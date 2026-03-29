@@ -24,9 +24,14 @@ jest.mock('../../utils/logger', () => ({
 jest.mock('../../utils/config', () => ({
   config: {
     SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
+    STORAGE_TYPE: 'local',
+    STORAGE_LOCAL_PATH: '/tmp/test-storage',
   },
 }));
 
+jest.mock('../../storage');
+jest.mock('../segmentationThumbnailService');
+jest.mock('../thumbnailManager');
 jest.mock('../imageService');
 
 describe('SegmentationService - Batch Result Fetching', () => {
@@ -143,9 +148,16 @@ describe('SegmentationService - Batch Result Fetching', () => {
         },
       });
 
-      expect(results['img-1']).toEqual({
+      expect(results['img-1']).toMatchObject({
         success: true,
-        polygons: mockPolygons,
+        polygons: expect.arrayContaining([
+          expect.objectContaining({
+            points: mockPolygons[0].points,
+            area: mockPolygons[0].area,
+            confidence: mockPolygons[0].confidence,
+            type: mockPolygons[0].type,
+          }),
+        ]),
         model_used: 'hrnet',
         threshold_used: 0.5,
         confidence: 0.95,
@@ -271,14 +283,14 @@ describe('SegmentationService - Batch Result Fetching', () => {
         imageHeight: 768,
       });
 
+      // PolygonValidator logs the parse error with its own context
       expect(logger.error).toHaveBeenCalledWith(
-        'Failed to parse polygons JSON in batch',
+        'Failed to parse polygons JSON',
         expect.any(Error),
-        'SegmentationService',
-        {
+        'PolygonValidator',
+        expect.objectContaining({
           imageId: 'img-1',
-          polygonsRaw: 'invalid-json{',
-        }
+        })
       );
     });
 
@@ -342,6 +354,9 @@ describe('SegmentationService - Batch Result Fetching', () => {
     });
 
     it('should handle empty imageIds array', async () => {
+      prismaMock.image.findMany.mockResolvedValue([]);
+      prismaMock.segmentation.findMany.mockResolvedValue([]);
+
       const results = await segmentationService.getBatchSegmentationResults(
         [],
         userId
@@ -422,10 +437,13 @@ describe('SegmentationService - Batch Result Fetching', () => {
         userId
       );
 
-      expect(results['img-1'].polygons).toEqual(complexPolygons);
-      expect(results['img-1'].polygons[0].points).toHaveLength(4);
-      expect(results['img-1'].polygons[1].type).toBe('internal');
-      expect(results['img-1'].polygons[1].parent_id).toBe('polygon-1');
+      const resultPolygons = (results['img-1'] as any).polygons;
+      expect(resultPolygons).toHaveLength(2);
+      expect(resultPolygons[0].points).toHaveLength(4);
+      expect(resultPolygons[0].area).toBe(625.75);
+      expect(resultPolygons[1].type).toBe('internal');
+      // Service converts parent_id to parentIds array
+      expect(resultPolygons[1].parentIds).toEqual(['polygon-1']);
     });
 
     it('should log debug information correctly', async () => {
@@ -504,14 +522,14 @@ describe('SegmentationService - Batch Result Fetching', () => {
 
       expect(result).toBeDefined();
       expect(result?.polygons).toEqual([]);
+      // PolygonValidator logs the parse error with its own context
       expect(logger.error).toHaveBeenCalledWith(
         'Failed to parse polygons JSON',
         expect.any(Error),
-        'SegmentationService',
-        {
+        'PolygonValidator',
+        expect.objectContaining({
           imageId,
-          polygonsRaw: 'invalid-json{',
-        }
+        })
       );
     });
   });

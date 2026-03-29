@@ -8,7 +8,6 @@ import {
 } from '@jest/globals';
 import { Request, Response, NextFunction } from 'express';
 import * as fs from 'fs';
-import * as path from 'path';
 import { accessLogger, testExports } from '../accessLogger';
 import { AuthRequest } from '../../types/auth';
 
@@ -29,7 +28,7 @@ describe('Access Logger Middleware', () => {
   let mockReq: Partial<AuthRequest>;
   let mockRes: Partial<Response>;
   let mockNext: NextFunction;
-  let finishCallback: (() => void) | null;
+  let finishCallback: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -52,7 +51,7 @@ describe('Access Logger Middleware', () => {
       get: jest.fn((header: string) => {
         if (header === 'User-Agent') return 'test-agent';
         return undefined;
-      }),
+      }) as unknown as Request['get'],
       user: undefined,
     };
 
@@ -96,7 +95,7 @@ describe('Access Logger Middleware', () => {
       mockReq.user = {
         id: 'user-123',
         email: 'test@example.com',
-        username: 'testuser',
+        emailVerified: false,
       };
 
       accessLogger(mockReq as AuthRequest, mockRes as Response, mockNext);
@@ -133,7 +132,7 @@ describe('Access Logger Middleware', () => {
     });
 
     it('should handle missing user agent gracefully', () => {
-      mockReq.get = jest.fn(() => undefined);
+      mockReq.get = jest.fn(() => undefined) as unknown as Request['get'];
 
       accessLogger(mockReq as AuthRequest, mockRes as Response, mockNext);
 
@@ -225,7 +224,7 @@ describe('Access Logger Middleware', () => {
 
     it('should fallback to req.ip when headers missing', () => {
       const { getClientIP } = testExports;
-      mockReq.ip = '127.0.0.1';
+      Object.defineProperty(mockReq, 'ip', { value: '127.0.0.1', writable: true, configurable: true });
       mockReq.headers = {};
 
       const ip = getClientIP(mockReq as Request);
@@ -500,7 +499,7 @@ describe('Access Logger Middleware', () => {
       expect(logEntry).toContain('200');
       expect(logEntry).toContain('150ms');
       expect(logEntry).toContain('Mozilla/5.0');
-      expect(logEntry).toEndWith('\n');
+      expect(logEntry).toMatch(/\n$/);
     });
 
     it('should sanitize user agent in log format', () => {

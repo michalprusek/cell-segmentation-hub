@@ -21,6 +21,7 @@ vi.mock('@/lib/api', () => ({
     deleteAccount: vi.fn(),
     getProject: vi.fn(),
     getProjectImages: vi.fn(),
+    getProjectImagesWithThumbnails: vi.fn(),
     getSegmentationResults: vi.fn(),
     getBatchSegmentationResults: vi.fn(),
   },
@@ -74,7 +75,8 @@ describe('useProjectData', () => {
 
     // Reset API client mocks to default values
     vi.mocked(apiClient.getProject).mockReset();
-    vi.mocked(apiClient.getProjectImages).mockReset();
+    vi.mocked(apiClient.getProjectImagesWithThumbnails).mockReset();
+    vi.mocked(apiClient.getProjectImagesWithThumbnails).mockReset();
     vi.mocked(apiClient.getSegmentationResults).mockReset();
     vi.mocked(apiClient.getBatchSegmentationResults).mockReset();
   });
@@ -90,6 +92,7 @@ describe('useProjectData', () => {
         user_id: 'user-1',
       };
 
+      // LOD 'low' response — images include lightweight segmentationResult with polygon counts
       const mockImagesResponse = {
         images: [
           {
@@ -102,6 +105,11 @@ describe('useProjectData', () => {
             created_at: '2023-01-01T00:00:00.000Z',
             updated_at: '2023-01-01T00:00:00.000Z',
             segmentationStatus: 'completed',
+            segmentationResult: {
+              polygons: [],
+              imageWidth: 800,
+              imageHeight: 600,
+            },
           },
           {
             id: 'image-2',
@@ -120,30 +128,9 @@ describe('useProjectData', () => {
         totalPages: 1,
       };
 
-      // Mock segmentation results for completed images
-      const mockSegmentationData = {
-        polygons: [
-          {
-            id: 'poly-1',
-            points: [
-              { x: 0, y: 0 },
-              { x: 100, y: 0 },
-              { x: 100, y: 100 },
-            ],
-          },
-        ],
-        imageWidth: 800,
-        imageHeight: 600,
-        modelUsed: 'hrnet',
-        confidence: 0.95,
-      };
-
       vi.mocked(apiClient.getProject).mockResolvedValueOnce(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValueOnce(
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce(
         mockImagesResponse
-      );
-      vi.mocked(apiClient.getSegmentationResults).mockResolvedValueOnce(
-        mockSegmentationData
       );
 
       const { result } = renderHook(
@@ -158,12 +145,9 @@ describe('useProjectData', () => {
 
       // Check that the API calls were made
       expect(vi.mocked(apiClient.getProject)).toHaveBeenCalledWith('project-1');
-      expect(vi.mocked(apiClient.getProjectImages)).toHaveBeenCalledWith(
+      expect(vi.mocked(apiClient.getProjectImagesWithThumbnails)).toHaveBeenCalledWith(
         'project-1',
-        { limit: 50, page: 1 }
-      );
-      expect(vi.mocked(apiClient.getSegmentationResults)).toHaveBeenCalledWith(
-        'image-1'
+        { limit: 100, page: 1, lod: 'low' }
       );
 
       // Check the final state
@@ -182,7 +166,7 @@ describe('useProjectData', () => {
       };
 
       vi.mocked(apiClient.getProject).mockResolvedValueOnce(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValueOnce({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce({
         images: [],
         total: 0,
         page: 1,
@@ -215,7 +199,7 @@ describe('useProjectData', () => {
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValueOnce(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValueOnce({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce({
         images: mockImages,
         total: 1,
         page: 1,
@@ -262,7 +246,7 @@ describe('useProjectData', () => {
     it('should handle images fetch error gracefully', async () => {
       const mockProject = { id: 'project-1', name: 'Test' };
       vi.mocked(apiClient.getProject).mockResolvedValueOnce(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockRejectedValueOnce(
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockRejectedValueOnce(
         new Error('Images fetch failed')
       );
 
@@ -279,6 +263,9 @@ describe('useProjectData', () => {
     });
 
     it('should handle segmentation fetch error gracefully', async () => {
+      // The new implementation does not eagerly fetch segmentation during load;
+      // segmentation data comes embedded in the LOD response from getProjectImagesWithThumbnails.
+      // A segmentation refresh error (from refreshImageSegmentation) is handled gracefully.
       const mockProject = { id: 'project-1', name: 'Test' };
       const mockImages = [
         {
@@ -290,15 +277,12 @@ describe('useProjectData', () => {
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValueOnce(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValueOnce({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce({
         images: mockImages,
         total: 1,
         page: 1,
         totalPages: 1,
       });
-      vi.mocked(apiClient.getSegmentationResults).mockRejectedValueOnce(
-        new Error('Segmentation fetch failed')
-      );
 
       const { result } = renderHook(
         () => useProjectData('project-1', 'user-1'),
@@ -327,7 +311,7 @@ describe('useProjectData', () => {
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue({
         images: mockImages,
         total: 1,
         page: 1,
@@ -350,9 +334,11 @@ describe('useProjectData', () => {
 
       // Test updateImages function
       const newImages = [{ ...mockImages[0], name: 'updated.jpg' }];
-      result.current.updateImages(newImages);
+      result.current.updateImages(newImages as any);
 
-      expect(result.current.images).toEqual(newImages);
+      await waitFor(() => {
+        expect(result.current.images).toEqual(newImages);
+      });
     });
   });
 
@@ -364,7 +350,7 @@ describe('useProjectData', () => {
       vi.mocked(apiClient.getProject)
         .mockResolvedValueOnce(mockProject1)
         .mockResolvedValueOnce(mockProject2);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue({
         images: [],
         total: 0,
         page: 1,
@@ -408,7 +394,7 @@ describe('useProjectData', () => {
             projectResolve = resolve;
           })
       );
-      vi.mocked(apiClient.getProjectImages).mockImplementationOnce(
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockImplementationOnce(
         () =>
           new Promise(resolve => {
             imagesResolve = resolve;
@@ -479,7 +465,11 @@ describe('useProjectData', () => {
   });
 
   describe('batch segmentation result fetching', () => {
-    it('should handle null response from batch API gracefully', async () => {
+    // The hook uses getProjectImagesWithThumbnails (LOD 'low') which returns segmentation
+    // data embedded in the image response. Segmentation enrichment happens via
+    // refreshImageSegmentation, not during initial load.
+
+    it('should load images with embedded segmentation from LOD response', async () => {
       const mockProject = { id: 'project-1', name: 'Test Project' };
       const mockImages = [
         {
@@ -489,6 +479,22 @@ describe('useProjectData', () => {
           created_at: '2023-01-01T00:00:00Z',
           updated_at: '2023-01-01T00:00:00Z',
           segmentationStatus: 'completed',
+          segmentationResult: {
+            polygons: [
+              {
+                id: 'poly-1',
+                points: [
+                  { x: 0, y: 0 },
+                  { x: 10, y: 0 },
+                  { x: 10, y: 10 },
+                  { x: 0, y: 10 },
+                ],
+                type: 'external',
+              },
+            ],
+            imageWidth: 800,
+            imageHeight: 600,
+          },
         },
         {
           id: 'img-2',
@@ -497,44 +503,20 @@ describe('useProjectData', () => {
           created_at: '2023-01-01T00:00:00Z',
           updated_at: '2023-01-01T00:00:00Z',
           segmentationStatus: 'completed',
+          // No embedded segmentationResult (null from server)
         },
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue({
         images: mockImages,
         total: 2,
         page: 1,
         totalPages: 1,
       });
 
-      // Mock batch API returning null for some images
-      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue({
-        'img-1': {
-          polygons: [
-            {
-              id: 'poly-1',
-              points: [
-                { x: 0, y: 0 },
-                { x: 10, y: 0 },
-                { x: 10, y: 10 },
-                { x: 0, y: 10 },
-              ],
-              type: 'external',
-              confidence: 0.9,
-              area: 100,
-            },
-          ],
-          imageWidth: 800,
-          imageHeight: 600,
-          modelUsed: 'hrnet',
-          confidence: 0.9,
-        },
-        'img-2': null, // Null response for this image
-      });
-
       const { result } = renderHook(
-        () => useProjectData('project-1', 'user-1', { fetchAll: true }),
+        () => useProjectData('project-1', 'user-1'),
         { wrapper }
       );
 
@@ -544,17 +526,17 @@ describe('useProjectData', () => {
 
       expect(result.current.images).toHaveLength(2);
 
-      // First image should have segmentation data
+      // First image has embedded segmentation data
       expect(result.current.images[0].segmentationResult).toBeDefined();
       expect(
         result.current.images[0].segmentationResult?.polygons
       ).toHaveLength(1);
 
-      // Second image should handle null gracefully
+      // Second image has no embedded segmentation
       expect(result.current.images[1].segmentationResult).toBeUndefined();
     });
 
-    it('should handle invalid batch response format', async () => {
+    it('should handle images without segmentation data gracefully', async () => {
       const mockProject = { id: 'project-1', name: 'Test Project' };
       const mockImages = [
         {
@@ -564,24 +546,20 @@ describe('useProjectData', () => {
           created_at: '2023-01-01T00:00:00Z',
           updated_at: '2023-01-01T00:00:00Z',
           segmentationStatus: 'completed',
+          // No segmentationResult in LOD response
         },
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue({
         images: mockImages,
         total: 1,
         page: 1,
         totalPages: 1,
       });
 
-      // Mock invalid batch response
-      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue(
-        null as any
-      );
-
       const { result } = renderHook(
-        () => useProjectData('project-1', 'user-1', { fetchAll: true }),
+        () => useProjectData('project-1', 'user-1'),
         { wrapper }
       );
 
@@ -589,40 +567,22 @@ describe('useProjectData', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      // Should fall back to original images without enrichment
+      // Images still load even if no segmentation is embedded
       expect(result.current.images).toHaveLength(1);
       expect(result.current.images[0].segmentationResult).toBeUndefined();
     });
 
-    it('should handle batch API errors gracefully', async () => {
+    it('should handle getProjectImagesWithThumbnails error gracefully', async () => {
       const mockProject = { id: 'project-1', name: 'Test Project' };
-      const mockImages = [
-        {
-          id: 'img-1',
-          name: 'test1.jpg',
-          url: '/uploads/test1.jpg',
-          created_at: '2023-01-01T00:00:00Z',
-          updated_at: '2023-01-01T00:00:00Z',
-          segmentationStatus: 'completed',
-        },
-      ];
 
       vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
-        images: mockImages,
-        total: 1,
-        page: 1,
-        totalPages: 1,
-      });
-
-      // Mock batch API error
-      const batchError = new Error('Batch API failed');
-      vi.mocked(apiClient.getBatchSegmentationResults).mockRejectedValue(
-        batchError
+      // Error in images fetch causes the while loop to break
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockRejectedValue(
+        new Error('Images fetch failed')
       );
 
       const { result } = renderHook(
-        () => useProjectData('project-1', 'user-1', { fetchAll: true }),
+        () => useProjectData('project-1', 'user-1'),
         { wrapper }
       );
 
@@ -630,45 +590,47 @@ describe('useProjectData', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      // Should return original images without enrichment
-      expect(result.current.images).toHaveLength(1);
-      expect(result.current.images[0].segmentationResult).toBeUndefined();
+      // Should return empty images on error
+      expect(result.current.images).toHaveLength(0);
     });
 
-    it('should handle missing polygons in segmentation data', async () => {
+    it('should handle pagination — multiple pages of images', async () => {
       const mockProject = { id: 'project-1', name: 'Test Project' };
-      const mockImages = [
-        {
-          id: 'img-1',
-          name: 'test1.jpg',
-          url: '/uploads/test1.jpg',
-          created_at: '2023-01-01T00:00:00Z',
-          updated_at: '2023-01-01T00:00:00Z',
-          segmentationStatus: 'completed',
-        },
-      ];
 
+      // First page returns 1 image, total is 2 → triggers second page fetch
       vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
-        images: mockImages,
-        total: 1,
-        page: 1,
-        totalPages: 1,
-      });
-
-      // Mock batch response with missing polygons
-      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue({
-        'img-1': {
-          // Missing polygons property
-          imageWidth: 800,
-          imageHeight: 600,
-          modelUsed: 'hrnet',
-          confidence: 0.9,
-        },
-      });
+      vi.mocked(apiClient.getProjectImagesWithThumbnails)
+        .mockResolvedValueOnce({
+          images: [
+            {
+              id: 'img-1',
+              name: 'test1.jpg',
+              created_at: '2023-01-01T00:00:00Z',
+              updated_at: '2023-01-01T00:00:00Z',
+              segmentationStatus: 'pending',
+            },
+          ],
+          total: 101, // More than one page (limit=100)
+          page: 1,
+          totalPages: 2,
+        })
+        .mockResolvedValueOnce({
+          images: [
+            {
+              id: 'img-2',
+              name: 'test2.jpg',
+              created_at: '2023-01-01T00:00:00Z',
+              updated_at: '2023-01-01T00:00:00Z',
+              segmentationStatus: 'pending',
+            },
+          ],
+          total: 101,
+          page: 2,
+          totalPages: 2,
+        });
 
       const { result } = renderHook(
-        () => useProjectData('project-1', 'user-1', { fetchAll: true }),
+        () => useProjectData('project-1', 'user-1'),
         { wrapper }
       );
 
@@ -676,9 +638,8 @@ describe('useProjectData', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(result.current.images).toHaveLength(1);
-      // Should handle missing polygons gracefully
-      expect(result.current.images[0].segmentationResult).toBeUndefined();
+      expect(result.current.images).toHaveLength(2);
+      expect(vi.mocked(apiClient.getProjectImagesWithThumbnails)).toHaveBeenCalledTimes(2);
     });
 
     it('should handle refreshImageSegmentation null response', async () => {
@@ -695,13 +656,12 @@ describe('useProjectData', () => {
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue({
         images: mockImages,
         total: 1,
         page: 1,
         totalPages: 1,
       });
-      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue({});
 
       const { result } = renderHook(
         () => useProjectData('project-1', 'user-1'),
@@ -712,13 +672,11 @@ describe('useProjectData', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      // Mock single image API returning null
+      // Mock single image API returning null — refresh should do nothing
       vi.mocked(apiClient.getSegmentationResults).mockResolvedValue(null);
 
-      // Call refreshImageSegmentation
-      await waitFor(() => {
-        result.current.refreshImageSegmentation('img-1');
-      });
+      // Call refreshImageSegmentation — should not throw
+      await result.current.refreshImageSegmentation('img-1');
 
       // Should handle null response gracefully without throwing
       expect(result.current.images[0].segmentationResult).toBeUndefined();
@@ -738,13 +696,12 @@ describe('useProjectData', () => {
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
-      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue({
         images: mockImages,
         total: 1,
         page: 1,
         totalPages: 1,
       });
-      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue({});
 
       const { result } = renderHook(
         () => useProjectData('project-1', 'user-1'),
@@ -755,18 +712,16 @@ describe('useProjectData', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      // Mock API error
+      // Mock API error on all 4 attempts (1 initial + 3 retries)
       const refreshError = new Error('API refresh failed');
       vi.mocked(apiClient.getSegmentationResults).mockRejectedValue(
         refreshError
       );
 
       // Call refreshImageSegmentation - should not throw
-      await waitFor(() => {
-        result.current.refreshImageSegmentation('img-1');
-      });
+      await result.current.refreshImageSegmentation('img-1');
 
-      // Should handle error gracefully
+      // Should handle error gracefully — image remains with no segmentationResult
       expect(result.current.images[0].segmentationResult).toBeUndefined();
     });
   });

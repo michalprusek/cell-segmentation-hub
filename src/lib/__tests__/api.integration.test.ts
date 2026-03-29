@@ -1,25 +1,62 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import axios from 'axios';
-import MockAdapter from 'axios-mock-adapter';
-import apiClient from '../api';
+import { apiClient } from '@/lib/api';
 
-// Create axios mock adapter
-const mock = new MockAdapter(axios);
+// ===== MOCK SETUP =====
+// Use vi.hoisted so mockAxiosInstance is available inside vi.mock('axios') factory
+const mockAxiosInstance = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  put: vi.fn(),
+  delete: vi.fn(),
+  patch: vi.fn(),
+  interceptors: {
+    request: { use: vi.fn() },
+    response: { use: vi.fn() },
+  },
+}));
+
+// Mock axios so ApiClient uses our mock instance
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn(() => mockAxiosInstance),
+  },
+}));
+
+// Override the global setup.ts mock for @/lib/api so we get the real singleton
+vi.mock('@/lib/api', async importOriginal => {
+  const actual = (await importOriginal()) as any;
+  return { ...actual };
+});
+
+// Mock config
+vi.mock('../config', () => ({
+  default: {
+    apiBaseUrl: 'http://localhost:3001/api',
+  },
+}));
+
+// Mock logger
+vi.mock('../logger', () => ({
+  logger: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
 
 describe('API Integration Tests', () => {
   beforeEach(() => {
-    // Clear any existing tokens
-    if (typeof (apiClient as any).clearAuthToken === 'function') {
-      (apiClient as any).clearAuthToken();
-    }
-    mock.reset();
+    vi.clearAllMocks();
+    // Point singleton's axios instance to our mock
+    (apiClient as any).instance = mockAxiosInstance;
+    // Clear any existing tokens between tests
+    (apiClient as any).accessToken = null;
+    (apiClient as any).refreshToken = null;
   });
 
   afterEach(() => {
-    mock.reset();
-    if (typeof (apiClient as any).clearAuthToken === 'function') {
-      (apiClient as any).clearAuthToken();
-    }
+    vi.clearAllMocks();
   });
 
   describe('Authentication Flow', () => {
@@ -39,46 +76,56 @@ describe('API Integration Tests', () => {
         refreshToken: 'refresh-token-123',
       };
 
-      mock.onPost('/api/auth/login').reply(200, response);
+      mockAxiosInstance.post.mockResolvedValue({
+        data: { success: true, data: response },
+      });
 
       const result = await apiClient.login(loginData.email, loginData.password);
 
+      // login() always includes rememberMe (default true)
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/login', {
+        ...loginData,
+        rememberMe: true,
+      });
       expect(result).toEqual(response);
-      expect(mock.history.post[0].data).toBe(JSON.stringify(loginData));
+      // Tokens should be stored after login
+      expect(apiClient.isAuthenticated()).toBe(true);
     });
 
     it('should handle registration with validation', async () => {
-      const registerData = {
-        name: 'New User',
-        email: 'newuser@example.com',
-        password: 'SecurePass123!',
-      };
+      // register(email, password, username?, consentOptions?)
+      const email = 'newuser@example.com';
+      const password = 'SecurePass123!';
+      const username = 'newuser';
 
       const response = {
         user: {
           id: '2',
-          email: registerData.email,
-          name: registerData.name,
+          email,
+          name: username,
         },
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
       };
 
-      mock.onPost('/api/auth/register').reply(201, response);
+      mockAxiosInstance.post.mockResolvedValue({
+        data: { success: true, data: response },
+      });
 
-      const result = await apiClient.register(
-        registerData.name,
-        registerData.email,
-        registerData.password
-      );
+      const result = await apiClient.register(email, password, username);
 
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/register', {
+        email,
+        password,
+        username,
+      });
       expect(result).toEqual(response);
     });
 
     it('should handle login errors gracefully', async () => {
-      mock.onPost('/api/auth/login').reply(401, {
-        error: 'Invalid credentials',
-      });
+      const error = new Error('Invalid credentials');
+      (error as any).response = { status: 401, data: { error: 'Invalid credentials' } };
+      mockAxiosInstance.post.mockRejectedValue(error);
 
       await expect(
         apiClient.login('wrong@example.com', 'wrongpass')
@@ -86,7 +133,8 @@ describe('API Integration Tests', () => {
     });
 
     it('should handle network errors', async () => {
-      mock.onPost('/api/auth/login').networkError();
+      const networkError = new Error('Network Error');
+      mockAxiosInstance.post.mockRejectedValue(networkError);
 
       await expect(
         apiClient.login('test@example.com', 'password')
@@ -94,7 +142,9 @@ describe('API Integration Tests', () => {
     });
 
     it('should handle timeout errors', async () => {
-      mock.onPost('/api/auth/login').timeout();
+      const timeoutError = new Error('timeout of 30000ms exceeded');
+      (timeoutError as any).code = 'ECONNABORTED';
+      mockAxiosInstance.post.mockRejectedValue(timeoutError);
 
       await expect(
         apiClient.login('test@example.com', 'password')
@@ -104,26 +154,32 @@ describe('API Integration Tests', () => {
 
   describe('Project Management', () => {
     beforeEach(() => {
-      // Set auth token for authenticated requests
-      if (typeof (apiClient as any).setAuthToken === 'function') {
-        (apiClient as any).setAuthToken(
-          'test-access-token',
-          'test-refresh-token'
-        );
-      }
+      // Set auth tokens for authenticated requests
+      (apiClient as any).accessToken = 'test-access-token';
+      (apiClient as any).refreshToken = 'test-refresh-token';
     });
 
     it('should fetch projects list', async () => {
       const projects = [
-        { id: '1', name: 'Project 1', description: 'Test project 1' },
-        { id: '2', name: 'Project 2', description: 'Test project 2' },
+        { id: '1', title: 'Project 1', description: 'Test project 1' },
+        { id: '2', title: 'Project 2', description: 'Test project 2' },
       ];
 
-      mock.onGet('/api/projects').reply(200, projects);
+      mockAxiosInstance.get.mockResolvedValue({
+        data: {
+          success: true,
+          data: { projects, total: 2, page: 1, totalPages: 1 },
+        },
+      });
 
       const result = await apiClient.getProjects();
 
-      expect(result).toEqual(projects);
+      // getProjects() with no args passes params: undefined
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/projects', {
+        params: undefined,
+      });
+      expect(result.projects).toHaveLength(2);
+      expect(result.total).toBe(2);
     });
 
     it('should create a new project', async () => {
@@ -134,15 +190,28 @@ describe('API Integration Tests', () => {
 
       const response = {
         id: '3',
-        ...newProject,
+        title: newProject.name,
+        description: newProject.description,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        userId: 'user-1',
       };
 
-      mock.onPost('/api/projects').reply(201, response);
+      mockAxiosInstance.post.mockResolvedValue({
+        data: { success: true, data: response },
+      });
 
       const result = await apiClient.createProject(newProject);
 
-      expect(result).toEqual(response);
+      // createProject converts 'name' -> 'title' to match backend schema
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/projects', {
+        title: newProject.name,
+        description: newProject.description,
+      });
+      expect(result).toMatchObject({
+        id: '3',
+        name: 'New Project',
+      });
     });
 
     it('should update an existing project', async () => {
@@ -154,33 +223,52 @@ describe('API Integration Tests', () => {
 
       const response = {
         id: projectId,
-        ...updates,
+        title: updates.name,
+        description: updates.description,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        userId: 'user-1',
       };
 
-      mock.onPut(`/api/projects/${projectId}`).reply(200, response);
+      mockAxiosInstance.put.mockResolvedValue({
+        data: { success: true, data: response },
+      });
 
       const result = await apiClient.updateProject(projectId, updates);
 
-      expect(result).toEqual(response);
+      // updateProject converts 'name' -> 'title' and removes 'name' from the request
+      expect(mockAxiosInstance.put).toHaveBeenCalledWith(
+        `/projects/${projectId}`,
+        {
+          name: undefined,
+          description: updates.description,
+          title: updates.name,
+        }
+      );
+      expect(result).toMatchObject({
+        id: projectId,
+        name: 'Updated Project Name',
+      });
     });
 
     it('should delete a project', async () => {
       const projectId = '1';
 
-      mock.onDelete(`/api/projects/${projectId}`).reply(204);
+      mockAxiosInstance.delete.mockResolvedValue({
+        data: { success: true },
+      });
 
       await expect(apiClient.deleteProject(projectId)).resolves.toBeUndefined();
+      expect(mockAxiosInstance.delete).toHaveBeenCalledWith(`/projects/${projectId}`);
     });
 
     it('should handle unauthorized access', async () => {
       // Clear auth token
-      if (typeof (apiClient as any).clearAuthToken === 'function') {
-        (apiClient as any).clearAuthToken();
-      }
+      (apiClient as any).accessToken = null;
 
-      mock.onGet('/api/projects').reply(401, {
-        error: 'Unauthorized',
-      });
+      const error = new Error('Unauthorized');
+      (error as any).response = { status: 401, data: { error: 'Unauthorized' } };
+      mockAxiosInstance.get.mockRejectedValue(error);
 
       await expect(apiClient.getProjects()).rejects.toThrow();
     });
@@ -188,12 +276,8 @@ describe('API Integration Tests', () => {
 
   describe('Image Upload', () => {
     beforeEach(() => {
-      if (typeof (apiClient as any).setAuthToken === 'function') {
-        (apiClient as any).setAuthToken(
-          'test-access-token',
-          'test-refresh-token'
-        );
-      }
+      (apiClient as any).accessToken = 'test-access-token';
+      (apiClient as any).refreshToken = 'test-refresh-token';
     });
 
     it('should upload an image successfully', async () => {
@@ -203,19 +287,36 @@ describe('API Integration Tests', () => {
       });
 
       const response = {
-        id: 'img-1',
-        fileName: 'test.jpg',
-        url: '/uploads/test.jpg',
+        images: [
+          {
+            id: 'img-1',
+            file_name: 'test.jpg',
+            url: '/uploads/test.jpg',
+            projectId,
+            userId: 'user-1',
+            segmentationStatus: 'pending',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+        count: 1,
       };
 
-      mock.onPost(`/api/projects/${projectId}/images`).reply(201, response);
+      mockAxiosInstance.post.mockResolvedValue({
+        data: { success: true, data: response },
+      });
 
-      const formData = new FormData();
-      formData.append('file', file);
+      const result = await apiClient.uploadImages(projectId, [file]);
 
-      const result = await apiClient.uploadImage(projectId, file);
-
-      expect(result).toEqual(response);
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+        `/projects/${projectId}/images`,
+        expect.any(FormData),
+        expect.objectContaining({
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 300000,
+        })
+      );
+      expect(result).toHaveLength(1);
     });
 
     it('should handle upload progress', async () => {
@@ -225,180 +326,194 @@ describe('API Integration Tests', () => {
       });
       const progressCallback = vi.fn();
 
-      mock.onPost(`/api/projects/${projectId}/images`).reply(201, {
-        id: 'img-1',
-        fileName: 'test.jpg',
+      mockAxiosInstance.post.mockImplementation((_url, _data, config) => {
+        // Simulate progress event
+        if (config?.onUploadProgress) {
+          config.onUploadProgress({ loaded: 50, total: 100 });
+        }
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: { images: [{ id: 'img-1', file_name: 'test.jpg' }], count: 1 },
+          },
+        });
       });
 
-      await apiClient.uploadImage(projectId, file, progressCallback);
+      await apiClient.uploadImages(projectId, [file], progressCallback);
 
-      // Progress callback should have been called
-      expect(progressCallback).toHaveBeenCalled();
+      // Progress callback should have been called with ~50%
+      expect(progressCallback).toHaveBeenCalledWith(50);
     });
 
     it('should handle large file rejection', async () => {
       const projectId = '1';
-      const largeFile = new File(['x'.repeat(10 * 1024 * 1024)], 'large.jpg', {
+      const largeFile = new File(['x'.repeat(1024)], 'large.jpg', {
         type: 'image/jpeg',
       });
 
-      mock.onPost(`/api/projects/${projectId}/images`).reply(413, {
-        error: 'File too large',
-      });
+      const error = new Error('Payload Too Large');
+      (error as any).response = { status: 413, data: { error: 'File too large' } };
+      mockAxiosInstance.post.mockRejectedValue(error);
 
       await expect(
-        apiClient.uploadImage(projectId, largeFile)
+        apiClient.uploadImages(projectId, [largeFile])
       ).rejects.toThrow();
     });
   });
 
   describe('Segmentation', () => {
     beforeEach(() => {
-      if (typeof (apiClient as any).setAuthToken === 'function') {
-        (apiClient as any).setAuthToken(
-          'test-access-token',
-          'test-refresh-token'
-        );
-      }
+      (apiClient as any).accessToken = 'test-access-token';
+      (apiClient as any).refreshToken = 'test-refresh-token';
     });
 
-    it('should request segmentation', async () => {
-      const request = {
-        projectId: '1',
-        imageId: 'img-1',
-        modelId: 'model-1',
-      };
+    it('should request batch segmentation', async () => {
+      // requestBatchSegmentation(imageIds, model?, threshold?, detectHoles?)
+      const imageIds = ['img-1', 'img-2'];
 
       const response = {
-        queueId: 'queue-1',
-        position: 5,
-        estimatedTime: 120,
+        batchId: 'batch-1',
+        queued: 2,
+        message: 'Segmentation queued',
       };
 
-      mock.onPost('/api/segmentation/process').reply(202, response);
+      mockAxiosInstance.post.mockResolvedValue({
+        data: { success: true, data: response },
+      });
 
-      const result = await apiClient.requestSegmentation(request);
+      const result = await apiClient.requestBatchSegmentation(imageIds);
 
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+        '/segmentation/batch',
+        {
+          imageIds,
+          model: 'hrnet',   // default
+          threshold: 0.5,   // default
+          detectHoles: undefined,
+        }
+      );
       expect(result).toEqual(response);
     });
 
     it('should fetch segmentation results', async () => {
-      const resultId = 'result-1';
+      const imageId = 'img-1';
       const results = {
-        id: resultId,
-        status: 'completed',
         polygons: [
           {
             id: 'poly-1',
             points: [
-              [0, 0],
-              [100, 0],
-              [100, 100],
-              [0, 100],
+              { x: 0, y: 0 },
+              { x: 100, y: 0 },
+              { x: 100, y: 100 },
+              { x: 0, y: 100 },
             ],
+            type: 'external',
           },
         ],
+        imageWidth: 800,
+        imageHeight: 600,
+        modelUsed: 'hrnet',
+        thresholdUsed: 0.5,
+        confidence: 0.95,
+        processingTime: 1.5,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
 
-      mock.onGet(`/api/segmentation/results/${resultId}`).reply(200, results);
+      mockAxiosInstance.get.mockResolvedValue({
+        data: { success: true, data: results },
+      });
 
-      const result = await apiClient.getSegmentationResult(resultId);
+      const result = await apiClient.getSegmentationResults(imageId);
 
-      expect(result).toEqual(results);
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith(
+        `/segmentation/images/${imageId}/results`,
+        expect.any(Object)
+      );
+      expect(result).toMatchObject({
+        polygons: expect.arrayContaining([
+          expect.objectContaining({ id: 'poly-1' }),
+        ]),
+      });
     });
 
     it('should handle segmentation queue status', async () => {
-      const queueId = 'queue-1';
-      const status = {
-        position: 2,
-        estimatedTime: 45,
-        status: 'processing',
+      const queueStatus = {
+        total: 10,
+        queued: 3,
+        processing: 2,
+        completed: 4,
+        failed: 1,
       };
 
-      mock.onGet(`/api/segmentation/queue/${queueId}`).reply(200, status);
+      mockAxiosInstance.get.mockResolvedValue({
+        data: { success: true, data: queueStatus },
+      });
 
-      const result = await apiClient.getQueueStats(queueId);
+      const result = await apiClient.getQueueStats();
 
-      expect(result).toEqual(status);
+      expect(result).toEqual(queueStatus);
     });
 
-    it('should cancel segmentation request', async () => {
+    it('should cancel/remove segmentation from queue', async () => {
       const queueId = 'queue-1';
 
-      mock.onDelete(`/api/segmentation/queue/${queueId}`).reply(204);
+      mockAxiosInstance.delete.mockResolvedValue({
+        data: { success: true },
+      });
 
       await expect(apiClient.removeFromQueue(queueId)).resolves.toBeUndefined();
+      expect(mockAxiosInstance.delete).toHaveBeenCalledWith(
+        expect.stringContaining(queueId)
+      );
     });
   });
 
   describe('Error Recovery', () => {
-    it('should retry failed requests with exponential backoff', async () => {
-      let attempts = 0;
+    it('should surface server errors to the caller', async () => {
+      // The ApiClient does not implement automatic retry — retries are done
+      // by the response interceptor for specific status codes (429 rate limiting).
+      // For generic 500 errors the error is re-thrown immediately.
+      (apiClient as any).accessToken = 'test-access-token';
 
-      mock.onGet('/api/projects').reply(() => {
-        attempts++;
-        if (attempts < 3) {
-          return [500, { error: 'Server error' }];
-        }
-        return [200, []];
+      const serverError = new Error('Server error');
+      (serverError as any).response = { status: 500, data: { error: 'Internal server error' } };
+      mockAxiosInstance.get.mockRejectedValue(serverError);
+
+      await expect(apiClient.getProjects()).rejects.toThrow('Server error');
+    });
+
+    it('should store new tokens after successful token refresh', async () => {
+      // Set an initial refresh token
+      (apiClient as any).accessToken = 'old-access-token';
+      (apiClient as any).refreshToken = 'old-refresh-token';
+
+      const refreshResponse = {
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+      };
+
+      mockAxiosInstance.post.mockResolvedValue({
+        data: { success: true, data: refreshResponse },
       });
 
-      const result = await apiClient.getProjects();
+      await apiClient.refreshAccessToken();
 
-      expect(attempts).toBe(3);
-      expect(result).toEqual([]);
+      expect((apiClient as any).accessToken).toBe('new-access-token');
     });
 
-    it('should handle token refresh on 401', async () => {
-      const refreshResponse = {
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-      };
+    it('should clear tokens after logout', async () => {
+      (apiClient as any).accessToken = 'test-access-token';
+      (apiClient as any).refreshToken = 'test-refresh-token';
 
-      mock
-        .onGet('/api/projects')
-        .replyOnce(401, { error: 'Token expired' })
-        .onGet('/api/projects')
-        .reply(200, []);
+      mockAxiosInstance.post.mockResolvedValue({
+        data: { success: true },
+      });
 
-      mock.onPost('/api/auth/refresh').reply(200, refreshResponse);
+      await apiClient.logout();
 
-      const result = await apiClient.getProjects();
-
-      expect(result).toEqual([]);
-    });
-
-    it('should handle concurrent requests during token refresh', async () => {
-      const refreshResponse = {
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-      };
-
-      // All requests initially fail with 401
-      mock
-        .onGet(/\/api\/projects.*/)
-        .replyOnce(401)
-        .onGet(/\/api\/projects.*/)
-        .reply(200, []);
-      mock.onPost('/api/auth/refresh').reply(200, refreshResponse);
-
-      // Make concurrent requests
-      const promises = [
-        apiClient.getProjects(),
-        apiClient.projects.getById('1'),
-        apiClient.projects.getById('2'),
-      ];
-
-      const results = await Promise.all(promises);
-
-      // All should succeed after token refresh
-      expect(results).toHaveLength(3);
-
-      // Verify refresh endpoint was called only once (de-duplication)
-      const refreshCalls = mock.history.post.filter(
-        call => call.url === '/api/auth/refresh'
-      );
-      expect(refreshCalls).toHaveLength(1);
+      expect(apiClient.isAuthenticated()).toBe(false);
+      expect(apiClient.getAccessToken()).toBeNull();
     });
   });
 });

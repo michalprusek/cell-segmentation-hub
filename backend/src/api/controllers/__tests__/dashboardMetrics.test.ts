@@ -10,11 +10,13 @@ type MockPrismaClient = {
   project: {
     count: ReturnType<typeof jest.fn>;
     findMany: ReturnType<typeof jest.fn>;
+    findUnique: ReturnType<typeof jest.fn>;
   };
   image: {
     count: ReturnType<typeof jest.fn>;
     aggregate: ReturnType<typeof jest.fn>;
     findMany: ReturnType<typeof jest.fn>;
+    groupBy: ReturnType<typeof jest.fn>;
   };
   segmentation: {
     count: ReturnType<typeof jest.fn>;
@@ -22,18 +24,20 @@ type MockPrismaClient = {
   };
 };
 
-const prismaMock: MockPrismaClient = {
+const _prismaMock: MockPrismaClient = {
   user: {
     findUnique: jest.fn(),
   },
   project: {
     count: jest.fn(),
     findMany: jest.fn(),
+    findUnique: jest.fn(),
   },
   image: {
     count: jest.fn(),
     aggregate: jest.fn(),
     findMany: jest.fn(),
+    groupBy: jest.fn(),
   },
   segmentation: {
     count: jest.fn(),
@@ -48,22 +52,34 @@ const mockAuthMiddleware = jest.fn((req: any, res: any, next: any) => {
 });
 
 // Mock dependencies
-jest.mock('../../../db', () => ({
-  prisma: prismaMock,
-}));
-jest.mock('../../../utils/logger', () => ({
-  logger: {
-    info: jest.fn(),
-    error: jest.fn(),
+jest.mock('../../../utils/config', () => ({
+  config: {
+    NODE_ENV: 'test',
+    PORT: 3001,
+    HOST: 'localhost',
+    DATABASE_URL: 'file:./test.db',
+    JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_ACCESS_EXPIRY: '15m',
+    JWT_REFRESH_EXPIRY: '7d',
+    ALLOWED_ORIGINS: 'http://localhost:3000',
+    WS_ALLOWED_ORIGINS: 'http://localhost:3000',
+    UPLOAD_DIR: './test-uploads',
+    STORAGE_TYPE: 'local',
+    MAX_FILE_SIZE: 10485760,
   },
 }));
-jest.mock('../../../middleware/auth', () => ({
-  requireAuth: mockAuthMiddleware,
-}));
+jest.mock('../../../db');
+jest.mock('../../../services/userService');
+jest.mock('../../../services/projectService');
+jest.mock('../../../services/sharingService');
+jest.mock('../../../services/emailService');
+jest.mock('../../../utils/logger');
+jest.mock('../../../middleware/auth');
 
 // Import after mocking
-import { getUserStats, getUserProfile } from '../../services/userService';
-import { getProjectStats } from '../../services/projectService';
+import { getUserStats, getUserProfile } from '../../../services/userService';
+import { getProjectStats } from '../../../services/projectService';
 
 // Create test app
 const app = express();
@@ -166,6 +182,11 @@ describe('Dashboard Metrics API Endpoints', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Restore mockAuthMiddleware implementation after clearAllMocks
+    mockAuthMiddleware.mockImplementation((req: any, _res: any, next: any) => {
+      req.user = { id: testUserId, email: 'test@example.com' };
+      next();
+    });
   });
 
   describe('GET /api/dashboard/metrics', () => {
@@ -181,18 +202,8 @@ describe('Dashboard Metrics API Endpoints', () => {
         processedImages: 180,
       };
 
-      // Set up database mocks
-      prismaMock.project.count.mockResolvedValueOnce(mockStats.totalProjects);
-      prismaMock.image.count
-        .mockResolvedValueOnce(mockStats.totalImages)
-        .mockResolvedValueOnce(mockStats.processedImages)
-        .mockResolvedValueOnce(mockStats.imagesUploadedToday);
-      prismaMock.segmentation.count.mockResolvedValueOnce(
-        mockStats.totalSegmentations
-      );
-      prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: mockStats.storageUsedBytes },
-      });
+      // Set up service mock
+      jest.mocked(getUserStats).mockResolvedValueOnce(mockStats);
 
       const response = await request(app)
         .get('/api/dashboard/metrics')
@@ -222,15 +233,16 @@ describe('Dashboard Metrics API Endpoints', () => {
 
     it('should return zero values for new users', async () => {
       // Mock empty user data
-      prismaMock.project.count.mockResolvedValueOnce(0);
-      prismaMock.image.count
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0);
-      prismaMock.segmentation.count.mockResolvedValueOnce(0);
-      prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: null },
-      });
+      const emptyStats = {
+        totalProjects: 0,
+        totalImages: 0,
+        totalSegmentations: 0,
+        storageUsed: '0 B',
+        storageUsedBytes: 0,
+        imagesUploadedToday: 0,
+        processedImages: 0,
+      };
+      jest.mocked(getUserStats).mockResolvedValueOnce(emptyStats);
 
       const response = await request(app)
         .get('/api/dashboard/metrics')
@@ -250,7 +262,7 @@ describe('Dashboard Metrics API Endpoints', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      prismaMock.project.count.mockRejectedValueOnce(
+      jest.mocked(getUserStats).mockRejectedValueOnce(
         new Error('Database connection failed')
       );
 
@@ -281,20 +293,6 @@ describe('Dashboard Metrics API Endpoints', () => {
 
   describe('GET /api/dashboard/profile', () => {
     it('should return comprehensive user profile with statistics', async () => {
-      const mockUser = {
-        id: testUserId,
-        email: 'test@example.com',
-        emailVerified: true,
-        createdAt: new Date(),
-        profile: {
-          title: 'John Doe',
-          preferredLang: 'en',
-          preferredTheme: 'dark',
-          emailNotifications: true,
-        },
-        _count: { projects: 5 },
-      };
-
       const mockStats = {
         totalProjects: 5,
         totalImages: 89,
@@ -305,18 +303,28 @@ describe('Dashboard Metrics API Endpoints', () => {
         processedImages: 65,
       };
 
-      prismaMock.user.findUnique.mockResolvedValueOnce(mockUser);
-      prismaMock.project.count.mockResolvedValueOnce(mockStats.totalProjects);
-      prismaMock.image.count
-        .mockResolvedValueOnce(mockStats.totalImages)
-        .mockResolvedValueOnce(mockStats.processedImages)
-        .mockResolvedValueOnce(mockStats.imagesUploadedToday);
-      prismaMock.segmentation.count.mockResolvedValueOnce(
-        mockStats.totalSegmentations
-      );
-      prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: mockStats.storageUsedBytes },
-      });
+      const mockProfile = {
+        id: testUserId,
+        email: 'test@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
+        isEmailVerified: true,
+        language: 'en',
+        theme: 'dark',
+        avatarUrl: null,
+        createdAt: new Date().toISOString(),
+        settings: {
+          notifications: {
+            email: true,
+            push: false,
+            segmentationComplete: true,
+            projectShared: true,
+          },
+        },
+        stats: mockStats,
+      };
+
+      jest.mocked(getUserProfile).mockResolvedValueOnce(mockProfile);
 
       const response = await request(app)
         .get('/api/dashboard/profile')
@@ -342,7 +350,7 @@ describe('Dashboard Metrics API Endpoints', () => {
     });
 
     it('should handle non-existent user', async () => {
-      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+      jest.mocked(getUserProfile).mockResolvedValueOnce(null);
 
       const response = await request(app)
         .get('/api/dashboard/profile')
@@ -355,36 +363,38 @@ describe('Dashboard Metrics API Endpoints', () => {
 
   describe('GET /api/projects/:projectId/stats', () => {
     it('should return accurate project statistics', async () => {
-      const mockProject = {
-        id: testProjectId,
-        title: 'Test Project',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const mockImageStats = [
-        { segmentationStatus: 'completed', _count: { id: 15 } },
-        { segmentationStatus: 'pending', _count: { id: 8 } },
-        { segmentationStatus: 'processing', _count: { id: 2 } },
-        { segmentationStatus: 'failed', _count: { id: 1 } },
-      ];
-
       const totalImages = 26;
       const totalSegmentations = 18;
       const totalFileSize = 75 * 1024 * 1024; // 75MB
 
-      // Mock sharing service to allow access
-      jest.doMock('../../services/sharingService', () => ({
-        hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: true }),
-      }));
+      const mockProjectStats = {
+        project: {
+          id: testProjectId,
+          title: 'Test Project',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        images: {
+          total: totalImages,
+          byStatus: {
+            completed: 15,
+            pending: 8,
+            processing: 2,
+            failed: 1,
+          },
+          totalFileSize: totalFileSize,
+        },
+        segmentations: {
+          total: totalSegmentations,
+        },
+        progress: {
+          completionPercentage: Math.round((15 / totalImages) * 100),
+          completedImages: 15,
+          remainingImages: totalImages - 15,
+        },
+      };
 
-      prismaMock.project.findUnique.mockResolvedValueOnce(mockProject);
-      prismaMock.image.groupBy.mockResolvedValueOnce(mockImageStats);
-      prismaMock.image.count.mockResolvedValueOnce(totalImages);
-      prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: totalFileSize },
-      });
-      prismaMock.segmentation.count.mockResolvedValueOnce(totalSegmentations);
+      jest.mocked(getProjectStats).mockResolvedValueOnce(mockProjectStats as any);
 
       const response = await request(app)
         .get(`/api/projects/${testProjectId}/stats`)
@@ -426,10 +436,7 @@ describe('Dashboard Metrics API Endpoints', () => {
     });
 
     it('should handle project not found or access denied', async () => {
-      // Mock sharing service to deny access
-      jest.doMock('../../services/sharingService', () => ({
-        hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: false }),
-      }));
+      jest.mocked(getProjectStats).mockResolvedValueOnce(null);
 
       const response = await request(app)
         .get('/api/projects/non-existent-project/stats')
@@ -443,12 +450,16 @@ describe('Dashboard Metrics API Endpoints', () => {
   describe('Performance Tests', () => {
     it('should handle concurrent dashboard requests efficiently', async () => {
       // Set up mock data for multiple concurrent requests
-      prismaMock.project.count.mockResolvedValue(10);
-      prismaMock.image.count.mockResolvedValue(500);
-      prismaMock.segmentation.count.mockResolvedValue(400);
-      prismaMock.image.aggregate.mockResolvedValue({
-        _sum: { fileSize: 500 * 1024 * 1024 },
-      });
+      const concurrentStats = {
+        totalProjects: 10,
+        totalImages: 500,
+        totalSegmentations: 400,
+        storageUsed: '500 MB',
+        storageUsedBytes: 500 * 1024 * 1024,
+        imagesUploadedToday: 20,
+        processedImages: 400,
+      };
+      jest.mocked(getUserStats).mockResolvedValue(concurrentStats);
 
       // Make multiple concurrent requests
       const promises = Array(10)
@@ -474,23 +485,14 @@ describe('Dashboard Metrics API Endpoints', () => {
         totalProjects: 7,
         totalImages: 156,
         totalSegmentations: 134,
+        storageUsed: '89 MB',
         storageUsedBytes: 89 * 1024 * 1024,
         imagesUploadedToday: 4,
         processedImages: 123,
       };
 
       // Set up consistent mock responses
-      prismaMock.project.count.mockResolvedValue(consistentStats.totalProjects);
-      prismaMock.image.count
-        .mockResolvedValue(consistentStats.totalImages)
-        .mockResolvedValue(consistentStats.processedImages)
-        .mockResolvedValue(consistentStats.imagesUploadedToday);
-      prismaMock.segmentation.count.mockResolvedValue(
-        consistentStats.totalSegmentations
-      );
-      prismaMock.image.aggregate.mockResolvedValue({
-        _sum: { fileSize: consistentStats.storageUsedBytes },
-      });
+      jest.mocked(getUserStats).mockResolvedValue(consistentStats);
 
       // Make multiple requests and verify consistency
       const response1 = await request(app).get('/api/dashboard/metrics');

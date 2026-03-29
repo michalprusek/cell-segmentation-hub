@@ -434,6 +434,8 @@ export default {
         'Nejpřesnější segmentace s mechanismy pozornosti (E2E ~482ms, 2.7 obr/s)',
       unet_spherohq:
         'Nejrychlejší model po optimalizacích! Výborný pro zpracování v reálném čase (E2E ~286ms, 5.5 obr/s)',
+      sperm:
+        'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:
@@ -1546,7 +1548,7 @@ export default {
       contact: {
         title: 'Kontaktní informace:',
         content:
-          'Pokud máte otázky ohledně těchto Podmínek, kontaktujte nás na spheroseg@utia.cas.cz',
+          'Pokud máte otázky ohledně těchto Podmínek, kontaktujte nás na prusek@utia.cas.cz',
       },
       navigation: {
         backToHome: 'Zpět domů',
@@ -1678,7 +1680,7 @@ export default {
             'Omezení: Omezit způsob, jakým zpracováváme vaše informace',
           ],
           contactNote:
-            'Pro uplatnění těchto práv nás kontaktujte na spheroseg@utia.cas.cz. Odpovíme do 30 dnů.',
+            'Pro uplatnění těchto práv nás kontaktujte na prusek@utia.cas.cz. Odpovíme do 30 dnů.',
         },
         dataRetention: {
           title: '8. Uchovávání dat',
@@ -1687,7 +1689,7 @@ export default {
             'Osobní/účetní data: Všechny osobní identifikátory, informace o profilu, nastavení účtu a transakční historie budou trvale vymazány do 90 dnů od uzavření účtu.',
             'Výzkumná data: Původní obrázky a projektová data propojená s vaším účtem budou vymazána do 90 dnů od uzavření účtu.',
             'Data pro trénování ML: Data používaná pro trénování ML jsou nejprve anonymizována/pseudonymizována k odstranění všech osobních identifikátorů. Tato anonymizovaná data mohou být uchovávána neomezeně dlouho k zachování zlepšení modelu, pokud se specificky neodhlásíte z trénování ML nebo nepožádáte o úplné vymazání.',
-            'Možnosti odhlášení: Můžete požádat o úplné vymazání všech dat, včetně anonymizovaných dat pro trénování ML, kontaktováním spheroseg@utia.cas.cz. Doba zpracování je obvykle 30 dnů.',
+            'Možnosti odhlášení: Můžete požádat o úplné vymazání všech dat, včetně anonymizovaných dat pro trénování ML, kontaktováním prusek@utia.cas.cz. Doba zpracování je obvykle 30 dnů.',
           ],
         },
         internationalTransfers: {
@@ -1707,8 +1709,8 @@ export default {
         },
         contact: {
           title: '12. Kontaktní informace',
-          dpo: 'Pověřenec pro ochranu osobních údajů: spheroseg@utia.cas.cz',
-          general: 'Obecné dotazy: spheroseg@utia.cas.cz',
+          dpo: 'Pověřenec pro ochranu osobních údajů: prusek@utia.cas.cz',
+          general: 'Obecné dotazy: prusek@utia.cas.cz',
           postal: 'Poštovní adresa:',
           address: {
             line1: 'ÚTIA AV ČR',

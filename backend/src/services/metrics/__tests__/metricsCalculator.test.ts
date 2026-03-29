@@ -39,20 +39,24 @@ jest.mock('axios', () => {
   const mockCreate = jest.fn(() => ({
     post: jest.fn().mockResolvedValue({
       data: {
-        area: 10000, // 100x100 square
-        perimeter: 400, // 4*100
-        equivalent_diameter: 112.84, // sqrt(4*10000/pi)
-        circularity: 0.785, // (4*pi*10000)/(400*400) ≈ 0.785
-        feret_diameter_max: 141.42, // diagonal of 100x100 square
-        feret_diameter_max_orthogonal_distance: 100,
-        feret_diameter_min: 100, // side of square
-        feret_aspect_ratio: 1.414, // 141.42/100
-        length_major_diameter_through_centroid: 141.42,
-        length_minor_diameter_through_centroid: 100,
-        compactness: 0.785, // Same as circularity for a square
-        convexity: 1.0, // Square is convex
-        solidity: 1.0, // Square has no holes
-        sphericity: 0.886, // Approx for a square
+        Area: 10000, // 100x100 square
+        Perimeter: 400, // 4*100
+        PerimeterWithHoles: 400,
+        EquivalentDiameter: 112.84, // sqrt(4*10000/pi)
+        Circularity: 0.785, // (4*pi*10000)/(400*400) ≈ 0.785
+        FeretDiameterMax: 141.42, // diagonal of 100x100 square
+        FeretDiameterMaxOrthogonalDistance: 100,
+        FeretDiameterMin: 100, // side of square
+        FeretAspectRatio: 1.414, // 141.42/100
+        LengthMajorDiameterThroughCentroid: 141.42,
+        LengthMinorDiameterThroughCentroid: 100,
+        BoundingBoxWidth: 100,
+        BoundingBoxHeight: 100,
+        Extent: 1.0,
+        Compactness: 0.785, // Same as circularity for a square
+        Convexity: 0.9, // Hardcoded estimate in fallback
+        Solidity: 0.95, // Hardcoded estimate in fallback
+        Sphericity: 0.628, // circularity * 0.8 in fallback
       },
     }),
   }));
@@ -86,8 +90,35 @@ describe('MetricsCalculator', () => {
   let calculator: MetricsCalculator;
 
   beforeEach(() => {
+    // jest config has resetMocks: true which clears mock implementations between tests.
+    // Re-setup the axios.create mock so the calculator gets a working http client.
+    const axiosMock = jest.requireMock('axios') as any;
+    const mockPostFn = jest.fn().mockResolvedValue({
+      data: {
+        Area: 10000,
+        Perimeter: 400,
+        PerimeterWithHoles: 400,
+        EquivalentDiameter: 112.84,
+        Circularity: 0.785,
+        FeretDiameterMax: 141.42,
+        FeretDiameterMaxOrthogonalDistance: 100,
+        FeretDiameterMin: 100,
+        FeretAspectRatio: 1.414,
+        LengthMajorDiameterThroughCentroid: 141.42,
+        LengthMinorDiameterThroughCentroid: 100,
+        BoundingBoxWidth: 100,
+        BoundingBoxHeight: 100,
+        Extent: 1.0,
+        Compactness: 0.785,
+        Convexity: 0.9,
+        Solidity: 0.95,
+        Sphericity: 0.628,
+      },
+    });
+    const createFn = jest.fn(() => ({ post: mockPostFn }));
+    axiosMock.default.create = createFn;
+    axiosMock.create = createFn;
     calculator = new MetricsCalculator();
-    jest.clearAllMocks();
   });
 
   describe('Scale Conversion', () => {
@@ -264,6 +295,7 @@ describe('MetricsCalculator', () => {
           type: 'external',
           area: 1000,
           perimeter: 120,
+          perimeterWithHoles: 120,
           equivalentDiameter: 35.68,
           circularity: 0.873,
           feretDiameterMax: 40,
@@ -272,6 +304,9 @@ describe('MetricsCalculator', () => {
           feretAspectRatio: 1.6,
           lengthMajorDiameterThroughCentroid: 38,
           lengthMinorDiameterThroughCentroid: 28,
+          boundingBoxWidth: 40,
+          boundingBoxHeight: 30,
+          extent: 0.833,
           compactness: 0.85,
           convexity: 0.95,
           solidity: 0.92,
@@ -311,6 +346,7 @@ describe('MetricsCalculator', () => {
           type: 'external',
           area: 1000,
           perimeter: 120,
+          perimeterWithHoles: 120,
           equivalentDiameter: 35.68,
           circularity: 0.873,
           feretDiameterMax: 40,
@@ -319,6 +355,9 @@ describe('MetricsCalculator', () => {
           feretAspectRatio: 1.6,
           lengthMajorDiameterThroughCentroid: 38,
           lengthMinorDiameterThroughCentroid: 28,
+          boundingBoxWidth: 40,
+          boundingBoxHeight: 30,
+          extent: 0.833,
           compactness: 0.85,
           convexity: 0.95,
           solidity: 0.92,

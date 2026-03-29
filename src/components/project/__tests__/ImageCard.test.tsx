@@ -5,13 +5,10 @@ import { render } from '@/test/utils/test-utils';
 import { ImageCard } from '@/components/project/ImageCard';
 import { ProjectImage } from '@/types';
 
-// Mock the CanvasThumbnailRenderer
-vi.mock('@/components/project/CanvasThumbnailRenderer', () => ({
-  default: ({ thumbnailData }: any) => (
-    <div data-testid="canvas-thumbnail">
-      Canvas Thumbnail - {thumbnailData?.polygonCount || 0} polygons
-    </div>
-  ),
+// Mock useRetryImage to control image loading state in tests
+const mockUseRetryImage = vi.fn();
+vi.mock('@/hooks/shared/useRetry', () => ({
+  useRetryImage: (...args: any[]) => mockUseRetryImage(...args),
 }));
 
 // Mock framer-motion
@@ -54,14 +51,28 @@ describe('ImageCard', () => {
     segmentationResults: [],
   };
 
+  const mockOnSelectionChange = vi.fn();
+
   const defaultProps = {
     image: baseImage,
     onDelete: mockOnDelete,
     onOpen: mockOnOpen,
+    isSelected: false,
+    onSelectionChange: mockOnSelectionChange,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: image loads successfully
+    mockUseRetryImage.mockReturnValue({
+      currentUrl: '/thumbnails/test-image.jpg',
+      loading: false,
+      retrying: false,
+      attempt: 0,
+      nextRetryIn: null,
+      imageError: false,
+      retry: vi.fn(),
+    });
   });
 
   it('renders image card with basic information', () => {
@@ -161,17 +172,13 @@ describe('ImageCard', () => {
     const user = userEvent.setup();
     render(<ImageCard {...defaultProps} />);
 
-    // Need to hover to show delete button
-    const card =
-      screen.getByRole('button', { name: /test.*image/i }) ||
-      document.querySelector('.cursor-pointer');
+    // Hover the card to show the delete button
+    const card = document.querySelector('.cursor-pointer');
     if (card) {
       await user.hover(card);
     }
 
-    const deleteButton =
-      screen.getByRole('button', { name: /delete/i }) ||
-      screen.getByRole('button');
+    const deleteButton = screen.getByRole('button');
     expect(deleteButton).toBeInTheDocument();
 
     await user.click(deleteButton);
@@ -193,7 +200,7 @@ describe('ImageCard', () => {
     expect(mockOnDelete).toHaveBeenCalled();
   });
 
-  it('renders segmentation overlay when completed with polygons', () => {
+  it('renders image thumbnail when completed with polygons', () => {
     const imageWithSegmentation = {
       ...baseImage,
       segmentationResult: {
@@ -217,13 +224,13 @@ describe('ImageCard', () => {
 
     render(<ImageCard {...defaultProps} image={imageWithSegmentation} />);
 
-    expect(screen.getByTestId('canvas-thumbnail')).toBeInTheDocument();
-    expect(
-      screen.getByText('Canvas Thumbnail - 1 polygons')
-    ).toBeInTheDocument();
+    // Component uses server-generated thumbnails, canvas renderer has been removed
+    const img = screen.getByRole('img');
+    expect(img).toBeInTheDocument();
+    expect(screen.getByText('Segmented')).toBeInTheDocument();
   });
 
-  it('does not render segmentation overlay when no polygons', () => {
+  it('renders image thumbnail when no polygons', () => {
     const imageWithoutSegmentation = {
       ...baseImage,
       segmentationResult: {
@@ -235,23 +242,40 @@ describe('ImageCard', () => {
 
     render(<ImageCard {...defaultProps} image={imageWithoutSegmentation} />);
 
-    expect(screen.queryByTestId('canvas-thumbnail')).not.toBeInTheDocument();
+    // Component uses server-generated thumbnails; no separate canvas overlay
+    const img = screen.getByRole('img');
+    expect(img).toBeInTheDocument();
   });
 
   it('handles image loading errors gracefully', () => {
-    const imageWithoutThumbnail = {
-      ...baseImage,
-      thumbnail_url: null,
-      url: null,
-      image_url: null,
-    };
+    // Simulate all image URLs failing to load
+    mockUseRetryImage.mockReturnValue({
+      currentUrl: null,
+      loading: false,
+      retrying: false,
+      attempt: 3,
+      nextRetryIn: null,
+      imageError: true,
+      retry: vi.fn(),
+    });
 
-    render(<ImageCard {...defaultProps} image={imageWithoutThumbnail} />);
+    render(<ImageCard {...defaultProps} />);
 
     expect(screen.getByText('No preview')).toBeInTheDocument();
   });
 
   it('falls back to alternative image URLs on error', () => {
+    // Mock useRetryImage to simulate fallback to second URL
+    mockUseRetryImage.mockReturnValue({
+      currentUrl: '/thumbnail.jpg',
+      loading: false,
+      retrying: false,
+      attempt: 1,
+      nextRetryIn: null,
+      imageError: false,
+      retry: vi.fn(),
+    });
+
     const imageWithMultipleUrls = {
       ...baseImage,
       thumbnail_url: '/thumbnail.jpg',
@@ -268,11 +292,10 @@ describe('ImageCard', () => {
   it('has correct fixed dimensions for stable rendering', () => {
     render(<ImageCard {...defaultProps} />);
 
-    const card = document.querySelector('[style*="width: 250px"]');
+    // Component uses Tailwind responsive classes for sizing
+    const card = document.querySelector('.cursor-pointer');
     expect(card).toBeInTheDocument();
-
-    const cardWithHeight = document.querySelector('[style*="height: 167px"]');
-    expect(cardWithHeight).toBeInTheDocument();
+    expect(card).toHaveClass('min-h-[167px]');
   });
 
   it('applies hover effects correctly', async () => {

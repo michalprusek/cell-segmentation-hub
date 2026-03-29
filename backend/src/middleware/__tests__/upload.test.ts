@@ -6,7 +6,32 @@ import {
   handleUploadError,
   validateUploadedFiles,
 } from '../upload';
-import { UploadMockGenerator } from '../../test/utils/uploadMocks';
+import * as UploadMocksRaw from '../../test/utils/uploadMocks';
+
+// Provide a class-style namespace for the individual exported functions
+const UploadMockGenerator = {
+  createMockFiles: UploadMocksRaw.createMockFiles,
+  createMockFormData: UploadMocksRaw.createMockFormData,
+  createInvalidFiles: UploadMocksRaw.createInvalidFiles,
+};
+
+/**
+ * Helper to attach mock files to a supertest request.
+ * Multer requires proper multipart/form-data; supertest's .send() doesn't work for this.
+ */
+function attachFiles(
+  req: ReturnType<ReturnType<typeof request>['post']>,
+  files: Express.Multer.File[]
+): ReturnType<ReturnType<typeof request>['post']> {
+  let r = req;
+  files.forEach(file => {
+    r = r.attach('images', file.buffer, {
+      filename: file.originalname,
+      contentType: file.mimetype,
+    });
+  });
+  return r;
+}
 
 describe('Upload Middleware - Large Batch Support', () => {
   let app: express.Application;
@@ -31,19 +56,17 @@ describe('Upload Middleware - Large Batch Support', () => {
         fileSize: 1024 * 100, // 100KB each
       });
 
-      const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-      const response = await request(app)
-        .post('/test-upload')
-        .send(form)
-        .expect(200);
+      const response = await attachFiles(
+        request(app).post('/test-upload'),
+        mockFiles
+      ).expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.fileCount).toBe(50);
     });
 
     it('should reject 51 files (exceeds new limit)', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req, res) => {
+      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
         const files = req.files as Express.Multer.File[];
         res.json({ success: true, fileCount: files.length });
       });
@@ -52,15 +75,13 @@ describe('Upload Middleware - Large Batch Support', () => {
         fileSize: 1024 * 100,
       });
 
-      const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-      const response = await request(app)
-        .post('/test-upload')
-        .send(form)
-        .expect(400);
+      const response = await attachFiles(
+        request(app).post('/test-upload'),
+        mockFiles
+      ).expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('Příliš mnoho souborů');
+      expect(response.body.error).toContain('Příliš mnoho souborů');
     });
 
     it('should handle old limit (20 files) for backward compatibility', async () => {
@@ -73,12 +94,10 @@ describe('Upload Middleware - Large Batch Support', () => {
         fileSize: 1024 * 100,
       });
 
-      const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-      const response = await request(app)
-        .post('/test-upload')
-        .send(form)
-        .expect(200);
+      const response = await attachFiles(
+        request(app).post('/test-upload'),
+        mockFiles
+      ).expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.fileCount).toBe(20);
@@ -93,43 +112,39 @@ describe('Upload Middleware - Large Batch Support', () => {
         res.json({ success: true, fileCount: files.length, totalSize });
       });
 
-      // Test with files that would be acceptable under new limits
+      // Test with files that would be acceptable under new limits (under 20MB per file)
       const mockFiles = UploadMockGenerator.createMockFiles(10, {
-        fileSize: 1024 * 1024 * 10, // 10MB each
+        fileSize: 1024 * 1024 * 1, // 1MB each (under 20MB test limit)
       });
 
-      const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-      const response = await request(app)
-        .post('/test-upload')
-        .send(form)
-        .expect(200);
+      const response = await attachFiles(
+        request(app).post('/test-upload'),
+        mockFiles
+      ).expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.fileCount).toBe(10);
-      expect(response.body.totalSize).toBe(10 * 1024 * 1024 * 10); // 100MB total
+      expect(response.body.totalSize).toBe(10 * 1024 * 1024 * 1); // 10MB total
     });
 
     it('should reject individual files exceeding size limit', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req, res) => {
+      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
         const files = req.files as Express.Multer.File[];
         res.json({ success: true, fileCount: files.length });
       });
 
-      // Create a file that exceeds the individual file size limit (typically 50MB)
+      // Create a file that exceeds the individual file size limit (20MB in test env)
       const mockFiles = UploadMockGenerator.createMockFiles(1, {
-        fileSize: 1024 * 1024 * 100, // 100MB - exceeds typical limit
+        fileSize: 1024 * 1024 * 21, // 21MB - exceeds 20MB test limit
       });
 
-      const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-      const response = await request(app)
-        .post('/test-upload')
-        .send(form)
-        .expect(400);
+      const response = await attachFiles(
+        request(app).post('/test-upload'),
+        mockFiles
+      ).expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('příliš velký');
+      expect(response.body.error).toContain('příliš velký');
     });
   });
 
@@ -154,9 +169,10 @@ describe('Upload Middleware - Large Batch Support', () => {
           extension: ext,
         });
 
-        const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-        const response = await request(app).post('/test-upload').send(form);
+        const response = await attachFiles(
+          request(app).post('/test-upload'),
+          mockFiles
+        );
 
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
@@ -164,7 +180,7 @@ describe('Upload Middleware - Large Batch Support', () => {
     });
 
     it('should reject unsupported MIME types', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req, res) => {
+      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
         const files = req.files as Express.Multer.File[];
         res.json({ success: true, fileCount: files.length });
       });
@@ -182,74 +198,69 @@ describe('Upload Middleware - Large Batch Support', () => {
           extension: ext,
         });
 
-        const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-        const response = await request(app).post('/test-upload').send(form);
+        const response = await attachFiles(
+          request(app).post('/test-upload'),
+          mockFiles
+        );
 
         expect(response.status).toBe(400);
         expect(response.body.success).toBe(false);
-        expect(response.body.message).toContain('Nepodporovaný formát');
+        expect(response.body.error).toContain('Nepodporovaný formát');
       }
     });
   });
 
   describe('Error Handling', () => {
     it('should handle LIMIT_FILE_COUNT error with new message', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req, res) => {
+      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
         res.json({ success: true });
       });
 
       // Simulate the error by creating too many files
       const mockFiles = UploadMockGenerator.createMockFiles(60); // Exceeds limit
 
-      const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-      const response = await request(app)
-        .post('/test-upload')
-        .send(form)
-        .expect(400);
+      const response = await attachFiles(
+        request(app).post('/test-upload'),
+        mockFiles
+      ).expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('50 souborů'); // New limit in message
+      expect(response.body.error).toContain('50 souborů'); // New limit in message
     });
 
     it('should handle LIMIT_FILE_SIZE error', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req, res) => {
+      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
         res.json({ success: true });
       });
 
       const mockFiles = UploadMockGenerator.createMockFiles(1, {
-        fileSize: 1024 * 1024 * 100, // 100MB
+        fileSize: 1024 * 1024 * 21, // 21MB - exceeds 20MB test limit
       });
 
-      const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-      const response = await request(app)
-        .post('/test-upload')
-        .send(form)
-        .expect(400);
+      const response = await attachFiles(
+        request(app).post('/test-upload'),
+        mockFiles
+      ).expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('příliš velký');
+      expect(response.body.error).toContain('příliš velký');
     });
 
     it('should handle multiple error types in batch', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req, res) => {
+      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
         res.json({ success: true });
       });
 
       // Mix of invalid files: wrong MIME types, too large, etc.
       const invalidFiles = UploadMockGenerator.createInvalidFiles();
 
-      const form = UploadMockGenerator.createMockFormData(invalidFiles);
-
-      const response = await request(app)
-        .post('/test-upload')
-        .send(form)
-        .expect(400);
+      const response = await attachFiles(
+        request(app).post('/test-upload'),
+        invalidFiles
+      ).expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toBeDefined();
+      expect(response.body.error).toBeDefined();
     });
   });
 
@@ -290,7 +301,7 @@ describe('Upload Middleware - Large Batch Support', () => {
       const response = await request(app).post('/test-validate').expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('alespoň jeden soubor');
+      expect(response.body.error).toContain('alespoň jeden soubor');
     });
   });
 
@@ -313,12 +324,10 @@ describe('Upload Middleware - Large Batch Support', () => {
         fileSize: 1024 * 500, // 500KB each = 20MB total
       });
 
-      const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-      const response = await request(app)
-        .post('/test-performance')
-        .send(form)
-        .expect(200);
+      const response = await attachFiles(
+        request(app).post('/test-performance'),
+        mockFiles
+      ).expect(200);
 
       const endMemory = process.memoryUsage();
       const memoryIncrease = endMemory.heapUsed - startMemory.heapUsed;
@@ -345,9 +354,10 @@ describe('Upload Middleware - Large Batch Support', () => {
           fileSize: 1024 * 100, // 100KB each
         });
 
-        const form = UploadMockGenerator.createMockFormData(mockFiles);
-
-        await request(app).post('/test-memory-leak').send(form).expect(200);
+        await attachFiles(
+          request(app).post('/test-memory-leak'),
+          mockFiles
+        ).expect(200);
 
         // Force garbage collection if available
         if (global.gc) {
@@ -375,9 +385,8 @@ describe('Upload Middleware - Large Batch Support', () => {
         const mockFiles = UploadMockGenerator.createMockFiles(15, {
           fileSize: 1024 * 100,
         });
-        const form = UploadMockGenerator.createMockFormData(mockFiles);
 
-        return request(app).post('/test-concurrent').send(form);
+        return attachFiles(request(app).post('/test-concurrent'), mockFiles);
       });
 
       const responses = await Promise.all(requests);
@@ -406,9 +415,11 @@ describe('Upload Middleware - Large Batch Support', () => {
           // Different file counts
           fileSize: 1024 * 100,
         });
-        const form = UploadMockGenerator.createMockFormData(mockFiles);
 
-        return request(app).post(`/test-integrity/upload-${i}`).send(form);
+        return attachFiles(
+          request(app).post(`/test-integrity/upload-${i}`),
+          mockFiles
+        );
       });
 
       const responses = await Promise.all(requests);
@@ -420,11 +431,13 @@ describe('Upload Middleware - Large Batch Support', () => {
       });
 
       // Verify no cross-contamination of files between requests
-      expect(uploadResults).toHaveLength(concurrentRequests);
-      expect(uploadResults[0].fileCount).toBe(10);
-      expect(uploadResults[1].fileCount).toBe(11);
-      expect(uploadResults[2].fileCount).toBe(12);
-      expect(uploadResults[3].fileCount).toBe(13);
+      // Sort by fileCount since concurrent requests may complete out of order
+      const sortedResults = uploadResults.sort((a, b) => a.fileCount - b.fileCount);
+      expect(sortedResults).toHaveLength(concurrentRequests);
+      expect(sortedResults[0].fileCount).toBe(10);
+      expect(sortedResults[1].fileCount).toBe(11);
+      expect(sortedResults[2].fileCount).toBe(12);
+      expect(sortedResults[3].fileCount).toBe(13);
     });
   });
 });

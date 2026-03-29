@@ -268,4 +268,4 @@ docker-compose -f docker-compose.staging.yml up -d --scale staging-ml=2
 For issues or questions about staging deployment:
 
 - GitHub Issues: https://github.com/michalprusek/cell-segmentation-hub/issues
-- Email: spheroseg@utia.cas.cz
+- Email: prusek@utia.cas.cz

@@ -692,7 +692,16 @@ describe('API Client - Segmentation & Queue Methods', () => {
 
         const result = await apiClient.getUserProfile();
 
-        expect(mockAxiosInstance.get).toHaveBeenCalledWith('/auth/profile');
+        // Implementation adds cache-busting headers and _t param to prevent stale profile data
+        expect(mockAxiosInstance.get).toHaveBeenCalledWith('/auth/profile', {
+          headers: {
+            'Cache-Control': 'no-cache',
+            Pragma: 'no-cache',
+          },
+          params: {
+            _t: expect.any(Number),
+          },
+        });
         expect(result).toEqual(mockProfile);
       });
     });
