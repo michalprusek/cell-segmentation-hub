@@ -397,6 +397,8 @@ export default {
       cbam_resunet: '具有注意力机制的最精确分割 (E2E ~482ms, 2.7 图像/秒)',
       unet_spherohq:
         '优化后最快的模型！非常适合实时处理 (E2E ~286ms, 5.5 图像/秒)',
+      sperm:
+        '精子形态模型，通过骨架提取测量头部、中段和尾部',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',
@@ -1395,7 +1397,7 @@ export default {
       },
       contact: {
         title: '联系信息：',
-        content: '如果您对这些条款有疑问，请通过spheroseg@utia.cas.cz联系我们',
+        content: '如果您对这些条款有疑问，请通过prusek@utia.cas.cz联系我们',
       },
       navigation: {
         backToHome: '返回首页',
@@ -1525,7 +1527,7 @@ export default {
             '限制：限制我们如何处理您的信息',
           ],
           contactNote:
-            '要行使这些权利，请通过spheroseg@utia.cas.cz联系我们。我们将在30天内回复。',
+            '要行使这些权利，请通过prusek@utia.cas.cz联系我们。我们将在30天内回复。',
         },
         dataRetention: {
           title: '8. 数据保留',
@@ -1534,7 +1536,7 @@ export default {
             '个人/账户数据：所有个人标识符、个人资料信息、账户设置和交易历史将在账户关闭后90天内永久删除。',
             '研究数据：与您账户关联的原始图像和项目数据将在账户关闭后90天内删除。',
             'ML训练数据：用于ML训练的数据首先被匿名化/化名化以删除所有个人标识符。这些匿名数据可能被无限期保留以保持模型改进，除非您特别选择退出ML训练或请求完全删除。',
-            '选择退出选项：您可以通过联系spheroseg@utia.cas.cz请求完全删除所有数据，包括匿名化的ML训练数据。处理时间通常为30天。',
+            '选择退出选项：您可以通过联系prusek@utia.cas.cz请求完全删除所有数据，包括匿名化的ML训练数据。处理时间通常为30天。',
           ],
         },
         internationalTransfers: {
@@ -1554,8 +1556,8 @@ export default {
         },
         contact: {
           title: '12. 联系信息',
-          dpo: '数据保护官：spheroseg@utia.cas.cz',
-          general: '一般查询：spheroseg@utia.cas.cz',
+          dpo: '数据保护官：prusek@utia.cas.cz',
+          general: '一般查询：prusek@utia.cas.cz',
           postal: '邮政地址：',
           address: {
             line1: 'ÚTIA AV ČR',

@@ -207,6 +207,22 @@ def pytest_configure(config):
     )
 
 
+@pytest.fixture
+def square_contour() -> np.ndarray:
+    """80x80 square contour at (10,10)-(90,90) in OpenCV format (4,1,2) int32."""
+    return np.array(
+        [[[10, 10]], [[90, 10]], [[90, 90]], [[10, 90]]],
+        dtype=np.int32,
+    )
+
+
+@pytest.fixture
+def postprocessing_service():
+    """Fresh PostprocessingService instance."""
+    from services.postprocessing import PostprocessingService
+    return PostprocessingService()
+
+
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to add markers based on test location."""
     for item in items:

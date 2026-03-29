@@ -258,7 +258,7 @@ A: ~2 GB for weights + ~5 GB for Docker images = ~7 GB total.
 A: Yes, set `ENABLE_GPU=false` in `.env`. Inference will be slower but works fine.
 
 **Q: Where can I get the latest weights?**
-A: Download from the [Google Drive folder](https://drive.google.com/drive/folders/1LwtiNkRabNw1c8V9kiEotdupO2HoaJzk?usp=drive_link) or contact spheroseg@utia.cas.cz
+A: Download from the [Google Drive folder](https://drive.google.com/drive/folders/1LwtiNkRabNw1c8V9kiEotdupO2HoaJzk?usp=drive_link) or contact prusek@utia.cas.cz
 
 **Q: Can I update weights without rebuilding?**
 A: Yes! Just replace files in `backend/segmentation/weights/` and restart:
@@ -274,5 +274,5 @@ For issues or questions:
 - Check logs: `make logs-ml`
 - Verify weights: `make check-weights`
 - Google Drive: [Download Weights](https://drive.google.com/drive/folders/1LwtiNkRabNw1c8V9kiEotdupO2HoaJzk?usp=drive_link)
-- Contact: spheroseg@utia.cas.cz
+- Contact: prusek@utia.cas.cz
 - Project page: https://staff.utia.cas.cz/novozada/spheroseg/

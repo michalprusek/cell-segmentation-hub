@@ -454,6 +454,8 @@ export default {
         'Präziseste Segmentierung mit Aufmerksamkeitsmechanismen (E2E ~482ms, 2.7 Bilder/s)',
       unet_spherohq:
         'Schnellstes Modell nach Optimierungen! Hervorragend für Echtzeitverarbeitung (E2E ~286ms, 5.5 Bilder/s)',
+      sperm:
+        'Spermienmorphologie-Modell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
     },
     dataUsageTitle: 'Datennutzung und Datenschutz',
     dataUsageDescription:
@@ -1513,7 +1515,7 @@ export default {
       contact: {
         title: 'Kontaktinformationen:',
         content:
-          'Wenn Sie Fragen zu diesen Bedingungen haben, kontaktieren Sie uns bitte unter spheroseg@utia.cas.cz',
+          'Wenn Sie Fragen zu diesen Bedingungen haben, kontaktieren Sie uns bitte unter prusek@utia.cas.cz',
       },
       navigation: {
         backToHome: 'Zurück zur Startseite',
@@ -1646,7 +1648,7 @@ export default {
             'Einschränkung: Begrenzen, wie wir Ihre Informationen verarbeiten',
           ],
           contactNote:
-            'Um diese Rechte auszuüben, kontaktieren Sie uns unter spheroseg@utia.cas.cz. Wir werden innerhalb von 30 Tagen antworten.',
+            'Um diese Rechte auszuüben, kontaktieren Sie uns unter prusek@utia.cas.cz. Wir werden innerhalb von 30 Tagen antworten.',
         },
         dataRetention: {
           title: '8. Datenspeicherung',
@@ -1656,7 +1658,7 @@ export default {
             'Persönliche/Kontodaten: Alle persönlichen Identifikatoren, Profilinformationen, Kontoeinstellungen und Transaktionshistorie werden innerhalb von 90 Tagen nach Kontoschluss dauerhaft gelöscht.',
             'Forschungsdaten: Ursprüngliche Bilder und Projektdaten, die mit Ihrem Konto verknüpft sind, werden innerhalb von 90 Tagen nach Kontoschluss gelöscht.',
             'ML-Trainingsdaten: Für ML-Training verwendete Daten werden zunächst anonymisiert/pseudonymisiert, um alle persönlichen Identifikatoren zu entfernen. Diese anonymisierten Daten können unbegrenzt aufbewahrt werden, um Modellverbesserungen zu bewahren, es sei denn, Sie schließen sich spezifisch vom ML-Training aus oder fordern vollständige Löschung an.',
-            'Opt-out-Optionen: Sie können vollständige Löschung aller Daten, einschließlich anonymisierter ML-Trainingsdaten, durch Kontaktierung von spheroseg@utia.cas.cz anfordern. Die Bearbeitungszeit beträgt typischerweise 30 Tage.',
+            'Opt-out-Optionen: Sie können vollständige Löschung aller Daten, einschließlich anonymisierter ML-Trainingsdaten, durch Kontaktierung von prusek@utia.cas.cz anfordern. Die Bearbeitungszeit beträgt typischerweise 30 Tage.',
           ],
         },
         internationalTransfers: {
@@ -1676,8 +1678,8 @@ export default {
         },
         contact: {
           title: '12. Kontaktinformationen',
-          dpo: 'Datenschutzbeauftragter: spheroseg@utia.cas.cz',
-          general: 'Allgemeine Anfragen: spheroseg@utia.cas.cz',
+          dpo: 'Datenschutzbeauftragter: prusek@utia.cas.cz',
+          general: 'Allgemeine Anfragen: prusek@utia.cas.cz',
           postal: 'Postadresse:',
           address: {
             line1: 'ÚTIA AV ČR',

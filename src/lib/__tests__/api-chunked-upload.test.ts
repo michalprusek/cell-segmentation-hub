@@ -1,11 +1,9 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import axios from 'axios';
-import { ApiClient } from '../api';
+import { apiClient } from '@/lib/api';
 
-// Mock axios
-vi.mock('axios');
-const mockAxios = vi.mocked(axios);
-const mockAxiosInstance = {
+// ===== MOCK SETUP =====
+// Use vi.hoisted so mockAxiosInstance is available inside vi.mock('axios') factory
+const mockAxiosInstance = vi.hoisted(() => ({
   post: vi.fn(),
   get: vi.fn(),
   put: vi.fn(),
@@ -15,20 +13,19 @@ const mockAxiosInstance = {
     request: { use: vi.fn() },
     response: { use: vi.fn() },
   },
-};
+}));
 
-mockAxios.create.mockReturnValue(mockAxiosInstance as any);
+// Mock axios so ApiClient uses our mock instance
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn(() => mockAxiosInstance),
+  },
+}));
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-};
-
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
+// Override the global setup.ts mock for @/lib/api so we get the real singleton
+vi.mock('@/lib/api', async importOriginal => {
+  const actual = (await importOriginal()) as any;
+  return { ...actual };
 });
 
 // Mock config
@@ -49,18 +46,25 @@ vi.mock('../logger', () => ({
 }));
 
 describe('ApiClient - Chunked Upload Tests', () => {
-  let apiClient: ApiClient;
+  // Helper to create mock File objects — defined at describe scope so all sub-describes can use it
+  const createMockFiles = (count: number): File[] => {
+    return Array.from({ length: count }, (_, i) => {
+      const content = `mock-image-data-${i}`;
+      const blob = new Blob([content], { type: 'image/jpeg' });
+      return new File([blob], `test-image-${i + 1}.jpg`, {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+    });
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    apiClient = new ApiClient();
-
-    // Mock successful auth
-    localStorageMock.getItem.mockImplementation((key: string) => {
-      if (key === 'accessToken') return 'mock-access-token';
-      if (key === 'refreshToken') return 'mock-refresh-token';
-      return null;
-    });
+    // Point the singleton's axios instance to our mock
+    (apiClient as any).instance = mockAxiosInstance;
+    // Set up auth tokens directly on the singleton
+    (apiClient as any).accessToken = 'mock-access-token';
+    (apiClient as any).refreshToken = 'mock-refresh-token';
   });
 
   afterEach(() => {
@@ -68,17 +72,6 @@ describe('ApiClient - Chunked Upload Tests', () => {
   });
 
   describe('File Chunking Logic', () => {
-    const createMockFiles = (count: number): File[] => {
-      return Array.from({ length: count }, (_, i) => {
-        const content = `mock-image-data-${i}`;
-        const blob = new Blob([content], { type: 'image/jpeg' });
-        return new File([blob], `test-image-${i + 1}.jpg`, {
-          type: 'image/jpeg',
-          lastModified: Date.now(),
-        });
-      });
-    };
-
     test('should split 613 files into 31 chunks of 20 files each', () => {
       const files = createMockFiles(613);
       const chunkSize = 20;
