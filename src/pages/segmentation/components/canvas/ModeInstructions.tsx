@@ -116,7 +116,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#10b981', // emerald-500 to match border
             instructions: [
               t('segmentation.instructions.addPoints.addPoints'),
-              `${t('segmentation.instructions.addPoints.holdShift')} • ${t('segmentation.instructions.addPoints.cancel')}`,
+              `${t('segmentation.instructions.addPoints.holdShift')} • ${t('segmentation.instructions.addPoints.enterFinalize')} • ${t('segmentation.instructions.addPoints.cancel')}`,
             ],
           };
         }

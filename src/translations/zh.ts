@@ -749,6 +749,7 @@ export default {
         addPoints:
           '点击添加点，然后点击另一个顶点完成。直接点击另一个顶点而不添加点，可删除它们之间的所有点。',
         holdShift: '按住SHIFT自动添加点',
+        enterFinalize: '按 ENTER 完成（折线：沿方向截断）',
         cancel: '按ESC取消',
       },
       editVertices: {

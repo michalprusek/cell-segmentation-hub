@@ -215,9 +215,9 @@ export const useKeyboardShortcuts = ({
           }
           break;
 
-        // Enter - finalize polyline creation
+        // Enter - finalize polyline creation or AddPoints on polylines
         case 'enter':
-          if (editMode === EditMode.CreatePolyline && onEnter) {
+          if ((editMode === EditMode.CreatePolyline || editMode === EditMode.AddPoints) && onEnter) {
             event.preventDefault();
             onEnter();
           }

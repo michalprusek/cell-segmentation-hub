@@ -827,6 +827,7 @@ export default {
         addPoints:
           'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen. Klicken Sie direkt auf einen anderen Eckpunkt ohne Punkte hinzuzufügen, um alle Punkte dazwischen zu entfernen.',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
+        enterFinalize: 'ENTER drücken zum Abschließen (Polylinien: schneidet in Richtung ab)',
         cancel: 'Drücken Sie ESC zum Abbrechen',
       },
       editVertices: {

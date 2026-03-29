@@ -141,7 +141,7 @@ export const useAdvancedInteractions = ({
       }
 
       // Add point to temporary points
-      setTempPoints([...tempPoints, imagePoint]);
+      setTempPoints(prev => [...prev, imagePoint]);
     },
     [
       tempPoints,
@@ -260,11 +260,13 @@ export const useAdvancedInteractions = ({
             interactionState.addPointStartVertex.vertexIndex
           ) {
             // Complete the sequence - implement CVAT-like point insertion
+            const isPolyline = selectedPolygon.geometry === 'polyline';
             const newPoints = insertPointsBetweenVertices(
               selectedPolygon.points,
               interactionState.addPointStartVertex.vertexIndex,
               closestVertex.index,
-              tempPoints
+              tempPoints,
+              isPolyline
             );
 
             if (newPoints) {
@@ -291,7 +293,7 @@ export const useAdvancedInteractions = ({
           }
         } else {
           // Add intermediate point to sequence (not on a vertex)
-          setTempPoints([...tempPoints, imagePoint]);
+          setTempPoints(prev => [...prev, imagePoint]);
         }
       }
     },
@@ -357,9 +359,9 @@ export const useAdvancedInteractions = ({
   const handleCreatePolylineClick = useCallback(
     (imagePoint: Point) => {
       // Add point to temporary points
-      setTempPoints([...tempPoints, imagePoint]);
+      setTempPoints(prev => [...prev, imagePoint]);
     },
-    [tempPoints, setTempPoints]
+    [setTempPoints]
   );
 
   /**
@@ -475,6 +477,13 @@ export const useAdvancedInteractions = ({
             // Nothing selected - exit slice mode to View mode
             setEditMode(EditMode.View);
           }
+        } else if (editMode === EditMode.AddPoints) {
+          // AddPoints mode: right-click starts panning (don't cancel)
+          setInteractionState({
+            ...interactionState,
+            isPanning: true,
+            panStart: { x: e.clientX, y: e.clientY },
+          });
         } else {
           // For other modes - always cancel current operation
           if (editMode !== EditMode.View) {
@@ -743,7 +752,7 @@ export const useAdvancedInteractions = ({
             EDITING_CONSTANTS.MIN_AUTO_ADD_DISTANCE / transform.zoom;
 
           if (distance >= MIN_DISTANCE) {
-            setTempPoints([...tempPoints, imagePoint]);
+            setTempPoints(prev => [...prev, imagePoint]);
             lastAutoAddedPoint.current = imagePoint;
           }
         }
@@ -890,15 +899,12 @@ function insertPointsBetweenVertices(
   originalPoints: Point[],
   startVertexIndex: number,
   endVertexIndex: number,
-  newPoints: Point[]
+  newPoints: Point[],
+  isPolyline = false
 ): Point[] | null {
-  // Inserts new points between two vertices, creating two candidate polygons
-  // and selecting the one with the smaller perimeter (preserves original boundary).
-
   const numPoints = originalPoints.length;
 
   // Normalize vertices to ensure consistent behavior
-  // Always work with the smaller index as vertex1 and larger as vertex2
   const vertex1 = Math.min(startVertexIndex, endVertexIndex);
   const vertex2 = Math.max(startVertexIndex, endVertexIndex);
 
@@ -917,12 +923,25 @@ function insertPointsBetweenVertices(
     ? [...newPoints].reverse()
     : newPoints;
 
-  // Create two candidate polygons
-  const candidate1Points: Point[] = []; // Replace direct path
-  const candidate2Points: Point[] = []; // Replace wrapped path
+  // Polyline: path between two vertices is unambiguous (always direct order),
+  // so just replace points[vertex1..vertex2] with the new sequence.
+  if (isPolyline) {
+    const result: Point[] = [];
+    for (let i = 0; i <= vertex1; i++) {
+      result.push(originalPoints[i]);
+    }
+    result.push(...finalNewPoints);
+    for (let i = vertex2; i < numPoints; i++) {
+      result.push(originalPoints[i]);
+    }
+    return result;
+  }
+
+  // Polygon: create two candidate polygons, pick the one with smaller perimeter.
+  const candidate1Points: Point[] = [];
+  const candidate2Points: Point[] = [];
 
   // Candidate 1: Replace direct path (vertex1 to vertex2)
-  // Keep: [0...vertex1] + newPoints + [vertex2...numPoints-1]
   for (let i = 0; i <= vertex1; i++) {
     candidate1Points.push(originalPoints[i]);
   }
@@ -932,21 +951,16 @@ function insertPointsBetweenVertices(
   }
 
   // Candidate 2: Replace wrapped path (vertex2 to vertex1 going around)
-  // Keep only the direct path vertices and replace wrapped path with newPoints
   candidate2Points.push(originalPoints[vertex1]);
   candidate2Points.push(...finalNewPoints);
   candidate2Points.push(originalPoints[vertex2]);
 
-  // Add the remaining points (wrapped path) by going from vertex2 to vertex1
   let idx = (vertex2 + 1) % numPoints;
   while (idx !== vertex1) {
     candidate2Points.push(originalPoints[idx]);
     idx = (idx + 1) % numPoints;
   }
 
-  // Calculate perimeters and choose the one with smaller perimeter.
-  // The candidate closer to the original polygon shape is the correct one,
-  // as adding points refines the boundary rather than replacing it.
   const perimeter1 = calculatePolygonPerimeter(candidate1Points);
   const perimeter2 = calculatePolygonPerimeter(candidate2Points);
 

@@ -79,6 +79,8 @@ export const useEnhancedSegmentationEditor = ({
   const [selectedPolygonId, setSelectedPolygonIdInternal] = useState<
     string | null
   >(null);
+  const selectedPolygonIdRef = useRef<string | null>(null);
+  selectedPolygonIdRef.current = selectedPolygonId;
 
   // Wrapped setSelectedPolygonId - fixed to not depend on selectedPolygonId
   const setSelectedPolygonId = useCallback((id: string | null) => {
@@ -106,6 +108,8 @@ export const useEnhancedSegmentationEditor = ({
     []
   ); // CRITICAL: No dependencies to prevent stale closures!
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
+  const tempPointsRef = useRef<Point[]>([]);
+  tempPointsRef.current = tempPoints;
   const [hoveredVertex, setHoveredVertex] = useState<{
     polygonId: string;
     vertexIndex: number;
@@ -177,6 +181,8 @@ export const useEnhancedSegmentationEditor = ({
     addPointEndVertex: null,
     isAddingPoints: false,
   });
+  const interactionStateRef = useRef(interactionState);
+  interactionStateRef.current = interactionState;
 
   // History management
   const [history, setHistory] = useState<Polygon[][]>([initialPolygons]);
@@ -716,11 +722,74 @@ export const useEnhancedSegmentationEditor = ({
     [polygons, updatePolygons, t]
   );
 
-  // Ref to hold the polyline finalization callback (set after interactions hook)
+  // Ref to hold the polyline creation finalization callback
   const polylineDoubleClickRef = useRef<(() => void) | null>(null);
+
+  // Stable Enter handler — reads ALL state from refs, never stale.
   const handleEnterPolyline = useCallback(() => {
+    const iState = interactionStateRef.current;
+    const currentTempPoints = tempPointsRef.current;
+    const selId = selectedPolygonIdRef.current;
+
+    // AddPoints mode: truncate/extend polyline
+    if (
+      iState.isAddingPoints &&
+      iState.addPointStartVertex &&
+      selId &&
+      currentTempPoints.length > 0
+    ) {
+      const allPolygons = getPolygons();
+      const selectedPolygon = allPolygons.find(p => p.id === selId);
+      if (!selectedPolygon || selectedPolygon.geometry !== 'polyline') return;
+
+      const pts = selectedPolygon.points;
+      const startIdx = iState.addPointStartVertex.vertexIndex;
+      const firstNew = currentTempPoints[0];
+      const startPt = pts[startIdx];
+
+      // Endpoints always extend; middle vertices use dot product
+      let towardEnd: boolean;
+      const hasPrev = startIdx > 0;
+      const hasNext = startIdx < pts.length - 1;
+
+      if (!hasNext) {
+        towardEnd = true;
+      } else if (!hasPrev) {
+        towardEnd = false;
+      } else {
+        const dxNew = firstNew.x - startPt.x;
+        const dyNew = firstNew.y - startPt.y;
+        const dotNext =
+          dxNew * (pts[startIdx + 1].x - startPt.x) +
+          dyNew * (pts[startIdx + 1].y - startPt.y);
+        const dotPrev =
+          dxNew * (pts[startIdx - 1].x - startPt.x) +
+          dyNew * (pts[startIdx - 1].y - startPt.y);
+        towardEnd = dotNext >= dotPrev;
+      }
+
+      const newPoints = towardEnd
+        ? [...pts.slice(0, startIdx + 1), ...currentTempPoints]
+        : [...[...currentTempPoints].reverse(), ...pts.slice(startIdx)];
+
+      const updatedPolygons = allPolygons.map(p =>
+        p.id === selId ? { ...p, points: newPoints } : p
+      );
+      updatePolygons(updatedPolygons);
+      setTempPoints([]);
+      setInteractionState({
+        ...iState,
+        isAddingPoints: false,
+        addPointStartVertex: null,
+        addPointEndVertex: null,
+      });
+      setEditMode(EditMode.EditVertices);
+      return;
+    }
+
+    // CreatePolyline mode: finalize
     polylineDoubleClickRef.current?.();
-  }, []);
+  }, [getPolygons, updatePolygons, setTempPoints, setInteractionState, setEditMode]);
 
   // Escape handler - always return to View mode
   const handleEscape = useCallback(() => {

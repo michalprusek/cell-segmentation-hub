@@ -212,6 +212,14 @@ const CanvasPolygon = React.memo(
       (instanceId: string) => onChangeInstanceId?.(id, instanceId),
       [onChangeInstanceId, id]
     );
+    // Suppress hover/click on non-selected polylines during editing to
+    // prevent accidental selection while working on the active polyline.
+    const suppressInteraction =
+      isPolyline &&
+      !isSelected &&
+      editMode !== EditMode.View &&
+      editMode !== EditMode.DeletePolygon;
+
     const handleMouseEnter = useCallback(() => onHover?.(id), [onHover, id]);
     const handleMouseLeave = useCallback(() => onHover?.(null), [onHover]);
 
@@ -254,10 +262,25 @@ const CanvasPolygon = React.memo(
           role="button"
           aria-label={`${isPolyline ? 'Polyline' : 'Polygon'} ${id} - ${type} ${isPolyline ? 'polyline' : 'polygon'} with ${points.length} vertices`}
           onKeyDown={handleKeyDown}
-          onMouseEnter={isPolyline ? handleMouseEnter : undefined}
-          onMouseLeave={isPolyline ? handleMouseLeave : undefined}
+          onMouseEnter={isPolyline && !suppressInteraction ? handleMouseEnter : undefined}
+          onMouseLeave={isPolyline && !suppressInteraction ? handleMouseLeave : undefined}
           style={{ outline: 'none' }}
         >
+          {/* Invisible wide hit-area path for polylines (easier clicking) */}
+          {isPolyline && pathString && !suppressInteraction && (
+            <path
+              d={pathString}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={Math.max(12 / zoom, 6)}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              onClick={handleClick}
+              onDoubleClick={handleDoubleClick}
+              pointerEvents="stroke"
+            />
+          )}
+
           {/* Polygon/Polyline path - render even if path is empty for testing */}
           <path
             d={pathString || 'M0,0'}
@@ -290,8 +313,9 @@ const CanvasPolygon = React.memo(
             pointerEvents={isPolyline ? 'stroke' : 'all'}
           />
 
-          {/* Polyline endpoint markers (small circles at start and end) */}
-          {isPolyline && validPoints.length >= 2 && (
+          {/* Polyline endpoint markers (small circles at start and end) — hidden when
+              selected because vertices are shown and dragging updates only on mouseup */}
+          {isPolyline && !isSelected && validPoints.length >= 2 && (
             <>
               <circle
                 cx={validPoints[0].x}
@@ -372,6 +396,7 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.instanceId === nextProps.polygon.instanceId &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
+      prevProps.editMode === nextProps.editMode &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
       prevProps.zoom === nextProps.zoom &&
       prevProps.hideVertices === nextProps.hideVertices &&

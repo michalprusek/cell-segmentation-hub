@@ -336,6 +336,103 @@ export function slicePolygon(
 }
 
 /**
+ * Slices a polyline (open path) at the intersection closest to the slice
+ * midpoint, producing two new polylines that share the intersection point.
+ */
+export function slicePolyline(
+  polygon: Polygon,
+  sliceStart: Point,
+  sliceEnd: Point
+): [Polygon, Polygon] | null {
+  const points = polygon.points;
+  if (!points || points.length < 2) {
+    return null;
+  }
+
+  // Find intersections — iterate open edges (no wrapping)
+  const intersections: Array<{ point: Point; edgeIndex: number; t: number }> =
+    [];
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const intersection = lineIntersection(
+      sliceStart,
+      sliceEnd,
+      points[i],
+      points[i + 1]
+    );
+    if (intersection) {
+      const edgeLength = Math.sqrt(
+        Math.pow(points[i + 1].x - points[i].x, 2) +
+          Math.pow(points[i + 1].y - points[i].y, 2)
+      );
+      const dist = Math.sqrt(
+        Math.pow(intersection.x - points[i].x, 2) +
+          Math.pow(intersection.y - points[i].y, 2)
+      );
+      const t = edgeLength > 0 ? dist / edgeLength : 0;
+      intersections.push({ point: intersection, edgeIndex: i, t });
+    }
+  }
+
+  if (intersections.length === 0) {
+    return null;
+  }
+
+  // Pick the intersection closest to the slice midpoint (most "central" cut)
+  const sliceMidX = (sliceStart.x + sliceEnd.x) / 2;
+  const sliceMidY = (sliceStart.y + sliceEnd.y) / 2;
+  intersections.sort((a, b) => {
+    const da =
+      Math.pow(a.point.x - sliceMidX, 2) +
+      Math.pow(a.point.y - sliceMidY, 2);
+    const db =
+      Math.pow(b.point.x - sliceMidX, 2) +
+      Math.pow(b.point.y - sliceMidY, 2);
+    return da - db;
+  });
+  const hit = intersections[0];
+
+  // Split: polyline1 = points[0..edgeIdx] + intersection
+  //        polyline2 = intersection + points[edgeIdx+1..end]
+  const poly1Points: Point[] = [];
+  for (let i = 0; i <= hit.edgeIndex; i++) {
+    poly1Points.push(points[i]);
+  }
+  poly1Points.push(hit.point);
+
+  const poly2Points: Point[] = [hit.point];
+  for (let i = hit.edgeIndex + 1; i < points.length; i++) {
+    poly2Points.push(points[i]);
+  }
+
+  // Both halves need at least 2 points
+  if (poly1Points.length < 2 || poly2Points.length < 2) {
+    return null;
+  }
+
+  const newPolyline1 = createPolygon(poly1Points, polygon.color);
+  const newPolyline2 = createPolygon(poly2Points, polygon.color);
+
+  // Preserve polyline-specific properties
+  newPolyline1.geometry = 'polyline';
+  newPolyline2.geometry = 'polyline';
+  if (polygon.confidence !== undefined) {
+    newPolyline1.confidence = polygon.confidence;
+    newPolyline2.confidence = polygon.confidence;
+  }
+  if (polygon.partClass) {
+    newPolyline1.partClass = polygon.partClass;
+    newPolyline2.partClass = polygon.partClass;
+  }
+  if (polygon.instanceId) {
+    newPolyline1.instanceId = polygon.instanceId;
+    newPolyline2.instanceId = polygon.instanceId;
+  }
+
+  return [newPolyline1, newPolyline2];
+}
+
+/**
  * Validate if a slice line is valid for a given polygon
  * If the line segment doesn't intersect properly, try extending it to an infinite line
  */
