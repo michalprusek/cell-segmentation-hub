@@ -980,6 +980,13 @@ export class ExportService {
       throw new Error('Export cancelled by user');
     }
 
+    // Detect if project contains polylines (sperm data)
+    const isSpermProject = this.metricsCalculator.hasPolylines(
+      metricsImages as Parameters<
+        typeof this.metricsCalculator.hasPolylines
+      >[0]
+    );
+
     for (const format of formats) {
       // Check if job was cancelled before each format export
       if (jobId && this.isJobCancelled(jobId)) {
@@ -987,11 +994,23 @@ export class ExportService {
       }
 
       if (format === 'excel') {
-        await this.metricsCalculator.exportToExcel(
-          allMetrics,
-          path.join(metricsDir, 'metrics.xlsx'),
-          options?.pixelToMicrometerScale
-        );
+        if (isSpermProject) {
+          // Sperm project: one row per sperm with H/M/T lengths
+          await this.metricsCalculator.exportSpermToExcel(
+            metricsImages as Parameters<
+              typeof this.metricsCalculator.exportSpermToExcel
+            >[0],
+            path.join(metricsDir, 'metrics.xlsx'),
+            options?.pixelToMicrometerScale
+          );
+        } else {
+          // Standard project: polygon metrics
+          await this.metricsCalculator.exportToExcel(
+            allMetrics,
+            path.join(metricsDir, 'metrics.xlsx'),
+            options?.pixelToMicrometerScale
+          );
+        }
       } else if (format === 'csv') {
         await this.metricsCalculator.exportToCSV(
           allMetrics,
