@@ -344,7 +344,8 @@ export default {
     imageAlreadyProcessing: "L'image est déjà en cours de traitement",
     processImageFailed: "Échec du traitement de l'image",
     upload: {
-      inProgress: 'Téléversement en cours. Vous pouvez continuer — suivez la progression en bas à droite.',
+      inProgress:
+        'Téléversement en cours. Vous pouvez continuer — suivez la progression en bas à droite.',
       uploading: 'Téléversement de {{success}}/{{total}} fichiers',
       completed: '{{count}} fichiers téléversés avec succès',
       completedWithFailures: '{{success}} téléversés, {{failed}} échoués',

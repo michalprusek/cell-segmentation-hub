@@ -349,10 +349,12 @@ export default {
     imageAlreadyProcessing: 'Bild wird bereits verarbeitet',
     processImageFailed: 'Bildverarbeitung fehlgeschlagen',
     upload: {
-      inProgress: 'Upload läuft. Sie können weiterarbeiten — den Fortschritt sehen Sie rechts unten.',
+      inProgress:
+        'Upload läuft. Sie können weiterarbeiten — den Fortschritt sehen Sie rechts unten.',
       uploading: '{{success}}/{{total}} Dateien werden hochgeladen',
       completed: '{{count}} Dateien erfolgreich hochgeladen',
-      completedWithFailures: '{{success}} hochgeladen, {{failed}} fehlgeschlagen',
+      completedWithFailures:
+        '{{success}} hochgeladen, {{failed}} fehlgeschlagen',
       failed: 'Upload fehlgeschlagen',
       cancelled: 'Upload abgebrochen',
       cancelButton: 'Upload abbrechen',

@@ -6,7 +6,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
 import { VisualizationGenerator } from './visualization/visualizationGenerator';
-import { MetricsCalculator } from './metrics/metricsCalculator';
+import { MetricsCalculator, type ImageWithSegmentation as MetricsImageInput } from './metrics/metricsCalculator';
 import { FormatConverter } from './export/formatConverter';
 import { WebSocketService } from './websocketService';
 import * as SharingService from './sharingService';
@@ -952,7 +952,7 @@ export class ExportService {
 
     const metricsDir = path.join(exportDir, 'metrics');
     // Convert images to the format expected by metrics calculator
-    const metricsImages = images.map(image => ({
+    const metricsImages: MetricsImageInput[] = images.map(image => ({
       id: image.id,
       name: image.name,
       width: image.width || undefined,
@@ -969,9 +969,7 @@ export class ExportService {
     }));
 
     const allMetrics = await this.metricsCalculator.calculateAllMetrics(
-      metricsImages as Parameters<
-        typeof this.metricsCalculator.calculateAllMetrics
-      >[0],
+      metricsImages,
       options?.pixelToMicrometerScale
     );
 
@@ -980,13 +978,6 @@ export class ExportService {
       throw new Error('Export cancelled by user');
     }
 
-    // Detect if project contains polylines (sperm data)
-    const isSpermProject = this.metricsCalculator.hasPolylines(
-      metricsImages as Parameters<
-        typeof this.metricsCalculator.hasPolylines
-      >[0]
-    );
-
     for (const format of formats) {
       // Check if job was cancelled before each format export
       if (jobId && this.isJobCancelled(jobId)) {
@@ -994,20 +985,17 @@ export class ExportService {
       }
 
       if (format === 'excel') {
-        if (isSpermProject) {
-          // Sperm project: one row per sperm with H/M/T lengths
-          await this.metricsCalculator.exportSpermToExcel(
-            metricsImages as Parameters<
-              typeof this.metricsCalculator.exportSpermToExcel
-            >[0],
-            path.join(metricsDir, 'metrics.xlsx'),
-            options?.pixelToMicrometerScale
-          );
-        } else {
-          // Standard project: polygon metrics
+        const excelPath = path.join(metricsDir, 'metrics.xlsx');
+        // Try sperm export first; falls back to standard if no polyline data found
+        const exportedSperm = await this.metricsCalculator.exportSpermToExcel(
+          metricsImages,
+          excelPath,
+          options?.pixelToMicrometerScale
+        );
+        if (!exportedSperm) {
           await this.metricsCalculator.exportToExcel(
             allMetrics,
-            path.join(metricsDir, 'metrics.xlsx'),
+            excelPath,
             options?.pixelToMicrometerScale
           );
         }
