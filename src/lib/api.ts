@@ -215,8 +215,8 @@ class ApiClient {
               // Retry the original request with new token
               originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
               return this.instance(originalRequest);
-            } catch (_refreshError) {
-              logger.debug('🔄 Token refresh failed, forcing logout');
+            } catch (refreshError) {
+              logger.error('Token refresh failed, forcing logout:', refreshError);
               // Fall through to force logout below
             }
           }

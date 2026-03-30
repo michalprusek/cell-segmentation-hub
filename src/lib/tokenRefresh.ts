@@ -85,6 +85,7 @@ class TokenRefreshManager {
         logger.debug('Token refreshed successfully');
         return true;
       }
+      logger.error('Token refresh completed but no access token was returned');
       return false;
     } catch (error) {
       logger.error('Token refresh failed:', error);
