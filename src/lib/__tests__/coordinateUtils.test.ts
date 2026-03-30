@@ -142,20 +142,32 @@ describe('Coordinate Utilities', () => {
       expect(typeof result.translateY).toBe('number');
     });
 
-    it('should constrain translation to keep image in bounds', () => {
-      // Use zoom < 2 to test translation constraints (zoom >= 2 allows unlimited panning)
+    it('should allow free panning when zoomed in (>= 1.0)', () => {
       const extremeTransform: TransformState = {
-        zoom: 1.5, // Below 2.0 threshold where constraints apply
-        translateX: -2000, // Far out of bounds
+        zoom: 1.5,
+        translateX: -2000,
         translateY: -2000,
       };
 
       const result = constrainTransform(extremeTransform, 800, 600, 400, 300);
 
-      // Translation should be constrained to keep image visible
-      // For zoom >= 1.0, very generous constraints apply
-      expect(result.translateX).toBeGreaterThan(-2000); // Should be constrained from original
-      expect(result.translateY).toBeGreaterThan(-2000); // Should be constrained from original
+      // Zoom >= 1.0 allows unlimited panning
+      expect(result.translateX).toBe(-2000);
+      expect(result.translateY).toBe(-2000);
+    });
+
+    it('should constrain translation when zoomed out (< 1.0)', () => {
+      const extremeTransform: TransformState = {
+        zoom: 0.5,
+        translateX: -5000,
+        translateY: -5000,
+      };
+
+      const result = constrainTransform(extremeTransform, 800, 600, 400, 300);
+
+      // Zoom < 1.0 applies constraints to keep image visible
+      expect(result.translateX).toBeGreaterThan(-5000);
+      expect(result.translateY).toBeGreaterThan(-5000);
     });
   });
 
