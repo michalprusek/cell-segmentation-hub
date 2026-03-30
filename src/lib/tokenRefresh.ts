@@ -73,22 +73,22 @@ class TokenRefreshManager {
 
     try {
       this.isRefreshing = true;
-      logger.debug('🔄 Refreshing access token...');
+      logger.debug('Proactive token refresh...');
 
-      // The API client will handle the refresh automatically through its interceptor
-      // We just need to make a request that will trigger the refresh if needed
-      await apiClient.getUserProfile();
+      // Directly refresh the token — don't go through getUserProfile which would
+      // trigger the 401 interceptor and create a double-refresh race condition
+      await apiClient.refreshAccessToken();
 
-      // If we get here, the token was successfully refreshed
       const newAccessToken = apiClient.getAccessToken();
       if (newAccessToken) {
         this.scheduleTokenRefresh(newAccessToken);
-        logger.debug('✅ Token refreshed successfully');
+        logger.debug('Token refreshed successfully');
         return true;
       }
+      logger.error('Token refresh completed but no access token was returned');
+      return false;
     } catch (error) {
       logger.error('Token refresh failed:', error);
-      // Clear tokens on refresh failure
       this.clearRefreshTimer();
       return false;
     } finally {

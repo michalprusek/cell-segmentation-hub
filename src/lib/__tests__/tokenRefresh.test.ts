@@ -15,6 +15,7 @@ vi.mock('@/lib/api', () => ({
     isAuthenticated: vi.fn(() => false),
     getAccessToken: vi.fn(() => null),
     getUserProfile: vi.fn().mockResolvedValue({ id: '1' }),
+    refreshAccessToken: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -99,7 +100,7 @@ describe('TokenRefreshManager', () => {
 
       // Timer should be at 30s minimum — advancing 29s should not trigger it
       vi.advanceTimersByTime(29_000);
-      expect(vi.mocked(apiClient.getUserProfile)).not.toHaveBeenCalled();
+      expect(vi.mocked(apiClient.refreshAccessToken)).not.toHaveBeenCalled();
     });
   });
 
@@ -115,17 +116,17 @@ describe('TokenRefreshManager', () => {
     it('returns true and reschedules when refresh succeeds', async () => {
       const { default: apiClient } = await import('@/lib/api');
       vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getUserProfile).mockResolvedValue({ id: '1' });
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
       vi.mocked(apiClient.getAccessToken).mockReturnValue(makeJwt());
 
       const result = await tokenRefreshManager.refreshTokenIfNeeded();
       expect(result).toBe(true);
     });
 
-    it('returns false when getUserProfile throws', async () => {
+    it('returns false when refreshAccessToken throws', async () => {
       const { default: apiClient } = await import('@/lib/api');
       vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getUserProfile).mockRejectedValue(
+      vi.mocked(apiClient.refreshAccessToken).mockRejectedValue(
         new Error('Network error')
       );
 
@@ -133,28 +134,28 @@ describe('TokenRefreshManager', () => {
       expect(result).toBe(false);
     });
 
-    it('does not call getUserProfile concurrently (deduplicates in-flight refresh)', async () => {
+    it('does not refresh concurrently (deduplicates in-flight refresh)', async () => {
       const { default: apiClient } = await import('@/lib/api');
       vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getAccessToken).mockReturnValue(makeJwt());
 
-      let resolveProfile!: () => void;
-      vi.mocked(apiClient.getUserProfile).mockReturnValue(
-        new Promise<any>(res => {
-          resolveProfile = () => res({ id: '1' });
+      let resolveRefresh!: () => void;
+      vi.mocked(apiClient.refreshAccessToken).mockReturnValue(
+        new Promise<void>(res => {
+          resolveRefresh = () => res();
         })
       );
 
       const p1 = tokenRefreshManager.refreshTokenIfNeeded();
       const p2 = tokenRefreshManager.refreshTokenIfNeeded();
 
-      resolveProfile();
+      resolveRefresh();
       const [r1, r2] = await Promise.all([p1, p2]);
 
-      // First call succeeds, second is deduplicated and returns false
+      // First call succeeds, second is deduplicated via isRefreshing flag
       expect(r1).toBe(true);
       expect(r2).toBe(false);
-      expect(vi.mocked(apiClient.getUserProfile)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(1);
     });
   });
 
