@@ -498,7 +498,23 @@ class ApiClient {
     }
   }
 
+  private refreshPromise: Promise<void> | null = null;
+
   async refreshAccessToken(): Promise<void> {
+    // Deduplicate concurrent refresh attempts — all callers share one in-flight request
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = this._doRefresh();
+    try {
+      await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+
+  private async _doRefresh(): Promise<void> {
     if (!this.refreshToken) {
       throw new Error('No refresh token available');
     }
@@ -507,8 +523,14 @@ class ApiClient {
       refreshToken: this.refreshToken,
     });
 
-    const data = this.extractData<{ accessToken: string }>(response);
+    const data = this.extractData<{
+      accessToken: string;
+      refreshToken: string;
+    }>(response);
     this.accessToken = data.accessToken;
+    if (data.refreshToken) {
+      this.refreshToken = data.refreshToken;
+    }
     this.saveTokensToStorage();
   }
 
