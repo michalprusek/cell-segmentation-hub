@@ -196,9 +196,9 @@ export const constrainTransform = (
   let translateX = transform.translateX;
   let translateY = transform.translateY;
 
-  // When zoomed in significantly (>= 2x), allow unlimited panning
-  // This fixes the issue where highly zoomed images get stuck at boundaries
-  if (zoom >= 2.0) {
+  // When zoomed in (>= 1x), allow unlimited panning
+  // so the user can freely navigate to any part of the image
+  if (zoom >= 1.0) {
     return {
       zoom,
       translateX: transform.translateX,
