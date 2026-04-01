@@ -60,8 +60,15 @@ export class HealthCheckService {
 
   private initializeRedis(): void {
     try {
-      const redisUrl = process.env.REDIS_URL || 'redis://redis:6379';
-      this.redis = new Redis(redisUrl, {
+      // Use explicit host/port/password instead of REDIS_URL to avoid
+      // WHATWG URL parser issues with special characters in passwords
+      const redisHost = process.env.REDIS_HOST || process.env.REDIS_SERVICE || 'redis';
+      const redisPassword = process.env.REDIS_PASSWORD;
+
+      this.redis = new Redis({
+        host: redisHost,
+        port: 6379,
+        password: redisPassword,
         maxRetriesPerRequest: 3,
         retryStrategy: (times): number => Math.min(times * 50, 2000),
         enableReadyCheck: true,
