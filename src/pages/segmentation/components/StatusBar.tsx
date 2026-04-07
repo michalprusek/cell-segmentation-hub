@@ -12,7 +12,7 @@ import {
   Plus,
   Hash,
   MousePointer,
-  PenTool,
+  Pentagon,
   Trash2,
   Eye,
   EyeOff,
@@ -53,7 +53,7 @@ const StatusBar = ({
       case EditMode.AddPoints:
         return <Plus className="h-3 w-3" />;
       case EditMode.CreatePolygon:
-        return <PenTool className="h-3 w-3" />;
+        return <Pentagon className="h-3 w-3" />;
       case EditMode.Slice:
         return <Scissors className="h-3 w-3" />;
       case EditMode.DeletePolygon:

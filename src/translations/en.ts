@@ -701,6 +701,7 @@ export default {
         addPoints:
           'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
+        enterFinalize: 'Press ENTER to finalize (polylines: truncates in direction)',
         cancel: 'Press ESC to cancel',
       },
       editVertices: {

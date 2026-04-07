@@ -837,6 +837,7 @@ export default {
         addPoints:
           'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
+        enterFinalize: 'Presione ENTER para finalizar (polilíneas: trunca en la dirección)',
         cancel: 'Presiona ESC para cancelar',
       },
       editVertices: {

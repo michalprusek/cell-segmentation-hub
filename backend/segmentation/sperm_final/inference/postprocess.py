@@ -251,25 +251,19 @@ def mask_to_polyline(
     mask: np.ndarray,
     cls: int,
     mask_threshold: float = 0.5,
-    simplify_eps: float = 5.0,
-    pts_per_100px: float = 32.0,
-    min_pts: int = 2,
+    simplify_eps: float = 2.0,
 ) -> List[Tuple[float, float]]:
     """Convert instance mask to a smooth polyline.
 
-    Pipeline: skeleton → prune → BFS longest path → RDP simplify →
-    uniform resampling.
-
-    The number of output points adapts to the arc length of the structure.
-    Head (cls=1) is always 3 points. Midpiece/tail use pts_per_100px density.
+    Pipeline: skeleton → prune → BFS longest path → RDP simplify.
+    Head (cls=1) is resampled to exactly 3 points; midpiece/tail return
+    the RDP-simplified path directly.
 
     Args:
         mask: Soft mask (float32).
         cls: Class ID (1=Head, 2=Midpiece, 3=Tail).
         mask_threshold: Threshold for binarization.
-        simplify_eps: RDP epsilon for initial simplification (higher = smoother).
-        pts_per_100px: Output point density (points per 100px of arc length).
-        min_pts: Minimum number of output points.
+        simplify_eps: RDP epsilon for simplification (lower = more detail).
     """
     bin_mask = (mask >= mask_threshold).astype(np.uint8)
     area = bin_mask.sum()
@@ -301,18 +295,65 @@ def mask_to_polyline(
 
     simplified = rdp_simplify(path, simplify_eps)
 
-    # Estimate arc length from simplified path to determine output point count
-    pts_arr = np.array(simplified, dtype=float)
-    arc_len = float(np.linalg.norm(pts_arr[1:] - pts_arr[:-1], axis=1).sum())
-    # Head (cls=1): always 3 points (start, midpoint, end) for a clean arc
+    # Head: always exactly 3 points (start, midpoint, end)
     if cls == 1:
-        n_output = 3
-    else:
-        n_output = max(min_pts, round(arc_len * pts_per_100px / 100.0))
+        return resample_polyline(simplified, 3)
 
-    # Uniform resampling along the simplified polyline — stable and follows
-    # the RDP-simplified path exactly without B-spline overshoot
-    return resample_polyline(simplified, n_output)
+    return [(float(x), float(y)) for x, y in simplified]
+
+
+def _segment_intersection(
+    p1: np.ndarray, p2: np.ndarray, p3: np.ndarray, p4: np.ndarray,
+) -> "np.ndarray | None":
+    """Find intersection point of segments p1-p2 and p3-p4.
+
+    Returns the intersection (x, y) array if the segments cross, else None.
+    Uses the parametric cross-product method.
+    """
+    d1 = p2 - p1
+    d2 = p4 - p3
+    cross = d1[0] * d2[1] - d1[1] * d2[0]
+    if abs(cross) < 1e-10:
+        return None  # parallel / collinear
+    dp = p3 - p1
+    t = (dp[0] * d2[1] - dp[1] * d2[0]) / cross
+    u = (dp[0] * d1[1] - dp[1] * d1[0]) / cross
+    if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+        return p1 + t * d1
+    return None
+
+
+def _find_junction_intersection(
+    poly_a: List[Tuple[float, float]],
+    poly_b: List[Tuple[float, float]],
+) -> "tuple | None":
+    """Find the intersection closest to the junction of two polylines.
+
+    poly_a is traversed from its END (last segment first) and poly_b from its
+    START (first segment first). Returns (intersection_point, seg_idx_a,
+    seg_idx_b) for the closest hit, or None if the polylines do not cross.
+    """
+    if len(poly_a) < 2 or len(poly_b) < 2:
+        return None
+    pts_a = [np.array(p) for p in poly_a]
+    pts_b = [np.array(p) for p in poly_b]
+    # Search from the junction end: a-segments from last to first, b from first
+    # to last.  Return the first hit — closest to the junction.
+    best = None
+    best_rank = None  # (i_from_end, j_from_start) — lower is closer to junction
+    for i in range(len(pts_a) - 2, -1, -1):
+        for j in range(len(pts_b) - 1):
+            pt = _segment_intersection(pts_a[i], pts_a[i + 1],
+                                       pts_b[j], pts_b[j + 1])
+            if pt is not None:
+                rank = (len(pts_a) - 2 - i, j)
+                if best_rank is None or rank < best_rank:
+                    best = (tuple(pt.tolist()), i, j)
+                    best_rank = rank
+        # Once we found an intersection at this a-segment, no need to go further
+        if best is not None:
+            break
+    return best
 
 
 def _orient_polyline_toward(
@@ -349,18 +390,19 @@ def _orient_polyline_toward(
 def connect_sperm_polylines(
     sperm: dict,
     mask_threshold: float = 0.3,
-    simplify_eps: float = 5.0,
-    pts_per_100px: float = 32.0,
+    simplify_eps: float = 2.0,
 ) -> dict:
     """Generate connected polylines for a complete sperm (H+M+T).
 
     For each part, generates a polyline via mask_to_polyline(). Then orients
-    them so they flow Head → Midpiece → Tail, and at each junction replaces
-    the meeting endpoints with their average so the polylines connect seamlessly.
+    them so they flow Head → Midpiece → Tail. At each junction, trims both
+    polylines to their closest intersection point. Falls back to endpoint
+    averaging when the polylines do not cross.
 
     Args:
         sperm: Dict with "head", "midpiece", "tail" instance dicts.
         mask_threshold: Threshold for binary masks.
+        simplify_eps: RDP epsilon for polyline simplification.
 
     Returns:
         Dict with "head", "midpiece", "tail" polylines (list of (x,y) tuples).
@@ -380,7 +422,6 @@ def connect_sperm_polylines(
             part["mask"], cls_map[part_key],
             mask_threshold=mask_threshold,
             simplify_eps=simplify_eps,
-            pts_per_100px=pts_per_100px,
         )
         polylines[part_key] = poly
         # Compute centroid for orientation reference
@@ -410,20 +451,33 @@ def connect_sperm_polylines(
     if len(t_poly) >= 2 and len(m_poly) >= 1:
         t_poly = _orient_polyline_toward(t_poly, m_poly[-1], use_start=True)
 
-    # Connect Head↔Midpiece junction: average meeting endpoints
+    # Connect Head↔Midpiece junction: use first intersection point,
+    # falling back to endpoint average when polylines don't cross.
     if len(h_poly) >= 1 and len(m_poly) >= 1:
-        h_end = np.array(h_poly[-1])
-        m_start = np.array(m_poly[0])
-        junction = tuple(((h_end + m_start) / 2.0).tolist())
-        h_poly[-1] = junction
-        m_poly[0] = junction
+        hit = _find_junction_intersection(h_poly, m_poly)
+        if hit is not None:
+            junction, seg_a, seg_b = hit
+            h_poly = h_poly[: seg_a + 1] + [junction]
+            m_poly = [junction] + m_poly[seg_b + 1 :]
+        else:
+            h_end = np.array(h_poly[-1])
+            m_start = np.array(m_poly[0])
+            junction = tuple(((h_end + m_start) / 2.0).tolist())
+            h_poly[-1] = junction
+            m_poly[0] = junction
 
-    # Connect Midpiece↔Tail junction: average meeting endpoints
+    # Connect Midpiece↔Tail junction: same strategy.
     if len(m_poly) >= 1 and len(t_poly) >= 1:
-        m_end = np.array(m_poly[-1])
-        t_start = np.array(t_poly[0])
-        junction = tuple(((m_end + t_start) / 2.0).tolist())
-        m_poly[-1] = junction
-        t_poly[0] = junction
+        hit = _find_junction_intersection(m_poly, t_poly)
+        if hit is not None:
+            junction, seg_a, seg_b = hit
+            m_poly = m_poly[: seg_a + 1] + [junction]
+            t_poly = [junction] + t_poly[seg_b + 1 :]
+        else:
+            m_end = np.array(m_poly[-1])
+            t_start = np.array(t_poly[0])
+            junction = tuple(((m_end + t_start) / 2.0).tolist())
+            m_poly[-1] = junction
+            t_poly[0] = junction
 
     return {"head": h_poly, "midpiece": m_poly, "tail": t_poly}

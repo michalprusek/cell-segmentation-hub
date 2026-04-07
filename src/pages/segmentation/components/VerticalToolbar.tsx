@@ -4,7 +4,7 @@ import {
   MousePointer,
   Edit3,
   Plus,
-  PenTool,
+  Pentagon,
   Spline,
   Scissors,
   Trash2,
@@ -48,7 +48,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
       case EditMode.AddPoints:
         return Plus;
       case EditMode.CreatePolygon:
-        return PenTool;
+        return Pentagon;
       case EditMode.CreatePolyline:
         return Spline;
       case EditMode.Slice:

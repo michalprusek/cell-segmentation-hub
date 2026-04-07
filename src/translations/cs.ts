@@ -696,6 +696,7 @@ export default {
         addPoints:
           'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení. Klikněte přímo na jiný vrchol bez přidávání bodů pro odstranění všech bodů mezi nimi.',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
+        enterFinalize: 'Stiskněte ENTER pro dokončení (polylines: ořízne ve směru přidávání)',
         cancel: 'Stiskněte ESC pro zrušení',
       },
       editVertices: {
