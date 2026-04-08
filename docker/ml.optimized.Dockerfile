@@ -17,10 +17,22 @@ WORKDIR /wheels
 # Copy requirements and build wheels with cache mount
 COPY backend/segmentation/requirements.txt .
 
-# Build wheels for all dependencies (cached for reuse)
+# Build wheels for all dependencies (cached for reuse).
+# torch 2.6.0 fixes CVE-2025-32434 (torch.load RCE). Paired with
+# torchvision 0.21.0. CUDA 12.4 variant pinned to match our runtime.
+#
+# Use PyPI as the primary index and the PyTorch CU124 index as an
+# extra fallback. If we set --index-url to the pytorch URL, pip tries
+# to resolve every sub-dep (typing-extensions, jinja2, filelock, ...)
+# there too, and the pytorch index serves those with inconsistent
+# snake_case metadata that modern pip refuses. Using PyPI as primary
+# means normal deps resolve cleanly; torch/torchvision still resolve
+# from the extra index because the +cu124 suffix pins them there.
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip wheel --no-cache-dir --wheel-dir /wheels \
-    torch==2.4.1+cu124 torchvision==0.19.1+cu124 --index-url https://download.pytorch.org/whl/cu124 && \
+    torch==2.6.0+cu124 torchvision==0.21.0+cu124 \
+    --index-url https://pypi.org/simple/ \
+    --extra-index-url https://download.pytorch.org/whl/cu124 && \
     pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 # Stage 2: Minimal runtime base
