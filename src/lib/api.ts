@@ -197,20 +197,6 @@ class ApiClient {
         // Check if this is a refresh token request to avoid infinite loops
         const isRefreshRequest = originalRequest.url?.includes('/auth/refresh');
 
-        // Defense-in-depth: failures on the export download endpoints must
-        // never force-logout the user. A failed (slow / oversized / network
-        // dropped) export download is not a session expiry, and the old
-        // behaviour ("Failed to download export… and now you're logged out")
-        // was a confusing UX bug. We still attempt token refresh below if
-        // we have one, we just don't fall through to clearing tokens for
-        // these specific endpoints.
-        const isExportDownloadEndpoint =
-          typeof originalRequest.url === 'string' &&
-          (/\/export\/[^/?#]+\/download(\?|$)/.test(originalRequest.url) ||
-            /\/export\/[^/?#]+\/download-token(\?|$)/.test(
-              originalRequest.url
-            ));
-
         if (
           error.response?.status === 401 &&
           !originalRequest._retry &&
@@ -235,14 +221,17 @@ class ApiClient {
             }
           }
 
-          // For export download endpoints, never force-logout — propagate
-          // the error so the export UI can show a "try again" message
-          // without nuking the user's session.
-          if (isExportDownloadEndpoint) {
-            return Promise.reject(error);
-          }
-
-          // No refresh token, or refresh failed - force logout
+          // No refresh token, or refresh failed - force logout.
+          //
+          // Note: this is reached for the POST /export/.../download-token
+          // endpoint too. A previous version of this file tried to
+          // special-case that endpoint to avoid logging the user out on
+          // export failures, but that caused an infinite-loop bug: the
+          // useSharedAdvancedExport hook would retry forever because its
+          // useEffect re-fires whenever the download state changes, and
+          // there was no auth-driven unmount to break the loop. If the
+          // refresh token is also dead we truly have no way to recover
+          // the session, so logout is the correct behaviour.
           logger.debug('🔒 Authentication failed - logging out');
 
           this.clearTokensFromStorage();
