@@ -235,17 +235,34 @@ class ModelLoader:
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
             
-            # Load weights with fallback strategies for compatibility
+            # Load weights with fallback strategies for compatibility.
+            #
+            # PyTorch 2.6+ changed the default of `weights_only` to True
+            # (fixing CVE-2025-32434 RCE). We try the safe path first and
+            # fall back to `weights_only=False` explicitly — omitting the
+            # arg used to mean "legacy unsafe" but now means "safe", so
+            # both attempts would fail identically without the explicit
+            # False. The fallback is safe in our context because the
+            # checkpoints come from our own trained-and-shipped model
+            # weights, not attacker-controlled files.
             logger.info(f"Loading {model_name} weights from: {weights_full_path}")
             try:
-                # Try weights_only=True first (safer for PyTorch 2.x)
-                checkpoint = torch.load(weights_full_path, map_location=self.device, weights_only=True)
+                checkpoint = torch.load(
+                    weights_full_path,
+                    map_location=self.device,
+                    weights_only=True,
+                )
             except Exception as e1:
                 logger.warning(f"Failed to load with weights_only=True: {e1}")
                 try:
-                    # Fallback without weights_only parameter for older PyTorch versions
-                    checkpoint = torch.load(weights_full_path, map_location=self.device)
-                    logger.info(f"Successfully loaded {model_name} without weights_only parameter")
+                    checkpoint = torch.load(
+                        weights_full_path,
+                        map_location=self.device,
+                        weights_only=False,
+                    )
+                    logger.info(
+                        f"Successfully loaded {model_name} with weights_only=False fallback"
+                    )
                 except Exception as e2:
                     logger.error(f"Failed to load checkpoint completely: {e2}")
                     raise e2

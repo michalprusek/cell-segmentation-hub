@@ -163,15 +163,20 @@ export const validateUploadedFiles = (
   next: NextFunction
 ): void => {
   try {
-    const files = req.files as Express.Multer.File[];
-
-    if (!files || files.length === 0) {
+    // Multer can expose req.files either as Express.Multer.File[] (with
+    // upload.array/any) or as { [fieldname]: Express.Multer.File[] }
+    // (with upload.fields). Guard explicitly so a misconfigured route
+    // can't slip an attacker-controlled object shape past the size and
+    // length checks below (CodeQL js/type-confusion-through-parameter-
+    // tampering).
+    if (!Array.isArray(req.files) || req.files.length === 0) {
       ResponseHelper.validationError(
         res,
         'Je nutné vybrat alespoň jeden soubor'
       );
       return;
     }
+    const files: Express.Multer.File[] = req.files;
 
     // Additional validation can be added here
     // For example, checking for virus scanning results, duplicate files, etc.
