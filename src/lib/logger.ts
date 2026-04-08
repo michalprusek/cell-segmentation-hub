@@ -62,12 +62,18 @@ class Logger {
     return `${prefix} ${message}`;
   }
 
+  // Passing user-derived text as the first argument to `console.*`
+  // makes it a format string — a `%s` or `%o` in the message would
+  // consume the `data` argument and scramble the output (CodeQL
+  // js/tainted-format-string). Use a fixed `'%s'` / `'%s %o'` template
+  // and move the real content to subsequent arguments so the message
+  // text can never be interpreted as format specifiers.
   debug(message: string, data?: unknown): void {
     if (this.shouldLog('debug')) {
       if (data !== undefined) {
-        console.log(this.formatMessage('debug', message), data);
+        console.log('%s %o', this.formatMessage('debug', message), data);
       } else {
-        console.log(this.formatMessage('debug', message));
+        console.log('%s', this.formatMessage('debug', message));
       }
     }
   }
@@ -75,9 +81,9 @@ class Logger {
   info(message: string, data?: unknown): void {
     if (this.shouldLog('info')) {
       if (data !== undefined) {
-        console.info(this.formatMessage('info', message), data);
+        console.info('%s %o', this.formatMessage('info', message), data);
       } else {
-        console.info(this.formatMessage('info', message));
+        console.info('%s', this.formatMessage('info', message));
       }
     }
   }
@@ -85,9 +91,9 @@ class Logger {
   warn(message: string, data?: unknown): void {
     if (this.shouldLog('warn')) {
       if (data !== undefined) {
-        console.warn(this.formatMessage('warn', message), data);
+        console.warn('%s %o', this.formatMessage('warn', message), data);
       } else {
-        console.warn(this.formatMessage('warn', message));
+        console.warn('%s', this.formatMessage('warn', message));
       }
     }
   }
@@ -95,9 +101,9 @@ class Logger {
   error(message: string, error?: unknown): void {
     if (this.shouldLog('error')) {
       if (error !== undefined) {
-        console.error(this.formatMessage('error', message), error);
+        console.error('%s %o', this.formatMessage('error', message), error);
       } else {
-        console.error(this.formatMessage('error', message));
+        console.error('%s', this.formatMessage('error', message));
       }
     }
   }

@@ -375,9 +375,12 @@ async def batch_segment_images(
                 })
                 
         except InferenceError as e:
-            logger.error(f"Inference error processing batch: {e}")
-            
-            # Return error for all images in batch
+            # Log the full exception details (including the message that
+            # may reference internal paths) but return only a generic
+            # error to the API caller to avoid leaking stack trace / path
+            # information (CodeQL py/stack-trace-exposure).
+            logger.error(f"Inference error processing batch: {e}", exc_info=True)
+
             results = []
             for i, filename in enumerate(filenames):
                 results.append({
@@ -385,22 +388,23 @@ async def batch_segment_images(
                     "batch_index": i,
                     "success": False,
                     "error": "Batch inference failed",
-                    "error_detail": str(e),
+                    "error_detail": "Inference error — see server logs",
                     "polygons": [],
                     "model_used": model,
                     "threshold_used": threshold
                 })
         except Exception as e:
-            logger.error(f"Failed to process batch: {e}")
-            
-            # Return error for all images in batch  
+            logger.error(f"Failed to process batch: {e}", exc_info=True)
+
+            # Same rationale as above — do not echo str(e) back to the
+            # external caller.
             results = []
             for i, filename in enumerate(filenames):
                 results.append({
                     "filename": filename,
                     "batch_index": i,
                     "success": False,
-                    "error": str(e),
+                    "error": "Batch processing failed — see server logs",
                     "polygons": [],
                     "model_used": model,
                     "threshold_used": threshold
