@@ -46,13 +46,16 @@ describe('Upload Middleware - Large Batch Support', () => {
   });
 
   describe('File Count Limits', () => {
-    it('should accept 50 files (new increased limit)', async () => {
+    // Tests run under TEST_LIMITS (MAX_FILES_PER_REQUEST: 20). These
+    // intentionally differ from PRODUCTION_LIMITS so boundary conditions
+    // are exercised with a small, predictable cap (issue #73).
+    it('should accept exactly MAX_FILES_PER_REQUEST files (20 at test cap)', async () => {
       app.post('/test-upload', uploadImages, (req, res) => {
         const files = req.files as Express.Multer.File[];
         res.json({ success: true, fileCount: files.length });
       });
 
-      const mockFiles = UploadMockGenerator.createMockFiles(50, {
+      const mockFiles = UploadMockGenerator.createMockFiles(20, {
         fileSize: 1024 * 100, // 100KB each
       });
 
@@ -62,16 +65,21 @@ describe('Upload Middleware - Large Batch Support', () => {
       ).expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.fileCount).toBe(50);
+      expect(response.body.fileCount).toBe(20);
     });
 
-    it('should reject 51 files (exceeds new limit)', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
-        const files = req.files as Express.Multer.File[];
-        res.json({ success: true, fileCount: files.length });
-      });
+    it('should reject 21 files (exceeds test cap)', async () => {
+      app.post(
+        '/test-upload',
+        uploadImages,
+        handleUploadError,
+        (req: any, res: any) => {
+          const files = req.files as Express.Multer.File[];
+          res.json({ success: true, fileCount: files.length });
+        }
+      );
 
-      const mockFiles = UploadMockGenerator.createMockFiles(51, {
+      const mockFiles = UploadMockGenerator.createMockFiles(21, {
         fileSize: 1024 * 100,
       });
 
@@ -82,25 +90,6 @@ describe('Upload Middleware - Large Batch Support', () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.error).toContain('Příliš mnoho souborů');
-    });
-
-    it('should handle old limit (20 files) for backward compatibility', async () => {
-      app.post('/test-upload', uploadImages, (req, res) => {
-        const files = req.files as Express.Multer.File[];
-        res.json({ success: true, fileCount: files.length });
-      });
-
-      const mockFiles = UploadMockGenerator.createMockFiles(20, {
-        fileSize: 1024 * 100,
-      });
-
-      const response = await attachFiles(
-        request(app).post('/test-upload'),
-        mockFiles
-      ).expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.fileCount).toBe(20);
     });
   });
 
@@ -217,7 +206,7 @@ describe('Upload Middleware - Large Batch Support', () => {
       });
 
       // Simulate the error by creating too many files
-      const mockFiles = UploadMockGenerator.createMockFiles(60); // Exceeds limit
+      const mockFiles = UploadMockGenerator.createMockFiles(25); // Exceeds test cap of 20
 
       const response = await attachFiles(
         request(app).post('/test-upload'),
@@ -225,7 +214,7 @@ describe('Upload Middleware - Large Batch Support', () => {
       ).expect(400);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('50 souborů'); // New limit in message
+      expect(response.body.error).toContain('20 souborů'); // TEST_LIMITS cap
     });
 
     it('should handle LIMIT_FILE_SIZE error', async () => {
@@ -320,8 +309,8 @@ describe('Upload Middleware - Large Batch Support', () => {
         });
       });
 
-      const mockFiles = UploadMockGenerator.createMockFiles(40, {
-        fileSize: 1024 * 500, // 500KB each = 20MB total
+      const mockFiles = UploadMockGenerator.createMockFiles(20, {
+        fileSize: 1024 * 500, // 500KB each = 10MB total
       });
 
       const response = await attachFiles(
@@ -333,8 +322,8 @@ describe('Upload Middleware - Large Batch Support', () => {
       const memoryIncrease = endMemory.heapUsed - startMemory.heapUsed;
 
       expect(response.body.success).toBe(true);
-      expect(response.body.fileCount).toBe(40);
-      expect(response.body.totalSize).toBe(40 * 1024 * 500);
+      expect(response.body.fileCount).toBe(20);
+      expect(response.body.totalSize).toBe(20 * 1024 * 500);
 
       // Memory increase should be reasonable (less than 100MB for this test)
       expect(memoryIncrease).toBeLessThan(100 * 1024 * 1024);
