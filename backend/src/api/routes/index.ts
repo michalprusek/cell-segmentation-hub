@@ -62,13 +62,23 @@ export function setupRoutes(app: Express): void {
   app.use('/api/auth', authRoutes);
 
   app.use('/api/users', userRoutes);
+  // IMPORTANT: exportRoutes and sharingRoutes must be registered BEFORE
+  // projectRoutes/imageRoutes. They expose paths shaped like
+  // /api/projects/:projectId/... that need a public ?token= query-auth
+  // path (the export download). projectRoutes/imageRoutes apply a global
+  // `router.use(authenticate)` to their entire router, so if Express
+  // enters them first it 401s on any request without an Authorization
+  // header — even ones that were meant for the public export download.
+  // Registering exportRoutes first lets Express match the download route
+  // there and run its optionalJwtAuth (which honours ?token=) before the
+  // project router's blanket auth.
+  app.use('/api', exportRoutes); // Export routes
+  app.use('/api', sharingRoutes); // Sharing routes
   app.use('/api/projects', projectRoutes);
   app.use('/api/projects', imageRoutes);
   app.use('/api/images', imageRoutes); // Direct image routes
   app.use('/api/segmentation', segmentationRoutes);
   app.use('/api/queue', queueRoutes);
-  app.use('/api', exportRoutes); // Export routes
-  app.use('/api', sharingRoutes); // Sharing routes
   app.use('/api/ml', mlRoutes); // ML service routes
   app.use('/api/cache', cacheRoutes); // Cache and session management routes
   app.use('/api/database', databaseRoutes); // Database management and monitoring routes
