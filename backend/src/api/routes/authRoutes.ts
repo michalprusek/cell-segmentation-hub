@@ -43,6 +43,19 @@ router.post(
   authController.refreshToken
 );
 
+// Alias for backward compatibility. The frontend used to call /auth/refresh
+// while the canonical path has always been /auth/refresh-token. The stale
+// URL silently 401'd because it fell through to `router.use(authenticate)`
+// below, which saw the already-expired access token on the refresh request
+// and rejected it — meaning every real session-expiry forced a full logout.
+// Keep this alias forever so any cached frontend bundle or third-party
+// client still works after the URL was canonicalised.
+router.post(
+  '/refresh',
+  validateBody(refreshTokenSchema),
+  authController.refreshToken
+);
+
 router.post(
   '/logout',
   authenticate, // Logout requires authentication

@@ -529,7 +529,14 @@ class ApiClient {
       throw new Error('No refresh token available');
     }
 
-    const response = await this.instance.post('/auth/refresh', {
+    // The backend route is /auth/refresh-token (see authRoutes.ts). A
+    // stale /auth/refresh URL used to fall through to the `router.use(
+    // authenticate)` catch-all below the POST routes, which returned 401
+    // because the request carried an already-expired access token —
+    // meaning the refresh flow was permanently broken and every
+    // mid-session token expiry forced a full logout. Use the canonical
+    // path. The backend also keeps a /refresh alias for safety.
+    const response = await this.instance.post('/auth/refresh-token', {
       refreshToken: this.refreshToken,
     });
 
