@@ -74,12 +74,15 @@ const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
 };
 
 const TEST_LIMITS: UploadLimitsConfig = {
-  MAX_FILES_PER_REQUEST: 50, // Match test expectations (50 file limit)
+  // Intentionally more restrictive than PRODUCTION_LIMITS so tests
+  // exercise boundary conditions (over-limit rejection, chunked
+  // splitting, etc.) against a small, predictable cap. Issue #73.
+  MAX_FILES_PER_REQUEST: 20,
   MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024,
   MAX_TOTAL_FILES: 100,
-  MAX_FIELDS: 10,
+  MAX_FIELDS: 5,
   MAX_FIELD_SIZE_KB: 10,
-  CHUNK_SIZE: 50,
+  CHUNK_SIZE: 20,
   NGINX_BODY_LIMIT: '50M',
   EXPRESS_JSON_LIMIT: '10mb',
   EXPRESS_URL_ENCODED_LIMIT: '10mb',
