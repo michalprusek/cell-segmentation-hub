@@ -11,7 +11,11 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import CanvasTemporaryGeometryLayer from '../CanvasTemporaryGeometryLayer';
-import { EditMode, type InteractionState, type TransformState } from '@/pages/segmentation/types';
+import {
+  EditMode,
+  type InteractionState,
+  type TransformState,
+} from '@/pages/segmentation/types';
 import type { Polygon } from '@/lib/segmentation';
 import {
   createMockPolygon,
@@ -25,7 +29,8 @@ import {
 // ---------------------------------------------------------------------------
 
 vi.mock('../CanvasVertex', async () => {
-  const actual = await vi.importActual<typeof import('../CanvasVertex')>('../CanvasVertex');
+  const actual =
+    await vi.importActual<typeof import('../CanvasVertex')>('../CanvasVertex');
   return {
     ...actual,
     calculateVertexRadius: vi.fn(() => 4),
@@ -40,8 +45,9 @@ vi.mock('../CanvasVertex', async () => {
 const makeTransform = (overrides?: Partial<TransformState>): TransformState =>
   createMockTransformState(overrides);
 
-const makeInteraction = (overrides?: Partial<InteractionState>): InteractionState =>
-  createMockInteractionState(overrides);
+const makeInteraction = (
+  overrides?: Partial<InteractionState>
+): InteractionState => createMockInteractionState(overrides);
 
 interface RenderOptions {
   transform?: TransformState;
@@ -207,7 +213,9 @@ describe('CanvasTemporaryGeometryLayer', () => {
         ],
       });
 
-      const lines = container.querySelectorAll('line[data-key="slice-line"], line');
+      const lines = container.querySelectorAll(
+        'line[data-key="slice-line"], line'
+      );
       expect(lines.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -280,7 +288,10 @@ describe('CanvasTemporaryGeometryLayer', () => {
 
       const { container } = renderLayer({
         editMode: EditMode.AddPoints,
-        tempPoints: [{ x: 15, y: 15 }, { x: 25, y: 25 }],
+        tempPoints: [
+          { x: 15, y: 15 },
+          { x: 25, y: 25 },
+        ],
         selectedPolygonId: 'target-polygon',
         polygons: [polygon],
         interactionState: makeInteraction({

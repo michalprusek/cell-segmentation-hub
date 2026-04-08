@@ -11,10 +11,14 @@ vi.mock('@/lib/api', () => ({
     login: vi.fn(),
     logout: vi.fn(),
     refreshAccessToken: vi.fn(),
-    getUserProfile: vi.fn().mockResolvedValue({ preferred_theme: 'system', preferredLang: 'en' }),
+    getUserProfile: vi
+      .fn()
+      .mockResolvedValue({ preferred_theme: 'system', preferredLang: 'en' }),
     deleteProject: vi.fn().mockResolvedValue(undefined),
     revokeProjectShare: vi.fn().mockResolvedValue(undefined),
-    getProjects: vi.fn().mockResolvedValue({ projects: [], total: 0, page: 1, totalPages: 1 }),
+    getProjects: vi
+      .fn()
+      .mockResolvedValue({ projects: [], total: 0, page: 1, totalPages: 1 }),
   },
   apiClient: {
     isAuthenticated: vi.fn(() => false),
@@ -32,7 +36,13 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/components/project/ShareDialog', () => ({
-  ShareDialog: ({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) =>
+  ShareDialog: ({
+    open,
+    onOpenChange,
+  }: {
+    open: boolean;
+    onOpenChange: (v: boolean) => void;
+  }) =>
     open ? (
       <div data-testid="share-dialog">
         <button onClick={() => onOpenChange(false)}>Close</button>
@@ -54,23 +64,46 @@ describe('ProjectActions', () => {
     const user = userEvent.setup();
     render(<ProjectActions projectId="proj-1" projectTitle="Test Project" />);
     await user.click(screen.getByRole('button'));
-    expect(screen.getByRole('menuitem', { name: /share/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /share/i })
+    ).toBeInTheDocument();
   });
 
   it('shows share and delete options for owned project', async () => {
     const user = userEvent.setup();
-    render(<ProjectActions projectId="proj-1" projectTitle="Test Project" isShared={false} />);
+    render(
+      <ProjectActions
+        projectId="proj-1"
+        projectTitle="Test Project"
+        isShared={false}
+      />
+    );
     await user.click(screen.getByRole('button'));
-    expect(screen.getByRole('menuitem', { name: /share/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /delete/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /share/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /delete/i })
+    ).toBeInTheDocument();
   });
 
   it('shows remove from shared option for shared project instead of delete', async () => {
     const user = userEvent.setup();
-    render(<ProjectActions projectId="proj-1" projectTitle="Test Project" isShared={true} shareId="share-1" />);
+    render(
+      <ProjectActions
+        projectId="proj-1"
+        projectTitle="Test Project"
+        isShared={true}
+        shareId="share-1"
+      />
+    );
     await user.click(screen.getByRole('button'));
-    expect(screen.queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /remove/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /^delete$/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /remove/i })
+    ).toBeInTheDocument();
   });
 
   it('calls deleteProject when delete is clicked', async () => {
@@ -97,7 +130,13 @@ describe('ProjectActions', () => {
 
   it('opens share dialog when share is clicked', async () => {
     const user = userEvent.setup();
-    render(<ProjectActions projectId="proj-1" projectTitle="Test Project" isShared={false} />);
+    render(
+      <ProjectActions
+        projectId="proj-1"
+        projectTitle="Test Project"
+        isShared={false}
+      />
+    );
     await user.click(screen.getByRole('button'));
     await user.click(screen.getByRole('menuitem', { name: /share/i }));
 

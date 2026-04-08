@@ -145,10 +145,9 @@ describe('useProjectData', () => {
 
       // Check that the API calls were made
       expect(vi.mocked(apiClient.getProject)).toHaveBeenCalledWith('project-1');
-      expect(vi.mocked(apiClient.getProjectImagesWithThumbnails)).toHaveBeenCalledWith(
-        'project-1',
-        { limit: 100, page: 1, lod: 'low' }
-      );
+      expect(
+        vi.mocked(apiClient.getProjectImagesWithThumbnails)
+      ).toHaveBeenCalledWith('project-1', { limit: 100, page: 1, lod: 'low' });
 
       // Check the final state
       expect(result.current.projectTitle).toBe('Test Project');
@@ -166,12 +165,14 @@ describe('useProjectData', () => {
       };
 
       vi.mocked(apiClient.getProject).mockResolvedValueOnce(mockProject);
-      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce({
-        images: [],
-        total: 0,
-        page: 1,
-        totalPages: 1,
-      });
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce(
+        {
+          images: [],
+          total: 0,
+          page: 1,
+          totalPages: 1,
+        }
+      );
 
       const { result } = renderHook(
         () => useProjectData('project-2', 'user-1'),
@@ -199,12 +200,14 @@ describe('useProjectData', () => {
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValueOnce(mockProject);
-      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce({
-        images: mockImages,
-        total: 1,
-        page: 1,
-        totalPages: 1,
-      });
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce(
+        {
+          images: mockImages,
+          total: 1,
+          page: 1,
+          totalPages: 1,
+        }
+      );
 
       const { result } = renderHook(
         () => useProjectData('project-1', 'user-1'),
@@ -277,12 +280,14 @@ describe('useProjectData', () => {
       ];
 
       vi.mocked(apiClient.getProject).mockResolvedValueOnce(mockProject);
-      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce({
-        images: mockImages,
-        total: 1,
-        page: 1,
-        totalPages: 1,
-      });
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValueOnce(
+        {
+          images: mockImages,
+          total: 1,
+          page: 1,
+          totalPages: 1,
+        }
+      );
 
       const { result } = renderHook(
         () => useProjectData('project-1', 'user-1'),
@@ -394,7 +399,9 @@ describe('useProjectData', () => {
             projectResolve = resolve;
           })
       );
-      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockImplementationOnce(
+      vi.mocked(
+        apiClient.getProjectImagesWithThumbnails
+      ).mockImplementationOnce(
         () =>
           new Promise(resolve => {
             imagesResolve = resolve;
@@ -639,7 +646,9 @@ describe('useProjectData', () => {
       });
 
       expect(result.current.images).toHaveLength(2);
-      expect(vi.mocked(apiClient.getProjectImagesWithThumbnails)).toHaveBeenCalledTimes(2);
+      expect(
+        vi.mocked(apiClient.getProjectImagesWithThumbnails)
+      ).toHaveBeenCalledTimes(2);
     });
 
     it('should handle refreshImageSegmentation null response', async () => {

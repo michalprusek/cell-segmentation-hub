@@ -80,12 +80,16 @@ import CanvasPolygonLayer from '../CanvasPolygonLayer';
 const buildPolygon = (id: string): Polygon =>
   createMockPolygon({ id, type: 'external' });
 
-const makeSegmentation = (polygons: Polygon[]) => ({
-  polygons,
-} as any);
+const makeSegmentation = (polygons: Polygon[]) =>
+  ({
+    polygons,
+  }) as any;
 
 const defaultProps = (overrides: Record<string, any> = {}) => ({
-  segmentation: makeSegmentation([buildPolygon('poly-1'), buildPolygon('poly-2')]),
+  segmentation: makeSegmentation([
+    buildPolygon('poly-1'),
+    buildPolygon('poly-2'),
+  ]),
   imageSize: { width: 800, height: 600 },
   selectedPolygonId: null,
   hoveredVertex: { polygonId: null, vertexIndex: null },
@@ -286,11 +290,7 @@ describe('CanvasPolygonLayer', () => {
     it('passes zoom to the vertex layer via polygon count proxy', () => {
       // The vertex layer mock exposes polygon-count which depends on visible
       // polygons – confirming that zoom changes do not break rendering.
-      render(
-        <CanvasPolygonLayer
-          {...defaultProps({ zoom: 3 })}
-        />
-      );
+      render(<CanvasPolygonLayer {...defaultProps({ zoom: 3 })} />);
 
       expect(screen.getByTestId('optimized-vertex-layer')).toHaveAttribute(
         'data-polygon-count',

@@ -8,7 +8,9 @@ import { ReactNode } from 'react';
 vi.mock('@/lib/api', () => ({
   default: {
     isAuthenticated: vi.fn(() => false),
-    getUserProfile: vi.fn().mockResolvedValue({ preferred_theme: 'system', preferredLang: 'en' }),
+    getUserProfile: vi
+      .fn()
+      .mockResolvedValue({ preferred_theme: 'system', preferredLang: 'en' }),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
@@ -155,7 +157,8 @@ describe('useUnifiedSegmentationUpdate', () => {
       vi.mocked(apiClient.getAccessToken).mockReturnValue('tok-123');
 
       const { result } = renderHook(
-        () => useUnifiedSegmentationUpdate({ projectId: 'proj-1', enabled: true }),
+        () =>
+          useUnifiedSegmentationUpdate({ projectId: 'proj-1', enabled: true }),
         { wrapper }
       );
 
@@ -177,7 +180,8 @@ describe('useUnifiedSegmentationUpdate', () => {
       } as any);
 
       renderHook(
-        () => useUnifiedSegmentationUpdate({ projectId: 'proj-1', enabled: false }),
+        () =>
+          useUnifiedSegmentationUpdate({ projectId: 'proj-1', enabled: false }),
         { wrapper }
       );
 
@@ -273,7 +277,11 @@ describe('useUnifiedSegmentationUpdate', () => {
       });
       vi.mocked(apiClient.getSegmentationResults)
         .mockImplementationOnce(() => firstCall as any)
-        .mockResolvedValue({ polygons: [], imageWidth: 100, imageHeight: 100 } as any);
+        .mockResolvedValue({
+          polygons: [],
+          imageWidth: 100,
+          imageHeight: 100,
+        } as any);
 
       const onImageUpdate = vi.fn();
 

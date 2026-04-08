@@ -397,8 +397,7 @@ export default {
       cbam_resunet: '具有注意力机制的最精确分割 (E2E ~482ms, 2.7 图像/秒)',
       unet_spherohq:
         '优化后最快的模型！非常适合实时处理 (E2E ~286ms, 5.5 图像/秒)',
-      sperm:
-        '精子形态模型，通过骨架提取测量头部、中段和尾部',
+      sperm: '精子形态模型，通过骨架提取测量头部、中段和尾部',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',

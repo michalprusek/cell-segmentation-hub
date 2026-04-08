@@ -157,7 +157,10 @@ describe('useThumbnailUpdates', () => {
 
       const updatePayload = {
         imageId: 'img-1',
-        thumbnailData: { levelOfDetail: 1, url: 'http://example.com/thumb.jpg' },
+        thumbnailData: {
+          levelOfDetail: 1,
+          url: 'http://example.com/thumb.jpg',
+        },
       };
 
       // Simulate socket emit on the project-specific channel

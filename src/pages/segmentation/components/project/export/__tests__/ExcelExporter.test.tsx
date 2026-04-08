@@ -47,16 +47,17 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const makePoints = () => [
-  { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
+  { x: 0, y: 0 },
+  { x: 100, y: 0 },
+  { x: 100, y: 100 },
+  { x: 0, y: 100 },
 ];
 
 const segmentationWithPolygons = {
   id: 'seg-1',
   imageWidth: 800,
   imageHeight: 600,
-  polygons: [
-    { id: 'ext-1', points: makePoints(), type: 'external' as const },
-  ],
+  polygons: [{ id: 'ext-1', points: makePoints(), type: 'external' as const }],
 };
 
 describe('ExcelExporter', () => {
@@ -75,11 +76,23 @@ describe('ExcelExporter', () => {
       createBlob: vi.fn(() => new Blob()),
       downloadFile: vi.fn(),
     });
-    const { calculateMetrics } = await import('@/pages/segmentation/utils/metricCalculations');
+    const { calculateMetrics } = await import(
+      '@/pages/segmentation/utils/metricCalculations'
+    );
     vi.mocked(calculateMetrics).mockReturnValue({
-      Area: 1000, Perimeter: 120, Circularity: 0.87, Extent: 0.78, Convexity: 0.95,
-      Solidity: 0.91, EquivalentDiameter: 35.7, FeretAspectRatio: 1.2, FeretDiameterMax: 45,
-      FeretDiameterOrthogonal: 38, FeretDiameterMin: 30, BoundingBoxWidth: 40, BoundingBoxHeight: 35,
+      Area: 1000,
+      Perimeter: 120,
+      Circularity: 0.87,
+      Extent: 0.78,
+      Convexity: 0.95,
+      Solidity: 0.91,
+      EquivalentDiameter: 35.7,
+      FeretAspectRatio: 1.2,
+      FeretDiameterMax: 45,
+      FeretDiameterOrthogonal: 38,
+      FeretDiameterMin: 30,
+      BoundingBoxWidth: 40,
+      BoundingBoxHeight: 35,
     });
     const { isPolygonInsidePolygon } = await import('@/lib/polygonGeometry');
     vi.mocked(isPolygonInsidePolygon).mockReturnValue(false);
@@ -94,25 +107,47 @@ describe('ExcelExporter', () => {
     // ExcelExporter guards against null segmentation but not empty arrays
     // It will render a button, but clicking it will export no rows
     render(
-      <ExcelExporter segmentation={{ id: 'seg', polygons: [], imageWidth: 800, imageHeight: 600 }} />
+      <ExcelExporter
+        segmentation={{
+          id: 'seg',
+          polygons: [],
+          imageWidth: 800,
+          imageHeight: 600,
+        }}
+      />
     );
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
   it('renders export button when external polygons are present', () => {
-    render(<ExcelExporter segmentation={segmentationWithPolygons} imageName="test.jpg" />);
+    render(
+      <ExcelExporter
+        segmentation={segmentationWithPolygons}
+        imageName="test.jpg"
+      />
+    );
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
   it('renders XLSX export button text', () => {
-    render(<ExcelExporter segmentation={segmentationWithPolygons} imageName="test.jpg" />);
+    render(
+      <ExcelExporter
+        segmentation={segmentationWithPolygons}
+        imageName="test.jpg"
+      />
+    );
     expect(screen.getByRole('button')).toHaveTextContent(/xlsx/i);
   });
 
   it('calls createExcelExport when button is clicked', async () => {
     const { createExcelExport } = await import('@/services/excelExportService');
     const user = userEvent.setup();
-    render(<ExcelExporter segmentation={segmentationWithPolygons} imageName="test.jpg" />);
+    render(
+      <ExcelExporter
+        segmentation={segmentationWithPolygons}
+        imageName="test.jpg"
+      />
+    );
     await user.click(screen.getByRole('button'));
     expect(createExcelExport).toHaveBeenCalled();
   });
@@ -132,13 +167,17 @@ describe('ExcelExporter', () => {
       ],
     };
     // Component renders because polygons array is non-empty
-    const { container } = render(<ExcelExporter segmentation={segWithPolylineOnly} />);
+    const { container } = render(
+      <ExcelExporter segmentation={segWithPolylineOnly} />
+    );
     expect(container).toBeDefined();
   });
 
   it('calls isPolygonInsidePolygon to associate holes with external polygons', async () => {
     const { isPolygonInsidePolygon } = await import('@/lib/polygonGeometry');
-    const { calculateMetrics } = await import('@/pages/segmentation/utils/metricCalculations');
+    const { calculateMetrics } = await import(
+      '@/pages/segmentation/utils/metricCalculations'
+    );
     const user = userEvent.setup();
 
     const segWithInternal = {
@@ -151,7 +190,9 @@ describe('ExcelExporter', () => {
       ],
     };
 
-    render(<ExcelExporter segmentation={segWithInternal} imageName="test.jpg" />);
+    render(
+      <ExcelExporter segmentation={segWithInternal} imageName="test.jpg" />
+    );
     await user.click(screen.getByRole('button'));
 
     expect(isPolygonInsidePolygon).toHaveBeenCalled();

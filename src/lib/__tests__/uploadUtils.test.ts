@@ -34,7 +34,11 @@ vi.mock('@/lib/uploadConfig', () => ({
   },
 }));
 
-const makeFile = (sizeBytes: number, type = 'image/jpeg', name = 'img.jpg'): File => {
+const makeFile = (
+  sizeBytes: number,
+  type = 'image/jpeg',
+  name = 'img.jpg'
+): File => {
   const f = new File(['x'], name, { type });
   Object.defineProperty(f, 'size', { value: sizeBytes, configurable: true });
   return f;
@@ -49,7 +53,9 @@ const testConfig: ChunkingConfig = {
 
 describe('chunkFiles', () => {
   it('splits files into chunks of the given size', () => {
-    const files = Array.from({ length: 11 }, (_, i) => makeFile(100, 'image/jpeg', `f${i}.jpg`));
+    const files = Array.from({ length: 11 }, (_, i) =>
+      makeFile(100, 'image/jpeg', `f${i}.jpg`)
+    );
     const chunks = chunkFiles(files, 5);
     expect(chunks).toHaveLength(3);
     expect(chunks[0]).toHaveLength(5);
@@ -58,7 +64,9 @@ describe('chunkFiles', () => {
   });
 
   it('returns a single chunk when files count equals chunk size', () => {
-    const files = Array.from({ length: 5 }, (_, i) => makeFile(100, 'image/jpeg', `f${i}.jpg`));
+    const files = Array.from({ length: 5 }, (_, i) =>
+      makeFile(100, 'image/jpeg', `f${i}.jpg`)
+    );
     const chunks = chunkFiles(files, 5);
     expect(chunks).toHaveLength(1);
     expect(chunks[0]).toHaveLength(5);
@@ -99,11 +107,17 @@ describe('calculateOptimalChunkSize', () => {
 
 describe('processChunksWithConcurrency', () => {
   it('processes all chunks and collects successful results', async () => {
-    const files = Array.from({ length: 6 }, (_, i) => makeFile(100, 'image/jpeg', `f${i}.jpg`));
+    const files = Array.from({ length: 6 }, (_, i) =>
+      makeFile(100, 'image/jpeg', `f${i}.jpg`)
+    );
     const chunks = chunkFiles(files, 2);
     const processor = vi.fn().mockResolvedValue('ok');
 
-    const result = await processChunksWithConcurrency(chunks, processor, testConfig);
+    const result = await processChunksWithConcurrency(
+      chunks,
+      processor,
+      testConfig
+    );
 
     expect(result.success).toHaveLength(3);
     expect(result.failed).toHaveLength(0);
@@ -111,12 +125,18 @@ describe('processChunksWithConcurrency', () => {
   });
 
   it('retries a failing chunk and records it as failed after exhausting attempts', async () => {
-    const files = Array.from({ length: 2 }, (_, i) => makeFile(100, 'image/jpeg', `f${i}.jpg`));
+    const files = Array.from({ length: 2 }, (_, i) =>
+      makeFile(100, 'image/jpeg', `f${i}.jpg`)
+    );
     const chunks = chunkFiles(files, 2);
     const processor = vi.fn().mockRejectedValue(new Error('network error'));
 
     const config: ChunkingConfig = { ...testConfig, retryAttempts: 2 };
-    const result = await processChunksWithConcurrency(chunks, processor, config);
+    const result = await processChunksWithConcurrency(
+      chunks,
+      processor,
+      config
+    );
 
     expect(result.failed).toHaveLength(1);
     expect(result.success).toHaveLength(0);
@@ -130,14 +150,23 @@ describe('processChunksWithConcurrency', () => {
     const processor = vi.fn().mockResolvedValue('ok');
     const onProgress = vi.fn();
 
-    await processChunksWithConcurrency(chunks, processor, testConfig, onProgress);
+    await processChunksWithConcurrency(
+      chunks,
+      processor,
+      testConfig,
+      onProgress
+    );
 
     expect(onProgress).toHaveBeenCalled();
   });
 
   it('handles empty chunks array without error', async () => {
     const processor = vi.fn().mockResolvedValue('ok');
-    const result = await processChunksWithConcurrency([], processor, testConfig);
+    const result = await processChunksWithConcurrency(
+      [],
+      processor,
+      testConfig
+    );
 
     expect(result.success).toHaveLength(0);
     expect(result.failed).toHaveLength(0);
@@ -169,14 +198,24 @@ describe('estimateUploadTime', () => {
 describe('validateFiles', () => {
   it('accepts files within size and type limits', () => {
     const file = makeFile(1024, 'image/jpeg');
-    const { valid, invalid } = validateFiles([file], 20 * 1024 * 1024, 500 * 1024 * 1024, ['image/jpeg']);
+    const { valid, invalid } = validateFiles(
+      [file],
+      20 * 1024 * 1024,
+      500 * 1024 * 1024,
+      ['image/jpeg']
+    );
     expect(valid).toHaveLength(1);
     expect(invalid).toHaveLength(0);
   });
 
   it('rejects files that exceed the individual size limit', () => {
     const big = makeFile(21 * 1024 * 1024, 'image/jpeg');
-    const { valid, invalid } = validateFiles([big], 20 * 1024 * 1024, 500 * 1024 * 1024, ['image/jpeg']);
+    const { valid, invalid } = validateFiles(
+      [big],
+      20 * 1024 * 1024,
+      500 * 1024 * 1024,
+      ['image/jpeg']
+    );
     expect(valid).toHaveLength(0);
     expect(invalid).toHaveLength(1);
     expect(invalid[0].reason).toContain('too large');
@@ -184,7 +223,12 @@ describe('validateFiles', () => {
 
   it('rejects files with unsupported MIME types', () => {
     const pdf = makeFile(100, 'application/pdf', 'doc.pdf');
-    const { valid, invalid } = validateFiles([pdf], 20 * 1024 * 1024, 500 * 1024 * 1024, ['image/jpeg']);
+    const { valid, invalid } = validateFiles(
+      [pdf],
+      20 * 1024 * 1024,
+      500 * 1024 * 1024,
+      ['image/jpeg']
+    );
     expect(valid).toHaveLength(0);
     expect(invalid[0].reason).toContain('Unsupported file type');
   });

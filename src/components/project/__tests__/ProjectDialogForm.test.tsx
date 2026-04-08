@@ -12,7 +12,9 @@ vi.mock('sonner', () => ({
 }));
 
 // Mock the useProjectForm hook — factories are hoisted, so use vi.fn() inline
-const mockHandleCreateProject = vi.fn((e: React.FormEvent) => e.preventDefault());
+const mockHandleCreateProject = vi.fn((e: React.FormEvent) =>
+  e.preventDefault()
+);
 const _mockOnClose = vi.fn();
 
 vi.mock('@/hooks/useProjectForm', () => ({
@@ -28,16 +30,26 @@ vi.mock('@/hooks/useProjectForm', () => ({
 
 // Mock Dialog UI components since they need Dialog context
 vi.mock('@/components/ui/dialog', () => ({
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 describe('ProjectDialogForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockHandleCreateProject.mockImplementation((e: React.FormEvent) => e.preventDefault());
+    mockHandleCreateProject.mockImplementation((e: React.FormEvent) =>
+      e.preventDefault()
+    );
   });
 
   it('renders project name input', () => {

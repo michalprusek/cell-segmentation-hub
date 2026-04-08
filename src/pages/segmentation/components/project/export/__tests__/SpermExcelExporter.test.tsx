@@ -31,9 +31,16 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-const makePolyline = (id: string, partClass: string, instanceId = 'sperm-1') => ({
+const makePolyline = (
+  id: string,
+  partClass: string,
+  instanceId = 'sperm-1'
+) => ({
   id,
-  points: [{ x: 0, y: 0 }, { x: 50, y: 50 }],
+  points: [
+    { x: 0, y: 0 },
+    { x: 50, y: 50 },
+  ],
   type: 'external' as const,
   geometry: 'polyline' as const,
   instanceId,
@@ -56,7 +63,9 @@ describe('SpermExcelExporter', () => {
       createBlob: vi.fn(() => new Blob()),
       downloadFile: vi.fn(),
     });
-    const { calculatePolylineLength } = await import('@/pages/segmentation/utils/metricCalculations');
+    const { calculatePolylineLength } = await import(
+      '@/pages/segmentation/utils/metricCalculations'
+    );
     vi.mocked(calculatePolylineLength).mockReturnValue(50.5);
   });
 
@@ -71,10 +80,20 @@ describe('SpermExcelExporter', () => {
       imageWidth: 800,
       imageHeight: 600,
       polygons: [
-        { id: 'p1', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }], type: 'external' as const },
+        {
+          id: 'p1',
+          points: [
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            { x: 100, y: 100 },
+          ],
+          type: 'external' as const,
+        },
       ],
     };
-    const { container } = render(<SpermExcelExporter segmentation={segNoPolylines} />);
+    const { container } = render(
+      <SpermExcelExporter segmentation={segNoPolylines} />
+    );
     expect(container.firstChild).toBeNull();
   });
 
@@ -150,7 +169,9 @@ describe('SpermExcelExporter', () => {
 
     let resolveExport!: (v: any) => void;
     vi.mocked(createExcelExport).mockReturnValueOnce(
-      new Promise(resolve => { resolveExport = resolve; })
+      new Promise(resolve => {
+        resolveExport = resolve;
+      })
     );
 
     const user = userEvent.setup();
@@ -168,7 +189,12 @@ describe('SpermExcelExporter', () => {
 
     // Resolve to avoid memory leaks
     resolveExport({
-      createWorkbook: () => ({ addWorksheet: () => ({ addRow: vi.fn(() => ({ font: {}, fill: {} })), columns: [] }) }),
+      createWorkbook: () => ({
+        addWorksheet: () => ({
+          addRow: vi.fn(() => ({ font: {}, fill: {} })),
+          columns: [],
+        }),
+      }),
       writeBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
       createBlob: vi.fn(() => new Blob()),
       downloadFile: vi.fn(),

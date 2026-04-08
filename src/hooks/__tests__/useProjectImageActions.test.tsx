@@ -67,7 +67,10 @@ import { toast } from 'sonner';
 import { updateImageProcessingStatus } from '@/lib/imageProcessingService';
 import type { ProjectImage } from '@/types';
 
-const makeImage = (id: string, overrides: Partial<ProjectImage> = {}): ProjectImage => ({
+const makeImage = (
+  id: string,
+  overrides: Partial<ProjectImage> = {}
+): ProjectImage => ({
   id,
   name: `image-${id}.jpg`,
   url: `http://localhost:3001/images/${id}.jpg`,
@@ -101,7 +104,12 @@ describe('useProjectImageActions', () => {
       vi.mocked(apiClient.deleteImage).mockResolvedValue(undefined);
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -109,17 +117,27 @@ describe('useProjectImageActions', () => {
         await result.current.handleDeleteImage('img-1');
       });
 
-      expect(vi.mocked(apiClient.deleteImage)).toHaveBeenCalledWith('proj-1', 'img-1');
+      expect(vi.mocked(apiClient.deleteImage)).toHaveBeenCalledWith(
+        'proj-1',
+        'img-1'
+      );
       expect(onImagesChange).toHaveBeenCalledWith([images[1]]);
     });
 
     it('shows toast error when deleteImage API fails', async () => {
       const images = [makeImage('img-1')];
       const onImagesChange = vi.fn();
-      vi.mocked(apiClient.deleteImage).mockRejectedValue(new Error('Delete failed'));
+      vi.mocked(apiClient.deleteImage).mockRejectedValue(
+        new Error('Delete failed')
+      );
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -136,7 +154,12 @@ describe('useProjectImageActions', () => {
       const onImagesChange = vi.fn();
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: undefined, images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: undefined,
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -156,7 +179,12 @@ describe('useProjectImageActions', () => {
       const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -165,7 +193,9 @@ describe('useProjectImageActions', () => {
       });
 
       const dispatchedEvent = dispatchSpy.mock.calls.find(
-        call => call[0] instanceof CustomEvent && call[0].type === 'project-image-deleted'
+        call =>
+          call[0] instanceof CustomEvent &&
+          call[0].type === 'project-image-deleted'
       );
       expect(dispatchedEvent).toBeTruthy();
     });
@@ -177,13 +207,20 @@ describe('useProjectImageActions', () => {
       const onImagesChange = vi.fn();
       const mockSegResult = { polygons: [], imageWidth: 100, imageHeight: 100 };
 
-      vi.mocked(updateImageProcessingStatus).mockImplementation(async ({ onComplete }) => {
-        onComplete?.(mockSegResult as any);
-        return { cancel: vi.fn() };
-      });
+      vi.mocked(updateImageProcessingStatus).mockImplementation(
+        async ({ onComplete }) => {
+          onComplete?.(mockSegResult as any);
+          return { cancel: vi.fn() };
+        }
+      );
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -206,7 +243,12 @@ describe('useProjectImageActions', () => {
       );
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -234,7 +276,12 @@ describe('useProjectImageActions', () => {
       );
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -252,7 +299,12 @@ describe('useProjectImageActions', () => {
       const onImagesChange = vi.fn();
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -275,7 +327,12 @@ describe('useProjectImageActions', () => {
       );
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -286,7 +343,10 @@ describe('useProjectImageActions', () => {
       await waitFor(() => {
         expect(onImagesChange).toHaveBeenCalledWith(
           expect.arrayContaining([
-            expect.objectContaining({ id: 'img-1', segmentationStatus: 'processing' }),
+            expect.objectContaining({
+              id: 'img-1',
+              segmentationStatus: 'processing',
+            }),
           ])
         );
       });
@@ -301,7 +361,12 @@ describe('useProjectImageActions', () => {
       );
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -319,13 +384,20 @@ describe('useProjectImageActions', () => {
       const onImagesChange = vi.fn();
       const mockSegResult = { polygons: [], imageWidth: 100, imageHeight: 100 };
 
-      vi.mocked(updateImageProcessingStatus).mockImplementation(async ({ onComplete }) => {
-        onComplete?.(mockSegResult as any);
-        return { cancel: vi.fn() };
-      });
+      vi.mocked(updateImageProcessingStatus).mockImplementation(
+        async ({ onComplete }) => {
+          onComplete?.(mockSegResult as any);
+          return { cancel: vi.fn() };
+        }
+      );
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -343,7 +415,12 @@ describe('useProjectImageActions', () => {
       const onImagesChange = vi.fn();
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -361,7 +438,12 @@ describe('useProjectImageActions', () => {
       const onImagesChange = vi.fn();
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: undefined, images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: undefined,
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 
@@ -377,7 +459,12 @@ describe('useProjectImageActions', () => {
       const onImagesChange = vi.fn();
 
       const { result } = renderHook(
-        () => useProjectImageActions({ projectId: 'proj-1', images, onImagesChange }),
+        () =>
+          useProjectImageActions({
+            projectId: 'proj-1',
+            images,
+            onImagesChange,
+          }),
         { wrapper }
       );
 

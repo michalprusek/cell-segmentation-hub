@@ -17,6 +17,12 @@ export default tseslint.config(
       'node_modules/',
       '*.generated.ts',
       '*.d.ts.map',
+      // Backend has its own ESLint config + tsconfig and is linted
+      // separately. The root (frontend) parser settings can't always
+      // parse backend-only TS syntax (e.g. parser-version mismatches on
+      // test files), and linting it from here would also bypass the
+      // backend's stricter rule set.
+      'backend/**',
     ],
   },
   {

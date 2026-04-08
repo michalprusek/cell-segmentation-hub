@@ -42,8 +42,9 @@ describe('WebSocket Integration Tests', () => {
   beforeEach(() => {
     // Create reactive mock socket with proper connection lifecycle simulation
     let _connected = false;
-    const _eventHandlers = new Map<string, Function[]>();
-    const _ioEventHandlers = new Map<string, Function[]>();
+    type AnyHandler = (...args: any[]) => unknown;
+    const _eventHandlers = new Map<string, AnyHandler[]>();
+    const _ioEventHandlers = new Map<string, AnyHandler[]>();
 
     mockSocket = {
       // Reactive connected property using getter
@@ -71,7 +72,7 @@ describe('WebSocket Integration Tests', () => {
       }),
 
       // Event registration that stores handlers
-      on: vi.fn((event: string, handler: Function) => {
+      on: vi.fn((event: string, handler: AnyHandler) => {
         if (!_eventHandlers.has(event)) {
           _eventHandlers.set(event, []);
         }
@@ -79,7 +80,7 @@ describe('WebSocket Integration Tests', () => {
         return mockSocket;
       }),
 
-      off: vi.fn((event: string, handler?: Function) => {
+      off: vi.fn((event: string, handler?: AnyHandler) => {
         if (handler) {
           const handlers = _eventHandlers.get(event) || [];
           const index = handlers.indexOf(handler);
@@ -101,7 +102,7 @@ describe('WebSocket Integration Tests', () => {
       }),
 
       io: {
-        on: vi.fn((event: string, handler: Function) => {
+        on: vi.fn((event: string, handler: AnyHandler) => {
           if (!_ioEventHandlers.has(event)) {
             _ioEventHandlers.set(event, []);
           }
@@ -109,7 +110,7 @@ describe('WebSocket Integration Tests', () => {
           return mockSocket.io;
         }),
 
-        off: vi.fn((event: string, handler?: Function) => {
+        off: vi.fn((event: string, handler?: AnyHandler) => {
           if (handler) {
             const handlers = _ioEventHandlers.get(event) || [];
             const index = handlers.indexOf(handler);

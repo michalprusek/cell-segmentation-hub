@@ -107,7 +107,8 @@ describe('DeleteAccountDialog', () => {
   it('should call deleteAccount API when confirmed', async () => {
     // Setup: make AuthProvider believe user is authenticated with the test email
     const apiModule = await import('@/lib/api');
-    const mockApiClient = (apiModule as any).default || (apiModule as any).apiClient;
+    const mockApiClient =
+      (apiModule as any).default || (apiModule as any).apiClient;
     mockApiClient.isAuthenticated.mockReturnValue(true);
     mockApiClient.getUserProfile.mockResolvedValue({
       id: 'test-user-id',
@@ -142,7 +143,8 @@ describe('DeleteAccountDialog', () => {
   it('should navigate to home after successful deletion', async () => {
     // Setup: make AuthProvider believe user is authenticated with the test email
     const apiModule = await import('@/lib/api');
-    const mockApiClient = (apiModule as any).default || (apiModule as any).apiClient;
+    const mockApiClient =
+      (apiModule as any).default || (apiModule as any).apiClient;
     mockApiClient.isAuthenticated.mockReturnValue(true);
     mockApiClient.getUserProfile.mockResolvedValue({
       id: 'test-user-id',
@@ -176,7 +178,8 @@ describe('DeleteAccountDialog', () => {
   it('should show error toast on deletion failure', async () => {
     // Make the apiClient.deleteAccount throw to trigger error path
     const apiModule = await import('@/lib/api');
-    const mockApiClient = (apiModule as any).default || (apiModule as any).apiClient;
+    const mockApiClient =
+      (apiModule as any).default || (apiModule as any).apiClient;
     mockApiClient.deleteAccount.mockRejectedValue(new Error('Network error'));
 
     const { toast } = await import('sonner');
@@ -198,7 +201,8 @@ describe('DeleteAccountDialog', () => {
 
   it('should disable input and button during deletion', async () => {
     const apiModule = await import('@/lib/api');
-    const mockApiClient = (apiModule as any).default || (apiModule as any).apiClient;
+    const mockApiClient =
+      (apiModule as any).default || (apiModule as any).apiClient;
     mockApiClient.deleteAccount.mockImplementation(
       () => new Promise(resolve => setTimeout(resolve, 100))
     );

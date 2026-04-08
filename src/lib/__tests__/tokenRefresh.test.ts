@@ -172,9 +172,7 @@ describe('TokenRefreshManager', () => {
     it('stopTokenRefreshManager clears timer and resets refreshing state', () => {
       const token = makeJwt();
       tokenRefreshManager.scheduleTokenRefresh(token);
-      expect(() =>
-        tokenRefreshManager.stopTokenRefreshManager()
-      ).not.toThrow();
+      expect(() => tokenRefreshManager.stopTokenRefreshManager()).not.toThrow();
     });
   });
 });

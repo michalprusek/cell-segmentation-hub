@@ -140,7 +140,9 @@ describe('ExportContext', () => {
 
       expect(result.current.getExportState('project-1')).toBeNull();
       expect(result.current.getExportState('project-2')).not.toBeNull();
-      expect(result.current.getExportState('project-2')!.exportProgress).toBe(80);
+      expect(result.current.getExportState('project-2')!.exportProgress).toBe(
+        80
+      );
     });
   });
 

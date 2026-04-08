@@ -77,7 +77,9 @@ describe('useStatusReconciliation', () => {
     it('returns false when image is processing and queue also shows processing', () => {
       // Use a fresh updatedAt to avoid the 5-minute stale timeout condition
       const recentlyUpdated = new Date(Date.now() - 10000); // 10 seconds ago
-      const images = [makeImage('img-1', 'processing', { updatedAt: recentlyUpdated })];
+      const images = [
+        makeImage('img-1', 'processing', { updatedAt: recentlyUpdated }),
+      ];
 
       const { result } = renderHook(() =>
         useStatusReconciliation({
@@ -92,7 +94,9 @@ describe('useStatusReconciliation', () => {
 
     it('returns true when image has been processing for over 5 minutes', () => {
       const staleTime = new Date(Date.now() - 310000); // 310 seconds ago
-      const images = [makeImage('img-1', 'processing', { updatedAt: staleTime })];
+      const images = [
+        makeImage('img-1', 'processing', { updatedAt: staleTime }),
+      ];
 
       const { result } = renderHook(() =>
         useStatusReconciliation({
@@ -106,7 +110,10 @@ describe('useStatusReconciliation', () => {
     });
 
     it('returns false when no images are processing', () => {
-      const images = [makeImage('img-1', 'completed'), makeImage('img-2', 'pending')];
+      const images = [
+        makeImage('img-1', 'completed'),
+        makeImage('img-2', 'pending'),
+      ];
 
       const { result } = renderHook(() =>
         useStatusReconciliation({
@@ -148,10 +155,15 @@ describe('useStatusReconciliation', () => {
         await result.current.reconcileImageStatuses();
       });
 
-      expect(vi.mocked(apiClient.getProjectImages)).toHaveBeenCalledWith('proj-1');
+      expect(vi.mocked(apiClient.getProjectImages)).toHaveBeenCalledWith(
+        'proj-1'
+      );
       expect(onImagesUpdate).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'img-1', segmentationStatus: 'completed' }),
+          expect.objectContaining({
+            id: 'img-1',
+            segmentationStatus: 'completed',
+          }),
         ])
       );
     });
@@ -215,7 +227,10 @@ describe('useStatusReconciliation', () => {
 
       expect(onImagesUpdate).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'img-1', segmentationStatus: 'completed' }),
+          expect.objectContaining({
+            id: 'img-1',
+            segmentationStatus: 'completed',
+          }),
         ])
       );
     });
@@ -224,7 +239,9 @@ describe('useStatusReconciliation', () => {
       const onImagesUpdate = vi.fn();
       // Completed just 5 seconds ago
       const recentlyCompleted = new Date(Date.now() - 5000);
-      const images = [makeImage('img-1', 'completed', { updatedAt: recentlyCompleted })];
+      const images = [
+        makeImage('img-1', 'completed', { updatedAt: recentlyCompleted }),
+      ];
 
       vi.mocked(apiClient.getProjectImages).mockResolvedValue({
         images: [
@@ -295,7 +312,9 @@ describe('useStatusReconciliation', () => {
       const onImagesUpdate = vi.fn();
       const images = [makeImage('img-1', 'processing')];
 
-      vi.mocked(apiClient.getProjectImages).mockRejectedValue(new Error('API error'));
+      vi.mocked(apiClient.getProjectImages).mockRejectedValue(
+        new Error('API error')
+      );
 
       const { result } = renderHook(() =>
         useStatusReconciliation({
@@ -344,7 +363,8 @@ describe('useStatusReconciliation', () => {
         await result.current.reconcileImageStatuses();
       });
 
-      const firstCallCount = vi.mocked(apiClient.getProjectImages).mock.calls.length;
+      const firstCallCount = vi.mocked(apiClient.getProjectImages).mock.calls
+        .length;
 
       // Second immediate call should be throttled
       await act(async () => {
@@ -352,7 +372,9 @@ describe('useStatusReconciliation', () => {
       });
 
       // API should not have been called again within the throttle window
-      expect(vi.mocked(apiClient.getProjectImages).mock.calls.length).toBe(firstCallCount);
+      expect(vi.mocked(apiClient.getProjectImages).mock.calls.length).toBe(
+        firstCallCount
+      );
     });
 
     it('schedules reconciliation via setTimeout when stale images exist', async () => {
@@ -368,7 +390,13 @@ describe('useStatusReconciliation', () => {
 
       // Advance timers to trigger the scheduled reconciliation
       vi.mocked(apiClient.getProjectImages).mockResolvedValue({
-        images: [{ id: 'img-1', segmentationStatus: 'processing', updated_at: new Date().toISOString() }],
+        images: [
+          {
+            id: 'img-1',
+            segmentationStatus: 'processing',
+            updated_at: new Date().toISOString(),
+          },
+        ],
       });
 
       await act(async () => {

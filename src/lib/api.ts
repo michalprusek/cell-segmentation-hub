@@ -2,10 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { Profile, UpdateProfile } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
-import {
-  retryWithBackoff,
-  RETRY_CONFIGS,
-} from '@/lib/retryUtils';
+import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
 import {
   chunkFiles,
   processChunksWithConcurrency,
@@ -200,6 +197,20 @@ class ApiClient {
         // Check if this is a refresh token request to avoid infinite loops
         const isRefreshRequest = originalRequest.url?.includes('/auth/refresh');
 
+        // Defense-in-depth: failures on the export download endpoints must
+        // never force-logout the user. A failed (slow / oversized / network
+        // dropped) export download is not a session expiry, and the old
+        // behaviour ("Failed to download export… and now you're logged out")
+        // was a confusing UX bug. We still attempt token refresh below if
+        // we have one, we just don't fall through to clearing tokens for
+        // these specific endpoints.
+        const isExportDownloadEndpoint =
+          typeof originalRequest.url === 'string' &&
+          (/\/export\/[^/?#]+\/download(\?|$)/.test(originalRequest.url) ||
+            /\/export\/[^/?#]+\/download-token(\?|$)/.test(
+              originalRequest.url
+            ));
+
         if (
           error.response?.status === 401 &&
           !originalRequest._retry &&
@@ -216,9 +227,19 @@ class ApiClient {
               originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
               return this.instance(originalRequest);
             } catch (refreshError) {
-              logger.error('Token refresh failed, forcing logout:', refreshError);
+              logger.error(
+                'Token refresh failed, forcing logout:',
+                refreshError
+              );
               // Fall through to force logout below
             }
+          }
+
+          // For export download endpoints, never force-logout — propagate
+          // the error so the export UI can show a "try again" message
+          // without nuking the user's session.
+          if (isExportDownloadEndpoint) {
+            return Promise.reject(error);
           }
 
           // No refresh token, or refresh failed - force logout
@@ -1784,6 +1805,51 @@ class ApiClient {
 
   getAccessToken(): string | null {
     return this.accessToken;
+  }
+
+  /**
+   * Request a short-lived signed download token for an export job.
+   * The token is then attached to a native browser download URL so the
+   * ZIP can stream straight to disk — bypassing the axios blob path that
+   * fails for very large exports (memory + 5-min timeout).
+   */
+  async getExportDownloadToken(
+    projectId: string,
+    jobId: string
+  ): Promise<{ token: string; expiresAt: number }> {
+    const response = await this.instance.post<{
+      token: string;
+      expiresAt: number;
+    }>(`/projects/${projectId}/export/${jobId}/download-token`);
+    return response.data;
+  }
+
+  /**
+   * Build the absolute URL the browser should navigate to in order to
+   * download an export ZIP. Uses the apiClient's configured base URL so
+   * it works in both dev and production.
+   */
+  buildExportDownloadUrl(
+    projectId: string,
+    jobId: string,
+    token: string,
+    filename?: string
+  ): string {
+    const params = new URLSearchParams({ token });
+    if (filename) {
+      params.set('filename', filename);
+    }
+    // Resolve against window.location so a relative baseURL (e.g. "/api")
+    // becomes a fully-qualified URL the browser can navigate to.
+    const path = `${this.baseURL}/projects/${projectId}/export/${jobId}/download?${params.toString()}`;
+    if (typeof window !== 'undefined') {
+      try {
+        return new URL(path, window.location.origin).toString();
+      } catch {
+        return path;
+      }
+    }
+    return path;
   }
 }
 

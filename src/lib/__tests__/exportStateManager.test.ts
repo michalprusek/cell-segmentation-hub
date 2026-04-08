@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import ExportStateManager, { type PersistedExportState } from '@/lib/exportStateManager';
+import ExportStateManager, {
+  type PersistedExportState,
+} from '@/lib/exportStateManager';
 
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -10,7 +12,9 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-const makeState = (overrides: Partial<PersistedExportState> = {}): PersistedExportState => ({
+const makeState = (
+  overrides: Partial<PersistedExportState> = {}
+): PersistedExportState => ({
   projectId: 'proj-1',
   jobId: 'job-1',
   status: 'exporting',
@@ -26,9 +30,18 @@ function makeLocalStorageMock() {
   return new Proxy(store, {
     get(target, prop) {
       if (prop === 'getItem') return (key: string) => target[key] ?? null;
-      if (prop === 'setItem') return (key: string, val: string) => { target[key] = val; };
-      if (prop === 'removeItem') return (key: string) => { delete target[key]; };
-      if (prop === 'clear') return () => { Object.keys(target).forEach(k => delete target[k]); };
+      if (prop === 'setItem')
+        return (key: string, val: string) => {
+          target[key] = val;
+        };
+      if (prop === 'removeItem')
+        return (key: string) => {
+          delete target[key];
+        };
+      if (prop === 'clear')
+        return () => {
+          Object.keys(target).forEach(k => delete target[k]);
+        };
       if (prop === 'length') return Object.keys(target).length;
       if (prop === 'key') return (i: number) => Object.keys(target)[i] ?? null;
       // Allow Object.keys(localStorage) to enumerate store keys
@@ -38,7 +51,12 @@ function makeLocalStorageMock() {
       return Object.keys(target);
     },
     getOwnPropertyDescriptor(target, key) {
-      if (key in target) return { enumerable: true, configurable: true, value: target[key as string] };
+      if (key in target)
+        return {
+          enumerable: true,
+          configurable: true,
+          value: target[key as string],
+        };
       return undefined;
     },
     has(target, key) {
@@ -126,7 +144,9 @@ describe('ExportStateManager', () => {
     });
 
     it('does not throw when clearing a non-existent state', () => {
-      expect(() => ExportStateManager.clearExportState('ghost-proj')).not.toThrow();
+      expect(() =>
+        ExportStateManager.clearExportState('ghost-proj')
+      ).not.toThrow();
     });
   });
 
@@ -140,7 +160,9 @@ describe('ExportStateManager', () => {
     it('updates exportStatus when provided', () => {
       ExportStateManager.saveExportState('proj-1', makeState());
       ExportStateManager.updateExportProgress('proj-1', 50, 'Compressing');
-      expect(ExportStateManager.getExportState('proj-1')!.exportStatus).toBe('Compressing');
+      expect(ExportStateManager.getExportState('proj-1')!.exportStatus).toBe(
+        'Compressing'
+      );
     });
 
     it('does nothing when no state exists for the projectId', () => {
@@ -157,7 +179,10 @@ describe('ExportStateManager', () => {
         state: makeState({ projectId: 'old-proj' }),
       });
 
-      ExportStateManager.saveExportState('fresh-proj', makeState({ projectId: 'fresh-proj' }));
+      ExportStateManager.saveExportState(
+        'fresh-proj',
+        makeState({ projectId: 'fresh-proj' })
+      );
 
       const count = ExportStateManager.cleanupExpiredStates();
       expect(count).toBe(1);
@@ -258,8 +283,14 @@ describe('ExportStateManager', () => {
 
   describe('getAllActiveStates', () => {
     it('returns all non-expired states keyed by projectId', () => {
-      ExportStateManager.saveExportState('proj-a', makeState({ projectId: 'proj-a', jobId: 'j-a' }));
-      ExportStateManager.saveExportState('proj-b', makeState({ projectId: 'proj-b', jobId: 'j-b' }));
+      ExportStateManager.saveExportState(
+        'proj-a',
+        makeState({ projectId: 'proj-a', jobId: 'j-a' })
+      );
+      ExportStateManager.saveExportState(
+        'proj-b',
+        makeState({ projectId: 'proj-b', jobId: 'j-b' })
+      );
 
       const all = ExportStateManager.getAllActiveStates();
       expect(Object.keys(all)).toHaveLength(2);
@@ -272,7 +303,10 @@ describe('ExportStateManager', () => {
         timestamp: Date.now() - 3 * 60 * 60 * 1000,
         state: makeState({ projectId: 'old' }),
       });
-      ExportStateManager.saveExportState('fresh', makeState({ projectId: 'fresh' }));
+      ExportStateManager.saveExportState(
+        'fresh',
+        makeState({ projectId: 'fresh' })
+      );
 
       const all = ExportStateManager.getAllActiveStates();
       expect(all['old']).toBeUndefined();
@@ -293,7 +327,10 @@ describe('ExportStateManager', () => {
           callCount++;
           if (throwOnNext && callCount === 1) {
             throwOnNext = false;
-            const err = Object.assign(new Error('QuotaExceededError'), { name: 'QuotaExceededError', code: 22 });
+            const err = Object.assign(new Error('QuotaExceededError'), {
+              name: 'QuotaExceededError',
+              code: 22,
+            });
             throw err;
           }
           store[key] = val;

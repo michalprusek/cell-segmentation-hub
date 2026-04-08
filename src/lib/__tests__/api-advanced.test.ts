@@ -2,38 +2,47 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ===== SETUP MOCKS BEFORE ANY IMPORTS =====
 // Use vi.hoisted so these variables are available before module imports
-const { mockAxiosInstance, requestInterceptorRef, responseInterceptorRef, responseErrorHandlerRef } =
-  vi.hoisted(() => {
-    const requestInterceptorRef: { value: any } = { value: undefined };
-    const responseInterceptorRef: { value: any } = { value: undefined };
-    const responseErrorHandlerRef: { value: any } = { value: undefined };
+const {
+  mockAxiosInstance,
+  requestInterceptorRef,
+  responseInterceptorRef,
+  responseErrorHandlerRef,
+} = vi.hoisted(() => {
+  const requestInterceptorRef: { value: any } = { value: undefined };
+  const responseInterceptorRef: { value: any } = { value: undefined };
+  const responseErrorHandlerRef: { value: any } = { value: undefined };
 
-    const mockAxiosInstance = {
-      get: vi.fn(),
-      post: vi.fn(),
-      put: vi.fn(),
-      delete: vi.fn(),
-      interceptors: {
-        request: {
-          use: vi.fn((success: any, _error: any) => {
-            requestInterceptorRef.value = success;
-            return 0;
-          }),
-          eject: vi.fn(),
-        },
-        response: {
-          use: vi.fn((success: any, error: any) => {
-            responseInterceptorRef.value = success;
-            responseErrorHandlerRef.value = error;
-            return 0;
-          }),
-          eject: vi.fn(),
-        },
+  const mockAxiosInstance = {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    interceptors: {
+      request: {
+        use: vi.fn((success: any, _error: any) => {
+          requestInterceptorRef.value = success;
+          return 0;
+        }),
+        eject: vi.fn(),
       },
-    };
+      response: {
+        use: vi.fn((success: any, error: any) => {
+          responseInterceptorRef.value = success;
+          responseErrorHandlerRef.value = error;
+          return 0;
+        }),
+        eject: vi.fn(),
+      },
+    },
+  };
 
-    return { mockAxiosInstance, requestInterceptorRef, responseInterceptorRef, responseErrorHandlerRef };
-  });
+  return {
+    mockAxiosInstance,
+    requestInterceptorRef,
+    responseInterceptorRef,
+    responseErrorHandlerRef,
+  };
+});
 
 // Mock axios.create to return our mock
 vi.mock('axios', () => ({
@@ -211,7 +220,9 @@ describe('API Client - Advanced Features', () => {
       (apiClient as any).refreshToken = 'valid-refresh-token';
 
       // Make instance callable for the retry request (axios instance can be called as function)
-      const callableMock = vi.fn().mockResolvedValueOnce({ data: { result: 'success' } });
+      const callableMock = vi
+        .fn()
+        .mockResolvedValueOnce({ data: { result: 'success' } });
       Object.assign(callableMock, mockAxiosInstance);
       (apiClient as any).instance = callableMock;
 
@@ -240,9 +251,9 @@ describe('API Client - Advanced Features', () => {
         config: loginRequest,
       };
 
-      await expect(responseErrorHandlerRef.value(unauthorizedError)).rejects.toEqual(
-        unauthorizedError
-      );
+      await expect(
+        responseErrorHandlerRef.value(unauthorizedError)
+      ).rejects.toEqual(unauthorizedError);
 
       // Should not attempt refresh for auth endpoints
       expect(mockAxiosInstance.post).not.toHaveBeenCalledWith(
@@ -268,7 +279,9 @@ describe('API Client - Advanced Features', () => {
       // Mock failed refresh
       mockAxiosInstance.post.mockRejectedValue(new Error('Refresh failed'));
 
-      await expect(responseErrorHandlerRef.value(unauthorizedError)).rejects.toThrow();
+      await expect(
+        responseErrorHandlerRef.value(unauthorizedError)
+      ).rejects.toThrow();
 
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
@@ -282,9 +295,9 @@ describe('API Client - Advanced Features', () => {
         config: requestWithRetry,
       };
 
-      await expect(responseErrorHandlerRef.value(unauthorizedError)).rejects.toEqual(
-        unauthorizedError
-      );
+      await expect(
+        responseErrorHandlerRef.value(unauthorizedError)
+      ).rejects.toEqual(unauthorizedError);
 
       expect(mockAxiosInstance.post).not.toHaveBeenCalled();
     });
@@ -329,7 +342,9 @@ describe('API Client - Advanced Features', () => {
       (apiClient as any).instance = callableMock;
 
       // Should reject after max retries
-      await expect(responseErrorHandlerRef.value(rateLimitError)).rejects.toBeDefined();
+      await expect(
+        responseErrorHandlerRef.value(rateLimitError)
+      ).rejects.toBeDefined();
 
       // Restore instance
       (apiClient as any).instance = mockAxiosInstance;
@@ -722,7 +737,17 @@ describe('API Client - Advanced Features', () => {
         data: {
           success: true,
           data: {
-            images: [{ id: '1', name: 'uploaded.jpg', projectId: 'project1', userId: 'user1', originalUrl: '/uploads/uploaded.jpg', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' }],
+            images: [
+              {
+                id: '1',
+                name: 'uploaded.jpg',
+                projectId: 'project1',
+                userId: 'user1',
+                originalUrl: '/uploads/uploaded.jpg',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+              },
+            ],
             count: 1,
           },
         },

@@ -1178,7 +1178,11 @@ describe('API Client', () => {
         const result = await apiClient.getBatchSegmentationResults(imageIds);
 
         expect(result['img-1']).toEqual(
-          expect.objectContaining({ polygons: [], imageWidth: 800, imageHeight: 600 })
+          expect.objectContaining({
+            polygons: [],
+            imageWidth: 800,
+            imageHeight: 600,
+          })
         );
         expect(result['img-2']).toBeNull();
         expect(result['img-3']).toEqual(
@@ -1205,7 +1209,9 @@ describe('API Client', () => {
 
         await expect(
           apiClient.getBatchSegmentationResults(imageIds)
-        ).rejects.toMatchObject({ message: 'Request failed with status code 500' });
+        ).rejects.toMatchObject({
+          message: 'Request failed with status code 500',
+        });
       });
 
       test('should handle concurrent batch requests efficiently', async () => {

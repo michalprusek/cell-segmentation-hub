@@ -3,10 +3,6 @@ import apiClient from '@/lib/api';
 import { useWebSocket } from '@/contexts/useWebSocket';
 import { logger } from '@/lib/logger';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
-import {
-  downloadFromResponse,
-  canDownloadLargeFiles,
-} from '@/lib/downloadUtils';
 import ExportStateManager from '@/lib/exportStateManager';
 import { useExportContext } from '@/contexts/ExportContext';
 import { useAbortController } from '@/hooks/shared/useAbortController';
@@ -20,6 +16,48 @@ const sanitizeFilename = (filename: string): string => {
     .replace(/_{2,}/g, '_') // Replace multiple underscores with single
     .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
     .substring(0, 100); // Limit length to prevent issues
+};
+
+/**
+ * Trigger a native browser download by creating a hidden anchor and
+ * clicking it. The browser streams the response straight to disk —
+ * no Blob, no axios timeout, and (crucially) the download cannot
+ * trigger the auth interceptor's force-logout logic.
+ */
+const triggerNativeDownload = (url: string, filename: string): void => {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  // Defer removal so Safari has time to register the click.
+  setTimeout(() => {
+    if (link.parentNode) {
+      link.parentNode.removeChild(link);
+    }
+  }, 100);
+};
+
+/**
+ * Run the full native-download flow for an export job: request a signed
+ * token from the backend, then trigger a native browser download with the
+ * token in the query string. Throws on token-issue failure so callers can
+ * surface a "try again" message.
+ */
+const runNativeExportDownload = async (
+  projectId: string,
+  jobId: string,
+  filename: string
+): Promise<void> => {
+  const { token } = await apiClient.getExportDownloadToken(projectId, jobId);
+  const url = apiClient.buildExportDownloadUrl(
+    projectId,
+    jobId,
+    token,
+    filename
+  );
+  triggerNativeDownload(url, filename);
 };
 
 export interface ExportOptions {
@@ -592,85 +630,44 @@ export const useSharedAdvancedExport = (
     const currentProjectNameSnapshot = currentProjectName;
 
     // ASYNC DOWNLOAD FUNCTION
+    //
+    // The download is triggered by the browser itself via a native <a>
+    // click — we only need to fetch a short-lived signed download token
+    // first. This avoids the 5-minute axios timeout and the in-memory
+    // Blob blowup that used to fail for very large exports.
     const performAutoDownload = async () => {
       try {
-        // Final cancellation check with closure variable
         if (currentJob?.status === 'cancelled') {
           logger.info('Auto-download cancelled - job cancelled');
           downloadInProgress.current = false;
           return;
         }
 
-        // Set downloading state
         updateState({ isDownloading: true });
 
-        // Browser compatibility check (non-blocking)
-        if (!canDownloadLargeFiles()) {
-          logger.warn('Browser may have issues with large file downloads');
-        }
+        logger.info('📥 Starting native auto-download for job:', currentJobId);
 
-        const signal = getSignal('download');
-        logger.info(
-          '📥 Starting auto-download with signal aborted:',
-          signal.aborted
-        );
-
-        const response = await apiClient.get(
-          `/projects/${projectId}/export/${currentJobId}/download`,
-          {
-            responseType: 'blob',
-            timeout: 300000, // 5 minutes
-            signal: signal,
-          }
-        );
-
-        logger.info('✅ Auto-download request completed');
-
-        // Final cancellation check after network request
-        if (currentJob?.status === 'cancelled') {
-          logger.info('Download cancelled after request completion');
-          downloadInProgress.current = false;
-          updateState({ isDownloading: false });
-          return;
-        }
-
-        // Generate simple filename
         const filename = currentProjectNameSnapshot
           ? `${sanitizeFilename(currentProjectNameSnapshot)}.zip`
           : `export_${currentJobId}.zip`;
 
-        await downloadFromResponse(response, filename);
-        logger.info('Export auto-downloaded successfully', {
+        await runNativeExportDownload(projectId, currentJobId, filename);
+
+        logger.info('Export auto-download dispatched to browser', {
           jobId: currentJobId,
           filename,
         });
 
-        // SUCCESS: Clear flags and state but keep in downloaded list
         downloadInProgress.current = false;
         updateState({
           completedJobId: null,
           isDownloading: false,
-          exportStatus: 'Download completed successfully.',
+          exportStatus: 'Download started. Check your downloads folder.',
         });
 
-        // Clear localStorage export state but keep downloaded tracking
         ExportStateManager.clearExportState(projectId);
-
-        // DO NOT AUTO-DISMISS - let user dismiss manually
       } catch (error: any) {
-        // ERROR HANDLING: Reset flags and allow retry
         downloadInProgress.current = false;
-
-        if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
-          logger.info('Auto-download cancelled by user');
-          updateState({
-            exportStatus: 'Download cancelled',
-            isDownloading: false,
-            completedJobId: null,
-          });
-          ExportStateManager.clearExportState(projectId);
-          return;
-        }
 
         logger.error('Auto-download failed:', error);
         // Remove from downloaded set to allow manual retry
@@ -825,85 +822,57 @@ export const useSharedAdvancedExport = (
     try {
       updateState({
         isDownloading: true,
-        exportStatus: 'Starting manual download...',
+        exportStatus: 'Starting download...',
       });
 
-      // Browser compatibility check (non-blocking)
-      if (!canDownloadLargeFiles()) {
-        logger.warn('Browser may have issues with large file downloads');
-      }
-
-      const signal = getSignal('download');
       logger.info(
-        '📥 Starting manual download with retry mechanism, signal aborted:',
-        signal.aborted
+        '📥 Starting native manual download for job:',
+        completedJobId
       );
 
-      // Enhanced download with retry mechanism for 503 errors
-      const downloadWithRetry = async () => {
-        return await retryWithBackoff(
-          async () => {
-            const response = await apiClient.get(
-              `/projects/${projectId}/export/${completedJobId}/download`,
-              {
-                responseType: 'blob',
-                timeout: 300000, // 5 minutes
-                signal: signal,
-              }
-            );
-            return response;
-          },
-          {
-            ...RETRY_CONFIGS.api,
-            maxAttempts: 3,
-            shouldRetry: (err, attempt) => {
-              const error = err as any;
-              const status = error?.response?.status;
-              // Retry on 502, 503, 504 (server errors)
-              const retryableStatuses = [502, 503, 504];
-              const isRetryable = retryableStatuses.includes(status);
-
-              logger.debug(
-                `Download attempt ${attempt}: status=${status}, retryable=${isRetryable}`
-              );
-              return isRetryable && attempt < 3;
-            },
-            onRetry: (err, attempt, nextDelay) => {
-              const error = err as any;
-              const status = error?.response?.status || 'unknown';
-
-              // Update UI to show retry status
-              updateState({
-                exportStatus: `Download failed (${status}), retrying in ${Math.round(nextDelay / 1000)}s... (${attempt}/3)`,
-                isDownloading: true,
-              });
-
-              logger.warn(
-                `🔄 Download retry ${attempt}/3 for status ${status}, waiting ${Math.round(nextDelay)}ms`
-              );
-            },
-          }
-        );
-      };
-
-      const result = await downloadWithRetry();
-
-      if (!result.success) {
-        throw result.error;
-      }
-
-      const response = result.data;
-      logger.info(
-        '✅ Manual download request completed (possibly after retries)'
-      );
-
-      // Generate simple filename
+      // Retry only the (small, fast) token-issue request — not the
+      // download itself, which the browser handles natively. The retry
+      // covers transient 502/503/504s on the token endpoint.
       const filename = currentProjectName
         ? `${sanitizeFilename(currentProjectName)}.zip`
         : `export_${completedJobId}.zip`;
 
-      await downloadFromResponse(response, filename);
-      logger.info('Export manually downloaded successfully', {
+      const downloadResult = await retryWithBackoff(
+        async () => {
+          await runNativeExportDownload(projectId, completedJobId, filename);
+        },
+        {
+          ...RETRY_CONFIGS.api,
+          maxAttempts: 3,
+          shouldRetry: (err, attempt) => {
+            const error = err as any;
+            const status = error?.response?.status;
+            const retryableStatuses = [502, 503, 504];
+            const isRetryable = retryableStatuses.includes(status);
+            logger.debug(
+              `Download token attempt ${attempt}: status=${status}, retryable=${isRetryable}`
+            );
+            return isRetryable && attempt < 3;
+          },
+          onRetry: (err, attempt, nextDelay) => {
+            const error = err as any;
+            const status = error?.response?.status || 'unknown';
+            updateState({
+              exportStatus: `Server busy (${status}), retrying in ${Math.round(nextDelay / 1000)}s... (${attempt}/3)`,
+              isDownloading: true,
+            });
+            logger.warn(
+              `🔄 Download retry ${attempt}/3 for status ${status}, waiting ${Math.round(nextDelay)}ms`
+            );
+          },
+        }
+      );
+
+      if (!downloadResult.success) {
+        throw downloadResult.error;
+      }
+
+      logger.info('Export manual download dispatched to browser', {
         jobId: completedJobId,
         filename,
       });
@@ -911,28 +880,14 @@ export const useSharedAdvancedExport = (
       // SUCCESS: Clear flags
       downloadInProgress.current = false;
       updateState({
-        exportStatus: 'Download completed successfully.',
+        exportStatus: 'Download started. Check your downloads folder.',
         isDownloading: false,
       });
 
-      // Clear localStorage
       ExportStateManager.clearExportState(projectId);
-
-      // DO NOT AUTO-DISMISS - let user control when to dismiss
     } catch (error: any) {
       // ERROR HANDLING: Reset flags
       downloadInProgress.current = false;
-
-      if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
-        logger.info('Manual download cancelled by user');
-        updateState({
-          exportStatus: 'Download cancelled',
-          isDownloading: false,
-          completedJobId: null,
-        });
-        ExportStateManager.clearExportState(projectId);
-        return;
-      }
 
       logger.error('Manual download failed:', error);
       // Remove from downloaded set to allow retry
@@ -955,7 +910,6 @@ export const useSharedAdvancedExport = (
     completedJobId,
     isDownloading,
     updateState,
-    getSignal,
     currentProjectName,
     markJobAsDownloaded,
     getDownloadedJobs,
