@@ -23,12 +23,12 @@ make up
 
 All services start automatically:
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| Frontend | http://localhost:3000 | React application |
-| Backend API | http://localhost:3001 | REST API |
-| API Docs | http://localhost:3001/api-docs | Swagger/OpenAPI |
-| ML Service | http://localhost:8000 | AI inference |
+| Service     | URL                            | Purpose           |
+| ----------- | ------------------------------ | ----------------- |
+| Frontend    | http://localhost:3000          | React application |
+| Backend API | http://localhost:3001          | REST API          |
+| API Docs    | http://localhost:3001/api-docs | Swagger/OpenAPI   |
+| ML Service  | http://localhost:8000          | AI inference      |
 
 > **Model Weights**: The ML service requires model weights (~1.8 GB). On first start, they are auto-downloaded from Google Drive. Run `make check-weights` to verify.
 
@@ -70,25 +70,25 @@ All services start automatically:
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind) |
-| Backend | Node.js + Express + TypeScript + Prisma ORM |
+| Layer      | Technology                                                     |
+| ---------- | -------------------------------------------------------------- |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)    |
+| Backend    | Node.js + Express + TypeScript + Prisma ORM                    |
 | ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm) |
-| Database | SQLite (dev) / PostgreSQL (prod) |
-| Real-time | Socket.io with auto-reconnect + exponential backoff |
-| Auth | JWT access + refresh tokens |
-| i18n | 6 languages via i18next (EN, CS, ES, DE, FR, ZH) |
-| Deployment | Docker + Docker Compose + Nginx |
+| Database   | SQLite (dev) / PostgreSQL (prod)                               |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff            |
+| Auth       | JWT access + refresh tokens                                    |
+| i18n       | 6 languages via i18next (EN, CS, ES, DE, FR, ZH)               |
+| Deployment | Docker + Docker Compose + Nginx                                |
 
 ## AI Models
 
-| Model | Inference | Throughput | Use Case |
-|-------|-----------|-----------|----------|
-| HRNet | ~200ms | 4.9 img/s | Balanced speed and accuracy |
-| CBAM-ResUNet | ~400ms | 2.7 img/s | Highest accuracy with attention mechanisms |
-| U-Net (SpheroHQ) | ~200ms | 5.5 img/s | Fastest, optimized for real-time |
-| Sperm | specialized | varies | Morphology with skeleton extraction |
+| Model            | Inference   | Throughput | Use Case                                   |
+| ---------------- | ----------- | ---------- | ------------------------------------------ |
+| HRNet            | ~200ms      | 4.9 img/s  | Balanced speed and accuracy                |
+| CBAM-ResUNet     | ~400ms      | 2.7 img/s  | Highest accuracy with attention mechanisms |
+| U-Net (SpheroHQ) | ~200ms      | 5.5 img/s  | Fastest, optimized for real-time           |
+| Sperm            | specialized | varies     | Morphology with skeleton extraction        |
 
 Performance measured on NVIDIA GPU. CPU fallback is supported.
 
@@ -144,12 +144,12 @@ All user-facing strings must exist in all 6 translation files (`src/translations
 
 The project has comprehensive test coverage across all layers:
 
-| Layer | Framework | Files | Tests | Coverage Target |
-|-------|-----------|-------|-------|----------------|
-| Frontend | Vitest + React Testing Library | 142 | ~2500 | 80% |
-| Backend | Jest + Supertest | 63 | ~980 | 75% |
-| ML Service | pytest | 14 | ~170 | 80% |
-| E2E | Playwright | 14 | varies | critical flows |
+| Layer      | Framework                      | Files | Tests  | Coverage Target |
+| ---------- | ------------------------------ | ----- | ------ | --------------- |
+| Frontend   | Vitest + React Testing Library | 142   | ~2500  | 80%             |
+| Backend    | Jest + Supertest               | 63    | ~980   | 75%             |
+| ML Service | pytest                         | 14    | ~170   | 80%             |
+| E2E        | Playwright                     | 14    | varies | critical flows  |
 
 ```bash
 # Run tests
@@ -169,26 +169,26 @@ make prod                  # Build + deploy with docker-compose.production.yml
 curl https://spherosegapp.utia.cas.cz/health
 ```
 
-| Service | Production | Dev |
-|---------|-----------|-----|
-| Nginx (SSL) | 80/443 | -- |
-| Frontend | 4000 | 3000 |
-| Backend | 4001 | 3001 |
-| ML | 4008 | 8000 |
+| Service     | Production | Dev  |
+| ----------- | ---------- | ---- |
+| Nginx (SSL) | 80/443     | --   |
+| Frontend    | 4000       | 3000 |
+| Backend     | 4001       | 3001 |
+| ML          | 4008       | 8000 |
 
 ## Documentation
 
-| Topic | Link |
-|-------|------|
-| Architecture Overview | [docs/architecture/README.md](docs/architecture/README.md) |
-| Frontend Architecture | [docs/architecture/frontend.md](docs/architecture/frontend.md) |
-| Backend Architecture | [docs/architecture/backend.md](docs/architecture/backend.md) |
-| ML Service | [docs/architecture/ml-service.md](docs/architecture/ml-service.md) |
-| Database Schema | [docs/reference/database-schema.md](docs/reference/database-schema.md) |
-| API Reference | [docs/api/README.md](docs/api/README.md) |
-| Testing Guide | [docs/testing-guide.md](docs/testing-guide.md) |
-| i18n Guide | [docs/i18n-guide.md](docs/i18n-guide.md) |
-| Getting Started | [docs/development/getting-started.md](docs/development/getting-started.md) |
+| Topic                 | Link                                                                       |
+| --------------------- | -------------------------------------------------------------------------- |
+| Architecture Overview | [docs/architecture/README.md](docs/architecture/README.md)                 |
+| Frontend Architecture | [docs/architecture/frontend.md](docs/architecture/frontend.md)             |
+| Backend Architecture  | [docs/architecture/backend.md](docs/architecture/backend.md)               |
+| ML Service            | [docs/architecture/ml-service.md](docs/architecture/ml-service.md)         |
+| Database Schema       | [docs/reference/database-schema.md](docs/reference/database-schema.md)     |
+| API Reference         | [docs/api/README.md](docs/api/README.md)                                   |
+| Testing Guide         | [docs/testing-guide.md](docs/testing-guide.md)                             |
+| i18n Guide            | [docs/i18n-guide.md](docs/i18n-guide.md)                                   |
+| Getting Started       | [docs/development/getting-started.md](docs/development/getting-started.md) |
 
 ## About
 

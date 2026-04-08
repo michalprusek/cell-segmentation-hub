@@ -62,7 +62,10 @@ interface BatchSegmentationState {
 
 // Create mock outside component to prevent infinite renders
 // Track operation state for status checks - plain object (not vi.fn) so clearAllMocks doesn't break it
-const mockOperationState = new Map<string, { status: string; progress: number }>();
+const mockOperationState = new Map<
+  string,
+  { status: string; progress: number }
+>();
 
 const mockOperationManager = {
   registerOperation: (op: { id: string; status: string; progress: number }) => {
@@ -73,7 +76,10 @@ const mockOperationManager = {
   isOperationActive: vi.fn(() => false),
   getActiveOperations: vi.fn(() => []),
   getOperation: (id: string) => mockOperationState.get(id) ?? null,
-  updateOperation: (id: string, updates: Partial<{ status: string; progress: number; endTime: number }>) => {
+  updateOperation: (
+    id: string,
+    updates: Partial<{ status: string; progress: number; endTime: number }>
+  ) => {
     const current = mockOperationState.get(id);
     if (current) {
       mockOperationState.set(id, { ...current, ...updates });
@@ -347,10 +353,13 @@ describe('QueueStatsPanel Cancel Integration', () => {
       await user.click(screen.getByTestId('segment-all-button'));
 
       // Wait for progress to update (first item takes 100ms)
-      await waitFor(() => {
-        const progressText = screen.getByTestId('progress-text');
-        expect(progressText.textContent).not.toBe('0%');
-      }, { timeout: 2000 });
+      await waitFor(
+        () => {
+          const progressText = screen.getByTestId('progress-text');
+          expect(progressText.textContent).not.toBe('0%');
+        },
+        { timeout: 2000 }
+      );
     });
   });
 
@@ -455,7 +464,8 @@ describe('QueueStatsPanel Cancel Integration', () => {
     });
 
     it('should handle high volume batch cancellation', async () => {
-      const { performance: perfConfig } = segmentationScenarios.highVolumeSegmentation;
+      const { performance: perfConfig } =
+        segmentationScenarios.highVolumeSegmentation;
       const queueStats = {
         queued: 9950,
         processing: 50,

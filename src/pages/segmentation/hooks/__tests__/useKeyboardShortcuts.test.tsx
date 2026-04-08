@@ -34,7 +34,12 @@ const makeProps = (overrides: Record<string, any> = {}) => ({
 
 // Dispatch a keydown event on the document body (the hook attaches to window)
 const pressKey = (key: string, extra: Partial<KeyboardEventInit> = {}) => {
-  fireEvent.keyDown(document, { key, bubbles: true, cancelable: true, ...extra });
+  fireEvent.keyDown(document, {
+    key,
+    bubbles: true,
+    cancelable: true,
+    ...extra,
+  });
 };
 
 const _releaseKey = (key: string, extra: Partial<KeyboardEventInit> = {}) => {

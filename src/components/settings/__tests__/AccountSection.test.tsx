@@ -26,7 +26,9 @@ describe('AccountSection', () => {
   it('renders change password submit button', () => {
     render(<AccountSection />);
     // The form has a submit button for changing password
-    expect(screen.getByRole('button', { name: /change password/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /change password/i })
+    ).toBeInTheDocument();
   });
 
   it('renders current password input', () => {
@@ -47,12 +49,16 @@ describe('AccountSection', () => {
 
   it('renders change password button', () => {
     render(<AccountSection />);
-    expect(screen.getByRole('button', { name: /change password/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /change password/i })
+    ).toBeInTheDocument();
   });
 
   it('renders delete account button in danger zone', () => {
     render(<AccountSection />);
-    expect(screen.getByRole('button', { name: /delete account/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /delete account/i })
+    ).toBeInTheDocument();
   });
 
   it('shows danger zone section', () => {
@@ -64,7 +70,9 @@ describe('AccountSection', () => {
   it('opens delete account dialog when delete account button is clicked', async () => {
     const user = userEvent.setup();
     render(<AccountSection />);
-    const deleteButton = screen.getByRole('button', { name: /delete account/i });
+    const deleteButton = screen.getByRole('button', {
+      name: /delete account/i,
+    });
     await user.click(deleteButton);
     expect(screen.getByTestId('delete-account-dialog')).toBeInTheDocument();
   });

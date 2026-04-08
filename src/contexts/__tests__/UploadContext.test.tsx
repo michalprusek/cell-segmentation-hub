@@ -55,7 +55,11 @@ vi.mock('sonner', () => ({
 // for emitting cancel events, but these are side-effects not exercised in unit
 // tests. Provide a null socket so no real socket code runs.
 vi.mock('@/contexts/useWebSocket', () => ({
-  useWebSocket: vi.fn(() => ({ socket: null, isConnected: false, manager: null })),
+  useWebSocket: vi.fn(() => ({
+    socket: null,
+    isConnected: false,
+    manager: null,
+  })),
 }));
 
 // ---------------------------------------------------------------------------
@@ -118,7 +122,9 @@ describe('UploadContext', () => {
 
       let sessionId!: string;
       act(() => {
-        sessionId = result.current.startUpload('project-1', [makeFile('a.png')]);
+        sessionId = result.current.startUpload('project-1', [
+          makeFile('a.png'),
+        ]);
       });
 
       expect(sessionId).toMatch(/^upload_/);

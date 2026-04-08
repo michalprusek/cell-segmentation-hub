@@ -5,7 +5,13 @@ import { render } from '@/test/utils/test-utils';
 import CocoTab from '../CocoTab';
 
 vi.mock('@/pages/segmentation/utils/cocoConverter', () => ({
-  convertToCOCO: vi.fn(() => JSON.stringify({ info: {}, images: [], annotations: [], categories: [] }, null, 2)),
+  convertToCOCO: vi.fn(() =>
+    JSON.stringify(
+      { info: {}, images: [], annotations: [], categories: [] },
+      null,
+      2
+    )
+  ),
 }));
 
 vi.mock('@/lib/downloadUtils', () => ({
@@ -21,7 +27,11 @@ const mockSegmentation = {
   polygons: [
     {
       id: 'poly-1',
-      points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }],
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+      ],
       type: 'external' as const,
     },
   ],
@@ -46,7 +56,9 @@ describe('CocoTab', () => {
 
   it('renders download button', () => {
     render(<CocoTab segmentation={mockSegmentation} />);
-    expect(screen.getByRole('button', { name: /download/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /download/i })
+    ).toBeInTheDocument();
   });
 
   it('displays COCO JSON output in pre element', () => {

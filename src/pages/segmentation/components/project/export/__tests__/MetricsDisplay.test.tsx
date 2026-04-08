@@ -19,7 +19,8 @@ vi.mock('@/pages/segmentation/utils/metricCalculations', () => ({
     Sphericity: 0.81,
     FeretAspectRatio: 1.5,
   })),
-  formatNumber: (n: number) => (n !== undefined && n !== null ? n.toFixed(2) : '0.00'),
+  formatNumber: (n: number) =>
+    n !== undefined && n !== null ? n.toFixed(2) : '0.00',
 }));
 
 vi.mock('@/lib/polygonGeometry', () => ({
@@ -35,7 +36,10 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const makePoints = () => [
-  { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
+  { x: 0, y: 0 },
+  { x: 100, y: 0 },
+  { x: 100, y: 100 },
+  { x: 0, y: 100 },
 ];
 
 const makeSegmentation = (overrides?: object) => ({
@@ -43,18 +47,33 @@ const makeSegmentation = (overrides?: object) => ({
   imageWidth: 800,
   imageHeight: 600,
   polygons: [
-    { id: 'ext-1', points: makePoints(), type: 'external' as const, ...overrides },
+    {
+      id: 'ext-1',
+      points: makePoints(),
+      type: 'external' as const,
+      ...overrides,
+    },
   ],
 });
 
 beforeEach(async () => {
   vi.clearAllMocks();
   // Re-apply implementations cleared by clearAllMocks
-  const { calculateMetrics } = await import('@/pages/segmentation/utils/metricCalculations');
+  const { calculateMetrics } = await import(
+    '@/pages/segmentation/utils/metricCalculations'
+  );
   vi.mocked(calculateMetrics).mockReturnValue({
-    Area: 1234.56, Perimeter: 150.2, Circularity: 0.72, EquivalentDiameter: 39.6,
-    FeretDiameterMax: 48.0, FeretDiameterMin: 32.0, Compactness: 0.65, Convexity: 0.94,
-    Solidity: 0.89, Sphericity: 0.81, FeretAspectRatio: 1.5,
+    Area: 1234.56,
+    Perimeter: 150.2,
+    Circularity: 0.72,
+    EquivalentDiameter: 39.6,
+    FeretDiameterMax: 48.0,
+    FeretDiameterMin: 32.0,
+    Compactness: 0.65,
+    Convexity: 0.94,
+    Solidity: 0.89,
+    Sphericity: 0.81,
+    FeretAspectRatio: 1.5,
   });
   const { isPolygonInsidePolygon } = await import('@/lib/polygonGeometry');
   vi.mocked(isPolygonInsidePolygon).mockReturnValue(false);
@@ -93,7 +112,9 @@ describe('MetricsDisplay', () => {
 
   it('renders download button for each external polygon', () => {
     render(<MetricsDisplay segmentation={makeSegmentation()} />);
-    const downloadButtons = screen.getAllByRole('button', { name: /download/i });
+    const downloadButtons = screen.getAllByRole('button', {
+      name: /download/i,
+    });
     expect(downloadButtons.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -110,13 +131,17 @@ describe('MetricsDisplay', () => {
     const { downloadJSON } = await import('@/lib/downloadUtils');
     const user = userEvent.setup();
     render(<MetricsDisplay segmentation={makeSegmentation()} />);
-    const downloadButton = screen.getAllByRole('button', { name: /download/i })[0];
+    const downloadButton = screen.getAllByRole('button', {
+      name: /download/i,
+    })[0];
     await user.click(downloadButton);
     expect(downloadJSON).toHaveBeenCalled();
   });
 
   it('filters out polylines — calculateMetrics is not called for polyline polygons', async () => {
-    const { calculateMetrics } = await import('@/pages/segmentation/utils/metricCalculations');
+    const { calculateMetrics } = await import(
+      '@/pages/segmentation/utils/metricCalculations'
+    );
     const segWithPolyline = {
       id: 'seg-3',
       imageWidth: 800,

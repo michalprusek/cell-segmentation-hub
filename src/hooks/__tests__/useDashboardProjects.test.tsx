@@ -83,7 +83,10 @@ describe('useDashboardProjects', () => {
         projects: [makeProject('p1'), makeProject('p2')],
       });
 
-      const { result } = renderHook(() => useDashboardProjects(defaultOptions), { wrapper });
+      const { result } = renderHook(
+        () => useDashboardProjects(defaultOptions),
+        { wrapper }
+      );
 
       await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -114,7 +117,10 @@ describe('useDashboardProjects', () => {
         new Error('Shared fetch failed')
       );
 
-      const { result } = renderHook(() => useDashboardProjects(defaultOptions), { wrapper });
+      const { result } = renderHook(
+        () => useDashboardProjects(defaultOptions),
+        { wrapper }
+      );
 
       await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -125,9 +131,14 @@ describe('useDashboardProjects', () => {
     });
 
     it('sets fetchError on getProjects failure', async () => {
-      vi.mocked(apiClient.getProjects).mockRejectedValue(new Error('Network error'));
+      vi.mocked(apiClient.getProjects).mockRejectedValue(
+        new Error('Network error')
+      );
 
-      const { result } = renderHook(() => useDashboardProjects(defaultOptions), { wrapper });
+      const { result } = renderHook(
+        () => useDashboardProjects(defaultOptions),
+        { wrapper }
+      );
 
       await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -150,7 +161,12 @@ describe('useDashboardProjects', () => {
       });
 
       const { result } = renderHook(
-        () => useDashboardProjects({ ...defaultOptions, sortField: 'updated_at', sortDirection: 'desc' }),
+        () =>
+          useDashboardProjects({
+            ...defaultOptions,
+            sortField: 'updated_at',
+            sortDirection: 'desc',
+          }),
         { wrapper }
       );
 
@@ -169,7 +185,12 @@ describe('useDashboardProjects', () => {
       });
 
       const { result } = renderHook(
-        () => useDashboardProjects({ ...defaultOptions, sortField: 'updated_at', sortDirection: 'asc' }),
+        () =>
+          useDashboardProjects({
+            ...defaultOptions,
+            sortField: 'updated_at',
+            sortDirection: 'asc',
+          }),
         { wrapper }
       );
 
@@ -189,7 +210,12 @@ describe('useDashboardProjects', () => {
       });
 
       const { result } = renderHook(
-        () => useDashboardProjects({ ...defaultOptions, sortField: 'name', sortDirection: 'asc' }),
+        () =>
+          useDashboardProjects({
+            ...defaultOptions,
+            sortField: 'name',
+            sortDirection: 'asc',
+          }),
         { wrapper }
       );
 
@@ -209,7 +235,12 @@ describe('useDashboardProjects', () => {
       });
 
       const { result } = renderHook(
-        () => useDashboardProjects({ ...defaultOptions, sortField: 'imageCount', sortDirection: 'desc' }),
+        () =>
+          useDashboardProjects({
+            ...defaultOptions,
+            sortField: 'imageCount',
+            sortDirection: 'desc',
+          }),
         { wrapper }
       );
 
@@ -226,7 +257,10 @@ describe('useDashboardProjects', () => {
         projects: [makeProject('p1'), makeProject('p2'), makeProject('p3')],
       });
 
-      const { result } = renderHook(() => useDashboardProjects(defaultOptions), { wrapper });
+      const { result } = renderHook(
+        () => useDashboardProjects(defaultOptions),
+        { wrapper }
+      );
 
       await waitFor(() => expect(result.current.loading).toBe(false));
       expect(result.current.projects).toHaveLength(3);
@@ -244,7 +278,10 @@ describe('useDashboardProjects', () => {
         projects: [makeProject('p1', { image_count: 5 })],
       });
 
-      const { result } = renderHook(() => useDashboardProjects(defaultOptions), { wrapper });
+      const { result } = renderHook(
+        () => useDashboardProjects(defaultOptions),
+        { wrapper }
+      );
 
       await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -260,10 +297,16 @@ describe('useDashboardProjects', () => {
     it('starts with loading true and sets to false after fetch', async () => {
       let resolve: (v: unknown) => void;
       vi.mocked(apiClient.getProjects).mockImplementationOnce(
-        () => new Promise(r => { resolve = r; })
+        () =>
+          new Promise(r => {
+            resolve = r;
+          })
       );
 
-      const { result } = renderHook(() => useDashboardProjects(defaultOptions), { wrapper });
+      const { result } = renderHook(
+        () => useDashboardProjects(defaultOptions),
+        { wrapper }
+      );
 
       expect(result.current.loading).toBe(true);
 
@@ -277,7 +320,10 @@ describe('useDashboardProjects', () => {
     it('does not update state after unmount (aborts in-flight request)', async () => {
       let resolveProjects: (v: unknown) => void;
       vi.mocked(apiClient.getProjects).mockImplementationOnce(
-        () => new Promise(r => { resolveProjects = r; })
+        () =>
+          new Promise(r => {
+            resolveProjects = r;
+          })
       );
       vi.mocked(apiClient.getSharedProjects).mockResolvedValue([]);
 

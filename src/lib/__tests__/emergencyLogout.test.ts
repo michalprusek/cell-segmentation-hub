@@ -63,7 +63,8 @@ describe('emergencyLogout', () => {
       emergencyLogout('Auth failure');
 
       expect(window.location.replace).toHaveBeenCalledTimes(1);
-      const replacedUrl = vi.mocked(window.location.replace).mock.calls[0][0] as string;
+      const replacedUrl = vi.mocked(window.location.replace).mock
+        .calls[0][0] as string;
       expect(replacedUrl).toContain('/sign-in');
       expect(replacedUrl).toContain('emergency=true');
     });
@@ -73,7 +74,8 @@ describe('emergencyLogout', () => {
       emergencyLogout('Auth failure');
       const after = Date.now();
 
-      const replacedUrl = vi.mocked(window.location.replace).mock.calls[0][0] as string;
+      const replacedUrl = vi.mocked(window.location.replace).mock
+        .calls[0][0] as string;
       const match = replacedUrl.match(/[?&]t=(\d+)/);
       expect(match).not.toBeNull();
       const timestamp = parseInt(match![1], 10);
@@ -84,7 +86,8 @@ describe('emergencyLogout', () => {
     it('uses a custom redirect path when provided', () => {
       emergencyLogout('reason', '/custom-path');
 
-      const replacedUrl = vi.mocked(window.location.replace).mock.calls[0][0] as string;
+      const replacedUrl = vi.mocked(window.location.replace).mock
+        .calls[0][0] as string;
       expect(replacedUrl).toContain('/custom-path');
     });
 

@@ -11,7 +11,9 @@ import { useProjectForm } from '@/hooks/useProjectForm';
 vi.mock('@/lib/api', () => ({
   default: {
     isAuthenticated: vi.fn(() => false),
-    getUserProfile: vi.fn().mockResolvedValue({ preferred_theme: 'system', preferredLang: 'en' }),
+    getUserProfile: vi
+      .fn()
+      .mockResolvedValue({ preferred_theme: 'system', preferredLang: 'en' }),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
@@ -56,8 +58,9 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@/lib/errorUtils', () => ({
-  getLocalizedErrorMessage: vi.fn((_error: unknown, _t: (k: string) => string, context?: string) =>
-    context ? `localized:${context}` : 'localized:error'
+  getLocalizedErrorMessage: vi.fn(
+    (_error: unknown, _t: (k: string) => string, context?: string) =>
+      context ? `localized:${context}` : 'localized:error'
   ),
 }));
 
@@ -75,7 +78,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 const makeFormEvent = () =>
-  ({ preventDefault: vi.fn() } as unknown as React.FormEvent);
+  ({ preventDefault: vi.fn() }) as unknown as React.FormEvent;
 
 // ---- tests -----------------------------------------------------------------
 

@@ -232,7 +232,9 @@ describe('LanguageContext', () => {
       vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue(mockProfile as any);
       vi.mocked(apiClient.getAccessToken).mockReturnValue('token-abc');
-      vi.mocked(apiClient.updateUserProfile).mockResolvedValue(undefined as any);
+      vi.mocked(apiClient.updateUserProfile).mockResolvedValue(
+        undefined as any
+      );
 
       localStorageMock.getItem.mockReturnValue(null);
 

@@ -284,7 +284,9 @@ export interface MockReqResNext {
     json: jest.MockedFunction<(body: unknown) => any>;
     send: jest.MockedFunction<(body?: unknown) => any>;
     sendStatus: jest.MockedFunction<(code: number) => any>;
-    set: jest.MockedFunction<(field: string, value: string) => any>;
+    set: jest.MockedFunction<
+      (field: string, value?: string | string[]) => any
+    >;
     locals: Record<string, unknown>;
   };
   next: jest.MockedFunction<NextFunction>;
@@ -301,8 +303,8 @@ export function createMockReqRes(
   const json = jest.fn() as jest.MockedFunction<(body: unknown) => any>;
   const send = jest.fn() as jest.MockedFunction<(body?: unknown) => any>;
   const sendStatus = jest.fn() as jest.MockedFunction<(code: number) => any>;
-  const set = jest.fn() as jest.MockedFunction<
-    (field: string, value: string) => any
+  const set = jest.fn() as unknown as jest.MockedFunction<
+    (field: string, value?: string | string[]) => any
   >;
   const status = jest.fn().mockReturnValue({
     json,
@@ -336,7 +338,7 @@ export function createMockReqRes(
     ...reqOverrides,
   };
 
-  const next = jest.fn() as jest.MockedFunction<NextFunction>;
+  const next = jest.fn() as unknown as jest.MockedFunction<NextFunction>;
 
   return { req, res, next };
 }

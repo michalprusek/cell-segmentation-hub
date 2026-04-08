@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { EXPORT_DEFAULTS, type ExportFormat, type MetricsFormat } from '@/lib/export-config';
+import {
+  EXPORT_DEFAULTS,
+  type ExportFormat,
+  type MetricsFormat,
+} from '@/lib/export-config';
 
 describe('export-config', () => {
   describe('EXPORT_DEFAULTS.COLORS', () => {
@@ -51,7 +55,9 @@ describe('export-config', () => {
     });
 
     it('annotation formats array has at least 2 entries', () => {
-      expect(EXPORT_DEFAULTS.FORMATS.ANNOTATION.length).toBeGreaterThanOrEqual(2);
+      expect(EXPORT_DEFAULTS.FORMATS.ANNOTATION.length).toBeGreaterThanOrEqual(
+        2
+      );
     });
   });
 

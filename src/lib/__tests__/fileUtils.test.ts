@@ -79,7 +79,9 @@ describe('getFileTypeIcon', () => {
 describe('createFileWithPreview', () => {
   beforeEach(() => {
     // jsdom does not implement URL.createObjectURL — assign directly to global.URL
-    URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/mock-uuid');
+    URL.createObjectURL = vi
+      .fn()
+      .mockReturnValue('blob:http://localhost/mock-uuid');
     URL.revokeObjectURL = vi.fn();
   });
 
@@ -134,7 +136,9 @@ describe('getFileIdentifier', () => {
 describe('filesMatch', () => {
   it('returns true when name and size match (filename + fileSize fields)', () => {
     const file = makeFile(2048, 'image/jpeg', 'img.jpg') as FileWithPreview;
-    expect(filesMatch(file, { filename: 'img.jpg', fileSize: file.size })).toBe(true);
+    expect(filesMatch(file, { filename: 'img.jpg', fileSize: file.size })).toBe(
+      true
+    );
   });
 
   it('returns true when name and size match (name + size fields)', () => {
@@ -144,7 +148,9 @@ describe('filesMatch', () => {
 
   it('returns false when names differ', () => {
     const file = makeFile(2048, 'image/jpeg', 'img.jpg') as FileWithPreview;
-    expect(filesMatch(file, { name: 'other.jpg', size: file.size })).toBe(false);
+    expect(filesMatch(file, { name: 'other.jpg', size: file.size })).toBe(
+      false
+    );
   });
 
   it('returns false when sizes differ', () => {
@@ -186,10 +192,15 @@ describe('cleanupFilePreviewUrls', () => {
 
   it('calls URL.revokeObjectURL for files with blob preview URLs', () => {
     const files: FileWithPreview[] = [
-      { ...makeFile(100), preview: 'blob:http://localhost/abc' } as FileWithPreview,
+      {
+        ...makeFile(100),
+        preview: 'blob:http://localhost/abc',
+      } as FileWithPreview,
     ];
     cleanupFilePreviewUrls(files);
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/abc');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(
+      'blob:http://localhost/abc'
+    );
   });
 
   it('does not call revokeObjectURL for files without a preview', () => {
@@ -202,7 +213,10 @@ describe('cleanupFilePreviewUrls', () => {
 
   it('does not call revokeObjectURL for non-blob preview strings', () => {
     const files: FileWithPreview[] = [
-      { ...makeFile(100), preview: 'https://example.com/img.jpg' } as FileWithPreview,
+      {
+        ...makeFile(100),
+        preview: 'https://example.com/img.jpg',
+      } as FileWithPreview,
     ];
     cleanupFilePreviewUrls(files);
     expect(URL.revokeObjectURL).not.toHaveBeenCalled();

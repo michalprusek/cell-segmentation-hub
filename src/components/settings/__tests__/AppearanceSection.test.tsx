@@ -48,7 +48,9 @@ describe('AppearanceSection', () => {
     render(<AppearanceSection />);
     const themeButtons = ['light', 'dark', 'system'];
     themeButtons.forEach(name => {
-      expect(screen.getByRole('button', { name: new RegExp(name, 'i') })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: new RegExp(name, 'i') })
+      ).toBeInTheDocument();
     });
   });
 

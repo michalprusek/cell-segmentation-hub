@@ -56,7 +56,13 @@ describe('ProjectToolbar', () => {
   it('calls setViewMode with list when list button is clicked', async () => {
     const user = userEvent.setup();
     const setViewMode = vi.fn();
-    render(<ProjectToolbar {...defaultProps} setViewMode={setViewMode} viewMode="grid" />);
+    render(
+      <ProjectToolbar
+        {...defaultProps}
+        setViewMode={setViewMode}
+        viewMode="grid"
+      />
+    );
     const buttons = screen.getAllByRole('button');
     // The list button is the last view toggle button
     const listButton = buttons[buttons.length - 1];
@@ -67,7 +73,13 @@ describe('ProjectToolbar', () => {
   it('calls setViewMode with grid when grid button is clicked', async () => {
     const user = userEvent.setup();
     const setViewMode = vi.fn();
-    render(<ProjectToolbar {...defaultProps} setViewMode={setViewMode} viewMode="list" />);
+    render(
+      <ProjectToolbar
+        {...defaultProps}
+        setViewMode={setViewMode}
+        viewMode="list"
+      />
+    );
     const buttons = screen.getAllByRole('button');
     // The grid button is second to last
     const gridButton = buttons[buttons.length - 2];
