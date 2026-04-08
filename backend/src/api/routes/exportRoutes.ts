@@ -45,10 +45,39 @@ router.get(
   exportController.getExportStatus
 );
 
-// Download export
+// Issue a short-lived signed download token (for native browser downloads)
+router.post(
+  '/projects/:projectId/export/:jobId/download-token',
+  authenticate,
+  [param('projectId').isUUID(), param('jobId').isUUID()],
+  validateRequest,
+  exportController.getDownloadToken
+);
+
+// Download export.
+//
+// This route accepts EITHER a JWT in the Authorization header (legacy XHR
+// path) OR a short-lived signed token in the ?token= query string (native
+// browser download path). The auth check is delegated to the controller so
+// the standard `authenticate` middleware does not block ?token= requests
+// (browsers cannot attach an Authorization header on <a href> downloads).
+const optionalJwtAuth = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (typeof req.query.token === 'string' && req.query.token.length > 0) {
+    // Token in query — controller will verify it.
+    next();
+    return;
+  }
+  // Otherwise fall through to the standard JWT middleware.
+  authenticate(req, res, next);
+};
+
 router.get(
   '/projects/:projectId/export/:jobId/download',
-  authenticate,
+  optionalJwtAuth,
   [param('projectId').isUUID(), param('jobId').isUUID()],
   validateRequest,
   exportController.downloadExport
