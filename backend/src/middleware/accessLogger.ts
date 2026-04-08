@@ -237,8 +237,14 @@ export const accessLogger = (
   res: Response,
   next: NextFunction
 ): void => {
-  // Ensure log directory exists (called per-request for testability)
-  ensureLogDirectory();
+  // Ensure log directory exists. In production this is called ONCE at
+  // module load (line 125) — calling it per-request costs a sync
+  // fs.existsSync on every HTTP hit. Tests need it per-request because
+  // they re-create the log dir between specs, so keep that path guarded
+  // (fixes issue #76).
+  if (process.env.NODE_ENV === 'test') {
+    ensureLogDirectory();
+  }
 
   const url = req.originalUrl || req.url;
 
