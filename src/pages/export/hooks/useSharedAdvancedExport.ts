@@ -670,15 +670,16 @@ export const useSharedAdvancedExport = (
         downloadInProgress.current = false;
 
         logger.error('Auto-download failed:', error);
-        // Remove from downloaded set to allow manual retry
-        const downloaded = getDownloadedJobs();
-        downloaded.delete(currentJobId);
-        localStorage.setItem(
-          `exportDownloaded_${projectId}`,
-          JSON.stringify(Array.from(downloaded))
-        );
-        downloadedJobIds.current.delete(currentJobId);
-
+        // IMPORTANT: do NOT remove currentJobId from the downloaded set
+        // here. This catch runs inside the auto-download useEffect, which
+        // depends on `isDownloading`. Resetting isDownloading below causes
+        // the effect to re-fire; if we also cleared the downloaded set,
+        // the `persistedDownloaded.has(completedJobId)` guard would pass
+        // and performAutoDownload would run again — and again, and again,
+        // creating an infinite retry loop (observed in prod 2026-04-08
+        // when tokens expired mid-session). The manual triggerDownload
+        // path already explicitly clears the set at its start, so the
+        // user can still retry by clicking the button.
         updateState({
           exportStatus:
             "Export completed! Click below to download if it didn't start automatically.",
@@ -890,15 +891,15 @@ export const useSharedAdvancedExport = (
       downloadInProgress.current = false;
 
       logger.error('Manual download failed:', error);
-      // Remove from downloaded set to allow retry
-      const downloaded = getDownloadedJobs();
-      downloaded.delete(completedJobId);
-      localStorage.setItem(
-        `exportDownloaded_${projectId}`,
-        JSON.stringify(Array.from(downloaded))
-      );
-      downloadedJobIds.current.delete(completedJobId);
-
+      // IMPORTANT: do NOT remove completedJobId from the downloaded set
+      // here. The auto-download useEffect depends on `isDownloading` and
+      // would re-fire as soon as we reset it below; if the downloaded
+      // set were also cleared, the effect's `persistedDownloaded.has(...)`
+      // guard would pass and auto-download would immediately retry,
+      // hitting the same failure and looping forever (observed in prod
+      // 2026-04-08). The next time the user clicks the download button,
+      // triggerDownload's own "allow retry" block at the top of this
+      // callback explicitly clears the set.
       updateState({
         exportStatus: 'Failed to download export. Please try again.',
         isDownloading: false,
