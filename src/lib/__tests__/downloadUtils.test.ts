@@ -37,7 +37,11 @@ describe('downloadBlob', () => {
     vi.spyOn(document.body, 'removeChild').mockImplementation(removeChildMock);
     vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
       if (tag === 'a') {
-        return { href: '', download: '', click: clickMock } as unknown as HTMLAnchorElement;
+        return {
+          href: '',
+          download: '',
+          click: clickMock,
+        } as unknown as HTMLAnchorElement;
       }
       return document.createElement.call(document, tag) as any;
     });
@@ -86,7 +90,9 @@ describe('downloadBlob', () => {
     vi.advanceTimersByTime(100);
 
     expect(removeChildMock).toHaveBeenCalled();
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/mock');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(
+      'blob:http://localhost/mock'
+    );
   });
 
   it('skips cleanup when cleanup option is false', () => {
@@ -233,7 +239,8 @@ describe('downloadCSV', () => {
 describe('canDownloadLargeFiles', () => {
   it('returns true for a modern Chrome user agent', () => {
     Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+      value:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
       configurable: true,
     });
     expect(canDownloadLargeFiles()).toBe(true);
@@ -241,7 +248,8 @@ describe('canDownloadLargeFiles', () => {
 
   it('returns true for a modern Firefox user agent', () => {
     Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/109.0',
+      value:
+        'Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/109.0',
       configurable: true,
     });
     expect(canDownloadLargeFiles()).toBe(true);
@@ -249,7 +257,8 @@ describe('canDownloadLargeFiles', () => {
 
   it('returns false for old Safari (version < 14)', () => {
     Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.5 Safari/605.1.15',
+      value:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.5 Safari/605.1.15',
       configurable: true,
     });
     expect(canDownloadLargeFiles()).toBe(false);
@@ -257,7 +266,8 @@ describe('canDownloadLargeFiles', () => {
 
   it('returns true for Safari version >= 14', () => {
     Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15',
+      value:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15',
       configurable: true,
     });
     expect(canDownloadLargeFiles()).toBe(true);
@@ -275,14 +285,23 @@ describe('downloadUsingIframe', () => {
   });
 
   it('creates a hidden iframe and appends it to the body', () => {
-    const appendChildMock = vi.spyOn(document.body, 'appendChild').mockImplementation(vi.fn());
+    const appendChildMock = vi
+      .spyOn(document.body, 'appendChild')
+      .mockImplementation(vi.fn());
     const iframeSrc: string[] = [];
     vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
       if (tag === 'iframe') {
-        const iframe = { style: { display: '' }, src: '' } as unknown as HTMLIFrameElement;
+        const iframe = {
+          style: { display: '' },
+          src: '',
+        } as unknown as HTMLIFrameElement;
         Object.defineProperty(iframe, 'src', {
-          set(val) { iframeSrc.push(val); },
-          get() { return iframeSrc.at(-1) ?? ''; },
+          set(val) {
+            iframeSrc.push(val);
+          },
+          get() {
+            return iframeSrc.at(-1) ?? '';
+          },
         });
         return iframe;
       }

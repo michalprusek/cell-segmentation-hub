@@ -61,7 +61,10 @@ describe('isTiffFile', () => {
 
 describe('ensureBrowserCompatibleUrl', () => {
   it('returns the display endpoint when the original URL is a TIFF', () => {
-    const result = ensureBrowserCompatibleUrl('img-1', 'http://example.com/file.tiff');
+    const result = ensureBrowserCompatibleUrl(
+      'img-1',
+      'http://example.com/file.tiff'
+    );
     expect(result).toBe('/api/images/img-1/display');
   });
 

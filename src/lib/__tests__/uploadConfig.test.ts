@@ -34,7 +34,9 @@ describe('UPLOAD_CONFIG', () => {
     });
 
     it('MAX_TOTAL_FILES matches FILE_LIMITS.MAX_FILES_PER_BATCH', () => {
-      expect(UPLOAD_CONFIG.MAX_TOTAL_FILES).toBe(FILE_LIMITS.MAX_FILES_PER_BATCH);
+      expect(UPLOAD_CONFIG.MAX_TOTAL_FILES).toBe(
+        FILE_LIMITS.MAX_FILES_PER_BATCH
+      );
     });
 
     it('RETRY_ATTEMPTS matches centralized RETRY_ATTEMPTS.UPLOAD', () => {
@@ -60,9 +62,7 @@ describe('UPLOAD_CONFIG', () => {
     });
 
     it('formats gigabytes correctly', () => {
-      expect(UPLOAD_CONFIG.formatSize(1.5 * 1024 * 1024 * 1024)).toBe(
-        '1.5 GB'
-      );
+      expect(UPLOAD_CONFIG.formatSize(1.5 * 1024 * 1024 * 1024)).toBe('1.5 GB');
     });
 
     it('formats zero bytes', () => {
@@ -117,8 +117,9 @@ describe('UPLOAD_CONFIG', () => {
 
     it('checks each chunk independently — only flags the oversized chunk', () => {
       // First chunk is fine, second would be oversized
-      const normalFiles = Array.from({ length: UPLOAD_CONFIG.FILES_PER_CHUNK }, () =>
-        makeFile(100)
+      const normalFiles = Array.from(
+        { length: UPLOAD_CONFIG.FILES_PER_CHUNK },
+        () => makeFile(100)
       );
       const oversized = makeFile(UPLOAD_CONFIG.MAX_SIZE_PER_CHUNK_BYTES + 1);
       const mixed = [...normalFiles, oversized];

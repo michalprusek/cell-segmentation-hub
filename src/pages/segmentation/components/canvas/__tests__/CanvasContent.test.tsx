@@ -14,7 +14,9 @@ import type { TransformState } from '@/pages/segmentation/types';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const makeTransform = (overrides: Partial<TransformState> = {}): TransformState => ({
+const makeTransform = (
+  overrides: Partial<TransformState> = {}
+): TransformState => ({
   zoom: 1,
   translateX: 0,
   translateY: 0,
@@ -76,7 +78,11 @@ describe('CanvasContent', () => {
 
   describe('Transform application', () => {
     it('applies translate3d and scale from the transform prop', () => {
-      const transform = makeTransform({ zoom: 2, translateX: 50, translateY: 30 });
+      const transform = makeTransform({
+        zoom: 2,
+        translateX: 50,
+        translateY: 30,
+      });
 
       render(
         <CanvasContent transform={transform}>

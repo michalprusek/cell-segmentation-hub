@@ -124,7 +124,10 @@ describe('API Integration Tests', () => {
 
     it('should handle login errors gracefully', async () => {
       const error = new Error('Invalid credentials');
-      (error as any).response = { status: 401, data: { error: 'Invalid credentials' } };
+      (error as any).response = {
+        status: 401,
+        data: { error: 'Invalid credentials' },
+      };
       mockAxiosInstance.post.mockRejectedValue(error);
 
       await expect(
@@ -259,7 +262,9 @@ describe('API Integration Tests', () => {
       });
 
       await expect(apiClient.deleteProject(projectId)).resolves.toBeUndefined();
-      expect(mockAxiosInstance.delete).toHaveBeenCalledWith(`/projects/${projectId}`);
+      expect(mockAxiosInstance.delete).toHaveBeenCalledWith(
+        `/projects/${projectId}`
+      );
     });
 
     it('should handle unauthorized access', async () => {
@@ -267,7 +272,10 @@ describe('API Integration Tests', () => {
       (apiClient as any).accessToken = null;
 
       const error = new Error('Unauthorized');
-      (error as any).response = { status: 401, data: { error: 'Unauthorized' } };
+      (error as any).response = {
+        status: 401,
+        data: { error: 'Unauthorized' },
+      };
       mockAxiosInstance.get.mockRejectedValue(error);
 
       await expect(apiClient.getProjects()).rejects.toThrow();
@@ -334,7 +342,10 @@ describe('API Integration Tests', () => {
         return Promise.resolve({
           data: {
             success: true,
-            data: { images: [{ id: 'img-1', file_name: 'test.jpg' }], count: 1 },
+            data: {
+              images: [{ id: 'img-1', file_name: 'test.jpg' }],
+              count: 1,
+            },
           },
         });
       });
@@ -352,7 +363,10 @@ describe('API Integration Tests', () => {
       });
 
       const error = new Error('Payload Too Large');
-      (error as any).response = { status: 413, data: { error: 'File too large' } };
+      (error as any).response = {
+        status: 413,
+        data: { error: 'File too large' },
+      };
       mockAxiosInstance.post.mockRejectedValue(error);
 
       await expect(
@@ -387,8 +401,8 @@ describe('API Integration Tests', () => {
         '/segmentation/batch',
         {
           imageIds,
-          model: 'hrnet',   // default
-          threshold: 0.5,   // default
+          model: 'hrnet', // default
+          threshold: 0.5, // default
           detectHoles: undefined,
         }
       );
@@ -477,7 +491,10 @@ describe('API Integration Tests', () => {
       (apiClient as any).accessToken = 'test-access-token';
 
       const serverError = new Error('Server error');
-      (serverError as any).response = { status: 500, data: { error: 'Internal server error' } };
+      (serverError as any).response = {
+        status: 500,
+        data: { error: 'Internal server error' },
+      };
       mockAxiosInstance.get.mockRejectedValue(serverError);
 
       await expect(apiClient.getProjects()).rejects.toThrow('Server error');

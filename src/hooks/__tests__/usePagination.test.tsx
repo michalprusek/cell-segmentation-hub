@@ -194,22 +194,23 @@ describe('usePagination', () => {
 
   describe('pageNumbers generation', () => {
     it('returns all page numbers when totalPages <= 7', () => {
-      const { result } = renderHook(() =>
-        usePagination({ totalItems: 210, itemsPerPage: 30 }) // 7 pages
+      const { result } = renderHook(
+        () => usePagination({ totalItems: 210, itemsPerPage: 30 }) // 7 pages
       );
       expect(result.current.pageNumbers).toEqual([1, 2, 3, 4, 5, 6, 7]);
     });
 
     it('returns all pages for small dataset', () => {
-      const { result } = renderHook(() =>
-        usePagination({ totalItems: 3, itemsPerPage: 1 }) // 3 pages
+      const { result } = renderHook(
+        () => usePagination({ totalItems: 3, itemsPerPage: 1 }) // 3 pages
       );
       expect(result.current.pageNumbers).toEqual([1, 2, 3]);
     });
 
     it('uses ellipsis (-1) for large page count near the beginning', () => {
-      const { result } = renderHook(() =>
-        usePagination({ totalItems: 300, itemsPerPage: 10, initialPage: 2 }) // 30 pages, near start
+      const { result } = renderHook(
+        () =>
+          usePagination({ totalItems: 300, itemsPerPage: 10, initialPage: 2 }) // 30 pages, near start
       );
       const pages = result.current.pageNumbers;
       // Should contain first 5 pages, an ellipsis marker, and last page
@@ -220,8 +221,9 @@ describe('usePagination', () => {
     });
 
     it('uses ellipsis (-1) for large page count near the end', () => {
-      const { result } = renderHook(() =>
-        usePagination({ totalItems: 300, itemsPerPage: 10, initialPage: 29 }) // 30 pages, near end
+      const { result } = renderHook(
+        () =>
+          usePagination({ totalItems: 300, itemsPerPage: 10, initialPage: 29 }) // 30 pages, near end
       );
       const pages = result.current.pageNumbers;
       expect(pages).toContain(-1);
@@ -230,8 +232,9 @@ describe('usePagination', () => {
     });
 
     it('uses two ellipsis markers when in the middle of a large range', () => {
-      const { result } = renderHook(() =>
-        usePagination({ totalItems: 300, itemsPerPage: 10, initialPage: 15 }) // 30 pages, middle
+      const { result } = renderHook(
+        () =>
+          usePagination({ totalItems: 300, itemsPerPage: 10, initialPage: 15 }) // 30 pages, middle
       );
       const pages = result.current.pageNumbers;
       const ellipsisCount = pages.filter(p => p === -1).length;

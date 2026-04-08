@@ -89,16 +89,12 @@ describe('authEventEmitter', () => {
 
     it('does not throw when removing an unregistered listener', () => {
       const ghost = () => {};
-      expect(() =>
-        authEventEmitter.off('profile_error', ghost)
-      ).not.toThrow();
+      expect(() => authEventEmitter.off('profile_error', ghost)).not.toThrow();
     });
 
     it('does not throw when removing a listener for an event type with no registrations', () => {
       const ghost = () => {};
-      expect(() =>
-        authEventEmitter.off('signup_error', ghost)
-      ).not.toThrow();
+      expect(() => authEventEmitter.off('signup_error', ghost)).not.toThrow();
     });
   });
 

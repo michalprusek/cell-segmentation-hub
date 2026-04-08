@@ -26,35 +26,51 @@ describe('ProjectHeader', () => {
   });
 
   it('renders the project title', () => {
-    render(<ProjectHeader projectTitle="My Test Project" imagesCount={5} loading={false} />);
+    render(
+      <ProjectHeader
+        projectTitle="My Test Project"
+        imagesCount={5}
+        loading={false}
+      />
+    );
     expect(screen.getByText('My Test Project')).toBeInTheDocument();
   });
 
   it('renders image count when not loading', () => {
-    render(<ProjectHeader projectTitle="Project" imagesCount={12} loading={false} />);
+    render(
+      <ProjectHeader projectTitle="Project" imagesCount={12} loading={false} />
+    );
     expect(screen.getByText(/12/)).toBeInTheDocument();
   });
 
   it('renders loading text when loading is true', () => {
-    render(<ProjectHeader projectTitle="Project" imagesCount={0} loading={true} />);
+    render(
+      <ProjectHeader projectTitle="Project" imagesCount={0} loading={true} />
+    );
     // t('common.loading') defaults to "Loading" in English
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
   it('renders DashboardHeader', () => {
-    render(<ProjectHeader projectTitle="Project" imagesCount={0} loading={false} />);
+    render(
+      <ProjectHeader projectTitle="Project" imagesCount={0} loading={false} />
+    );
     expect(screen.getByTestId('dashboard-header')).toBeInTheDocument();
   });
 
   it('renders a back button', () => {
-    render(<ProjectHeader projectTitle="Project" imagesCount={0} loading={false} />);
+    render(
+      <ProjectHeader projectTitle="Project" imagesCount={0} loading={false} />
+    );
     const backButton = screen.getByRole('button');
     expect(backButton).toBeInTheDocument();
   });
 
   it('navigates to /dashboard when back button is clicked', async () => {
     const user = userEvent.setup();
-    render(<ProjectHeader projectTitle="Project" imagesCount={0} loading={false} />);
+    render(
+      <ProjectHeader projectTitle="Project" imagesCount={0} loading={false} />
+    );
     const backButton = screen.getByRole('button');
     await user.click(backButton);
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');

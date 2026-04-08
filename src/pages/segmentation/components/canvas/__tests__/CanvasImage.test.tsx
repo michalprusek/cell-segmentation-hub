@@ -67,8 +67,14 @@ describe('CanvasImage', () => {
 
       // Simulate image loaded — jsdom does not populate naturalWidth/Height
       // automatically, so we define them via Object.defineProperty.
-      Object.defineProperty(img, 'naturalWidth', { value: 800, configurable: true });
-      Object.defineProperty(img, 'naturalHeight', { value: 600, configurable: true });
+      Object.defineProperty(img, 'naturalWidth', {
+        value: 800,
+        configurable: true,
+      });
+      Object.defineProperty(img, 'naturalHeight', {
+        value: 600,
+        configurable: true,
+      });
 
       fireEvent.load(img);
 

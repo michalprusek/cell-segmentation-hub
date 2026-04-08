@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createCroppedImage, cropImageToCircle, blobToBase64 } from '@/lib/cropImage';
+import {
+  createCroppedImage,
+  cropImageToCircle,
+  blobToBase64,
+} from '@/lib/cropImage';
 import type { Area } from 'react-easy-crop';
 
 // A minimal 2d context mock that does NOT rely on DOMMatrix.translate / DOMMatrix.scale.
@@ -119,7 +123,12 @@ describe('cropImage', () => {
       setupImageMock(400, 300);
 
       const crop: Area = { x: 10, y: 10, width: 100, height: 80 };
-      await createCroppedImage('data:image/jpeg;base64,abc', crop, undefined, 45);
+      await createCroppedImage(
+        'data:image/jpeg;base64,abc',
+        crop,
+        undefined,
+        45
+      );
 
       // translate should be called (to position crop center and offset)
       expect(ctxMock._spies.translateSpy).toHaveBeenCalled();
@@ -131,11 +140,10 @@ describe('cropImage', () => {
       setupImageMock(400, 300);
 
       const crop: Area = { x: 0, y: 0, width: 100, height: 80 };
-      await createCroppedImage(
-        'data:image/jpeg;base64,abc',
-        crop,
-        { horizontal: true, vertical: false }
-      );
+      await createCroppedImage('data:image/jpeg;base64,abc', crop, {
+        horizontal: true,
+        vertical: false,
+      });
 
       // scale(-1, 1) should have been called for horizontal flip
       expect(ctxMock._spies.scaleSpy).toHaveBeenCalledWith(-1, 1);
@@ -153,9 +161,9 @@ describe('cropImage', () => {
     it('rejects when canvas returns null blob', async () => {
       setupImageMock(400, 300);
 
-      HTMLCanvasElement.prototype.toBlob = vi.fn(
-        (callback: BlobCallback) => { callback(null); }
-      );
+      HTMLCanvasElement.prototype.toBlob = vi.fn((callback: BlobCallback) => {
+        callback(null);
+      });
 
       const crop: Area = { x: 0, y: 0, width: 100, height: 80 };
       await expect(
@@ -188,9 +196,9 @@ describe('cropImage', () => {
     it('rejects when canvas returns null blob', async () => {
       setupImageMock(400, 400);
 
-      HTMLCanvasElement.prototype.toBlob = vi.fn(
-        (callback: BlobCallback) => { callback(null); }
-      );
+      HTMLCanvasElement.prototype.toBlob = vi.fn((callback: BlobCallback) => {
+        callback(null);
+      });
 
       const crop: Area = { x: 0, y: 0, width: 100, height: 100 };
       await expect(

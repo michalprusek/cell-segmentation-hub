@@ -74,21 +74,27 @@ describe('UserProfileDropdown', () => {
     const user = userEvent.setup();
     renderDropdown();
     await user.click(screen.getByRole('button'));
-    expect(screen.getByRole('menuitem', { name: /log out/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /log out/i })
+    ).toBeInTheDocument();
   });
 
   it('shows settings menu item', async () => {
     const user = userEvent.setup();
     renderDropdown();
     await user.click(screen.getByRole('button'));
-    expect(screen.getByRole('menuitem', { name: /settings/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /settings/i })
+    ).toBeInTheDocument();
   });
 
   it('shows dashboard menu item', async () => {
     const user = userEvent.setup();
     renderDropdown();
     await user.click(screen.getByRole('button'));
-    expect(screen.getByRole('menuitem', { name: /dashboard/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /dashboard/i })
+    ).toBeInTheDocument();
   });
 
   it('navigates to /settings when settings is clicked', async () => {
