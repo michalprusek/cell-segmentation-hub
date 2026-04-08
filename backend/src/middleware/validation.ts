@@ -176,9 +176,22 @@ export const validateFiles = (
     typeof maxFiles === 'number' && Number.isFinite(maxFiles) ? maxFiles : 10;
 
   return (req: Request, res: Response, next: NextFunction) => {
-    const files = req.files as Express.Multer.File[] | undefined;
+    // `req.files` from multer can be either `Express.Multer.File[]`
+    // (with upload.array/any) or `{ [fieldname]: Express.Multer.File[] }`
+    // (with upload.fields). Guard explicitly against the object form so
+    // a misconfigured route can't slip an attacker-controlled shape past
+    // the length/mime checks below (CodeQL js/type-confusion-through-
+    // parameter-tampering).
+    if (!Array.isArray(req.files)) {
+      return ResponseHelper.validationError(
+        res,
+        'Alespoň jeden soubor je vyžadován',
+        'FileValidation'
+      );
+    }
+    const files: Express.Multer.File[] = req.files;
 
-    if (!files || files.length === 0) {
+    if (files.length === 0) {
       return ResponseHelper.validationError(
         res,
         'Alespoň jeden soubor je vyžadován',

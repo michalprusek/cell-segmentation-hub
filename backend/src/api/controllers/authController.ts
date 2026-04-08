@@ -805,17 +805,23 @@ export const uploadAvatar = asyncHandler(
       // Clean up temp file if it exists
       if ('path' in imageFile && imageFile.path) {
         try {
-          // Validate path stays within expected directory
+          // Validate path stays within expected directory. Resolve the
+          // user-provided path ONCE and use that resolved value for both
+          // the boundary check and the unlink, so a symlinked or racing
+          // path can't slip past validation.
           const resolvedFilePath = path.resolve(imageFile.path);
           const uploadsDir = path.resolve(
             process.env.UPLOAD_DIR || './uploads'
           );
-          const tempDir = path.resolve(process.env.UPLOAD_DIR || './uploads', 'temp');
+          const tempDir = path.resolve(
+            process.env.UPLOAD_DIR || './uploads',
+            'temp'
+          );
           if (
             resolvedFilePath.startsWith(uploadsDir + path.sep) ||
             resolvedFilePath.startsWith(tempDir + path.sep)
           ) {
-            await fs.unlink(imageFile.path);
+            await fs.unlink(resolvedFilePath);
           } else {
             logger.warn(
               'Skipped cleanup of file outside expected directory',

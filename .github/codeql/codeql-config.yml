@@ -1,0 +1,31 @@
+name: 'SpheroSeg CodeQL config'
+
+# Skip test files and infrastructure scripts.
+#
+# Test files mock route handlers (Express routers, Multer middleware,
+# rate limiters, etc.) and CodeQL flags every mocked handler with
+# `js/missing-rate-limiting`, `js/insecure-randomness`, and similar
+# warnings — none of which apply because the code never runs against a
+# real network. Excluding these files removes the noise so genuine
+# production findings stay visible.
+paths-ignore:
+  - '**/__tests__/**'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.spec.ts'
+  - '**/*.spec.tsx'
+  - 'tests/**'
+  - 'backend/src/test/**'
+  - 'scripts/**'
+  - 'playwright.config.ts'
+  - 'vitest.config.ts'
+  - 'vitest.setup.ts'
+  - 'jest.config.js'
+  - 'jest.setup.js'
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/coverage/**'
+  - '**/node_modules/**'
+
+queries:
+  - uses: security-and-quality
