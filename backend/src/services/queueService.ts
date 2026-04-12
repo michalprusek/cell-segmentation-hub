@@ -568,6 +568,7 @@ export class QueueService {
       hrnet: 1, // Always process one at a time for reliability
       cbam_resunet: 1, // Always process one at a time for reliability
       unet_spherohq: 1, // Always process one at a time for reliability
+      unet_attention_aspp: 1, // Always process one at a time for reliability
     };
 
     // Get the highest priority item first, excluding specified image IDs
@@ -1136,6 +1137,7 @@ export class QueueService {
       hrnet: 196, // ~196ms per image
       cbam_resunet: 396, // ~396ms per image
       unet_spherohq: 1000, // ~1000ms per image
+      unet_attention_aspp: 350, // ~350ms per image
     };
 
     const timePerImage = modelTimes[model as keyof typeof modelTimes] || 500;

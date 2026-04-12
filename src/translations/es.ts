@@ -388,6 +388,10 @@ export default {
     modelSelection: {
       title: 'Selección de modelo',
       description: 'Elige el modelo de IA para usar en la segmentación celular',
+      sections: {
+        spheroid: 'Modelos de esferoides',
+        sperm: 'Modelos de espermatozoides',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -404,8 +408,13 @@ export default {
           description:
             'Mejor rendimiento en el conjunto de datos SpheroHQ - optimizado para segmentación de esferoides con velocidad y precisión equilibradas (~0.25s/imagen, 10 img/s)',
         },
+        unet_attention_aspp: {
+          name: 'UNet Attention-ASPP',
+          description:
+            'UNet mejorado con Attention Gates y ASPP para detectar esferoides en disolución y pequeñas células satélite (~0.35s/imagen)',
+        },
         sperm: {
-          name: 'Segmentación de espermatozoides',
+          name: 'Morfología espermática',
           description:
             'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
         },
@@ -420,6 +429,8 @@ export default {
     currentThreshold: 'Umbral actual',
     modelSelected: 'Modelo seleccionado con éxito',
     modelSettingsSaved: 'Configuración de modelo guardada con éxito',
+    thresholdAutoAdjusted:
+      'Modelo seleccionado — umbral ajustado automáticamente a {threshold}% (optimizado para este modelo)',
     modelSize: {
       small: 'Pequeño',
       medium: 'Mediano',
@@ -432,6 +443,8 @@ export default {
         'Segmentación más precisa con mecanismos de atención (E2E ~482ms, 2.7 img/s)',
       unet_spherohq:
         '¡El modelo más rápido después de las optimizaciones! Excelente para procesamiento en tiempo real (E2E ~286ms, 5.5 img/s)',
+      unet_attention_aspp:
+        'UNet mejorado con Attention Gates y cuello de botella ASPP para detectar esferoides en disolución y pequeñas células satélite (35,5M parámetros)',
       sperm:
         'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
     },

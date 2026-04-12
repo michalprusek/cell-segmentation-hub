@@ -31,6 +31,7 @@ except ImportError:
 from models.hrnet import HRNetV2
 from models.cbam_resunet import ResUNetCBAM
 from models.unet import UNet
+from models.unet_attention import UNet as UNetAttention
 
 # Optional sperm model import
 _sperm_import_error = None
@@ -82,6 +83,12 @@ class BatchConfig:
                         "max_safe_batch_size": 2,
                         "expected_throughput": 2.2,
                         "memory_limit_mb": 4000
+                    },
+                    "unet_attention_aspp": {
+                        "optimal_batch_size": 1,
+                        "max_safe_batch_size": 1,
+                        "expected_throughput": 1.5,
+                        "memory_limit_mb": 5000
                     }
                 }
             }
@@ -132,6 +139,12 @@ class ModelLoader:
             'class': UNet,
             'pretrained_path': 'weights/unet_spherohq_best.pth',
             'finetuned_path': 'weights/unet_spherohq_best.pth',
+            'config_path': None
+        },
+        'unet_attention_aspp': {
+            'class': UNetAttention,
+            'pretrained_path': 'weights/unet_v4_weights.pth',
+            'finetuned_path': 'weights/unet_v4_weights.pth',
             'config_path': None
         },
         'sperm': {
@@ -221,6 +234,15 @@ class ModelLoader:
                 # UNet optimized for SpheroHQ dataset
                 model = UNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512, 1024],
                            use_instance_norm=True, dropout_rate=0.0, use_deep_supervision=False)
+            elif model_name == 'unet_attention_aspp':
+                # Enhanced UNet with Attention Gates + ASPP for dissolving spheroids
+                model = UNetAttention(
+                    in_channels=3, out_channels=1,
+                    features=[64, 128, 256, 512, 1024],
+                    use_instance_norm=True, dropout_rate=0.0,
+                    use_deep_supervision=False,
+                    use_attention_gates=True, use_aspp=True
+                )
             elif model_name == 'sperm':
                 # Sperm segmentation model — uses its own pipeline (Mask2Former + graph assembly)
                 if SpermModel is None:
@@ -283,8 +305,9 @@ class ModelLoader:
                     # Recreate model with detected features - DROPOUT SET TO 0 FOR INFERENCE!
                     model = ResUNetCBAM(in_channels=3, out_channels=1, features=detected_features, use_instance_norm=True, dropout_rate=0.0)
             
-            # Load state dict
-            model.load_state_dict(state_dict, strict=False)
+            # Load state dict (strict=True for unet_attention_aspp, False for legacy models)
+            strict = (model_name == 'unet_attention_aspp')
+            model.load_state_dict(state_dict, strict=strict)
             
             model.to(self.device)
             model.eval()

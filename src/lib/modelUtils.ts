@@ -1,5 +1,12 @@
 // Define types locally to avoid circular dependency
-export type ModelType = 'hrnet' | 'cbam_resunet' | 'unet_spherohq' | 'sperm';
+export type ModelType =
+  | 'hrnet'
+  | 'cbam_resunet'
+  | 'unet_spherohq'
+  | 'unet_attention_aspp'
+  | 'sperm';
+
+export type ModelCategory = 'spheroid' | 'sperm';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds
@@ -15,6 +22,7 @@ export interface ModelInfo {
   description: string;
   size: 'small' | 'medium' | 'large';
   defaultThreshold: number;
+  category: ModelCategory;
   performance?: ModelPerformance;
 }
 
@@ -33,6 +41,7 @@ export function getLocalizedModelInfo(
       id: 'hrnet',
       size: 'small',
       defaultThreshold: 0.5,
+      category: 'spheroid',
       performance: {
         avgTimePerImage: 0.204,
         throughput: 4.9,
@@ -44,6 +53,7 @@ export function getLocalizedModelInfo(
       id: 'cbam_resunet',
       size: 'medium',
       defaultThreshold: 0.5,
+      category: 'spheroid',
       performance: {
         avgTimePerImage: 0.377,
         throughput: 2.7,
@@ -55,6 +65,7 @@ export function getLocalizedModelInfo(
       id: 'unet_spherohq',
       size: 'small',
       defaultThreshold: 0.5,
+      category: 'spheroid',
       performance: {
         avgTimePerImage: 0.181,
         throughput: 5.5,
@@ -62,10 +73,23 @@ export function getLocalizedModelInfo(
         batchSize: 4,
       },
     },
+    unet_attention_aspp: {
+      id: 'unet_attention_aspp',
+      size: 'medium',
+      defaultThreshold: 0.2,
+      category: 'spheroid',
+      performance: {
+        avgTimePerImage: 0.35,
+        throughput: 2.8,
+        p95Latency: 0.5,
+        batchSize: 1,
+      },
+    },
     sperm: {
       id: 'sperm',
       size: 'medium',
       defaultThreshold: 0.5,
+      category: 'sperm',
       performance: {
         avgTimePerImage: 0.3,
         throughput: 3.3,
@@ -79,6 +103,7 @@ export function getLocalizedModelInfo(
     hrnet: 'hrnet',
     cbam_resunet: 'cbam',
     unet_spherohq: 'unet_spherohq',
+    unet_attention_aspp: 'unet_attention_aspp',
     sperm: 'sperm',
   };
 
@@ -101,6 +126,7 @@ export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
     'hrnet',
     'cbam_resunet',
     'unet_spherohq',
+    'unet_attention_aspp',
     'sperm',
   ];
   return modelIds.map(id => getLocalizedModelInfo(id, t));
@@ -124,6 +150,7 @@ export const BASIC_MODEL_INFO: Record<
     description: 'Balanced model with good speed and quality, E2E ~309ms',
     size: 'small',
     defaultThreshold: 0.5,
+    category: 'spheroid',
     performance: {
       avgTimePerImage: 0.204,
       throughput: 4.9,
@@ -139,6 +166,7 @@ export const BASIC_MODEL_INFO: Record<
       'Most precise segmentation with attention mechanisms, E2E ~482ms',
     size: 'medium',
     defaultThreshold: 0.5,
+    category: 'spheroid',
     performance: {
       avgTimePerImage: 0.377,
       throughput: 2.7,
@@ -154,6 +182,7 @@ export const BASIC_MODEL_INFO: Record<
       'Fastest model after optimizations, excellent for real-time processing, E2E ~286ms',
     size: 'small',
     defaultThreshold: 0.5,
+    category: 'spheroid',
     performance: {
       avgTimePerImage: 0.181,
       throughput: 5.5,
@@ -161,14 +190,31 @@ export const BASIC_MODEL_INFO: Record<
       batchSize: 4,
     },
   },
+  unet_attention_aspp: {
+    id: 'unet_attention_aspp',
+    name: 'UNet Attention-ASPP',
+    displayName: 'UNet Attention-ASPP',
+    description:
+      'Enhanced UNet with Attention Gates and ASPP for detecting dissolving spheroids and small satellite cells',
+    size: 'medium',
+    defaultThreshold: 0.2,
+    category: 'spheroid',
+    performance: {
+      avgTimePerImage: 0.35,
+      throughput: 2.8,
+      p95Latency: 0.5,
+      batchSize: 1,
+    },
+  },
   sperm: {
     id: 'sperm',
-    name: 'Sperm Segmentation',
-    displayName: 'Sperm Segmentation',
+    name: 'Sperm Morphology',
+    displayName: 'Sperm Morphology',
     description:
       'Sperm morphology model with skeleton extraction for head/midpiece/tail measurement',
     size: 'medium',
     defaultThreshold: 0.5,
+    category: 'sperm',
     performance: {
       avgTimePerImage: 0.3,
       throughput: 3.3,
