@@ -307,8 +307,14 @@ class ModelLoader:
             
             # Load state dict (strict=True for unet_attention_aspp, False for legacy models)
             strict = (model_name == 'unet_attention_aspp')
-            model.load_state_dict(state_dict, strict=strict)
-            
+            load_result = model.load_state_dict(state_dict, strict=strict)
+            if not strict and (load_result.missing_keys or load_result.unexpected_keys):
+                logger.warning(
+                    f"State dict mismatch for {model_name}: "
+                    f"missing_keys={load_result.missing_keys}, "
+                    f"unexpected_keys={load_result.unexpected_keys}"
+                )
+
             model.to(self.device)
             model.eval()
             

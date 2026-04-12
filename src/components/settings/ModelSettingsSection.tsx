@@ -41,16 +41,18 @@ const ModelSettingsSection = () => {
   const handleModelChange = (modelId: string) => {
     const model = availableModels.find(m => m.id === modelId);
     setSelectedModel(modelId as ModelType);
-    if (model && model.defaultThreshold !== 0.5) {
+    if (model) {
       setConfidenceThreshold(model.defaultThreshold);
-      toast.success(
-        t('settings.thresholdAutoAdjusted').replace(
-          '{threshold}',
-          String(Math.round(model.defaultThreshold * 100))
-        )
-      );
-    } else {
-      toast.success(t('settings.modelSelected'));
+      if (model.defaultThreshold !== 0.5) {
+        toast.success(
+          t('settings.thresholdAutoAdjusted').replace(
+            '{threshold}',
+            String(Math.round(model.defaultThreshold * 100))
+          )
+        );
+      } else {
+        toast.success(t('settings.modelSelected'));
+      }
     }
   };
 

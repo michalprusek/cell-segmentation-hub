@@ -385,26 +385,57 @@ export class LocalStorageProvider implements StorageProvider {
   /**
    * Decode BMP file to raw RGB pixel buffer for Sharp.
    * Sharp (libvips) doesn't support BMP input natively.
-   * Handles 8-bit palette-indexed and 24-bit direct BGR formats.
+   * Handles 8-bit palette-indexed, 24-bit BGR, and 32-bit BGRA formats.
+   * Only uncompressed BMPs (BI_RGB) are supported.
    */
   private decodeBmpToRawBuffer(buffer: Buffer): {
     data: Buffer;
     raw: { width: number; height: number; channels: 3 };
   } {
+    // Validate BMP signature and minimum header size
+    if (buffer.length < 54) {
+      throw new Error(`BMP file too small: ${buffer.length} bytes`);
+    }
+    if (buffer[0] !== 0x42 || buffer[1] !== 0x4d) {
+      throw new Error('Invalid BMP signature (expected BM)');
+    }
+
     const dataOffset = buffer.readUInt32LE(10);
+    const dibHeaderSize = buffer.readUInt32LE(14);
     const width = buffer.readInt32LE(18);
     const height = buffer.readInt32LE(22);
     const bitsPerPixel = buffer.readUInt16LE(28);
+    const compression = buffer.readUInt32LE(30);
     const absHeight = Math.abs(height);
     const bottomUp = height > 0;
+
+    // Validate dimensions and compression
+    if (width <= 0 || absHeight <= 0) {
+      throw new Error(`Invalid BMP dimensions: ${width}x${height}`);
+    }
+    if (width > 65535 || absHeight > 65535) {
+      throw new Error(`BMP dimensions too large: ${width}x${absHeight}`);
+    }
+    if (compression !== 0) {
+      throw new Error(
+        `Unsupported BMP compression: ${compression} (only BI_RGB=0 supported)`
+      );
+    }
+    if (dataOffset >= buffer.length) {
+      throw new Error(
+        `BMP data offset (${dataOffset}) past end of file (${buffer.length})`
+      );
+    }
 
     const pixelData = Buffer.alloc(width * absHeight * 3);
 
     if (bitsPerPixel === 8) {
-      // Palette-indexed: 256 entries at offset 54, each 4 bytes (BGRA)
-      const paletteOffset = 54;
+      // Palette starts after the DIB header (14-byte BMP header + dibHeaderSize)
+      const paletteOffset = 14 + dibHeaderSize;
+      const biClrUsed = buffer.readUInt32LE(46);
+      const paletteSize = biClrUsed > 0 ? biClrUsed : 256;
       const palette: [number, number, number][] = [];
-      for (let i = 0; i < 256; i++) {
+      for (let i = 0; i < paletteSize; i++) {
         const off = paletteOffset + i * 4;
         palette.push([buffer[off + 2], buffer[off + 1], buffer[off]]);
       }
@@ -415,7 +446,7 @@ export class LocalStorageProvider implements StorageProvider {
         for (let x = 0; x < width; x++) {
           const idx = buffer[srcOffset + x];
           const dstIdx = (y * width + x) * 3;
-          const [r, g, b] = palette[idx];
+          const [r, g, b] = palette[idx] || [0, 0, 0];
           pixelData[dstIdx] = r;
           pixelData[dstIdx + 1] = g;
           pixelData[dstIdx + 2] = b;

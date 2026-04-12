@@ -1,6 +1,5 @@
-# unet.py
+# unet_attention.py
 # Enhanced UNet with Attention Gates + ASPP bottleneck for small cell detection
-# Base: https://github.com/michalprusek/cell-segmentation-hub
 
 import torch
 import torch.nn as nn
@@ -113,8 +112,8 @@ class ASPPBottleneck(nn.Module):
 class UNet(nn.Module):
     """Enhanced UNet with Attention Gates on skip connections and ASPP bottleneck.
 
-    Compatible with pretrained weights from standard UNet (strict=False loading).
-    New modules (attention_gates, aspp_bottleneck) initialize with Kaiming.
+    Trained from scratch; weights loaded with strict=True in inference.
+    All modules (including attention_gates and bottleneck/ASPP) use Kaiming init.
     """
 
     def __init__(
@@ -176,8 +175,9 @@ class UNet(nn.Module):
         if use_attention_gates:
             self.attention_gates = nn.ModuleList()
             for i in range(len(reversed_features) - 1):
-                F_g = reversed_features[i + 1]  # upsampled decoder channels
-                F_l = reversed_features[i + 1]  # encoder skip channels
+                # F_g == F_l here: ConvTranspose2d output matches encoder skip at each level
+                F_g = reversed_features[i + 1]
+                F_l = reversed_features[i + 1]
                 F_int = F_l // 2
                 self.attention_gates.append(AttentionGate(F_g, F_l, F_int))
 
