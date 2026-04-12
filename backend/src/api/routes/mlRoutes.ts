@@ -44,6 +44,14 @@ router.get(
           version: '1.0.0',
           status: 'active',
         },
+        {
+          id: 'unet_attention_aspp',
+          name: 'UNet Attention-ASPP',
+          description:
+            'Enhanced UNet with Attention Gates and ASPP for dissolving spheroids and satellite cells',
+          version: '4.0.0',
+          status: 'active',
+        },
       ];
 
       return ResponseHelper.success(

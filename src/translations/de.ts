@@ -410,6 +410,10 @@ export default {
     modelSelection: {
       title: 'Modellauswahl',
       description: 'Wählen Sie das KI-Modell für die Zellsegmentierung',
+      sections: {
+        spheroid: 'Sphäroid-Modelle',
+        sperm: 'Spermien-Modelle',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -426,8 +430,13 @@ export default {
           description:
             'Beste Leistung auf SpheroHQ-Datensatz - optimiert für Sphäroid-Segmentierung mit ausgewogener Geschwindigkeit und Genauigkeit (~0.25s/Bild, 10 Bilder/s)',
         },
+        unet_attention_aspp: {
+          name: 'UNet Attention-ASPP',
+          description:
+            'Erweitertes UNet mit Attention Gates und ASPP zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (~0.35s/Bild)',
+        },
         sperm: {
-          name: 'Spermien-Segmentierung',
+          name: 'Spermien-Morphologie',
           description:
             'Spermien-Morphologiemodell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
         },
@@ -442,6 +451,8 @@ export default {
     currentThreshold: 'Aktuelle Schwelle',
     modelSelected: 'Modell erfolgreich ausgewählt',
     modelSettingsSaved: 'Modelleinstellungen erfolgreich gespeichert',
+    thresholdAutoAdjusted:
+      'Modell ausgewählt — Schwellenwert automatisch auf {threshold}% eingestellt (optimiert für dieses Modell)',
     modelSize: {
       small: 'Klein',
       medium: 'Mittel',
@@ -454,6 +465,8 @@ export default {
         'Präziseste Segmentierung mit Aufmerksamkeitsmechanismen (E2E ~482ms, 2.7 Bilder/s)',
       unet_spherohq:
         'Schnellstes Modell nach Optimierungen! Hervorragend für Echtzeitverarbeitung (E2E ~286ms, 5.5 Bilder/s)',
+      unet_attention_aspp:
+        'Erweitertes UNet mit Attention Gates und ASPP-Bottleneck zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (35,5M Parameter)',
       sperm:
         'Spermienmorphologie-Modell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
     },

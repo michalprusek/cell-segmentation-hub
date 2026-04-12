@@ -418,6 +418,10 @@ export default {
     modelSelection: {
       title: 'Model Selection',
       description: 'Choose the AI model to use for cell segmentation',
+      sections: {
+        spheroid: 'Spheroid Models',
+        sperm: 'Sperm Models',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -434,8 +438,13 @@ export default {
           description:
             'Best performance on SpheroHQ dataset - optimized for spheroid segmentation with balanced speed and accuracy (~0.25s/image, 10 img/s)',
         },
+        unet_attention_aspp: {
+          name: 'UNet Attention-ASPP',
+          description:
+            'Enhanced UNet with Attention Gates and ASPP for detecting dissolving spheroids and small satellite cells (~0.35s/image)',
+        },
         sperm: {
-          name: 'Sperm Segmentation',
+          name: 'Sperm Morphology',
           description:
             'Sperm morphology model with skeleton extraction for head/midpiece/tail measurement',
         },
@@ -450,6 +459,8 @@ export default {
     currentThreshold: 'Current threshold',
     modelSelected: 'Model selected successfully',
     modelSettingsSaved: 'Model settings saved successfully',
+    thresholdAutoAdjusted:
+      'Model selected — threshold automatically set to {threshold}% (optimized for this model)',
     modelSize: {
       small: 'Small',
       medium: 'Medium',
@@ -462,6 +473,8 @@ export default {
         'Most precise segmentation with attention mechanisms (E2E ~482ms, 2.7 img/s)',
       unet_spherohq:
         'Fastest model after optimizations! Excellent for real-time processing (E2E ~286ms, 5.5 img/s)',
+      unet_attention_aspp:
+        'Enhanced UNet with Attention Gates and ASPP bottleneck for detecting dissolving spheroids and small satellite cells (35.5M params)',
       sperm:
         'Sperm morphology model with skeleton extraction for head, midpiece, and tail measurement',
     },

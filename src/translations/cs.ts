@@ -392,6 +392,10 @@ export default {
     modelSelection: {
       title: 'Výběr modelu',
       description: 'Vyberte AI model pro segmentaci buněk',
+      sections: {
+        spheroid: 'Modely sféroidů',
+        sperm: 'Modely spermií',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -406,8 +410,13 @@ export default {
           description:
             'Nejlepší výkon na datové sadě SpheroHQ - optimalizováno pro segmentaci sféroidů s vyváženou rychlostí a přesností (~0.25s/obr., 10 obr./s)',
         },
+        unet_attention_aspp: {
+          name: 'UNet Attention-ASPP',
+          description:
+            'Vylepšený UNet s Attention Gates a ASPP pro detekci rozpadajících se sféroidů a malých satelitních buněk (~0.35s/snímek)',
+        },
         sperm: {
-          name: 'Segmentace spermií',
+          name: 'Morfologie spermií',
           description:
             'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
         },
@@ -422,6 +431,8 @@ export default {
     currentThreshold: 'Současný práh',
     modelSelected: 'Model úspěšně vybrán',
     modelSettingsSaved: 'Nastavení modelu úspěšně uloženo',
+    thresholdAutoAdjusted:
+      'Model vybrán — práh automaticky nastaven na {threshold}% (optimalizováno pro tento model)',
     modelSize: {
       small: 'Malý',
       medium: 'Střední',
@@ -434,6 +445,8 @@ export default {
         'Nejpřesnější segmentace s mechanismy pozornosti (E2E ~482ms, 2.7 obr/s)',
       unet_spherohq:
         'Nejrychlejší model po optimalizacích! Výborný pro zpracování v reálném čase (E2E ~286ms, 5.5 obr/s)',
+      unet_attention_aspp:
+        'Vylepšený UNet s Attention Gates a ASPP bottleneck pro detekci rozpadajících se sféroidů a malých satelitních buněk (35.5M parametrů)',
       sperm:
         'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
     },

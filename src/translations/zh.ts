@@ -359,6 +359,10 @@ export default {
     modelSelection: {
       title: '模型选择',
       description: '选择用于细胞分割的AI模型',
+      sections: {
+        spheroid: '球体模型',
+        sperm: '精子模型',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -373,8 +377,13 @@ export default {
           description:
             '在SpheroHQ数据集上表现最佳 - 专为球体分割优化，速度和精度平衡 (~0.25秒/图像, 10图像/秒)',
         },
+        unet_attention_aspp: {
+          name: 'UNet Attention-ASPP',
+          description:
+            '增强型UNet，配备注意力门控和ASPP，用于检测溶解中的球体和小型卫星细胞（约0.35秒/图像）',
+        },
         sperm: {
-          name: '精子分割',
+          name: '精子形态学',
           description:
             '精子形态学模型，含骨架提取功能，用于测量头部、中段和尾部',
         },
@@ -387,6 +396,8 @@ export default {
     currentThreshold: '当前阈值',
     modelSelected: '模型选择成功',
     modelSettingsSaved: '模型设置保存成功',
+    thresholdAutoAdjusted:
+      '模型已选择 — 阈值已自动设置为{threshold}%（针对此模型优化）',
     modelSize: {
       small: '小',
       medium: '中',
@@ -397,6 +408,8 @@ export default {
       cbam_resunet: '具有注意力机制的最精确分割 (E2E ~482ms, 2.7 图像/秒)',
       unet_spherohq:
         '优化后最快的模型！非常适合实时处理 (E2E ~286ms, 5.5 图像/秒)',
+      unet_attention_aspp:
+        '增强型UNet，配备注意力门控和ASPP瓶颈层，用于检测溶解中的球体和小型卫星细胞（3550万参数）',
       sperm: '精子形态模型，通过骨架提取测量头部、中段和尾部',
     },
     dataUsageTitle: '数据使用和隐私',

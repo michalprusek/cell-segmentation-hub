@@ -13,10 +13,10 @@ export const uuidSchema = z.string().uuid('Musí být platné UUID');
  * Segmentation model validation
  */
 export const segmentationModelSchema = z.enum(
-  ['hrnet', 'cbam_resunet', 'unet_spherohq', 'sperm'],
+  ['hrnet', 'cbam_resunet', 'unet_spherohq', 'unet_attention_aspp', 'sperm'],
   {
     errorMap: () => ({
-      message: 'Model musí být hrnet, cbam_resunet, unet_spherohq nebo sperm',
+      message: 'Model musí být hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp nebo sperm',
     }),
   }
 );
