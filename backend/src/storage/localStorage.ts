@@ -409,12 +409,23 @@ export class LocalStorageProvider implements StorageProvider {
     const absHeight = Math.abs(height);
     const bottomUp = height > 0;
 
-    // Validate dimensions and compression
+    // Validate header, dimensions and compression
+    if (dibHeaderSize < 40) {
+      throw new Error(
+        `Unsupported BMP DIB header size: ${dibHeaderSize} (only BITMAPINFOHEADER >= 40 supported)`
+      );
+    }
     if (width <= 0 || absHeight <= 0) {
       throw new Error(`Invalid BMP dimensions: ${width}x${height}`);
     }
     if (width > 65535 || absHeight > 65535) {
       throw new Error(`BMP dimensions too large: ${width}x${absHeight}`);
+    }
+    const totalPixels = width * absHeight;
+    if (totalPixels > 100_000_000) {
+      throw new Error(
+        `BMP too large for thumbnail decoding: ${width}x${absHeight} = ${totalPixels} pixels`
+      );
     }
     if (compression !== 0) {
       throw new Error(
@@ -433,13 +444,25 @@ export class LocalStorageProvider implements StorageProvider {
       // Palette starts after the DIB header (14-byte BMP header + dibHeaderSize)
       const paletteOffset = 14 + dibHeaderSize;
       const biClrUsed = buffer.readUInt32LE(46);
-      const paletteSize = biClrUsed > 0 ? biClrUsed : 256;
+      const paletteSize = biClrUsed > 0 && biClrUsed <= 256 ? biClrUsed : 256;
+      const paletteEnd = paletteOffset + paletteSize * 4;
+      if (paletteEnd > buffer.length) {
+        throw new Error(
+          `BMP palette data truncated: need ${paletteEnd} bytes, file is ${buffer.length} bytes`
+        );
+      }
       const palette: [number, number, number][] = [];
       for (let i = 0; i < paletteSize; i++) {
         const off = paletteOffset + i * 4;
         palette.push([buffer[off + 2], buffer[off + 1], buffer[off]]);
       }
       const rowSize = Math.ceil(width / 4) * 4;
+      const requiredEnd = dataOffset + rowSize * absHeight;
+      if (requiredEnd > buffer.length) {
+        throw new Error(
+          `BMP pixel data truncated: need ${requiredEnd} bytes, file is ${buffer.length} bytes`
+        );
+      }
       for (let y = 0; y < absHeight; y++) {
         const srcRow = bottomUp ? absHeight - 1 - y : y;
         const srcOffset = dataOffset + srcRow * rowSize;
@@ -454,6 +477,12 @@ export class LocalStorageProvider implements StorageProvider {
       }
     } else if (bitsPerPixel === 24) {
       const rowSize = Math.ceil((width * 3) / 4) * 4;
+      const requiredEnd = dataOffset + rowSize * absHeight;
+      if (requiredEnd > buffer.length) {
+        throw new Error(
+          `BMP pixel data truncated: need ${requiredEnd} bytes, file is ${buffer.length} bytes`
+        );
+      }
       for (let y = 0; y < absHeight; y++) {
         const srcRow = bottomUp ? absHeight - 1 - y : y;
         const srcOffset = dataOffset + srcRow * rowSize;
@@ -467,6 +496,12 @@ export class LocalStorageProvider implements StorageProvider {
       }
     } else if (bitsPerPixel === 32) {
       const rowSize = width * 4;
+      const requiredEnd = dataOffset + rowSize * absHeight;
+      if (requiredEnd > buffer.length) {
+        throw new Error(
+          `BMP pixel data truncated: need ${requiredEnd} bytes, file is ${buffer.length} bytes`
+        );
+      }
       for (let y = 0; y < absHeight; y++) {
         const srcRow = bottomUp ? absHeight - 1 - y : y;
         const srcOffset = dataOffset + srcRow * rowSize;
