@@ -35,6 +35,7 @@ export interface SegmentationRequest {
     | 'hrnet'
     | 'cbam_resunet'
     | 'unet_spherohq'
+    | 'unet_attention_aspp'
     | 'resunet_advanced'
     | 'resunet_small'
     | 'sperm';

@@ -19,6 +19,7 @@ export type SegmentationModel =
   | 'hrnet'
   | 'cbam_resunet'
   | 'unet_spherohq'
+  | 'unet_attention_aspp'
   | 'resunet_advanced'
   | 'resunet_small';
 
@@ -356,6 +357,7 @@ export function isSegmentationModel(
     value === 'hrnet' ||
     value === 'cbam_resunet' ||
     value === 'unet_spherohq' ||
+    value === 'unet_attention_aspp' ||
     value === 'resunet_advanced' ||
     value === 'resunet_small'
   );

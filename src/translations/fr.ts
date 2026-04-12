@@ -401,6 +401,10 @@ export default {
       title: 'Sélection de modèle',
       description:
         'Choisissez le modèle IA à utiliser pour la segmentation cellulaire',
+      sections: {
+        spheroid: 'Modèles de sphéroïdes',
+        sperm: 'Modèles de spermatozoïdes',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -417,8 +421,13 @@ export default {
           description:
             "Meilleures performances sur l'ensemble de données SpheroHQ - optimisé pour la segmentation de sphéroïdes avec vitesse et précision équilibrées (~0.25s/image, 10 img/s)",
         },
+        unet_attention_aspp: {
+          name: 'UNet Attention-ASPP',
+          description:
+            'UNet amélioré avec Attention Gates et ASPP pour la détection de sphéroïdes en dissolution et de petites cellules satellites (~0.35s/image)',
+        },
         sperm: {
-          name: 'Segmentation de spermatozoïdes',
+          name: 'Morphologie des spermatozoïdes',
           description:
             'Modèle de morphologie spermatique avec extraction de squelette pour mesurer la tête, la pièce intermédiaire et la queue',
         },
@@ -433,6 +442,8 @@ export default {
     currentThreshold: 'Seuil actuel',
     modelSelected: 'Modèle sélectionné avec succès',
     modelSettingsSaved: 'Paramètres du modèle enregistrés avec succès',
+    thresholdAutoAdjusted:
+      'Modèle sélectionné — seuil automatiquement réglé à {threshold}% (optimisé pour ce modèle)',
     modelSize: {
       small: 'Petit',
       medium: 'Moyen',
@@ -445,6 +456,8 @@ export default {
         "Segmentation la plus précise avec mécanismes d'attention (E2E ~482ms, 2.7 img/s)",
       unet_spherohq:
         'Le modèle le plus rapide après optimisations! Excellent pour le traitement en temps réel (E2E ~286ms, 5.5 img/s)',
+      unet_attention_aspp:
+        'UNet amélioré avec Attention Gates et goulot ASPP pour la détection de sphéroïdes en dissolution et de petites cellules satellites (35,5M paramètres)',
       sperm:
         'Modèle de morphologie spermatique avec extraction de squelette pour la mesure de la tête, de la pièce intermédiaire et de la queue',
     },

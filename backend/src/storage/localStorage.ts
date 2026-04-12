@@ -79,23 +79,17 @@ export class LocalStorageProvider implements StorageProvider {
 
           const thumbnailSize = options.thumbnailSize || DEFAULT_THUMBNAIL_SIZE;
 
-          // Sharp needs special handling for certain file formats
-          let sharpInstance = sharp(buffer);
+          // Sharp (libvips) doesn't support BMP input — decode manually
+          const inputBuffer = this.isBmpMimeType(mimeType)
+            ? this.decodeBmpToRawBuffer(buffer)
+            : { data: buffer };
 
-          // For BMP and other formats that might have issues, ensure proper conversion
-          if (
-            mimeType === 'image/bmp' ||
-            mimeType === 'image/x-ms-bmp' ||
-            mimeType === 'image/x-bmp' ||
-            mimeType === 'image/gif' ||
-            mimeType === 'image/tiff' ||
-            mimeType === 'image/tif'
-          ) {
-            // Convert these formats to JPEG for consistent thumbnails
-            sharpInstance = sharpInstance.toFormat('jpeg');
-          }
+          const sharpInput =
+            'raw' in inputBuffer
+              ? sharp(inputBuffer.data, { raw: inputBuffer.raw })
+              : sharp(inputBuffer.data);
 
-          await sharpInstance
+          await sharpInput
             .resize(thumbnailSize.width, thumbnailSize.height, {
               fit: 'inside',
               withoutEnlargement: true,
@@ -375,6 +369,158 @@ export class LocalStorageProvider implements StorageProvider {
    */
   private isImageMimeType(mimeType: string): boolean {
     return mimeType.startsWith('image/');
+  }
+
+  /**
+   * Check if MIME type is BMP (Sharp/libvips doesn't support BMP input)
+   */
+  private isBmpMimeType(mimeType: string): boolean {
+    return (
+      mimeType === 'image/bmp' ||
+      mimeType === 'image/x-ms-bmp' ||
+      mimeType === 'image/x-bmp'
+    );
+  }
+
+  /**
+   * Decode BMP file to raw RGB pixel buffer for Sharp.
+   * Sharp (libvips) doesn't support BMP input natively.
+   * Handles 8-bit palette-indexed, 24-bit BGR, and 32-bit BGRA formats.
+   * Only uncompressed BMPs (BI_RGB) are supported.
+   */
+  private decodeBmpToRawBuffer(buffer: Buffer): {
+    data: Buffer;
+    raw: { width: number; height: number; channels: 3 };
+  } {
+    // Validate BMP signature and minimum header size
+    if (buffer.length < 54) {
+      throw new Error(`BMP file too small: ${buffer.length} bytes`);
+    }
+    if (buffer[0] !== 0x42 || buffer[1] !== 0x4d) {
+      throw new Error('Invalid BMP signature (expected BM)');
+    }
+
+    const dataOffset = buffer.readUInt32LE(10);
+    const dibHeaderSize = buffer.readUInt32LE(14);
+    const width = buffer.readInt32LE(18);
+    const height = buffer.readInt32LE(22);
+    const bitsPerPixel = buffer.readUInt16LE(28);
+    const compression = buffer.readUInt32LE(30);
+    const absHeight = Math.abs(height);
+    const bottomUp = height > 0;
+
+    // Validate header, dimensions and compression
+    if (dibHeaderSize < 40) {
+      throw new Error(
+        `Unsupported BMP DIB header size: ${dibHeaderSize} (only BITMAPINFOHEADER >= 40 supported)`
+      );
+    }
+    if (width <= 0 || absHeight <= 0) {
+      throw new Error(`Invalid BMP dimensions: ${width}x${height}`);
+    }
+    if (width > 65535 || absHeight > 65535) {
+      throw new Error(`BMP dimensions too large: ${width}x${absHeight}`);
+    }
+    const totalPixels = width * absHeight;
+    if (totalPixels > 100_000_000) {
+      throw new Error(
+        `BMP too large for thumbnail decoding: ${width}x${absHeight} = ${totalPixels} pixels`
+      );
+    }
+    if (compression !== 0) {
+      throw new Error(
+        `Unsupported BMP compression: ${compression} (only BI_RGB=0 supported)`
+      );
+    }
+    if (dataOffset >= buffer.length) {
+      throw new Error(
+        `BMP data offset (${dataOffset}) past end of file (${buffer.length})`
+      );
+    }
+
+    const pixelData = Buffer.alloc(width * absHeight * 3);
+
+    if (bitsPerPixel === 8) {
+      // Palette starts after the DIB header (14-byte BMP header + dibHeaderSize)
+      const paletteOffset = 14 + dibHeaderSize;
+      const biClrUsed = buffer.readUInt32LE(46);
+      const paletteSize = biClrUsed > 0 && biClrUsed <= 256 ? biClrUsed : 256;
+      const paletteEnd = paletteOffset + paletteSize * 4;
+      if (paletteEnd > buffer.length) {
+        throw new Error(
+          `BMP palette data truncated: need ${paletteEnd} bytes, file is ${buffer.length} bytes`
+        );
+      }
+      const palette: [number, number, number][] = [];
+      for (let i = 0; i < paletteSize; i++) {
+        const off = paletteOffset + i * 4;
+        palette.push([buffer[off + 2], buffer[off + 1], buffer[off]]);
+      }
+      const rowSize = Math.ceil(width / 4) * 4;
+      const requiredEnd = dataOffset + rowSize * absHeight;
+      if (requiredEnd > buffer.length) {
+        throw new Error(
+          `BMP pixel data truncated: need ${requiredEnd} bytes, file is ${buffer.length} bytes`
+        );
+      }
+      for (let y = 0; y < absHeight; y++) {
+        const srcRow = bottomUp ? absHeight - 1 - y : y;
+        const srcOffset = dataOffset + srcRow * rowSize;
+        for (let x = 0; x < width; x++) {
+          const idx = buffer[srcOffset + x];
+          const dstIdx = (y * width + x) * 3;
+          const [r, g, b] = palette[idx] || [0, 0, 0];
+          pixelData[dstIdx] = r;
+          pixelData[dstIdx + 1] = g;
+          pixelData[dstIdx + 2] = b;
+        }
+      }
+    } else if (bitsPerPixel === 24) {
+      const rowSize = Math.ceil((width * 3) / 4) * 4;
+      const requiredEnd = dataOffset + rowSize * absHeight;
+      if (requiredEnd > buffer.length) {
+        throw new Error(
+          `BMP pixel data truncated: need ${requiredEnd} bytes, file is ${buffer.length} bytes`
+        );
+      }
+      for (let y = 0; y < absHeight; y++) {
+        const srcRow = bottomUp ? absHeight - 1 - y : y;
+        const srcOffset = dataOffset + srcRow * rowSize;
+        for (let x = 0; x < width; x++) {
+          const srcIdx = srcOffset + x * 3;
+          const dstIdx = (y * width + x) * 3;
+          pixelData[dstIdx] = buffer[srcIdx + 2];
+          pixelData[dstIdx + 1] = buffer[srcIdx + 1];
+          pixelData[dstIdx + 2] = buffer[srcIdx];
+        }
+      }
+    } else if (bitsPerPixel === 32) {
+      const rowSize = width * 4;
+      const requiredEnd = dataOffset + rowSize * absHeight;
+      if (requiredEnd > buffer.length) {
+        throw new Error(
+          `BMP pixel data truncated: need ${requiredEnd} bytes, file is ${buffer.length} bytes`
+        );
+      }
+      for (let y = 0; y < absHeight; y++) {
+        const srcRow = bottomUp ? absHeight - 1 - y : y;
+        const srcOffset = dataOffset + srcRow * rowSize;
+        for (let x = 0; x < width; x++) {
+          const srcIdx = srcOffset + x * 4;
+          const dstIdx = (y * width + x) * 3;
+          pixelData[dstIdx] = buffer[srcIdx + 2];
+          pixelData[dstIdx + 1] = buffer[srcIdx + 1];
+          pixelData[dstIdx + 2] = buffer[srcIdx];
+        }
+      }
+    } else {
+      throw new Error(`Unsupported BMP bit depth: ${bitsPerPixel}`);
+    }
+
+    return {
+      data: pixelData,
+      raw: { width, height: absHeight, channels: 3 },
+    };
   }
 
   /**

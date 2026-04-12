@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { ModelType } from '@/contexts/useModel';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useLocalizedModels } from '@/hooks/useLocalizedModels';
+import { ModelInfo } from '@/lib/modelUtils';
 import { Cpu, Zap, Target } from 'lucide-react';
 
 const ModelSettingsSection = () => {
@@ -28,9 +29,31 @@ const ModelSettingsSection = () => {
     availableModels,
   } = useLocalizedModels();
 
+  const spheroidModels = useMemo(
+    () => availableModels.filter(m => m.category === 'spheroid'),
+    [availableModels]
+  );
+  const spermModels = useMemo(
+    () => availableModels.filter(m => m.category === 'sperm'),
+    [availableModels]
+  );
+
   const handleModelChange = (modelId: string) => {
+    const model = availableModels.find(m => m.id === modelId);
     setSelectedModel(modelId as ModelType);
-    toast.success(t('settings.modelSelected'));
+    if (model) {
+      setConfidenceThreshold(model.defaultThreshold);
+      if (model.defaultThreshold !== 0.5) {
+        toast.success(
+          t('settings.thresholdAutoAdjusted').replace(
+            '{threshold}',
+            String(Math.round(model.defaultThreshold * 100))
+          )
+        );
+      } else {
+        toast.success(t('settings.modelSelected'));
+      }
+    }
   };
 
   const handleThresholdChange = (value: number[]) => {
@@ -72,6 +95,30 @@ const ModelSettingsSection = () => {
     }
   };
 
+  const renderModelCard = (model: ModelInfo) => (
+    <div key={model.id} className="flex items-center space-x-4">
+      <RadioGroupItem value={model.id} id={model.id} />
+      <Label htmlFor={model.id} className="flex-1 cursor-pointer">
+        <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                {getSizeIcon(model.size)}
+                {model.displayName}
+              </CardTitle>
+              <Badge className={getSizeBadgeColor(model.size)}>
+                {t(`settings.modelSize.${model.size}`)}
+              </Badge>
+            </div>
+            <CardDescription className="text-sm">
+              {t(`settings.modelDescription.${model.id}`)}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </Label>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -84,29 +131,17 @@ const ModelSettingsSection = () => {
 
         <RadioGroup value={selectedModel} onValueChange={handleModelChange}>
           <div className="space-y-4">
-            {availableModels.map(model => (
-              <div key={model.id} className="flex items-center space-x-4">
-                <RadioGroupItem value={model.id} id={model.id} />
-                <Label htmlFor={model.id} className="flex-1 cursor-pointer">
-                  <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          {getSizeIcon(model.size)}
-                          {model.displayName}
-                        </CardTitle>
-                        <Badge className={getSizeBadgeColor(model.size)}>
-                          {t(`settings.modelSize.${model.size}`)}
-                        </Badge>
-                      </div>
-                      <CardDescription className="text-sm">
-                        {t(`settings.modelDescription.${model.id}`)}
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                </Label>
-              </div>
-            ))}
+            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              {t('settings.modelSelection.sections.spheroid')}
+            </h4>
+            {spheroidModels.map(renderModelCard)}
+
+            <div className="pt-2">
+              <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                {t('settings.modelSelection.sections.sperm')}
+              </h4>
+            </div>
+            {spermModels.map(renderModelCard)}
           </div>
         </RadioGroup>
       </div>
