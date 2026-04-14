@@ -47,6 +47,7 @@ import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
 import CanvasTemporaryGeometryLayer from './components/canvas/CanvasTemporaryGeometryLayer';
 import { polygonVisibilityManager } from '@/lib/rendering/PolygonVisibilityManager';
+import { FpsMeter } from '@/lib/rendering/FpsMeter';
 
 // Layout components
 import EditorHeader from './components/EditorHeader';
@@ -1419,6 +1420,10 @@ const SegmentationEditor = () => {
           />
         </div>
       </EditorLayout>
+      {/* Opt-in dev overlay: append ?perf=1 to the URL or set
+          localStorage.segPerfOverlay='1'. Renders null in production
+          by default — no bundle cost beyond the module itself. */}
+      <FpsMeter />
     </SegmentationErrorBoundary>
   );
 };
