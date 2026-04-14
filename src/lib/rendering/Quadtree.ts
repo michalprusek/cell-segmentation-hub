@@ -95,6 +95,18 @@ export class Quadtree<T> {
   private root: QuadtreeNode<T>;
 
   constructor(bounds: QuadtreeBounds) {
+    if (
+      !Number.isFinite(bounds.minX) ||
+      !Number.isFinite(bounds.minY) ||
+      !Number.isFinite(bounds.maxX) ||
+      !Number.isFinite(bounds.maxY) ||
+      bounds.minX >= bounds.maxX ||
+      bounds.minY >= bounds.maxY
+    ) {
+      throw new Error(
+        `Quadtree: invalid bounds ${JSON.stringify(bounds)} (require finite numbers with minX<maxX and minY<maxY)`
+      );
+    }
     this.root = new QuadtreeNode<T>(bounds, 0);
   }
 

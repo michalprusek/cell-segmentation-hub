@@ -14,7 +14,7 @@
  */
 
 import type { Point } from '@/lib/segmentation';
-import { Quadtree, type NearestResult } from './Quadtree';
+import { Quadtree } from './Quadtree';
 
 interface IndexEntry {
   tree: Quadtree<number>;
@@ -25,10 +25,14 @@ export class VertexSpatialIndex {
   private readonly entries = new Map<string, IndexEntry>();
 
   /**
-   * Find the nearest vertex of `polygonId` to (x, y) within `maxDistance`.
+   * Find the vertex index nearest to (x, y) within `maxDistance`.
    * Returns null if the polygon is empty or no vertex is close enough.
    * Builds the underlying quadtree lazily on first call and reuses it
    * until the polygon's points reference changes.
+   *
+   * Returns just the index rather than the full quadtree result — the
+   * hot-path caller only needs the index, and hiding the quadtree
+   * generic keeps callers decoupled from the tree's internal shape.
    */
   findNearestVertex(
     polygonId: string,
@@ -36,10 +40,11 @@ export class VertexSpatialIndex {
     x: number,
     y: number,
     maxDistance: number
-  ): NearestResult<number> | null {
+  ): number | null {
     if (!points || points.length === 0) return null;
     const entry = this.ensureIndex(polygonId, points);
-    return entry.tree.findNearest(x, y, maxDistance);
+    const result = entry.tree.findNearest(x, y, maxDistance);
+    return result ? result.item : null;
   }
 
   invalidate(polygonId: string): void {

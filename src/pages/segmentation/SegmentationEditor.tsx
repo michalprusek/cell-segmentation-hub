@@ -1141,6 +1141,14 @@ const SegmentationEditor = () => {
     const containerWidth = canvasWidth || imageDimensions?.width || 0;
     const containerHeight = canvasHeight || imageDimensions?.height || 0;
 
+    // Graceful fallback for the first render (before image dimensions
+    // are measured) or for a transient 0-sized layout: render the full
+    // filtered set instead of culling against a degenerate viewport.
+    // Returning [] here would be "safer" on paper but hides real
+    // polygons from the user during normal editor startup.
+    // `filtered` already includes the selected polygon (it's only
+    // excluded when hidden or malformed), so nothing load-bearing is
+    // skipped by bypassing ensureSelectedVisible/sortForRendering here.
     if (containerWidth <= 0 || containerHeight <= 0) {
       return filtered;
     }

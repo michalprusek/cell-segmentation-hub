@@ -12,8 +12,7 @@ describe('VertexSpatialIndex', () => {
     const idx = new VertexSpatialIndex();
     // Query near vertex 1 (10, 0) — well within maxDistance.
     const result = idx.findNearestVertex('poly-a', triangle, 9.5, 0.3, 2);
-    expect(result).not.toBeNull();
-    expect(result!.item).toBe(1);
+    expect(result).toBe(1);
   });
 
   it('returns null when outside maxDistance', () => {
@@ -26,8 +25,8 @@ describe('VertexSpatialIndex', () => {
     const idx = new VertexSpatialIndex();
     const first = idx.findNearestVertex('poly-a', triangle, 0, 0, 1);
     const second = idx.findNearestVertex('poly-a', triangle, 0, 0, 1);
-    expect(first?.item).toBe(0);
-    expect(second?.item).toBe(0);
+    expect(first).toBe(0);
+    expect(second).toBe(0);
   });
 
   it('rebuilds when points reference changes', () => {
@@ -36,7 +35,7 @@ describe('VertexSpatialIndex', () => {
 
     const shifted = triangle.map(p => ({ x: p.x + 100, y: p.y }));
     const res = idx.findNearestVertex('poly-a', shifted, 100, 0, 1);
-    expect(res?.item).toBe(0);
+    expect(res).toBe(0);
   });
 
   it('scales to a 4000-point polygon', () => {
@@ -49,6 +48,26 @@ describe('VertexSpatialIndex', () => {
 
     // Query at angle 0 (≈ (500, 0)) -- expect vertex 0.
     const res = idx.findNearestVertex('poly-big', points, 500, 0, 10);
-    expect(res?.item).toBe(0);
+    expect(res).toBe(0);
+  });
+
+  it('handles polygons entirely in negative coordinate space', () => {
+    // Exercises the bounds + padding math for negative coords — a
+    // panned/zoomed image can produce polygon points far into the
+    // negative quadrant. A missing sign guard used to mis-pad bounds.
+    const idx = new VertexSpatialIndex();
+    const negTriangle = [
+      { x: -500, y: -500 },
+      { x: -490, y: -500 },
+      { x: -495, y: -492 },
+    ];
+    const res = idx.findNearestVertex(
+      'poly-neg',
+      negTriangle,
+      -489.5,
+      -500.3,
+      2
+    );
+    expect(res).toBe(1);
   });
 });

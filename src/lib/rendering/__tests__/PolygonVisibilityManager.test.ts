@@ -74,6 +74,34 @@ describe('PolygonVisibilityManager.getVisiblePolygons', () => {
     expect(result.culledCount).toBeGreaterThan(200);
   });
 
+  it('invalidates the cached result when the polygons array reference changes', () => {
+    // Guards the immutable-update case: a vertex drag (or image switch
+    // into a polygon set of matching count) replaces the polygons array
+    // in place. If the cache only checked count+viewport, it would
+    // hand back stale object references that React.memo would treat as
+    // unchanged — and the UI would keep rendering the pre-edit state.
+    const manager = new PolygonVisibilityManager();
+
+    const firstPolygons = Array.from({ length: 5 }, (_, i) =>
+      makeSquarePolygon(`p${i}`, i * 50, 0)
+    );
+    const ctx: VisibilityContext = {
+      zoom: 1,
+      offset: { x: 0, y: 0 },
+      containerWidth: 1000,
+      containerHeight: 1000,
+      forceRenderSelected: true,
+    };
+
+    const firstResult = manager.getVisiblePolygons(firstPolygons, ctx);
+    const secondPolygons = firstPolygons.slice(); // same count, same geometry, fresh array
+    const secondResult = manager.getVisiblePolygons(secondPolygons, ctx);
+
+    // The two arrays are different references — result must be a fresh
+    // computation, not the cached one.
+    expect(secondResult).not.toBe(firstResult);
+  });
+
   it('keeps the selected polygon visible even if it lies outside the viewport', () => {
     const manager = new PolygonVisibilityManager();
 

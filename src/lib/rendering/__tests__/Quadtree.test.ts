@@ -83,6 +83,39 @@ describe('Quadtree.findNearest', () => {
     expect(res).not.toBeNull();
     expect(res!.item).toBe(25);
   });
+
+  it('returns nearest neighbour on a query exactly at the root midline', () => {
+    // minX=0, maxX=100 -> root midX=50. Vertices straddle the midline;
+    // the one on the "west" side is slightly closer. Guards against
+    // the primary-quadrant-first descent failing to visit the sibling
+    // when the query sits exactly on the boundary.
+    const tree = new Quadtree<string>({
+      minX: 0,
+      minY: 0,
+      maxX: 100,
+      maxY: 100,
+    });
+    tree.insert(49.9, 50, 'west');
+    tree.insert(50.5, 50, 'east');
+    const res = tree.findNearest(50, 50, 10);
+    expect(res).not.toBeNull();
+    expect(res!.item).toBe('west');
+  });
+
+  it('rejects invalid bounds at construction time', () => {
+    expect(
+      () => new Quadtree<number>({ minX: 10, minY: 0, maxX: 0, maxY: 100 })
+    ).toThrow(/invalid bounds/);
+    expect(
+      () =>
+        new Quadtree<number>({
+          minX: NaN,
+          minY: 0,
+          maxX: 10,
+          maxY: 10,
+        })
+    ).toThrow(/invalid bounds/);
+  });
 });
 
 // Deterministic RNG for reproducible tests.

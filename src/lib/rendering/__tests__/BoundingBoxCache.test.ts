@@ -74,6 +74,13 @@ describe('BoundingBoxCache', () => {
     expect(stats.misses).toBe(2);
   });
 
+  it('rejects invalid maxEntries at construction time', () => {
+    expect(() => new BoundingBoxCache(0)).toThrow(/maxEntries/);
+    expect(() => new BoundingBoxCache(-1)).toThrow(/maxEntries/);
+    expect(() => new BoundingBoxCache(Infinity)).toThrow(/maxEntries/);
+    expect(() => new BoundingBoxCache(NaN)).toThrow(/maxEntries/);
+  });
+
   it('evicts least-recently-used entry when over capacity', () => {
     const cache = new BoundingBoxCache(2);
     cache.get('a', square);

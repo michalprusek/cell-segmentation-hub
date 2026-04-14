@@ -25,7 +25,13 @@ export class BoundingBoxCache {
   private hits = 0;
   private misses = 0;
 
-  constructor(private readonly maxEntries: number = DEFAULT_MAX_ENTRIES) {}
+  constructor(private readonly maxEntries: number = DEFAULT_MAX_ENTRIES) {
+    if (!Number.isFinite(maxEntries) || maxEntries < 1) {
+      throw new Error(
+        `BoundingBoxCache: maxEntries must be a finite number >= 1 (got ${maxEntries})`
+      );
+    }
+  }
 
   /**
    * Bulk lookup. Returns a map of polygon id -> BoundingBox. Entries
