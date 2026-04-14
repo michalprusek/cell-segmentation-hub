@@ -116,9 +116,13 @@ export function useFpsSampler(enabled: boolean): FpsMeterSample {
 /**
  * Overlay component. Mount near the top of the editor tree; it self-gates
  * on `isFpsOverlayEnabled()` and renders nothing in production by default.
+ *
+ * The gate is read ONCE per mount via a `useState` initializer so the
+ * editor's hot re-render path doesn't pay for a fresh `URLSearchParams`
+ * build and `localStorage.getItem` call on every render.
  */
 export function FpsMeter(): JSX.Element | null {
-  const enabled = isFpsOverlayEnabled();
+  const [enabled] = useState(isFpsOverlayEnabled);
   const sample = useFpsSampler(enabled);
   if (!enabled) return null;
 
