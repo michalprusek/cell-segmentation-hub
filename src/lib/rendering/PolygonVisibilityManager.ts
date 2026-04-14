@@ -5,7 +5,7 @@
  */
 
 import { Polygon } from '@/lib/segmentation';
-import { BoundingBox } from '@/lib/polygonOptimization';
+import type { BoundingBox } from '@/lib/polygonGeometry';
 import { boundingBoxCache } from './BoundingBoxCache';
 
 export interface ViewportBounds {
@@ -109,6 +109,8 @@ export class PolygonVisibilityManager {
   private thresholds = new AdaptiveThresholds();
   private lastViewport: ViewportBounds | null = null;
   private lastVisibilityResult: VisibilityResult | null = null;
+  private lastPolygonsRef: Polygon[] | null = null;
+  private lastSelectedPolygonId: string | null | undefined = undefined;
   private frameCount = 0;
 
   /**
@@ -123,8 +125,19 @@ export class PolygonVisibilityManager {
     // Calculate current viewport
     const viewport = this.calculateViewport(context);
 
-    // Check if we can use cached result for small viewport changes
-    if (this.canUseCachedResult(viewport, polygons.length)) {
+    // Check if we can use cached result for small viewport changes.
+    // Cache reuse is ALSO gated by polygon array identity and selection
+    // identity: the editor mutates polygons immutably, so the array
+    // reference changes on every edit. Without this gate, an immutable
+    // replacement with the same length + similar viewport (vertex drag,
+    // image switch into a polygon set of matching count) would hand back
+    // stale polygon object references and the UI would keep rendering
+    // the pre-edit state.
+    if (
+      this.canUseCachedResult(viewport, polygons.length) &&
+      this.lastPolygonsRef === polygons &&
+      this.lastSelectedPolygonId === context.selectedPolygonId
+    ) {
       return this.lastVisibilityResult!;
     }
 
@@ -200,6 +213,8 @@ export class PolygonVisibilityManager {
     // Cache result for potential reuse
     this.lastViewport = viewport;
     this.lastVisibilityResult = result;
+    this.lastPolygonsRef = polygons;
+    this.lastSelectedPolygonId = context.selectedPolygonId;
     this.frameCount++;
 
     return result;
@@ -374,6 +389,8 @@ export class PolygonVisibilityManager {
   reset(): void {
     this.lastViewport = null;
     this.lastVisibilityResult = null;
+    this.lastPolygonsRef = null;
+    this.lastSelectedPolygonId = undefined;
     this.frameCount = 0;
   }
 

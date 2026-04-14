@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { startTransition, useCallback, useEffect, useRef } from 'react';
 import { Point, Polygon } from '@/lib/segmentation';
 import {
   EditMode,
@@ -18,6 +18,7 @@ import {
   calculatePolygonPerimeter,
   createPolygon,
 } from '@/lib/polygonGeometry';
+import { vertexSpatialIndex } from '@/lib/rendering/VertexSpatialIndex';
 
 /**
  * Advanced interaction handler inspired by SpheroSeg
@@ -85,6 +86,19 @@ export const useAdvancedInteractions = ({
 }: UseAdvancedInteractionsProps) => {
   // Refs for tracking state
   const lastAutoAddedPoint = useRef<Point | null>(null);
+  // Last image-space point at which we ran the vertex-hover hit test.
+  // Used to skip the spatial-index lookup when the cursor hasn't moved
+  // far enough (in image coords) to possibly change which vertex is
+  // under it. Huge win for 4000-point polygons.
+  //
+  // Must be reset whenever the hit-test target changes — otherwise the
+  // first mousemove after (re)selection or drag-end skips the check and
+  // hover stays stuck on an index from the previous target.
+  const lastHoverCheckPoint = useRef<Point | null>(null);
+
+  useEffect(() => {
+    lastHoverCheckPoint.current = null;
+  }, [selectedPolygonId, editMode]);
 
   /**
    * Handle View mode clicks - panning only (polygon selection handled by CanvasPolygon onClick)
@@ -764,18 +778,38 @@ export const useAdvancedInteractions = ({
         const selectedPolygon = polygons.find(p => p.id === selectedPolygonId);
 
         if (selectedPolygon) {
+          // Skip the hit test if the cursor barely moved in image space.
+          // Threshold is sub-pixel in screen space (0.5px) so hover still
+          // feels instantaneous — but at high zoom on a 4000-point polygon
+          // this skips 90%+ of mousemove events.
+          const hoverMoveThresholdSq = Math.max(
+            0.25 / (transform.zoom * transform.zoom),
+            0.0001
+          );
+          const last = lastHoverCheckPoint.current;
+          if (last) {
+            const mdx = imagePoint.x - last.x;
+            const mdy = imagePoint.y - last.y;
+            if (mdx * mdx + mdy * mdy < hoverMoveThresholdSq) {
+              return;
+            }
+          }
+          lastHoverCheckPoint.current = imagePoint;
+
           const hitRadius =
             EDITING_CONSTANTS.VERTEX_HIT_RADIUS / transform.zoom;
-          const closestVertex = findClosestVertex(
-            imagePoint,
+          const closestVertexIndex = vertexSpatialIndex.findNearestVertex(
+            selectedPolygonId,
             selectedPolygon.points,
+            imagePoint.x,
+            imagePoint.y,
             hitRadius
           );
 
-          if (closestVertex) {
+          if (closestVertexIndex !== null) {
             setHoveredVertex({
               polygonId: selectedPolygonId,
-              vertexIndex: closestVertex.index,
+              vertexIndex: closestVertexIndex,
             });
           } else {
             setHoveredVertex(null);
@@ -843,9 +877,26 @@ export const useAdvancedInteractions = ({
             return polygon;
           });
 
-          updatePolygons(updatedPolygons);
+          // Invalidate the spatial index eagerly — identity-based rebuild
+          // would catch it on the next query, but dropping it here keeps
+          // any query in the same tick from hitting stale data.
+          vertexSpatialIndex.invalidate(polygonId);
+          // The cursor is still sitting on the dragged vertex's new
+          // position, so clear the hover-skip memo — otherwise the next
+          // mousemove may skip the hit test and leave hover stuck.
+          lastHoverCheckPoint.current = null;
 
-          // Clear the drag state
+          // The polygons-array rebuild re-renders every memoized child.
+          // For a 4000-point polygon that's the most expensive part of a
+          // vertex drag. Marking it non-urgent lets the pointerup event
+          // finish on the synchronous cycle and the heavy re-render run
+          // in React's idle time, avoiding a visible stutter.
+          startTransition(() => {
+            updatePolygons(updatedPolygons);
+          });
+
+          // Drag state itself must clear synchronously so the UI stops
+          // drawing the drag offset immediately.
           setVertexDragState({
             isDragging: false,
             polygonId: null,

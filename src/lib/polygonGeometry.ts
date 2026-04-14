@@ -280,30 +280,35 @@ export const findClosestVertex = (
   distance: number;
 } | null => {
   let closestIndex = -1;
-  let minDistance = Infinity;
+  let minDistanceSq = Infinity;
+
+  // AABB prefilter: when maxDistance is provided, vertices outside the
+  // [±maxDistance] window around point cannot win. Cheap |dx|/|dy| checks
+  // eliminate the vast majority of vertices before any multiplication.
+  const hasMax = maxDistance !== undefined;
+  const maxDistanceSq = hasMax ? maxDistance * maxDistance : Infinity;
 
   for (let i = 0; i < polygonPoints.length; i++) {
     const vertex = polygonPoints[i];
     const dx = vertex.x - point.x;
+    if (hasMax && (dx > maxDistance || -dx > maxDistance)) continue;
     const dy = vertex.y - point.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (hasMax && (dy > maxDistance || -dy > maxDistance)) continue;
 
-    if (distance < minDistance) {
-      minDistance = distance;
+    const distanceSq = dx * dx + dy * dy;
+    if (distanceSq < minDistanceSq) {
+      minDistanceSq = distanceSq;
       closestIndex = i;
     }
   }
 
-  if (
-    closestIndex === -1 ||
-    (maxDistance !== undefined && minDistance > maxDistance)
-  ) {
+  if (closestIndex === -1 || minDistanceSq > maxDistanceSq) {
     return null;
   }
 
   return {
     index: closestIndex,
-    distance: minDistance,
+    distance: Math.sqrt(minDistanceSq),
   };
 };
 
