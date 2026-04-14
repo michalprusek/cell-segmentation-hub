@@ -1118,6 +1118,21 @@ const SegmentationEditor = () => {
     projectImages?.findIndex(img => img.id === imageId) ?? -1;
   const _isAnyEditModeActive = editor.editMode !== EditMode.View;
 
+  // Memoize the render-candidate list so a parent re-render (hover/zoom/pan)
+  // doesn't reallocate + re-filter the whole array each frame.
+  // Must live above any early return to satisfy the rules of hooks.
+  const visiblePolygons = useMemo(
+    () =>
+      editor.polygons
+        .filter(polygon => !hiddenPolygonIds.has(polygon.id))
+        .filter(polygon => {
+          if (!polygon.points) return false;
+          const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
+          return polygon.points.length >= minPoints;
+        }),
+    [editor.polygons, hiddenPolygonIds]
+  );
+
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading
   if (projectLoading && !projectImages.length) {
@@ -1231,7 +1246,6 @@ const SegmentationEditor = () => {
                         width: imageDimensions?.width || canvasWidth,
                         height: imageDimensions?.height || canvasHeight,
                         maxWidth: 'none',
-                        shapeRendering: 'geometricPrecision',
                         pointerEvents: 'auto',
                         zIndex: 10,
                       }}
@@ -1253,60 +1267,33 @@ const SegmentationEditor = () => {
                       <CanvasSvgFilters />
 
                       {/* Render all polygons */}
-                      {(() => {
-                        const visiblePolygons = editor.polygons
-                          .filter(polygon => !hiddenPolygonIds.has(polygon.id))
-                          .filter(polygon => {
-                            if (!polygon.points) return false;
-                            const minPoints =
-                              polygon.geometry === 'polyline' ? 2 : 3;
-                            return polygon.points.length >= minPoints;
-                          });
-
-                        // Render polygons
-                        return (
-                          <>
-                            {/* Actual polygons */}
-                            {visiblePolygons.map(polygon => (
-                              <CanvasPolygon
-                                key={generateSafePolygonKey(
-                                  polygon,
-                                  editor.isUndoRedoInProgress
-                                )}
-                                polygon={polygon}
-                                isSelected={
-                                  polygon.id === editor.selectedPolygonId
-                                }
-                                hoveredVertex={
-                                  editor.hoveredVertex || EMPTY_HOVERED_VERTEX
-                                }
-                                vertexDragState={editor.vertexDragState}
-                                zoom={editor.transform.zoom}
-                                isUndoRedoInProgress={
-                                  editor.isUndoRedoInProgress
-                                }
-                                isHovered={polygon.id === hoveredPolygonId}
-                                editMode={editor.editMode}
-                                onSelectPolygon={editor.handlePolygonClick}
-                                onDeletePolygon={
-                                  handleDeletePolygonFromContextMenu
-                                }
-                                onSlicePolygon={
-                                  handleSlicePolygonFromContextMenu
-                                }
-                                onEditPolygon={handleEditPolygonFromContextMenu}
-                                onChangePartClass={handleChangePartClass}
-                                onChangeInstanceId={handleChangeInstanceId}
-                                availableInstanceIds={availableInstanceIds}
-                                onDeleteVertex={
-                                  handleDeleteVertexFromContextMenu
-                                }
-                                onHover={setHoveredPolygonId}
-                              />
-                            ))}
-                          </>
-                        );
-                      })()}
+                      {visiblePolygons.map(polygon => (
+                        <CanvasPolygon
+                          key={generateSafePolygonKey(
+                            polygon,
+                            editor.isUndoRedoInProgress
+                          )}
+                          polygon={polygon}
+                          isSelected={polygon.id === editor.selectedPolygonId}
+                          hoveredVertex={
+                            editor.hoveredVertex || EMPTY_HOVERED_VERTEX
+                          }
+                          vertexDragState={editor.vertexDragState}
+                          zoom={editor.transform.zoom}
+                          isUndoRedoInProgress={editor.isUndoRedoInProgress}
+                          isHovered={polygon.id === hoveredPolygonId}
+                          editMode={editor.editMode}
+                          onSelectPolygon={editor.handlePolygonClick}
+                          onDeletePolygon={handleDeletePolygonFromContextMenu}
+                          onSlicePolygon={handleSlicePolygonFromContextMenu}
+                          onEditPolygon={handleEditPolygonFromContextMenu}
+                          onChangePartClass={handleChangePartClass}
+                          onChangeInstanceId={handleChangeInstanceId}
+                          availableInstanceIds={availableInstanceIds}
+                          onDeleteVertex={handleDeleteVertexFromContextMenu}
+                          onHover={setHoveredPolygonId}
+                        />
+                      ))}
 
                       {/* Vertices are now rendered inside CanvasPolygon component */}
 

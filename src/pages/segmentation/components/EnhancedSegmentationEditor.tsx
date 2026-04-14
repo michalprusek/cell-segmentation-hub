@@ -12,6 +12,15 @@ import CanvasVertex from './canvas/CanvasVertex';
 import ModeInstructions from './canvas/ModeInstructions';
 import CanvasTemporaryGeometryLayer from './canvas/CanvasTemporaryGeometryLayer';
 
+// Stable references — allocating these inline on every render broke
+// React.memo on CanvasPolygon and triggered a re-render of every polygon.
+const EMPTY_HOVERED_VERTEX = { polygonId: null, vertexIndex: null } as const;
+const EMPTY_VERTEX_DRAG_STATE = {
+  isDragging: false,
+  polygonId: null,
+  vertexIndex: null,
+} as const;
+
 interface EnhancedSegmentationEditorProps {
   imageUrl: string;
   imageWidth: number;
@@ -145,7 +154,6 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
               className="absolute top-0 left-0 pointer-events-none"
               style={{
                 maxWidth: 'none',
-                shapeRendering: 'geometricPrecision',
               }}
             >
               {/* Render all polygons */}
@@ -154,21 +162,10 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
                   key={ensureValidPolygonId(polygon.id, `enhanced-${index}`)}
                   polygon={polygon}
                   isSelected={polygon.id === editor.selectedPolygonId}
-                  hoveredVertex={
-                    editor.hoveredVertex || {
-                      polygonId: null,
-                      vertexIndex: null,
-                    }
-                  }
-                  vertexDragState={{
-                    isDragging: false,
-                    polygonId: null,
-                    vertexIndex: null,
-                  }}
+                  hoveredVertex={editor.hoveredVertex || EMPTY_HOVERED_VERTEX}
+                  vertexDragState={EMPTY_VERTEX_DRAG_STATE}
                   zoom={editor.transform.zoom}
-                  onSelectPolygon={() =>
-                    editor.setSelectedPolygonId(polygon.id)
-                  }
+                  onSelectPolygon={editor.setSelectedPolygonId}
                 />
               ))}
 
