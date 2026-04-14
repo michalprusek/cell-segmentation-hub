@@ -18,6 +18,7 @@ import {
   calculatePolygonPerimeter,
   createPolygon,
 } from '@/lib/polygonGeometry';
+import { vertexSpatialIndex } from '@/lib/rendering/VertexSpatialIndex';
 
 /**
  * Advanced interaction handler inspired by SpheroSeg
@@ -789,16 +790,18 @@ export const useAdvancedInteractions = ({
 
           const hitRadius =
             EDITING_CONSTANTS.VERTEX_HIT_RADIUS / transform.zoom;
-          const closestVertex = findClosestVertex(
-            imagePoint,
+          const closestVertex = vertexSpatialIndex.findNearestVertex(
+            selectedPolygonId,
             selectedPolygon.points,
+            imagePoint.x,
+            imagePoint.y,
             hitRadius
           );
 
           if (closestVertex) {
             setHoveredVertex({
               polygonId: selectedPolygonId,
-              vertexIndex: closestVertex.index,
+              vertexIndex: closestVertex.item,
             });
           } else {
             setHoveredVertex(null);
