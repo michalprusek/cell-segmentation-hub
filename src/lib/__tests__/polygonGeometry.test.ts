@@ -311,6 +311,36 @@ describe('Polygon Geometry Utilities', () => {
 
       expect(result).toBeNull();
     });
+
+    it('AABB prefilter: mid-case with some vertices inside window', () => {
+      // Point sits near (4,4); maxDistance=3 means only vertices within
+      // a 6x6 AABB around it are candidates. (0,0) and (100,0) are
+      // outside the prefilter window; (4,4) and (6,6) are inside.
+      // The true nearest is (4,4) at distance 0. Guards an off-by-one
+      // in the `dx > maxDistance` / `-dx > maxDistance` branches.
+      const polygon: Point[] = [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 6, y: 6 },
+        { x: 4, y: 4 },
+      ];
+      const result = findClosestVertex({ x: 4, y: 4 }, polygon, 3);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(3);
+      expect(result!.distance).toBeCloseTo(0, 5);
+    });
+
+    it('AABB prefilter: point exactly maxDistance away on x-axis still admitted', () => {
+      // |dx| === maxDistance must be inclusive — the correct semantic
+      // is "within maxDistance", and the final maxDistanceSq check is
+      // non-strict. If the prefilter used strict `>` incorrectly, this
+      // would return null.
+      const polygon: Point[] = [{ x: 5, y: 0 }];
+      const result = findClosestVertex({ x: 0, y: 0 }, polygon, 5);
+      expect(result).not.toBeNull();
+      expect(result!.index).toBe(0);
+      expect(result!.distance).toBeCloseTo(5, 5);
+    });
   });
 
   describe('findClosestSegment', () => {

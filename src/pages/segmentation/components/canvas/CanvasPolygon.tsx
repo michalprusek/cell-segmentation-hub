@@ -82,36 +82,37 @@ const CanvasPolygon = React.memo(
       return filtered.length >= minPoints ? filtered : [];
     }, [points, isPolyline]);
 
-    // Generate SVG path string from valid points (no simplification)
-    // Apply drag offset to the dragged vertex
+    // Generate SVG path string from valid points (no simplification).
+    // Single-pass build: applies drag offset inline and avoids the double
+    // array allocation the previous `.map(...).map(...)` chain used on every
+    // frame of a 4000-point drag.
     const pathString = useMemo(() => {
       const minPoints = isPolyline ? 2 : 3;
       if (!validPoints || validPoints.length < minPoints) {
         return '';
       }
 
-      // If we're dragging a vertex from this polygon, apply the offset
-      let pointsToRender = validPoints;
-      if (
-        vertexDragState?.isDragging &&
+      const dragActive =
+        !!vertexDragState?.isDragging &&
         vertexDragState.polygonId === id &&
         vertexDragState.vertexIndex !== null &&
-        vertexDragState.dragOffset
-      ) {
-        pointsToRender = validPoints.map((p, index) => {
-          if (index === vertexDragState.vertexIndex) {
-            return {
-              x: p.x + vertexDragState.dragOffset.x,
-              y: p.y + vertexDragState.dragOffset.y,
-            };
-          }
-          return p;
-        });
+        !!vertexDragState.dragOffset;
+      const dragIdx = dragActive ? vertexDragState.vertexIndex : -1;
+      const dragOffsetX = dragActive ? vertexDragState.dragOffset!.x : 0;
+      const dragOffsetY = dragActive ? vertexDragState.dragOffset!.y : 0;
+
+      const parts = new Array<string>(validPoints.length);
+      for (let i = 0; i < validPoints.length; i++) {
+        const p = validPoints[i];
+        if (i === dragIdx) {
+          parts[i] = `${p.x + dragOffsetX},${p.y + dragOffsetY}`;
+        } else {
+          parts[i] = `${p.x},${p.y}`;
+        }
       }
 
       // Polylines: open path (no Z). Polygons: closed path (Z).
-      const path = `M${pointsToRender.map(p => `${p.x},${p.y}`).join(' L')}${isPolyline ? '' : ' Z'}`;
-      return path;
+      return `M${parts.join(' L')}${isPolyline ? '' : ' Z'}`;
     }, [validPoints, vertexDragState, id, isPolyline]);
 
     // For the path stroke width, we need to adjust based on zoom level
@@ -286,7 +287,6 @@ const CanvasPolygon = React.memo(
             onDoubleClick={handleDoubleClick}
             filter={pathFilter}
             vectorEffect="non-scaling-stroke"
-            shapeRendering="geometricPrecision"
             pointerEvents={isPolyline ? 'stroke' : 'all'}
           />
 

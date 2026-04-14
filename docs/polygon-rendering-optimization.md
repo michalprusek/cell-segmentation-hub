@@ -1,454 +1,101 @@
-# High-Performance Polygon Rendering System
+# Polygon Rendering Optimization
 
-## Overview
-
-This document describes the complete implementation of a high-performance polygon rendering system inspired by SpheroSeg strategies. The system replaces the original rendering implementation with optimized components that provide 10x better performance for large datasets.
+Performance-critical paths in the segmentation editor and the utilities that keep them fast. Two scenarios historically caused stutter: many polygons in one image (300+) and single polygons with many vertices (4000+). Everything here targets those.
 
 ## Architecture
 
-### Core Optimization Systems
+```
+SegmentationEditor.tsx (memoized visiblePolygons)
+  └─ PolygonVisibilityManager
+        ├─ AdaptiveThresholds (frame-time driven culling threshold)
+        └─ BoundingBoxCache   (identity-keyed AABB cache)
+  └─ CanvasPolygon per visible polygon
+        └─ Single-pass SVG path builder
 
-#### 1. Caching Layer (`/src/lib/rendering/`)
+useAdvancedInteractions (vertex hover / drag)
+  └─ VertexSpatialIndex
+        └─ Quadtree (best-first nearest-neighbor)
 
-**BoundingBoxCache.ts**
-
-- LRU cache for polygon bounding boxes
-- Automatic invalidation on polygon changes
-- Bulk operations for batch processing
-- Memory-efficient with configurable limits
-
-**PolygonVisibilityManager.ts**
-
-- Frustum culling to eliminate off-screen polygons
-- Adaptive visibility thresholds based on zoom level
-- Viewport intersection detection
-- Smart caching of visibility results
-
-**RenderBatchManager.ts**
-
-- Groups polygons into optimized render batches
-- Spatial and priority-based batching strategies
-- Progressive rendering for smooth 60fps interactions
-- Minimizes draw calls and state changes
-
-#### 2. Web Worker Infrastructure (`src/lib/workerPool.ts`, `src/workers/polygonWorker.ts`)
-
-**WorkerPool Management**
-
-- Configurable worker pool size
-- Load balancing across available workers
-- Automatic worker lifecycle management
-- Fallback to main thread if workers unavailable
-
-**Polygon Worker Operations**
-
-- Ramer-Douglas-Peucker polygon simplification
-- Polygon intersection calculations
-- Line-polygon slicing algorithms
-- Area and perimeter calculations
-- Convex hull generation
-- Polygon buffering operations
-
-#### 3. Level of Detail System (`src/lib/rendering/LODManager.ts`)
-
-**Adaptive Quality**
-
-- Automatic quality adjustment based on performance
-- Zoom-level dependent detail levels
-- Polygon complexity reduction for distant objects
-- Maintains visual quality while optimizing performance
-
-### Optimized Components
-
-#### Main Polygon Layer (`src/pages/segmentation/components/canvas/CanvasPolygonLayer.tsx`)
-
-**Features**
-
-- Complete replacement of original implementation
-- Performance monitoring with real-time FPS display
-- Configurable optimization levels
-- Backward compatibility with all existing props
-
-**New Props**
-
-```typescript
-interface OptimizedCanvasPolygonLayerProps {
-  targetFPS?: number; // Target frame rate (default: 60)
-  enableWorkers?: boolean; // Enable Web Workers (default: true)
-  enableLOD?: boolean; // Enable Level of Detail (default: true)
-  renderQuality?: 'low' | 'medium' | 'high' | 'ultra';
-}
+polygonGeometry.ts
+  └─ findClosestVertex (squared-distance + AABB prefilter; non-interactive callers)
 ```
 
-#### Optimized Polygon Renderer (`src/pages/segmentation/components/canvas/OptimizedPolygonRenderer.tsx`)
-
-**Batch Rendering**
+All modules live under `src/lib/rendering/` or next to the editor. Nothing is lazy-loaded; the hot paths stay synchronous.
 
-- Groups polygons by render properties
-- Minimizes SVG state changes
-- Progressive rendering for large datasets
-- Optimized SVG path generation
+## Components
 
-#### Optimized Vertex Layer (`src/pages/segmentation/components/canvas/OptimizedVertexLayer.tsx`)
+### `BoundingBoxCache` — `src/lib/rendering/BoundingBoxCache.ts`
 
-**Canvas-Based Vertices**
+Identity-keyed AABB cache. Returns the cached bounding box whenever a polygon's `points` array reference is unchanged. The editor mutates polygons immutably (replaces the points array on every edit), so reference equality is a sound invalidation signal and also cheap. Backed by a `Map` with a 5000-entry LRU cap (Map iteration order is insertion order → oldest entry is the first key).
 
-- Uses OffscreenCanvas for vertex rendering
-- Spatial indexing for O(log n) vertex lookup
-- Efficient hit testing and hover detection
-- Hardware-accelerated rendering when available
+### `PolygonVisibilityManager` — `src/lib/rendering/PolygonVisibilityManager.ts`
 
-## Performance Improvements
+Frustum culling on polygon AABBs. Three guardrails:
 
-### Measurable Benefits
+- Below 10 polygons: render everything. Avoids false negatives on tiny projects.
+- Below an adaptive threshold (~50–100 polygons, tightened when frame time exceeds 20 ms): render everything.
+- Above that threshold: cull polygons whose bounding box does not intersect the current viewport plus a zoom-scaled buffer.
 
-| Metric                         | Before    | After   | Improvement      |
-| ------------------------------ | --------- | ------- | ---------------- |
-| Rendering Time (1000 polygons) | ~500ms    | ~50ms   | 10x faster       |
-| Memory Usage                   | 100MB     | 50-70MB | 30-50% reduction |
-| Frame Rate (complex scenes)    | 15-30 FPS | 60 FPS  | 2-4x improvement |
-| Interaction Response           | 100-200ms | 10-20ms | 10x faster       |
+`forceRenderSelected` ensures the selected polygon is never culled, even when off-screen.
 
-### Qualitative Improvements
+### `Quadtree<T>` — `src/lib/rendering/Quadtree.ts`
 
-- **Smooth zoom/pan operations** - No lag during viewport changes
-- **Faster loading** of large segmentation datasets
-- **Better responsiveness** on low-end devices
-- **Stable performance** during extended use
+Dependency-free 2D point quadtree. 8 points per leaf, max depth 12. `findNearest(x, y, maxDistance)` uses best-first recursion and prunes subtrees whose squared min-distance to the query exceeds the current best. No `Math.sqrt` runs inside the recursion — only once, on the final winner.
 
-## Configuration
+### `VertexSpatialIndex` — `src/lib/rendering/VertexSpatialIndex.ts`
 
-### Performance Presets
+Per-polygon wrapper around `Quadtree<number>` where the stored item is the vertex index. Built lazily on first query, reused until the polygon's `points` reference changes. For a 4000-point polygon, `findNearestVertex` takes ≈ 0.02 ms vs. ≈ 0.6 ms for the old O(n) sweep.
 
-**High Performance (Many Polygons)**
+### `findClosestVertex` — `src/lib/polygonGeometry.ts`
 
-```typescript
-<CanvasPolygonLayer
-  renderQuality="medium"
-  enableLOD={true}
-  enableWorkers={true}
-  targetFPS={30}
-/>
-```
+Still exported, still correct, still used by non-interactive callers (slicing, export, offline geometry). Hot path (hover / drag) goes through `VertexSpatialIndex`. The non-interactive version now uses squared distance internally and an AABB prefilter driven by `maxDistance`, so even without the spatial index it's much faster than it was.
 
-**High Quality (Fewer Polygons)**
+## Caller integration
 
-```typescript
-<CanvasPolygonLayer
-  renderQuality="ultra"
-  enableLOD={false}
-  enableWorkers={false}
-  targetFPS={60}
-/>
-```
+### Editor render — `src/pages/segmentation/SegmentationEditor.tsx`
 
-**Mobile/Low-End Devices**
+`visiblePolygons` is a single `useMemo` that:
 
-```typescript
-<CanvasPolygonLayer
-  renderQuality="low"
-  enableLOD={true}
-  enableWorkers={false}
-  targetFPS={30}
-/>
-```
+1. Filters out hidden polygons and polygons below `minPoints`.
+2. Calls `polygonVisibilityManager.getVisiblePolygons(filtered, { zoom, offset, containerWidth, containerHeight, selectedPolygonId, forceRenderSelected: true })`.
 
-### Fine-Tuning Options
+Dependencies cover transform, hidden-id set, selection, and canvas dimensions — so pan/zoom re-triggers culling but a pure hover does not.
 
-**Cache Configuration**
+### Hover / drag — `src/pages/segmentation/hooks/useAdvancedInteractions.tsx`
 
-```typescript
-// In BoundingBoxCache.ts
-const DEFAULT_CACHE_SIZE = 1000;
-const DEFAULT_TTL = 30000; // 30 seconds
-```
+Mouse move in `EditVertices` / `AddPoints` mode:
 
-**Worker Pool Settings**
+1. Early bail when the cursor hasn't moved at least sub-pixel in image space since the last hit test. Skips ≥ 90% of mousemove events at high zoom.
+2. Calls `vertexSpatialIndex.findNearestVertex(polygonId, points, x, y, hitRadius)`.
+3. Updates `hoveredVertex` if the result changed.
 
-```typescript
-// In workerPool.ts
-const maxWorkers = Math.min(4, navigator.hardwareConcurrency || 2);
-const idleTimeout = 30000; // 30 seconds
-```
+Drag end (`handleMouseUp`):
 
-**LOD Thresholds**
+1. Eagerly invalidates the spatial index for the dragged polygon.
+2. Wraps `updatePolygons(...)` in `React.startTransition` so the heavy re-render runs in idle time while the pointer-up event finishes synchronously.
 
-```typescript
-// In LODManager.ts
-const LOD_LEVELS = {
-  high: { maxPolygons: 100, simplification: 0.5 },
-  medium: { maxPolygons: 500, simplification: 1.0 },
-  low: { maxPolygons: 1000, simplification: 2.0 },
-};
-```
+### SVG path generation — `src/pages/segmentation/components/canvas/CanvasPolygon.tsx`
 
-## Development Tools
+Single-pass path build: one loop over `validPoints`, applying the drag offset inline at the dragged vertex index. No intermediate `.map().map()` chains.
 
-### Performance Monitoring
+## Measured effect
 
-**Development Overlay**
+Against the two reported lag scenarios (dev build, Chrome, M-class CPU):
 
-- Real-time FPS counter
-- Polygon count (total/visible)
-- Render batch count
-- Current zoom level
-- Active optimization status
+| Scenario                                    | Before         | After phase 1+2+4+6     |
+| ------------------------------------------- | -------------- | ----------------------- |
+| 300 polygons, pan / hover                   | ~25 fps        | ~55–60 fps              |
+| 4000-point polygon, vertex hover            | ~15 fps        | ~55–60 fps              |
+| 4000-point polygon, vertex drag-end stutter | ~120 ms freeze | < 30 ms                 |
+| `findClosestVertex` on 4000 points          | ~0.6 ms        | ~0.02 ms (via quadtree) |
 
-**Performance Profiling**
+## Known open items
 
-```typescript
-// Available in development mode
-const { fps, frameTime, cacheHitRate } = useRenderingPerformance();
-```
+These are planned but not yet implemented:
 
-### Demo Component
+- **Canvas-based vertex rendering.** 4000 SVG `<circle>` elements for a selected 4000-point polygon still creates DOM pressure even with the quadtree handling hit tests. A `<canvas>` overlay rendering all vertices (with pointer events delegated through the spatial index) is the next step; it needs manual UI verification that interactions stay at parity with the SVG path, so it ships behind a feature flag.
+- **Web worker offload.** `polygonSlicing`, Feret-diameter, and bulk bbox computations over large polygons still run on the main thread. `src/lib/workerPool.ts` exists unused — the plan is a single dedicated `polygonGeometry.worker.ts` with `Float32Array` transferables for slicing and metric calculation on polygons above a size threshold (~500 points).
 
-**Testing Interface** (`src/test/OptimizedRenderingDemo.tsx`)
+## What the earlier draft of this doc got wrong
 
-- Interactive polygon count slider (10-5000 polygons)
-- Quality preset controls
-- Real-time performance metrics
-- Optimization toggle switches
-- Benchmark comparison tools
-
-## Browser Compatibility
-
-### Modern Browsers (Full Features)
-
-- Chrome 80+ (Web Workers, OffscreenCanvas)
-- Firefox 75+ (Web Workers, OffscreenCanvas)
-- Safari 14+ (Web Workers, limited OffscreenCanvas)
-- Edge 80+ (Web Workers, OffscreenCanvas)
-
-### Legacy Browser Fallbacks
-
-- **Web Workers** → Main thread processing
-- **OffscreenCanvas** → Regular Canvas
-- **Advanced caching** → Basic caching
-- **LOD system** → Fixed quality rendering
-
-## Migration Guide
-
-### Automatic Migration
-
-The new system is 100% backward compatible. Existing code works without changes:
-
-```typescript
-// This code works unchanged
-<CanvasPolygonLayer
-  segmentation={segmentation}
-  imageSize={imageSize}
-  selectedPolygonId={selectedPolygonId}
-  // ... all existing props
-/>
-```
-
-### Optional Enhancements
-
-Add new optimization props for better performance:
-
-```typescript
-// Enhanced with optimizations
-<CanvasPolygonLayer
-  segmentation={segmentation}
-  imageSize={imageSize}
-  selectedPolygonId={selectedPolygonId}
-  // ... existing props
-  targetFPS={60}
-  enableWorkers={true}
-  enableLOD={true}
-  renderQuality="high"
-/>
-```
-
-### Custom Optimization Integration
-
-```typescript
-import { useOptimizedPolygonRendering } from '@/hooks/useOptimizedPolygonRendering';
-
-const { visiblePolygons, renderBatches, stats, isLoading } =
-  useOptimizedPolygonRendering(polygons, context, options);
-```
-
-## Implementation Notes
-
-### File Changes
-
-**Replaced Files**
-
-- `CanvasPolygonLayer.tsx` - Completely rewritten with optimizations
-
-**Removed Files**
-
-- `PolygonCollection.tsx` - Replaced by OptimizedPolygonRenderer
-- `CanvasVertexLayer.tsx` - Replaced by OptimizedVertexLayer
-- `usePerformanceMonitor.tsx` - Replaced by new performance system
-
-**New Files**
-
-```
-src/lib/rendering/
-├── BoundingBoxCache.ts
-├── PolygonVisibilityManager.ts
-├── RenderBatchManager.ts
-└── LODManager.ts
-
-src/lib/
-├── workerPool.ts
-└── WorkerOperations.ts
-
-src/workers/
-└── polygonWorker.ts
-
-public/workers/
-└── polygonWorker.js
-```
-
-### Memory Management
-
-**Automatic Cleanup**
-
-- LRU cache with configurable size limits
-- Worker pool with idle timeout
-- Bounding box cache invalidation
-- Progressive garbage collection
-
-**Memory Monitoring**
-
-```typescript
-// Available in development
-const memoryUsage = performance.memory?.usedJSHeapSize || 0;
-```
-
-## Production Deployment
-
-### Build Configuration
-
-**Vite Configuration**
-
-```typescript
-// vite.config.ts - Web Worker support
-export default defineConfig({
-  worker: {
-    format: 'es',
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'polygon-workers': ['src/workers/polygonWorker.ts'],
-        },
-      },
-    },
-  },
-});
-```
-
-**Public Assets**
-
-- Copy `polygonWorker.js` to `public/workers/` directory
-- Ensure proper MIME types for worker files
-- Configure CSP headers if using Content Security Policy
-
-### Performance Monitoring
-
-**Production Metrics**
-
-```typescript
-// Track performance in production
-window.polygonRenderingStats = {
-  averageFPS: currentFPS,
-  polygonCount: visiblePolygons.length,
-  renderTime: frameTime,
-  optimizationLevel: renderQuality,
-};
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Workers Not Loading**
-
-- Check worker file exists at `/public/workers/polygonWorker.js`
-- Verify CORS headers allow worker loading
-- Enable fallback to main thread processing
-
-**Performance Regression**
-
-- Check if LOD is enabled for large datasets
-- Verify render quality isn't set too high
-- Monitor memory usage for cache overflow
-
-**Visual Artifacts**
-
-- Adjust simplification tolerance in LOD settings
-- Check viewport culling thresholds
-- Verify polygon topology preservation
-
-### Debug Tools
-
-**Console Debugging**
-
-```typescript
-// Enable debug logging
-window.DEBUG_POLYGON_RENDERING = true;
-
-// Performance profiling
-console.time('polygon-render');
-// ... rendering code
-console.timeEnd('polygon-render');
-```
-
-**Performance Profiler**
-
-- Use browser DevTools Performance tab
-- Monitor Web Worker activity
-- Check memory allocation patterns
-- Profile frame rate during interactions
-
-## Future Enhancements
-
-### Planned Improvements
-
-**WebGL Acceleration**
-
-- GPU-based polygon rendering
-- Shader-based vertex processing
-- Hardware-accelerated transformations
-
-**Advanced Caching**
-
-- Persistent storage for polygon data
-- Cross-session cache retention
-- Predictive loading strategies
-
-**Machine Learning Optimization**
-
-- Adaptive LOD based on user behavior
-- Intelligent prefetching
-- Performance prediction models
-
-### Extension Points
-
-**Custom Workers**
-
-```typescript
-// Add custom polygon operations
-const customWorker = new WorkerPool('/workers/customPolygonWorker.js');
-const result = await customWorker.execute('customOperation', data);
-```
-
-**Plugin Architecture**
-
-```typescript
-// Register custom optimization plugins
-registerOptimizationPlugin('myCustomOptimizer', {
-  preRender: polygons => optimizePolygons(polygons),
-  postRender: result => enhanceResult(result),
-});
-```
-
-## Conclusion
-
-The high-performance polygon rendering system provides significant performance improvements while maintaining full backward compatibility. The modular architecture allows for easy customization and future enhancements while ensuring reliable operation across different browser environments and device capabilities.
+The previous version of this document described `CanvasPolygonLayer.tsx`, `OptimizedPolygonRenderer.tsx`, `OptimizedVertexLayer.tsx`, `LODManager.ts`, `RenderBatchManager.ts`, an `OptimizedRenderingDemo`, and a working worker integration — none of which were ever on the active render path. `CanvasPolygonLayer.tsx` was dead code with broken imports; the rest never existed. They have been removed. The architecture section above reflects what actually runs.
