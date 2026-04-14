@@ -5,7 +5,7 @@
  */
 
 import { Polygon } from '@/lib/segmentation';
-import { BoundingBox } from '@/lib/polygonOptimization';
+import type { BoundingBox } from '@/lib/polygonGeometry';
 import { boundingBoxCache } from './BoundingBoxCache';
 
 export interface ViewportBounds {

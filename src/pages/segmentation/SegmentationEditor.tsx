@@ -46,6 +46,7 @@ import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
 import CanvasTemporaryGeometryLayer from './components/canvas/CanvasTemporaryGeometryLayer';
+import { polygonVisibilityManager } from '@/lib/rendering/PolygonVisibilityManager';
 
 // Layout components
 import EditorHeader from './components/EditorHeader';
@@ -1121,17 +1122,51 @@ const SegmentationEditor = () => {
   // Memoize the render-candidate list so a parent re-render (hover/zoom/pan)
   // doesn't reallocate + re-filter the whole array each frame.
   // Must live above any early return to satisfy the rules of hooks.
-  const visiblePolygons = useMemo(
-    () =>
-      editor.polygons
-        .filter(polygon => !hiddenPolygonIds.has(polygon.id))
-        .filter(polygon => {
-          if (!polygon.points) return false;
-          const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
-          return polygon.points.length >= minPoints;
-        }),
-    [editor.polygons, hiddenPolygonIds]
-  );
+  //
+  // Also runs frustum culling through polygonVisibilityManager: polygons
+  // whose bounding box doesn't intersect the visible viewport are skipped
+  // entirely. Below its internal threshold (~50–100 polygons) the manager
+  // renders the full set unchanged, so small projects see no behavior
+  // change; large projects (300+) see only the ~50 polygons actually
+  // visible on screen.
+  const visiblePolygons = useMemo(() => {
+    const filtered = editor.polygons
+      .filter(polygon => !hiddenPolygonIds.has(polygon.id))
+      .filter(polygon => {
+        if (!polygon.points) return false;
+        const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
+        return polygon.points.length >= minPoints;
+      });
+
+    const containerWidth = canvasWidth || imageDimensions?.width || 0;
+    const containerHeight = canvasHeight || imageDimensions?.height || 0;
+
+    if (containerWidth <= 0 || containerHeight <= 0) {
+      return filtered;
+    }
+
+    return polygonVisibilityManager.getVisiblePolygons(filtered, {
+      zoom: editor.transform.zoom,
+      offset: {
+        x: editor.transform.translateX,
+        y: editor.transform.translateY,
+      },
+      containerWidth,
+      containerHeight,
+      selectedPolygonId: editor.selectedPolygonId,
+      forceRenderSelected: true,
+    }).visiblePolygons;
+  }, [
+    editor.polygons,
+    hiddenPolygonIds,
+    editor.transform.zoom,
+    editor.transform.translateX,
+    editor.transform.translateY,
+    editor.selectedPolygonId,
+    canvasWidth,
+    canvasHeight,
+    imageDimensions,
+  ]);
 
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading
