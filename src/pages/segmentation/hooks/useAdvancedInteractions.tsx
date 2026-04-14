@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { startTransition, useCallback, useRef } from 'react';
 import { Point, Polygon } from '@/lib/segmentation';
 import {
   EditMode,
@@ -869,9 +869,22 @@ export const useAdvancedInteractions = ({
             return polygon;
           });
 
-          updatePolygons(updatedPolygons);
+          // Invalidate the spatial index eagerly — identity-based rebuild
+          // would catch it on the next query, but dropping it here keeps
+          // any query in the same tick from hitting stale data.
+          vertexSpatialIndex.invalidate(polygonId);
 
-          // Clear the drag state
+          // The polygons-array rebuild re-renders every memoized child.
+          // For a 4000-point polygon that's the most expensive part of a
+          // vertex drag. Marking it non-urgent lets the pointerup event
+          // finish on the synchronous cycle and the heavy re-render run
+          // in React's idle time, avoiding a visible stutter.
+          startTransition(() => {
+            updatePolygons(updatedPolygons);
+          });
+
+          // Drag state itself must clear synchronously so the UI stops
+          // drawing the drag offset immediately.
           setVertexDragState({
             isDragging: false,
             polygonId: null,
