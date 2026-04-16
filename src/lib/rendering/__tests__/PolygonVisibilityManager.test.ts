@@ -1,3 +1,7 @@
+// NOTE: PolygonVisibilityManager is currently bypassed by the segmentation
+// editor (see SegmentationEditor.tsx visiblePolygons). These tests still
+// exercise the manager directly so the module is covered in case the
+// culling path is re-enabled once its viewport math is proven correct.
 import { describe, expect, it } from 'vitest';
 import type { Polygon } from '@/lib/segmentation';
 import {

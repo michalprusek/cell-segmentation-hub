@@ -46,7 +46,6 @@ import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
 import CanvasTemporaryGeometryLayer from './components/canvas/CanvasTemporaryGeometryLayer';
-import { polygonVisibilityManager } from '@/lib/rendering/PolygonVisibilityManager';
 import { FpsMeter } from '@/lib/rendering/FpsMeter';
 
 // Layout components
@@ -1124,58 +1123,21 @@ const SegmentationEditor = () => {
   // doesn't reallocate + re-filter the whole array each frame.
   // Must live above any early return to satisfy the rules of hooks.
   //
-  // Also runs frustum culling through polygonVisibilityManager: polygons
-  // whose bounding box doesn't intersect the visible viewport are skipped
-  // entirely. Below its internal threshold (~50–100 polygons) the manager
-  // renders the full set unchanged, so small projects see no behavior
-  // change; large projects (300+) see only the ~50 polygons actually
-  // visible on screen.
+  // Frustum culling is intentionally DISABLED here — prior viewport-bounds
+  // calculation misculled visible polygons at low zoom and after pan. The
+  // culling helper in src/lib/rendering/PolygonVisibilityManager.ts is
+  // retained but unused; delete both together if culling isn't revisited.
+  // In the meantime every non-hidden, well-formed polygon renders
+  // regardless of zoom and translation.
   const visiblePolygons = useMemo(() => {
-    const filtered = editor.polygons
+    return editor.polygons
       .filter(polygon => !hiddenPolygonIds.has(polygon.id))
       .filter(polygon => {
         if (!polygon.points) return false;
         const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
         return polygon.points.length >= minPoints;
       });
-
-    const containerWidth = canvasWidth || imageDimensions?.width || 0;
-    const containerHeight = canvasHeight || imageDimensions?.height || 0;
-
-    // Graceful fallback for the first render (before image dimensions
-    // are measured) or for a transient 0-sized layout: render the full
-    // filtered set instead of culling against a degenerate viewport.
-    // Returning [] here would be "safer" on paper but hides real
-    // polygons from the user during normal editor startup.
-    // `filtered` already includes the selected polygon (it's only
-    // excluded when hidden or malformed), so nothing load-bearing is
-    // skipped by bypassing ensureSelectedVisible/sortForRendering here.
-    if (containerWidth <= 0 || containerHeight <= 0) {
-      return filtered;
-    }
-
-    return polygonVisibilityManager.getVisiblePolygons(filtered, {
-      zoom: editor.transform.zoom,
-      offset: {
-        x: editor.transform.translateX,
-        y: editor.transform.translateY,
-      },
-      containerWidth,
-      containerHeight,
-      selectedPolygonId: editor.selectedPolygonId,
-      forceRenderSelected: true,
-    }).visiblePolygons;
-  }, [
-    editor.polygons,
-    hiddenPolygonIds,
-    editor.transform.zoom,
-    editor.transform.translateX,
-    editor.transform.translateY,
-    editor.selectedPolygonId,
-    canvasWidth,
-    canvasHeight,
-    imageDimensions,
-  ]);
+  }, [editor.polygons, hiddenPolygonIds]);
 
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading

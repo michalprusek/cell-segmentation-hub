@@ -238,7 +238,6 @@ interface TransformState {
 
 ## Performance Considerations
 
-- **Viewport Culling**: Only renders visible polygons
 - **Level of Detail**: Reduces vertex count at low zoom levels
 - **Batch Rendering**: Groups polygon operations
 - **Debounced Updates**: Smooth interaction during dragging
