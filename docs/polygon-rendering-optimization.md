@@ -54,12 +54,9 @@ Still exported, still correct, still used by non-interactive callers (slicing, e
 
 ### Editor render — `src/pages/segmentation/SegmentationEditor.tsx`
 
-`visiblePolygons` is a single `useMemo` that:
+`visiblePolygons` is a single `useMemo` that filters out hidden polygons and polygons below `minPoints`. Every remaining polygon is rendered regardless of zoom or translation.
 
-1. Filters out hidden polygons and polygons below `minPoints`.
-2. Calls `polygonVisibilityManager.getVisiblePolygons(filtered, { zoom, offset, containerWidth, containerHeight, selectedPolygonId, forceRenderSelected: true })`.
-
-Dependencies cover transform, hidden-id set, selection, and canvas dimensions — so pan/zoom re-triggers culling but a pure hover does not.
+> **Note:** frustum culling via `polygonVisibilityManager.getVisiblePolygons` is currently **disabled**. The earlier viewport-bounds calculation misculled visible polygons at low zoom and after pan. The manager module and its tests are retained so the culling path can be re-enabled once the viewport math is proven correct on a large dataset.
 
 ### Hover / drag — `src/pages/segmentation/hooks/useAdvancedInteractions.tsx`
 

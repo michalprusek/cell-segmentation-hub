@@ -3,8 +3,14 @@
  *
  * Opt-in via `?perf=1` query param or `localStorage.segPerfOverlay = '1'`.
  * Designed for validating performance work on the editor's render path
- * (viewport culling, quadtree hit test, etc.) without shipping anything
- * user-visible by default.
+ * without shipping anything user-visible by default.
+ *
+ * Frustum culling is currently bypassed in the editor (see
+ * `SegmentationEditor.tsx visiblePolygons`), so the visibility-manager
+ * counters below will read their defaults (zero frames sampled, no
+ * reduced-mode trigger). The overlay flags this explicitly with a
+ * `culling: DISABLED` line so the zero values aren't misread as
+ * indicators that culling is "working well".
  *
  * Uses an imperative rAF loop and a ref-only state update pattern so the
  * overlay itself doesn't cause additional renders of its parent tree.
@@ -151,6 +157,7 @@ export function FpsMeter(): JSX.Element | null {
     >
       {`FPS ${sample.fps.toFixed(1)}
 frames ${sample.frameCount}
+culling DISABLED
 level ${vis.isUsingReducedRendering ? 'reduced' : 'normal'}
 cull-thresh ${vis.cullingThreshold}
 avgFrame ${vis.averageFrameTime.toFixed(2)}ms
