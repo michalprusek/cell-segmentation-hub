@@ -4,7 +4,6 @@ import { Polygon, Point } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
-import { calculateBoundingBox } from '@/lib/polygonGeometry';
 
 interface CanvasPolygonProps {
   polygon: Polygon;
@@ -56,9 +55,6 @@ const CanvasPolygon = React.memo(
     editMode,
   }: CanvasPolygonProps) => {
     const { id, points, type = 'external', parent_id } = polygon;
-
-    // Calculate bounding box for viewport culling (cached)
-    const boundingBox = useMemo(() => calculateBoundingBox(points), [points]);
 
     // Determine if this is a polyline (open path)
     const isPolyline = polygon.geometry === 'polyline';

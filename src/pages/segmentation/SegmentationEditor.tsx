@@ -138,6 +138,7 @@ const SegmentationEditor = () => {
     width: 800,
     height: 600,
   });
+
   // Use custom hook for segmentation reload logic
   const { isReloading, reloadSegmentation, cleanupReloadOperations } =
     useSegmentationReload({
@@ -1122,11 +1123,11 @@ const SegmentationEditor = () => {
   // doesn't reallocate + re-filter the whole array each frame.
   // Must live above any early return to satisfy the rules of hooks.
   //
-  // Frustum culling via polygonVisibilityManager is intentionally DISABLED
-  // here — prior viewport-bounds calculation misculled visible polygons at
-  // low zoom and after pan. The manager code is retained for a possible
-  // future re-enable once the viewport math is proven correct on a large
-  // dataset; in the meantime every non-hidden, well-formed polygon renders
+  // Frustum culling is intentionally DISABLED here — prior viewport-bounds
+  // calculation misculled visible polygons at low zoom and after pan. The
+  // culling helper in src/lib/rendering/PolygonVisibilityManager.ts is
+  // retained but unused; delete both together if culling isn't revisited.
+  // In the meantime every non-hidden, well-formed polygon renders
   // regardless of zoom and translation.
   const visiblePolygons = useMemo(() => {
     return editor.polygons
