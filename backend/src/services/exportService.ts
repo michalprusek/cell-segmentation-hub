@@ -11,6 +11,9 @@ import { FormatConverter } from './export/formatConverter';
 import { WebSocketService } from './websocketService';
 import * as SharingService from './sharingService';
 import { batchProcessor } from '../utils/batchProcessor';
+import { mapWithConcurrency } from '../utils/concurrency';
+
+const YOLO_WRITE_CONCURRENCY = 16;
 
 export interface ExportOptions {
   includeOriginalImages?: boolean;
@@ -884,15 +887,12 @@ export class ExportService {
           JSON.stringify(cocoData, null, 2)
         );
       } else if (format === 'yolo') {
-        for (let i = 0; i < images.length; i++) {
-          // Check if job was cancelled inside YOLO loop (most time-consuming)
-          if (jobId && this.isJobCancelled(jobId)) {
-            throw new Error('Export cancelled by user');
-          }
-
-          const image = images[i];
-          if (image && image.segmentation) {
-            const yoloData = await this.formatConverter.convertToYOLO(
+        await mapWithConcurrency(
+          images,
+          YOLO_WRITE_CONCURRENCY,
+          async image => {
+            if (!image || !image.segmentation) return;
+            const yoloResult = await this.formatConverter.convertToYOLO(
               image.segmentation.polygons,
               image.width || 0,
               image.height || 0
@@ -900,15 +900,22 @@ export class ExportService {
             const imageNameWithoutExt = path.parse(image.name).name;
             await fs.writeFile(
               path.join(formatDir, `${imageNameWithoutExt}.txt`),
-              yoloData
+              yoloResult.content
             );
+            if (yoloResult.warnings.length > 0) {
+              logger.warn(
+                `YOLO export for ${image.name} produced ${yoloResult.warnings.length} warning(s)`,
+                'ExportService',
+                { jobId, imageId: image.id, warnings: yoloResult.warnings }
+              );
+            }
+          },
+          {
+            shouldAbort: () => !!jobId && this.isJobCancelled(jobId),
+            onProgress,
+            abortMessage: 'Export cancelled by user',
           }
-
-          // Report progress for YOLO generation
-          if (onProgress) {
-            onProgress(i + 1, images.length);
-          }
-        }
+        );
       } else if (format === 'json') {
         // Convert ImageWithSegmentation[] to ImageData[]
         const imageDataArray = images.map(image => ({

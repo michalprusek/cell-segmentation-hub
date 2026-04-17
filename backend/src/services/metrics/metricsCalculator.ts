@@ -9,6 +9,9 @@ import { config } from '../../utils/config';
 import {
   /* SCALE_CONFIG, */ validateScale /* getScaleValidationMessage, getScaleWarningMessage */,
 } from './scaleConfig';
+import type { SpermPartClass } from '../../utils/polygonValidation';
+import { polylineLength } from '../../utils/polygonGeometry';
+import { groupPolylinesByInstanceId, findPart } from '../../utils/spermGrouping';
 
 export interface PolygonMetrics {
   imageId: string;
@@ -49,7 +52,7 @@ export interface ParsedPolygon {
   points: Point[];
   type?: 'external' | 'internal';
   geometry?: 'polygon' | 'polyline';
-  partClass?: 'head' | 'midpiece' | 'tail';
+  partClass?: SpermPartClass;
   instanceId?: string;
 }
 
@@ -75,16 +78,6 @@ export class MetricsCalculator {
   private pythonApiUrl: string;
   private http: AxiosInstance;
   private logger = logger;
-
-  private polylineLength(points: Point[]): number {
-    let len = 0;
-    for (let i = 1; i < points.length; i++) {
-      const dx = points[i].x - points[i - 1].x;
-      const dy = points[i].y - points[i - 1].y;
-      len += Math.sqrt(dx * dx + dy * dy);
-    }
-    return len;
-  }
 
   constructor() {
     // Validate ML service URL
@@ -693,37 +686,25 @@ export class MetricsCalculator {
         continue;
       }
 
-      // Get polylines grouped by instanceId
-      const orphanedCount = polygons.filter(
-        p => p.geometry === 'polyline' && !p.instanceId
-      ).length;
-      if (orphanedCount > 0) {
+      const allPolylines = polygons.filter(p => p.geometry === 'polyline');
+      const { groups, orphanCount } = groupPolylinesByInstanceId(allPolylines);
+      if (orphanCount > 0) {
         this.logger.warn(
-          `Image "${image.name}" has ${orphanedCount} polyline(s) without instanceId — excluded from sperm metrics`,
+          `Image "${image.name}" has ${orphanCount} polyline(s) without instanceId — excluded from sperm metrics`,
           'MetricsCalculator',
           { imageId: image.id }
         );
       }
 
-      const polylines = polygons.filter(
-        (p): p is ParsedPolygon & { instanceId: string } =>
-          p.geometry === 'polyline' && !!p.instanceId
-      );
-      const groups = new Map<string, ParsedPolygon[]>();
-      for (const pl of polylines) {
-        if (!groups.has(pl.instanceId)) groups.set(pl.instanceId, []);
-        groups.get(pl.instanceId)!.push(pl);
-      }
-
-      for (const [instanceId, parts] of groups) {
+      for (const { instanceId, parts } of groups) {
         hasData = true;
-        const head = parts.find(p => p.partClass === 'head');
-        const mid = parts.find(p => p.partClass === 'midpiece');
-        const tail = parts.find(p => p.partClass === 'tail');
+        const head = findPart(parts, 'head');
+        const mid = findPart(parts, 'midpiece');
+        const tail = findPart(parts, 'tail');
 
-        const headLen = head ? this.polylineLength(head.points) * scale : 0;
-        const midLen = mid ? this.polylineLength(mid.points) * scale : 0;
-        const tailLen = tail ? this.polylineLength(tail.points) * scale : 0;
+        const headLen = head ? polylineLength(head.points) * scale : 0;
+        const midLen = mid ? polylineLength(mid.points) * scale : 0;
+        const tailLen = tail ? polylineLength(tail.points) * scale : 0;
 
         worksheet.addRow({
           imageName: image.name,
