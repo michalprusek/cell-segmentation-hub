@@ -4,6 +4,8 @@ import {
   type SpermPartClass,
   isValidSpermPartClass,
 } from '../../utils/polygonValidation';
+import { polylineLength } from '../../utils/polygonGeometry';
+import { groupPolylinesByInstanceId, findPart } from '../../utils/spermGrouping';
 
 export interface Point {
   x: number;
@@ -343,7 +345,7 @@ export class FormatConverter {
                 geometry: 'polyline',
                 partClass: polyline.partClass,
                 ...(polyline.instanceId && { instanceId: polyline.instanceId }),
-                length: this.calculatePolylineLength(polyline.points),
+                length: polylineLength(polyline.points),
               },
             });
           }
@@ -537,13 +539,13 @@ export class FormatConverter {
                 partClass: p.partClass,
               }),
               ...(p.instanceId && { instanceId: p.instanceId }),
-              length: this.calculatePolylineLength(p.points),
+              length: polylineLength(p.points),
               boundingBox: this.calculateBoundingBox(p.points),
             })
           );
 
           const { instances: spermInstances, orphanCount } =
-            this.groupPolylinesByInstanceId(polylines);
+            this.buildSpermInstances(polylines);
           if (orphanCount > 0) {
             totalOrphans += orphanCount;
             if (orphanSampleImages.length < 10) {
@@ -673,52 +675,22 @@ export class FormatConverter {
     return perimeter;
   }
 
-  private calculatePolylineLength(points: Point[]): number {
-    let length = 0;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      if (prev && curr) {
-        const dx = curr.x - prev.x;
-        const dy = curr.y - prev.y;
-        length += Math.sqrt(dx * dx + dy * dy);
-      }
-    }
-    return length;
-  }
-
-  private groupPolylinesByInstanceId(polylines: Polygon[]): {
+  private buildSpermInstances(polylines: Polygon[]): {
     instances: JSONSpermInstance[];
     orphanCount: number;
   } {
-    const groups = new Map<string, Polygon[]>();
-    let orphanCount = 0;
-    for (const p of polylines) {
-      if (!p.instanceId) {
-        orphanCount += 1;
-        continue;
-      }
-      const list = groups.get(p.instanceId);
-      if (list) {
-        list.push(p);
-      } else {
-        groups.set(p.instanceId, [p]);
-      }
-    }
+    const { groups, orphanCount } = groupPolylinesByInstanceId(polylines);
 
-    const instances: JSONSpermInstance[] = [];
-    for (const [instanceId, parts] of groups) {
-      const head = parts.find(p => p.partClass === 'head');
-      const midpiece = parts.find(p => p.partClass === 'midpiece');
-      const tail = parts.find(p => p.partClass === 'tail');
+    const instances: JSONSpermInstance[] = groups.map(({ instanceId, parts }) => {
+      const head = findPart(parts, 'head');
+      const midpiece = findPart(parts, 'midpiece');
+      const tail = findPart(parts, 'tail');
 
-      const headLen = head ? this.calculatePolylineLength(head.points) : 0;
-      const midLen = midpiece
-        ? this.calculatePolylineLength(midpiece.points)
-        : 0;
-      const tailLen = tail ? this.calculatePolylineLength(tail.points) : 0;
+      const headLen = head ? polylineLength(head.points) : 0;
+      const midLen = midpiece ? polylineLength(midpiece.points) : 0;
+      const tailLen = tail ? polylineLength(tail.points) : 0;
 
-      instances.push({
+      return {
         instanceId,
         parts: {
           ...(head && { head: { points: head.points, length: headLen } }),
@@ -728,8 +700,9 @@ export class FormatConverter {
           ...(tail && { tail: { points: tail.points, length: tailLen } }),
         },
         totalLength: headLen + midLen + tailLen,
-      });
-    }
+      };
+    });
+
     return { instances, orphanCount };
   }
 

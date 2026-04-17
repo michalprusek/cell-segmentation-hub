@@ -3,6 +3,7 @@ import { writeFile, readFile, mkdir, unlink } from 'fs/promises';
 import sharp from 'sharp';
 import path from 'path';
 import { logger } from '../../utils/logger';
+import type { SpermPartClass } from '../../utils/polygonValidation';
 
 export interface VisualizationOptions {
   showNumbers?: boolean;
@@ -20,7 +21,7 @@ export interface Polygon {
   type: 'external' | 'internal';
   id?: string;
   geometry?: 'polygon' | 'polyline';
-  partClass?: 'head' | 'midpiece' | 'tail';
+  partClass?: SpermPartClass;
   instanceId?: string;
 }
 
