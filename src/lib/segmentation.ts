@@ -26,10 +26,10 @@ export interface Polygon {
   name?: string;
   confidence?: number;
   area?: number;
-  parent_id?: string; // For internal polygons, references the parent external polygon
-  geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
-  partClass?: SpermPartClass; // For sperm polyline parts
-  instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
+  parent_id?: string;
+  geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat with rows stored before sperm model)
+  partClass?: SpermPartClass;
+  instanceId?: string;
 }
 
 export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';

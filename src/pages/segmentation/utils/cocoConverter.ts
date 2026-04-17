@@ -4,66 +4,61 @@ import {
   isPolyline,
   isValidSpermPartClass,
 } from '@/lib/segmentation';
-import { calculateMetrics } from './metricCalculations';
-import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
+import {
+  calculateMetrics,
+  calculatePolylineLength,
+} from './metricCalculations';
+import {
+  isPolygonInsidePolygon,
+  calculateBoundingBox,
+} from '@/lib/polygonGeometry';
 
-const polylineLength = (points: { x: number; y: number }[]): number => {
-  let length = 0;
-  for (let i = 1; i < points.length; i++) {
-    const dx = points[i].x - points[i - 1].x;
-    const dy = points[i].y - points[i - 1].y;
-    length += Math.sqrt(dx * dx + dy * dy);
+const flattenPoints = (points: { x: number; y: number }[]): number[] => {
+  const out: number[] = [];
+  for (const p of points) {
+    out.push(p.x, p.y);
   }
-  return length;
+  return out;
 };
 
-const flattenPoints = (points: { x: number; y: number }[]): number[] =>
-  points.reduce<number[]>((acc, p) => [...acc, p.x, p.y], []);
-
-const boundingBox = (
+const bboxTuple = (
   points: { x: number; y: number }[]
 ): [number, number, number, number] => {
-  if (points.length === 0) return [0, 0, 0, 0];
-  const xs = points.map(p => p.x);
-  const ys = points.map(p => p.y);
-  const x = Math.min(...xs);
-  const y = Math.min(...ys);
-  return [x, y, Math.max(...xs) - x, Math.max(...ys) - y];
+  const bb = calculateBoundingBox(points);
+  return [bb.minX, bb.minY, bb.width, bb.height];
 };
 
 export const convertToCOCO = (segmentation: SegmentationResult): string => {
-  const closedExternal = segmentation.polygons.filter(
-    p => p.type === 'external' && p.geometry !== 'polyline'
-  );
-  const allInternalPolygons = segmentation.polygons.filter(
-    p => p.type === 'internal'
-  );
-  const allPolylines = segmentation.polygons.filter(p => isPolyline(p));
-  const validPolylines = allPolylines.filter((p: Polygon) =>
-    isValidSpermPartClass(p.partClass)
-  );
+  const closedExternal: Polygon[] = [];
+  const internal: Polygon[] = [];
+  const validPolylines: Polygon[] = [];
+  for (const p of segmentation.polygons) {
+    if (isPolyline(p)) {
+      if (isValidSpermPartClass(p.partClass)) validPolylines.push(p);
+    } else if (p.type === 'internal') {
+      internal.push(p);
+    } else if (p.type === 'external') {
+      closedExternal.push(p);
+    }
+  }
 
   let annotationId = 1;
   const annotations: Array<Record<string, unknown>> = [];
 
   for (const polygon of closedExternal) {
-    const holes = allInternalPolygons.filter(internal =>
-      isPolygonInsidePolygon(internal.points, polygon.points)
+    const holes = internal.filter(h =>
+      isPolygonInsidePolygon(h.points, polygon.points)
     );
-    const segmentationPoints = [
-      flattenPoints(polygon.points),
-      ...holes.map(h => flattenPoints(h.points)),
-    ];
-    const [x, y, width, height] = boundingBox(polygon.points);
-    const area = calculateMetrics(polygon, holes).Area;
-
     annotations.push({
       id: annotationId++,
       image_id: 1,
       category_id: 1,
-      segmentation: segmentationPoints,
-      bbox: [x, y, width, height],
-      area,
+      segmentation: [
+        flattenPoints(polygon.points),
+        ...holes.map(h => flattenPoints(h.points)),
+      ],
+      bbox: bboxTuple(polygon.points),
+      area: calculateMetrics(polygon, holes).Area,
       iscrowd: 0,
       attributes: {
         type: 'external',
@@ -79,7 +74,7 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
       image_id: 1,
       category_id: 2,
       segmentation: [flattenPoints(polyline.points)],
-      bbox: boundingBox(polyline.points),
+      bbox: bboxTuple(polyline.points),
       area: 0,
       iscrowd: 0,
       attributes: {
@@ -87,18 +82,17 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
         geometry: 'polyline',
         partClass: polyline.partClass,
         ...(polyline.instanceId && { instanceId: polyline.instanceId }),
-        length: polylineLength(polyline.points),
+        length: calculatePolylineLength(polyline.points),
       },
     });
   }
 
-  const categories =
-    validPolylines.length > 0
-      ? [
-          { id: 1, name: 'spheroid', supercategory: 'cell' },
-          { id: 2, name: 'sperm', supercategory: 'biological' },
-        ]
-      : [{ id: 1, name: 'spheroid', supercategory: 'cell' }];
+  const categories: Array<Record<string, unknown>> = [
+    { id: 1, name: 'spheroid', supercategory: 'cell' },
+  ];
+  if (validPolylines.length > 0) {
+    categories.push({ id: 2, name: 'sperm', supercategory: 'biological' });
+  }
 
   const coco = {
     info: {

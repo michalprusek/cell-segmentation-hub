@@ -160,7 +160,7 @@ describe('FormatConverter', () => {
       }
     });
 
-    it('skips polylines with missing partClass and warns', async () => {
+    it('skips polylines with missing partClass and warns once with sample imageIds', async () => {
       const converter = new FormatConverter();
       const orphan: Polygon = {
         ...spermHead,
@@ -177,7 +177,11 @@ describe('FormatConverter', () => {
       expect(mockedLogger.warn).toHaveBeenCalledWith(
         expect.stringContaining('missing or invalid partClass'),
         'FormatConverter',
-        expect.objectContaining({ skipped: 1 })
+        expect.objectContaining({
+          totalSkipped: 1,
+          sampleImageIds: ['img1'],
+          expected: ['head', 'midpiece', 'tail'],
+        })
       );
     });
 
@@ -192,7 +196,11 @@ describe('FormatConverter', () => {
       const coco = await converter.convertToCOCO([data]);
 
       expect(coco.annotations.filter(a => a.category_id === 2)).toHaveLength(0);
-      expect(mockedLogger.warn).toHaveBeenCalled();
+      expect(mockedLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('missing or invalid partClass'),
+        'FormatConverter',
+        expect.objectContaining({ totalSkipped: 1 })
+      );
     });
 
     it('keeps annotation IDs unique across multiple images', async () => {
@@ -328,7 +336,10 @@ describe('FormatConverter', () => {
       expect(mockedLogger.warn).toHaveBeenCalledWith(
         expect.stringContaining('without instanceId'),
         'FormatConverter',
-        expect.objectContaining({ orphanCount: 1 })
+        expect.objectContaining({
+          totalOrphans: 1,
+          sampleImageIds: ['img1'],
+        })
       );
     });
 
@@ -359,6 +370,23 @@ describe('FormatConverter', () => {
 
       expect(polylines).toHaveLength(1);
       expect(polylines?.[0]?.partClass).toBeUndefined();
+    });
+
+  });
+
+  describe('annotation ID stability', () => {
+    it('keeps IDs unique within a single image with mixed polygons and polylines', async () => {
+      const data = buildImageData([
+        closedPolygon,
+        spermHead,
+        spermMidpiece,
+        spermTail,
+      ]);
+
+      const coco = await new FormatConverter().convertToCOCO([data]);
+      const ids = coco.annotations.map(a => a.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toEqual([1, 2, 3, 4]);
     });
   });
 });

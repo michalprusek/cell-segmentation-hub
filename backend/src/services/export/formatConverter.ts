@@ -5,9 +5,6 @@ import {
   isValidSpermPartClass,
 } from '../../utils/polygonValidation';
 
-export type { SpermPartClass };
-export { SPERM_PART_CLASSES, isValidSpermPartClass };
-
 export interface Point {
   x: number;
   y: number;
@@ -22,7 +19,32 @@ export interface Polygon {
   instanceId?: string;
 }
 
-export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
+const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
+
+const flattenPoints = (points: Point[]): number[] => {
+  const out: number[] = [];
+  for (const p of points) {
+    out.push(p.x, p.y);
+  }
+  return out;
+};
+
+const CELL_CATEGORY: COCOCategory = {
+  id: 1,
+  name: 'cell',
+  supercategory: 'biological',
+  color: [0, 255, 0],
+};
+
+const SPERM_CATEGORY: COCOCategory = {
+  id: 2,
+  name: 'sperm',
+  supercategory: 'biological',
+  color: [255, 128, 0],
+};
+
+const buildCocoCategories = (hasSperm: boolean): COCOCategory[] =>
+  hasSperm ? [CELL_CATEGORY, SPERM_CATEGORY] : [CELL_CATEGORY];
 
 export interface SegmentationResult {
   polygons: string; // JSON string of Polygon[]
@@ -181,7 +203,9 @@ export class FormatConverter {
     const annotations: COCOAnnotation[] = [];
     const imagesList: COCOImage[] = [];
     let annotationId = 1;
-    let totalValidPolylines = 0;
+    let hasSperm = false;
+    let totalInvalidPartClass = 0;
+    const sampleAffectedImages: string[] = [];
 
     for (let imageIdx = 0; imageIdx < images.length; imageIdx++) {
       const image = images[imageIdx];
@@ -220,35 +244,32 @@ export class FormatConverter {
             polygons = [];
           }
 
-          const closedExternalPolygons = polygons.filter(
-            (p: Polygon) =>
-              p.type === 'external' && p.geometry !== 'polyline'
-          );
-          const internalPolygons = polygons.filter(
-            (p: Polygon) => p.type === 'internal'
-          );
-          const allPolylines = polygons.filter((p: Polygon) => isPolyline(p));
+          const closedExternalPolygons: Polygon[] = [];
+          const internalPolygons: Polygon[] = [];
           const validPolylines: Polygon[] = [];
           let invalidPartClassCount = 0;
-          for (const pl of allPolylines) {
-            if (isValidSpermPartClass(pl.partClass)) {
-              validPolylines.push(pl);
-            } else {
-              invalidPartClassCount += 1;
+          for (const p of polygons as Polygon[]) {
+            if (isPolyline(p)) {
+              if (isValidSpermPartClass(p.partClass)) {
+                validPolylines.push(p);
+              } else {
+                invalidPartClassCount += 1;
+              }
+            } else if (p.type === 'internal') {
+              internalPolygons.push(p);
+            } else if (p.type === 'external') {
+              closedExternalPolygons.push(p);
             }
           }
           if (invalidPartClassCount > 0) {
-            logger.warn(
-              `Skipping ${invalidPartClassCount} polyline(s) with missing or invalid partClass in COCO export`,
-              'FormatConverter',
-              {
-                imageId: image.id,
-                expected: SPERM_PART_CLASSES,
-                skipped: invalidPartClassCount,
-              }
-            );
+            totalInvalidPartClass += invalidPartClassCount;
+            if (sampleAffectedImages.length < 10) {
+              sampleAffectedImages.push(image.id);
+            }
           }
-          totalValidPolylines += validPolylines.length;
+          if (validPolylines.length > 0) {
+            hasSperm = true;
+          }
 
           for (const polygon of closedExternalPolygons) {
             // Find internal polygons that belong to this external polygon
@@ -289,13 +310,7 @@ export class FormatConverter {
               );
               segmentation = rle;
             } else {
-              // Simple polygon without holes - use polygon format
-              segmentation = [
-                polygon.points.reduce((acc: number[], point: Point) => {
-                  acc.push(point.x, point.y);
-                  return acc;
-                }, []),
-              ];
+              segmentation = [flattenPoints(polygon.points)];
             }
 
             annotations.push({
@@ -315,18 +330,11 @@ export class FormatConverter {
           }
 
           for (const polyline of validPolylines) {
-            const flat = polyline.points.reduce(
-              (acc: number[], point: Point) => {
-                acc.push(point.x, point.y);
-                return acc;
-              },
-              []
-            );
             annotations.push({
               id: annotationId++,
               image_id: imageIdx + 1,
               category_id: 2,
-              segmentation: [flat],
+              segmentation: [flattenPoints(polyline.points)],
               bbox: this.calculateBoundingBox(polyline.points),
               area: 0,
               iscrowd: 0,
@@ -343,7 +351,18 @@ export class FormatConverter {
       }
     }
 
-    // Create COCO format object
+    if (totalInvalidPartClass > 0) {
+      logger.warn(
+        `COCO export skipped ${totalInvalidPartClass} polyline(s) with missing or invalid partClass across ${sampleAffectedImages.length}+ image(s)`,
+        'FormatConverter',
+        {
+          expected: SPERM_PART_CLASSES,
+          totalSkipped: totalInvalidPartClass,
+          sampleImageIds: sampleAffectedImages,
+        }
+      );
+    }
+
     const cocoData = {
       info: {
         description: 'Cell Segmentation Dataset',
@@ -354,30 +373,7 @@ export class FormatConverter {
       },
       images: imagesList,
       annotations,
-      categories:
-        totalValidPolylines > 0
-          ? [
-              {
-                id: 1,
-                name: 'cell',
-                supercategory: 'biological',
-                color: [0, 255, 0] as [number, number, number],
-              },
-              {
-                id: 2,
-                name: 'sperm',
-                supercategory: 'biological',
-                color: [255, 128, 0] as [number, number, number],
-              },
-            ]
-          : [
-              {
-                id: 1,
-                name: 'cell',
-                supercategory: 'biological',
-                color: [0, 255, 0] as [number, number, number],
-              },
-            ],
+      categories: buildCocoCategories(hasSperm),
       licenses: [
         {
           id: 1,
@@ -478,6 +474,8 @@ export class FormatConverter {
       },
       images: [],
     };
+    let totalOrphans = 0;
+    const orphanSampleImages: string[] = [];
 
     for (let imageIdx = 0; imageIdx < images.length; imageIdx++) {
       const image = images[imageIdx];
@@ -517,14 +515,18 @@ export class FormatConverter {
             polygons = [];
           }
 
-          const externalPolygons = polygons.filter(
-            (p: Polygon) =>
-              p.type === 'external' && p.geometry !== 'polyline'
-          );
-          const internalPolygons = polygons.filter(
-            (p: Polygon) => p.type === 'internal'
-          );
-          const polylines = polygons.filter((p: Polygon) => isPolyline(p));
+          const externalPolygons: Polygon[] = [];
+          const internalPolygons: Polygon[] = [];
+          const polylines: Polygon[] = [];
+          for (const p of polygons as Polygon[]) {
+            if (isPolyline(p)) {
+              polylines.push(p);
+            } else if (p.type === 'internal') {
+              internalPolygons.push(p);
+            } else if (p.type === 'external') {
+              externalPolygons.push(p);
+            }
+          }
 
           const polylinesData: JSONPolylineData[] = polylines.map(
             (p: Polygon, idx: number) => ({
@@ -541,7 +543,13 @@ export class FormatConverter {
           );
 
           const { instances: spermInstances, orphanCount } =
-            this.groupPolylinesByInstanceId(polylines, image.id);
+            this.groupPolylinesByInstanceId(polylines);
+          if (orphanCount > 0) {
+            totalOrphans += orphanCount;
+            if (orphanSampleImages.length < 10) {
+              orphanSampleImages.push(image.id);
+            }
+          }
 
           imageData.segmentation = {
             cellCount: result.cellCount || externalPolygons.length,
@@ -591,6 +599,14 @@ export class FormatConverter {
       }
 
       exportData.images.push(imageData);
+    }
+
+    if (totalOrphans > 0) {
+      logger.warn(
+        `JSON export found ${totalOrphans} polyline(s) without instanceId across ${orphanSampleImages.length}+ image(s) — excluded from spermInstances grouping`,
+        'FormatConverter',
+        { totalOrphans, sampleImageIds: orphanSampleImages }
+      );
     }
 
     return exportData;
@@ -671,10 +687,10 @@ export class FormatConverter {
     return length;
   }
 
-  private groupPolylinesByInstanceId(
-    polylines: Polygon[],
-    imageId?: string
-  ): { instances: JSONSpermInstance[]; orphanCount: number } {
+  private groupPolylinesByInstanceId(polylines: Polygon[]): {
+    instances: JSONSpermInstance[];
+    orphanCount: number;
+  } {
     const groups = new Map<string, Polygon[]>();
     let orphanCount = 0;
     for (const p of polylines) {
@@ -688,14 +704,6 @@ export class FormatConverter {
       } else {
         groups.set(p.instanceId, [p]);
       }
-    }
-
-    if (orphanCount > 0) {
-      logger.warn(
-        `${orphanCount} polyline(s) without instanceId — excluded from spermInstances grouping`,
-        'FormatConverter',
-        { imageId, orphanCount }
-      );
     }
 
     const instances: JSONSpermInstance[] = [];
