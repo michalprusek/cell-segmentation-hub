@@ -124,7 +124,10 @@ describe('ExportService', () => {
     }));
     MockFormatConverter.mockImplementation(() => ({
       convertToCOCO: (jest.fn() as any).mockResolvedValue({}),
-      convertToYOLO: (jest.fn() as any).mockResolvedValue([]),
+      convertToYOLO: (jest.fn() as any).mockResolvedValue({
+        content: '',
+        warnings: [],
+      }),
       convertToJSON: (jest.fn() as any).mockResolvedValue({}),
     }));
 

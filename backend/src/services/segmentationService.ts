@@ -6,7 +6,10 @@ import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
-import { PolygonValidator } from '../utils/polygonValidation';
+import {
+  PolygonValidator,
+  type SpermPartClass,
+} from '../utils/polygonValidation';
 import { ImageService } from './imageService';
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { ThumbnailManager } from './thumbnailManager';
@@ -25,8 +28,8 @@ export interface SegmentationPolygon {
   type: 'external' | 'internal';
   parentIds?: string[]; // For internal polygons, match frontend API interface
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
-  partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
-  instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
+  partClass?: SpermPartClass;
+  instanceId?: string;
 }
 
 export interface SegmentationRequest {

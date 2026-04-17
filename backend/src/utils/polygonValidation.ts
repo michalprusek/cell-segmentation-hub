@@ -1,5 +1,14 @@
 import { logger } from '../utils/logger';
 
+export const SPERM_PART_CLASSES = ['head', 'midpiece', 'tail'] as const;
+export type SpermPartClass = (typeof SPERM_PART_CLASSES)[number];
+
+export const isValidSpermPartClass = (
+  value: unknown
+): value is SpermPartClass =>
+  typeof value === 'string' &&
+  (SPERM_PART_CLASSES as readonly string[]).includes(value);
+
 export interface PolygonPoint {
   x: number;
   y: number;
@@ -283,12 +292,7 @@ export const PolygonValidator = {
     if (polygonObj.geometry === 'polyline') {
       (validatedPolygon as any).geometry = 'polyline';
     }
-    const validPartClasses = ['head', 'midpiece', 'tail'];
-    if (
-      polygonObj.partClass &&
-      typeof polygonObj.partClass === 'string' &&
-      validPartClasses.includes(polygonObj.partClass)
-    ) {
+    if (isValidSpermPartClass(polygonObj.partClass)) {
       (validatedPolygon as any).partClass = polygonObj.partClass;
     }
     if (polygonObj.instanceId && typeof polygonObj.instanceId === 'string') {
