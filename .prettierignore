@@ -40,6 +40,10 @@ pnpm-lock.yaml
 **/*.d.ts
 **/*.generated.*
 
+# Research / study data artifacts (large untracked datasets)
+iaa_study/
+output_time_48h/
+
 # Binary files
 **/*.png
 **/*.jpg
