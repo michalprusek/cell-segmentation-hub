@@ -9,6 +9,9 @@ export interface Polygon {
   points: Point[];
   type: 'external' | 'internal';
   id?: string;
+  geometry?: 'polygon' | 'polyline';
+  partClass?: 'head' | 'midpiece' | 'tail';
+  instanceId?: string;
 }
 
 export interface SegmentationResult {
@@ -44,7 +47,11 @@ export interface COCOAnnotation {
   iscrowd: number;
   attributes?: {
     type: string;
-    has_holes: boolean;
+    geometry?: 'polygon' | 'polyline';
+    has_holes?: boolean;
+    partClass?: 'head' | 'midpiece' | 'tail';
+    instanceId?: string;
+    length?: number;
   };
 }
 
@@ -85,6 +92,26 @@ export interface JSONPolygonData {
   centroid?: Point;
 }
 
+export interface JSONPolylineData {
+  id: number;
+  points: Point[];
+  geometry: 'polyline';
+  partClass?: 'head' | 'midpiece' | 'tail';
+  instanceId?: string;
+  length: number;
+  boundingBox?: [number, number, number, number];
+}
+
+export interface JSONSpermInstance {
+  instanceId: string;
+  parts: {
+    head?: { points: Point[]; length: number };
+    midpiece?: { points: Point[]; length: number };
+    tail?: { points: Point[]; length: number };
+  };
+  totalLength: number;
+}
+
 export interface JSONSegmentationData {
   cellCount: number;
   timestamp?: Date;
@@ -92,10 +119,14 @@ export interface JSONSegmentationData {
     external: JSONPolygonData[];
     internal: JSONPolygonData[];
   };
+  polylines?: JSONPolylineData[];
+  spermInstances?: JSONSpermInstance[];
   statistics: {
     totalExternalPolygons: number;
     totalInternalPolygons: number;
     totalArea: number;
+    totalPolylines?: number;
+    totalSpermInstances?: number;
   };
 }
 
@@ -172,15 +203,18 @@ export class FormatConverter {
             polygons = [];
           }
 
-          // Process external polygons
-          const externalPolygons = polygons.filter(
-            (p: Polygon) => p.type === 'external'
+          const closedExternalPolygons = polygons.filter(
+            (p: Polygon) =>
+              p.type === 'external' && p.geometry !== 'polyline'
           );
           const internalPolygons = polygons.filter(
             (p: Polygon) => p.type === 'internal'
           );
+          const polylines = polygons.filter(
+            (p: Polygon) => p.geometry === 'polyline'
+          );
 
-          for (const polygon of externalPolygons) {
+          for (const polygon of closedExternalPolygons) {
             // Find internal polygons that belong to this external polygon
             // (simplified - in real scenario, you'd check spatial containment)
             const associatedInternalPolygons = internalPolygons.filter(
@@ -238,7 +272,34 @@ export class FormatConverter {
               iscrowd: associatedInternalPolygons.length > 0 ? 1 : 0, // iscrowd=1 for RLE format
               attributes: {
                 type: 'external',
+                geometry: 'polygon',
                 has_holes: associatedInternalPolygons.length > 0,
+              },
+            });
+          }
+
+          for (const polyline of polylines) {
+            const flat = polyline.points.reduce(
+              (acc: number[], point: Point) => {
+                acc.push(point.x, point.y);
+                return acc;
+              },
+              []
+            );
+            annotations.push({
+              id: annotationId++,
+              image_id: imageIdx + 1,
+              category_id: 2, // Sperm category
+              segmentation: [flat],
+              bbox: this.calculateBoundingBox(polyline.points),
+              area: 0,
+              iscrowd: 0,
+              attributes: {
+                type: 'external',
+                geometry: 'polyline',
+                ...(polyline.partClass && { partClass: polyline.partClass }),
+                ...(polyline.instanceId && { instanceId: polyline.instanceId }),
+                length: this.calculatePolylineLength(polyline.points),
               },
             });
           }
@@ -263,6 +324,12 @@ export class FormatConverter {
           name: 'cell',
           supercategory: 'biological',
           color: [0, 255, 0] as [number, number, number],
+        },
+        {
+          id: 2,
+          name: 'sperm',
+          supercategory: 'biological',
+          color: [255, 128, 0] as [number, number, number],
         },
       ],
       licenses: [
@@ -308,9 +375,23 @@ export class FormatConverter {
     }
     const lines: string[] = [];
 
-    // Filter external polygons only for YOLO
+    // Polylines (e.g. sperm head/midpiece/tail) are open curves — YOLO has no
+    // representation for them. Skip them and surface a warning so the user
+    // exports COCO/JSON when they need polyline data preserved.
+    const polylines = polygons.filter(
+      (p: Polygon) => p.geometry === 'polyline'
+    );
+    if (polylines.length > 0) {
+      logger.warn(
+        `YOLO format does not support open polylines — skipping ${polylines.length} polyline(s). Use COCO or JSON for sperm data.`,
+        'FormatConverter',
+        { polylineCount: polylines.length }
+      );
+    }
+
     const externalPolygons = polygons.filter(
-      (p: Polygon) => p.type === 'external'
+      (p: Polygon) =>
+        p.type === 'external' && p.geometry !== 'polyline'
     );
 
     for (const polygon of externalPolygons) {
@@ -397,11 +478,29 @@ export class FormatConverter {
           }
 
           const externalPolygons = polygons.filter(
-            (p: Polygon) => p.type === 'external'
+            (p: Polygon) =>
+              p.type === 'external' && p.geometry !== 'polyline'
           );
           const internalPolygons = polygons.filter(
             (p: Polygon) => p.type === 'internal'
           );
+          const polylines = polygons.filter(
+            (p: Polygon) => p.geometry === 'polyline'
+          );
+
+          const polylinesData: JSONPolylineData[] = polylines.map(
+            (p: Polygon, idx: number) => ({
+              id: idx + 1,
+              points: p.points,
+              geometry: 'polyline',
+              ...(p.partClass && { partClass: p.partClass }),
+              ...(p.instanceId && { instanceId: p.instanceId }),
+              length: this.calculatePolylineLength(p.points),
+              boundingBox: this.calculateBoundingBox(p.points),
+            })
+          );
+
+          const spermInstances = this.groupPolylinesByInstanceId(polylines);
 
           imageData.segmentation = {
             cellCount: result.cellCount || externalPolygons.length,
@@ -422,6 +521,8 @@ export class FormatConverter {
                 perimeter: this.calculatePerimeter(p.points),
               })),
             },
+            ...(polylinesData.length > 0 && { polylines: polylinesData }),
+            ...(spermInstances.length > 0 && { spermInstances }),
             statistics: {
               totalExternalPolygons: externalPolygons.length,
               totalInternalPolygons: internalPolygons.length,
@@ -436,6 +537,12 @@ export class FormatConverter {
                     sum + this.calculatePolygonArea(p.points),
                   0
                 ),
+              ...(polylinesData.length > 0 && {
+                totalPolylines: polylinesData.length,
+              }),
+              ...(spermInstances.length > 0 && {
+                totalSpermInstances: spermInstances.length,
+              }),
             },
           };
         }
@@ -506,6 +613,63 @@ export class FormatConverter {
     }
 
     return perimeter;
+  }
+
+  private calculatePolylineLength(points: Point[]): number {
+    let length = 0;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      if (prev && curr) {
+        const dx = curr.x - prev.x;
+        const dy = curr.y - prev.y;
+        length += Math.sqrt(dx * dx + dy * dy);
+      }
+    }
+    return length;
+  }
+
+  private groupPolylinesByInstanceId(
+    polylines: Polygon[]
+  ): JSONSpermInstance[] {
+    const groups = new Map<string, Polygon[]>();
+    for (const p of polylines) {
+      if (!p.instanceId) {
+        continue;
+      }
+      const list = groups.get(p.instanceId);
+      if (list) {
+        list.push(p);
+      } else {
+        groups.set(p.instanceId, [p]);
+      }
+    }
+
+    const instances: JSONSpermInstance[] = [];
+    for (const [instanceId, parts] of groups) {
+      const head = parts.find(p => p.partClass === 'head');
+      const midpiece = parts.find(p => p.partClass === 'midpiece');
+      const tail = parts.find(p => p.partClass === 'tail');
+
+      const headLen = head ? this.calculatePolylineLength(head.points) : 0;
+      const midLen = midpiece
+        ? this.calculatePolylineLength(midpiece.points)
+        : 0;
+      const tailLen = tail ? this.calculatePolylineLength(tail.points) : 0;
+
+      instances.push({
+        instanceId,
+        parts: {
+          ...(head && { head: { points: head.points, length: headLen } }),
+          ...(midpiece && {
+            midpiece: { points: midpiece.points, length: midLen },
+          }),
+          ...(tail && { tail: { points: tail.points, length: tailLen } }),
+        },
+        totalLength: headLen + midLen + tailLen,
+      });
+    }
+    return instances;
   }
 
   /**
