@@ -420,11 +420,9 @@ export class FormatConverter {
     // YOLO has no open-curve representation; polylines are skipped (warning emitted).
     const polylines = polygons.filter((p: Polygon) => isPolyline(p));
     if (polylines.length > 0) {
-      const msg = `YOLO format does not support open polylines — skipped ${polylines.length} polyline(s). Use COCO or JSON for sperm data.`;
-      warnings.push(msg);
-      logger.warn(msg, 'FormatConverter', {
-        polylineCount: polylines.length,
-      });
+      warnings.push(
+        `YOLO format does not support open polylines — skipped ${polylines.length} polyline(s). Use COCO or JSON for sperm data.`
+      );
     }
 
     const externalPolygons = polygons.filter(

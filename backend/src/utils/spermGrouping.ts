@@ -6,9 +6,16 @@ export interface SpermPolylinePart {
   points: { x: number; y: number }[];
 }
 
+// After grouping, every part has both fields by construction (orphans are
+// excluded). Narrowing the result type removes false confidence at call sites.
+export type GroupedPart<P extends SpermPolylinePart> = P & {
+  instanceId: string;
+};
+
 export interface SpermInstanceGroup<P extends SpermPolylinePart> {
   instanceId: string;
-  parts: P[];
+  // Non-empty by construction: a bucket is created on first push.
+  parts: readonly [GroupedPart<P>, ...GroupedPart<P>[]];
 }
 
 export interface SpermGroupingResult<P extends SpermPolylinePart> {
@@ -16,42 +23,38 @@ export interface SpermGroupingResult<P extends SpermPolylinePart> {
   orphanCount: number;
 }
 
-/**
- * Groups polylines by `instanceId` for sperm-morphology aggregation.
- * Polylines without `instanceId` are counted as orphans (not grouped).
- * Pure function — caller decides whether/where to log the orphan count.
- */
+// Polylines missing instanceId are returned as `orphanCount`, not grouped.
 export const groupPolylinesByInstanceId = <P extends SpermPolylinePart>(
   polylines: P[]
 ): SpermGroupingResult<P> => {
-  const buckets = new Map<string, P[]>();
+  const buckets = new Map<string, GroupedPart<P>[]>();
   let orphanCount = 0;
   for (const p of polylines) {
     if (!p.instanceId) {
       orphanCount += 1;
       continue;
     }
+    const grouped = p as GroupedPart<P>;
     const list = buckets.get(p.instanceId);
     if (list) {
-      list.push(p);
+      list.push(grouped);
     } else {
-      buckets.set(p.instanceId, [p]);
+      buckets.set(p.instanceId, [grouped]);
     }
   }
 
   const groups: SpermInstanceGroup<P>[] = [];
   for (const [instanceId, parts] of buckets) {
-    groups.push({ instanceId, parts });
+    groups.push({
+      instanceId,
+      parts: parts as [GroupedPart<P>, ...GroupedPart<P>[]],
+    });
   }
 
   return { groups, orphanCount };
 };
 
-/**
- * Locate the polyline for a given partClass within a group's parts.
- * Returns the first match (callers should ensure unique parts per group).
- */
 export const findPart = <P extends SpermPolylinePart>(
-  parts: P[],
+  parts: readonly P[],
   partClass: SpermPartClass
 ): P | undefined => parts.find(p => p.partClass === partClass);

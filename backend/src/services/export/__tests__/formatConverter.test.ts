@@ -343,6 +343,37 @@ describe('FormatConverter', () => {
       );
     });
 
+    it('keeps multiple sperm instances separate within one image', async () => {
+      const converter = new FormatConverter();
+      const sperm1Head = { ...spermHead, instanceId: 'sperm_1', id: 's1h' };
+      const sperm1Tail = { ...spermTail, instanceId: 'sperm_1', id: 's1t' };
+      const sperm2Head = { ...spermHead, instanceId: 'sperm_2', id: 's2h' };
+      const sperm2Mid = {
+        ...spermMidpiece,
+        instanceId: 'sperm_2',
+        id: 's2m',
+      };
+      const data = buildImageData([
+        sperm1Head,
+        sperm2Head,
+        sperm1Tail,
+        sperm2Mid,
+      ]);
+
+      const out = await converter.convertToJSON([data]);
+      const seg = out.images[0]?.segmentation;
+
+      expect(seg?.spermInstances).toHaveLength(2);
+      const s1 = seg?.spermInstances?.find(s => s.instanceId === 'sperm_1');
+      const s2 = seg?.spermInstances?.find(s => s.instanceId === 'sperm_2');
+      expect(s1?.parts.head).toBeDefined();
+      expect(s1?.parts.tail).toBeDefined();
+      expect(s1?.parts.midpiece).toBeUndefined();
+      expect(s2?.parts.head).toBeDefined();
+      expect(s2?.parts.midpiece).toBeDefined();
+      expect(s2?.parts.tail).toBeUndefined();
+    });
+
     it('handles a pure-polyline image with no closed polygons', async () => {
       const converter = new FormatConverter();
       const data = buildImageData([spermHead, spermMidpiece, spermTail]);

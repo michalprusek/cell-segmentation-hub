@@ -1,9 +1,11 @@
+import { logger } from './logger';
+
 /**
- * Process items with bounded concurrency. Workers pull from a shared
- * cursor; the first thrown error short-circuits remaining work.
+ * Bounded-concurrency map. Workers share a cursor; the first thrown error
+ * short-circuits remaining work and is rethrown after in-flight tasks
+ * settle. Subsequent concurrent errors are logged so they aren't lost.
  *
- * - `shouldAbort()` is checked before each item — used for user-initiated
- *   cancellation. Throws are surfaced after all in-flight tasks settle.
+ * - `shouldAbort()` is polled before each item for user-initiated cancellation.
  * - `onProgress(completed, total)` fires after each successful completion.
  *   Order is non-deterministic; counts are accurate.
  */
@@ -38,7 +40,15 @@ export const mapWithConcurrency = async <T>(
       try {
         await task(items[i] as T, i);
       } catch (err) {
-        if (firstError === undefined) firstError = err;
+        if (firstError === undefined) {
+          firstError = err;
+        } else {
+          logger.error(
+            'mapWithConcurrency: secondary task error suppressed by first-error short-circuit',
+            err instanceof Error ? err : new Error(String(err)),
+            'concurrency'
+          );
+        }
         return;
       }
       completed += 1;
@@ -46,9 +56,7 @@ export const mapWithConcurrency = async <T>(
     }
   };
 
-  await Promise.all(
-    Array.from({ length: limit }, () => worker())
-  );
+  await Promise.all(Array.from({ length: limit }, () => worker()));
 
   if (firstError !== undefined) throw firstError;
   if (aborted) {
