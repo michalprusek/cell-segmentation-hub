@@ -1,4 +1,12 @@
 import { logger } from '../../utils/logger';
+import {
+  SPERM_PART_CLASSES,
+  type SpermPartClass,
+  isValidSpermPartClass,
+} from '../../utils/polygonValidation';
+
+export type { SpermPartClass };
+export { SPERM_PART_CLASSES, isValidSpermPartClass };
 
 export interface Point {
   x: number;
@@ -10,9 +18,11 @@ export interface Polygon {
   type: 'external' | 'internal';
   id?: string;
   geometry?: 'polygon' | 'polyline';
-  partClass?: 'head' | 'midpiece' | 'tail';
+  partClass?: SpermPartClass;
   instanceId?: string;
 }
+
+export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
 
 export interface SegmentationResult {
   polygons: string; // JSON string of Polygon[]
@@ -49,7 +59,7 @@ export interface COCOAnnotation {
     type: string;
     geometry?: 'polygon' | 'polyline';
     has_holes?: boolean;
-    partClass?: 'head' | 'midpiece' | 'tail';
+    partClass?: SpermPartClass;
     instanceId?: string;
     length?: number;
   };
@@ -96,7 +106,7 @@ export interface JSONPolylineData {
   id: number;
   points: Point[];
   geometry: 'polyline';
-  partClass?: 'head' | 'midpiece' | 'tail';
+  partClass?: SpermPartClass;
   instanceId?: string;
   length: number;
   boundingBox?: [number, number, number, number];
@@ -127,7 +137,13 @@ export interface JSONSegmentationData {
     totalArea: number;
     totalPolylines?: number;
     totalSpermInstances?: number;
+    orphanPolylineCount?: number;
   };
+}
+
+export interface YOLOConversionResult {
+  content: string;
+  warnings: string[];
 }
 
 export interface JSONImageData {
@@ -165,6 +181,7 @@ export class FormatConverter {
     const annotations: COCOAnnotation[] = [];
     const imagesList: COCOImage[] = [];
     let annotationId = 1;
+    let totalValidPolylines = 0;
 
     for (let imageIdx = 0; imageIdx < images.length; imageIdx++) {
       const image = images[imageIdx];
@@ -210,9 +227,28 @@ export class FormatConverter {
           const internalPolygons = polygons.filter(
             (p: Polygon) => p.type === 'internal'
           );
-          const polylines = polygons.filter(
-            (p: Polygon) => p.geometry === 'polyline'
-          );
+          const allPolylines = polygons.filter((p: Polygon) => isPolyline(p));
+          const validPolylines: Polygon[] = [];
+          let invalidPartClassCount = 0;
+          for (const pl of allPolylines) {
+            if (isValidSpermPartClass(pl.partClass)) {
+              validPolylines.push(pl);
+            } else {
+              invalidPartClassCount += 1;
+            }
+          }
+          if (invalidPartClassCount > 0) {
+            logger.warn(
+              `Skipping ${invalidPartClassCount} polyline(s) with missing or invalid partClass in COCO export`,
+              'FormatConverter',
+              {
+                imageId: image.id,
+                expected: SPERM_PART_CLASSES,
+                skipped: invalidPartClassCount,
+              }
+            );
+          }
+          totalValidPolylines += validPolylines.length;
 
           for (const polygon of closedExternalPolygons) {
             // Find internal polygons that belong to this external polygon
@@ -278,7 +314,7 @@ export class FormatConverter {
             });
           }
 
-          for (const polyline of polylines) {
+          for (const polyline of validPolylines) {
             const flat = polyline.points.reduce(
               (acc: number[], point: Point) => {
                 acc.push(point.x, point.y);
@@ -289,7 +325,7 @@ export class FormatConverter {
             annotations.push({
               id: annotationId++,
               image_id: imageIdx + 1,
-              category_id: 2, // Sperm category
+              category_id: 2,
               segmentation: [flat],
               bbox: this.calculateBoundingBox(polyline.points),
               area: 0,
@@ -297,7 +333,7 @@ export class FormatConverter {
               attributes: {
                 type: 'external',
                 geometry: 'polyline',
-                ...(polyline.partClass && { partClass: polyline.partClass }),
+                partClass: polyline.partClass,
                 ...(polyline.instanceId && { instanceId: polyline.instanceId }),
                 length: this.calculatePolylineLength(polyline.points),
               },
@@ -318,20 +354,30 @@ export class FormatConverter {
       },
       images: imagesList,
       annotations,
-      categories: [
-        {
-          id: 1,
-          name: 'cell',
-          supercategory: 'biological',
-          color: [0, 255, 0] as [number, number, number],
-        },
-        {
-          id: 2,
-          name: 'sperm',
-          supercategory: 'biological',
-          color: [255, 128, 0] as [number, number, number],
-        },
-      ],
+      categories:
+        totalValidPolylines > 0
+          ? [
+              {
+                id: 1,
+                name: 'cell',
+                supercategory: 'biological',
+                color: [0, 255, 0] as [number, number, number],
+              },
+              {
+                id: 2,
+                name: 'sperm',
+                supercategory: 'biological',
+                color: [255, 128, 0] as [number, number, number],
+              },
+            ]
+          : [
+              {
+                id: 1,
+                name: 'cell',
+                supercategory: 'biological',
+                color: [0, 255, 0] as [number, number, number],
+              },
+            ],
       licenses: [
         {
           id: 1,
@@ -344,14 +390,11 @@ export class FormatConverter {
     return cocoData;
   }
 
-  /**
-   * Convert to YOLO format (returns string content for text file)
-   */
   async convertToYOLO(
     polygonsJson: string,
     imageWidth: number,
     imageHeight: number
-  ): Promise<string> {
+  ): Promise<YOLOConversionResult> {
     let polygons;
     try {
       polygons = JSON.parse(polygonsJson);
@@ -374,19 +417,16 @@ export class FormatConverter {
       );
     }
     const lines: string[] = [];
+    const warnings: string[] = [];
 
-    // Polylines (e.g. sperm head/midpiece/tail) are open curves — YOLO has no
-    // representation for them. Skip them and surface a warning so the user
-    // exports COCO/JSON when they need polyline data preserved.
-    const polylines = polygons.filter(
-      (p: Polygon) => p.geometry === 'polyline'
-    );
+    // YOLO has no open-curve representation; polylines are skipped (warning emitted).
+    const polylines = polygons.filter((p: Polygon) => isPolyline(p));
     if (polylines.length > 0) {
-      logger.warn(
-        `YOLO format does not support open polylines — skipping ${polylines.length} polyline(s). Use COCO or JSON for sperm data.`,
-        'FormatConverter',
-        { polylineCount: polylines.length }
-      );
+      const msg = `YOLO format does not support open polylines — skipped ${polylines.length} polyline(s). Use COCO or JSON for sperm data.`;
+      warnings.push(msg);
+      logger.warn(msg, 'FormatConverter', {
+        polylineCount: polylines.length,
+      });
     }
 
     const externalPolygons = polygons.filter(
@@ -422,7 +462,7 @@ export class FormatConverter {
       lines.push(`# Segmentation: 0 ${segmentationPoints}`);
     }
 
-    return lines.join('\n');
+    return { content: lines.join('\n'), warnings };
   }
 
   /**
@@ -484,23 +524,24 @@ export class FormatConverter {
           const internalPolygons = polygons.filter(
             (p: Polygon) => p.type === 'internal'
           );
-          const polylines = polygons.filter(
-            (p: Polygon) => p.geometry === 'polyline'
-          );
+          const polylines = polygons.filter((p: Polygon) => isPolyline(p));
 
           const polylinesData: JSONPolylineData[] = polylines.map(
             (p: Polygon, idx: number) => ({
               id: idx + 1,
               points: p.points,
               geometry: 'polyline',
-              ...(p.partClass && { partClass: p.partClass }),
+              ...(isValidSpermPartClass(p.partClass) && {
+                partClass: p.partClass,
+              }),
               ...(p.instanceId && { instanceId: p.instanceId }),
               length: this.calculatePolylineLength(p.points),
               boundingBox: this.calculateBoundingBox(p.points),
             })
           );
 
-          const spermInstances = this.groupPolylinesByInstanceId(polylines);
+          const { instances: spermInstances, orphanCount } =
+            this.groupPolylinesByInstanceId(polylines, image.id);
 
           imageData.segmentation = {
             cellCount: result.cellCount || externalPolygons.length,
@@ -543,6 +584,7 @@ export class FormatConverter {
               ...(spermInstances.length > 0 && {
                 totalSpermInstances: spermInstances.length,
               }),
+              ...(orphanCount > 0 && { orphanPolylineCount: orphanCount }),
             },
           };
         }
@@ -630,11 +672,14 @@ export class FormatConverter {
   }
 
   private groupPolylinesByInstanceId(
-    polylines: Polygon[]
-  ): JSONSpermInstance[] {
+    polylines: Polygon[],
+    imageId?: string
+  ): { instances: JSONSpermInstance[]; orphanCount: number } {
     const groups = new Map<string, Polygon[]>();
+    let orphanCount = 0;
     for (const p of polylines) {
       if (!p.instanceId) {
+        orphanCount += 1;
         continue;
       }
       const list = groups.get(p.instanceId);
@@ -643,6 +688,14 @@ export class FormatConverter {
       } else {
         groups.set(p.instanceId, [p]);
       }
+    }
+
+    if (orphanCount > 0) {
+      logger.warn(
+        `${orphanCount} polyline(s) without instanceId — excluded from spermInstances grouping`,
+        'FormatConverter',
+        { imageId, orphanCount }
+      );
     }
 
     const instances: JSONSpermInstance[] = [];
@@ -669,7 +722,7 @@ export class FormatConverter {
         totalLength: headLen + midLen + tailLen,
       });
     }
-    return instances;
+    return { instances, orphanCount };
   }
 
   /**

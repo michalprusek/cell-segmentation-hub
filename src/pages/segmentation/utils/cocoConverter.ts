@@ -1,65 +1,105 @@
-import { SegmentationResult } from '@/lib/segmentation';
+import {
+  type Polygon,
+  type SegmentationResult,
+  isPolyline,
+  isValidSpermPartClass,
+} from '@/lib/segmentation';
 import { calculateMetrics } from './metricCalculations';
 import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
 
-// Convert segmentation to COCO format
-export const convertToCOCO = (segmentation: SegmentationResult): string => {
-  const externalPolygons = segmentation.polygons.filter(
-    p => p.type === 'external'
-  );
+const polylineLength = (points: { x: number; y: number }[]): number => {
+  let length = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    length += Math.sqrt(dx * dx + dy * dy);
+  }
+  return length;
+};
 
-  // Get all internal polygons
+const flattenPoints = (points: { x: number; y: number }[]): number[] =>
+  points.reduce<number[]>((acc, p) => [...acc, p.x, p.y], []);
+
+const boundingBox = (
+  points: { x: number; y: number }[]
+): [number, number, number, number] => {
+  if (points.length === 0) return [0, 0, 0, 0];
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return [x, y, Math.max(...xs) - x, Math.max(...ys) - y];
+};
+
+export const convertToCOCO = (segmentation: SegmentationResult): string => {
+  const closedExternal = segmentation.polygons.filter(
+    p => p.type === 'external' && p.geometry !== 'polyline'
+  );
   const allInternalPolygons = segmentation.polygons.filter(
     p => p.type === 'internal'
   );
+  const allPolylines = segmentation.polygons.filter(p => isPolyline(p));
+  const validPolylines = allPolylines.filter((p: Polygon) =>
+    isValidSpermPartClass(p.partClass)
+  );
 
-  const annotations = externalPolygons.map((polygon, index) => {
-    // Find internal polygons (holes) that are actually inside this external polygon
+  let annotationId = 1;
+  const annotations: Array<Record<string, unknown>> = [];
+
+  for (const polygon of closedExternal) {
     const holes = allInternalPolygons.filter(internal =>
       isPolygonInsidePolygon(internal.points, polygon.points)
     );
-
-    // Convert points to COCO format (all x coordinates, then all y coordinates)
     const segmentationPoints = [
-      polygon.points.reduce<number[]>(
-        (acc, point) => [...acc, point.x, point.y],
-        []
-      ),
+      flattenPoints(polygon.points),
+      ...holes.map(h => flattenPoints(h.points)),
     ];
-
-    // Add only the holes that are inside this polygon to segmentation
-    holes.forEach(hole => {
-      segmentationPoints.push(
-        hole.points.reduce<number[]>(
-          (acc, point) => [...acc, point.x, point.y],
-          []
-        )
-      );
-    });
-
-    // Calculate bounding box
-    const xs = polygon.points.map(p => p.x);
-    const ys = polygon.points.map(p => p.y);
-    const x = Math.min(...xs);
-    const y = Math.min(...ys);
-    const width = Math.max(...xs) - x;
-    const height = Math.max(...ys) - y;
-
-    // Calculate area with only the contained holes subtracted
+    const [x, y, width, height] = boundingBox(polygon.points);
     const area = calculateMetrics(polygon, holes).Area;
 
-    return {
-      id: index + 1,
-      image_id: 1, // Assume one image
-      category_id: 1, // Spheroid category
+    annotations.push({
+      id: annotationId++,
+      image_id: 1,
+      category_id: 1,
       segmentation: segmentationPoints,
       bbox: [x, y, width, height],
-      area: area, // Area with holes subtracted
+      area,
       iscrowd: 0,
-    };
-  });
+      attributes: {
+        type: 'external',
+        geometry: 'polygon',
+        has_holes: holes.length > 0,
+      },
+    });
+  }
 
-  // Create COCO format
+  for (const polyline of validPolylines) {
+    annotations.push({
+      id: annotationId++,
+      image_id: 1,
+      category_id: 2,
+      segmentation: [flattenPoints(polyline.points)],
+      bbox: boundingBox(polyline.points),
+      area: 0,
+      iscrowd: 0,
+      attributes: {
+        type: 'external',
+        geometry: 'polyline',
+        partClass: polyline.partClass,
+        ...(polyline.instanceId && { instanceId: polyline.instanceId }),
+        length: polylineLength(polyline.points),
+      },
+    });
+  }
+
+  const categories =
+    validPolylines.length > 0
+      ? [
+          { id: 1, name: 'spheroid', supercategory: 'cell' },
+          { id: 2, name: 'sperm', supercategory: 'biological' },
+        ]
+      : [{ id: 1, name: 'spheroid', supercategory: 'cell' }];
+
   const coco = {
     info: {
       description: 'Spheroid segmentation dataset',
@@ -71,19 +111,13 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
       {
         id: 1,
         file_name: segmentation.imageSrc?.split('/').pop() || 'image.png',
-        width: 800, // Assume fixed size
+        width: 800,
         height: 600,
         date_captured: new Date().toISOString(),
       },
     ],
     annotations,
-    categories: [
-      {
-        id: 1,
-        name: 'spheroid',
-        supercategory: 'cell',
-      },
-    ],
+    categories,
   };
 
   return JSON.stringify(coco, null, 2);

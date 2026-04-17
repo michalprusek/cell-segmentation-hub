@@ -9,6 +9,15 @@ export interface Point {
   y: number;
 }
 
+export const SPERM_PART_CLASSES = ['head', 'midpiece', 'tail'] as const;
+export type SpermPartClass = (typeof SPERM_PART_CLASSES)[number];
+
+export const isValidSpermPartClass = (
+  value: unknown
+): value is SpermPartClass =>
+  typeof value === 'string' &&
+  (SPERM_PART_CLASSES as readonly string[]).includes(value);
+
 export interface Polygon {
   id: string;
   points: Point[];
@@ -19,9 +28,11 @@ export interface Polygon {
   area?: number;
   parent_id?: string; // For internal polygons, references the parent external polygon
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
-  partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
+  partClass?: SpermPartClass; // For sperm polyline parts
   instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
 }
+
+export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
 
 // SegmentationResult type removed - use Polygon[] directly
 

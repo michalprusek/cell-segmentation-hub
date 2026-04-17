@@ -892,7 +892,7 @@ export class ExportService {
 
           const image = images[i];
           if (image && image.segmentation) {
-            const yoloData = await this.formatConverter.convertToYOLO(
+            const yoloResult = await this.formatConverter.convertToYOLO(
               image.segmentation.polygons,
               image.width || 0,
               image.height || 0
@@ -900,8 +900,15 @@ export class ExportService {
             const imageNameWithoutExt = path.parse(image.name).name;
             await fs.writeFile(
               path.join(formatDir, `${imageNameWithoutExt}.txt`),
-              yoloData
+              yoloResult.content
             );
+            if (yoloResult.warnings.length > 0) {
+              logger.warn(
+                `YOLO export for ${image.name} produced ${yoloResult.warnings.length} warning(s)`,
+                'ExportService',
+                { jobId, imageId: image.id, warnings: yoloResult.warnings }
+              );
+            }
           }
 
           // Report progress for YOLO generation

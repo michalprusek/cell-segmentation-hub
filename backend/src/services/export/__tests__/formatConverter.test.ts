@@ -1,4 +1,4 @@
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 jest.mock('../../../utils/logger', () => ({
   logger: {
@@ -9,10 +9,19 @@ jest.mock('../../../utils/logger', () => ({
   },
 }));
 
-import { FormatConverter, type ImageData, type Polygon } from '../formatConverter';
+import {
+  FormatConverter,
+  type ImageData,
+  type Polygon,
+} from '../formatConverter';
 import { logger } from '../../../utils/logger';
 
 const mockedLogger = logger as jest.Mocked<typeof logger>;
+
+beforeEach(() => {
+  mockedLogger.warn.mockClear();
+  mockedLogger.error.mockClear();
+});
 
 const closedPolygon: Polygon = {
   id: 'p1',
@@ -61,7 +70,10 @@ const spermTail: Polygon = {
   ],
 };
 
-const buildImageData = (polygons: Polygon[]): ImageData => ({
+const buildImageData = (
+  polygons: Polygon[],
+  overrides: Partial<ImageData> = {}
+): ImageData => ({
   id: 'img1',
   filename: 'image1.png',
   width: 100,
@@ -73,13 +85,26 @@ const buildImageData = (polygons: Polygon[]): ImageData => ({
       timestamp: new Date('2026-04-17T00:00:00Z'),
     },
   ],
+  ...overrides,
 });
 
 describe('FormatConverter', () => {
   describe('convertToCOCO', () => {
-    it('emits a separate sperm category alongside cell', async () => {
+    it('emits only the cell category for polygon-only projects', async () => {
       const converter = new FormatConverter();
       const data = buildImageData([closedPolygon]);
+
+      const coco = await converter.convertToCOCO([data]);
+
+      expect(coco.categories).toEqual([
+        expect.objectContaining({ id: 1, name: 'cell' }),
+      ]);
+      expect(coco.categories.find(c => c.name === 'sperm')).toBeUndefined();
+    });
+
+    it('adds sperm category when polylines are present', async () => {
+      const converter = new FormatConverter();
+      const data = buildImageData([closedPolygon, spermHead]);
 
       const coco = await converter.convertToCOCO([data]);
 
@@ -89,7 +114,7 @@ describe('FormatConverter', () => {
       ]);
     });
 
-    it('writes closed polygons under category 1 with geometry=polygon', async () => {
+    it('writes closed polygons under category 1 with exact area', async () => {
       const converter = new FormatConverter();
       const data = buildImageData([closedPolygon]);
 
@@ -99,12 +124,17 @@ describe('FormatConverter', () => {
       const ann = coco.annotations[0];
       expect(ann.category_id).toBe(1);
       expect(ann.attributes?.geometry).toBe('polygon');
-      expect(ann.area).toBeGreaterThan(0);
+      expect(ann.area).toBe(100);
     });
 
-    it('writes polylines under category 2 with partClass+instanceId in attributes', async () => {
+    it('writes polylines under category 2 with exact length and partClass+instanceId', async () => {
       const converter = new FormatConverter();
-      const data = buildImageData([closedPolygon, spermHead, spermMidpiece, spermTail]);
+      const data = buildImageData([
+        closedPolygon,
+        spermHead,
+        spermMidpiece,
+        spermTail,
+      ]);
 
       const coco = await converter.convertToCOCO([data]);
 
@@ -116,27 +146,76 @@ describe('FormatConverter', () => {
         .sort();
       expect(partClasses).toEqual(['head', 'midpiece', 'tail']);
 
+      const expectedLengths: Record<string, number> = {
+        head: 3,
+        midpiece: 4,
+        tail: 5,
+      };
       for (const ann of polylineAnns) {
         expect(ann.attributes?.geometry).toBe('polyline');
         expect(ann.attributes?.instanceId).toBe('sperm_1');
-        expect(ann.attributes?.length).toBeGreaterThan(0);
         expect(ann.area).toBe(0);
+        const part = ann.attributes?.partClass as keyof typeof expectedLengths;
+        expect(ann.attributes?.length).toBeCloseTo(expectedLengths[part]);
       }
     });
 
-    it('produces stable annotation IDs (no collision between polygons and polylines)', async () => {
+    it('skips polylines with missing partClass and warns', async () => {
       const converter = new FormatConverter();
-      const data = buildImageData([closedPolygon, spermHead, spermMidpiece, spermTail]);
+      const orphan: Polygon = {
+        ...spermHead,
+        id: 'orphan-no-part',
+        partClass: undefined,
+      };
+      const data = buildImageData([closedPolygon, orphan]);
 
       const coco = await converter.convertToCOCO([data]);
 
+      const spermAnns = coco.annotations.filter(a => a.category_id === 2);
+      expect(spermAnns).toHaveLength(0);
+      expect(coco.categories.find(c => c.name === 'sperm')).toBeUndefined();
+      expect(mockedLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('missing or invalid partClass'),
+        'FormatConverter',
+        expect.objectContaining({ skipped: 1 })
+      );
+    });
+
+    it('rejects polylines whose partClass is outside the whitelist', async () => {
+      const converter = new FormatConverter();
+      const typo: Polygon = {
+        ...spermHead,
+        partClass: 'flagellum' as never,
+      };
+      const data = buildImageData([typo]);
+
+      const coco = await converter.convertToCOCO([data]);
+
+      expect(coco.annotations.filter(a => a.category_id === 2)).toHaveLength(0);
+      expect(mockedLogger.warn).toHaveBeenCalled();
+    });
+
+    it('keeps annotation IDs unique across multiple images', async () => {
+      const converter = new FormatConverter();
+      const data1 = buildImageData([closedPolygon, spermHead], {
+        id: 'img1',
+        filename: 'a.png',
+      });
+      const data2 = buildImageData([closedPolygon, spermMidpiece], {
+        id: 'img2',
+        filename: 'b.png',
+      });
+
+      const coco = await converter.convertToCOCO([data1, data2]);
+
       const ids = coco.annotations.map(a => a.id);
       expect(new Set(ids).size).toBe(ids.length);
+      expect(coco.annotations.length).toBe(4);
     });
   });
 
   describe('convertToYOLO', () => {
-    it('skips polylines with a warning log', async () => {
+    it('returns { content, warnings } with warning when polylines present', async () => {
       const converter = new FormatConverter();
       const polygonsJson = JSON.stringify([
         closedPolygon,
@@ -145,26 +224,46 @@ describe('FormatConverter', () => {
         spermTail,
       ]);
 
-      const yolo = await converter.convertToYOLO(polygonsJson, 100, 100);
-      const lines = yolo.split('\n').filter(l => l && !l.startsWith('#'));
+      const result = await converter.convertToYOLO(polygonsJson, 100, 100);
+      const lines = result.content
+        .split('\n')
+        .filter(l => l && !l.startsWith('#'));
 
       expect(lines).toHaveLength(1);
       expect(lines[0]).toMatch(/^0 /);
-      expect(mockedLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('YOLO format does not support open polylines'),
-        'FormatConverter',
-        expect.objectContaining({ polylineCount: 3 })
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain(
+        'YOLO format does not support open polylines'
       );
+      expect(result.warnings[0]).toContain('skipped 3');
     });
 
-    it('does not warn when there are no polylines', async () => {
-      mockedLogger.warn.mockClear();
+    it('returns empty warnings array when no polylines present', async () => {
       const converter = new FormatConverter();
       const polygonsJson = JSON.stringify([closedPolygon]);
 
-      await converter.convertToYOLO(polygonsJson, 100, 100);
+      const result = await converter.convertToYOLO(polygonsJson, 100, 100);
 
+      expect(result.warnings).toEqual([]);
       expect(mockedLogger.warn).not.toHaveBeenCalled();
+    });
+
+    it('produces empty content but warns for pure-polyline input', async () => {
+      const converter = new FormatConverter();
+      const polygonsJson = JSON.stringify([spermHead, spermMidpiece]);
+
+      const result = await converter.convertToYOLO(polygonsJson, 100, 100);
+
+      expect(result.content).toBe('');
+      expect(result.warnings).toHaveLength(1);
+    });
+
+    it('throws on malformed JSON', async () => {
+      const converter = new FormatConverter();
+
+      await expect(
+        converter.convertToYOLO('not-json', 100, 100)
+      ).rejects.toThrow(/Invalid polygon data format/);
     });
   });
 
@@ -180,11 +279,17 @@ describe('FormatConverter', () => {
       expect(seg?.polylines).toBeUndefined();
       expect(seg?.spermInstances).toBeUndefined();
       expect(seg?.statistics.totalPolylines).toBeUndefined();
+      expect(seg?.statistics.orphanPolylineCount).toBeUndefined();
     });
 
-    it('emits polylines and spermInstances when polylines exist', async () => {
+    it('emits polylines and spermInstances with exact lengths', async () => {
       const converter = new FormatConverter();
-      const data = buildImageData([closedPolygon, spermHead, spermMidpiece, spermTail]);
+      const data = buildImageData([
+        closedPolygon,
+        spermHead,
+        spermMidpiece,
+        spermTail,
+      ]);
 
       const out = await converter.convertToJSON([data]);
       const seg = out.images[0]?.segmentation;
@@ -202,9 +307,10 @@ describe('FormatConverter', () => {
 
       expect(seg?.statistics.totalPolylines).toBe(3);
       expect(seg?.statistics.totalSpermInstances).toBe(1);
+      expect(seg?.statistics.orphanPolylineCount).toBeUndefined();
     });
 
-    it('orphan polylines (no instanceId) are exported but not grouped', async () => {
+    it('logs orphan polylines and reports orphanPolylineCount in statistics', async () => {
       const converter = new FormatConverter();
       const orphan: Polygon = {
         ...spermHead,
@@ -218,6 +324,41 @@ describe('FormatConverter', () => {
 
       expect(seg?.polylines).toHaveLength(1);
       expect(seg?.spermInstances).toBeUndefined();
+      expect(seg?.statistics.orphanPolylineCount).toBe(1);
+      expect(mockedLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('without instanceId'),
+        'FormatConverter',
+        expect.objectContaining({ orphanCount: 1 })
+      );
+    });
+
+    it('handles a pure-polyline image with no closed polygons', async () => {
+      const converter = new FormatConverter();
+      const data = buildImageData([spermHead, spermMidpiece, spermTail]);
+
+      const out = await converter.convertToJSON([data]);
+      const seg = out.images[0]?.segmentation;
+
+      expect(seg?.polygons.external).toHaveLength(0);
+      expect(seg?.polygons.internal).toHaveLength(0);
+      expect(seg?.polylines).toHaveLength(3);
+      expect(seg?.spermInstances).toHaveLength(1);
+      expect(seg?.statistics.totalArea).toBe(0);
+    });
+
+    it('skips invalid partClass in polylinesData but keeps the polyline entry', async () => {
+      const converter = new FormatConverter();
+      const typo: Polygon = {
+        ...spermHead,
+        partClass: 'midpeice' as never,
+      };
+      const data = buildImageData([typo]);
+
+      const out = await converter.convertToJSON([data]);
+      const polylines = out.images[0]?.segmentation?.polylines;
+
+      expect(polylines).toHaveLength(1);
+      expect(polylines?.[0]?.partClass).toBeUndefined();
     });
   });
 });
