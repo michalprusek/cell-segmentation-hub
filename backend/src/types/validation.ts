@@ -312,12 +312,24 @@ export type ImageQueryParams = z.infer<typeof imageQuerySchema>;
 /**
  * Schema for reordering images within a project (time-series / wound-healing UI).
  * Array order == desired displayOrder (index 0 → displayOrder 0, index 1 → 1, ...).
+ *
+ * ``mode`` controls what happens to images not in the payload:
+ * - ``'all'`` (default): payload MUST contain every image in the project. The
+ *   service rejects with 400 otherwise, preventing silent sort drift when the
+ *   client forgets an image.
+ * - ``'partial'``: only the listed images are repositioned at the front
+ *   (indexes 0..N-1); omitted images keep their existing displayOrder but
+ *   are shifted to start at N. Useful for "move these to front" UX.
  */
 export const imageReorderSchema = z.object({
   imageIds: z
     .array(uuidSchema)
     .min(1, 'Je potřeba alespoň jedno UUID')
-    .max(10000, 'Maximum 10000 obrázků na jeden reorder'),
+    .max(10000, 'Maximum 10000 obrázků na jeden reorder')
+    .refine(arr => new Set(arr).size === arr.length, {
+      message: 'imageIds obsahují duplicity',
+    }),
+  mode: z.enum(['all', 'partial']).optional().default('all'),
 });
 
 export type ImageReorderData = z.infer<typeof imageReorderSchema>;

@@ -83,6 +83,13 @@ export interface ExportJob {
   completedAt?: Date;
   options: ExportOptions;
   projectName?: string;
+  /**
+   * Non-fatal problems surfaced to the user after a completed export (e.g.
+   * wound TimeSeries sheet could not be written because the chart library
+   * failed). The job still ends with ``status: 'completed'`` — these are
+   * warnings, not errors.
+   */
+  warnings?: string[];
 }
 
 export class ExportService {
@@ -1014,8 +1021,19 @@ export class ExportService {
 
         // Wound-healing time-series: only triggered when at least one image
         // was segmented with the wound model. Appends an extra worksheet +
-        // embedded area-vs-time chart to the existing metrics.xlsx.
-        await this.maybeAppendWoundTimeSeries(images, excelPath, jobId);
+        // embedded area-vs-time chart to the existing metrics.xlsx. Any
+        // failure attaches a warning to the job so the UI can surface it.
+        const tsWarning = await this.maybeAppendWoundTimeSeries(
+          images,
+          excelPath,
+          jobId
+        );
+        if (tsWarning && jobId) {
+          const job = this.exportJobs.get(jobId);
+          if (job) {
+            job.warnings = [...(job.warnings ?? []), tsWarning];
+          }
+        }
       } else if (format === 'csv') {
         await this.metricsCalculator.exportToCSV(
           allMetrics,
@@ -1948,20 +1966,26 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
    * If the project contains wound-model segmentations, open the metrics
    * workbook and append a ``WoundTimeSeries`` sheet with wound-area % per
    * frame and an embedded line chart. No-op for spheroid/sperm projects.
+   *
+   * Returns a warning string when the wound feature was expected (project
+   * has wound segmentations) but the sheet could not be written — the
+   * caller attaches the message to the export job so the user sees it.
    */
   private async maybeAppendWoundTimeSeries(
     images: ImageWithSegmentation[],
     excelPath: string,
     jobId?: string
-  ): Promise<void> {
+  ): Promise<string | null> {
     const hasWound = images.some(img => img.segmentation?.model === 'wound');
     if (!hasWound) {
-      return;
+      return null;
     }
 
     try {
       const ExcelJS = (await import('exceljs')).default;
-      const { appendWoundTimeSeriesSheet } = await import('./export/woundTimeSeries');
+      const { appendWoundTimeSeriesSheet } = await import(
+        './export/woundTimeSeries'
+      );
 
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.readFile(excelPath);
@@ -1974,12 +1998,16 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
           { jobId }
         );
       }
+      return null;
     } catch (err) {
-      logger.warn(
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(
         'Failed to append wound TimeSeries — metrics.xlsx left without it',
+        err instanceof Error ? err : undefined,
         'ExportService',
-        { error: err instanceof Error ? err.message : String(err), jobId }
+        { error: message, jobId }
       );
+      return `Wound time-series sheet could not be written: ${message}`;
     }
   }
 }

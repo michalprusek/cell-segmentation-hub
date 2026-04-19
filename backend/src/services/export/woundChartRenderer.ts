@@ -1,8 +1,9 @@
 /**
  * Renders a PNG line chart of wound-area-% over time points using
- * node-canvas (already a backend dependency). Kept zero-dep on chart.js —
- * a plain line chart with grid/axes is all the export needs and adding a
- * second chart runtime (chartjs-node-canvas) would mean another native build.
+ * ``canvas`` (already a backend dependency for thumbnailing). Kept zero-dep
+ * on chart.js — for a plain single-series line chart, adding
+ * ``chartjs-node-canvas`` + chart.js + transitive deps onto the existing
+ * native canvas wasn't worth the install surface.
  */
 
 import { createCanvas } from 'canvas';

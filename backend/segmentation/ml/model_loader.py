@@ -270,7 +270,6 @@ class ModelLoader:
                 logger.info(f"Successfully loaded sperm pipeline model from: {weights_full_path}")
                 return model
             elif model_name == 'wound':
-                # Wound-healing model — U-Net++ with ResNeXt-50 encoder via smp
                 if WoundModel is None:
                     raise ImportError(
                         f"Wound model architecture not available: {_wound_import_error}"
@@ -869,7 +868,7 @@ class ModelLoader:
         self.current_model = 'wound'
 
         try:
-            original_size = image.size  # PIL: (width, height)
+            original_size = image.size
             logger.info(
                 f"Starting wound prediction, image size: {original_size}, "
                 f"detect_holes: {detect_holes}"
@@ -892,7 +891,15 @@ class ModelLoader:
                 )
             except InferenceTimeoutError:
                 raise
-            except Exception as e:
+            except torch.cuda.OutOfMemoryError as e:
+                raise InferenceError(
+                    f"Wound inference OOM on GPU: {e}"
+                ) from e
+            except RuntimeError as e:
+                # Covers CUDA runtime, shape mismatch, invalid tensor ops.
+                # Programming errors (TypeError / AttributeError) intentionally
+                # propagate so tests / monitoring see them as bugs, not as
+                # generic "inference failed" 500s.
                 raise InferenceError(f"Wound inference failed: {e}") from e
 
             if isinstance(logits, tuple):
@@ -902,8 +909,6 @@ class ModelLoader:
                 logits, original_size, threshold
             )
 
-            # Polygon extraction — reuse the spheroid-style hierarchy so that
-            # internal free-cell regions map onto parent_id relationships.
             if detect_holes:
                 contours, hierarchy = cv2.findContours(
                     binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
@@ -938,11 +943,18 @@ class ModelLoader:
                 if detect_holes and hierarchy is not None:
                     parent_idx = hierarchy[i][3]
                     if parent_idx != -1:
-                        polygon_type = "internal"
                         for existing in polygons:
                             if existing.get("contour_index") == parent_idx:
                                 parent_id = existing["id"]
                                 break
+                        # Only treat as hole when we could resolve the parent.
+                        # If the parent contour was filtered (< 50 px) it is
+                        # missing from ``polygons`` and an orphan "internal"
+                        # would otherwise be subtracted from the wrong wound
+                        # in downstream area calculations. Reclassify as
+                        # external instead.
+                        if parent_id is not None:
+                            polygon_type = "internal"
 
                 polygon_data = {
                     "id": f"polygon_{polygon_id_counter}",

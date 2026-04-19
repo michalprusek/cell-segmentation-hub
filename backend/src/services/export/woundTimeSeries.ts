@@ -7,12 +7,15 @@
  * embedded in the metrics workbook.
  *
  * Area convention (matches the retired VŠCHT wound-healing app):
- *     woundAreaPct = Σ(external polygon area) − Σ(internal polygon area)
- *                   ───────────────────────────────────────────────────── × 100
- *                                image width × image height
+ *     woundAreaPct = Σ(external polygon area) − Σ(hole area)
+ *                   ──────────────────────────────────────────── × 100
+ *                            image width × image height
  *
- * Internal polygons (parent_id set) represent free cells inside a wound —
- * same semantics as the legacy "+/−" polygon operation.
+ * A polygon is treated as a hole (subtracted) only when it was tagged
+ * ``type: 'internal'`` AND has a resolved ``parent_id`` pointing to a
+ * surviving external polygon — requiring both prevents orphaned holes
+ * (whose small parent was filtered out at < 50 px) from corrupting the
+ * area calculation.
  */
 
 import type ExcelJS from 'exceljs';
@@ -27,11 +30,23 @@ export interface WoundTimePoint {
   woundAreaPct: number;
   polygonCount: number;
   createdAt: string | null;
+  /**
+   * Populated only when the row could not be computed (e.g. corrupt polygon
+   * JSON, missing image dimensions). The sheet row shows this message so the
+   * user can distinguish a real zero-area wound from a parsing failure.
+   */
+  note?: string;
 }
 
-interface ImageLike extends ImageWithSegmentation {
-  createdAt?: Date | string | null;
-  displayOrder?: number | null;
+/**
+ * Minimal image shape required by the time-series computation.
+ * Intentionally narrow: the full Prisma ``Image`` has many more fields, but
+ * time-series only needs these. Accepting either ``Date`` or ``string`` on
+ * ``createdAt`` tolerates both Prisma rows and already-serialized payloads.
+ */
+interface WoundSeriesImage extends ImageWithSegmentation {
+  createdAt: Date | string;
+  displayOrder: number | null;
 }
 
 interface ParsedPoint {
@@ -62,19 +77,28 @@ function computeWoundAreaPct(
   polygonsJson: string,
   width: number | undefined,
   height: number | undefined
-): { pct: number; polygonCount: number } {
+): { pct: number; polygonCount: number; note?: string } {
   if (!width || !height) {
-    return { pct: 0, polygonCount: 0 };
+    return {
+      pct: 0,
+      polygonCount: 0,
+      note: 'missing image dimensions',
+    };
   }
   let polygons: ParsedPolygon[];
   try {
     const parsed = JSON.parse(polygonsJson);
     polygons = Array.isArray(parsed) ? parsed : parsed.polygons || [];
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logger.warn('Failed to parse wound polygons JSON', 'woundTimeSeries', {
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
     });
-    return { pct: 0, polygonCount: 0 };
+    return {
+      pct: 0,
+      polygonCount: 0,
+      note: `polygon JSON parse failed: ${message}`,
+    };
   }
 
   let externalArea = 0;
@@ -84,7 +108,16 @@ function computeWoundAreaPct(
       continue;
     }
     const area = shoelaceArea(poly.points);
-    if (poly.type === 'internal' || poly.parent_id) {
+    // A polygon is a hole only if both conditions hold: the ML pipeline
+    // tagged it as ``internal`` AND we resolved a concrete ``parent_id``.
+    // Requiring both prevents orphaned children (whose small parent was
+    // filtered out post-segmentation) from being subtracted from the
+    // wrong wound — which would produce negative raw area clamped to 0.
+    const isHole =
+      poly.type === 'internal' &&
+      typeof poly.parent_id === 'string' &&
+      poly.parent_id.length > 0;
+    if (isHole) {
       internalArea += area;
     } else {
       externalArea += area;
@@ -92,15 +125,16 @@ function computeWoundAreaPct(
   }
 
   const imageArea = width * height;
-  const pct = imageArea > 0 ? ((externalArea - internalArea) / imageArea) * 100 : 0;
+  const pct =
+    imageArea > 0 ? ((externalArea - internalArea) / imageArea) * 100 : 0;
   return { pct: Math.max(0, pct), polygonCount: polygons.length };
 }
 
-export function shouldExportWoundTimeSeries(images: ImageLike[]): boolean {
+export function shouldExportWoundTimeSeries(images: WoundSeriesImage[]): boolean {
   return images.some(img => img.segmentation?.model === 'wound');
 }
 
-export function buildWoundTimeSeries(images: ImageLike[]): WoundTimePoint[] {
+export function buildWoundTimeSeries(images: WoundSeriesImage[]): WoundTimePoint[] {
   const sorted = [...images].sort((a, b) => {
     const aOrder = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
     const bOrder = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
@@ -119,7 +153,7 @@ export function buildWoundTimeSeries(images: ImageLike[]): WoundTimePoint[] {
     if (img.segmentation?.model !== 'wound') {
       continue;
     }
-    const { pct, polygonCount } = computeWoundAreaPct(
+    const { pct, polygonCount, note } = computeWoundAreaPct(
       img.segmentation.polygons,
       img.width,
       img.height
@@ -131,6 +165,7 @@ export function buildWoundTimeSeries(images: ImageLike[]): WoundTimePoint[] {
       woundAreaPct: parseFloat(pct.toFixed(3)),
       polygonCount,
       createdAt: img.createdAt ? new Date(img.createdAt).toISOString() : null,
+      ...(note ? { note } : {}),
     });
     orderCounter += 1;
   }
@@ -144,7 +179,7 @@ export function buildWoundTimeSeries(images: ImageLike[]): WoundTimePoint[] {
  */
 export async function appendWoundTimeSeriesSheet(
   workbook: ExcelJS.Workbook,
-  images: ImageLike[]
+  images: WoundSeriesImage[]
 ): Promise<number> {
   if (!shouldExportWoundTimeSeries(images)) {
     return 0;
@@ -162,6 +197,7 @@ export async function appendWoundTimeSeriesSheet(
     { header: 'Polygons', key: 'polygonCount', width: 10 },
     { header: 'Created At (UTC)', key: 'createdAt', width: 24 },
     { header: 'Image ID', key: 'imageId', width: 38 },
+    { header: 'Note', key: 'note', width: 40 },
   ];
   sheet.getRow(1).font = { bold: true };
 
@@ -173,6 +209,7 @@ export async function appendWoundTimeSeriesSheet(
       polygonCount: p.polygonCount,
       createdAt: p.createdAt,
       imageId: p.imageId,
+      note: p.note ?? '',
     });
   }
 

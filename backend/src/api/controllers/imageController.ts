@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { ImageService } from '../../services/imageService';
 // Removed ThumbnailService - using unified approach with SegmentationThumbnailService only
 import { SegmentationThumbnailService } from '../../services/segmentationThumbnailService';
@@ -424,11 +425,23 @@ export class ImageController {
         return;
       }
 
-      const { imageIds } = req.body as { imageIds: string[] };
+      const { imageIds, mode } = req.body as {
+        imageIds: string[];
+        mode?: 'all' | 'partial';
+      };
 
-      await this.imageService.reorderImages(projectId, userId, imageIds);
+      await this.imageService.reorderImages(
+        projectId,
+        userId,
+        imageIds,
+        mode ?? 'all'
+      );
 
-      ResponseHelper.success(res, { reordered: imageIds.length }, 'Pořadí obrázků aktualizováno');
+      ResponseHelper.success(
+        res,
+        { reordered: imageIds.length, mode: mode ?? 'all' },
+        'Image order updated'
+      );
     } catch (error) {
       logger.error(
         'Failed to reorder images',
@@ -449,6 +462,24 @@ export class ImageController {
           'ImageController'
         );
         return;
+      }
+
+      // Map Prisma errors to actionable 409 Conflict so the UI can prompt the
+      // user to reload. P2025 = record not found (image deleted mid-drag);
+      // P2034 = serialization conflict (two drags overlapped).
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025' || error.code === 'P2034') {
+          ResponseHelper.error(
+            res,
+            ApiError.conflict(
+              'Image list changed during reorder, please reload and retry'
+            ),
+            409,
+            undefined,
+            'ImageController'
+          );
+          return;
+        }
       }
 
       ResponseHelper.internalError(res, error as Error, 'ImageController');
