@@ -16,6 +16,7 @@ import {
   projectImageParamsSchema,
   imageQuerySchema,
   imageBatchDeleteSchema,
+  imageReorderSchema,
 } from '../../types/validation';
 
 const router = Router();
@@ -90,6 +91,18 @@ router.post(
   handleUploadError,
   validateUploadedFiles,
   imageController.uploadImages
+);
+
+/**
+ * Reorder images within a project for time-series workflows.
+ * PATCH /projects/:id/images/reorder
+ * MUST be placed before `/:projectId/images/:imageId` to avoid matching as image detail.
+ */
+router.patch(
+  '/:id/images/reorder',
+  validateParams(projectIdSchema),
+  validateBody(imageReorderSchema),
+  imageController.reorderImages
 );
 
 /**

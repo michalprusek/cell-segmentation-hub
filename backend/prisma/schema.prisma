@@ -87,6 +87,7 @@ model Image {
   width                  Int?
   height                 Int?
   mimeType               String?
+  displayOrder           Int?                // Manual ordering for time-series (wound healing etc.); null => fall back to createdAt
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
   project                Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -94,6 +95,7 @@ model Image {
   segmentation           Segmentation?
 
   @@index([projectId, segmentationStatus], map: "idx_image_project_status")
+  @@index([projectId, displayOrder], map: "idx_image_project_order")
   @@map("images")
 }
 

@@ -109,10 +109,14 @@ bun.lockb
 # Model weights and large files
 *.pth
 *.pth.backup
+*.pt
 *.onnx
 *.h5
 *.pkl
 *.model
+
+# Wound-healing model release archives (extracted to weights/ on deploy)
+wound_seg_v2.zip
 
 # Generated documentation
 docs/api/generated/

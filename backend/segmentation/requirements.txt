@@ -31,5 +31,8 @@ scikit-image==0.22.0
 # ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
 networkx>=3.0
 
+# Wound-healing model (U-Net++ / ResNeXt-50 via segmentation_models_pytorch)
+segmentation-models-pytorch==0.3.4
+
 # Prometheus metrics
 prometheus-fastapi-instrumentator==6.1.0

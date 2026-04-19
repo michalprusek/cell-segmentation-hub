@@ -124,16 +124,20 @@ describe('useLocalizedModels', () => {
   });
 
   describe('getAllModels', () => {
-    it('returns all four available models', () => {
+    it('returns every registered model (spheroid + sperm + wound)', () => {
       const { result } = renderHook(() => useLocalizedModels());
       const models = result.current.getAllModels();
 
-      expect(models).toHaveLength(4);
+      // Registry: hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp,
+      // sperm, wound. If this count changes intentionally, update here.
+      expect(models).toHaveLength(6);
       const ids = models.map(m => m.id);
       expect(ids).toContain('hrnet');
       expect(ids).toContain('cbam_resunet');
       expect(ids).toContain('unet_spherohq');
+      expect(ids).toContain('unet_attention_aspp');
       expect(ids).toContain('sperm');
+      expect(ids).toContain('wound');
     });
 
     it('each model has a non-empty name and description', () => {
@@ -162,7 +166,7 @@ describe('useLocalizedModels', () => {
       const { result } = renderHook(() => useLocalizedModels());
 
       // availableModels is the result of getAllModels() called during render
-      expect(result.current.availableModels).toHaveLength(4);
+      expect(result.current.availableModels).toHaveLength(6);
     });
   });
 

@@ -37,6 +37,10 @@ const ModelSettingsSection = () => {
     () => availableModels.filter(m => m.category === 'sperm'),
     [availableModels]
   );
+  const woundModels = useMemo(
+    () => availableModels.filter(m => m.category === 'wound'),
+    [availableModels]
+  );
 
   const handleModelChange = (modelId: string) => {
     const model = availableModels.find(m => m.id === modelId);
@@ -142,6 +146,13 @@ const ModelSettingsSection = () => {
               </h4>
             </div>
             {spermModels.map(renderModelCard)}
+
+            <div className="pt-2">
+              <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                {t('settings.modelSelection.sections.wound')}
+              </h4>
+            </div>
+            {woundModels.map(renderModelCard)}
           </div>
         </RadioGroup>
       </div>

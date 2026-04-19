@@ -395,6 +395,7 @@ export default {
       sections: {
         spheroid: 'Modely sféroidů',
         sperm: 'Modely spermií',
+        wound: 'Modely hojení ran',
       },
       models: {
         hrnet: {
@@ -419,6 +420,11 @@ export default {
           name: 'Morfologie spermií',
           description:
             'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
+        },
+        wound: {
+          name: 'Hojení ran (scratch assay)',
+          description:
+            'U-Net++ s enkodérem ResNeXt-50 pro binární segmentaci ran v mikroskopii scratch-assay (~32 ms na A5000, Dice 0,967)',
         },
       },
     },
@@ -449,6 +455,8 @@ export default {
         'Vylepšený UNet s Attention Gates a ASPP bottleneck pro detekci rozpadajících se sféroidů a malých satelitních buněk (35.5M parametrů)',
       sperm:
         'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
+      wound:
+        'U-Net++ (ResNeXt-50) model pro segmentaci ran v mikroskopii scratch-assay. Jedna binární oblast rány na snímek; ideální pro časové řady hojení.',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:
@@ -1135,6 +1143,7 @@ export default {
       segmentationProcess: 'Proces segmentace',
       segmentationEditor: 'Editor segmentace',
       exportFeatures: 'Funkce exportu',
+      sharedProjects: 'Sdílené projekty',
     },
     introduction: {
       title: 'Úvod',
@@ -1204,7 +1213,7 @@ export default {
           description:
             'Přesný segmentační model s mechanismy pozornosti pro přesnou detekci hranic sféroidů.',
         },
-        unet_spherohq: {
+        unet: {
           name: 'UNet (SpheroHQ)',
           inferenceTime: 'E2E čas: ~286ms na obrázek (ML inference: 181ms)',
           bestFor:
@@ -1427,48 +1436,32 @@ export default {
       exportNoteText:
         'Každý export obsahuje dokumentaci, metadata a všechny vybrané typy obsahu organizované v přehledné struktuře složek pro snadné použití.',
     },
-    sharedProjectsSection: {
+    sharedProjects: {
       title: 'Sdílené projekty',
       description:
-        'SpheroSeg umožňuje spolupráci na projektech prostřednictvím výkonných funkcí sdílení. Sdílejte své projekty s kolegy, spolupracujte na anotacích a společně analyzujte výsledky.',
-      keyFeatures: 'Klíčové funkce',
+        'SpheroSeg vám umožňuje spolupracovat s kolegy sdílením projektů. Sdílejte své segmentační výsledky a anotace s dalšími výzkumníky pro kontrolu a spolupráci.',
+      sharingFeatures: 'Funkce sdílení',
       features: {
-        projectSharing: {
-          title: 'Sdílení projektů',
-          description:
-            'Sdílejte projekty s konkrétními uživateli prostřednictvím e-mailových pozvánek nebo generováním odkazů pro sdílení.',
-        },
-        permissions: {
-          title: 'Správa oprávnění',
-          description:
-            'Nastavte oprávnění pouze pro čtení nebo úplný přístup pro sdílené uživatele.',
-        },
-        realTimeSync: {
-          title: 'Synchronizace v reálném čase',
-          description:
-            'Změny provedené sdílenými uživateli jsou okamžitě viditelné pro všechny spolupracovníky.',
-        },
-        activityTracking: {
-          title: 'Sledování aktivity',
-          description:
-            'Sledujte, kdo provedl jaké změny s podrobnými protokoly aktivit.',
-        },
+        readOnly:
+          'Přístup pouze pro čtení: Příjemci mohou zobrazovat, ale nemohou měnit vaše data',
+        emailInvite:
+          'E-mailové pozvánky: Sdílení přes e-mail s automatickými notifikacemi',
+        revokeAccess:
+          'Odvolatelný přístup: Oprávnění ke sdílení lze kdykoli zrušit',
+        multipleCollaborators:
+          'Více spolupracovníků: Sdílejte s celými výzkumnými týmy',
       },
       howToShare: 'Jak sdílet projekt',
       shareSteps: {
         step1: 'Otevřete projekt, který chcete sdílet',
         step2: 'Klikněte na tlačítko "Sdílet" v nástrojové liště projektu',
-        step3: 'Zvolte mezi e-mailovou pozvánkou nebo odkazem pro sdílení',
-        step4: 'Nastavte úroveň oprávnění (čtení nebo úplný přístup)',
-        step5: 'Odešlete pozvánku nebo zkopírujte odkaz pro sdílení',
-        step6: 'Spolupracovníci mohou přistupovat k projektu po přijetí',
+        step3: 'Zadejte e-mailové adresy svých spolupracovníků',
+        step4: 'Přidejte volitelnou zprávu vysvětlující sdílený obsah',
+        step5: 'Klikněte na "Odeslat pozvánky" a projekt bude sdílen',
       },
-      accessingShared: 'Přístup ke sdíleným projektům',
-      accessDescription:
-        'Projekty sdílené s vámi se objeví v sekci "Sdílené projekty" na vašem řídicím panelu. Můžete je zobrazit, upravovat (pokud máte oprávnění) a analyzovat stejně jako své vlastní projekty.',
-      collaborationTip: 'Tip pro spolupráci:',
-      collaborationTipText:
-        'Používejte funkci komentářů k zanechávání poznámek na konkrétních obrázcích nebo segmentacích pro efektivní komunikaci s vašim týmem.',
+      permissionsNote: 'Důležité:',
+      permissionsNoteText:
+        'Sdílené projekty jsou pro příjemce pouze ke čtení. Mohou prohlížet segmentace a exportovat data, ale nemohou měnit původní anotace. Tím je zajištěna integrita dat při spolupráci.',
     },
     footer: {
       backToHome: 'Zpět domů',

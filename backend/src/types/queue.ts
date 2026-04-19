@@ -21,7 +21,9 @@ export type SegmentationModel =
   | 'unet_spherohq'
   | 'unet_attention_aspp'
   | 'resunet_advanced'
-  | 'resunet_small';
+  | 'resunet_small'
+  | 'sperm'
+  | 'wound';
 
 /**
  * Queue item status
@@ -359,7 +361,9 @@ export function isSegmentationModel(
     value === 'unet_spherohq' ||
     value === 'unet_attention_aspp' ||
     value === 'resunet_advanced' ||
-    value === 'resunet_small'
+    value === 'resunet_small' ||
+    value === 'sperm' ||
+    value === 'wound'
   );
 }
 

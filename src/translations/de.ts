@@ -413,6 +413,7 @@ export default {
       sections: {
         spheroid: 'Sphäroid-Modelle',
         sperm: 'Spermien-Modelle',
+        wound: 'Wundheilungs-Modelle',
       },
       models: {
         hrnet: {
@@ -439,6 +440,11 @@ export default {
           name: 'Spermien-Morphologie',
           description:
             'Spermien-Morphologiemodell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
+        },
+        wound: {
+          name: 'Wundheilung (Scratch-Assay)',
+          description:
+            'U-Net++ mit ResNeXt-50-Encoder für binäre Wundsegmentierung in Scratch-Assay-Mikroskopie (~32 ms auf A5000, Dice 0,967)',
         },
       },
     },
@@ -469,6 +475,8 @@ export default {
         'Erweitertes UNet mit Attention Gates und ASPP-Bottleneck zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (35,5M Parameter)',
       sperm:
         'Spermienmorphologie-Modell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
+      wound:
+        'U-Net++ (ResNeXt-50) Modell für die Wundsegmentierung in Scratch-Assay-Mikroskopie. Eine binäre Wundregion pro Bild; ideal für Heilungsverlauf-Timelapses.',
     },
     dataUsageTitle: 'Datennutzung und Datenschutz',
     dataUsageDescription:
@@ -1162,6 +1170,7 @@ export default {
       segmentationProcess: 'Segmentierungsprozess',
       segmentationEditor: 'Segmentierungseditor',
       exportFeatures: 'Export-Funktionen',
+      sharedProjects: 'Geteilte Projekte',
     },
     introduction: {
       title: 'Einführung',
@@ -1223,7 +1232,7 @@ export default {
           description:
             'Präzises Segmentierungsmodell mit Aufmerksamkeitsmechanismen für genaue Sphäroid-Grenzerkennung.',
         },
-        unet_spherohq: {
+        unet: {
           name: 'UNet (SpheroHQ)',
           inferenceTime: 'E2E-Zeit: ~286ms pro Bild (ML-Inferenz: 181ms)',
           bestFor:
@@ -1407,7 +1416,7 @@ export default {
       exportNote: 'Pakete sind umfassend:',
       exportNoteText: 'Jeder Export enthält Dokumentation und Metadaten.',
     },
-    sharedProjectsSection: {
+    sharedProjects: {
       title: 'Geteilte Projekte',
       description:
         'SpheroSeg ermöglicht Ihnen die Zusammenarbeit mit Kollegen durch das Teilen von Projekten. Teilen Sie Ihre Segmentierungsergebnisse und Annotationen mit anderen Forschern zur Überprüfung und Zusammenarbeit.',
