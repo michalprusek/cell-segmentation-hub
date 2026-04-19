@@ -1021,11 +1021,13 @@ export class ExportService {
 
         // Wound-healing time-series: only triggered when at least one image
         // was segmented with the wound model. Appends an extra worksheet +
-        // embedded area-vs-time chart to the existing metrics.xlsx. Any
-        // failure attaches a warning to the job so the UI can surface it.
+        // embedded area-vs-time chart to the existing metrics.xlsx AND
+        // writes the chart as a standalone PNG into ``wound_healing/``.
+        // Any failure attaches a warning to the job so the UI can surface it.
         const tsWarning = await this.maybeAppendWoundTimeSeries(
           images,
           excelPath,
+          exportDir,
           jobId
         );
         if (tsWarning && jobId) {
@@ -1965,7 +1967,10 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
   /**
    * If the project contains wound-model segmentations, open the metrics
    * workbook and append a ``WoundTimeSeries`` sheet with wound-area % per
-   * frame and an embedded line chart. No-op for spheroid/sperm projects.
+   * frame and an embedded line chart. Additionally writes the chart PNG
+   * as a standalone file at ``<exportDir>/wound_healing/wound_area_chart.png``
+   * so users don't have to extract it out of Excel. No-op for spheroid/
+   * sperm projects.
    *
    * Returns a warning string when the wound feature was expected (project
    * has wound segmentations) but the sheet could not be written — the
@@ -1974,6 +1979,7 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
   private async maybeAppendWoundTimeSeries(
     images: ImageWithSegmentation[],
     excelPath: string,
+    exportDir: string,
     jobId?: string
   ): Promise<string | null> {
     const hasWound = images.some(img => img.segmentation?.model === 'wound');
@@ -1989,7 +1995,10 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
 
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.readFile(excelPath);
-      const count = await appendWoundTimeSeriesSheet(workbook, images);
+      const { count, chartPng } = await appendWoundTimeSeriesSheet(
+        workbook,
+        images
+      );
       if (count > 0) {
         await workbook.xlsx.writeFile(excelPath);
         logger.info(
@@ -1997,6 +2006,18 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
           'ExportService',
           { jobId }
         );
+
+        if (chartPng) {
+          const woundDir = path.join(exportDir, 'wound_healing');
+          await fs.mkdir(woundDir, { recursive: true });
+          const chartPath = path.join(woundDir, 'wound_area_chart.png');
+          await fs.writeFile(chartPath, chartPng);
+          logger.info(
+            `Wound area chart saved to ${chartPath}`,
+            'ExportService',
+            { jobId, frames: count }
+          );
+        }
       }
       return null;
     } catch (err) {
