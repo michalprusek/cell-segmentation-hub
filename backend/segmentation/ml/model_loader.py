@@ -27,6 +27,8 @@ except ImportError:
     gpu_monitor_available = False
     GPUMonitor = None
 
+logger = logging.getLogger(__name__)
+
 # Import model architectures using relative imports
 from models.hrnet import HRNetV2
 from models.cbam_resunet import ResUNetCBAM
@@ -42,15 +44,22 @@ except ImportError as e:
     SpermModel = None
     _sperm_import_error = e
 
+# Optional wound model import (requires segmentation_models_pytorch)
+_wound_import_error = None
+try:
+    from models.wound import WoundModel
+except ImportError as e:
+    logger.warning(f"Could not import WoundModel: {e}. Wound segmentation will not be available.")
+    WoundModel = None
+    _wound_import_error = e
+
 # Import the new inference executor
 from .inference_executor import (
-    InferenceExecutor, 
+    InferenceExecutor,
     InferenceTimeoutError,
     InferenceError,
     get_global_executor
 )
-
-logger = logging.getLogger(__name__)
 
 
 class BatchConfig:
@@ -151,6 +160,12 @@ class ModelLoader:
             'class': SpermModel,  # Will be None if sperm.py not yet copied
             'pretrained_path': 'sperm_final/best_model.pth',
             'finetuned_path': 'sperm_final/best_model.pth',
+            'config_path': None
+        },
+        'wound': {
+            'class': WoundModel,  # Will be None if segmentation_models_pytorch not installed
+            'pretrained_path': 'weights/wound_seg_v2.pt',
+            'finetuned_path': 'weights/wound_seg_v2.pt',
             'config_path': None
         }
     }
@@ -253,6 +268,16 @@ class ModelLoader:
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
                 logger.info(f"Successfully loaded sperm pipeline model from: {weights_full_path}")
+                return model
+            elif model_name == 'wound':
+                if WoundModel is None:
+                    raise ImportError(
+                        f"Wound model architecture not available: {_wound_import_error}"
+                    )
+                model = WoundModel()
+                model.load_weights(str(weights_full_path), self.device)
+                self.loaded_models[model_name] = model
+                logger.info(f"Successfully loaded wound model from: {weights_full_path}")
                 return model
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
@@ -828,6 +853,151 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('sperm')
+
+    def predict_wound(self, image: Image.Image, threshold: float = 0.5,
+                      detect_holes: bool = True,
+                      timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Run the wound-healing segmentation model.
+
+        Produces a single closed-polygon result (largest wound region) with
+        optional nested holes (free cells inside the wound). The output shape
+        matches predict() so the backend/frontend can treat wound polygons
+        identically to spheroid polygons — only ``class`` differs.
+        """
+        self.is_processing = True
+        self.current_model = 'wound'
+
+        try:
+            original_size = image.size
+            logger.info(
+                f"Starting wound prediction, image size: {original_size}, "
+                f"detect_holes: {detect_holes}"
+            )
+
+            wound_wrapper = self.get_model('wound')
+            input_tensor = wound_wrapper.preprocess(image)
+
+            if timeout is None:
+                timeout = float(os.getenv("ML_INFERENCE_TIMEOUT", "60"))
+
+            executor = get_global_executor()
+            try:
+                logits = executor.execute_inference(
+                    model=wound_wrapper.model,
+                    input_tensor=input_tensor,
+                    model_name='wound',
+                    timeout=timeout,
+                    image_size=original_size,
+                )
+            except InferenceTimeoutError:
+                raise
+            except torch.cuda.OutOfMemoryError as e:
+                raise InferenceError(
+                    f"Wound inference OOM on GPU: {e}"
+                ) from e
+            except RuntimeError as e:
+                # Covers CUDA runtime, shape mismatch, invalid tensor ops.
+                # Programming errors (TypeError / AttributeError) intentionally
+                # propagate so tests / monitoring see them as bugs, not as
+                # generic "inference failed" 500s.
+                raise InferenceError(f"Wound inference failed: {e}") from e
+
+            if isinstance(logits, tuple):
+                logits = logits[0]
+
+            binary_mask = wound_wrapper.postprocess_to_mask(
+                logits, original_size, threshold
+            )
+
+            if detect_holes:
+                contours, hierarchy = cv2.findContours(
+                    binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+                )
+            else:
+                contours, hierarchy = cv2.findContours(
+                    binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+
+            if hierarchy is not None:
+                hierarchy = hierarchy[0]
+
+            polygons = []
+            polygon_id_counter = 1
+            filtered_count = 0
+            max_confidence = float(torch.sigmoid(logits).max().item())
+
+            for i, contour in enumerate(contours):
+                if cv2.contourArea(contour) < 50:
+                    filtered_count += 1
+                    continue
+
+                points = [
+                    {"x": float(pt[0][0]), "y": float(pt[0][1])}
+                    for pt in contour
+                ]
+                if len(points) < 3:
+                    continue
+
+                polygon_type = "external"
+                parent_id = None
+                if detect_holes and hierarchy is not None:
+                    parent_idx = hierarchy[i][3]
+                    if parent_idx != -1:
+                        for existing in polygons:
+                            if existing.get("contour_index") == parent_idx:
+                                parent_id = existing["id"]
+                                break
+                        # Only treat as hole when we could resolve the parent.
+                        # If the parent contour was filtered (< 50 px) it is
+                        # missing from ``polygons`` and an orphan "internal"
+                        # would otherwise be subtracted from the wrong wound
+                        # in downstream area calculations. Reclassify as
+                        # external instead.
+                        if parent_id is not None:
+                            polygon_type = "internal"
+
+                polygon_data = {
+                    "id": f"polygon_{polygon_id_counter}",
+                    "points": points,
+                    "type": polygon_type,
+                    "class": "wound",
+                    "confidence": max_confidence,
+                    "vertices_count": len(points),
+                    "contour_index": i,
+                }
+                if parent_id:
+                    polygon_data["parent_id"] = parent_id
+
+                polygons.append(polygon_data)
+                polygon_id_counter += 1
+
+            for polygon in polygons:
+                polygon.pop("contour_index", None)
+
+            external_count = sum(1 for p in polygons if p["type"] == "external")
+            internal_count = sum(1 for p in polygons if p["type"] == "internal")
+            logger.info(
+                f"Wound: {len(polygons)} polygons ({external_count} external, "
+                f"{internal_count} holes, filtered {filtered_count} small)"
+            )
+
+            return {
+                "model_used": "wound",
+                "threshold_used": threshold,
+                "image_size": {"width": original_size[0], "height": original_size[1]},
+                "polygons": polygons,
+                "processing_info": {
+                    "device": str(self.device),
+                    "num_polygons": len(polygons),
+                    "confidence_scores": [p["confidence"] for p in polygons],
+                    "batch_size": 1,
+                },
+            }
+
+        finally:
+            self.is_processing = False
+            self.current_model = None
+            self.release_model('wound')
 
     def predict_batch(self, images: List[Image.Image], model_name: str, batch_size: Optional[int] = None,
                      threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> List[Dict[str, Any]]:

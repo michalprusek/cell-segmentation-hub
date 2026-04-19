@@ -641,6 +641,112 @@ export class ImageService {
   }
 
   /**
+   * Persist an explicit time-series ordering for a project's images.
+   *
+   * The order of ``imageIds`` defines the desired displayOrder: position 0 →
+   * displayOrder 0, position 1 → 1, etc. All writes run inside one Prisma
+   * ``$transaction`` so each request is atomic. (Two concurrent reorders
+   * against the same project are last-write-wins per image under Prisma's
+   * default READ COMMITTED isolation — no serialization, but also no torn
+   * rows since each row update is atomic.)
+   *
+   * ``mode`` semantics (see ``imageReorderSchema``):
+   * - ``'all'`` (default): payload must cover every image in the project,
+   *   otherwise a 400 is returned. Prevents silent sort drift when the
+   *   client forgets an image.
+   * - ``'partial'``: listed images take displayOrder 0..N-1; the rest keep
+   *   their relative createdAt ordering but are shifted to start at N.
+   */
+  async reorderImages(
+    projectId: string,
+    userId: string,
+    imageIds: string[],
+    mode: 'all' | 'partial' = 'all'
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user) {
+      throw ApiError.notFound('User not found');
+    }
+
+    const project = await this.prisma.project.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { userId },
+          {
+            shares: {
+              some: {
+                status: 'accepted',
+                OR: [{ sharedWithId: userId }, { email: user.email }],
+              },
+            },
+          },
+        ],
+      },
+    });
+    if (!project) {
+      throw ApiError.forbidden('Access denied to this project');
+    }
+
+    const providedImages = await this.prisma.image.findMany({
+      where: { id: { in: imageIds }, projectId },
+      select: { id: true },
+    });
+    if (providedImages.length !== imageIds.length) {
+      const provided = new Set(providedImages.map(i => i.id));
+      const missing = imageIds.filter(id => !provided.has(id));
+      const preview = missing.slice(0, 5).join(', ');
+      const suffix =
+        missing.length > 5 ? ` (+${missing.length - 5} more)` : '';
+      throw ApiError.badRequest(
+        `Image IDs do not belong to this project: ${preview}${suffix}`
+      );
+    }
+
+    if (mode === 'all') {
+      const total = await this.prisma.image.count({ where: { projectId } });
+      if (total !== imageIds.length) {
+        throw ApiError.badRequest(
+          `Reorder mode 'all' requires every project image in the payload; ` +
+            `got ${imageIds.length}, expected ${total}. Use mode 'partial' ` +
+            `to reorder a subset.`
+        );
+      }
+    }
+
+    const updates = imageIds.map((id, index) =>
+      this.prisma.image.update({
+        where: { id },
+        data: { displayOrder: index },
+      })
+    );
+
+    if (mode === 'partial') {
+      // Give omitted images a later displayOrder based on their createdAt so
+      // tie-breaks stay deterministic. We do this inside the same
+      // transaction so the sort is never in a torn state between queries.
+      const omitted = await this.prisma.image.findMany({
+        where: { projectId, id: { notIn: imageIds } },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      omitted.forEach((img, idx) => {
+        updates.push(
+          this.prisma.image.update({
+            where: { id: img.id },
+            data: { displayOrder: imageIds.length + idx },
+          })
+        );
+      });
+    }
+
+    await this.prisma.$transaction(updates);
+  }
+
+  /**
    * Get single image by ID with permission check
    */
   async getImageById(

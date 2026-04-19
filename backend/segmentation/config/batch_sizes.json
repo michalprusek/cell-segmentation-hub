@@ -61,6 +61,20 @@
         "expected_concurrent_throughput": 6.6
       },
       "note": "Sperm segmentation model - estimates pending benchmarking"
+    },
+    "wound": {
+      "optimal_batch_size": 1,
+      "max_safe_batch_size": 4,
+      "expected_throughput": 31.0,
+      "memory_limit_mb": 3700,
+      "p95_latency_ms": 32.0,
+      "production_optimized": true,
+      "concurrent_processing": {
+        "max_concurrent_users": 2,
+        "memory_per_user_mb": 3700,
+        "expected_concurrent_throughput": 35.0
+      },
+      "note": "U-Net++ / ResNeXt-50 wound-healing model — latency from vendor README (A5000 fp16 batch=1 ~32ms, throughput batch=10 ~35 img/s)"
     }
   },
   "dynamic_batching": {

@@ -421,6 +421,7 @@ export default {
       sections: {
         spheroid: 'Spheroid Models',
         sperm: 'Sperm Models',
+        wound: 'Wound Healing Models',
       },
       models: {
         hrnet: {
@@ -447,6 +448,11 @@ export default {
           name: 'Sperm Morphology',
           description:
             'Sperm morphology model with skeleton extraction for head/midpiece/tail measurement',
+        },
+        wound: {
+          name: 'Wound Healing (Scratch Assay)',
+          description:
+            'U-Net++ with ResNeXt-50 encoder for binary wound segmentation in scratch-assay microscopy (~32 ms on A5000, Dice 0.967)',
         },
       },
     },
@@ -477,6 +483,8 @@ export default {
         'Enhanced UNet with Attention Gates and ASPP bottleneck for detecting dissolving spheroids and small satellite cells (35.5M params)',
       sperm:
         'Sperm morphology model with skeleton extraction for head, midpiece, and tail measurement',
+      wound:
+        'U-Net++ (ResNeXt-50) model for wound segmentation in scratch-assay microscopy. Single binary wound region per image; ideal for healing-rate timelapses.',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:

@@ -404,6 +404,7 @@ export default {
       sections: {
         spheroid: 'Modèles de sphéroïdes',
         sperm: 'Modèles de spermatozoïdes',
+        wound: 'Modèles de cicatrisation',
       },
       models: {
         hrnet: {
@@ -430,6 +431,11 @@ export default {
           name: 'Morphologie des spermatozoïdes',
           description:
             'Modèle de morphologie spermatique avec extraction de squelette pour mesurer la tête, la pièce intermédiaire et la queue',
+        },
+        wound: {
+          name: 'Cicatrisation des plaies (scratch assay)',
+          description:
+            'U-Net++ avec encodeur ResNeXt-50 pour la segmentation binaire des plaies en microscopie de scratch-assay (~32 ms sur A5000, Dice 0,967)',
         },
       },
     },
@@ -460,6 +466,8 @@ export default {
         'UNet amélioré avec Attention Gates et goulot ASPP pour la détection de sphéroïdes en dissolution et de petites cellules satellites (35,5M paramètres)',
       sperm:
         'Modèle de morphologie spermatique avec extraction de squelette pour la mesure de la tête, de la pièce intermédiaire et de la queue',
+      wound:
+        'Modèle U-Net++ (ResNeXt-50) pour la segmentation des plaies en microscopie de scratch-assay. Une seule région de plaie binaire par image ; idéal pour les time-lapses de cicatrisation.',
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
     dataUsageDescription:

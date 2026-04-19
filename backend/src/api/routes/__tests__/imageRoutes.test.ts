@@ -315,6 +315,52 @@ describe('Image Routes', () => {
     });
   });
 
+  describe('PATCH /api/:id/images/reorder — time-series reorder', () => {
+    it('should require authentication', async () => {
+      mockedAuthenticate.mockImplementationOnce(async (_req, res, _next) => {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+      });
+
+      await request(app)
+        .patch(`/api/${validProjectId}/images/reorder`)
+        .send({ imageIds: [validImageId] })
+        .expect(401);
+    });
+
+    it('should route reorder requests through authentication middleware', async () => {
+      await request(app)
+        .patch(`/api/${validProjectId}/images/reorder`)
+        .send({ imageIds: [validImageId] });
+
+      expect(mockedAuthenticate).toHaveBeenCalled();
+    });
+
+    it('should not match the image-detail GET route (route ordering)', async () => {
+      // PATCH /api/:id/images/reorder must be declared before the
+      // GET /api/:projectId/images/:imageId route, otherwise the detail
+      // route would swallow ``reorder`` as a path param.
+      const response = await request(app)
+        .patch(`/api/${validProjectId}/images/reorder`)
+        .send({ imageIds: [validImageId] });
+
+      // GET-only route would return 404/405; our PATCH landed on the
+      // controller (possibly returning 500 because ImageService is mocked).
+      expect([200, 400, 500]).toContain(response.status);
+    });
+
+    it('should accept a mode parameter (all | partial)', async () => {
+      const allRes = await request(app)
+        .patch(`/api/${validProjectId}/images/reorder`)
+        .send({ imageIds: [validImageId], mode: 'all' });
+      expect([200, 400, 500]).toContain(allRes.status);
+
+      const partialRes = await request(app)
+        .patch(`/api/${validProjectId}/images/reorder`)
+        .send({ imageIds: [validImageId], mode: 'partial' });
+      expect([200, 400, 500]).toContain(partialRes.status);
+    });
+  });
+
   describe('GET /api/:imageId/display — public route', () => {
     it('should not require authentication', async () => {
       // authenticate should NOT be called for /display route (public)

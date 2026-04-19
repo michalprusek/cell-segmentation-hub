@@ -41,7 +41,8 @@ export interface SegmentationRequest {
     | 'unet_attention_aspp'
     | 'resunet_advanced'
     | 'resunet_small'
-    | 'sperm';
+    | 'sperm'
+    | 'wound';
   threshold?: number;
   userId: string;
   detectHoles?: boolean;

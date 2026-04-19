@@ -11,4 +11,10 @@ try:
 except ImportError:
     SpermModel = None
 
-__all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel']
+# Wound model: optional import (requires segmentation_models_pytorch)
+try:
+    from .wound import WoundModel
+except ImportError:
+    WoundModel = None
+
+__all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel', 'WoundModel']

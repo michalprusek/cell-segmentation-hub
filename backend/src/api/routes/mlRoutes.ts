@@ -52,6 +52,22 @@ router.get(
           version: '4.0.0',
           status: 'active',
         },
+        {
+          id: 'sperm',
+          name: 'Sperm Morphology',
+          description:
+            'Mask2Former + graph assembly for sperm head/midpiece/tail polyline extraction',
+          version: '1.0.0',
+          status: 'active',
+        },
+        {
+          id: 'wound',
+          name: 'Wound Healing',
+          description:
+            'U-Net++ (ResNeXt-50) for scratch-assay wound segmentation (binary mask, ~32ms on A5000)',
+          version: '2.0.0',
+          status: 'active',
+        },
       ];
 
       return ResponseHelper.success(

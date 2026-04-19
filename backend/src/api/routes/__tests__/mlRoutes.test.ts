@@ -230,38 +230,35 @@ describe('ML Routes Authentication Tests', () => {
     });
 
     describe('GET /api/ml/models', () => {
-      it('should return available models without authentication', async () => {
+      it('should return every registered model without authentication', async () => {
         const response = await request(app).get('/api/ml/models').expect(200);
 
-        expect(response.body).toEqual({
-          success: true,
-          data: [
-            {
-              id: 'hrnetv2',
-              name: 'HRNetV2',
-              description: 'Best accuracy, ~3.1s inference time',
-              version: '1.0.0',
-              status: 'active',
-            },
-            {
-              id: 'cbam-resunet',
-              name: 'CBAM-ResUNet',
-              description:
-                'Precise segmentation with attention mechanisms, optimized inference time',
-              version: '2.0.0',
-              status: 'active',
-            },
-            {
-              id: 'unet_spherohq',
-              name: 'UNet (SpheroHQ)',
-              description:
-                'Best performance on SpheroHQ dataset, balanced speed and accuracy',
-              version: '1.0.0',
-              status: 'active',
-            },
-          ],
-          message: 'Available ML models retrieved successfully',
-        });
+        // The route is the hardcoded catalog of models surfaced to the UI.
+        // Current lineup: 4 spheroid models + sperm + wound. If you add
+        // or remove a model from mlRoutes.ts, update this list.
+        expect(response.body.success).toBe(true);
+        expect(response.body.message).toBe(
+          'Available ML models retrieved successfully'
+        );
+        const ids = response.body.data.map((m: { id: string }) => m.id);
+        expect(ids).toEqual([
+          'hrnetv2',
+          'cbam-resunet',
+          'unet_spherohq',
+          'unet_attention_aspp',
+          'sperm',
+          'wound',
+        ]);
+        // Spot-check the two newest entries' metadata so renames don't slip.
+        const sperm = response.body.data.find(
+          (m: { id: string }) => m.id === 'sperm'
+        );
+        expect(sperm.name).toBe('Sperm Morphology');
+        const wound = response.body.data.find(
+          (m: { id: string }) => m.id === 'wound'
+        );
+        expect(wound.name).toBe('Wound Healing');
+        expect(wound.description).toMatch(/U-Net\+\+/);
 
         expect(mockedLogger.info).toHaveBeenCalledWith(
           '📊 ML: Fetching available models'
