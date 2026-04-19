@@ -174,19 +174,31 @@ export function buildWoundTimeSeries(images: WoundSeriesImage[]): WoundTimePoint
 }
 
 /**
+ * Outcome of appending the WoundTimeSeries sheet to a workbook.
+ * ``chartPng`` is the rendered area-vs-time PNG — the caller can additionally
+ * write it to a standalone file in ``wound_healing/`` so users don't have to
+ * extract the chart out of Excel.
+ */
+export interface WoundTimeSeriesResult {
+  count: number;
+  chartPng: Buffer | null;
+  points: WoundTimePoint[];
+}
+
+/**
  * Append a WoundTimeSeries worksheet (+ embedded chart PNG) to an existing
  * ExcelJS workbook. Does nothing if no wound images are present.
  */
 export async function appendWoundTimeSeriesSheet(
   workbook: ExcelJS.Workbook,
   images: WoundSeriesImage[]
-): Promise<number> {
+): Promise<WoundTimeSeriesResult> {
   if (!shouldExportWoundTimeSeries(images)) {
-    return 0;
+    return { count: 0, chartPng: null, points: [] };
   }
   const points = buildWoundTimeSeries(images);
   if (points.length === 0) {
-    return 0;
+    return { count: 0, chartPng: null, points: [] };
   }
 
   const sheet = workbook.addWorksheet('WoundTimeSeries');
@@ -213,13 +225,14 @@ export async function appendWoundTimeSeriesSheet(
     });
   }
 
+  let chartPng: Buffer | null = null;
   try {
-    const pngBuffer = await renderWoundAreaChart(points);
+    chartPng = await renderWoundAreaChart(points);
     // ExcelJS's Buffer type lags behind recent @types/node which narrowed
     // Buffer to Buffer<ArrayBuffer>; node-canvas returns the runtime-identical
     // Buffer<ArrayBufferLike>. Cast keeps the types happy without copying.
     const imageId = workbook.addImage({
-      buffer: pngBuffer as unknown as ExcelJS.Buffer,
+      buffer: chartPng as unknown as ExcelJS.Buffer,
       extension: 'png',
     });
     // Anchor the chart to the right of the data, starting at column H row 1.
@@ -233,7 +246,12 @@ export async function appendWoundTimeSeriesSheet(
       'woundTimeSeries',
       { error: err instanceof Error ? err.message : String(err) }
     );
+    chartPng = null;
   }
 
-  return points.length;
+  return {
+    count: points.length,
+    chartPng,
+    points,
+  };
 }

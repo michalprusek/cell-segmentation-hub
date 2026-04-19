@@ -241,7 +241,7 @@ describe('appendWoundTimeSeriesSheet', () => {
     workbook = new ExcelJS.Workbook();
   });
 
-  it('returns 0 and does not add sheet when no wound images', async () => {
+  it('returns count=0 and chartPng=null when no wound images', async () => {
     const img = sampleExternalSquareImage({
       segmentation: {
         polygons: '[]',
@@ -249,8 +249,10 @@ describe('appendWoundTimeSeriesSheet', () => {
         threshold: 0.5,
       },
     });
-    const count = await appendWoundTimeSeriesSheet(workbook, [img as never]);
-    expect(count).toBe(0);
+    const result = await appendWoundTimeSeriesSheet(workbook, [img as never]);
+    expect(result.count).toBe(0);
+    expect(result.chartPng).toBeNull();
+    expect(result.points).toEqual([]);
     expect(workbook.worksheets).toHaveLength(0);
   });
 
@@ -260,11 +262,27 @@ describe('appendWoundTimeSeriesSheet', () => {
       sampleExternalSquareImage({ id: 'b', displayOrder: 1 }),
       sampleExternalSquareImage({ id: 'c', displayOrder: 2 }),
     ];
-    const count = await appendWoundTimeSeriesSheet(workbook, imgs as never[]);
-    expect(count).toBe(3);
+    const result = await appendWoundTimeSeriesSheet(workbook, imgs as never[]);
+    expect(result.count).toBe(3);
     const sheet = workbook.getWorksheet('WoundTimeSeries');
     expect(sheet).toBeDefined();
     // Header row + 3 data rows
     expect(sheet!.rowCount).toBe(4);
+  });
+
+  it('returns a chartPng field so the caller can write it to disk', async () => {
+    const imgs = [
+      sampleExternalSquareImage({ id: 'a', displayOrder: 0 }),
+      sampleExternalSquareImage({ id: 'b', displayOrder: 1 }),
+    ];
+    const result = await appendWoundTimeSeriesSheet(workbook, imgs as never[]);
+    expect(result.count).toBe(2);
+    expect(result.points).toHaveLength(2);
+    // The field MUST be present in the return shape so
+    // ``maybeAppendWoundTimeSeries`` in exportService.ts can branch on it
+    // to decide whether to write ``wound_healing/wound_area_chart.png``.
+    // The VALUE depends on whether canvas rendering succeeded in the test
+    // environment; we only assert shape here.
+    expect(result).toHaveProperty('chartPng');
   });
 });
