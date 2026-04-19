@@ -13,10 +13,11 @@ export const uuidSchema = z.string().uuid('Musí být platné UUID');
  * Segmentation model validation
  */
 export const segmentationModelSchema = z.enum(
-  ['hrnet', 'cbam_resunet', 'unet_spherohq', 'unet_attention_aspp', 'sperm'],
+  ['hrnet', 'cbam_resunet', 'unet_spherohq', 'unet_attention_aspp', 'sperm', 'wound'],
   {
     errorMap: () => ({
-      message: 'Model musí být hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp nebo sperm',
+      message:
+        'Model musí být hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp, sperm nebo wound',
     }),
   }
 );
@@ -219,10 +220,10 @@ export const imageQuerySchema = z.object({
     })
     .optional(),
   sortBy: z
-    .enum(['name', 'createdAt', 'updatedAt', 'fileSize'], {
+    .enum(['name', 'createdAt', 'updatedAt', 'fileSize', 'displayOrder'], {
       errorMap: () => ({
         message:
-          'Řazení lze provést podle: name, createdAt, updatedAt, fileSize',
+          'Řazení lze provést podle: name, createdAt, updatedAt, fileSize, displayOrder',
       }),
     })
     .optional()
@@ -307,6 +308,19 @@ export type ProjectQueryParams = z.infer<typeof projectQuerySchema>;
 export type ProjectIdParams = z.infer<typeof projectIdSchema>;
 export type ImageUploadData = z.infer<typeof imageUploadSchema>;
 export type ImageQueryParams = z.infer<typeof imageQuerySchema>;
+
+/**
+ * Schema for reordering images within a project (time-series / wound-healing UI).
+ * Array order == desired displayOrder (index 0 → displayOrder 0, index 1 → 1, ...).
+ */
+export const imageReorderSchema = z.object({
+  imageIds: z
+    .array(uuidSchema)
+    .min(1, 'Je potřeba alespoň jedno UUID')
+    .max(10000, 'Maximum 10000 obrázků na jeden reorder'),
+});
+
+export type ImageReorderData = z.infer<typeof imageReorderSchema>;
 export type ImageIdParams = z.infer<typeof imageIdSchema>;
 export type ProjectImageParams = z.infer<typeof projectImageParamsSchema>;
 export type ImageBatchDeleteData = z.infer<typeof imageBatchDeleteSchema>;

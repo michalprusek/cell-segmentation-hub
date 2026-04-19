@@ -969,6 +969,21 @@ class ApiClient {
     return response.data.data;
   }
 
+  /**
+   * Reorder images within a project (used for wound-healing time-series view).
+   * The order of ``imageIds`` in the array sets ``displayOrder``: index 0 →
+   * displayOrder 0, index 1 → 1, etc. The backend applies the change in a
+   * single transaction.
+   */
+  async reorderProjectImages(
+    projectId: string,
+    imageIds: string[]
+  ): Promise<void> {
+    await this.instance.patch(`/projects/${projectId}/images/reorder`, {
+      imageIds,
+    });
+  }
+
   async getProjectImages(
     projectId: string,
     params?: { page?: number; limit?: number }

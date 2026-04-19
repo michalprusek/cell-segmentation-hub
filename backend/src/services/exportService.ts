@@ -1011,6 +1011,11 @@ export class ExportService {
             options?.pixelToMicrometerScale
           );
         }
+
+        // Wound-healing time-series: only triggered when at least one image
+        // was segmented with the wound model. Appends an extra worksheet +
+        // embedded area-vs-time chart to the existing metrics.xlsx.
+        await this.maybeAppendWoundTimeSeries(images, excelPath, jobId);
       } else if (format === 'csv') {
         await this.metricsCalculator.exportToCSV(
           allMetrics,
@@ -1936,6 +1941,45 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
       logger.info('Export job cleanup interval stopped', 'ExportService');
+    }
+  }
+
+  /**
+   * If the project contains wound-model segmentations, open the metrics
+   * workbook and append a ``WoundTimeSeries`` sheet with wound-area % per
+   * frame and an embedded line chart. No-op for spheroid/sperm projects.
+   */
+  private async maybeAppendWoundTimeSeries(
+    images: ImageWithSegmentation[],
+    excelPath: string,
+    jobId?: string
+  ): Promise<void> {
+    const hasWound = images.some(img => img.segmentation?.model === 'wound');
+    if (!hasWound) {
+      return;
+    }
+
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const { appendWoundTimeSeriesSheet } = await import('./export/woundTimeSeries');
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(excelPath);
+      const count = await appendWoundTimeSeriesSheet(workbook, images);
+      if (count > 0) {
+        await workbook.xlsx.writeFile(excelPath);
+        logger.info(
+          `Wound TimeSeries appended: ${count} frames`,
+          'ExportService',
+          { jobId }
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        'Failed to append wound TimeSeries — metrics.xlsx left without it',
+        'ExportService',
+        { error: err instanceof Error ? err.message : String(err), jobId }
+      );
     }
   }
 }

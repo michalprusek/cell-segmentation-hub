@@ -311,7 +311,13 @@ export class ImageController {
       const statusRaw = req.query.status as string | undefined;
 
       // Validate sortBy
-      const allowedSortFields = ['name', 'createdAt', 'updatedAt', 'fileSize'];
+      const allowedSortFields = [
+        'name',
+        'createdAt',
+        'updatedAt',
+        'fileSize',
+        'displayOrder',
+      ];
       if (!allowedSortFields.includes(sortByRaw)) {
         res
           .status(400)
@@ -343,7 +349,12 @@ export class ImageController {
       const queryParams = {
         page,
         limit,
-        sortBy: sortBy as 'name' | 'createdAt' | 'updatedAt' | 'fileSize',
+        sortBy: sortBy as
+          | 'name'
+          | 'createdAt'
+          | 'updatedAt'
+          | 'fileSize'
+          | 'displayOrder',
         sortOrder: sortOrder as 'asc' | 'desc',
         status: status as
           | 'pending'
@@ -390,6 +401,56 @@ export class ImageController {
       }
 
       // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
+    }
+  };
+
+  /**
+   * Reorder images within a project (time-series UI for wound-healing etc.).
+   * PATCH /api/projects/:id/images/reorder
+   * Body: { imageIds: string[] } — position in array == displayOrder.
+   */
+  reorderImages = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
+
+      const { id: projectId } = req.params;
+      if (!projectId) {
+        ResponseHelper.badRequest(res, 'Project ID is required');
+        return;
+      }
+
+      const { imageIds } = req.body as { imageIds: string[] };
+
+      await this.imageService.reorderImages(projectId, userId, imageIds);
+
+      ResponseHelper.success(res, { reordered: imageIds.length }, 'Pořadí obrázků aktualizováno');
+    } catch (error) {
+      logger.error(
+        'Failed to reorder images',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          projectId: req.params.id,
+        }
+      );
+
+      if (error instanceof ApiError) {
+        ResponseHelper.error(
+          res,
+          error,
+          error.statusCode,
+          undefined,
+          'ImageController'
+        );
+        return;
+      }
+
       ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };

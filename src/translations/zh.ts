@@ -362,6 +362,7 @@ export default {
       sections: {
         spheroid: '球体模型',
         sperm: '精子模型',
+        wound: '伤口愈合模型',
       },
       models: {
         hrnet: {
@@ -387,6 +388,11 @@ export default {
           description:
             '精子形态学模型，含骨架提取功能，用于测量头部、中段和尾部',
         },
+        wound: {
+          name: '伤口愈合（划痕实验）',
+          description:
+            '使用ResNeXt-50编码器的U-Net++，用于划痕实验显微镜中的二进制伤口分割（A5000上约32毫秒，Dice 0.967）',
+        },
       },
     },
     confidenceThreshold: '置信度阈值',
@@ -411,6 +417,8 @@ export default {
       unet_attention_aspp:
         '增强型UNet，配备注意力门控和ASPP瓶颈层，用于检测溶解中的球体和小型卫星细胞（3550万参数）',
       sperm: '精子形态模型，通过骨架提取测量头部、中段和尾部',
+      wound:
+        '用于划痕实验显微镜的伤口分割的U-Net++（ResNeXt-50）模型。每张图像一个二进制伤口区域；非常适合愈合速度的时间延迟拍摄。',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',

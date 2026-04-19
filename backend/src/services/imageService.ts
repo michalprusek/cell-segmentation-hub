@@ -641,6 +641,70 @@ export class ImageService {
   }
 
   /**
+   * Persist an explicit time-series ordering for a project's images.
+   *
+   * The order of ``imageIds`` in the payload defines the desired displayOrder:
+   * position 0 → ``displayOrder = 0``, position 1 → ``displayOrder = 1``, etc.
+   * All updates run in a single transaction so the re-ordering is atomic —
+   * partial rewrites across concurrent drags are impossible.
+   *
+   * Rejects with ``forbidden`` if any image belongs to a project the user
+   * can't edit, or to a different project than the one in the URL.
+   */
+  async reorderImages(
+    projectId: string,
+    userId: string,
+    imageIds: string[]
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user) {
+      throw ApiError.notFound('User not found');
+    }
+
+    const project = await this.prisma.project.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { userId },
+          {
+            shares: {
+              some: {
+                status: 'accepted',
+                OR: [{ sharedWithId: userId }, { email: user.email }],
+              },
+            },
+          },
+        ],
+      },
+    });
+    if (!project) {
+      throw ApiError.forbidden('Access denied to this project');
+    }
+
+    const images = await this.prisma.image.findMany({
+      where: { id: { in: imageIds }, projectId },
+      select: { id: true },
+    });
+    if (images.length !== imageIds.length) {
+      throw ApiError.badRequest(
+        'Some image IDs do not belong to this project'
+      );
+    }
+
+    await this.prisma.$transaction(
+      imageIds.map((id, index) =>
+        this.prisma.image.update({
+          where: { id },
+          data: { displayOrder: index },
+        })
+      )
+    );
+  }
+
+  /**
    * Get single image by ID with permission check
    */
   async getImageById(

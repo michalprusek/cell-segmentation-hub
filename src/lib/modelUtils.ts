@@ -4,9 +4,10 @@ export type ModelType =
   | 'cbam_resunet'
   | 'unet_spherohq'
   | 'unet_attention_aspp'
-  | 'sperm';
+  | 'sperm'
+  | 'wound';
 
-export type ModelCategory = 'spheroid' | 'sperm';
+export type ModelCategory = 'spheroid' | 'sperm' | 'wound';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds
@@ -97,6 +98,18 @@ export function getLocalizedModelInfo(
         batchSize: 1,
       },
     },
+    wound: {
+      id: 'wound',
+      size: 'medium',
+      defaultThreshold: 0.5,
+      category: 'wound',
+      performance: {
+        avgTimePerImage: 0.032,
+        throughput: 35.0,
+        p95Latency: 0.05,
+        batchSize: 1,
+      },
+    },
   };
 
   const keyMap: Record<ModelType, string> = {
@@ -105,6 +118,7 @@ export function getLocalizedModelInfo(
     unet_spherohq: 'unet_spherohq',
     unet_attention_aspp: 'unet_attention_aspp',
     sperm: 'sperm',
+    wound: 'wound',
   };
 
   const baseModel = baseModels[modelId];
@@ -128,6 +142,7 @@ export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
     'unet_spherohq',
     'unet_attention_aspp',
     'sperm',
+    'wound',
   ];
   return modelIds.map(id => getLocalizedModelInfo(id, t));
 }
@@ -219,6 +234,22 @@ export const BASIC_MODEL_INFO: Record<
       avgTimePerImage: 0.3,
       throughput: 3.3,
       p95Latency: 0.45,
+      batchSize: 1,
+    },
+  },
+  wound: {
+    id: 'wound',
+    name: 'Wound Healing',
+    displayName: 'Wound Healing (Scratch Assay)',
+    description:
+      'U-Net++ with ResNeXt-50 encoder for binary wound segmentation in scratch-assay microscopy timelapses (~32 ms on A5000 GPU)',
+    size: 'medium',
+    defaultThreshold: 0.5,
+    category: 'wound',
+    performance: {
+      avgTimePerImage: 0.032,
+      throughput: 35.0,
+      p95Latency: 0.05,
       batchSize: 1,
     },
   },

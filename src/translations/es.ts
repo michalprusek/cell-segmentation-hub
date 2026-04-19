@@ -391,6 +391,7 @@ export default {
       sections: {
         spheroid: 'Modelos de esferoides',
         sperm: 'Modelos de espermatozoides',
+        wound: 'Modelos de cicatrización',
       },
       models: {
         hrnet: {
@@ -417,6 +418,11 @@ export default {
           name: 'Morfología espermática',
           description:
             'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
+        },
+        wound: {
+          name: 'Cicatrización de heridas (scratch assay)',
+          description:
+            'U-Net++ con codificador ResNeXt-50 para segmentación binaria de heridas en microscopía de scratch-assay (~32 ms en A5000, Dice 0,967)',
         },
       },
     },
@@ -447,6 +453,8 @@ export default {
         'UNet mejorado con Attention Gates y cuello de botella ASPP para detectar esferoides en disolución y pequeñas células satélite (35,5M parámetros)',
       sperm:
         'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
+      wound:
+        'Modelo U-Net++ (ResNeXt-50) para segmentación de heridas en microscopía de scratch-assay. Una única región de herida binaria por imagen; ideal para time-lapses de cicatrización.',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
     dataUsageDescription:
@@ -1144,6 +1152,7 @@ export default {
       segmentationProcess: 'Proceso de Segmentación',
       segmentationEditor: 'Editor de Segmentación',
       exportFeatures: 'Características de Exportación',
+      sharedProjects: 'Proyectos compartidos',
     },
     introduction: {
       title: 'Introducción',
@@ -1216,7 +1225,7 @@ export default {
           description:
             'Modelo de segmentación preciso con mecanismos de atención para la detección precisa de límites de esferoides.',
         },
-        unet_spherohq: {
+        unet: {
           name: 'UNet (SpheroHQ)',
           inferenceTime: 'Tiempo E2E: ~286ms por imagen (inferencia ML: 181ms)',
           bestFor:
@@ -1447,51 +1456,33 @@ export default {
       exportNoteText:
         'Cada exportación incluye documentación, metadatos y todos los tipos de contenido seleccionados organizados en una estructura de carpetas clara para uso fácil.',
     },
-    sharedProjectsSection: {
-      title: 'Proyectos Compartidos',
+    sharedProjects: {
+      title: 'Proyectos compartidos',
       description:
-        'SpheroSeg permite la colaboración en proyectos a través de potentes funciones de compartición. Comparte tus proyectos con colegas, colabora en anotaciones y analiza resultados juntos.',
-      keyFeatures: 'Características Principales',
+        'SpheroSeg le permite colaborar con colegas compartiendo proyectos. Comparta sus resultados de segmentación y anotaciones con otros investigadores para revisión y colaboración.',
+      sharingFeatures: 'Funciones de compartición',
       features: {
-        projectSharing: {
-          title: 'Compartir Proyectos',
-          description:
-            'Comparte proyectos con usuarios específicos a través de invitaciones por correo electrónico o generando enlaces para compartir.',
-        },
-        permissions: {
-          title: 'Gestión de Permisos',
-          description:
-            'Establece permisos de solo lectura o acceso completo para usuarios compartidos.',
-        },
-        realTimeSync: {
-          title: 'Sincronización en Tiempo Real',
-          description:
-            'Los cambios realizados por usuarios compartidos son inmediatamente visibles para todos los colaboradores.',
-        },
-        activityTracking: {
-          title: 'Seguimiento de Actividad',
-          description:
-            'Rastrea quién hizo qué cambios con registros de actividad detallados.',
-        },
+        readOnly:
+          'Acceso de solo lectura: los destinatarios pueden ver pero no modificar sus datos',
+        emailInvite:
+          'Invitaciones por correo electrónico: comparta por correo con notificaciones automáticas',
+        revokeAccess:
+          'Acceso revocable: elimine los permisos de compartición en cualquier momento',
+        multipleCollaborators:
+          'Múltiples colaboradores: comparta con equipos de investigación completos',
       },
-      howToShare: 'Cómo Compartir un Proyecto',
+      howToShare: 'Cómo compartir un proyecto',
       shareSteps: {
-        step1: 'Abre el proyecto que deseas compartir',
+        step1: 'Abra el proyecto que desea compartir',
         step2:
-          'Haz clic en el botón "Compartir" en la barra de herramientas del proyecto',
-        step3:
-          'Elige entre invitación por correo electrónico o enlace para compartir',
-        step4: 'Establece el nivel de permisos (lectura o acceso completo)',
-        step5: 'Envía la invitación o copia el enlace para compartir',
-        step6:
-          'Los colaboradores pueden acceder al proyecto después de aceptar',
+          'Haga clic en el botón "Compartir" en la barra de herramientas del proyecto',
+        step3: 'Introduzca las direcciones de correo de sus colaboradores',
+        step4: 'Añada un mensaje opcional explicando el contenido compartido',
+        step5: 'Haga clic en "Enviar invitaciones" para compartir el proyecto',
       },
-      accessingShared: 'Acceder a Proyectos Compartidos',
-      accessDescription:
-        'Los proyectos compartidos contigo aparecerán en la sección "Proyectos Compartidos" de tu panel de control. Puedes verlos, editarlos (si tienes permisos) y analizarlos igual que tus propios proyectos.',
-      collaborationTip: 'Consejo de Colaboración:',
-      collaborationTipText:
-        'Usa la función de comentarios para dejar notas en imágenes o segmentaciones específicas para una comunicación efectiva con tu equipo.',
+      permissionsNote: 'Importante:',
+      permissionsNoteText:
+        'Los proyectos compartidos son de solo lectura para los destinatarios. Pueden ver segmentaciones y exportar datos, pero no pueden modificar las anotaciones originales. Esto garantiza la integridad de los datos durante la colaboración.',
     },
     footer: {
       backToHome: 'Volver al Inicio',
