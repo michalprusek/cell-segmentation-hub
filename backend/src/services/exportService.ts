@@ -1019,21 +1019,19 @@ export class ExportService {
           );
         }
 
-        // Wound-healing time-series: only triggered when at least one image
-        // was segmented with the wound model. Appends an extra worksheet +
-        // embedded area-vs-time chart to the existing metrics.xlsx AND
-        // writes the chart as a standalone PNG into ``wound_healing/``.
-        // Any failure attaches a warning to the job so the UI can surface it.
-        const tsWarning = await this.maybeAppendWoundTimeSeries(
+        // Wound time-series: no-op for non-wound projects. Failures are
+        // reported per phase so the UI can distinguish chart-render issues
+        // from filesystem issues from xlsx corruption.
+        const tsWarnings = await this.maybeAppendWoundTimeSeries(
           images,
           excelPath,
           exportDir,
           jobId
         );
-        if (tsWarning && jobId) {
+        if (tsWarnings.length > 0 && jobId) {
           const job = this.exportJobs.get(jobId);
           if (job) {
-            job.warnings = [...(job.warnings ?? []), tsWarning];
+            job.warnings = [...(job.warnings ?? []), ...tsWarnings];
           }
         }
       } else if (format === 'csv') {
@@ -1972,63 +1970,134 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
    * so users don't have to extract it out of Excel. No-op for spheroid/
    * sperm projects.
    *
-   * Returns a warning string when the wound feature was expected (project
-   * has wound segmentations) but the sheet could not be written — the
-   * caller attaches the message to the export job so the user sees it.
+   * Returns an array of warnings so the caller can attach all of them to
+   * the export job; empty array on full success or non-wound project.
+   * Each phase (xlsx-append, xlsx-write, chart-render, png-write) surfaces
+   * its own distinct warning so the user can tell which part failed —
+   * previously one failure was reported as "the whole time-series broke",
+   * which was misleading when e.g. only the standalone PNG file failed.
    */
   private async maybeAppendWoundTimeSeries(
     images: ImageWithSegmentation[],
     excelPath: string,
     exportDir: string,
     jobId?: string
-  ): Promise<string | null> {
+  ): Promise<string[]> {
     const hasWound = images.some(img => img.segmentation?.model === 'wound');
     if (!hasWound) {
-      return null;
+      return [];
     }
 
+    const warnings: string[] = [];
+
+    // Phase 1: load export deps + open the just-written metrics workbook.
+    // exceljs is a CJS module with TypeScript interop — ``.default`` works at
+    // runtime via esModuleInterop but the namespace type doesn't advertise
+    // it, hence the cast.
+    type ExcelJsDefault = typeof import('exceljs');
+    let ExcelJS: ExcelJsDefault;
+    let appendWoundTimeSeriesSheet: typeof import('./export/woundTimeSeries').appendWoundTimeSeriesSheet;
+    let writeStandaloneWoundChart: typeof import('./export/woundTimeSeries').writeStandaloneWoundChart;
     try {
-      const ExcelJS = (await import('exceljs')).default;
-      const { appendWoundTimeSeriesSheet } = await import(
+      const excelMod = (await import('exceljs')) as unknown as {
+        default: ExcelJsDefault;
+      };
+      ExcelJS = excelMod.default;
+      ({ appendWoundTimeSeriesSheet, writeStandaloneWoundChart } = await import(
         './export/woundTimeSeries'
-      );
-
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.readFile(excelPath);
-      const { count, chartPng } = await appendWoundTimeSeriesSheet(
-        workbook,
-        images
-      );
-      if (count > 0) {
-        await workbook.xlsx.writeFile(excelPath);
-        logger.info(
-          `Wound TimeSeries appended: ${count} frames`,
-          'ExportService',
-          { jobId }
-        );
-
-        if (chartPng) {
-          const woundDir = path.join(exportDir, 'wound_healing');
-          await fs.mkdir(woundDir, { recursive: true });
-          const chartPath = path.join(woundDir, 'wound_area_chart.png');
-          await fs.writeFile(chartPath, chartPng);
-          logger.info(
-            `Wound area chart saved to ${chartPath}`,
-            'ExportService',
-            { jobId, frames: count }
-          );
-        }
-      }
-      return null;
+      ));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error(
-        'Failed to append wound TimeSeries — metrics.xlsx left without it',
+        'Failed to load wound TimeSeries dependencies',
         err instanceof Error ? err : undefined,
         'ExportService',
         { error: message, jobId }
       );
-      return `Wound time-series sheet could not be written: ${message}`;
+      return [
+        `Wound time-series skipped — export dependency load failed: ${message}`,
+      ];
     }
+
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.readFile(excelPath);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(
+        'Failed to open metrics.xlsx for wound TimeSeries append',
+        err instanceof Error ? err : undefined,
+        'ExportService',
+        { error: message, jobId, excelPath }
+      );
+      return [
+        `Wound time-series sheet could not be added — metrics.xlsx unreadable: ${message}`,
+      ];
+    }
+
+    // Phase 2: compute + write the TimeSeries sheet. Also captures chart
+    // render failures as a non-fatal ``chartError`` on the returned shape.
+    const { count, chartPng, chartError } = await appendWoundTimeSeriesSheet(
+      workbook,
+      images
+    );
+
+    if (count === 0) {
+      return [];
+    }
+
+    if (chartError) {
+      warnings.push(
+        `Wound area chart could not be rendered (TimeSeries sheet still written): ${chartError}`
+      );
+    }
+
+    try {
+      await workbook.xlsx.writeFile(excelPath);
+      logger.info(
+        `Wound TimeSeries appended: ${count} frames`,
+        'ExportService',
+        { jobId, hasChart: chartPng !== null }
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(
+        'Failed to save metrics.xlsx after wound TimeSeries append',
+        err instanceof Error ? err : undefined,
+        'ExportService',
+        { error: message, jobId, excelPath }
+      );
+      return [
+        ...warnings,
+        `Wound time-series sheet could not be saved: ${message}`,
+      ];
+    }
+
+    // Phase 3: standalone PNG copy for users who don't want to extract
+    // the chart out of Excel. Independent of the sheet above — this can
+    // fail without invalidating the xlsx.
+    if (chartPng) {
+      try {
+        const chartPath = await writeStandaloneWoundChart(exportDir, chartPng);
+        logger.info(
+          `Wound area chart saved to ${chartPath}`,
+          'ExportService',
+          { jobId, frames: count }
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error(
+          'Failed to save standalone wound chart PNG',
+          err instanceof Error ? err : undefined,
+          'ExportService',
+          { error: message, jobId }
+        );
+        warnings.push(
+          `Wound area chart PNG could not be saved (Excel copy is still available): ${message}`
+        );
+      }
+    }
+
+    return warnings;
   }
 }

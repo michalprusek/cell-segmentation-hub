@@ -9,17 +9,20 @@ jest.mock('../../../utils/logger', () => ({
   },
 }));
 
-jest.mock('../woundChartRenderer', () => ({
-  renderWoundAreaChart: jest.fn(async () =>
-    Buffer.from([0x89, 0x50, 0x4e, 0x47])
-  ),
-}));
+// Using the real renderWoundAreaChart — node-canvas is a backend dependency
+// and works in the test environment. Failure-path tests use jest.spyOn to
+// override specific cases rather than jest.mock, because jest.mock of an
+// ESM module produces unreliable return values in ts-jest/ESM preset.
 
+import { promises as fsp } from 'fs';
+import os from 'os';
+import path from 'path';
 import ExcelJS from 'exceljs';
 import {
   buildWoundTimeSeries,
   shouldExportWoundTimeSeries,
   appendWoundTimeSeriesSheet,
+  writeStandaloneWoundChart,
 } from '../woundTimeSeries';
 
 // Helper: build a 100×100 image row with one external square (40×40 @ (10,10))
@@ -252,7 +255,7 @@ describe('appendWoundTimeSeriesSheet', () => {
     const result = await appendWoundTimeSeriesSheet(workbook, [img as never]);
     expect(result.count).toBe(0);
     expect(result.chartPng).toBeNull();
-    expect(result.points).toEqual([]);
+    expect(result.chartError).toBeUndefined();
     expect(workbook.worksheets).toHaveLength(0);
   });
 
@@ -270,19 +273,77 @@ describe('appendWoundTimeSeriesSheet', () => {
     expect(sheet!.rowCount).toBe(4);
   });
 
-  it('returns a chartPng field so the caller can write it to disk', async () => {
+  it('returns a real PNG Buffer on chartPng so the caller can write it to disk', async () => {
     const imgs = [
       sampleExternalSquareImage({ id: 'a', displayOrder: 0 }),
       sampleExternalSquareImage({ id: 'b', displayOrder: 1 }),
     ];
     const result = await appendWoundTimeSeriesSheet(workbook, imgs as never[]);
     expect(result.count).toBe(2);
-    expect(result.points).toHaveLength(2);
-    // The field MUST be present in the return shape so
-    // ``maybeAppendWoundTimeSeries`` in exportService.ts can branch on it
-    // to decide whether to write ``wound_healing/wound_area_chart.png``.
-    // The VALUE depends on whether canvas rendering succeeded in the test
-    // environment; we only assert shape here.
-    expect(result).toHaveProperty('chartPng');
+    expect(result.chartError).toBeUndefined();
+    expect(Buffer.isBuffer(result.chartPng)).toBe(true);
+    // PNG magic bytes
+    expect(result.chartPng!.slice(0, 4).toString('hex')).toBe('89504e47');
   });
+
+  it('sets chartError when renderWoundAreaChart throws', async () => {
+    const mod = await import('../woundChartRenderer');
+    const spy = jest
+      .spyOn(mod, 'renderWoundAreaChart')
+      .mockRejectedValueOnce(new Error('canvas backend unavailable'));
+    try {
+      const imgs = [
+        sampleExternalSquareImage({ id: 'a', displayOrder: 0 }),
+        sampleExternalSquareImage({ id: 'b', displayOrder: 1 }),
+      ];
+      const result = await appendWoundTimeSeriesSheet(
+        workbook,
+        imgs as never[]
+      );
+      expect(result.count).toBe(2);
+      expect(result.chartPng).toBeNull();
+      expect(result.chartError).toMatch(/canvas backend unavailable/);
+      // Data rows are still written — only the chart image is missing.
+      expect(workbook.getWorksheet('WoundTimeSeries')).toBeDefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('writeStandaloneWoundChart', () => {
+  let exportDir: string;
+
+  beforeEach(async () => {
+    exportDir = await fsp.mkdtemp(
+      path.join(os.tmpdir(), 'wound-export-test-')
+    );
+  });
+
+  afterEach(async () => {
+    await fsp.rm(exportDir, { recursive: true, force: true });
+  });
+
+  it('writes the PNG into wound_healing/wound_area_chart.png', async () => {
+    const buf = Buffer.from('89504e470d0a1a0a', 'hex');
+    const chartPath = await writeStandaloneWoundChart(exportDir, buf);
+    expect(chartPath).toBe(
+      path.join(exportDir, 'wound_healing', 'wound_area_chart.png')
+    );
+    const st = await fsp.stat(chartPath);
+    expect(st.size).toBe(buf.length);
+    const readBack = await fsp.readFile(chartPath);
+    expect(readBack.equals(buf)).toBe(true);
+  });
+
+  it('is idempotent across repeated calls (mkdir recursive)', async () => {
+    const buf1 = Buffer.from('89504e470d0a1a0a', 'hex');
+    const buf2 = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+    await writeStandaloneWoundChart(exportDir, buf1);
+    const p = await writeStandaloneWoundChart(exportDir, buf2);
+    const readBack = await fsp.readFile(p);
+    // Second call should overwrite, not append / fail.
+    expect(readBack.equals(buf2)).toBe(true);
+  });
+
 });

@@ -18,6 +18,8 @@
  * area calculation.
  */
 
+import { promises as fsp } from 'fs';
+import path from 'path';
 import type ExcelJS from 'exceljs';
 import { logger } from '../../utils/logger';
 import type { ImageWithSegmentation } from '../metrics/metricsCalculator';
@@ -175,14 +177,15 @@ export function buildWoundTimeSeries(images: WoundSeriesImage[]): WoundTimePoint
 
 /**
  * Outcome of appending the WoundTimeSeries sheet to a workbook.
- * ``chartPng`` is the rendered area-vs-time PNG — the caller can additionally
- * write it to a standalone file in ``wound_healing/`` so users don't have to
- * extract the chart out of Excel.
+ * ``chartPng`` is null when the chart could not be rendered; in that case
+ * ``chartError`` carries the human-readable reason so the caller can surface
+ * it to the user. Callers commonly persist the PNG alongside the workbook —
+ * see ``writeStandaloneWoundChart`` for the companion helper.
  */
 export interface WoundTimeSeriesResult {
   count: number;
   chartPng: Buffer | null;
-  points: WoundTimePoint[];
+  chartError?: string;
 }
 
 /**
@@ -194,11 +197,11 @@ export async function appendWoundTimeSeriesSheet(
   images: WoundSeriesImage[]
 ): Promise<WoundTimeSeriesResult> {
   if (!shouldExportWoundTimeSeries(images)) {
-    return { count: 0, chartPng: null, points: [] };
+    return { count: 0, chartPng: null };
   }
   const points = buildWoundTimeSeries(images);
   if (points.length === 0) {
-    return { count: 0, chartPng: null, points: [] };
+    return { count: 0, chartPng: null };
   }
 
   const sheet = workbook.addWorksheet('WoundTimeSeries');
@@ -226,32 +229,69 @@ export async function appendWoundTimeSeriesSheet(
   }
 
   let chartPng: Buffer | null = null;
+  let chartError: string | undefined;
+
+  // Step 1: render the chart. On failure the sheet still gets its data rows
+  // (they're already written above) — only the chart image is lost.
   try {
     chartPng = await renderWoundAreaChart(points);
-    // ExcelJS's Buffer type lags behind recent @types/node which narrowed
-    // Buffer to Buffer<ArrayBuffer>; node-canvas returns the runtime-identical
-    // Buffer<ArrayBufferLike>. Cast keeps the types happy without copying.
-    const imageId = workbook.addImage({
-      buffer: chartPng as unknown as ExcelJS.Buffer,
-      extension: 'png',
-    });
-    // Anchor the chart to the right of the data, starting at column H row 1.
-    sheet.addImage(imageId, {
-      tl: { col: 7, row: 0 },
-      ext: { width: 960, height: 480 },
-    });
   } catch (err) {
+    chartError = err instanceof Error ? err.message : String(err);
     logger.warn(
       'Wound area chart render failed — TimeSeries sheet written without chart',
       'woundTimeSeries',
-      { error: err instanceof Error ? err.message : String(err) }
+      { error: chartError }
     );
-    chartPng = null;
   }
 
-  return {
-    count: points.length,
-    chartPng,
-    points,
-  };
+  // Step 2: best-effort embed the chart into the sheet. A failure here
+  // (e.g. ExcelJS rejects the buffer) must not invalidate ``chartPng`` —
+  // the caller still wants to write it to disk as a standalone artifact.
+  if (chartPng) {
+    try {
+      // ExcelJS's Buffer type lags behind recent @types/node which narrowed
+      // Buffer to Buffer<ArrayBuffer>; node-canvas returns the runtime-
+      // identical Buffer<ArrayBufferLike>. Cast keeps the types happy
+      // without copying.
+      const imageId = workbook.addImage({
+        buffer: chartPng as unknown as ExcelJS.Buffer,
+        extension: 'png',
+      });
+      // Anchor the chart to the right of the data, starting at column H row 1.
+      sheet.addImage(imageId, {
+        tl: { col: 7, row: 0 },
+        ext: { width: 960, height: 480 },
+      });
+    } catch (err) {
+      logger.warn(
+        'Wound chart rendered but could not be embedded in workbook — standalone PNG still usable',
+        'woundTimeSeries',
+        { error: err instanceof Error ? err.message : String(err) }
+      );
+    }
+  }
+
+  return chartError !== undefined
+    ? { count: points.length, chartPng, chartError }
+    : { count: points.length, chartPng };
+}
+
+/**
+ * Writes the rendered wound-area chart as a standalone PNG to
+ * ``<exportDir>/wound_healing/wound_area_chart.png``.
+ *
+ * Extracted as its own function so the ``mkdir`` + ``writeFile`` logic is
+ * unit-testable via ``fs.mkdtemp`` without spinning up the full export
+ * service. Returns the resulting file path on success, or throws the
+ * original filesystem error (caller wraps into a job warning).
+ */
+export async function writeStandaloneWoundChart(
+  exportDir: string,
+  chartPng: Buffer
+): Promise<string> {
+  const woundDir = path.join(exportDir, 'wound_healing');
+  await fsp.mkdir(woundDir, { recursive: true });
+  const chartPath = path.join(woundDir, 'wound_area_chart.png');
+  await fsp.writeFile(chartPath, chartPng);
+  return chartPath;
 }
