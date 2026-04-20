@@ -5,6 +5,7 @@
 
 import { vi } from 'vitest';
 import type { Point, Polygon } from '@/lib/segmentation';
+import { calculatePolygonArea as libCalculatePolygonArea } from '@/lib/polygonGeometry';
 import type {
   EditMode,
   InteractionState,
@@ -448,16 +449,8 @@ export const createFileMocks = () => {
     }));
   });
 
-  const calculatePolygonArea = (polygon: Polygon): number => {
-    let area = 0;
-    const points = polygon.points;
-
-    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-      area += (points[j].x + points[i].x) * (points[j].y - points[i].y);
-    }
-
-    return Math.abs(area / 2);
-  };
+  const calculatePolygonArea = (polygon: Polygon): number =>
+    libCalculatePolygonArea(polygon.points);
 
   const calculatePolygonPerimeter = (polygon: Polygon): number => {
     let perimeter = 0;

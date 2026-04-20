@@ -194,16 +194,12 @@ class ApiClient {
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/refresh');
 
-        // Check if this is a refresh token request to avoid infinite loops
-        const isRefreshRequest = originalRequest.url?.includes('/auth/refresh');
-
         if (
           error.response?.status === 401 &&
           !originalRequest._retry &&
           !isAuthEndpoint
         ) {
-          // If we have a refresh token, try to refresh before logging out
-          if (this.refreshToken && !isRefreshRequest) {
+          if (this.refreshToken) {
             originalRequest._retry = true;
 
             try {

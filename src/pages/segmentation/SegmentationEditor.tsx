@@ -378,29 +378,31 @@ const SegmentationEditor = () => {
       );
     }
 
-    logger.debug('🔄 Transformed segmentation polygons for editor:', {
-      hasSegmentationData: true,
-      inputCount: segmentationPolygons.length,
-      validCount: polygons.length,
-      filteredOut: invalidCount,
-      processingTime: `${processingTime.toFixed(2)}ms`,
-      imageDimensions,
-      firstPolygon: polygons[0]
-        ? {
-            id: polygons[0].id,
-            type: polygons[0].type,
-            parent_id: polygons[0].parent_id,
-            pointsCount: polygons[0].points?.length || 0,
-            firstPoints: polygons[0].points?.slice(0, 3),
-          }
-        : null,
-      internalPolygonCount: polygons.filter(
-        p => p.type === 'internal' || p.parent_id
-      ).length,
-      externalPolygonCount: polygons.filter(
-        p => p.type === 'external' && !p.parent_id
-      ).length,
-    });
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug('🔄 Transformed segmentation polygons for editor:', {
+        hasSegmentationData: true,
+        inputCount: segmentationPolygons.length,
+        validCount: polygons.length,
+        filteredOut: invalidCount,
+        processingTime: `${processingTime.toFixed(2)}ms`,
+        imageDimensions,
+        firstPolygon: polygons[0]
+          ? {
+              id: polygons[0].id,
+              type: polygons[0].type,
+              parent_id: polygons[0].parent_id,
+              pointsCount: polygons[0].points?.length || 0,
+              firstPoints: polygons[0].points?.slice(0, 3),
+            }
+          : null,
+        internalPolygonCount: polygons.filter(
+          p => p.type === 'internal' || p.parent_id
+        ).length,
+        externalPolygonCount: polygons.filter(
+          p => p.type === 'external' && !p.parent_id
+        ).length,
+      });
+    }
 
     return polygons;
   }, [segmentationPolygons, imageDimensions]);
@@ -550,11 +552,6 @@ const SegmentationEditor = () => {
     // 2. Switching images (autosaveBeforeReset)
     // 3. Leaving the editor (unmount autosave)
   });
-
-  // REMOVED: Duplicate usePolygonSelection instance - now using editor.handlePolygonSelection and editor.handlePolygonClick
-  // These handlers are provided by useEnhancedSegmentationEditor which has the centralized polygon selection logic
-
-  // REMOVED: Old problematic handlePolygonSelection that forced EditVertices mode
 
   // Load segmentation data with proper cancellation handling
   useEffect(() => {
@@ -751,8 +748,8 @@ const SegmentationEditor = () => {
     getSignal,
   ]);
 
-  // Debug logging for polygon rendering (only when polygons change)
   useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
     const filteredPolygons = editor.polygons.filter(
       polygon => !hiddenPolygonIds.has(polygon.id)
     );
@@ -1100,44 +1097,18 @@ const SegmentationEditor = () => {
     [editor.editMode]
   );
 
-  // DISABLED: Autosave on unmount was causing issues with frequent re-renders
-  // The component was unmounting/remounting too often, triggering unwanted saves
-  // Autosave now only happens when:
-  // 1. Switching to a different image
-  // 2. Leaving the editor page completely (handled by EditorHeader navigation)
-  // 3. Manual save (Ctrl+S or Save button)
-
-  /* Commenting out problematic unmount autosave
-  useEffect(() => {
-    return () => {
-      // This was triggering too often due to component re-renders
-    };
-  }, [editor]);
-  */
-
   const currentImageIndex =
     projectImages?.findIndex(img => img.id === imageId) ?? -1;
-  const _isAnyEditModeActive = editor.editMode !== EditMode.View;
 
-  // Memoize the render-candidate list so a parent re-render (hover/zoom/pan)
-  // doesn't reallocate + re-filter the whole array each frame.
-  // Must live above any early return to satisfy the rules of hooks.
-  //
-  // Frustum culling is intentionally DISABLED here — prior viewport-bounds
-  // calculation misculled visible polygons at low zoom and after pan. The
-  // culling helper in src/lib/rendering/PolygonVisibilityManager.ts is
-  // retained but unused; delete both together if culling isn't revisited.
-  // In the meantime every non-hidden, well-formed polygon renders
-  // regardless of zoom and translation.
-  const visiblePolygons = useMemo(() => {
-    return editor.polygons
-      .filter(polygon => !hiddenPolygonIds.has(polygon.id))
-      .filter(polygon => {
-        if (!polygon.points) return false;
+  const visiblePolygons = useMemo(
+    () =>
+      editor.polygons.filter(polygon => {
+        if (hiddenPolygonIds.has(polygon.id) || !polygon.points) return false;
         const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
         return polygon.points.length >= minPoints;
-      });
-  }, [editor.polygons, hiddenPolygonIds]);
+      }),
+    [editor.polygons, hiddenPolygonIds]
+  );
 
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading

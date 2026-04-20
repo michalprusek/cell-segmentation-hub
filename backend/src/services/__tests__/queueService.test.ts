@@ -204,20 +204,18 @@ describe('QueueService', () => {
     it('returns queued and processing counts', async () => {
       prismaMock.segmentationQueue.count
         .mockResolvedValueOnce(3)   // queued
-        .mockResolvedValueOnce(1)   // processing
-        .mockResolvedValueOnce(4);  // total
+        .mockResolvedValueOnce(1);  // processing
 
       const stats = await service.getQueueStats('project-id', 'user-id');
 
       expect(stats).toEqual({ queued: 3, processing: 1, total: 4 });
-      expect(prismaMock.segmentationQueue.count).toHaveBeenCalledTimes(3);
+      expect(prismaMock.segmentationQueue.count).toHaveBeenCalledTimes(2);
     });
 
     it('emits queue stats via WebSocket when projectId is provided', async () => {
       prismaMock.segmentationQueue.count
         .mockResolvedValueOnce(2)
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(2);
+        .mockResolvedValueOnce(0);
 
       await service.getQueueStats('project-id');
 

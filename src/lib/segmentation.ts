@@ -107,19 +107,7 @@ export const segmentImage = async (
   };
 };
 
-// Calculate polygon area, with consideration for internal holes
-export const calculatePolygonArea = (polygon: Point[]): number => {
-  let area = 0;
-  const n = polygon.length;
-
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    area += polygon[i].x * polygon[j].y;
-    area -= polygon[j].x * polygon[i].y;
-  }
-
-  return Math.abs(area) / 2;
-};
+export { calculatePolygonArea } from './polygonGeometry';
 
 // Calculate polygon perimeter
 export const calculatePerimeter = (polygon: Point[]): number => {

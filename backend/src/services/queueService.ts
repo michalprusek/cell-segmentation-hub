@@ -377,17 +377,15 @@ export class QueueService {
         whereClause.userId = userId;
       }
 
-      const [queued, processing, total] = await Promise.all([
+      const [queued, processing] = await Promise.all([
         this.prisma.segmentationQueue.count({
           where: { ...whereClause, status: 'queued' },
         }),
         this.prisma.segmentationQueue.count({
           where: { ...whereClause, status: 'processing' },
         }),
-        this.prisma.segmentationQueue.count({
-          where: { ...whereClause, status: { in: ['queued', 'processing'] } },
-        }),
       ]);
+      const total = queued + processing;
 
       const stats = { queued, processing, total };
 
@@ -1685,7 +1683,6 @@ export class QueueService {
               jobCount: processingItems.length,
             }
           );
-          // TODO: Implement ML service cancellation API call if needed
         } catch (mlError) {
           logger.error(
             'Failed to cancel ML processing',

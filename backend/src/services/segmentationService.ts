@@ -1515,27 +1515,20 @@ export class SegmentationService {
       throw new Error('Project not found or no access');
     }
 
-    // Get total images count for the project
-    const totalImages = await this.prisma.image.count({
-      where: { projectId },
-    });
-
-    // Get all segmentation data for the project
-    const segmentationData = await this.prisma.segmentation.findMany({
-      where: {
-        image: {
-          projectId,
-        },
-      },
-      include: {
-        image: {
-          select: {
-            name: true,
-            segmentationStatus: true,
+    const [totalImages, segmentationData] = await Promise.all([
+      this.prisma.image.count({ where: { projectId } }),
+      this.prisma.segmentation.findMany({
+        where: { image: { projectId } },
+        include: {
+          image: {
+            select: {
+              name: true,
+              segmentationStatus: true,
+            },
           },
         },
-      },
-    });
+      }),
+    ]);
 
     // Calculate statistics
     const totalSegmented = segmentationData.length;
