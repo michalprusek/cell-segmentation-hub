@@ -252,16 +252,18 @@ def mask_to_polyline(
     cls: int,
     mask_threshold: float = 0.5,
     simplify_eps: float = 5.0,
-    pts_per_100px: float = 32.0,
+    pts_per_100px: float = 8.0,
     min_pts: int = 2,
 ) -> List[Tuple[float, float]]:
     """Convert instance mask to a smooth polyline.
 
     Pipeline: skeleton → prune → BFS longest path → RDP simplify →
-    uniform resampling.
+    approximating B-spline to remove high-frequency skeleton noise.
 
     The number of output points adapts to the arc length of the structure.
-    Head (cls=1) is always 3 points. Midpiece/tail use pts_per_100px density.
+    The B-spline uses smoothing proportional to the number of control points
+    to filter out pixel-level zigzag from skeletonization while preserving
+    overall curvature.
 
     Args:
         mask: Soft mask (float32).
@@ -304,11 +306,7 @@ def mask_to_polyline(
     # Estimate arc length from simplified path to determine output point count
     pts_arr = np.array(simplified, dtype=float)
     arc_len = float(np.linalg.norm(pts_arr[1:] - pts_arr[:-1], axis=1).sum())
-    # Head (cls=1): always 3 points (start, midpoint, end) for a clean arc
-    if cls == 1:
-        n_output = 3
-    else:
-        n_output = max(min_pts, round(arc_len * pts_per_100px / 100.0))
+    n_output = max(min_pts, round(arc_len * pts_per_100px / 100.0))
 
     # Uniform resampling along the simplified polyline — stable and follows
     # the RDP-simplified path exactly without B-spline overshoot
@@ -350,7 +348,7 @@ def connect_sperm_polylines(
     sperm: dict,
     mask_threshold: float = 0.3,
     simplify_eps: float = 5.0,
-    pts_per_100px: float = 32.0,
+    pts_per_100px: float = 8.0,
 ) -> dict:
     """Generate connected polylines for a complete sperm (H+M+T).
 

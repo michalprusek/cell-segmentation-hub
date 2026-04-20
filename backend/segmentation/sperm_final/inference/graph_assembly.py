@@ -9,11 +9,8 @@ Handles containment via effective area discounting, crossing detection
 via skeleton junction analysis, and same-class fragment merging.
 """
 
-import logging
 from collections import deque
 from typing import Dict, List, Optional, Tuple
-
-logger = logging.getLogger(__name__)
 
 import cv2
 import numpy as np
@@ -236,10 +233,57 @@ def _endpoint_distance_head(feat_head: Dict, feat_other: Dict) -> float:
     return min(float(np.linalg.norm(hc - ep)) for ep, _ in feat_other["ep_tangents"])
 
 
+def _apply_learned_cost(
+    hand_cost: int,
+    feat_a: Dict,
+    feat_b: Dict,
+    config: GraphAssemblyConfig,
+    edge_type: int,
+    image_diag: Optional[float] = None,
+    edge_cost_mlp=None,
+) -> int:
+    """Blend hand-tuned cost with learned MLP cost if available.
+
+    hand_cost: integer cost from hand-tuned branch
+    edge_type: 0=H→M, 1=M→T, 2=same-class merge (see edge_cost_mlp.EDGE_*)
+    """
+    if edge_cost_mlp is None or not config.use_learned_costs:
+        return hand_cost
+    if config.learned_skip_merge and edge_type == 2:
+        return hand_cost
+    emb_a = feat_a.get("embedding")
+    emb_b = feat_b.get("embedding")
+    if emb_a is None or emb_b is None:
+        return hand_cost
+
+    import torch
+    from sperm_final.models.edge_cost_mlp import extract_geom_features
+
+    diag = image_diag if image_diag is not None else 4000.0
+    geom = extract_geom_features(feat_a, feat_b, diag)
+    device = next(edge_cost_mlp.parameters()).device
+    z_i = torch.as_tensor(emb_a, device=device, dtype=torch.float32).unsqueeze(0)
+    z_j = torch.as_tensor(emb_b, device=device, dtype=torch.float32).unsqueeze(0)
+    g = torch.as_tensor(geom, device=device, dtype=torch.float32).unsqueeze(0)
+    with torch.no_grad():
+        logits = edge_cost_mlp(z_i, z_j, g)[0]  # (3,)
+    prob = torch.sigmoid(logits[edge_type]).item()
+    learned_cost = max(1, round(config.learned_scale * (1.0 - prob)))
+
+    hw = config.hybrid_weight
+    if hw >= 0.999:
+        return learned_cost
+    if hw <= 0.001:
+        return hand_cost
+    return max(1, round(hw * learned_cost + (1.0 - hw) * hand_cost))
+
+
 def connection_cost(
     feat_a: Dict,
     feat_b: Dict,
     config: GraphAssemblyConfig,
+    edge_cost_mlp=None,
+    image_diag: Optional[float] = None,
 ) -> Optional[int]:
     """Compute cost of connecting two cross-class instances.
 
@@ -249,8 +293,13 @@ def connection_cost(
     aligned with the direction from B to A).
 
     Returns None if connection is infeasible (too far).
+
+    When `edge_cost_mlp` is provided and `config.use_learned_costs=True`, the
+    hand-tuned cost is blended with the learned MLP score per `config.hybrid_weight`.
     """
     cls_a, cls_b = feat_a["cls"], feat_b["cls"]
+    # Edge type index used by learned MLP (0=H→M, 1=M→T)
+    edge_type = 0 if cls_a == 1 else 1
 
     # Head uses centroid-based distance
     if cls_a == 1:  # Head -> Midpiece
@@ -272,7 +321,10 @@ def connection_cost(
                 angle = np.degrees(np.arccos(np.clip(np.dot(tg, dir_away), -1, 1)))
                 best_angle = min(best_angle, angle)
             angle_penalty = best_angle
-        return max(1, round(config.w_dist * dist + config.w_angle * angle_penalty))
+        hand_cost = max(1, round(config.w_dist * dist + config.w_angle * angle_penalty))
+        return _apply_learned_cost(hand_cost, feat_a, feat_b, config,
+                                     edge_type=edge_type, image_diag=image_diag,
+                                     edge_cost_mlp=edge_cost_mlp)
 
     # Midpiece -> Tail (both have skeleton endpoints)
     if not feat_a["ep_tangents"] or not feat_b["ep_tangents"]:
@@ -282,7 +334,10 @@ def connection_cost(
         )
         if dist > config.max_connection_dist:
             return None
-        return max(1, round(config.w_dist * dist))
+        hand_cost = max(1, round(config.w_dist * dist))
+        return _apply_learned_cost(hand_cost, feat_a, feat_b, config,
+                                     edge_type=edge_type, image_diag=image_diag,
+                                     edge_cost_mlp=edge_cost_mlp)
 
     # Find best endpoint pair
     best_cost = None
@@ -317,7 +372,10 @@ def connection_cost(
 
     if best_cost is None:
         return None
-    return max(1, best_cost)
+    hand_cost = max(1, best_cost)
+    return _apply_learned_cost(hand_cost, feat_a, feat_b, config,
+                                 edge_type=edge_type, image_diag=image_diag,
+                                 edge_cost_mlp=edge_cost_mlp)
 
 
 def merge_cost(
@@ -410,6 +468,8 @@ def build_assembly_graph(
     instances: List[Dict],
     mask_threshold: float,
     config: GraphAssemblyConfig = None,
+    edge_cost_mlp=None,
+    image_diag: Optional[float] = None,
 ) -> nx.DiGraph:
     """Build min-cost flow graph for sperm part assembly.
 
@@ -432,10 +492,12 @@ def build_assembly_graph(
         G.add_node("T", demand=0)
         return G, [], []
 
-    # Step 1: compute features
+    # Step 1: compute features + propagate per-instance embedding (needed by MLP)
     features = []
     for inst in instances:
         feat = compute_instance_features(inst, mask_threshold, config.tangent_n_pts)
+        if "embedding" in inst:
+            feat["embedding"] = inst["embedding"]
         features.append(feat)
 
     # Step 2: compute effective areas (handles containment)
@@ -481,7 +543,8 @@ def build_assembly_graph(
         for mi, mf in midpieces:
             if not _bbox_close(hf["bbox"], mf["bbox"], config.bbox_prune_gap):
                 continue
-            cost = connection_cost(hf, mf, config)
+            cost = connection_cost(hf, mf, config,
+                                    edge_cost_mlp=edge_cost_mlp, image_diag=image_diag)
             if cost is not None:
                 G.add_edge(f"{hi}_out", f"{mi}_in", capacity=1, weight=cost)
 
@@ -490,7 +553,8 @@ def build_assembly_graph(
         for ti, tf in tails:
             if not _bbox_close(mf["bbox"], tf["bbox"], config.bbox_prune_gap):
                 continue
-            cost = connection_cost(mf, tf, config)
+            cost = connection_cost(mf, tf, config,
+                                    edge_cost_mlp=edge_cost_mlp, image_diag=image_diag)
             if cost is not None:
                 G.add_edge(f"{mi}_out", f"{ti}_in", capacity=1, weight=cost)
 
@@ -636,14 +700,18 @@ def assemble_sperm_graph(
     instances: List[Dict],
     mask_threshold: float,
     config: GraphAssemblyConfig = None,
+    edge_cost_mlp=None,
+    image_diag: Optional[float] = None,
 ) -> List[Dict]:
     """Top-level: build graph -> solve -> extract -> filter complete only.
 
     Args:
-        instances: List of {"mask": ndarray, "cls": int, "score": float}.
-                   Should already have split_disconnected + split_branching applied.
+        instances: List of {"mask", "cls", "score", [optional] "embedding"}.
         mask_threshold: Threshold for binary masks.
         config: Graph assembly configuration.
+        edge_cost_mlp: Optional EdgeCostMLP for learned costs. Requires each
+            instance to carry an "embedding" field (from v12 InstanceEmbedHead).
+        image_diag: Image diagonal in pixels (for geom-feature normalization).
 
     Returns:
         List of sperm dicts: {"head": inst, "midpiece": inst, "tail": inst}.
@@ -655,39 +723,12 @@ def assemble_sperm_graph(
     if not instances:
         return []
 
-    # Cap instances to prevent combinatorial explosion in graph solver.
-    # Use balanced selection: equal per class so the solver can form complete sperm.
-    MAX_PER_CLASS = 15
-    total = len(instances)
-    if total > MAX_PER_CLASS * 3:
-        by_cls = {1: [], 2: [], 3: []}
-        for inst in instances:
-            if inst['cls'] in by_cls:
-                by_cls[inst['cls']].append(inst)
-        # Keep top MAX_PER_CLASS per class, sorted by score
-        capped = []
-        for cls_id in (1, 2, 3):
-            sorted_cls = sorted(by_cls.get(cls_id, []), key=lambda x: -x['score'])
-            capped.extend(sorted_cls[:MAX_PER_CLASS])
-        instances = capped
-        logger.warning(f"Capped from {total} to {len(instances)} instances ({MAX_PER_CLASS}/class)")
-
-    cls_counts = {}
-    for inst in instances:
-        c = {1: 'head', 2: 'midpiece', 3: 'tail'}.get(inst['cls'], f'cls{inst["cls"]}')
-        cls_counts[c] = cls_counts.get(c, 0) + 1
-    logger.info(f"Graph assembly input: {len(instances)} instances, parts: {cls_counts}")
-
     graph, features, effective_areas = build_assembly_graph(
-        instances, mask_threshold, config
+        instances, mask_threshold, config,
+        edge_cost_mlp=edge_cost_mlp, image_diag=image_diag,
     )
     cost, flow_dict = solve_assembly(graph)
     paths = extract_flow_paths(flow_dict, len(instances))
-
-    logger.info(f"Graph assembly: {len(paths)} paths found, cost={cost:.1f}")
-
     sperm_list = paths_to_sperm(paths, instances, features, mask_threshold)
-
-    logger.info(f"Graph assembly result: {len(sperm_list)} complete sperm from {len(paths)} paths")
 
     return sperm_list

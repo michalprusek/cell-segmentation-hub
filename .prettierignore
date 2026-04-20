@@ -56,6 +56,10 @@ output_time_48h/
 **/*.woff2
 **/*.ttf
 **/*.eot
+**/*.zip
+**/*.pth
+**/*.pt
+**/*.bmp
 
 # IDE files
 .vscode/

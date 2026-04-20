@@ -28,8 +28,12 @@ numpy==1.24.3
 scipy==1.11.4
 scikit-image==0.22.0
 # Sperm model dependencies (Mask2Former + graph assembly)
-# ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
+# v17: DINOv2-L/14 backbone via HuggingFace's own transformers.Dinov2Model
+# (no timm runtime dependency). On first inference the HF cache is
+# populated (~1.3 GB); mount HF_HOME as a volume to persist across
+# container restarts.
 networkx>=3.0
+transformers>=4.40.0
 
 # Wound-healing model (U-Net++ / ResNeXt-50 via segmentation_models_pytorch)
 segmentation-models-pytorch==0.3.4

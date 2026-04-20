@@ -73,6 +73,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy application code
 COPY --chown=app:app backend/segmentation/ .
 
+# Pre-create the HuggingFace cache directory owned by `app`. When a named
+# volume is first mounted here, Docker seeds it from the image contents,
+# preserving ownership — without this step the volume is root-owned and
+# non-root containers can't write the DINOv2-L download to it.
+RUN mkdir -p /app/hf_cache && chown -R app:app /app/hf_cache
+
 # Copy entrypoint script for automatic weight management
 COPY --chown=app:app <<'EOF' /app/docker-entrypoint.sh
 #!/bin/bash
@@ -178,6 +184,11 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 ENV OMP_NUM_THREADS=4
 ENV MKL_NUM_THREADS=4
+# HuggingFace cache for the DINOv2-L backbone used by the sperm model (v17).
+# Mount a volume at /app/hf_cache to persist the ~1.3 GB download across
+# container restarts; otherwise the first sperm inference re-downloads it.
+ENV HF_HOME=/app/hf_cache
+ENV HF_HUB_ENABLE_HF_TRANSFER=1
 
 EXPOSE 8000
 
