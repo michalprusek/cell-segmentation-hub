@@ -20,7 +20,6 @@ import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
-// Removed useThumbnailUpdates - unified thumbnail system doesn't need it
 import { logger } from '@/lib/logger';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { usePagination } from '@/hooks/usePagination';
@@ -36,9 +35,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  // AlertDialogTrigger,"
 } from '@/components/ui/alert-dialog';
-// import { Checkbox } from '@/components/ui/checkbox';
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -55,10 +52,7 @@ const ProjectDetail = () => {
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
-  // Navigation state variables removed - automatic navigation to segmentation editor disabled
 
-  // Debouncing and deduplication for segmentation refresh
-  const debounceTimeoutRef = useRef<{ [imageId: string]: NodeJS.Timeout }>({});
   const lastStatusRef = useRef<{ [imageId: string]: string }>({});
 
   // Fetch project data — images loaded with lod:'low' (metadata only, no polygons).
@@ -146,6 +140,7 @@ const ProjectDetail = () => {
               if (page > 40) break; // Safety limit
             }
 
+            const existingById = new Map(images.map(i => [i.id, i]));
             const formattedImages = (allImages || []).map(img => {
               let segmentationStatus =
                 img.segmentationStatus || img.segmentation_status;
@@ -153,10 +148,7 @@ const ProjectDetail = () => {
                 segmentationStatus = 'completed';
               }
 
-              // Find existing image to preserve thumbnails for images not affected by cancellation
-              const existingImage = images.find(
-                existing => existing.id === img.id
-              );
+              const existingImage = existingById.get(img.id);
 
               // Only clear thumbnails if the image was actually cancelled (status is no_segmentation)
               const wasCancelled = segmentationStatus === 'no_segmentation';
@@ -190,44 +182,10 @@ const ProjectDetail = () => {
           }
         }
 
-        // Reset batch submitted state
         setBatchSubmitted(false);
-        // Navigation state cleanup removed
       }
     },
     [id, user?.id, updateImages, images]
-  );
-
-  // Optimized refresh function for real-time updates
-  const _debouncedRefreshSegmentation = useCallback(
-    (imageId: string, currentStatus: string) => {
-      // Clear existing timeout for this image
-      if (debounceTimeoutRef.current[imageId]) {
-        clearTimeout(debounceTimeoutRef.current[imageId]);
-      }
-
-      // Check if status actually changed
-      const lastStatus = lastStatusRef.current[imageId];
-      if (lastStatus === currentStatus) {
-        return;
-      }
-
-      // Update last status
-      lastStatusRef.current[imageId] = currentStatus;
-
-      // For completed segmentation, refresh immediately for real-time updates
-      // For other statuses, use minimal debounce
-      const delay =
-        currentStatus === 'completed' || currentStatus === 'segmented'
-          ? 100
-          : 300;
-
-      debounceTimeoutRef.current[imageId] = setTimeout(() => {
-        refreshImageSegmentationRef.current(imageId);
-        delete debounceTimeoutRef.current[imageId];
-      }, delay);
-    },
-    []
   );
 
   // Handle batch completion to refresh gallery
@@ -265,6 +223,7 @@ const ProjectDetail = () => {
         if (page > 40) break; // Safety limit
       }
 
+      const existingById = new Map(images.map(i => [i.id, i]));
       const formattedImages = (allImages || []).map(img => {
         let segmentationStatus =
           img.segmentationStatus || img.segmentation_status;
@@ -272,8 +231,7 @@ const ProjectDetail = () => {
           segmentationStatus = 'completed';
         }
 
-        // Find existing image to preserve segmentation thumbnails if not provided
-        const existingImage = images.find(existing => existing.id === img.id);
+        const existingImage = existingById.get(img.id);
 
         return {
           id: img.id,
@@ -482,6 +440,7 @@ const ProjectDetail = () => {
         if (page > 40) break; // Safety limit
       }
 
+      const existingById = new Map(images.map(i => [i.id, i]));
       const formattedImages = (allImages || []).map(img => {
         let segmentationStatus =
           img.segmentationStatus || img.segmentation_status;
@@ -489,8 +448,7 @@ const ProjectDetail = () => {
           segmentationStatus = 'completed';
         }
 
-        // Find existing image to preserve segmentation thumbnails
-        const existingImage = images.find(existing => existing.id === img.id);
+        const existingImage = existingById.get(img.id);
 
         return {
           id: img.id,
@@ -903,18 +861,9 @@ const ProjectDetail = () => {
     };
   }, [lastUpdate, id, processWebSocketUpdate]);
 
-  // Cleanup debounce timeouts on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
-      // Clear debounce timeouts
-      const timeouts = debounceTimeoutRef.current;
-      if (timeouts) {
-        for (const timeout of Object.values(timeouts)) {
-          clearTimeout(timeout);
-        }
-      }
-
-      // Clear batch update timeout
       if (batchUpdateTimeoutRef.current) {
         clearTimeout(batchUpdateTimeoutRef.current);
       }
@@ -1428,10 +1377,10 @@ const ProjectDetail = () => {
       toast.dismiss('batch-progress');
 
       // Revert UI changes on error
+      const originalById = new Map(images.map(i => [i.id, i]));
       updateImages(prevImages =>
         prevImages.map(img => {
-          // Restore original status for queued images
-          const originalImage = images.find(i => i.id === img.id);
+          const originalImage = originalById.get(img.id);
           if (originalImage) {
             return {
               ...img,
