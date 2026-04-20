@@ -141,9 +141,7 @@ describe('FormatConverter', () => {
       const polylineAnns = coco.annotations.filter(a => a.category_id === 2);
       expect(polylineAnns).toHaveLength(3);
 
-      const partClasses = polylineAnns
-        .map(a => a.attributes?.partClass)
-        .sort();
+      const partClasses = polylineAnns.map(a => a.attributes?.partClass).sort();
       expect(partClasses).toEqual(['head', 'midpiece', 'tail']);
 
       const expectedLengths: Record<string, number> = {
@@ -402,7 +400,6 @@ describe('FormatConverter', () => {
       expect(polylines).toHaveLength(1);
       expect(polylines?.[0]?.partClass).toBeUndefined();
     });
-
   });
 
   describe('annotation ID stability', () => {
@@ -418,6 +415,63 @@ describe('FormatConverter', () => {
       const ids = coco.annotations.map(a => a.id);
       expect(new Set(ids).size).toBe(ids.length);
       expect(ids).toEqual([1, 2, 3, 4]);
+    });
+  });
+
+  describe('missing image dimensions', () => {
+    // Regression: Sharp can fail to extract metadata on upload (BMP, unusual
+    // variants), leaving Image.width/height NULL. The export used to silently
+    // emit COCO/JSON headers of 800x600 while polygons were already in the
+    // real PIL coordinate space — producing annotations that lie about the
+    // canvas size and extend outside the declared bounding box.
+    const largePolygon: Polygon = {
+      id: 'p-big',
+      type: 'external',
+      points: [
+        { x: 0, y: 0 },
+        { x: 1286, y: 0 },
+        { x: 1286, y: 1293 },
+        { x: 0, y: 1293 },
+      ],
+    };
+
+    it('COCO infers header dimensions from polygon extents when width/height are 0', async () => {
+      const data = buildImageData([largePolygon], { width: 0, height: 0 });
+
+      const coco = await new FormatConverter().convertToCOCO([data]);
+
+      expect(coco.images).toHaveLength(1);
+      expect(coco.images[0].width).toBeGreaterThanOrEqual(1286);
+      expect(coco.images[0].height).toBeGreaterThanOrEqual(1293);
+      expect(coco.images[0].width).not.toBe(800);
+      expect(coco.images[0].height).not.toBe(600);
+      expect(mockedLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('missing dimensions'),
+        'FormatConverter'
+      );
+    });
+
+    it('JSON infers header dimensions from polygon extents when width/height are 0', async () => {
+      const data = buildImageData([largePolygon], { width: 0, height: 0 });
+
+      const json = await new FormatConverter().convertToJSON([data]);
+
+      expect(json.images[0].dimensions.width).toBeGreaterThanOrEqual(1286);
+      expect(json.images[0].dimensions.height).toBeGreaterThanOrEqual(1293);
+      expect(json.images[0].dimensions.width).not.toBe(800);
+      expect(json.images[0].dimensions.height).not.toBe(600);
+    });
+
+    it('uses provided width/height verbatim when present', async () => {
+      const data = buildImageData([closedPolygon], {
+        width: 2048,
+        height: 1536,
+      });
+
+      const coco = await new FormatConverter().convertToCOCO([data]);
+
+      expect(coco.images[0].width).toBe(2048);
+      expect(coco.images[0].height).toBe(1536);
     });
   });
 });
