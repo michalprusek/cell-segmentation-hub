@@ -99,10 +99,8 @@ export class ExportService {
   private metricsCalculator: MetricsCalculator;
   private formatConverter: FormatConverter;
 
-  // Helper to check if an export job has been cancelled
   private isJobCancelled(jobId: string): boolean {
-    const job = this.exportJobs.get(jobId);
-    return job?.status === 'cancelled' || false;
+    return this.exportJobs.get(jobId)?.status === 'cancelled';
   }
   private exportJobs: Map<string, ExportJob>;
   private cleanupInterval: NodeJS.Timeout | null = null;

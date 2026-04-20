@@ -42,18 +42,6 @@ export interface ApiError {
   };
 }
 
-export interface PolygonMetrics {
-  area: number;
-  perimeter: number;
-  centroid: { x: number; y: number };
-  boundingBox: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-}
-
 // Helper function for safe error message extraction with HTTP status code mapping
 export function getErrorMessage(
   error: unknown,

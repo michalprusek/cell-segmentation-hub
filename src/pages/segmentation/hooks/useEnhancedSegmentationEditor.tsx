@@ -288,11 +288,6 @@ export const useEnhancedSegmentationEditor = ({
       initialPolygons.length !== initialPolygonsRef.current.length;
     const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
 
-    // DEBUG: Log why isNewData is triggering
-    if (isNewData) {
-      // isNewData triggered with state changes
-    }
-
     if (isNewData) {
       // First, cancel any ongoing autosave for the previous image
       if (imageChanged) {
@@ -332,8 +327,7 @@ export const useEnhancedSegmentationEditor = ({
         // CRITICAL FIX: Only reset to View mode when actually switching images, not on polygon updates
         // This prevents slice/delete mode from being reset when polygons change
         if (imageChanged || !hasInitialized.current) {
-          // Resetting to View mode due to image change or first load
-          setEditMode(EditMode.View); // Reset to view mode only on image change
+          setEditMode(EditMode.View);
         }
 
         setTempPoints([]); // Clear temp points
@@ -745,8 +739,6 @@ export const useEnhancedSegmentationEditor = ({
     setSelectedPolygonIdInternal(null);
   }, []); // No dependencies to prevent recreation cycles
 
-  // Initialize keyboard shortcuts first to get access to shift key state
-  // Force HMR update - Fixed slice mode keyboard shortcut 2025-09-22
   const keyboardShortcuts = useKeyboardShortcuts({
     editMode,
     canUndo,

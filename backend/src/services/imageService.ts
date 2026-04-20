@@ -7,7 +7,7 @@ import { ImageQueryParams } from '../types/validation';
 import { v4 as _uuidv4 } from 'uuid';
 import sharp from 'sharp';
 import path from 'path';
-import { existsSync, promises as fs } from 'fs';
+import { promises as fs } from 'fs';
 import { ApiError } from '../middleware/error';
 import { WebSocketService } from './websocketService';
 import {
@@ -16,6 +16,15 @@ import {
   DashboardUpdateData,
 } from '../types/websocket';
 import * as UserService from './userService';
+
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface UploadImageData {
   originalname: string;
@@ -1259,7 +1268,7 @@ export class ImageService {
       throw new Error('Invalid image path: path traversal detected');
     }
 
-    if (existsSync(convertedPath)) {
+    if (await pathExists(convertedPath)) {
       // Periodically clean up old converted files (don't await to avoid blocking)
       this.cleanupConvertedCache().catch(error =>
         logger.error('Background cleanup failed', error)
@@ -1295,11 +1304,8 @@ export class ImageService {
         })
         .toBuffer();
 
-      // Cache the converted image
-      const convertedDir = path.dirname(convertedPath);
-      if (!existsSync(convertedDir)) {
-        await fs.mkdir(convertedDir, { recursive: true });
-      }
+      // Cache the converted image — mkdir with recursive:true is idempotent
+      await fs.mkdir(path.dirname(convertedPath), { recursive: true });
       await fs.writeFile(convertedPath, convertedBuffer);
 
       logger.info('Image converted and cached successfully', 'ImageService', {
@@ -1381,10 +1387,14 @@ export class ImageService {
         process.env.UPLOAD_DIR || './uploads',
         imagePath
       );
-      if (!existsSync(fullPath)) {
-        throw new Error('Image file not found');
+      try {
+        return await fs.readFile(fullPath);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw new Error('Image file not found');
+        }
+        throw err;
       }
-      return await fs.readFile(fullPath);
     } else {
       // For other storage providers, implement buffer retrieval
       throw new Error(
@@ -1403,12 +1413,15 @@ export class ImageService {
         'converted'
       );
 
-      // Skip if directory doesn't exist
-      if (!existsSync(convertedDir)) {
-        return;
+      let files: string[];
+      try {
+        files = await fs.readdir(convertedDir);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+          return;
+        }
+        throw err;
       }
-
-      const files = await fs.readdir(convertedDir);
       const cutoffTime = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
 
       for (const file of files) {
@@ -1451,13 +1464,17 @@ export class ImageService {
         `${imageId}.png`
       );
 
-      if (existsSync(convertedPath)) {
+      try {
         await fs.unlink(convertedPath);
         logger.info(
           'Removed converted file for deleted image',
           'ImageService',
           { imageId }
         );
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw err;
+        }
       }
     } catch (error) {
       logger.error(
