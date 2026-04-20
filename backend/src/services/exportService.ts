@@ -6,8 +6,15 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
 import { VisualizationGenerator } from './visualization/visualizationGenerator';
-import { MetricsCalculator, type ImageWithSegmentation as MetricsImageInput } from './metrics/metricsCalculator';
-import { FormatConverter } from './export/formatConverter';
+import {
+  MetricsCalculator,
+  type ImageWithSegmentation as MetricsImageInput,
+} from './metrics/metricsCalculator';
+import {
+  FormatConverter,
+  resolveImageDimensions,
+  type Polygon as ExportPolygon,
+} from './export/formatConverter';
 import { WebSocketService } from './websocketService';
 import * as SharingService from './sharingService';
 import { batchProcessor } from '../utils/batchProcessor';
@@ -868,12 +875,14 @@ export class ExportService {
       const formatDir = path.join(exportDir, 'annotations', format);
 
       if (format === 'coco') {
-        // Convert ImageWithSegmentation[] to ImageData[]
+        // Polygon coordinates come from the ML service in PIL's original-image
+        // space, recorded on Segmentation.imageWidth/Height. Prefer those over
+        // Image.width/height (Sharp upload metadata, nullable for BMP).
         const imageDataArray = images.map(image => ({
           id: image.id,
           filename: image.name,
-          width: image.width || 0,
-          height: image.height || 0,
+          width: image.segmentation?.imageWidth || image.width || 0,
+          height: image.segmentation?.imageHeight || image.height || 0,
           segmentationResults: image.segmentation
             ? [
                 {
@@ -897,10 +906,44 @@ export class ExportService {
           YOLO_WRITE_CONCURRENCY,
           async image => {
             if (!image || !image.segmentation) return;
+
+            // YOLO normalizes every coordinate by width/height → 0 would
+            // produce NaN/Infinity in the output file. Resolve dimensions
+            // with the same fallback chain used by COCO/JSON: ML-PIL dims
+            // first, then Sharp upload metadata, then polygon extents.
+            let parsedPolygons: ExportPolygon[] = [];
+            try {
+              const parsed = JSON.parse(image.segmentation.polygons);
+              if (Array.isArray(parsed)) parsedPolygons = parsed;
+            } catch {
+              // convertToYOLO will re-parse and report the error with context
+            }
+            const { width: yoloWidth, height: yoloHeight } =
+              resolveImageDimensions(
+                {
+                  id: image.id,
+                  filename: image.name,
+                  width: image.segmentation.imageWidth || image.width || 0,
+                  height: image.segmentation.imageHeight || image.height || 0,
+                },
+                parsedPolygons,
+                'YOLO'
+              );
+
+            if (yoloWidth <= 0 || yoloHeight <= 0) {
+              logger.error(
+                `YOLO export skipped for image ${image.name} (${image.id}): no usable dimensions`,
+                new Error('No usable image dimensions'),
+                'ExportService',
+                { jobId, imageId: image.id }
+              );
+              return;
+            }
+
             const yoloResult = await this.formatConverter.convertToYOLO(
               image.segmentation.polygons,
-              image.width || 0,
-              image.height || 0
+              yoloWidth,
+              yoloHeight
             );
             const imageNameWithoutExt = path.parse(image.name).name;
             await fs.writeFile(
@@ -922,12 +965,11 @@ export class ExportService {
           }
         );
       } else if (format === 'json') {
-        // Convert ImageWithSegmentation[] to ImageData[]
         const imageDataArray = images.map(image => ({
           id: image.id,
           filename: image.name,
-          width: image.width || 0,
-          height: image.height || 0,
+          width: image.segmentation?.imageWidth || image.width || 0,
+          height: image.segmentation?.imageHeight || image.height || 0,
           segmentationResults: image.segmentation
             ? [
                 {
@@ -2077,11 +2119,10 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     if (chartPng) {
       try {
         const chartPath = await writeStandaloneWoundChart(exportDir, chartPng);
-        logger.info(
-          `Wound area chart saved to ${chartPath}`,
-          'ExportService',
-          { jobId, frames: count }
-        );
+        logger.info(`Wound area chart saved to ${chartPath}`, 'ExportService', {
+          jobId,
+          frames: count,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         logger.error(

@@ -5,7 +5,10 @@ import {
   isValidSpermPartClass,
 } from '../../utils/polygonValidation';
 import { polylineLength } from '../../utils/polygonGeometry';
-import { groupPolylinesByInstanceId, findPart } from '../../utils/spermGrouping';
+import {
+  groupPolylinesByInstanceId,
+  findPart,
+} from '../../utils/spermGrouping';
 
 export interface Point {
   x: number;
@@ -22,6 +25,67 @@ export interface Polygon {
 }
 
 const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
+
+// Lower bound on canvas size derived from polygon extents. Used as a fallback
+// only when Image.width/height and Segmentation.imageWidth/Height are both
+// unset (e.g. BMPs that Sharp couldn't parse). Empty input yields 0x0 — the
+// caller must treat that as "no usable dimensions" and escalate.
+export const inferDimensionsFromPolygons = (
+  polygons: Polygon[]
+): { width: number; height: number } => {
+  let maxX = 0;
+  let maxY = 0;
+  let hasPoints = false;
+  for (const polygon of polygons) {
+    for (const point of polygon.points) {
+      hasPoints = true;
+      if (point.x > maxX) maxX = point.x;
+      if (point.y > maxY) maxY = point.y;
+    }
+  }
+  if (!hasPoints) return { width: 0, height: 0 };
+  return {
+    width: Math.ceil(maxX) + 1,
+    height: Math.ceil(maxY) + 1,
+  };
+};
+
+export const resolveImageDimensions = (
+  image: ImageData,
+  polygons: Polygon[],
+  context: 'COCO' | 'YOLO' | 'JSON'
+): { width: number; height: number } => {
+  const hasWidth = image.width > 0;
+  const hasHeight = image.height > 0;
+  if (hasWidth && hasHeight) {
+    return { width: image.width, height: image.height };
+  }
+
+  const inferred = inferDimensionsFromPolygons(polygons);
+  const resolvedWidth = hasWidth ? image.width : inferred.width;
+  const resolvedHeight = hasHeight ? image.height : inferred.height;
+
+  const missing = [!hasWidth && 'width', !hasHeight && 'height']
+    .filter(Boolean)
+    .join('/');
+
+  if (resolvedWidth <= 0 || resolvedHeight <= 0) {
+    logger.error(
+      `${context} export: image "${image.filename}" (${image.id}) has no usable ${missing}; ` +
+        `no polygons available to infer from. Output header will be ${resolvedWidth}x${resolvedHeight} (invalid).`,
+      new Error('Missing image dimensions with no inferable polygons'),
+      'FormatConverter'
+    );
+  } else {
+    logger.warn(
+      `${context} export: image "${image.filename}" (${image.id}) is missing ${missing}; ` +
+        `inferred ${resolvedWidth}x${resolvedHeight} from polygon extents.`,
+      'FormatConverter'
+    );
+  }
+
+  return { width: resolvedWidth, height: resolvedHeight };
+};
 
 const flattenPoints = (points: Point[]): number[] => {
   const out: number[] = [];
@@ -215,140 +279,145 @@ export class FormatConverter {
         continue;
       }
 
-      // Add image to COCO images list
+      let parsedPolygons: Polygon[] = [];
+      const result = image.segmentationResults?.[0];
+      if (result?.polygons) {
+        try {
+          parsedPolygons = JSON.parse(result.polygons);
+          if (!Array.isArray(parsedPolygons)) {
+            parsedPolygons = [];
+          }
+        } catch (error) {
+          logger.error(
+            'Failed to parse polygons JSON for COCO format',
+            error instanceof Error ? error : new Error('Unknown error'),
+            'FormatConverter',
+            {
+              imageId: image.id,
+              polygonsData: result.polygons
+                ? result.polygons.substring(0, 100) + '...'
+                : 'undefined',
+            }
+          );
+          parsedPolygons = [];
+        }
+      }
+
+      const { width: imageWidth, height: imageHeight } = resolveImageDimensions(
+        image,
+        parsedPolygons,
+        'COCO'
+      );
+
       imagesList.push({
         id: imageIdx + 1,
         file_name: image.filename,
-        width: image.width || 800,
-        height: image.height || 600,
+        width: imageWidth,
+        height: imageHeight,
         date_captured: new Date().toISOString(),
       });
 
-      // Process segmentation results
-      if (image.segmentationResults && image.segmentationResults.length > 0) {
-        const result = image.segmentationResults[0];
-        if (result?.polygons) {
-          let polygons;
-          try {
-            polygons = JSON.parse(result.polygons);
-          } catch (error) {
-            logger.error(
-              'Failed to parse polygons JSON for COCO format',
-              error instanceof Error ? error : new Error('Unknown error'),
-              'FormatConverter',
-              {
-                imageId: image.id,
-                polygonsData: result.polygons
-                  ? result.polygons.substring(0, 100) + '...'
-                  : 'undefined',
-              }
-            );
-            polygons = [];
-          }
+      if (parsedPolygons.length > 0) {
+        const polygons = parsedPolygons;
 
-          const closedExternalPolygons: Polygon[] = [];
-          const internalPolygons: Polygon[] = [];
-          const validPolylines: Polygon[] = [];
-          let invalidPartClassCount = 0;
-          for (const p of polygons as Polygon[]) {
-            if (isPolyline(p)) {
-              if (isValidSpermPartClass(p.partClass)) {
-                validPolylines.push(p);
-              } else {
-                invalidPartClassCount += 1;
-              }
-            } else if (p.type === 'internal') {
-              internalPolygons.push(p);
-            } else if (p.type === 'external') {
-              closedExternalPolygons.push(p);
-            }
-          }
-          if (invalidPartClassCount > 0) {
-            totalInvalidPartClass += invalidPartClassCount;
-            if (sampleAffectedImages.length < 10) {
-              sampleAffectedImages.push(image.id);
-            }
-          }
-          if (validPolylines.length > 0) {
-            hasSperm = true;
-          }
-
-          for (const polygon of closedExternalPolygons) {
-            // Find internal polygons that belong to this external polygon
-            // (simplified - in real scenario, you'd check spatial containment)
-            const associatedInternalPolygons = internalPolygons.filter(
-              (internal: Polygon) =>
-                this.isPolygonInsidePolygon(internal.points, polygon.points)
-            );
-
-            // Calculate bounding box
-            const bbox = this.calculateBoundingBox(polygon.points);
-
-            // Calculate area (accounting for holes)
-            const area =
-              this.calculatePolygonArea(polygon.points) -
-              associatedInternalPolygons.reduce(
-                (sum: number, internal: Polygon) =>
-                  sum + this.calculatePolygonArea(internal.points),
-                0
-              );
-
-            let segmentation: number[][] | RLEFormat;
-
-            if (associatedInternalPolygons.length > 0) {
-              // Create binary mask for polygon with holes
-              const mask = this.createBinaryMask(
-                polygon.points,
-                associatedInternalPolygons.map((p: Polygon) => p.points),
-                image.width || 800,
-                image.height || 600
-              );
-
-              // Encode mask to COCO RLE format
-              const rle = this.encodeMaskToRLE(
-                mask,
-                image.width || 800,
-                image.height || 600
-              );
-              segmentation = rle;
+        const closedExternalPolygons: Polygon[] = [];
+        const internalPolygons: Polygon[] = [];
+        const validPolylines: Polygon[] = [];
+        let invalidPartClassCount = 0;
+        for (const p of polygons as Polygon[]) {
+          if (isPolyline(p)) {
+            if (isValidSpermPartClass(p.partClass)) {
+              validPolylines.push(p);
             } else {
-              segmentation = [flattenPoints(polygon.points)];
+              invalidPartClassCount += 1;
             }
+          } else if (p.type === 'internal') {
+            internalPolygons.push(p);
+          } else if (p.type === 'external') {
+            closedExternalPolygons.push(p);
+          }
+        }
+        if (invalidPartClassCount > 0) {
+          totalInvalidPartClass += invalidPartClassCount;
+          if (sampleAffectedImages.length < 10) {
+            sampleAffectedImages.push(image.id);
+          }
+        }
+        if (validPolylines.length > 0) {
+          hasSperm = true;
+        }
 
-            annotations.push({
-              id: annotationId++,
-              image_id: imageIdx + 1,
-              category_id: 1, // Cell/spheroid category
-              segmentation,
-              bbox,
-              area,
-              iscrowd: associatedInternalPolygons.length > 0 ? 1 : 0, // iscrowd=1 for RLE format
-              attributes: {
-                type: 'external',
-                geometry: 'polygon',
-                has_holes: associatedInternalPolygons.length > 0,
-              },
-            });
+        for (const polygon of closedExternalPolygons) {
+          // Find internal polygons that belong to this external polygon
+          // (simplified - in real scenario, you'd check spatial containment)
+          const associatedInternalPolygons = internalPolygons.filter(
+            (internal: Polygon) =>
+              this.isPolygonInsidePolygon(internal.points, polygon.points)
+          );
+
+          // Calculate bounding box
+          const bbox = this.calculateBoundingBox(polygon.points);
+
+          // Calculate area (accounting for holes)
+          const area =
+            this.calculatePolygonArea(polygon.points) -
+            associatedInternalPolygons.reduce(
+              (sum: number, internal: Polygon) =>
+                sum + this.calculatePolygonArea(internal.points),
+              0
+            );
+
+          let segmentation: number[][] | RLEFormat;
+
+          if (associatedInternalPolygons.length > 0) {
+            // Create binary mask for polygon with holes
+            const mask = this.createBinaryMask(
+              polygon.points,
+              associatedInternalPolygons.map((p: Polygon) => p.points),
+              imageWidth,
+              imageHeight
+            );
+
+            // Encode mask to COCO RLE format
+            const rle = this.encodeMaskToRLE(mask, imageWidth, imageHeight);
+            segmentation = rle;
+          } else {
+            segmentation = [flattenPoints(polygon.points)];
           }
 
-          for (const polyline of validPolylines) {
-            annotations.push({
-              id: annotationId++,
-              image_id: imageIdx + 1,
-              category_id: 2,
-              segmentation: [flattenPoints(polyline.points)],
-              bbox: this.calculateBoundingBox(polyline.points),
-              area: 0,
-              iscrowd: 0,
-              attributes: {
-                type: 'external',
-                geometry: 'polyline',
-                partClass: polyline.partClass,
-                ...(polyline.instanceId && { instanceId: polyline.instanceId }),
-                length: polylineLength(polyline.points),
-              },
-            });
-          }
+          annotations.push({
+            id: annotationId++,
+            image_id: imageIdx + 1,
+            category_id: 1, // Cell/spheroid category
+            segmentation,
+            bbox,
+            area,
+            iscrowd: associatedInternalPolygons.length > 0 ? 1 : 0, // iscrowd=1 for RLE format
+            attributes: {
+              type: 'external',
+              geometry: 'polygon',
+              has_holes: associatedInternalPolygons.length > 0,
+            },
+          });
+        }
+
+        for (const polyline of validPolylines) {
+          annotations.push({
+            id: annotationId++,
+            image_id: imageIdx + 1,
+            category_id: 2,
+            segmentation: [flattenPoints(polyline.points)],
+            bbox: this.calculateBoundingBox(polyline.points),
+            area: 0,
+            iscrowd: 0,
+            attributes: {
+              type: 'external',
+              geometry: 'polyline',
+              partClass: polyline.partClass,
+              ...(polyline.instanceId && { instanceId: polyline.instanceId }),
+              length: polylineLength(polyline.points),
+            },
+          });
         }
       }
     }
@@ -426,8 +495,7 @@ export class FormatConverter {
     }
 
     const externalPolygons = polygons.filter(
-      (p: Polygon) =>
-        p.type === 'external' && p.geometry !== 'polyline'
+      (p: Polygon) => p.type === 'external' && p.geometry !== 'polyline'
     );
 
     for (const polygon of externalPolygons) {
@@ -483,119 +551,126 @@ export class FormatConverter {
         continue;
       }
 
+      let parsedPolygons: Polygon[] = [];
+      const result = image.segmentationResults?.[0];
+      if (result?.polygons) {
+        try {
+          parsedPolygons = JSON.parse(result.polygons);
+          if (!Array.isArray(parsedPolygons)) {
+            parsedPolygons = [];
+          }
+        } catch (error) {
+          logger.error(
+            'Failed to parse polygons JSON for custom JSON format',
+            error instanceof Error ? error : new Error('Unknown error'),
+            'FormatConverter',
+            {
+              polygonsData: result?.polygons
+                ? result.polygons.substring(0, 100) + '...'
+                : 'undefined',
+            }
+          );
+          parsedPolygons = [];
+        }
+      }
+
+      const { width: jsonImageWidth, height: jsonImageHeight } =
+        resolveImageDimensions(image, parsedPolygons, 'JSON');
+
       const imageData: JSONImageData = {
         id: image.id,
         index: imageIdx + 1,
         filename: image.filename,
         dimensions: {
-          width: image.width || 800,
-          height: image.height || 600,
+          width: jsonImageWidth,
+          height: jsonImageHeight,
         },
         segmentation: null,
       };
 
-      // Process segmentation results
-      if (image.segmentationResults && image.segmentationResults.length > 0) {
-        const result = image.segmentationResults[0];
-        if (result?.polygons) {
-          let polygons;
-          try {
-            polygons = JSON.parse(result.polygons);
-          } catch (error) {
-            logger.error(
-              'Failed to parse polygons JSON for custom JSON format',
-              error instanceof Error ? error : new Error('Unknown error'),
-              'FormatConverter',
-              {
-                polygonsData: result?.polygons
-                  ? result.polygons.substring(0, 100) + '...'
-                  : 'undefined',
-              }
-            );
-            polygons = [];
-          }
+      if (parsedPolygons.length > 0) {
+        const polygons = parsedPolygons;
 
-          const externalPolygons: Polygon[] = [];
-          const internalPolygons: Polygon[] = [];
-          const polylines: Polygon[] = [];
-          for (const p of polygons as Polygon[]) {
-            if (isPolyline(p)) {
-              polylines.push(p);
-            } else if (p.type === 'internal') {
-              internalPolygons.push(p);
-            } else if (p.type === 'external') {
-              externalPolygons.push(p);
-            }
+        const externalPolygons: Polygon[] = [];
+        const internalPolygons: Polygon[] = [];
+        const polylines: Polygon[] = [];
+        for (const p of polygons as Polygon[]) {
+          if (isPolyline(p)) {
+            polylines.push(p);
+          } else if (p.type === 'internal') {
+            internalPolygons.push(p);
+          } else if (p.type === 'external') {
+            externalPolygons.push(p);
           }
+        }
 
-          const polylinesData: JSONPolylineData[] = polylines.map(
-            (p: Polygon, idx: number) => ({
+        const polylinesData: JSONPolylineData[] = polylines.map(
+          (p: Polygon, idx: number) => ({
+            id: idx + 1,
+            points: p.points,
+            geometry: 'polyline',
+            ...(isValidSpermPartClass(p.partClass) && {
+              partClass: p.partClass,
+            }),
+            ...(p.instanceId && { instanceId: p.instanceId }),
+            length: polylineLength(p.points),
+            boundingBox: this.calculateBoundingBox(p.points),
+          })
+        );
+
+        const { instances: spermInstances, orphanCount } =
+          this.buildSpermInstances(polylines);
+        if (orphanCount > 0) {
+          totalOrphans += orphanCount;
+          if (orphanSampleImages.length < 10) {
+            orphanSampleImages.push(image.id);
+          }
+        }
+
+        imageData.segmentation = {
+          cellCount: result.cellCount || externalPolygons.length,
+          timestamp: result.timestamp,
+          polygons: {
+            external: externalPolygons.map((p: Polygon, idx: number) => ({
               id: idx + 1,
               points: p.points,
-              geometry: 'polyline',
-              ...(isValidSpermPartClass(p.partClass) && {
-                partClass: p.partClass,
-              }),
-              ...(p.instanceId && { instanceId: p.instanceId }),
-              length: polylineLength(p.points),
+              area: this.calculatePolygonArea(p.points),
+              perimeter: this.calculatePerimeter(p.points),
               boundingBox: this.calculateBoundingBox(p.points),
-            })
-          );
-
-          const { instances: spermInstances, orphanCount } =
-            this.buildSpermInstances(polylines);
-          if (orphanCount > 0) {
-            totalOrphans += orphanCount;
-            if (orphanSampleImages.length < 10) {
-              orphanSampleImages.push(image.id);
-            }
-          }
-
-          imageData.segmentation = {
-            cellCount: result.cellCount || externalPolygons.length,
-            timestamp: result.timestamp,
-            polygons: {
-              external: externalPolygons.map((p: Polygon, idx: number) => ({
-                id: idx + 1,
-                points: p.points,
-                area: this.calculatePolygonArea(p.points),
-                perimeter: this.calculatePerimeter(p.points),
-                boundingBox: this.calculateBoundingBox(p.points),
-                centroid: this.calculateCentroid(p.points),
-              })),
-              internal: internalPolygons.map((p: Polygon, idx: number) => ({
-                id: idx + 1,
-                points: p.points,
-                area: this.calculatePolygonArea(p.points),
-                perimeter: this.calculatePerimeter(p.points),
-              })),
-            },
-            ...(polylinesData.length > 0 && { polylines: polylinesData }),
-            ...(spermInstances.length > 0 && { spermInstances }),
-            statistics: {
-              totalExternalPolygons: externalPolygons.length,
-              totalInternalPolygons: internalPolygons.length,
-              totalArea:
-                externalPolygons.reduce(
-                  (sum: number, p: Polygon) =>
-                    sum + this.calculatePolygonArea(p.points),
-                  0
-                ) -
-                internalPolygons.reduce(
-                  (sum: number, p: Polygon) =>
-                    sum + this.calculatePolygonArea(p.points),
-                  0
-                ),
-              ...(polylinesData.length > 0 && {
-                totalPolylines: polylinesData.length,
-              }),
-              ...(spermInstances.length > 0 && {
-                totalSpermInstances: spermInstances.length,
-              }),
-              ...(orphanCount > 0 && { orphanPolylineCount: orphanCount }),
-            },
-          };
-        }
+              centroid: this.calculateCentroid(p.points),
+            })),
+            internal: internalPolygons.map((p: Polygon, idx: number) => ({
+              id: idx + 1,
+              points: p.points,
+              area: this.calculatePolygonArea(p.points),
+              perimeter: this.calculatePerimeter(p.points),
+            })),
+          },
+          ...(polylinesData.length > 0 && { polylines: polylinesData }),
+          ...(spermInstances.length > 0 && { spermInstances }),
+          statistics: {
+            totalExternalPolygons: externalPolygons.length,
+            totalInternalPolygons: internalPolygons.length,
+            totalArea:
+              externalPolygons.reduce(
+                (sum: number, p: Polygon) =>
+                  sum + this.calculatePolygonArea(p.points),
+                0
+              ) -
+              internalPolygons.reduce(
+                (sum: number, p: Polygon) =>
+                  sum + this.calculatePolygonArea(p.points),
+                0
+              ),
+            ...(polylinesData.length > 0 && {
+              totalPolylines: polylinesData.length,
+            }),
+            ...(spermInstances.length > 0 && {
+              totalSpermInstances: spermInstances.length,
+            }),
+            ...(orphanCount > 0 && { orphanPolylineCount: orphanCount }),
+          },
+        };
       }
 
       exportData.images.push(imageData);
@@ -679,27 +754,29 @@ export class FormatConverter {
   } {
     const { groups, orphanCount } = groupPolylinesByInstanceId(polylines);
 
-    const instances: JSONSpermInstance[] = groups.map(({ instanceId, parts }) => {
-      const head = findPart(parts, 'head');
-      const midpiece = findPart(parts, 'midpiece');
-      const tail = findPart(parts, 'tail');
+    const instances: JSONSpermInstance[] = groups.map(
+      ({ instanceId, parts }) => {
+        const head = findPart(parts, 'head');
+        const midpiece = findPart(parts, 'midpiece');
+        const tail = findPart(parts, 'tail');
 
-      const headLen = head ? polylineLength(head.points) : 0;
-      const midLen = midpiece ? polylineLength(midpiece.points) : 0;
-      const tailLen = tail ? polylineLength(tail.points) : 0;
+        const headLen = head ? polylineLength(head.points) : 0;
+        const midLen = midpiece ? polylineLength(midpiece.points) : 0;
+        const tailLen = tail ? polylineLength(tail.points) : 0;
 
-      return {
-        instanceId,
-        parts: {
-          ...(head && { head: { points: head.points, length: headLen } }),
-          ...(midpiece && {
-            midpiece: { points: midpiece.points, length: midLen },
-          }),
-          ...(tail && { tail: { points: tail.points, length: tailLen } }),
-        },
-        totalLength: headLen + midLen + tailLen,
-      };
-    });
+        return {
+          instanceId,
+          parts: {
+            ...(head && { head: { points: head.points, length: headLen } }),
+            ...(midpiece && {
+              midpiece: { points: midpiece.points, length: midLen },
+            }),
+            ...(tail && { tail: { points: tail.points, length: tailLen } }),
+          },
+          totalLength: headLen + midLen + tailLen,
+        };
+      }
+    );
 
     return { instances, orphanCount };
   }
