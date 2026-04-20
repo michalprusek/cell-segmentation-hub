@@ -26,44 +26,65 @@ export interface Polygon {
 
 const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
 
-// When image dimensions are missing (e.g. nullable Image.width/height from
-// formats Sharp couldn't parse on upload), derive a safe lower bound from the
-// polygon extents. This keeps COCO/JSON self-consistent — a header that lies
-// about the canvas size is worse than one that may be slightly too large —
-// and we log it so the upstream data gap is visible.
-const inferDimensionsFromPolygons = (
+// Lower bound on canvas size derived from polygon extents. Used as a fallback
+// only when Image.width/height and Segmentation.imageWidth/Height are both
+// unset (e.g. BMPs that Sharp couldn't parse). Empty input yields 0x0 — the
+// caller must treat that as "no usable dimensions" and escalate.
+export const inferDimensionsFromPolygons = (
   polygons: Polygon[]
 ): { width: number; height: number } => {
   let maxX = 0;
   let maxY = 0;
+  let hasPoints = false;
   for (const polygon of polygons) {
     for (const point of polygon.points) {
+      hasPoints = true;
       if (point.x > maxX) maxX = point.x;
       if (point.y > maxY) maxY = point.y;
     }
   }
+  if (!hasPoints) return { width: 0, height: 0 };
   return {
     width: Math.ceil(maxX) + 1,
     height: Math.ceil(maxY) + 1,
   };
 };
 
-const resolveImageDimensions = (
+export const resolveImageDimensions = (
   image: ImageData,
   polygons: Polygon[],
-  context: 'COCO' | 'JSON'
+  context: 'COCO' | 'YOLO' | 'JSON'
 ): { width: number; height: number } => {
-  if (image.width > 0 && image.height > 0) {
+  const hasWidth = image.width > 0;
+  const hasHeight = image.height > 0;
+  if (hasWidth && hasHeight) {
     return { width: image.width, height: image.height };
   }
+
   const inferred = inferDimensionsFromPolygons(polygons);
-  logger.warn(
-    `${context} export: image "${image.filename}" (${image.id}) is missing dimensions; ` +
-      `inferred ${inferred.width}x${inferred.height} from polygon extents. ` +
-      'Upstream Image.width/height and Segmentation.imageWidth/imageHeight are both unset.',
-    'FormatConverter'
-  );
-  return inferred;
+  const resolvedWidth = hasWidth ? image.width : inferred.width;
+  const resolvedHeight = hasHeight ? image.height : inferred.height;
+
+  const missing = [!hasWidth && 'width', !hasHeight && 'height']
+    .filter(Boolean)
+    .join('/');
+
+  if (resolvedWidth <= 0 || resolvedHeight <= 0) {
+    logger.error(
+      `${context} export: image "${image.filename}" (${image.id}) has no usable ${missing}; ` +
+        `no polygons available to infer from. Output header will be ${resolvedWidth}x${resolvedHeight} (invalid).`,
+      new Error('Missing image dimensions with no inferable polygons'),
+      'FormatConverter'
+    );
+  } else {
+    logger.warn(
+      `${context} export: image "${image.filename}" (${image.id}) is missing ${missing}; ` +
+        `inferred ${resolvedWidth}x${resolvedHeight} from polygon extents.`,
+      'FormatConverter'
+    );
+  }
+
+  return { width: resolvedWidth, height: resolvedHeight };
 };
 
 const flattenPoints = (points: Point[]): number[] => {

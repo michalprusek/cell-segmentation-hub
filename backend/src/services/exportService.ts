@@ -10,7 +10,11 @@ import {
   MetricsCalculator,
   type ImageWithSegmentation as MetricsImageInput,
 } from './metrics/metricsCalculator';
-import { FormatConverter } from './export/formatConverter';
+import {
+  FormatConverter,
+  resolveImageDimensions,
+  type Polygon as ExportPolygon,
+} from './export/formatConverter';
 import { WebSocketService } from './websocketService';
 import * as SharingService from './sharingService';
 import { batchProcessor } from '../utils/batchProcessor';
@@ -902,10 +906,44 @@ export class ExportService {
           YOLO_WRITE_CONCURRENCY,
           async image => {
             if (!image || !image.segmentation) return;
+
+            // YOLO normalizes every coordinate by width/height → 0 would
+            // produce NaN/Infinity in the output file. Resolve dimensions
+            // with the same fallback chain used by COCO/JSON: ML-PIL dims
+            // first, then Sharp upload metadata, then polygon extents.
+            let parsedPolygons: ExportPolygon[] = [];
+            try {
+              const parsed = JSON.parse(image.segmentation.polygons);
+              if (Array.isArray(parsed)) parsedPolygons = parsed;
+            } catch {
+              // convertToYOLO will re-parse and report the error with context
+            }
+            const { width: yoloWidth, height: yoloHeight } =
+              resolveImageDimensions(
+                {
+                  id: image.id,
+                  filename: image.name,
+                  width: image.segmentation.imageWidth || image.width || 0,
+                  height: image.segmentation.imageHeight || image.height || 0,
+                },
+                parsedPolygons,
+                'YOLO'
+              );
+
+            if (yoloWidth <= 0 || yoloHeight <= 0) {
+              logger.error(
+                `YOLO export skipped for image ${image.name} (${image.id}): no usable dimensions`,
+                new Error('No usable image dimensions'),
+                'ExportService',
+                { jobId, imageId: image.id }
+              );
+              return;
+            }
+
             const yoloResult = await this.formatConverter.convertToYOLO(
               image.segmentation.polygons,
-              image.segmentation.imageWidth || image.width || 0,
-              image.segmentation.imageHeight || image.height || 0
+              yoloWidth,
+              yoloHeight
             );
             const imageNameWithoutExt = path.parse(image.name).name;
             await fs.writeFile(

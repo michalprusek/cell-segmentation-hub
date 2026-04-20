@@ -446,7 +446,7 @@ describe('FormatConverter', () => {
       expect(coco.images[0].width).not.toBe(800);
       expect(coco.images[0].height).not.toBe(600);
       expect(mockedLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('missing dimensions'),
+        expect.stringContaining('missing width/height'),
         'FormatConverter'
       );
     });
@@ -472,6 +472,72 @@ describe('FormatConverter', () => {
 
       expect(coco.images[0].width).toBe(2048);
       expect(coco.images[0].height).toBe(1536);
+    });
+
+    it('preserves a known axis when only the other is missing', async () => {
+      const data = buildImageData([largePolygon], { width: 1286, height: 0 });
+
+      const coco = await new FormatConverter().convertToCOCO([data]);
+
+      // Known width is kept verbatim; only height is inferred from extents.
+      expect(coco.images[0].width).toBe(1286);
+      expect(coco.images[0].height).toBeGreaterThanOrEqual(1293);
+    });
+
+    it('logs error (not warn) when no polygons and dims are missing', async () => {
+      const data = buildImageData([], { width: 0, height: 0 });
+
+      const coco = await new FormatConverter().convertToCOCO([data]);
+
+      expect(coco.images[0].width).toBe(0);
+      expect(coco.images[0].height).toBe(0);
+      expect(mockedLogger.error).toHaveBeenCalledWith(
+        expect.stringContaining('no usable'),
+        expect.any(Error),
+        'FormatConverter'
+      );
+      expect(mockedLogger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('inferred'),
+        'FormatConverter'
+      );
+    });
+
+    it('RLE mask path uses inferred dimensions when dims are missing', async () => {
+      // External square 0..100 with an internal hole 20..40 → triggers the
+      // createBinaryMask/encodeMaskToRLE path which previously received the
+      // hardcoded 800x600 mask buffer.
+      const external: Polygon = {
+        id: 'ext',
+        type: 'external',
+        points: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 100, y: 100 },
+          { x: 0, y: 100 },
+        ],
+      };
+      const hole: Polygon = {
+        id: 'hole',
+        type: 'internal',
+        points: [
+          { x: 20, y: 20 },
+          { x: 40, y: 20 },
+          { x: 40, y: 40 },
+          { x: 20, y: 40 },
+        ],
+      };
+      const data = buildImageData([external, hole], { width: 0, height: 0 });
+
+      const coco = await new FormatConverter().convertToCOCO([data]);
+
+      const ann = coco.annotations[0];
+      expect(ann.iscrowd).toBe(1);
+      const rle = ann.segmentation as { size: [number, number] };
+      // RLE size = [height, width]; inferred from extents ~ 101x101.
+      expect(rle.size[0]).toBe(coco.images[0].height);
+      expect(rle.size[1]).toBe(coco.images[0].width);
+      expect(rle.size[0]).toBeGreaterThanOrEqual(101);
+      expect(rle.size[1]).toBeGreaterThanOrEqual(101);
     });
   });
 });
