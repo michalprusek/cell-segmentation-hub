@@ -180,6 +180,15 @@ export default {
     createProject: 'Créer un nouveau projet',
     createProjectDesc:
       'Ajoutez un nouveau projet pour organiser vos images de sphéroïdes et analyses.',
+    projectType: 'Type de projet',
+    projectTypeUpdated: 'Type de projet mis à jour',
+    failedToUpdateProject: 'Impossible de mettre à jour le projet',
+    types: {
+      spheroid: 'Sphéroïdes (standard)',
+      spheroid_invasive: 'Sphéroïdes désintégrés',
+      wound: 'Cicatrisation des plaies',
+      sperm: 'Spermatozoïdes',
+    },
     projectNamePlaceholder: 'ex. : Sphéroïdes de cellules HeLa',
     projectDescPlaceholder:
       'ex. : Analyse des sphéroïdes tumoraux pour les études de résistance aux médicaments',
@@ -1739,6 +1748,12 @@ export default {
     solidity: 'Solidité',
     sphericity: 'Sphéricité',
     feretAspectRatio: "Rapport d'Aspect de Feret",
+    disintegrationIndex: 'Indice de Désintégration',
+    wassersteinW1: 'Wasserstein W1',
+    referenceMode: 'Mode de Référence',
+    totalSpheroidArea: 'Surface Totale des Sphéroïdes',
+    coreArea: 'Surface du Noyau',
+    invasionArea: "Surface d'Invasion",
     noPolygonsFound: "Aucun polygone trouvé pour l'analyse",
   },
   keyboardShortcuts: {

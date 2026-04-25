@@ -9,6 +9,19 @@ export const isValidSpermPartClass = (
   typeof value === 'string' &&
   (SPERM_PART_CLASSES as readonly string[]).includes(value);
 
+// Wider partClass union: sperm body parts plus spheroid 'core'.
+export const POLYGON_PART_CLASSES = [
+  ...SPERM_PART_CLASSES,
+  'core',
+] as const;
+export type PolygonPartClass = (typeof POLYGON_PART_CLASSES)[number];
+
+export const isValidPolygonPartClass = (
+  value: unknown
+): value is PolygonPartClass =>
+  typeof value === 'string' &&
+  (POLYGON_PART_CLASSES as readonly string[]).includes(value);
+
 export interface PolygonPoint {
   x: number;
   y: number;
@@ -292,7 +305,10 @@ export const PolygonValidator = {
     if (polygonObj.geometry === 'polyline') {
       (validatedPolygon as any).geometry = 'polyline';
     }
-    if (isValidSpermPartClass(polygonObj.partClass)) {
+    // partClass accepts both sperm parts (head/midpiece/tail) and 'core' for
+    // ASPP spheroid core polygons; older code only validated SpermPartClass
+    // which silently stripped 'core' during polygon JSON load.
+    if (isValidPolygonPartClass(polygonObj.partClass)) {
       (validatedPolygon as any).partClass = polygonObj.partClass;
     }
     if (polygonObj.instanceId && typeof polygonObj.instanceId === 'string') {

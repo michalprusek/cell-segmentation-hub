@@ -63,6 +63,9 @@ model Project {
   id                String              @id @default(uuid())
   title             String
   description       String?
+  // Project workflow type — drives metric export format and editor mode.
+  // One of: 'spheroid' | 'spheroid_invasive' | 'wound' | 'sperm'.
+  type              String              @default("spheroid")
   userId            String
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt

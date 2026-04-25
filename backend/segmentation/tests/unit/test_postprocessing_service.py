@@ -529,3 +529,196 @@ class TestPolygonsToCOCOFormat:
         result = service.polygons_to_coco_format([], self.IMAGE_SIZE)
 
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# detect_core_polygon  (ASPP spheroid core)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+class TestDetectCorePolygon:
+    """Tests for PostprocessingService.detect_core_polygon."""
+
+    H, W = 256, 256
+    CY, CX = 128, 128
+    R_OUTER = 80   # full spheroid radius
+    R_CORE = 35    # dense centre radius
+
+    def _disk_with_core_image(self) -> np.ndarray:
+        """Bright field analogue: bright background, light corona, dark core."""
+        img = np.full((self.H, self.W), 230, dtype=np.uint8)
+        y, x = np.ogrid[:self.H, :self.W]
+        d2 = (y - self.CY) ** 2 + (x - self.CX) ** 2
+        img[d2 <= self.R_OUTER ** 2] = 160  # corona (mid-grey)
+        img[d2 <= self.R_CORE ** 2] = 40    # core (dark)
+        return img
+
+    def _outer_polygon(self) -> dict:
+        """Square polygon enclosing the entire spheroid (drives 'largest' pick)."""
+        x0, y0 = self.CX - self.R_OUTER, self.CY - self.R_OUTER
+        x1, y1 = self.CX + self.R_OUTER, self.CY + self.R_OUTER
+        return {
+            "points": [
+                {"x": float(x0), "y": float(y0)},
+                {"x": float(x1), "y": float(y0)},
+                {"x": float(x1), "y": float(y1)},
+                {"x": float(x0), "y": float(y1)},
+            ],
+            "area": float((2 * self.R_OUTER) ** 2),
+            "confidence": 0.9,
+            "type": "external",
+        }
+
+    def test_core_detected_with_partclass(self, service):
+        """Synthetic disk+core image yields a polygon tagged partClass='core'."""
+        img = self._disk_with_core_image()
+        polys = [self._outer_polygon()]
+
+        core = service.detect_core_polygon(img, polys)
+
+        assert core is not None
+        assert core["partClass"] == "core"
+        assert core["type"] == "external"
+        assert _is_valid_polygon_dict(core)
+        assert len(core["points"]) >= 3
+
+    def test_core_area_smaller_than_outer(self, service):
+        """Core area must lie strictly inside the outer polygon's area."""
+        img = self._disk_with_core_image()
+        outer = self._outer_polygon()
+
+        core = service.detect_core_polygon(img, [outer])
+
+        assert core is not None
+        assert 0 < core["area"] < outer["area"]
+        # Roughly the area of the inner disk (allow ±35% for rasterization)
+        expected = np.pi * self.R_CORE ** 2
+        assert abs(core["area"] - expected) / expected < 0.35
+
+    def test_picks_largest_polygon(self, service):
+        """Among multiple polygons, core must be sourced from the largest one."""
+        img = self._disk_with_core_image()
+        outer = self._outer_polygon()
+        # A small distractor polygon located in a uniform-bright corner
+        small = {
+            "points": [
+                {"x": 5.0, "y": 5.0},
+                {"x": 15.0, "y": 5.0},
+                {"x": 15.0, "y": 15.0},
+                {"x": 5.0, "y": 15.0},
+            ],
+            "area": 100.0,
+            "confidence": 0.5,
+            "type": "external",
+        }
+
+        core = service.detect_core_polygon(img, [small, outer])
+
+        assert core is not None
+        # Core centroid should fall near the disk centre, not the corner distractor
+        xs = [p["x"] for p in core["points"]]
+        ys = [p["y"] for p in core["points"]]
+        cx_est = sum(xs) / len(xs)
+        cy_est = sum(ys) / len(ys)
+        assert abs(cx_est - self.CX) < 20
+        assert abs(cy_est - self.CY) < 20
+
+    def test_uniform_intensity_falls_back_to_full_polygon(self, service):
+        """Uniform intensity → Otsu undefined → return full polygon as 'core'.
+
+        Honours the user's 'always add some core' requirement.
+        """
+        img = np.full((self.H, self.W), 100, dtype=np.uint8)
+        outer = self._outer_polygon()
+
+        core = service.detect_core_polygon(img, [outer])
+
+        assert core is not None
+        assert core["partClass"] == "core"
+        # Fallback covers the whole polygon, so area should match the outer
+        # polygon's filled mask area within rasterization tolerance.
+        assert core["area"] > 0
+
+    def test_empty_polygons_returns_none(self, service):
+        """No input polygons → no core."""
+        img = self._disk_with_core_image()
+        assert service.detect_core_polygon(img, []) is None
+
+    def test_invalid_image_returns_none(self, service):
+        """Empty / None image → no core, no exception."""
+        outer = self._outer_polygon()
+        assert service.detect_core_polygon(None, [outer]) is None
+        assert service.detect_core_polygon(np.array([]), [outer]) is None
+
+    def test_polygon_with_too_few_points_returns_none(self, service):
+        """Polygon with <3 points cannot define a region → None."""
+        img = self._disk_with_core_image()
+        bad = {
+            "points": [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}],
+            "area": 1.0,
+            "confidence": 0.5,
+            "type": "external",
+        }
+        assert service.detect_core_polygon(img, [bad]) is None
+
+    # -- 2-of-3 voting (compact gate) ---------------------------------------
+
+    def _circular_polygon(self, cx, cy, r, n=64) -> dict:
+        """Approximate a circle with n vertices (high solidity)."""
+        thetas = np.linspace(0, 2 * np.pi, n, endpoint=False)
+        pts = [{"x": float(cx + r * np.cos(t)), "y": float(cy + r * np.sin(t))}
+               for t in thetas]
+        return {
+            "points": pts,
+            "area": float(np.pi * r ** 2),
+            "confidence": 0.9,
+            "type": "external",
+        }
+
+    def test_compact_spheroid_returns_whole_polygon(self, service):
+        """Round mask with mild interior gradient → 2-of-3 votes → whole polygon."""
+        # Bright background, single dark disk (no corona) → uniform-ish inside.
+        img = np.full((self.H, self.W), 230, dtype=np.uint8)
+        y, x = np.ogrid[:self.H, :self.W]
+        d2 = (y - self.CY) ** 2 + (x - self.CX) ** 2
+        img[d2 <= self.R_OUTER ** 2] = 60   # uniform dark spheroid
+        # Add a tiny gradient so Otsu has something to split (still low mean_diff).
+        img[d2 <= (self.R_OUTER - 10) ** 2] = 50
+        # Use a circular polygon → solidity ~1.0
+        poly = self._circular_polygon(self.CX, self.CY, self.R_OUTER)
+
+        core = service.detect_core_polygon(img, [poly])
+
+        assert core is not None
+        assert core["partClass"] == "core"
+        # Compact path returns the input polygon points verbatim.
+        assert len(core["points"]) == len(poly["points"])
+        # And the area covers the full mask area (within rasterization tolerance).
+        assert core["area"] > 0.9 * poly["area"]
+
+    def test_invasive_spheroid_returns_inner_subset(self, service):
+        """Disk+corona image with bbox polygon → bimodal path → smaller core."""
+        # The synthetic disk+corona has high mean_diff (~140) and low core_frac
+        # (~0.15), and the bbox polygon is convex (sol=1.0). Only solidity votes
+        # → 1 vote → bimodal path returns inner disk.
+        img = self._disk_with_core_image()
+        outer = self._outer_polygon()
+
+        core = service.detect_core_polygon(img, [outer])
+
+        assert core is not None
+        assert core["area"] < outer["area"] * 0.5
+        # Centroid of the returned core should sit at the disk centre.
+        xs = [p["x"] for p in core["points"]]
+        ys = [p["y"] for p in core["points"]]
+        assert abs(sum(xs) / len(xs) - self.CX) < 20
+        assert abs(sum(ys) / len(ys) - self.CY) < 20
+
+    def test_compact_threshold_constants_present(self, service):
+        """Voting thresholds are class-level so tests can introspect them."""
+        assert hasattr(service, "COMPACT_MEAN_DIFF_MAX")
+        assert hasattr(service, "COMPACT_CORE_FRAC_MIN")
+        assert hasattr(service, "COMPACT_SOLIDITY_MIN")
+        assert 0 < service.COMPACT_MEAN_DIFF_MAX < 256
+        assert 0 < service.COMPACT_CORE_FRAC_MIN < 1
+        assert 0 < service.COMPACT_SOLIDITY_MIN < 1

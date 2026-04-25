@@ -3,7 +3,7 @@ import { writeFile, readFile, mkdir, unlink } from 'fs/promises';
 import sharp from 'sharp';
 import path from 'path';
 import { logger } from '../../utils/logger';
-import type { SpermPartClass } from '../../utils/polygonValidation';
+import type { PolygonPartClass } from '../../utils/polygonValidation';
 
 export interface VisualizationOptions {
   showNumbers?: boolean;
@@ -21,7 +21,7 @@ export interface Polygon {
   type: 'external' | 'internal';
   id?: string;
   geometry?: 'polygon' | 'polyline';
-  partClass?: SpermPartClass;
+  partClass?: PolygonPartClass;
   instanceId?: string;
 }
 
@@ -303,12 +303,16 @@ export class VisualizationGenerator {
       return;
     }
 
-    // Polylines use part-class colors; polygons use type-based colors
+    // Polylines use part-class colors; closed polygons use type-based colors
+    // except 'core' which renders green (consistent with the editor canvas).
+    const isCorePolygon = !isPolyline && polygon.partClass === 'core';
     const color = isPolyline
       ? POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7'
-      : polygon.type === 'external'
-        ? options.polygonColors?.external || '#00FF00'
-        : options.polygonColors?.internal || '#FF0000';
+      : isCorePolygon
+        ? '#22c55e' // green — matches frontend CanvasPolygon for ASPP core
+        : polygon.type === 'external'
+          ? options.polygonColors?.external || '#00FF00'
+          : options.polygonColors?.internal || '#FF0000';
 
     ctx.strokeStyle = color;
     ctx.lineWidth = isPolyline

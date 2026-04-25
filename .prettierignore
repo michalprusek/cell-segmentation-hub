@@ -67,3 +67,7 @@ output_time_48h/
 # OS files
 .DS_Store
 Thumbs.db
+# Backups and temp visualization output
+.backups/
+.tmp_viz/
+

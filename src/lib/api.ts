@@ -1,5 +1,10 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { Profile, UpdateProfile } from '@/types';
+import {
+  Profile,
+  UpdateProfile,
+  isProjectType,
+  type ProjectType,
+} from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
@@ -599,10 +604,17 @@ class ApiClient {
 
   // Helper method to map backend project fields to frontend expectations
   private mapProjectFields(project: Record<string, unknown>): Project {
+    // Defensive: validate type against the known enum, default to 'spheroid'
+    // for legacy records or corrupt rows.
+    const typeValue: ProjectType = isProjectType(project.type)
+      ? project.type
+      : 'spheroid';
+
     const result: Project = {
       id: project.id as string,
       name: (project.title as string) || (project.name as string), // Map title -> name
       description: project.description as string | undefined,
+      type: typeValue,
       created_at:
         (project.createdAt as string) || (project.created_at as string),
       updated_at:
@@ -799,11 +811,13 @@ class ApiClient {
   async createProject(data: {
     name: string;
     description?: string;
+    type?: import('@/types').ProjectType;
   }): Promise<Project> {
     // Convert 'name' to 'title' to match backend validation schema
     const requestData = {
       title: data.name,
       description: data.description,
+      type: data.type,
     };
     const response = await this.instance.post('/projects', requestData);
     const project = this.extractData(response);
@@ -818,7 +832,11 @@ class ApiClient {
 
   async updateProject(
     id: string,
-    data: { name?: string; description?: string }
+    data: {
+      name?: string;
+      description?: string;
+      type?: import('@/types').ProjectType;
+    }
   ): Promise<Project> {
     // Convert 'name' to 'title' if provided
     const requestData = {

@@ -180,6 +180,15 @@ export default {
     createProject: 'Crear nuevo proyecto',
     createProjectDesc:
       'Añade un nuevo proyecto para organizar tus imágenes y análisis de esferoides.',
+    projectType: 'Tipo de proyecto',
+    projectTypeUpdated: 'Tipo de proyecto actualizado',
+    failedToUpdateProject: 'Error al actualizar el proyecto',
+    types: {
+      spheroid: 'Esferoides (estándar)',
+      spheroid_invasive: 'Esferoides desintegrados',
+      wound: 'Cicatrización de heridas',
+      sperm: 'Esperma',
+    },
     projectNamePlaceholder: 'ej. Esferoides de células HeLa',
     projectDescPlaceholder:
       'ej. Análisis de esferoides tumorales para estudios de resistencia a fármacos',
@@ -1790,6 +1799,12 @@ export default {
     solidity: 'Solidez',
     sphericity: 'Esfericidad',
     feretAspectRatio: 'Relación de Aspecto de Feret',
+    disintegrationIndex: 'Índice de Desintegración',
+    wassersteinW1: 'Wasserstein W1',
+    referenceMode: 'Modo de Referencia',
+    totalSpheroidArea: 'Área Total de Esferoides',
+    coreArea: 'Área del Núcleo',
+    invasionArea: 'Área de Invasión',
     noPolygonsFound: 'No se encontraron polígonos para análisis',
   },
   keyboardShortcuts: {

@@ -180,6 +180,15 @@ export default {
     createProject: 'Neues Projekt erstellen',
     createProjectDesc:
       'Fügen Sie ein neues Projekt hinzu, um Ihre Sphäroid-Bilder und Analysen zu organisieren.',
+    projectType: 'Projekttyp',
+    projectTypeUpdated: 'Projekttyp aktualisiert',
+    failedToUpdateProject: 'Projekt konnte nicht aktualisiert werden',
+    types: {
+      spheroid: 'Sphäroide (Standard)',
+      spheroid_invasive: 'Zerfallene Sphäroide',
+      wound: 'Wundheilung',
+      sperm: 'Spermien',
+    },
     projectNamePlaceholder: 'z.B. HeLa-Zell-Sphäroide',
     projectDescPlaceholder:
       'z.B. Analyse von Tumor-Sphäroiden für Arzneimittelresistenz-Studien',
@@ -1752,6 +1761,12 @@ export default {
     solidity: 'Festigkeit',
     sphericity: 'Sphärizität',
     feretAspectRatio: 'Feret-Seitenverhältnis',
+    disintegrationIndex: 'Zerfallsindex',
+    wassersteinW1: 'Wasserstein W1',
+    referenceMode: 'Referenzmodus',
+    totalSpheroidArea: 'Gesamtfläche der Sphäroide',
+    coreArea: 'Kernfläche',
+    invasionArea: 'Invasionsfläche',
     noPolygonsFound: 'Keine Polygone zur Analyse gefunden',
   },
   keyboardShortcuts: {

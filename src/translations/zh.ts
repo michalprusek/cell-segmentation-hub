@@ -169,6 +169,15 @@ export default {
   projects: {
     createProject: '创建新项目',
     createProjectDesc: '添加新项目来组织您的球体图像和分析。',
+    projectType: '项目类型',
+    projectTypeUpdated: '项目类型已更新',
+    failedToUpdateProject: '无法更新项目',
+    types: {
+      spheroid: '球体（标准）',
+      spheroid_invasive: '分解球体',
+      wound: '伤口愈合',
+      sperm: '精子',
+    },
     projectNamePlaceholder: '例如：HeLa细胞球体',
     projectDescPlaceholder: '例如：用于药物耐受性研究的肿瘤球体分析',
     creatingProject: '创建中...',
@@ -1626,6 +1635,12 @@ export default {
     solidity: '实心度',
     sphericity: '球形度',
     feretAspectRatio: 'Feret纵横比',
+    disintegrationIndex: '分解指数',
+    wassersteinW1: 'Wasserstein W1',
+    referenceMode: '参考模式',
+    totalSpheroidArea: '球体总面积',
+    coreArea: '核心面积',
+    invasionArea: '侵袭面积',
     noPolygonsFound: '未找到可分析的多边形',
   },
   keyboardShortcuts: {

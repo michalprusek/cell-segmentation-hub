@@ -13,10 +13,17 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { PlusCircle } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/useAuth';
 import { useLanguage } from '@/contexts/useLanguage';
-import { getErrorMessage } from '@/types';
+import { getErrorMessage, PROJECT_TYPES, type ProjectType } from '@/types';
 import { logger } from '@/lib/logger';
 
 interface NewProjectProps {
@@ -26,6 +33,7 @@ interface NewProjectProps {
 const NewProject = ({ onProjectCreated }: NewProjectProps) => {
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
+  const [projectType, setProjectType] = useState<ProjectType>('spheroid');
   const [isCreating, setIsCreating] = useState(false);
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
@@ -51,6 +59,7 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
       const projectData = await apiClient.createProject({
         name: projectName,
         description: trimmedDescription || '',
+        type: projectType,
       });
 
       // Validate response
@@ -129,6 +138,26 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
                 value={projectDescription}
                 onChange={e => setProjectDescription(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="projectType" className="text-right">
+                {t('projects.projectType')}
+              </Label>
+              <Select
+                value={projectType}
+                onValueChange={(v: ProjectType) => setProjectType(v)}
+              >
+                <SelectTrigger id="projectType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROJECT_TYPES.map(pt => (
+                    <SelectItem key={pt} value={pt}>
+                      {t(`projects.types.${pt}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

@@ -59,11 +59,30 @@ const ProjectDetail = () => {
   // Segmentation editor loads full polygon data independently when opened.
   const {
     projectTitle,
+    projectType,
+    setProjectType,
     images,
     loading,
     updateImages,
     refreshImageSegmentation,
   } = useProjectData(id, user?.id);
+
+  const handleProjectTypeChange = useCallback(
+    async (newType: import('@/types').ProjectType) => {
+      if (!id) return;
+      try {
+        await apiClient.updateProject(id, { type: newType });
+        setProjectType(newType);
+        toast.success(t('projects.projectTypeUpdated'));
+      } catch (err) {
+        logger.error('Failed to update project type', err);
+        toast.error(
+          getErrorMessage(err, t) || t('projects.failedToUpdateProject')
+        );
+      }
+    },
+    [id, setProjectType, t]
+  );
 
   // Handle cancellation events from WebSocket - define early for useSegmentationQueue
   const handleSegmentationCancelled = useCallback(
@@ -1414,6 +1433,8 @@ const ProjectDetail = () => {
         projectTitle={projectTitle}
         imagesCount={filteredImages.length}
         loading={loading}
+        projectType={projectType}
+        onTypeChange={handleProjectTypeChange}
       />
 
       <div className="container mx-auto px-4 py-8">

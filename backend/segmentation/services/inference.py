@@ -58,7 +58,7 @@ class InferenceService:
         
         try:
             # Load and preprocess image
-            image, original_size = self._load_and_preprocess_image(image_data)
+            image, original_size, original_gray = self._load_and_preprocess_image(image_data)
             preprocessing_time = time.time() - start_time
             
             logger.info(f"Image preprocessed in {preprocessing_time:.3f}s, "
@@ -87,6 +87,16 @@ class InferenceService:
             
             polygons = self.postprocessing.mask_to_polygons(mask, threshold, detect_holes)
             polygons = self.postprocessing.optimize_polygons(polygons)
+
+            # ASPP-only: locate dense central 'core' inside the largest polygon
+            # and append it tagged for green rendering in the editor.
+            if model_name == 'unet_attention_aspp':
+                core_polygon = self.postprocessing.detect_core_polygon(
+                    original_gray, polygons
+                )
+                if core_polygon is not None:
+                    polygons.append(core_polygon)
+                    logger.info("ASPP core polygon appended (area=%.1f)", core_polygon["area"])
             
             postprocess_time = time.time() - postprocess_start
             
@@ -115,33 +125,41 @@ class InferenceService:
             raise RuntimeError(f"Segmentation failed: {str(e)}")
     
     def _load_and_preprocess_image(self, image_data: bytes) -> tuple:
-        """Load and preprocess image for model input"""
+        """Load and preprocess image for model input.
+
+        Returns ``(image_tensor, original_size, original_gray)`` where
+        ``original_gray`` is a uint8 grayscale ndarray at original_size,
+        used by ASPP core detection to share the polygon coordinate system.
+        """
         try:
             # Load image from bytes
             image = Image.open(io.BytesIO(image_data)).convert('RGB')
             original_size = image.size  # (width, height)
-            
+
             # Convert to numpy array
             image_np = np.array(image)
-            
+
+            # Grayscale at original_size for downstream intensity analysis
+            original_gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+
             # Resize to target size
             image_resized = cv2.resize(image_np, self.target_size)
-            
+
             # Convert to tensor and normalize
             image_tensor = torch.from_numpy(image_resized).permute(2, 0, 1).float() / 255.0
-            
+
             # Apply ImageNet normalization
             image_tensor = self.normalize(image_tensor)
-            
+
             # Add batch dimension
             image_tensor = image_tensor.unsqueeze(0)
-            
+
             # Move to device
             device = self.model_manager.device
             image_tensor = image_tensor.to(device)
-            
-            return image_tensor, original_size
-            
+
+            return image_tensor, original_size, original_gray
+
         except Exception as e:
             logger.error(f"Failed to preprocess image: {e}")
             raise ValueError(f"Invalid image data: {str(e)}")
