@@ -157,12 +157,7 @@ services:
       - ML_GPU_PRIORITY=high
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
-      # Sperm v17 weights (DINOv2-L + Mask2Former + edge-cost MLP).
-      # Host path uses the sperm_final/weights/ convention matching the release zip.
-      - ./backend/segmentation/sperm_final/weights:/app/sperm_final/weights:ro
-      # HuggingFace cache for the DINOv2-L backbone (~1.3 GB). Named volume
-      # persists the first-inference download across container restarts.
-      - hf_cache:/app/hf_cache
+      - ./backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro
       - ./backend/uploads/blue:/app/uploads
     restart: always
     deploy:

@@ -3,6 +3,7 @@
 Adapted from combined_pipeline.py:48-156.
 """
 
+import logging
 from typing import Dict, List, Tuple
 
 import cv2
@@ -12,6 +13,8 @@ import torch.nn.functional as F
 
 from sperm_final.config import ID_TO_CLASS, NUM_CLASSES
 from sperm_final.data.dataset import IMAGENET_MEAN, IMAGENET_STD
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +108,7 @@ def _accumulate_soft_masks(
             b2 = acc["mask"] >= mask_threshold
             intersection = (b1 & b2).sum()
             union_area = (b1 | b2).sum()
-            if union_area > 0 and intersection / union_area > 0.5:
+            if union_area > 0 and intersection / union_area > 0.3:
                 # Average the soft masks
                 count = acc["_acc_count"]
                 acc["mask"] = (acc["mask"] * count + inst["mask"]) / (count + 1)
@@ -835,7 +838,6 @@ def predict_full_image_for_graph(
     overlap: int = 300,
     score_threshold: float = 0.95,
     mask_threshold: float = 0.3,
-    use_hr: bool = False,
 ) -> List[Dict]:
     """Minimal prediction pipeline for graph assembly input.
 
@@ -850,13 +852,10 @@ def predict_full_image_for_graph(
         overlap: Overlap between patches.
         score_threshold: Minimum class score (high = trust model).
         mask_threshold: Threshold for binary masks.
-        use_hr: If True and model has v14 high-res branch, use dyn_mask_head
-            for native-resolution masks instead of 256² pred_masks (then upsampled).
 
     Returns:
         List of instance dicts with "mask", "cls", "score".
     """
-    hr_ok = use_hr and getattr(model, "use_high_res_mask", False) and hasattr(model, "dyn_mask_head")
     model.eval()
     C, H, W = image_tensor.shape
 
@@ -891,30 +890,12 @@ def predict_full_image_for_graph(
             scores, classes = probs[:, 1:].max(-1)
             classes = classes + 1
 
-            # If v14 HR branch available, pre-compute HR masks for kept queries only
-            hr_masks = None
-            if hr_ok:
-                keep = (scores >= score_threshold) & (classes >= 1) & (classes < NUM_CLASSES)
-                if keep.any():
-                    keep_idx = torch.where(keep)[0]
-                    E = outputs["pred_hr_E"]          # (1, D, 1024, 1024)
-                    theta = outputs["pred_hr_theta"][0, keep_idx]  # (K, 169)
-                    # Compute centers from low-res pred_masks (512-sized intermediate is fine)
-                    centers_list = []
-                    for q in keep_idx.tolist():
-                        m_low = pred_masks[q].sigmoid()
-                        ys, xs = torch.where(m_low > 0.3)
-                        if ys.numel() > 0:
-                            h_m, w_m = m_low.shape
-                            centers_list.append([float(xs.float().mean() / (w_m - 1)),
-                                                   float(ys.float().mean() / (h_m - 1))])
-                        else:
-                            centers_list.append([0.5, 0.5])
-                    centers = torch.tensor(centers_list, device=device, dtype=theta.dtype)
-                    batch_idx = torch.zeros(len(keep_idx), device=device, dtype=torch.long)
-                    hr_logits = model.dyn_mask_head(E, theta, centers, batch_idx)  # (K, 1024, 1024)
-                    hr_probs = hr_logits.sigmoid().cpu().numpy()
-                    hr_masks = {int(q): hr_probs[i] for i, q in enumerate(keep_idx.tolist())}
+            # Log top detection scores for debugging threshold issues
+            top_k = min(5, len(scores))
+            top_vals, top_idx = scores.topk(top_k)
+            above_half = [(f"{float(top_vals[i]):.3f}", int(classes[top_idx[i]])) for i in range(top_k) if float(top_vals[i]) > 0.3]
+            if above_half:
+                logger.info(f"Patch ({py},{px}): detections above 0.3: {above_half}, threshold={score_threshold}")
 
             for q in range(len(scores)):
                 score = float(scores[q])
@@ -922,16 +903,13 @@ def predict_full_image_for_graph(
                 if score < score_threshold or cls < 1 or cls >= NUM_CLASSES:
                     continue
 
-                if hr_masks is not None and q in hr_masks:
-                    mask = hr_masks[q]  # already (1024, 1024) native
-                else:
-                    mask = pred_masks[q]
-                    mask = F.interpolate(
-                        mask.unsqueeze(0).unsqueeze(0),
-                        size=(patch_size, patch_size),
-                        mode="bilinear",
-                        align_corners=False,
-                    ).squeeze().sigmoid().cpu().numpy()
+                mask = pred_masks[q]
+                mask = F.interpolate(
+                    mask.unsqueeze(0).unsqueeze(0),
+                    size=(patch_size, patch_size),
+                    mode="bilinear",
+                    align_corners=False,
+                ).squeeze().sigmoid().cpu().numpy()
 
                 full_mask = np.zeros((Hp, Wp), dtype=np.float32)
                 actual_h = min(patch_size, Hp - py)

@@ -158,8 +158,8 @@ class ModelLoader:
         },
         'sperm': {
             'class': SpermModel,  # Will be None if sperm.py not yet copied
-            'pretrained_path': 'sperm_final/weights/v17_model.pth',
-            'finetuned_path': 'sperm_final/weights/v17_model.pth',
+            'pretrained_path': 'sperm_final/best_model.pth',
+            'finetuned_path': 'sperm_final/best_model.pth',
             'config_path': None
         },
         'wound': {

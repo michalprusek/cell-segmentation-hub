@@ -297,7 +297,6 @@ class TransformerDecoder(nn.Module):
             "pred_logits": pred_logits,
             "pred_masks": pred_masks,
             "aux_outputs": aux_outputs[:-1],  # exclude last (same as final)
-            "query_features": query,  # (B, Q, hidden_dim) — used by optional IGM2F heads
         }
 
     def _predict_masks(
@@ -475,51 +474,6 @@ class Mask2FormerModel(nn.Module):
             per_layer_heads=getattr(config, "per_layer_heads", False),
         )
 
-        # IGM2F-PL heads (Phase B, opt-in via ModelConfig flags)
-        self.use_polyline_head = getattr(config, "use_polyline_head", False)
-        self.use_instance_embed = getattr(config, "use_instance_embed", False)
-        if self.use_polyline_head or self.use_instance_embed:
-            from sperm_final.models.igm2f_heads import PolylineHead, InstanceEmbedHead
-            if self.use_polyline_head:
-                self.polyline_head = PolylineHead(
-                    hidden_dim=config.fpn_channels,
-                    k_max=getattr(config, "polyline_k_max", 32),
-                )
-            if self.use_instance_embed:
-                self.instance_embed_head = InstanceEmbedHead(
-                    hidden_dim=config.fpn_channels,
-                    embed_dim=getattr(config, "instance_embed_dim", 256),
-                )
-
-        # GeoMask (v16): per-point width head → differentiable tube rasterizer
-        self.use_geomask = getattr(config, "use_geomask", False)
-        if self.use_geomask:
-            from sperm_final.models.geomask_heads import WidthHead
-            self.width_head = WidthHead(
-                hidden_dim=config.fpn_channels,
-                k_max=getattr(config, "polyline_k_max", 32),
-                max_width_px=getattr(config, "geomask_max_width_px", 40.0),
-            )
-
-        # v14 native-resolution mask branch (CondInst dynamic head, opt-in)
-        self.use_high_res_mask = getattr(config, "use_high_res_mask", False)
-        if self.use_high_res_mask:
-            from sperm_final.models.dynamic_mask_head import (
-                MaskFeatureHead, DynamicMaskHead, CONTROLLER_OUT_DIM,
-            )
-            self.hr_embed_dim = getattr(config, "hr_embed_dim", 8)
-            # mask_features from pixel_decoder lives at stride-8 for ViT-L/16
-            # (64 token grid for 1024 input, pixel decoder keeps stride ~8).
-            # Upscale factor 8 → native 1024² mask.
-            self.mask_feature_head = MaskFeatureHead(
-                in_channels=config.fpn_channels,
-                out_dim=self.hr_embed_dim,
-                target_upscale=8,
-            )
-            self.dyn_mask_controller = nn.Linear(config.fpn_channels, CONTROLLER_OUT_DIM)
-            nn.init.zeros_(self.dyn_mask_controller.bias)
-            self.dyn_mask_head = DynamicMaskHead(embed_dim=self.hr_embed_dim)
-
     def forward(self, pixel_values: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Forward pass.
 
@@ -554,30 +508,8 @@ class Mask2FormerModel(nn.Module):
         # Upsample mask features for finer mask prediction
         mask_features_hr = self.mask_upsampler(mask_features)
 
-        # Transformer decoder → class + mask predictions (+ query_features)
+        # Transformer decoder → class + mask predictions
         outputs = self.transformer_decoder(mask_features_hr, multi_scale_out)
-
-        # IGM2F-PL heads (opt-in)
-        if self.use_polyline_head or self.use_instance_embed:
-            qf = outputs["query_features"]
-            if self.use_polyline_head:
-                pl = self.polyline_head(qf)
-                outputs["pred_polyline_coords"] = pl["coords"]         # (B, Q, K, 2) normalized
-                outputs["pred_polyline_valid"] = pl["valid_logits"]    # (B, Q, K)
-            if self.use_instance_embed:
-                outputs["pred_instance_embed"] = self.instance_embed_head(qf)
-
-        # GeoMask (v16): per-point width (pixels)
-        if self.use_geomask:
-            qf = outputs["query_features"]
-            outputs["pred_polyline_widths"] = self.width_head(qf)   # (B, Q, K)
-
-        # v14 high-res branch (opt-in). E computed once; theta per query.
-        # Actual masks produced lazily in criterion for matched queries only.
-        if self.use_high_res_mask:
-            # `mask_features` is the pixel_decoder's stride-4 output (B, C, 256, 256 for 1024 input)
-            outputs["pred_hr_E"] = self.mask_feature_head(mask_features)   # (B, D, 1024, 1024)
-            outputs["pred_hr_theta"] = self.dyn_mask_controller(outputs["query_features"])  # (B, Q, 169)
 
         return outputs
 
@@ -624,14 +556,12 @@ class Mask2FormerModel(nn.Module):
                             break
                     layer_params.setdefault(layer_idx, []).append(param)
             else:
-                # DINOv2 / DINOv3 ViT: use DINOv2Backbone._get_layer_list() which
-                # handles both `encoder.layer.N` (DINOv2) and `model.layer.N` (DINOv3).
-                num_layers = len(self.backbone._get_layer_list())
+                # DINOv2 ViT: encoder.layer.0 through encoder.layer.N
+                num_layers = len(self.backbone.backbone.encoder.layer)
                 for name, param in backbone_params:
                     layer_idx = 0  # default for embeddings
                     for li in range(num_layers):
-                        # Match both DINOv2 (`encoder.layer.{li}.`) and DINOv3 (`model.layer.{li}.`)
-                        if f".encoder.layer.{li}." in name or f".model.layer.{li}." in name:
+                        if f".encoder.layer.{li}." in name:
                             layer_idx = li
                             break
                     layer_params.setdefault(layer_idx, []).append(param)
