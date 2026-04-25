@@ -1,15 +1,48 @@
+import logging
+import os
+import sys
+from typing import Any, Dict, List, Optional
+
+import cv2
+import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict, Any
-import numpy as np
-import cv2
-import sys
-import os
+from scipy.stats import wasserstein_distance
 
 # Import characteristic_functions from utils package
 from utils.characteristic_functions import calculate_all
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api", tags=["metrics"])
+
+
+class DisintegrationRequest(BaseModel):
+    """Request body for DI computation.
+
+    `mask_polygons` (plural, preferred) is the list of every external polygon
+    forming the total cell-covered area; they are rasterised into a single
+    binary mask via union (cv2.fillPoly applied per polygon to the same
+    canvas). DI is then computed from that union.
+    `mask_polygon` (singular) is kept for backward compatibility — same as
+    passing a one-element list.
+    `core_polygons` is the list of dense core fragments; their combined
+    rasterised area defines R_core. `core_polygon` (singular) is the legacy
+    single-polygon variant.
+    """
+    mask_polygon: Optional[List[List[float]]] = None
+    mask_polygons: Optional[List[List[List[float]]]] = None
+    core_polygon: Optional[List[List[float]]] = None
+    core_polygons: Optional[List[List[List[float]]]] = None
+    image_width: int
+    image_height: int
+
+
+class DisintegrationResponse(BaseModel):
+    di: float
+    w1: float
+    reference: str  # 'core' | 'r_eff' | 'r_eff_fallback' | 'none'
+    n_pixels: int
 
 class Point(BaseModel):
     x: float
@@ -132,6 +165,136 @@ async def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[Metric
             ))
     
     return results
+
+@router.post("/disintegration-index", response_model=DisintegrationResponse)
+async def disintegration_index(request: DisintegrationRequest):
+    """Compute the per-image Disintegration Index (DI).
+
+    Reduces the binary mask polygon to a 1-D radial distribution of pixel
+    distances from the centroid, normalises by R_ref (derived from core
+    area if provided, else from mask area), and measures the
+    1-Wasserstein distance to the analytical CDF of a uniform disk
+    `F_ref(d̃) = d̃²`. The raw W1 is squashed via `tanh` into `[0, 1)`.
+    """
+    try:
+        H = int(request.image_height)
+        W = int(request.image_width)
+        if H <= 0 or W <= 0:
+            raise HTTPException(
+                status_code=400, detail="image_width/image_height must be positive"
+            )
+
+        # Build a UNION mask from every supplied external polygon.
+        # `mask_polygons` (plural) is the preferred input — represents the full
+        # ASPP segmentation (all spheroids in one canvas). `mask_polygon`
+        # (singular) is a legacy alias for a single-element list.
+        mask_polys: List[List[List[float]]] = []
+        if request.mask_polygons:
+            mask_polys = request.mask_polygons
+        elif request.mask_polygon is not None:
+            mask_polys = [request.mask_polygon]
+        if not mask_polys:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one of mask_polygons / mask_polygon is required",
+            )
+
+        mask = np.zeros((H, W), dtype=np.uint8)
+        valid_masks = 0
+        for poly in mask_polys:
+            pts = np.asarray(poly, dtype=np.float32)
+            if pts.ndim == 2 and pts.shape[1] == 2 and pts.shape[0] >= 3:
+                cv2.fillPoly(mask, [pts.astype(np.int32)], 1)
+                valid_masks += 1
+        if valid_masks == 0:
+            return DisintegrationResponse(
+                di=0.0, w1=0.0, reference="none", n_pixels=0
+            )
+        ys, xs = np.nonzero(mask)
+        n = int(xs.size)
+        if n == 0:
+            return DisintegrationResponse(
+                di=0.0, w1=0.0, reference="none", n_pixels=0
+            )
+
+        cx = float(xs.mean())
+        cy = float(ys.mean())
+        d_mask = np.hypot(xs - cx, ys - cy)
+
+        ref_label = "r_eff"
+        r_ref: Optional[float] = None
+        d_core: Optional[np.ndarray] = None
+        # Collect candidate core polygons: prefer the plural list, fall back to
+        # singular for legacy callers.
+        candidate_cores: List[List[List[float]]] = []
+        if request.core_polygons:
+            candidate_cores = request.core_polygons
+        elif request.core_polygon is not None:
+            candidate_cores = [request.core_polygon]
+
+        if candidate_cores:
+            core_mask = np.zeros((H, W), dtype=np.uint8)
+            valid_count = 0
+            for poly in candidate_cores:
+                core_pts_arr = np.asarray(poly, dtype=np.float32)
+                if (
+                    core_pts_arr.ndim == 2
+                    and core_pts_arr.shape[1] == 2
+                    and core_pts_arr.shape[0] >= 3
+                ):
+                    cv2.fillPoly(core_mask, [core_pts_arr.astype(np.int32)], 1)
+                    valid_count += 1
+            n_core = int(core_mask.sum())
+            if valid_count > 0 and n_core > 0:
+                ys_c, xs_c = np.nonzero(core_mask)
+                d_core = np.hypot(xs_c - cx, ys_c - cy)
+                # R_core for scale-invariant normalisation of W1.
+                r_ref = float(np.sqrt(n_core / np.pi))
+                ref_label = "core"
+            else:
+                ref_label = "r_eff_fallback"
+
+        if r_ref is None:
+            r_ref = float(np.sqrt(n / np.pi))
+        if r_ref <= 0:
+            return DisintegrationResponse(
+                di=0.0, w1=0.0, reference=ref_label, n_pixels=n
+            )
+
+        if d_core is not None and d_core.size > 0:
+            # Empirical-CDF reference: compare radial distance distribution of
+            # the mask against the empirical distribution of the core's own
+            # pixels (both relative to the mask centroid). Normalised by R_core
+            # to keep the metric scale-invariant.
+            w1_px = float(wasserstein_distance(d_mask, d_core))
+            w1 = w1_px / r_ref
+        else:
+            # No core: fall back to the equivalent-disk reference CDF
+            # F_ref(d̃) = d̃² in the d̃ = d / R_eff space.
+            d_tilde = np.sort(d_mask / r_ref)
+            u = (np.arange(n, dtype=np.float64) + 0.5) / n
+            w1 = float(np.mean(np.abs(d_tilde - np.sqrt(u))))
+        di = float(np.tanh(w1))
+
+        return DisintegrationResponse(
+            di=di, w1=w1, reference=ref_label, n_pixels=n
+        )
+    except HTTPException:
+        raise
+    except (ValueError, cv2.error, MemoryError) as exc:
+        logger.exception(
+            "DI computation failed: H=%d W=%d n_mask=%d n_core=%d",
+            H, W,
+            len(request.mask_polygons or [request.mask_polygon])
+            if (request.mask_polygons or request.mask_polygon) else 0,
+            len(request.core_polygons or [request.core_polygon])
+            if (request.core_polygons or request.core_polygon) else 0,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to compute disintegration index: {exc}",
+        ) from exc
+
 
 @router.get("/metrics-info")
 async def get_metrics_info():

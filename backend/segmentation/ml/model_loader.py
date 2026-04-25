@@ -721,7 +721,47 @@ class ModelLoader:
             
             logger.info(f"Polygon detection: {len(polygons)} valid polygons from {total_contours} contours "
                        f"({external_count} external, {internal_count} internal, filtered {filtered_count} small contours)")
-            
+
+            # ASPP-only: detect dense central 'core' inside the largest polygon
+            # via the shared 2-of-3 voting logic (Otsu + core-fraction + solidity).
+            if model_name == 'unet_attention_aspp' and polygons:
+                try:
+                    # Ensure each polygon carries an `area` field so detect_core_polygon
+                    # can pick the largest one consistently with `mask_to_polygons`.
+                    for poly in polygons:
+                        if 'area' not in poly and poly.get('points'):
+                            pts_arr = np.array(
+                                [[p['x'], p['y']] for p in poly['points']],
+                                dtype=np.float32,
+                            )
+                            poly['area'] = float(cv2.contourArea(pts_arr))
+
+                    rgb_arr = np.array(image.convert('RGB'))
+                    gray_arr = cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2GRAY)
+                    from services.postprocessing import PostprocessingService
+                    core_polygons = PostprocessingService().detect_core_polygons(
+                        gray_arr, polygons
+                    )
+                    for core_polygon in core_polygons:
+                        core_polygon.setdefault('id', f"polygon_{polygon_id_counter}")
+                        core_polygon.setdefault('class', 'spheroid')
+                        polygons.append(core_polygon)
+                        polygon_id_counter += 1
+                    if core_polygons:
+                        logger.info(
+                            f"ASPP appended {len(core_polygons)} core polygon(s) "
+                            f"(areas={[round(c['area'], 1) for c in core_polygons]})"
+                        )
+                except (cv2.error, ValueError) as core_exc:
+                    # Inner narrow catch: detect_core_polygons already swallows
+                    # geometric/numerical errors. Anything reaching here is a
+                    # second-line defence (e.g., colour-space conversion edge case).
+                    logger.error(
+                        "Core polygon detection hook failed (model=%s, size=%s, n_polys=%d): %s",
+                        model_name, original_size, len(polygons), core_exc,
+                        exc_info=True,
+                    )
+
             if len(polygons) == 0:
                 logger.warning(f"No valid polygons detected! Total contours: {total_contours}, filtered: {filtered_count}")
                 logger.warning(f"Binary mask stats - shape: {binary_mask.shape}, unique values: {np.unique(binary_mask)}")

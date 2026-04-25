@@ -135,6 +135,10 @@ const CanvasPolygon = React.memo(
 
     // Determine path color based on polygon type, polyline partClass, and selection status
     const getPathColor = () => {
+      // Spheroid 'core' (closed polygon, dense central region from ASPP model)
+      if (!isPolyline && polygon.partClass === 'core') {
+        return isSelected ? '#16a34a' : '#22c55e'; // green
+      }
       if (isPolyline) {
         // Part-class-based colors for sperm polylines
         switch (polygon.partClass) {
@@ -258,21 +262,30 @@ const CanvasPolygon = React.memo(
           {/* Polygon/Polyline path - render even if path is empty for testing */}
           <path
             d={pathString || 'M0,0'}
+            style={
+              !isPolyline && polygon.partClass === 'core'
+                ? { fill: 'rgba(34, 197, 94, 0.25)', stroke: '#22c55e' }
+                : undefined
+            }
             className={cn(
               'polygon-path cursor-pointer transition-colors',
               isPolyline
                 ? 'polyline-path'
-                : isInternal
-                  ? 'polygon-internal'
-                  : 'polygon-external',
+                : polygon.partClass === 'core'
+                  ? 'polygon-core'
+                  : isInternal
+                    ? 'polygon-internal'
+                    : 'polygon-external',
               isSelected && 'polygon-selected'
             )}
             fill={
               isPolyline
                 ? 'none'
-                : isInternal
-                  ? 'rgba(14, 165, 233, 0.1)'
-                  : 'rgba(239, 68, 68, 0.1)'
+                : polygon.partClass === 'core'
+                  ? 'rgba(34, 197, 94, 0.25)' // green core (#22c55e at 25%)
+                  : isInternal
+                    ? 'rgba(14, 165, 233, 0.1)'
+                    : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
             strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}

@@ -31,6 +31,7 @@ export async function createProject(
       data: {
         title: data.title,
         description: data.description,
+        type: data.type,
         userId: userId,
       },
       include: {
@@ -382,6 +383,7 @@ export async function updateProject(
       data: {
         title: data.title,
         description: data.description,
+        ...(data.type !== undefined && { type: data.type }),
         updatedAt: new Date(),
       },
       include: {
