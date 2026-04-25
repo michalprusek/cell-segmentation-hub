@@ -1,5 +1,10 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { Profile, UpdateProfile } from '@/types';
+import {
+  Profile,
+  UpdateProfile,
+  isProjectType,
+  type ProjectType,
+} from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
@@ -599,21 +604,23 @@ class ApiClient {
 
   // Helper method to map backend project fields to frontend expectations
   private mapProjectFields(project: Record<string, unknown>): Project {
+    // Defensive: validate type against the known enum, default to 'spheroid'
+    // for legacy records or corrupt rows.
+    const typeValue: ProjectType = isProjectType(project.type)
+      ? project.type
+      : 'spheroid';
+
     const result: Project = {
       id: project.id as string,
       name: (project.title as string) || (project.name as string), // Map title -> name
       description: project.description as string | undefined,
+      type: typeValue,
       created_at:
         (project.createdAt as string) || (project.created_at as string),
       updated_at:
         (project.updatedAt as string) || (project.updated_at as string),
       user_id: (project.userId as string) || (project.user_id as string),
     };
-
-    // Project type drives metric export and editor mode dispatch.
-    if (typeof project.type === 'string') {
-      result.type = project.type as import('@/types').ProjectType;
-    }
 
     // Add optional fields only if they exist
     const imageCount =

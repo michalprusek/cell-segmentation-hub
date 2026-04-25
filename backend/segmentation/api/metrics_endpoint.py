@@ -1,13 +1,18 @@
+import logging
+import os
+import sys
+from typing import Any, Dict, List, Optional
+
+import cv2
+import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-import numpy as np
-import cv2
-import sys
-import os
+from scipy.stats import wasserstein_distance
 
 # Import characteristic_functions from utils package
 from utils.characteristic_functions import calculate_all
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["metrics"])
 
@@ -261,7 +266,6 @@ async def disintegration_index(request: DisintegrationRequest):
             # the mask against the empirical distribution of the core's own
             # pixels (both relative to the mask centroid). Normalised by R_core
             # to keep the metric scale-invariant.
-            from scipy.stats import wasserstein_distance
             w1_px = float(wasserstein_distance(d_mask, d_core))
             w1 = w1_px / r_ref
         else:
@@ -277,11 +281,19 @@ async def disintegration_index(request: DisintegrationRequest):
         )
     except HTTPException:
         raise
-    except Exception as exc:
+    except (ValueError, cv2.error, MemoryError) as exc:
+        logger.exception(
+            "DI computation failed: H=%d W=%d n_mask=%d n_core=%d",
+            H, W,
+            len(request.mask_polygons or [request.mask_polygon])
+            if (request.mask_polygons or request.mask_polygon) else 0,
+            len(request.core_polygons or [request.core_polygon])
+            if (request.core_polygons or request.core_polygon) else 0,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Failed to compute disintegration index: {exc}",
-        )
+        ) from exc
 
 
 @router.get("/metrics-info")

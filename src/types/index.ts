@@ -339,11 +339,18 @@ export const PROJECT_TYPES = [
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
+/** Coerce arbitrary input to a known ProjectType, defaulting to 'spheroid'.
+ * Use at API boundary so consumers never have to defensively `?? 'spheroid'`.
+ */
+export const isProjectType = (v: unknown): v is ProjectType =>
+  typeof v === 'string' && (PROJECT_TYPES as readonly string[]).includes(v);
+
 export interface Project {
   id: string;
   name: string;
   description?: string;
-  type?: ProjectType;
+  // Required: DB column is NOT NULL DEFAULT 'spheroid'. API always returns it.
+  type: ProjectType;
   created_at: string;
   updated_at: string;
   user_id: string;

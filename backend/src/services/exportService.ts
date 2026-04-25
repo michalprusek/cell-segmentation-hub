@@ -1020,24 +1020,41 @@ export class ExportService {
     const dimsCache = new Map<string, { width: number; height: number }>();
     for (const image of images) {
       if ((image.width && image.height) || !image.originalPath) continue;
+
+      // Step 1: read dimensions from disk. Sharp failure means the file is
+      // missing/corrupt; warn and skip this image.
+      let meta: { width?: number; height?: number };
       try {
-        const filePath = path.join(uploadDir, image.originalPath);
-        const meta = await sharp(filePath).metadata();
-        if (meta.width && meta.height) {
-          dimsCache.set(image.id, { width: meta.width, height: meta.height });
-          await prisma.image.update({
-            where: { id: image.id },
-            data: { width: meta.width, height: meta.height },
-          });
-          logger.info(
-            `Backfilled dims for image ${image.id}: ${meta.width}x${meta.height}`,
-            'ExportService',
-            { jobId, imageId: image.id }
-          );
-        }
+        meta = await sharp(path.join(uploadDir, image.originalPath)).metadata();
       } catch (err) {
         logger.warn(
-          `Failed to read dimensions for ${image.id} from disk: ${err instanceof Error ? err.message : String(err)}`,
+          `Failed to READ dimensions for ${image.id} from disk: ${err instanceof Error ? err.message : String(err)}`,
+          'ExportService',
+          { jobId, imageId: image.id, path: image.originalPath }
+        );
+        continue;
+      }
+      if (!meta.width || !meta.height) continue;
+
+      // Cache wins over DB so metrics calc can proceed even if persistence fails.
+      dimsCache.set(image.id, { width: meta.width, height: meta.height });
+
+      // Step 2: persist back to the DB. Failure here is a real DB problem
+      // (connection lost, constraint violation) — log ERROR, not WARN.
+      try {
+        await prisma.image.update({
+          where: { id: image.id },
+          data: { width: meta.width, height: meta.height },
+        });
+        logger.info(
+          `Backfilled dims for image ${image.id}: ${meta.width}x${meta.height}`,
+          'ExportService',
+          { jobId, imageId: image.id }
+        );
+      } catch (err) {
+        logger.error(
+          `Failed to PERSIST backfilled dimensions for ${image.id}; metrics will use cached values`,
+          err instanceof Error ? err : new Error(String(err)),
           'ExportService',
           { jobId, imageId: image.id }
         );
@@ -1078,10 +1095,11 @@ export class ExportService {
         options?.pixelToMicrometerScale
       );
     } catch (err) {
-      logger.warn(
-        `Image-level metrics (DI) failed; continuing without them: ${err instanceof Error ? err.message : String(err)}`,
+      logger.error(
+        'Per-image DI metrics aggregation crashed; Excel will omit the DI columns',
+        err instanceof Error ? err : new Error(String(err)),
         'ExportService',
-        { jobId }
+        { jobId, imageCount: metricsImages.length }
       );
     }
 
@@ -1109,15 +1127,15 @@ export class ExportService {
           );
           if (!exportedSperm) {
             logger.warn(
-              `Project flagged as sperm but no polyline data — falling back to polygon metrics`,
+              `Project flagged as sperm but no polyline data — falling back to standard polygon metrics`,
               'ExportService',
               { jobId }
             );
-            await this.metricsCalculator.exportToExcel(
+            // Fall back to per-polygon metrics (NOT the DI-shaped report).
+            await this.metricsCalculator.exportPolygonMetricsToExcel(
               allMetrics,
               excelPath,
-              options?.pixelToMicrometerScale,
-              imageMetrics
+              options?.pixelToMicrometerScale
             );
           }
         } else if (projectType === 'spheroid_invasive') {
@@ -1427,7 +1445,11 @@ ${scaleInfo}
 
 # Per-Image Metrics: Disintegration Analysis
 
-The Excel export reports **one row per image** with four metrics:
+**Applies to projects with \`type='spheroid_invasive'\` only.** Standard
+\`spheroid\` and \`wound\` projects get the per-polygon metrics report
+described above; \`sperm\` projects get the head/midpiece/tail morphology
+sheet. This section documents the disintegrated-spheroid Excel layout,
+which is one row per image with the four numeric metrics
 **Total Spheroid Area**, **Core Area**, **Invasion Area** (all in ${areaUnit})
 and **Disintegration Index** (dimensionless). The metrics target spheroid
 disintegration analysis (Lim, Kang, Lee 2020 — Sci. Rep. PMC6971071) but
@@ -1609,7 +1631,8 @@ Algorithm (implemented in
 - **DI computation**: \`backend/segmentation/api/metrics_endpoint.py\`
 - **Per-image area orchestration**: \`backend/src/services/metrics/metricsCalculator.ts\`
   (\`calculateAllImageMetrics\`)
-- **Excel writer**: same file (\`exportToExcel\` — emits the two-column report)
+- **Excel writer**: same file (\`exportToExcel\` — emits Image Name, Image ID,
+  Total Spheroid Area, Core Area, Invasion Area, Disintegration Index)
 `;
   }
 

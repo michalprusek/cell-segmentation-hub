@@ -752,8 +752,15 @@ class ModelLoader:
                             f"ASPP appended {len(core_polygons)} core polygon(s) "
                             f"(areas={[round(c['area'], 1) for c in core_polygons]})"
                         )
-                except Exception as core_exc:
-                    logger.error(f"Core polygon detection failed: {core_exc}")
+                except (cv2.error, ValueError) as core_exc:
+                    # Inner narrow catch: detect_core_polygons already swallows
+                    # geometric/numerical errors. Anything reaching here is a
+                    # second-line defence (e.g., colour-space conversion edge case).
+                    logger.error(
+                        "Core polygon detection hook failed (model=%s, size=%s, n_polys=%d): %s",
+                        model_name, original_size, len(polygons), core_exc,
+                        exc_info=True,
+                    )
 
             if len(polygons) == 0:
                 logger.warning(f"No valid polygons detected! Total contours: {total_contours}, filtered: {filtered_count}")

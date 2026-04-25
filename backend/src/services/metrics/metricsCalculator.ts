@@ -41,14 +41,23 @@ export interface PolygonMetrics {
   sphericity: number;
 }
 
-/** Per-image disintegration metrics. Computed on-demand at export time. */
+/** Per-image disintegration metrics. Computed on-demand at export time.
+ *
+ * `referenceMode` distinguishes how DI was computed (or why it wasn't):
+ *   - 'core'           → empirical-CDF reference from detected core pixels
+ *   - 'r_eff'          → equivalent-disk fallback (no core polygon present)
+ *   - 'r_eff_fallback' → core polygon supplied but rasterised to 0 pixels
+ *   - 'none'           → no externals or no image dimensions; DI not attempted
+ *   - 'failed'         → DI HTTP call or polygon JSON parse threw an error
+ *                        Lets exporters render `'N/A'` instead of a sentinel 0.
+ */
 export interface ImageMetrics {
   imageId: string;
   imageName: string;
   polygonCount: number;
   disintegrationIndex: number; // tanh(W1) ∈ [0, 1)
   wassersteinW1: number; // raw 1-Wasserstein distance, ≥ 0
-  referenceMode: 'core' | 'r_eff' | 'r_eff_fallback' | 'none';
+  referenceMode: 'core' | 'r_eff' | 'r_eff_fallback' | 'none' | 'failed';
   nPixels: number;
   // Areas (px² by default, μm² when pixelToMicrometerScale is provided).
   totalSpheroidArea: number; // sum of external polygon areas, core excluded
@@ -308,14 +317,17 @@ export class MetricsCalculator {
   }
 
   /**
-   * Compute the Disintegration Index for every image that has a segmentation.
+   * Compute per-image area metrics + the Disintegration Index for every image
+   * that has a segmentation.
    *
-   * Per image: picks the largest closed polygon as A_all, the polygon with
-   * partClass='core' as the dense centre, and POSTs both to the Python ML
-   * service `/api/disintegration-index` endpoint.
+   * Per image: rasterises the **union of every external non-core polygon**
+   * as the mask and the **union of every `partClass='core'` polygon** as the
+   * core reference, then POSTs them to the Python ML service
+   * `/api/disintegration-index` endpoint. Areas are computed locally via the
+   * Shoelace formula and reported even if the DI HTTP call fails.
    *
-   * Falls back to R_eff (equivalent radius of A_all) when no core polygon is
-   * present (non-ASPP segmentations).
+   * Falls back to R_eff (equivalent radius of the mask union) when no core
+   * polygon is present (non-ASPP segmentations).
    */
   async calculateAllImageMetrics(
     images: ImageWithSegmentation[],
@@ -368,7 +380,11 @@ export class MetricsCalculator {
           err instanceof Error ? err : new Error(String(err)),
           'MetricsCalculator'
         );
-        result.push(this._emptyImageMetrics(image));
+        // Flag the row so exporters can show 'N/A' instead of a sentinel 0.
+        result.push({
+          ...this._emptyImageMetrics(image),
+          referenceMode: 'failed',
+        });
         continue;
       }
 
@@ -409,10 +425,19 @@ export class MetricsCalculator {
             );
           }
         } catch (err) {
-          this.logger.warn(
-            `DI computation failed for image ${image.id}; areas still reported. ${err instanceof Error ? err.message : String(err)}`,
-            'MetricsCalculator'
+          // Areas already computed above; mark DI fields explicitly failed.
+          this.logger.error(
+            `DI computation failed for image ${image.id}; areas still reported`,
+            err instanceof Error ? err : new Error(String(err)),
+            'MetricsCalculator',
+            { imageId: image.id }
           );
+          di = {
+            disintegrationIndex: 0,
+            wassersteinW1: 0,
+            referenceMode: 'failed',
+            nPixels: 0,
+          };
         }
       }
 
@@ -480,7 +505,9 @@ export class MetricsCalculator {
     };
   }
 
-  /** Shoelace polygon area (always non-negative) for picking the largest. */
+  /** Shoelace polygon area (always non-negative). Used to sum spheroid and
+   * core areas for the per-image disintegration report.
+   */
   private polygonArea(points: Point[]): number {
     if (!points || points.length < 3) {return 0;}
     let s = 0;
@@ -1032,12 +1059,14 @@ export class MetricsCalculator {
   }
 
   /**
-   * Generate summary statistics for metrics
+   * Generate summary statistics for the per-polygon metrics report.
+   * Used by `exportPolygonMetricsToExcel` for `spheroid` and `wound` projects.
+   * DI aggregates live in the `spheroid_invasive` Excel report directly,
+   * not here — keep this function focused on shape descriptors.
    */
   private generateSummaryStatistics(
     metrics: PolygonMetrics[],
-    pixelToMicrometerScale?: number,
-    imageMetrics?: ImageMetrics[]
+    pixelToMicrometerScale?: number
   ): SummaryStatisticsRow[] {
     const externalMetrics = metrics.filter(m => m.type === 'external');
 
@@ -1058,7 +1087,6 @@ export class MetricsCalculator {
       avgSphericity: this.average(externalMetrics.map(m => m.sphericity)),
     };
 
-    // Determine units based on scale
     const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
     const areaUnit = isScaled ? 'um^2' : 'px^2';
     const lengthUnit = isScaled ? 'um' : 'px';
@@ -1078,33 +1106,6 @@ export class MetricsCalculator {
       ['Average Solidity', stats.avgSolidity.toFixed(4)],
       ['Average Sphericity', stats.avgSphericity.toFixed(4)],
     ];
-
-    // Disintegration Index aggregates (per-image granularity)
-    if (imageMetrics && imageMetrics.length > 0) {
-      const dis = imageMetrics
-        .map(m => m.disintegrationIndex)
-        .filter(v => isFinite(v));
-      if (dis.length > 0) {
-        const meanDi = this.average(dis);
-        const variance = this.average(dis.map(v => (v - meanDi) ** 2));
-        const stdDi = Math.sqrt(variance);
-        const compact = imageMetrics.filter(
-          m => m.disintegrationIndex < 0.05
-        ).length;
-        const disintegrated = imageMetrics.filter(
-          m => m.disintegrationIndex >= 0.05
-        ).length;
-        rows.push(
-          [''],
-          ['Disintegration Index'],
-          ['Image Count', imageMetrics.length],
-          ['Mean DI', meanDi.toFixed(4)],
-          ['Std DI', stdDi.toFixed(4)],
-          ['Compact (DI < 0.05)', compact],
-          ['Disintegrated (DI ≥ 0.05)', disintegrated]
-        );
-      }
-    }
 
     return rows;
   }

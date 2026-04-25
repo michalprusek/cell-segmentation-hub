@@ -169,3 +169,59 @@ class TestDisintegrationIndex:
         }
         resp = client.post("/api/disintegration-index", json=body)
         assert resp.status_code == 400
+
+    # ---- plural mask_polygons / core_polygons (production-shape) ----
+
+    def test_plural_mask_polygons_unions_multiple_polygons(self, client):
+        """`mask_polygons` (plural) must union every polygon into one mask.
+
+        This is the shape the TypeScript caller actually sends in production —
+        every external non-core polygon as a separate entry.
+        """
+        # Two disjoint disks → combined pixel count ≈ 2× a single disk.
+        single = self._post(client, {
+            "mask_polygon": _circle(80, 80, 30),
+            "core_polygon": None,
+            "image_width": self.W, "image_height": self.H,
+        })
+        union = self._post(client, {
+            "mask_polygons": [_circle(80, 80, 30), _circle(180, 180, 30)],
+            "core_polygons": None,
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert union["n_pixels"] >= int(1.9 * single["n_pixels"])
+        assert union["n_pixels"] <= int(2.1 * single["n_pixels"])
+
+    def test_plural_with_overlapping_polygons_does_not_double_count(self, client):
+        """Two identical polygons in `mask_polygons` produce the same
+        `n_pixels` as one — fillPoly union is idempotent.
+        """
+        circle = _circle(self.CX, self.CY, 50)
+        once = self._post(client, {
+            "mask_polygons": [circle],
+            "image_width": self.W, "image_height": self.H,
+        })
+        twice = self._post(client, {
+            "mask_polygons": [circle, circle],
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert once["n_pixels"] == twice["n_pixels"]
+
+    def test_plural_core_polygons_combined_for_r_ref(self, client):
+        """Multiple core polygons should be unioned into the R_core area."""
+        mask = _circle(self.CX, self.CY, 90)
+        core_a = _circle(self.CX - 20, self.CY, 15)
+        core_b = _circle(self.CX + 20, self.CY, 15)
+        out = self._post(client, {
+            "mask_polygons": [mask],
+            "core_polygons": [core_a, core_b],
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert out["reference"] == "core"
+
+    def test_neither_singular_nor_plural_mask_returns_400(self, client):
+        """Empty request body for masks → 400, not silent zeros."""
+        resp = client.post("/api/disintegration-index", json={
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert resp.status_code == 400

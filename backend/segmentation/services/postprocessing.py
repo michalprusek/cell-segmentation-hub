@@ -162,19 +162,19 @@ class PostprocessingService:
 
     def detect_core_polygons(self, gray_image: np.ndarray,
                              polygons: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Detect dense core fragment(s) **inside the largest** ASPP spheroid.
+        """Detect a dense core polygon inside the **largest** ASPP spheroid.
 
         Picks a single parent — the largest external polygon that is not already
         a core and exceeds :attr:`CORE_MIN_PARENT_AREA`. Inside that parent:
 
           * If the 2-of-3 compactness gate fires, returns one core covering the
             whole parent (= compact, pre-invasion spheroid).
-          * Otherwise, after Otsu thresholding, returns **all** connected
-            components above :attr:`CORE_FRAGMENT_MIN_AREA` as separate cores
-            (= rozprsknutý spheroid fractured into multiple dense islands).
+          * Otherwise, after Otsu thresholding, returns the single largest
+            connected component below the threshold as the core.
 
-        Every returned core carries ``parent_id`` linking it to the same parent
-        so downstream code can sum their areas and compute DI consistently.
+        Returns a list of 0 or 1 polygons (kept plural for backward-compatible
+        plumbing; earlier multi-fragment versions emitted multiple). The core
+        carries ``parent_id`` linking it to the chosen parent.
         """
         try:
             if not polygons or gray_image is None or gray_image.size == 0:
@@ -207,8 +207,14 @@ class PostprocessingService:
                 return []
 
             return self._detect_cores_inside_parent(gray_image, largest, h, w)
-        except Exception as e:
-            logger.error(f"Failed to detect core polygons: {e}")
+        except (cv2.error, ValueError) as e:
+            # Narrow catch: only suppress geometric/numerical failures of the
+            # detection pipeline. Programming errors (KeyError, TypeError,
+            # AttributeError, ImportError) propagate so they surface in logs
+            # / Sentry instead of being indistinguishable from a no-core image.
+            logger.error(
+                "Failed to detect core polygons (non-fatal): %s", e, exc_info=True
+            )
             return []
 
     def _detect_cores_inside_parent(self, gray_image: np.ndarray,
