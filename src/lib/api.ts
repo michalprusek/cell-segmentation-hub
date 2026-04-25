@@ -610,6 +610,11 @@ class ApiClient {
       user_id: (project.userId as string) || (project.user_id as string),
     };
 
+    // Project type drives metric export and editor mode dispatch.
+    if (typeof project.type === 'string') {
+      result.type = project.type as import('@/types').ProjectType;
+    }
+
     // Add optional fields only if they exist
     const imageCount =
       (project.imageCount as number) ||
@@ -799,11 +804,13 @@ class ApiClient {
   async createProject(data: {
     name: string;
     description?: string;
+    type?: import('@/types').ProjectType;
   }): Promise<Project> {
     // Convert 'name' to 'title' to match backend validation schema
     const requestData = {
       title: data.name,
       description: data.description,
+      type: data.type,
     };
     const response = await this.instance.post('/projects', requestData);
     const project = this.extractData(response);
@@ -818,7 +825,11 @@ class ApiClient {
 
   async updateProject(
     id: string,
-    data: { name?: string; description?: string }
+    data: {
+      name?: string;
+      description?: string;
+      type?: import('@/types').ProjectType;
+    }
   ): Promise<Project> {
     // Convert 'name' to 'title' if provided
     const requestData = {

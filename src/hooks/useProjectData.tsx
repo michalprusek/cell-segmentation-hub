@@ -17,6 +17,9 @@ export const useProjectData = (
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const [projectTitle, setProjectTitle] = useState<string>('');
+  const [projectType, setProjectType] = useState<
+    import('@/types').ProjectType | undefined
+  >(undefined);
   const [images, setImages] = useState<ProjectImage[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -45,6 +48,7 @@ export const useProjectData = (
         }
 
         setProjectTitle(project.name);
+        setProjectType(project.type);
 
         // Fetch all images by making multiple requests if needed.
         // Backend max is 100 per request; we use lod: 'low' which
@@ -276,6 +280,8 @@ export const useProjectData = (
 
   return {
     projectTitle,
+    projectType,
+    setProjectType,
     images,
     loading,
     updateImages,

@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs/promises';
 import archiver from 'archiver';
+import sharp from 'sharp';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
@@ -9,6 +10,7 @@ import { VisualizationGenerator } from './visualization/visualizationGenerator';
 import {
   MetricsCalculator,
   type ImageWithSegmentation as MetricsImageInput,
+  type ImageMetrics,
 } from './metrics/metricsCalculator';
 import {
   FormatConverter,
@@ -470,7 +472,8 @@ export class ExportService {
         );
       }
 
-      // Generate metrics (can run in parallel)
+      // Generate metrics (can run in parallel). Project.type drives the
+      // metric format dispatch (spheroid vs spheroid_invasive vs sperm vs wound).
       if (options.metricsFormats?.length && project.images) {
         exportTasks.push(
           this.generateMetrics(
@@ -478,6 +481,7 @@ export class ExportService {
             exportDir,
             options.metricsFormats,
             project.title,
+            (project as { type?: string }).type || 'spheroid',
             options,
             jobId
           ).then(() => {
@@ -905,7 +909,7 @@ export class ExportService {
           images,
           YOLO_WRITE_CONCURRENCY,
           async image => {
-            if (!image || !image.segmentation) return;
+            if (!image || !image.segmentation) {return;}
 
             // YOLO normalizes every coordinate by width/height → 0 would
             // produce NaN/Infinity in the output file. Resolve dimensions
@@ -914,7 +918,7 @@ export class ExportService {
             let parsedPolygons: ExportPolygon[] = [];
             try {
               const parsed = JSON.parse(image.segmentation.polygons);
-              if (Array.isArray(parsed)) parsedPolygons = parsed;
+              if (Array.isArray(parsed)) {parsedPolygons = parsed;}
             } catch {
               // convertToYOLO will re-parse and report the error with context
             }
@@ -996,6 +1000,7 @@ export class ExportService {
     exportDir: string,
     formats: string[],
     _projectName: string,
+    projectType: string,
     options?: ExportOptions,
     jobId?: string
   ): Promise<void> {
@@ -1005,27 +1010,80 @@ export class ExportService {
     }
 
     const metricsDir = path.join(exportDir, 'metrics');
+
+    // Backfill missing image dimensions from disk before metrics calculation.
+    // Older uploads were written without populating width/height in DB; the
+    // DI metric needs real dimensions to rasterise the polygon. We read
+    // metadata via sharp and persist back to the DB so subsequent exports
+    // and any UI surface get the correct values.
+    const uploadDir = process.env.UPLOAD_DIR || '/app/uploads';
+    const dimsCache = new Map<string, { width: number; height: number }>();
+    for (const image of images) {
+      if ((image.width && image.height) || !image.originalPath) continue;
+      try {
+        const filePath = path.join(uploadDir, image.originalPath);
+        const meta = await sharp(filePath).metadata();
+        if (meta.width && meta.height) {
+          dimsCache.set(image.id, { width: meta.width, height: meta.height });
+          await prisma.image.update({
+            where: { id: image.id },
+            data: { width: meta.width, height: meta.height },
+          });
+          logger.info(
+            `Backfilled dims for image ${image.id}: ${meta.width}x${meta.height}`,
+            'ExportService',
+            { jobId, imageId: image.id }
+          );
+        }
+      } catch (err) {
+        logger.warn(
+          `Failed to read dimensions for ${image.id} from disk: ${err instanceof Error ? err.message : String(err)}`,
+          'ExportService',
+          { jobId, imageId: image.id }
+        );
+      }
+    }
+
     // Convert images to the format expected by metrics calculator
-    const metricsImages: MetricsImageInput[] = images.map(image => ({
-      id: image.id,
-      name: image.name,
-      width: image.width || undefined,
-      height: image.height || undefined,
-      segmentation: image.segmentation
-        ? {
-            polygons: image.segmentation.polygons,
-            model: image.segmentation.model,
-            threshold: image.segmentation.threshold,
-            confidence: image.segmentation.confidence || undefined,
-            processingTime: image.segmentation.processingTime || undefined,
-          }
-        : undefined,
-    }));
+    const metricsImages: MetricsImageInput[] = images.map(image => {
+      const cached = dimsCache.get(image.id);
+      return {
+        id: image.id,
+        name: image.name,
+        width: image.width || cached?.width || undefined,
+        height: image.height || cached?.height || undefined,
+        segmentation: image.segmentation
+          ? {
+              polygons: image.segmentation.polygons,
+              model: image.segmentation.model,
+              threshold: image.segmentation.threshold,
+              confidence: image.segmentation.confidence || undefined,
+              processingTime: image.segmentation.processingTime || undefined,
+            }
+          : undefined,
+      };
+    });
 
     const allMetrics = await this.metricsCalculator.calculateAllMetrics(
       metricsImages,
       options?.pixelToMicrometerScale
     );
+
+    // Per-image metrics (Disintegration Index). Failures here must not break
+    // the rest of the export — DI is purely additive.
+    let imageMetrics: ImageMetrics[] = [];
+    try {
+      imageMetrics = await this.metricsCalculator.calculateAllImageMetrics(
+        metricsImages,
+        options?.pixelToMicrometerScale
+      );
+    } catch (err) {
+      logger.warn(
+        `Image-level metrics (DI) failed; continuing without them: ${err instanceof Error ? err.message : String(err)}`,
+        'ExportService',
+        { jobId }
+      );
+    }
 
     // Check if job was cancelled after metrics calculation
     if (jobId && this.isJobCancelled(jobId)) {
@@ -1040,19 +1098,41 @@ export class ExportService {
 
       if (format === 'excel') {
         const excelPath = path.join(metricsDir, 'metrics.xlsx');
-        // Try sperm-specific export first (writes to same path); falls back to standard polygon metrics if no polyline data found
-        const exportedSperm = await this.metricsCalculator.exportSpermToExcel(
-          metricsImages,
-          excelPath,
-          options?.pixelToMicrometerScale
-        );
-        if (!exportedSperm) {
-          logger.info(
-            `No sperm polyline data found — falling back to standard polygon metrics export`,
-            'ExportService',
-            { jobId, imageCount: metricsImages.length }
+        // Project type drives which Excel layout we emit. Auto-detection
+        // (sperm polylines / wound model) is kept as a fallback for legacy
+        // projects that pre-date the explicit type field.
+        if (projectType === 'sperm') {
+          const exportedSperm = await this.metricsCalculator.exportSpermToExcel(
+            metricsImages,
+            excelPath,
+            options?.pixelToMicrometerScale
           );
+          if (!exportedSperm) {
+            logger.warn(
+              `Project flagged as sperm but no polyline data — falling back to polygon metrics`,
+              'ExportService',
+              { jobId }
+            );
+            await this.metricsCalculator.exportToExcel(
+              allMetrics,
+              excelPath,
+              options?.pixelToMicrometerScale,
+              imageMetrics
+            );
+          }
+        } else if (projectType === 'spheroid_invasive') {
+          // Disintegrated-spheroid analysis: simplified 4-metric report
+          // (Total Spheroid Area, Core Area, Invasion Area, DI).
           await this.metricsCalculator.exportToExcel(
+            allMetrics,
+            excelPath,
+            options?.pixelToMicrometerScale,
+            imageMetrics
+          );
+        } else {
+          // 'spheroid' (standard) and 'wound': emit the comprehensive
+          // per-polygon metrics report (Polygon Metrics + Summary sheets).
+          await this.metricsCalculator.exportPolygonMetricsToExcel(
             allMetrics,
             excelPath,
             options?.pixelToMicrometerScale
@@ -1342,6 +1422,194 @@ ${scaleInfo}
 - **Edge case handling**: Robust for degenerate and complex polygons
 - **Performance monitoring**: Automatic warnings for large datasets
 - **Error recovery**: Fallback calculations when advanced algorithms fail
+
+---
+
+# Per-Image Metrics: Disintegration Analysis
+
+The Excel export reports **one row per image** with four metrics:
+**Total Spheroid Area**, **Core Area**, **Invasion Area** (all in ${areaUnit})
+and **Disintegration Index** (dimensionless). The metrics target spheroid
+disintegration analysis (Lim, Kang, Lee 2020 — Sci. Rep. PMC6971071) but
+apply equally to compact (t=0) and rozprsknuté (t>0) spheroids.
+
+## Pipeline Overview
+
+\`\`\`
+ASPP segmentation  →  polygons[]  →  core detection (Otsu + 2-of-3 voting)
+                                       ↓
+                              partClass="core" polygon attached
+                                       ↓
+       ┌──────────────┬─────────────────┬──────────────────┐
+       ↓              ↓                 ↓                  ↓
+ Total Spheroid    Core Area     Invasion Area    Disintegration
+   Area (Σ ext.    (largest       (Total − Core,    Index = tanh(W₁)
+   non-core)        core CC)       clamped ≥ 0)     where W₁ compares
+                                                    the empirical CDF of
+                                                    distances of every
+                                                    mask pixel against
+                                                    every core pixel,
+                                                    normalised by R_core
+\`\`\`
+
+## Core Detection (ASPP-only)
+
+Performed in the Python ML service inside \`PostprocessingService.detect_core_polygons\`
+(file \`backend/segmentation/services/postprocessing.py\`). Pipeline:
+
+1. **Pick parent**: the **largest** external polygon detected by ASPP (\`A_all\`)
+   that exceeds \`CORE_MIN_PARENT_AREA = 1000 px²\`. Smaller externals are
+   noise/debris and don't get a core.
+
+2. **Rasterise** the parent polygon into a binary mask matching the original
+   image dimensions (\`cv2.fillPoly\` on a uint8 zero canvas).
+
+3. **Local Otsu** on the grayscale intensities **inside the mask only**:
+   \`thr = threshold_otsu(gray[mask>0])\`. The histogram restriction is essential
+   — global Otsu sits between background and cells, which is the duality of
+   the segmentation itself and yields no information about core vs. corona.
+
+4. **2-of-3 compactness gate**. The spheroid is "compact" (= core covers the
+   whole parent) when **at least two** of these indicators agree:
+   - **mean_diff** < 45 grayscale levels: difference of \`mean(below_thr)\` and
+     \`mean(above_thr)\` inside the mask. Small ⇒ unimodal interior.
+   - **core_frac** > 0.75: fraction of mask pixels below Otsu. High ⇒ most of
+     the spheroid is dense.
+   - **solidity** > 0.85: \`area / convex_hull_area\` of the parent polygon.
+     High ⇒ round, no invasion projections.
+
+   Calibrated on user 12bprusek's *time_0h* (compact) vs *time_48h* (invasive)
+   projects, April 2026. Cohen's *d* = 3.18 on \`mean_diff\`. Class constants
+   are tunable in \`PostprocessingService\`.
+
+5. **Compact path** (votes ≥ 2): return the **whole parent polygon** as the
+   core. \`Core Area ≈ Total Spheroid Area\`.
+
+6. **Bimodal path** (votes < 2): build \`core_raw = (gray ≤ thr) & mask\`, label
+   connected components, return the **single largest CC** as the core polygon.
+   The contour is extracted via \`cv2.findContours(RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)\`.
+
+7. The returned core polygon carries \`partClass="core"\` and \`parent_id\` linking
+   it to the parent spheroid.
+
+## Total Spheroid Area (${areaUnit})
+
+\`\`\`
+TotalSpheroidArea = Σ area(external polygon)   for partClass ≠ "core"
+\`\`\`
+
+- **Sum of geometric areas** of every external polygon **excluding** the core.
+  The core sits *inside* the parent spheroid; including it would double-count
+  the same physical pixels.
+- **Algorithm**: Shoelace (Gauss's area) formula on polygon vertices —
+  \`A = ½ |Σᵢ (xᵢ·yᵢ₊₁ − xᵢ₊₁·yᵢ)|\`. Vertices wrap (i+1 mod n).
+- **Unit conversion**: when a μm/px scale is configured at the project level,
+  \`A_μm² = A_px² × scale²\`. Otherwise pixel units are reported.
+- **Multi-spheroid images**: smaller spheroids (those without a detected core)
+  are still summed in. So \`TotalSpheroidArea\` represents *all cell-covered
+  area* in the image, not just the largest.
+
+## Core Area (${areaUnit})
+
+\`\`\`
+CoreArea = area(polygon with partClass="core")
+\`\`\`
+
+- Geometric area of the **single core polygon** (largest connected component
+  below Otsu threshold; or the whole parent in the compact case).
+- Same Shoelace formula and same scale conversion as Total Spheroid Area.
+- For a compact spheroid: \`CoreArea ≈ TotalSpheroidArea\` (whole parent = core).
+- For a fully invasive spheroid: \`CoreArea\` is the dense central agglomerate
+  while the rest of \`TotalSpheroidArea\` is the diffuse invasion zone.
+- **Reference**: Lim 2020 \`A_core\` (paper notation) corresponds directly.
+
+## Invasion Area (${areaUnit})
+
+\`\`\`
+InvasionArea = max(0, TotalSpheroidArea − CoreArea)
+\`\`\`
+
+- Cell-covered area **outside** the dense core. Direct numeric proxy for the
+  invasion zone size: how much of the cell mass has migrated beyond the dense
+  central agglomerate.
+- For a **compact** (t=0) spheroid: InvasionArea ≈ 0.
+- For a **strongly invasive** spheroid: InvasionArea ≈ 0.5–0.8 × TotalSpheroidArea.
+- Same Shoelace areas + same scale conversion. Clamped at zero to handle
+  edge cases where Core slightly exceeds Total due to numerical artefacts.
+- Corresponds to Lim 2020 \`(A_all − A_core)\` numerator of the invasion index B.
+
+## Disintegration Index (DI)
+
+The DI is a scalar in \`[0, 1)\` that quantifies *how much spheroid mass has
+escaped beyond a uniform-disk reference of equivalent core area*. Reported in
+the Excel column **Disintegration Index** (4 decimal places, dimensionless).
+
+Algorithm (implemented in
+\`backend/segmentation/api/metrics_endpoint.py\` — POST \`/api/disintegration-index\`):
+
+1. **Rasterise the union of every external polygon** (the whole ASPP segmentation
+   mask, excluding cores) into a single binary canvas via repeated
+   \`cv2.fillPoly\`. Collect the \`(x, y)\` of all \`N\` white pixels.
+
+2. **Centroid** \`(cx, cy) = (mean(xᵢ), mean(yᵢ))\`. Distances
+   \`dᵢ = √((xᵢ − cx)² + (yᵢ − cy)²)\`.
+
+3. **Reference radius**:
+   - If a core polygon is present, \`R_ref = √(N_core / π)\` where \`N_core\` is
+     the rasterised pixel count of the core.
+   - Otherwise fallback to \`R_eff = √(N / π)\`.
+
+4. **Reference distribution — empirical core CDF**. When a core polygon is
+   present, the reference is the **empirical** distribution of distances
+   \`d_core\` for every pixel inside the core (relative to the same mask
+   centroid). This means the reference reflects the **actual radial profile
+   of the dense core**, not an idealised disk. The fallback (no core) uses
+   the analytical equivalent-disk CDF \`F_ref(d̃) = d̃²\` for \`d̃ ∈ [0, 1]\`.
+
+5. **1-Wasserstein distance**:
+   - **Core path**: \`W₁_px = wasserstein_distance(d_mask, d_core)\` via
+     \`scipy.stats\`, computed exactly between the two empirical 1D
+     distributions. Scale-normalised: \`W₁ = W₁_px / R_core\`, where
+     \`R_core = √(N_core / π)\`.
+   - **r_eff fallback**: bin-free quantile formula
+     \`W₁ ≈ (1/N) · Σᵢ |d̃₍ᵢ₎ − √((i − 0.5) / N)|\` where d̃₍ᵢ₎ are sorted
+     normalised distances \`d_mask / R_eff\`.
+
+6. **Saturation**: \`DI = tanh(W₁)\`. Maps \`W₁ ∈ [0, ∞) → [0, 1)\`.
+
+**Properties**: dimensionless, scale-invariant (all distances normalised by
+\`R_ref\`), rotation-invariant, translation-invariant (centroid-relative).
+
+**Calibrated thresholds** (user 12bprusek, April 2026):
+- *time_0h* (compact): DI median ≈ 0.001
+- *time_48h* (rozprsknuté): DI median ≈ 0.48
+- 320× separation between groups
+
+## Edge Cases & Caveats
+
+- **No ASPP segmentation** (HRNet, CBAM-ResUNet, plain U-Net, sperm, wound):
+  no core polygon is generated. \`Core Area = 0\`, \`Total Spheroid Area\` still
+  reports the sum of all external polygons. Compatibility-safe for any model.
+- **Image with no polygons or no externals**: both metrics report \`0\`.
+- **Cropped spheroid touching image edge**: the centroid is biased, the
+  rasterised area is truncated. Detected via bbox of mask = canvas edge —
+  not auto-flagged in the export but visible by inspection.
+- **Multiple spheroids, only the largest gets a core**: smaller spheroids
+  contribute to \`Total Spheroid Area\` only. By design — paper Lim 2020
+  treats each spheroid as its own experimental unit.
+- **Hollow / necrotic core**: the central pixels may be lighter than the
+  surrounding ring, which inflates \`mean_diff\` and the algorithm may pick a
+  ring-shaped CC as the "core". Mathematically correct given the intensity
+  histogram, biologically ambiguous; manual inspection recommended for
+  spheroids known to have necrotic centres.
+
+## Source Files
+
+- **Core detection**: \`backend/segmentation/services/postprocessing.py\`
+- **DI computation**: \`backend/segmentation/api/metrics_endpoint.py\`
+- **Per-image area orchestration**: \`backend/src/services/metrics/metricsCalculator.ts\`
+  (\`calculateAllImageMetrics\`)
+- **Excel writer**: same file (\`exportToExcel\` — emits the two-column report)
 `;
   }
 

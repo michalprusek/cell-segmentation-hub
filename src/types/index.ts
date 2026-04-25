@@ -331,10 +331,19 @@ export interface AuthResponse {
 }
 
 // Project types
+export const PROJECT_TYPES = [
+  'spheroid',
+  'spheroid_invasive',
+  'wound',
+  'sperm',
+] as const;
+export type ProjectType = (typeof PROJECT_TYPES)[number];
+
 export interface Project {
   id: string;
   name: string;
   description?: string;
+  type?: ProjectType;
   created_at: string;
   updated_at: string;
   user_id: string;
@@ -345,6 +354,7 @@ export interface Project {
 export interface NewProject {
   name: string;
   description?: string;
+  type?: ProjectType;
 }
 
 // Image types

@@ -8,7 +8,7 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import {
   PolygonValidator,
-  type SpermPartClass,
+  type PolygonPartClass,
 } from '../utils/polygonValidation';
 import { ImageService } from './imageService';
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
@@ -28,7 +28,7 @@ export interface SegmentationPolygon {
   type: 'external' | 'internal';
   parentIds?: string[]; // For internal polygons, match frontend API interface
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
-  partClass?: SpermPartClass;
+  partClass?: PolygonPartClass;
   instanceId?: string;
 }
 

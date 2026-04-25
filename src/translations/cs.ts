@@ -181,6 +181,15 @@ export default {
     createProject: 'Vytvořit nový projekt',
     createProjectDesc:
       'Přidat nový projekt pro organizaci vašich sféroidních snímků a analýz.',
+    projectType: 'Typ projektu',
+    projectTypeUpdated: 'Typ projektu byl aktualizován',
+    failedToUpdateProject: 'Nepodařilo se aktualizovat projekt',
+    types: {
+      spheroid: 'Sféroidy (standardní)',
+      spheroid_invasive: 'Rozprsknuté sféroidy',
+      wound: 'Hojení ran',
+      sperm: 'Spermie',
+    },
     projectNamePlaceholder: 'např. HeLa buněčné sferoidy',
     projectDescPlaceholder:
       'např. Analýza nádorových sféroidů pro studie rezistence na léky',
@@ -1766,6 +1775,12 @@ export default {
     solidity: 'Solidita',
     sphericity: 'Sféricita',
     feretAspectRatio: 'Feretův poměr stran',
+    disintegrationIndex: 'Index rozpadu',
+    wassersteinW1: 'Wasserstein W1',
+    referenceMode: 'Referenční režim',
+    totalSpheroidArea: 'Celková plocha sféroidů',
+    coreArea: 'Plocha core',
+    invasionArea: 'Plocha invaze',
     noPolygonsFound: 'Nebyly nalezeny žádné polygony pro analýzu',
   },
   keyboardShortcuts: {

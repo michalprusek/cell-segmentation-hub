@@ -100,6 +100,20 @@ export const cleanupQueueSchema = z.object({
 // ============================================================================
 
 /**
+ * Project workflow type — drives metric export format and editor behavior.
+ * Mirrors the `type` column on the projects table.
+ */
+export const PROJECT_TYPES = [
+  'spheroid',
+  'spheroid_invasive',
+  'wound',
+  'sperm',
+] as const;
+export type ProjectType = (typeof PROJECT_TYPES)[number];
+
+const projectTypeSchema = z.enum(PROJECT_TYPES);
+
+/**
  * Schema for creating a new project
  */
 export const createProjectSchema = z.object({
@@ -114,6 +128,7 @@ export const createProjectSchema = z.object({
     .trim()
     .optional()
     .nullable(),
+  type: projectTypeSchema.optional(),
 });
 
 /**
@@ -132,6 +147,7 @@ export const updateProjectSchema = z.object({
     .trim()
     .optional()
     .nullable(),
+  type: projectTypeSchema.optional(),
 });
 
 /**

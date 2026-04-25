@@ -3,8 +3,9 @@
 import logging
 import cv2
 import numpy as np
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from skimage import measure
+from skimage.filters import threshold_otsu
 from scipy import ndimage
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,16 @@ logger = logging.getLogger(__name__)
 class PostprocessingService:
     """Service for postprocessing segmentation masks"""
     
+    # Compact-spheroid voting thresholds (2-of-3 must fire to treat the whole
+    # ASPP polygon as the core, e.g. for compact t=0 spheroids before invasion).
+    # Calibrated on user 12bprusek's time_0h vs time_48h projects (Apr 2026).
+    COMPACT_MEAN_DIFF_MAX = 45.0   # max Otsu inter-class intensity gap
+    COMPACT_CORE_FRAC_MIN = 0.75   # min fraction of mask below Otsu threshold
+    COMPACT_SOLIDITY_MIN = 0.85    # min mask area / convex hull area
+    # Minimum parent-spheroid area (in px²) to attempt core detection. Smaller
+    # external polygons are noise/debris and don't deserve a core.
+    CORE_MIN_PARENT_AREA = 1000.0
+
     def __init__(self):
         self.min_area = 50  # Minimum polygon area in pixels - lowered for better small cell detection
         self.simplification_tolerance = 0.1  # Douglas-Peucker tolerance - reduced for higher precision
@@ -137,7 +148,169 @@ class PostprocessingService:
             logger.error(f"Failed to convert region to polygon: {e}")
             return None
     
-    def filter_polygons(self, polygons: List[Dict[str, Any]], 
+    def detect_core_polygon(self, gray_image: np.ndarray,
+                            polygons: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Backward-compatible single-core entry point.
+
+        Returns the largest core fragment from :meth:`detect_core_polygons`
+        (or ``None`` if there are no fragments).
+        """
+        cores = self.detect_core_polygons(gray_image, polygons)
+        if not cores:
+            return None
+        return max(cores, key=lambda c: float(c.get("area", 0.0)))
+
+    def detect_core_polygons(self, gray_image: np.ndarray,
+                             polygons: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Detect dense core fragment(s) **inside the largest** ASPP spheroid.
+
+        Picks a single parent — the largest external polygon that is not already
+        a core and exceeds :attr:`CORE_MIN_PARENT_AREA`. Inside that parent:
+
+          * If the 2-of-3 compactness gate fires, returns one core covering the
+            whole parent (= compact, pre-invasion spheroid).
+          * Otherwise, after Otsu thresholding, returns **all** connected
+            components above :attr:`CORE_FRAGMENT_MIN_AREA` as separate cores
+            (= rozprsknutý spheroid fractured into multiple dense islands).
+
+        Every returned core carries ``parent_id`` linking it to the same parent
+        so downstream code can sum their areas and compute DI consistently.
+        """
+        try:
+            if not polygons or gray_image is None or gray_image.size == 0:
+                return []
+            h, w = gray_image.shape[:2]
+
+            candidates: List[Dict[str, Any]] = []
+            for p in polygons:
+                if p.get("type") != "external":
+                    continue
+                if p.get("partClass") == "core":
+                    continue
+                if p.get("parent_id"):
+                    continue
+                pts = p.get("points") or []
+                if len(pts) < 3:
+                    continue
+                area = p.get("area")
+                if area is None:
+                    area = float(cv2.contourArea(np.array(
+                        [[pt["x"], pt["y"]] for pt in pts], dtype=np.float32
+                    )))
+                    p["area"] = area
+                candidates.append(p)
+            if not candidates:
+                return []
+
+            largest = max(candidates, key=lambda p: float(p.get("area", 0.0)))
+            if float(largest.get("area", 0.0)) < self.CORE_MIN_PARENT_AREA:
+                return []
+
+            return self._detect_cores_inside_parent(gray_image, largest, h, w)
+        except Exception as e:
+            logger.error(f"Failed to detect core polygons: {e}")
+            return []
+
+    def _detect_cores_inside_parent(self, gray_image: np.ndarray,
+                                    parent: Dict[str, Any],
+                                    h: int, w: int) -> List[Dict[str, Any]]:
+        """Compactness gate + multi-fragment extraction inside one parent."""
+        points = parent.get("points") or []
+        poly_pts = np.array(
+            [[int(round(p["x"])), int(round(p["y"]))] for p in points],
+            dtype=np.int32,
+        )
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.fillPoly(mask, [poly_pts], 1)
+        if mask.sum() == 0:
+            return []
+
+        inside = gray_image[mask > 0]
+        if inside.size == 0:
+            return []
+
+        poly_area = float(cv2.contourArea(poly_pts))
+        hull_area = float(cv2.contourArea(cv2.convexHull(poly_pts)))
+        solidity = poly_area / (hull_area + 1e-6)
+        confidence = float(np.clip(1.0 - inside.mean() / 255.0, 0.0, 1.0))
+        parent_id = parent.get("id")
+
+        def _attach_parent(core: Dict[str, Any]) -> Dict[str, Any]:
+            if parent_id:
+                core["parent_id"] = parent_id
+            return core
+
+        # Degenerate intensity: trivially compact, single core = whole mask.
+        if inside.min() == inside.max():
+            return [_attach_parent(self._compact_core_polygon(points, mask, confidence))]
+
+        thr = float(threshold_otsu(inside))
+        below = inside[inside <= thr]
+        above = inside[inside > thr]
+        if below.size == 0 or above.size == 0:
+            return [_attach_parent(self._compact_core_polygon(points, mask, confidence))]
+
+        mean_diff = float(above.mean() - below.mean())
+        core_raw = (gray_image <= thr) & (mask > 0)
+        core_frac = float(core_raw.sum()) / float(mask.sum())
+        votes = (
+            int(mean_diff < self.COMPACT_MEAN_DIFF_MAX)
+            + int(core_frac > self.COMPACT_CORE_FRAC_MIN)
+            + int(solidity > self.COMPACT_SOLIDITY_MIN)
+        )
+        if votes >= 2:
+            logger.info(
+                "Core(%s): compact gate fired (md=%.1f cf=%.2f sol=%.2f votes=%d)",
+                parent_id, mean_diff, core_frac, solidity, votes,
+            )
+            return [_attach_parent(self._compact_core_polygon(points, mask, confidence))]
+
+        # Bimodal: take the LARGEST connected component below Otsu threshold.
+        # (Earlier versions emitted every CC above a min-area threshold, but
+        # one-core-per-spheroid keeps the report and the DI semantics simpler.)
+        labeled = measure.label(core_raw.astype(np.uint8), connectivity=2)
+        regions = measure.regionprops(labeled)
+        if not regions:
+            return []
+        best = max(regions, key=lambda r: r.area)
+        component = (labeled == best.label).astype(np.uint8)
+        contours, _ = cv2.findContours(
+            component, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        if not contours:
+            return []
+        contour = max(contours, key=cv2.contourArea)
+        if len(contour) < 3:
+            return []
+        core_points = [
+            {"x": float(pt[0][0]), "y": float(pt[0][1])} for pt in contour
+        ]
+        logger.info(
+            "Core(%s): bimodal Otsu (md=%.1f cf=%.2f sol=%.2f area=%d)",
+            parent_id, mean_diff, core_frac, solidity, int(best.area),
+        )
+        return [_attach_parent({
+            "points": core_points,
+            "area": float(best.area),
+            "confidence": confidence,
+            "type": "external",
+            "partClass": "core",
+        })]
+
+    @staticmethod
+    def _compact_core_polygon(points: List[Dict[str, float]],
+                              mask: np.ndarray,
+                              confidence: float) -> Dict[str, Any]:
+        """Return the input polygon as the core (compact spheroid case)."""
+        return {
+            "points": [{"x": float(p["x"]), "y": float(p["y"])} for p in points],
+            "area": float(int(mask.sum())),
+            "confidence": confidence,
+            "type": "external",
+            "partClass": "core",
+        }
+
+    def filter_polygons(self, polygons: List[Dict[str, Any]],
                        min_area: int = None, min_confidence: float = None) -> List[Dict[str, Any]]:
         """Filter polygons based on area and confidence"""
         filtered = []

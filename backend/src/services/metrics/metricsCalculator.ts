@@ -9,7 +9,10 @@ import { config } from '../../utils/config';
 import {
   /* SCALE_CONFIG, */ validateScale /* getScaleValidationMessage, getScaleWarningMessage */,
 } from './scaleConfig';
-import type { SpermPartClass } from '../../utils/polygonValidation';
+import type {
+  PolygonPartClass,
+  SpermPartClass,
+} from '../../utils/polygonValidation';
 import { polylineLength } from '../../utils/polygonGeometry';
 import { groupPolylinesByInstanceId, findPart } from '../../utils/spermGrouping';
 
@@ -38,6 +41,21 @@ export interface PolygonMetrics {
   sphericity: number;
 }
 
+/** Per-image disintegration metrics. Computed on-demand at export time. */
+export interface ImageMetrics {
+  imageId: string;
+  imageName: string;
+  polygonCount: number;
+  disintegrationIndex: number; // tanh(W1) ∈ [0, 1)
+  wassersteinW1: number; // raw 1-Wasserstein distance, ≥ 0
+  referenceMode: 'core' | 'r_eff' | 'r_eff_fallback' | 'none';
+  nPixels: number;
+  // Areas (px² by default, μm² when pixelToMicrometerScale is provided).
+  totalSpheroidArea: number; // sum of external polygon areas, core excluded
+  coreArea: number; // detected core polygon area (0 if no core)
+  invasionArea: number; // totalSpheroidArea − coreArea, clamped at 0
+}
+
 export interface Point {
   x: number;
   y: number;
@@ -52,7 +70,7 @@ export interface ParsedPolygon {
   points: Point[];
   type?: 'external' | 'internal';
   geometry?: 'polygon' | 'polyline';
-  partClass?: SpermPartClass;
+  partClass?: PolygonPartClass;
   instanceId?: string;
 }
 
@@ -290,6 +308,192 @@ export class MetricsCalculator {
   }
 
   /**
+   * Compute the Disintegration Index for every image that has a segmentation.
+   *
+   * Per image: picks the largest closed polygon as A_all, the polygon with
+   * partClass='core' as the dense centre, and POSTs both to the Python ML
+   * service `/api/disintegration-index` endpoint.
+   *
+   * Falls back to R_eff (equivalent radius of A_all) when no core polygon is
+   * present (non-ASPP segmentations).
+   */
+  async calculateAllImageMetrics(
+    images: ImageWithSegmentation[],
+    pixelToMicrometerScale?: number
+  ): Promise<ImageMetrics[]> {
+    // Area unit conversion: px² → μm² when scale is set and valid.
+    const areaScale =
+      pixelToMicrometerScale && pixelToMicrometerScale > 0
+        ? pixelToMicrometerScale * pixelToMicrometerScale
+        : 1;
+    const result: ImageMetrics[] = [];
+    for (const image of images) {
+      if (!image?.segmentation?.polygons) {
+        result.push(this._emptyImageMetrics(image));
+        continue;
+      }
+
+      // Step 1: parse polygons and compute area metrics. These are
+      // self-contained (no network) so they always succeed when polygon
+      // JSON is well-formed.
+      let closed: Array<ParsedPolygon & { type: 'external' | 'internal' }> = [];
+      let externals: typeof closed = [];
+      let cores: typeof closed = [];
+      let totalSpheroidArea = 0;
+      let coreArea = 0;
+      let invasionArea = 0;
+      try {
+        const parsed: ParsedPolygon[] = JSON.parse(image.segmentation.polygons);
+        closed = parsed.filter(
+          (p): p is ParsedPolygon & { type: 'external' | 'internal' } =>
+            p.geometry !== 'polyline' && !!p.type
+        );
+        externals = closed.filter(p => p.type === 'external');
+        cores = closed.filter(p => p.partClass === 'core');
+
+        const totalSpheroidAreaPx = externals
+          .filter(p => p.partClass !== 'core')
+          .reduce((sum, p) => sum + this.polygonArea(p.points), 0);
+        const coreAreaPx = cores.reduce(
+          (sum, p) => sum + this.polygonArea(p.points),
+          0
+        );
+        const invasionAreaPx = Math.max(0, totalSpheroidAreaPx - coreAreaPx);
+        totalSpheroidArea = totalSpheroidAreaPx * areaScale;
+        coreArea = coreAreaPx * areaScale;
+        invasionArea = invasionAreaPx * areaScale;
+      } catch (err) {
+        this.logger.error(
+          `Failed to parse polygons for image ${image.id}`,
+          err instanceof Error ? err : new Error(String(err)),
+          'MetricsCalculator'
+        );
+        result.push(this._emptyImageMetrics(image));
+        continue;
+      }
+
+      // Step 2: optional DI computation. Network call to ML; failures must
+      // NOT void the area metrics already computed in step 1.
+      let di: {
+        disintegrationIndex: number;
+        wassersteinW1: number;
+        referenceMode: ImageMetrics['referenceMode'];
+        nPixels: number;
+      } = {
+        disintegrationIndex: 0,
+        wassersteinW1: 0,
+        referenceMode: 'none',
+        nPixels: 0,
+      };
+
+      const usableExternals = externals.filter(p => p.partClass !== 'core');
+      if (usableExternals.length > 0) {
+        try {
+          // DI is computed from the UNION of every external polygon (the
+          // entire ASPP segmentation mask), not just the largest spheroid.
+          const maskPolygons = usableExternals.map(p => p.points);
+          // Use every detected core; the Python endpoint unions them too.
+          const corePolygonsForDi = cores.map(c => c.points);
+
+          if (!image.width || !image.height) {
+            this.logger.warn(
+              `Image ${image.id} missing width/height in DB — DI requires real dimensions; skipping`,
+              'MetricsCalculator'
+            );
+          } else {
+            di = await this.calculateImageDisintegrationIndex(
+              maskPolygons,
+              corePolygonsForDi.length > 0 ? corePolygonsForDi : undefined,
+              image.width,
+              image.height
+            );
+          }
+        } catch (err) {
+          this.logger.warn(
+            `DI computation failed for image ${image.id}; areas still reported. ${err instanceof Error ? err.message : String(err)}`,
+            'MetricsCalculator'
+          );
+        }
+      }
+
+      result.push({
+        imageId: image.id,
+        imageName: image.name,
+        polygonCount: closed.length,
+        ...di,
+        totalSpheroidArea,
+        coreArea,
+        invasionArea,
+      });
+    }
+    return result;
+  }
+
+  private _emptyImageMetrics(
+    image: ImageWithSegmentation | undefined
+  ): ImageMetrics {
+    return {
+      imageId: image?.id ?? '',
+      imageName: image?.name ?? '',
+      polygonCount: 0,
+      disintegrationIndex: 0,
+      wassersteinW1: 0,
+      referenceMode: 'none',
+      nPixels: 0,
+      totalSpheroidArea: 0,
+      coreArea: 0,
+      invasionArea: 0,
+    };
+  }
+
+  private async calculateImageDisintegrationIndex(
+    maskPolygons: Point[][],
+    corePolygons: Point[][] | undefined,
+    imageWidth: number,
+    imageHeight: number
+  ): Promise<{
+    disintegrationIndex: number;
+    wassersteinW1: number;
+    referenceMode: ImageMetrics['referenceMode'];
+    nPixels: number;
+  }> {
+    const mask_polygons = maskPolygons.map(pts => pts.map(p => [p.x, p.y]));
+    const core_polygons = corePolygons
+      ? corePolygons.map(pts => pts.map(p => [p.x, p.y]))
+      : null;
+    const response = await this.http.post<{
+      di: number;
+      w1: number;
+      reference: ImageMetrics['referenceMode'];
+      n_pixels: number;
+    }>('/api/disintegration-index', {
+      mask_polygons,
+      core_polygons,
+      image_width: imageWidth,
+      image_height: imageHeight,
+    });
+    return {
+      disintegrationIndex: response.data.di,
+      wassersteinW1: response.data.w1,
+      referenceMode: response.data.reference,
+      nPixels: response.data.n_pixels,
+    };
+  }
+
+  /** Shoelace polygon area (always non-negative) for picking the largest. */
+  private polygonArea(points: Point[]): number {
+    if (!points || points.length < 3) {return 0;}
+    let s = 0;
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      if (!a || !b) {continue;}
+      s += a.x * b.y - b.x * a.y;
+    }
+    return Math.abs(s) / 2;
+  }
+
+  /**
    * Calculate metrics for a single polygon using Python service
    */
   private async calculatePolygonMetrics(
@@ -482,20 +686,24 @@ export class MetricsCalculator {
   /**
    * Export metrics to Excel
    */
-  async exportToExcel(
+  /**
+   * Comprehensive polygon-level Excel export for **standard spheroid** /
+   * **wound** projects: every polygon gets its own row with the full set of
+   * shape descriptors (area, perimeter, circularity, Feret, etc.) + Summary.
+   *
+   * Used when the project's `type` field is `'spheroid'` or `'wound'`.
+   */
+  async exportPolygonMetricsToExcel(
     metrics: PolygonMetrics[],
     outputPath: string,
     pixelToMicrometerScale?: number
   ): Promise<void> {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Polygon Metrics');
-
-    // Determine units based on scale
     const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
     const areaUnit = isScaled ? 'um^2' : 'px^2';
     const lengthUnit = isScaled ? 'um' : 'px';
 
-    // Add headers
     worksheet.columns = [
       { header: 'Image Name', key: 'imageName', width: 20 },
       { header: 'Image ID', key: 'imageId', width: 15 },
@@ -503,53 +711,17 @@ export class MetricsCalculator {
       { header: 'Type', key: 'type', width: 10 },
       { header: `Area (${areaUnit})`, key: 'area', width: 12 },
       { header: `Perimeter (${lengthUnit})`, key: 'perimeter', width: 12 },
-      {
-        header: `Perimeter with Holes (${lengthUnit})`,
-        key: 'perimeterWithHoles',
-        width: 20,
-      },
-      {
-        header: `Equivalent Diameter (${lengthUnit})`,
-        key: 'equivalentDiameter',
-        width: 18,
-      },
+      { header: `Perimeter with Holes (${lengthUnit})`, key: 'perimeterWithHoles', width: 20 },
+      { header: `Equivalent Diameter (${lengthUnit})`, key: 'equivalentDiameter', width: 18 },
       { header: 'Circularity', key: 'circularity', width: 10 },
-      {
-        header: `Feret Diameter Max (${lengthUnit})`,
-        key: 'feretDiameterMax',
-        width: 18,
-      },
-      {
-        header: `Feret Diameter Min (${lengthUnit})`,
-        key: 'feretDiameterMin',
-        width: 18,
-      },
-      {
-        header: `Feret Diameter Orthogonal (${lengthUnit})`,
-        key: 'feretDiameterOrthogonal',
-        width: 22,
-      },
+      { header: `Feret Diameter Max (${lengthUnit})`, key: 'feretDiameterMax', width: 18 },
+      { header: `Feret Diameter Min (${lengthUnit})`, key: 'feretDiameterMin', width: 18 },
+      { header: `Feret Diameter Orthogonal (${lengthUnit})`, key: 'feretDiameterOrthogonal', width: 22 },
       { header: 'Feret Aspect Ratio', key: 'feretAspectRatio', width: 15 },
-      {
-        header: `Major Axis Length (${lengthUnit})`,
-        key: 'lengthMajorDiameter',
-        width: 18,
-      },
-      {
-        header: `Minor Axis Length (${lengthUnit})`,
-        key: 'lengthMinorDiameter',
-        width: 18,
-      },
-      {
-        header: `Bounding Box Width (${lengthUnit})`,
-        key: 'boundingBoxWidth',
-        width: 20,
-      },
-      {
-        header: `Bounding Box Height (${lengthUnit})`,
-        key: 'boundingBoxHeight',
-        width: 20,
-      },
+      { header: `Major Axis Length (${lengthUnit})`, key: 'lengthMajorDiameter', width: 18 },
+      { header: `Minor Axis Length (${lengthUnit})`, key: 'lengthMinorDiameter', width: 18 },
+      { header: `Bounding Box Width (${lengthUnit})`, key: 'boundingBoxWidth', width: 20 },
+      { header: `Bounding Box Height (${lengthUnit})`, key: 'boundingBoxHeight', width: 20 },
       { header: 'Extent', key: 'extent', width: 10 },
       { header: 'Compactness', key: 'compactness', width: 12 },
       { header: 'Convexity', key: 'convexity', width: 10 },
@@ -557,16 +729,9 @@ export class MetricsCalculator {
       { header: 'Sphericity', key: 'sphericity', width: 10 },
     ];
 
-    // Add data rows with validation for finite values
+    const safeValue = (value: number, decimals = 2): number =>
+      isFinite(value) ? parseFloat(value.toFixed(decimals)) : 0;
     metrics.forEach(m => {
-      // Helper function to ensure finite values
-      const safeValue = (value: number, decimals = 2): number => {
-        if (!isFinite(value)) {
-          return 0;
-        }
-        return parseFloat(value.toFixed(decimals));
-      };
-
       worksheet.addRow({
         imageName: m.imageName,
         imageId: m.imageId,
@@ -579,10 +744,7 @@ export class MetricsCalculator {
         circularity: safeValue(m.circularity, 4),
         feretDiameterMax: safeValue(m.feretDiameterMax, 2),
         feretDiameterMin: safeValue(m.feretDiameterMin, 2),
-        feretDiameterOrthogonal: safeValue(
-          m.feretDiameterMaxOrthogonalDistance,
-          2
-        ),
+        feretDiameterOrthogonal: safeValue(m.feretDiameterMaxOrthogonalDistance, 2),
         feretAspectRatio: safeValue(m.feretAspectRatio, 2),
         lengthMajorDiameter: safeValue(m.lengthMajorDiameterThroughCentroid, 2),
         lengthMinorDiameter: safeValue(m.lengthMinorDiameterThroughCentroid, 2),
@@ -595,8 +757,6 @@ export class MetricsCalculator {
         sphericity: safeValue(m.sphericity, 4),
       });
     });
-
-    // Style the header row
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = {
       type: 'pattern',
@@ -604,17 +764,11 @@ export class MetricsCalculator {
       fgColor: { argb: 'FFE0E0E0' },
     };
 
-    // Add summary sheet
+    // Summary sheet (aggregates across the project).
     const summarySheet = workbook.addWorksheet('Summary');
-    const summaryData = this.generateSummaryStatistics(
-      metrics,
-      pixelToMicrometerScale
-    );
-
-    // Add summary data to the sheet
+    const summaryData = this.generateSummaryStatistics(metrics, pixelToMicrometerScale);
     summaryData.forEach((row, index) => {
       const excelRow = summarySheet.addRow(row);
-      // Bold the header row
       if (index === 0) {
         excelRow.font = { bold: true };
         excelRow.fill = {
@@ -624,17 +778,76 @@ export class MetricsCalculator {
         };
       }
     });
+    summarySheet.columns.forEach(column => { column.width = 20; });
 
-    // Auto-fit columns in summary sheet
-    summarySheet.columns.forEach(column => {
-      column.width = 20;
-    });
-
-    // Create parent directory if it doesn't exist
     const parentDir = path.dirname(outputPath);
     await fs.mkdir(parentDir, { recursive: true });
+    await workbook.xlsx.writeFile(outputPath);
+    this.logger.info(`Polygon Metrics Excel written: ${outputPath}`, 'MetricsCalculator');
+  }
 
-    // Write file
+  async exportToExcel(
+    metrics: PolygonMetrics[],
+    outputPath: string,
+    pixelToMicrometerScale?: number,
+    imageMetrics?: ImageMetrics[]
+  ): Promise<void> {
+    // `metrics` (per-polygon) are intentionally NOT written here — for
+    // disintegrated-spheroid (`spheroid_invasive`) projects the user only wants
+    // ONE row per image. Detailed methodology lives in `metrics_guide.md`.
+    void metrics;
+    const workbook = new ExcelJS.Workbook();
+
+    const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
+    const areaUnit = isScaled ? 'um^2' : 'px^2';
+
+    const sheet = workbook.addWorksheet('Image Metrics');
+    sheet.columns = [
+      { header: 'Image Name', key: 'imageName', width: 32 },
+      { header: 'Image ID', key: 'imageId', width: 22 },
+      {
+        header: `Total Spheroid Area (${areaUnit})`,
+        key: 'totalSpheroidArea',
+        width: 26,
+      },
+      { header: `Core Area (${areaUnit})`, key: 'coreArea', width: 22 },
+      {
+        header: `Invasion Area (${areaUnit})`,
+        key: 'invasionArea',
+        width: 24,
+      },
+      {
+        header: 'Disintegration Index',
+        key: 'disintegrationIndex',
+        width: 22,
+      },
+    ];
+
+    const safe = (v: number, decimals = 2): number =>
+      isFinite(v) ? parseFloat(v.toFixed(decimals)) : 0;
+
+    if (imageMetrics) {
+      imageMetrics.forEach(m => {
+        sheet.addRow({
+          imageName: m.imageName,
+          imageId: m.imageId,
+          totalSpheroidArea: safe(m.totalSpheroidArea, 2),
+          coreArea: safe(m.coreArea, 2),
+          invasionArea: safe(m.invasionArea, 2),
+          disintegrationIndex: safe(m.disintegrationIndex, 4),
+        });
+      });
+    }
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    };
+
+    const parentDir = path.dirname(outputPath);
+    await fs.mkdir(parentDir, { recursive: true });
     await workbook.xlsx.writeFile(outputPath);
     this.logger.info(`Excel file created: ${outputPath}`, 'MetricsCalculator');
   }
@@ -670,12 +883,12 @@ export class MetricsCalculator {
     let hasData = false;
 
     for (const image of images) {
-      if (!image.segmentation?.polygons) continue;
+      if (!image.segmentation?.polygons) {continue;}
 
       let polygons: ParsedPolygon[];
       try {
         const parsed = JSON.parse(image.segmentation.polygons);
-        if (!Array.isArray(parsed)) continue;
+        if (!Array.isArray(parsed)) {continue;}
         polygons = parsed;
       } catch (parseError) {
         this.logger.warn(
@@ -686,7 +899,16 @@ export class MetricsCalculator {
         continue;
       }
 
-      const allPolylines = polygons.filter(p => p.geometry === 'polyline');
+      // Polylines are sperm-only (partClass ∈ {head|midpiece|tail}); narrow the
+      // type so spermGrouping doesn't see the wider 'core' literal.
+      const allPolylines = polygons.filter(
+        (
+          p
+        ): p is ParsedPolygon & {
+          geometry: 'polyline';
+          partClass?: SpermPartClass;
+        } => p.geometry === 'polyline' && p.partClass !== 'core'
+      );
       const { groups, orphanCount } = groupPolylinesByInstanceId(allPolylines);
       if (orphanCount > 0) {
         this.logger.warn(
@@ -717,7 +939,7 @@ export class MetricsCalculator {
       }
     }
 
-    if (!hasData) return false;
+    if (!hasData) {return false;}
 
     // Style header
     const headerRow = worksheet.getRow(1);
@@ -814,7 +1036,8 @@ export class MetricsCalculator {
    */
   private generateSummaryStatistics(
     metrics: PolygonMetrics[],
-    pixelToMicrometerScale?: number
+    pixelToMicrometerScale?: number,
+    imageMetrics?: ImageMetrics[]
   ): SummaryStatisticsRow[] {
     const externalMetrics = metrics.filter(m => m.type === 'external');
 
@@ -840,7 +1063,7 @@ export class MetricsCalculator {
     const areaUnit = isScaled ? 'um^2' : 'px^2';
     const lengthUnit = isScaled ? 'um' : 'px';
 
-    return [
+    const rows: SummaryStatisticsRow[] = [
       ['Summary Statistics'],
       [''],
       ['Metric', 'Value'],
@@ -855,6 +1078,35 @@ export class MetricsCalculator {
       ['Average Solidity', stats.avgSolidity.toFixed(4)],
       ['Average Sphericity', stats.avgSphericity.toFixed(4)],
     ];
+
+    // Disintegration Index aggregates (per-image granularity)
+    if (imageMetrics && imageMetrics.length > 0) {
+      const dis = imageMetrics
+        .map(m => m.disintegrationIndex)
+        .filter(v => isFinite(v));
+      if (dis.length > 0) {
+        const meanDi = this.average(dis);
+        const variance = this.average(dis.map(v => (v - meanDi) ** 2));
+        const stdDi = Math.sqrt(variance);
+        const compact = imageMetrics.filter(
+          m => m.disintegrationIndex < 0.05
+        ).length;
+        const disintegrated = imageMetrics.filter(
+          m => m.disintegrationIndex >= 0.05
+        ).length;
+        rows.push(
+          [''],
+          ['Disintegration Index'],
+          ['Image Count', imageMetrics.length],
+          ['Mean DI', meanDi.toFixed(4)],
+          ['Std DI', stdDi.toFixed(4)],
+          ['Compact (DI < 0.05)', compact],
+          ['Disintegrated (DI ≥ 0.05)', disintegrated]
+        );
+      }
+    }
+
+    return rows;
   }
 
   private average(numbers: number[]): number {
