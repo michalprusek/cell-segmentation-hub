@@ -49,6 +49,7 @@ type ProjectWithImages = Prisma.ProjectGetPayload<{
   select: {
     id: true;
     title: true;
+    type: true;
     images: {
       select: {
         id: true;
@@ -319,6 +320,7 @@ export class ExportService {
         select: {
           id: true,
           title: true,
+          type: true, // drives metric export dispatcher
           images: {
             where: options.selectedImageIds
               ? { id: { in: options.selectedImageIds } }
@@ -481,7 +483,7 @@ export class ExportService {
             exportDir,
             options.metricsFormats,
             project.title,
-            (project as { type?: string }).type || 'spheroid',
+            project.type || 'spheroid',
             options,
             jobId
           ).then(() => {
