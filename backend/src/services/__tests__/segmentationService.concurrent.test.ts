@@ -142,6 +142,11 @@ describe('SegmentationService - Concurrent Request Handling', () => {
       },
       project: {
         findFirst: vi.fn().mockResolvedValue(null),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'project-id',
+          userId: 'user-id',
+          type: 'spheroid',
+        }),
       },
     } as any;
     mockImageService = {
