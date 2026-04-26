@@ -627,6 +627,9 @@ export default {
   segmentation: {
     modelNotCompatible:
       '模型 "{{model}}" 与项目类型 "{{type}}" 不兼容。允许的: {{allowed}}。',
+    incompatibleModelTitle: '无法使用此模型进行分割',
+    incompatibleModelDesc:
+      '当前选择的模型 "{{model}}" 与此项目类型 ({{type}}) 不兼容。允许的模型: {{allowed}}。请在设置中更改模型或更改项目类型。',
     mode: {
       view: '查看和导航',
       edit: '编辑',
