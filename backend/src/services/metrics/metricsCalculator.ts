@@ -13,6 +13,10 @@ import type {
   PolygonPartClass,
   SpermPartClass,
 } from '../../utils/polygonValidation';
+import type {
+  MinimalPolygon,
+  PolygonPoint,
+} from '../../types/polygon';
 import { polylineLength } from '../../utils/polygonGeometry';
 import { groupPolylinesByInstanceId, findPart } from '../../utils/spermGrouping';
 import {
@@ -76,15 +80,14 @@ export interface ImageMetrics {
   invasionArea: number; // totalSpheroidArea − coreArea, clamped at 0
 }
 
-export interface Point {
-  x: number;
-  y: number;
-}
+// Local Point alias kept so the many call sites in this file stay terse.
+// Structurally identical to PolygonPoint from ../../types/polygon.
+export type Point = PolygonPoint;
 
-export interface Polygon {
-  points: Point[];
-  type: 'external' | 'internal';
-}
+/** Re-export of the shared minimal polygon shape — metrics math only
+ *  needs `points` + `type`. Kept named `Polygon` so existing call sites
+ *  inside this file don't need to be touched. */
+export type Polygon = MinimalPolygon;
 
 export interface ParsedPolygon {
   points: Point[];

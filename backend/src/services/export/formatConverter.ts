@@ -9,19 +9,17 @@ import {
   groupPolylinesByInstanceId,
   findPart,
 } from '../../utils/spermGrouping';
+import type { BasePolygon, PolygonPoint } from '../../types/polygon';
 
-export interface Point {
-  x: number;
-  y: number;
-}
+/** Local alias kept for the many call sites in this file that already
+ *  use `Point`. Structurally identical to `PolygonPoint`. */
+export type Point = PolygonPoint;
 
-export interface Polygon {
-  points: Point[];
-  type: 'external' | 'internal';
-  id?: string;
-  geometry?: 'polygon' | 'polyline';
+/** Export polygon — `BasePolygon` plus the narrower `SpermPartClass`
+ *  union. Spheroid 'core' annotations don't appear in exports, so the
+ *  visualization-side `PolygonPartClass` is intentionally too wide here. */
+export interface Polygon extends BasePolygon {
   partClass?: SpermPartClass;
-  instanceId?: string;
 }
 
 const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
