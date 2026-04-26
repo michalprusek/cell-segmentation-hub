@@ -482,7 +482,13 @@ export interface SegmentationResult {
   updated_at: string;
 }
 
-// ProjectImage type for use across components
+/**
+ * Domain `ProjectImage` — the de-facto canonical shape used across all UI
+ * components, hooks, and exports (18+ import sites). Permissive: accepts
+ * both camelCase and snake_case alt fields so it can wrap either the API
+ * wire DTO from `@/lib/api` or freshly constructed objects. New code
+ * should consume this type, not the wire DTO.
+ */
 export interface ProjectImage {
   id: string;
   name: string;

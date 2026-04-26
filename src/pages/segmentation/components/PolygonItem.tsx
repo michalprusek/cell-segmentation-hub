@@ -11,22 +11,24 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import type { Point } from '@/lib/segmentation';
 
-interface Point {
-  x: number;
-  y: number;
-}
-
-interface PolygonData {
+/**
+ * UI view model for the side-panel polygon tree. Distinct from the domain
+ * `PolygonData` in `@/types`: this carries optional `name` (rename UI) and
+ * `children` (parent/child rendering) but drops `class`, `geometry`,
+ * `partClass`, `instanceId` since the tree row doesn't need them.
+ */
+interface PolygonTreeItem {
   id: string;
   name?: string;
   type: 'external' | 'internal';
   points: Point[];
-  children?: PolygonData[];
+  children?: PolygonTreeItem[];
 }
 
 interface PolygonItemProps {
-  polygon: PolygonData;
+  polygon: PolygonTreeItem;
   index: number;
   isChild?: boolean;
   selectedPolygonId: string | null;
@@ -183,27 +185,29 @@ const PolygonItem: React.FC<PolygonItemProps> = React.memo(
             transition={{ duration: 0.2 }}
             className="mt-1"
           >
-            {polygon.children?.map((child: PolygonData, childIndex: number) => (
-              <PolygonItem
-                key={child.id}
-                polygon={child}
-                isChild={true}
-                index={childIndex}
-                selectedPolygonId={selectedPolygonId}
-                expandedPolygons={expandedPolygons}
-                hiddenPolygonIds={hiddenPolygonIds}
-                editingPolygonId={editingPolygonId}
-                editingName={editingName}
-                onSelectPolygon={onSelectPolygon}
-                onToggleExpanded={onToggleExpanded}
-                onToggleVisibility={onToggleVisibility}
-                onStartRename={onStartRename}
-                onSaveRename={onSaveRename}
-                onCancelRename={onCancelRename}
-                onDeletePolygon={onDeletePolygon}
-                onEditingNameChange={onEditingNameChange}
-              />
-            ))}
+            {polygon.children?.map(
+              (child: PolygonTreeItem, childIndex: number) => (
+                <PolygonItem
+                  key={child.id}
+                  polygon={child}
+                  isChild={true}
+                  index={childIndex}
+                  selectedPolygonId={selectedPolygonId}
+                  expandedPolygons={expandedPolygons}
+                  hiddenPolygonIds={hiddenPolygonIds}
+                  editingPolygonId={editingPolygonId}
+                  editingName={editingName}
+                  onSelectPolygon={onSelectPolygon}
+                  onToggleExpanded={onToggleExpanded}
+                  onToggleVisibility={onToggleVisibility}
+                  onStartRename={onStartRename}
+                  onSaveRename={onSaveRename}
+                  onCancelRename={onCancelRename}
+                  onDeletePolygon={onDeletePolygon}
+                  onEditingNameChange={onEditingNameChange}
+                />
+              )
+            )}
           </motion.div>
         )}
       </div>

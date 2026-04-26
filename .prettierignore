@@ -71,3 +71,6 @@ Thumbs.db
 .backups/
 .tmp_viz/
 
+# External / scratch model artifacts dropped at repo root
+path_c_v24c/
+

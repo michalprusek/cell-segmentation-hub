@@ -43,16 +43,6 @@ export const EDITING_CONSTANTS = {
   MAX_ZOOM: 10, // 1000% maximum zoom
 } as const;
 
-export interface ProjectImage {
-  id: string;
-  name: string;
-  url: string;
-  createdAt: Date;
-  updatedAt: Date;
-  segmentationStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  segmentationResult?: SegmentationResult;
-}
-
 export interface DragState {
   isDragging: boolean;
   startX: number;
