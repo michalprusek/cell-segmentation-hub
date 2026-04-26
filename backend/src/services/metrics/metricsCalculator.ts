@@ -15,6 +15,17 @@ import type {
 } from '../../utils/polygonValidation';
 import { polylineLength } from '../../utils/polygonGeometry';
 import { groupPolylinesByInstanceId, findPart } from '../../utils/spermGrouping';
+import {
+  calculatePolygonArea,
+  calculatePerimeter,
+  calculateBoundingBox,
+  calculateConvexHull,
+  pointToLineDistance,
+  rotatingCalipers,
+  isPointInPolygon,
+  isPolygonInside,
+  calculateCentroid,
+} from './geometricPrimitives';
 
 export interface PolygonMetrics {
   imageId: string;
@@ -275,7 +286,7 @@ export class MetricsCalculator {
       try {
         // Find holes that are inside this specific polygon
         const holesForPolygon = internalPolygons.filter(inner =>
-          this.isPolygonInside(inner, polygon)
+          isPolygonInside(inner, polygon)
         );
 
         // Calculate metrics using Python service
@@ -300,7 +311,7 @@ export class MetricsCalculator {
 
         // Fallback to basic calculations with proper hole mapping
         const holesForPolygon = internalPolygons.filter(inner =>
-          this.isPolygonInside(inner, polygon)
+          isPolygonInside(inner, polygon)
         );
 
         metrics.push({
@@ -623,26 +634,26 @@ export class MetricsCalculator {
     }
 
     // Calculate main polygon area using Shoelace formula
-    const mainArea = this.calculatePolygonArea(polygon.points);
+    const mainArea = calculatePolygonArea(polygon.points);
 
     // Subtract hole areas
     const holesArea = holes.reduce((sum, hole) => {
       if (!hole?.points || hole.points.length === 0) {
         return sum; // Skip invalid holes
       }
-      return sum + this.calculatePolygonArea(hole.points);
+      return sum + calculatePolygonArea(hole.points);
     }, 0);
     let area = Math.max(0, mainArea - holesArea);
 
     // Calculate perimeter of external boundary only
-    const externalPerimeter = this.calculatePerimeter(polygon.points);
+    const externalPerimeter = calculatePerimeter(polygon.points);
 
     // Calculate perimeter with holes (external + all hole perimeters)
     const holesPerimeter = holes.reduce((sum, hole) => {
       if (!hole?.points || hole.points.length === 0) {
         return sum; // Skip invalid holes
       }
-      return sum + this.calculatePerimeter(hole.points);
+      return sum + calculatePerimeter(hole.points);
     }, 0);
     const perimeterWithHoles = externalPerimeter + holesPerimeter;
 
@@ -651,7 +662,7 @@ export class MetricsCalculator {
     const perimeter = Math.max(externalPerimeter, Number.EPSILON);
 
     // Calculate bounding box for extent calculation
-    const boundingBox = this.calculateBoundingBox(polygon.points);
+    const boundingBox = calculateBoundingBox(polygon.points);
     const boundingBoxArea = boundingBox.width * boundingBox.height;
 
     // Calculate circularity: 4*pi * area / perimeter^2 (clamped to [0,1])
@@ -671,9 +682,9 @@ export class MetricsCalculator {
     const equivalentDiameter = Math.sqrt((4 * area) / Math.PI);
 
     // Calculate convex hull for convexity, solidity, and proper Feret diameters
-    const convexHull = this.calculateConvexHull(polygon.points);
-    const convexArea = this.calculatePolygonArea(convexHull);
-    const convexPerimeter = this.calculatePerimeter(convexHull);
+    const convexHull = calculateConvexHull(polygon.points);
+    const convexArea = calculatePolygonArea(convexHull);
+    const convexPerimeter = calculatePerimeter(convexHull);
 
     // Convexity: perimeter of convex hull / perimeter of polygon
     const convexity = perimeter > 0 ? convexPerimeter / perimeter : 0;
@@ -682,7 +693,7 @@ export class MetricsCalculator {
     const solidity = convexArea > 0 ? area / convexArea : 0;
 
     // Calculate proper Feret diameters using rotating calipers
-    const feretDiameters = this.rotatingCalipers(convexHull);
+    const feretDiameters = rotatingCalipers(convexHull);
 
     // Ensure safe division for aspect ratio
     const feretAspectRatio =
@@ -1117,376 +1128,6 @@ export class MetricsCalculator {
     return numbers.reduce((a, b) => a + b, 0) / numbers.length;
   }
 
-  private calculatePolygonArea(points: Point[]): number {
-    if (!points || points.length < 3) {
-      return 0;
-    }
-
-    let area = 0;
-    const n = points.length;
-
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const currentPoint = points[i];
-      const nextPoint = points[j];
-
-      if (
-        !currentPoint ||
-        !nextPoint ||
-        typeof currentPoint.x !== 'number' ||
-        typeof currentPoint.y !== 'number' ||
-        typeof nextPoint.x !== 'number' ||
-        typeof nextPoint.y !== 'number'
-      ) {
-        continue;
-      }
-
-      area += currentPoint.x * nextPoint.y;
-      area -= nextPoint.x * currentPoint.y;
-    }
-
-    return Math.abs(area / 2);
-  }
-
-  private calculatePerimeter(points: Point[]): number {
-    if (!points || points.length < 2) {
-      return 0;
-    }
-
-    let perimeter = 0;
-    const n = points.length;
-
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const currentPoint = points[i];
-      const nextPoint = points[j];
-
-      if (
-        !currentPoint ||
-        !nextPoint ||
-        typeof currentPoint.x !== 'number' ||
-        typeof currentPoint.y !== 'number' ||
-        typeof nextPoint.x !== 'number' ||
-        typeof nextPoint.y !== 'number'
-      ) {
-        continue;
-      }
-
-      const dx = nextPoint.x - currentPoint.x;
-      const dy = nextPoint.y - currentPoint.y;
-      perimeter += Math.sqrt(dx * dx + dy * dy);
-    }
-
-    return perimeter;
-  }
-
-  private calculateBoundingBox(points: Point[]): {
-    width: number;
-    height: number;
-  } {
-    if (!points || points.length === 0) {
-      return { width: 0, height: 0 };
-    }
-
-    const xs = points.filter(p => p && typeof p.x === 'number').map(p => p.x);
-    const ys = points.filter(p => p && typeof p.y === 'number').map(p => p.y);
-
-    if (xs.length === 0 || ys.length === 0) {
-      return { width: 0, height: 0 };
-    }
-    const minX = Math.min(...xs);
-    const minY = Math.min(...ys);
-    const maxX = Math.max(...xs);
-    const maxY = Math.max(...ys);
-
-    return {
-      width: maxX - minX,
-      height: maxY - minY,
-    };
-  }
-
-  /**
-   * Calculate convex hull using Andrew's monotone chain algorithm
-   */
-  private calculateConvexHull(points: Point[]): Point[] {
-    if (points.length < 3) {
-      return points;
-    }
-
-    // Sort points by x-coordinate, then by y-coordinate
-    const sortedPoints = [...points].sort((a, b) => {
-      if (a.x === b.x) {
-        return a.y - b.y;
-      }
-      return a.x - b.x;
-    });
-
-    // Build lower hull
-    const lower: Point[] = [];
-    for (const point of sortedPoints) {
-      while (
-        lower.length >= 2 &&
-        this.cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0
-      ) {
-        lower.pop();
-      }
-      lower.push(point);
-    }
-
-    // Build upper hull
-    const upper: Point[] = [];
-    for (let i = sortedPoints.length - 1; i >= 0; i--) {
-      const point = sortedPoints[i];
-      while (
-        upper.length >= 2 &&
-        this.cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0
-      ) {
-        upper.pop();
-      }
-      upper.push(point);
-    }
-
-    // Remove last point of each half because it's repeated
-    lower.pop();
-    upper.pop();
-
-    return lower.concat(upper);
-  }
-
-  /**
-   * Calculate cross product for convex hull algorithm
-   */
-  private cross(o: Point, a: Point, b: Point): number {
-    return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-  }
-
-  /**
-   * Calculate distance between two points
-   */
-  private distance(p1: Point, p2: Point): number {
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  /**
-   * Calculate the distance from a point to a line segment defined by two endpoints
-   */
-  private pointToLineDistance(
-    point: Point,
-    lineStart: Point,
-    lineEnd: Point
-  ): number {
-    const A = point.x - lineStart.x;
-    const B = point.y - lineStart.y;
-    const C = lineEnd.x - lineStart.x;
-    const D = lineEnd.y - lineStart.y;
-
-    const dot = A * C + B * D;
-    const lenSq = C * C + D * D;
-
-    if (lenSq === 0) {
-      return this.distance(point, lineStart);
-    }
-
-    const param = dot / lenSq;
-
-    let xx: number, yy: number;
-
-    if (param < 0) {
-      xx = lineStart.x;
-      yy = lineStart.y;
-    } else if (param > 1) {
-      xx = lineEnd.x;
-      yy = lineEnd.y;
-    } else {
-      xx = lineStart.x + param * C;
-      yy = lineStart.y + param * D;
-    }
-
-    const dx = point.x - xx;
-    const dy = point.y - yy;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  /**
-   * Find Feret diameters via brute-force pairwise distance on the convex hull.
-   * Returns max, min, and orthogonal Feret diameters.
-   */
-  private rotatingCalipers(hull: Point[]): {
-    max: number;
-    min: number;
-    orthogonal: number;
-  } {
-    if (hull.length < 3) {
-      return { max: 0, min: 0, orthogonal: 0 };
-    }
-
-    let maxDist = 0;
-    let minDist = Infinity;
-    let orthogonalDist = 0;
-    let maxPair: [Point, Point] | null = null;
-
-    // Find maximum Feret diameter (max distance between any two hull points)
-    for (let i = 0; i < hull.length; i++) {
-      for (let j = i + 1; j < hull.length; j++) {
-        const dist = this.distance(hull[i], hull[j]);
-        if (dist > maxDist) {
-          maxDist = dist;
-          maxPair = [hull[i], hull[j]];
-        }
-      }
-    }
-
-    // Find minimum Feret diameter (min caliper width)
-    // For each edge of the hull, find the furthest point from that edge
-    for (let i = 0; i < hull.length; i++) {
-      const j = (i + 1) % hull.length;
-      let maxDistFromEdge = 0;
-
-      // Find the furthest point from this edge
-      for (let k = 0; k < hull.length; k++) {
-        if (k === i || k === j) {
-          continue;
-        }
-        const dist = this.pointToLineDistance(hull[k], hull[i], hull[j]);
-        maxDistFromEdge = Math.max(maxDistFromEdge, dist);
-      }
-
-      // The caliper width for this orientation is the distance to the furthest point
-      if (maxDistFromEdge > 0 && maxDistFromEdge < minDist) {
-        minDist = maxDistFromEdge;
-      }
-    }
-
-    // Find orthogonal Feret diameter
-    // This is the width perpendicular to the maximum Feret diameter
-    if (maxPair) {
-      const [p1, p2] = maxPair;
-      let maxOrthDist = 0;
-
-      // Find the maximum perpendicular distance from the max Feret line
-      for (const point of hull) {
-        const dist = this.pointToLineDistance(point, p1, p2);
-        maxOrthDist = Math.max(maxOrthDist, dist);
-      }
-
-      // NOTE: This doubles the max one-sided perpendicular distance from the Feret axis.
-      // This is an approximation — a true orthogonal caliper width would measure between
-      // two parallel supporting lines, not double the one-sided distance.
-      orthogonalDist = maxOrthDist * 2;
-    }
-
-    // Handle edge cases
-    if (minDist === Infinity) {
-      // Fallback for degenerate cases
-      minDist = maxDist;
-    }
-
-    return {
-      max: maxDist,
-      min: minDist,
-      orthogonal: orthogonalDist,
-    };
-  }
-
-  /**
-   * Check if a point is inside a polygon using ray-casting algorithm
-   */
-  private isPointInPolygon(point: Point, polygon: Polygon): boolean {
-    if (!polygon?.points || polygon.points.length < 3) {
-      return false;
-    }
-
-    const { x, y } = point;
-    const points = polygon.points;
-    let inside = false;
-
-    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-      const xi = points[i]?.x || 0;
-      const yi = points[i]?.y || 0;
-      const xj = points[j]?.x || 0;
-      const yj = points[j]?.y || 0;
-
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-        inside = !inside;
-      }
-    }
-
-    return inside;
-  }
-
-  /**
-   * Check if inner polygon is completely inside outer polygon
-   * Uses centroid test - checks if centroid of inner polygon is inside outer polygon
-   */
-  private isPolygonInside(inner: Polygon, outer: Polygon): boolean {
-    if (
-      !inner?.points ||
-      !outer?.points ||
-      inner.points.length === 0 ||
-      outer.points.length === 0
-    ) {
-      return false;
-    }
-
-    // Calculate centroid of inner polygon
-    const centroid = this.calculateCentroid(inner.points);
-
-    // Check if centroid is inside outer polygon
-    return this.isPointInPolygon(centroid, outer);
-  }
-
-  /**
-   * Calculate centroid of a polygon
-   */
-  private calculateCentroid(points: Point[]): Point {
-    if (!points || points.length === 0) {
-      return { x: 0, y: 0 };
-    }
-
-    let cx = 0;
-    let cy = 0;
-    let area = 0;
-    const n = points.length;
-
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const currentPoint = points[i];
-      const nextPoint = points[j];
-
-      if (
-        !currentPoint ||
-        !nextPoint ||
-        typeof currentPoint.x !== 'number' ||
-        typeof currentPoint.y !== 'number' ||
-        typeof nextPoint.x !== 'number' ||
-        typeof nextPoint.y !== 'number'
-      ) {
-        continue;
-      }
-
-      const cross = currentPoint.x * nextPoint.y - nextPoint.x * currentPoint.y;
-      area += cross;
-      cx += (currentPoint.x + nextPoint.x) * cross;
-      cy += (currentPoint.y + nextPoint.y) * cross;
-    }
-
-    area *= 0.5;
-    if (Math.abs(area) < Number.EPSILON) {
-      // Fallback to simple average for degenerate cases
-      const avgX =
-        points.reduce((sum, p) => sum + (p?.x || 0), 0) / points.length;
-      const avgY =
-        points.reduce((sum, p) => sum + (p?.y || 0), 0) / points.length;
-      return { x: avgX, y: avgY };
-    }
-
-    cx /= 6 * area;
-    cy /= 6 * area;
-
-    return { x: cx, y: cy };
-  }
 
   /**
    * Apply scale conversion to metrics with enhanced validation
