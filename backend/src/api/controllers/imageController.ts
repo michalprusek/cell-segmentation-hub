@@ -10,6 +10,7 @@ import {
   UploadCompletedData,
 } from '../../types/websocket';
 import { ResponseHelper } from '../../utils/response';
+import { JOB_STATUSES } from '../../types';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/index';
 import { getStorageProvider } from '../../storage/index';
@@ -334,9 +335,8 @@ export class ImageController {
         return;
       }
 
-      // Validate status
-      const allowedStatuses = ['pending', 'processing', 'completed', 'failed'];
-      if (statusRaw && !allowedStatuses.includes(statusRaw)) {
+      // Validate status — same set as `JOB_STATUSES` SSOT in types/index.ts
+      if (statusRaw && !(JOB_STATUSES as readonly string[]).includes(statusRaw)) {
         res
           .status(400)
           .json({ error: 'Invalid query parameter', field: 'status' });
