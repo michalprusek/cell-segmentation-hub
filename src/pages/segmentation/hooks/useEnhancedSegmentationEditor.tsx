@@ -272,7 +272,7 @@ export const useEnhancedSegmentationEditor = ({
         }
 
         logger.error('Autosave failed when switching images:', error);
-        toast.error(t('toast.autosaveFailed'));
+        toast.error(t('toast.segmentation.autosaveFailed'));
       }
     }
 

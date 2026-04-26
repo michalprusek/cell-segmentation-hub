@@ -163,10 +163,17 @@ function extractUsedKeys() {
       if (
         stat.isDirectory() &&
         !file.startsWith('.') &&
-        file !== 'node_modules'
+        file !== 'node_modules' &&
+        file !== '__tests__' &&
+        file !== '__mocks__'
       ) {
         scanDirectory(filePath);
-      } else if (file.match(/\.(tsx?|jsx?)$/)) {
+      } else if (
+        file.match(/\.(tsx?|jsx?)$/) &&
+        !file.match(/\.(test|spec)\.(tsx?|jsx?)$/)
+      ) {
+        // Skip test files — they intentionally reference non-existent keys
+        // (e.g. LanguageContext.test.tsx tests fallback behavior).
         scanFile(filePath);
       }
     }

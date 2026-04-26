@@ -61,12 +61,12 @@ const ResetPassword = () => {
     }
 
     if (!validatePassword(password)) {
-      toast.error(t('errors.validationErrors.passwordMinLength'));
+      toast.error(t('errors.validationErrors.passwordTooShort'));
       return;
     }
 
     if (password !== confirmPassword) {
-      toast.error(t('errors.validationErrors.passwordMismatch'));
+      toast.error(t('errors.validationErrors.passwordsDoNotMatch'));
       return;
     }
 
