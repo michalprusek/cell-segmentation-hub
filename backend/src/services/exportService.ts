@@ -198,6 +198,26 @@ export class ExportService {
     }
   }
 
+  /** How many concurrent export jobs a single user can have running. */
+  private static readonly MAX_ACTIVE_JOBS_PER_USER = 1;
+
+  /** True if the given user already has an active (non-terminal) export. */
+  private hasActiveJobForUser(userId: string): boolean {
+    let active = 0;
+    for (const job of this.exportJobs.values()) {
+      if (
+        job.userId === userId &&
+        (job.status === 'pending' || job.status === 'processing')
+      ) {
+        active++;
+        if (active >= ExportService.MAX_ACTIVE_JOBS_PER_USER) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   async startExportJob(
     projectId: string,
     userId: string,
@@ -212,6 +232,17 @@ export class ExportService {
     if (!accessCheck.hasAccess) {
       throw new Error(
         'Access denied: You do not have permission to export this project'
+      );
+    }
+
+    // Per-user concurrency cap: each export burns I/O + CPU + RAM. Without
+    // this gate a user could spam POST /api/export/... and exhaust shared
+    // resources for everyone else. Caller (controller) translates this
+    // error to HTTP 429 in PR follow-up.
+    if (this.hasActiveJobForUser(userId)) {
+      throw new Error(
+        'Rate limit exceeded: you already have an export in progress. ' +
+          'Wait for it to finish or cancel it before starting another.'
       );
     }
 

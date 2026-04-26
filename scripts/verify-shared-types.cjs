@@ -1,35 +1,37 @@
 #!/usr/bin/env node
 /**
- * Verify that frontend and backend `MODEL_TYPE_COMPATIBILITY` constants
- * stay in sync. This is the cheaper alternative to setting up a
- * monorepo / shared package — we leave the two declarations where they
- * are (separate build trees, no shared import path needed) and just
- * verify they match.
+ * Verify that frontend and backend cross-stack constants stay in sync.
+ *
+ * The frontend (Vite/Vitest) and backend (Node/Vitest) build trees do
+ * not share an import path, so we keep the canonical declarations in
+ * separate files and just verify they match. Cheaper than wiring a
+ * monorepo / shared package, sufficient because drift is rare.
  *
  * Runs in pre-commit (via lint-staged) and in CI. Fails with a clear
- * diff if the two declarations drift.
+ * diff if any pair drifts.
  *
- * Why we don't do a "real" shared package:
- * - Drift frequency is essentially zero (the two declarations have
- *   never diverged since they were authored together).
- * - Adding workspaces / path aliases to both Vite + ts-jest + Vitest
- *   build trees costs more than this script.
- * - If drift becomes routine (>1×/quarter), revisit and migrate to a
- *   real shared package; until then, verify-and-warn is enough.
+ * To register a new shared constant, append an entry to `SHARED_CONSTS`
+ * below — the rest is generic.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-const FRONTEND_FILE = path.resolve(__dirname, '..', 'src', 'types', 'index.ts');
-const BACKEND_FILE = path.resolve(
-  __dirname,
-  '..',
-  'backend',
-  'src',
-  'types',
-  'validation.ts'
-);
+const ROOT = path.resolve(__dirname, '..');
+
+/** @type {Array<{name: string, frontend: string, backend: string}>} */
+const SHARED_CONSTS = [
+  {
+    name: 'MODEL_TYPE_COMPATIBILITY',
+    frontend: path.join(ROOT, 'src', 'types', 'index.ts'),
+    backend: path.join(ROOT, 'backend', 'src', 'types', 'validation.ts'),
+  },
+  {
+    name: 'PROJECT_TYPES',
+    frontend: path.join(ROOT, 'src', 'types', 'index.ts'),
+    backend: path.join(ROOT, 'backend', 'src', 'types', 'validation.ts'),
+  },
+];
 
 /**
  * Extract the source range of a `const NAME = ...` block. Returns the
@@ -45,7 +47,6 @@ function extractConstBlock(filePath, name) {
   }
 
   const startIdx = startMatch.index;
-  // Walk forward, tracking brace depth
   let depth = 0;
   let i = startIdx;
   let inString = false;
@@ -65,13 +66,12 @@ function extractConstBlock(filePath, name) {
       stringQuote = ch;
       continue;
     }
-    if (ch === '{') {
+    if (ch === '{' || ch === '[') {
       depth++;
       started = true;
-    } else if (ch === '}') {
+    } else if (ch === '}' || ch === ']') {
       depth--;
       if (started && depth === 0) {
-        // Find the end of this statement (next semicolon)
         const semi = src.indexOf(';', i);
         return src.slice(startIdx, semi + 1);
       }
@@ -80,46 +80,56 @@ function extractConstBlock(filePath, name) {
   return null;
 }
 
-const compatFront = extractConstBlock(
-  FRONTEND_FILE,
-  'MODEL_TYPE_COMPATIBILITY'
-);
-const compatBack = extractConstBlock(BACKEND_FILE, 'MODEL_TYPE_COMPATIBILITY');
-
-if (!compatFront) {
-  console.error(
-    `FAIL: could not locate MODEL_TYPE_COMPATIBILITY in ${FRONTEND_FILE}`
-  );
-  process.exit(1);
-}
-if (!compatBack) {
-  console.error(
-    `FAIL: could not locate MODEL_TYPE_COMPATIBILITY in ${BACKEND_FILE}`
-  );
-  process.exit(1);
-}
-
-// Normalize whitespace for comparison — declaration order, types, and
-// values must match; whitespace differences are noise.
+/** Whitespace-insensitive equality — declaration order, types, and
+ * values must match; whitespace differences are noise. */
 const normalize = s => s.replace(/\s+/g, ' ').trim();
-const a = normalize(compatFront);
-const b = normalize(compatBack);
 
-if (a !== b) {
+let failed = 0;
+
+for (const entry of SHARED_CONSTS) {
+  const front = extractConstBlock(entry.frontend, entry.name);
+  const back = extractConstBlock(entry.backend, entry.name);
+
+  if (!front) {
+    console.error(
+      `FAIL: could not locate ${entry.name} in ${path.relative(ROOT, entry.frontend)}`
+    );
+    failed++;
+    continue;
+  }
+  if (!back) {
+    console.error(
+      `FAIL: could not locate ${entry.name} in ${path.relative(ROOT, entry.backend)}`
+    );
+    failed++;
+    continue;
+  }
+
+  if (normalize(front) !== normalize(back)) {
+    console.error(
+      `FAIL: ${entry.name} has drifted between frontend and backend.`
+    );
+    console.error('');
+    console.error(`Frontend (${path.relative(ROOT, entry.frontend)}):`);
+    console.error('  ' + front.split('\n').join('\n  '));
+    console.error('');
+    console.error(`Backend  (${path.relative(ROOT, entry.backend)}):`);
+    console.error('  ' + back.split('\n').join('\n  '));
+    console.error('');
+    console.error(
+      'Update both files so the const declarations are byte-identical, then re-run.'
+    );
+    failed++;
+    continue;
+  }
+
+  console.log(`OK: ${entry.name} frontend ↔ backend in sync.`);
+}
+
+if (failed > 0) {
+  console.error('');
   console.error(
-    'FAIL: MODEL_TYPE_COMPATIBILITY has drifted between frontend and backend.'
-  );
-  console.error('');
-  console.error(`Frontend (${path.relative(process.cwd(), FRONTEND_FILE)}):`);
-  console.error('  ' + compatFront.split('\n').join('\n  '));
-  console.error('');
-  console.error(`Backend  (${path.relative(process.cwd(), BACKEND_FILE)}):`);
-  console.error('  ' + compatBack.split('\n').join('\n  '));
-  console.error('');
-  console.error(
-    'Update both files so the const declarations are byte-identical, then re-run.'
+    `${failed} of ${SHARED_CONSTS.length} shared constants are out of sync.`
   );
   process.exit(1);
 }
-
-console.log('OK: MODEL_TYPE_COMPATIBILITY frontend ↔ backend in sync.');
