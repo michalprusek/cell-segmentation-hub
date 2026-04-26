@@ -8,6 +8,9 @@
     "bash -c 'npm run type-check'",
     "bash -c 'npx madge --circular src/ || true'"
   ],
+  "{src/types/**/*.ts,backend/src/types/**/*.ts}": [
+    "bash -c 'node scripts/verify-shared-types.cjs'"
+  ],
   "*.{js,jsx}": [
     "eslint --fix --cache --max-warnings=500 --format=stylish --no-warn-ignored",
     "prettier --write"
