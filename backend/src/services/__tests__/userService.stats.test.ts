@@ -20,24 +20,26 @@ type MockPrismaClient = {
   };
 };
 
-const prismaMock: MockPrismaClient = {
-  user: {
-    findUnique: vi.fn(),
-  },
-  project: {
-    count: vi.fn(),
-  },
-  image: {
-    count: vi.fn(),
-    aggregate: vi.fn(),
-  },
-  segmentation: {
-    count: vi.fn(),
-  },
-  profile: {
-    upsert: vi.fn(),
-  },
-};
+const { prismaMock } = vi.hoisted(() => ({
+  prismaMock: {
+    user: {
+      findUnique: vi.fn(),
+    },
+    project: {
+      count: vi.fn(),
+    },
+    image: {
+      count: vi.fn(),
+      aggregate: vi.fn(),
+    },
+    segmentation: {
+      count: vi.fn(),
+    },
+    profile: {
+      upsert: vi.fn(),
+    },
+  } as MockPrismaClient,
+}));
 
 // Mock dependencies
 vi.mock('../../db', () => ({

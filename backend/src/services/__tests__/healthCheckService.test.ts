@@ -1,35 +1,46 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// All mocks before imports
-const mockPrismaQueryRaw = vi.fn() as any;
-const mockPrismaDisconnect = vi.fn() as any;
+// All mocks before imports — wrapped in vi.hoisted so vi.mock factories
+// can reference these without hitting the temporal dead zone.
+const {
+  mockPrismaQueryRaw,
+  mockPrismaDisconnect,
+  mockRedisPing,
+  mockRedisInfo,
+  mockRedisSetex,
+  mockRedisQuit,
+  mockRedisOn,
+  mockAxiosGet,
+} = vi.hoisted(() => ({
+  mockPrismaQueryRaw: vi.fn() as any,
+  mockPrismaDisconnect: vi.fn() as any,
+  mockRedisPing: vi.fn() as any,
+  mockRedisInfo: vi.fn() as any,
+  mockRedisSetex: vi.fn() as any,
+  mockRedisQuit: vi.fn() as any,
+  mockRedisOn: vi.fn() as any,
+  mockAxiosGet: vi.fn() as any,
+}));
 
 vi.mock('@prisma/client', () => ({
-  PrismaClient: vi.fn(() => ({
+  PrismaClient: vi.fn().mockImplementation(() => ({
     $queryRaw: mockPrismaQueryRaw,
     $disconnect: mockPrismaDisconnect,
     $metrics: { json: vi.fn(async () => null) },
   })),
 }));
 
-const mockRedisPing = vi.fn() as any;
-const mockRedisInfo = vi.fn() as any;
-const mockRedisSetex = vi.fn() as any;
-const mockRedisQuit = vi.fn() as any;
-const mockRedisOn = vi.fn() as any;
-
-vi.mock('ioredis', () =>
-  vi.fn(() => ({
+vi.mock('ioredis', () => ({
+  default: vi.fn(() => ({
     ping: mockRedisPing,
     info: mockRedisInfo,
     setex: mockRedisSetex,
     quit: mockRedisQuit,
     on: mockRedisOn,
     status: 'ready',
-  }))
-);
+  })),
+}));
 
-const mockAxiosGet = vi.fn() as any;
 vi.mock('axios', () => ({
   default: { get: mockAxiosGet },
   get: mockAxiosGet,

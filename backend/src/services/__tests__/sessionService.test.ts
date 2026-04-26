@@ -1,27 +1,55 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock Redis before imports
-const mockSetEx = vi.fn() as any;
-const mockGet = vi.fn() as any;
-const mockDel = vi.fn() as any;
-const mockSAdd = vi.fn() as any;
-const mockSRem = vi.fn() as any;
-const mockSMembers = vi.fn() as any;
-const mockExpire = vi.fn() as any;
+// Mock Redis before imports — declared inside `vi.hoisted` so the
+// top-level `vi.mock(...)` factories below (which Vitest hoists above
+// all other statements) can reference them.
+const {
+  mockSetEx,
+  mockGet,
+  mockDel,
+  mockSAdd,
+  mockSRem,
+  mockSMembers,
+  mockExpire,
+  mockExecuteRedisCommand,
+  mockGetRedisClient,
+} = vi.hoisted(() => {
+  const mockSetEx = vi.fn() as any;
+  const mockGet = vi.fn() as any;
+  const mockDel = vi.fn() as any;
+  const mockSAdd = vi.fn() as any;
+  const mockSRem = vi.fn() as any;
+  const mockSMembers = vi.fn() as any;
+  const mockExpire = vi.fn() as any;
 
-const mockExecuteRedisCommand = vi.fn(async (fn: (client: any) => Promise<unknown>) => {
-  return fn({
-    setEx: mockSetEx,
-    get: mockGet,
-    del: mockDel,
-    sAdd: mockSAdd,
-    sRem: mockSRem,
-    sMembers: mockSMembers,
-    expire: mockExpire,
-  });
-}) as any;
+  const mockExecuteRedisCommand = vi.fn(
+    async (fn: (client: any) => Promise<unknown>) => {
+      return fn({
+        setEx: mockSetEx,
+        get: mockGet,
+        del: mockDel,
+        sAdd: mockSAdd,
+        sRem: mockSRem,
+        sMembers: mockSMembers,
+        expire: mockExpire,
+      });
+    }
+  ) as any;
 
-const mockGetRedisClient = vi.fn(() => null) as any;
+  const mockGetRedisClient = vi.fn(() => null) as any;
+
+  return {
+    mockSetEx,
+    mockGet,
+    mockDel,
+    mockSAdd,
+    mockSRem,
+    mockSMembers,
+    mockExpire,
+    mockExecuteRedisCommand,
+    mockGetRedisClient,
+  };
+});
 
 vi.mock('../../config/redis', () => ({
   executeRedisCommand: mockExecuteRedisCommand,
@@ -30,8 +58,8 @@ vi.mock('../../config/redis', () => ({
 vi.mock('../../utils/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('crypto', () => {
-  const actual = vi.importActual('crypto') as typeof import('crypto');
+vi.mock('crypto', async () => {
+  const actual = (await vi.importActual('crypto')) as typeof import('crypto');
   return {
     ...actual,
     // randomBytes must return a Buffer-like object where .toString('hex') returns a plain string
