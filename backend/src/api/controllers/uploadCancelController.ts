@@ -1,7 +1,13 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../types/auth';
 import { logger } from '../../utils/logger';
+import { ResponseHelper } from '../../utils/response';
 import { WebSocketService } from '../../services/websocketService';
+
+const CTX = 'UploadCancelController';
+
+const toErr = (e: unknown): Error =>
+  e instanceof Error ? e : new Error(String(e));
 
 export class UploadCancelController {
   constructor() {
@@ -20,12 +26,12 @@ export class UploadCancelController {
       const userId = req.user?.id;
 
       if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
 
       if (!uploadId) {
-        res.status(400).json({ error: 'Upload ID is required' });
+        ResponseHelper.badRequest(res, 'Upload ID is required', CTX);
         return;
       }
 
@@ -51,12 +57,12 @@ export class UploadCancelController {
         uploadId,
       });
     } catch (error) {
-      logger.error(
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
         'Failed to cancel upload',
-        error instanceof Error ? error : new Error(String(error)),
-        'UploadCancelController'
+        CTX
       );
-      res.status(500).json({ error: 'Failed to cancel upload' });
     }
   }
 
@@ -70,12 +76,12 @@ export class UploadCancelController {
       const userId = req.user?.id;
 
       if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
 
       if (!projectId) {
-        res.status(400).json({ error: 'Project ID is required' });
+        ResponseHelper.badRequest(res, 'Project ID is required', CTX);
         return;
       }
 
@@ -99,12 +105,12 @@ export class UploadCancelController {
         projectId,
       });
     } catch (error) {
-      logger.error(
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
         'Failed to cancel all uploads',
-        error instanceof Error ? error : new Error(String(error)),
-        'UploadCancelController'
+        CTX
       );
-      res.status(500).json({ error: 'Failed to cancel all uploads' });
     }
   }
 }
