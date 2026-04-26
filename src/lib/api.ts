@@ -59,7 +59,7 @@ export interface Project {
  * camelCase domain `ProjectImage` from `@/types`, which is a superset and
  * the de-facto canonical type (18+ consumers).
  */
-export interface ProjectImage {
+export interface ProjectImageDTO {
   id: string;
   name: string;
   project_id: string;
@@ -678,7 +678,7 @@ class ApiClient {
   }
 
   // Helper method to map backend image fields to frontend expectations
-  private mapImageFields(image: Record<string, unknown>): ProjectImage {
+  private mapImageFields(image: Record<string, unknown>): ProjectImageDTO {
     let imageUrl =
       (image.originalUrl as string) || (image.image_url as string) || '';
     let thumbnailUrl =
@@ -736,7 +736,9 @@ class ApiClient {
   }
 
   // Helper method to map multiple images
-  private mapImagesFields(images: Record<string, unknown>[]): ProjectImage[] {
+  private mapImagesFields(
+    images: Record<string, unknown>[]
+  ): ProjectImageDTO[] {
     return images.map(image => this.mapImageFields(image));
   }
 
@@ -958,7 +960,7 @@ class ApiClient {
   /**
    * Get project images with optimized thumbnail data
    */
-  async getProjectImagesWithThumbnails(
+  async getProjectImageDTOsWithThumbnails(
     projectId: string,
     params?: {
       page?: number;
@@ -966,7 +968,7 @@ class ApiClient {
       lod?: 'low' | 'medium' | 'high';
     }
   ): Promise<{
-    images: ProjectImage[];
+    images: ProjectImageDTO[];
     pagination: {
       page: number;
       limit: number;
@@ -997,7 +999,7 @@ class ApiClient {
    * displayOrder 0, index 1 → 1, etc. The backend applies the change in a
    * single transaction.
    */
-  async reorderProjectImages(
+  async reorderProjectImageDTOs(
     projectId: string,
     imageIds: string[]
   ): Promise<void> {
@@ -1006,11 +1008,11 @@ class ApiClient {
     });
   }
 
-  async getProjectImages(
+  async getProjectImageDTOs(
     projectId: string,
     params?: { page?: number; limit?: number }
   ): Promise<{
-    images: ProjectImage[];
+    images: ProjectImageDTO[];
     total: number;
     page: number;
     totalPages: number;
@@ -1053,7 +1055,7 @@ class ApiClient {
    * @param {string} projectId - The project ID to upload images to
    * @param {FileList | File[]} files - Array or FileList of image files to upload
    * @param {Function} [onProgress] - Optional callback for upload progress
-   * @returns {Promise<ProjectImage[]>} Array of uploaded image objects
+   * @returns {Promise<ProjectImageDTO[]>} Array of uploaded image objects
    * @throws {Error} If upload fails or files are invalid
    * @example
    * const images = await apiClient.uploadImages(
@@ -1066,7 +1068,7 @@ class ApiClient {
     projectId: string,
     files: File[],
     onProgress?: (progressPercent: number) => void
-  ): Promise<ProjectImage[]> {
+  ): Promise<ProjectImageDTO[]> {
     const formData = new FormData();
     files.forEach(file => {
       // Normalize filename to NFC to ensure diacritics are properly composed
@@ -1126,7 +1128,7 @@ class ApiClient {
    * @param {File[]} files - Array of image files to upload
    * @param {Function} [onProgress] - Optional callback for upload progress
    * @param {Function} [onChunkProgress] - Optional callback for chunk-level progress
-   * @returns {Promise<ChunkedUploadResult<ProjectImage[]>>} Chunked upload results
+   * @returns {Promise<ChunkedUploadResult<ProjectImageDTO[]>>} Chunked upload results
    * @throws {Error} If upload fails or files are invalid
    * @example
    * const result = await apiClient.uploadImagesChunked(
@@ -1142,7 +1144,7 @@ class ApiClient {
     onProgress?: (progressPercent: number) => void,
     onChunkProgress?: (progress: ChunkProgress) => void,
     signal?: AbortSignal
-  ): Promise<ChunkedUploadResult<ProjectImage[]>> {
+  ): Promise<ChunkedUploadResult<ProjectImageDTO[]>> {
     logger.info(
       `Starting chunked upload of ${files.length} files to project ${projectId}`
     );
@@ -1327,7 +1329,7 @@ class ApiClient {
     return result;
   }
 
-  async getImage(projectId: string, imageId: string): Promise<ProjectImage> {
+  async getImage(projectId: string, imageId: string): Promise<ProjectImageDTO> {
     const response = await this.instance.get(
       `/projects/${projectId}/images/${imageId}`
     );
@@ -1540,7 +1542,7 @@ class ApiClient {
 
   async getImageWithSegmentation(
     imageId: string
-  ): Promise<ProjectImage & { segmentation?: SegmentationResult }> {
+  ): Promise<ProjectImageDTO & { segmentation?: SegmentationResult }> {
     const response = await this.instance.get(
       `/images/${imageId}?includeSegmentation=true`
     );

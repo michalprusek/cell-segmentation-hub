@@ -18,7 +18,7 @@ import { useAuth, useLanguage } from '@/contexts/exports';
 // Note: Profile functionality now handled by AuthContext and Settings page
 import AvatarUploadButton from '@/components/profile/AvatarUploadButton';
 import AvatarCropDialog from '@/components/profile/AvatarCropDialog';
-import { apiClient, Project, ProjectImage } from '@/lib/api';
+import { apiClient, Project, ProjectImageDTO } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { createImagePreviewUrl } from '@/lib/tiffConverter';
 
@@ -177,7 +177,7 @@ const Profile = () => {
         }
 
         // Get recent images for activity (from recent projects)
-        let recentImages: ProjectImage[] = [];
+        let recentImages: ProjectImageDTO[] = [];
         let recentImagesError = null;
         try {
           for (const project of recentProjects.slice(0, 3)) {
