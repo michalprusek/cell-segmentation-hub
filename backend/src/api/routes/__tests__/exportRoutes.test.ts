@@ -6,8 +6,8 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 
@@ -16,26 +16,26 @@ import { logger } from '../../../utils/logger';
 // so that when exportRoutes.ts imports ExportController → ExportService, the
 // getInstance() call returns our controllable mock instance.
 // ---------------------------------------------------------------------------
-const mockServiceInstance: Record<string, jest.Mock<any>> = {
-  startExportJob: jest.fn(),
-  getJobStatus: jest.fn(),
-  getExportFilePath: jest.fn(),
-  cancelJob: jest.fn(),
-  getExportHistory: jest.fn(),
-  setWebSocketService: jest.fn(),
+const mockServiceInstance: Record<string, Mock<any>> = {
+  startExportJob: vi.fn(),
+  getJobStatus: vi.fn(),
+  getExportFilePath: vi.fn(),
+  cancelJob: vi.fn(),
+  getExportHistory: vi.fn(),
+  setWebSocketService: vi.fn(),
 };
 
-jest.mock('../../../services/exportService', () => ({
+vi.mock('../../../services/exportService', () => ({
   ExportService: {
-    getInstance: jest.fn(() => mockServiceInstance),
+    getInstance: vi.fn(() => mockServiceInstance),
   },
 }));
 
 // Mock all other dependencies
-jest.mock('../../../middleware/auth');
-jest.mock('../../../utils/logger');
-jest.mock('fs/promises');
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../middleware/auth');
+vi.mock('../../../utils/logger');
+vi.mock('fs/promises');
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -59,10 +59,10 @@ jest.mock('../../../utils/config', () => ({
 // Import router AFTER mocks are in place
 import { exportRoutes } from '../exportRoutes';
 
-const mockedAuthenticate = authenticate as jest.MockedFunction<
+const mockedAuthenticate = authenticate as MockedFunction<
   typeof authenticate
 >;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
+const mockedLogger = logger as Mocked<typeof logger>;
 
 const mockUser = {
   id: 'test-user-id',
@@ -84,9 +84,9 @@ describe('Export Routes', () => {
     app = express();
     app.use(express.json());
 
-    mockedLogger.info = jest.fn() as jest.MockedFunction<typeof logger.info>;
-    mockedLogger.error = jest.fn() as jest.MockedFunction<typeof logger.error>;
-    mockedLogger.debug = jest.fn() as jest.MockedFunction<typeof logger.debug>;
+    mockedLogger.info = vi.fn() as MockedFunction<typeof logger.info>;
+    mockedLogger.error = vi.fn() as MockedFunction<typeof logger.error>;
+    mockedLogger.debug = vi.fn() as MockedFunction<typeof logger.debug>;
 
     // Default: auth passes with user injected
     mockedAuthenticate.mockImplementation(
@@ -104,7 +104,7 @@ describe('Export Routes', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('POST /api/projects/:projectId/export — start export', () => {

@@ -4,8 +4,7 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
 import request from 'supertest';
 import { Server as HTTPServer, createServer } from 'http';
 import Client from 'socket.io-client';
@@ -14,97 +13,97 @@ import express from 'express';
 // Mock Prisma client for project card testing
 type MockPrismaClient = {
   user: {
-    findUnique: ReturnType<typeof jest.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
   };
   project: {
-    findMany: ReturnType<typeof jest.fn>;
-    findUnique: ReturnType<typeof jest.fn>;
-    count: ReturnType<typeof jest.fn>;
-    groupBy: ReturnType<typeof jest.fn>;
-    create: ReturnType<typeof jest.fn>;
-    update: ReturnType<typeof jest.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
+    groupBy: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
   };
   image: {
-    create: ReturnType<typeof jest.fn>;
-    delete: ReturnType<typeof jest.fn>;
-    count: ReturnType<typeof jest.fn>;
-    aggregate: ReturnType<typeof jest.fn>;
-    groupBy: ReturnType<typeof jest.fn>;
-    update: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
+    create: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
+    aggregate: ReturnType<typeof vi.fn>;
+    groupBy: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
   };
   segmentation: {
-    create: ReturnType<typeof jest.fn>;
-    count: ReturnType<typeof jest.fn>;
+    create: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
   shares: {
-    findMany: ReturnType<typeof jest.fn>;
+    findMany: ReturnType<typeof vi.fn>;
   };
 };
 
 const prismaMock: MockPrismaClient = {
   user: {
-    findUnique: jest.fn(),
+    findUnique: vi.fn(),
   },
   project: {
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-    count: jest.fn(),
-    groupBy: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+    count: vi.fn(),
+    groupBy: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
   },
   image: {
-    create: jest.fn(),
-    delete: jest.fn(),
-    count: jest.fn(),
-    aggregate: jest.fn(),
-    groupBy: jest.fn(),
-    update: jest.fn(),
-    findMany: jest.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn(),
+    aggregate: vi.fn(),
+    groupBy: vi.fn(),
+    update: vi.fn(),
+    findMany: vi.fn(),
   },
   segmentation: {
-    create: jest.fn(),
-    count: jest.fn(),
+    create: vi.fn(),
+    count: vi.fn(),
   },
   shares: {
-    findMany: jest.fn(),
+    findMany: vi.fn(),
   },
 };
 
 // Mock authentication middleware
-const mockAuthMiddleware = jest.fn((req: any, res: any, next: any) => {
+const mockAuthMiddleware = vi.fn((req: any, res: any, next: any) => {
   req.user = { id: 'test-user-id', email: 'test@example.com' };
   next();
 });
 
 // Mock dependencies
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   prisma: prismaMock,
 }));
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
   },
 }));
-jest.mock('../../middleware/auth', () => ({
+vi.mock('../../middleware/auth', () => ({
   requireAuth: mockAuthMiddleware,
 }));
-jest.mock('jsonwebtoken', () => ({
-  verify: jest.fn(),
-  sign: jest.fn(),
+vi.mock('jsonwebtoken', () => ({
+  verify: vi.fn(),
+  sign: vi.fn(),
   default: {
-    verify: jest.fn(),
-    sign: jest.fn(),
+    verify: vi.fn(),
+    sign: vi.fn(),
   },
 }));
 
 // Mock sharing service
-jest.mock('../../services/sharingService', () => ({
-  hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: true } as never),
+vi.mock('../../services/sharingService', () => ({
+  hasProjectAccess: vi.fn().mockResolvedValue({ hasAccess: true } as never),
 }));
 
 // Import after mocking
@@ -426,7 +425,7 @@ describe('Project Card Real-time Updates', () => {
       };
 
       // Mock JWT verification
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -490,7 +489,7 @@ describe('Project Card Real-time Updates', () => {
 
     it('should update completion percentage when segmentation completes', done => {
       // Mock JWT
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -568,7 +567,7 @@ describe('Project Card Real-time Updates', () => {
 
     it('should update project card after image deletion', done => {
       // Mock JWT
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -627,7 +626,7 @@ describe('Project Card Real-time Updates', () => {
   describe('Project Card Thumbnail URL Generation', () => {
     it('should update thumbnail URL when new image is uploaded', done => {
       // Mock JWT
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -704,7 +703,7 @@ describe('Project Card Real-time Updates', () => {
   describe('Project Card Last Activity Tracking', () => {
     it('should update lastActivity timestamp on operations', done => {
       // Mock JWT
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -766,7 +765,7 @@ describe('Project Card Real-time Updates', () => {
       let sharedUserUpdateReceived = false;
 
       // Owner socket
-      (jwt.verify as jest.Mock).mockReturnValueOnce({
+      (jwt.verify as Mock).mockReturnValueOnce({
         userId: ownerId,
         email: 'owner@example.com',
       });
@@ -798,7 +797,7 @@ describe('Project Card Real-time Updates', () => {
       });
 
       // Shared user socket
-      (jwt.verify as jest.Mock).mockReturnValueOnce({
+      (jwt.verify as Mock).mockReturnValueOnce({
         userId: sharedUserId,
         email: 'shared@example.com',
       });
@@ -865,7 +864,7 @@ describe('Project Card Real-time Updates', () => {
   describe('Project Card Performance with Multiple Updates', () => {
     it('should handle rapid successive project updates efficiently', done => {
       // Mock JWT
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -929,7 +928,7 @@ describe('Project Card Real-time Updates', () => {
 
     it('should maintain data consistency across multiple concurrent updates', done => {
       // Mock JWT
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });

@@ -1,6 +1,6 @@
 // Mock utilities for testing uploads
 const vi = {
-  fn: (impl?: any) => jest.fn(impl),
+  fn: (impl?: any) => vi.fn(impl),
 };
 
 /**

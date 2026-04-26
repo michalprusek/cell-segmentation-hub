@@ -1,4 +1,4 @@
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, vi } from 'vitest';
 import { mapWithConcurrency } from '../concurrency';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -7,7 +7,7 @@ describe('mapWithConcurrency', () => {
   it('processes all items in correct count and reports progress', async () => {
     const items = Array.from({ length: 20 }, (_, i) => i);
     const processed: number[] = [];
-    const onProgress = jest.fn();
+    const onProgress = vi.fn();
 
     await mapWithConcurrency(
       items,
@@ -73,7 +73,7 @@ describe('mapWithConcurrency', () => {
   });
 
   it('handles empty input as no-op', async () => {
-    const onProgress = jest.fn();
+    const onProgress = vi.fn();
     await expect(
       mapWithConcurrency([], 4, async () => {}, { onProgress })
     ).resolves.toBeUndefined();

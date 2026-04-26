@@ -5,15 +5,15 @@ import {
   it,
   expect,
   beforeEach,
-  jest,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import sharingRoutes from '../sharingRoutes';
 import { authenticate, optionalAuthenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 
 // Mock config and jwt early to prevent process.exit during module loading
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -32,17 +32,17 @@ jest.mock('../../../utils/config', () => ({
   isTest: true,
   getOrigins: () => ['http://localhost:3000'],
 }));
-jest.mock('../../../auth/jwt');
+vi.mock('../../../auth/jwt');
 
 // Mock dependencies before imports
-jest.mock('../../../middleware/auth');
-jest.mock('../../../middleware/validation', () => ({
+vi.mock('../../../middleware/auth');
+vi.mock('../../../middleware/validation', () => ({
   validateBody: () => (_req: any, _res: any, next: any) => next(),
   validateParams: () => (_req: any, _res: any, next: any) => next(),
 }));
-jest.mock('../../../utils/logger');
-jest.mock('../../../services/sharingService');
-jest.mock('../../../utils/response', () => ({
+vi.mock('../../../utils/logger');
+vi.mock('../../../services/sharingService');
+vi.mock('../../../utils/response', () => ({
   ResponseHelper: {
     success: (res: any, data: any, message: any, statusCode: any) =>
       res.status(statusCode ?? 200).json({ success: true, data, message }),
@@ -68,14 +68,14 @@ jest.mock('../../../utils/response', () => ({
 
 import * as SharingService from '../../../services/sharingService';
 
-const mockedAuthenticate = authenticate as jest.MockedFunction<
+const mockedAuthenticate = authenticate as MockedFunction<
   typeof authenticate
 >;
-const mockedOptionalAuthenticate = optionalAuthenticate as jest.MockedFunction<
+const mockedOptionalAuthenticate = optionalAuthenticate as MockedFunction<
   typeof optionalAuthenticate
 >;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
-const mockedSharingService = SharingService as jest.Mocked<
+const mockedLogger = logger as Mocked<typeof logger>;
+const mockedSharingService = SharingService as Mocked<
   typeof SharingService
 >;
 
@@ -104,12 +104,12 @@ describe('Sharing Routes', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    mockedLogger.info = jest.fn() as any;
-    mockedLogger.error = jest.fn() as any;
-    mockedLogger.warn = jest.fn() as any;
-    mockedLogger.debug = jest.fn() as any;
+    mockedLogger.info = vi.fn() as any;
+    mockedLogger.error = vi.fn() as any;
+    mockedLogger.warn = vi.fn() as any;
+    mockedLogger.debug = vi.fn() as any;
 
     mockedAuthenticate.mockImplementation(
       ((req: any, _res: any, next: any) => {
@@ -129,7 +129,7 @@ describe('Sharing Routes', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // -------------------------------------------------------------------------

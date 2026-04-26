@@ -6,19 +6,18 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
 import { ExportController } from '../exportController';
 import { ExportService } from '../../../services/exportService';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 
 // Mock dependencies before imports are resolved
-jest.mock('../../../services/exportService');
-jest.mock('../../../middleware/auth');
-jest.mock('../../../utils/logger');
-jest.mock('fs/promises');
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../services/exportService');
+vi.mock('../../../middleware/auth');
+vi.mock('../../../utils/logger');
+vi.mock('fs/promises');
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -39,13 +38,13 @@ jest.mock('../../../utils/config', () => ({
   },
 }));
 
-const MockedExportService = ExportService as jest.MockedClass<typeof ExportService>;
-const mockAuthMiddleware = authenticate as jest.MockedFunction<typeof authenticate>;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
+const MockedExportService = ExportService as MockedClass<typeof ExportService>;
+const mockAuthMiddleware = authenticate as MockedFunction<typeof authenticate>;
+const mockedLogger = logger as Mocked<typeof logger>;
 
-type AnyMock = jest.Mock<any>;
+type AnyMock = Mock<any>;
 
-// Typed mock service helpers — avoids `never` inference from jest.Mocked<ExportService>
+// Typed mock service helpers — avoids `never` inference from Mocked<ExportService>
 type MockServiceMethods = {
   startExportJob: AnyMock;
   getJobStatus: AnyMock;
@@ -69,25 +68,25 @@ describe('ExportController', () => {
   const jobId = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Create plain mock object for service methods
     mockService = {
-      startExportJob: jest.fn() as AnyMock,
-      getJobStatus: jest.fn() as AnyMock,
-      getExportFilePath: jest.fn() as AnyMock,
-      cancelJob: jest.fn() as AnyMock,
-      getExportHistory: jest.fn() as AnyMock,
-      setWebSocketService: jest.fn() as AnyMock,
+      startExportJob: vi.fn() as AnyMock,
+      getJobStatus: vi.fn() as AnyMock,
+      getExportFilePath: vi.fn() as AnyMock,
+      cancelJob: vi.fn() as AnyMock,
+      getExportHistory: vi.fn() as AnyMock,
+      setWebSocketService: vi.fn() as AnyMock,
     };
 
     // Make getInstance return our mock service
-    (MockedExportService.getInstance as jest.Mock<any>) = jest.fn().mockReturnValue(mockService);
+    (MockedExportService.getInstance as Mock<any>) = vi.fn().mockReturnValue(mockService);
 
     // Mock logger methods
-    mockedLogger.info = jest.fn() as jest.MockedFunction<typeof logger.info>;
-    mockedLogger.error = jest.fn() as jest.MockedFunction<typeof logger.error>;
-    mockedLogger.debug = jest.fn() as jest.MockedFunction<typeof logger.debug>;
+    mockedLogger.info = vi.fn() as MockedFunction<typeof logger.info>;
+    mockedLogger.error = vi.fn() as MockedFunction<typeof logger.error>;
+    mockedLogger.debug = vi.fn() as MockedFunction<typeof logger.debug>;
 
     app = express();
     app.use(express.json());
@@ -135,8 +134,8 @@ describe('ExportController', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
-    jest.resetAllMocks();
+    vi.restoreAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('startExport', () => {

@@ -4,18 +4,18 @@ import { PrismaClient } from '@prisma/client';
 import { Server as SocketIOServer } from 'socket.io';
 
 // Mock dependencies
-jest.mock('http');
-jest.mock('socket.io');
-jest.mock('@prisma/client');
+vi.mock('http');
+vi.mock('socket.io');
+vi.mock('@prisma/client');
 
 describe('WebSocketService - Parallel Processing', () => {
   let webSocketService: WebSocketService;
-  let mockHttpServer: jest.Mocked<HTTPServer>;
-  let mockPrisma: jest.Mocked<PrismaClient>;
-  let mockSocketIOServer: jest.Mocked<SocketIOServer>;
+  let mockHttpServer: Mocked<HTTPServer>;
+  let mockPrisma: Mocked<PrismaClient>;
+  let mockSocketIOServer: Mocked<SocketIOServer>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Reset singleton so each test gets a fresh instance with new mocks
     (WebSocketService as any).instance = null;
@@ -25,14 +25,14 @@ describe('WebSocketService - Parallel Processing', () => {
     mockPrisma = {} as any;
 
     mockSocketIOServer = {
-      on: jest.fn(),
-      to: jest.fn().mockReturnThis(),
-      emit: jest.fn(),
-      use: jest.fn(),
+      on: vi.fn(),
+      to: vi.fn().mockReturnThis(),
+      emit: vi.fn(),
+      use: vi.fn(),
     } as any;
 
     // Mock Socket.IO constructor
-    (SocketIOServer as unknown as jest.Mock).mockReturnValue(mockSocketIOServer);
+    (SocketIOServer as unknown as Mock).mockReturnValue(mockSocketIOServer);
 
     // Create WebSocketService instance
     webSocketService = WebSocketService.getInstance(mockHttpServer, mockPrisma);
@@ -104,7 +104,7 @@ describe('WebSocketService - Parallel Processing', () => {
       const projectId = 'proj1';
 
       // Mock the emit method for concurrent user count
-      const emitSpy = jest.spyOn(webSocketService, 'emitConcurrentUserCount');
+      const emitSpy = vi.spyOn(webSocketService, 'emitConcurrentUserCount');
 
       webSocketService.trackParallelProcessingUser(userId, projectId);
 
@@ -126,7 +126,7 @@ describe('WebSocketService - Parallel Processing', () => {
       const projectId = 'proj1';
 
       // Mock the emit method
-      const emitSpy = jest.spyOn(webSocketService, 'emitConcurrentUserCount');
+      const emitSpy = vi.spyOn(webSocketService, 'emitConcurrentUserCount');
 
       // Add users
       webSocketService.trackParallelProcessingUser(userId1, projectId);

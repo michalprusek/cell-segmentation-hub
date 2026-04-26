@@ -1,58 +1,58 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 
 // Mock Prisma client
 type MockPrismaClient = {
   user: {
-    findUnique: ReturnType<typeof jest.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
   };
   project: {
-    count: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
-    findUnique: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
   };
   image: {
-    count: ReturnType<typeof jest.fn>;
-    aggregate: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
-    groupBy: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
+    aggregate: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    groupBy: ReturnType<typeof vi.fn>;
   };
   segmentation: {
-    count: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
   };
 };
 
 const _prismaMock: MockPrismaClient = {
   user: {
-    findUnique: jest.fn(),
+    findUnique: vi.fn(),
   },
   project: {
-    count: jest.fn(),
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
+    count: vi.fn(),
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
   },
   image: {
-    count: jest.fn(),
-    aggregate: jest.fn(),
-    findMany: jest.fn(),
-    groupBy: jest.fn(),
+    count: vi.fn(),
+    aggregate: vi.fn(),
+    findMany: vi.fn(),
+    groupBy: vi.fn(),
   },
   segmentation: {
-    count: jest.fn(),
-    findMany: jest.fn(),
+    count: vi.fn(),
+    findMany: vi.fn(),
   },
 };
 
 // Mock authentication middleware
-const mockAuthMiddleware = jest.fn((req: any, res: any, next: any) => {
+const mockAuthMiddleware = vi.fn((req: any, res: any, next: any) => {
   req.user = { id: 'test-user-id', email: 'test@example.com' };
   next();
 });
 
 // Mock dependencies
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -69,13 +69,13 @@ jest.mock('../../../utils/config', () => ({
     MAX_FILE_SIZE: 10485760,
   },
 }));
-jest.mock('../../../db');
-jest.mock('../../../services/userService');
-jest.mock('../../../services/projectService');
-jest.mock('../../../services/sharingService');
-jest.mock('../../../services/emailService');
-jest.mock('../../../utils/logger');
-jest.mock('../../../middleware/auth');
+vi.mock('../../../db');
+vi.mock('../../../services/userService');
+vi.mock('../../../services/projectService');
+vi.mock('../../../services/sharingService');
+vi.mock('../../../services/emailService');
+vi.mock('../../../utils/logger');
+vi.mock('../../../middleware/auth');
 
 // Import after mocking
 import { getUserStats, getUserProfile } from '../../../services/userService';
@@ -181,7 +181,7 @@ describe('Dashboard Metrics API Endpoints', () => {
   const testProjectId = 'test-project-id';
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Restore mockAuthMiddleware implementation after clearAllMocks
     mockAuthMiddleware.mockImplementation((req: any, _res: any, next: any) => {
       req.user = { id: testUserId, email: 'test@example.com' };
@@ -203,7 +203,7 @@ describe('Dashboard Metrics API Endpoints', () => {
       };
 
       // Set up service mock
-      jest.mocked(getUserStats).mockResolvedValueOnce(mockStats);
+      vi.mocked(getUserStats).mockResolvedValueOnce(mockStats);
 
       const response = await request(app)
         .get('/api/dashboard/metrics')
@@ -242,7 +242,7 @@ describe('Dashboard Metrics API Endpoints', () => {
         imagesUploadedToday: 0,
         processedImages: 0,
       };
-      jest.mocked(getUserStats).mockResolvedValueOnce(emptyStats);
+      vi.mocked(getUserStats).mockResolvedValueOnce(emptyStats);
 
       const response = await request(app)
         .get('/api/dashboard/metrics')
@@ -262,7 +262,7 @@ describe('Dashboard Metrics API Endpoints', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      jest.mocked(getUserStats).mockRejectedValueOnce(
+      vi.mocked(getUserStats).mockRejectedValueOnce(
         new Error('Database connection failed')
       );
 
@@ -324,7 +324,7 @@ describe('Dashboard Metrics API Endpoints', () => {
         stats: mockStats,
       };
 
-      jest.mocked(getUserProfile).mockResolvedValueOnce(mockProfile);
+      vi.mocked(getUserProfile).mockResolvedValueOnce(mockProfile);
 
       const response = await request(app)
         .get('/api/dashboard/profile')
@@ -350,7 +350,7 @@ describe('Dashboard Metrics API Endpoints', () => {
     });
 
     it('should handle non-existent user', async () => {
-      jest.mocked(getUserProfile).mockResolvedValueOnce(null);
+      vi.mocked(getUserProfile).mockResolvedValueOnce(null);
 
       const response = await request(app)
         .get('/api/dashboard/profile')
@@ -394,7 +394,7 @@ describe('Dashboard Metrics API Endpoints', () => {
         },
       };
 
-      jest.mocked(getProjectStats).mockResolvedValueOnce(mockProjectStats as any);
+      vi.mocked(getProjectStats).mockResolvedValueOnce(mockProjectStats as any);
 
       const response = await request(app)
         .get(`/api/projects/${testProjectId}/stats`)
@@ -436,7 +436,7 @@ describe('Dashboard Metrics API Endpoints', () => {
     });
 
     it('should handle project not found or access denied', async () => {
-      jest.mocked(getProjectStats).mockResolvedValueOnce(null);
+      vi.mocked(getProjectStats).mockResolvedValueOnce(null);
 
       const response = await request(app)
         .get('/api/projects/non-existent-project/stats')
@@ -459,7 +459,7 @@ describe('Dashboard Metrics API Endpoints', () => {
         imagesUploadedToday: 20,
         processedImages: 400,
       };
-      jest.mocked(getUserStats).mockResolvedValue(concurrentStats);
+      vi.mocked(getUserStats).mockResolvedValue(concurrentStats);
 
       // Make multiple concurrent requests
       const promises = Array(10)
@@ -492,7 +492,7 @@ describe('Dashboard Metrics API Endpoints', () => {
       };
 
       // Set up consistent mock responses
-      jest.mocked(getUserStats).mockResolvedValue(consistentStats);
+      vi.mocked(getUserStats).mockResolvedValue(consistentStats);
 
       // Make multiple requests and verify consistency
       const response1 = await request(app).get('/api/dashboard/metrics');

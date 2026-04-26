@@ -5,15 +5,15 @@ import {
   it,
   expect,
   beforeEach,
-  jest,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import authRoutes from '../authRoutes';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 
 // Mock config and jwt early to prevent process.exit during module loading
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -42,52 +42,52 @@ jest.mock('../../../utils/config', () => ({
   isTest: true,
   getOrigins: () => ['http://localhost:3000'],
 }));
-jest.mock('../../../auth/jwt');
+vi.mock('../../../auth/jwt');
 // Prevent nodemailer from opening SMTP connections during module loading
-jest.mock('nodemailer', () => ({
-  createTransport: jest.fn(() => ({
-    sendMail: jest.fn(),
-    verify: jest.fn(),
-    close: jest.fn(),
+vi.mock('nodemailer', () => ({
+  createTransport: vi.fn(() => ({
+    sendMail: vi.fn(),
+    verify: vi.fn(),
+    close: vi.fn(),
   })),
 }));
 
 // Mock all dependencies before router import resolution
-jest.mock('../../../middleware/auth');
-jest.mock('../../../middleware/rateLimiter', () => ({
+vi.mock('../../../middleware/auth');
+vi.mock('../../../middleware/rateLimiter', () => ({
   authLimiter: (_req: any, _res: any, next: any) => next(),
   passwordResetLimiter: (_req: any, _res: any, next: any) => next(),
   apiLimiter: (_req: any, _res: any, next: any) => next(),
 }));
-jest.mock('../../../middleware/validation', () => ({
+vi.mock('../../../middleware/validation', () => ({
   validateBody: () => (_req: any, _res: any, next: any) => next(),
   validateParams: () => (_req: any, _res: any, next: any) => next(),
 }));
-jest.mock('../../../middleware/upload', () => ({
+vi.mock('../../../middleware/upload', () => ({
   uploadSingleImage: (_req: any, _res: any, next: any) => next(),
   handleUploadError: (_req: any, _res: any, next: any) => next(),
 }));
-jest.mock('../../../utils/logger');
+vi.mock('../../../utils/logger');
 // Use factory mocks for services with heavy module-level side effects (nodemailer, etc.)
-jest.mock('../../../services/authService', () => ({
-  login: jest.fn(),
-  register: jest.fn(),
-  logout: jest.fn(),
-  refreshToken: jest.fn(),
-  requestPasswordReset: jest.fn(),
-  resetPasswordWithToken: jest.fn(),
-  verifyEmail: jest.fn(),
-  resendVerificationEmail: jest.fn(),
+vi.mock('../../../services/authService', () => ({
+  login: vi.fn(),
+  register: vi.fn(),
+  logout: vi.fn(),
+  refreshToken: vi.fn(),
+  requestPasswordReset: vi.fn(),
+  resetPasswordWithToken: vi.fn(),
+  verifyEmail: vi.fn(),
+  resendVerificationEmail: vi.fn(),
 }));
-jest.mock('../../../services/userService', () => ({
-  getUserProfile: jest.fn(),
-  updateUserProfile: jest.fn(),
-  calculateUserStorage: jest.fn(),
-  getUserActivity: jest.fn(),
-  changePassword: jest.fn(),
+vi.mock('../../../services/userService', () => ({
+  getUserProfile: vi.fn(),
+  updateUserProfile: vi.fn(),
+  calculateUserStorage: vi.fn(),
+  getUserActivity: vi.fn(),
+  changePassword: vi.fn(),
 }));
-jest.mock('../../../db');
-jest.mock('../../../utils/response', () => ({
+vi.mock('../../../db');
+vi.mock('../../../utils/response', () => ({
   ResponseHelper: {
     success: (res: any, data: any, message: any, statusCode: any) =>
       res.status(statusCode ?? 200).json({ success: true, data, message }),
@@ -109,9 +109,9 @@ jest.mock('../../../utils/response', () => ({
   },
 }));
 
-// Mock auth controller functions — use plain functions in the factory (jest.fn() in
-// factory scope can be unreliable in Jest ESM mode); reassign to jest.fn below.
-jest.mock('../../../api/controllers/authController', () => ({
+// Mock auth controller functions — use plain functions in the factory (vi.fn() in
+// factory scope can be unreliable in Jest ESM mode); reassign to vi.fn below.
+vi.mock('../../../api/controllers/authController', () => ({
   register: (_req: any, res: any) =>
     res.status(201).json({
       success: true,
@@ -164,15 +164,15 @@ jest.mock('../../../api/controllers/authController', () => ({
 
 import * as authController from '../../../api/controllers/authController';
 
-const mockedAuthenticate = authenticate as jest.MockedFunction<
+const mockedAuthenticate = authenticate as MockedFunction<
   typeof authenticate
 >;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
+const mockedLogger = logger as Mocked<typeof logger>;
 
-// Controller spy references — in ESM mode, jest.spyOn wraps the live binding
+// Controller spy references — in ESM mode, vi.spyOn wraps the live binding
 // so toHaveBeenCalled() assertions reflect actual invocations.
 // (Factory plain functions are wrappable as long as the mock module object allows mutations)
-const mockedController = authController as jest.Mocked<typeof authController>;
+const mockedController = authController as Mocked<typeof authController>;
 
 const mockUser = {
   id: 'user-id-123',
@@ -186,11 +186,11 @@ describe('Auth Routes', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    mockedLogger.info = jest.fn() as any;
-    mockedLogger.error = jest.fn() as any;
-    mockedLogger.warn = jest.fn() as any;
+    mockedLogger.info = vi.fn() as any;
+    mockedLogger.error = vi.fn() as any;
+    mockedLogger.warn = vi.fn() as any;
 
     mockedAuthenticate.mockImplementation(
       ((req: any, _res: any, next: any) => {
@@ -203,7 +203,7 @@ describe('Auth Routes', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // -------------------------------------------------------------------------

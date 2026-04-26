@@ -6,21 +6,21 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { segmentationController } from '../segmentationController';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 import { ResponseHelper } from '../../../utils/response';
 
 // Mock all dependencies — must be before any imports that use them
-jest.mock('../../../services/segmentationService');
-jest.mock('../../../services/imageService');
-jest.mock('../../../middleware/auth');
-jest.mock('../../../utils/logger');
-jest.mock('../../../utils/response');
-jest.mock('../../../db');
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../services/segmentationService');
+vi.mock('../../../services/imageService');
+vi.mock('../../../middleware/auth');
+vi.mock('../../../utils/logger');
+vi.mock('../../../utils/response');
+vi.mock('../../../db');
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -47,9 +47,9 @@ jest.mock('../../../utils/config', () => ({
   },
 }));
 
-const mockAuthMiddleware = authenticate as jest.MockedFunction<typeof authenticate>;
-const MockedResponseHelper = ResponseHelper as jest.Mocked<typeof ResponseHelper>;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
+const mockAuthMiddleware = authenticate as MockedFunction<typeof authenticate>;
+const MockedResponseHelper = ResponseHelper as Mocked<typeof ResponseHelper>;
+const mockedLogger = logger as Mocked<typeof logger>;
 
 describe('SegmentationController', () => {
   let app: express.Application;
@@ -80,32 +80,32 @@ describe('SegmentationController', () => {
 
   // Install ResponseHelper mocks
   function installResponseMocks() {
-    (MockedResponseHelper.success as jest.Mock).mockImplementation(
+    (MockedResponseHelper.success as Mock).mockImplementation(
       (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
-    (MockedResponseHelper.notFound as jest.Mock).mockImplementation(
+    (MockedResponseHelper.notFound as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(404).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.unauthorized as jest.Mock).mockImplementation(
+    (MockedResponseHelper.unauthorized as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(401).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.badRequest as jest.Mock).mockImplementation(
+    (MockedResponseHelper.badRequest as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(400).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.validationError as jest.Mock).mockImplementation(
+    (MockedResponseHelper.validationError as Mock).mockImplementation(
       (res: express.Response, message: string | Record<string, string[]>) => {
         return res.status(400).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.internalError as jest.Mock).mockImplementation(
+    (MockedResponseHelper.internalError as Mock).mockImplementation(
       (res: express.Response, _err: unknown, message: string) => {
         return res.status(500).json({ success: false, error: message });
       }
@@ -113,7 +113,7 @@ describe('SegmentationController', () => {
   }
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     installResponseMocks();
 
     app = express();
@@ -131,9 +131,9 @@ describe('SegmentationController', () => {
       }
     );
 
-    mockedLogger.debug = jest.fn() as jest.MockedFunction<typeof logger.debug>;
-    mockedLogger.error = jest.fn() as jest.MockedFunction<typeof logger.error>;
-    mockedLogger.info = jest.fn() as jest.MockedFunction<typeof logger.info>;
+    mockedLogger.debug = vi.fn() as MockedFunction<typeof logger.debug>;
+    mockedLogger.error = vi.fn() as MockedFunction<typeof logger.error>;
+    mockedLogger.info = vi.fn() as MockedFunction<typeof logger.info>;
 
     // Setup routes
     app.get(
@@ -164,14 +164,14 @@ describe('SegmentationController', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
-    jest.resetAllMocks();
+    vi.restoreAllMocks();
+    vi.resetAllMocks();
   });
 
   // Helper to set a fresh mock on the private segmentationService inside the
   // singleton segmentationController. Uses a type bypass to access the private field.
-  function mockMethod(method: string): jest.Mock<any> {
-    const fn: jest.Mock<any> = jest.fn();
+  function mockMethod(method: string): Mock<any> {
+    const fn: Mock<any> = vi.fn();
     // Access the private service via index signature bypass
     const ctrl = segmentationController as Record<string, any>;
     if (ctrl.segmentationService) {

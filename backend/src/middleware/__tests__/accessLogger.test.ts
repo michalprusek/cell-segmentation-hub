@@ -2,25 +2,24 @@ import {
   describe,
   it,
   expect,
-  jest,
   beforeEach,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 import * as fs from 'fs';
 import { accessLogger, testExports } from '../accessLogger';
 import { AuthRequest } from '../../types/auth';
 
 // Mock fs module
-jest.mock('fs');
+vi.mock('fs');
 
 // Mock logger
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -31,13 +30,13 @@ describe('Access Logger Middleware', () => {
   let finishCallback: any;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     finishCallback = null;
 
     // Mock fs operations
-    jest.mocked(fs.existsSync).mockReturnValue(true);
-    jest.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    jest.mocked(fs.appendFileSync).mockReturnValue(undefined);
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+    vi.mocked(fs.appendFileSync).mockReturnValue(undefined);
 
     // Setup mock request
     mockReq = {
@@ -48,7 +47,7 @@ describe('Access Logger Middleware', () => {
       headers: {
         'user-agent': 'test-agent',
       },
-      get: jest.fn((header: string) => {
+      get: vi.fn((header: string) => {
         if (header === 'User-Agent') return 'test-agent';
         return undefined;
       }) as unknown as Request['get'],
@@ -58,7 +57,7 @@ describe('Access Logger Middleware', () => {
     // Setup mock response with finish event emitter
     mockRes = {
       statusCode: 200,
-      on: jest.fn((event: string, callback: () => void) => {
+      on: vi.fn((event: string, callback: () => void) => {
         if (event === 'finish') {
           finishCallback = callback;
         }
@@ -66,11 +65,11 @@ describe('Access Logger Middleware', () => {
       }),
     };
 
-    mockNext = jest.fn();
+    mockNext = vi.fn();
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Basic Logging', () => {
@@ -122,7 +121,7 @@ describe('Access Logger Middleware', () => {
         finishCallback();
       }
 
-      const logCall = jest.mocked(fs.appendFileSync).mock.calls[0];
+      const logCall = vi.mocked(fs.appendFileSync).mock.calls[0];
       const logEntry = logCall[1] as string;
 
       expect(logEntry).toContain('POST');
@@ -132,7 +131,7 @@ describe('Access Logger Middleware', () => {
     });
 
     it('should handle missing user agent gracefully', () => {
-      mockReq.get = jest.fn(() => undefined) as unknown as Request['get'];
+      mockReq.get = vi.fn(() => undefined) as unknown as Request['get'];
 
       accessLogger(mockReq as AuthRequest, mockRes as Response, mockNext);
 
@@ -260,11 +259,11 @@ describe('Access Logger Middleware', () => {
       expect(fs.appendFileSync).toHaveBeenCalledTimes(1);
 
       // Reset mocks but keep deduplicator state
-      jest.mocked(fs.appendFileSync).mockClear();
+      vi.mocked(fs.appendFileSync).mockClear();
 
       // Second identical request immediately
       finishCallback = null;
-      mockRes.on = jest.fn((event: string, callback: () => void) => {
+      mockRes.on = vi.fn((event: string, callback: () => void) => {
         if (event === 'finish') {
           finishCallback = callback;
         }
@@ -297,9 +296,9 @@ describe('Access Logger Middleware', () => {
       );
 
       // Reset mocks
-      jest.mocked(fs.appendFileSync).mockClear();
+      vi.mocked(fs.appendFileSync).mockClear();
       finishCallback = null;
-      mockRes.on = jest.fn((event: string, callback: () => void) => {
+      mockRes.on = vi.fn((event: string, callback: () => void) => {
         if (event === 'finish') {
           finishCallback = callback;
         }
@@ -327,9 +326,9 @@ describe('Access Logger Middleware', () => {
       expect(fs.appendFileSync).toHaveBeenCalledTimes(1);
 
       // Reset mocks
-      jest.mocked(fs.appendFileSync).mockClear();
+      vi.mocked(fs.appendFileSync).mockClear();
       finishCallback = null;
-      mockRes.on = jest.fn((event: string, callback: () => void) => {
+      mockRes.on = vi.fn((event: string, callback: () => void) => {
         if (event === 'finish') {
           finishCallback = callback;
         }
@@ -358,9 +357,9 @@ describe('Access Logger Middleware', () => {
       expect(fs.appendFileSync).toHaveBeenCalledTimes(1);
 
       // Reset mocks
-      jest.mocked(fs.appendFileSync).mockClear();
+      vi.mocked(fs.appendFileSync).mockClear();
       finishCallback = null;
-      mockRes.on = jest.fn((event: string, callback: () => void) => {
+      mockRes.on = vi.fn((event: string, callback: () => void) => {
         if (event === 'finish') {
           finishCallback = callback;
         }
@@ -450,7 +449,7 @@ describe('Access Logger Middleware', () => {
 
   describe('Error Handling', () => {
     it('should handle fs.appendFileSync errors gracefully', () => {
-      jest.mocked(fs.appendFileSync).mockImplementation(() => {
+      vi.mocked(fs.appendFileSync).mockImplementation(() => {
         throw new Error('Disk full');
       });
 
@@ -465,7 +464,7 @@ describe('Access Logger Middleware', () => {
     });
 
     it('should create log directory if missing', () => {
-      jest.mocked(fs.existsSync).mockReturnValue(false);
+      vi.mocked(fs.existsSync).mockReturnValue(false);
 
       accessLogger(mockReq as AuthRequest, mockRes as Response, mockNext);
 
@@ -567,7 +566,7 @@ describe('Access Logger Middleware', () => {
 
         // Reset for next iteration
         finishCallback = null;
-        mockRes.on = jest.fn((event: string, callback: () => void) => {
+        mockRes.on = vi.fn((event: string, callback: () => void) => {
           if (event === 'finish') {
             finishCallback = callback;
           }
@@ -602,7 +601,7 @@ describe('Access Logger Middleware', () => {
 
         // Reset for next iteration
         finishCallback = null;
-        mockRes.on = jest.fn((event: string, callback: () => void) => {
+        mockRes.on = vi.fn((event: string, callback: () => void) => {
           if (event === 'finish') {
             finishCallback = callback;
           }

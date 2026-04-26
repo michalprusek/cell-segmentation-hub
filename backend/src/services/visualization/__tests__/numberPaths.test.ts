@@ -2,12 +2,12 @@ import { NUMBER_PATHS } from '../numberPaths';
 import { createCanvas } from 'canvas';
 
 // Mock logger
-jest.mock('../../../utils/logger', () => ({
+vi.mock('../../../utils/logger', () => ({
   logger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
@@ -15,7 +15,7 @@ describe('NumberPaths Caching System', () => {
   beforeEach(() => {
     // Clear cache before each test
     NUMBER_PATHS.clearCache();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Cache Functionality', () => {
@@ -108,10 +108,10 @@ describe('NumberPaths Caching System', () => {
       const ctx = canvas.getContext('2d');
 
       // Spy on canvas methods
-      const beginPathSpy = jest.spyOn(ctx, 'beginPath');
-      const moveToSpy = jest.spyOn(ctx, 'moveTo');
-      const lineToSpy = jest.spyOn(ctx, 'lineTo');
-      const strokeSpy = jest.spyOn(ctx, 'stroke');
+      const beginPathSpy = vi.spyOn(ctx, 'beginPath');
+      const moveToSpy = vi.spyOn(ctx, 'moveTo');
+      const lineToSpy = vi.spyOn(ctx, 'lineTo');
+      const strokeSpy = vi.spyOn(ctx, 'stroke');
 
       // Draw digit 1 (simple vertical line)
       NUMBER_PATHS.drawDigit(ctx, 1, 100, 100, 32);
@@ -174,8 +174,8 @@ describe('NumberPaths Caching System', () => {
       const canvas = createCanvas(200, 200);
       const ctx = canvas.getContext('2d');
 
-      const fillSpy = jest.spyOn(ctx, 'fill');
-      const arcSpy = jest.spyOn(ctx, 'arc');
+      const fillSpy = vi.spyOn(ctx, 'fill');
+      const arcSpy = vi.spyOn(ctx, 'arc');
 
       // Draw a large number
       NUMBER_PATHS.drawLargeNumber(ctx, 5000, 100, 100, 32);
@@ -210,7 +210,7 @@ describe('NumberPaths Caching System', () => {
       const canvas = createCanvas(200, 200);
       const ctx = canvas.getContext('2d');
 
-      const fillTextSpy = jest.spyOn(ctx, 'fillText');
+      const fillTextSpy = vi.spyOn(ctx, 'fillText');
 
       // Test with large size to enable text display
       NUMBER_PATHS.drawLargeNumber(ctx, 1500000, 100, 100, 40);

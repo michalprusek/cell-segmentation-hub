@@ -1,25 +1,25 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // All mocks before imports
-const mockPrismaQueryRaw = jest.fn() as any;
-const mockPrismaDisconnect = jest.fn() as any;
+const mockPrismaQueryRaw = vi.fn() as any;
+const mockPrismaDisconnect = vi.fn() as any;
 
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn(() => ({
+vi.mock('@prisma/client', () => ({
+  PrismaClient: vi.fn(() => ({
     $queryRaw: mockPrismaQueryRaw,
     $disconnect: mockPrismaDisconnect,
-    $metrics: { json: jest.fn(async () => null) },
+    $metrics: { json: vi.fn(async () => null) },
   })),
 }));
 
-const mockRedisPing = jest.fn() as any;
-const mockRedisInfo = jest.fn() as any;
-const mockRedisSetex = jest.fn() as any;
-const mockRedisQuit = jest.fn() as any;
-const mockRedisOn = jest.fn() as any;
+const mockRedisPing = vi.fn() as any;
+const mockRedisInfo = vi.fn() as any;
+const mockRedisSetex = vi.fn() as any;
+const mockRedisQuit = vi.fn() as any;
+const mockRedisOn = vi.fn() as any;
 
-jest.mock('ioredis', () =>
-  jest.fn(() => ({
+vi.mock('ioredis', () =>
+  vi.fn(() => ({
     ping: mockRedisPing,
     info: mockRedisInfo,
     setex: mockRedisSetex,
@@ -29,31 +29,31 @@ jest.mock('ioredis', () =>
   }))
 );
 
-const mockAxiosGet = jest.fn() as any;
-jest.mock('axios', () => ({
+const mockAxiosGet = vi.fn() as any;
+vi.mock('axios', () => ({
   default: { get: mockAxiosGet },
   get: mockAxiosGet,
 }));
 
-jest.mock('v8', () => ({
-  getHeapStatistics: jest.fn(() => ({
+vi.mock('v8', () => ({
+  getHeapStatistics: vi.fn(() => ({
     heap_size_limit: 2 * 1024 * 1024 * 1024,
   })),
 }));
 
-jest.mock('fs/promises', () => ({
-  access: jest.fn() as any,
-  stat: jest.fn() as any,
+vi.mock('fs/promises', () => ({
+  access: vi.fn() as any,
+  stat: vi.fn() as any,
   constants: { W_OK: 2, R_OK: 4 },
 }));
 
-jest.mock('../../utils/logger', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), debug: jest.fn(), warn: jest.fn() },
+vi.mock('../../utils/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
 
 // Mock emailService dynamic import
-jest.mock('../emailService', () => ({
-  testConnection: jest.fn(async () => true),
+vi.mock('../emailService', () => ({
+  testConnection: vi.fn(async () => true),
   _config: { service: 'smtp' },
 }));
 
@@ -62,10 +62,10 @@ import * as fs from 'fs/promises';
 import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 
-const mockFsAccess = fs.access as ReturnType<typeof jest.fn>;
-const mockFsStat = fs.stat as ReturnType<typeof jest.fn>;
-const MockPrismaClient = PrismaClient as unknown as ReturnType<typeof jest.fn>;
-const MockRedis = Redis as unknown as ReturnType<typeof jest.fn>;
+const mockFsAccess = fs.access as ReturnType<typeof vi.fn>;
+const mockFsStat = fs.stat as ReturnType<typeof vi.fn>;
+const MockPrismaClient = PrismaClient as unknown as ReturnType<typeof vi.fn>;
+const MockRedis = Redis as unknown as ReturnType<typeof vi.fn>;
 
 /**
  * Set up all happy-path mocks. Individual tests may override specific ones.
@@ -76,7 +76,7 @@ function setupHappyPathMocks() {
   MockPrismaClient.mockImplementation(() => ({
     $queryRaw: mockPrismaQueryRaw,
     $disconnect: mockPrismaDisconnect,
-    $metrics: { json: jest.fn(async () => null) },
+    $metrics: { json: vi.fn(async () => null) },
   }));
   MockRedis.mockImplementation(() => ({
     ping: mockRedisPing,

@@ -1,71 +1,78 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 
 // Create a comprehensive prisma mock first
 type MockPrismaClient = {
   project: {
-    create: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
-    findUnique: ReturnType<typeof jest.fn>;
-    findFirst: ReturnType<typeof jest.fn>;
-    update: ReturnType<typeof jest.fn>;
-    delete: ReturnType<typeof jest.fn>;
-    count: ReturnType<typeof jest.fn>;
+    create: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
   user: {
-    findUnique: ReturnType<typeof jest.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
   };
   image: {
-    count: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
-    groupBy: ReturnType<typeof jest.fn>;
-    aggregate: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    groupBy: ReturnType<typeof vi.fn>;
+    aggregate: ReturnType<typeof vi.fn>;
   };
   segmentation: {
-    count: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
 };
 
-const prismaMock: MockPrismaClient = {
-  project: {
-    create: jest.fn(),
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-    findFirst: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
-    count: jest.fn(),
-  },
-  user: {
-    findUnique: jest.fn(),
-  },
-  image: {
-    count: jest.fn(),
-    findMany: jest.fn(),
-    groupBy: jest.fn(),
-    aggregate: jest.fn(),
-  },
-  segmentation: {
-    count: jest.fn(),
-  },
-};
+// Wrap in vi.hoisted so vi.mock factory can reference it (Vitest hoists
+// vi.mock above all top-level statements, so without `hoisted`, the
+// factory would see `undefined` at evaluation time).
+const { prismaMock } = vi.hoisted(() => {
+  const mock: MockPrismaClient = {
+    project: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      count: vi.fn(),
+    },
+    user: {
+      findUnique: vi.fn(),
+    },
+    image: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      groupBy: vi.fn(),
+      aggregate: vi.fn(),
+    },
+    segmentation: {
+      count: vi.fn(),
+    },
+  };
+  return { prismaMock: mock };
+});
 
 // Mock dependencies
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   prisma: prismaMock,
 }));
-jest.mock('../../utils/logger');
-jest.mock('../sharingService', () => ({
-  hasProjectAccess: jest.fn(),
+vi.mock('../../utils/logger');
+vi.mock('../sharingService', () => ({
+  hasProjectAccess: vi.fn(),
 }));
 
 import * as projectService from '../projectService';
 import * as SharingService from '../sharingService';
 
-const mockHasProjectAccess = SharingService.hasProjectAccess as jest.MockedFunction<typeof SharingService.hasProjectAccess>;
+const mockHasProjectAccess = SharingService.hasProjectAccess as MockedFunction<typeof SharingService.hasProjectAccess>;
 
 describe('ProjectService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Default: grant access
     mockHasProjectAccess.mockResolvedValue({ hasAccess: true, isOwner: true });
   });

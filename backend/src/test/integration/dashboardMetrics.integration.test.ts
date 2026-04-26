@@ -4,8 +4,7 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
 import request from 'supertest';
 import { Server as HTTPServer, createServer } from 'http';
 // import { Server as SocketIOServer } from 'socket.io';
@@ -15,88 +14,88 @@ import express from 'express';
 // Mock Prisma client with comprehensive methods
 type MockPrismaClient = {
   user: {
-    findUnique: ReturnType<typeof jest.fn>;
-    create: ReturnType<typeof jest.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
   };
   project: {
-    create: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
-    findUnique: ReturnType<typeof jest.fn>;
-    count: ReturnType<typeof jest.fn>;
-    groupBy: ReturnType<typeof jest.fn>;
+    create: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
+    groupBy: ReturnType<typeof vi.fn>;
   };
   image: {
-    create: ReturnType<typeof jest.fn>;
-    delete: ReturnType<typeof jest.fn>;
-    count: ReturnType<typeof jest.fn>;
-    aggregate: ReturnType<typeof jest.fn>;
-    groupBy: ReturnType<typeof jest.fn>;
-    update: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
+    create: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
+    aggregate: ReturnType<typeof vi.fn>;
+    groupBy: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
   };
   segmentation: {
-    create: ReturnType<typeof jest.fn>;
-    count: ReturnType<typeof jest.fn>;
-    findMany: ReturnType<typeof jest.fn>;
+    create: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
   };
-  $transaction: ReturnType<typeof jest.fn>;
+  $transaction: ReturnType<typeof vi.fn>;
 };
 
 const prismaMock: MockPrismaClient = {
   user: {
-    findUnique: jest.fn(),
-    create: jest.fn(),
+    findUnique: vi.fn(),
+    create: vi.fn(),
   },
   project: {
-    create: jest.fn(),
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-    count: jest.fn(),
-    groupBy: jest.fn(),
+    create: vi.fn(),
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+    count: vi.fn(),
+    groupBy: vi.fn(),
   },
   image: {
-    create: jest.fn(),
-    delete: jest.fn(),
-    count: jest.fn(),
-    aggregate: jest.fn(),
-    groupBy: jest.fn(),
-    update: jest.fn(),
-    findMany: jest.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn(),
+    aggregate: vi.fn(),
+    groupBy: vi.fn(),
+    update: vi.fn(),
+    findMany: vi.fn(),
   },
   segmentation: {
-    create: jest.fn(),
-    count: jest.fn(),
-    findMany: jest.fn(),
+    create: vi.fn(),
+    count: vi.fn(),
+    findMany: vi.fn(),
   },
-  $transaction: jest.fn(),
+  $transaction: vi.fn(),
 };
 
 // Mock authentication middleware
-const mockAuthMiddleware = jest.fn((req: any, res: any, next: any) => {
+const mockAuthMiddleware = vi.fn((req: any, res: any, next: any) => {
   req.user = { id: 'test-user-id', email: 'test@example.com' };
   next();
 });
 
 // Mock dependencies
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   prisma: prismaMock,
 }));
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
   },
 }));
-jest.mock('../../middleware/auth', () => ({
+vi.mock('../../middleware/auth', () => ({
   requireAuth: mockAuthMiddleware,
 }));
-jest.mock('jsonwebtoken', () => ({
-  verify: jest.fn(),
-  sign: jest.fn(),
+vi.mock('jsonwebtoken', () => ({
+  verify: vi.fn(),
+  sign: vi.fn(),
   default: {
-    verify: jest.fn(),
-    sign: jest.fn(),
+    verify: vi.fn(),
+    sign: vi.fn(),
   },
 }));
 
@@ -369,7 +368,7 @@ describe('Dashboard Metrics Integration Tests', () => {
       });
 
       // Mock JWT verification
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -473,7 +472,7 @@ describe('Dashboard Metrics Integration Tests', () => {
       ]);
 
       // Mock JWT
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -577,7 +576,7 @@ describe('Dashboard Metrics Integration Tests', () => {
       });
 
       // Mock JWT
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });

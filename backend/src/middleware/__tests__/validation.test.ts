@@ -2,30 +2,29 @@ import {
   describe,
   it,
   expect,
-  jest,
   beforeEach,
-} from '@jest/globals';
+} from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 import { Readable } from 'stream';
 import { z } from 'zod';
 
 // All mocks BEFORE source imports
-jest.mock('../../utils/response', () => ({
+vi.mock('../../utils/response', () => ({
   __esModule: true,
   ResponseHelper: {
-    validationError: jest.fn(),
-    internalError: jest.fn(),
-    badRequest: jest.fn(),
+    validationError: vi.fn(),
+    internalError: vi.fn(),
+    badRequest: vi.fn(),
   },
 }));
 
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   __esModule: true,
   logger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -57,7 +56,7 @@ describe('Validation Middleware', () => {
   let mockNext: NextFunction;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockReq = {
       body: {},
@@ -70,13 +69,13 @@ describe('Validation Middleware', () => {
     };
 
     mockRes = {
-      status: jest.fn().mockReturnThis() as unknown as Response['status'],
-      json: jest.fn().mockReturnThis() as unknown as Response['json'],
-      send: jest.fn().mockReturnThis() as unknown as Response['send'],
+      status: vi.fn().mockReturnThis() as unknown as Response['status'],
+      json: vi.fn().mockReturnThis() as unknown as Response['json'],
+      send: vi.fn().mockReturnThis() as unknown as Response['send'],
       headersSent: false,
     };
 
-    mockNext = jest.fn() as NextFunction;
+    mockNext = vi.fn() as NextFunction;
   });
 
   // -----------------------------------------------------------------------
@@ -151,7 +150,7 @@ describe('Validation Middleware', () => {
     it('returns 500 on a non-Zod error thrown during parsing', () => {
       // Create a schema that throws an unexpected error during parse
       const schema = z.object({ name: z.string() });
-      jest.spyOn(schema, 'parse').mockImplementation(() => {
+      vi.spyOn(schema, 'parse').mockImplementation(() => {
         throw new Error('Unexpected crash');
       });
 

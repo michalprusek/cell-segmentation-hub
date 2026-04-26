@@ -4,10 +4,9 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
 
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
     NODE_ENV: 'test',
@@ -17,20 +16,20 @@ jest.mock('../../../utils/config', () => ({
   },
 }));
 
-jest.mock('../../../utils/logger', () => ({
+vi.mock('../../../utils/logger', () => ({
   logger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
-jest.mock('../../sharingService', () => ({
+vi.mock('../../sharingService', () => ({
   hasProjectAccess: () => Promise.resolve({ hasAccess: true }),
 }));
 
-jest.mock('../../../db', () => ({
+vi.mock('../../../db', () => ({
   prisma: {
     project: {
       findUnique: () => Promise.resolve(null),
@@ -45,9 +44,9 @@ import path from 'path';
 // Mock prisma for integration tests
 const prismaMock = {
   project: {
-    findUnique: jest.fn(),
+    findUnique: vi.fn(),
   },
-} as { project: { findUnique: ReturnType<typeof jest.fn> } };
+} as { project: { findUnique: ReturnType<typeof vi.fn> } };
 
 /**
  * Integration tests for scale conversion feature
@@ -175,7 +174,7 @@ describe('Scale Conversion Integration Tests', () => {
       ];
 
       // Create spy once before the loop
-      const loggerSpy = jest.spyOn(metricsCalculator['logger'], 'warn');
+      const loggerSpy = vi.spyOn(metricsCalculator['logger'], 'warn');
 
       try {
         for (const testCase of edgeCaseScales) {

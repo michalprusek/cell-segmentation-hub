@@ -6,10 +6,9 @@ import {
   it,
   expect,
   beforeEach,
-  jest,
   beforeAll,
   afterAll,
-} from '@jest/globals';
+} from 'vitest';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db';
 import { generateTokenPair } from '../../auth/jwt';
@@ -40,17 +39,17 @@ import {
  */
 
 // Mock rate limiter for cleaner test output
-jest.mock('../../middleware/rateLimiter', () => ({
-  apiLimiter: jest.fn((req, res, next) => next() as any),
+vi.mock('../../middleware/rateLimiter', () => ({
+  apiLimiter: vi.fn((req, res, next) => next() as any),
 }));
 
 // Mock logger to prevent console noise during tests
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -166,7 +165,7 @@ describe('ML Authentication Boundaries Integration Tests', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Complete Authentication Flow Integration', () => {
@@ -529,7 +528,7 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       // Mock database to simulate connection failure
       const originalFindUnique = prisma.user.findUnique;
 
-      (prisma.user.findUnique as jest.Mock) = jest
+      (prisma.user.findUnique as Mock) = jest
         .fn()
         .mockRejectedValue(new Error('Database connection failed') as any);
 
@@ -549,7 +548,7 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       // Mock database to simulate timeout
       const originalFindUnique = prisma.user.findUnique;
 
-      (prisma.user.findUnique as jest.Mock) = jest
+      (prisma.user.findUnique as Mock) = jest
         .fn()
         .mockImplementation(
           () =>

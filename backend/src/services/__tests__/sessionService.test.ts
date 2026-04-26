@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock Redis before imports
-const mockSetEx = jest.fn() as any;
-const mockGet = jest.fn() as any;
-const mockDel = jest.fn() as any;
-const mockSAdd = jest.fn() as any;
-const mockSRem = jest.fn() as any;
-const mockSMembers = jest.fn() as any;
-const mockExpire = jest.fn() as any;
+const mockSetEx = vi.fn() as any;
+const mockGet = vi.fn() as any;
+const mockDel = vi.fn() as any;
+const mockSAdd = vi.fn() as any;
+const mockSRem = vi.fn() as any;
+const mockSMembers = vi.fn() as any;
+const mockExpire = vi.fn() as any;
 
-const mockExecuteRedisCommand = jest.fn(async (fn: (client: any) => Promise<unknown>) => {
+const mockExecuteRedisCommand = vi.fn(async (fn: (client: any) => Promise<unknown>) => {
   return fn({
     setEx: mockSetEx,
     get: mockGet,
@@ -21,21 +21,21 @@ const mockExecuteRedisCommand = jest.fn(async (fn: (client: any) => Promise<unkn
   });
 }) as any;
 
-const mockGetRedisClient = jest.fn(() => null) as any;
+const mockGetRedisClient = vi.fn(() => null) as any;
 
-jest.mock('../../config/redis', () => ({
+vi.mock('../../config/redis', () => ({
   executeRedisCommand: mockExecuteRedisCommand,
   getRedisClient: mockGetRedisClient,
 }));
-jest.mock('../../utils/logger', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), debug: jest.fn(), warn: jest.fn() },
+vi.mock('../../utils/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
-jest.mock('crypto', () => {
-  const actual = jest.requireActual('crypto') as typeof import('crypto');
+vi.mock('crypto', () => {
+  const actual = vi.importActual('crypto') as typeof import('crypto');
   return {
     ...actual,
     // randomBytes must return a Buffer-like object where .toString('hex') returns a plain string
-    randomBytes: jest.fn((size: number) => {
+    randomBytes: vi.fn((size: number) => {
       const buf = Buffer.alloc(size, 0xaa);
       return buf;
     }),
@@ -45,12 +45,12 @@ jest.mock('crypto', () => {
 import { sessionService } from '../sessionService';
 import crypto from 'crypto';
 
-const mockRandomBytes = crypto.randomBytes as ReturnType<typeof jest.fn>;
+const mockRandomBytes = crypto.randomBytes as ReturnType<typeof vi.fn>;
 
 describe('SessionService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // resetMocks:true clears all jest.fn() implementations — re-establish
+    vi.clearAllMocks();
+    // resetMocks:true clears all vi.fn() implementations — re-establish
     mockRandomBytes.mockImplementation((size: number) => Buffer.alloc(size, 0xaa));
     mockSetEx.mockResolvedValue('OK');
     mockGet.mockResolvedValue(null);

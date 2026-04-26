@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
 // Simple database connection test that doesn't require full Prisma setup
 describe('Database Connection Tests', () => {

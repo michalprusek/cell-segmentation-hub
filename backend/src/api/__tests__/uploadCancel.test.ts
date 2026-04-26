@@ -3,43 +3,43 @@
  * Tests POST /api/uploads/:uploadId/cancel functionality
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 import request from 'supertest';
 import express, { Express } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 
 // Mock dependencies before imports
-jest.mock('@/db', () => ({
+vi.mock('@/db', () => ({
   prisma: {
     upload: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
     },
     uploadChunk: {
-      deleteMany: jest.fn(),
+      deleteMany: vi.fn(),
     },
   },
 }));
 
-jest.mock('@/redis/client', () => ({
+vi.mock('@/redis/client', () => ({
   default: {
-    del: jest.fn(),
-    get: jest.fn(),
-    set: jest.fn(),
+    del: vi.fn(),
+    get: vi.fn(),
+    set: vi.fn(),
   },
   redisClient: {
-    del: jest.fn(),
-    get: jest.fn(),
-    set: jest.fn(),
+    del: vi.fn(),
+    get: vi.fn(),
+    set: vi.fn(),
   },
 }));
 
-jest.mock('@/services/websocketService', () => ({
+vi.mock('@/services/websocketService', () => ({
   webSocketService: {
-    emitToRoom: jest.fn(),
-    emitToUser: jest.fn(),
+    emitToRoom: vi.fn(),
+    emitToUser: vi.fn(),
   },
 }));
 
@@ -217,10 +217,10 @@ describe('Upload Cancel API Tests', () => {
   });
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Setup mocks
-    const dbModule = jest.mocked(await import('@/db'));
+    const dbModule = vi.mocked(await import('@/db'));
     mockPrisma = dbModule.prisma;
 
     const redisModule = await import('@/redis/client') as any;
@@ -242,7 +242,7 @@ describe('Upload Cancel API Tests', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('POST /api/uploads/:uploadId/cancel', () => {
@@ -493,7 +493,7 @@ describe('Upload Cancel API Tests', () => {
       it('should clean up temporary files', async () => {
         // Mock filesystem operations
         const fsModule = await import('fs/promises') as any;
-        fsModule.rm = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+        fsModule.rm = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
         await request(app).post('/api/uploads/upload-123/cancel').expect(200);
 

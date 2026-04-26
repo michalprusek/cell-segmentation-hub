@@ -1,52 +1,52 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock Prisma types for TypeScript
 type MockPrismaClient = {
   user: {
-    findUnique: ReturnType<typeof jest.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
   };
   project: {
-    count: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
   image: {
-    count: ReturnType<typeof jest.fn>;
-    aggregate: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
+    aggregate: ReturnType<typeof vi.fn>;
   };
   segmentation: {
-    count: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
   profile: {
-    upsert: ReturnType<typeof jest.fn>;
+    upsert: ReturnType<typeof vi.fn>;
   };
 };
 
 const prismaMock: MockPrismaClient = {
   user: {
-    findUnique: jest.fn(),
+    findUnique: vi.fn(),
   },
   project: {
-    count: jest.fn(),
+    count: vi.fn(),
   },
   image: {
-    count: jest.fn(),
-    aggregate: jest.fn(),
+    count: vi.fn(),
+    aggregate: vi.fn(),
   },
   segmentation: {
-    count: jest.fn(),
+    count: vi.fn(),
   },
   profile: {
-    upsert: jest.fn(),
+    upsert: vi.fn(),
   },
 };
 
 // Mock dependencies
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   prisma: prismaMock,
 }));
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    info: jest.fn(),
-    error: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
@@ -64,7 +64,7 @@ describe('UserService Statistics', () => {
   tomorrow.setDate(tomorrow.getDate() + 1);
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('getUserStats', () => {

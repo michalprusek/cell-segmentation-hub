@@ -2,9 +2,9 @@ import {
   describe,
   it,
   expect,
-  jest,
   beforeEach,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 
 // ---------------------------------------------------------------------------
@@ -15,12 +15,12 @@ import { Request, Response, NextFunction } from 'express';
 // We use a module-scoped array so Jest's resetMocks/clearMocks does NOT wipe it.
 const capturedConfigs: Array<Record<string, unknown>> = [];
 
-jest.mock('express-rate-limit', () => {
-  const mockRateLimit = jest.fn(
+vi.mock('express-rate-limit', () => {
+  const mockRateLimit = vi.fn(
     (config: Record<string, unknown>) => {
       capturedConfigs.push(config);
       // Return a lightweight middleware stub that simply calls next()
-      const middleware = jest.fn(
+      const middleware = vi.fn(
         (_req: Request, _res: Response, next: NextFunction) => next()
       );
       (middleware as unknown as Record<string, unknown>).__config = config;
@@ -30,29 +30,29 @@ jest.mock('express-rate-limit', () => {
   return { __esModule: true, default: mockRateLimit };
 });
 
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   __esModule: true,
   logger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
-jest.mock('../../utils/response', () => ({
+vi.mock('../../utils/response', () => ({
   __esModule: true,
   ResponseHelper: {
-    rateLimit: jest.fn(),
-    validationError: jest.fn(),
-    internalError: jest.fn(),
-    unauthorized: jest.fn(),
+    rateLimit: vi.fn(),
+    validationError: vi.fn(),
+    internalError: vi.fn(),
+    unauthorized: vi.fn(),
   },
 }));
 
-jest.mock('../../config/uploadLimits', () => ({
+vi.mock('../../config/uploadLimits', () => ({
   __esModule: true,
-  getUploadLimitsForEnvironment: jest.fn(() => ({
+  getUploadLimitsForEnvironment: vi.fn(() => ({
     AUTH_WINDOW_MS: 15 * 60 * 1000,   // 15 minutes
     AUTH_MAX_REQUESTS: 20,
     API_WINDOW_MS: 5 * 60 * 1000,     // 5 minutes
@@ -74,7 +74,7 @@ import {
   apiRateLimiter,
 } from '../rateLimiter';
 
-const mockRateLimit = rateLimit as jest.MockedFunction<typeof rateLimit>;
+const mockRateLimit = rateLimit as MockedFunction<typeof rateLimit>;
 
 // Snapshot of configs captured during module import (immutable reference)
 // These are populated the first time the module is imported and never cleared.
@@ -94,9 +94,9 @@ const buildReq = (overrides: Partial<Request> = {}): Partial<Request> => ({
 });
 
 const buildRes = (): Partial<Response> => ({
-  status: jest.fn().mockReturnThis() as unknown as Response['status'],
-  json: jest.fn().mockReturnThis() as unknown as Response['json'],
-  send: jest.fn().mockReturnThis() as unknown as Response['send'],
+  status: vi.fn().mockReturnThis() as unknown as Response['status'],
+  json: vi.fn().mockReturnThis() as unknown as Response['json'],
+  send: vi.fn().mockReturnThis() as unknown as Response['send'],
   headersSent: false,
 });
 
@@ -115,9 +115,9 @@ describe('Rate Limiter Middleware', () => {
     }
 
     // Only clear call counts, not captured config data
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    mockNext = jest.fn() as NextFunction;
+    mockNext = vi.fn() as NextFunction;
   });
 
   // -------------------------------------------------------------------------

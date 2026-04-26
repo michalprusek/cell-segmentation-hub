@@ -12,7 +12,7 @@ const flushPromises = async () => {
 };
 
 // Mock dependencies
-jest.mock('../../utils/config', () => ({
+vi.mock('../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -26,15 +26,15 @@ jest.mock('../../utils/config', () => ({
     SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
   },
 }));
-jest.mock('@prisma/client');
-jest.mock('../../services/queueService');
-jest.mock('../../services/segmentationService');
-jest.mock('../../services/imageService');
+vi.mock('@prisma/client');
+vi.mock('../../services/queueService');
+vi.mock('../../services/segmentationService');
+vi.mock('../../services/imageService');
 
 describe('QueueWorker - Parallel Processing', () => {
   let queueWorker: QueueWorker;
-  let mockPrisma: jest.Mocked<PrismaClient>;
-  let mockQueueService: jest.Mocked<QueueService>;
+  let mockPrisma: Mocked<PrismaClient>;
+  let mockQueueService: Mocked<QueueService>;
 
   const mockQueueItems: SegmentationQueue[] = [
     {
@@ -93,8 +93,8 @@ describe('QueueWorker - Parallel Processing', () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
 
     // Reset the singleton so each test gets a fresh instance with the new mock
     (QueueWorker as any).instance = null;
@@ -104,22 +104,22 @@ describe('QueueWorker - Parallel Processing', () => {
 
     // Mock QueueService.getInstance to return a mock
     mockQueueService = {
-      getMultipleBatches: jest.fn(),
-      processMultipleBatches: jest.fn(),
-      setQueueWorker: jest.fn(),
-      resetStuckItems: jest.fn(),
-      getQueueHealthStatus: jest.fn(),
-      cleanupOldEntries: jest.fn(),
+      getMultipleBatches: vi.fn(),
+      processMultipleBatches: vi.fn(),
+      setQueueWorker: vi.fn(),
+      resetStuckItems: vi.fn(),
+      getQueueHealthStatus: vi.fn(),
+      cleanupOldEntries: vi.fn(),
     } as any;
 
-    (QueueService.getInstance as jest.Mock).mockReturnValue(mockQueueService);
+    (QueueService.getInstance as Mock).mockReturnValue(mockQueueService);
 
     // Create QueueWorker instance
     queueWorker = QueueWorker.getInstance(mockPrisma);
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe('Parallel Queue Processing', () => {
@@ -133,7 +133,7 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.triggerImmediateProcessing();
 
       // Fast-forward time to trigger processing
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
 
       // Wait for async operations
       await flushPromises();
@@ -152,7 +152,7 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.start();
 
       // Trigger processing
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
       await flushPromises();
 
       expect(mockQueueService.getMultipleBatches).toHaveBeenCalledWith(4);
@@ -173,11 +173,11 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.start();
 
       // First processing cycle - should fail but not crash
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
       await flushPromises();
 
       // Second processing cycle - should work normally
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
       await flushPromises();
 
       expect(mockQueueService.getMultipleBatches).toHaveBeenCalledTimes(2);
@@ -203,7 +203,7 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.triggerImmediateProcessing();
       queueWorker.triggerImmediateProcessing();
 
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
       await flushPromises();
 
       // Should only call processing once (overlapping prevention)
@@ -237,7 +237,7 @@ describe('QueueWorker - Parallel Processing', () => {
     });
 
     it('should log detailed batch information during parallel processing', async () => {
-      const consoleSpy = jest.spyOn(console, 'info').mockImplementation();
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation();
 
       mockQueueService.getMultipleBatches.mockResolvedValue(mockBatches);
       mockQueueService.processMultipleBatches.mockResolvedValue(undefined);
@@ -278,7 +278,7 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.start();
 
       // Fast-forward to trigger health check (1 minute interval)
-      jest.advanceTimersByTime(60000);
+      vi.advanceTimersByTime(60000);
       await flushPromises();
 
       expect(mockQueueService.resetStuckItems).toHaveBeenCalledWith(5);
@@ -301,7 +301,7 @@ describe('QueueWorker - Parallel Processing', () => {
 
     it('should perform periodic cleanup of old entries', async () => {
       Object.defineProperty(mockPrisma, 'segmentationQueue', {
-        value: { deleteMany: jest.fn().mockResolvedValue({ count: 5 }) },
+        value: { deleteMany: vi.fn().mockResolvedValue({ count: 5 }) },
         writable: true,
         configurable: true,
       });
@@ -309,7 +309,7 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.start();
 
       // Fast-forward to trigger cleanup (1 hour interval)
-      jest.advanceTimersByTime(3600000);
+      vi.advanceTimersByTime(3600000);
       await flushPromises();
 
       expect(mockPrisma.segmentationQueue.deleteMany).toHaveBeenCalledWith({
@@ -333,7 +333,7 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.start();
 
       // Should not crash on health check failures
-      jest.advanceTimersByTime(60000);
+      vi.advanceTimersByTime(60000);
       await flushPromises();
 
       expect(mockQueueService.resetStuckItems).toHaveBeenCalled();
@@ -397,7 +397,7 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.start();
 
       // Should not crash on queue service errors
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
       await flushPromises();
 
       expect(mockQueueService.getMultipleBatches).toHaveBeenCalled();
@@ -413,11 +413,11 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.start();
 
       // First cycle - error
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
       await flushPromises();
 
       // Second cycle - should work
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
       await flushPromises();
 
       expect(mockQueueService.getMultipleBatches).toHaveBeenCalledTimes(2);
@@ -435,11 +435,11 @@ describe('QueueWorker - Parallel Processing', () => {
       queueWorker.start();
 
       // Processing cycle with error
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
       await flushPromises();
 
       // Health check cycle should still work
-      jest.advanceTimersByTime(60000);
+      vi.advanceTimersByTime(60000);
       await flushPromises();
 
       expect(mockQueueService.processMultipleBatches).toHaveBeenCalled();
@@ -460,10 +460,10 @@ describe('QueueWorker - Parallel Processing', () => {
       mockQueueService.getMultipleBatches.mockClear();
 
       // Should use 100ms interval for near-instant processing
-      jest.advanceTimersByTime(99);
+      vi.advanceTimersByTime(99);
       expect(mockQueueService.getMultipleBatches).not.toHaveBeenCalled();
 
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
       // Flush promises to allow the async processQueue to run
       await flushPromises();
       expect(mockQueueService.getMultipleBatches).toHaveBeenCalled();

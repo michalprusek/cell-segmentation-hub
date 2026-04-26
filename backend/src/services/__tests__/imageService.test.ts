@@ -1,68 +1,68 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // --- Prisma mock ---
 const prismaMock = {
   project: {
-    findFirst: jest.fn() as any,
+    findFirst: vi.fn() as any,
   },
   image: {
-    create: jest.fn() as any,
-    findMany: jest.fn() as any,
-    findFirst: jest.fn() as any,
-    count: jest.fn() as any,
-    delete: jest.fn() as any,
-    update: jest.fn() as any,
+    create: vi.fn() as any,
+    findMany: vi.fn() as any,
+    findFirst: vi.fn() as any,
+    count: vi.fn() as any,
+    delete: vi.fn() as any,
+    update: vi.fn() as any,
   },
   user: {
-    findUnique: jest.fn() as any,
+    findUnique: vi.fn() as any,
   },
-  $transaction: jest.fn() as any,
+  $transaction: vi.fn() as any,
 };
 
 // --- Storage provider mock ---
 const storageMock = {
-  upload: jest.fn() as any,
-  getUrl: jest.fn() as any,
-  delete: jest.fn() as any,
+  upload: vi.fn() as any,
+  getUrl: vi.fn() as any,
+  delete: vi.fn() as any,
 };
 
 // --- WebSocket service mock ---
 const wsServiceMock = {
-  emitToUser: jest.fn() as any,
-  broadcastProjectUpdate: jest.fn() as any,
-  emitDashboardUpdate: jest.fn() as any,
+  emitToUser: vi.fn() as any,
+  broadcastProjectUpdate: vi.fn() as any,
+  emitDashboardUpdate: vi.fn() as any,
 };
 
 // --- All mocks must be declared before the source import ---
-jest.mock('../../db', () => ({ prisma: prismaMock }));
+vi.mock('../../db', () => ({ prisma: prismaMock }));
 
-jest.mock('../../storage/index', () => ({
-  getStorageProvider: jest.fn(),
+vi.mock('../../storage/index', () => ({
+  getStorageProvider: vi.fn(),
   LocalStorageProvider: {
-    generateKey: jest.fn(
+    generateKey: vi.fn(
       (_userId: string, _projectId: string, filename: string) =>
         `uploads/${filename}`
     ),
   },
 }));
 
-jest.mock('../websocketService', () => ({
+vi.mock('../websocketService', () => ({
   WebSocketService: {
-    getInstance: jest.fn(() => wsServiceMock),
+    getInstance: vi.fn(() => wsServiceMock),
   },
 }));
 
-jest.mock('../userService', () => ({
-  getUserStats: jest.fn(),
+vi.mock('../userService', () => ({
+  getUserStats: vi.fn(),
 }));
 
-jest.mock('../../utils/logger');
-jest.mock('../../utils/config', () => ({ config: { NODE_ENV: 'test' } }));
-jest.mock('../../utils/getBaseUrl', () => ({
-  getBaseUrl: jest.fn(() => 'http://localhost:3001'),
+vi.mock('../../utils/logger');
+vi.mock('../../utils/config', () => ({ config: { NODE_ENV: 'test' } }));
+vi.mock('../../utils/getBaseUrl', () => ({
+  getBaseUrl: vi.fn(() => 'http://localhost:3001'),
 }));
-jest.mock('sharp');
-jest.mock('fs');
+vi.mock('sharp');
+vi.mock('fs');
 
 import { ImageService } from '../imageService';
 import { getStorageProvider, LocalStorageProvider } from '../../storage/index';
@@ -103,15 +103,15 @@ const mockFile = {
   size: 1024,
 };
 
-const mockGetStorageProvider = getStorageProvider as ReturnType<typeof jest.fn>;
-const mockGenerateKey = (LocalStorageProvider as any).generateKey as ReturnType<typeof jest.fn>;
-const mockGetBaseUrl = getBaseUrl as ReturnType<typeof jest.fn>;
+const mockGetStorageProvider = getStorageProvider as ReturnType<typeof vi.fn>;
+const mockGenerateKey = (LocalStorageProvider as any).generateKey as ReturnType<typeof vi.fn>;
+const mockGetBaseUrl = getBaseUrl as ReturnType<typeof vi.fn>;
 
 describe('ImageService', () => {
   let service: ImageService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     service = makeImageService();
 
     // Re-set all implementations that resetMocks:true clears
@@ -308,7 +308,7 @@ describe('ImageService', () => {
       prismaMock.$transaction.mockImplementationOnce(async (cb: any) => {
         const txClient = {
           image: {
-            delete: (jest.fn() as any).mockResolvedValue(mockImage),
+            delete: (vi.fn() as any).mockResolvedValue(mockImage),
           },
         };
         await cb(txClient);

@@ -2,46 +2,46 @@ import {
   describe,
   it,
   expect,
-  jest,
   beforeEach,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 
 // All mocks BEFORE source imports
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   __esModule: true,
   prisma: {
     user: {
-      findUnique: jest.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
 
-jest.mock('../../auth/jwt', () => ({
+vi.mock('../../auth/jwt', () => ({
   __esModule: true,
-  extractTokenFromHeader: jest.fn(),
-  verifyAccessToken: jest.fn(),
+  extractTokenFromHeader: vi.fn(),
+  verifyAccessToken: vi.fn(),
 }));
 
-jest.mock('../../utils/response', () => ({
+vi.mock('../../utils/response', () => ({
   __esModule: true,
   ResponseHelper: {
-    unauthorized: jest.fn(),
-    forbidden: jest.fn(),
-    notFound: jest.fn(),
-    validationError: jest.fn(),
-    badRequest: jest.fn(),
-    internalError: jest.fn(),
+    unauthorized: vi.fn(),
+    forbidden: vi.fn(),
+    notFound: vi.fn(),
+    validationError: vi.fn(),
+    badRequest: vi.fn(),
+    internalError: vi.fn(),
   },
 }));
 
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   __esModule: true,
   logger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -60,13 +60,13 @@ import {
 } from '../auth';
 
 // Typed mock helpers
-const mockExtractTokenFromHeader = extractTokenFromHeader as jest.MockedFunction<
+const mockExtractTokenFromHeader = extractTokenFromHeader as MockedFunction<
   typeof extractTokenFromHeader
 >;
-const mockVerifyAccessToken = verifyAccessToken as jest.MockedFunction<
+const mockVerifyAccessToken = verifyAccessToken as MockedFunction<
   typeof verifyAccessToken
 >;
-const mockPrismaUserFindUnique = prisma.user.findUnique as jest.MockedFunction<
+const mockPrismaUserFindUnique = prisma.user.findUnique as MockedFunction<
   typeof prisma.user.findUnique
 >;
 
@@ -96,7 +96,7 @@ describe('Auth Middleware', () => {
   let mockNext: NextFunction;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockReq = {
       headers: {},
@@ -104,13 +104,13 @@ describe('Auth Middleware', () => {
     };
 
     mockRes = {
-      status: jest.fn().mockReturnThis() as unknown as Response['status'],
-      json: jest.fn().mockReturnThis() as unknown as Response['json'],
-      send: jest.fn().mockReturnThis() as unknown as Response['send'],
+      status: vi.fn().mockReturnThis() as unknown as Response['status'],
+      json: vi.fn().mockReturnThis() as unknown as Response['json'],
+      send: vi.fn().mockReturnThis() as unknown as Response['send'],
       headersSent: false,
     };
 
-    mockNext = jest.fn() as NextFunction;
+    mockNext = vi.fn() as NextFunction;
   });
 
   // -----------------------------------------------------------------------

@@ -1,21 +1,23 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 import { Response } from 'express';
 import { ResponseHelper, calculatePagination } from '../response';
+import { logger } from '../logger';
 
 // The helper internally calls `logger.warn` / `logger.error`. The logger
 // module reads runtime config at import; for these tests we stub out only
 // the methods we care about so the assertions don't get noisy.
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   logger: {
-    warn: jest.fn(),
-    error: jest.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
 const mockRes = (): Response => {
   const res: Partial<Response> = {};
-  res.status = jest.fn().mockReturnValue(res) as Response['status'];
-  res.json = jest.fn().mockReturnValue(res) as Response['json'];
+  res.status = vi.fn().mockReturnValue(res) as Response['status'];
+  res.json = vi.fn().mockReturnValue(res) as Response['json'];
   return res as Response;
 };
 
@@ -41,7 +43,7 @@ describe('ResponseHelper.success', () => {
 
 describe('ResponseHelper error variants', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('badRequest writes 400 with code BAD_REQUEST and the message in `error`', () => {
@@ -75,7 +77,7 @@ describe('ResponseHelper error variants', () => {
     ResponseHelper.forbidden(res);
 
     expect(res.status).toHaveBeenCalledWith(403);
-    const body = (res.json as jest.Mock).mock.calls[0]?.[0] as Record<
+    const body = (res.json as Mock).mock.calls[0]?.[0] as Record<
       string,
       unknown
     >;
@@ -101,7 +103,7 @@ describe('ResponseHelper error variants', () => {
     ResponseHelper.conflict(res);
 
     expect(res.status).toHaveBeenCalledWith(409);
-    const body = (res.json as jest.Mock).mock.calls[0]?.[0] as Record<
+    const body = (res.json as Mock).mock.calls[0]?.[0] as Record<
       string,
       unknown
     >;
@@ -113,7 +115,7 @@ describe('ResponseHelper error variants', () => {
     ResponseHelper.rateLimit(res);
 
     expect(res.status).toHaveBeenCalledWith(429);
-    const body = (res.json as jest.Mock).mock.calls[0]?.[0] as Record<
+    const body = (res.json as Mock).mock.calls[0]?.[0] as Record<
       string,
       unknown
     >;
@@ -139,7 +141,7 @@ describe('ResponseHelper error variants', () => {
     ResponseHelper.serviceUnavailable(res);
 
     expect(res.status).toHaveBeenCalledWith(503);
-    const body = (res.json as jest.Mock).mock.calls[0]?.[0] as Record<
+    const body = (res.json as Mock).mock.calls[0]?.[0] as Record<
       string,
       unknown
     >;
@@ -181,7 +183,7 @@ describe('ResponseHelper.error: contract for downstream consumers', () => {
     // so the migrated controller responses must keep `error` populated.
     const res = mockRes();
     ResponseHelper.badRequest(res, 'X');
-    const body = (res.json as jest.Mock).mock.calls[0]?.[0] as Record<
+    const body = (res.json as Mock).mock.calls[0]?.[0] as Record<
       string,
       unknown
     >;
@@ -193,10 +195,8 @@ describe('ResponseHelper.error: contract for downstream consumers', () => {
     // Even without a passed-in Error, a 500 response must take the error-log
     // path (not the warn path). A future refactor swapping `||` for `&&`
     // would break this — this test catches it.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { logger } = require('../logger');
-    (logger.error as jest.Mock).mockClear();
-    (logger.warn as jest.Mock).mockClear();
+    (logger.error as Mock).mockClear();
+    (logger.warn as Mock).mockClear();
 
     const res = mockRes();
     ResponseHelper.error(res, 'Service down', 500);

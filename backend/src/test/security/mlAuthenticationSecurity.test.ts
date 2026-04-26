@@ -1,6 +1,7 @@
 import request from 'supertest';
 import express from 'express';
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 import mlRoutes from '../../api/routes/mlRoutes';
 import { authenticate } from '../../middleware/auth';
 import { apiLimiter } from '../../middleware/rateLimiter';
@@ -19,23 +20,23 @@ import { createTestUser, createTestTokens } from '../utils/jwtTestUtils';
  */
 
 // Mock dependencies for controlled testing
-jest.mock('../../middleware/rateLimiter', () => ({
-  apiLimiter: jest.fn((req: any, res: any, next: any) => next()),
+vi.mock('../../middleware/rateLimiter', () => ({
+  apiLimiter: vi.fn((req: any, res: any, next: any) => next()),
 }));
 
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
-const mockedAuthenticate = authenticate as jest.MockedFunction<
+const mockedAuthenticate = authenticate as MockedFunction<
   typeof authenticate
 >;
-const mockedApiLimiter = apiLimiter as jest.MockedFunction<typeof apiLimiter>;
+const mockedApiLimiter = apiLimiter as MockedFunction<typeof apiLimiter>;
 
 describe('ML Authentication Security Tests', () => {
   let app: express.Application;
@@ -51,7 +52,7 @@ describe('ML Authentication Security Tests', () => {
     validUser = createTestUser();
     validTokens = await createTestTokens(validUser);
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Default successful authentication mock
     mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {

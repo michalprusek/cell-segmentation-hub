@@ -1,17 +1,17 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-jest.mock('../../../utils/logger', () => ({
+vi.mock('../../../utils/logger', () => ({
   logger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
 // Using the real renderWoundAreaChart — node-canvas is a backend dependency
-// and works in the test environment. Failure-path tests use jest.spyOn to
-// override specific cases rather than jest.mock, because jest.mock of an
+// and works in the test environment. Failure-path tests use vi.spyOn to
+// override specific cases rather than vi.mock, because vi.mock of an
 // ESM module produces unreliable return values in ts-jest/ESM preset.
 
 import { promises as fsp } from 'fs';

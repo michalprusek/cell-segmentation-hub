@@ -5,14 +5,13 @@ import {
   it,
   expect,
   beforeEach,
-  jest,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
 import healthRoutes from '../healthRoutes';
 import { logger } from '../../../utils/logger';
 
 // Mock config and jwt early to prevent process.exit during module loading
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -31,26 +30,26 @@ jest.mock('../../../utils/config', () => ({
   isTest: true,
   getOrigins: () => ['http://localhost:3000'],
 }));
-jest.mock('../../../auth/jwt');
+vi.mock('../../../auth/jwt');
 
 // Mock dependencies before any imports — use factory for healthCheckService to
 // prevent PrismaClient instantiation at module load time
-jest.mock('../../../utils/logger');
-jest.mock('../../../db');
-jest.mock('../../../services/healthCheckService', () => ({
+vi.mock('../../../utils/logger');
+vi.mock('../../../db');
+vi.mock('../../../services/healthCheckService', () => ({
   healthCheckService: {
-    checkHealth: jest.fn(),
-    isReadyForDeployment: jest.fn(),
-    getHealthHistory: jest.fn(),
-    startPeriodicChecks: jest.fn(),
-    stopPeriodicChecks: jest.fn(),
+    checkHealth: vi.fn(),
+    isReadyForDeployment: vi.fn(),
+    getHealthHistory: vi.fn(),
+    startPeriodicChecks: vi.fn(),
+    stopPeriodicChecks: vi.fn(),
   },
 }));
 
 import { healthCheckService } from '../../../services/healthCheckService';
 
-const mockedLogger = logger as jest.Mocked<typeof logger>;
-const mockedHealthCheckService = healthCheckService as jest.Mocked<
+const mockedLogger = logger as Mocked<typeof logger>;
+const mockedHealthCheckService = healthCheckService as Mocked<
   typeof healthCheckService
 >;
 
@@ -112,17 +111,17 @@ describe('Health Routes', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    mockedLogger.info = jest.fn() as any;
-    mockedLogger.error = jest.fn() as any;
-    mockedLogger.warn = jest.fn() as any;
+    mockedLogger.info = vi.fn() as any;
+    mockedLogger.error = vi.fn() as any;
+    mockedLogger.warn = vi.fn() as any;
 
     app.use('/health', healthRoutes);
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // -------------------------------------------------------------------------

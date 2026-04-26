@@ -1,55 +1,55 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // nodemailer mock: resetMocks resets implementations but not the factory.
 // We return a fresh object each time createTransport is called so _transporter is set.
 const createFakeTransporter = () => ({
-  verify: jest.fn(async () => true) as any,
-  sendMail: jest.fn(async () => ({ messageId: 'default-msg-id' })) as any,
+  verify: vi.fn(async () => true) as any,
+  sendMail: vi.fn(async () => ({ messageId: 'default-msg-id' })) as any,
 });
 
-jest.mock('nodemailer', () => ({
+vi.mock('nodemailer', () => ({
   default: {
-    createTransport: jest.fn(() => createFakeTransporter()),
+    createTransport: vi.fn(() => createFakeTransporter()),
   },
-  createTransport: jest.fn(() => createFakeTransporter()),
+  createTransport: vi.fn(() => createFakeTransporter()),
 }));
-jest.mock('../../utils/logger', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), debug: jest.fn(), warn: jest.fn() },
+vi.mock('../../utils/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
-jest.mock('../../utils/envValidator', () => ({
+vi.mock('../../utils/envValidator', () => ({
   // Read actual env var so SKIP_EMAIL_SEND works correctly in tests
-  getBooleanEnvVar: jest.fn((key: string, defaultVal: boolean) => {
+  getBooleanEnvVar: vi.fn((key: string, defaultVal: boolean) => {
     const val = process.env[key];
     if (val === 'true') return true;
     if (val === 'false') return false;
     return defaultVal;
   }),
-  getNumericEnvVar: jest.fn((_key: string, defaultVal: number) => defaultVal),
+  getNumericEnvVar: vi.fn((_key: string, defaultVal: number) => defaultVal),
 }));
-jest.mock('../../services/emailRetryService', () => ({
-  sendEmailWithRetry: jest.fn(async () => ({ messageId: 'retry-msg-id' })),
-  parseEmailTimeout: jest.fn((_key: string, def: number) => def),
-  updateEmailMetrics: jest.fn(),
-  queueEmailForRetry: jest.fn(() => 'queue-id-123'),
+vi.mock('../../services/emailRetryService', () => ({
+  sendEmailWithRetry: vi.fn(async () => ({ messageId: 'retry-msg-id' })),
+  parseEmailTimeout: vi.fn((_key: string, def: number) => def),
+  updateEmailMetrics: vi.fn(),
+  queueEmailForRetry: vi.fn(() => 'queue-id-123'),
 }));
-jest.mock('../../constants/email', () => ({
-  isUTIASmtpServer: jest.fn(() => false),
+vi.mock('../../constants/email', () => ({
+  isUTIASmtpServer: vi.fn(() => false),
   SMTP_HOSTS: { UTIA: 'hermes.utia.cas.cz', UTIA_BACKUP: 'mail.utia.cas.cz' },
 }));
-jest.mock('../../templates/passwordResetEmailMultilang', () => ({
-  generateSimplePasswordResetHTML: jest.fn(() => '<html>reset</html>'),
-  generateSimplePasswordResetText: jest.fn(() => 'reset text'),
-  getPasswordResetSubject: jest.fn(() => 'Reset your password'),
+vi.mock('../../templates/passwordResetEmailMultilang', () => ({
+  generateSimplePasswordResetHTML: vi.fn(() => '<html>reset</html>'),
+  generateSimplePasswordResetText: vi.fn(() => 'reset text'),
+  getPasswordResetSubject: vi.fn(() => 'Reset your password'),
 }));
-jest.mock('../../templates/verificationEmail', () => ({
-  generateVerificationEmailHTML: jest.fn(() => ({
+vi.mock('../../templates/verificationEmail', () => ({
+  generateVerificationEmailHTML: vi.fn(() => ({
     subject: 'Verify your email',
     html: '<html>verify</html>',
   })),
 }));
-jest.mock('../../utils/escapeHtml', () => ({
-  escapeHtml: jest.fn((s: string) => s),
-  sanitizeUrl: jest.fn((s: string) => s),
+vi.mock('../../utils/escapeHtml', () => ({
+  escapeHtml: vi.fn((s: string) => s),
+  sanitizeUrl: vi.fn((s: string) => s),
 }));
 
 import * as emailService from '../emailService';
@@ -58,11 +58,11 @@ import nodemailer from 'nodemailer';
 import * as verificationEmailTemplate from '../../templates/verificationEmail';
 import * as envValidator from '../../utils/envValidator';
 
-const mockCreateTransport = nodemailer.createTransport as ReturnType<typeof jest.fn>;
-const mockSendEmailWithRetry = emailRetryService.sendEmailWithRetry as ReturnType<typeof jest.fn>;
-const mockQueueEmailForRetry = emailRetryService.queueEmailForRetry as ReturnType<typeof jest.fn>;
-const mockGenerateVerificationEmailHTML = verificationEmailTemplate.generateVerificationEmailHTML as ReturnType<typeof jest.fn>;
-const mockGetBooleanEnvVar = envValidator.getBooleanEnvVar as ReturnType<typeof jest.fn>;
+const mockCreateTransport = nodemailer.createTransport as ReturnType<typeof vi.fn>;
+const mockSendEmailWithRetry = emailRetryService.sendEmailWithRetry as ReturnType<typeof vi.fn>;
+const mockQueueEmailForRetry = emailRetryService.queueEmailForRetry as ReturnType<typeof vi.fn>;
+const mockGenerateVerificationEmailHTML = verificationEmailTemplate.generateVerificationEmailHTML as ReturnType<typeof vi.fn>;
+const mockGetBooleanEnvVar = envValidator.getBooleanEnvVar as ReturnType<typeof vi.fn>;
 
 describe('EmailService', () => {
   const originalEnv = { ...process.env };
@@ -213,7 +213,7 @@ describe('EmailService', () => {
 
     it('queues email via queueEmailForRetry when UTIA SMTP is configured', async () => {
       const { isUTIASmtpServer } = await import('../../constants/email');
-      (isUTIASmtpServer as ReturnType<typeof jest.fn>).mockReturnValueOnce(true);
+      (isUTIASmtpServer as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
 
       await emailService.sendVerificationEmail(
         'newuser@example.com',
@@ -229,8 +229,8 @@ describe('EmailService', () => {
     it('returns true when transporter verify succeeds', async () => {
       // Build a transporter where verify resolves successfully
       const fakeTransporter = {
-        verify: jest.fn(async () => true) as any,
-        sendMail: jest.fn() as any,
+        verify: vi.fn(async () => true) as any,
+        sendMail: vi.fn() as any,
       };
       mockCreateTransport.mockReturnValueOnce(fakeTransporter);
       emailService.init();
@@ -242,8 +242,8 @@ describe('EmailService', () => {
 
     it('returns false when transporter verify rejects', async () => {
       const fakeTransporter = {
-        verify: jest.fn(async () => { throw new Error('ECONNREFUSED'); }) as any,
-        sendMail: jest.fn() as any,
+        verify: vi.fn(async () => { throw new Error('ECONNREFUSED'); }) as any,
+        sendMail: vi.fn() as any,
       };
       mockCreateTransport.mockReturnValueOnce(fakeTransporter);
       emailService.init();

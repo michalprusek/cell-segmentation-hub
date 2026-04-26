@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mocks must be before imports
-jest.mock('../../utils/logger', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), debug: jest.fn(), warn: jest.fn() },
+vi.mock('../../utils/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
-jest.mock('../../utils/envValidator', () => ({
-  getNumericEnvVar: jest.fn((_key: string, defaultVal: number) => defaultVal),
+vi.mock('../../utils/envValidator', () => ({
+  getNumericEnvVar: vi.fn((_key: string, defaultVal: number) => defaultVal),
 }));
-jest.mock('../../constants/email', () => ({
+vi.mock('../../constants/email', () => ({
   EMAIL_RETRY: {
     MAX_ATTEMPTS: 3,
     UTIA_MAX_ATTEMPTS: 5,
@@ -22,16 +22,16 @@ jest.mock('../../constants/email', () => ({
     SEND: 30000,
     UTIA_SEND: 300000,
   },
-  isUTIASmtpServer: jest.fn(() => false),
-  getMaxRetryAttempts: jest.fn(() => 3),
-  getQueueProcessingDelay: jest.fn(() => 10),
+  isUTIASmtpServer: vi.fn(() => false),
+  getMaxRetryAttempts: vi.fn(() => 3),
+  getQueueProcessingDelay: vi.fn(() => 10),
 }));
-jest.mock('../../utils/retryService', () => ({
+vi.mock('../../utils/retryService', () => ({
   retryService: {
-    executeWithRetry: jest.fn(async (fn: () => unknown) => fn()),
+    executeWithRetry: vi.fn(async (fn: () => unknown) => fn()),
   },
   RetryService: {
-    isCommonRetriableError: jest.fn(() => false),
+    isCommonRetriableError: vi.fn(() => false),
   },
 }));
 
@@ -43,11 +43,11 @@ import {
 } from '../emailRetryService';
 import { retryService } from '../../utils/retryService';
 
-const mockExecuteWithRetry = retryService.executeWithRetry as ReturnType<typeof jest.fn>;
+const mockExecuteWithRetry = retryService.executeWithRetry as ReturnType<typeof vi.fn>;
 
 describe('EmailRetryService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     testHelpers.clearSentEmails();
   });
 
@@ -59,7 +59,7 @@ describe('EmailRetryService', () => {
     it('succeeds on first attempt', async () => {
       const mockResult = { messageId: 'msg-ok' };
       const mockTransporter = {
-        sendMail: jest.fn(() => Promise.resolve(mockResult)) as any,
+        sendMail: vi.fn(() => Promise.resolve(mockResult)) as any,
       };
       mockExecuteWithRetry.mockImplementationOnce(async (fn: () => unknown) => fn() as any);
       mockTransporter.sendMail.mockResolvedValueOnce(mockResult as any);
@@ -80,7 +80,7 @@ describe('EmailRetryService', () => {
 
     it('retries on transient failure via executeWithRetry', async () => {
       const mockTransporter = {
-        sendMail: jest.fn() as any,
+        sendMail: vi.fn() as any,
       };
       const transientError = new Error('ECONNRESET network error');
       mockTransporter.sendMail

@@ -1,65 +1,65 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// All jest.mock() calls must use inline factories (not outer variables),
-// because jest.mock() is hoisted above const declarations.
+// All vi.mock() calls must use inline factories (not outer variables),
+// because vi.mock() is hoisted above const declarations.
 
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   prisma: {
     project: {
-      findUnique: jest.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
 
-jest.mock('../sharingService', () => ({
-  hasProjectAccess: jest.fn(),
+vi.mock('../sharingService', () => ({
+  hasProjectAccess: vi.fn(),
 }));
 
-jest.mock('../websocketService', () => ({
+vi.mock('../websocketService', () => ({
   WebSocketService: {
-    getInstance: jest.fn(() => ({
-      emitToUser: jest.fn(),
+    getInstance: vi.fn(() => ({
+      emitToUser: vi.fn(),
     })),
   },
 }));
 
-jest.mock('uuid', () => ({ v4: jest.fn(() => 'test-job-id-1234') }));
-jest.mock('../../utils/logger');
+vi.mock('uuid', () => ({ v4: vi.fn(() => 'test-job-id-1234') }));
+vi.mock('../../utils/logger');
 
-jest.mock('fs/promises', () => ({
-  mkdir: jest.fn(),
-  writeFile: jest.fn(),
-  readFile: jest.fn(),
-  readdir: jest.fn(),
-  stat: jest.fn(),
-  unlink: jest.fn(),
-  copyFile: jest.fn(),
+vi.mock('fs/promises', () => ({
+  mkdir: vi.fn(),
+  writeFile: vi.fn(),
+  readFile: vi.fn(),
+  readdir: vi.fn(),
+  stat: vi.fn(),
+  unlink: vi.fn(),
+  copyFile: vi.fn(),
 }));
 
-jest.mock('archiver', () =>
-  jest.fn(() => ({
-    directory: jest.fn(),
-    on: jest.fn(),
-    pipe: jest.fn(),
-    finalize: jest.fn(),
+vi.mock('archiver', () =>
+  vi.fn(() => ({
+    directory: vi.fn(),
+    on: vi.fn(),
+    pipe: vi.fn(),
+    finalize: vi.fn(),
   }))
 );
 
-jest.mock('../visualization/visualizationGenerator', () => ({
-  VisualizationGenerator: jest.fn(),
+vi.mock('../visualization/visualizationGenerator', () => ({
+  VisualizationGenerator: vi.fn(),
 }));
 
-jest.mock('../metrics/metricsCalculator', () => ({
-  MetricsCalculator: jest.fn(),
+vi.mock('../metrics/metricsCalculator', () => ({
+  MetricsCalculator: vi.fn(),
 }));
 
-jest.mock('../export/formatConverter', () => ({
-  FormatConverter: jest.fn(),
+vi.mock('../export/formatConverter', () => ({
+  FormatConverter: vi.fn(),
 }));
 
-jest.mock('../../utils/batchProcessor', () => ({
+vi.mock('../../utils/batchProcessor', () => ({
   batchProcessor: {
-    processBatch: jest.fn(
+    processBatch: vi.fn(
       async (
         items: unknown[],
         processor: (item: unknown) => Promise<unknown>
@@ -82,12 +82,12 @@ const PROJECT_ID = 'project-id';
 const USER_ID = 'user-id';
 
 // Typed references to the mocked functions
-const mockHasProjectAccess = (SharingService as any).hasProjectAccess as ReturnType<typeof jest.fn>;
-const mockPrismaProjectFindUnique = (prisma as any).project.findUnique as ReturnType<typeof jest.fn>;
-const mockUuidV4 = uuidv4 as unknown as ReturnType<typeof jest.fn>;
-const MockMetricsCalculator = MetricsCalculator as unknown as ReturnType<typeof jest.fn>;
-const MockFormatConverter = FormatConverter as unknown as ReturnType<typeof jest.fn>;
-const MockVisualizationGenerator = VisualizationGenerator as unknown as ReturnType<typeof jest.fn>;
+const mockHasProjectAccess = (SharingService as any).hasProjectAccess as ReturnType<typeof vi.fn>;
+const mockPrismaProjectFindUnique = (prisma as any).project.findUnique as ReturnType<typeof vi.fn>;
+const mockUuidV4 = uuidv4 as unknown as ReturnType<typeof vi.fn>;
+const MockMetricsCalculator = MetricsCalculator as unknown as ReturnType<typeof vi.fn>;
+const MockFormatConverter = FormatConverter as unknown as ReturnType<typeof vi.fn>;
+const MockVisualizationGenerator = VisualizationGenerator as unknown as ReturnType<typeof vi.fn>;
 
 const resetSingleton = () => {
   (ExportService as any).instance = undefined;
@@ -109,26 +109,26 @@ describe('ExportService', () => {
   let service: ExportService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Re-set constructor mocks (resetMocks:true clears factory-set implementations).
     // Cast to `any` to avoid TS2345 "never" inference inside mockImplementation callbacks.
     MockVisualizationGenerator.mockImplementation(() => ({
-      generateVisualization: (jest.fn() as any).mockResolvedValue(undefined),
+      generateVisualization: (vi.fn() as any).mockResolvedValue(undefined),
     }));
     MockMetricsCalculator.mockImplementation(() => ({
-      calculateAllMetrics: (jest.fn() as any).mockResolvedValue([]),
-      exportToExcel: (jest.fn() as any).mockResolvedValue(undefined),
-      exportToCSV: (jest.fn() as any).mockResolvedValue(undefined),
-      exportSpermToExcel: (jest.fn() as any).mockResolvedValue(false),
+      calculateAllMetrics: (vi.fn() as any).mockResolvedValue([]),
+      exportToExcel: (vi.fn() as any).mockResolvedValue(undefined),
+      exportToCSV: (vi.fn() as any).mockResolvedValue(undefined),
+      exportSpermToExcel: (vi.fn() as any).mockResolvedValue(false),
     }));
     MockFormatConverter.mockImplementation(() => ({
-      convertToCOCO: (jest.fn() as any).mockResolvedValue({}),
-      convertToYOLO: (jest.fn() as any).mockResolvedValue({
+      convertToCOCO: (vi.fn() as any).mockResolvedValue({}),
+      convertToYOLO: (vi.fn() as any).mockResolvedValue({
         content: '',
         warnings: [],
       }),
-      convertToJSON: (jest.fn() as any).mockResolvedValue({}),
+      convertToJSON: (vi.fn() as any).mockResolvedValue({}),
     }));
 
     service = makeService();
