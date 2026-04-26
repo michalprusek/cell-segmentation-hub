@@ -71,7 +71,11 @@ class GPUMonitor:
         
         # Monitoring thread
         self.monitoring_thread: Optional[threading.Thread] = None
-        self.stop_monitoring = threading.Event()
+        # Event used by `_monitoring_loop` to know when to exit. Renamed
+        # from `self.stop_monitoring` to avoid shadowing the
+        # `stop_monitoring()` method below — the previous name made
+        # `cleanup()` raise `TypeError: 'Event' object is not callable`.
+        self._stop_event = threading.Event()
         
         # Performance tracking
         self.peak_memory_mb = 0.0
@@ -118,13 +122,13 @@ class GPUMonitor:
                 # Get temperature if available
                 try:
                     temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-                except:
+                except pynvml.NVMLError:
                     pass
-                
+
                 # Get power draw if available
                 try:
                     power_draw = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0  # Convert to watts
-                except:
+                except pynvml.NVMLError:
                     pass
                     
                 pynvml.nvmlShutdown()
@@ -162,22 +166,22 @@ class GPUMonitor:
             logger.warning("Monitoring already running")
             return
         
-        self.stop_monitoring.clear()
+        self._stop_event.clear()
         self.monitoring_thread = threading.Thread(target=self._monitoring_loop)
         self.monitoring_thread.daemon = True
         self.monitoring_thread.start()
         logger.info("GPU monitoring started")
-    
+
     def stop_monitoring(self):
         """Stop background monitoring"""
-        self.stop_monitoring.set()
+        self._stop_event.set()
         if self.monitoring_thread:
             self.monitoring_thread.join(timeout=5)
         logger.info("GPU monitoring stopped")
-    
+
     def _monitoring_loop(self):
         """Background monitoring loop"""
-        while not self.stop_monitoring.is_set():
+        while not self._stop_event.is_set():
             metrics = self.get_current_metrics()
             if metrics:
                 self.metrics_history.append(metrics)
