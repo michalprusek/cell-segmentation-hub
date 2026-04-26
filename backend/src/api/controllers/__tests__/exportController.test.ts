@@ -202,6 +202,22 @@ describe('ExportController', () => {
       expect(response.body.error).toBe('Failed to start export');
     });
 
+    it('should return 429 when service rejects due to per-user concurrency cap', async () => {
+      mockService.startExportJob.mockRejectedValueOnce(
+        new Error(
+          'Rate limit exceeded: you already have an export in progress. ' +
+            'Wait for it to finish or cancel it before starting another.'
+        )
+      );
+
+      const response = await request(app)
+        .post(`/projects/${projectId}/export`)
+        .send({ options: {} })
+        .expect(429);
+
+      expect(response.body.error).toContain('Rate limit exceeded');
+    });
+
     it('should use empty options when options not provided', async () => {
       mockService.startExportJob.mockResolvedValueOnce(jobId);
 
