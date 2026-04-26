@@ -3,13 +3,20 @@
 # Database Backup Script for Cell Segmentation Hub
 # Supports both PostgreSQL and SQLite databases
 
-set -e
+# pipefail is critical: without it, `pg_dump | gzip` masks pg_dump
+# failures (e.g. wrong credentials, missing pg_dump binary) because
+# gzip happily exits 0 on empty input and produces a 20-byte "valid"
+# gzip header. The `-s` size check below would still pass, and we'd
+# silently install a useless backup.
+set -eo pipefail
 
-# Configuration
-BACKUP_DIR="/backups/database"
-RETENTION_DAYS=30
+# Configuration — env-overridable so the script works for both root
+# (default `/backups/database` + `/var/log/backup.log`) and non-root
+# users (e.g. systemd timer running as `cvat` writing under `~/spheroseg-backups`).
+BACKUP_DIR="${BACKUP_DIR:-/backups/database}"
+RETENTION_DAYS="${RETENTION_DAYS:-30}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="/var/log/backup.log"
+LOG_FILE="${LOG_FILE:-/var/log/backup.log}"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -44,14 +51,18 @@ elif [ -f ".env" ]; then
     load_env_file ".env"
 fi
 
-# Logging function
+# Logging function — tolerate non-writable LOG_FILE (e.g. when running
+# as a non-root systemd user that can't touch /var/log). Fall back to
+# stderr only.
 log() {
     echo -e "$1"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> $LOG_FILE
+    if [ -w "$(dirname "$LOG_FILE")" ] 2>/dev/null; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE" 2>/dev/null || true
+    fi
 }
 
 # Create backup directory if it doesn't exist
-mkdir -p $BACKUP_DIR
+mkdir -p "$BACKUP_DIR"
 
 log "${GREEN}Starting database backup...${NC}"
 
@@ -136,14 +147,24 @@ except Exception as e:
     # Remove temporary pgpass file
     rm -f "$PGPASS_FILE"
     
-    # Verify backup
-    if [ -f "$BACKUP_FILE" ] && [ -s "$BACKUP_FILE" ]; then
-        SIZE=$(du -h $BACKUP_FILE | cut -f1)
+    # Verify backup. Minimum size check is critical — a 20-byte gzip
+    # header on its own passes `-s` (size > 0) but is unusable. A real
+    # spheroseg dump is megabytes; require at least 1 KiB so an empty
+    # pg_dump (e.g. credential failure that pipefail somehow missed)
+    # surfaces as a backup error rather than a silent zero-content file.
+    MIN_BACKUP_BYTES=1024
+    if [ -f "$BACKUP_FILE" ]; then
+        BYTES=$(stat -c %s "$BACKUP_FILE" 2>/dev/null || stat -f %z "$BACKUP_FILE")
+        if [ "$BYTES" -lt "$MIN_BACKUP_BYTES" ]; then
+            log "${RED}❌ Backup is suspiciously small ($BYTES B < $MIN_BACKUP_BYTES B). Aborting.${NC}"
+            rm -f "$BACKUP_FILE"
+            exit 1
+        fi
+        SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
         log "${GREEN}✅ PostgreSQL backup successful: $BACKUP_FILE (Size: $SIZE)${NC}"
-        
-        # Test restore capability (dry run)
-        gunzip -t $BACKUP_FILE
-        if [ $? -eq 0 ]; then
+
+        # Test restore capability (gzip integrity)
+        if gunzip -t "$BACKUP_FILE"; then
             log "${GREEN}✅ Backup integrity verified${NC}"
         else
             log "${RED}❌ Backup integrity check failed${NC}"
@@ -189,7 +210,11 @@ if [[ ! $RETENTION_DAYS =~ ^[0-9]+$ ]]; then
     log "${RED}❌ RETENTION_DAYS must be a positive integer${NC}"
     exit 1
 fi
-find -- "$BACKUP_DIR" -type f -name "*.gz" -mtime +"$RETENTION_DAYS" -print0 | xargs -0 rm --
+# xargs -r is required: without it, an empty find result (no files
+# older than RETENTION_DAYS, common on a fresh install) calls
+# `rm --` with no arguments and rm errors with "missing operand".
+find -- "$BACKUP_DIR" -type f -name "*.gz" -mtime +"$RETENTION_DAYS" -print0 \
+    | xargs -0 -r rm --
 
 # List recent backups
 log "${GREEN}Recent backups:${NC}"

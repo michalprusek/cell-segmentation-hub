@@ -1,0 +1,43 @@
+[Unit]
+Description=SpheroSeg PostgreSQL database backup
+Documentation=https://github.com/michalprusek/cell-segmentation-hub/blob/main/docs/database-backup.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+
+# Adjust User if you install on behalf of a different account.
+User=cvat
+Group=cvat
+
+# Project root — must contain .env.production and scripts/backup-database.sh.
+WorkingDirectory=/home/cvat/cell-segmentation-hub
+
+# Where backups land + log destination. Override on install if your host
+# uses a different volume layout.
+Environment=BACKUP_DIR=/home/cvat/spheroseg-backups
+Environment=LOG_FILE=/home/cvat/spheroseg-backups/backup.log
+Environment=RETENTION_DAYS=30
+
+ExecStart=/bin/bash /home/cvat/cell-segmentation-hub/scripts/backup-database.sh
+
+# Don't fail the timer on a single bad night — Restart=no + RemainAfterExit=no
+# means systemctl status reports the failure for the operator without
+# blocking subsequent runs.
+RemainAfterExit=no
+
+# Hardening — backup script doesn't need elevated privileges or network
+# beyond pg_dump's connection.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/cvat/spheroseg-backups /home/cvat/cell-segmentation-hub
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target
