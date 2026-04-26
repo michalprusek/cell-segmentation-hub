@@ -60,7 +60,7 @@ vi.mock('../../utils/logger', () => ({
 }));
 vi.mock('crypto', async () => {
   const actual = (await vi.importActual('crypto')) as typeof import('crypto');
-  return {
+  const mocked = {
     ...actual,
     // randomBytes must return a Buffer-like object where .toString('hex') returns a plain string
     randomBytes: vi.fn((size: number) => {
@@ -68,6 +68,7 @@ vi.mock('crypto', async () => {
       return buf;
     }),
   };
+  return { ...mocked, default: mocked };
 });
 
 import { sessionService } from '../sessionService';

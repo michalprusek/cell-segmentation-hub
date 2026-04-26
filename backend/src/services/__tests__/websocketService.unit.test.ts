@@ -1,35 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// --- JWT mock ---
-const jwtMock = {
-  verify: vi.fn() as any,
-};
+// All mocks wrapped in vi.hoisted so the vi.mock factories below can
+// reference them after Vitest hoists the vi.mock calls above the file.
+const { jwtMock, prismaMock, mockIo } = vi.hoisted(() => {
+  const jwtMock = { verify: vi.fn() as any };
+  const prismaMock = {
+    user: { findUnique: vi.fn() as any },
+    project: { findFirst: vi.fn() as any },
+  };
+  const mockIo = {
+    use: vi.fn() as any,
+    on: vi.fn() as any,
+    to: vi.fn() as any,
+    emit: vi.fn() as any,
+    close: vi.fn() as any,
+  };
+  mockIo.to.mockReturnValue({ emit: vi.fn() });
+  return { jwtMock, prismaMock, mockIo };
+});
 
-// --- Prisma mock ---
-const prismaMock = {
-  user: {
-    findUnique: vi.fn() as any,
-  },
-  project: {
-    findFirst: vi.fn() as any,
-  },
-};
-
-// --- Socket.IO mock ---
-// The mock io instance returned by the SocketIOServer constructor
-const mockIo = {
-  use: vi.fn() as any,
-  on: vi.fn() as any,
-  to: vi.fn() as any,
-  emit: vi.fn() as any,
-  close: vi.fn() as any,
-};
-// make .to() chainable (returns object with .emit)
-mockIo.to.mockReturnValue({ emit: vi.fn() });
-
-// All mocks before imports
 vi.mock('socket.io', () => ({
-  Server: vi.fn(() => mockIo),
+  Server: vi.fn().mockImplementation(function (this: any) {
+    Object.assign(this, mockIo);
+    return mockIo;
+  }),
 }));
 vi.mock('jsonwebtoken', () => jwtMock);
 vi.mock('../../utils/logger');
@@ -50,7 +44,8 @@ const resetSingleton = () => {
 const makeService = () => {
   resetSingleton();
 
-  // Reset mock io return on each construction
+  // Reset mock io return on each construction. Vitest 4 needs an
+  // implementation function (not mockReturnValue) for `new`-called mocks.
   const freshIo = {
     use: vi.fn(),
     on: vi.fn(),
@@ -58,7 +53,9 @@ const makeService = () => {
     emit: vi.fn(),
     close: vi.fn(),
   };
-  (SocketIOServer as unknown as Mock).mockReturnValue(freshIo);
+  (SocketIOServer as unknown as Mock).mockImplementation(function (this: any) {
+    Object.assign(this, freshIo);
+  });
 
   const httpServer = {} as any;
   const svc = WebSocketService.getInstance(httpServer, prismaMock as any);

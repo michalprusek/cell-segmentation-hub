@@ -35,9 +35,9 @@ vi.mock('../../../utils/config', () => ({
 vi.mock('../../../services/imageService');
 vi.mock('../../../middleware/auth');
 vi.mock('../../../services/segmentationThumbnailService', () => ({
-  SegmentationThumbnailService: vi.fn().mockImplementation(() => ({
-    generateThumbnail: vi.fn(() => Promise.resolve()),
-  })),
+  SegmentationThumbnailService: vi.fn().mockImplementation(function (this: any) {
+    this.generateThumbnail = vi.fn(() => Promise.resolve());
+  }),
 }));
 vi.mock('../../../services/websocketService', () => ({
   WebSocketService: {
@@ -149,8 +149,11 @@ describe('ImageController - Large Batch Upload Tests', () => {
       getBrowserCompatibleImage: vi.fn(),
     };
 
-    // Configure the auto-mock class to return our mock instance
-    MockImageService.mockImplementation(() => mockImageService as any);
+    // Configure the auto-mock class to return our mock instance.
+    // Vitest 4: arrow fn impl can't be constructed, use function form.
+    MockImageService.mockImplementation(function (this: any) {
+      Object.assign(this, mockImageService);
+    });
 
     imageController = new ImageController();
 

@@ -11,19 +11,17 @@ import type { MockedFunction } from 'vitest';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 
-// ---------------------------------------------------------------------------
-// Factory mock for ExportService — must be declared before all other mocks
-// so that when exportRoutes.ts imports ExportController → ExportService, the
-// getInstance() call returns our controllable mock instance.
-// ---------------------------------------------------------------------------
-const mockServiceInstance: Record<string, Mock<any>> = {
-  startExportJob: vi.fn(),
-  getJobStatus: vi.fn(),
-  getExportFilePath: vi.fn(),
-  cancelJob: vi.fn(),
-  getExportHistory: vi.fn(),
-  setWebSocketService: vi.fn(),
-};
+// vi.hoisted so the factory below can reference these.
+const { mockServiceInstance } = vi.hoisted(() => ({
+  mockServiceInstance: {
+    startExportJob: vi.fn(),
+    getJobStatus: vi.fn(),
+    getExportFilePath: vi.fn(),
+    cancelJob: vi.fn(),
+    getExportHistory: vi.fn(),
+    setWebSocketService: vi.fn(),
+  } as Record<string, Mock<any>>,
+}));
 
 vi.mock('../../../services/exportService', () => ({
   ExportService: {

@@ -92,7 +92,9 @@ vi.mock('@prisma/client', () => {
     },
   };
   return {
-    PrismaClient: vi.fn().mockImplementation(() => mockPrismaClient),
+    PrismaClient: vi.fn().mockImplementation(function (this: any) {
+      Object.assign(this, mockPrismaClient);
+    }),
     Prisma: { PrismaClientKnownRequestError: class extends Error {} },
   };
 });

@@ -8,9 +8,50 @@ import { PrismaClient } from '@prisma/client';
 import axios, { AxiosInstance } from 'axios';
 import { getStorageProvider } from '../../storage/index';
 
+// vi.hoisted so the @prisma/client factory below can reference these.
+const { mockPrismaInstance } = vi.hoisted(() => ({
+  mockPrismaInstance: {
+    $connect: vi.fn(),
+    $disconnect: vi.fn(),
+    $transaction: vi.fn(),
+    user: { findUnique: vi.fn() },
+    project: { findUnique: vi.fn(), findFirst: vi.fn() },
+    image: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    segmentation: {
+      upsert: vi.fn(),
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    segmentationQueue: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+  } as any,
+}));
+
 // Mock dependencies
 vi.mock('axios');
-vi.mock('@prisma/client');
+vi.mock('@prisma/client', () => ({
+  PrismaClient: vi.fn().mockImplementation(function (this: any) {
+    Object.assign(this, mockPrismaInstance);
+  }),
+  Prisma: { PrismaClientKnownRequestError: class extends Error {} },
+}));
 vi.mock('../imageService');
 vi.mock('../segmentationThumbnailService');
 vi.mock('../thumbnailManager');

@@ -36,14 +36,14 @@ vi.mock('fs/promises', () => ({
   copyFile: vi.fn(),
 }));
 
-vi.mock('archiver', () =>
-  vi.fn(() => ({
+vi.mock('archiver', () => ({
+  default: vi.fn(() => ({
     directory: vi.fn(),
     on: vi.fn(),
     pipe: vi.fn(),
     finalize: vi.fn(),
-  }))
-);
+  })),
+}));
 
 vi.mock('../visualization/visualizationGenerator', () => ({
   VisualizationGenerator: vi.fn(),
@@ -55,6 +55,7 @@ vi.mock('../metrics/metricsCalculator', () => ({
 
 vi.mock('../export/formatConverter', () => ({
   FormatConverter: vi.fn(),
+  resolveImageDimensions: vi.fn().mockResolvedValue({ width: 100, height: 100 }),
 }));
 
 vi.mock('../../utils/batchProcessor', () => ({
@@ -113,23 +114,28 @@ describe('ExportService', () => {
 
     // Re-set constructor mocks (resetMocks:true clears factory-set implementations).
     // Cast to `any` to avoid TS2345 "never" inference inside mockImplementation callbacks.
-    MockVisualizationGenerator.mockImplementation(() => ({
-      generateVisualization: (vi.fn() as any).mockResolvedValue(undefined),
-    }));
-    MockMetricsCalculator.mockImplementation(() => ({
-      calculateAllMetrics: (vi.fn() as any).mockResolvedValue([]),
-      exportToExcel: (vi.fn() as any).mockResolvedValue(undefined),
-      exportToCSV: (vi.fn() as any).mockResolvedValue(undefined),
-      exportSpermToExcel: (vi.fn() as any).mockResolvedValue(false),
-    }));
-    MockFormatConverter.mockImplementation(() => ({
-      convertToCOCO: (vi.fn() as any).mockResolvedValue({}),
-      convertToYOLO: (vi.fn() as any).mockResolvedValue({
+    // Vitest v4 quirk: `mockImplementation(() => obj)` produces a non-
+    // constructable arrow function. Use function-form so `new MockX()`
+    // sets properties on `this` and returns it.
+    MockVisualizationGenerator.mockImplementation(function (this: any) {
+      this.generateVisualization = (vi.fn() as any).mockResolvedValue(undefined);
+    });
+    MockMetricsCalculator.mockImplementation(function (this: any) {
+      this.calculateAllMetrics = (vi.fn() as any).mockResolvedValue([]);
+      this.calculateAllImageMetrics = (vi.fn() as any).mockResolvedValue([]);
+      this.exportToExcel = (vi.fn() as any).mockResolvedValue(undefined);
+      this.exportToCSV = (vi.fn() as any).mockResolvedValue(undefined);
+      this.exportPolygonMetricsToExcel = (vi.fn() as any).mockResolvedValue(undefined);
+      this.exportSpermToExcel = (vi.fn() as any).mockResolvedValue(false);
+    });
+    MockFormatConverter.mockImplementation(function (this: any) {
+      this.convertToCOCO = (vi.fn() as any).mockResolvedValue({});
+      this.convertToYOLO = (vi.fn() as any).mockResolvedValue({
         content: '',
         warnings: [],
-      }),
-      convertToJSON: (vi.fn() as any).mockResolvedValue({}),
-    }));
+      });
+      this.convertToJSON = (vi.fn() as any).mockResolvedValue({});
+    });
 
     service = makeService();
 
