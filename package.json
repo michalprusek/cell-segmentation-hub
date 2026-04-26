@@ -30,6 +30,7 @@
     "i18n:check": "node scripts/check-i18n.cjs",
     "i18n:lint": "eslint . --config .eslintrc-i18n.js",
     "i18n:validate": "npm run i18n:check && npm run i18n:lint",
+    "verify:shared-types": "node scripts/verify-shared-types.cjs",
     "lint:types": "eslint . --ext .ts,.tsx --config .eslintrc-typescript.js",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
