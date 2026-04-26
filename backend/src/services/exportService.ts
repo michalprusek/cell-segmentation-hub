@@ -27,6 +27,11 @@ import {
   generateMetricsGuide,
   generateAnnotationGuides,
 } from './export/exportDocs';
+import {
+  sanitizeFilename,
+  getProgressMessage,
+  createZipArchive,
+} from './export/exportFileOperations';
 
 const YOLO_WRITE_CONCURRENCY = 16;
 
@@ -527,7 +532,7 @@ export class ExportService {
       checkCancellation();
 
       // Create ZIP archive (no compression)
-      const zipPath = await this.createZipArchive(exportDir, project.title);
+      const zipPath = await createZipArchive(exportDir, project.title);
 
       // Check for cancellation after ZIP creation
       checkCancellation();
@@ -1261,85 +1266,6 @@ export class ExportService {
     await fs.writeFile(path.join(docDir, 'metrics_guide.md'), metricsGuide);
   }
 
-  private async createZipArchive(
-    exportDir: string,
-    projectName: string
-  ): Promise<string> {
-    // Sanitize project name for filesystem safety
-    const sanitizedProjectName = this.sanitizeFilename(projectName);
-    // Use simple project name for export file (as requested by user)
-    const zipName = `${sanitizedProjectName}.zip`;
-    const zipPath = path.join(process.env.EXPORT_DIR || './exports', zipName);
-
-    const output = await fs.open(zipPath, 'w');
-    const archive = archiver('zip', {
-      zlib: { level: 6 }, // Balanced compression (6 is default, good balance of speed vs size)
-      highWaterMark: 16 * 1024 * 1024, // 16MB buffer for better streaming performance
-    });
-
-    return new Promise((resolve, reject) => {
-      let cleanupCalled = false;
-
-      const cleanup = async (): Promise<void> => {
-        if (cleanupCalled) {
-          return;
-        }
-        cleanupCalled = true;
-
-        try {
-          // Destroy archive first
-          if (archive.readable || archive.writable) {
-            archive.destroy();
-          }
-        } catch (error) {
-          logger.warn('Failed to destroy archive:', 'ExportService', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        try {
-          // Close file handle
-          await output.close();
-        } catch (error) {
-          logger.warn('Failed to close file handle:', 'ExportService', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        // Remove event listeners to prevent memory leaks
-        writeStream.removeAllListeners();
-        archive.removeAllListeners();
-      };
-
-      const writeStream = output.createWriteStream();
-
-      // Add error handler for writeStream
-      writeStream.on('error', error => {
-        cleanup().finally(() => reject(error));
-      });
-
-      writeStream.on('close', () => {
-        cleanup().finally(() => resolve(zipPath));
-      });
-
-      archive.on('error', error => {
-        cleanup().finally(() => reject(error));
-      });
-
-      archive.pipe(writeStream);
-      archive.directory(exportDir, false);
-
-      // Wrap finalize in try/catch and handle its promise rejection
-      try {
-        archive.finalize().catch(error => {
-          cleanup().finally(() => reject(error));
-        });
-      } catch (error) {
-        cleanup().finally(() => reject(error));
-      }
-    });
-  }
-
   private updateJobProgress(
     jobId: string,
     progress: number,
@@ -1359,7 +1285,7 @@ export class ExportService {
       const phase = progress < 90 ? 'processing' : 'downloading';
 
       // Generate contextual message
-      const message = this.getProgressMessage(progress, stage, stageProgress);
+      const message = getProgressMessage(progress, stage, stageProgress);
 
       // Enhanced progress data for WebSocket
       const progressData = {
@@ -1375,51 +1301,6 @@ export class ExportService {
       // Send to user via WebSocket
       this.sendToUser(job.userId, 'export:progress', progressData);
     }
-  }
-
-  private getProgressMessage(
-    progress: number,
-    stage?:
-      | 'images'
-      | 'visualizations'
-      | 'annotations'
-      | 'metrics'
-      | 'compression',
-    stageProgress?: { current: number; total: number; currentItem?: string }
-  ): string {
-    if (stage && stageProgress) {
-      const { current, total, currentItem } = stageProgress;
-      switch (stage) {
-        case 'images':
-          return `Copying original images (${current}/${total})${currentItem ? `: ${currentItem}` : ''}... ${progress}%`;
-        case 'visualizations':
-          return `Generating visualizations (${current}/${total})${currentItem ? `: ${currentItem}` : ''}... ${progress}%`;
-        case 'annotations':
-          return `Creating annotation files (${current}/${total})${currentItem ? `: ${currentItem}` : ''}... ${progress}%`;
-        case 'metrics':
-          return `Calculating metrics (${current}/${total})${currentItem ? `: ${currentItem}` : ''}... ${progress}%`;
-        case 'compression':
-          return `Creating archive... ${progress}%`;
-        default:
-          return `Processing ${stage} (${current}/${total})... ${progress}%`;
-      }
-    } else if (stage) {
-      switch (stage) {
-        case 'images':
-          return `Copying original images... ${progress}%`;
-        case 'visualizations':
-          return `Generating visualizations... ${progress}%`;
-        case 'annotations':
-          return `Creating annotation files... ${progress}%`;
-        case 'metrics':
-          return `Calculating metrics... ${progress}%`;
-        case 'compression':
-          return `Creating archive... ${progress}%`;
-        default:
-          return `Processing ${stage}... ${progress}%`;
-      }
-    }
-    return `Processing... ${progress}%`;
   }
 
   private setupJobCleanup(): void {
@@ -1619,62 +1500,6 @@ export class ExportService {
   /**
    * Sanitize filename for filesystem safety
    */
-  private sanitizeFilename(filename: string): string {
-    if (!filename || typeof filename !== 'string') {
-      return 'export';
-    }
-
-    // Replace invalid characters with underscores
-    // Invalid characters: < > : " | ? * \ / and control characters
-    let sanitized = filename
-      .replace(/[<>:"|?*\\/]/g, '_')
-      // eslint-disable-next-line no-control-regex
-      .replace(/[\u0000-\u001f\u0080-\u009f]/g, '_')
-      .trim();
-
-    // Remove leading/trailing dots and spaces (Windows compatibility)
-    sanitized = sanitized.replace(/^[.\s]+|[.\s]+$/g, '');
-
-    // Ensure filename is not empty and not too long
-    if (!sanitized || sanitized.length === 0) {
-      sanitized = 'export';
-    } else if (sanitized.length > 100) {
-      // Truncate to 100 characters to avoid filesystem limits
-      sanitized = sanitized.substring(0, 100).trim();
-    }
-
-    // Avoid reserved Windows names
-    const reservedNames = [
-      'CON',
-      'PRN',
-      'AUX',
-      'NUL',
-      'COM1',
-      'COM2',
-      'COM3',
-      'COM4',
-      'COM5',
-      'COM6',
-      'COM7',
-      'COM8',
-      'COM9',
-      'LPT1',
-      'LPT2',
-      'LPT3',
-      'LPT4',
-      'LPT5',
-      'LPT6',
-      'LPT7',
-      'LPT8',
-      'LPT9',
-    ];
-    if (reservedNames.includes(sanitized.toUpperCase())) {
-      sanitized = `${sanitized}_export`;
-    }
-
-    return sanitized;
-  }
-
   // Cleanup method for graceful shutdown
   public destroy(): void {
     if (this.cleanupInterval) {
