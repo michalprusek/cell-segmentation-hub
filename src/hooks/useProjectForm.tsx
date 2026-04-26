@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/useAuth';
-import { getErrorMessage as _getErrorMessage } from '@/types';
+import { getErrorMessage as _getErrorMessage, type ProjectType } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { logger } from '@/lib/logger';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -16,6 +16,7 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
   const { t } = useLanguage();
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
+  const [projectType, setProjectType] = useState<ProjectType>('spheroid');
   const [isCreating, setIsCreating] = useState(false);
   const { user } = useAuth();
 
@@ -38,6 +39,7 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
       const projectData = await apiClient.createProject({
         name: projectName,
         description: projectDescription || t('projects.noDescriptionProvided'),
+        type: projectType,
       });
 
       // Validate response
@@ -56,6 +58,7 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
       onClose();
       setProjectName('');
       setProjectDescription('');
+      setProjectType('spheroid');
 
       // Trigger refresh or callback
       if (onSuccess && projectData.id) {
@@ -85,6 +88,8 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
     setProjectName,
     projectDescription,
     setProjectDescription,
+    projectType,
+    setProjectType,
     isCreating,
     handleCreateProject,
   };
