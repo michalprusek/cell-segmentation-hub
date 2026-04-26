@@ -141,5 +141,13 @@ real-*-measurements-*.json
 screenshots/
 videos/
 backups/
+.backups/
+.tmp_viz/
 .playwright-mcp/
 scripts/certbot-logs/
+
+# Local-only env (Grafana admin password)
+.env.monitoring
+
+# External / scratch model artifacts dropped at repo root
+path_c_v24c/

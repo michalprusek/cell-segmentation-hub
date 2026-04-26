@@ -115,12 +115,9 @@ model Segmentation {
   imageHeight            Int?
   imageWidth             Int?
   image                  Image                   @relation(fields: [imageId], references: [id], onDelete: Cascade)
-  // Removed segmentationThumbnails - using unified image thumbnail approach
 
   @@map("segmentations")
 }
-
-// SegmentationThumbnail model removed - using unified image thumbnail approach
 
 model SegmentationQueue {
   id          String    @id @default(uuid())

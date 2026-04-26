@@ -118,13 +118,13 @@ class GPUMonitor:
                 # Get temperature if available
                 try:
                     temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-                except:
+                except pynvml.NVMLError:
                     pass
-                
+
                 # Get power draw if available
                 try:
                     power_draw = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0  # Convert to watts
-                except:
+                except pynvml.NVMLError:
                     pass
                     
                 pynvml.nvmlShutdown()
