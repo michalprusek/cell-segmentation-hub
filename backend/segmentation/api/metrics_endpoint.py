@@ -251,6 +251,13 @@ async def disintegration_index(request: DisintegrationRequest):
                 r_ref = float(np.sqrt(n_core / np.pi))
                 ref_label = "core"
             else:
+                # Surface a warning so a malformed/off-canvas/collinear core
+                # polygon doesn't silently degrade DI to the r_eff fallback.
+                logger.warning(
+                    "DI core polygons rejected: provided=%d valid_shape=%d "
+                    "rasterised_pixels=%d image=%dx%d -> r_eff fallback",
+                    len(candidate_cores), valid_count, n_core, W, H,
+                )
                 ref_label = "r_eff_fallback"
 
         # Step 2: choose the centroid. Prefer the core's centroid (improvement A

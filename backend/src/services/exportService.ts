@@ -1020,14 +1020,47 @@ export class ExportService {
     // and any UI surface get the correct values.
     const uploadDir = process.env.UPLOAD_DIR || '/app/uploads';
     const dimsCache = new Map<string, { width: number; height: number }>();
+
+    /** Read width/height from a BMP file via header parsing.
+     * Sharp/libvips lacks BMP support in the production image, so for the
+     * microscopy upload format (mostly .bmp) we parse the DIB header
+     * directly: width @ offset 18, height @ offset 22 (4-byte LE int32;
+     * negative height = top-down storage, take abs).
+     */
+    const readBmpDims = async (
+      filePath: string
+    ): Promise<{ width: number; height: number } | null> => {
+      const fh = await fs.open(filePath, 'r');
+      try {
+        const buf = Buffer.alloc(26);
+        await fh.read(buf, 0, 26, 0);
+        if (buf[0] !== 0x42 || buf[1] !== 0x4d) return null;
+        const width = buf.readInt32LE(18);
+        const height = Math.abs(buf.readInt32LE(22));
+        if (width <= 0 || height <= 0) return null;
+        return { width, height };
+      } finally {
+        await fh.close();
+      }
+    };
+
     for (const image of images) {
       if ((image.width && image.height) || !image.originalPath) continue;
 
-      // Step 1: read dimensions from disk. Sharp failure means the file is
-      // missing/corrupt; warn and skip this image.
+      // Step 1: read dimensions from disk. Try BMP header first (microscopy
+      // format, sharp doesn't support it in this build); fall back to sharp
+      // for PNG/JPEG/TIFF.
+      const filePath = path.join(uploadDir, image.originalPath);
+      const ext = path.extname(filePath).toLowerCase();
       let meta: { width?: number; height?: number };
       try {
-        meta = await sharp(path.join(uploadDir, image.originalPath)).metadata();
+        if (ext === '.bmp') {
+          const bmp = await readBmpDims(filePath);
+          if (!bmp) continue;
+          meta = bmp;
+        } else {
+          meta = await sharp(filePath).metadata();
+        }
       } catch (err) {
         logger.warn(
           `Failed to READ dimensions for ${image.id} from disk: ${err instanceof Error ? err.message : String(err)}`,
@@ -1595,10 +1628,11 @@ Algorithm (implemented in
 
 4. **Reference distribution — empirical core CDF**. When a core polygon is
    present, the reference is the **empirical** distribution of distances
-   \`d_core\` for every pixel inside the core (relative to the same mask
-   centroid). This means the reference reflects the **actual radial profile
-   of the dense core**, not an idealised disk. The fallback (no core) uses
-   the analytical equivalent-disk CDF \`F_ref(d̃) = d̃²\` for \`d̃ ∈ [0, 1]\`.
+   \`d_core\` for every pixel inside the core, anchored on the **same
+   centroid as d_mask** (the core centroid from step 2). This means the
+   reference reflects the **actual radial profile of the dense core**,
+   not an idealised disk. The fallback (no core) uses the analytical
+   equivalent-disk CDF \`F_ref(d̃) = d̃²\` for \`d̃ ∈ [0, 1]\`.
 
 5. **1-Wasserstein distance**:
    - **Core path**: \`W₁_px = wasserstein_distance(d_mask, d_core)\` via
