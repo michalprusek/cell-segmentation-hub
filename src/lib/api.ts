@@ -4,6 +4,7 @@ import {
   UpdateProfile,
   isProjectType,
   type ProjectType,
+  type SegmentationStatus,
 } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
@@ -126,7 +127,7 @@ export interface SegmentationResult {
   processingTime?: number;
   imageWidth: number;
   imageHeight: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: SegmentationStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -647,9 +648,7 @@ class ApiClient {
   }
 
   // Helper method to map segmentation status values
-  private mapSegmentationStatus(
-    status: unknown
-  ): 'pending' | 'processing' | 'completed' | 'failed' {
+  private mapSegmentationStatus(status: unknown): SegmentationStatus {
     // Safely coerce to string
     const statusStr =
       typeof status === 'string' ? status : String(status || '');

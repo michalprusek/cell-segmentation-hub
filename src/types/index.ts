@@ -407,7 +407,7 @@ export interface Image {
   user_id: string;
   image_url: string;
   thumbnail_url?: string;
-  segmentation_status: 'pending' | 'processing' | 'completed' | 'failed';
+  segmentation_status: SegmentationStatus;
   created_at: string;
   updated_at: string;
 }
@@ -452,6 +452,29 @@ export interface NewAccessRequest {
   reason: string;
 }
 
+/**
+ * Canonical segmentation/job status union for the frontend. The four base
+ * states match what the backend returns over REST + WebSocket
+ * (`segmentationService.ts`, `mapSegmentationStatus()` in `api.ts`).
+ *
+ * For export jobs that can additionally be cancelled, use `ExportJobStatus`
+ * which is `SegmentationStatus | 'cancelled'`.
+ *
+ * Use these instead of writing the 4-variant union inline — auto-import
+ * stays consistent and a future status addition is one edit, not seven.
+ */
+export type SegmentationStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+
+/**
+ * Status union for cancellable jobs (e.g. exports). Superset of
+ * `SegmentationStatus` plus `'cancelled'`.
+ */
+export type ExportJobStatus = SegmentationStatus | 'cancelled';
+
 // Segmentation types (can be extended as needed)
 export interface PolygonData {
   id: string;
@@ -467,7 +490,7 @@ export interface SegmentationData {
   id?: string;
   imageSrc?: string;
   polygons: PolygonData[];
-  status?: 'pending' | 'processing' | 'completed' | 'failed';
+  status?: SegmentationStatus;
   timestamp?: Date;
   imageWidth?: number;
   imageHeight?: number;
@@ -477,7 +500,7 @@ export interface SegmentationResult {
   id: string;
   image_id: string;
   polygons: PolygonData[];
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: SegmentationStatus;
   created_at: string;
   updated_at: string;
 }

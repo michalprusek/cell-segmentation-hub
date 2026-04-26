@@ -21,6 +21,7 @@ import { WebSocketService } from './websocketService';
 import * as SharingService from './sharingService';
 import { batchProcessor } from '../utils/batchProcessor';
 import { mapWithConcurrency } from '../utils/concurrency';
+import type { CancellableJobStatus } from '../types';
 
 const YOLO_WRITE_CONCURRENCY = 16;
 
@@ -85,7 +86,7 @@ export interface ExportJob {
   id: string;
   projectId: string;
   userId: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  status: CancellableJobStatus;
   progress: number;
   message?: string;
   filePath?: string;

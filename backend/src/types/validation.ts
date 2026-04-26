@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { JOB_STATUSES } from './index';
 
 // ============================================================================
 // Common validation schemas
@@ -249,10 +250,9 @@ export const imageQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
   status: z
-    .enum(['pending', 'processing', 'completed', 'failed'], {
+    .enum(JOB_STATUSES, {
       errorMap: () => ({
-        message:
-          'Neplatný status. Možné hodnoty: pending, processing, completed, failed',
+        message: `Neplatný status. Možné hodnoty: ${JOB_STATUSES.join(', ')}`,
       }),
     })
     .optional(),
