@@ -1,51 +1,51 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // --- Prisma mock ---
 const prismaMock = {
   segmentationQueue: {
-    findFirst: jest.fn() as any,
-    findMany: jest.fn() as any,
-    create: jest.fn() as any,
-    createMany: jest.fn() as any,
-    delete: jest.fn() as any,
-    deleteMany: jest.fn() as any,
-    update: jest.fn() as any,
-    updateMany: jest.fn() as any,
-    count: jest.fn() as any,
+    findFirst: vi.fn() as any,
+    findMany: vi.fn() as any,
+    create: vi.fn() as any,
+    createMany: vi.fn() as any,
+    delete: vi.fn() as any,
+    deleteMany: vi.fn() as any,
+    update: vi.fn() as any,
+    updateMany: vi.fn() as any,
+    count: vi.fn() as any,
   },
   image: {
-    updateMany: jest.fn() as any,
-    findFirst: jest.fn() as any,
+    updateMany: vi.fn() as any,
+    findFirst: vi.fn() as any,
   },
   segmentation: {
-    deleteMany: jest.fn() as any,
+    deleteMany: vi.fn() as any,
   },
-  $transaction: jest.fn() as any,
+  $transaction: vi.fn() as any,
 };
 
 // --- Segmentation service mock ---
 const segmentationServiceMock = {
-  requestSegmentation: jest.fn() as any,
-  requestBatchSegmentation: jest.fn() as any,
+  requestSegmentation: vi.fn() as any,
+  requestBatchSegmentation: vi.fn() as any,
 };
 
 // --- Image service mock ---
 const imageServiceMock = {
-  getImageById: jest.fn() as any,
-  updateSegmentationStatus: jest.fn() as any,
+  getImageById: vi.fn() as any,
+  updateSegmentationStatus: vi.fn() as any,
 };
 
 // --- WebSocket service mock ---
 const wsServiceMock = {
-  emitSegmentationUpdate: jest.fn() as any,
-  emitQueueStatsUpdate: jest.fn() as any,
+  emitSegmentationUpdate: vi.fn() as any,
+  emitQueueStatsUpdate: vi.fn() as any,
 };
 
 // --- Logger mock ---
-jest.mock('../../utils/logger');
-jest.mock('../../utils/batchProcessor', () => ({
+vi.mock('../../utils/logger');
+vi.mock('../../utils/batchProcessor', () => ({
   batchProcessor: {
-    processBatch: jest.fn(async (items: unknown[], processor: (item: unknown) => Promise<unknown>) =>
+    processBatch: vi.fn(async (items: unknown[], processor: (item: unknown) => Promise<unknown>) =>
       Promise.all(items.map(processor))
     ),
   },
@@ -88,7 +88,7 @@ describe('QueueService', () => {
   let service: QueueService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     service = makeService();
     service.setWebSocketService(wsServiceMock as any);
   });

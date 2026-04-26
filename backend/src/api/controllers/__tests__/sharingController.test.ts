@@ -6,8 +6,8 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import {
   shareProjectByEmail,
   shareProjectByLink,
@@ -22,27 +22,27 @@ import { logger } from '../../../utils/logger';
 import { ResponseHelper } from '../../../utils/response';
 
 // Mock all dependencies
-jest.mock('../../../services/sharingService');
-jest.mock('../../../middleware/auth');
-jest.mock('../../../utils/logger');
-jest.mock('../../../utils/response', () => ({
+vi.mock('../../../services/sharingService');
+vi.mock('../../../middleware/auth');
+vi.mock('../../../utils/logger');
+vi.mock('../../../utils/response', () => ({
   asyncHandler: (fn: any) => fn,
   ResponseHelper: {
-    success: jest.fn(),
-    notFound: jest.fn(),
-    unauthorized: jest.fn(),
-    forbidden: jest.fn(),
-    badRequest: jest.fn(),
-    internalError: jest.fn(),
-    validationError: jest.fn(),
-    conflict: jest.fn(),
-    rateLimit: jest.fn(),
-    serviceUnavailable: jest.fn(),
-    error: jest.fn(),
-    paginated: jest.fn(),
+    success: vi.fn(),
+    notFound: vi.fn(),
+    unauthorized: vi.fn(),
+    forbidden: vi.fn(),
+    badRequest: vi.fn(),
+    internalError: vi.fn(),
+    validationError: vi.fn(),
+    conflict: vi.fn(),
+    rateLimit: vi.fn(),
+    serviceUnavailable: vi.fn(),
+    error: vi.fn(),
+    paginated: vi.fn(),
   },
 }));
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -64,10 +64,10 @@ jest.mock('../../../utils/config', () => ({
 }));
 
 // Double-cast via unknown to avoid both `never` inference and TS overlap errors
-const MockedSharingService = SharingService as unknown as Record<string, jest.Mock<any>>;
-const mockAuthMiddleware = authenticate as jest.MockedFunction<typeof authenticate>;
-const MockedResponseHelper = ResponseHelper as jest.Mocked<typeof ResponseHelper>;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
+const MockedSharingService = SharingService as unknown as Record<string, Mock<any>>;
+const mockAuthMiddleware = authenticate as MockedFunction<typeof authenticate>;
+const MockedResponseHelper = ResponseHelper as Mocked<typeof ResponseHelper>;
+const mockedLogger = logger as Mocked<typeof logger>;
 
 describe('SharingController', () => {
   let app: express.Application;
@@ -96,32 +96,32 @@ describe('SharingController', () => {
   };
 
   function installResponseMocks() {
-    (MockedResponseHelper.success as jest.Mock).mockImplementation(
+    (MockedResponseHelper.success as Mock).mockImplementation(
       (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
-    (MockedResponseHelper.notFound as jest.Mock).mockImplementation(
+    (MockedResponseHelper.notFound as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(404).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.unauthorized as jest.Mock).mockImplementation(
+    (MockedResponseHelper.unauthorized as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(401).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.forbidden as jest.Mock).mockImplementation(
+    (MockedResponseHelper.forbidden as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(403).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.badRequest as jest.Mock).mockImplementation(
+    (MockedResponseHelper.badRequest as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(400).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.internalError as jest.Mock).mockImplementation(
+    (MockedResponseHelper.internalError as Mock).mockImplementation(
       (res: express.Response, _err: unknown, message: string) => {
         return res.status(500).json({ success: false, error: message });
       }
@@ -129,7 +129,7 @@ describe('SharingController', () => {
   }
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     installResponseMocks();
 
     app = express();
@@ -147,9 +147,9 @@ describe('SharingController', () => {
       }
     );
 
-    mockedLogger.info = jest.fn() as jest.MockedFunction<typeof logger.info>;
-    mockedLogger.error = jest.fn() as jest.MockedFunction<typeof logger.error>;
-    mockedLogger.debug = jest.fn() as jest.MockedFunction<typeof logger.debug>;
+    mockedLogger.info = vi.fn() as MockedFunction<typeof logger.info>;
+    mockedLogger.error = vi.fn() as MockedFunction<typeof logger.error>;
+    mockedLogger.debug = vi.fn() as MockedFunction<typeof logger.debug>;
 
     // Register routes
     app.post('/projects/:id/share/email', mockAuthMiddleware, shareProjectByEmail);
@@ -162,17 +162,17 @@ describe('SharingController', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
-    jest.resetAllMocks();
+    vi.restoreAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('shareProjectByEmail', () => {
     it('should share project and return share details', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.shareProjectByEmail as jest.Mock<any>).mockResolvedValueOnce(mockShare);
+      (MockedSharingService.shareProjectByEmail as Mock<any>).mockResolvedValueOnce(mockShare);
       installResponseMocks();
 
       const response = await request(app)
@@ -205,7 +205,7 @@ describe('SharingController', () => {
     });
 
     it('should return 404 when project not found', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: false,
         isOwner: false,
       });
@@ -220,7 +220,7 @@ describe('SharingController', () => {
     });
 
     it('should return 403 when user is not the project owner', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: false,
       });
@@ -235,11 +235,11 @@ describe('SharingController', () => {
     });
 
     it('should return 400 when project already shared with user', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.shareProjectByEmail as jest.Mock<any>).mockRejectedValueOnce(
+      (MockedSharingService.shareProjectByEmail as Mock<any>).mockRejectedValueOnce(
         new Error('Project is already shared with this user')
       );
       installResponseMocks();
@@ -253,11 +253,11 @@ describe('SharingController', () => {
     });
 
     it('should return 500 on unexpected service error', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.shareProjectByEmail as jest.Mock<any>).mockRejectedValueOnce(
+      (MockedSharingService.shareProjectByEmail as Mock<any>).mockRejectedValueOnce(
         new Error('Unexpected DB failure')
       );
       installResponseMocks();
@@ -273,11 +273,11 @@ describe('SharingController', () => {
 
   describe('shareProjectByLink', () => {
     it('should generate shareable link successfully', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.shareProjectByLink as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.shareProjectByLink as Mock<any>).mockResolvedValueOnce({
         ...mockShare,
         shareToken,
         tokenExpiry: new Date('2025-01-01'),
@@ -314,7 +314,7 @@ describe('SharingController', () => {
     });
 
     it('should return 403 when user is not owner', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: false,
       });
@@ -331,11 +331,11 @@ describe('SharingController', () => {
 
   describe('getProjectShares', () => {
     it('should return list of shares for a project', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.getProjectShares as jest.Mock<any>).mockResolvedValueOnce([
+      (MockedSharingService.getProjectShares as Mock<any>).mockResolvedValueOnce([
         { ...mockShare, sharedWith: null },
       ]);
       installResponseMocks();
@@ -368,7 +368,7 @@ describe('SharingController', () => {
     });
 
     it('should return 404 when project not found', async () => {
-      (MockedSharingService.hasProjectAccess as jest.Mock<any>).mockResolvedValueOnce({
+      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
         hasAccess: false,
         isOwner: false,
       });
@@ -384,7 +384,7 @@ describe('SharingController', () => {
 
   describe('revokeProjectShare', () => {
     it('should revoke share successfully', async () => {
-      (MockedSharingService.revokeShare as jest.Mock<any>).mockResolvedValueOnce(undefined);
+      (MockedSharingService.revokeShare as Mock<any>).mockResolvedValueOnce(undefined);
       installResponseMocks();
 
       const response = await request(app)
@@ -418,7 +418,7 @@ describe('SharingController', () => {
     });
 
     it('should return 404 when share not found', async () => {
-      (MockedSharingService.revokeShare as jest.Mock<any>).mockRejectedValueOnce(
+      (MockedSharingService.revokeShare as Mock<any>).mockRejectedValueOnce(
         new Error('Share not found')
       );
       installResponseMocks();
@@ -449,7 +449,7 @@ describe('SharingController', () => {
         },
         needsLogin: false,
       };
-      (MockedSharingService.acceptShareInvitation as jest.Mock<any>).mockResolvedValueOnce(acceptedShare);
+      (MockedSharingService.acceptShareInvitation as Mock<any>).mockResolvedValueOnce(acceptedShare);
       installResponseMocks();
 
       const response = await request(app)
@@ -477,7 +477,7 @@ describe('SharingController', () => {
         },
         needsLogin: true,
       };
-      (MockedSharingService.acceptShareInvitation as jest.Mock<any>).mockResolvedValueOnce(pendingResult);
+      (MockedSharingService.acceptShareInvitation as Mock<any>).mockResolvedValueOnce(pendingResult);
       installResponseMocks();
 
       const response = await request(app)
@@ -489,7 +489,7 @@ describe('SharingController', () => {
     });
 
     it('should return 404 for invalid or expired token', async () => {
-      (MockedSharingService.acceptShareInvitation as jest.Mock<any>).mockRejectedValueOnce(
+      (MockedSharingService.acceptShareInvitation as Mock<any>).mockRejectedValueOnce(
         new Error('Invalid or expired share token')
       );
       installResponseMocks();
@@ -502,7 +502,7 @@ describe('SharingController', () => {
     });
 
     it('should return 400 when invitation email does not match', async () => {
-      (MockedSharingService.acceptShareInvitation as jest.Mock<any>).mockRejectedValueOnce(
+      (MockedSharingService.acceptShareInvitation as Mock<any>).mockRejectedValueOnce(
         new Error('Invitation sent to a different email')
       );
       installResponseMocks();
@@ -536,7 +536,7 @@ describe('SharingController', () => {
           createdAt: new Date('2024-01-01'),
         },
       ];
-      (MockedSharingService.getSharedProjects as jest.Mock<any>).mockResolvedValueOnce(mockSharedProjects);
+      (MockedSharingService.getSharedProjects as Mock<any>).mockResolvedValueOnce(mockSharedProjects);
       installResponseMocks();
 
       const response = await request(app)
@@ -548,7 +548,7 @@ describe('SharingController', () => {
     });
 
     it('should return empty array when no shared projects', async () => {
-      (MockedSharingService.getSharedProjects as jest.Mock<any>).mockResolvedValueOnce([]);
+      (MockedSharingService.getSharedProjects as Mock<any>).mockResolvedValueOnce([]);
       installResponseMocks();
 
       const response = await request(app)
@@ -579,7 +579,7 @@ describe('SharingController', () => {
     });
 
     it('should return 500 on service error', async () => {
-      (MockedSharingService.getSharedProjects as jest.Mock<any>).mockRejectedValueOnce(
+      (MockedSharingService.getSharedProjects as Mock<any>).mockRejectedValueOnce(
         new Error('DB connection lost')
       );
       installResponseMocks();

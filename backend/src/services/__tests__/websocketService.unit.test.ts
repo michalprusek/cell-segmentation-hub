@@ -1,38 +1,38 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // --- JWT mock ---
 const jwtMock = {
-  verify: jest.fn() as any,
+  verify: vi.fn() as any,
 };
 
 // --- Prisma mock ---
 const prismaMock = {
   user: {
-    findUnique: jest.fn() as any,
+    findUnique: vi.fn() as any,
   },
   project: {
-    findFirst: jest.fn() as any,
+    findFirst: vi.fn() as any,
   },
 };
 
 // --- Socket.IO mock ---
 // The mock io instance returned by the SocketIOServer constructor
 const mockIo = {
-  use: jest.fn() as any,
-  on: jest.fn() as any,
-  to: jest.fn() as any,
-  emit: jest.fn() as any,
-  close: jest.fn() as any,
+  use: vi.fn() as any,
+  on: vi.fn() as any,
+  to: vi.fn() as any,
+  emit: vi.fn() as any,
+  close: vi.fn() as any,
 };
 // make .to() chainable (returns object with .emit)
-mockIo.to.mockReturnValue({ emit: jest.fn() });
+mockIo.to.mockReturnValue({ emit: vi.fn() });
 
 // All mocks before imports
-jest.mock('socket.io', () => ({
-  Server: jest.fn(() => mockIo),
+vi.mock('socket.io', () => ({
+  Server: vi.fn(() => mockIo),
 }));
-jest.mock('jsonwebtoken', () => jwtMock);
-jest.mock('../../utils/logger');
+vi.mock('jsonwebtoken', () => jwtMock);
+vi.mock('../../utils/logger');
 
 import { WebSocketService } from '../websocketService';
 import { Server as SocketIOServer } from 'socket.io';
@@ -52,13 +52,13 @@ const makeService = () => {
 
   // Reset mock io return on each construction
   const freshIo = {
-    use: jest.fn(),
-    on: jest.fn(),
-    to: jest.fn().mockReturnValue({ emit: jest.fn() }),
-    emit: jest.fn(),
-    close: jest.fn(),
+    use: vi.fn(),
+    on: vi.fn(),
+    to: vi.fn().mockReturnValue({ emit: vi.fn() }),
+    emit: vi.fn(),
+    close: vi.fn(),
   };
-  (SocketIOServer as unknown as jest.Mock).mockReturnValue(freshIo);
+  (SocketIOServer as unknown as Mock).mockReturnValue(freshIo);
 
   const httpServer = {} as any;
   const svc = WebSocketService.getInstance(httpServer, prismaMock as any);
@@ -70,7 +70,7 @@ describe('WebSocketService - Core Unit Tests', () => {
   let io: ReturnType<typeof makeService>['io'];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     ({ svc, io } = makeService());
   });
 
@@ -81,7 +81,7 @@ describe('WebSocketService - Core Unit Tests', () => {
   // ---------------------------------------------------------------------------
   describe('emitToUser', () => {
     it('emits to user room via io.to()', () => {
-      const roomEmit = jest.fn();
+      const roomEmit = vi.fn();
       io.to.mockReturnValueOnce({ emit: roomEmit });
 
       svc.emitToUser('user-123', 'test-event', { payload: 'data' });
@@ -103,7 +103,7 @@ describe('WebSocketService - Core Unit Tests', () => {
   // ---------------------------------------------------------------------------
   describe('broadcastProjectUpdate', () => {
     it('emits to project room with PROJECT_UPDATE event', () => {
-      const roomEmit = jest.fn();
+      const roomEmit = vi.fn();
       io.to.mockReturnValueOnce({ emit: roomEmit });
 
       const update = {
@@ -127,7 +127,7 @@ describe('WebSocketService - Core Unit Tests', () => {
   // ---------------------------------------------------------------------------
   describe('emitDashboardUpdate', () => {
     it('calls emitToUser with DASHBOARD_UPDATE event', () => {
-      const roomEmit = jest.fn();
+      const roomEmit = vi.fn();
       io.to.mockReturnValueOnce({ emit: roomEmit });
 
       const dashboardData = {
@@ -156,7 +156,7 @@ describe('WebSocketService - Core Unit Tests', () => {
   // ---------------------------------------------------------------------------
   describe('emitSegmentationUpdate', () => {
     it('emits status and progress to user room', () => {
-      const roomEmit = jest.fn();
+      const roomEmit = vi.fn();
       io.to.mockReturnValueOnce({ emit: roomEmit });
 
       const update = {
@@ -180,7 +180,7 @@ describe('WebSocketService - Core Unit Tests', () => {
   // ---------------------------------------------------------------------------
   describe('emitQueueStatsUpdate', () => {
     it('emits queue statistics to project room', () => {
-      const roomEmit = jest.fn();
+      const roomEmit = vi.fn();
       io.to.mockReturnValueOnce({ emit: roomEmit });
 
       const stats = {
@@ -264,7 +264,7 @@ describe('WebSocketService - Core Unit Tests', () => {
           headers: {},
         },
       };
-      const next = jest.fn();
+      const next = vi.fn();
 
       await middleware(socket, next);
 
@@ -292,7 +292,7 @@ describe('WebSocketService - Core Unit Tests', () => {
           headers: {},
         },
       };
-      const next = jest.fn();
+      const next = vi.fn();
 
       await middleware(socket, next);
 
@@ -322,7 +322,7 @@ describe('WebSocketService - Core Unit Tests', () => {
           headers: {},
         },
       };
-      const next = jest.fn();
+      const next = vi.fn();
 
       await middleware(socket, next);
 
@@ -355,7 +355,7 @@ describe('WebSocketService - Core Unit Tests', () => {
           headers: {},
         },
       };
-      const next = jest.fn();
+      const next = vi.fn();
 
       await middleware(socket, next);
 

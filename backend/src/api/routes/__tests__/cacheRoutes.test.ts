@@ -5,15 +5,15 @@ import {
   it,
   expect,
   beforeEach,
-  jest,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import cacheRoutes from '../cacheRoutes';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 
 // Mock config and jwt early to prevent process.exit during module loading
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -32,20 +32,20 @@ jest.mock('../../../utils/config', () => ({
   isTest: true,
   getOrigins: () => ['http://localhost:3000'],
 }));
-jest.mock('../../../auth/jwt');
+vi.mock('../../../auth/jwt');
 
 // Mock dependencies before router resolution
-jest.mock('../../../middleware/auth');
-jest.mock('../../../middleware/rateLimiter', () => ({
+vi.mock('../../../middleware/auth');
+vi.mock('../../../middleware/rateLimiter', () => ({
   apiLimiter: (_req: any, _res: any, next: any) => next(),
   authLimiter: (_req: any, _res: any, next: any) => next(),
 }));
-jest.mock('../../../middleware/validation', () => ({
+vi.mock('../../../middleware/validation', () => ({
   validateBody: () => (_req: any, _res: any, next: any) => next(),
   validateParams: () => (_req: any, _res: any, next: any) => next(),
 }));
-jest.mock('../../../utils/logger');
-jest.mock('../../../utils/response', () => ({
+vi.mock('../../../utils/logger');
+vi.mock('../../../utils/response', () => ({
   ResponseHelper: {
     success: (res: any, data: any, message: any, statusCode: any) =>
       res.status(statusCode ?? 200).json({ success: true, data, message }),
@@ -60,10 +60,10 @@ jest.mock('../../../utils/response', () => ({
   },
 }));
 
-const mockedAuthenticate = authenticate as jest.MockedFunction<
+const mockedAuthenticate = authenticate as MockedFunction<
   typeof authenticate
 >;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
+const mockedLogger = logger as Mocked<typeof logger>;
 
 const mockUser = {
   id: 'user-id-123',
@@ -77,11 +77,11 @@ describe('Cache Routes', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    mockedLogger.info = jest.fn() as any;
-    mockedLogger.error = jest.fn() as any;
-    mockedLogger.warn = jest.fn() as any;
+    mockedLogger.info = vi.fn() as any;
+    mockedLogger.error = vi.fn() as any;
+    mockedLogger.warn = vi.fn() as any;
 
     mockedAuthenticate.mockImplementation(
       ((req: any, _res: any, next: any) => {
@@ -94,7 +94,7 @@ describe('Cache Routes', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // -------------------------------------------------------------------------

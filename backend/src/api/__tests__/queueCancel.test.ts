@@ -7,71 +7,71 @@ import {
   describe,
   it,
   expect,
-  jest,
   beforeEach,
   afterEach,
   beforeAll,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import request from 'supertest';
 import express, { Express } from 'express';
 
 // Mock dependencies before imports
-jest.mock('@/db', () => ({
+vi.mock('@/db', () => ({
   prisma: {
     segmentationQueue: {
-      findMany: jest.fn(),
-      updateMany: jest.fn(),
-      deleteMany: jest.fn(),
+      findMany: vi.fn(),
+      updateMany: vi.fn(),
+      deleteMany: vi.fn(),
     },
     project: {
-      findUnique: jest.fn(),
+      findUnique: vi.fn(),
     },
     image: {
-      updateMany: jest.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
 
-jest.mock('bull', () => ({
-  default: jest.fn().mockImplementation(() => ({
-    getJob: jest.fn(),
-    removeJobs: jest.fn(),
-    getWaiting: jest.fn(),
-    getActive: jest.fn(),
-    getCompleted: jest.fn(),
-    clean: jest.fn(),
+vi.mock('bull', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    getJob: vi.fn(),
+    removeJobs: vi.fn(),
+    getWaiting: vi.fn(),
+    getActive: vi.fn(),
+    getCompleted: vi.fn(),
+    clean: vi.fn(),
   })),
 }));
 
 const mockWsInstance = {
-  emitToRoom: jest.fn(),
-  emitToUser: jest.fn(),
-  broadcastBatchCancellation: jest.fn(),
+  emitToRoom: vi.fn(),
+  emitToUser: vi.fn(),
+  broadcastBatchCancellation: vi.fn(),
 };
 
 const mockQueueInstance = {
-  removeJobs: jest.fn() as jest.MockedFunction<(...args: any[]) => Promise<any>>,
-  getWaiting: jest.fn(),
-  getActive: jest.fn(),
+  removeJobs: vi.fn() as MockedFunction<(...args: any[]) => Promise<any>>,
+  getWaiting: vi.fn(),
+  getActive: vi.fn(),
 };
 
 const mockMLServiceInstance = {
-  cancelJob: jest.fn() as jest.MockedFunction<(...args: any[]) => Promise<any>>,
-  cancelBatch: jest.fn(),
+  cancelJob: vi.fn() as MockedFunction<(...args: any[]) => Promise<any>>,
+  cancelBatch: vi.fn(),
 };
 
-jest.mock('../../services/websocketService', () => ({
+vi.mock('../../services/websocketService', () => ({
   WebSocketService: {
-    // Use regular function (not jest.fn) so resetMocks doesn't clear it
+    // Use regular function (not vi.fn) so resetMocks doesn't clear it
     getInstance: () => mockWsInstance,
   },
 }));
 
 // mlService doesn't exist - mock inline instead
-// jest.mock('../../services/mlService', () => ({
+// vi.mock('../../services/mlService', () => ({
 //   mlService: {
-//     cancelJob: jest.fn(),
-//     cancelBatch: jest.fn(),
+//     cancelJob: vi.fn(),
+//     cancelBatch: vi.fn(),
 //   },
 // }));
 
@@ -309,13 +309,13 @@ describe('Segmentation Batch Cancel API Tests', () => {
   });
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Setup mocks
     const { prisma } = await import('../../db');
     mockPrisma = prisma as any;
 
-    // All module-level mocks share the same jest.fn() references
+    // All module-level mocks share the same vi.fn() references
     // resetMocks clears implementations but not the object references
     mockWebSocket = mockWsInstance;
     mockMLService = mockMLServiceInstance;
@@ -337,7 +337,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('POST /api/queue/batch/:batchId/cancel', () => {

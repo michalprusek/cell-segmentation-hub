@@ -1,37 +1,37 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Capture the factory function so we can control what executeRedisCommand does per test
 let executeRedisCommandImpl: ((client: any) => Promise<unknown>) | null = null;
 
-const mockExecuteRedisCommand = jest.fn(async (fn: (client: any) => Promise<unknown>) => {
+const mockExecuteRedisCommand = vi.fn(async (fn: (client: any) => Promise<unknown>) => {
   if (executeRedisCommandImpl) {
     return executeRedisCommandImpl(fn);
   }
   return fn({
-    get: jest.fn(),
-    setEx: jest.fn(),
-    del: jest.fn(),
-    exists: jest.fn(),
-    incrBy: jest.fn(),
-    expire: jest.fn(),
-    ttl: jest.fn(),
-    scan: jest.fn(),
-    unlink: jest.fn(),
-    dbSize: jest.fn(),
+    get: vi.fn(),
+    setEx: vi.fn(),
+    del: vi.fn(),
+    exists: vi.fn(),
+    incrBy: vi.fn(),
+    expire: vi.fn(),
+    ttl: vi.fn(),
+    scan: vi.fn(),
+    unlink: vi.fn(),
+    dbSize: vi.fn(),
   });
 }) as any;
 
 const mockRedisClient = {
-  ping: jest.fn() as any,
-  info: jest.fn() as any,
+  ping: vi.fn() as any,
+  info: vi.fn() as any,
 };
 
-jest.mock('../../config/redis', () => ({
+vi.mock('../../config/redis', () => ({
   executeRedisCommand: mockExecuteRedisCommand,
   redisClient: mockRedisClient,
 }));
-jest.mock('../../utils/logger', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), debug: jest.fn(), warn: jest.fn() },
+vi.mock('../../utils/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
 
 import { CacheService, cacheService as _cacheService } from '../cacheService';
@@ -40,7 +40,7 @@ describe('CacheService', () => {
   let service: CacheService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     executeRedisCommandImpl = null;
     service = new CacheService();
   });
@@ -169,7 +169,7 @@ describe('CacheService', () => {
       mockExecuteRedisCommand.mockImplementationOnce(async (fn: any) =>
         fn({ get: async () => cachedEntry })
       );
-      const factory = jest.fn(async () => 'factory-result');
+      const factory = vi.fn(async () => 'factory-result');
 
       const result = await service.getOrSet('existing-key', factory);
 
@@ -188,7 +188,7 @@ describe('CacheService', () => {
           fn({ setEx: async () => 'OK' })
         );
 
-      const factory = jest.fn(async () => 'computed-value');
+      const factory = vi.fn(async () => 'computed-value');
 
       const result = await service.getOrSet('new-key', factory, { ttl: 300 });
 

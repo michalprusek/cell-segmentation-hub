@@ -10,7 +10,8 @@
  *   const { req, res, next } = createMockReqRes();
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 
 // ---------------------------------------------------------------------------
@@ -280,16 +281,16 @@ export interface MockReqResNext {
     headers: Record<string, string>;
   };
   res: Partial<Response> & {
-    status: jest.MockedFunction<(code: number) => any>;
-    json: jest.MockedFunction<(body: unknown) => any>;
-    send: jest.MockedFunction<(body?: unknown) => any>;
-    sendStatus: jest.MockedFunction<(code: number) => any>;
-    set: jest.MockedFunction<
+    status: MockedFunction<(code: number) => any>;
+    json: MockedFunction<(body: unknown) => any>;
+    send: MockedFunction<(body?: unknown) => any>;
+    sendStatus: MockedFunction<(code: number) => any>;
+    set: MockedFunction<
       (field: string, value?: string | string[]) => any
     >;
     locals: Record<string, unknown>;
   };
-  next: jest.MockedFunction<NextFunction>;
+  next: MockedFunction<NextFunction>;
 }
 
 /**
@@ -300,18 +301,18 @@ export interface MockReqResNext {
 export function createMockReqRes(
   reqOverrides: Partial<MockReqResNext['req']> = {}
 ): MockReqResNext {
-  const json = jest.fn() as jest.MockedFunction<(body: unknown) => any>;
-  const send = jest.fn() as jest.MockedFunction<(body?: unknown) => any>;
-  const sendStatus = jest.fn() as jest.MockedFunction<(code: number) => any>;
-  const set = jest.fn() as unknown as jest.MockedFunction<
+  const json = vi.fn() as MockedFunction<(body: unknown) => any>;
+  const send = vi.fn() as MockedFunction<(body?: unknown) => any>;
+  const sendStatus = vi.fn() as MockedFunction<(code: number) => any>;
+  const set = vi.fn() as unknown as MockedFunction<
     (field: string, value?: string | string[]) => any
   >;
-  const status = jest.fn().mockReturnValue({
+  const status = vi.fn().mockReturnValue({
     json,
     send,
     sendStatus,
     set,
-  }) as jest.MockedFunction<(code: number) => any>;
+  }) as MockedFunction<(code: number) => any>;
 
   const res: MockReqResNext['res'] = {
     status,
@@ -338,7 +339,7 @@ export function createMockReqRes(
     ...reqOverrides,
   };
 
-  const next = jest.fn() as unknown as jest.MockedFunction<NextFunction>;
+  const next = vi.fn() as unknown as MockedFunction<NextFunction>;
 
   return { req, res, next };
 }

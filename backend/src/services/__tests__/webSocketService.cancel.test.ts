@@ -7,10 +7,9 @@ import {
   describe,
   it,
   expect,
-  jest,
   beforeEach,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
 import { Server as SocketIOServer } from 'socket.io';
 import { createServer } from 'http';
 import Client from 'socket.io-client';
@@ -106,13 +105,13 @@ const cancelTestUtils = {
 };
 
 // Mock dependencies
-jest.mock('@/db', () => ({
+vi.mock('@/db', () => ({
   prisma: {
     user: {
-      findUnique: jest.fn(),
+      findUnique: vi.fn(),
     },
     project: {
-      findUnique: jest.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
@@ -346,7 +345,7 @@ describe('WebSocket Service Cancel Integration', () => {
 
     await wsService.close();
     server.close();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Connection and Authentication', () => {

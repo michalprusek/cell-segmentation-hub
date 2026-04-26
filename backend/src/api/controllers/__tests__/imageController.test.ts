@@ -4,8 +4,7 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { ImageController } from '../imageController';
@@ -15,7 +14,7 @@ import { authenticate } from '../../../middleware/auth';
 import { prisma } from '../../../db/index';
 
 // Mock dependencies
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -33,14 +32,14 @@ jest.mock('../../../utils/config', () => ({
     MAX_FILE_SIZE: 10485760,
   },
 }));
-jest.mock('../../../services/imageService');
-jest.mock('../../../middleware/auth');
-jest.mock('../../../services/segmentationThumbnailService', () => ({
-  SegmentationThumbnailService: jest.fn().mockImplementation(() => ({
-    generateThumbnail: jest.fn(() => Promise.resolve()),
+vi.mock('../../../services/imageService');
+vi.mock('../../../middleware/auth');
+vi.mock('../../../services/segmentationThumbnailService', () => ({
+  SegmentationThumbnailService: vi.fn().mockImplementation(() => ({
+    generateThumbnail: vi.fn(() => Promise.resolve()),
   })),
 }));
-jest.mock('../../../services/websocketService', () => ({
+vi.mock('../../../services/websocketService', () => ({
   WebSocketService: {
     getInstance: () => ({
       emitToUser: () => undefined,
@@ -48,46 +47,46 @@ jest.mock('../../../services/websocketService', () => ({
     }),
   },
 }));
-jest.mock('../../../storage/index', () => ({
-  getStorageProvider: jest.fn(() => ({
-    saveFile: jest.fn(() => Promise.resolve('/mock/path')),
-    deleteFile: jest.fn(() => Promise.resolve()),
-    getFileUrl: jest.fn(() => 'http://mock/url'),
+vi.mock('../../../storage/index', () => ({
+  getStorageProvider: vi.fn(() => ({
+    saveFile: vi.fn(() => Promise.resolve('/mock/path')),
+    deleteFile: vi.fn(() => Promise.resolve()),
+    getFileUrl: vi.fn(() => 'http://mock/url'),
   })),
 }));
-jest.mock('../../../services/sharingService', () => ({
-  hasProjectAccess: jest.fn(() => Promise.resolve({ hasAccess: true })),
+vi.mock('../../../services/sharingService', () => ({
+  hasProjectAccess: vi.fn(() => Promise.resolve({ hasAccess: true })),
 }));
-jest.mock('../../../utils/logger', () => ({
+vi.mock('../../../utils/logger', () => ({
   logger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   },
 }));
-jest.mock('../../../db/index', () => ({
+vi.mock('../../../db/index', () => ({
   prisma: {
     project: {
-      findFirst: jest.fn(),
-      findUnique: jest.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
     },
     image: {
-      findMany: jest.fn(),
-      count: jest.fn(),
-      create: jest.fn(),
-      createMany: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
+      create: vi.fn(),
+      createMany: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     segmentation: {
-      findUnique: jest.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
 
-const MockImageService = jest.mocked(ImageService);
-const mockAuthenticate = jest.mocked(authenticate);
+const MockImageService = vi.mocked(ImageService);
+const mockAuthenticate = vi.mocked(authenticate);
 
 describe('ImageController - Large Batch Upload Tests', () => {
   let app: express.Application;
@@ -140,14 +139,14 @@ describe('ImageController - Large Batch Upload Tests', () => {
 
     // Setup mocks BEFORE creating controller so auto-mock has them set up
     mockImageService = {
-      uploadImages: jest.fn(),
-      uploadImagesWithProgress: jest.fn(),
-      getProjectImages: jest.fn(),
-      getImageById: jest.fn(),
-      deleteImage: jest.fn(),
-      deleteBatch: jest.fn(),
-      getImageStats: jest.fn(),
-      getBrowserCompatibleImage: jest.fn(),
+      uploadImages: vi.fn(),
+      uploadImagesWithProgress: vi.fn(),
+      getProjectImages: vi.fn(),
+      getImageById: vi.fn(),
+      deleteImage: vi.fn(),
+      deleteBatch: vi.fn(),
+      getImageStats: vi.fn(),
+      getBrowserCompatibleImage: vi.fn(),
     };
 
     // Configure the auto-mock class to return our mock instance
@@ -179,11 +178,11 @@ describe('ImageController - Large Batch Upload Tests', () => {
     );
 
     // Mock prisma
-    jest.mocked(prisma.project.findFirst).mockResolvedValue(mockProject);
+    vi.mocked(prisma.project.findFirst).mockResolvedValue(mockProject);
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Upload Limits and Validation', () => {
@@ -512,7 +511,7 @@ describe('ImageController - Large Batch Upload Tests', () => {
     });
 
     it('should clean up resources on upload failure', async () => {
-      const cleanupSpy = jest.fn();
+      const cleanupSpy = vi.fn();
 
       mockImageService.uploadImagesWithProgress.mockImplementation(async () => {
         cleanupSpy(); // Simulate cleanup call

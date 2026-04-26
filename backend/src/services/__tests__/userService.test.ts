@@ -1,35 +1,35 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mocks must be declared before imports
 const prismaMock = {
   user: {
-    findUnique: jest.fn() as any,
-    update: jest.fn() as any,
-    delete: jest.fn() as any,
-    deleteMany: jest.fn() as any,
+    findUnique: vi.fn() as any,
+    update: vi.fn() as any,
+    delete: vi.fn() as any,
+    deleteMany: vi.fn() as any,
   },
   project: {
-    count: jest.fn() as any,
-    findMany: jest.fn() as any,
-    deleteMany: jest.fn() as any,
+    count: vi.fn() as any,
+    findMany: vi.fn() as any,
+    deleteMany: vi.fn() as any,
   },
   image: {
-    count: jest.fn() as any,
-    aggregate: jest.fn() as any,
-    findMany: jest.fn() as any,
+    count: vi.fn() as any,
+    aggregate: vi.fn() as any,
+    findMany: vi.fn() as any,
   },
   segmentation: {
-    count: jest.fn() as any,
-    findMany: jest.fn() as any,
+    count: vi.fn() as any,
+    findMany: vi.fn() as any,
   },
   profile: {
-    upsert: jest.fn() as any,
+    upsert: vi.fn() as any,
   },
 };
 
-jest.mock('../../db', () => ({ prisma: prismaMock }));
-jest.mock('../../utils/logger', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), debug: jest.fn(), warn: jest.fn() },
+vi.mock('../../db', () => ({ prisma: prismaMock }));
+vi.mock('../../utils/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
 
 import {
@@ -43,7 +43,7 @@ describe('UserService', () => {
   const testUserId = 'user-id-1';
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('getUserProfile', () => {

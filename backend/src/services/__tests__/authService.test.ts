@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock config early to prevent process.exit(1) during module load chain
-jest.mock('../../utils/config', () => ({
+vi.mock('../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -34,75 +34,75 @@ jest.mock('../../utils/config', () => ({
 // Create a comprehensive prisma mock first
 const prismaMock = {
   user: {
-    findUnique: jest.fn() as any,
-    findFirst: jest.fn() as any,
-    create: jest.fn() as any,
-    update: jest.fn() as any,
-    delete: jest.fn() as any,
-    deleteMany: jest.fn() as any,
+    findUnique: vi.fn() as any,
+    findFirst: vi.fn() as any,
+    create: vi.fn() as any,
+    update: vi.fn() as any,
+    delete: vi.fn() as any,
+    deleteMany: vi.fn() as any,
   },
   profile: {
-    findUnique: jest.fn() as any,
-    upsert: jest.fn() as any,
-    create: jest.fn() as any,
-    update: jest.fn() as any,
-    deleteMany: jest.fn() as any,
+    findUnique: vi.fn() as any,
+    upsert: vi.fn() as any,
+    create: vi.fn() as any,
+    update: vi.fn() as any,
+    deleteMany: vi.fn() as any,
   },
   session: {
-    findUnique: jest.fn() as any,
-    create: jest.fn() as any,
-    update: jest.fn() as any,
-    updateMany: jest.fn() as any,
-    delete: jest.fn() as any,
-    deleteMany: jest.fn() as any,
+    findUnique: vi.fn() as any,
+    create: vi.fn() as any,
+    update: vi.fn() as any,
+    updateMany: vi.fn() as any,
+    delete: vi.fn() as any,
+    deleteMany: vi.fn() as any,
   },
   project: {
-    findMany: jest.fn() as any,
-    deleteMany: jest.fn() as any,
+    findMany: vi.fn() as any,
+    deleteMany: vi.fn() as any,
   },
   image: {
-    deleteMany: jest.fn() as any,
+    deleteMany: vi.fn() as any,
   },
   segmentation: {
-    deleteMany: jest.fn() as any,
+    deleteMany: vi.fn() as any,
   },
   segmentationQueue: {
-    deleteMany: jest.fn() as any,
+    deleteMany: vi.fn() as any,
   },
-  $transaction: jest.fn() as any,
+  $transaction: vi.fn() as any,
 };
 
 // Mock sessionService to avoid Redis dependency
 const sessionServiceMock = {
-  storeRefreshToken: jest.fn() as any,
-  createSession: jest.fn() as any,
-  rotateRefreshToken: jest.fn() as any,
-  verifyRefreshToken: jest.fn() as any,
-  deleteRefreshToken: jest.fn() as any,
+  storeRefreshToken: vi.fn() as any,
+  createSession: vi.fn() as any,
+  rotateRefreshToken: vi.fn() as any,
+  verifyRefreshToken: vi.fn() as any,
+  deleteRefreshToken: vi.fn() as any,
 };
 
 // Mock withTransaction to just call the callback with the prisma client passed in
-jest.mock('../../utils/database', () => ({
-  withTransaction: jest.fn().mockImplementation(
+vi.mock('../../utils/database', () => ({
+  withTransaction: vi.fn().mockImplementation(
     async (prismaClient: any, callback: any) => callback(prismaClient)
   ),
 }));
 
 // Mock dependencies
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   prisma: prismaMock,
 }));
-jest.mock('../../auth/password');
-jest.mock('../../auth/jwt');
-jest.mock('../../utils/logger');
-jest.mock('../../services/emailService');
-jest.mock('../../services/sessionService', () => ({
+vi.mock('../../auth/password');
+vi.mock('../../auth/jwt');
+vi.mock('../../utils/logger');
+vi.mock('../../services/emailService');
+vi.mock('../../services/sessionService', () => ({
   sessionService: sessionServiceMock,
 }));
-jest.mock('../../storage/index', () => ({
-  getStorageProvider: jest.fn(),
+vi.mock('../../storage/index', () => ({
+  getStorageProvider: vi.fn(),
 }));
-jest.mock('sharp', () => jest.fn());
+vi.mock('sharp', () => vi.fn());
 
 import * as authService from '../authService';
 import { hashPassword, verifyPassword } from '../../auth/password';
@@ -110,17 +110,17 @@ import { generateTokenPair } from '../../auth/jwt';
 import { withTransaction } from '../../utils/database';
 import * as EmailService from '../../services/emailService';
 
-const mockHashPassword = hashPassword as ReturnType<typeof jest.fn>;
-const mockVerifyPassword = verifyPassword as ReturnType<typeof jest.fn>;
-const mockGenerateTokenPair = generateTokenPair as ReturnType<typeof jest.fn>;
-const mockWithTransaction = withTransaction as ReturnType<typeof jest.fn>;
+const mockHashPassword = hashPassword as ReturnType<typeof vi.fn>;
+const mockVerifyPassword = verifyPassword as ReturnType<typeof vi.fn>;
+const mockGenerateTokenPair = generateTokenPair as ReturnType<typeof vi.fn>;
+const mockWithTransaction = withTransaction as ReturnType<typeof vi.fn>;
 const mockSendVerificationEmail =
-  EmailService.sendVerificationEmail as ReturnType<typeof jest.fn>;
+  EmailService.sendVerificationEmail as ReturnType<typeof vi.fn>;
 
 describe('AuthService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // Restore withTransaction implementation after jest.clearAllMocks()
+    vi.clearAllMocks();
+    // Restore withTransaction implementation after vi.clearAllMocks()
     mockWithTransaction.mockImplementation(
       async (prismaClient: any, callback: any) => callback(prismaClient)
     );

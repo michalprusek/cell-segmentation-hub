@@ -4,8 +4,7 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
 import { Server as HTTPServer, createServer } from 'http';
 // import { Server as SocketIOServer } from 'socket.io';
 import Client from 'socket.io-client';
@@ -13,55 +12,55 @@ import Client from 'socket.io-client';
 // Mock Prisma client
 type MockPrismaClient = {
   user: {
-    findUnique: ReturnType<typeof jest.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
   };
   project: {
-    findUnique: ReturnType<typeof jest.fn>;
-    count: ReturnType<typeof jest.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
   image: {
-    count: ReturnType<typeof jest.fn>;
-    aggregate: ReturnType<typeof jest.fn>;
-    groupBy: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
+    aggregate: ReturnType<typeof vi.fn>;
+    groupBy: ReturnType<typeof vi.fn>;
   };
   segmentation: {
-    count: ReturnType<typeof jest.fn>;
+    count: ReturnType<typeof vi.fn>;
   };
 };
 
 const prismaMock: MockPrismaClient = {
   user: {
-    findUnique: jest.fn(),
+    findUnique: vi.fn(),
   },
   project: {
-    findUnique: jest.fn(),
-    count: jest.fn(),
+    findUnique: vi.fn(),
+    count: vi.fn(),
   },
   image: {
-    count: jest.fn(),
-    aggregate: jest.fn(),
-    groupBy: jest.fn(),
+    count: vi.fn(),
+    aggregate: vi.fn(),
+    groupBy: vi.fn(),
   },
   segmentation: {
-    count: jest.fn(),
+    count: vi.fn(),
   },
 };
 
 // Mock dependencies
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   prisma: prismaMock,
 }));
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
   },
 }));
-jest.mock('jsonwebtoken', () => ({
-  verify: jest.fn(),
+vi.mock('jsonwebtoken', () => ({
+  verify: vi.fn(),
   default: {
-    verify: jest.fn(),
+    verify: vi.fn(),
   },
 }));
 
@@ -112,7 +111,7 @@ describe('WebSocket Real-time Updates', () => {
       const mockToken = 'valid-jwt-token';
 
       // Mock JWT verification
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -162,7 +161,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -209,7 +208,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -258,7 +257,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -307,7 +306,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'shared-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: sharedUserId,
         email: 'shared@example.com',
       });
@@ -359,7 +358,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -421,7 +420,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -464,7 +463,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -525,7 +524,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -570,7 +569,7 @@ describe('WebSocket Real-time Updates', () => {
     it('should require valid JWT token for WebSocket connection', done => {
       const invalidToken = 'invalid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockImplementation(() => {
+      (jwt.verify as Mock).mockImplementation(() => {
         throw new Error('Invalid token');
       });
 
@@ -595,7 +594,7 @@ describe('WebSocket Real-time Updates', () => {
       const testProjectId = 'private-project-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: authorizedUserId,
         email: 'authorized@example.com',
       });
@@ -649,7 +648,7 @@ describe('WebSocket Real-time Updates', () => {
       let connectedClients = 0;
       let eventsReceived = 0;
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });
@@ -705,7 +704,7 @@ describe('WebSocket Real-time Updates', () => {
       const testUserId = 'test-user-id';
       const mockToken = 'valid-jwt-token';
 
-      (jwt.verify as jest.Mock).mockReturnValue({
+      (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
         email: 'test@example.com',
       });

@@ -2,35 +2,34 @@ import {
   describe,
   it,
   expect,
-  jest,
   beforeEach,
-} from '@jest/globals';
+} from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 
 // All mocks BEFORE source imports
-jest.mock('../../utils/response', () => ({
+vi.mock('../../utils/response', () => ({
   __esModule: true,
   ResponseHelper: {
-    validationError: jest.fn(),
-    conflict: jest.fn(),
-    notFound: jest.fn(),
-    badRequest: jest.fn(),
-    unauthorized: jest.fn(),
-    forbidden: jest.fn(),
-    internalError: jest.fn(),
-    serviceUnavailable: jest.fn(),
-    error: jest.fn(),
-    rateLimit: jest.fn(),
+    validationError: vi.fn(),
+    conflict: vi.fn(),
+    notFound: vi.fn(),
+    badRequest: vi.fn(),
+    unauthorized: vi.fn(),
+    forbidden: vi.fn(),
+    internalError: vi.fn(),
+    serviceUnavailable: vi.fn(),
+    error: vi.fn(),
+    rateLimit: vi.fn(),
   },
 }));
 
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   __esModule: true,
   logger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -82,7 +81,7 @@ describe('Error Middleware', () => {
   let mockNext: NextFunction;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockReq = {
       method: 'GET',
@@ -90,13 +89,13 @@ describe('Error Middleware', () => {
     };
 
     mockRes = {
-      status: jest.fn().mockReturnThis() as unknown as Response['status'],
-      json: jest.fn().mockReturnThis() as unknown as Response['json'],
-      send: jest.fn().mockReturnThis() as unknown as Response['send'],
+      status: vi.fn().mockReturnThis() as unknown as Response['status'],
+      json: vi.fn().mockReturnThis() as unknown as Response['json'],
+      send: vi.fn().mockReturnThis() as unknown as Response['send'],
       headersSent: false,
     };
 
-    mockNext = jest.fn() as NextFunction;
+    mockNext = vi.fn() as NextFunction;
   });
 
   // -----------------------------------------------------------------------

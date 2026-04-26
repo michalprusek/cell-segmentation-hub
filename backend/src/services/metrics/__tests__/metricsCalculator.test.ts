@@ -7,24 +7,24 @@ import {
 // Mock ExcelJS
 const mockWorksheet = {
   columns: [],
-  addRow: jest.fn(),
+  addRow: vi.fn(),
 };
 
 const mockWorkbook = {
-  addWorksheet: jest.fn(() => mockWorksheet),
+  addWorksheet: vi.fn(() => mockWorksheet),
   xlsx: {
-    writeFile: jest.fn(),
+    writeFile: vi.fn(),
   },
 };
 
 // Create spy functions for the test
-const mockAddWorksheet = jest.fn(() => mockWorksheet);
-const mockWriteFile = jest.fn();
+const mockAddWorksheet = vi.fn(() => mockWorksheet);
+const mockWriteFile = vi.fn();
 
-jest.mock('exceljs', () => {
+vi.mock('exceljs', () => {
   return {
     default: {
-      Workbook: jest.fn().mockImplementation(() => ({
+      Workbook: vi.fn().mockImplementation(() => ({
         addWorksheet: mockAddWorksheet,
         xlsx: {
           writeFile: mockWriteFile,
@@ -35,9 +35,9 @@ jest.mock('exceljs', () => {
 });
 
 // Mock axios
-jest.mock('axios', () => {
-  const mockCreate = jest.fn(() => ({
-    post: jest.fn().mockResolvedValue({
+vi.mock('axios', () => {
+  const mockCreate = vi.fn(() => ({
+    post: vi.fn().mockResolvedValue({
       data: {
         Area: 10000, // 100x100 square
         Perimeter: 400, // 4*100
@@ -70,17 +70,17 @@ jest.mock('axios', () => {
 });
 
 // Mock logger
-jest.mock('../../../utils/logger', () => ({
+vi.mock('../../../utils/logger', () => ({
   logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
 // Mock config
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     SEGMENTATION_SERVICE_URL: 'http://ml-service:8000',
   },
@@ -90,34 +90,10 @@ describe('MetricsCalculator', () => {
   let calculator: MetricsCalculator;
 
   beforeEach(() => {
-    // jest config has resetMocks: true which clears mock implementations between tests.
-    // Re-setup the axios.create mock so the calculator gets a working http client.
-    const axiosMock = jest.requireMock('axios') as any;
-    const mockPostFn = jest.fn().mockResolvedValue({
-      data: {
-        Area: 10000,
-        Perimeter: 400,
-        PerimeterWithHoles: 400,
-        EquivalentDiameter: 112.84,
-        Circularity: 0.785,
-        FeretDiameterMax: 141.42,
-        FeretDiameterMaxOrthogonalDistance: 100,
-        FeretDiameterMin: 100,
-        FeretAspectRatio: 1.414,
-        LengthMajorDiameterThroughCentroid: 141.42,
-        LengthMinorDiameterThroughCentroid: 100,
-        BoundingBoxWidth: 100,
-        BoundingBoxHeight: 100,
-        Extent: 1.0,
-        Compactness: 0.785,
-        Convexity: 0.9,
-        Solidity: 0.95,
-        Sphericity: 0.628,
-      },
-    });
-    const createFn = jest.fn(() => ({ post: mockPostFn }));
-    axiosMock.default.create = createFn;
-    axiosMock.create = createFn;
+    // The top-level `vi.mock('axios', ...)` factory already provides the
+    // mocked `axios.create()` returning a `post` that resolves with the
+    // metrics payload. Vitest doesn't reset module mocks between tests
+    // (unlike Jest's `resetMocks: true`), so we just instantiate the SUT.
     calculator = new MetricsCalculator();
   });
 
@@ -279,7 +255,7 @@ describe('MetricsCalculator', () => {
 
   describe('Summary Statistics with Scale', () => {
     afterEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it.skip('should generate correct units in Excel export', async () => {
@@ -366,7 +342,7 @@ describe('MetricsCalculator', () => {
       ];
 
       // Mock the exportToCSV method
-      calculator.exportToCSV = jest.fn(async (metrics, path, scale) => {
+      calculator.exportToCSV = vi.fn(async (metrics, path, scale) => {
         const fs = await import('fs').then(m => m.promises);
         const units = scale ? 'µm' : 'px';
         const header = `id,name,area (${units}²),perimeter (${units}),circularity\n`;
