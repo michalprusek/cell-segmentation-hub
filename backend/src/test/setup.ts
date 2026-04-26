@@ -1,4 +1,4 @@
-import { jest, beforeEach, afterEach } from '@jest/globals';
+import { vi, beforeEach, afterEach } from 'vitest';
 // import { PrismaClient } from '@prisma/client'
 
 // Create a comprehensive Prisma mock
@@ -13,29 +13,29 @@ const createPrismaMock = () => {
     'passwordResetToken',
   ];
   const mock: Record<string, unknown> = {
-    $connect: jest.fn(() => Promise.resolve()),
-    $disconnect: jest.fn(() => Promise.resolve()),
-    $executeRaw: jest.fn(),
-    $queryRaw: jest.fn(),
-    $transaction: jest.fn((cb: (mock: Record<string, unknown>) => unknown) =>
+    $connect: vi.fn(() => Promise.resolve()),
+    $disconnect: vi.fn(() => Promise.resolve()),
+    $executeRaw: vi.fn(),
+    $queryRaw: vi.fn(),
+    $transaction: vi.fn((cb: (mock: Record<string, unknown>) => unknown) =>
       cb(mock)
     ),
   };
 
   models.forEach(model => {
     mock[model] = {
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-      aggregate: jest.fn(),
-      groupBy: jest.fn(),
-      upsert: jest.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+      count: vi.fn(),
+      aggregate: vi.fn(),
+      groupBy: vi.fn(),
+      upsert: vi.fn(),
     };
   });
 
@@ -46,78 +46,78 @@ export const prismaMock = createPrismaMock();
 
 // Mock Redis client
 export const redisMock = {
-  get: jest.fn(),
-  set: jest.fn(),
-  del: jest.fn(),
-  exists: jest.fn(),
-  expire: jest.fn(),
-  flushall: jest.fn(),
-  quit: jest.fn(),
-  connect: jest.fn(),
-  disconnect: jest.fn(),
+  get: vi.fn(),
+  set: vi.fn(),
+  del: vi.fn(),
+  exists: vi.fn(),
+  expire: vi.fn(),
+  flushall: vi.fn(),
+  quit: vi.fn(),
+  connect: vi.fn(),
+  disconnect: vi.fn(),
 };
 
 // Mock Bull queue
 export const queueMock = {
-  add: jest.fn(),
-  process: jest.fn(),
-  on: jest.fn(),
-  clean: jest.fn(),
-  pause: jest.fn(),
-  resume: jest.fn(),
-  close: jest.fn(),
+  add: vi.fn(),
+  process: vi.fn(),
+  on: vi.fn(),
+  clean: vi.fn(),
+  pause: vi.fn(),
+  resume: vi.fn(),
+  close: vi.fn(),
 };
 
 // Mock JWT
-jest.mock('jsonwebtoken');
+vi.mock('jsonwebtoken');
 
 // Mock bcryptjs
-jest.mock('bcryptjs');
+vi.mock('bcryptjs');
 
 // Mock Prisma client
-jest.mock('../db', () => ({
+vi.mock('../db', () => ({
   __esModule: true,
   prisma: createPrismaMock(),
   default: createPrismaMock(),
 }));
 
 // Mock Redis client
-jest.mock('../redis/client', () => ({
+vi.mock('../redis/client', () => ({
   __esModule: true,
   default: redisMock,
 }));
 
 // Mock Bull queue
-jest.mock('bull');
+vi.mock('bull');
 
 // Mock file system operations
-jest.mock('fs/promises', () => ({
-  readFile: jest.fn(),
-  writeFile: jest.fn(),
-  unlink: jest.fn(),
-  mkdir: jest.fn(),
-  access: jest.fn(),
-  stat: jest.fn(),
+vi.mock('fs/promises', () => ({
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+  unlink: vi.fn(),
+  mkdir: vi.fn(),
+  access: vi.fn(),
+  stat: vi.fn(),
 }));
 
 // Mock sharp for image processing
-jest.mock('sharp');
+vi.mock('sharp');
 
 // Mock nodemailer
-jest.mock('nodemailer');
+vi.mock('nodemailer');
 
 // Mock axios for external API calls
-jest.mock('axios');
+vi.mock('axios');
 
 // Setup and teardown
 
 beforeEach(() => {
   // mockReset(prismaMock)
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 // Set test environment variables
@@ -149,7 +149,7 @@ process.env.WS_ALLOWED_ORIGINS = 'http://localhost:3000';
 // Suppress console logs during tests
 global.console = {
   ...console,
-  log: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
+  log: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
 };

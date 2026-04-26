@@ -8,7 +8,7 @@ process.env.JWT_ACCESS_EXPIRY = '15m';
 process.env.JWT_REFRESH_EXPIRY = '7d';
 
 // Mock config before it's imported by other modules
-jest.mock('../../utils/config', () => ({
+vi.mock('../../utils/config', () => ({
   config: {
     jwt: {
       accessSecret: 'test-access-secret-for-testing-only-32-characters-long',
@@ -25,33 +25,33 @@ jest.mock('../../utils/config', () => ({
 }));
 
 // Mock dependencies before imports
-jest.mock('../../db', () => ({
+vi.mock('../../db', () => ({
   prisma: {
     user: {
-      findUnique: jest.fn(),
+      findUnique: vi.fn(),
     },
     profile: {
-      upsert: jest.fn(),
+      upsert: vi.fn(),
     },
   },
 }));
-jest.mock('../../storage/index');
-jest.mock('sharp', () => {
-  return jest.fn(() => ({
-    resize: jest.fn().mockReturnThis(),
-    jpeg: jest.fn().mockReturnThis(),
-    toBuffer: jest.fn().mockResolvedValue(Buffer.from('processed-image')),
+vi.mock('../../storage/index');
+vi.mock('sharp', () => {
+  return vi.fn(() => ({
+    resize: vi.fn().mockReturnThis(),
+    jpeg: vi.fn().mockReturnThis(),
+    toBuffer: vi.fn().mockResolvedValue(Buffer.from('processed-image')),
   }));
 });
-jest.mock('uuid', () => ({
+vi.mock('uuid', () => ({
   v4: () => 'mock-uuid',
 }));
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -113,25 +113,25 @@ describe('AuthService - Avatar Upload', () => {
   };
 
   const mockStorage = {
-    upload: jest.fn(),
-    getUrl: jest.fn(),
-    delete: jest.fn(),
+    upload: vi.fn(),
+    getUrl: vi.fn(),
+    delete: vi.fn(),
   };
 
   const mockSharpInstance = {
-    resize: jest.fn().mockReturnThis(),
-    jpeg: jest.fn().mockReturnThis(),
-    toBuffer: jest.fn(),
+    resize: vi.fn().mockReturnThis(),
+    jpeg: vi.fn().mockReturnThis(),
+    toBuffer: vi.fn(),
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     (storageProvider.getStorageProvider as any).mockReturnValue(mockStorage);
     (sharp as any).mockImplementation(() => mockSharpInstance);
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('uploadAvatar', () => {
@@ -141,9 +141,9 @@ describe('AuthService - Avatar Upload', () => {
 
       // Override the global sharp mock for this test
       const mockSharpInstance = {
-        resize: jest.fn().mockReturnThis(),
-        jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockResolvedValue(processedBuffer),
+        resize: vi.fn().mockReturnThis(),
+        jpeg: vi.fn().mockReturnThis(),
+        toBuffer: vi.fn().mockResolvedValue(processedBuffer),
       };
       (sharp as any).mockImplementation(() => mockSharpInstance);
 
@@ -235,9 +235,9 @@ describe('AuthService - Avatar Upload', () => {
 
       // Override the global sharp mock for this test
       const mockSharpInstance = {
-        resize: jest.fn().mockReturnThis(),
-        jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockResolvedValue(processedBuffer),
+        resize: vi.fn().mockReturnThis(),
+        jpeg: vi.fn().mockReturnThis(),
+        toBuffer: vi.fn().mockResolvedValue(processedBuffer),
       };
       (sharp as any).mockImplementation(() => mockSharpInstance);
 
@@ -307,8 +307,8 @@ describe('AuthService - Avatar Upload', () => {
 
       // Override the global sharp mock for this test to fail
       const failingSharpInstance = {
-        resize: jest.fn().mockReturnThis(),
-        jpeg: jest.fn().mockReturnThis(),
+        resize: vi.fn().mockReturnThis(),
+        jpeg: vi.fn().mockReturnThis(),
         toBuffer: jest
           .fn()
           .mockRejectedValue(new Error('Image processing failed')),
@@ -335,9 +335,9 @@ describe('AuthService - Avatar Upload', () => {
 
       // Override the global sharp mock for this test
       const mockSharpInstance = {
-        resize: jest.fn().mockReturnThis(),
-        jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockResolvedValue(processedBuffer),
+        resize: vi.fn().mockReturnThis(),
+        jpeg: vi.fn().mockReturnThis(),
+        toBuffer: vi.fn().mockResolvedValue(processedBuffer),
       };
       (sharp as any).mockImplementation(() => mockSharpInstance);
 
@@ -364,7 +364,7 @@ describe('AuthService - Avatar Upload', () => {
 
       for (const format of supportedFormats) {
         // Reset mocks before each iteration
-        jest.clearAllMocks();
+        vi.clearAllMocks();
 
         const file = { ...mockFile, mimetype: format };
 
@@ -380,9 +380,9 @@ describe('AuthService - Avatar Upload', () => {
 
       // Override the global sharp mock for this test
       const mockSharpInstance = {
-        resize: jest.fn().mockReturnThis(),
-        jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockResolvedValue(processedBuffer),
+        resize: vi.fn().mockReturnThis(),
+        jpeg: vi.fn().mockReturnThis(),
+        toBuffer: vi.fn().mockResolvedValue(processedBuffer),
       };
       (sharp as any).mockImplementation(() => mockSharpInstance);
 

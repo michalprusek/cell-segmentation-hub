@@ -12,10 +12,11 @@
  * - Error recovery when one of 4 parallel processes fails
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 
 // Mock config early to prevent process.exit(1) during module load chain
-jest.mock('../../utils/config', () => ({
+vi.mock('../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -44,54 +45,54 @@ jest.mock('../../utils/config', () => ({
   isTest: true,
   getOrigins: () => ['http://localhost:3000'],
 }));
-jest.mock('sharp', () => jest.fn());
-jest.mock('../../storage/index', () => ({ getStorageProvider: jest.fn() }));
+vi.mock('sharp', () => vi.fn());
+vi.mock('../../storage/index', () => ({ getStorageProvider: vi.fn() }));
 
 // Mock PrismaClient before any import that could trigger DB init
-jest.mock('@prisma/client', () => {
+vi.mock('@prisma/client', () => {
   const mockPrismaClient = {
-    $connect: jest.fn(),
-    $disconnect: jest.fn(),
-    $transaction: jest.fn(),
+    $connect: vi.fn(),
+    $disconnect: vi.fn(),
+    $transaction: vi.fn(),
     user: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findMany: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     project: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findMany: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     image: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
-      count: jest.fn(),
-      deleteMany: jest.fn(),
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+      deleteMany: vi.fn(),
     },
     segmentation: {
-      deleteMany: jest.fn(),
+      deleteMany: vi.fn(),
     },
     segmentationQueue: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
-      count: jest.fn(),
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
   };
   return {
-    PrismaClient: jest.fn().mockImplementation(() => mockPrismaClient),
+    PrismaClient: vi.fn().mockImplementation(() => mockPrismaClient),
     Prisma: { PrismaClientKnownRequestError: class extends Error {} },
   };
 });
@@ -104,10 +105,10 @@ import { WebSocketService } from '../websocketService';
 import { logger as _logger } from '../../utils/logger';
 
 // Mock dependencies
-jest.mock('../../utils/logger');
-jest.mock('../websocketService');
-jest.mock('../segmentationService');
-jest.mock('../imageService');
+vi.mock('../../utils/logger');
+vi.mock('../websocketService');
+vi.mock('../segmentationService');
+vi.mock('../imageService');
 
 // Test data structures
 interface ConcurrentTestUser {
@@ -197,17 +198,17 @@ describe('QueueService Parallel Processing', () => {
 
     // Setup mock services
     mockSegmentationService = {
-      requestBatchSegmentation: jest.fn().mockImplementation(async (images: any[]) =>
+      requestBatchSegmentation: vi.fn().mockImplementation(async (images: any[]) =>
         images.map(() => mockSegmentationResults())
       ),
-      requestSegmentation: jest.fn().mockImplementation(async () => mockSegmentationResults()),
-      saveSegmentationResults: (jest.fn() as any).mockResolvedValue(undefined),
-      checkServiceHealth: (jest.fn() as any).mockResolvedValue(true),
+      requestSegmentation: vi.fn().mockImplementation(async () => mockSegmentationResults()),
+      saveSegmentationResults: (vi.fn() as any).mockResolvedValue(undefined),
+      checkServiceHealth: (vi.fn() as any).mockResolvedValue(true),
     } as any;
 
     // Mock imageService to return a valid image for any imageId
     mockImageService = {
-      getImageById: jest.fn().mockImplementation(async (imageId: string) => ({
+      getImageById: vi.fn().mockImplementation(async (imageId: string) => ({
         id: imageId,
         segmentationStatus: 'no_segmentation',
         projectId: concurrentUsers.find(u => u.imageIds.includes(imageId))?.projectId || 'project_1',
@@ -217,17 +218,17 @@ describe('QueueService Parallel Processing', () => {
         fileSize: 1024,
         mimeType: 'image/tiff',
       })),
-      updateSegmentationStatus: jest.fn(),
+      updateSegmentationStatus: vi.fn(),
     } as any;
 
     mockWebSocketService = {
-      emitSegmentationUpdate: jest.fn(),
-      emitSegmentationComplete: jest.fn(),
-      emitQueueStatsUpdate: jest.fn(),
+      emitSegmentationUpdate: vi.fn(),
+      emitSegmentationComplete: vi.fn(),
+      emitQueueStatsUpdate: vi.fn(),
     } as unknown as WebSocketService;
 
     // Mock prisma.$transaction to execute the callback with prisma as tx
-    (prisma.$transaction as jest.MockedFunction<any>).mockImplementation(
+    (prisma.$transaction as MockedFunction<any>).mockImplementation(
       async (callback: (tx: any) => Promise<any>) => {
         if (typeof callback === 'function') {
           return callback(prisma);
@@ -240,7 +241,7 @@ describe('QueueService Parallel Processing', () => {
     let queueIdCounter = 0;
     const queueStore: any[] = [];
 
-    (prisma.segmentationQueue.create as jest.MockedFunction<any>).mockImplementation(
+    (prisma.segmentationQueue.create as MockedFunction<any>).mockImplementation(
       async ({ data }: any) => {
         const entry = {
           id: `queue_${++queueIdCounter}`,
@@ -271,7 +272,7 @@ describe('QueueService Parallel Processing', () => {
       });
     };
 
-    (prisma.segmentationQueue.findMany as jest.MockedFunction<any>).mockImplementation(
+    (prisma.segmentationQueue.findMany as MockedFunction<any>).mockImplementation(
       async ({ where, take, orderBy: _orderBy }: any = {}) => {
         let results = queueStore.filter(e => matchesWhere(e, where));
         if (take !== undefined) results = results.slice(0, take);
@@ -279,15 +280,15 @@ describe('QueueService Parallel Processing', () => {
       }
     );
 
-    (prisma.segmentationQueue.findFirst as jest.MockedFunction<any>).mockImplementation(
+    (prisma.segmentationQueue.findFirst as MockedFunction<any>).mockImplementation(
       async ({ where }: any = {}) => queueStore.find(e => matchesWhere(e, where)) || null
     );
 
-    (prisma.segmentationQueue.count as jest.MockedFunction<any>).mockImplementation(
+    (prisma.segmentationQueue.count as MockedFunction<any>).mockImplementation(
       async ({ where }: any = {}) => queueStore.filter(e => matchesWhere(e, where)).length
     );
 
-    (prisma.segmentationQueue.updateMany as jest.MockedFunction<any>).mockImplementation(
+    (prisma.segmentationQueue.updateMany as MockedFunction<any>).mockImplementation(
       async ({ where, data }: any) => {
         const matching = queueStore.filter(e => matchesWhere(e, where));
         matching.forEach(e => Object.assign(e, data));
@@ -295,7 +296,7 @@ describe('QueueService Parallel Processing', () => {
       }
     );
 
-    (prisma.segmentationQueue.update as jest.MockedFunction<any>).mockImplementation(
+    (prisma.segmentationQueue.update as MockedFunction<any>).mockImplementation(
       async ({ where, data }: any) => {
         const entry = queueStore.find(e => matchesWhere(e, where));
         if (entry) Object.assign(entry, data);
@@ -303,7 +304,7 @@ describe('QueueService Parallel Processing', () => {
       }
     );
 
-    (prisma.segmentationQueue.delete as jest.MockedFunction<any>).mockImplementation(
+    (prisma.segmentationQueue.delete as MockedFunction<any>).mockImplementation(
       async ({ where }: any) => {
         const idx = queueStore.findIndex(e => matchesWhere(e, where));
         if (idx !== -1) {
@@ -316,15 +317,15 @@ describe('QueueService Parallel Processing', () => {
 
     // Mock image count to return a fixed value representing total test images
     const totalTestImages = concurrentUsers.reduce((sum, u) => sum + u.imageIds.length, 0);
-    (prisma.image.count as jest.MockedFunction<any>).mockResolvedValue(totalTestImages);
-    (prisma.image.findMany as jest.MockedFunction<any>).mockResolvedValue([]);
-    (prisma.image.findUnique as jest.MockedFunction<any>).mockResolvedValue(null);
-    (prisma.image.update as jest.MockedFunction<any>).mockResolvedValue({});
-    (prisma.image.updateMany as jest.MockedFunction<any>).mockResolvedValue({ count: 0 });
-    (prisma.project.findMany as jest.MockedFunction<any>).mockResolvedValue([]);
-    (prisma.user.create as jest.MockedFunction<any>).mockResolvedValue({});
-    (prisma.project.create as jest.MockedFunction<any>).mockResolvedValue({});
-    (prisma.image.create as jest.MockedFunction<any>).mockResolvedValue({});
+    (prisma.image.count as MockedFunction<any>).mockResolvedValue(totalTestImages);
+    (prisma.image.findMany as MockedFunction<any>).mockResolvedValue([]);
+    (prisma.image.findUnique as MockedFunction<any>).mockResolvedValue(null);
+    (prisma.image.update as MockedFunction<any>).mockResolvedValue({});
+    (prisma.image.updateMany as MockedFunction<any>).mockResolvedValue({ count: 0 });
+    (prisma.project.findMany as MockedFunction<any>).mockResolvedValue([]);
+    (prisma.user.create as MockedFunction<any>).mockResolvedValue({});
+    (prisma.project.create as MockedFunction<any>).mockResolvedValue({});
+    (prisma.image.create as MockedFunction<any>).mockResolvedValue({});
 
     // Reset singleton so each test gets a fresh instance
     (QueueService as any).instance = null;
@@ -342,7 +343,7 @@ describe('QueueService Parallel Processing', () => {
   });
 
   afterEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterAll(async () => {
@@ -769,7 +770,7 @@ describe('QueueService Parallel Processing', () => {
       // Simulate connection pool exhaustion: only allow 50 concurrent transactions
       let activeConnections = 0;
       const MAX_POOL = 50;
-      (prisma.$transaction as jest.MockedFunction<any>).mockImplementation(
+      (prisma.$transaction as MockedFunction<any>).mockImplementation(
         async (callback: any) => {
           if (activeConnections >= MAX_POOL) {
             throw new Error('Connection pool exhausted: timeout waiting for connection');

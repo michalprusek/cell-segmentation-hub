@@ -9,20 +9,20 @@ import axios, { AxiosInstance } from 'axios';
 import { getStorageProvider } from '../../storage/index';
 
 // Mock dependencies
-jest.mock('axios');
-jest.mock('@prisma/client');
-jest.mock('../imageService');
-jest.mock('../segmentationThumbnailService');
-jest.mock('../thumbnailManager');
-jest.mock('../../utils/logger', () => ({
+vi.mock('axios');
+vi.mock('@prisma/client');
+vi.mock('../imageService');
+vi.mock('../segmentationThumbnailService');
+vi.mock('../thumbnailManager');
+vi.mock('../../utils/logger', () => ({
   logger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
-jest.mock('../../utils/config', () => ({
+vi.mock('../../utils/config', () => ({
   config: {
     SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
     NODE_ENV: 'test',
@@ -33,20 +33,20 @@ jest.mock('../../utils/config', () => ({
     STORAGE_LOCAL_PATH: '/tmp/test-storage',
   },
 }));
-jest.mock('../../storage/index', () => ({
-  getStorageProvider: jest.fn(() => ({
-    getFileUrl: jest.fn((path: string) => Promise.resolve(`http://localhost/${path}`)),
-    saveFile: jest.fn(() => Promise.resolve('/saved/path')),
-    deleteFile: jest.fn(() => Promise.resolve()),
-    getBuffer: jest.fn(() => Promise.resolve(Buffer.from('mock-image-data'))),
+vi.mock('../../storage/index', () => ({
+  getStorageProvider: vi.fn(() => ({
+    getFileUrl: vi.fn((path: string) => Promise.resolve(`http://localhost/${path}`)),
+    saveFile: vi.fn(() => Promise.resolve('/saved/path')),
+    deleteFile: vi.fn(() => Promise.resolve()),
+    getBuffer: vi.fn(() => Promise.resolve(Buffer.from('mock-image-data'))),
   })),
 }));
 
 describe('SegmentationService - Concurrent Request Handling', () => {
   let segmentationService: SegmentationService;
-  let mockPrisma: jest.Mocked<PrismaClient>;
-  let mockImageService: jest.Mocked<ImageService>;
-  let mockAxios: jest.Mocked<AxiosInstance>;
+  let mockPrisma: Mocked<PrismaClient>;
+  let mockImageService: Mocked<ImageService>;
+  let mockAxios: Mocked<AxiosInstance>;
 
   const mockSegmentationResponse: SegmentationResponse = {
     success: true,
@@ -80,53 +80,53 @@ describe('SegmentationService - Concurrent Request Handling', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Setup mocks
     mockPrisma = {
       segmentation: {
-        upsert: jest.fn().mockResolvedValue({ id: 'seg-1' }),
-        create: jest.fn().mockResolvedValue({ id: 'seg-1' }),
-        findUnique: jest.fn().mockResolvedValue(null),
-        findMany: jest.fn().mockResolvedValue([]),
-        update: jest.fn().mockResolvedValue({}),
-        delete: jest.fn().mockResolvedValue({}),
-        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        upsert: vi.fn().mockResolvedValue({ id: 'seg-1' }),
+        create: vi.fn().mockResolvedValue({ id: 'seg-1' }),
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        update: vi.fn().mockResolvedValue({}),
+        delete: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       image: {
-        findUnique: jest.fn().mockResolvedValue(null),
-        findMany: jest.fn().mockResolvedValue([]),
-        update: jest.fn().mockResolvedValue({}),
-        count: jest.fn().mockResolvedValue(0),
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        update: vi.fn().mockResolvedValue({}),
+        count: vi.fn().mockResolvedValue(0),
       },
       project: {
-        findFirst: jest.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue(null),
       },
     } as any;
     mockImageService = {
-      getImageById: jest.fn().mockResolvedValue(mockImage),
-      updateSegmentationStatus: jest.fn().mockResolvedValue(undefined),
+      getImageById: vi.fn().mockResolvedValue(mockImage),
+      updateSegmentationStatus: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     // Mock axios instance
     mockAxios = {
-      post: jest.fn(),
-      get: jest.fn(),
+      post: vi.fn(),
+      get: vi.fn(),
       interceptors: {
-        request: { use: jest.fn() },
-        response: { use: jest.fn() },
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
       },
     } as any;
 
     // Mock axios.create to return our mock instance
-    (axios.create as jest.Mock).mockReturnValue(mockAxios);
+    (axios.create as Mock).mockReturnValue(mockAxios);
 
     // Re-setup storage mock after clearAllMocks (clearAllMocks resets implementations)
-    (getStorageProvider as jest.Mock).mockReturnValue({
-      getFileUrl: jest.fn((path: string) => Promise.resolve(`http://localhost/${path}`)),
-      saveFile: jest.fn(() => Promise.resolve('/saved/path')),
-      deleteFile: jest.fn(() => Promise.resolve()),
-      getBuffer: jest.fn(() => Promise.resolve(Buffer.from('mock-image-data'))),
+    (getStorageProvider as Mock).mockReturnValue({
+      getFileUrl: vi.fn((path: string) => Promise.resolve(`http://localhost/${path}`)),
+      saveFile: vi.fn(() => Promise.resolve('/saved/path')),
+      deleteFile: vi.fn(() => Promise.resolve()),
+      getBuffer: vi.fn(() => Promise.resolve(Buffer.from('mock-image-data'))),
     });
 
     // Create SegmentationService instance

@@ -6,8 +6,8 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { queueRoutes } from '../queueRoutes';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
@@ -15,36 +15,36 @@ import { ResponseHelper } from '../../../utils/response';
 import { prisma as _prisma } from '../../../db';
 
 // Mock all dependencies
-jest.mock('../../../middleware/auth');
-jest.mock('../../../utils/logger');
-jest.mock('../../../utils/response', () => ({
+vi.mock('../../../middleware/auth');
+vi.mock('../../../utils/logger');
+vi.mock('../../../utils/response', () => ({
   asyncHandler: (fn: any) => fn,
   ResponseHelper: {
-    success: jest.fn(),
-    notFound: jest.fn(),
-    unauthorized: jest.fn(),
-    forbidden: jest.fn(),
-    badRequest: jest.fn(),
-    internalError: jest.fn(),
-    validationError: jest.fn(),
-    conflict: jest.fn(),
-    rateLimit: jest.fn(),
-    serviceUnavailable: jest.fn(),
-    error: jest.fn(),
-    paginated: jest.fn(),
+    success: vi.fn(),
+    notFound: vi.fn(),
+    unauthorized: vi.fn(),
+    forbidden: vi.fn(),
+    badRequest: vi.fn(),
+    internalError: vi.fn(),
+    validationError: vi.fn(),
+    conflict: vi.fn(),
+    rateLimit: vi.fn(),
+    serviceUnavailable: vi.fn(),
+    error: vi.fn(),
+    paginated: vi.fn(),
   },
 }));
-jest.mock('../../../db');
-jest.mock('../../../services/queueService');
-jest.mock('../../../services/segmentationService');
-jest.mock('../../../services/imageService');
-jest.mock('../../../services/websocketService');
-jest.mock('../../../middleware/validation', () => ({
-  validateBody: jest.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
-  validateParams: jest.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
-  validateQuery: jest.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
+vi.mock('../../../db');
+vi.mock('../../../services/queueService');
+vi.mock('../../../services/segmentationService');
+vi.mock('../../../services/imageService');
+vi.mock('../../../services/websocketService');
+vi.mock('../../../middleware/validation', () => ({
+  validateBody: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
+  validateParams: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
+  validateQuery: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
 }));
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -64,11 +64,11 @@ jest.mock('../../../utils/config', () => ({
   },
 }));
 
-const mockedAuthenticate = authenticate as jest.MockedFunction<
+const mockedAuthenticate = authenticate as MockedFunction<
   typeof authenticate
 >;
-const MockedResponseHelper = ResponseHelper as jest.Mocked<typeof ResponseHelper>;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
+const MockedResponseHelper = ResponseHelper as Mocked<typeof ResponseHelper>;
+const mockedLogger = logger as Mocked<typeof logger>;
 
 const mockUser = {
   id: 'test-user-id',
@@ -84,7 +84,7 @@ describe('Queue Routes', () => {
   let app: express.Application;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     app = express();
     app.use(express.json());
@@ -102,46 +102,46 @@ describe('Queue Routes', () => {
     );
 
     // ResponseHelper mocks
-    (MockedResponseHelper.success as jest.Mock).mockImplementation(
+    (MockedResponseHelper.success as Mock).mockImplementation(
       (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
-    (MockedResponseHelper.notFound as jest.Mock).mockImplementation(
+    (MockedResponseHelper.notFound as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(404).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.unauthorized as jest.Mock).mockImplementation(
+    (MockedResponseHelper.unauthorized as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(401).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.badRequest as jest.Mock).mockImplementation(
+    (MockedResponseHelper.badRequest as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(400).json({ success: false, error: message });
       }
     );
-    (MockedResponseHelper.validationError as jest.Mock).mockImplementation(
+    (MockedResponseHelper.validationError as Mock).mockImplementation(
       (res: express.Response, errors: unknown) => {
         return res.status(400).json({ success: false, errors });
       }
     );
-    (MockedResponseHelper.internalError as jest.Mock).mockImplementation(
+    (MockedResponseHelper.internalError as Mock).mockImplementation(
       (res: express.Response, _err: unknown, message: string) => {
         return res.status(500).json({ success: false, error: message });
       }
     );
 
-    mockedLogger.info = jest.fn() as jest.MockedFunction<typeof logger.info>;
-    mockedLogger.error = jest.fn() as jest.MockedFunction<typeof logger.error>;
-    mockedLogger.debug = jest.fn() as jest.MockedFunction<typeof logger.debug>;
+    mockedLogger.info = vi.fn() as MockedFunction<typeof logger.info>;
+    mockedLogger.error = vi.fn() as MockedFunction<typeof logger.error>;
+    mockedLogger.debug = vi.fn() as MockedFunction<typeof logger.debug>;
 
     app.use('/api/queue', queueRoutes);
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('POST /api/queue/images/:imageId — add to queue', () => {

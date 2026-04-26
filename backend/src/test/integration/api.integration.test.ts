@@ -5,7 +5,7 @@ import {
   expect,
   beforeAll,
   afterAll /* beforeEach, afterEach */,
-} from '@jest/globals';
+} from 'vitest';
 import app from '../../server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';

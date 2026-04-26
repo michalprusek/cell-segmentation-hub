@@ -5,9 +5,8 @@ import {
   it,
   expect,
   beforeEach,
-  jest,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
 import mlRoutes from '../mlRoutes';
 import { authenticate } from '../../../middleware/auth';
 import { apiLimiter } from '../../../middleware/rateLimiter';
@@ -17,11 +16,11 @@ import { prisma } from '../../../db';
 import axios from 'axios';
 
 // Mock axios to prevent real HTTP calls to ML service
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+vi.mock('axios');
+const mockedAxios = axios as Mocked<typeof axios>;
 
 // Mock dependencies
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -36,20 +35,20 @@ jest.mock('../../../utils/config', () => ({
     WS_ALLOWED_ORIGINS: 'http://localhost:3000',
   },
 }));
-jest.mock('../../../middleware/auth');
-jest.mock('../../../middleware/rateLimiter');
-jest.mock('../../../utils/logger');
-jest.mock('../../../auth/jwt');
-jest.mock('../../../db');
+vi.mock('../../../middleware/auth');
+vi.mock('../../../middleware/rateLimiter');
+vi.mock('../../../utils/logger');
+vi.mock('../../../auth/jwt');
+vi.mock('../../../db');
 
 // Create mocked functions with proper typing
 const mockedAuthenticate = authenticate as any;
 const mockedApiLimiter = apiLimiter as any;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
-const _mockedVerifyAccessToken = verifyAccessToken as jest.MockedFunction<
+const mockedLogger = logger as Mocked<typeof logger>;
+const _mockedVerifyAccessToken = verifyAccessToken as MockedFunction<
   typeof verifyAccessToken
 >;
-const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
+const mockedPrisma = prisma as Mocked<typeof prisma>;
 
 // Mock user data
 const mockUser = {
@@ -92,7 +91,7 @@ describe('ML Routes Authentication Tests', () => {
     app.use(express.json());
 
     // Reset all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Mock rate limiter to pass through
     mockedApiLimiter.mockImplementation((req: any, res: any, next: any) =>
@@ -100,22 +99,22 @@ describe('ML Routes Authentication Tests', () => {
     );
 
     // Mock logger methods
-    mockedLogger.info = jest.fn();
-    mockedLogger.error = jest.fn();
+    mockedLogger.info = vi.fn();
+    mockedLogger.error = vi.fn();
 
     // Mock Prisma user findUnique
     (mockedPrisma as any).user = {
-      findUnique: jest.fn(),
+      findUnique: vi.fn(),
     };
 
     // Default axios mock: ML service returns healthy response
-    mockedAxios.get = jest.fn(() =>
+    mockedAxios.get = vi.fn(() =>
       Promise.resolve({ data: { status: 'healthy', gpu_available: false } })
     ) as any;
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Public ML Endpoints (No Authentication Required)', () => {
@@ -161,7 +160,7 @@ describe('ML Routes Authentication Tests', () => {
 
       it('should handle health check errors gracefully', async () => {
         // Override axios to simulate ML service being unavailable
-        mockedAxios.get = jest.fn(() =>
+        mockedAxios.get = vi.fn(() =>
           Promise.reject(new Error('connect ECONNREFUSED'))
         ) as any;
 
@@ -217,7 +216,7 @@ describe('ML Routes Authentication Tests', () => {
 
       it('should handle status check errors', async () => {
         // Override axios to simulate ML service being unavailable
-        mockedAxios.get = jest.fn(() =>
+        mockedAxios.get = vi.fn(() =>
           Promise.reject(new Error('connect ECONNREFUSED'))
         ) as any;
 

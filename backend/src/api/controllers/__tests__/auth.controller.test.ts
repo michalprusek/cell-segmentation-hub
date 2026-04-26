@@ -1,9 +1,10 @@
 import request from 'supertest';
 import express from 'express';
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 
 // Mock config early to prevent process.exit(1) during module load chain
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -34,21 +35,21 @@ jest.mock('../../../utils/config', () => ({
 }));
 
 // Mock AuthService
-jest.mock('../../../services/authService');
-jest.mock('../../../utils/logger');
+vi.mock('../../../services/authService');
+vi.mock('../../../utils/logger');
 
 import { register, login, refreshToken, logout } from '../authController';
 import * as AuthService from '../../../services/authService';
 import { errorHandler, ApiError } from '../../../middleware/error';
 
-const MockedAuthService = AuthService as jest.Mocked<typeof AuthService>;
+const MockedAuthService = AuthService as Mocked<typeof AuthService>;
 
 // Create a mocked AuthService instance for easier testing
 const authService = {
-  register: jest.fn() as jest.MockedFunction<typeof AuthService.register>,
-  login: jest.fn() as jest.MockedFunction<typeof AuthService.login>,
-  refreshToken: jest.fn() as jest.MockedFunction<typeof AuthService.refreshToken>,
-  logout: jest.fn() as jest.MockedFunction<typeof AuthService.logout>,
+  register: vi.fn() as MockedFunction<typeof AuthService.register>,
+  login: vi.fn() as MockedFunction<typeof AuthService.login>,
+  refreshToken: vi.fn() as MockedFunction<typeof AuthService.refreshToken>,
+  logout: vi.fn() as MockedFunction<typeof AuthService.logout>,
 };
 
 describe('Auth Controller Functions', () => {
@@ -68,7 +69,7 @@ describe('Auth Controller Functions', () => {
     app.use(errorHandler);
 
     // Reset mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Mock static methods on AuthService
     MockedAuthService.register = authService.register;

@@ -1,46 +1,46 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mocks must be declared before imports
 const prismaMock = {
   project: {
-    findFirst: jest.fn() as any,
+    findFirst: vi.fn() as any,
   },
   projectShare: {
-    findFirst: jest.fn() as any,
-    findMany: jest.fn() as any,
-    create: jest.fn() as any,
-    update: jest.fn() as any,
-    delete: jest.fn() as any,
+    findFirst: vi.fn() as any,
+    findMany: vi.fn() as any,
+    create: vi.fn() as any,
+    update: vi.fn() as any,
+    delete: vi.fn() as any,
   },
   user: {
-    findUnique: jest.fn() as any,
+    findUnique: vi.fn() as any,
   },
 };
 
-jest.mock('../../db', () => ({ prisma: prismaMock }));
-jest.mock('../../utils/logger', () => ({
-  logger: { info: jest.fn(), error: jest.fn(), debug: jest.fn(), warn: jest.fn() },
+vi.mock('../../db', () => ({ prisma: prismaMock }));
+vi.mock('../../utils/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
-jest.mock('../../services/emailService', () => ({
-  sendEmail: jest.fn(() => Promise.resolve()),
+vi.mock('../../services/emailService', () => ({
+  sendEmail: vi.fn(() => Promise.resolve()),
 }));
-jest.mock('uuid', () => ({ v4: jest.fn(() => 'mock-uuid-1234') }));
-jest.mock('../../templates/shareInvitationEmailSimple', () => ({
-  generateShareInvitationSimpleHTML: jest.fn(() => '<html>invite</html>'),
-  generateShareInvitationSimpleText: jest.fn(() => 'invite text'),
-  getShareInvitationSimpleSubject: jest.fn(() => 'Project shared with you'),
+vi.mock('uuid', () => ({ v4: vi.fn(() => 'mock-uuid-1234') }));
+vi.mock('../../templates/shareInvitationEmailSimple', () => ({
+  generateShareInvitationSimpleHTML: vi.fn(() => '<html>invite</html>'),
+  generateShareInvitationSimpleText: vi.fn(() => 'invite text'),
+  getShareInvitationSimpleSubject: vi.fn(() => 'Project shared with you'),
 }));
 
 import * as sharingService from '../sharingService';
 import * as EmailService from '../../services/emailService';
 import { v4 as uuidv4 } from 'uuid';
 
-const mockSendEmail = EmailService.sendEmail as ReturnType<typeof jest.fn>;
-const mockUuidV4 = uuidv4 as ReturnType<typeof jest.fn>;
+const mockSendEmail = EmailService.sendEmail as ReturnType<typeof vi.fn>;
+const mockUuidV4 = uuidv4 as ReturnType<typeof vi.fn>;
 
 describe('SharingService', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // resetMocks:true clears implementations — re-establish uuid mock
     mockUuidV4.mockReturnValue('mock-uuid-1234');
     mockSendEmail.mockResolvedValue(undefined);

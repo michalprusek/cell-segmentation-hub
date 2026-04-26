@@ -3,25 +3,24 @@ import {
   it,
   expect,
   beforeEach,
-  jest,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { SegmentationService } from '../segmentationService';
 import { ImageService } from '../imageService';
 import { logger } from '../../utils/logger';
 
 // Mock dependencies
-jest.mock('../../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
   logger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
-jest.mock('../../utils/config', () => ({
+vi.mock('../../utils/config', () => ({
   config: {
     SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
     STORAGE_TYPE: 'local',
@@ -29,10 +28,10 @@ jest.mock('../../utils/config', () => ({
   },
 }));
 
-jest.mock('../../storage');
-jest.mock('../segmentationThumbnailService');
-jest.mock('../thumbnailManager');
-jest.mock('../imageService');
+vi.mock('../../storage');
+vi.mock('../segmentationThumbnailService');
+vi.mock('../thumbnailManager');
+vi.mock('../imageService');
 
 describe('SegmentationService - Batch Result Fetching', () => {
   let segmentationService: SegmentationService;
@@ -43,28 +42,28 @@ describe('SegmentationService - Batch Result Fetching', () => {
     // Create comprehensive Prisma mock
     prismaMock = {
       segmentation: {
-        findMany: jest.fn(),
-        findUnique: jest.fn(),
-        upsert: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-        delete: jest.fn(),
-        deleteMany: jest.fn(),
+        findMany: vi.fn(),
+        findUnique: vi.fn(),
+        upsert: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+        deleteMany: vi.fn(),
       },
       image: {
-        findMany: jest.fn(),
-        findUnique: jest.fn(),
-        count: jest.fn(),
+        findMany: vi.fn(),
+        findUnique: vi.fn(),
+        count: vi.fn(),
       },
       project: {
-        findFirst: jest.fn(),
+        findFirst: vi.fn(),
       },
     };
 
     // Mock ImageService
     imageServiceMock = {
-      getImageById: jest.fn(),
-      updateSegmentationStatus: jest.fn(),
+      getImageById: vi.fn(),
+      updateSegmentationStatus: vi.fn(),
     };
 
     segmentationService = new SegmentationService(
@@ -72,11 +71,11 @@ describe('SegmentationService - Batch Result Fetching', () => {
       imageServiceMock as ImageService
     );
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('getBatchSegmentationResults', () => {

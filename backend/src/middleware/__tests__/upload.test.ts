@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import {
@@ -42,7 +42,7 @@ describe('Upload Middleware - Large Batch Support', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('File Count Limits', () => {

@@ -13,8 +13,8 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import {
   createProject,
   getProjects,
@@ -28,28 +28,28 @@ import { logger } from '../../../utils/logger';
 import { ResponseHelper } from '../../../utils/response';
 
 // Mock all dependencies
-jest.mock('../../../services/projectService');
-jest.mock('../../../middleware/auth');
-jest.mock('../../../utils/logger');
-jest.mock('../../../utils/response', () => ({
+vi.mock('../../../services/projectService');
+vi.mock('../../../middleware/auth');
+vi.mock('../../../utils/logger');
+vi.mock('../../../utils/response', () => ({
   asyncHandler: (fn: any) => fn,
   ResponseHelper: {
-    success: jest.fn(),
-    notFound: jest.fn(),
-    unauthorized: jest.fn(),
-    forbidden: jest.fn(),
-    badRequest: jest.fn(),
-    internalError: jest.fn(),
-    validationError: jest.fn(),
-    conflict: jest.fn(),
-    rateLimit: jest.fn(),
-    serviceUnavailable: jest.fn(),
-    error: jest.fn(),
-    paginated: jest.fn(),
+    success: vi.fn(),
+    notFound: vi.fn(),
+    unauthorized: vi.fn(),
+    forbidden: vi.fn(),
+    badRequest: vi.fn(),
+    internalError: vi.fn(),
+    validationError: vi.fn(),
+    conflict: vi.fn(),
+    rateLimit: vi.fn(),
+    serviceUnavailable: vi.fn(),
+    error: vi.fn(),
+    paginated: vi.fn(),
   },
 }));
-jest.mock('../../../db');
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../db');
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -69,9 +69,9 @@ jest.mock('../../../utils/config', () => ({
   },
 }));
 
-const MockedProjectService = projectService as unknown as Record<string, jest.Mock<any>>;
-const mockedAuthenticate = authenticate as jest.MockedFunction<typeof authenticate>;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
+const MockedProjectService = projectService as unknown as Record<string, Mock<any>>;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
+const mockedLogger = logger as Mocked<typeof logger>;
 
 const mockUser = {
   id: 'test-user-id',
@@ -99,7 +99,7 @@ describe('Project Routes', () => {
   let app: express.Application;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     app = express();
     app.use(express.json());
@@ -117,45 +117,45 @@ describe('Project Routes', () => {
     );
 
     // Install ResponseHelper mocks
-    (ResponseHelper.success as jest.Mock).mockImplementation(
+    (ResponseHelper.success as Mock).mockImplementation(
       (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
-    (ResponseHelper.paginated as jest.Mock).mockImplementation(
+    (ResponseHelper.paginated as Mock).mockImplementation(
       (res: express.Response, data: unknown, pagination: unknown, message: string) => {
         return res.status(200).json({ success: true, data: { projects: data, pagination }, message });
       }
     );
-    (ResponseHelper.notFound as jest.Mock).mockImplementation(
+    (ResponseHelper.notFound as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(404).json({ success: false, message });
       }
     );
-    (ResponseHelper.unauthorized as jest.Mock).mockImplementation(
+    (ResponseHelper.unauthorized as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(401).json({ success: false, message });
       }
     );
-    (ResponseHelper.forbidden as jest.Mock).mockImplementation(
+    (ResponseHelper.forbidden as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(403).json({ success: false, message });
       }
     );
-    (ResponseHelper.badRequest as jest.Mock).mockImplementation(
+    (ResponseHelper.badRequest as Mock).mockImplementation(
       (res: express.Response, message: string) => {
         return res.status(400).json({ success: false, message });
       }
     );
-    (ResponseHelper.internalError as jest.Mock).mockImplementation(
+    (ResponseHelper.internalError as Mock).mockImplementation(
       (res: express.Response, _err: unknown, message: string) => {
         return res.status(500).json({ success: false, message });
       }
     );
 
-    mockedLogger.info = jest.fn() as jest.MockedFunction<typeof logger.info>;
-    mockedLogger.error = jest.fn() as jest.MockedFunction<typeof logger.error>;
-    mockedLogger.debug = jest.fn() as jest.MockedFunction<typeof logger.debug>;
+    mockedLogger.info = vi.fn() as MockedFunction<typeof logger.info>;
+    mockedLogger.error = vi.fn() as MockedFunction<typeof logger.error>;
+    mockedLogger.debug = vi.fn() as MockedFunction<typeof logger.debug>;
 
     // Register routes using controller functions directly (same pattern as reference test)
     app.get('/projects', mockedAuthenticate, getProjects);
@@ -166,8 +166,8 @@ describe('Project Routes', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
-    jest.resetAllMocks();
+    vi.restoreAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('POST /projects — create project', () => {

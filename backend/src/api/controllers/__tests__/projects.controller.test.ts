@@ -6,8 +6,8 @@ import {
   expect,
   beforeEach,
   afterEach,
-  jest,
-} from '@jest/globals';
+} from 'vitest';
+import type { MockedFunction } from 'vitest';
 import {
   createProject,
   getProjects,
@@ -19,7 +19,7 @@ import * as projectService from '../../../services/projectService';
 import { authenticate } from '../../../middleware/auth';
 
 // Mock dependencies
-jest.mock('../../../utils/config', () => ({
+vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
     PORT: 3001,
@@ -34,19 +34,19 @@ jest.mock('../../../utils/config', () => ({
     WS_ALLOWED_ORIGINS: 'http://localhost:3000',
   },
 }));
-jest.mock('../../../services/projectService');
-jest.mock('../../../middleware/auth');
-jest.mock('../../../utils/logger', () => ({
+vi.mock('../../../services/projectService');
+vi.mock('../../../middleware/auth');
+vi.mock('../../../utils/logger', () => ({
   logger: {
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
-const MockProjectService = projectService as jest.Mocked<typeof projectService>;
-const mockAuthMiddleware = authenticate as jest.MockedFunction<
+const MockProjectService = projectService as Mocked<typeof projectService>;
+const mockAuthMiddleware = authenticate as MockedFunction<
   typeof authenticate
 >;
 
@@ -100,9 +100,9 @@ describe('ProjectController', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
-    jest.clearAllMocks();
-    jest.resetAllMocks();
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('GET /projects', () => {
