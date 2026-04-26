@@ -959,7 +959,7 @@ class ApiClient {
   /**
    * Get project images with optimized thumbnail data
    */
-  async getProjectImageDTOsWithThumbnails(
+  async getProjectImagesWithThumbnails(
     projectId: string,
     params?: {
       page?: number;
@@ -998,7 +998,7 @@ class ApiClient {
    * displayOrder 0, index 1 → 1, etc. The backend applies the change in a
    * single transaction.
    */
-  async reorderProjectImageDTOs(
+  async reorderProjectImages(
     projectId: string,
     imageIds: string[]
   ): Promise<void> {
@@ -1007,7 +1007,7 @@ class ApiClient {
     });
   }
 
-  async getProjectImageDTOs(
+  async getProjectImages(
     projectId: string,
     params?: { page?: number; limit?: number }
   ): Promise<{
