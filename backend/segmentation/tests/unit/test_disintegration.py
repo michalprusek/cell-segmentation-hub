@@ -225,3 +225,67 @@ class TestDisintegrationIndex:
             "image_width": self.W, "image_height": self.H,
         })
         assert resp.status_code == 400
+
+    # ---- core-centroid anchor (improvement A) ----
+    # The previous tests use symmetric concentric shapes, so the mass centroid
+    # and the core centroid coincide and the anchor change is invisible. The
+    # tests below deliberately break symmetry to exercise the new anchor.
+
+    def test_asymmetric_invasion_uses_core_anchor_not_mass(self, client):
+        """Mask extends rightward of the core. Mass centroid drifts right;
+        core centroid stays at (CX, CY). With the core-centroid anchor, all
+        rightward pixels are now far from the anchor, so DI is significantly
+        higher than when the same mask is processed without a core (which
+        falls back to the mass centroid).
+        """
+        # Asymmetric mask: a centred blob plus a bulge to the right.
+        mask = [_circle(self.CX, self.CY, 30), _circle(self.CX + 80, self.CY, 25)]
+        core = [_circle(self.CX, self.CY, 18)]
+        with_core = self._post(client, {
+            "mask_polygons": mask, "core_polygons": core,
+            "image_width": self.W, "image_height": self.H,
+        })
+        no_core = self._post(client, {
+            "mask_polygons": mask, "core_polygons": None,
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert with_core["reference"] == "core"
+        # The core anchor on (CX, CY) sees the right bulge as far away;
+        # the mass-anchor fallback sits between the blobs and sees them as
+        # roughly equidistant. Net: with_core DI must exceed no_core DI.
+        assert with_core["di"] > no_core["di"] + 0.05
+
+    def test_off_centre_core_changes_di_vs_centred_core(self, client):
+        """Same mask, two different core positions. Old code (mass anchor)
+        would have given identical DIs because the anchor depends only on
+        the mask. New code (core anchor) gives different DIs because the
+        anchor moves with the core.
+        """
+        mask_pts = [_circle(140, 100, 80)]
+        centred_core = [_circle(140, 100, 30)]
+        offset_core = [_circle(120, 80, 30)]
+        centred = self._post(client, {
+            "mask_polygons": mask_pts, "core_polygons": centred_core,
+            "image_width": self.W, "image_height": self.H,
+        })
+        offset = self._post(client, {
+            "mask_polygons": mask_pts, "core_polygons": offset_core,
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert abs(offset["di"] - centred["di"]) > 0.02
+
+    def test_satellite_blob_with_main_blob_core(self, client):
+        """A main blob with a core, plus a distant satellite blob in the
+        mask. Anchor sits on the main blob's core; satellite pixels are
+        far from the anchor → DI elevated. Mass anchor would have sat
+        between the blobs.
+        """
+        main_blob = _circle(80, 128, 35)
+        satellite = _circle(200, 128, 20)
+        core = [_circle(80, 128, 18)]
+        out = self._post(client, {
+            "mask_polygons": [main_blob, satellite], "core_polygons": core,
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert out["reference"] == "core"
+        assert out["di"] > 0.20

@@ -345,6 +345,41 @@ export type ProjectType = (typeof PROJECT_TYPES)[number];
 export const isProjectType = (v: unknown): v is ProjectType =>
   typeof v === 'string' && (PROJECT_TYPES as readonly string[]).includes(v);
 
+/** Models compatible with each project type. Cross-type segmentation is
+ * blocked at both frontend (dropdown filter) and backend (400 on submit).
+ *
+ * - `spheroid_invasive` is locked to `unet_attention_aspp` because core
+ *   detection is tied to that model's postprocessing path.
+ * - `wound` and `sperm` use their dedicated specialised models only.
+ * - Standard `spheroid` projects can use any of the general spheroid
+ *   models, with `unet_attention_aspp` excluded so users wanting core
+ *   detection are nudged toward marking the project disintegrated.
+ */
+export const MODEL_TYPE_COMPATIBILITY: Record<ProjectType, readonly string[]> =
+  {
+    spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
+    spheroid_invasive: ['unet_attention_aspp'],
+    wound: ['wound'],
+    sperm: ['sperm'],
+  } as const;
+
+/** Visual category for badge colouring on project pages. */
+export const PROJECT_TYPE_CATEGORY: Record<
+  ProjectType,
+  'spheroid' | 'spheroid_invasive' | 'wound' | 'sperm'
+> = {
+  spheroid: 'spheroid',
+  spheroid_invasive: 'spheroid_invasive',
+  wound: 'wound',
+  sperm: 'sperm',
+} as const;
+
+export const isModelCompatibleWithType = (
+  model: string,
+  projectType: ProjectType
+): boolean =>
+  (MODEL_TYPE_COMPATIBILITY[projectType] as readonly string[]).includes(model);
+
 export interface Project {
   id: string;
   name: string;

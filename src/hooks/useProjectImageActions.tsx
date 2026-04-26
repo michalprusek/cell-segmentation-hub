@@ -3,7 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
 import { updateImageProcessingStatus } from '@/lib/imageProcessingService';
-import type { ProjectImage, SegmentationData } from '@/types';
+import {
+  isModelCompatibleWithType,
+  MODEL_TYPE_COMPATIBILITY,
+  type ProjectImage,
+  type ProjectType,
+  type SegmentationData,
+} from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useModel } from '@/contexts/useModel';
@@ -11,12 +17,14 @@ import { logger } from '@/lib/logger';
 
 interface UseProjectImageActionsProps {
   projectId?: string;
+  projectType?: ProjectType;
   onImagesChange: (images: ProjectImage[]) => void;
   images: ProjectImage[];
 }
 
 export const useProjectImageActions = ({
   projectId,
+  projectType,
   onImagesChange,
   images,
 }: UseProjectImageActionsProps) => {
@@ -75,6 +83,21 @@ export const useProjectImageActions = ({
 
   // Process an image segmentation and return a Promise that resolves when completed
   const handleProcessImage = async (imageId: string): Promise<boolean> => {
+    // Pre-flight: ensure the globally selected model is compatible with this
+    // project's type. Backend enforces the same rule (defense in depth), but
+    // we abort here so the user gets immediate feedback instead of a 400.
+    if (projectType && !isModelCompatibleWithType(selectedModel, projectType)) {
+      const allowed = MODEL_TYPE_COMPATIBILITY[projectType].join(', ');
+      toast.error(
+        t('segmentation.modelNotCompatible', {
+          model: selectedModel,
+          type: projectType,
+          allowed,
+        })
+      );
+      return false;
+    }
+
     // Use ref-based synchronous check to prevent race conditions
     if (processingImagesRef.current.has(imageId)) {
       toast.info(t('imageAlreadyProcessing'));

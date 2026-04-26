@@ -204,6 +204,9 @@ export default {
     projectType: 'Project Type',
     projectTypeUpdated: 'Project type updated',
     failedToUpdateProject: 'Failed to update project',
+    changeProjectType: 'Change project type',
+    typeChangeSegmentationsWarning:
+      '{{count}} existing segmentation(s) may no longer match the new "{{type}}" export format. Re-segment to refresh metrics.',
     types: {
       spheroid: 'Spheroids (standard)',
       spheroid_invasive: 'Disintegrated spheroids',
@@ -558,6 +561,8 @@ export default {
     system: 'System',
   },
   segmentation: {
+    modelNotCompatible:
+      'Model "{{model}}" is not compatible with project type "{{type}}". Allowed: {{allowed}}.',
     mode: {
       view: 'View and navigate',
       edit: 'Edit',

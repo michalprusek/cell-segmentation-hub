@@ -184,6 +184,9 @@ export default {
     projectType: 'Typ projektu',
     projectTypeUpdated: 'Typ projektu byl aktualizován',
     failedToUpdateProject: 'Nepodařilo se aktualizovat projekt',
+    changeProjectType: 'Změnit typ projektu',
+    typeChangeSegmentationsWarning:
+      '{{count}} existujících segmentací nemusí odpovídat exportnímu formátu "{{type}}". Re-segmentujte pro aktualizaci metrik.',
     types: {
       spheroid: 'Sféroidy (standardní)',
       spheroid_invasive: 'Rozprsknuté sféroidy',
@@ -543,6 +546,8 @@ export default {
     system: 'Systémový',
   },
   segmentation: {
+    modelNotCompatible:
+      'Model "{{model}}" není kompatibilní s typem projektu "{{type}}". Povolené: {{allowed}}.',
     mode: {
       view: 'Zobrazit a navigovat',
       edit: 'Upravit',

@@ -183,6 +183,9 @@ export default {
     projectType: 'Projekttyp',
     projectTypeUpdated: 'Projekttyp aktualisiert',
     failedToUpdateProject: 'Projekt konnte nicht aktualisiert werden',
+    changeProjectType: 'Projekttyp ändern',
+    typeChangeSegmentationsWarning:
+      '{{count}} bestehende Segmentierungen entsprechen möglicherweise nicht mehr dem Exportformat "{{type}}". Erneut segmentieren, um Metriken zu aktualisieren.',
     types: {
       spheroid: 'Sphäroide (Standard)',
       spheroid_invasive: 'Zerfallene Sphäroide',
@@ -689,6 +692,8 @@ export default {
     },
   },
   segmentation: {
+    modelNotCompatible:
+      'Modell "{{model}}" ist nicht mit dem Projekttyp "{{type}}" kompatibel. Erlaubt: {{allowed}}.',
     mode: {
       view: 'Anzeigen und navigieren',
       edit: 'Bearbeiten',

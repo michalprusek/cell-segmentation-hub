@@ -74,6 +74,22 @@ const ProjectDetail = () => {
         await apiClient.updateProject(id, { type: newType });
         setProjectType(newType);
         toast.success(t('projects.projectTypeUpdated'));
+
+        // Warn if existing segmentations were produced by a model not standard
+        // for the new type — they're not auto-deleted, but their metrics will
+        // no longer match the new project's export format.
+        const segmentedCount = images.filter(
+          img => img.segmentationStatus === 'completed'
+        ).length;
+        if (segmentedCount > 0) {
+          toast.warning(
+            t('projects.typeChangeSegmentationsWarning', {
+              count: segmentedCount,
+              type: t(`projects.types.${newType}`),
+            }),
+            { duration: 8000 }
+          );
+        }
       } catch (err) {
         logger.error('Failed to update project type', err);
         toast.error(
@@ -81,7 +97,7 @@ const ProjectDetail = () => {
         );
       }
     },
-    [id, setProjectType, t]
+    [id, setProjectType, t, images]
   );
 
   // Handle cancellation events from WebSocket - define early for useSegmentationQueue
@@ -399,6 +415,7 @@ const ProjectDetail = () => {
   const { handleDeleteImage, handleOpenSegmentationEditor } =
     useProjectImageActions({
       projectId: id,
+      projectType,
       onImagesChange: updateImages,
       images,
     });

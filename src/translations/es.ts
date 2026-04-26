@@ -183,6 +183,9 @@ export default {
     projectType: 'Tipo de proyecto',
     projectTypeUpdated: 'Tipo de proyecto actualizado',
     failedToUpdateProject: 'Error al actualizar el proyecto',
+    changeProjectType: 'Cambiar tipo de proyecto',
+    typeChangeSegmentationsWarning:
+      '{{count}} segmentaciones existentes pueden no coincidir con el formato de exportación "{{type}}". Vuelva a segmentar para actualizar las métricas.',
     types: {
       spheroid: 'Esferoides (estándar)',
       spheroid_invasive: 'Esferoides desintegrados',
@@ -681,6 +684,8 @@ export default {
     },
   },
   segmentation: {
+    modelNotCompatible:
+      'El modelo "{{model}}" no es compatible con el tipo de proyecto "{{type}}". Permitidos: {{allowed}}.',
     mode: {
       view: 'Ver y navegar',
       edit: 'Editar',

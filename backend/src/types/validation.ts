@@ -114,6 +114,27 @@ export type ProjectType = (typeof PROJECT_TYPES)[number];
 const projectTypeSchema = z.enum(PROJECT_TYPES);
 
 /**
+ * Models compatible with each project type. Mirror of the same constant
+ * in `src/types/index.ts` (frontend) — kept duplicated because frontend
+ * and backend have separate build trees and no shared import path.
+ *
+ * Cross-type segmentation requests fail with 400.
+ */
+export const MODEL_TYPE_COMPATIBILITY: Record<ProjectType, readonly string[]> =
+  {
+    spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
+    spheroid_invasive: ['unet_attention_aspp'],
+    wound: ['wound'],
+    sperm: ['sperm'],
+  } as const;
+
+export const isModelCompatibleWithType = (
+  model: string,
+  projectType: ProjectType
+): boolean =>
+  (MODEL_TYPE_COMPATIBILITY[projectType] as readonly string[]).includes(model);
+
+/**
  * Schema for creating a new project
  */
 export const createProjectSchema = z.object({

@@ -172,6 +172,9 @@ export default {
     projectType: '项目类型',
     projectTypeUpdated: '项目类型已更新',
     failedToUpdateProject: '无法更新项目',
+    changeProjectType: '更改项目类型',
+    typeChangeSegmentationsWarning:
+      '{{count}} 个现有分割可能不再符合 "{{type}}" 导出格式。重新分割以更新指标。',
     types: {
       spheroid: '球体（标准）',
       spheroid_invasive: '分解球体',
@@ -622,6 +625,8 @@ export default {
     },
   },
   segmentation: {
+    modelNotCompatible:
+      '模型 "{{model}}" 与项目类型 "{{type}}" 不兼容。允许的: {{allowed}}。',
     mode: {
       view: '查看和导航',
       edit: '编辑',
