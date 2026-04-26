@@ -13,6 +13,13 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
+# Configure logging up front so GPU init can log via the standard logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Configure GPU memory limit BEFORE any CUDA operations
 # This sets a per-process memory fraction - PyTorch will raise OOM if exceeded
 # Note: This does not provide priority over other GPU processes; it limits this process's allocation
@@ -37,17 +44,19 @@ if torch.cuda.is_available():
             os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:512,garbage_collection_threshold:0.6")
 
         _gpu_initialized = True
-        # Note: Using print here because logger isn't configured yet. Will log properly after logger setup.
-        print(f"[GPU Init] Memory limit: {_gpu_memory_limit_gb:.1f}GB / {_total_gpu_memory_gb:.1f}GB ({_memory_fraction:.1%}), Priority: {_gpu_priority}")
+        logger.info(
+            "GPU init: memory limit %.1fGB / %.1fGB (%.1f%%), priority=%s",
+            _gpu_memory_limit_gb, _total_gpu_memory_gb, _memory_fraction * 100, _gpu_priority
+        )
     except ValueError as e:
-        print(f"[GPU Init ERROR] Invalid ML_MEMORY_LIMIT_GB value '{os.getenv('ML_MEMORY_LIMIT_GB')}': {e}")
-        print("[GPU Init] Continuing without GPU memory limit - may cause OOM errors")
+        logger.error(
+            "GPU init: invalid ML_MEMORY_LIMIT_GB value '%s': %s — continuing without GPU memory limit",
+            os.getenv("ML_MEMORY_LIMIT_GB"), e
+        )
     except RuntimeError as e:
-        print(f"[GPU Init ERROR] CUDA initialization failed: {e}")
-        print("[GPU Init] Falling back to CPU mode")
+        logger.error("GPU init: CUDA initialization failed: %s — falling back to CPU mode", e)
     except Exception as e:
-        print(f"[GPU Init ERROR] Unexpected error: {e}")
-        print("[GPU Init] Falling back to CPU mode")
+        logger.exception("GPU init: unexpected error — falling back to CPU mode: %s", e)
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -62,14 +71,7 @@ from api.metrics_endpoint import router as metrics_router
 from api.monitoring import router as monitoring_router
 from ml.model_loader import ModelLoader
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Log GPU initialization status (now that logger is available)
+# Log GPU initialization summary status
 if _gpu_initialized:
     logger.info(f"GPU configured: {_gpu_memory_limit_gb:.1f}GB limit, priority={_gpu_priority}")
 elif torch.cuda.is_available():

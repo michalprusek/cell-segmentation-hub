@@ -265,12 +265,12 @@ Run visual consistency tests:
 npm run test:e2e -- visual-regression-numbers.spec.ts
 ```
 
-### Benchmark Suite
+### Performance Suite
 
-Compare performance across versions:
+Run the performance test suite (Vitest):
 
 ```bash
-npm run benchmark
+npm run test:performance
 ```
 
 ## Recommended System Requirements
