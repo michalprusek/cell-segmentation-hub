@@ -18,7 +18,8 @@ import { useAuth, useLanguage } from '@/contexts/exports';
 // Note: Profile functionality now handled by AuthContext and Settings page
 import AvatarUploadButton from '@/components/profile/AvatarUploadButton';
 import AvatarCropDialog from '@/components/profile/AvatarCropDialog';
-import { apiClient, Project, ProjectImageDTO } from '@/lib/api';
+import { apiClient, dtoToProjectImage, Project } from '@/lib/api';
+import type { ProjectImage } from '@/types';
 import { logger } from '@/lib/logger';
 import { createImagePreviewUrl } from '@/lib/tiffConverter';
 
@@ -176,8 +177,10 @@ const Profile = () => {
           setCompletedCountError(completedError);
         }
 
-        // Get recent images for activity (from recent projects)
-        let recentImages: ProjectImageDTO[] = [];
+        // Get recent images for activity (from recent projects).
+        // Convert DTOs to domain ProjectImage at the API seam — keeps
+        // snake_case wire fields out of UI logic.
+        let recentImages: ProjectImage[] = [];
         let recentImagesError = null;
         try {
           for (const project of recentProjects.slice(0, 3)) {
@@ -187,7 +190,9 @@ const Profile = () => {
                 project.id,
                 { limit: 5 }
               );
-              recentImages.push(...(imagesResponse.images || []));
+              recentImages.push(
+                ...(imagesResponse.images || []).map(dtoToProjectImage)
+              );
             } catch (error) {
               logger.warn(
                 `Error fetching recent images for project ${project.id}:`,
@@ -197,9 +202,7 @@ const Profile = () => {
           }
           // Sort by creation date and take most recent
           recentImages.sort(
-            (a, b) =>
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime()
+            (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
           );
           recentImages = recentImages.slice(0, 10); // Keep only 10 most recent
         } catch (error) {
@@ -229,13 +232,13 @@ const Profile = () => {
 
         if (recentImages) {
           recentImages.forEach(image => {
-            const createdDate = new Date(image.created_at);
+            const createdDate = image.createdAt;
             const now = new Date();
             const diffDays = Math.floor(
               (now.getTime() - createdDate.getTime()) / (1000 * 3600 * 24)
             );
 
-            if (image.segmentation_status === 'completed') {
+            if (image.segmentationStatus === 'completed') {
               activity.push({
                 action: `${t('profile.completedSegmentation')} '${image.name}'`,
                 date: createdDate.toISOString(),
