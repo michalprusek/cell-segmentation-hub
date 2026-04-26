@@ -29,6 +29,19 @@ export default {
     noImages: 'Nebyly nalezeny žádné obrázky',
     createYourFirst: 'Vytvořte svůj první projekt pro začátek',
     tryAgain: 'Zkusit znovu',
+    cancelling: 'Rušení...',
+    retry: 'Zkusit znovu',
+    retrying: 'Opakuji pokus...',
+    retryAttempt: 'Pokus {{attempt}} z {{max}}',
+    retryingIn: 'Zkouším znovu za {{seconds}} sekund...',
+    nextRetryIn: 'Další pokus za {{seconds}}s',
+    operationFailed: 'Operace selhala',
+    unexpectedError: 'Nastala neočekávaná chyba',
+    failedToLoad: 'Načtení selhalo',
+    loadingFailed: 'Načtení selhalo. Zkuste to prosím znovu.',
+    networkError: 'Chyba sítě. Zkontrolujte prosím připojení.',
+    refreshPage: 'Obnovit stránku',
+    tryAgainLater: 'Zkuste to prosím později',
     email: 'Email',
     password: 'Heslo',
     name: 'Jméno',
@@ -332,6 +345,7 @@ export default {
     acceptedFormats:
       'Podporované formáty: JPEG, PNG, TIFF, BMP (max 20MB na soubor)',
     uploadProgress: 'Průběh nahrávání',
+    readyToUpload: 'Připraveno k nahrání',
     uploadingTo: 'Nahrávání do',
     currentProject: 'Aktuální projekt',
     autoSegment: 'Automatická segmentace obrázků po nahrání',
@@ -836,6 +850,18 @@ export default {
     didntReceiveEmail: 'Nedostali jste email?',
     rememberPassword: 'Vzpomněli jste si na heslo?',
     tryAgain: 'Zkusit znovu',
+    enterNewPassword: 'Zadejte nové heslo',
+    newPassword: 'Nové heslo',
+    confirmPasswordPlaceholder: 'Potvrzení hesla',
+    passwordRequirements: 'Heslo musí mít alespoň 8 znaků',
+    resettingPassword: 'Resetování hesla...',
+    passwordResetSuccess: 'Heslo úspěšně resetováno',
+    passwordResetSuccessMessage:
+      'Vaše heslo bylo úspěšně resetováno. Nyní se můžete přihlásit novým heslem.',
+    invalidResetToken: 'Neplatný odkaz pro reset',
+    invalidResetTokenMessage:
+      'Tento odkaz pro reset hesla je neplatný nebo vypršel. Požádejte prosím o nový reset hesla.',
+    requestNewReset: 'Požádat o nový reset',
   },
   profile: {
     title: 'Profil',
@@ -952,6 +978,21 @@ export default {
     cancelAllFailed: 'Nepodařilo se zrušit segmentace',
     cancelAllError: 'Chyba při rušení segmentací',
     cancelling: 'Ruším...',
+    processingSlots: 'Zpracovávací sloty',
+    parallel: 'paralelně',
+    users: 'uživatelů',
+    active: 'aktivní',
+    you: 'Vy',
+    yourSlot: 'Váš slot: #{{slot}}',
+    concurrentUsers: 'Také zpracovává: {{users}}',
+    availableSlots: '{{count}} slot dostupný',
+    availableSlots_other: '{{count}} slotů dostupných',
+    yourPosition: 'Vaše pozice',
+    estimatedWait: 'Odh. čekání',
+    allSlotsActive:
+      'Všechny zpracovávací sloty jsou obsazeny – dosažena maximální kapacita paralelního zpracování',
+    slotAvailable:
+      'Slot je dostupný! Pozice #{{position}} (~{{waitTime}} min čekání)',
   },
   toast: {
     error: 'Došlo k chybě',
@@ -1122,6 +1163,7 @@ export default {
     downloading: 'Stahování...',
     cancelling: 'Ruší se...',
     cancelled: 'Export zrušen',
+    cancelExport: 'Zrušit export',
     connected: 'Připojeno',
     disconnected: 'Odpojeno',
     reconnecting: 'Připojování...',
@@ -1926,6 +1968,7 @@ export default {
     reloadingSegmentation: 'Obnovování segmentace...',
     segmenting: 'Segmentování...',
     waitingInQueue: 'Čekání ve frontě...',
+    retryingLoad: 'Načítání se nedaří. Zkouším znovu...',
     error: {
       title: 'Chyba segmentace',
       description:
@@ -1933,6 +1976,8 @@ export default {
       errorDetails: 'Podrobnosti chyby',
       tryAgain: 'Zkusit znovu',
       unsavedChanges: 'Neuložené změny',
+      imageLoadFailed:
+        'Obrázek se nepodařilo načíst. Obnovte stránku a zkuste to znovu.',
     },
     export: {
       exportAllMetrics: 'Exportovat všechny metriky jako XLSX',
