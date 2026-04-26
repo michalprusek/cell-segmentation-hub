@@ -8,8 +8,24 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useProjectForm } from '@/hooks/useProjectForm';
 import { useLanguage } from '@/contexts/useLanguage';
+import { PROJECT_TYPES, type ProjectType } from '@/types';
+import { cn } from '@/lib/utils';
+
+const PROJECT_TYPE_DOT: Record<ProjectType, string> = {
+  spheroid: 'bg-blue-500',
+  spheroid_invasive: 'bg-emerald-500',
+  wound: 'bg-amber-500',
+  sperm: 'bg-purple-500',
+};
 
 interface ProjectDialogFormProps {
   onSuccess?: (projectId: string) => void;
@@ -23,6 +39,8 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
     setProjectName,
     projectDescription,
     setProjectDescription,
+    projectType,
+    setProjectType,
     isCreating,
     handleCreateProject,
   } = useProjectForm({ onSuccess, onClose });
@@ -57,6 +75,34 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
               value={projectDescription}
               onChange={e => setProjectDescription(e.target.value)}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="projectType" className="text-right">
+              {t('projects.projectType')}
+            </Label>
+            <Select
+              value={projectType}
+              onValueChange={(v: ProjectType) => setProjectType(v)}
+            >
+              <SelectTrigger id="projectType">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROJECT_TYPES.map(pt => (
+                  <SelectItem key={pt} value={pt}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'inline-block w-2.5 h-2.5 rounded-full',
+                          PROJECT_TYPE_DOT[pt]
+                        )}
+                      />
+                      {t(`projects.types.${pt}`)}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
