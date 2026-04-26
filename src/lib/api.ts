@@ -4,6 +4,7 @@ import {
   UpdateProfile,
   isProjectType,
   type ProjectType,
+  type ProjectImage,
   type SegmentationStatus,
 } from '@/types';
 import { logger } from '@/lib/logger';
@@ -1890,3 +1891,39 @@ class ApiClient {
 // Create and export a singleton instance
 export const apiClient = new ApiClient();
 export default apiClient;
+
+/**
+ * Convert a wire `ProjectImageDTO` (snake_case, narrow status union) into
+ * a domain `ProjectImage` (camelCase, superset status, Date instances).
+ *
+ * Use this at the seam between `apiClient.*` (which returns DTOs) and
+ * UI/business code (which expects the domain shape from `@/types`).
+ * Keeps snake_case field access from leaking into components — the
+ * historical cause of subtle bugs when wire format changed without
+ * consumer updates.
+ *
+ * Domain fields not present on the DTO (e.g. `segmentationResult`) are
+ * left undefined; callers that need them should fetch via the dedicated
+ * segmentation API.
+ */
+export function dtoToProjectImage(dto: ProjectImageDTO): ProjectImage {
+  return {
+    id: dto.id,
+    name: dto.name,
+    url: dto.url ?? dto.image_url,
+    displayUrl: dto.displayUrl,
+    width: dto.width,
+    height: dto.height,
+    createdAt: new Date(dto.created_at),
+    updatedAt: new Date(dto.updated_at),
+    segmentationStatus: dto.segmentation_status,
+    project_id: dto.project_id,
+    thumbnail_url: dto.thumbnail_url,
+    segmentationThumbnailPath: dto.segmentationThumbnailPath,
+    segmentationThumbnailUrl: dto.segmentationThumbnailUrl,
+    image_url: dto.image_url,
+    created_at: dto.created_at,
+    updated_at: dto.updated_at,
+    user_id: dto.user_id,
+  };
+}
