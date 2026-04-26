@@ -7,6 +7,7 @@ import ExportStateManager from '@/lib/exportStateManager';
 import { useExportContext } from '@/contexts/ExportContext';
 import { useAbortController } from '@/hooks/shared/useAbortController';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
+import type { ExportJobStatus } from '@/types';
 
 // Sanitize filename to remove/replace invalid characters
 const sanitizeFilename = (filename: string): string => {
@@ -82,7 +83,7 @@ export interface ExportOptions {
 
 interface ExportJob {
   id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  status: ExportJobStatus;
   progress: number;
   message?: string;
   filePath?: string;

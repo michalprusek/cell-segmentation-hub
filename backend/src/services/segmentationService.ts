@@ -6,6 +6,7 @@ import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
+import type { JobStatus } from '../types';
 import {
   PolygonValidator,
   type PolygonPartClass,
@@ -67,7 +68,7 @@ export interface SegmentationResponse {
 
 export interface SegmentationTaskStatus {
   taskId: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: JobStatus;
   progress?: number;
   result?: SegmentationResponse;
   error?: string;

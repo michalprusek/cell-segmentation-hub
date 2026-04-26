@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Progress } from './progress';
 import { cn } from '@/lib/utils';
 import { CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import type { SegmentationStatus } from '@/types';
 
 interface SegmentationProgressProps {
   status: 'queued' | 'processing' | 'completed' | 'failed';
@@ -116,7 +117,7 @@ interface BatchSegmentationProgressProps {
   items: Array<{
     id: string;
     name: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed';
+    status: SegmentationStatus;
     progress?: number;
   }>;
   overallProgress: number;
