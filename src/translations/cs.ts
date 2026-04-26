@@ -548,6 +548,9 @@ export default {
   segmentation: {
     modelNotCompatible:
       'Model "{{model}}" není kompatibilní s typem projektu "{{type}}". Povolené: {{allowed}}.',
+    incompatibleModelTitle: 'Tímto modelem nelze segmentovat',
+    incompatibleModelDesc:
+      'Aktuálně vybraný model "{{model}}" není kompatibilní s typem tohoto projektu ({{type}}). Povolené modely pro tento typ: {{allowed}}. Změňte prosím model v Nastavení nebo změňte typ projektu.',
     mode: {
       view: 'Zobrazit a navigovat',
       edit: 'Upravit',
