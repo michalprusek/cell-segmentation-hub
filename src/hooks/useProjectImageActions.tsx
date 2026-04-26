@@ -20,6 +20,10 @@ interface UseProjectImageActionsProps {
   projectType?: ProjectType;
   onImagesChange: (images: ProjectImage[]) => void;
   images: ProjectImage[];
+  /** Called when an action is blocked because the selected model is not
+   * compatible with the project type. Lets the parent component open a
+   * blocking modal instead of relying on a toast. */
+  onIncompatibleModel?: () => void;
 }
 
 export const useProjectImageActions = ({
@@ -27,6 +31,7 @@ export const useProjectImageActions = ({
   projectType,
   onImagesChange,
   images,
+  onIncompatibleModel,
 }: UseProjectImageActionsProps) => {
   const navigate = useNavigate();
   const [processingImages, setProcessingImages] = useState<string[]>([]);
@@ -85,16 +90,22 @@ export const useProjectImageActions = ({
   const handleProcessImage = async (imageId: string): Promise<boolean> => {
     // Pre-flight: ensure the globally selected model is compatible with this
     // project's type. Backend enforces the same rule (defense in depth), but
-    // we abort here so the user gets immediate feedback instead of a 400.
+    // we abort here so the user gets immediate feedback. Prefer opening the
+    // parent's modal so the user sees a blocking explanation rather than a
+    // fading toast; fall back to toast if no modal handler is wired.
     if (projectType && !isModelCompatibleWithType(selectedModel, projectType)) {
-      const allowed = MODEL_TYPE_COMPATIBILITY[projectType].join(', ');
-      toast.error(
-        t('segmentation.modelNotCompatible', {
-          model: selectedModel,
-          type: projectType,
-          allowed,
-        })
-      );
+      if (onIncompatibleModel) {
+        onIncompatibleModel();
+      } else {
+        const allowed = MODEL_TYPE_COMPATIBILITY[projectType].join(', ');
+        toast.error(
+          t('segmentation.modelNotCompatible', {
+            model: selectedModel,
+            type: projectType,
+            allowed,
+          })
+        );
+      }
       return false;
     }
 

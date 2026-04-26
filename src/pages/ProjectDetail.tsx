@@ -36,6 +36,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  isModelCompatibleWithType,
+  MODEL_TYPE_COMPATIBILITY,
+  getErrorMessage,
+} from '@/types';
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -47,6 +52,8 @@ const ProjectDetail = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [incompatibleModelOpen, setIncompatibleModelOpen] =
+    useState<boolean>(false);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
     new Set()
   );
@@ -418,6 +425,7 @@ const ProjectDetail = () => {
       projectType,
       onImagesChange: updateImages,
       images,
+      onIncompatibleModel: () => setIncompatibleModelOpen(true),
     });
 
   // Status reconciliation for keeping UI in sync with backend
@@ -1237,6 +1245,15 @@ const ProjectDetail = () => {
       return;
     }
 
+    // Block segmentation when the globally selected model isn't compatible
+    // with this project's type. Open the modal instead of a toast — the user
+    // tried an action that fundamentally can't proceed and needs a clear
+    // explanation, not a quickly-fading notification.
+    if (projectType && !isModelCompatibleWithType(selectedModel, projectType)) {
+      setIncompatibleModelOpen(true);
+      return;
+    }
+
     // Prevent double submission
     if (batchSubmitted) {
       return;
@@ -1595,6 +1612,36 @@ const ProjectDetail = () => {
               className="bg-red-600 hover:bg-red-700"
             >
               {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Incompatible model dialog — blocks the user from running a model
+          that doesn't fit the current project type, with a clear list of
+          allowed models for that type. */}
+      <AlertDialog
+        open={incompatibleModelOpen}
+        onOpenChange={setIncompatibleModelOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('segmentation.incompatibleModelTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('segmentation.incompatibleModelDesc', {
+                model: selectedModel,
+                type: projectType ? t(`projects.types.${projectType}`) : '',
+                allowed: projectType
+                  ? MODEL_TYPE_COMPATIBILITY[projectType].join(', ')
+                  : '',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setIncompatibleModelOpen(false)}>
+              {t('common.close')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

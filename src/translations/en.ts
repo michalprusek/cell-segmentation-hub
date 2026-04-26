@@ -563,6 +563,9 @@ export default {
   segmentation: {
     modelNotCompatible:
       'Model "{{model}}" is not compatible with project type "{{type}}". Allowed: {{allowed}}.',
+    incompatibleModelTitle: 'Cannot segment with this model',
+    incompatibleModelDesc:
+      'The currently selected model "{{model}}" is not compatible with this project\'s type ({{type}}). Allowed models for this type: {{allowed}}. Please change the model in Settings or change the project type.',
     mode: {
       view: 'View and navigate',
       edit: 'Edit',

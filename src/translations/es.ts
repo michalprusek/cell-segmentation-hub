@@ -686,6 +686,9 @@ export default {
   segmentation: {
     modelNotCompatible:
       'El modelo "{{model}}" no es compatible con el tipo de proyecto "{{type}}". Permitidos: {{allowed}}.',
+    incompatibleModelTitle: 'No se puede segmentar con este modelo',
+    incompatibleModelDesc:
+      'El modelo seleccionado "{{model}}" no es compatible con el tipo de este proyecto ({{type}}). Modelos permitidos: {{allowed}}. Cambie el modelo en Configuración o cambie el tipo de proyecto.',
     mode: {
       view: 'Ver y navegar',
       edit: 'Editar',
