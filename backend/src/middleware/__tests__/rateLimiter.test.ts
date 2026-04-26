@@ -12,21 +12,21 @@ import { Request, Response, NextFunction } from 'express';
 // ---------------------------------------------------------------------------
 
 // Capture every config object passed to rateLimit() at module load time.
-// We use a module-scoped array so Jest's resetMocks/clearMocks does NOT wipe it.
-const capturedConfigs: Array<Record<string, unknown>> = [];
+// `vi.hoisted` so the array survives Vitest hoisting `vi.mock` above us.
+const { capturedConfigs } = vi.hoisted(() => ({
+  capturedConfigs: [] as Array<Record<string, unknown>>,
+}));
 
 vi.mock('express-rate-limit', () => {
-  const mockRateLimit = vi.fn(
-    (config: Record<string, unknown>) => {
-      capturedConfigs.push(config);
-      // Return a lightweight middleware stub that simply calls next()
-      const middleware = vi.fn(
-        (_req: Request, _res: Response, next: NextFunction) => next()
-      );
-      (middleware as unknown as Record<string, unknown>).__config = config;
-      return middleware;
-    }
-  );
+  const mockRateLimit = vi.fn((config: Record<string, unknown>) => {
+    capturedConfigs.push(config);
+    // Return a lightweight middleware stub that simply calls next()
+    const middleware = vi.fn(
+      (_req: Request, _res: Response, next: NextFunction) => next()
+    );
+    (middleware as unknown as Record<string, unknown>).__config = config;
+    return middleware;
+  });
   return { __esModule: true, default: mockRateLimit };
 });
 

@@ -23,22 +23,11 @@ const {
 }));
 
 vi.mock('@prisma/client', () => ({
-  PrismaClient: vi.fn().mockImplementation(() => ({
-    $queryRaw: mockPrismaQueryRaw,
-    $disconnect: mockPrismaDisconnect,
-    $metrics: { json: vi.fn(async () => null) },
-  })),
+  PrismaClient: vi.fn(),
 }));
 
 vi.mock('ioredis', () => ({
-  default: vi.fn(() => ({
-    ping: mockRedisPing,
-    info: mockRedisInfo,
-    setex: mockRedisSetex,
-    quit: mockRedisQuit,
-    on: mockRedisOn,
-    status: 'ready',
-  })),
+  default: vi.fn(),
 }));
 
 vi.mock('axios', () => ({
@@ -83,20 +72,22 @@ const MockRedis = Redis as unknown as ReturnType<typeof vi.fn>;
  * resetMocks:true means we must re-establish ALL implementations in beforeEach.
  */
 function setupHappyPathMocks() {
-  // Re-establish constructor mocks (wiped by resetMocks:true)
-  MockPrismaClient.mockImplementation(() => ({
-    $queryRaw: mockPrismaQueryRaw,
-    $disconnect: mockPrismaDisconnect,
-    $metrics: { json: vi.fn(async () => null) },
-  }));
-  MockRedis.mockImplementation(() => ({
-    ping: mockRedisPing,
-    info: mockRedisInfo,
-    setex: mockRedisSetex,
-    quit: mockRedisQuit,
-    on: mockRedisOn,
-    status: 'ready',
-  }));
+  // Re-establish constructor mocks (wiped by resetMocks:true). Use the
+  // function-form so `new MockPrismaClient()` etc. are constructable in
+  // Vitest 4 (arrow form `() => ({...})` is not).
+  MockPrismaClient.mockImplementation(function (this: any) {
+    this.$queryRaw = mockPrismaQueryRaw;
+    this.$disconnect = mockPrismaDisconnect;
+    this.$metrics = { json: vi.fn(async () => null) };
+  });
+  MockRedis.mockImplementation(function (this: any) {
+    this.ping = mockRedisPing;
+    this.info = mockRedisInfo;
+    this.setex = mockRedisSetex;
+    this.quit = mockRedisQuit;
+    this.on = mockRedisOn;
+    this.status = 'ready';
+  });
 
   (mockPrismaQueryRaw as any).mockResolvedValue([{ 1: 1 }]);
   (mockPrismaDisconnect as any).mockResolvedValue(undefined);
