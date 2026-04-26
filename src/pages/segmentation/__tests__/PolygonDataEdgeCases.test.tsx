@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import CanvasPolygon from '../components/canvas/CanvasPolygon';
 import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
-import type { Polygon, Point } from '@/lib/segmentation';
+import type { Polygon } from '@/lib/segmentation';
 
 // Mock logger to capture validation warnings
 const mockLogger = {
@@ -716,7 +716,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
         { ...polygon, id: undefined as any },
       ];
 
-      corruptionSteps.forEach((corruptedPolygon, index) => {
+      corruptionSteps.forEach(corruptedPolygon => {
         expect(() => {
           rerender(
             <svg width="800" height="600" viewBox="0 0 800 600">

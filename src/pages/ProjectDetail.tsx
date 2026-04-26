@@ -386,12 +386,6 @@ const ProjectDetail = () => {
     [images]
   );
 
-  // Check if there are any images currently processing
-  const hasProcessingImages = useMemo(
-    () => images.some(img => img.segmentationStatus === 'processing'),
-    [images]
-  );
-
   // Check if queue has any items (processing or queued)
   const hasActiveQueue = useMemo(
     () => queueStats && (queueStats.processing > 0 || queueStats.queued > 0),
@@ -429,14 +423,16 @@ const ProjectDetail = () => {
     });
 
   // Status reconciliation for keeping UI in sync with backend
-  const { reconcileImageStatuses, hasStaleProcessingImages } =
-    useStatusReconciliation({
-      projectId: id,
-      images,
-      onImagesUpdate: updateImages,
-      queueStats,
-      isConnected,
-    });
+  const {
+    reconcileImageStatuses,
+    hasStaleProcessingImages: _hasStaleProcessingImages,
+  } = useStatusReconciliation({
+    projectId: id,
+    images,
+    onImagesUpdate: updateImages,
+    queueStats,
+    isConnected,
+  });
 
   // Store reconciliation function in ref to avoid dependency issues
   const reconcileRef = useRef(reconcileImageStatuses);
@@ -457,7 +453,7 @@ const ProjectDetail = () => {
   refreshImageSegmentationRef.current = refreshImageSegmentation;
 
   // Store fetchImages function to call after cancellation
-  const fetchImages = useCallback(async () => {
+  const _fetchImages = useCallback(async () => {
     if (!id || !user?.id) return;
 
     try {
@@ -873,6 +869,9 @@ const ProjectDetail = () => {
         queueProcessingTimeoutRef.current = timeoutId;
       }
     },
+    // processBatchUpdates is intentionally omitted; callers reach it via the
+    // outer scope and including it would re-create this callback per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [id, queueStats, batchSubmitted, navigate, images]
   );
 
@@ -1099,7 +1098,7 @@ const ProjectDetail = () => {
           },
         });
         window.dispatchEvent(event);
-      } catch (error) {
+      } catch {
         toast.error(t('toast.upload.failed'));
       }
     }
@@ -1187,7 +1186,7 @@ const ProjectDetail = () => {
           t('project.imagesDeleteFailed', { count: result.failedIds.length })
         );
       }
-    } catch (error) {
+    } catch {
       toast.error(t('errors.deleteImages'));
     } finally {
       setShowDeleteDialog(false);
@@ -1342,7 +1341,7 @@ const ProjectDetail = () => {
         })
       );
 
-      let totalQueued = 0;
+      let _totalQueued = 0;
 
       // Helper function to process image chunks
       const processImageChunks = async (
@@ -1392,13 +1391,13 @@ const ProjectDetail = () => {
           imageIdsWithoutSegmentation,
           false
         );
-        totalQueued += queuedCount;
+        _totalQueued += queuedCount;
       }
 
       // Process selected images with segmentation (force re-segment)
       if (imageIdsToResegment.length > 0) {
         const queuedCount = await processImageChunks(imageIdsToResegment, true);
-        totalQueued += queuedCount;
+        _totalQueued += queuedCount;
       }
 
       // Dismiss progress toast if it exists
@@ -1412,7 +1411,7 @@ const ProjectDetail = () => {
 
       // Refresh queue stats
       requestQueueStats();
-    } catch (error) {
+    } catch {
       toast.error(t('projects.errorAddingToQueue'));
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- context co-locates hook with provider */
 import React, {
   createContext,
   useState,

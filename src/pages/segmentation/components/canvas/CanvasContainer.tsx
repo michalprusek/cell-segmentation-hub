@@ -31,12 +31,12 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       onWheel,
       onContextMenu,
       children,
-      loading,
+      loading: _loading,
       editMode,
       // Legacy props for backward compatibility
-      slicingMode = false,
-      pointAddingMode = false,
-      deleteMode = false,
+      slicingMode: _slicingMode = false,
+      pointAddingMode: _pointAddingMode = false,
+      deleteMode: _deleteMode = false,
     },
     ref
   ) => {

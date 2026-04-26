@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { Polygon, Point } from '@/lib/segmentation';
+import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';

@@ -525,7 +525,7 @@ describe('Performance Utils', () => {
 
     test('should handle large datasets efficiently', () => {
       // Generate many points
-      const points = Array.from({ length: 1000 }, (_, i) => ({
+      const points = Array.from({ length: 1000 }, () => ({
         x: Math.random() * 100,
         y: Math.random() * 100,
       }));

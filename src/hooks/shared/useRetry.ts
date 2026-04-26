@@ -3,7 +3,7 @@
  * Provides retry functionality with loading states and error handling
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useLanguage } from '@/contexts/exports';
 import { toast } from 'sonner';
 import {
@@ -72,10 +72,13 @@ export function useRetry<T>(
     ...retryConfig
   } = options;
 
-  // Merge preset config if provided
-  const finalConfig = preset
-    ? { ...RETRY_CONFIGS[preset], ...retryConfig }
-    : retryConfig;
+  // Merge preset config if provided. Wrap in useMemo to keep stable reference
+  // for downstream useCallback hooks; otherwise the config object would change
+  // every render and cause `execute` to re-create on every render.
+  const finalConfig = useMemo(
+    () => (preset ? { ...RETRY_CONFIGS[preset], ...retryConfig } : retryConfig),
+    [preset, retryConfig]
+  );
 
   const [state, setState] = useState<UseRetryState<T>>({
     data: null,

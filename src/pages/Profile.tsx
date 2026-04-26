@@ -304,6 +304,9 @@ const Profile = () => {
         avatar: profile.avatarUrl || '/placeholder.svg',
       }));
     }
+    // profileData is read inside the guard but using setter callback form;
+    // depending on it would cause re-fires on every form edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.avatarUrl]);
 
   // Clean up object URLs on unmount or when avatar image changes

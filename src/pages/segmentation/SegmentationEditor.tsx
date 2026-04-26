@@ -1065,6 +1065,9 @@ const SegmentationEditor = () => {
       );
       editor.updatePolygons(updatedPolygons);
     },
+    // editor object reference is stable; tracking individual methods avoids
+    // re-creating this callback when unrelated editor state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [editor.getPolygons, editor.updatePolygons]
   );
 

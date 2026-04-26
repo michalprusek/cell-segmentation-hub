@@ -195,8 +195,9 @@ export const usePolygonSelection = ({
           return;
       }
     },
+    // editMode is read via editModeRef to avoid stale closures and re-creates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      // Removed editMode from dependencies since we use editModeRef to avoid stale closures
       currentSelectedPolygonId,
       onModeChange,
       onSelectionChange,
@@ -228,7 +229,9 @@ export const usePolygonSelection = ({
 
       handlePolygonSelection(polygonId);
     },
-    [handlePolygonSelection] // Removed editMode from dependencies since we use ref
+    // editMode is read via editModeRef; intentionally omitted from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handlePolygonSelection]
   );
 
   return {

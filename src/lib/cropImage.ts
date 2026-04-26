@@ -20,7 +20,7 @@ export const createCroppedImage = async (
   const rotRad = getRadianAngle(rotation);
 
   // Calculate bounding box of the rotated image
-  const { width: _bBoxWidth, height: bBoxHeight } = rotateSize(
+  const { width: _bBoxWidth, height: _bBoxHeight } = rotateSize(
     image.width,
     image.height,
     rotation

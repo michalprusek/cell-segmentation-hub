@@ -19,7 +19,7 @@ import {
 describe('Mode Configuration SSOT', () => {
   describe('Configuration Consistency', () => {
     it('should have no modes in both read-only and geometry-modifying categories', () => {
-      const readOnlyModes = new Set(MODE_BEHAVIOR_CONFIG.READ_ONLY_MODES);
+      const _readOnlyModes = new Set(MODE_BEHAVIOR_CONFIG.READ_ONLY_MODES);
       const geometryModifyingModes = new Set(
         MODE_BEHAVIOR_CONFIG.GEOMETRY_MODIFYING_MODES
       );

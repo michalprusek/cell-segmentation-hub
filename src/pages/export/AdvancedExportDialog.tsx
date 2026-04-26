@@ -21,13 +21,6 @@ import {
 } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
   Download,
@@ -37,8 +30,6 @@ import {
   Package,
   Settings,
   Palette,
-  FileText,
-  Archive,
   WifiOff,
   AlertCircle,
   RefreshCw,

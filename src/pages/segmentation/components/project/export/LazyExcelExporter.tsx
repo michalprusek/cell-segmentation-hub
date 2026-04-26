@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { Button } from '@/components/ui/button';
-import { FileSpreadsheet, Loader2, AlertCircle } from 'lucide-react';
+import { FileSpreadsheet, Loader2 } from 'lucide-react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/exports';
 import { lazyWithRetry, LazyImportErrorBoundary } from '@/lib/lazyWithRetry';

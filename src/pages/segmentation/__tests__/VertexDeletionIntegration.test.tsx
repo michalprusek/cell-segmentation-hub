@@ -10,11 +10,9 @@ import {
   screen,
   fireEvent,
   waitFor,
-  MockLanguageProvider,
-  MockThemeProvider,
   AllProviders,
 } from '@/test-utils/reactTestUtils';
-import { Polygon, Point } from '@/lib/segmentation';
+import { Polygon } from '@/lib/segmentation';
 import { EditMode } from '../types';
 import VertexContextMenu from '../components/context-menu/VertexContextMenu';
 import CanvasVertex from '../components/canvas/CanvasVertex';
@@ -176,7 +174,7 @@ describe('Vertex Deletion Integration Tests', () => {
 
     it('prevents polygon deselection during vertex context menu', async () => {
       const VertexWithPolygonSelection = () => {
-        const handleVertexRightClick = vi.fn((e: React.MouseEvent) => {
+        const _handleVertexRightClick = vi.fn((e: React.MouseEvent) => {
           e.stopPropagation(); // This should prevent polygon deselection
         });
 
@@ -482,6 +480,9 @@ describe('Vertex Deletion Integration Tests', () => {
 
         React.useEffect(() => {
           setPolygonState(currentPolygon);
+          // currentPolygon is mutated in outer scope by handleDeleteVertex; the
+          // dep is intentionally listed so this test re-syncs after mutations.
+          // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [currentPolygon]);
 
         return (

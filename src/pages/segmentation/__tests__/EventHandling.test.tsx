@@ -10,10 +10,7 @@ import userEvent from '@testing-library/user-event';
 import CanvasPolygon from '../components/canvas/CanvasPolygon';
 import CanvasContainer from '../components/canvas/CanvasContainer';
 import { EditMode } from '../types';
-import {
-  createMockPolygon,
-  simulateMouseInteraction,
-} from '@/test-utils/segmentationTestUtils';
+import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
 import type { Polygon } from '@/lib/segmentation';
 
 // Mock dependencies

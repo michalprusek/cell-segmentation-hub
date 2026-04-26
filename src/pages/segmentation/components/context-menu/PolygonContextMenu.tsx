@@ -37,7 +37,7 @@ const PolygonContextMenu = ({
   onDelete,
   onSlice,
   onEdit,
-  polygonId,
+  polygonId: _polygonId,
   isPolyline = false,
   onChangePartClass,
   onChangeInstanceId,

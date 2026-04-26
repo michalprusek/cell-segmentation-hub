@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
@@ -89,23 +89,28 @@ export const ImageCard = ({
   const { t } = useLanguage();
 
   // Create ordered list of candidate URLs, with TIFF support
-  const candidateUrls = React.useMemo(() => {
-    return getImageFallbackUrls(image);
-  }, [
-    image.id,
-    image.name,
-    image.segmentationThumbnailUrl,
-    image.segmentationThumbnailPath,
-    image.thumbnail_url,
-    image.url,
-    image.image_url,
-    image.displayUrl,
-  ]);
+  const candidateUrls = React.useMemo(
+    () => getImageFallbackUrls(image),
+    // Track only the URL/identity fields used by getImageFallbackUrls; depending
+    // on the whole image object would re-memoize on unrelated property changes
+    // (e.g. segmentationStatus).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      image.id,
+      image.name,
+      image.segmentationThumbnailUrl,
+      image.segmentationThumbnailPath,
+      image.thumbnail_url,
+      image.url,
+      image.image_url,
+      image.displayUrl,
+    ]
+  );
 
   // Use the retry hook for image loading with fallback URLs
   const {
     currentUrl,
-    loading: imageLoading,
+    loading: _imageLoading,
     retrying: imageRetrying,
     attempt: retryAttempt,
     nextRetryIn,
