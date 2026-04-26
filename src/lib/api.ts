@@ -51,6 +51,13 @@ export interface Project {
   image_count?: number;
 }
 
+/**
+ * Wire-format DTO returned by `mapImageFields()` — snake_case fields,
+ * narrower status union, all timestamps as ISO strings. Used internally by
+ * `apiClient` for REST normalization. Components should prefer the
+ * camelCase domain `ProjectImage` from `@/types`, which is a superset and
+ * the de-facto canonical type (18+ consumers).
+ */
 export interface ProjectImage {
   id: string;
   name: string;
