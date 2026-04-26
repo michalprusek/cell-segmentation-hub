@@ -217,21 +217,22 @@ async def disintegration_index(request: DisintegrationRequest):
                 di=0.0, w1=0.0, reference="none", n_pixels=0
             )
 
-        cx = float(xs.mean())
-        cy = float(ys.mean())
-        d_mask = np.hypot(xs - cx, ys - cy)
-
+        # Step 1: rasterise the optional core polygon(s). The core's centroid,
+        # when available, is the *anchor* for both d_mask and d_core — that
+        # way the metric measures "how far did mass spread from where the
+        # dense core sits", not the smeared mass centroid that drifts toward
+        # the invasion zone.
         ref_label = "r_eff"
         r_ref: Optional[float] = None
         d_core: Optional[np.ndarray] = None
-        # Collect candidate core polygons: prefer the plural list, fall back to
-        # singular for legacy callers.
         candidate_cores: List[List[List[float]]] = []
         if request.core_polygons:
             candidate_cores = request.core_polygons
         elif request.core_polygon is not None:
             candidate_cores = [request.core_polygon]
 
+        ys_c: Optional[np.ndarray] = None
+        xs_c: Optional[np.ndarray] = None
         if candidate_cores:
             core_mask = np.zeros((H, W), dtype=np.uint8)
             valid_count = 0
@@ -247,12 +248,22 @@ async def disintegration_index(request: DisintegrationRequest):
             n_core = int(core_mask.sum())
             if valid_count > 0 and n_core > 0:
                 ys_c, xs_c = np.nonzero(core_mask)
-                d_core = np.hypot(xs_c - cx, ys_c - cy)
-                # R_core for scale-invariant normalisation of W1.
                 r_ref = float(np.sqrt(n_core / np.pi))
                 ref_label = "core"
             else:
                 ref_label = "r_eff_fallback"
+
+        # Step 2: choose the centroid. Prefer the core's centroid (improvement A
+        # over the original mass-weighted mask centroid); fall back to the mask
+        # centroid only when no core is available.
+        if xs_c is not None and ys_c is not None and xs_c.size > 0:
+            cx = float(xs_c.mean())
+            cy = float(ys_c.mean())
+            d_core = np.hypot(xs_c - cx, ys_c - cy)
+        else:
+            cx = float(xs.mean())
+            cy = float(ys.mean())
+        d_mask = np.hypot(xs - cx, ys - cy)
 
         if r_ref is None:
             r_ref = float(np.sqrt(n / np.pi))
@@ -262,10 +273,10 @@ async def disintegration_index(request: DisintegrationRequest):
             )
 
         if d_core is not None and d_core.size > 0:
-            # Empirical-CDF reference: compare radial distance distribution of
-            # the mask against the empirical distribution of the core's own
-            # pixels (both relative to the mask centroid). Normalised by R_core
-            # to keep the metric scale-invariant.
+            # Empirical-CDF reference: compare the radial distance distribution
+            # of mask pixels against the same distribution of core pixels —
+            # both anchored on the core's centroid. Normalised by R_core to
+            # keep the metric scale-invariant.
             w1_px = float(wasserstein_distance(d_mask, d_core))
             w1 = w1_px / r_ref
         else:
