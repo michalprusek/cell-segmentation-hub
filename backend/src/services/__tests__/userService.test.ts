@@ -1,31 +1,33 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mocks must be declared before imports
-const prismaMock = {
-  user: {
-    findUnique: vi.fn() as any,
-    update: vi.fn() as any,
-    delete: vi.fn() as any,
-    deleteMany: vi.fn() as any,
+// `vi.hoisted` so vi.mock factories below can reference this.
+const { prismaMock } = vi.hoisted(() => ({
+  prismaMock: {
+    user: {
+      findUnique: vi.fn() as any,
+      update: vi.fn() as any,
+      delete: vi.fn() as any,
+      deleteMany: vi.fn() as any,
+    },
+    project: {
+      count: vi.fn() as any,
+      findMany: vi.fn() as any,
+      deleteMany: vi.fn() as any,
+    },
+    image: {
+      count: vi.fn() as any,
+      aggregate: vi.fn() as any,
+      findMany: vi.fn() as any,
+    },
+    segmentation: {
+      count: vi.fn() as any,
+      findMany: vi.fn() as any,
+    },
+    profile: {
+      upsert: vi.fn() as any,
+    },
   },
-  project: {
-    count: vi.fn() as any,
-    findMany: vi.fn() as any,
-    deleteMany: vi.fn() as any,
-  },
-  image: {
-    count: vi.fn() as any,
-    aggregate: vi.fn() as any,
-    findMany: vi.fn() as any,
-  },
-  segmentation: {
-    count: vi.fn() as any,
-    findMany: vi.fn() as any,
-  },
-  profile: {
-    upsert: vi.fn() as any,
-  },
-};
+}));
 
 vi.mock('../../db', () => ({ prisma: prismaMock }));
 vi.mock('../../utils/logger', () => ({

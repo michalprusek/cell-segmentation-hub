@@ -1,30 +1,47 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Capture the factory function so we can control what executeRedisCommand does per test
-let executeRedisCommandImpl: ((client: any) => Promise<unknown>) | null = null;
+// Vitest hoists `vi.mock(...)` above all top-level statements. To share
+// state between the factory and the test body, declare those bindings
+// inside `vi.hoisted(() => ({ ... }))` — that block also gets hoisted.
+const { mockExecuteRedisCommand, mockRedisClient, getExecuteRedisCommandImpl, setExecuteRedisCommandImpl } = vi.hoisted(() => {
+  let executeRedisCommandImpl: ((client: any) => Promise<unknown>) | null = null;
 
-const mockExecuteRedisCommand = vi.fn(async (fn: (client: any) => Promise<unknown>) => {
-  if (executeRedisCommandImpl) {
-    return executeRedisCommandImpl(fn);
-  }
-  return fn({
-    get: vi.fn(),
-    setEx: vi.fn(),
-    del: vi.fn(),
-    exists: vi.fn(),
-    incrBy: vi.fn(),
-    expire: vi.fn(),
-    ttl: vi.fn(),
-    scan: vi.fn(),
-    unlink: vi.fn(),
-    dbSize: vi.fn(),
-  });
-}) as any;
+  const mockExecuteRedisCommand = vi.fn(
+    async (fn: (client: any) => Promise<unknown>) => {
+      if (executeRedisCommandImpl) {
+        return executeRedisCommandImpl(fn);
+      }
+      return fn({
+        get: vi.fn(),
+        setEx: vi.fn(),
+        del: vi.fn(),
+        exists: vi.fn(),
+        incrBy: vi.fn(),
+        expire: vi.fn(),
+        ttl: vi.fn(),
+        scan: vi.fn(),
+        unlink: vi.fn(),
+        dbSize: vi.fn(),
+      });
+    }
+  ) as any;
 
-const mockRedisClient = {
-  ping: vi.fn() as any,
-  info: vi.fn() as any,
-};
+  const mockRedisClient = {
+    ping: vi.fn() as any,
+    info: vi.fn() as any,
+  };
+
+  return {
+    mockExecuteRedisCommand,
+    mockRedisClient,
+    getExecuteRedisCommandImpl: () => executeRedisCommandImpl,
+    setExecuteRedisCommandImpl: (
+      v: ((client: any) => Promise<unknown>) | null
+    ) => {
+      executeRedisCommandImpl = v;
+    },
+  };
+});
 
 vi.mock('../../config/redis', () => ({
   executeRedisCommand: mockExecuteRedisCommand,
@@ -41,7 +58,7 @@ describe('CacheService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    executeRedisCommandImpl = null;
+    setExecuteRedisCommandImpl(null);
     service = new CacheService();
   });
 
