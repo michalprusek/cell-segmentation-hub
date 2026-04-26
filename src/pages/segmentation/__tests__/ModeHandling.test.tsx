@@ -5,14 +5,10 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditMode } from '../types';
-import {
-  createMockPolygon,
-  createMockPolygons,
-  createMockSegmentationEditorProps,
-} from '@/test-utils/segmentationTestUtils';
+import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
 import type { Polygon } from '@/lib/segmentation';
 
 // Mock a simplified SegmentationEditor component for mode testing
@@ -23,7 +19,7 @@ const MockSegmentationEditor = ({
   onModeChange,
   onPolygonSelect,
   onPolygonDelete,
-  onPolygonSlice,
+  onPolygonSlice: _onPolygonSlice,
 }: {
   polygons: Polygon[];
   editMode: EditMode;
@@ -313,7 +309,7 @@ describe('Mode Switching and Interaction Handling', () => {
     });
 
     it('should allow switching selected polygon in slice mode', async () => {
-      const { rerender } = renderEditor(EditMode.Slice, 'poly-1');
+      renderEditor(EditMode.Slice, 'poly-1');
 
       // Click different polygon
       fireEvent.click(

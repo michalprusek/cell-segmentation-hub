@@ -15,6 +15,7 @@
  * Uses an imperative rAF loop and a ref-only state update pattern so the
  * overlay itself doesn't cause additional renders of its parent tree.
  */
+/* eslint-disable react-refresh/only-export-components -- exports helpers alongside overlay */
 
 import { useEffect, useRef, useState } from 'react';
 import { polygonVisibilityManager } from './PolygonVisibilityManager';

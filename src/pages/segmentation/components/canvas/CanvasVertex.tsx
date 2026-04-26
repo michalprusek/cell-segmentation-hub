@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- exports zoom helpers next to component */
 import React from 'react';
 import { Point } from '@/lib/segmentation';
 

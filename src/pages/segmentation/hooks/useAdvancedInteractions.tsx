@@ -6,15 +6,10 @@ import {
   TransformState,
   EDITING_CONSTANTS,
 } from '../types';
-import {
-  getCanvasCoordinates,
-  canvasToImageCoordinates,
-} from '@/lib/coordinateUtils';
+import { getCanvasCoordinates } from '@/lib/coordinateUtils';
 import {
   isPointInPolygon,
   findClosestVertex,
-  findClosestSegment,
-  calculatePolygonArea,
   calculatePolygonPerimeter,
   createPolygon,
 } from '@/lib/polygonGeometry';
@@ -69,7 +64,7 @@ export const useAdvancedInteractions = ({
   canvasRef,
   selectedPolygonId,
   tempPoints,
-  cursorPosition,
+  cursorPosition: _cursorPosition,
   isShiftPressed: isShiftPressedCallback,
   isSpacePressed: isSpacePressedCallback,
   activePartClassRef,
@@ -410,7 +405,7 @@ export const useAdvancedInteractions = ({
   /**
    * Handle Delete Polygon mode clicks
    */
-  const handleDeletePolygonClick = useCallback((imagePoint: Point) => {
+  const handleDeletePolygonClick = useCallback((_imagePoint: Point) => {
     // Delete mode now relies on polygon-level selection
     return;
   }, []);

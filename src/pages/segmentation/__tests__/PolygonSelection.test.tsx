@@ -8,13 +8,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CanvasPolygon from '../components/canvas/CanvasPolygon';
-import { SegmentationContextProvider } from '../contexts/SegmentationContext';
 import { EditMode } from '../types';
 import {
   createMockPolygon,
   createMockPolygons,
-  createMockSegmentationEditorProps,
-  simulateMouseInteraction,
 } from '@/test-utils/segmentationTestUtils';
 import type { Polygon } from '@/lib/segmentation';
 
@@ -71,8 +68,8 @@ describe('Polygon Selection Functionality', () => {
   let mockOnDeletePolygon: ReturnType<typeof vi.fn>;
   let mockOnSlicePolygon: ReturnType<typeof vi.fn>;
   let mockOnEditPolygon: ReturnType<typeof vi.fn>;
-  let mockSetEditMode: ReturnType<typeof vi.fn>;
-  let mockHandlePolygonSelection: ReturnType<typeof vi.fn>;
+  let _mockSetEditMode: ReturnType<typeof vi.fn>;
+  let _mockHandlePolygonSelection: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     // Create test polygons with different positions to avoid overlap
@@ -113,8 +110,8 @@ describe('Polygon Selection Functionality', () => {
     mockOnDeletePolygon = vi.fn();
     mockOnSlicePolygon = vi.fn();
     mockOnEditPolygon = vi.fn();
-    mockSetEditMode = vi.fn();
-    mockHandlePolygonSelection = vi.fn();
+    _mockSetEditMode = vi.fn();
+    _mockHandlePolygonSelection = vi.fn();
 
     vi.clearAllMocks();
   });
@@ -127,7 +124,7 @@ describe('Polygon Selection Functionality', () => {
   const renderPolygonsInSvg = (
     polygons: Polygon[],
     selectedPolygonId: string | null = null,
-    editMode: EditMode = EditMode.View
+    _editMode: EditMode = EditMode.View
   ) => {
     return render(
       <svg width="800" height="600" viewBox="0 0 800 600">

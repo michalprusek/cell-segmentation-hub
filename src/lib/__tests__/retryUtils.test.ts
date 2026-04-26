@@ -14,7 +14,6 @@ import {
   sleep,
   CircuitBreaker,
   RETRY_CONFIGS,
-  DEFAULT_RETRY_CONFIG,
 } from '../retryUtils';
 import { TEST_TIMEOUTS } from '../constants';
 

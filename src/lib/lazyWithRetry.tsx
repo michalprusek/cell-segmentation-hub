@@ -2,8 +2,9 @@
  * Enhanced lazy loading with automatic retry mechanism
  * Handles dynamic import failures gracefully with user feedback
  */
+/* eslint-disable react-refresh/only-export-components -- factory exports both helpers and component */
 
-import React, { lazy, ComponentType, Suspense } from 'react';
+import React, { lazy, ComponentType } from 'react';
 import { retryWithBackoff, RETRY_CONFIGS } from './retryUtils';
 import { logger } from './logger';
 import { toast } from 'sonner';

@@ -22,8 +22,8 @@ export const useOffsetConstraints = (
       const containerWidth = containerRect.width;
       const containerHeight = containerRect.height;
 
-      const scaledImgWidth = img.width * newZoom;
-      const scaledImgHeight = img.height * newZoom;
+      const _scaledImgWidth = img.width * newZoom;
+      const _scaledImgHeight = img.height * newZoom;
 
       const minX = containerWidth / newZoom - img.width;
       const maxX = 0;

@@ -2,7 +2,7 @@
 // This simulates image segmentation with thresholding and contour finding
 // In a real app, this would use more advanced methods like WebAssembly or call a backend API
 
-import type { PolygonData, SegmentationData } from '@/types';
+import type { SegmentationData } from '@/types';
 
 export interface Point {
   x: number;
@@ -91,7 +91,7 @@ export const applyThresholding = async (
 };
 
 // Contour finding - returns empty array as we fetch real segmentation from backend
-export const findContours = (imageData: ImageData): Polygon[] => {
+export const findContours = (_imageData: ImageData): Polygon[] => {
   // In production, segmentation is performed by the ML backend service
   // This function returns an empty array since we don't generate fake polygons
   return [];

@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { TransformState } from '../../types';
 
 interface CanvasContentProps {

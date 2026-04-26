@@ -1,6 +1,5 @@
 import React from 'react';
 import { Point } from '@/lib/segmentation';
-import CanvasZoomInfo from './CanvasZoomInfo';
 import EditorHelpTips from '../EditorHelpTips';
 import EditorModeFooter from './EditorModeFooter';
 
@@ -17,7 +16,7 @@ interface CanvasUIElementsProps {
  * UI prvky na plátně - informace o zoomu, tipy, nápovědní panely
  */
 const CanvasUIElements = ({
-  zoom,
+  zoom: _zoom,
   editMode,
   slicingMode,
   pointAddingMode,
