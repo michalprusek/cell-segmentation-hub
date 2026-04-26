@@ -375,6 +375,24 @@ export class SegmentationService {
         throw new Error('Image not found or no access');
       }
 
+      // Project type / model compatibility check. Defense in depth — frontend
+      // already filters the model dropdown, but a curl bypass would otherwise
+      // allow e.g. running the sperm model on a wound project.
+      const projectRecord = await this.prisma.project.findUnique({
+        where: { id: image.projectId },
+        select: { type: true },
+      });
+      const projectType = (projectRecord?.type ||
+        'spheroid') as import('../types/validation').ProjectType;
+      const { isModelCompatibleWithType, MODEL_TYPE_COMPATIBILITY } =
+        await import('../types/validation');
+      if (!isModelCompatibleWithType(model, projectType)) {
+        const allowed = MODEL_TYPE_COMPATIBILITY[projectType].join(', ');
+        throw new Error(
+          `Model '${model}' is not compatible with project type '${projectType}'. Allowed models: ${allowed}.`
+        );
+      }
+
       // Update image status to processing
       await this.imageService.updateSegmentationStatus(
         imageId,

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ArrowLeft } from 'lucide-react';
 import {
   Select,
@@ -12,6 +13,21 @@ import {
 import { useLanguage } from '@/contexts/useLanguage';
 import DashboardHeader from '@/components/DashboardHeader';
 import { PROJECT_TYPES, type ProjectType } from '@/types';
+import { cn } from '@/lib/utils';
+
+/** Color-code each project type so disintegrated spheroids visually stand
+ * out from the standard spheroid family. Tailwind classes; no inline style.
+ */
+const PROJECT_TYPE_BADGE: Record<ProjectType, string> = {
+  spheroid:
+    'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 border-blue-300 dark:border-blue-700',
+  spheroid_invasive:
+    'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700 ring-1 ring-emerald-400/40',
+  wound:
+    'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 border-amber-300 dark:border-amber-700',
+  sperm:
+    'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 border-purple-300 dark:border-purple-700',
+};
 
 interface ProjectHeaderProps {
   projectTitle: string;
@@ -61,26 +77,46 @@ const ProjectHeader = ({
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {t('projects.projectType')}:
                 </span>
-                {onTypeChange ? (
+                {/* Color badge visually segregates project types — disintegrated
+                    spheroids get an emerald ring to stand out from the standard
+                    spheroid family (blue), wound (amber), sperm (purple). */}
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-xs font-medium border',
+                    PROJECT_TYPE_BADGE[projectType]
+                  )}
+                >
+                  {t(`projects.types.${projectType}`)}
+                </Badge>
+                {onTypeChange && (
                   <Select
                     value={projectType}
                     onValueChange={(v: ProjectType) => onTypeChange(v)}
                   >
-                    <SelectTrigger className="h-8 w-[180px] text-xs">
+                    <SelectTrigger
+                      className="h-8 w-[40px] text-xs"
+                      aria-label={t('projects.changeProjectType')}
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {PROJECT_TYPES.map(pt => (
                         <SelectItem key={pt} value={pt} className="text-xs">
+                          <span
+                            className={cn(
+                              'inline-block w-2 h-2 rounded-full mr-2 align-middle',
+                              pt === 'spheroid' && 'bg-blue-500',
+                              pt === 'spheroid_invasive' && 'bg-emerald-500',
+                              pt === 'wound' && 'bg-amber-500',
+                              pt === 'sperm' && 'bg-purple-500'
+                            )}
+                          />
                           {t(`projects.types.${pt}`)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                ) : (
-                  <span className="text-sm font-medium">
-                    {t(`projects.types.${projectType}`)}
-                  </span>
                 )}
               </div>
             )}
