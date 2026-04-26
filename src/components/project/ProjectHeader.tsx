@@ -29,13 +29,6 @@ const PROJECT_TYPE_BADGE: Record<ProjectType, string> = {
     'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 border-purple-300 dark:border-purple-700',
 };
 
-const PROJECT_TYPE_DOT: Record<ProjectType, string> = {
-  spheroid: 'bg-blue-500',
-  spheroid_invasive: 'bg-emerald-500',
-  wound: 'bg-amber-500',
-  sperm: 'bg-purple-500',
-};
-
 interface ProjectHeaderProps {
   projectTitle: string;
   imagesCount: number;
@@ -86,8 +79,8 @@ const ProjectHeader = ({
                 </span>
                 {onTypeChange ? (
                   // Editable: dropdown trigger styled as a coloured pill that
-                  // matches the badge palette. Disintegrated spheroids get an
-                  // emerald ring to stand out from the standard spheroid family.
+                  // matches the badge palette. The pill background carries the
+                  // type identity — no extra dot needed.
                   <Select
                     value={projectType}
                     onValueChange={(v: ProjectType) => onTypeChange(v)}
@@ -95,34 +88,18 @@ const ProjectHeader = ({
                     <SelectTrigger
                       aria-label={t('projects.changeProjectType')}
                       className={cn(
-                        'h-8 min-w-[200px] text-xs font-medium border rounded-md gap-2 pl-3 pr-2',
+                        'h-8 min-w-[200px] text-xs font-medium border rounded-md pl-3 pr-2',
                         PROJECT_TYPE_BADGE[projectType]
                       )}
                     >
-                      <span className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'inline-block w-2.5 h-2.5 rounded-full shrink-0',
-                            PROJECT_TYPE_DOT[projectType]
-                          )}
-                        />
-                        <span className="truncate">
-                          {t(`projects.types.${projectType}`)}
-                        </span>
+                      <span className="truncate">
+                        {t(`projects.types.${projectType}`)}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
                       {PROJECT_TYPES.map(pt => (
                         <SelectItem key={pt} value={pt} className="text-xs">
-                          <span className="flex items-center gap-2">
-                            <span
-                              className={cn(
-                                'inline-block w-2.5 h-2.5 rounded-full shrink-0',
-                                PROJECT_TYPE_DOT[pt]
-                              )}
-                            />
-                            {t(`projects.types.${pt}`)}
-                          </span>
+                          {t(`projects.types.${pt}`)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -132,16 +109,10 @@ const ProjectHeader = ({
                   <Badge
                     variant="outline"
                     className={cn(
-                      'h-8 px-3 text-xs font-medium border gap-2',
+                      'h-8 px-3 text-xs font-medium border',
                       PROJECT_TYPE_BADGE[projectType]
                     )}
                   >
-                    <span
-                      className={cn(
-                        'inline-block w-2.5 h-2.5 rounded-full',
-                        PROJECT_TYPE_DOT[projectType]
-                      )}
-                    />
                     {t(`projects.types.${projectType}`)}
                   </Badge>
                 )}
