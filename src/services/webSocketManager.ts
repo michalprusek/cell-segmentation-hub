@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
+import { TIMEOUTS } from '@/lib/constants';
 import { webSocketEventEmitter } from '@/lib/websocketEvents';
 import type {
   SegmentationUpdate,
@@ -105,7 +106,7 @@ class WebSocketManager {
     if (this.isConnecting) {
       logger.debug('WebSocket connection already in progress, waiting...');
       return new Promise((resolve, reject) => {
-        const maxWaitTime = 30000; // 30 seconds max wait
+        const maxWaitTime = TIMEOUTS.WEBSOCKET_CONNECT;
         const startTime = Date.now();
 
         const checkConnection = () => {

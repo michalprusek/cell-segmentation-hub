@@ -7,6 +7,7 @@ import {
 } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
+import { TIMEOUTS } from '@/lib/constants';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
 import {
   chunkFiles,
@@ -167,7 +168,7 @@ class ApiClient {
     this.baseURL = baseURL;
     this.instance = axios.create({
       baseURL,
-      timeout: 120000, // Increased to 2 minutes for batch operations
+      timeout: TIMEOUTS.API_BATCH_DEFAULT,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -1085,7 +1086,7 @@ class ApiClient {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 300000, // 5 minutes for file uploads (increased from 60s)
+        timeout: TIMEOUTS.FILE_UPLOAD_LARGE,
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(
@@ -1243,7 +1244,7 @@ class ApiClient {
               'Content-Type': 'multipart/form-data',
             },
             signal: signal, // Add abort signal support
-            timeout: 300000, // 5 minutes timeout for chunk uploads (100 files)
+            timeout: TIMEOUTS.FILE_UPLOAD_LARGE,
             onUploadProgress: progressEvent => {
               if (progressEvent.total) {
                 const chunkProgressPercent = Math.round(

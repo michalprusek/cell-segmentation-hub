@@ -44,8 +44,12 @@ export const TIMEOUTS = {
   SEGMENTATION_PROCESS: 300000, // 5 minutes
   /** Export operation timeout */
   EXPORT_PROCESS: 600000, // 10 minutes
-  /** File upload operation */
+  /** File upload operation (single small file) */
   FILE_UPLOAD: 120000, // 2 minutes
+  /** Large / chunked file upload — single POST may carry up to ~100 files */
+  FILE_UPLOAD_LARGE: 300000, // 5 minutes
+  /** Default axios client timeout — must accommodate batch list operations */
+  API_BATCH_DEFAULT: 120000, // 2 minutes
 
   /** Health check interval */
   HEALTH_CHECK: 30000,
