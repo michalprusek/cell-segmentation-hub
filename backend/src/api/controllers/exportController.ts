@@ -243,7 +243,10 @@ export class ExportController {
         return;
       }
 
-      // Verify the file exists and is a regular file
+      // Verify the file exists and is a regular file. We log non-ENOENT
+      // errors at warn level so ops can distinguish a genuinely missing
+      // file from a permission/IO problem masquerading as a 404 — the
+      // user-facing response stays the same to avoid leaking server state.
       let fileSize: number;
       try {
         const stats = await fs.stat(resolvedFilePath);
@@ -252,7 +255,11 @@ export class ExportController {
           return;
         }
         fileSize = stats.size;
-      } catch {
+      } catch (err) {
+        const errno = (err as NodeJS.ErrnoException)?.code;
+        if (errno && errno !== 'ENOENT') {
+          logger.warn(`fs.stat failed for export file (errno=${errno})`, CTX);
+        }
         ResponseHelper.notFound(res, 'File not found', CTX);
         return;
       }
