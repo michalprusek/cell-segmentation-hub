@@ -183,7 +183,7 @@ export function clearOptimizationCaches(): void {
 /**
  * Development-only performance logging
  */
-export function debugLog(message: string, data?: any): void {
+export function debugLog(_message: string, _data?: any): void {
   // Debug logging disabled to avoid console.log in production
   // Can be enabled for debugging if needed
 }

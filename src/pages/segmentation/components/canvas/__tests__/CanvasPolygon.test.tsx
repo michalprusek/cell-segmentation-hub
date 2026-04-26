@@ -7,11 +7,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CanvasPolygon from '../CanvasPolygon';
-import {
-  createMockPolygon,
-  createMockPolygons,
-} from '@/test-utils/segmentationTestUtils';
-import { render as customRender } from '@/test-utils/reactTestUtils';
+import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
 import type { VertexDragState } from '@/pages/segmentation/types';
 
 // Mock the heavy dependencies
@@ -96,7 +92,7 @@ describe('CanvasPolygon', () => {
   describe('Rendering', () => {
     it('renders polygon with basic render function', () => {
       // Use basic render instead of customRender to avoid context issues
-      const result = render(
+      render(
         <svg width="800" height="600" viewBox="0 0 800 600">
           <CanvasPolygon {...defaultProps} />
         </svg>
@@ -111,11 +107,7 @@ describe('CanvasPolygon', () => {
     });
 
     it('renders polygon with correct basic structure', () => {
-      const result = renderPolygonInSvg(<CanvasPolygon {...defaultProps} />);
-
-      // Try to find the element by its ID as well
-      const polygonByTestId = screen.queryByTestId('test-polygon');
-      const polygonById = document.getElementById('test-polygon');
+      renderPolygonInSvg(<CanvasPolygon {...defaultProps} />);
 
       const polygonElement = screen.getByTestId('test-polygon');
       expect(polygonElement).toBeInTheDocument();
@@ -281,12 +273,6 @@ describe('CanvasPolygon', () => {
   });
 
   describe('Vertex Interactions', () => {
-    const mockVertexDragState: VertexDragState = {
-      isDragging: false,
-      polygonId: null,
-      vertexIndex: null,
-    };
-
     it('renders vertices with drag state', () => {
       const dragState: VertexDragState = {
         isDragging: true,

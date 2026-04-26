@@ -392,6 +392,9 @@ export const useSegmentationQueue = (
         }
       }
     };
+    // Handlers and projectId are intentionally excluded — handler refs are
+    // assigned via refs above to avoid re-subscribing on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     user,
     token,
@@ -399,7 +402,7 @@ export const useSegmentationQueue = (
     isDisabled,
     onSegmentationCancelled,
     onBulkSegmentationCancelled,
-  ]); // Handlers REMOVED from dependencies - refs are used instead
+  ]);
 
   // Join project room when projectId changes and connection is ready
   useEffect(() => {

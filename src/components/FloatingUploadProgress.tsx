@@ -32,6 +32,8 @@ const FloatingUploadProgress: React.FC = () => {
       setVisibleSessionId(activeSession.id);
       setExpanded(false);
     }
+    // Only react to id change to avoid retriggering on object identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id]);
 
   // Auto-collapse completed sessions after 8 seconds
@@ -49,6 +51,8 @@ const FloatingUploadProgress: React.FC = () => {
       }, 8000);
       return () => clearTimeout(timer);
     }
+    // displaySession is derived from activeSession + sessions; tracking id+status is sufficient
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displaySession?.status, displaySession?.id, clearSession]);
 
   const status = displaySession?.status;

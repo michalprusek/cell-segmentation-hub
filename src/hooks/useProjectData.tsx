@@ -169,6 +169,9 @@ export const useProjectData = (
     };
 
     fetchData();
+    // signOut is stable from AuthContext but not memoized; including it would
+    // re-fetch on every auth state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, userId, t]);
 
   const updateImages = useCallback(

@@ -2,22 +2,7 @@ import React from 'react';
 import { Polygon } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/useLanguage';
 import { EditMode } from '../types';
-import {
-  Shapes,
-  MapPin,
-  CheckCircle,
-  XCircle,
-  Edit3,
-  Scissors,
-  Plus,
-  Hash,
-  MousePointer,
-  PenTool,
-  Trash2,
-  Eye,
-  EyeOff,
-  Target,
-} from 'lucide-react';
+import { Shapes, MapPin, CheckCircle, Eye, EyeOff, Target } from 'lucide-react';
 
 interface StatusBarProps {
   polygons: Polygon[];
@@ -29,7 +14,7 @@ interface StatusBarProps {
 
 const StatusBar = ({
   polygons,
-  editMode,
+  editMode: _editMode,
   selectedPolygonId,
   visiblePolygonsCount,
   hiddenPolygonsCount,
@@ -43,63 +28,6 @@ const StatusBar = ({
     (sum, polygon) => sum + polygon.points.length,
     0
   );
-
-  const getModeIcon = () => {
-    switch (editMode) {
-      case EditMode.View:
-        return <MousePointer className="h-3 w-3" />;
-      case EditMode.EditVertices:
-        return <Edit3 className="h-3 w-3" />;
-      case EditMode.AddPoints:
-        return <Plus className="h-3 w-3" />;
-      case EditMode.CreatePolygon:
-        return <PenTool className="h-3 w-3" />;
-      case EditMode.Slice:
-        return <Scissors className="h-3 w-3" />;
-      case EditMode.DeletePolygon:
-        return <Trash2 className="h-3 w-3" />;
-      default:
-        return null;
-    }
-  };
-
-  const getModeColor = () => {
-    switch (editMode) {
-      case EditMode.View:
-        return 'text-gray-400 bg-gray-500/20';
-      case EditMode.EditVertices:
-        return 'text-purple-400 bg-purple-500/20';
-      case EditMode.AddPoints:
-        return 'text-emerald-400 bg-emerald-500/20';
-      case EditMode.CreatePolygon:
-        return 'text-blue-400 bg-blue-500/20';
-      case EditMode.Slice:
-        return 'text-yellow-400 bg-yellow-500/20';
-      case EditMode.DeletePolygon:
-        return 'text-red-400 bg-red-500/20';
-      default:
-        return 'text-slate-400';
-    }
-  };
-
-  const getModeLabel = () => {
-    switch (editMode) {
-      case EditMode.View:
-        return t('segmentation.mode.view');
-      case EditMode.EditVertices:
-        return t('segmentation.mode.editVertices');
-      case EditMode.AddPoints:
-        return t('segmentation.mode.addPoints');
-      case EditMode.CreatePolygon:
-        return t('segmentation.mode.createPolygon');
-      case EditMode.Slice:
-        return t('segmentation.mode.slice');
-      case EditMode.DeletePolygon:
-        return t('segmentation.mode.deletePolygon');
-      default:
-        return '';
-    }
-  };
 
   // Spočítáme viditelné a skryté polygony
   const totalPolygons = polygons.length;

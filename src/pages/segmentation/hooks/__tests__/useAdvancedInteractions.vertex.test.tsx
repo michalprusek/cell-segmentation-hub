@@ -4,10 +4,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useAdvancedInteractions } from '../useAdvancedInteractions';
 import { EditMode, InteractionState, TransformState } from '../../types';
-import { Polygon, Point } from '@/lib/segmentation';
+import { Polygon } from '@/lib/segmentation';
 import { findClosestVertex } from '@/lib/polygonGeometry';
 
 // Mock coordinate utilities

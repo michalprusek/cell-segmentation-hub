@@ -226,7 +226,7 @@ describe('WebSocket Performance Tests', () => {
         wsManager.on('segmentation-update', listener);
       }
 
-      const afterRegistrationMemory = process.memoryUsage().heapUsed;
+      const _afterRegistrationMemory = process.memoryUsage().heapUsed;
 
       // Remove all listeners
       listeners.forEach(listener => {

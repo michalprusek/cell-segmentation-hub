@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Suspense } from 'react';
 // Using lazyWithRetry for robust chunk loading with automatic retries
-import { lazyWithRetry, LazyImportErrorBoundary } from '@/lib/lazyWithRetry';
+import { lazyWithRetry } from '@/lib/lazyWithRetry';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';

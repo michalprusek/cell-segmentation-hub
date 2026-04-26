@@ -373,6 +373,9 @@ export const useEnhancedSegmentationEditor = ({
         );
       }
     }
+    // setEditMode/setSelectedPolygonId are stable setState refs and intentionally
+    // omitted to avoid re-running this initialization effect on each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPolygons, imageId, autosaveBeforeReset, abortAutosave]);
 
   // Auto-reset view when opening image from gallery
@@ -663,6 +666,8 @@ export const useEnhancedSegmentationEditor = ({
 
       toast.success(t('toast.segmentation.deleted'));
     },
+    // setSelectedPolygonId is a stable useState setter; omitted intentionally.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [polygons, selectedPolygonId, updatePolygons, t]
   );
 
@@ -737,7 +742,10 @@ export const useEnhancedSegmentationEditor = ({
     // ENHANCED: Return to base state (View mode + No selection)
     setEditMode(EditMode.View);
     setSelectedPolygonIdInternal(null);
-  }, []); // No dependencies to prevent recreation cycles
+    // setEditMode and setSelectedPolygonIdInternal are stable useState setters;
+    // empty deps prevents recreation cycles in downstream callbacks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const keyboardShortcuts = useKeyboardShortcuts({
     editMode,

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,7 +7,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { useAuth, useLanguage } from '@/contexts/exports';
 import { Loader2, ArrowLeft, Check, X } from 'lucide-react';
-import { getErrorMessage } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { logger } from '@/lib/logger';
 
@@ -17,7 +16,6 @@ const SignUp = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
   const { signUp, user } = useAuth();
   const { t } = useLanguage();
 

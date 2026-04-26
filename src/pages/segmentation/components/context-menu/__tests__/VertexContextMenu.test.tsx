@@ -259,15 +259,15 @@ describe('VertexContextMenu', () => {
     });
     it('handles different language contexts', () => {
       // Test with different language mock if needed
-      const customLanguageProvider = ({
+      const CustomLanguageProvider = ({
         children,
       }: {
         children: React.ReactNode;
       }) => <div data-language="cs">{children}</div>;
       render(
-        <customLanguageProvider>
+        <CustomLanguageProvider>
           <VertexContextMenu {...defaultProps} />
-        </customLanguageProvider>,
+        </CustomLanguageProvider>,
         {
           wrapper: ({ children }) => <div>{children}</div>,
         }
@@ -306,7 +306,7 @@ describe('VertexContextMenu', () => {
   });
   describe('Error Handling', () => {
     it('handles missing onDelete callback gracefully', () => {
-      const { onDelete, ...propsWithoutCallback } = defaultProps;
+      const { onDelete: _onDelete, ...propsWithoutCallback } = defaultProps;
       // Should not crash even if onDelete is undefined
       expect(() => {
         render(

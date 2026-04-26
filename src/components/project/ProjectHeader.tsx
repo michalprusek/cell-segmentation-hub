@@ -8,7 +8,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/useLanguage';
 import DashboardHeader from '@/components/DashboardHeader';

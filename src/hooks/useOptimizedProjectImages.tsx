@@ -242,7 +242,7 @@ export const useOptimizedProjectImages = ({
         );
       }
     },
-    [apiRefetch]
+    [apiRefetch, error]
   );
 
   return {

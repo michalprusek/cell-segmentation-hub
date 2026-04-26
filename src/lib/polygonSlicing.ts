@@ -70,7 +70,6 @@ export function slicePolygon(
 
   // If we don't have exactly 2 intersections with the segment, try infinite line
   if (intersections.length !== 2) {
-    const segmentIntersectionCount = intersections.length;
     intersections.length = 0; // Clear array
 
     for (let i = 0; i < points.length; i++) {
@@ -153,7 +152,6 @@ export function slicePolygon(
 
   // Check for degenerate slice line (too short length)
   if (sliceLineLength < 1) {
-    const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
     return null;
   }
 

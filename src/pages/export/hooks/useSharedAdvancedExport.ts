@@ -7,7 +7,6 @@ import ExportStateManager from '@/lib/exportStateManager';
 import { useExportContext } from '@/contexts/ExportContext';
 import { useAbortController } from '@/hooks/shared/useAbortController';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
-import type { ExportJobStatus } from '@/types';
 
 // Sanitize filename to remove/replace invalid characters
 const sanitizeFilename = (filename: string): string => {
@@ -81,14 +80,6 @@ export interface ExportOptions {
   pixelToMicrometerScale?: number;
 }
 
-interface ExportJob {
-  id: string;
-  status: ExportJobStatus;
-  progress: number;
-  message?: string;
-  filePath?: string;
-}
-
 export const useSharedAdvancedExport = (
   projectId: string,
   projectName?: string
@@ -113,7 +104,7 @@ export const useSharedAdvancedExport = (
     includeDocumentation: EXPORT_DEFAULTS.OPTIONS.INCLUDE_DOCUMENTATION,
   });
 
-  const [createdBlobUrls, setCreatedBlobUrls] = useState<string[]>([]);
+  const [createdBlobUrls, _setCreatedBlobUrls] = useState<string[]>([]);
   const downloadedJobIds = useRef<Set<string>>(new Set());
   const downloadInProgress = useRef<boolean>(false);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(
@@ -127,8 +118,13 @@ export const useSharedAdvancedExport = (
   const { socket } = useWebSocket();
 
   // Initialize AbortController for cancellable downloads
-  const { getSignal, abort, abortAll, resetController, isAborted } =
-    useAbortController('export');
+  const {
+    getSignal,
+    abort,
+    abortAll: _abortAll,
+    resetController,
+    isAborted,
+  } = useAbortController('export');
 
   // Get current export state from context
   const exportState = getExportState(projectId);
