@@ -489,12 +489,21 @@ export class HealthCheckService {
       // Grafana not available
     }
 
+    // Monitoring is ANCILLARY — Prometheus/Grafana are observability
+    // tooling, not part of the request path. App works fully without
+    // them. Don't propagate their absence as 'unhealthy' or even
+    // 'degraded' for the overall app status — that would mask real
+    // production problems behind monitoring container churn.
+    //
+    // We still return granular details so an external observer that
+    // CARES about monitoring (e.g. an SRE dashboard) can inspect them.
     const allHealthy = Object.values(checks).every(v => v);
-    const someHealthy = Object.values(checks).some(v => v);
 
     return {
-      status: allHealthy ? 'healthy' : someHealthy ? 'degraded' : 'unhealthy',
-      message: `Monitoring services: Prometheus ${checks.prometheus ? '✓' : '✗'}, Grafana ${checks.grafana ? '✓' : '✗'}`,
+      status: 'healthy',
+      message: allHealthy
+        ? 'Monitoring services online: Prometheus ✓, Grafana ✓'
+        : `Monitoring services optional and not currently reachable (Prometheus ${checks.prometheus ? '✓' : '✗'}, Grafana ${checks.grafana ? '✓' : '✗'}) — does not affect app health`,
       responseTime: Date.now() - startTime,
       details: checks,
       lastCheck: new Date(),
