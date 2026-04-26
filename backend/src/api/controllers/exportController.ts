@@ -114,12 +114,16 @@ export class ExportController {
         message: 'Export job started successfully',
       });
     } catch (error) {
-      ResponseHelper.internalError(
-        res,
-        toErr(error),
-        'Failed to start export',
-        CTX
-      );
+      const err = toErr(error);
+      // Per-user concurrency rate limit (1 active export at a time) —
+      // surfaces as 429 instead of 500 so the frontend can show a sensible
+      // toast ("wait for current export to finish") rather than a generic
+      // server error.
+      if (err.message.startsWith('Rate limit exceeded:')) {
+        ResponseHelper.rateLimit(res, err.message, CTX);
+        return;
+      }
+      ResponseHelper.internalError(res, err, 'Failed to start export', CTX);
     }
   }
 

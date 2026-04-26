@@ -187,6 +187,66 @@ describe('ExportService', () => {
 
       expect(jobId).toBe(JOB_ID);
     });
+
+    it('rejects a second concurrent export from the same user', async () => {
+      // Pre-seed a pending job for the user. We don't await startExportJob
+      // again because the first call kicks off async processing — using
+      // the internal map keeps the test deterministic.
+      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
+      jobs.set('existing-job', {
+        id: 'existing-job',
+        projectId: PROJECT_ID,
+        userId: USER_ID,
+        status: 'pending',
+        progress: 0,
+        createdAt: new Date(),
+        options: {},
+      });
+
+      await expect(
+        service.startExportJob(PROJECT_ID, USER_ID, {
+          annotationFormats: ['json'],
+        })
+      ).rejects.toThrow(/Rate limit exceeded/);
+    });
+
+    it('allows a new export after the previous one finishes', async () => {
+      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
+      jobs.set('past-job', {
+        id: 'past-job',
+        projectId: PROJECT_ID,
+        userId: USER_ID,
+        status: 'completed', // terminal state — no longer "active"
+        progress: 100,
+        createdAt: new Date(),
+        options: {},
+      });
+
+      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
+        annotationFormats: ['json'],
+      });
+
+      expect(jobId).toBe(JOB_ID);
+    });
+
+    it('does not block a different user from exporting concurrently', async () => {
+      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
+      jobs.set('other-users-job', {
+        id: 'other-users-job',
+        projectId: PROJECT_ID,
+        userId: 'other-user',
+        status: 'processing',
+        progress: 50,
+        createdAt: new Date(),
+        options: {},
+      });
+
+      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
+        annotationFormats: ['json'],
+      });
+
+      expect(jobId).toBe(JOB_ID);
+    });
   });
 
   // ---------------------------------------------------------------------------
