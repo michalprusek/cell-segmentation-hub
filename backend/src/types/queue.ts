@@ -43,7 +43,6 @@ export type QueuePriority = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 /**
  * Polygon types for segmentation results
  */
-export type PolygonType = 'external' | 'internal';
 
 // ============================================================================
 // Request Data Interfaces (validated by Zod schemas)
@@ -477,62 +476,6 @@ export interface ResetStuckItemsRequest extends AuthenticatedRequest {
 export interface CleanupQueueRequest extends AuthenticatedRequest {
   body: CleanupQueueData;
 }
-
-// ============================================================================
-// Configuration Interfaces
-// ============================================================================
-
-/**
- * Queue configuration
- */
-export interface QueueConfig {
-  maxQueueSize: number;
-  maxBatchSize: number;
-  defaultTimeout: number;
-  maxRetries: number;
-  stuckThresholdMinutes: number;
-  cleanupThresholdDays: number;
-  priorityBoost: {
-    premium: number;
-    shared: number;
-  };
-}
-
-/**
- * Model-specific configuration
- */
-export interface ModelConfig {
-  model: SegmentationModel;
-  defaultThreshold: number;
-  timeout: number;
-  maxImageSize: [number, number];
-  batchSize: number;
-  memoryRequirement: number; // in MB
-}
-
-// ============================================================================
-// Utility Types
-// ============================================================================
-
-/**
- * Make all properties of T optional except for K
- */
-export type RequireOnly<T, K extends keyof T> = Partial<T> & Pick<T, K>;
-
-/**
- * Queue entry creation data
- */
-export type CreateQueueEntry = RequireOnly<
-  QueueEntryResponse,
-  'imageId' | 'projectId' | 'userId'
->;
-
-/**
- * Queue entry update data
- */
-export type UpdateQueueEntry = Partial<
-  Pick<QueueEntryResponse, 'status' | 'error' | 'startedAt' | 'completedAt'>
->;
 
 export default {
   // Re-export everything for convenient import
