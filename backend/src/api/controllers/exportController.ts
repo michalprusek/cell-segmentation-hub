@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { ExportService, ExportOptions } from '../../services/exportService';
+import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import * as path from 'path';
 import { promises as fs } from 'fs';
@@ -9,6 +10,11 @@ import {
   verifyDownloadToken,
   InvalidDownloadTokenError,
 } from '../../services/export/downloadTokenService';
+
+const CTX = 'ExportController';
+
+const toErr = (e: unknown): Error =>
+  e instanceof Error ? e : new Error(String(e));
 
 export class ExportController {
   private exportService: ExportService;
@@ -38,11 +44,15 @@ export class ExportController {
       const userId = req.user?.id;
 
       if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
       if (!projectId || !jobId) {
-        res.status(400).json({ error: 'Project ID and Job ID are required' });
+        ResponseHelper.badRequest(
+          res,
+          'Project ID and Job ID are required',
+          CTX
+        );
         return;
       }
 
@@ -53,7 +63,7 @@ export class ExportController {
         userId
       );
       if (!filePath) {
-        res.status(404).json({ error: 'Export file not found' });
+        ResponseHelper.notFound(res, 'Export file not found', CTX);
         return;
       }
 
@@ -63,12 +73,12 @@ export class ExportController {
         expiresAt: issued.expiresAt,
       });
     } catch (error) {
-      logger.error(
-        'Failed to issue download token:',
-        error instanceof Error ? error : new Error(String(error)),
-        'ExportController'
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
+        'Failed to issue download token',
+        CTX
       );
-      res.status(500).json({ error: 'Failed to issue download token' });
     }
   }
 
@@ -82,12 +92,12 @@ export class ExportController {
       const userId = req.user?.id;
 
       if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
 
       if (!projectId) {
-        res.status(400).json({ error: 'Project ID is required' });
+        ResponseHelper.badRequest(res, 'Project ID is required', CTX);
         return;
       }
 
@@ -104,12 +114,12 @@ export class ExportController {
         message: 'Export job started successfully',
       });
     } catch (error) {
-      logger.error(
-        'Export start failed:',
-        error instanceof Error ? error : new Error(String(error)),
-        'ExportController'
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
+        'Failed to start export',
+        CTX
       );
-      res.status(500).json({ error: 'Failed to start export' });
     }
   }
 
@@ -119,17 +129,17 @@ export class ExportController {
       const userId = req.user?.id;
 
       if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
 
       if (!projectId) {
-        res.status(400).json({ error: 'Project ID is required' });
+        ResponseHelper.badRequest(res, 'Project ID is required', CTX);
         return;
       }
 
       if (!jobId) {
-        res.status(400).json({ error: 'Job ID is required' });
+        ResponseHelper.badRequest(res, 'Job ID is required', CTX);
         return;
       }
 
@@ -140,18 +150,18 @@ export class ExportController {
       );
 
       if (!status) {
-        res.status(404).json({ error: 'Export status not found' });
+        ResponseHelper.notFound(res, 'Export status not found', CTX);
         return;
       }
 
       res.json(status);
     } catch (error) {
-      logger.error(
-        'Failed to get export status:',
-        error instanceof Error ? error : new Error(String(error)),
-        'ExportController'
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
+        'Failed to get export status',
+        CTX
       );
-      res.status(500).json({ error: 'Failed to get export status' });
     }
   }
 
@@ -160,11 +170,11 @@ export class ExportController {
       const { projectId, jobId } = req.params;
 
       if (!projectId) {
-        res.status(400).json({ error: 'Project ID is required' });
+        ResponseHelper.badRequest(res, 'Project ID is required', CTX);
         return;
       }
       if (!jobId) {
-        res.status(400).json({ error: 'Job ID is required' });
+        ResponseHelper.badRequest(res, 'Job ID is required', CTX);
         return;
       }
 
@@ -183,15 +193,21 @@ export class ExportController {
         try {
           const payload = verifyDownloadToken(queryToken);
           if (payload.jobId !== jobId || payload.projectId !== projectId) {
-            res.status(403).json({ error: 'Token does not match resource' });
+            ResponseHelper.forbidden(
+              res,
+              'Token does not match resource',
+              CTX
+            );
             return;
           }
           userId = payload.userId;
         } catch (err) {
           if (err instanceof InvalidDownloadTokenError) {
-            res
-              .status(401)
-              .json({ error: `Invalid download token: ${err.message}` });
+            ResponseHelper.unauthorized(
+              res,
+              `Invalid download token: ${err.message}`,
+              CTX
+            );
             return;
           }
           throw err;
@@ -199,7 +215,7 @@ export class ExportController {
       }
 
       if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
 
@@ -210,7 +226,7 @@ export class ExportController {
       );
 
       if (!filePath) {
-        res.status(404).json({ error: 'Export file not found' });
+        ResponseHelper.notFound(res, 'Export file not found', CTX);
         return;
       }
 
@@ -223,7 +239,7 @@ export class ExportController {
       // Verify the resolved path is within the exports directory
       const rel = path.relative(exportsBaseDir, resolvedFilePath);
       if (rel.startsWith('..') || path.isAbsolute(rel)) {
-        res.status(400).json({ error: 'Invalid file path' });
+        ResponseHelper.badRequest(res, 'Invalid file path', CTX);
         return;
       }
 
@@ -232,17 +248,12 @@ export class ExportController {
       try {
         const stats = await fs.stat(resolvedFilePath);
         if (!stats.isFile()) {
-          res.status(404).json({ error: 'File not found' });
+          ResponseHelper.notFound(res, 'File not found', CTX);
           return;
         }
         fileSize = stats.size;
-      } catch (err) {
-        logger.error(
-          'File not found:',
-          err instanceof Error ? err : new Error(String(err)),
-          'ExportController'
-        );
-        res.status(404).json({ error: 'File not found' });
+      } catch {
+        ResponseHelper.notFound(res, 'File not found', CTX);
         return;
       }
 
@@ -269,19 +280,20 @@ export class ExportController {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
 
-      res.sendFile(resolvedFilePath, err => {
-        if (err) {
-          logger.error('Send file error:', err, 'ExportController');
-          // Response might already be partially sent — just log.
+      res.sendFile(resolvedFilePath, sendErr => {
+        if (sendErr) {
+          // Response might already be partially sent — sendFile owns the
+          // stream, so we cannot send another response. Just log.
+          logger.error('Send file error:', sendErr, CTX);
         }
       });
     } catch (error) {
-      logger.error(
-        'Download export failed:',
-        error instanceof Error ? error : new Error(String(error)),
-        'ExportController'
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
+        'Failed to download export',
+        CTX
       );
-      res.status(500).json({ error: 'Failed to download export' });
     }
   }
 
@@ -291,17 +303,17 @@ export class ExportController {
       const userId = req.user?.id;
 
       if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
 
       if (!projectId) {
-        res.status(400).json({ error: 'Project ID is required' });
+        ResponseHelper.badRequest(res, 'Project ID is required', CTX);
         return;
       }
 
       if (!jobId) {
-        res.status(400).json({ error: 'Job ID is required' });
+        ResponseHelper.badRequest(res, 'Job ID is required', CTX);
         return;
       }
 
@@ -312,12 +324,12 @@ export class ExportController {
         message: 'Export job cancelled successfully',
       });
     } catch (error) {
-      logger.error(
-        'Cancel export failed:',
-        error instanceof Error ? error : new Error(String(error)),
-        'ExportController'
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
+        'Failed to cancel export',
+        CTX
       );
-      res.status(500).json({ error: 'Failed to cancel export' });
     }
   }
 
@@ -327,12 +339,12 @@ export class ExportController {
       const userId = req.user?.id;
 
       if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
 
       if (!projectId) {
-        res.status(400).json({ error: 'Project ID is required' });
+        ResponseHelper.badRequest(res, 'Project ID is required', CTX);
         return;
       }
 
@@ -343,12 +355,12 @@ export class ExportController {
 
       res.json(history);
     } catch (error) {
-      logger.error(
-        'Failed to get export history:',
-        error instanceof Error ? error : new Error(String(error)),
-        'ExportController'
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
+        'Failed to get export history',
+        CTX
       );
-      res.status(500).json({ error: 'Failed to get export history' });
     }
   }
 
@@ -385,12 +397,12 @@ export class ExportController {
 
       res.json(formats);
     } catch (error) {
-      logger.error(
-        'Failed to get export formats:',
-        error instanceof Error ? error : new Error(String(error)),
-        'ExportController'
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
+        'Failed to get export formats',
+        CTX
       );
-      res.status(500).json({ error: 'Failed to get export formats' });
     }
   }
 }
