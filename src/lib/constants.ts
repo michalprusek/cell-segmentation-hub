@@ -44,8 +44,16 @@ export const TIMEOUTS = {
   SEGMENTATION_PROCESS: 300000, // 5 minutes
   /** Export operation timeout */
   EXPORT_PROCESS: 600000, // 10 minutes
-  /** File upload operation */
-  FILE_UPLOAD: 120000, // 2 minutes
+  /** Retry-loop max delay for upload retries (NOT a request timeout —
+   *  for that, use FILE_UPLOAD_LARGE). Used by `retryUtils` exponential
+   *  backoff cap. */
+  FILE_UPLOAD_RETRY_MAX_DELAY: 120000, // 2 minutes
+  /** Large / chunked file upload — request timeout for a single POST that
+   *  may carry up to ~100 files. */
+  FILE_UPLOAD_LARGE: 300000, // 5 minutes
+  /** Default axios client timeout — chosen so batch list operations don't
+   *  time out before the backend responds. */
+  API_DEFAULT: 120000, // 2 minutes
 
   /** Health check interval */
   HEALTH_CHECK: 30000,

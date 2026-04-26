@@ -67,7 +67,7 @@ export const RETRY_CONFIGS = {
   upload: {
     maxAttempts: RETRY_ATTEMPTS.UPLOAD,
     initialDelay: TIMEOUTS.RETRY_SHORT,
-    maxDelay: TIMEOUTS.FILE_UPLOAD,
+    maxDelay: TIMEOUTS.FILE_UPLOAD_RETRY_MAX_DELAY,
     backoffFactor: 2,
   },
   websocket: {
