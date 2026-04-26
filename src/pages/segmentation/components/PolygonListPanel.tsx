@@ -7,7 +7,6 @@ import {
   MoreVertical,
   ChevronUp,
   ChevronDown,
-  Spline,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';

@@ -100,13 +100,9 @@ export const getConsoleMock = (): ConsoleMock => {
   return {
     // eslint-disable-next-line no-console
     log: console.log as ReturnType<typeof vi.fn>,
-    // eslint-disable-next-line no-console
     error: console.error as ReturnType<typeof vi.fn>,
-    // eslint-disable-next-line no-console
     warn: console.warn as ReturnType<typeof vi.fn>,
-    // eslint-disable-next-line no-console
     info: console.info as ReturnType<typeof vi.fn>,
-    // eslint-disable-next-line no-console
     debug: console.debug as ReturnType<typeof vi.fn>,
   };
 };

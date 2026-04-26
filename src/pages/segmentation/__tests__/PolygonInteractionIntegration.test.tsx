@@ -5,13 +5,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  act,
-} from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditMode } from '../types';
 import { shouldPreventCanvasDeselection } from '../config/modeConfig';
@@ -568,8 +562,6 @@ describe('Polygon Interaction Integration Tests', () => {
     });
 
     it('should handle concurrent polygon operations', async () => {
-      const user = userEvent.setup();
-
       render(
         <MockSegmentationWorkflow
           polygons={testPolygons}

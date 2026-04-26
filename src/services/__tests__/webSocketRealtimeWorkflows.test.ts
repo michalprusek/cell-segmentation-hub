@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import WebSocketManager, {
-  QueueStats,
   SegmentationUpdate,
 } from '@/services/webSocketManager';
 import { io } from 'socket.io-client';
@@ -40,13 +39,13 @@ vi.mock('@/lib/websocketEvents', () => ({
 describe('WebSocket Real-time Workflows', () => {
   let testEnv: ReturnType<typeof createWebSocketTestEnvironment>;
   let wsManager: WebSocketManager;
-  let scenarios: WebSocketTestScenarios;
+  let _scenarios: WebSocketTestScenarios;
 
   beforeEach(() => {
     testEnv = createWebSocketTestEnvironment();
     vi.mocked(io).mockReturnValue(testEnv.mockSocket);
     wsManager = WebSocketManager.getInstance();
-    scenarios = testEnv.scenarios;
+    _scenarios = testEnv.scenarios;
   });
 
   afterEach(() => {

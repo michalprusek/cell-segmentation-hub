@@ -104,9 +104,6 @@ describe('Polygon Hole Rendering', () => {
       const pathElement = polygonElement.querySelector('path');
       expect(pathElement).toBeInTheDocument();
 
-      // Check computed styles for red color
-      const computedStyle = window.getComputedStyle(pathElement!);
-      // The actual color values might vary, but we check for red-like values
       // Note: In tests, CSS classes might not apply computed styles,
       // so we check for class presence as well
       expect(polygonElement).toHaveClass('external');
@@ -270,7 +267,7 @@ describe('Polygon Hole Rendering', () => {
         ],
       });
 
-      const { rerender } = render(
+      render(
         <svg width="800" height="600" viewBox="0 0 800 600">
           <CanvasPolygon
             polygon={externalPolygon}

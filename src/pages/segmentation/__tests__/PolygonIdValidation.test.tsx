@@ -2,6 +2,7 @@
  * Comprehensive tests for polygon ID validation and React key generation
  * Tests the specific issues: undefined polygon IDs, React key conflicts, fallback key generation
  */
+/* eslint-disable no-console -- test mocks console.log */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

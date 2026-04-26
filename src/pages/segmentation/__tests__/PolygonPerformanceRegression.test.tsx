@@ -2,6 +2,7 @@
  * Performance regression tests for polygon rendering and interaction
  * Tests rendering performance with various polygon datasets and interaction patterns
  */
+/* eslint-disable no-console -- regression tests log perf metrics */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -181,7 +182,7 @@ describe('Polygon Performance Regression Tests', () => {
   ): PerformanceMetrics => {
     performanceMonitor.start();
 
-    const result = render(
+    render(
       <svg width="2000" height="2000" viewBox="0 0 2000 2000">
         {polygons.map((polygon, index) => (
           <CanvasPolygon

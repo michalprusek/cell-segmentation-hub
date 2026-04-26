@@ -41,7 +41,7 @@ vi.mock('@/lib/errorUtils', () => ({
 import { slicePolygon, validateSliceLine } from '@/lib/polygonSlicing';
 
 describe('usePolygonSlicing', () => {
-  let testPolygons: ReturnType<typeof createTestPolygons>;
+  let _testPolygons: ReturnType<typeof createTestPolygons>;
   let testPolygonObjects: ReturnType<typeof createTestPolygonObjects>;
   let mockProps: {
     polygons: Polygon[];
@@ -59,7 +59,7 @@ describe('usePolygonSlicing', () => {
     // Setup browser APIs for testing
     mockBrowserAPIs();
 
-    testPolygons = createTestPolygons();
+    _testPolygons = createTestPolygons();
     testPolygonObjects = createTestPolygonObjects();
 
     mockProps = {

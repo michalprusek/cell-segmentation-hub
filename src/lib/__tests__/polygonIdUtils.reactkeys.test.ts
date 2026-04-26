@@ -5,7 +5,6 @@
 
 import {
   generateSafePolygonKey,
-  validatePolygonId,
   ensureValidPolygonId,
   logPolygonIdIssue,
 } from '../polygonIdUtils';
@@ -146,10 +145,6 @@ describe('React Key Generation Fixes', () => {
 
       // Keys should be different for different states
       expect(normalKey1).not.toBe(undoKey);
-
-      // But state suffix should be consistent
-      const baseKey1 = normalKey1.replace('-normal', '');
-      const baseKey2 = undoKey.replace('-undo', '');
 
       // Since generateSafePolygonKey creates new IDs each time for undefined,
       // we just ensure no "undefined" appears in the keys

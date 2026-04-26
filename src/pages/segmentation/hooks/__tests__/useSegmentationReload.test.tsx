@@ -341,11 +341,11 @@ describe('useSegmentationReload', () => {
   });
 
   it('should handle concurrent reload requests', async () => {
-    let resolveFirst: (value: any) => void;
+    let _resolveFirst: (value: any) => void;
     let resolveSecond: (value: any) => void;
 
     const firstPromise = new Promise(resolve => {
-      resolveFirst = resolve;
+      _resolveFirst = resolve;
     });
 
     const secondPromise = new Promise(resolve => {

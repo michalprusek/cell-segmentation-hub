@@ -5,12 +5,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-} from '@/test-utils/reactTestUtils';
+import { render, screen, fireEvent } from '@/test-utils/reactTestUtils';
 import CanvasContainer from '../CanvasContainer';
 import { EditMode } from '../../../types';
 
@@ -275,7 +270,6 @@ describe('CanvasContainer - Core Functionality', () => {
       render(<CanvasContainer {...defaultProps} />);
 
       const container = screen.getByTestId('canvas-container');
-      const style = window.getComputedStyle(container);
 
       // Should have background image (dot pattern)
       expect(container).toHaveStyle('background-size: 20px 20px');

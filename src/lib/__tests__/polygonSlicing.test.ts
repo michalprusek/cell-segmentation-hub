@@ -9,8 +9,6 @@ import { calculatePolygonArea } from '@/lib/polygonGeometry';
 import {
   createTestPolygons,
   createTestPolygonObjects,
-  expectPointsEqual,
-  expectPointArraysEqual,
   measurePerformance,
 } from '@/test-utils/polygonTestUtils';
 import type { Point, Polygon } from '@/lib/segmentation';

@@ -4,7 +4,6 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import { Trash } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -19,8 +18,8 @@ interface VertexContextMenuProps {
 const VertexContextMenu = ({
   children,
   onDelete,
-  vertexIndex,
-  polygonId,
+  vertexIndex: _vertexIndex,
+  polygonId: _polygonId,
 }: VertexContextMenuProps) => {
   const { t } = useLanguage();
 

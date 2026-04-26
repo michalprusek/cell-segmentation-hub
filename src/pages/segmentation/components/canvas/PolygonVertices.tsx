@@ -3,10 +3,6 @@ import { Point } from '@/lib/segmentation';
 import CanvasVertex from './CanvasVertex';
 import VertexContextMenu from '../context-menu/VertexContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
-import {
-  shouldRenderVertices,
-  getDecimatedVertices,
-} from '@/lib/polygonOptimization';
 
 interface PolygonVerticesProps {
   polygonId: string;
@@ -29,7 +25,7 @@ const PolygonVertices = React.memo(
     points,
     polygonType,
     isSelected,
-    isHovered,
+    isHovered: _isHovered,
     hoveredVertex,
     vertexDragState,
     zoom,

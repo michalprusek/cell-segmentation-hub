@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@/test-utils/reactTestUtils';
+import { render } from '@/test-utils/reactTestUtils';
 import CanvasPolygon from '../CanvasPolygon';
 import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
 

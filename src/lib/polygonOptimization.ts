@@ -1,5 +1,5 @@
 import { Point } from '@/lib/segmentation';
-import { calculateBoundingBox, type BoundingBox } from './polygonGeometry';
+import { type BoundingBox } from './polygonGeometry';
 
 // Douglas-Peucker algorithm for polygon simplification optimized for performance
 export const simplifyPolygon = (
@@ -105,7 +105,7 @@ export const isInViewport = (
 export const getSimplificationTolerance = (
   zoom: number,
   polygonBoundingBox: BoundingBox,
-  originalPointCount: number
+  _originalPointCount: number
 ): number => {
   // Base tolerance relative to polygon size
   const baseSize = Math.min(
@@ -186,7 +186,7 @@ export const getVertexDecimationStep = (
 // Get decimated vertices based on LOD
 export const getDecimatedVertices = (
   points: Point[],
-  zoom: number
+  _zoom: number
 ): Point[] => {
   // DISABLED DECIMATION - Always return all vertices for full visibility
   return points;

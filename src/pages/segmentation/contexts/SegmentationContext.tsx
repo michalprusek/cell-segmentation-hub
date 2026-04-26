@@ -1,9 +1,6 @@
 import React from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
-import {
-  SegmentationContext,
-  type SegmentationContextType,
-} from './SegmentationContext.types';
+import { SegmentationContext } from './SegmentationContext.types';
 
 // useSegmentationContext is exported from './useSegmentationContext' to avoid Fast Refresh warnings
 

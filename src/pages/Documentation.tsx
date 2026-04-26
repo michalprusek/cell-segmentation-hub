@@ -9,13 +9,11 @@ interface LocationState {
 }
 import {
   FileText,
-  Code,
   Info,
   BookOpen,
   Microscope,
   ArrowRight,
   Download,
-  Settings,
   Edit3,
   Cpu,
   Layers,

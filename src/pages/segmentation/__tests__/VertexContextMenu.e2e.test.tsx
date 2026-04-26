@@ -13,7 +13,6 @@ import {
   AllProviders,
 } from '@/test-utils/reactTestUtils';
 import { Polygon } from '@/lib/segmentation';
-import { EditMode } from '../types';
 import SegmentationEditor from '../SegmentationEditor';
 
 // Mock browser APIs
@@ -80,7 +79,7 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
 
 // Mock image loading
 Object.defineProperty(Image.prototype, 'src', {
-  set: function (src) {
+  set: function (_src) {
     setTimeout(() => {
       this.onload?.();
     }, 0);
