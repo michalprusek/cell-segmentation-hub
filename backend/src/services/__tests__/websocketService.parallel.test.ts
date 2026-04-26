@@ -31,8 +31,11 @@ describe('WebSocketService - Parallel Processing', () => {
       use: vi.fn(),
     } as any;
 
-    // Mock Socket.IO constructor
-    (SocketIOServer as unknown as Mock).mockReturnValue(mockSocketIOServer);
+    // Mock Socket.IO constructor (Vitest 4: mockReturnValue can't be called
+    // with `new` — use mockImplementation in function form).
+    (SocketIOServer as unknown as Mock).mockImplementation(function (this: any) {
+      Object.assign(this, mockSocketIOServer);
+    });
 
     // Create WebSocketService instance
     webSocketService = WebSocketService.getInstance(mockHttpServer, mockPrisma);

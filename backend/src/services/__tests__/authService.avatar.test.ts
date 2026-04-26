@@ -37,11 +37,12 @@ vi.mock('../../db', () => ({
 }));
 vi.mock('../../storage/index');
 vi.mock('sharp', () => {
-  return vi.fn(() => ({
+  const sharpFn = vi.fn().mockImplementation(() => ({
     resize: vi.fn().mockReturnThis(),
     jpeg: vi.fn().mockReturnThis(),
     toBuffer: vi.fn().mockResolvedValue(Buffer.from('processed-image')),
   }));
+  return { default: sharpFn };
 });
 vi.mock('uuid', () => ({
   v4: () => 'mock-uuid',
