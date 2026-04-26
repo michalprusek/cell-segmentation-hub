@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import path from 'path';
 import { logger } from '../../utils/logger';
 import type { PolygonPartClass } from '../../utils/polygonValidation';
+import type { BasePolygon } from '../../types/polygon';
 
 export interface VisualizationOptions {
   showNumbers?: boolean;
@@ -16,13 +17,11 @@ export interface VisualizationOptions {
   transparency?: number;
 }
 
-export interface Polygon {
-  points: Array<{ x: number; y: number }>;
-  type: 'external' | 'internal';
-  id?: string;
-  geometry?: 'polygon' | 'polyline';
+/** Visualization polygon — `BasePolygon` plus the wider `PolygonPartClass`
+ *  union (sperm sub-parts plus spheroid 'core'). The export layer
+ *  intentionally uses the narrower `SpermPartClass` flavour. */
+export interface Polygon extends BasePolygon {
   partClass?: PolygonPartClass;
-  instanceId?: string;
 }
 
 const POLYLINE_COLORS: Record<string, string> = {
