@@ -363,17 +363,6 @@ export const MODEL_TYPE_COMPATIBILITY: Record<ProjectType, readonly string[]> =
     sperm: ['sperm'],
   } as const;
 
-/** Visual category for badge colouring on project pages. */
-export const PROJECT_TYPE_CATEGORY: Record<
-  ProjectType,
-  'spheroid' | 'spheroid_invasive' | 'wound' | 'sperm'
-> = {
-  spheroid: 'spheroid',
-  spheroid_invasive: 'spheroid_invasive',
-  wound: 'wound',
-  sperm: 'sperm',
-} as const;
-
 export const isModelCompatibleWithType = (
   model: string,
   projectType: ProjectType
@@ -412,13 +401,6 @@ export interface Image {
   updated_at: string;
 }
 
-export interface NewImage {
-  name: string;
-  project_id: string;
-  image_url: string;
-  thumbnail_url?: string;
-}
-
 export interface UpdateProfile {
   username?: string;
   organization?: string;
@@ -435,21 +417,6 @@ export interface UpdateProfile {
   consentToMLTraining?: boolean;
   consentToAlgorithmImprovement?: boolean;
   consentToFeatureDevelopment?: boolean;
-}
-
-// Access request types
-export interface AccessRequest {
-  id: string;
-  email: string;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
-  updated_at: string;
-}
-
-export interface NewAccessRequest {
-  email: string;
-  reason: string;
 }
 
 /**
@@ -542,19 +509,6 @@ export interface ProjectImage {
   user_id?: string;
 }
 
-// API Response types
-export interface ApiResponse<T> {
-  data: T;
-  message?: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
-
 // Metric types for XLSX export
 export interface SpheroidMetric {
   imageId: string;
@@ -574,26 +528,4 @@ export interface SpheroidMetric {
   boundingBoxHeight: number; // Renamed from lengthMinorDiameter for clarity
   solidity: number;
   // sphericity removed - it's a 3D metric, not applicable to 2D
-}
-
-// Sperm morphology metrics for polyline-based measurements
-export interface SpermMetric {
-  imageName: string;
-  instanceId: string;
-  headLengthPx: number;
-  headLengthUm?: number;
-  midpieceLengthPx: number;
-  midpieceLengthUm?: number;
-  tailLengthPx: number;
-  tailLengthUm?: number;
-}
-
-// Type guard for ApiError
-export function isApiError(error: unknown): error is ApiError {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof (error as { message?: unknown }).message === 'string'
-  );
 }
