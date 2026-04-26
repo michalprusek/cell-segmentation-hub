@@ -1575,8 +1575,18 @@ Algorithm (implemented in
    mask, excluding cores) into a single binary canvas via repeated
    \`cv2.fillPoly\`. Collect the \`(x, y)\` of all \`N\` white pixels.
 
-2. **Centroid** \`(cx, cy) = (mean(xᵢ), mean(yᵢ))\`. Distances
-   \`dᵢ = √((xᵢ − cx)² + (yᵢ − cy)²)\`.
+2. **Centroid anchor**:
+   - If a core polygon is present, \`(cx, cy) = (mean(xᵢ_core), mean(yᵢ_core))\` —
+     the centroid of the **core pixels**. The metric thus measures how far
+     mass spread from the dense core, not from the smeared mass centroid
+     that drifts toward the invasion zone (improvement A — biologically the
+     core is the natural reference point for "how far did things go").
+   - Otherwise (no core) fallback to mask centroid
+     \`(cx, cy) = (mean(xᵢ), mean(yᵢ))\`.
+
+   Distances \`dᵢ = √((xᵢ − cx)² + (yᵢ − cy)²)\` are computed for both
+   sets (\`d_mask\` over all mask pixels and \`d_core\` over core pixels)
+   relative to this single anchor.
 
 3. **Reference radius**:
    - If a core polygon is present, \`R_ref = √(N_core / π)\` where \`N_core\` is
