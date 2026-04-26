@@ -50,6 +50,7 @@ SECURE_CREDENTIALS.md
 
 # Test results and reports
 test-results/
+test-results-smoke/
 playwright-report/
 coverage/
 .nyc_output/
