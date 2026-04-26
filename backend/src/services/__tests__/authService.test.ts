@@ -31,55 +31,56 @@ vi.mock('../../utils/config', () => ({
   getOrigins: () => ['http://localhost:3000'],
 }));
 
-// Create a comprehensive prisma mock first
-const prismaMock = {
-  user: {
-    findUnique: vi.fn() as any,
-    findFirst: vi.fn() as any,
-    create: vi.fn() as any,
-    update: vi.fn() as any,
-    delete: vi.fn() as any,
-    deleteMany: vi.fn() as any,
+// Vitest hoists `vi.mock(...)` factories to the top of the file. State
+// they reference must live inside `vi.hoisted(...)` to also be hoisted.
+const { prismaMock, sessionServiceMock } = vi.hoisted(() => ({
+  prismaMock: {
+    user: {
+      findUnique: vi.fn() as any,
+      findFirst: vi.fn() as any,
+      create: vi.fn() as any,
+      update: vi.fn() as any,
+      delete: vi.fn() as any,
+      deleteMany: vi.fn() as any,
+    },
+    profile: {
+      findUnique: vi.fn() as any,
+      upsert: vi.fn() as any,
+      create: vi.fn() as any,
+      update: vi.fn() as any,
+      deleteMany: vi.fn() as any,
+    },
+    session: {
+      findUnique: vi.fn() as any,
+      create: vi.fn() as any,
+      update: vi.fn() as any,
+      updateMany: vi.fn() as any,
+      delete: vi.fn() as any,
+      deleteMany: vi.fn() as any,
+    },
+    project: {
+      findMany: vi.fn() as any,
+      deleteMany: vi.fn() as any,
+    },
+    image: {
+      deleteMany: vi.fn() as any,
+    },
+    segmentation: {
+      deleteMany: vi.fn() as any,
+    },
+    segmentationQueue: {
+      deleteMany: vi.fn() as any,
+    },
+    $transaction: vi.fn() as any,
   },
-  profile: {
-    findUnique: vi.fn() as any,
-    upsert: vi.fn() as any,
-    create: vi.fn() as any,
-    update: vi.fn() as any,
-    deleteMany: vi.fn() as any,
+  sessionServiceMock: {
+    storeRefreshToken: vi.fn() as any,
+    createSession: vi.fn() as any,
+    rotateRefreshToken: vi.fn() as any,
+    verifyRefreshToken: vi.fn() as any,
+    deleteRefreshToken: vi.fn() as any,
   },
-  session: {
-    findUnique: vi.fn() as any,
-    create: vi.fn() as any,
-    update: vi.fn() as any,
-    updateMany: vi.fn() as any,
-    delete: vi.fn() as any,
-    deleteMany: vi.fn() as any,
-  },
-  project: {
-    findMany: vi.fn() as any,
-    deleteMany: vi.fn() as any,
-  },
-  image: {
-    deleteMany: vi.fn() as any,
-  },
-  segmentation: {
-    deleteMany: vi.fn() as any,
-  },
-  segmentationQueue: {
-    deleteMany: vi.fn() as any,
-  },
-  $transaction: vi.fn() as any,
-};
-
-// Mock sessionService to avoid Redis dependency
-const sessionServiceMock = {
-  storeRefreshToken: vi.fn() as any,
-  createSession: vi.fn() as any,
-  rotateRefreshToken: vi.fn() as any,
-  verifyRefreshToken: vi.fn() as any,
-  deleteRefreshToken: vi.fn() as any,
-};
+}));
 
 // Mock withTransaction to just call the callback with the prisma client passed in
 vi.mock('../../utils/database', () => ({
@@ -102,7 +103,7 @@ vi.mock('../../services/sessionService', () => ({
 vi.mock('../../storage/index', () => ({
   getStorageProvider: vi.fn(),
 }));
-vi.mock('sharp', () => vi.fn());
+vi.mock('sharp', () => ({ default: vi.fn() }));
 
 import * as authService from '../authService';
 import { hashPassword, verifyPassword } from '../../auth/password';
