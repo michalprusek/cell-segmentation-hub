@@ -187,6 +187,56 @@ describe('ResponseHelper.error: contract for downstream consumers', () => {
     >;
     expect(body.error).toBe('X');
   });
+
+  it('error(res, msg, 500) without an Error param still logs at error level', () => {
+    // Locks the `if (logError || statusCode >= 500)` branch in response.ts:71.
+    // Even without a passed-in Error, a 500 response must take the error-log
+    // path (not the warn path). A future refactor swapping `||` for `&&`
+    // would break this — this test catches it.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { logger } = require('../logger');
+    (logger.error as jest.Mock).mockClear();
+    (logger.warn as jest.Mock).mockClear();
+
+    const res = mockRes();
+    ResponseHelper.error(res, 'Service down', 500);
+
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe('ResponseHelper.paginated', () => {
+  it('writes 200 + body shape that list endpoints depend on', () => {
+    // Frontend list views read `response.pagination.totalPages` — locking
+    // the body shape here protects every paginated endpoint from a refactor
+    // that renames `pagination` to `meta` or similar.
+    const res = mockRes();
+    const data = [{ id: 'a' }, { id: 'b' }];
+    const pagination = { page: 1, limit: 10, total: 2, totalPages: 1 };
+    ResponseHelper.paginated(res, data, pagination, 'OK');
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data,
+      pagination,
+      message: 'OK',
+    });
+  });
+
+  it('honours an explicit status code (e.g. 206 Partial Content)', () => {
+    const res = mockRes();
+    ResponseHelper.paginated(
+      res,
+      [],
+      { page: 1, limit: 10, total: 0, totalPages: 0 },
+      undefined,
+      206
+    );
+    expect(res.status).toHaveBeenCalledWith(206);
+  });
 });
 
 describe('calculatePagination', () => {

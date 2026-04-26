@@ -36,13 +36,16 @@ def test_summary_stats_reports_no_data_initially(cpu_monitor):
     assert stats == {"status": "no_data", "gpu_available": False}
 
 
-def test_record_batch_processing_with_no_gpu_yields_zero_memory(cpu_monitor):
-    """memory_after on CPU is 0; delta is therefore non-negative even after clamp."""
-    start = time.time() - 0.05  # 50ms ago
+def test_record_batch_processing_with_no_gpu_yields_zero_memory(cpu_monitor, monkeypatch):
+    """memory_after on CPU is 0; delta is therefore non-negative even after clamp.
+    Throughput math is unit-checked with a deterministic 1-second clock so a
+    formula regression (e.g. dropping the *1000 conversion) would be caught."""
+    # Pin time.time so inference_time_ms == 1000.0 exactly.
+    monkeypatch.setattr("monitoring.gpu_monitor.time.time", lambda: 1.0)
     result = cpu_monitor.record_batch_processing(
         model_name="hrnet",
         batch_size=4,
-        start_time=start,
+        start_time=0.0,
         memory_before=0,
         success=True,
     )
@@ -52,10 +55,21 @@ def test_record_batch_processing_with_no_gpu_yields_zero_memory(cpu_monitor):
     assert result.memory_before_mb == 0.0
     assert result.memory_after_mb == 0.0
     assert result.memory_delta_mb == 0.0
-    # Throughput is computed from inference_time_ms; should be positive.
-    assert result.throughput_imgs_sec > 0
+    # 4 imgs in 1.0s = 4 imgs/sec exactly.
+    assert result.inference_time_ms == pytest.approx(1000.0)
+    assert result.throughput_imgs_sec == pytest.approx(4.0)
     # Counter updates only on success.
     assert cpu_monitor.total_images_processed == 4
+
+
+def test_stop_monitoring_is_callable_after_init(cpu_monitor):
+    """Regression test for the Event-shadowing bug fixed in fix(gpu-monitor).
+    Before the fix, `__init__` did `self.stop_monitoring = threading.Event()`,
+    shadowing the `stop_monitoring()` method, so calling it raised
+    `TypeError: 'Event' object is not callable`."""
+    # Method must be callable. Without an active thread it just sets the
+    # internal stop event and returns.
+    cpu_monitor.stop_monitoring()  # must not raise
 
 
 def test_record_batch_processing_failure_does_not_update_totals(cpu_monitor):
