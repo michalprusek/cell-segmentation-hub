@@ -27,6 +27,7 @@ import {
   generateMetricsGuide,
   generateAnnotationGuides,
 } from './export/exportDocs';
+import { coerceProjectType } from '../types/validation';
 import {
   sanitizeFilename,
   getProgressMessage,
@@ -1292,8 +1293,13 @@ export class ExportService {
       JSON.stringify(metadata, null, 2)
     );
 
-    // Generate metrics guide
-    const metricsGuide = generateMetricsGuide(options);
+    // Generate metrics guide. Project type drives the layout: sperm gets
+    // head/midpiece/tail morphology, spheroid_invasive the DI sheet,
+    // wound area + time-series, spheroid the full polygon catalogue.
+    const metricsGuide = generateMetricsGuide(
+      coerceProjectType(project.type),
+      options
+    );
     await fs.writeFile(path.join(docDir, 'metrics_guide.md'), metricsGuide);
   }
 
