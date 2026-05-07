@@ -115,6 +115,19 @@ export type ProjectType = (typeof PROJECT_TYPES)[number];
 const projectTypeSchema = z.enum(PROJECT_TYPES);
 
 /**
+ * Narrow an arbitrary string (e.g. `Project.type` from Prisma, where the
+ * column is a plain `String` despite the comment locking it to the union)
+ * to a known `ProjectType`. Falls back to `'spheroid'` for legacy rows or
+ * unrecognised values — matches the frontend `coerceProjectType` helper
+ * (`src/types/index.ts:343`).
+ */
+export const isProjectType = (v: unknown): v is ProjectType =>
+  typeof v === 'string' && (PROJECT_TYPES as readonly string[]).includes(v);
+
+export const coerceProjectType = (v: unknown): ProjectType =>
+  isProjectType(v) ? v : 'spheroid';
+
+/**
  * Models compatible with each project type. Mirror of the same constant
  * in `src/types/index.ts` (frontend) — kept duplicated because frontend
  * and backend have separate build trees and no shared import path.

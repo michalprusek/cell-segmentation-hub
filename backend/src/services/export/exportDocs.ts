@@ -11,6 +11,7 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import type { ExportOptions, ProjectWithImages } from '../exportService';
+import type { ProjectType } from '../../types/validation';
 
 export function generateReadme(
   project: ProjectWithImages,
@@ -65,16 +66,50 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 `;
 }
 
-export function generateMetricsGuide(options?: ExportOptions): string {
-  // Determine units based on scale
-  const isScaled =
-    options?.pixelToMicrometerScale && options.pixelToMicrometerScale > 0;
-  const areaUnit = isScaled ? 'um^2' : 'px^2';
-  const lengthUnit = isScaled ? 'um' : 'px';
-  const scaleInfo = isScaled
-    ? `\n## Scale Conversion\n\n- **Scale**: ${options.pixelToMicrometerScale} um/pixel\n- **Linear measurements**: Converted from pixels to micrometers (um)\n- **Area measurements**: Converted from pixels^2 to square micrometers (um^2)\n- **Dimensionless ratios**: Remain unchanged (scale-invariant)\n`
-    : '\n## Units\n\n- **All measurements are in pixel units**\n- **Linear measurements**: pixels (px)\n- **Area measurements**: square pixels (px^2)\n';
+interface UnitContext {
+  areaUnit: 'px^2' | 'um^2';
+  lengthUnit: 'px' | 'um';
+  scaleInfo: string;
+}
 
+function buildUnitContext(options?: ExportOptions): UnitContext {
+  const isScaled =
+    !!options?.pixelToMicrometerScale && options.pixelToMicrometerScale > 0;
+  const areaUnit: UnitContext['areaUnit'] = isScaled ? 'um^2' : 'px^2';
+  const lengthUnit: UnitContext['lengthUnit'] = isScaled ? 'um' : 'px';
+  const scaleInfo = isScaled
+    ? `\n## Scale Conversion\n\n- **Scale**: ${options!.pixelToMicrometerScale} um/pixel\n- **Linear measurements**: Converted from pixels to micrometers (um)\n- **Area measurements**: Converted from pixels^2 to square micrometers (um^2)\n- **Dimensionless ratios**: Remain unchanged (scale-invariant)\n`
+    : '\n## Units\n\n- **All measurements are in pixel units**\n- **Linear measurements**: pixels (px)\n- **Area measurements**: square pixels (px^2)\n';
+  return { areaUnit, lengthUnit, scaleInfo };
+}
+
+/**
+ * Project-type-aware metrics guide generator.
+ *
+ * Each `ProjectType` exports a different Excel layout — the guide must
+ * match. Fanning out by type prevents mismatches like "sperm export
+ * lists Disintegration Index" (real bug, fixed here). The four
+ * branches mirror the dispatch in `exportService.exportMetrics`.
+ */
+export function generateMetricsGuide(
+  projectType: ProjectType,
+  options?: ExportOptions
+): string {
+  const ctx = buildUnitContext(options);
+  switch (projectType) {
+    case 'sperm':
+      return buildSpermGuide(ctx);
+    case 'spheroid_invasive':
+      return buildSpheroidInvasiveGuide(ctx);
+    case 'wound':
+      return buildWoundGuide(ctx);
+    case 'spheroid':
+    default:
+      return buildSpheroidGuide(ctx);
+  }
+}
+
+function buildSpheroidGuide({ areaUnit, lengthUnit, scaleInfo }: UnitContext): string {
   return `# Polygon Metrics Reference Guide
 ${scaleInfo}
 ## Calculated Metrics
@@ -232,20 +267,17 @@ ${scaleInfo}
 - **Edge case handling**: Robust for degenerate and complex polygons
 - **Performance monitoring**: Automatic warnings for large datasets
 - **Error recovery**: Fallback calculations when advanced algorithms fail
+`;
+}
 
----
-
-# Per-Image Metrics: Disintegration Analysis
-
-**Applies to projects with \`type='spheroid_invasive'\` only.** Standard
-\`spheroid\` and \`wound\` projects get the per-polygon metrics report
-described above; \`sperm\` projects get the head/midpiece/tail morphology
-sheet. This section documents the disintegrated-spheroid Excel layout,
-which is one row per image with the four numeric metrics
+function buildSpheroidInvasiveGuide({ areaUnit, scaleInfo }: UnitContext): string {
+  return `# Disintegration Analysis Metrics Guide
+${scaleInfo}
+This export is one row per image with four numeric metrics —
 **Total Spheroid Area**, **Core Area**, **Invasion Area** (all in ${areaUnit})
 and **Disintegration Index** (dimensionless). The metrics target spheroid
 disintegration analysis (Lim, Kang, Lee 2020 — Sci. Rep. PMC6971071) but
-apply equally to compact (t=0) and rozprsknuté (t>0) spheroids.
+apply equally to compact (t=0) and disintegrated (t>0) spheroids.
 
 ## Pipeline Overview
 
@@ -436,6 +468,176 @@ spheroids known to have necrotic centres.
 (\`calculateAllImageMetrics\`)
 - **Excel writer**: same file (\`exportToExcel\` — emits Image Name, Image ID,
 Total Spheroid Area, Core Area, Invasion Area, Disintegration Index)
+`;
+}
+
+function buildWoundGuide({ areaUnit, lengthUnit, scaleInfo }: UnitContext): string {
+  return `# Wound Healing Metrics Reference Guide
+${scaleInfo}
+Wound projects export a single morphological metric per polygon —
+**Area** — together with an automatically generated **time-series chart**
+of wound area progression across the imaged time points. Other geometric
+quantities (perimeter, circularity, Feret, etc.) are not relevant for
+wound-closure analysis and are intentionally not included.
+
+## Area
+
+- **Description**: Total enclosed area of the wound polygon using the
+Shoelace formula with hole subtraction
+- **Formula**: A = A_external - Sum(A_holes)
+- **Implementation**: Shoelace formula:
+A = (1/2)|Sum(x_i * y_{i+1} - x_{i+1} * y_i)|
+- **Units**: ${areaUnit}
+- **Range**: [0, ∞)
+- **ImageJ compatibility**: ✅ Matches ImageJ area calculation
+- **Hole handling**: Internal polygon (hole) areas are subtracted from
+the external polygon area; final area is clamped at zero
+
+## Time-Series Analysis
+
+The wound export includes an automatically generated time-series chart
+embedded as an additional sheet of \`metrics.xlsx\`.
+
+### Time-Point Detection
+
+Each input image's filename is parsed for a numeric time-point token
+(e.g. \`wound_0h.png\`, \`wound_24h.png\`, \`wound_48h.png\`). Recognised
+suffixes include \`h\` (hours), \`min\` (minutes) and bare integers.
+Images are sorted by the parsed time value before charting; images
+without a parseable time are excluded from the chart but still appear
+in the per-polygon Area column.
+
+### Wound Area Series
+
+For each image, the wound area is computed as the **sum of all external
+polygon areas** in ${areaUnit}. The series is plotted as a line chart with
+time on the X-axis and wound area on the Y-axis. A scale conversion
+(if configured at project level) is applied uniformly across the
+series.
+
+### Chart Embedding
+
+The chart is rendered server-side via node-canvas and inserted into
+the Excel workbook as an additional sheet — no client-side rendering
+is required. Source: \`backend/src/services/export/woundTimeSeries.ts\`.
+
+### Edge Cases
+
+- **Single time point**: chart is omitted (no curve to draw); polygon
+Area still exported in the main sheet.
+- **Mixed parseable / unparseable filenames**: the chart includes only
+parseable rows; unparseable rows are listed in the Excel as Area-only.
+- **No external polygons in an image**: that image's wound area is
+reported as 0 in the time series.
+
+## Source Files
+
+- **Wound time-series builder**: \`backend/src/services/export/woundTimeSeries.ts\`
+- **Per-polygon area orchestration**: \`backend/src/services/metrics/metricsCalculator.ts\`
+- **Excel writer**: \`exportPolygonMetricsToExcel\` — emits Image Name,
+Polygon ID, Area (${areaUnit}); time-series sheet appended afterwards.
+
+## Notes for Researchers
+
+1. **Units**: Always verify scale conversion (${lengthUnit}) for
+physical-length comparisons across imaging sessions.
+2. **Holes**: Internal polygons are treated as holes — useful when
+re-epithelialised islands appear inside the wound.
+3. **Time parsing**: Use consistent filename conventions (\`<name>_<N>h.png\`
+or similar) for clean time-series plots.
+`;
+}
+
+function buildSpermGuide({ lengthUnit, scaleInfo }: UnitContext): string {
+  return `# Sperm Morphology Metrics Reference Guide
+${scaleInfo}
+Sperm projects export **per-instance morphology** — one row per detected
+sperm cell, with separate length measurements for each anatomical part
+(head, midpiece, tail) plus the combined total length. Geometric polygon
+metrics (area, circularity, Feret, etc.) are not applicable to the
+polyline-based sperm representation and are not included.
+
+## Calculated Metrics
+
+### Head Length
+- **Description**: Total Euclidean length of the sperm head polyline
+- **Formula**: L = Sum(sqrt((x_{i+1} - x_i)^2 + (y_{i+1} - y_i)^2))
+- **Units**: ${lengthUnit}
+- **Range**: [0, ∞)
+
+### Midpiece Length
+- **Description**: Total Euclidean length of the midpiece polyline
+- **Formula**: same as Head Length, applied to midpiece vertices
+- **Units**: ${lengthUnit}
+- **Range**: [0, ∞)
+
+### Tail Length
+- **Description**: Total Euclidean length of the tail polyline
+- **Formula**: same as Head Length, applied to tail vertices
+- **Units**: ${lengthUnit}
+- **Range**: [0, ∞)
+
+### Total Length
+- **Description**: Sum of head + midpiece + tail lengths for the same
+sperm instance
+- **Formula**: TotalLength = HeadLength + MidpieceLength + TailLength
+- **Units**: ${lengthUnit}
+- **Range**: [0, ∞)
+- **Missing parts**: A part not detected on a given instance contributes
+zero to the total. The row is still emitted (e.g. head + tail without
+detected midpiece is valid output).
+
+## Polyline Geometry
+
+Sperm anatomical parts are represented as **open polylines**, not closed
+polygons. A polyline is an ordered sequence of vertices [(x_1, y_1), …,
+(x_n, y_n)] with no edge connecting (x_n, y_n) back to (x_1, y_1).
+Length is the cumulative Euclidean distance between consecutive
+vertices.
+
+## Instance Grouping
+
+Each sperm instance carries an \`instanceId\` field. Polylines sharing
+the same \`instanceId\` are grouped together and contribute to the
+**same row** of the Excel sheet. The \`partClass\` field on each
+polyline declares which anatomical part it represents:
+
+\`\`\`
+partClass ∈ { "head", "midpiece", "tail" }
+\`\`\`
+
+Polylines without an \`instanceId\` are excluded from the per-instance
+sheet (a warning is logged but the export does not fail). Polylines
+with an unrecognised \`partClass\` are ignored.
+
+## Edge Cases
+
+- **Image with no detected sperm**: that image contributes no rows.
+The export still succeeds.
+- **No sperm detected across the entire project**: \`metrics.xlsx\` is
+not written. The export falls back to the standard polygon metrics
+report, which will be empty for this project type.
+- **Multiple instances in one image**: each instance gets its own row
+keyed by the unique \`instanceId\` value.
+- **Duplicate \`partClass\` for the same instance**: only the first
+polyline of each part is used; subsequent ones are silently skipped.
+
+## Source Files
+
+- **Polyline length**: \`backend/src/services/metrics/polylineLength.ts\`
+- **Instance grouping**: \`backend/src/services/metrics/spermGrouping.ts\`
+- **Excel writer**: \`backend/src/services/metrics/metricsCalculator.ts\`
+(\`exportSpermToExcel\` — emits Image Name, Instance ID, Head/Midpiece/Tail/Total Length)
+
+## Notes for Researchers
+
+1. **Units**: Always verify scale conversion for cross-microscope or
+cross-magnification comparisons.
+2. **Manual completion**: A sperm cell with one missing part is still
+exported with the present parts — useful for partially occluded cells.
+3. **Polyline ordering**: Length is order-independent (Euclidean
+distance is symmetric), but the source-of-truth for which vertex is
+"start" vs. "end" is determined by user annotation.
 `;
 }
 
