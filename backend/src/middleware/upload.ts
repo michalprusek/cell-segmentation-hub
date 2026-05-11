@@ -5,7 +5,22 @@ import type { Express } from 'express-serve-static-core';
 import {
   SUPPORTED_MIME_TYPES,
   SUPPORTED_EXTENSIONS,
+  SUPPORTED_VIDEO_MIME_TYPES,
+  SUPPORTED_VIDEO_EXTENSIONS,
 } from '../storage/interface';
+
+// Merged set used by the upload fileFilter — frames are extracted from
+// videos by the video extractor service after the file lands on disk.
+const ALL_SUPPORTED_MIME_TYPES = [
+  ...SUPPORTED_MIME_TYPES,
+  ...SUPPORTED_VIDEO_MIME_TYPES,
+  'application/octet-stream', // ND2 has no registered MIME; checked by extension
+] as readonly string[];
+
+const ALL_SUPPORTED_EXTENSIONS = [
+  ...SUPPORTED_EXTENSIONS,
+  ...SUPPORTED_VIDEO_EXTENSIONS,
+] as readonly string[];
 import { getUploadLimitsForEnvironment } from '../config/uploadLimits';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
@@ -25,10 +40,12 @@ const upload = multer({
     fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024, // Convert KB to bytes
   },
   fileFilter: (req, file, cb) => {
-    // Check MIME type
+    // Check MIME type — accept image MIMEs, video MIMEs, or the generic
+    // application/octet-stream fallback used by browsers for .nd2 (Nikon
+    // proprietary). The extension check below disambiguates octet-stream.
     if (
       typeof file.mimetype !== 'string' ||
-      !(SUPPORTED_MIME_TYPES as readonly string[]).includes(file.mimetype)
+      !ALL_SUPPORTED_MIME_TYPES.includes(file.mimetype)
     ) {
       logger.warn(
         'File upload rejected - unsupported MIME type',
@@ -42,7 +59,7 @@ const upload = multer({
 
       return cb(
         new Error(
-          `Nepodporovaný formát souboru: ${file.mimetype}. Podporované: ${SUPPORTED_MIME_TYPES.join(', ')}`
+          `Nepodporovaný formát souboru: ${file.mimetype}. Podporované: ${ALL_SUPPORTED_MIME_TYPES.join(', ')}`
         )
       );
     }
@@ -51,9 +68,7 @@ const upload = multer({
     const fileExtension = path.extname(file.originalname).toLowerCase();
 
     if (
-      !SUPPORTED_EXTENSIONS.includes(
-        fileExtension as (typeof SUPPORTED_EXTENSIONS)[number]
-      )
+      !ALL_SUPPORTED_EXTENSIONS.includes(fileExtension)
     ) {
       logger.warn(
         'File upload rejected - unsupported extension',
@@ -67,7 +82,7 @@ const upload = multer({
 
       return cb(
         new Error(
-          `Nepodporovaná přípona souboru. Podporované: ${SUPPORTED_EXTENSIONS.join(', ')}`
+          `Nepodporovaná přípona souboru. Podporované: ${ALL_SUPPORTED_EXTENSIONS.join(', ')}`
         )
       );
     }
