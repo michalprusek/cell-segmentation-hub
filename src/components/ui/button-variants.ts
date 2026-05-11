@@ -14,8 +14,14 @@ export const buttonVariants = cva(
           'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
+        // High-contrast bordered CTA used by the sign-in / sign-up flows.
+        // In dark mode the original "invert to white-on-black" treatment
+        // was reported as glary / hard to read, so the dark side now uses
+        // the brand primary color (white text on blue) which matches the
+        // platform's other primary CTAs and stays readable against the
+        // editor's dark canvas.
         framed:
-          'bg-black text-white border-2 border-black hover:bg-gray-900 dark:bg-white dark:text-black dark:border-white dark:hover:bg-gray-100',
+          'bg-black text-white border-2 border-black hover:bg-gray-900 dark:bg-primary dark:text-primary-foreground dark:border-primary dark:hover:bg-primary/90',
       },
       size: {
         default: 'h-10 px-4 py-2',
