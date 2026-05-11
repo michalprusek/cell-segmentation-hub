@@ -111,6 +111,8 @@ bun.lockb
 *.pth
 *.pth.backup
 *.pt
+*.pt.bak-*
+*.ckpt
 *.onnx
 *.h5
 *.pkl
@@ -118,6 +120,7 @@ bun.lockb
 
 # Wound-healing model release archives (extracted to weights/ on deploy)
 wound_seg_v2.zip
+mitb5-wounds.zip
 
 # Generated documentation
 docs/api/generated/

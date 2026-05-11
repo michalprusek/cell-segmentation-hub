@@ -164,8 +164,8 @@ class ModelLoader:
         },
         'wound': {
             'class': WoundModel,  # Will be None if segmentation_models_pytorch not installed
-            'pretrained_path': 'weights/wound_seg_v2.pt',
-            'finetuned_path': 'weights/wound_seg_v2.pt',
+            'pretrained_path': 'weights/wound_mitb5.ckpt',
+            'finetuned_path': 'weights/wound_mitb5.ckpt',
             'config_path': None
         }
     }
