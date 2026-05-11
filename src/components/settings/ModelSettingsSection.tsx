@@ -26,8 +26,18 @@ const ModelSettingsSection = () => {
     availableModels,
   } = useLocalizedModels();
 
+  // The disintegrated-spheroid workflow uses a dedicated model
+  // (unet_attention_aspp) — surface it as its own section so users
+  // aren't tempted to pick it for standard spheroid analysis.
   const spheroidModels = useMemo(
-    () => availableModels.filter(m => m.category === 'spheroid'),
+    () =>
+      availableModels.filter(
+        m => m.category === 'spheroid' && m.id !== 'unet_attention_aspp'
+      ),
+    [availableModels]
+  );
+  const spheroidInvasiveModels = useMemo(
+    () => availableModels.filter(m => m.id === 'unet_attention_aspp'),
     [availableModels]
   );
   const spermModels = useMemo(
@@ -36,6 +46,10 @@ const ModelSettingsSection = () => {
   );
   const woundModels = useMemo(
     () => availableModels.filter(m => m.category === 'wound'),
+    [availableModels]
+  );
+  const microtubuleModels = useMemo(
+    () => availableModels.filter(m => m.category === 'microtubule'),
     [availableModels]
   );
 
@@ -116,6 +130,17 @@ const ModelSettingsSection = () => {
             </h4>
             {spheroidModels.map(renderModelCard)}
 
+            {spheroidInvasiveModels.length > 0 && (
+              <>
+                <div className="pt-2">
+                  <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    {t('settings.modelSelection.sections.spheroid_invasive')}
+                  </h4>
+                </div>
+                {spheroidInvasiveModels.map(renderModelCard)}
+              </>
+            )}
+
             <div className="pt-2">
               <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                 {t('settings.modelSelection.sections.sperm')}
@@ -129,6 +154,17 @@ const ModelSettingsSection = () => {
               </h4>
             </div>
             {woundModels.map(renderModelCard)}
+
+            {microtubuleModels.length > 0 && (
+              <>
+                <div className="pt-2">
+                  <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    {t('settings.modelSelection.sections.microtubule')}
+                  </h4>
+                </div>
+                {microtubuleModels.map(renderModelCard)}
+              </>
+            )}
           </div>
         </RadioGroup>
       </div>

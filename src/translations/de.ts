@@ -439,6 +439,7 @@ export default {
       description: 'Wählen Sie das KI-Modell für die Zellsegmentierung',
       sections: {
         spheroid: 'Sphäroid-Modelle',
+        spheroid_invasive: 'Modelle für zerfallene Sphäroide',
         sperm: 'Spermien-Modelle',
         wound: 'Wundheilungs-Modelle',
         microtubule: 'Mikrotubuli-Modelle',

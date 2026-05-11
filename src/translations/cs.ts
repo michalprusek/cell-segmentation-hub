@@ -421,6 +421,7 @@ export default {
       description: 'Vyberte AI model pro segmentaci buněk',
       sections: {
         spheroid: 'Modely sféroidů',
+        spheroid_invasive: 'Modely rozprsknutých sféroidů',
         sperm: 'Modely spermií',
         wound: 'Modely hojení ran',
         microtubule: 'Modely mikrotubulů',

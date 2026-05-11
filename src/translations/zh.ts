@@ -388,6 +388,7 @@ export default {
       description: '选择用于细胞分割的AI模型',
       sections: {
         spheroid: '球体模型',
+        spheroid_invasive: '分解球体模型',
         sperm: '精子模型',
         wound: '伤口愈合模型',
         microtubule: '微管模型',

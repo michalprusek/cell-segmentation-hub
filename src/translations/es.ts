@@ -417,6 +417,7 @@ export default {
       description: 'Elige el modelo de IA para usar en la segmentación celular',
       sections: {
         spheroid: 'Modelos de esferoides',
+        spheroid_invasive: 'Modelos de esferoides desintegrados',
         sperm: 'Modelos de espermatozoides',
         wound: 'Modelos de cicatrización',
         microtubule: 'Modelos de microtúbulos',

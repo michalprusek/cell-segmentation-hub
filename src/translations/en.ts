@@ -433,6 +433,7 @@ export default {
       description: 'Choose the AI model to use for cell segmentation',
       sections: {
         spheroid: 'Spheroid Models',
+        spheroid_invasive: 'Disintegrated Spheroid Models',
         sperm: 'Sperm Models',
         wound: 'Wound Healing Models',
         microtubule: 'Microtubule Models',
