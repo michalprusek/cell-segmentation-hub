@@ -11,6 +11,7 @@
 
 import { spawn } from 'child_process';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { logger } from '../../utils/logger';
 import {
   ChannelMeta,
@@ -20,7 +21,11 @@ import {
   ProgressCallback,
 } from './types';
 
-const HELPERS_DIR = path.join(__dirname, 'pythonHelpers');
+// The backend runs under tsx in ES-module mode where __dirname is not
+// defined. Resolve our own dir from import.meta.url so the spawned
+// Python helpers can find each other regardless of cwd.
+const _MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const HELPERS_DIR = path.join(_MODULE_DIR, 'pythonHelpers');
 
 interface PythonResult {
   frameCount: number;
