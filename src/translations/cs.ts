@@ -205,6 +205,7 @@ export default {
       spheroid_invasive: 'Rozprsknuté sféroidy',
       wound: 'Hojení ran',
       sperm: 'Spermie',
+      microtubules: 'Mikrotubuly',
     },
     projectNamePlaceholder: 'např. HeLa buněčné sferoidy',
     projectDescPlaceholder:
@@ -422,6 +423,7 @@ export default {
         spheroid: 'Modely sféroidů',
         sperm: 'Modely spermií',
         wound: 'Modely hojení ran',
+        microtubule: 'Modely mikrotubulů',
       },
       models: {
         hrnet: {
@@ -452,6 +454,11 @@ export default {
           description:
             'U-Net s enkodérem MiT-B5 (SegFormer) pro binární segmentaci ran v mikroskopii scratch-assay (~32 ms na A5000, 90% IoU na externí testovací sadě)',
         },
+        microtubule: {
+          name: 'Mikrotubuly (DINOv3 + PySOAX)',
+          description:
+            'Instanční segmentace mikrotubulů pro IRM/TIRF časosběrná videa. DINOv3-L ViT-L/16 + DPT fúze dává centerline polyline per MT a 32-d embedding na pixel, který umožňuje cross-frame tracking a generování kymografu. ~8 s/frame; jediný model v platformě s nativním polyline výstupem.',
+        },
       },
     },
     detectHoles: 'Detekce Děr',
@@ -477,6 +484,8 @@ export default {
         'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
       wound:
         'U-Net + MiT-B5 (SegFormer enkodér) model pro segmentaci ran v mikroskopii scratch-assay. Jedna binární oblast rány na snímek; ideální pro časové řady hojení.',
+      microtubule:
+        'Instanční segmentace mikrotubulů pro IRM/TIRF mikroskopii. DINOv3-L + DPT enkodér, PySOAX postprocessing, nativní polyline výstup s tracking přes 32-d embedding.',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:

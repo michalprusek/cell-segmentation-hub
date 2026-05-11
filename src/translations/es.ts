@@ -204,6 +204,7 @@ export default {
       spheroid_invasive: 'Esferoides desintegrados',
       wound: 'Cicatrización de heridas',
       sperm: 'Esperma',
+      microtubules: 'Microtúbulos',
     },
     projectNamePlaceholder: 'ej. Esferoides de células HeLa',
     projectDescPlaceholder:
@@ -418,6 +419,7 @@ export default {
         spheroid: 'Modelos de esferoides',
         sperm: 'Modelos de espermatozoides',
         wound: 'Modelos de cicatrización',
+        microtubule: 'Modelos de microtúbulos',
       },
       models: {
         hrnet: {
@@ -450,6 +452,11 @@ export default {
           description:
             'U-Net con codificador MiT-B5 (SegFormer) para segmentación binaria de heridas en microscopía de scratch-assay (~32 ms en A5000, 90 % IoU en conjunto de prueba externo)',
         },
+        microtubule: {
+          name: 'Microtúbulos (DINOv3 + PySOAX)',
+          description:
+            'Segmentación de instancias para time-lapses de microtúbulos IRM/TIRF. DINOv3-L ViT-L/16 + fusión DPT produce polilíneas centerline por MT y embeddings de 32 dim por píxel para tracking entre cuadros y generación de kymograph. ~8 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
+        },
       },
     },
     detectHoles: 'Detectar Agujeros',
@@ -475,6 +482,8 @@ export default {
         'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
       wound:
         'Modelo U-Net + MiT-B5 (codificador SegFormer) para segmentación de heridas en microscopía de scratch-assay. Una única región de herida binaria por imagen; ideal para time-lapses de cicatrización.',
+      microtubule:
+        'Segmentación de instancias de microtúbulos para microscopía IRM/TIRF. Codificador DINOv3-L + DPT, postprocesado PySOAX, salida polilínea nativa con tracking basado en embeddings.',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
     dataUsageDescription:

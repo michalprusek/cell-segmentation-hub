@@ -336,6 +336,7 @@ export const PROJECT_TYPES = [
   'spheroid_invasive',
   'wound',
   'sperm',
+  'microtubules',
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
@@ -350,7 +351,9 @@ export const isProjectType = (v: unknown): v is ProjectType =>
  *
  * - `spheroid_invasive` is locked to `unet_attention_aspp` because core
  *   detection is tied to that model's postprocessing path.
- * - `wound` and `sperm` use their dedicated specialised models only.
+ * - `wound`, `sperm` and `microtubules` use their dedicated specialised
+ *   models only. `microtubules` ships with the v7 DINOv3 + DPT + PySOAX
+ *   pipeline producing per-instance polyline centerlines.
  * - Standard `spheroid` projects can use any of the general spheroid
  *   models, with `unet_attention_aspp` excluded so users wanting core
  *   detection are nudged toward marking the project disintegrated.
@@ -361,6 +364,7 @@ export const MODEL_TYPE_COMPATIBILITY: Record<ProjectType, readonly string[]> =
     spheroid_invasive: ['unet_attention_aspp'],
     wound: ['wound'],
     sperm: ['sperm'],
+    microtubules: ['microtubule'],
   } as const;
 
 export const isModelCompatibleWithType = (
