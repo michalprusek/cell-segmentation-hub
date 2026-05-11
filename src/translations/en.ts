@@ -464,7 +464,7 @@ export default {
         wound: {
           name: 'Wound Healing (Scratch Assay)',
           description:
-            'U-Net++ with ResNeXt-50 encoder for binary wound segmentation in scratch-assay microscopy (~32 ms on A5000, Dice 0.967)',
+            'U-Net with MiT-B5 (SegFormer) encoder for binary wound segmentation in scratch-assay microscopy (~32 ms on A5000, 90% IoU on external test set)',
         },
       },
     },
@@ -490,7 +490,7 @@ export default {
       sperm:
         'Sperm morphology model with skeleton extraction for head, midpiece, and tail measurement',
       wound:
-        'U-Net++ (ResNeXt-50) model for wound segmentation in scratch-assay microscopy. Single binary wound region per image; ideal for healing-rate timelapses.',
+        'U-Net + MiT-B5 (SegFormer encoder) model for wound segmentation in scratch-assay microscopy. Single binary wound region per image; ideal for healing-rate timelapses.',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:

@@ -242,7 +242,7 @@ export const BASIC_MODEL_INFO: Record<
     name: 'Wound Healing',
     displayName: 'Wound Healing (Scratch Assay)',
     description:
-      'U-Net++ with ResNeXt-50 encoder for binary wound segmentation in scratch-assay microscopy timelapses (~32 ms on A5000 GPU)',
+      'U-Net with MiT-B5 (SegFormer) encoder for binary wound segmentation in scratch-assay microscopy timelapses (~32 ms on A5000 GPU, 90% IoU on external test set)',
     size: 'medium',
     defaultThreshold: 0.5,
     category: 'wound',
