@@ -450,7 +450,7 @@ export default {
         wound: {
           name: 'Hojení ran (scratch assay)',
           description:
-            'U-Net++ s enkodérem ResNeXt-50 pro binární segmentaci ran v mikroskopii scratch-assay (~32 ms na A5000, Dice 0,967)',
+            'U-Net s enkodérem MiT-B5 (SegFormer) pro binární segmentaci ran v mikroskopii scratch-assay (~32 ms na A5000, 90% IoU na externí testovací sadě)',
         },
       },
     },
@@ -476,7 +476,7 @@ export default {
       sperm:
         'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
       wound:
-        'U-Net++ (ResNeXt-50) model pro segmentaci ran v mikroskopii scratch-assay. Jedna binární oblast rány na snímek; ideální pro časové řady hojení.',
+        'U-Net + MiT-B5 (SegFormer enkodér) model pro segmentaci ran v mikroskopii scratch-assay. Jedna binární oblast rány na snímek; ideální pro časové řady hojení.',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:

@@ -448,7 +448,7 @@ export default {
         wound: {
           name: 'Cicatrización de heridas (scratch assay)',
           description:
-            'U-Net++ con codificador ResNeXt-50 para segmentación binaria de heridas en microscopía de scratch-assay (~32 ms en A5000, Dice 0,967)',
+            'U-Net con codificador MiT-B5 (SegFormer) para segmentación binaria de heridas en microscopía de scratch-assay (~32 ms en A5000, 90 % IoU en conjunto de prueba externo)',
         },
       },
     },
@@ -474,7 +474,7 @@ export default {
       sperm:
         'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
       wound:
-        'Modelo U-Net++ (ResNeXt-50) para segmentación de heridas en microscopía de scratch-assay. Una única región de herida binaria por imagen; ideal para time-lapses de cicatrización.',
+        'Modelo U-Net + MiT-B5 (codificador SegFormer) para segmentación de heridas en microscopía de scratch-assay. Una única región de herida binaria por imagen; ideal para time-lapses de cicatrización.',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
     dataUsageDescription:
