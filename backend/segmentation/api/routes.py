@@ -146,6 +146,11 @@ async def segment_image(
         elif model == 'wound':
             # Wound model expects grayscale 512×512 — custom preprocessing lives in WoundModel
             result = loader.predict_wound(image, threshold, detect_holes)
+        elif model == 'microtubule':
+            # Microtubule v7 takes the user threshold as the seed_prob cutoff
+            # (default 0.5). PySOAX hyperparameters are fixed to the production
+            # Optuna-tuned defaults; detect_holes is not meaningful for polylines.
+            result = loader.predict_microtubule(image, threshold)
         else:
             result = loader.predict(image, model, threshold, detect_holes)
         inference_time = time.time() - inference_start
