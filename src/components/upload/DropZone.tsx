@@ -166,7 +166,7 @@ const DropZone: React.FC<DropZoneProps> = ({ disabled, onDrop }) => {
       <input {...getInputProps()} disabled={disabled} />
       <div className="flex flex-col items-center space-y-3 text-center">
         <Upload
-          className={`h-12 w-12 ${!disabled ? 'text-gray-400 dark:text-gray-500' : 'text-gray-300 dark:text-gray-700'}`}
+          className={`h-12 w-12 ${!disabled ? 'text-gray-400 dark:text-gray-500' : 'text-gray-300 dark:text-gray-700'} dark:text-gray-300`}
         />
         <div>
           <p

@@ -51,7 +51,7 @@ export const ImageListItem = ({
       </div>
 
       {/* Thumbnail */}
-      <div className="h-10 w-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0 cursor-pointer">
+      <div className="h-10 w-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0 cursor-pointer dark:bg-gray-800">
         {image.thumbnail_url ? (
           <img
             src={image.thumbnail_url}

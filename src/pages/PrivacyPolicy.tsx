@@ -14,7 +14,7 @@ const PrivacyPolicy = () => {
       <div className="container mx-auto px-4 py-12 flex-1 mt-16">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            <h1 className="text-4xl font-bold text-gray-900 mb-4 dark:text-gray-100">
               {t('legal.privacy.title')}
             </h1>
             <p className="text-lg text-gray-600">
@@ -29,26 +29,26 @@ const PrivacyPolicy = () => {
               </p>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.introduction.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-6">
+            <p className="text-gray-700 leading-relaxed mb-6 dark:text-gray-300">
               {t('legal.privacy.sections.introduction.content')}
             </p>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.informationCollected.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-6">
+            <p className="text-gray-700 leading-relaxed mb-6 dark:text-gray-300">
               {t('legal.privacy.sections.informationCollected.content')}
             </p>
 
-            <h3 className="text-xl font-semibold text-gray-900 mt-8 mb-3">
+            <h3 className="text-xl font-semibold text-gray-900 mt-8 mb-3 dark:text-gray-100">
               {t(
                 'legal.privacy.sections.informationCollected.personalInfo.title'
               )}
             </h3>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {(Array.isArray(
                 t(
                   'legal.privacy.sections.informationCollected.personalInfo.items'
@@ -63,7 +63,7 @@ const PrivacyPolicy = () => {
               ))}
             </ul>
 
-            <h3 className="text-xl font-semibold text-gray-900 mt-8 mb-3">
+            <h3 className="text-xl font-semibold text-gray-900 mt-8 mb-3 dark:text-gray-100">
               {t(
                 'legal.privacy.sections.informationCollected.researchData.title'
               )}
@@ -80,7 +80,7 @@ const PrivacyPolicy = () => {
                 )}
               </p>
             </div>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t(
                 'legal.privacy.sections.informationCollected.researchData.items'
               ).map((item: string, index: number) => (
@@ -88,10 +88,10 @@ const PrivacyPolicy = () => {
               ))}
             </ul>
 
-            <h3 className="text-xl font-semibold text-gray-900 mt-8 mb-3">
+            <h3 className="text-xl font-semibold text-gray-900 mt-8 mb-3 dark:text-gray-100">
               {t('legal.privacy.sections.informationCollected.usageInfo.title')}
             </h3>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t(
                 'legal.privacy.sections.informationCollected.usageInfo.items'
               ).map((item: string, index: number) => (
@@ -99,7 +99,7 @@ const PrivacyPolicy = () => {
               ))}
             </ul>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.mlTraining.title')}
             </h2>
             <div className="bg-amber-50 border-l-4 border-amber-400 p-6 mb-6">
@@ -123,10 +123,10 @@ const PrivacyPolicy = () => {
               </p>
             </div>
 
-            <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3">
+            <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3 dark:text-gray-100">
               {t('legal.privacy.sections.mlTraining.howWeUse.title')}
             </h3>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t('legal.privacy.sections.mlTraining.howWeUse.items').map(
                 (item: string, index: number) => (
                   <li key={index}>{item}</li>
@@ -134,10 +134,10 @@ const PrivacyPolicy = () => {
               )}
             </ul>
 
-            <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3">
+            <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3 dark:text-gray-100">
               {t('legal.privacy.sections.mlTraining.protection.title')}
             </h3>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t('legal.privacy.sections.mlTraining.protection.items').map(
                 (item: string, index: number) => (
                   <li key={index}>{item}</li>
@@ -145,13 +145,13 @@ const PrivacyPolicy = () => {
               )}
             </ul>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.howWeUse.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-4">
+            <p className="text-gray-700 leading-relaxed mb-4 dark:text-gray-300">
               {t('legal.privacy.sections.howWeUse.content')}
             </p>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t('legal.privacy.sections.howWeUse.purposes').map(
                 (purpose: string, index: number) => (
                   <li key={index}>{purpose}</li>
@@ -159,13 +159,13 @@ const PrivacyPolicy = () => {
               )}
             </ul>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.dataSecurity.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-4">
+            <p className="text-gray-700 leading-relaxed mb-4 dark:text-gray-300">
               {t('legal.privacy.sections.dataSecurity.content')}
             </p>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t('legal.privacy.sections.dataSecurity.measures').map(
                 (measure: string, index: number) => (
                   <li key={index}>{measure}</li>
@@ -173,16 +173,16 @@ const PrivacyPolicy = () => {
               )}
             </ul>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.dataSharing.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-6">
+            <p className="text-gray-700 leading-relaxed mb-6 dark:text-gray-300">
               <strong>
                 {t('legal.privacy.sections.dataSharing.noSaleStatement')}
               </strong>{' '}
               {t('legal.privacy.sections.dataSharing.sharingContent')}
             </p>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t('legal.privacy.sections.dataSharing.circumstances').map(
                 (circumstance: string, index: number) => (
                   <li key={index}>{circumstance}</li>
@@ -190,13 +190,13 @@ const PrivacyPolicy = () => {
               )}
             </ul>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.privacyRights.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-4">
+            <p className="text-gray-700 leading-relaxed mb-4 dark:text-gray-300">
               {t('legal.privacy.sections.privacyRights.content')}
             </p>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t('legal.privacy.sections.privacyRights.rights').map(
                 (right: string, index: number) => (
                   <li key={index}>{right}</li>
@@ -204,17 +204,17 @@ const PrivacyPolicy = () => {
               )}
             </ul>
 
-            <p className="text-gray-700 leading-relaxed mb-6">
+            <p className="text-gray-700 leading-relaxed mb-6 dark:text-gray-300">
               {t('legal.privacy.sections.privacyRights.contactNote')}
             </p>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.dataRetention.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-6">
+            <p className="text-gray-700 leading-relaxed mb-6 dark:text-gray-300">
               {t('legal.privacy.sections.dataRetention.content')}
             </p>
-            <ul className="list-disc ml-6 mb-6 text-gray-700">
+            <ul className="list-disc ml-6 mb-6 text-gray-700 dark:text-gray-300">
               {t('legal.privacy.sections.dataRetention.categories').map(
                 (category: string, index: number) => (
                   <li key={index}>{category}</li>
@@ -222,38 +222,38 @@ const PrivacyPolicy = () => {
               )}
             </ul>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.internationalTransfers.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-6">
+            <p className="text-gray-700 leading-relaxed mb-6 dark:text-gray-300">
               {t('legal.privacy.sections.internationalTransfers.content')}
             </p>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.childrensPrivacy.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-6">
+            <p className="text-gray-700 leading-relaxed mb-6 dark:text-gray-300">
               {t('legal.privacy.sections.childrensPrivacy.content')}
             </p>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.policyChanges.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-6">
+            <p className="text-gray-700 leading-relaxed mb-6 dark:text-gray-300">
               {t('legal.privacy.sections.policyChanges.content')}
             </p>
 
-            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4 dark:text-gray-100">
               {t('legal.privacy.sections.contact.title')}
             </h2>
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <p className="text-gray-700 mb-4">
+            <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-900">
+              <p className="text-gray-700 mb-4 dark:text-gray-300">
                 <strong>{t('legal.privacy.sections.contact.dpo')}</strong>
               </p>
-              <p className="text-gray-700 mb-4">
+              <p className="text-gray-700 mb-4 dark:text-gray-300">
                 <strong>{t('legal.privacy.sections.contact.general')}</strong>
               </p>
-              <p className="text-gray-700 mb-0">
+              <p className="text-gray-700 mb-0 dark:text-gray-300">
                 <strong>{t('legal.privacy.sections.contact.postal')}</strong>
                 <br />
                 {t('legal.privacy.sections.contact.address.line1')}

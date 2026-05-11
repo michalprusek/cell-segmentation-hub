@@ -51,7 +51,7 @@ const ProjectHeader = ({
   return (
     <>
       <DashboardHeader />
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 dark:bg-gray-900">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-4">
             <Button

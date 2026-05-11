@@ -93,7 +93,7 @@ const ModelSettingsSection = () => {
     <div key={model.id} className="flex items-center space-x-4">
       <RadioGroupItem value={model.id} id={model.id} />
       <Label htmlFor={model.id} className="flex-1 cursor-pointer">
-        <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
+        <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 dark:bg-gray-900">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">

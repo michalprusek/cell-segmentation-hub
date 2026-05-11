@@ -36,7 +36,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
   const { t } = useLanguage();
 
   return (
-    <div className="flex items-center justify-between gap-4 p-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex items-center justify-between gap-4 p-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 dark:bg-gray-900">
       {/* Left side - History Controls */}
       <div className="flex items-center gap-1">
         <Button

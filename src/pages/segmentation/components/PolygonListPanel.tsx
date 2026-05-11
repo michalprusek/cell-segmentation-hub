@@ -130,7 +130,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (loading) {
     return (
-      <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
+      <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center dark:bg-gray-900">
         <div className="text-gray-500">{t('common.loading')}</div>
       </div>
     );
@@ -138,7 +138,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (!polygons || polygons.length === 0) {
     return (
-      <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+      <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col dark:bg-gray-900">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('segmentation.status.polygons')}
@@ -157,7 +157,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   }
 
   return (
-    <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+    <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col dark:bg-gray-900">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2 lg:mb-0">

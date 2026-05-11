@@ -203,7 +203,7 @@ export const ImageCard = ({
               {/* Retry overlay when retrying */}
               {imageRetrying && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-lg">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-lg dark:bg-gray-900">
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
                       <span className="text-sm">

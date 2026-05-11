@@ -268,10 +268,10 @@ const Dashboard = () => {
 
   if (fetchError) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <DashboardHeader />
         <div className="container mx-auto px-4 py-8">
-          <div className="bg-white p-6 rounded-lg border border-red-200 text-center">
+          <div className="bg-white p-6 rounded-lg border border-red-200 text-center dark:bg-gray-900">
             <p className="text-red-500 mb-4">{fetchError}</p>
             <button
               onClick={fetchProjects}
@@ -287,7 +287,7 @@ const Dashboard = () => {
 
   return (
     <PageTransition mode="fade">
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <DashboardHeader />
 
         <PageContainer>
@@ -312,7 +312,7 @@ const Dashboard = () => {
             <ContentCard className="p-6">
               <FlexBetween align="center" className="flex-col sm:flex-row mb-6">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1 dark:text-gray-100">
                     {t('dashboard.projectGallery')}
                   </h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400">

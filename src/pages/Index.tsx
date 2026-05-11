@@ -20,7 +20,7 @@ function Index() {
         <Features />
 
         {/* About Section */}
-        <section id="about" className="py-20 bg-gray-50">
+        <section id="about" className="py-20 bg-gray-50 dark:bg-gray-900">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-12">
@@ -44,16 +44,16 @@ function Index() {
                 </div>
 
                 <div className="space-y-6">
-                  <p className="text-gray-700 leading-relaxed">
+                  <p className="text-gray-700 leading-relaxed dark:text-gray-300">
                     {t('landing.about.description1')}
                   </p>
-                  <p className="text-gray-700 leading-relaxed">
+                  <p className="text-gray-700 leading-relaxed dark:text-gray-300">
                     {t('landing.about.description2')}
                   </p>
-                  <p className="text-gray-700 leading-relaxed">
+                  <p className="text-gray-700 leading-relaxed dark:text-gray-300">
                     {t('landing.about.description3')}
                   </p>
-                  <p className="text-gray-700 leading-relaxed">
+                  <p className="text-gray-700 leading-relaxed dark:text-gray-300">
                     {t('landing.about.contactText')}{' '}
                     <a
                       href="mailto:prusek@utia.cas.cz"

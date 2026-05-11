@@ -103,14 +103,14 @@ const ForgotPassword = () => {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative">
+      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative dark:bg-gray-900">
         {/* Back button */}
         <div className="absolute top-6 left-6 z-10">
           <Link
             to="/sign-in"
-            className="inline-flex items-center justify-center w-10 h-10 glass-morphism rounded-full hover:bg-white/20 transition-all duration-200"
+            className="inline-flex items-center justify-center w-10 h-10 glass-morphism rounded-full hover:bg-white/20 transition-all duration-200 dark:bg-gray-900"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
+            <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
           </Link>
         </div>
 
@@ -130,7 +130,7 @@ const ForgotPassword = () => {
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
 
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4 dark:text-gray-100">
                 {t('auth.emailSent')}
               </h2>
 
@@ -176,14 +176,14 @@ const ForgotPassword = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative">
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative dark:bg-gray-900">
       {/* Back button */}
       <div className="absolute top-6 left-6 z-10">
         <Link
           to="/sign-in"
-          className="inline-flex items-center justify-center w-10 h-10 glass-morphism rounded-full hover:bg-white/20 transition-all duration-200"
+          className="inline-flex items-center justify-center w-10 h-10 glass-morphism rounded-full hover:bg-white/20 transition-all duration-200 dark:bg-gray-900"
         >
-          <ArrowLeft className="w-5 h-5 text-gray-700" />
+          <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
         </Link>
       </div>
 
@@ -206,7 +206,7 @@ const ForgotPassword = () => {
             <Link to="/" className="inline-flex items-center justify-center">
               <img src="/logo.svg" alt="SpheroSeg Logo" className="w-12 h-12" />
             </Link>
-            <h2 className="mt-4 text-3xl font-bold text-gray-900">
+            <h2 className="mt-4 text-3xl font-bold text-gray-900 dark:text-gray-100">
               {t('auth.forgotPassword')}
             </h2>
             <p className="mt-2 text-gray-600">{t('auth.enterEmailForReset')}</p>
@@ -249,10 +249,10 @@ const ForgotPassword = () => {
           <div className="mt-8">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
+                <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">
+                <span className="px-4 bg-white text-gray-500 dark:bg-gray-900">
                   {t('auth.rememberPassword')}
                 </span>
               </div>

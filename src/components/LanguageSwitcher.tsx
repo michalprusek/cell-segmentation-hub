@@ -35,7 +35,7 @@ const LanguageSwitcher = () => {
         <Button
           variant="ghost"
           size="sm"
-          className="text-gray-700 hover:text-blue-500 hover:bg-gray-100/50 transition-colors"
+          className="text-gray-700 hover:text-blue-500 hover:bg-gray-100/50 transition-colors dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-800"
           aria-label={t('accessibility.selectLanguage')}
         >
           <Languages className="h-4 w-4" />

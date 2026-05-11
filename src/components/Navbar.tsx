@@ -36,7 +36,7 @@ const Navbar = () => {
         isScrolled
           ? 'py-3 bg-white/80 backdrop-blur-md shadow-sm'
           : 'py-5 bg-transparent'
-      }`}
+      } dark:bg-gray-900`}
     >
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
         <Link
@@ -51,19 +51,19 @@ const Navbar = () => {
         <nav className="hidden md:flex items-center gap-6">
           <Link
             to="/documentation"
-            className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
+            className="text-sm text-gray-700 hover:text-blue-500 transition-colors dark:text-gray-300"
           >
             {t('common.documentation')}
           </Link>
           <Link
             to="/terms-of-service"
-            className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
+            className="text-sm text-gray-700 hover:text-blue-500 transition-colors dark:text-gray-300"
           >
             {t('common.termsOfService')}
           </Link>
           <Link
             to="/privacy-policy"
-            className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
+            className="text-sm text-gray-700 hover:text-blue-500 transition-colors dark:text-gray-300"
           >
             {t('common.privacyPolicy')}
           </Link>
@@ -83,7 +83,7 @@ const Navbar = () => {
 
         {/* Mobile Menu Button */}
         <button
-          className="md:hidden text-gray-700"
+          className="md:hidden text-gray-700 dark:text-gray-300"
           onClick={toggleMobileMenu}
           aria-label={t('accessibility.toggleMenu')}
         >
@@ -97,30 +97,30 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-white/95 backdrop-blur-md shadow-lg animate-fade-in">
+        <div className="md:hidden absolute top-full left-0 right-0 bg-white/95 backdrop-blur-md shadow-lg animate-fade-in dark:bg-gray-900">
           <div className="container mx-auto px-4 py-6 flex flex-col space-y-4">
             <Link
               to="/documentation"
-              className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
+              className="text-gray-700 hover:text-blue-500 py-2 transition-colors dark:text-gray-300"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {t('common.documentation')}
             </Link>
             <Link
               to="/terms-of-service"
-              className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
+              className="text-gray-700 hover:text-blue-500 py-2 transition-colors dark:text-gray-300"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {t('common.termsOfService')}
             </Link>
             <Link
               to="/privacy-policy"
-              className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
+              className="text-gray-700 hover:text-blue-500 py-2 transition-colors dark:text-gray-300"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {t('common.privacyPolicy')}
             </Link>
-            <div className="flex items-center justify-between py-2 border-t border-gray-200">
+            <div className="flex items-center justify-between py-2 border-t border-gray-200 dark:border-gray-700">
               <span className="text-sm text-gray-600">
                 {t('common.settings')}
               </span>

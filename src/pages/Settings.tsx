@@ -83,7 +83,7 @@ const Settings = () => {
             <ArrowLeft className="mr-2 h-4 w-4" />
             {t('common.back')}
           </Button>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white dark:text-gray-100">
             {t('settings.pageTitle')}
           </h1>
         </div>

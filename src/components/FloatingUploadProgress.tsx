@@ -146,11 +146,11 @@ const FloatingUploadProgress: React.FC = () => {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 100, opacity: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="fixed bottom-4 right-4 z-[99] w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden"
+        className="fixed bottom-4 right-4 z-[99] w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden dark:bg-gray-900"
       >
         {/* Collapsed header — always visible */}
         <div
-          className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-gray-750"
+          className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-gray-750 dark:hover:bg-gray-800 dark:bg-gray-900"
           onClick={() => status === 'uploading' && setExpanded(e => !e)}
         >
           {statusIcon}

@@ -96,7 +96,7 @@ function Hero() {
             </span>
           </div>
 
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight dark:text-gray-100">
             {t('landing.hero.title')}
           </h1>
 
