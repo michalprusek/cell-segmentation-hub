@@ -454,17 +454,11 @@ export default {
         },
       },
     },
-    confidenceThreshold: 'Práh Spolehlivosti',
-    confidenceThresholdDescription:
-      'Minimální spolehlivost požadovaná pro predikce segmentace',
     detectHoles: 'Detekce Děr',
     detectHolesDescription:
       'Povolit detekci vnitřních struktur a děr uvnitř buněk',
-    currentThreshold: 'Současný práh',
     modelSelected: 'Model úspěšně vybrán',
     modelSettingsSaved: 'Nastavení modelu úspěšně uloženo',
-    thresholdAutoAdjusted:
-      'Model vybrán — práh automaticky nastaven na {threshold}% (optimalizováno pro tento model)',
     modelSize: {
       small: 'Malý',
       medium: 'Střední',

@@ -121,7 +121,7 @@ describe('ModelContext', () => {
       expect(result.current.detectHoles).toBe(true);
     });
 
-    it('exposes all four models in availableModels', async () => {
+    it('exposes the full model catalogue in availableModels', async () => {
       const { result } = renderHook(() => useModel(), { wrapper });
 
       await waitFor(() => {
@@ -132,8 +132,9 @@ describe('ModelContext', () => {
       expect(modelIds).toContain('hrnet');
       expect(modelIds).toContain('cbam_resunet');
       expect(modelIds).toContain('unet_spherohq');
+      expect(modelIds).toContain('unet_attention_aspp');
       expect(modelIds).toContain('sperm');
-      expect(result.current.availableModels).toHaveLength(4);
+      expect(modelIds).toContain('wound');
     });
   });
 
@@ -193,51 +194,45 @@ describe('ModelContext', () => {
     });
   });
 
-  describe('setConfidenceThreshold', () => {
-    it('clamps values below the minimum (0.1) to 0.1', async () => {
+  describe('confidenceThreshold is read-only and derived from selected model', () => {
+    it('returns the selected model defaultThreshold (0.5 for hrnet)', async () => {
       const { result } = renderHook(() => useModel(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.selectedModel).toBe('hrnet');
       });
 
-      act(() => {
-        result.current.setConfidenceThreshold(0.01);
-      });
-
-      expect(result.current.confidenceThreshold).toBe(0.1);
+      expect(result.current.confidenceThreshold).toBe(0.5);
     });
 
-    it('clamps values above the maximum (0.9) to 0.9', async () => {
+    it('updates automatically when the selected model changes', async () => {
       const { result } = renderHook(() => useModel(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.selectedModel).toBe('hrnet');
       });
+      expect(result.current.confidenceThreshold).toBe(0.5);
 
+      // unet_attention_aspp is calibrated to 0.2; switching the selected
+      // model must propagate to the threshold reported by the context.
       act(() => {
-        result.current.setConfidenceThreshold(1.0);
+        result.current.setSelectedModel('unet_attention_aspp');
       });
 
-      expect(result.current.confidenceThreshold).toBe(0.9);
+      expect(result.current.confidenceThreshold).toBe(0.2);
     });
 
-    it('accepts a valid threshold within range and persists it', async () => {
+    it('no longer exposes setConfidenceThreshold', async () => {
       const { result } = renderHook(() => useModel(), { wrapper });
 
       await waitFor(() => {
         expect(result.current.selectedModel).toBe('hrnet');
       });
 
-      act(() => {
-        result.current.setConfidenceThreshold(0.7);
-      });
-
-      expect(result.current.confidenceThreshold).toBe(0.7);
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'guest_confidenceThreshold',
-        '0.7'
-      );
+      expect(
+        (result.current as { setConfidenceThreshold?: unknown })
+          .setConfidenceThreshold
+      ).toBeUndefined();
     });
   });
 
@@ -302,7 +297,6 @@ describe('ModelContext', () => {
     it('reads saved settings from localStorage using guest key when no user', async () => {
       localStorageMock.getItem.mockImplementation((key: string) => {
         if (key === 'guest_selectedModel') return 'sperm';
-        if (key === 'guest_confidenceThreshold') return '0.8';
         if (key === 'guest_detectHoles') return 'false';
         return null;
       });
@@ -313,23 +307,28 @@ describe('ModelContext', () => {
         expect(result.current.selectedModel).toBe('sperm');
       });
 
-      expect(result.current.confidenceThreshold).toBe(0.8);
+      // sperm has defaultThreshold 0.5 — threshold is no longer read
+      // from localStorage, only the model id is.
+      expect(result.current.confidenceThreshold).toBe(0.5);
       expect(result.current.detectHoles).toBe(false);
     });
 
-    it('handles invalid (out-of-range) saved threshold by clamping on load', async () => {
-      // Value stored is 0.05 — below minimum 0.1 — should be clamped to 0.1
+    it('ignores any guest_confidenceThreshold left over from older builds', async () => {
+      // Older builds persisted a per-user threshold; the new context
+      // ignores those entries (they are stale and the per-model default
+      // takes precedence). Verifies the migration path doesn't leak.
       localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'guest_confidenceThreshold') return '0.05';
+        if (key === 'guest_confidenceThreshold') return '0.8';
         return null;
       });
 
       const { result } = renderHook(() => useModel(), { wrapper });
 
       await waitFor(() => {
-        // After clamping, should be set to minimum 0.1
-        expect(result.current.confidenceThreshold).toBe(0.1);
+        expect(result.current.selectedModel).toBe('hrnet');
       });
+      // hrnet defaultThreshold is 0.5, not the stale 0.8
+      expect(result.current.confidenceThreshold).toBe(0.5);
     });
 
     it('ignores invalid model ids from localStorage and keeps default', async () => {

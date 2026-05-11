@@ -452,17 +452,11 @@ export default {
         },
       },
     },
-    confidenceThreshold: 'Umbral de Confianza',
-    confidenceThresholdDescription:
-      'Confianza mínima requerida para las predicciones de segmentación',
     detectHoles: 'Detectar Agujeros',
     detectHolesDescription:
       'Habilitar la detección de estructuras internas y agujeros dentro de las células',
-    currentThreshold: 'Umbral actual',
     modelSelected: 'Modelo seleccionado con éxito',
     modelSettingsSaved: 'Configuración de modelo guardada con éxito',
-    thresholdAutoAdjusted:
-      'Modelo seleccionado — umbral ajustado automáticamente a {threshold}% (optimizado para este modelo)',
     modelSize: {
       small: 'Pequeño',
       medium: 'Mediano',

@@ -468,17 +468,11 @@ export default {
         },
       },
     },
-    confidenceThreshold: 'Confidence Threshold',
-    confidenceThresholdDescription:
-      'Minimum confidence required for segmentation predictions',
     detectHoles: 'Detect Holes',
     detectHolesDescription:
       'Enable detection of internal structures and holes within cells',
-    currentThreshold: 'Current threshold',
     modelSelected: 'Model selected successfully',
     modelSettingsSaved: 'Model settings saved successfully',
-    thresholdAutoAdjusted:
-      'Model selected — threshold automatically set to {threshold}% (optimized for this model)',
     modelSize: {
       small: 'Small',
       medium: 'Medium',

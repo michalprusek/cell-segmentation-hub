@@ -16,7 +16,6 @@ export function useLocalizedModels() {
     confidenceThreshold,
     detectHoles,
     setSelectedModel,
-    setConfidenceThreshold,
     setDetectHoles,
   } = useModel();
   const { t } = useLanguage();
@@ -38,7 +37,6 @@ export function useLocalizedModels() {
     confidenceThreshold,
     detectHoles,
     setSelectedModel,
-    setConfidenceThreshold,
     setDetectHoles,
     getLocalizedModel,
     getAllModels,
