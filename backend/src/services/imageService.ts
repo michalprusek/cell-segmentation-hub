@@ -586,9 +586,13 @@ export class ImageService {
     const { page, limit, status, sortBy, sortOrder } = options;
     const skip = (page - 1) * limit;
 
-    // Build where clause
+    // Build where clause. Hide individual video frame rows from the
+    // gallery — only top-level rows (standalone images + video containers)
+    // are returned. Video frames are reachable via the editor's video-mode
+    // routes, not the project gallery.
     const where: Prisma.ImageWhereInput = {
       projectId,
+      parentVideoId: null,
     };
 
     if (status) {

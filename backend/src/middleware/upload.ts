@@ -100,9 +100,15 @@ export const uploadImages = upload.array(
 );
 
 /**
- * Middleware for handling single file upload
+ * Middleware for handling single file upload (form field name: "image")
  */
 export const uploadSingleImage = upload.single('image');
+
+/**
+ * Middleware for a single video upload (form field name: "video"). The
+ * MIME check is shared with image uploads — only the field name differs.
+ */
+export const uploadSingleVideo = upload.single('video');
 
 /**
  * Error handler for multer upload errors
