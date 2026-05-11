@@ -150,6 +150,54 @@ export class VideoController {
   }
 
   /**
+   * GET /images/:imageId/video-frames
+   *
+   * Returns the container row's metadata + the ordered list of child
+   * frame Image IDs. Drives the editor's frame slider.
+   */
+  static async getVideoFrames(req: Request, res: Response): Promise<void> {
+    try {
+      const imageId = req.params.imageId;
+      const container = await prisma.image.findUnique({
+        where: { id: imageId },
+        select: {
+          id: true,
+          name: true,
+          width: true,
+          height: true,
+          isVideoContainer: true,
+          frameCount: true,
+          videoDurationMs: true,
+          channels: true,
+        },
+      });
+      if (!container || !container.isVideoContainer) {
+        ResponseHelper.error(res, 'Not a video container', 404);
+        return;
+      }
+
+      const frames = await prisma.image.findMany({
+        where: { parentVideoId: imageId },
+        orderBy: { frameIndex: 'asc' },
+        select: { id: true, frameIndex: true, segmentationStatus: true },
+      });
+
+      ResponseHelper.success(res, {
+        ...container,
+        channels: container.channels,
+        frames,
+      });
+    } catch (err) {
+      logger.error(
+        `Frame list fetch failed: ${(err as Error).message}`,
+        err as Error,
+        'VideoController'
+      );
+      ResponseHelper.error(res, 'Frame list fetch failed', 500);
+    }
+  }
+
+  /**
    * PATCH /images/:imageId/channels
    *
    * Updates the channels JSON on a video container row. Validates that

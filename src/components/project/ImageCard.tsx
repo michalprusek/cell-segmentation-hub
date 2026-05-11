@@ -172,6 +172,34 @@ export const ImageCard = ({
                 loading="lazy"
               />
 
+              {/* Video container marker — only renders when the API
+                  returns isVideoContainer = true. The play triangle is
+                  the visual anchor; the frame count surfaces as a chip
+                  for projects with many short and long takes. */}
+              {image.isVideoContainer && (
+                <>
+                  <div className="absolute top-2 left-2 z-10 rounded-full bg-black/60 text-white p-2 backdrop-blur-sm">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
+                  {typeof image.frameCount === 'number' &&
+                    image.frameCount > 0 && (
+                      <div className="absolute bottom-2 right-2 z-10 rounded bg-black/60 text-white text-xs px-2 py-0.5 backdrop-blur-sm">
+                        {image.frameCount}{' '}
+                        {t('common.frames', { defaultValue: 'frames' })}
+                      </div>
+                    )}
+                </>
+              )}
+
               {/* Retry overlay when retrying */}
               {imageRetrying && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">

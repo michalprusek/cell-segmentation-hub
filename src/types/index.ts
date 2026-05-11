@@ -511,6 +511,23 @@ export interface ProjectImage {
   created_at?: string; // Alternative date format
   updated_at?: string; // Alternative date format
   user_id?: string;
+  // Video container fields (set on rows where isVideoContainer == true).
+  // Frame children are filtered from the gallery on the backend; UI only
+  // ever sees container rows here.
+  isVideoContainer?: boolean;
+  frameCount?: number | null;
+  videoDurationMs?: number | null;
+  channels?: VideoChannel[] | null;
+}
+
+/** Shape of one entry in the ``channels`` JSON column on an Image row.
+ *  Set only on rows where ``isVideoContainer == true``. */
+export interface VideoChannel {
+  name: string;
+  type: 'irm' | 'fluorescent';
+  wavelengthNm?: number;
+  displayColor?: string;
+  isSegmentationSource: boolean;
 }
 
 // Metric types for XLSX export

@@ -118,6 +118,15 @@ router.get(
 );
 
 /**
+ * List the frames of a video container in temporal order.
+ * GET /images/:imageId/video-frames
+ */
+router.get(
+  '/:imageId/video-frames',
+  VideoController.getVideoFrames
+);
+
+/**
  * Update the channel metadata on a video container row.
  * PATCH /images/:imageId/channels
  */
