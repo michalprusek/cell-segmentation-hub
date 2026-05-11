@@ -465,17 +465,11 @@ export default {
         },
       },
     },
-    confidenceThreshold: 'Seuil de confiance',
-    confidenceThresholdDescription:
-      'Confiance minimale requise pour les prédictions de segmentation',
     detectHoles: 'Détecter les Trous',
     detectHolesDescription:
       'Activer la détection des structures internes et des trous dans les cellules',
-    currentThreshold: 'Seuil actuel',
     modelSelected: 'Modèle sélectionné avec succès',
     modelSettingsSaved: 'Paramètres du modèle enregistrés avec succès',
-    thresholdAutoAdjusted:
-      'Modèle sélectionné — seuil automatiquement réglé à {threshold}% (optimisé pour ce modèle)',
     modelSize: {
       small: 'Petit',
       medium: 'Moyen',

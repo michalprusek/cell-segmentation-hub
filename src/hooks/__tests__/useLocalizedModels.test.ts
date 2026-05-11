@@ -21,7 +21,6 @@ vi.mock('@/contexts/useModel', () => ({
     confidenceThreshold: 0.5,
     detectHoles: true,
     setSelectedModel: vi.fn(),
-    setConfidenceThreshold: vi.fn(),
     setDetectHoles: vi.fn(),
     getModelInfo: vi.fn(),
     availableModels: [],
@@ -66,15 +65,19 @@ describe('useLocalizedModels', () => {
   });
 
   describe('return shape', () => {
-    it('exposes selectedModel, confidenceThreshold, detectHoles and setters', () => {
+    it('exposes selectedModel, confidenceThreshold (read-only), detectHoles and setters', () => {
       const { result } = renderHook(() => useLocalizedModels());
 
       expect(result.current.selectedModel).toBe('hrnet');
       expect(result.current.confidenceThreshold).toBe(0.5);
       expect(result.current.detectHoles).toBe(true);
       expect(typeof result.current.setSelectedModel).toBe('function');
-      expect(typeof result.current.setConfidenceThreshold).toBe('function');
       expect(typeof result.current.setDetectHoles).toBe('function');
+      // confidenceThreshold is now read-only — no setter exposed.
+      expect(
+        (result.current as { setConfidenceThreshold?: unknown })
+          .setConfidenceThreshold
+      ).toBeUndefined();
     });
 
     it('exposes getLocalizedModel, getAllModels, getSelectedModelInfo, availableModels', () => {

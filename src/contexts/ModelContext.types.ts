@@ -11,10 +11,16 @@ export type { ModelType, ModelInfo, ModelPerformance };
 
 export interface ModelContextType {
   selectedModel: ModelType;
+  /**
+   * Read-only inference threshold for the currently selected model.
+   * Derived from `getModelInfo(selectedModel).defaultThreshold` — calibrated
+   * per-model in `modelUtils.ts`. No longer user-configurable: each model
+   * has its own calibrated value (e.g. `unet_attention_aspp` uses 0.2,
+   * others 0.5) and a global slider produced inconsistent results.
+   */
   confidenceThreshold: number;
   detectHoles: boolean;
   setSelectedModel: (model: ModelType) => void;
-  setConfidenceThreshold: (threshold: number) => void;
   setDetectHoles: (detectHoles: boolean) => void;
   getModelInfo: (modelId: ModelType) => ModelInfo;
   availableModels: ModelInfo[];
@@ -27,7 +33,6 @@ export const ModelContext = createContext<ModelContextType>({
   confidenceThreshold: 0.5,
   detectHoles: true,
   setSelectedModel: () => {},
-  setConfidenceThreshold: () => {},
   setDetectHoles: () => {},
   getModelInfo: () => AVAILABLE_MODELS[0],
   availableModels: AVAILABLE_MODELS,
