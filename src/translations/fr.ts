@@ -338,11 +338,11 @@ export default {
     },
   },
   images: {
-    uploadImages: 'Télécharger des images',
-    dragDrop: 'Glissez et déposez les images ici',
+    uploadImages: 'Télécharger des images ou vidéos',
+    dragDrop: 'Glissez et déposez les images ou vidéos ici',
     clickToSelect: 'ou cliquez pour sélectionner des fichiers',
     acceptedFormats:
-      'Formats acceptés : JPEG, PNG, TIFF, BMP (max 20MB par fichier)',
+      'Images : JPEG, PNG, TIFF, BMP (max 20 Mo) — Vidéos : MP4, AVI, MOV, MKV, WebM, ND2, TIFF multipage (max 100 Go)',
     uploadProgress: 'Progression du téléchargement',
     readyToUpload: 'Prêt à télécharger',
     uploadingTo: "Sélectionnez d'abord un projet",
@@ -356,7 +356,7 @@ export default {
     noAnalysesYet: "Pas encore d'analyses",
     runAnalysis: "Exécuter l'analyse",
     viewResults: 'Voir les résultats',
-    dropImagesHere: 'Déposez les images ici...',
+    dropImagesHere: 'Déposez les fichiers ici...',
     selectProjectFirst: "Veuillez d'abord sélectionner un projet",
     projectRequired:
       'Vous devez sélectionner un projet avant de pouvoir télécharger des images',

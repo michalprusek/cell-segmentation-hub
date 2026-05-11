@@ -300,10 +300,11 @@ export default {
     },
   },
   images: {
-    uploadImages: '上传图像',
-    dragDrop: '将图像拖放到这里',
+    uploadImages: '上传图像或视频',
+    dragDrop: '将图像或视频拖放到这里',
     clickToSelect: '或点击选择文件',
-    acceptedFormats: '支持格式：JPEG、PNG、TIFF、BMP（单个文件最大20MB）',
+    acceptedFormats:
+      '图像：JPEG、PNG、TIFF、BMP（最大 20 MB）— 视频：MP4、AVI、MOV、MKV、WebM、ND2、多页 TIFF（最大 100 GB）',
     uploadProgress: '上传进度',
     readyToUpload: '准备上传',
     uploadingTo: '请先选择项目',
@@ -317,7 +318,7 @@ export default {
     noAnalysesYet: '暂无分析',
     runAnalysis: '运行分析',
     viewResults: '查看结果',
-    dropImagesHere: '将图像放在这里...',
+    dropImagesHere: '将文件放在这里...',
     selectProjectFirst: '请先选择项目',
     projectRequired: '您必须先选择项目才能上传图像',
     pending: '等待中',

@@ -28,67 +28,71 @@ import { logger } from '../utils/logger';
 // Get environment-specific upload limits
 const uploadLimits = getUploadLimitsForEnvironment();
 
+// Videos / microscopy stacks dwarf single images — a tile-scan ND2 or a
+// long timelapse can easily reach 50 GB. Use the existing chunked-upload
+// pipeline for images (20 MB cap stays tight) but expose a separate
+// multer for the /videos route with a 100 GB ceiling.
+const VIDEO_UPLOAD_MAX_BYTES = 100 * 1024 * 1024 * 1024;
+
+// Shared multer fileFilter — accepts any MIME on the union of image +
+// video supported types, falling through to extension validation for
+// formats with no registered MIME (most notably ND2). Pulled out so the
+// image-multer and the video-multer below can share it without touching
+// the (private, untyped) ``upload.options`` field.
+const sharedFileFilter: multer.Options['fileFilter'] = (req, file, cb) => {
+  if (
+    typeof file.mimetype !== 'string' ||
+    !ALL_SUPPORTED_MIME_TYPES.includes(file.mimetype)
+  ) {
+    logger.warn(
+      'File upload rejected - unsupported MIME type',
+      'UploadMiddleware',
+      {
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        userId: req.user?.id,
+      }
+    );
+    return cb(
+      new Error(
+        `Nepodporovaný formát souboru: ${file.mimetype}. Podporované: ${ALL_SUPPORTED_MIME_TYPES.join(', ')}`
+      )
+    );
+  }
+
+  const fileExtension = path.extname(file.originalname).toLowerCase();
+  if (!ALL_SUPPORTED_EXTENSIONS.includes(fileExtension)) {
+    logger.warn(
+      'File upload rejected - unsupported extension',
+      'UploadMiddleware',
+      {
+        filename: file.originalname,
+        extension: fileExtension,
+        userId: req.user?.id,
+      }
+    );
+    return cb(
+      new Error(
+        `Nepodporovaná přípona souboru. Podporované: ${ALL_SUPPORTED_EXTENSIONS.join(', ')}`
+      )
+    );
+  }
+
+  cb(null, true);
+};
+
 /**
- * Multer configuration for file uploads
+ * Multer configuration for file uploads (images chunked-upload pipeline).
  */
 const upload = multer({
-  storage: multer.memoryStorage(), // Store files in memory
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: uploadLimits.MAX_FILE_SIZE_BYTES,
-    files: uploadLimits.MAX_FILES_PER_REQUEST, // Increased from 20 to 50
-    fields: uploadLimits.MAX_FIELDS, // Increased from 5 to 10
-    fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024, // Convert KB to bytes
+    files: uploadLimits.MAX_FILES_PER_REQUEST,
+    fields: uploadLimits.MAX_FIELDS,
+    fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024,
   },
-  fileFilter: (req, file, cb) => {
-    // Check MIME type — accept image MIMEs, video MIMEs, or the generic
-    // application/octet-stream fallback used by browsers for .nd2 (Nikon
-    // proprietary). The extension check below disambiguates octet-stream.
-    if (
-      typeof file.mimetype !== 'string' ||
-      !ALL_SUPPORTED_MIME_TYPES.includes(file.mimetype)
-    ) {
-      logger.warn(
-        'File upload rejected - unsupported MIME type',
-        'UploadMiddleware',
-        {
-          filename: file.originalname,
-          mimetype: file.mimetype,
-          userId: req.user?.id,
-        }
-      );
-
-      return cb(
-        new Error(
-          `Nepodporovaný formát souboru: ${file.mimetype}. Podporované: ${ALL_SUPPORTED_MIME_TYPES.join(', ')}`
-        )
-      );
-    }
-
-    // Check file extension
-    const fileExtension = path.extname(file.originalname).toLowerCase();
-
-    if (
-      !ALL_SUPPORTED_EXTENSIONS.includes(fileExtension)
-    ) {
-      logger.warn(
-        'File upload rejected - unsupported extension',
-        'UploadMiddleware',
-        {
-          filename: file.originalname,
-          extension: fileExtension,
-          userId: req.user?.id,
-        }
-      );
-
-      return cb(
-        new Error(
-          `Nepodporovaná přípona souboru. Podporované: ${ALL_SUPPORTED_EXTENSIONS.join(', ')}`
-        )
-      );
-    }
-
-    cb(null, true);
-  },
+  fileFilter: sharedFileFilter,
 });
 
 /**
@@ -105,10 +109,27 @@ export const uploadImages = upload.array(
 export const uploadSingleImage = upload.single('image');
 
 /**
- * Middleware for a single video upload (form field name: "video"). The
- * MIME check is shared with image uploads — only the field name differs.
+ * Multer configuration dedicated to video uploads. Uses the same MIME
+ * filter as ``upload`` but a much larger per-file budget so .nd2 stacks
+ * and multi-page TIFFs aren't truncated at 20 MB.
  */
-export const uploadSingleVideo = upload.single('video');
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: VIDEO_UPLOAD_MAX_BYTES,
+    files: 1,
+    fields: uploadLimits.MAX_FIELDS,
+    fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024,
+  },
+  fileFilter: sharedFileFilter,
+});
+
+/**
+ * Middleware for a single video upload (form field name: "video"). The
+ * MIME check is shared with image uploads; only the field name and the
+ * per-file size budget differ.
+ */
+export const uploadSingleVideo = videoUpload.single('video');
 
 /**
  * Error handler for multer upload errors

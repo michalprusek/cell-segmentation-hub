@@ -340,11 +340,11 @@ export default {
     },
   },
   images: {
-    uploadImages: 'Nahrát obrázky',
-    dragDrop: 'Přetáhněte obrázky sem',
+    uploadImages: 'Nahrát obrázky nebo videa',
+    dragDrop: 'Přetáhněte obrázky nebo videa sem',
     clickToSelect: 'nebo klikněte pro výběr souborů',
     acceptedFormats:
-      'Podporované formáty: JPEG, PNG, TIFF, BMP (max 20MB na soubor)',
+      'Obrázky: JPEG, PNG, TIFF, BMP (max 20 MB) — Videa: MP4, AVI, MOV, MKV, WebM, ND2, multi-page TIFF (max 100 GB)',
     uploadProgress: 'Průběh nahrávání',
     readyToUpload: 'Připraveno k nahrání',
     uploadingTo: 'Nahrávání do',
@@ -358,7 +358,7 @@ export default {
     noAnalysesYet: 'Zatím žádné analýzy',
     runAnalysis: 'Spustit analýzu',
     viewResults: 'Zobrazit výsledky',
-    dropImagesHere: 'Přetáhněte obrázky sem...',
+    dropImagesHere: 'Přetáhněte soubory sem...',
     selectProjectFirst: 'Nejprve vyberte projekt',
     projectRequired: 'Před nahráním obrázků musíte vybrat projekt',
     pending: 'Čekající',

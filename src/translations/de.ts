@@ -343,11 +343,11 @@ export default {
     },
   },
   images: {
-    uploadImages: 'Bilder hochladen',
-    dragDrop: 'Bilder hier hineinziehen',
+    uploadImages: 'Bilder oder Videos hochladen',
+    dragDrop: 'Bilder oder Videos hier hineinziehen',
     clickToSelect: 'oder klicken Sie, um Dateien auszuwählen',
     acceptedFormats:
-      'Akzeptierte Formate: JPEG, PNG, TIFF, BMP (max 20MB pro Datei)',
+      'Bilder: JPEG, PNG, TIFF, BMP (max. 20 MB) — Videos: MP4, AVI, MOV, MKV, WebM, ND2, mehrseitige TIFFs (max. 100 GB)',
     uploadProgress: 'Upload-Fortschritt',
     readyToUpload: 'Bereit zum Hochladen',
     uploadingTo: 'Wählen Sie zuerst ein Projekt aus',
@@ -361,7 +361,7 @@ export default {
     noAnalysesYet: 'Noch keine Analysen',
     runAnalysis: 'Analyse ausführen',
     viewResults: 'Ergebnisse anzeigen',
-    dropImagesHere: 'Bilder hier ablegen...',
+    dropImagesHere: 'Dateien hier ablegen...',
     selectProjectFirst: 'Bitte wählen Sie zuerst ein Projekt aus',
     projectRequired:
       'Sie müssen ein Projekt auswählen, bevor Sie Bilder hochladen können',

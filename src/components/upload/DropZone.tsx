@@ -4,6 +4,15 @@ import { Upload } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { toast } from 'sonner';
 import UPLOAD_CONFIG from '@/lib/uploadConfig';
+import { FILE_LIMITS } from '@/lib/constants';
+
+const VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.nd2'];
+
+function isVideoFile(file: File): boolean {
+  if (file.type.startsWith('video/')) return true;
+  const lower = file.name.toLowerCase();
+  return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext));
+}
 
 interface DropZoneProps {
   disabled: boolean;
@@ -29,7 +38,13 @@ const DropZone: React.FC<DropZoneProps> = ({ disabled, onDrop }) => {
     const validFiles: File[] = [];
 
     acceptedFiles.forEach(file => {
-      if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE_BYTES) {
+      // Videos / microscopy stacks get a larger size budget because the
+      // upload payload is a single multi-frame file, vs. many smaller
+      // single-image uploads.
+      const sizeBudget = isVideoFile(file)
+        ? FILE_LIMITS.MAX_VIDEO_FILE_SIZE_BYTES
+        : UPLOAD_CONFIG.MAX_FILE_SIZE_BYTES;
+      if (file.size > sizeBudget) {
         oversizedFiles.push(file);
       } else {
         validFiles.push(file);
@@ -117,12 +132,25 @@ const DropZone: React.FC<DropZoneProps> = ({ disabled, onDrop }) => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: handleDrop,
     accept: {
-      'image/jpeg': [],
-      'image/png': [],
-      'image/tiff': [],
-      'image/bmp': [],
+      // Single images
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/tiff': ['.tif', '.tiff'], // includes multi-page TIFF stacks
+      'image/bmp': ['.bmp'],
+      // Videos (extracted frame-by-frame on upload)
+      'video/mp4': ['.mp4'],
+      'video/x-msvideo': ['.avi'],
+      'video/quicktime': ['.mov'],
+      'video/x-matroska': ['.mkv'],
+      'video/webm': ['.webm'],
+      // ND2: Nikon NIS-Elements proprietary; browsers usually report
+      // it as application/octet-stream, so we gate on the extension.
+      'application/octet-stream': ['.nd2'],
     },
-    maxSize: UPLOAD_CONFIG.MAX_FILE_SIZE_BYTES, // Use centralized config (20MB)
+    // Use the larger video budget as the dropzone-level cap; the
+    // per-file logic above re-validates with the smaller image budget
+    // for non-video uploads.
+    maxSize: FILE_LIMITS.MAX_VIDEO_FILE_SIZE_BYTES,
     disabled,
   });
 

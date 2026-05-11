@@ -339,11 +339,11 @@ export default {
     deleteImages: 'Failed to delete selected images',
   },
   images: {
-    uploadImages: 'Upload Images',
-    dragDrop: 'Drag & drop images here',
+    uploadImages: 'Upload Images or Videos',
+    dragDrop: 'Drag & drop images or videos here',
     clickToSelect: 'or click to select files',
     acceptedFormats:
-      'Accepted formats: JPEG, PNG, TIFF, BMP (max 20MB per file)',
+      'Images: JPEG, PNG, TIFF, BMP (max 20 MB) — Videos: MP4, AVI, MOV, MKV, WebM, ND2, multi-page TIFF (max 100 GB)',
     uploadProgress: 'Upload Progress',
     readyToUpload: 'Ready to Upload',
     uploadingTo: 'Select a project first',
@@ -357,7 +357,7 @@ export default {
     noAnalysesYet: 'No analyses yet',
     runAnalysis: 'Run Analysis',
     viewResults: 'View Results',
-    dropImagesHere: 'Drop the images here...',
+    dropImagesHere: 'Drop the files here...',
     selectProjectFirst: 'Please select a project first',
     projectRequired: 'You must select a project before you can upload images',
     pending: 'Pending',
