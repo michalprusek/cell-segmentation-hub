@@ -103,10 +103,85 @@ export function generateMetricsGuide(
       return buildSpheroidInvasiveGuide(ctx);
     case 'wound':
       return buildWoundGuide(ctx);
+    case 'microtubules':
+      return buildMicrotubuleGuide(ctx);
     case 'spheroid':
     default:
       return buildSpheroidGuide(ctx);
   }
+}
+
+function buildMicrotubuleGuide({ lengthUnit, scaleInfo }: UnitContext): string {
+  return `# Microtubule Metrics Reference Guide
+${scaleInfo}
+## Polyline Geometry
+
+The microtubule model produces **open polyline centerlines** (one polyline
+per microtubule instance), not closed polygons. Metrics are computed
+per-polyline and aggregated per-track when cross-frame tracking is
+available.
+
+### Length
+- **Description**: Sum of Euclidean distances between consecutive
+  centerline vertices.
+- **Formula**: L = Sum_i ||p_{i+1} - p_i||
+- **Units**: ${lengthUnit}
+- **Range**: [0, ∞)
+
+### End-to-end distance
+- **Description**: Straight-line distance between the two endpoints of
+  the centerline.
+- **Units**: ${lengthUnit}
+
+### Tortuosity
+- **Description**: Length divided by end-to-end distance. 1.0 = perfectly
+  straight; higher values = more curved.
+- **Range**: [1.0, ∞)
+
+### Mean curvature
+- **Description**: Average absolute change in tangent direction between
+  consecutive segments. Higher values for kinkier filaments.
+- **Units**: 1/${lengthUnit}
+
+## Tracked metrics (videos only)
+
+When a polyline carries a \`trackId\`, the export also produces a
+per-track time-series:
+
+### Length over time
+- **Description**: One row per (trackId, frameIndex). Tracks growth /
+  shrinkage / catastrophe events.
+- **Use**: feed into your favourite dynamics analysis (mean polymerization
+  rate, +TIP comet velocity, etc.).
+
+### Displacement
+- **Description**: ||centroid(t) - centroid(t-1)|| per consecutive frame.
+- **Units**: ${lengthUnit}/frame
+
+## JSON export
+
+The JSON format preserves the full microtubule structure:
+
+- \`geometry: "polyline"\` on every record
+- \`instanceId\` — unique per polyline (one MT = one instance)
+- \`trackId\` — set when tracking ran successfully; equal across frames
+  for sibling polylines representing the same MT over time
+
+## Visualisation
+
+Generated kymograph PNGs are stored alongside the metrics workbook when
+any polyline was opened in the editor's kymograph modal during the
+session.
+
+## Known limitations
+
+- PySOAX has a known wrong-pairing failure mode at MT crossings (~50 %
+  resolved by the v7 embedding-guided postprocessing). Splits/merges
+  may surface as multiple short tracks for one real MT.
+- Tracking does not currently model catastrophe / rescue events
+  explicitly — sharp drops in length within a single trackId are the
+  best heuristic for now.
+`;
 }
 
 function buildSpheroidGuide({ areaUnit, lengthUnit, scaleInfo }: UnitContext): string {
