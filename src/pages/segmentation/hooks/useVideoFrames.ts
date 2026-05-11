@@ -1,21 +1,25 @@
 /**
  * Frame navigation hook for video-container images.
  *
- * Given a video container image ID, loads its child frame metadata, then
- * exposes ``frameIndex`` (currently displayed) + setters + a play/pause
- * loop running at ``fps`` (default 10). React Query handles per-frame
- * prefetching: the next 5 frames are warmed in the background so ←/→
- * navigation feels instant once the user starts moving.
+ * Given a video container image ID, loads its child frame metadata via a
+ * single React Query (cached 60 s), exposes ``frameIndex`` (currently
+ * displayed) + setters + a play/pause loop running at ``fps`` (default
+ * 10). Per-frame image prefetching is *not* owned here — that lives in
+ * SegmentationEditor's adjacent-image prefetch helper. This hook only
+ * owns the frame-list metadata + playback loop.
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import apiClient from '@/lib/api';
+import type { VideoChannel, ProjectImage } from '@/types';
 
 export interface VideoFrame {
   id: string;
   frameIndex: number;
-  segmentationStatus: string;
+  /** Same union used elsewhere by ProjectImage so consumers don't need
+   *  to map between divergent string sets. */
+  segmentationStatus: NonNullable<ProjectImage['segmentationStatus']>;
 }
 
 export interface VideoContainerMeta {
@@ -25,13 +29,7 @@ export interface VideoContainerMeta {
   width: number | null;
   height: number | null;
   videoDurationMs: number | null;
-  channels: Array<{
-    name: string;
-    type: 'irm' | 'fluorescent';
-    wavelengthNm?: number;
-    displayColor?: string;
-    isSegmentationSource: boolean;
-  }> | null;
+  channels: VideoChannel[] | null;
   frames: VideoFrame[];
 }
 

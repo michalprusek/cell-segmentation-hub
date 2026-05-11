@@ -7,6 +7,7 @@ import React, {
   useEffect,
   useMemo,
 } from 'react';
+import axios from 'axios';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useWebSocket } from '@/contexts/useWebSocket';
@@ -252,6 +253,10 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
           // combined success/fail tally for mixed batches.
           let videoSuccess = 0;
           let videoFailed = 0;
+          // Surface the first failure's user-facing message so the
+          // aggregate toast tells the user *why* the upload failed, not
+          // just *that* it did.
+          let firstFailureMessage: string | null = null;
           for (let i = 0; i < videoFiles.length; i++) {
             if (signal?.aborted) break;
             const vfile = videoFiles[i];
@@ -287,7 +292,25 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
               });
               videoSuccess++;
             } catch (err) {
-              logger.error('[UploadContext] video upload failed', err);
+              // axios cancellation isn't a real failure — abort
+              // shouldn't inflate videoFailed or land a "video upload
+              // failed" toast.
+              if (axios.isCancel(err)) {
+                logger.info(
+                  `[UploadContext] video upload cancelled: ${vfile.name}`
+                );
+                break;
+              }
+              const msg =
+                (err as { response?: { data?: { error?: string } } })?.response
+                  ?.data?.error ?? (err as Error)?.message ?? 'unknown error';
+              logger.error(
+                `[UploadContext] video upload failed: ${vfile.name} — ${msg}`,
+                err
+              );
+              if (firstFailureMessage === null) {
+                firstFailureMessage = `${vfile.name}: ${msg}`;
+              }
               videoFailed++;
             }
           }
@@ -315,12 +338,20 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
             }));
             if (videoFailed > 0 && videoSuccess > 0) {
               toast.warning(
-                `${videoSuccess} videos uploaded, ${videoFailed} failed`
+                `${videoSuccess} videos uploaded, ${videoFailed} failed`,
+                firstFailureMessage
+                  ? { description: firstFailureMessage }
+                  : undefined
               );
             } else if (videoFailed === 0 && videoSuccess > 0) {
               toast.success(`${videoSuccess} video(s) uploaded successfully`);
             } else if (videoFailed > 0) {
-              toast.error(`Video upload failed: ${videoFailed} file(s)`);
+              toast.error(
+                `Video upload failed: ${videoFailed} file(s)`,
+                firstFailureMessage
+                  ? { description: firstFailureMessage }
+                  : undefined
+              );
             }
             if (onCompleteRef.current) onCompleteRef.current();
             return;

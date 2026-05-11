@@ -76,19 +76,39 @@ async function runHelper(
           )
         );
       }
-      // The final JSON line is whatever comes after the last PROGRESS prefix.
+      // Helpers occasionally warn on stderr while still exiting 0 (e.g.
+      // tifffile deprecation, partial-page skip). Surface to ops at warn
+      // so the "first 3 pages decoded as wrong axes order" message
+      // doesn't vanish.
+      if (stderr.trim().length > 0) {
+        logger.warn(
+          `python helper ${scriptName} succeeded with stderr: ${stderr.slice(-500)}`,
+          'VideoExtractor'
+        );
+      }
       const finalLine = stdout
         .split('\n')
         .map(l => l.trim())
         .filter(l => l.length > 0 && !l.startsWith('PROGRESS '))
         .pop();
       if (!finalLine) {
-        return reject(new Error(`${scriptName} produced no result JSON`));
+        return reject(
+          new Error(
+            `${scriptName} produced no result JSON. stdout tail: ${stdout.slice(-300)} | stderr: ${stderr.slice(-300)}`
+          )
+        );
       }
       try {
         resolve(JSON.parse(finalLine));
       } catch (err) {
-        reject(new Error(`failed to parse ${scriptName} output: ${err}`));
+        // Don't lose the actual output we tried to parse; ops needs it
+        // when the helper accidentally prints a traceback as the "final
+        // line" and the JSON parse blows up downstream.
+        reject(
+          new Error(
+            `failed to parse ${scriptName} output: ${err}. final line: ${finalLine.slice(0, 200)}`
+          )
+        );
       }
     });
   });

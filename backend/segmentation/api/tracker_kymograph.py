@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,8 @@ router = APIRouter()
 
 class PolylineInput(BaseModel):
     """One polyline as fed to the tracker."""
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     # (M, 2) row, col centerline pixel coords. List-of-list is the
     # JSON-friendly form; numpy conversion happens server-side.
@@ -51,39 +53,88 @@ class PolylineInput(BaseModel):
 
 
 class FramePolylines(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     frame: int
     polylines: List[PolylineInput]
 
 
 class TrackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     frames: List[FramePolylines]
+    # cost_threshold is in [0, 2]: cosine-distance term is in [0, 2]
+    # (1 - cosine_similarity), spatial term is spatial_weight * normalized
+    # distance in [0, spatial_weight]. The 0.5 default picks pairs whose
+    # average cosine similarity is at least ~0.5 OR whose spatial drift
+    # alone is small enough to dominate the cost.
     cost_threshold: float = Field(0.5, ge=0.0, le=2.0)
+    # spatial_weight multiplies a normalized [0, 1] distance, so the
+    # spatial contribution to cost lives in [0, spatial_weight]. 0.3 keeps
+    # the embedding signal dominant while still penalising distant matches.
     spatial_weight: float = Field(0.3, ge=0.0, le=1.0)
 
 
 class TrackResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     assignments: Dict[str, str]  # polylineId -> trackId
     track_count: int
 
 
-def _decode_embedding(b64: str | None, n_points: int) -> Optional[np.ndarray]:
+class EmbeddingDecodeError(ValueError):
+    """Distinguishes a corrupt embedding payload from a legitimately
+    absent one (b64 == None). Caller decides whether to log + neutral-
+    cost or raise."""
+
+
+def _decode_embedding(
+    b64: str | None, n_points: int
+) -> Optional[np.ndarray]:
+    """Decode a base64 float16 (n_points × 32) embedding.
+
+    Returns None ONLY when the embedding string itself is None/empty
+    (older segmentations don't have one). Decode failures raise
+    EmbeddingDecodeError — callers should treat that as data corruption
+    and log it loudly rather than degrade silently to spatial-only
+    matching.
+    """
     if not b64:
         return None
     try:
         buf = base64.b64decode(b64)
         arr = np.frombuffer(buf, dtype=np.float16)
-        if arr.size % 32 != 0:
-            return None
-        arr = arr.reshape(-1, 32)
-        # If the embedding was persisted at full per-point resolution it
-        # should match n_points exactly; tolerate small mismatches by
-        # trimming or padding to whichever is smaller.
-        if arr.shape[0] != n_points:
-            return arr[:n_points] if arr.shape[0] > n_points else arr
-        return arr
     except Exception as exc:
-        logger.warning(f"failed to decode embedding: {exc}")
-        return None
+        raise EmbeddingDecodeError(f"base64/float16 decode failed: {exc}")
+    if arr.size == 0 or arr.size % 32 != 0:
+        raise EmbeddingDecodeError(
+            f"embedding byte count {arr.size * 2} is not a multiple of 32 float16"
+        )
+    arr = arr.reshape(-1, 32)
+    if arr.shape[0] > n_points:
+        # Persisted too many rows — trim to centerline length so cosine
+        # mean is computed against the relevant slice.
+        return arr[:n_points]
+    if arr.shape[0] < n_points:
+        # Fewer embedding rows than centerline points: keep what we have
+        # rather than guessing. Caller may log a soft warning.
+        return arr
+    return arr
+
+
+def _safe_mean_embedding(p: PolylineInput) -> tuple[Optional[np.ndarray], bool]:
+    """Decode embedding mean for one polyline; second element is True iff
+    decoding raised EmbeddingDecodeError (i.e. corruption rather than
+    legitimately-absent embedding). Caller aggregates the corruption
+    count and logs once per frame pair."""
+    try:
+        emb = _decode_embedding(p.embedding, len(p.points_rc))
+    except EmbeddingDecodeError as exc:
+        logger.warning(f"polyline {p.id}: {exc}")
+        return None, True
+    if emb is None:
+        return None, False
+    return emb.mean(axis=0), False
 
 
 def _build_cost_matrix(
@@ -93,21 +144,32 @@ def _build_cost_matrix(
     spatial_weight: float,
 ) -> np.ndarray:
     """Cost = (1 - mean cosine sim of embeddings) + λ · normalised dist."""
-    prev_emb = []
-    prev_cent = []
+    prev_emb: List[Optional[np.ndarray]] = []
+    prev_cent: List[np.ndarray] = []
+    corrupt_count = 0
     for p in prev:
-        emb = _decode_embedding(p.embedding, len(p.points_rc))
-        prev_emb.append(emb.mean(axis=0) if emb is not None else None)
+        emb, was_corrupt = _safe_mean_embedding(p)
+        prev_emb.append(emb)
+        if was_corrupt:
+            corrupt_count += 1
         pts = np.asarray(p.points_rc, dtype=np.float32)
         prev_cent.append(pts.mean(axis=0) if pts.size else np.zeros(2))
 
-    nxt_emb = []
-    nxt_cent = []
+    nxt_emb: List[Optional[np.ndarray]] = []
+    nxt_cent: List[np.ndarray] = []
     for p in nxt:
-        emb = _decode_embedding(p.embedding, len(p.points_rc))
-        nxt_emb.append(emb.mean(axis=0) if emb is not None else None)
+        emb, was_corrupt = _safe_mean_embedding(p)
+        nxt_emb.append(emb)
+        if was_corrupt:
+            corrupt_count += 1
         pts = np.asarray(p.points_rc, dtype=np.float32)
         nxt_cent.append(pts.mean(axis=0) if pts.size else np.zeros(2))
+
+    if corrupt_count > 0:
+        logger.error(
+            f"Tracker: {corrupt_count}/{len(prev) + len(nxt)} embeddings "
+            "were corrupt and fell back to spatial-only matching"
+        )
 
     P, Q = len(prev), len(nxt)
     cost = np.full((P, Q), fill_value=1.0, dtype=np.float32)
@@ -197,6 +259,8 @@ async def track(req: TrackRequest) -> TrackResponse:
 # ----------------------------------------------------------------------------
 
 class KymographFrameInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     frame: int
     # (M, 2) row, col centerline used to sample intensity in this frame.
     polyline_rc: List[List[float]]
@@ -204,12 +268,16 @@ class KymographFrameInput(BaseModel):
 
 
 class KymographRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     frames: List[KymographFrameInput]
     target_width: int = Field(200, ge=10, le=2000)
     tracked: bool = False
 
 
 class KymographResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     png_base64: str
     csv_base64: str
     frame_count: int
@@ -228,12 +296,33 @@ def _resample_profile(profile: np.ndarray, target_width: int) -> np.ndarray:
     return np.interp(dst_x, src_x, profile.astype(np.float32))
 
 
-_VIRIDIS_RGB = np.array([  # 16-stop subsample of matplotlib viridis
-    [68, 1, 84],   [72, 25, 109], [69, 50, 127], [62, 73, 137],
-    [54, 95, 141], [47, 116, 142], [40, 137, 141], [35, 158, 138],
-    [37, 178, 124], [73, 195, 102], [128, 207, 70], [188, 215, 39],
-    [246, 222, 31], [253, 188, 25], [253, 144, 21], [241, 96, 17],
-], dtype=np.float32) / 255.0
+_VIRIDIS_RGB = np.array(
+    [
+        # 16-stop subsample of matplotlib viridis colormap.
+        # Sampled at i/15 for i in [0..15] from matplotlib.cm.viridis. The
+        # tail (>= stop 12) intentionally stays in the yellow/yellow-green
+        # band — viridis ends at bright yellow #fde725, not in orange/red.
+        # Mixing in plasma/inferno tail stops would silently mis-render
+        # high-intensity pixels relative to ImageJ output.
+        [68, 1, 84],
+        [71, 22, 105],
+        [72, 41, 122],
+        [69, 60, 135],
+        [62, 78, 138],
+        [54, 96, 141],
+        [47, 113, 142],
+        [40, 130, 142],
+        [35, 147, 142],
+        [33, 165, 133],
+        [40, 181, 121],
+        [73, 197, 103],
+        [127, 211, 79],
+        [187, 222, 56],
+        [232, 230, 56],
+        [253, 231, 37],
+    ],
+    dtype=np.float32,
+) / 255.0
 
 
 def _viridis(values: np.ndarray) -> np.ndarray:

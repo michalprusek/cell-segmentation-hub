@@ -346,6 +346,20 @@ export type ProjectType = (typeof PROJECT_TYPES)[number];
 export const isProjectType = (v: unknown): v is ProjectType =>
   typeof v === 'string' && (PROJECT_TYPES as readonly string[]).includes(v);
 
+/** All known model identifiers — kept as a literal union so the
+ *  MODEL_TYPE_COMPATIBILITY map below catches typos at compile time
+ *  (a misspelled model id in any array becomes a TS error). Mirrors the
+ *  `ModelType` union in `@/lib/modelUtils.ts`; intentionally duplicated
+ *  here to avoid a circular import. */
+type KnownModelId =
+  | 'hrnet'
+  | 'cbam_resunet'
+  | 'unet_spherohq'
+  | 'unet_attention_aspp'
+  | 'sperm'
+  | 'wound'
+  | 'microtubule';
+
 /** Models compatible with each project type. Cross-type segmentation is
  * blocked at both frontend (dropdown filter) and backend (400 on submit).
  *
@@ -358,14 +372,16 @@ export const isProjectType = (v: unknown): v is ProjectType =>
  *   models, with `unet_attention_aspp` excluded so users wanting core
  *   detection are nudged toward marking the project disintegrated.
  */
-export const MODEL_TYPE_COMPATIBILITY: Record<ProjectType, readonly string[]> =
-  {
-    spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
-    spheroid_invasive: ['unet_attention_aspp'],
-    wound: ['wound'],
-    sperm: ['sperm'],
-    microtubules: ['microtubule'],
-  } as const;
+export const MODEL_TYPE_COMPATIBILITY: Record<
+  ProjectType,
+  readonly KnownModelId[]
+> = {
+  spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
+  spheroid_invasive: ['unet_attention_aspp'],
+  wound: ['wound'],
+  sperm: ['sperm'],
+  microtubules: ['microtubule'],
+} as const;
 
 export const isModelCompatibleWithType = (
   model: string,

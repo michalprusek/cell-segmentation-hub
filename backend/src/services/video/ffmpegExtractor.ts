@@ -28,17 +28,29 @@ import {
  */
 async function probeFrameCount(
   sourcePath: string
-): Promise<{ frameCount: number; durationMs: number; width: number; height: number } | null> {
+): Promise<{
+  frameCount: number;
+  durationMs: number;
+  width: number;
+  height: number;
+} | null> {
   if (!ffmpegPath) return null;
   const ffprobeBinary = ffmpegPath.replace(/ffmpeg(\.exe)?$/i, 'ffprobe$1');
 
   return new Promise(resolve => {
+    // -of json keeps named fields so we can't be tricked by ffprobe
+    // versions that flip the CSV column order (some emit nb_read_packets
+    // first, others width — observed across ffmpeg 4.x / 6.x).
     const args = [
-      '-v', 'error',
-      '-select_streams', 'v:0',
+      '-v',
+      'error',
+      '-select_streams',
+      'v:0',
       '-count_packets',
-      '-show_entries', 'stream=nb_read_packets,width,height,duration',
-      '-of', 'csv=p=0',
+      '-show_entries',
+      'stream=nb_read_packets,width,height,duration',
+      '-of',
+      'json',
       sourcePath,
     ];
     let stdout = '';
@@ -47,24 +59,33 @@ async function probeFrameCount(
     child.on('error', () => resolve(null));
     child.on('close', code => {
       if (code !== 0) return resolve(null);
-      const parts = stdout.trim().split(',');
-      if (parts.length < 4) return resolve(null);
-      const width = parseInt(parts[0], 10);
-      const height = parseInt(parts[1], 10);
-      const durationS = parseFloat(parts[2]);
-      const frameCount = parseInt(parts[3], 10);
-      if (
-        !Number.isFinite(width) || !Number.isFinite(height) ||
-        !Number.isFinite(frameCount) || frameCount <= 0
-      ) {
-        return resolve(null);
+      try {
+        const parsed = JSON.parse(stdout);
+        const stream = parsed?.streams?.[0];
+        if (!stream) return resolve(null);
+        const width = parseInt(String(stream.width), 10);
+        const height = parseInt(String(stream.height), 10);
+        const durationS = parseFloat(String(stream.duration ?? 'NaN'));
+        const frameCount = parseInt(String(stream.nb_read_packets), 10);
+        if (
+          !Number.isFinite(width) ||
+          !Number.isFinite(height) ||
+          !Number.isFinite(frameCount) ||
+          frameCount <= 0
+        ) {
+          return resolve(null);
+        }
+        resolve({
+          frameCount,
+          durationMs: Number.isFinite(durationS)
+            ? Math.round(durationS * 1000)
+            : 0,
+          width,
+          height,
+        });
+      } catch {
+        resolve(null);
       }
-      resolve({
-        frameCount,
-        durationMs: Number.isFinite(durationS) ? Math.round(durationS * 1000) : 0,
-        width,
-        height,
-      });
     });
   });
 }
@@ -97,6 +118,7 @@ export async function extractWithFfmpeg(
   const flatDir = path.join(destDir, '_extract_flat');
   await fs.mkdir(flatDir, { recursive: true });
 
+  let ffmpegStderr = '';
   await new Promise<void>((resolve, reject) => {
     const args = [
       '-hide_banner',
@@ -107,16 +129,26 @@ export async function extractWithFfmpeg(
       path.join(flatDir, '%06d.png'),
     ];
     const child = spawn(ffmpegPath as string, args);
-    let stderr = '';
-    child.stderr.on('data', c => (stderr += c.toString()));
+    child.stderr.on('data', c => (ffmpegStderr += c.toString()));
     child.on('error', reject);
     child.on('close', code => {
       if (code !== 0) {
-        return reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-500)}`));
+        return reject(new Error(`ffmpeg exited ${code}: ${ffmpegStderr.slice(-500)}`));
       }
       resolve();
     });
   });
+
+  // ffmpeg can exit 0 while still warning on stderr (e.g. PTS broken,
+  // codec partially unsupported). Surface non-empty stderr at warn level
+  // so ops can see the partial-decode case before it becomes a user
+  // complaint.
+  if (ffmpegStderr.trim().length > 0) {
+    logger.warn(
+      `ffmpeg succeeded but emitted stderr: ${ffmpegStderr.slice(-500)}`,
+      'VideoExtractor'
+    );
+  }
 
   // Move flat extraction into per-frame subdirectories matching the
   // channel-aware storage layout used by the rest of the pipeline.
@@ -124,7 +156,13 @@ export async function extractWithFfmpeg(
     .filter(f => f.endsWith('.png'))
     .sort();
   if (flatFiles.length === 0) {
-    throw new Error('ffmpeg produced no frames — source may be empty or corrupt');
+    // ffmpeg succeeded but wrote no PNGs — most often a codec the build
+    // doesn't support (rare with ffmpeg-static), broken PTS dropping all
+    // frames at -vsync 0, or disk pressure on the temp dir. The stderr
+    // tail usually carries the real signal.
+    throw new Error(
+      `ffmpeg produced no frames (rc=0). stderr tail: ${ffmpegStderr.slice(-500) || '(empty)'}`
+    );
   }
 
   for (let i = 0; i < flatFiles.length; i++) {
