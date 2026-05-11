@@ -94,9 +94,19 @@ Controllers → Services → Prisma ORM → Storage (local filesystem / S3)
 ### ML Service (`/backend/segmentation/`)
 
 - FastAPI app with PyTorch models, GPU (CUDA) with CPU fallback
-- Models: HRNet (~200ms), CBAM-ResUNet (~400ms), U-Net (~200ms), Sperm (specialized)
-- Weights auto-download from Google Drive. Check: `make check-weights`
-- Inference → postprocessing → polygon extraction
+- Models: HRNet (~200ms), CBAM-ResUNet (~400ms), U-Net (~200ms), Sperm (specialized), Microtubule v7 (DINOv3-L + DPT + PySOAX, ~8 s/frame)
+- Weights auto-download from Google Drive. Check: `make check-weights`. Microtubule v7 is staged via `scripts/download-microtubule-weights.sh` (1.2 GB) and additionally needs `HF_TOKEN` for the gated DINOv3 backbone (~1.1 GB on first load).
+- Inference → postprocessing → polygon extraction (or polyline centerlines for sperm + microtubule)
+- Cross-frame routes: `/api/v1/track` (Hungarian matching across video frames using persisted 32-d embeddings) and `/api/v1/kymograph` (line-profile sampling + viridis heatmap rendering) live in `api/tracker_kymograph.py`.
+
+### Video projects
+
+- A video container is one `Image` row with `isVideoContainer = true` and a `channels` JSON array. Each extracted frame is a child `Image` row with `parentVideoId` + `frameIndex` + `displayOrder`. The container itself is never enqueued.
+- Supported formats: MP4 / AVI / MOV / MKV / WebM (via `ffmpeg-static`), multi-page TIFF stacks (`tifffile` Python helper), Nikon ND2 (`nd2` Python helper). All extractors live in `backend/src/services/video/`.
+- Storage layout: `projects/<pid>/images/<videoId>/{original.ext, thumbnail.jpg, frames/NNNN/<channel>.png, ...}`.
+- Channels: ND2 + multi-page TIFF expose per-channel PNGs. IRM auto-detection by name (IRM / BF / DIC / TL) + null wavelength. Segmentation runs on the channel marked `isSegmentationSource = true`; kymograph defaults to the first fluorescent channel.
+- Cross-frame microtubule tracking: triggers automatically when all frames of a container reach status `'segmented'`; `backend/src/services/tracking/trackerService.ts` posts polylines + embeddings to ML `/track` and patches `trackId` back into each `Segmentation.polygons`.
+- Queue fairness: `getBatchItems` prefers users not in the recently-processed window so a 200-frame video can't monopolise the queue.
 
 ### Key Shared Libraries (`/src/lib/`)
 
