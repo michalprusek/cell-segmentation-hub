@@ -1,28 +1,35 @@
 /**
  * Service that owns the per-upload video flow:
  *
- *   incoming buffer → temp file → extractVideoSafe →
- *   one container Image row + N child frame Image rows + thumbnail.
+ *   multer temp file → rename into projects/<pid>/images/<vid>/original.<ext>
+ *   → extractVideoSafe → one container Image row + N child frame Image rows
+ *   + thumbnail.
  *
- * Kept separate from imageService so the static-image upload path stays
- * untouched. The route layer routes a file to this service when the
- * extension matches a video format (mp4/avi/mov/mkv/webm/nd2 or a
- * multi-page TIFF detected after open).
+ * The controller routes a file here when the extension matches a video
+ * format (mp4/avi/mov/mkv/webm/nd2 or a multi-page TIFF). Static-image
+ * uploads keep going through imageService unchanged.
+ *
+ * Failure handling guarantees:
+ *
+ *   - If any step in the happy path throws, the container row is updated to
+ *     ``segmentationStatus='extraction_failed'`` AND the entire container
+ *     directory under projects/<pid>/images/<vid>/ is removed so retrying
+ *     starts from a clean slate.
+ *   - The multer-supplied temp file is always removed, even on success
+ *     (renamed into the canonical location).
+ *   - If the secondary "mark as failed" Prisma update itself fails, that
+ *     error is logged at ``error`` level with the container ID so ops can
+ *     find stuck-in-pending rows.
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import sharp from 'sharp';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { extractVideoSafe } from './video/videoExtractor';
-import type {
-  ChannelMeta,
-  ExtractionProgress,
-} from './video/types';
-
-const prisma = new PrismaClient();
+import type { ChannelMeta, ExtractionProgress } from './video/types';
 
 export interface VideoUploadProgressEvent {
   videoContainerId: string;
@@ -54,9 +61,9 @@ function videoContainerDir(projectId: string, containerId: string): string {
 }
 
 /** Frame-relative storage key, persisted as the child Image's
- *  ``originalPath``. Always points at the segmentation source channel
- *  for now; consumers that need a different channel build their own
- *  URL via the /frame-data?channel=X route. */
+ *  ``originalPath``. Points at the segmentation source channel for now;
+ *  consumers that need a different channel build their own URL via the
+ *  /frame-data?channel=X route. */
 function frameStorageKey(
   containerId: string,
   frameIndex: number,
@@ -76,13 +83,21 @@ async function generateContainerThumbnail(
   outPath: string
 ): Promise<void> {
   const firstFrameDir = path.join(framesRoot, '0000');
+  let listedFiles: string[] = [];
+  try {
+    listedFiles = await fs.readdir(firstFrameDir);
+  } catch (err) {
+    logger.warn(
+      `Cannot list first-frame dir for thumbnail: ${(err as Error).message}`,
+      'VideoUploadService',
+      { firstFrameDir }
+    );
+  }
   const candidates = [
     path.join(firstFrameDir, `${defaultChannel}.png`),
-    // Fallbacks for resilience: any PNG in the first frame dir.
-    ...(await fs
-      .readdir(firstFrameDir)
-      .then(files => files.filter(f => f.endsWith('.png')).map(f => path.join(firstFrameDir, f)))
-      .catch(() => [] as string[])),
+    ...listedFiles
+      .filter(f => f.endsWith('.png'))
+      .map(f => path.join(firstFrameDir, f)),
   ];
   for (const candidate of candidates) {
     try {
@@ -91,32 +106,56 @@ async function generateContainerThumbnail(
         .jpeg({ quality: 85 })
         .toFile(outPath);
       return;
-    } catch {
-      /* try next candidate */
+    } catch (err) {
+      logger.warn(
+        `Thumbnail candidate failed: ${candidate} (${(err as Error).message})`,
+        'VideoUploadService'
+      );
     }
   }
-  throw new Error(`Failed to generate thumbnail from any frame in ${firstFrameDir}`);
+  throw new Error(
+    `Failed to generate thumbnail from any frame in ${firstFrameDir}`
+  );
 }
 
-export async function uploadVideo(
-  buffer: Buffer,
-  options: {
-    projectId: string;
-    originalName: string;
-    mimeType: string;
-    onProgress?: VideoProgressCallback;
+/** Move (rename) the multer temp file into ``destPath``. Falls back to
+ *  copy+unlink if the rename crosses filesystems (EXDEV). */
+async function moveFile(srcPath: string, destPath: string): Promise<void> {
+  try {
+    await fs.rename(srcPath, destPath);
+    return;
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code !== 'EXDEV') throw err;
+    await fs.copyFile(srcPath, destPath);
+    await fs.unlink(srcPath).catch(() => undefined);
   }
-): Promise<VideoUploadResult> {
-  const { projectId, originalName, mimeType, onProgress } = options;
+}
+
+/**
+ * Persist an uploaded video. The file is expected to already be on disk
+ * at ``tempFilePath`` (multer diskStorage); we only own renaming it into
+ * place and orchestrating extraction.
+ */
+export async function uploadVideoFromFile(options: {
+  projectId: string;
+  originalName: string;
+  mimeType: string;
+  tempFilePath: string;
+  onProgress?: VideoProgressCallback;
+}): Promise<VideoUploadResult> {
+  const { projectId, originalName, mimeType, tempFilePath, onProgress } =
+    options;
 
   // 1. Create container DB row up front so the worker has a stable ID.
+  const fileStat = await fs.stat(tempFilePath);
   const container = await prisma.image.create({
     data: {
       name: originalName,
-      originalPath: '', // filled in after the file lands on disk
+      originalPath: '', // filled in once the file lands at its final path
       thumbnailPath: null,
       projectId,
-      fileSize: buffer.byteLength,
+      fileSize: Number(fileStat.size),
       mimeType,
       segmentationStatus: 'pending_extraction',
       isVideoContainer: true,
@@ -139,13 +178,27 @@ export async function uploadVideo(
     });
   };
 
+  const cleanupOnFailure = async (): Promise<void> => {
+    // Remove the canonical container dir + any partial frames.
+    await fs.rm(baseDir, { recursive: true, force: true }).catch(err => {
+      logger.error(
+        `Failed to clean up baseDir for failed upload: ${(err as Error).message}`,
+        err as Error,
+        'VideoUploadService',
+        { containerId, baseDir }
+      );
+    });
+    // Also remove the multer temp file in case the rename never happened.
+    await fs.rm(tempFilePath, { force: true }).catch(() => undefined);
+  };
+
   try {
-    // 2. Persist the original to disk.
-    reportProgress('saving', 0.05, 'Saving original');
+    // 2. Move multer's temp file into the canonical location.
+    reportProgress('saving', 0.05, 'Persisting original');
     await fs.mkdir(baseDir, { recursive: true });
     const ext = path.extname(originalName) || '.bin';
     const originalPath = path.join(baseDir, `original${ext}`);
-    await fs.writeFile(originalPath, buffer);
+    await moveFile(tempFilePath, originalPath);
 
     // 3. Run the extractor end-to-end.
     reportProgress('extracting', 0.1, 'Extracting frames');
@@ -158,8 +211,7 @@ export async function uploadVideo(
         ),
     });
 
-    // 4. Generate container thumbnail from the segmentation-source channel
-    //    when present, otherwise from the first available channel.
+    // 4. Generate container thumbnail.
     reportProgress('persisting', 0.85, 'Generating thumbnail');
     const defaultChannel =
       result.channels.find(c => c.isSegmentationSource)?.name ??
@@ -172,7 +224,7 @@ export async function uploadVideo(
       thumbnailPath
     );
 
-    // 5. Persist frame rows in a batch + update container metadata.
+    // 5. Persist frame rows + container metadata.
     reportProgress('persisting', 0.9, 'Persisting frame records');
     const frameRows = Array.from({ length: result.frameCount }, (_, i) => ({
       name: `${originalName} (frame ${i + 1})`,
@@ -224,12 +276,28 @@ export async function uploadVideo(
     logger.error(
       `Video upload failed: ${message}`,
       err as Error,
-      'VideoUploadService'
+      'VideoUploadService',
+      { containerId, projectId, originalName }
     );
-    await prisma.image.update({
-      where: { id: containerId },
-      data: { segmentationStatus: 'extraction_failed' },
-    }).catch(() => {/* ignore secondary failure */});
+
+    // Mark container as failed BEFORE cleanup so the row's state reflects
+    // reality even if the rm -rf takes a while or fails.
+    try {
+      await prisma.image.update({
+        where: { id: containerId },
+        data: { segmentationStatus: 'extraction_failed' },
+      });
+    } catch (secondaryErr) {
+      logger.error(
+        `Failed to mark container as extraction_failed: ${(secondaryErr as Error).message}`,
+        secondaryErr as Error,
+        'VideoUploadService',
+        { containerId }
+      );
+    }
+
+    await cleanupOnFailure();
+
     onProgress?.({
       videoContainerId: containerId,
       filename: originalName,

@@ -871,7 +871,40 @@ export class ImageService {
         await storage.delete(image.thumbnailPath);
       }
 
-      // Delete from database (this will also delete related segmentation data due to CASCADE)
+      // Video containers own a whole directory subtree
+      // (projects/<pid>/images/<videoId>/frames/NNNN/<channel>.png) that
+      // sits outside originalPath/thumbnailPath. Without explicit
+      // cleanup, deleting a 200-frame multi-channel ND2 leaves several GB
+      // orphaned on disk while DB cascade removes the rows. Recursive rm
+      // is best-effort — failure logs but doesn't abort the delete.
+      if (image.isVideoContainer) {
+        try {
+          const fs = await import('fs/promises');
+          const path = await import('path');
+          const { config } = await import('../utils/config');
+          const containerDir = path.join(
+            config.UPLOAD_DIR,
+            'projects',
+            image.projectId,
+            'images',
+            image.id
+          );
+          await fs.rm(containerDir, { recursive: true, force: true });
+          logger.info('Removed video container directory', 'ImageService', {
+            imageId,
+            containerDir,
+          });
+        } catch (rmErr) {
+          logger.error(
+            `Failed to remove video container directory: ${(rmErr as Error).message}`,
+            rmErr as Error,
+            'ImageService',
+            { imageId }
+          );
+        }
+      }
+
+      // Delete from database (cascades to child frame Image rows + Segmentation)
       await this.prisma.image.delete({
         where: { id: imageId },
       });

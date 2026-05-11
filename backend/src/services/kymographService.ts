@@ -20,11 +20,13 @@
 
 import * as path from 'path';
 import axios from 'axios';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 
-const prisma = new PrismaClient();
+/** Same whitelist used by VideoController. Channel names must be alnum +
+ *  underscore + dash so they can't escape the storage root. */
+const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 interface PolylineRecord {
   id: string;
@@ -84,12 +86,32 @@ export async function buildKymograph(
 ): Promise<KymographServiceResult> {
   const { videoContainerId, polylineId, frameIndex, sourceChannel } = input;
 
+  // Defence in depth: reject any sourceChannel containing path separators
+  // or other unsafe characters. The route layer also validates, but this
+  // service is a public entry point for any future caller.
+  if (!CHANNEL_NAME_RE.test(sourceChannel)) {
+    throw new Error('Invalid sourceChannel');
+  }
+
   const container = await prisma.image.findUnique({
     where: { id: videoContainerId },
-    select: { id: true, projectId: true, isVideoContainer: true },
+    select: {
+      id: true,
+      projectId: true,
+      isVideoContainer: true,
+      channels: true,
+    },
   });
   if (!container || !container.isVideoContainer) {
     throw new Error('videoContainerId does not refer to a video container');
+  }
+
+  // Whitelist sourceChannel against the container's declared channels.
+  const declared = Array.isArray(container.channels)
+    ? (container.channels as Array<{ name: string }>).map(c => c.name)
+    : [];
+  if (declared.length > 0 && !declared.includes(sourceChannel)) {
+    throw new Error(`Unknown source channel: ${sourceChannel}`);
   }
 
   const allFrames = await prisma.image.findMany({

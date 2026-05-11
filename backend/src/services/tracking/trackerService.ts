@@ -15,11 +15,9 @@
  */
 
 import axios from 'axios';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../db/prismaClient';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
-
-const prisma = new PrismaClient();
 
 interface PolygonRecord {
   id: string;
@@ -37,15 +35,28 @@ interface SegmentationRecord {
   polygons: string;
 }
 
-/** Convert one frame's polygons JSON into the shape the ML tracker expects. */
-function asTrackerPolylines(frameIndex: number, segmentation: SegmentationRecord) {
+/** Convert one frame's polygons JSON into the shape the ML tracker expects.
+ *  Parse failures are logged at error level — the read path already
+ *  validated this JSON when storing, so a failure here indicates real
+ *  corruption (truncated row, encoding flip). Returns empty polylines so
+ *  the tracker still processes other frames. */
+function asTrackerPolylines(
+  frameIndex: number,
+  segmentation: SegmentationRecord
+) {
   let polygons: PolygonRecord[];
   try {
     polygons = JSON.parse(segmentation.polygons) as PolygonRecord[];
   } catch (err) {
-    logger.warn(
-      `Failed to parse polygons for segmentation ${segmentation.id}: ${(err as Error).message}`,
-      'TrackerService'
+    logger.error(
+      `Polygons JSON malformed for segmentation ${segmentation.id}; tracker will skip this frame`,
+      err as Error,
+      'TrackerService',
+      {
+        segmentationId: segmentation.id,
+        frameIndex,
+        polygonsLength: segmentation.polygons?.length,
+      }
     );
     return { frame: frameIndex, polylines: [] };
   }
@@ -131,40 +142,70 @@ export async function runTrackingForContainer(containerId: string): Promise<void
     return;
   }
 
-  // Write back trackIds: parse each frame's polygons, set trackId on
-  // matching polyline rows, serialise back.
-  await prisma.$transaction(
-    frames
-      .filter(f => f.segmentation)
-      .map(f => {
-        const seg = f.segmentation as SegmentationRecord;
-        let polygons: PolygonRecord[];
-        try {
-          polygons = JSON.parse(seg.polygons) as PolygonRecord[];
-        } catch {
-          polygons = [];
+  // Write back trackIds in chunked transactions. A single $transaction
+  // over hundreds of frame updates routinely exceeds the default 5 s
+  // Prisma transactionTimeout (especially with large polygon JSON
+  // payloads). Chunking + an explicit per-chunk timeout keeps the
+  // 200-frame case reliable while still being atomic per chunk.
+  const TX_CHUNK_SIZE = 25;
+  const TX_TIMEOUT_MS = 60_000;
+
+  const updates: Array<{ segmentationId: string; polygonsJson: string }> = [];
+  for (const f of frames) {
+    if (!f.segmentation) continue;
+    const seg = f.segmentation as SegmentationRecord;
+    let polygons: PolygonRecord[];
+    try {
+      polygons = JSON.parse(seg.polygons) as PolygonRecord[];
+    } catch (err) {
+      // Parse failure here is corruption (we read this exact row a few
+      // hundred ms ago in the read pass). Log loudly and skip — do NOT
+      // silently substitute [] which would erase any existing trackIds.
+      logger.error(
+        `Refusing to overwrite malformed polygons JSON during tracker write-back`,
+        err as Error,
+        'TrackerService',
+        { segmentationId: seg.id, polygonsLength: seg.polygons?.length }
+      );
+      continue;
+    }
+    let mutated = false;
+    for (const poly of polygons) {
+      const tid = assignments[poly.id];
+      if (tid && poly.trackId !== tid) {
+        poly.trackId = tid;
+        mutated = true;
+      }
+    }
+    if (mutated) {
+      updates.push({
+        segmentationId: seg.id,
+        polygonsJson: JSON.stringify(polygons),
+      });
+    }
+  }
+
+  // Use the interactive transaction overload so we can set the timeout.
+  // The array-form overload from Prisma 5.x does not accept timeout
+  // options; the function-form does.
+  for (let i = 0; i < updates.length; i += TX_CHUNK_SIZE) {
+    const chunk = updates.slice(i, i + TX_CHUNK_SIZE);
+    await prisma.$transaction(
+      async tx => {
+        for (const u of chunk) {
+          await tx.segmentation.update({
+            where: { id: u.segmentationId },
+            data: { polygons: u.polygonsJson },
+          });
         }
-        let mutated = false;
-        for (const poly of polygons) {
-          const tid = assignments[poly.id];
-          if (tid && poly.trackId !== tid) {
-            poly.trackId = tid;
-            mutated = true;
-          }
-        }
-        if (!mutated) {
-          return prisma.segmentation.findUnique({ where: { id: seg.id } });
-        }
-        return prisma.segmentation.update({
-          where: { id: seg.id },
-          data: { polygons: JSON.stringify(polygons) },
-        });
-      })
-  );
+      },
+      { timeout: TX_TIMEOUT_MS, maxWait: 10_000 }
+    );
+  }
 
   const uniqueTracks = new Set(Object.values(assignments)).size;
   logger.info(
-    `Tracker: container ${containerId} → ${uniqueTracks} unique tracks across ${frames.length} frames`,
+    `Tracker: container ${containerId} → ${uniqueTracks} unique tracks across ${frames.length} frames (${updates.length} rows updated in ${Math.ceil(updates.length / TX_CHUNK_SIZE)} chunks)`,
     'TrackerService'
   );
 }

@@ -1,5 +1,6 @@
 import multer from 'multer';
 import path from 'path';
+import * as os from 'os';
 import { Request, Response, NextFunction } from 'express';
 import type { Express } from 'express-serve-static-core';
 import {
@@ -113,8 +114,26 @@ export const uploadSingleImage = upload.single('image');
  * filter as ``upload`` but a much larger per-file budget so .nd2 stacks
  * and multi-page TIFFs aren't truncated at 20 MB.
  */
+// Videos are buffered to a temp file on disk (not memory) so a 50 GB ND2
+// can land safely even when the backend container has only a few GB of
+// RAM. The videoUploadService then renames the temp file into the
+// canonical projects/<pid>/images/<vid>/original.<ext> location and the
+// extractor runs from there.
+const VIDEO_UPLOAD_TMP_DIR =
+  process.env.VIDEO_UPLOAD_TMP_DIR ?? path.join(os.tmpdir(), 'spheroseg-uploads');
+
 const videoUpload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, VIDEO_UPLOAD_TMP_DIR),
+    filename: (_req, file, cb) => {
+      // Preserve the original extension so the extractor's format detection
+      // (mp4 vs nd2 vs tiff stack) works against the temp path. Prefix
+      // with a random token to avoid collisions across concurrent uploads.
+      const ext = path.extname(file.originalname);
+      const token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+      cb(null, `${token}${ext}`);
+    },
+  }),
   limits: {
     fileSize: VIDEO_UPLOAD_MAX_BYTES,
     files: 1,
@@ -123,6 +142,18 @@ const videoUpload = multer({
   },
   fileFilter: sharedFileFilter,
 });
+
+// Ensure the tmp dir exists at boot — diskStorage will throw EEXIST/ENOENT
+// otherwise on first upload.
+import { mkdirSync } from 'fs';
+try {
+  mkdirSync(VIDEO_UPLOAD_TMP_DIR, { recursive: true });
+} catch (err) {
+  logger.warn(
+    `Failed to ensure video tmp dir ${VIDEO_UPLOAD_TMP_DIR}: ${(err as Error).message}`,
+    'UploadMiddleware'
+  );
+}
 
 /**
  * Middleware for a single video upload (form field name: "video"). The

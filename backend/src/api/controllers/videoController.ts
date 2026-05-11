@@ -1,19 +1,28 @@
 /**
  * Video-related HTTP handlers: upload (extracts to per-frame Image rows),
  * frame-data fetch by channel, and PATCH for channel metadata updates.
+ *
+ * Security rules baked into every handler:
+ *
+ *  - **Authz**: every read/write goes through ``assertProjectAccess`` which
+ *    mirrors the imageService rule (project owner OR accepted-share). No
+ *    image lookup by raw imageId without verifying the caller has access
+ *    to the project that owns it.
+ *  - **Channel name whitelist**: ``channel`` query/body strings are
+ *    validated against ``container.channels[].name`` (or the legacy
+ *    bareword set extractors emit) before any path join — prevents
+ *    ``?channel=../../../etc/...`` traversal.
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../db/prismaClient';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
-import { uploadVideo } from '../../services/videoUploadService';
+import { uploadVideoFromFile } from '../../services/videoUploadService';
 import { isVideoFilename } from '../../services/video/videoExtractor';
-
-const prisma = new PrismaClient();
 
 interface ChannelDTO {
   name: string;
@@ -23,23 +32,123 @@ interface ChannelDTO {
   isSegmentationSource: boolean;
 }
 
+/** Allowed shape for channel names anywhere in the API surface. Filesystem-
+ *  safe alnum + underscore + dash; bans dots so ``.png`` extension can't
+ *  smuggle in, bans slashes so traversal is impossible. */
+const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+function isSafeChannelName(name: unknown): name is string {
+  return typeof name === 'string' && CHANNEL_NAME_RE.test(name);
+}
+
+/** Assert the caller has access to ``projectId`` (owner or accepted share).
+ *  Resolves to ``null`` on access denial after writing the response. */
+async function assertProjectAccess(
+  req: Request,
+  res: Response,
+  projectId: string
+): Promise<string | null> {
+  const userId = req.user?.id;
+  if (!userId) {
+    ResponseHelper.error(res, 'Unauthorized', 401);
+    return null;
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  if (!user) {
+    ResponseHelper.error(res, 'Unauthorized', 401);
+    return null;
+  }
+  const project = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      OR: [
+        { userId },
+        {
+          shares: {
+            some: {
+              status: 'accepted',
+              OR: [{ sharedWithId: userId }, { email: user.email }],
+            },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  });
+  if (!project) {
+    ResponseHelper.error(res, 'Access denied to this project', 403);
+    return null;
+  }
+  return userId;
+}
+
+/** Resolve the container row for an arbitrary imageId, asserting that the
+ *  caller has access to its parent project. Returns null on access denial
+ *  (handler should then return). */
+async function loadAuthorisedContainer(
+  req: Request,
+  res: Response,
+  imageId: string
+) {
+  if (typeof imageId !== 'string' || imageId.length === 0) {
+    ResponseHelper.error(res, 'imageId required', 400);
+    return null;
+  }
+  const image = await prisma.image.findUnique({
+    where: { id: imageId },
+    select: {
+      id: true,
+      projectId: true,
+      originalPath: true,
+      isVideoContainer: true,
+      parentVideoId: true,
+      frameIndex: true,
+      channels: true,
+      name: true,
+      width: true,
+      height: true,
+      frameCount: true,
+      videoDurationMs: true,
+    },
+  });
+  if (!image) {
+    ResponseHelper.error(res, 'Image not found', 404);
+    return null;
+  }
+  const userId = await assertProjectAccess(req, res, image.projectId);
+  if (!userId) return null;
+  return image;
+}
+
 export class VideoController {
   /**
    * POST /projects/:id/videos
    *
    * Accepts a single video upload (mp4/avi/mov/mkv/webm/nd2 or multi-page
-   * TIFF), runs the extractor synchronously, and responds with the new
-   * container ID + extracted frame count + detected channel metadata.
+   * TIFF). The uploaded file is streamed to a tmp path by multer
+   * (diskStorage) so the backend container never buffers a 100 GB ND2
+   * into RAM. The extractor service then renames the tmp file into the
+   * canonical project storage layout before extracting frames.
    */
   static async upload(req: Request, res: Response): Promise<void> {
     try {
       const projectId = req.params.id;
+      const userId = await assertProjectAccess(req, res, projectId);
+      if (!userId) return;
+
       const file = req.file as Express.Multer.File | undefined;
       if (!file) {
         ResponseHelper.error(res, 'No file uploaded', 400);
         return;
       }
       if (!isVideoFilename(file.originalname)) {
+        // Clean up the tmp file the dropped-by-multer would otherwise leave.
+        if (file.path) {
+          await fs.rm(file.path, { force: true }).catch(() => undefined);
+        }
         ResponseHelper.error(
           res,
           `Not a recognised video format: ${path.extname(file.originalname)}`,
@@ -48,13 +157,11 @@ export class VideoController {
         return;
       }
 
-      // The websocket layer is owned by upload progress already; for an
-      // MVP this call is synchronous and returns the result once the
-      // extractor completes. Frontend shows a spinner during the call.
-      const result = await uploadVideo(file.buffer, {
+      const result = await uploadVideoFromFile({
         projectId,
         originalName: file.originalname,
         mimeType: file.mimetype,
+        tempFilePath: file.path,
       });
 
       ResponseHelper.success(res, {
@@ -64,7 +171,11 @@ export class VideoController {
       });
     } catch (err) {
       const message = (err as Error).message;
-      logger.error(`Video upload failed: ${message}`, err as Error, 'VideoController');
+      logger.error(
+        `Video upload failed: ${message}`,
+        err as Error,
+        'VideoController'
+      );
       ResponseHelper.error(res, message, 500);
     }
   }
@@ -85,23 +196,36 @@ export class VideoController {
           ? channelParam
           : null;
 
-      const image = await prisma.image.findUnique({
-        where: { id: imageId },
-        select: {
-          id: true,
-          projectId: true,
-          originalPath: true,
-          parentVideoId: true,
-          frameIndex: true,
-        },
-      });
-      if (!image) {
-        ResponseHelper.error(res, 'Image not found', 404);
+      // Reject anything that could escape the storage root. We do this
+      // BEFORE the DB lookup so a malicious query never even touches the
+      // database with arbitrary content.
+      if (channelName !== null && !isSafeChannelName(channelName)) {
+        ResponseHelper.error(res, 'Invalid channel name', 400);
         return;
       }
 
+      const image = await loadAuthorisedContainer(req, res, imageId);
+      if (!image) return;
+
       let absPath: string;
-      if (channelName && image.parentVideoId != null && image.frameIndex != null) {
+      if (
+        channelName &&
+        image.parentVideoId != null &&
+        image.frameIndex != null
+      ) {
+        // Whitelist channelName against the container's declared channels
+        // so even alnum-only-but-undeclared names can't hit the FS.
+        const container = await prisma.image.findUnique({
+          where: { id: image.parentVideoId },
+          select: { channels: true },
+        });
+        const allowed = Array.isArray(container?.channels)
+          ? (container!.channels as unknown as ChannelDTO[]).map(c => c.name)
+          : [];
+        if (allowed.length > 0 && !allowed.includes(channelName)) {
+          ResponseHelper.error(res, `Unknown channel: ${channelName}`, 400);
+          return;
+        }
         absPath = path.join(
           config.UPLOAD_DIR,
           'projects',
@@ -113,9 +237,6 @@ export class VideoController {
           `${channelName}.png`
         );
       } else {
-        // Standalone image or channel not specified — fall back to
-        // originalPath, which is stored relative to the project's
-        // image root.
         absPath = path.join(
           config.UPLOAD_DIR,
           'projects',
@@ -125,9 +246,31 @@ export class VideoController {
         );
       }
 
+      // Defence in depth: ensure the resolved path is still under the
+      // configured upload root. Even with the regex+whitelist above,
+      // a misconfigured ``originalPath`` cannot escape.
+      const uploadRoot = path.resolve(config.UPLOAD_DIR);
+      const resolved = path.resolve(absPath);
+      if (!resolved.startsWith(uploadRoot + path.sep)) {
+        logger.error(
+          'Frame data path resolved outside upload root',
+          new Error('path traversal'),
+          'VideoController',
+          { resolved, uploadRoot, imageId, channelName }
+        );
+        ResponseHelper.error(res, 'Invalid path', 400);
+        return;
+      }
+
       try {
-        await fs.access(absPath);
+        await fs.access(resolved);
       } catch {
+        logger.error(
+          `Frame PNG missing on disk for image ${imageId}`,
+          new Error('ENOENT'),
+          'VideoController',
+          { resolved, channelName, parentVideoId: image.parentVideoId }
+        );
         ResponseHelper.error(
           res,
           `Frame data not found for channel '${channelName ?? '<default>'}'`,
@@ -138,7 +281,7 @@ export class VideoController {
 
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'private, max-age=3600');
-      res.sendFile(absPath);
+      res.sendFile(resolved);
     } catch (err) {
       logger.error(
         `Frame data fetch failed: ${(err as Error).message}`,
@@ -158,35 +301,18 @@ export class VideoController {
   static async getVideoFrames(req: Request, res: Response): Promise<void> {
     try {
       const imageId = req.params.imageId;
-      const container = await prisma.image.findUnique({
-        where: { id: imageId },
-        select: {
-          id: true,
-          name: true,
-          width: true,
-          height: true,
-          isVideoContainer: true,
-          frameCount: true,
-          videoDurationMs: true,
-          channels: true,
-        },
-      });
-      if (!container || !container.isVideoContainer) {
+      const container = await loadAuthorisedContainer(req, res, imageId);
+      if (!container) return;
+      if (!container.isVideoContainer) {
         ResponseHelper.error(res, 'Not a video container', 404);
         return;
       }
-
       const frames = await prisma.image.findMany({
         where: { parentVideoId: imageId },
         orderBy: { frameIndex: 'asc' },
         select: { id: true, frameIndex: true, segmentationStatus: true },
       });
-
-      ResponseHelper.success(res, {
-        ...container,
-        channels: container.channels,
-        frames,
-      });
+      ResponseHelper.success(res, { ...container, frames });
     } catch (err) {
       logger.error(
         `Frame list fetch failed: ${(err as Error).message}`,
@@ -201,9 +327,7 @@ export class VideoController {
    * PATCH /images/:imageId/channels
    *
    * Updates the channels JSON on a video container row. Validates that
-   * at most one channel has ``isSegmentationSource: true`` (radio
-   * behaviour) and that the named channels actually have PNG files on
-   * disk before persisting.
+   * exactly-one (or zero) channels carry ``isSegmentationSource: true``.
    */
   static async updateChannels(req: Request, res: Response): Promise<void> {
     try {
@@ -212,6 +336,25 @@ export class VideoController {
       if (!Array.isArray(channels) || channels.length === 0) {
         ResponseHelper.error(res, 'channels[] required', 400);
         return;
+      }
+      // Validate channel name shape — same whitelist used at read time.
+      for (const c of channels) {
+        if (!isSafeChannelName(c?.name)) {
+          ResponseHelper.error(
+            res,
+            'Each channel.name must be alnum/underscore/dash, ≤64 chars',
+            400
+          );
+          return;
+        }
+        if (c.type !== 'irm' && c.type !== 'fluorescent') {
+          ResponseHelper.error(
+            res,
+            "channel.type must be 'irm' or 'fluorescent'",
+            400
+          );
+          return;
+        }
       }
       const sourceCount = channels.filter(c => c.isSegmentationSource).length;
       if (sourceCount > 1) {
@@ -223,8 +366,9 @@ export class VideoController {
         return;
       }
 
-      const image = await prisma.image.findUnique({ where: { id: imageId } });
-      if (!image || !image.isVideoContainer) {
+      const image = await loadAuthorisedContainer(req, res, imageId);
+      if (!image) return;
+      if (!image.isVideoContainer) {
         ResponseHelper.error(res, 'Not a video container', 400);
         return;
       }

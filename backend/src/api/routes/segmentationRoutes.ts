@@ -184,13 +184,65 @@ router.post(
   authenticate,
   [
     body('videoContainerId').isUUID(),
-    body('polylineId').isString().notEmpty(),
+    body('polylineId').isString().notEmpty().isLength({ max: 128 }),
     body('frameIndex').isInt({ min: 0 }),
-    body('sourceChannel').isString().notEmpty(),
+    // sourceChannel: alnum + underscore + dash only; rejected before the
+    // service layer joins it into a filesystem path.
+    body('sourceChannel')
+      .isString()
+      .matches(/^[A-Za-z0-9_-]{1,64}$/)
+      .withMessage(
+        'sourceChannel must be alnum / underscore / dash, up to 64 chars'
+      ),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
     try {
+      // Authz: ensure the caller owns (or has accepted-share access to)
+      // the project containing the requested video container before
+      // even invoking the ML service.
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.error(res, 'Unauthorized', 401);
+        return;
+      }
+      const { prisma } = await import('../../db/prismaClient');
+      const container = await prisma.image.findUnique({
+        where: { id: req.body.videoContainerId },
+        select: { projectId: true, isVideoContainer: true },
+      });
+      if (!container || !container.isVideoContainer) {
+        ResponseHelper.error(res, 'Video container not found', 404);
+        return;
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      const project = await prisma.project.findFirst({
+        where: {
+          id: container.projectId,
+          OR: [
+            { userId },
+            {
+              shares: {
+                some: {
+                  status: 'accepted',
+                  OR: [
+                    { sharedWithId: userId },
+                    ...(user?.email ? [{ email: user.email }] : []),
+                  ],
+                },
+              },
+            },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!project) {
+        ResponseHelper.error(res, 'Access denied to this project', 403);
+        return;
+      }
       const result = await buildKymograph({
         videoContainerId: req.body.videoContainerId,
         polylineId: req.body.polylineId,

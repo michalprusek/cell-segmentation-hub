@@ -9,6 +9,7 @@ import { WebSocketService } from './websocketService';
 import { batchProcessor } from '../utils/batchProcessor';
 import { SegmentationUpdateData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
+import { scheduleTrackingForContainer } from './tracking/trackerService';
 
 export interface QueueStats {
   queued: number;
@@ -838,22 +839,24 @@ export class QueueService {
 
           // If this image is a video frame and its container's batch is
           // now fully segmented, run cross-frame tracking. Best-effort,
-          // fire-and-forget — frontend reads trackIds when present.
+          // fire-and-forget. The split on error category matters: a DB
+          // failure is real and gets logger.error; the scheduler itself
+          // is fire-and-forget (no await) so its rejections are caught
+          // inside scheduleTrackingForContainer.
           try {
             const imageMeta = await this.prisma.image.findUnique({
               where: { id: item.imageId },
               select: { parentVideoId: true },
             });
             if (imageMeta?.parentVideoId) {
-              const { scheduleTrackingForContainer } = await import(
-                './tracking/trackerService'
-              );
               scheduleTrackingForContainer(imageMeta.parentVideoId);
             }
           } catch (trackErr) {
-            logger.warn(
-              `Failed to schedule tracking: ${(trackErr as Error).message}`,
-              'QueueService'
+            logger.error(
+              `Failed to look up parentVideoId for tracking dispatch: ${(trackErr as Error).message}`,
+              trackErr as Error,
+              'QueueService',
+              { imageId: item.imageId }
             );
           }
 
