@@ -1123,6 +1123,64 @@ class ApiClient {
   }
 
   /**
+   * Uploads a single video / multi-page TIFF / ND2 stack to a project.
+   *
+   * Routes to POST /projects/:id/videos (separate multer with 100 GB cap +
+   * server-side ffmpeg / nd2 / tifffile extraction). One file per call;
+   * callers wanting to upload multiple videos should loop.
+   *
+   * Returns the backend's container-creation response so callers can
+   * surface the frame count and channel list in the UI.
+   */
+  async uploadVideo(
+    projectId: string,
+    file: File,
+    onProgress?: (progressPercent: number) => void
+  ): Promise<{
+    videoContainerId: string;
+    frameCount: number;
+    channels: Array<{
+      name: string;
+      type: 'irm' | 'fluorescent';
+      wavelengthNm?: number;
+      displayColor?: string;
+      isSegmentationSource: boolean;
+    }>;
+  }> {
+    const formData = new FormData();
+    const normalizedName = file.name.normalize('NFC');
+    const payload =
+      normalizedName !== file.name
+        ? new File([file], normalizedName, {
+            type: file.type,
+            lastModified: file.lastModified,
+          })
+        : file;
+    formData.append('video', payload);
+
+    const response = await this.instance.post(
+      `/projects/${projectId}/videos`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        // Server-side extraction can take minutes for a 1 GB ND2 stack.
+        // Bias toward the high end; for typical small videos the request
+        // returns well before this.
+        timeout: TIMEOUTS.FILE_UPLOAD_LARGE * 4,
+        onUploadProgress: progressEvent => {
+          if (onProgress && progressEvent.total) {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            onProgress(percentCompleted);
+          }
+        },
+      }
+    );
+    return this.extractData(response) as never;
+  }
+
+  /**
    * Uploads multiple images to a project using chunking for large batches
    * @param {string} projectId - The project ID to upload images to
    * @param {File[]} files - Array of image files to upload

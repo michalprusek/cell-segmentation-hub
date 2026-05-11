@@ -221,20 +221,124 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       onCompleteRef.current = onComplete ?? null;
       activeSessionIdRef.current = sessionId;
 
+      // Split files into video / single-image groups. Videos take a
+      // different round-trip (one-at-a-time POST /videos with server-side
+      // ffmpeg/nd2/tifffile extraction); throwing them through the bulk
+      // /images endpoint would either be rejected by the smaller multer
+      // budget or trigger a broken Sharp thumbnail pass on opaque bytes.
+      const VIDEO_EXTENSIONS = [
+        '.mp4',
+        '.avi',
+        '.mov',
+        '.mkv',
+        '.webm',
+        '.nd2',
+      ];
+      const isVideoFile = (f: File) => {
+        if (f.type.startsWith('video/')) return true;
+        const lower = f.name.toLowerCase();
+        return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext));
+      };
+      const videoFiles = files.filter(isVideoFile);
+      const imageFiles = files.filter(f => !isVideoFile(f));
+
       // Run the actual upload asynchronously
       const doUpload = async () => {
         try {
           const signal = abortControllerRef.current?.signal;
 
-          if (files.length > DEFAULT_CHUNKING_CONFIG.chunkSize) {
+          // Videos first — sequential, single endpoint per file. We
+          // accumulate counts so the session card reports a single
+          // combined success/fail tally for mixed batches.
+          let videoSuccess = 0;
+          let videoFailed = 0;
+          for (let i = 0; i < videoFiles.length; i++) {
+            if (signal?.aborted) break;
+            const vfile = videoFiles[i];
+            setSessions(prev => {
+              const s = prev[sessionId];
+              if (!s || s.status !== 'uploading') return prev;
+              return {
+                ...prev,
+                [sessionId]: {
+                  ...s,
+                  currentOperation: `Uploading video ${i + 1}/${videoFiles.length}: ${vfile.name}`,
+                },
+              };
+            });
+            try {
+              await apiClient.uploadVideo(projectId, vfile, percent => {
+                // Treat each video as 1 / videoFiles.length share of overall
+                const segment = 100 / Math.max(1, files.length);
+                const overall = Math.round(
+                  i * segment + (percent * segment) / 100
+                );
+                setSessions(prev => {
+                  const s = prev[sessionId];
+                  if (!s || s.status !== 'uploading') return prev;
+                  return {
+                    ...prev,
+                    [sessionId]: {
+                      ...s,
+                      overallProgress: Math.max(s.overallProgress, overall),
+                    },
+                  };
+                });
+              });
+              videoSuccess++;
+            } catch (err) {
+              logger.error('[UploadContext] video upload failed', err);
+              videoFailed++;
+            }
+          }
+          // If user only uploaded videos, finalize the session here so we
+          // don't fall through into the image upload paths with an empty
+          // imageFiles array (which would otherwise post zero-file form).
+          if (imageFiles.length === 0) {
+            setSessions(prev => ({
+              ...prev,
+              [sessionId]: {
+                ...prev[sessionId],
+                status:
+                  videoFailed > 0 && videoSuccess === 0
+                    ? 'failed'
+                    : 'completed',
+                overallProgress: 100,
+                successCount: videoSuccess,
+                failedCount: videoFailed,
+                chunkProgress: null,
+                currentOperation:
+                  videoFailed > 0
+                    ? `${videoSuccess} videos uploaded, ${videoFailed} failed`
+                    : `${videoSuccess} video(s) uploaded successfully`,
+              },
+            }));
+            if (videoFailed > 0 && videoSuccess > 0) {
+              toast.warning(
+                `${videoSuccess} videos uploaded, ${videoFailed} failed`
+              );
+            } else if (videoFailed === 0 && videoSuccess > 0) {
+              toast.success(`${videoSuccess} video(s) uploaded successfully`);
+            } else if (videoFailed > 0) {
+              toast.error(`Video upload failed: ${videoFailed} file(s)`);
+            }
+            if (onCompleteRef.current) onCompleteRef.current();
+            return;
+          }
+          // Otherwise: alias the images-only set as the working batch.
+          // (`files` is a fn param so we can't reassign without lint
+          // friction; the local alias is cleaner anyway.)
+          const remainingFiles = imageFiles;
+
+          if (remainingFiles.length > DEFAULT_CHUNKING_CONFIG.chunkSize) {
             // Chunked upload for large batches
             logger.info(
-              `[UploadContext] Starting chunked upload of ${files.length} files`
+              `[UploadContext] Starting chunked upload of ${remainingFiles.length} files`
             );
 
             const result = await apiClient.uploadImagesChunked(
               projectId,
-              files,
+              remainingFiles,
               progressPercent => {
                 setSessions(prev => {
                   const s = prev[sessionId];
@@ -309,20 +413,20 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
           } else {
             // Regular upload for small batches
             logger.info(
-              `[UploadContext] Starting regular upload of ${files.length} files`
+              `[UploadContext] Starting regular upload of ${remainingFiles.length} files`
             );
 
             setSessions(prev => ({
               ...prev,
               [sessionId]: {
                 ...prev[sessionId],
-                currentOperation: `Uploading ${files.length} files...`,
+                currentOperation: `Uploading ${remainingFiles.length} files...`,
               },
             }));
 
             const uploadedImages = await apiClient.uploadImages(
               projectId,
-              files,
+              remainingFiles,
               progressPercent => {
                 setSessions(prev => {
                   const s = prev[sessionId];
