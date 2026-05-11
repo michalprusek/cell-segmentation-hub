@@ -1,18 +1,25 @@
 """Wound-healing segmentation model wrapper.
 
-Wraps a U-Net++ (ResNeXt-50 32x4d encoder) trained on scratch-assay microscopy
-images. Produces a binary mask where foreground = wound (cell-free region).
+Wraps a U-Net + MiT-B5 (SegFormer encoder) trained on scratch-assay
+microscopy images. Produces a binary mask where foreground = wound
+(cell-free region). Reports 90.0% IoU on the external Löwenstein
+dataset and 92.3% on the internal multi-cell-line test set.
 
 Architecture decisions:
-- Wrapper (not nn.Module subclass) — keeps ``.model`` as a raw smp nn.Module
-  so the global InferenceExecutor can run it unmodified, and preprocessing /
-  postprocessing lives on the same object instead of a sibling utility module.
-  (Dependency isolation is handled separately by the try/import guard in
-  ``models/__init__.py`` plus the ``WoundModel is None`` check in the model
-  loader.)
-- Preprocessing baked into the class — wound uses grayscale input with a
-  custom ``x/255 - 0.5`` normalization that differs from the shared ImageNet
-  normalization used by spheroid models.
+- Wrapper (not nn.Module subclass) — keeps ``.model`` as a raw smp
+  nn.Module so the global InferenceExecutor can run it unmodified, and
+  preprocessing / postprocessing lives on the same object instead of a
+  sibling utility module. (Dependency isolation is handled separately
+  by the try/import guard in ``models/__init__.py`` plus the
+  ``WoundModel is None`` check in the model loader.)
+- Preprocessing baked into the class — wound uses grayscale input with
+  a custom ``x/255 - 0.5`` normalization that differs from the shared
+  ImageNet normalization used by spheroid models. MiT encoders require
+  3 input channels, so the grayscale tensor is replicated across the
+  channel dimension after normalization (the same value in R, G, B).
+- IMAGE_SIZE is 256 (training resolution of MiT-B5 + small wound input
+  resolution); the downstream postprocessor bilinearly upsamples the
+  predicted probability map back to the original image size.
 """
 
 from __future__ import annotations
@@ -40,9 +47,10 @@ class WoundModel:
     """Loads the wound-healing segmentation checkpoint and exposes standard
     preprocess / forward / postprocess primitives."""
 
-    IMAGE_SIZE = 512
-    ENCODER = "resnext50_32x4d"
-    ARCH = "unetplusplus"
+    IMAGE_SIZE = 256
+    ENCODER = "mit_b5"
+    ARCH = "unet"
+    IN_CHANNELS = 3  # MiT encoders require 3 channels (replicated grayscale)
 
     def __init__(self) -> None:
         if smp is None:
@@ -54,7 +62,7 @@ class WoundModel:
             self.ARCH,
             encoder_name=self.ENCODER,
             encoder_weights=None,
-            in_channels=1,
+            in_channels=self.IN_CHANNELS,
             classes=1,
         )
         self.model.eval()
@@ -104,6 +112,16 @@ class WoundModel:
         else:
             sd = state
 
+        # MiT-B5 checkpoint comes from PyTorch Lightning, where every key in
+        # the state_dict is prefixed with ``model.`` (Lightning module wraps
+        # the actual nn.Module under that attribute name). Strip the prefix
+        # so the keys match the plain smp model we instantiated above.
+        if any(k.startswith("model.") for k in sd):
+            sd = {
+                (k[len("model."):] if k.startswith("model.") else k): v
+                for k, v in sd.items()
+            }
+
         result = self.model.load_state_dict(sd, strict=True)
         if result.missing_keys or result.unexpected_keys:
             raise RuntimeError(
@@ -125,17 +143,23 @@ class WoundModel:
         return self
 
     def preprocess(self, image: Image.Image) -> torch.Tensor:
-        """PIL → grayscale → resize 512×512 BILINEAR → normalize `[−0.5, 0.5]`.
+        """PIL → grayscale → resize 256×256 BILINEAR → normalize `[−0.5, 0.5]`
+        → replicate to 3 channels.
 
         The model was trained on brightfield scratch-assay microscopy (bright
         background = wound, dark = cells). RGB inputs are converted to L mode
-        via PIL's luminance formula before normalization.
+        via PIL's luminance formula before normalization. The final
+        ``repeat(1, 3, 1, 1)`` is required because the MiT-B5 encoder
+        expects 3-channel input — the same grayscale value is replicated
+        across the R, G, B planes (matches training-time preprocessing
+        exactly).
         """
         gray = image if image.mode == "L" else image.convert("L")
         resized = gray.resize((self.IMAGE_SIZE, self.IMAGE_SIZE), Image.BILINEAR)
         arr = np.array(resized, dtype=np.uint8, copy=True)
         t = torch.from_numpy(arr).unsqueeze(0).unsqueeze(0).to(self.device)
-        return t.float() / 255.0 - 0.5
+        normalized = t.float() / 255.0 - 0.5
+        return normalized.repeat(1, self.IN_CHANNELS, 1, 1)
 
     def postprocess_to_mask(self, logits: torch.Tensor,
                             original_size: Tuple[int, int],
