@@ -19,10 +19,18 @@
  */
 import { test, expect } from '@playwright/test';
 
+import * as fs from 'fs';
+
+const FIXTURE_PATH = 'tests/fixtures/video/short_mt.mp4';
+
 test.describe('Microtubule + video workflow', () => {
-  test.fixme(
-    true,
-    'requires microtubule_v7.pt weights + HF_TOKEN + ffmpeg-static in the E2E stack'
+  // The smoke test runs when the fixture is present AND the E2E stack
+  // has microtubule weights staged + a HuggingFace token in env. On a
+  // bare CI runner we skip rather than fail so unrelated PRs aren't
+  // blocked by missing weights.
+  test.skip(
+    !fs.existsSync(FIXTURE_PATH) || !process.env.E2E_USER_EMAIL,
+    'fixture or E2E_USER_EMAIL missing — see tests/fixtures/video/README'
   );
 
   test('create project, upload mp4, segment, kymograph', async ({ page }) => {
@@ -43,7 +51,7 @@ test.describe('Microtubule + video workflow', () => {
 
     // Upload mp4 fixture
     const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles('tests/fixtures/video/short_mt.mp4');
+    await fileInput.setInputFiles(FIXTURE_PATH);
     await expect(page.locator('text=frames').first()).toBeVisible({
       timeout: 60_000,
     });
