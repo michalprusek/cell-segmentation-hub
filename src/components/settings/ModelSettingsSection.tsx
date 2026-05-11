@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
@@ -21,10 +20,8 @@ const ModelSettingsSection = () => {
   const { t } = useLanguage();
   const {
     selectedModel,
-    confidenceThreshold,
     detectHoles,
     setSelectedModel,
-    setConfidenceThreshold,
     setDetectHoles,
     availableModels,
   } = useLocalizedModels();
@@ -43,29 +40,8 @@ const ModelSettingsSection = () => {
   );
 
   const handleModelChange = (modelId: string) => {
-    const model = availableModels.find(m => m.id === modelId);
     setSelectedModel(modelId as ModelType);
-    if (model) {
-      setConfidenceThreshold(model.defaultThreshold);
-      if (model.defaultThreshold !== 0.5) {
-        toast.success(
-          t('settings.thresholdAutoAdjusted').replace(
-            '{threshold}',
-            String(Math.round(model.defaultThreshold * 100))
-          )
-        );
-      } else {
-        toast.success(t('settings.modelSelected'));
-      }
-    }
-  };
-
-  const handleThresholdChange = (value: number[]) => {
-    setConfidenceThreshold(value[0] / 100); // Convert from 0-100 to 0-1
-  };
-
-  const handleThresholdCommit = (_value: number[]) => {
-    toast.success(t('settings.modelSettingsSaved'));
+    toast.success(t('settings.modelSelected'));
   };
 
   const handleDetectHolesChange = (checked: boolean) => {
@@ -155,42 +131,6 @@ const ModelSettingsSection = () => {
             {woundModels.map(renderModelCard)}
           </div>
         </RadioGroup>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="threshold" className="text-base font-medium">
-            {t('settings.confidenceThreshold')}
-          </Label>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {t('settings.confidenceThresholdDescription')}
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              10%
-            </span>
-            <span className="text-sm font-medium">
-              {Math.round(confidenceThreshold * 100)}%
-            </span>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              90%
-            </span>
-          </div>
-
-          <Slider
-            id="threshold"
-            min={10}
-            max={90}
-            step={1}
-            value={[confidenceThreshold * 100]}
-            onValueChange={handleThresholdChange}
-            onValueCommit={handleThresholdCommit}
-            className="w-full"
-          />
-        </div>
       </div>
 
       <div className="space-y-4">

@@ -421,15 +421,10 @@ export default {
         },
       },
     },
-    confidenceThreshold: '置信度阈值',
-    confidenceThresholdDescription: '分割预测所需的最小置信度',
     detectHoles: '检测空洞',
     detectHolesDescription: '启用细胞内部结构和空洞的检测',
-    currentThreshold: '当前阈值',
     modelSelected: '模型选择成功',
     modelSettingsSaved: '模型设置保存成功',
-    thresholdAutoAdjusted:
-      '模型已选择 — 阈值已自动设置为{threshold}%（针对此模型优化）',
     modelSize: {
       small: '小',
       medium: '中',

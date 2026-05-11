@@ -18,7 +18,6 @@ vi.mock('@/hooks/useLocalizedModels', () => ({
     confidenceThreshold: 0.5,
     detectHoles: true,
     setSelectedModel: vi.fn(),
-    setConfidenceThreshold: vi.fn(),
     setDetectHoles: vi.fn(),
     availableModels: [
       {
@@ -26,12 +25,14 @@ vi.mock('@/hooks/useLocalizedModels', () => ({
         displayName: 'HRNet',
         size: 'medium',
         description: 'High-resolution network',
+        category: 'spheroid',
       },
       {
         id: 'unet',
         displayName: 'U-Net',
         size: 'small',
         description: 'Classic U-Net',
+        category: 'spheroid',
       },
     ],
   })),
@@ -67,15 +68,14 @@ describe('ModelSettingsSection', () => {
     expect(hrnetRadio).toBeChecked();
   });
 
-  it('renders confidence threshold slider', () => {
+  it('does not render any confidence threshold slider', () => {
+    // The threshold is now a per-model constant (calibrated in
+    // modelUtils.ts), not a user-tunable setting — no slider in the UI.
     render(<ModelSettingsSection />);
-    expect(screen.getByRole('slider')).toBeInTheDocument();
-  });
-
-  it('shows current threshold percentage', () => {
-    render(<ModelSettingsSection />);
-    // 0.5 * 100 = 50%
-    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+    // Also no rendered "50%" or similar threshold indicator from the
+    // removed slider block.
+    expect(screen.queryByText('50%')).not.toBeInTheDocument();
   });
 
   it('renders detect holes toggle switch', () => {
@@ -97,11 +97,22 @@ describe('ModelSettingsSection', () => {
       confidenceThreshold: 0.5,
       detectHoles: true,
       setSelectedModel,
-      setConfidenceThreshold: vi.fn(),
       setDetectHoles: vi.fn(),
       availableModels: [
-        { id: 'hrnet', displayName: 'HRNet', size: 'medium', description: '' },
-        { id: 'unet', displayName: 'U-Net', size: 'small', description: '' },
+        {
+          id: 'hrnet',
+          displayName: 'HRNet',
+          size: 'medium',
+          description: '',
+          category: 'spheroid',
+        },
+        {
+          id: 'unet',
+          displayName: 'U-Net',
+          size: 'small',
+          description: '',
+          category: 'spheroid',
+        },
       ],
       getLocalizedModel: vi.fn(),
       getAllModels: vi.fn(),

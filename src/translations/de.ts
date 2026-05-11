@@ -474,17 +474,11 @@ export default {
         },
       },
     },
-    confidenceThreshold: 'Vertrauensschwelle',
-    confidenceThresholdDescription:
-      'Mindestvertrauen für Segmentierungsvorhersagen erforderlich',
     detectHoles: 'Löcher Erkennen',
     detectHolesDescription:
       'Erkennung von inneren Strukturen und Löchern in Zellen aktivieren',
-    currentThreshold: 'Aktuelle Schwelle',
     modelSelected: 'Modell erfolgreich ausgewählt',
     modelSettingsSaved: 'Modelleinstellungen erfolgreich gespeichert',
-    thresholdAutoAdjusted:
-      'Modell ausgewählt — Schwellenwert automatisch auf {threshold}% eingestellt (optimiert für dieses Modell)',
     modelSize: {
       small: 'Klein',
       medium: 'Mittel',
