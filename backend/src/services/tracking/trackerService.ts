@@ -115,7 +115,7 @@ export async function runTrackingForContainer(containerId: string): Promise<void
     return;
   }
 
-  const mlUrl = `${config.ML_SERVICE_URL}/api/v1/track`;
+  const mlUrl = `${config.SEGMENTATION_SERVICE_URL}/api/v1/track`;
   let assignments: Record<string, string> = {};
   try {
     const res = await axios.post(mlUrl, trackPayload, { timeout: 60_000 });

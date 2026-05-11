@@ -153,7 +153,7 @@ export async function buildKymograph(
     });
   }
 
-  const mlUrl = `${config.ML_SERVICE_URL}/api/v1/kymograph`;
+  const mlUrl = `${config.SEGMENTATION_SERVICE_URL}/api/v1/kymograph`;
   const res = await axios.post(
     mlUrl,
     {

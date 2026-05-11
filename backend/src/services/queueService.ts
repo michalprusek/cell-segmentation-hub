@@ -588,7 +588,7 @@ export class QueueService {
     // when only one user is contending.
     const recentlyProcessed = await this.prisma.segmentationQueue.findMany({
       where: { status: { in: ['processing', 'completed'] } },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ completedAt: 'desc' }, { startedAt: 'desc' }],
       take: 5,
       select: { userId: true },
     });
