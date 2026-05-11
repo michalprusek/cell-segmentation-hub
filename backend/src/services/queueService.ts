@@ -580,10 +580,38 @@ export class QueueService {
       };
     }
 
-    const firstItem = await this.prisma.segmentationQueue.findFirst({
-      where: whereClause,
-      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+    // Queue fairness: when several users have pending work, avoid back-
+    // to-back picks from the same user so a 200-frame video upload from
+    // user A can't block user B for hours.  We look at the last 5
+    // processed queue items and prefer a pending item from a user not
+    // in that window.  Falls back to plain priority/createdAt order
+    // when only one user is contending.
+    const recentlyProcessed = await this.prisma.segmentationQueue.findMany({
+      where: { status: { in: ['processing', 'completed'] } },
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+      select: { userId: true },
     });
+    const recentUserIds = Array.from(
+      new Set(recentlyProcessed.map(r => r.userId))
+    );
+
+    let firstItem = null;
+    if (recentUserIds.length > 0) {
+      firstItem = await this.prisma.segmentationQueue.findFirst({
+        where: {
+          ...whereClause,
+          userId: { notIn: recentUserIds },
+        },
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      });
+    }
+    if (!firstItem) {
+      firstItem = await this.prisma.segmentationQueue.findFirst({
+        where: whereClause,
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      });
+    }
 
     if (!firstItem) {
       return [];
@@ -807,6 +835,27 @@ export class QueueService {
           await this.prisma.segmentationQueue.delete({
             where: { id: item.id },
           });
+
+          // If this image is a video frame and its container's batch is
+          // now fully segmented, run cross-frame tracking. Best-effort,
+          // fire-and-forget — frontend reads trackIds when present.
+          try {
+            const imageMeta = await this.prisma.image.findUnique({
+              where: { id: item.imageId },
+              select: { parentVideoId: true },
+            });
+            if (imageMeta?.parentVideoId) {
+              const { scheduleTrackingForContainer } = await import(
+                './tracking/trackerService'
+              );
+              scheduleTrackingForContainer(imageMeta.parentVideoId);
+            }
+          } catch (trackErr) {
+            logger.warn(
+              `Failed to schedule tracking: ${(trackErr as Error).message}`,
+              'QueueService'
+            );
+          }
 
           // Emit success notification via WebSocket
           if (this.websocketService) {

@@ -8,6 +8,8 @@ import {
   ValidationError,
 } from 'express-validator';
 import { ResponseHelper } from '../../utils/response';
+import { buildKymograph } from '../../services/kymographService';
+import { logger } from '../../utils/logger';
 
 // Middleware to handle express-validator results
 const handleValidation = (
@@ -167,6 +169,45 @@ router.post(
   ],
   handleValidation,
   segmentationController.batchGetSegmentationResults
+);
+
+/**
+ * @route POST /api/segmentation/kymograph
+ * @description Build a kymograph for one microtubule polyline across all
+ *   frames of its container video. The frontend KymographModal posts
+ *   here; we orchestrate the per-frame polyline + channel-file
+ *   resolution and delegate the sampling + rendering to the ML service.
+ * @access Private
+ */
+router.post(
+  '/kymograph',
+  authenticate,
+  [
+    body('videoContainerId').isUUID(),
+    body('polylineId').isString().notEmpty(),
+    body('frameIndex').isInt({ min: 0 }),
+    body('sourceChannel').isString().notEmpty(),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      const result = await buildKymograph({
+        videoContainerId: req.body.videoContainerId,
+        polylineId: req.body.polylineId,
+        frameIndex: req.body.frameIndex,
+        sourceChannel: req.body.sourceChannel,
+      });
+      ResponseHelper.success(res, result);
+    } catch (err) {
+      const message = (err as Error).message;
+      logger.error(
+        `Kymograph build failed: ${message}`,
+        err as Error,
+        'SegmentationRoutes'
+      );
+      ResponseHelper.error(res, message, 500);
+    }
+  }
 );
 
 export { router as segmentationRoutes };
