@@ -130,6 +130,10 @@ export const useProjectData = (
             frameCount: img.frameCount,
             videoDurationMs: img.videoDurationMs,
             channels: img.channels,
+            // Surface originalPath for the Segment-All channel picker —
+            // extractChannelsFromPaths derives distinct channels from the
+            // /frames/NNNN/<channel>.<ext> shape across all pages.
+            originalPath: img.originalPath,
           };
         });
 
