@@ -85,10 +85,16 @@ export const RETRY_ATTEMPTS = {
  * File size and upload limitations
  */
 export const FILE_LIMITS = {
-  /** Maximum file size in megabytes */
+  /** Maximum file size in megabytes (single image) */
   MAX_FILE_SIZE_MB: 20,
   /** Maximum file size in bytes */
   MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024,
+  /** Maximum video / multi-page-TIFF / ND2 file size in megabytes.
+   *  Large tile-scan ND2s and long time-lapses can reach 50 GB; cap at
+   *  100 GB so we don't have to retune again for the next big file. */
+  MAX_VIDEO_FILE_SIZE_MB: 100 * 1024,
+  /** Maximum video file size in bytes (100 GB) */
+  MAX_VIDEO_FILE_SIZE_BYTES: 100 * 1024 * 1024 * 1024,
   /** Maximum total file size for batch uploads in MB */
   MAX_TOTAL_SIZE_MB: 500,
   /** Maximum total file size for batch uploads in bytes */
@@ -101,6 +107,9 @@ export const FILE_LIMITS = {
   CHUNK_SIZE_BYTES: 5 * 1024 * 1024, // 5MB chunks
   /** Supported image formats */
   SUPPORTED_FORMATS: ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'tif'] as const,
+  /** Supported video / microscopy-stack formats. ND2 is gated on
+   *  filename extension since browsers report it as octet-stream. */
+  SUPPORTED_VIDEO_FORMATS: ['mp4', 'avi', 'mov', 'mkv', 'webm', 'nd2'] as const,
 } as const;
 
 /**

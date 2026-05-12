@@ -8,6 +8,8 @@ import {
   ValidationError,
 } from 'express-validator';
 import { ResponseHelper } from '../../utils/response';
+import { buildKymograph } from '../../services/kymographService';
+import { logger } from '../../utils/logger';
 
 // Middleware to handle express-validator results
 const handleValidation = (
@@ -167,6 +169,97 @@ router.post(
   ],
   handleValidation,
   segmentationController.batchGetSegmentationResults
+);
+
+/**
+ * @route POST /api/segmentation/kymograph
+ * @description Build a kymograph for one microtubule polyline across all
+ *   frames of its container video. The frontend KymographModal posts
+ *   here; we orchestrate the per-frame polyline + channel-file
+ *   resolution and delegate the sampling + rendering to the ML service.
+ * @access Private
+ */
+router.post(
+  '/kymograph',
+  authenticate,
+  [
+    body('videoContainerId').isUUID(),
+    body('polylineId').isString().notEmpty().isLength({ max: 128 }),
+    body('frameIndex').isInt({ min: 0 }),
+    // sourceChannel: alnum + underscore + dash only; rejected before the
+    // service layer joins it into a filesystem path.
+    body('sourceChannel')
+      .isString()
+      .matches(/^[A-Za-z0-9_-]{1,64}$/)
+      .withMessage(
+        'sourceChannel must be alnum / underscore / dash, up to 64 chars'
+      ),
+  ],
+  handleValidation,
+  async (req: Request, res: Response) => {
+    try {
+      // Authz: ensure the caller owns (or has accepted-share access to)
+      // the project containing the requested video container before
+      // even invoking the ML service.
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.error(res, 'Unauthorized', 401);
+        return;
+      }
+      const { prisma } = await import('../../db/prismaClient');
+      const container = await prisma.image.findUnique({
+        where: { id: req.body.videoContainerId },
+        select: { projectId: true, isVideoContainer: true },
+      });
+      if (!container || !container.isVideoContainer) {
+        ResponseHelper.error(res, 'Video container not found', 404);
+        return;
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      const project = await prisma.project.findFirst({
+        where: {
+          id: container.projectId,
+          OR: [
+            { userId },
+            {
+              shares: {
+                some: {
+                  status: 'accepted',
+                  OR: [
+                    { sharedWithId: userId },
+                    ...(user?.email ? [{ email: user.email }] : []),
+                  ],
+                },
+              },
+            },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!project) {
+        ResponseHelper.error(res, 'Access denied to this project', 403);
+        return;
+      }
+      const result = await buildKymograph({
+        videoContainerId: req.body.videoContainerId,
+        polylineId: req.body.polylineId,
+        frameIndex: req.body.frameIndex,
+        sourceChannel: req.body.sourceChannel,
+      });
+      ResponseHelper.success(res, result);
+    } catch (err) {
+      const message = (err as Error).message;
+      logger.error(
+        `Kymograph build failed: ${message}`,
+        err as Error,
+        'SegmentationRoutes'
+      );
+      ResponseHelper.error(res, message, 500);
+    }
+  }
 );
 
 export { router as segmentationRoutes };

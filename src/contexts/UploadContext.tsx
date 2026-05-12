@@ -7,6 +7,7 @@ import React, {
   useEffect,
   useMemo,
 } from 'react';
+import axios from 'axios';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useWebSocket } from '@/contexts/useWebSocket';
@@ -221,20 +222,186 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       onCompleteRef.current = onComplete ?? null;
       activeSessionIdRef.current = sessionId;
 
+      // Split files into video / single-image groups. Videos take a
+      // different round-trip (one-at-a-time POST /videos with server-side
+      // ffmpeg/nd2/tifffile extraction); throwing them through the bulk
+      // /images endpoint would either be rejected by the smaller multer
+      // budget or trigger a broken Sharp thumbnail pass on opaque bytes.
+      const VIDEO_EXTENSIONS = [
+        '.mp4',
+        '.avi',
+        '.mov',
+        '.mkv',
+        '.webm',
+        '.nd2',
+      ];
+      const isVideoFile = (f: File) => {
+        if (f.type.startsWith('video/')) return true;
+        const lower = f.name.toLowerCase();
+        return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext));
+      };
+      const videoFiles = files.filter(isVideoFile);
+      const imageFiles = files.filter(f => !isVideoFile(f));
+
       // Run the actual upload asynchronously
       const doUpload = async () => {
         try {
           const signal = abortControllerRef.current?.signal;
 
-          if (files.length > DEFAULT_CHUNKING_CONFIG.chunkSize) {
+          // Videos first — sequential, single endpoint per file. We
+          // accumulate counts so the session card reports a single
+          // combined success/fail tally for mixed batches.
+          //
+          // Round 2 review caught: previously a cancel produced
+          // videoSuccess==0 && videoFailed==0, which fell through to the
+          // "completed, no toast" branch — user clicks Cancel and the
+          // session card silently says "complete". Track cancellations
+          // separately so we can report status: 'cancelled' and an
+          // explicit info toast.
+          let videoSuccess = 0;
+          let videoFailed = 0;
+          let videoCancelled = 0;
+          // Surface the first failure's user-facing message so the
+          // aggregate toast tells the user *why* the upload failed, not
+          // just *that* it did.
+          let firstFailureMessage: string | null = null;
+          for (let i = 0; i < videoFiles.length; i++) {
+            if (signal?.aborted) break;
+            const vfile = videoFiles[i];
+            setSessions(prev => {
+              const s = prev[sessionId];
+              if (!s || s.status !== 'uploading') return prev;
+              return {
+                ...prev,
+                [sessionId]: {
+                  ...s,
+                  currentOperation: `Uploading video ${i + 1}/${videoFiles.length}: ${vfile.name}`,
+                },
+              };
+            });
+            try {
+              await apiClient.uploadVideo(projectId, vfile, percent => {
+                // Treat each video as 1 / videoFiles.length share of overall
+                const segment = 100 / Math.max(1, files.length);
+                const overall = Math.round(
+                  i * segment + (percent * segment) / 100
+                );
+                setSessions(prev => {
+                  const s = prev[sessionId];
+                  if (!s || s.status !== 'uploading') return prev;
+                  return {
+                    ...prev,
+                    [sessionId]: {
+                      ...s,
+                      overallProgress: Math.max(s.overallProgress, overall),
+                    },
+                  };
+                });
+              });
+              videoSuccess++;
+            } catch (err) {
+              // axios cancellation isn't a real failure — abort
+              // shouldn't inflate videoFailed. But it IS a meaningful
+              // state distinct from "completed"; remember the count so
+              // the finaliser below can mark the session 'cancelled'
+              // and fire an info toast.
+              if (axios.isCancel(err)) {
+                logger.info(
+                  `[UploadContext] video upload cancelled: ${vfile.name}`
+                );
+                videoCancelled++;
+                // Count remaining unattempted files as cancelled too —
+                // when the user hits Cancel mid-batch they cancel the
+                // whole queue, not just the in-flight upload.
+                videoCancelled += videoFiles.length - 1 - i;
+                break;
+              }
+              const msg =
+                (err as { response?: { data?: { error?: string } } })?.response
+                  ?.data?.error ?? (err as Error)?.message ?? 'unknown error';
+              logger.error(
+                `[UploadContext] video upload failed: ${vfile.name} — ${msg}`,
+                err
+              );
+              if (firstFailureMessage === null) {
+                firstFailureMessage = `${vfile.name}: ${msg}`;
+              }
+              videoFailed++;
+            }
+          }
+          // If user only uploaded videos, finalize the session here so we
+          // don't fall through into the image upload paths with an empty
+          // imageFiles array (which would otherwise post zero-file form).
+          if (imageFiles.length === 0) {
+            // Status precedence: failed > cancelled > completed. A batch
+            // that produced both a real failure and a cancel is treated
+            // as 'failed' because there's a fault to investigate; a
+            // batch with only cancels is 'cancelled'.
+            const finalStatus =
+              videoFailed > 0 && videoSuccess === 0
+                ? 'failed'
+                : videoCancelled > 0 && videoFailed === 0 && videoSuccess === 0
+                  ? 'cancelled'
+                  : 'completed';
+            const opSummary = [
+              videoSuccess > 0 ? `${videoSuccess} uploaded` : null,
+              videoFailed > 0 ? `${videoFailed} failed` : null,
+              videoCancelled > 0 ? `${videoCancelled} cancelled` : null,
+            ]
+              .filter(Boolean)
+              .join(', ') || 'no files processed';
+            setSessions(prev => ({
+              ...prev,
+              [sessionId]: {
+                ...prev[sessionId],
+                status: finalStatus,
+                overallProgress: 100,
+                successCount: videoSuccess,
+                failedCount: videoFailed,
+                chunkProgress: null,
+                currentOperation: opSummary,
+              },
+            }));
+            if (videoCancelled > 0 && videoFailed === 0 && videoSuccess === 0) {
+              toast.info(`Upload cancelled (${videoCancelled} file(s))`);
+            } else if (videoCancelled > 0 && videoSuccess > 0) {
+              toast.info(
+                `${videoSuccess} uploaded, ${videoCancelled} cancelled`
+              );
+            } else if (videoFailed > 0 && videoSuccess > 0) {
+              toast.warning(
+                `${videoSuccess} videos uploaded, ${videoFailed} failed`,
+                firstFailureMessage
+                  ? { description: firstFailureMessage }
+                  : undefined
+              );
+            } else if (videoFailed === 0 && videoSuccess > 0) {
+              toast.success(`${videoSuccess} video(s) uploaded successfully`);
+            } else if (videoFailed > 0) {
+              toast.error(
+                `Video upload failed: ${videoFailed} file(s)`,
+                firstFailureMessage
+                  ? { description: firstFailureMessage }
+                  : undefined
+              );
+            }
+            if (onCompleteRef.current) onCompleteRef.current();
+            return;
+          }
+          // Otherwise: alias the images-only set as the working batch.
+          // (`files` is a fn param so we can't reassign without lint
+          // friction; the local alias is cleaner anyway.)
+          const remainingFiles = imageFiles;
+
+          if (remainingFiles.length > DEFAULT_CHUNKING_CONFIG.chunkSize) {
             // Chunked upload for large batches
             logger.info(
-              `[UploadContext] Starting chunked upload of ${files.length} files`
+              `[UploadContext] Starting chunked upload of ${remainingFiles.length} files`
             );
 
             const result = await apiClient.uploadImagesChunked(
               projectId,
-              files,
+              remainingFiles,
               progressPercent => {
                 setSessions(prev => {
                   const s = prev[sessionId];
@@ -309,20 +476,20 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
           } else {
             // Regular upload for small batches
             logger.info(
-              `[UploadContext] Starting regular upload of ${files.length} files`
+              `[UploadContext] Starting regular upload of ${remainingFiles.length} files`
             );
 
             setSessions(prev => ({
               ...prev,
               [sessionId]: {
                 ...prev[sessionId],
-                currentOperation: `Uploading ${files.length} files...`,
+                currentOperation: `Uploading ${remainingFiles.length} files...`,
               },
             }));
 
             const uploadedImages = await apiClient.uploadImages(
               projectId,
-              files,
+              remainingFiles,
               progressPercent => {
                 setSessions(prev => {
                   const s = prev[sessionId];

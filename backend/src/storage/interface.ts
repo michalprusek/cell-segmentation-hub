@@ -115,6 +115,20 @@ export const SUPPORTED_MIME_TYPES = [
 ] as const;
 
 /**
+ * Supported video MIME types (extracted frame-by-frame on upload by the
+ * video extractor service). ND2 has no registered MIME so it's matched on
+ * the .nd2 extension separately in the upload controller.
+ */
+export const SUPPORTED_VIDEO_MIME_TYPES = [
+  'video/mp4',
+  'video/avi',
+  'video/x-msvideo',
+  'video/quicktime',
+  'video/x-matroska',
+  'video/webm',
+] as const;
+
+/**
  * Supported image extensions
  */
 export const SUPPORTED_EXTENSIONS = [
@@ -126,6 +140,20 @@ export const SUPPORTED_EXTENSIONS = [
   '.tif',
   '.webp',
   '.gif',
+] as const;
+
+/**
+ * Supported video extensions. ND2 (Nikon proprietary) and multi-page TIFF
+ * stacks are video-like too — multi-page TIFF detection happens after the
+ * file is opened by the Python helper.
+ */
+export const SUPPORTED_VIDEO_EXTENSIONS = [
+  '.mp4',
+  '.avi',
+  '.mov',
+  '.mkv',
+  '.webm',
+  '.nd2',
 ] as const;
 
 /**

@@ -193,6 +193,7 @@ export default {
       spheroid_invasive: '分解球体',
       wound: '伤口愈合',
       sperm: '精子',
+      microtubules: '微管',
     },
     projectNamePlaceholder: '例如：HeLa细胞球体',
     projectDescPlaceholder: '例如：用于药物耐受性研究的肿瘤球体分析',
@@ -299,10 +300,11 @@ export default {
     },
   },
   images: {
-    uploadImages: '上传图像',
-    dragDrop: '将图像拖放到这里',
+    uploadImages: '上传图像或视频',
+    dragDrop: '将图像或视频拖放到这里',
     clickToSelect: '或点击选择文件',
-    acceptedFormats: '支持格式：JPEG、PNG、TIFF、BMP（单个文件最大20MB）',
+    acceptedFormats:
+      '图像：JPEG、PNG、TIFF、BMP（最大 20 MB）— 视频：MP4、AVI、MOV、MKV、WebM、ND2、多页 TIFF（最大 100 GB）',
     uploadProgress: '上传进度',
     readyToUpload: '准备上传',
     uploadingTo: '请先选择项目',
@@ -316,7 +318,7 @@ export default {
     noAnalysesYet: '暂无分析',
     runAnalysis: '运行分析',
     viewResults: '查看结果',
-    dropImagesHere: '将图像放在这里...',
+    dropImagesHere: '将文件放在这里...',
     selectProjectFirst: '请先选择项目',
     projectRequired: '您必须先选择项目才能上传图像',
     pending: '等待中',
@@ -387,8 +389,10 @@ export default {
       description: '选择用于细胞分割的AI模型',
       sections: {
         spheroid: '球体模型',
+        spheroid_invasive: '分解球体模型',
         sperm: '精子模型',
         wound: '伤口愈合模型',
+        microtubule: '微管模型',
       },
       models: {
         hrnet: {
@@ -419,6 +423,11 @@ export default {
           description:
             '使用MiT-B5（SegFormer）编码器的U-Net，用于划痕实验显微镜中的二进制伤口分割（A5000上约32毫秒，外部测试集上90% IoU）',
         },
+        microtubule: {
+          name: '微管 (DINOv3 + PySOAX)',
+          description:
+            '面向 IRM/TIRF 微管延时实验的实例分割。DINOv3-L ViT-L/16 + DPT 融合生成每条微管的中线折线和每像素 32 维嵌入，可驱动跨帧跟踪和动态图（kymograph）生成。约 8 秒/帧；本平台唯一原生输出折线的模型。',
+        },
       },
     },
     detectHoles: '检测空洞',
@@ -440,6 +449,8 @@ export default {
       sperm: '精子形态模型，通过骨架提取测量头部、中段和尾部',
       wound:
         '用于划痕实验显微镜的伤口分割的U-Net + MiT-B5（SegFormer编码器）模型。每张图像一个二进制伤口区域；非常适合愈合速度的时间延迟拍摄。',
+      microtubule:
+        '面向 IRM/TIRF 显微镜的微管实例分割。DINOv3-L + DPT 编码器，PySOAX 后处理，原生折线输出，并支持基于嵌入的跨帧跟踪。',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',

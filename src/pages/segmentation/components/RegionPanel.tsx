@@ -111,7 +111,7 @@ const RegionPanel = ({
     >
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 dark:text-gray-100">
           {t('segmentation.status.polygonList')}
         </h3>
         <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -123,7 +123,7 @@ const RegionPanel = ({
       <div className="flex-1 overflow-y-auto py-4">
         {loading ? (
           <div className="px-4 py-8 text-center">
-            <div className="animate-spin h-8 w-8 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 rounded-full mx-auto mb-3" />
+            <div className="animate-spin h-8 w-8 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 rounded-full mx-auto mb-3 dark:border-gray-700" />
             <div className="text-sm text-gray-600 dark:text-gray-400">
               {t('segmentation.loading') || 'Loading...'}
             </div>

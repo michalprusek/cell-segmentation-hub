@@ -12,7 +12,7 @@ const EmptyState = ({ hasSearchTerm, onUpload }: EmptyStateProps) => {
   const { t } = useLanguage();
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center dark:bg-gray-900">
       <ImageIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
       <h3 className="text-lg font-medium mb-2 dark:text-white">
         {t('common.noImages')}

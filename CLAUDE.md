@@ -51,22 +51,22 @@ npx prisma studio                # Visual DB browser
 
 ## Tech Stack
 
-| Layer      | Technology                                                     |
-| ---------- | -------------------------------------------------------------- |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)    |
-| Backend    | Node.js + Express + TypeScript + Prisma                        |
-| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm) |
-| Database   | SQLite (dev) / PostgreSQL (prod)                               |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff            |
-| Auth       | JWT access + refresh tokens                                    |
-| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via i18next               |
+| Layer      | Technology                                                                            |
+| ---------- | ------------------------------------------------------------------------------------- |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                           |
+| Backend    | Node.js + Express + TypeScript + Prisma                                               |
+| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm, Wound, Microtubule v7) |
+| Database   | PostgreSQL (dev + prod via Docker compose)                                            |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff                                   |
+| Auth       | JWT access + refresh tokens                                                           |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via i18next                                      |
 
 ## Architecture
 
 ### Frontend State Management
 
 - **Server state**: React Query (TanStack) with optimistic updates and query invalidation
-- **Client state**: React Contexts — Auth, Theme, Language, WebSocket, Upload, Export, Model
+- **Client state**: React Contexts — Auth, Theme, Language, WebSocket, Upload, Export, Model, ImageDisplayContext (editor: channel + min/max + frame index)
 - **Real-time**: Socket.io events (`segmentationStatus`, `segmentationCompleted/Failed`, `queueStats`)
 
 ### Segmentation Editor (`/src/pages/segmentation/`)
@@ -77,7 +77,7 @@ The editor is the most complex frontend component (~51KB orchestrator). Key patt
 - **`useEnhancedSegmentationEditor`** — core state: polygons, selection, undo/redo, transforms
 - **`useAdvancedInteractions`** — mouse/keyboard interactions, polygon creation, vertex editing
 - **EditMode enum** — state machine: `View | EditVertices | Slice | AddPoints | DeletePolygon | CreatePolygon | CreatePolyline`
-- **Polygon model** — supports both closed polygons (`geometry: 'polygon'`) and open polylines (`geometry: 'polyline'`) with `partClass` and `instanceId` for sperm morphology
+- **Polygon model** — closed polygons (`geometry: 'polygon'`) and open polylines (`geometry: 'polyline'`) with optional `partClass` + `instanceId` (sperm) or `trackId` + `_embedding` (microtubule cross-frame tracking)
 - **Canvas layers** — `CanvasPolygon` (per-polygon, React.memo with custom comparator), `CanvasVertex`, `CanvasTemporaryGeometryLayer`
 - **Coordinate system** — image coords ↔ canvas coords via `coordinateUtils.ts`, zoom-dependent stroke widths
 
@@ -94,9 +94,19 @@ Controllers → Services → Prisma ORM → Storage (local filesystem / S3)
 ### ML Service (`/backend/segmentation/`)
 
 - FastAPI app with PyTorch models, GPU (CUDA) with CPU fallback
-- Models: HRNet (~200ms), CBAM-ResUNet (~400ms), U-Net (~200ms), Sperm (specialized)
-- Weights auto-download from Google Drive. Check: `make check-weights`
-- Inference → postprocessing → polygon extraction
+- Models: HRNet (~200ms), CBAM-ResUNet (~400ms), U-Net (~200ms), Sperm (specialized), Microtubule v7 (DINOv3-L + DPT + PySOAX, ~8 s/frame)
+- Weights auto-download from Google Drive. Check: `make check-weights`. Microtubule v7 is staged via `scripts/download-microtubule-weights.sh` (1.2 GB) and additionally needs `HF_TOKEN` for the gated DINOv3 backbone (~1.1 GB on first load).
+- Inference → postprocessing → polygon extraction (or polyline centerlines for sperm + microtubule)
+- Cross-frame routes: `/api/v1/track` (Hungarian matching across video frames using persisted 32-d embeddings) and `/api/v1/kymograph` (line-profile sampling + viridis heatmap rendering) live in `api/tracker_kymograph.py`.
+
+### Video projects
+
+- A video container is one `Image` row with `isVideoContainer = true` and a `channels` JSON array. Each extracted frame is a child `Image` row with `parentVideoId` + `frameIndex` + `displayOrder`. The container itself is never enqueued.
+- Supported formats: MP4 / AVI / MOV / MKV / WebM (via `ffmpeg-static`), multi-page TIFF stacks (`tifffile` Python helper), Nikon ND2 (`nd2` Python helper). All extractors live in `backend/src/services/video/`.
+- Storage layout: `projects/<pid>/images/<videoId>/{original.ext, thumbnail.jpg, frames/NNNN/<channel>.png, ...}`.
+- Channels: ND2 + multi-page TIFF expose per-channel PNGs. IRM auto-detection by name (IRM / BF / DIC / TL) + null wavelength. Segmentation runs on the channel marked `isSegmentationSource = true`; kymograph defaults to the first fluorescent channel.
+- Cross-frame microtubule tracking: triggers automatically when all frames of a container reach status `'segmented'`; `backend/src/services/tracking/trackerService.ts` posts polylines + embeddings to ML `/track` and patches `trackId` back into each `Segmentation.polygons`.
+- Queue fairness: `getBatchItems` prefers users not in the recently-processed window so a 200-frame video can't monopolise the queue.
 
 ### Key Shared Libraries (`/src/lib/`)
 
@@ -168,23 +178,31 @@ make prod                                               # Build + deploy
 
 Database: `spheroseg_blue` on PostgreSQL (container: `spheroseg-postgres`).
 
+### Deploy gotchas
+
+- **Apply migrations in production with `prisma migrate deploy`**, not `migrate dev` (dev creates the migration file; deploy applies an existing one to a live DB).
+- **Bind-mounted configs need container recreate, not just `nginx -s reload`** — `sed -i` rewrites the inode, the running container holds the old one. Use `docker compose up -d --no-deps --force-recreate <service>`.
+- **HF cache bind-mount** (`backend/segmentation/.hf-cache`) must exist with `chown 999:999` (container user) before the ML container starts, otherwise transformers errors with `PermissionError at .../huggingface/hub`.
+- **Upload limits are coupled across 3 layers** — images: 20 MB (`FILE_LIMITS.MAX_FILE_SIZE_BYTES` + image multer + nginx). Videos / ND2: 100 GB (`MAX_VIDEO_FILE_SIZE_BYTES` + separate `videoUpload` multer + `client_max_body_size 100G`). All three must agree or the smallest wins.
+- **`HF_TOKEN` env var** required for first microtubule load (gated DINOv3 backbone download, ~1.1 GB). Lives in `.env.production` (gitignored). Subsequent loads read from the HF cache and don't need a valid token.
+
 ## Email
 
 UTIA mail server (`hermes.utia.cas.cz:25`, STARTTLS, no auth). Delays of 2-10 minutes are normal — emails are queued for background processing. Config in `.env.production`.
 
 ## Documentation Index
 
-| Topic                          | File                                                                                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Architecture overview          | [`docs/architecture/README.md`](docs/architecture/README.md)                                                                         |
-| Frontend architecture          | [`docs/architecture/frontend.md`](docs/architecture/frontend.md)                                                                     |
-| Backend architecture           | [`docs/architecture/backend.md`](docs/architecture/backend.md)                                                                       |
-| ML service                     | [`docs/architecture/ml-service.md`](docs/architecture/ml-service.md)                                                                 |
-| Database schema                | [`docs/reference/database-schema.md`](docs/reference/database-schema.md)                                                             |
-| Testing guide                  | [`docs/testing-guide.md`](docs/testing-guide.md)                                                                                     |
-| i18n guide                     | [`docs/i18n-guide.md`](docs/i18n-guide.md)                                                                                           |
-| Git hooks                      | [`docs/hooks-guide.md`](docs/hooks-guide.md)                                                                                         |
-| Deployment                     | [`docs/superpowers/specs/2026-03-28-simplify-deployment-design.md`](docs/superpowers/specs/2026-03-28-simplify-deployment-design.md) |
-| Polygon rendering optimization | [`docs/polygon-rendering-optimization.md`](docs/polygon-rendering-optimization.md)                                                   |
-| API documentation              | [`docs/api/README.md`](docs/api/README.md)                                                                                           |
-| Getting started                | [`docs/development/getting-started.md`](docs/development/getting-started.md)                                                         |
+| Topic                          | File                                                                                                                                                                    |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Architecture overview          | [`docs/architecture/README.md`](docs/architecture/README.md)                                                                                                            |
+| Frontend architecture          | [`docs/architecture/frontend.md`](docs/architecture/frontend.md)                                                                                                        |
+| Backend architecture           | [`docs/architecture/backend.md`](docs/architecture/backend.md)                                                                                                          |
+| ML service                     | [`docs/architecture/ml-service.md`](docs/architecture/ml-service.md)                                                                                                    |
+| Database schema                | [`docs/reference/database-schema.md`](docs/reference/database-schema.md)                                                                                                |
+| Testing guide                  | [`docs/testing-guide.md`](docs/testing-guide.md)                                                                                                                        |
+| i18n guide                     | [`docs/i18n-guide.md`](docs/i18n-guide.md)                                                                                                                              |
+| Git hooks                      | [`docs/hooks-guide.md`](docs/hooks-guide.md)                                                                                                                            |
+| Deployment                     | [`docs/superpowers/specs/2026-03-28-simplify-deployment-design.md`](docs/superpowers/specs/2026-03-28-simplify-deployment-design.md)                                    |
+| Polygon rendering optimization | [`docs/polygon-rendering-optimization.md`](docs/polygon-rendering-optimization.md) _(aspirational — describes files that don't exist; active render is naive `.map()`)_ |
+| API documentation              | [`docs/api/README.md`](docs/api/README.md)                                                                                                                              |
+| Getting started                | [`docs/development/getting-started.md`](docs/development/getting-started.md)                                                                                            |

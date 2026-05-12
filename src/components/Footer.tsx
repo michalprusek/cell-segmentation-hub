@@ -7,7 +7,7 @@ const Footer = () => {
   const { t } = useLanguage();
 
   return (
-    <footer className="bg-gray-50 border-t border-gray-200">
+    <footer className="bg-gray-50 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-12 md:py-16">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-2">
@@ -44,7 +44,7 @@ const Footer = () => {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase mb-4">
+            <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase mb-4 dark:text-gray-100">
               {t('footer.resources')}
             </h3>
             <ul className="space-y-3">
@@ -60,7 +60,7 @@ const Footer = () => {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase mb-4">
+            <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase mb-4 dark:text-gray-100">
               {t('footer.legal')}
             </h3>
             <ul className="space-y-3">
@@ -92,7 +92,7 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-gray-200">
+        <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
           <p className="text-gray-500 text-center">
             © {new Date().getFullYear()} SpheroSeg. {t('footer.developedAt')}{' '}
             <a

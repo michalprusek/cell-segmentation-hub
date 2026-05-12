@@ -69,7 +69,7 @@ const MobileMenu = ({
         </div>
         <div className="py-2">
           <button
-            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
             onClick={() => {
               setIsMenuOpen(false);
               navigate('/profile');
@@ -79,7 +79,7 @@ const MobileMenu = ({
             <span>{t('common.profile')}</span>
           </button>
           <button
-            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
             onClick={() => {
               setIsMenuOpen(false);
               navigate('/settings');
@@ -89,7 +89,7 @@ const MobileMenu = ({
             <span>{t('common.settings')}</span>
           </button>
           <button
-            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
             onClick={() => {
               setIsMenuOpen(false);
               navigate('/dashboard');
@@ -99,7 +99,7 @@ const MobileMenu = ({
             <span>{t('common.dashboard')}</span>
           </button>
           <button
-            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
             onClick={() => {
               setIsMenuOpen(false);
               navigate('/settings?tab=notifications');
@@ -113,7 +113,7 @@ const MobileMenu = ({
           </button>
           <div className="border-t my-2 dark:border-gray-700"></div>
           <button
-            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500"
+            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500 dark:hover:bg-gray-800 dark:bg-gray-800"
             onClick={handleSignOut}
           >
             <LogOut className="h-5 w-5 mr-3" />

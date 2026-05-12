@@ -109,6 +109,7 @@ export const PROJECT_TYPES = [
   'spheroid_invasive',
   'wound',
   'sperm',
+  'microtubules',
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
@@ -140,6 +141,7 @@ export const MODEL_TYPE_COMPATIBILITY: Record<ProjectType, readonly string[]> =
     spheroid_invasive: ['unet_attention_aspp'],
     wound: ['wound'],
     sperm: ['sperm'],
+    microtubules: ['microtubule'],
   } as const;
 
 export const isModelCompatibleWithType = (

@@ -83,7 +83,7 @@ const PolygonItem: React.FC<PolygonItemProps> = React.memo(
                 ? 'bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700'
                 : 'bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700'
               : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
+          } dark:bg-gray-800`}
           onClick={() => onSelectPolygon(polygon.id)}
         >
           {hasChildren && (
@@ -129,12 +129,12 @@ const PolygonItem: React.FC<PolygonItemProps> = React.memo(
                     onCancelRename();
                   }
                 }}
-                className="text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-700"
                 autoFocus
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+              <div className="text-sm font-medium text-gray-900 dark:text-white truncate dark:text-gray-100">
                 {polygonName}
               </div>
             )}

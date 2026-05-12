@@ -336,6 +336,7 @@ export const PROJECT_TYPES = [
   'spheroid_invasive',
   'wound',
   'sperm',
+  'microtubules',
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
@@ -345,23 +346,42 @@ export type ProjectType = (typeof PROJECT_TYPES)[number];
 export const isProjectType = (v: unknown): v is ProjectType =>
   typeof v === 'string' && (PROJECT_TYPES as readonly string[]).includes(v);
 
+/** All known model identifiers — kept as a literal union so the
+ *  MODEL_TYPE_COMPATIBILITY map below catches typos at compile time
+ *  (a misspelled model id in any array becomes a TS error). Mirrors the
+ *  `ModelType` union in `@/lib/modelUtils.ts`; intentionally duplicated
+ *  here to avoid a circular import. */
+type KnownModelId =
+  | 'hrnet'
+  | 'cbam_resunet'
+  | 'unet_spherohq'
+  | 'unet_attention_aspp'
+  | 'sperm'
+  | 'wound'
+  | 'microtubule';
+
 /** Models compatible with each project type. Cross-type segmentation is
  * blocked at both frontend (dropdown filter) and backend (400 on submit).
  *
  * - `spheroid_invasive` is locked to `unet_attention_aspp` because core
  *   detection is tied to that model's postprocessing path.
- * - `wound` and `sperm` use their dedicated specialised models only.
+ * - `wound`, `sperm` and `microtubules` use their dedicated specialised
+ *   models only. `microtubules` ships with the v7 DINOv3 + DPT + PySOAX
+ *   pipeline producing per-instance polyline centerlines.
  * - Standard `spheroid` projects can use any of the general spheroid
  *   models, with `unet_attention_aspp` excluded so users wanting core
  *   detection are nudged toward marking the project disintegrated.
  */
-export const MODEL_TYPE_COMPATIBILITY: Record<ProjectType, readonly string[]> =
-  {
-    spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
-    spheroid_invasive: ['unet_attention_aspp'],
-    wound: ['wound'],
-    sperm: ['sperm'],
-  } as const;
+export const MODEL_TYPE_COMPATIBILITY: Record<
+  ProjectType,
+  readonly KnownModelId[]
+> = {
+  spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
+  spheroid_invasive: ['unet_attention_aspp'],
+  wound: ['wound'],
+  sperm: ['sperm'],
+  microtubules: ['microtubule'],
+} as const;
 
 export const isModelCompatibleWithType = (
   model: string,
@@ -507,6 +527,23 @@ export interface ProjectImage {
   created_at?: string; // Alternative date format
   updated_at?: string; // Alternative date format
   user_id?: string;
+  // Video container fields (set on rows where isVideoContainer == true).
+  // Frame children are filtered from the gallery on the backend; UI only
+  // ever sees container rows here.
+  isVideoContainer?: boolean;
+  frameCount?: number | null;
+  videoDurationMs?: number | null;
+  channels?: VideoChannel[] | null;
+}
+
+/** Shape of one entry in the ``channels`` JSON column on an Image row.
+ *  Set only on rows where ``isVideoContainer == true``. */
+export interface VideoChannel {
+  name: string;
+  type: 'irm' | 'fluorescent';
+  wavelengthNm?: number;
+  displayColor?: string;
+  isSegmentationSource: boolean;
 }
 
 // Metric types for XLSX export

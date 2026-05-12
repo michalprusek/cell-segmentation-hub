@@ -90,7 +90,7 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
   return (
     <div className={`${className}`}>
       <Button
-        className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg"
+        className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg dark:border-gray-700"
         size="sm"
         onClick={() => handleToggle(true)}
       >
@@ -110,7 +110,7 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
             onClick={() => handleToggle(false)}
           >
             <motion.div
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full"
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full dark:bg-gray-900"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -133,7 +133,7 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
               <div className="space-y-4 max-h-80 overflow-y-auto">
                 {shortcutCategories.map((category, categoryIndex) => (
                   <div key={categoryIndex} className="space-y-2">
-                    <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200">
+                    <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200 dark:text-gray-100">
                       {category.title}
                     </h4>
                     <div className="grid gap-2">
@@ -150,7 +150,7 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
                               0.02,
                           }}
                         >
-                          <div className="bg-gray-100 dark:bg-gray-700 rounded px-2.5 py-1 font-mono text-sm min-w-16 text-center flex-shrink-0">
+                          <div className="bg-gray-100 dark:bg-gray-700 rounded px-2.5 py-1 font-mono text-sm min-w-16 text-center flex-shrink-0 dark:bg-gray-800">
                             {shortcut.key}
                           </div>
                           <div className="text-sm text-gray-700 dark:text-gray-300">

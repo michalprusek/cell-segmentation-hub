@@ -69,6 +69,7 @@ from api.routes import router
 from api.models import ErrorResponse, HealthResponse
 from api.metrics_endpoint import router as metrics_router
 from api.monitoring import router as monitoring_router
+from api.tracker_kymograph import router as tracker_kymograph_router
 from ml.model_loader import ModelLoader
 
 # Log GPU initialization summary status
@@ -171,6 +172,9 @@ async def log_requests(request: Request, call_next):
 app.include_router(router, prefix="/api/v1")
 app.include_router(metrics_router)
 app.include_router(monitoring_router, prefix="/api/v1")
+# Microtubule-specific routes (tracker + kymograph). Mounted at the same
+# prefix so the backend talks to ``/api/v1/track`` and ``/api/v1/kymograph``.
+app.include_router(tracker_kymograph_router, prefix="/api/v1")
 
 # Request validation error handler - logs 422 errors with details
 @app.exception_handler(RequestValidationError)

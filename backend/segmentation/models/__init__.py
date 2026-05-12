@@ -17,4 +17,13 @@ try:
 except ImportError:
     WoundModel = None
 
-__all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel', 'WoundModel']
+# Microtubule v7 model: optional import. The package brings in DINOv3 (gated,
+# needs HF_TOKEN) plus PySOAX postprocessing; ImportError here means transformers
+# isn't installed or the weights aren't downloaded yet.
+try:
+    from .microtubule import MicrotubuleModel
+except ImportError:
+    MicrotubuleModel = None
+
+__all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel',
+           'WoundModel', 'MicrotubuleModel']

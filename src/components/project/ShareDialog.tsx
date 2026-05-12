@@ -405,7 +405,7 @@ export function ShareDialog({
                             '?')[0].toUpperCase()}
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {share.sharedWith?.username ||
                               share.sharedWith?.email ||
                               share.email}
@@ -452,7 +452,7 @@ export function ShareDialog({
                           <Mail className="h-5 w-5" />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {share.email}
                           </div>
                           <div className="text-xs text-gray-500">
@@ -566,7 +566,7 @@ export function ShareDialog({
                           <Link className="h-5 w-5" />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {share.sharedWith?.username ||
                               share.sharedWith?.email}
                           </div>

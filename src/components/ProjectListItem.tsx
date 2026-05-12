@@ -52,7 +52,7 @@ const ProjectListItem = React.memo(
 
     return (
       <Card
-        className="overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full"
+        className="overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full dark:hover:bg-gray-800 dark:bg-gray-900"
         onClick={handleCardClick}
       >
         <div className="flex items-center p-4">

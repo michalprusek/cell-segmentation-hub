@@ -38,12 +38,23 @@ RUN npx tsc --project tsconfig.prod.json || true
 # Stage 5: Optimized production image
 FROM base AS production
 
-# Add runtime dependencies and fonts
+# Add runtime dependencies and fonts.
+#
+# Includes python3 + a small set of imaging/scientific packages used by
+# the video extractor's helper scripts (multi-page TIFF stacks via
+# tifffile, Nikon ND2 via the `nd2` package). These are read-only
+# script-shell helpers spawned via child_process — they don't need the
+# full ML stack. Keeping them on the slim alpine production image
+# adds ~120 MB but lets the backend handle microscopy file uploads
+# without round-tripping to the ML container.
 RUN apk add --no-cache \
     cairo pango jpeg giflib librsvg \
     ttf-dejavu ttf-liberation ttf-freefont \
     fontconfig font-noto font-noto-emoji \
-    && fc-cache -fv
+    python3 py3-pip py3-numpy py3-pillow \
+    && fc-cache -fv \
+    && pip3 install --no-cache-dir --break-system-packages \
+       'tifffile>=2024.1.30' 'nd2>=0.10.0'
 
 # Add build dependencies temporarily for canvas compilation
 RUN apk add --no-cache --virtual .build-deps \

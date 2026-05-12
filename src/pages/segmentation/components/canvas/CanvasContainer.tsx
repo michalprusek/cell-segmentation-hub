@@ -128,7 +128,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
     return (
       <div
         ref={ref}
-        className={`flex-1 overflow-hidden relative bg-gray-50 dark:bg-gray-800 min-h-[400px] h-full rounded-lg border-4 transition-all duration-200 select-none ${getBorderColor()}`}
+        className={`flex-1 overflow-hidden relative bg-gray-50 dark:bg-gray-800 min-h-[400px] h-full rounded-lg border-4 transition-all duration-200 select-none ${getBorderColor()} dark:bg-gray-900`}
         style={{
           cursor: getCursorStyle(),
           backgroundImage: `radial-gradient(circle, ${dotColor} 1px, transparent 1px)`,

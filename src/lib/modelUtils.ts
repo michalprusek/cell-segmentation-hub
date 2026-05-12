@@ -5,9 +5,10 @@ export type ModelType =
   | 'unet_spherohq'
   | 'unet_attention_aspp'
   | 'sperm'
-  | 'wound';
+  | 'wound'
+  | 'microtubule';
 
-export type ModelCategory = 'spheroid' | 'sperm' | 'wound';
+export type ModelCategory = 'spheroid' | 'sperm' | 'wound' | 'microtubule';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds
@@ -110,6 +111,21 @@ export function getLocalizedModelInfo(
         batchSize: 1,
       },
     },
+    microtubule: {
+      id: 'microtubule',
+      size: 'large',
+      defaultThreshold: 0.5,
+      category: 'microtubule',
+      performance: {
+        // DINOv3-L (~300M params) + PySOAX iterative snake evolver. Numbers
+        // are conservative estimates on A5000; first call is much slower
+        // because of the gated HuggingFace download of the backbone weights.
+        avgTimePerImage: 8.0,
+        throughput: 0.13,
+        p95Latency: 10.0,
+        batchSize: 1,
+      },
+    },
   };
 
   const keyMap: Record<ModelType, string> = {
@@ -119,6 +135,7 @@ export function getLocalizedModelInfo(
     unet_attention_aspp: 'unet_attention_aspp',
     sperm: 'sperm',
     wound: 'wound',
+    microtubule: 'microtubule',
   };
 
   const baseModel = baseModels[modelId];
@@ -143,6 +160,7 @@ export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
     'unet_attention_aspp',
     'sperm',
     'wound',
+    'microtubule',
   ];
   return modelIds.map(id => getLocalizedModelInfo(id, t));
 }
@@ -250,6 +268,22 @@ export const BASIC_MODEL_INFO: Record<
       avgTimePerImage: 0.032,
       throughput: 35.0,
       p95Latency: 0.05,
+      batchSize: 1,
+    },
+  },
+  microtubule: {
+    id: 'microtubule',
+    name: 'Microtubule (v7)',
+    displayName: 'Microtubule (DINOv3 + PySOAX)',
+    description:
+      'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT-style fusion produces a per-pixel 32-d embedding that PySOAX uses to extract individual MT centerlines. The embedding also drives automatic cross-frame tracking for kymograph analysis. Slow (~8 s/frame) but the only model in the platform producing polyline output.',
+    size: 'large',
+    defaultThreshold: 0.5,
+    category: 'microtubule',
+    performance: {
+      avgTimePerImage: 8.0,
+      throughput: 0.13,
+      p95Latency: 10.0,
       batchSize: 1,
     },
   },

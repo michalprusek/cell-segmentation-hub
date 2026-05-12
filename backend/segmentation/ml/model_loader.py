@@ -53,6 +53,19 @@ except ImportError as e:
     WoundModel = None
     _wound_import_error = e
 
+# Optional microtubule v7 model import (requires transformers>=4.57 and
+# HF_TOKEN at first use for the gated DINOv3 backbone download).
+_microtubule_import_error = None
+try:
+    from models.microtubule import MicrotubuleModel
+except ImportError as e:
+    logger.warning(
+        f"Could not import MicrotubuleModel: {e}. "
+        "Microtubule segmentation will not be available."
+    )
+    MicrotubuleModel = None
+    _microtubule_import_error = e
+
 # Import the new inference executor
 from .inference_executor import (
     InferenceExecutor,
@@ -167,6 +180,13 @@ class ModelLoader:
             'pretrained_path': 'weights/wound_mitb5.ckpt',
             'finetuned_path': 'weights/wound_mitb5.ckpt',
             'config_path': None
+        },
+        'microtubule': {
+            # Will be None if transformers not installed or HF_TOKEN missing
+            'class': MicrotubuleModel,
+            'pretrained_path': 'weights/microtubule_v7.pt',
+            'finetuned_path': 'weights/microtubule_v7.pt',
+            'config_path': None
         }
     }
     
@@ -278,6 +298,21 @@ class ModelLoader:
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
                 logger.info(f"Successfully loaded wound model from: {weights_full_path}")
+                return model
+            elif model_name == 'microtubule':
+                # Microtubule v7 — wraps DINOv3 ViT-L/16 + DPT decoder + PySOAX.
+                # Loading is slow (HF backbone download on first run plus 1.2 GB
+                # checkpoint), so we skip the generic torch.load path below and
+                # let the wrapper drive it end-to-end.
+                if MicrotubuleModel is None:
+                    raise ImportError(
+                        f"Microtubule model architecture not available: "
+                        f"{_microtubule_import_error}"
+                    )
+                model = MicrotubuleModel()
+                model.load_weights(str(weights_full_path), self.device)
+                self.loaded_models[model_name] = model
+                logger.info(f"Successfully loaded microtubule v7 model from: {weights_full_path}")
                 return model
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
@@ -1038,6 +1073,94 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('wound')
+
+    def predict_microtubule(self, image: Image.Image, threshold: float = 0.5,
+                            timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Run microtubule v7 (DINOv3-L + DPT + PySOAX) on a single frame.
+
+        Differs from the standard predict() path:
+
+        - Output is polylines (open centerlines), not closed mask polygons.
+        - Each polyline carries an instanceId (one microtubule = one polyline)
+          and a base64-encoded float16 embedding sample (M points x 32 dims)
+          which the tracking pipeline consumes to identify the same MT across
+          frames without re-running inference.
+        - The wrapper does its own preprocessing (percentile normalisation),
+          so there is no shared executor / preprocess_image hand-off — the
+          model runs inside MicrotubuleModel.predict().
+        """
+        import base64 as _b64
+        import time as _time
+        import uuid as _uuid
+
+        self.get_model('microtubule')
+        if 'microtubule' not in self.loaded_models:
+            raise ValueError(
+                "Microtubule model not loaded. Run load_model('microtubule') first."
+            )
+
+        mt_model = self.loaded_models['microtubule']
+        original_size = image.size  # (width, height)
+
+        self.is_processing = True
+        self.current_model = 'microtubule'
+        start_time = _time.time()
+
+        try:
+            # PIL → grayscale numpy (H, W). Wrapper handles further conversion.
+            image_np = np.array(image.convert('L'))
+
+            result = mt_model.predict(image_np, seed_threshold=threshold)
+            centerlines = result["centerlines_rc"]            # list of (M,2) float64
+            embedding_samples = result["embedding_samples"]   # list of (M,32) float16
+
+            polylines: List[Dict[str, Any]] = []
+            for idx, (cl, emb) in enumerate(zip(centerlines, embedding_samples)):
+                # centerline is (M, 2) in (row, col) → convert to (x=col, y=row)
+                # so it lines up with the rest of the editor's image coords.
+                points = [
+                    {"x": float(cl[i, 1]), "y": float(cl[i, 0])}
+                    for i in range(cl.shape[0])
+                ]
+                # float16 → base64 of raw bytes; consumer reads back as
+                # np.frombuffer(buf, dtype=np.float16).reshape(M, 32).
+                emb_b64 = _b64.b64encode(np.ascontiguousarray(emb).tobytes()).decode("ascii")
+                instance_id = f"mt_{_uuid.uuid4().hex[:8]}"
+                polylines.append({
+                    "id": f"polyline_{idx + 1}",
+                    "points": points,
+                    "type": "external",
+                    "class": "microtubule",
+                    "geometry": "polyline",
+                    "instanceId": instance_id,
+                    "confidence": 1.0,  # PySOAX is deterministic; no per-snake score
+                    "vertices_count": len(points),
+                    "_embedding": emb_b64,
+                    "_embedding_dim": int(emb.shape[1]) if emb.size else 32,
+                })
+
+            processing_time = _time.time() - start_time
+            logger.info(
+                f"Microtubule v7: {len(polylines)} centerlines in {processing_time:.2f}s"
+            )
+
+            return {
+                "model_used": "microtubule",
+                "threshold_used": threshold,
+                "image_size": {"width": original_size[0], "height": original_size[1]},
+                "polygons": [],
+                "polylines": polylines,
+                "processing_info": {
+                    "device": str(self.device),
+                    "num_polylines": len(polylines),
+                    "processing_time_s": processing_time,
+                    "batch_size": 1,
+                },
+            }
+        finally:
+            self.is_processing = False
+            self.current_model = None
+            self.release_model('microtubule')
 
     def predict_batch(self, images: List[Image.Image], model_name: str, batch_size: Optional[int] = None,
                      threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> List[Dict[str, Any]]:

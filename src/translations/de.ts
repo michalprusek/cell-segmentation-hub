@@ -204,6 +204,7 @@ export default {
       spheroid_invasive: 'Zerfallene Sphäroide',
       wound: 'Wundheilung',
       sperm: 'Spermien',
+      microtubules: 'Mikrotubuli',
     },
     projectNamePlaceholder: 'z.B. HeLa-Zell-Sphäroide',
     projectDescPlaceholder:
@@ -342,11 +343,11 @@ export default {
     },
   },
   images: {
-    uploadImages: 'Bilder hochladen',
-    dragDrop: 'Bilder hier hineinziehen',
+    uploadImages: 'Bilder oder Videos hochladen',
+    dragDrop: 'Bilder oder Videos hier hineinziehen',
     clickToSelect: 'oder klicken Sie, um Dateien auszuwählen',
     acceptedFormats:
-      'Akzeptierte Formate: JPEG, PNG, TIFF, BMP (max 20MB pro Datei)',
+      'Bilder: JPEG, PNG, TIFF, BMP (max. 20 MB) — Videos: MP4, AVI, MOV, MKV, WebM, ND2, mehrseitige TIFFs (max. 100 GB)',
     uploadProgress: 'Upload-Fortschritt',
     readyToUpload: 'Bereit zum Hochladen',
     uploadingTo: 'Wählen Sie zuerst ein Projekt aus',
@@ -360,7 +361,7 @@ export default {
     noAnalysesYet: 'Noch keine Analysen',
     runAnalysis: 'Analyse ausführen',
     viewResults: 'Ergebnisse anzeigen',
-    dropImagesHere: 'Bilder hier ablegen...',
+    dropImagesHere: 'Dateien hier ablegen...',
     selectProjectFirst: 'Bitte wählen Sie zuerst ein Projekt aus',
     projectRequired:
       'Sie müssen ein Projekt auswählen, bevor Sie Bilder hochladen können',
@@ -438,8 +439,10 @@ export default {
       description: 'Wählen Sie das KI-Modell für die Zellsegmentierung',
       sections: {
         spheroid: 'Sphäroid-Modelle',
+        spheroid_invasive: 'Modelle für zerfallene Sphäroide',
         sperm: 'Spermien-Modelle',
         wound: 'Wundheilungs-Modelle',
+        microtubule: 'Mikrotubuli-Modelle',
       },
       models: {
         hrnet: {
@@ -472,6 +475,11 @@ export default {
           description:
             'U-Net mit MiT-B5-Encoder (SegFormer) für binäre Wundsegmentierung in Scratch-Assay-Mikroskopie (~32 ms auf A5000, 90 % IoU auf externem Testdatensatz)',
         },
+        microtubule: {
+          name: 'Mikrotubuli (DINOv3 + PySOAX)',
+          description:
+            'Instanz-Segmentierung für IRM/TIRF-Mikrotubuli-Zeitrafferaufnahmen. DINOv3-L ViT-L/16 + DPT-Fusion liefert eine Centerline-Polylinie pro MT plus ein 32-d Embedding pro Pixel, das frameübergreifendes Tracking und Kymograph-Erzeugung ermöglicht. ~8 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
+        },
       },
     },
     detectHoles: 'Löcher Erkennen',
@@ -497,6 +505,8 @@ export default {
         'Spermienmorphologie-Modell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
       wound:
         'U-Net + MiT-B5 (SegFormer-Encoder) Modell für die Wundsegmentierung in Scratch-Assay-Mikroskopie. Eine binäre Wundregion pro Bild; ideal für Heilungsverlauf-Timelapses.',
+      microtubule:
+        'Instanz-Segmentierung für Mikrotubuli in der IRM/TIRF-Mikroskopie. DINOv3-L + DPT-Encoder, PySOAX-Postprocessing, native Polylinien-Ausgabe mit Embedding-basiertem Tracking.',
     },
     dataUsageTitle: 'Datennutzung und Datenschutz',
     dataUsageDescription:

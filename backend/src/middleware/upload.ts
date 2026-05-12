@@ -1,11 +1,27 @@
 import multer from 'multer';
 import path from 'path';
+import * as os from 'os';
 import { Request, Response, NextFunction } from 'express';
 import type { Express } from 'express-serve-static-core';
 import {
   SUPPORTED_MIME_TYPES,
   SUPPORTED_EXTENSIONS,
+  SUPPORTED_VIDEO_MIME_TYPES,
+  SUPPORTED_VIDEO_EXTENSIONS,
 } from '../storage/interface';
+
+// Merged set used by the upload fileFilter — frames are extracted from
+// videos by the video extractor service after the file lands on disk.
+const ALL_SUPPORTED_MIME_TYPES = [
+  ...SUPPORTED_MIME_TYPES,
+  ...SUPPORTED_VIDEO_MIME_TYPES,
+  'application/octet-stream', // ND2 has no registered MIME; checked by extension
+] as readonly string[];
+
+const ALL_SUPPORTED_EXTENSIONS = [
+  ...SUPPORTED_EXTENSIONS,
+  ...SUPPORTED_VIDEO_EXTENSIONS,
+] as readonly string[];
 import { getUploadLimitsForEnvironment } from '../config/uploadLimits';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
@@ -13,67 +29,71 @@ import { logger } from '../utils/logger';
 // Get environment-specific upload limits
 const uploadLimits = getUploadLimitsForEnvironment();
 
+// Videos / microscopy stacks dwarf single images — a tile-scan ND2 or a
+// long timelapse can easily reach 50 GB. Use the existing chunked-upload
+// pipeline for images (20 MB cap stays tight) but expose a separate
+// multer for the /videos route with a 100 GB ceiling.
+const VIDEO_UPLOAD_MAX_BYTES = 100 * 1024 * 1024 * 1024;
+
+// Shared multer fileFilter — accepts any MIME on the union of image +
+// video supported types, falling through to extension validation for
+// formats with no registered MIME (most notably ND2). Pulled out so the
+// image-multer and the video-multer below can share it without touching
+// the (private, untyped) ``upload.options`` field.
+const sharedFileFilter: multer.Options['fileFilter'] = (req, file, cb) => {
+  if (
+    typeof file.mimetype !== 'string' ||
+    !ALL_SUPPORTED_MIME_TYPES.includes(file.mimetype)
+  ) {
+    logger.warn(
+      'File upload rejected - unsupported MIME type',
+      'UploadMiddleware',
+      {
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        userId: req.user?.id,
+      }
+    );
+    return cb(
+      new Error(
+        `Nepodporovaný formát souboru: ${file.mimetype}. Podporované: ${ALL_SUPPORTED_MIME_TYPES.join(', ')}`
+      )
+    );
+  }
+
+  const fileExtension = path.extname(file.originalname).toLowerCase();
+  if (!ALL_SUPPORTED_EXTENSIONS.includes(fileExtension)) {
+    logger.warn(
+      'File upload rejected - unsupported extension',
+      'UploadMiddleware',
+      {
+        filename: file.originalname,
+        extension: fileExtension,
+        userId: req.user?.id,
+      }
+    );
+    return cb(
+      new Error(
+        `Nepodporovaná přípona souboru. Podporované: ${ALL_SUPPORTED_EXTENSIONS.join(', ')}`
+      )
+    );
+  }
+
+  cb(null, true);
+};
+
 /**
- * Multer configuration for file uploads
+ * Multer configuration for file uploads (images chunked-upload pipeline).
  */
 const upload = multer({
-  storage: multer.memoryStorage(), // Store files in memory
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: uploadLimits.MAX_FILE_SIZE_BYTES,
-    files: uploadLimits.MAX_FILES_PER_REQUEST, // Increased from 20 to 50
-    fields: uploadLimits.MAX_FIELDS, // Increased from 5 to 10
-    fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024, // Convert KB to bytes
+    files: uploadLimits.MAX_FILES_PER_REQUEST,
+    fields: uploadLimits.MAX_FIELDS,
+    fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024,
   },
-  fileFilter: (req, file, cb) => {
-    // Check MIME type
-    if (
-      typeof file.mimetype !== 'string' ||
-      !(SUPPORTED_MIME_TYPES as readonly string[]).includes(file.mimetype)
-    ) {
-      logger.warn(
-        'File upload rejected - unsupported MIME type',
-        'UploadMiddleware',
-        {
-          filename: file.originalname,
-          mimetype: file.mimetype,
-          userId: req.user?.id,
-        }
-      );
-
-      return cb(
-        new Error(
-          `Nepodporovaný formát souboru: ${file.mimetype}. Podporované: ${SUPPORTED_MIME_TYPES.join(', ')}`
-        )
-      );
-    }
-
-    // Check file extension
-    const fileExtension = path.extname(file.originalname).toLowerCase();
-
-    if (
-      !SUPPORTED_EXTENSIONS.includes(
-        fileExtension as (typeof SUPPORTED_EXTENSIONS)[number]
-      )
-    ) {
-      logger.warn(
-        'File upload rejected - unsupported extension',
-        'UploadMiddleware',
-        {
-          filename: file.originalname,
-          extension: fileExtension,
-          userId: req.user?.id,
-        }
-      );
-
-      return cb(
-        new Error(
-          `Nepodporovaná přípona souboru. Podporované: ${SUPPORTED_EXTENSIONS.join(', ')}`
-        )
-      );
-    }
-
-    cb(null, true);
-  },
+  fileFilter: sharedFileFilter,
 });
 
 /**
@@ -85,9 +105,62 @@ export const uploadImages = upload.array(
 );
 
 /**
- * Middleware for handling single file upload
+ * Middleware for handling single file upload (form field name: "image")
  */
 export const uploadSingleImage = upload.single('image');
+
+/**
+ * Multer configuration dedicated to video uploads. Uses the same MIME
+ * filter as ``upload`` but a much larger per-file budget so .nd2 stacks
+ * and multi-page TIFFs aren't truncated at 20 MB.
+ */
+// Videos are buffered to a temp file on disk (not memory) so a 50 GB ND2
+// can land safely even when the backend container has only a few GB of
+// RAM. The videoUploadService then renames the temp file into the
+// canonical projects/<pid>/images/<vid>/original.<ext> location and the
+// extractor runs from there.
+const VIDEO_UPLOAD_TMP_DIR =
+  process.env.VIDEO_UPLOAD_TMP_DIR ?? path.join(os.tmpdir(), 'spheroseg-uploads');
+
+const videoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, VIDEO_UPLOAD_TMP_DIR),
+    filename: (_req, file, cb) => {
+      // Preserve the original extension so the extractor's format detection
+      // (mp4 vs nd2 vs tiff stack) works against the temp path. Prefix
+      // with a random token to avoid collisions across concurrent uploads.
+      const ext = path.extname(file.originalname);
+      const token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+      cb(null, `${token}${ext}`);
+    },
+  }),
+  limits: {
+    fileSize: VIDEO_UPLOAD_MAX_BYTES,
+    files: 1,
+    fields: uploadLimits.MAX_FIELDS,
+    fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024,
+  },
+  fileFilter: sharedFileFilter,
+});
+
+// Ensure the tmp dir exists at boot — diskStorage will throw EEXIST/ENOENT
+// otherwise on first upload.
+import { mkdirSync } from 'fs';
+try {
+  mkdirSync(VIDEO_UPLOAD_TMP_DIR, { recursive: true });
+} catch (err) {
+  logger.warn(
+    `Failed to ensure video tmp dir ${VIDEO_UPLOAD_TMP_DIR}: ${(err as Error).message}`,
+    'UploadMiddleware'
+  );
+}
+
+/**
+ * Middleware for a single video upload (form field name: "video"). The
+ * MIME check is shared with image uploads; only the field name and the
+ * per-file size budget differ.
+ */
+export const uploadSingleVideo = videoUpload.single('video');
 
 /**
  * Error handler for multer upload errors

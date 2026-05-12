@@ -148,7 +148,7 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
       {/* Header */}
       <div className="p-3 border-b border-gray-200 dark:border-gray-700">
         <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
@@ -234,7 +234,7 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
                   activeInstanceId === instanceId
                     ? 'bg-violet-50 dark:bg-violet-900/20'
                     : ''
-                }`}
+                } dark:hover:bg-gray-800 dark:bg-gray-900`}
                 onClick={() => {
                   toggleExpanded(instanceId);
                   onInstanceIdChange(instanceId);
@@ -274,7 +274,7 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
                         selectedPolygonId === polyline.id
                           ? 'bg-violet-100 dark:bg-violet-900/30'
                           : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
+                      } dark:hover:bg-gray-800 dark:bg-gray-800`}
                       onClick={() =>
                         onSelectPolygon(
                           selectedPolygonId === polyline.id ? null : polyline.id
@@ -317,7 +317,7 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
                   selectedPolygonId === polyline.id
                     ? 'bg-violet-100 dark:bg-violet-900/30'
                     : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                } dark:hover:bg-gray-800 dark:bg-gray-800`}
                 onClick={() =>
                   onSelectPolygon(
                     selectedPolygonId === polyline.id ? null : polyline.id
