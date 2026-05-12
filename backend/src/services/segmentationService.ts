@@ -15,6 +15,7 @@ import { ImageService } from './imageService';
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
+import { safeMlFilename } from '../utils/mlFilename';
 
 export interface SegmentationPoint {
   x: number;
@@ -409,10 +410,13 @@ export class SegmentationService {
         throw new Error('Failed to load image from storage');
       }
 
-      // Prepare form data for Python service
+      // Prepare form data for Python service. The filename has to
+      // satisfy the ML service's split('.')-based extension check;
+      // video-frame Image rows carry names like "video.nd2 (frame 98)"
+      // which fail that check. safeMlFilename normalises both shapes.
       const formData = new FormData();
       formData.append('file', imageBuffer, {
-        filename: image.name,
+        filename: safeMlFilename(image),
         contentType: image.mimeType || 'image/jpeg',
       });
 
@@ -977,7 +981,7 @@ export class SegmentationService {
         }
         const imageBuffer = await storage.getBuffer(image.originalPath);
         formData.append('files', imageBuffer, {
-          filename: image.name,
+          filename: safeMlFilename(image),
           contentType: image.mimeType || 'image/jpeg',
         });
 
