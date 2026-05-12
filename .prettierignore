@@ -75,3 +75,8 @@ Thumbs.db
 path_c_v24c/
 microtubules_v7_pysoax/
 
+# Local "remember" skill scratch state (gitignored, never shipped).
+# Contains free-form notes + bare-expression timestamp files that
+# shouldn't be formatted or linted.
+.remember/
+

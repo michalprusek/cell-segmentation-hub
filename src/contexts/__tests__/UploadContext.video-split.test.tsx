@@ -30,13 +30,12 @@ import { useUpload } from '@/contexts/useUpload';
 // vi.mock is hoisted to the top of the file by Vitest, so any locals it
 // references must be hoisted too. vi.hoisted() does exactly that.
 
-const { uploadImagesMock, uploadImagesChunkedMock, uploadVideoMock } = vi.hoisted(
-  () => ({
+const { uploadImagesMock, uploadImagesChunkedMock, uploadVideoMock } =
+  vi.hoisted(() => ({
     uploadImagesMock: vi.fn(),
     uploadImagesChunkedMock: vi.fn(),
     uploadVideoMock: vi.fn(),
-  })
-);
+  }));
 
 vi.mock('@/lib/api', () => ({
   default: {
@@ -65,7 +64,9 @@ vi.mock('sonner', () => ({
 
 // Inline shim for axios so isCancel can be controlled per-test.
 vi.mock('axios', () => ({
-  default: { isCancel: (e: unknown) => Boolean((e as { __cancel?: boolean })?.__cancel) },
+  default: {
+    isCancel: (e: unknown) => Boolean((e as { __cancel?: boolean })?.__cancel),
+  },
 }));
 
 // --- helpers -----------------------------------------------------------
@@ -201,7 +202,9 @@ describe('UploadContext file-split routing', () => {
         frameCount: 1,
         channels: [],
       })
-      .mockRejectedValueOnce(Object.assign(new Error('canceled'), { __cancel: true }));
+      .mockRejectedValueOnce(
+        Object.assign(new Error('canceled'), { __cancel: true })
+      );
     const { result } = renderHook(() => useUpload(), { wrapper });
     await act(async () => {
       result.current.startUpload('proj-5', [
