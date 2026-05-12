@@ -1061,6 +1061,11 @@ export class ImageController {
             videoDurationMs: image.videoDurationMs,
             channels: image.channels,
             displayOrder: image.displayOrder,
+            // Exposed so the Segment-All channel picker can derive the set
+            // of distinct channels for multi-channel video projects
+            // (extractChannelsFromPaths reads the /frames/NNNN/<ch>.<ext>
+            // shape). Not used by the canvas — that goes through `url`.
+            originalPath: image.originalPath,
           };
         })
       );
