@@ -531,6 +531,11 @@ export interface ProjectImage {
   // Frame children are filtered from the gallery on the backend; UI only
   // ever sees container rows here.
   isVideoContainer?: boolean;
+  // Frame-row identifiers — set when the row IS a child frame; null on
+  // containers and standalone images. Editor uses these to load polygons
+  // for a specific frame inside a video.
+  parentVideoId?: string | null;
+  frameIndex?: number | null;
   frameCount?: number | null;
   videoDurationMs?: number | null;
   channels?: VideoChannel[] | null;
