@@ -1130,7 +1130,12 @@ export class ImageService {
     });
 
     const totalImages = images.length;
-    const totalSize = images.reduce((sum, img) => sum + (img.fileSize || 0), 0);
+    // fileSize is BigInt — coerce per row before summing; 2^53 covers any
+    // realistic file size, so number arithmetic is safe.
+    const totalSize = images.reduce(
+      (sum, img) => sum + Number(img.fileSize ?? 0n),
+      0
+    );
 
     // Count by status
     const byStatus = {
