@@ -1266,6 +1266,21 @@ export class ImageService {
       throw ApiError.forbidden('Access denied to this project');
     }
 
+    // Video containers + extracted frames have no browser-renderable
+    // origin (ND2 / TIFF stack binary or per-channel PNG buried under
+    // frames/NNNN/<channel>.png). Resolve to the segmentation-source
+    // channel of the appropriate frame so the editor canvas can render
+    // it directly. For containers we serve frame 0; for frame rows we
+    // serve that frame's own source channel.
+    if (image.isVideoContainer || image.parentVideoId) {
+      const frameBuffer = await this.getVideoFrameForDisplay(image);
+      if (frameBuffer) {
+        return frameBuffer;
+      }
+      // Fall through to the original-buffer path on miss — the safer
+      // failure mode is letting nginx 404 surface than silently lying.
+    }
+
     // Check if conversion is needed
     const browserSupportedTypes = [
       'image/jpeg',
@@ -1420,6 +1435,70 @@ export class ImageService {
   /**
    * Helper method to get image buffer from storage
    */
+  /**
+   * Resolve a video-container or video-frame Image row to its actual
+   * displayable PNG buffer (the segmentation-source channel of frame 0
+   * for containers, the row's own source channel for frame children).
+   * Returns null if the channel can't be determined or the file is
+   * missing — caller decides how to handle that.
+   */
+  private async getVideoFrameForDisplay(
+    image: Prisma.ImageGetPayload<Record<string, never>>
+  ): Promise<{ buffer: Buffer; mimeType: string; filename: string } | null> {
+    // We need: projectId, parentVideoId (or own id when container),
+    // frameIndex (0 for container default), and the segmentation-source
+    // channel name from the container row's channels JSON.
+    const containerId = image.isVideoContainer
+      ? image.id
+      : image.parentVideoId;
+    if (!containerId) return null;
+
+    const frameIndex = image.isVideoContainer ? 0 : (image.frameIndex ?? 0);
+
+    // Channels live on the container row, not on the frames.
+    const container = image.isVideoContainer
+      ? image
+      : await this.prisma.image.findUnique({ where: { id: containerId } });
+    if (!container) return null;
+
+    const channels = Array.isArray(container.channels)
+      ? (container.channels as unknown as Array<{
+          name: string;
+          isSegmentationSource?: boolean;
+        }>)
+      : [];
+    const sourceChannel =
+      channels.find(c => c.isSegmentationSource)?.name ??
+      channels[0]?.name ??
+      null;
+    if (!sourceChannel) return null;
+
+    // Defence in depth: alnum/underscore/dot/dash only — same regex the
+    // /frame-data controller uses to keep this path 1:1 with that one.
+    if (!/^[A-Za-z0-9._-]+$/.test(sourceChannel)) return null;
+
+    const framePath = path.join(
+      'projects',
+      container.projectId,
+      'images',
+      containerId,
+      'frames',
+      String(frameIndex).padStart(4, '0'),
+      `${sourceChannel}.png`
+    );
+
+    try {
+      const buffer = await this.getImageBuffer(framePath);
+      return {
+        buffer,
+        mimeType: 'image/png',
+        filename: `${image.name}_frame${String(frameIndex).padStart(4, '0')}.png`,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private async getImageBuffer(imagePath: string): Promise<Buffer> {
     const storage = getStorageProvider();
 
