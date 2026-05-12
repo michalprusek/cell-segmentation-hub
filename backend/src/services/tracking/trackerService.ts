@@ -100,6 +100,15 @@ const _inFlightTrackers = new Set<string>();
 export async function runTrackingForContainer(
   containerId: string
 ): Promise<void> {
+  // Claim the in-flight slot **synchronously** before any await.
+  // Round-3 review caught: doing `has()` then `await ...` then `add()`
+  // creates a check-then-act race in Node's single-threaded async model
+  // — two near-simultaneous triggers both see `has() === false`, both
+  // await isBatchComplete (which yields the microtask), both reach add,
+  // and both proceed. Set.add is idempotent for membership but the two
+  // coroutines have already passed the gate. Claiming the slot before
+  // the first await closes the window: the second caller observes the
+  // slot already taken and bails immediately.
   if (_inFlightTrackers.has(containerId)) {
     logger.debug(
       `Tracker: container ${containerId} already in flight, skipping duplicate trigger`,
@@ -107,15 +116,15 @@ export async function runTrackingForContainer(
     );
     return;
   }
-  if (!(await isBatchComplete(containerId))) {
-    logger.debug(
-      `Tracker: batch ${containerId} not yet complete, skipping`,
-      'TrackerService'
-    );
-    return;
-  }
   _inFlightTrackers.add(containerId);
   try {
+    if (!(await isBatchComplete(containerId))) {
+      logger.debug(
+        `Tracker: batch ${containerId} not yet complete, skipping`,
+        'TrackerService'
+      );
+      return;
+    }
     await _runTrackingForContainerInner(containerId);
   } finally {
     _inFlightTrackers.delete(containerId);

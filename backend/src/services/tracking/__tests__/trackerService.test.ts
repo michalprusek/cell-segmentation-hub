@@ -166,37 +166,47 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
     expect(errors).toMatch(/malformed polygons JSON/i);
   });
 
-  it('drops duplicate runs of the same container via the in-flight guard', async () => {
-    // Make findMany slow so two calls overlap
-    let resolveBatch: (() => void) | null = null;
+  it('drops duplicate runs even when both callers race inside isBatchComplete', async () => {
+    // Round-3 review caught: an in-flight guard that does
+    //   has() -> await ... -> add()
+    // can be defeated by two callers entering simultaneously, both
+    // seeing has()===false, both awaiting, both adding. The guard
+    // must claim the slot synchronously BEFORE the first await — this
+    // test exercises that exact overlap window by holding the FIRST
+    // call's isBatchComplete suspended until AFTER the SECOND call
+    // has reached its own guard check.
+    let releaseFirstBatchCheck: (() => void) | null = null;
+    let isBatchCompleteCallCount = 0;
     prismaImageFindMany.mockImplementation(async ({ select }) => {
       if (select?.segmentationStatus) {
+        isBatchCompleteCallCount++;
+        if (isBatchCompleteCallCount === 1) {
+          // First call suspends here, giving the second call a chance
+          // to enter runTrackingForContainer concurrently.
+          await new Promise<void>(r => {
+            releaseFirstBatchCheck = r;
+          });
+        }
         return [{ segmentationStatus: 'segmented' }];
       }
-      await new Promise<void>(r => {
-        resolveBatch = r;
-      });
+      // "load all frames" — return empty so the inner pass returns fast.
       return [];
     });
 
     const first = runTrackingForContainer('vid-2');
-    // Wait a tick so first call enters the in-flight set
-    await new Promise(r => setTimeout(r, 5));
+    // Yield the microtask so first call reaches the suspended
+    // isBatchComplete before we trigger the second.
+    await new Promise(r => setImmediate(r));
     const second = runTrackingForContainer('vid-2');
 
-    // Second call should resolve immediately (skipped via in-flight guard).
+    // Second must short-circuit BEFORE its own isBatchComplete fires.
     await second;
-    // findMany was called only by the first pass (1 isBatchComplete +
-    // 1 frame load) at this point; the second pass never even entered
-    // the function body.
-    const callCountBeforeResolve = prismaImageFindMany.mock.calls.length;
+    // At this point the first is still suspended; only its single
+    // isBatchComplete call has been made. The second never even
+    // entered isBatchComplete — the guard caught it synchronously.
+    expect(isBatchCompleteCallCount).toBe(1);
 
-    // Unblock the first call so it completes.
-    resolveBatch?.();
+    releaseFirstBatchCheck?.();
     await first;
-
-    // After resolve: first call's full pass made 2 findMany calls.
-    // Second's was skipped via in-flight guard.
-    expect(callCountBeforeResolve).toBeLessThanOrEqual(2);
   });
 });
