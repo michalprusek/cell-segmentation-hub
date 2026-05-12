@@ -48,8 +48,20 @@ export interface VideoUploadResult {
   channels: ChannelMeta[];
 }
 
-/** Top-level path under the configured uploads directory that holds a
- *  given video container and its extracted frames. */
+/** Storage-key prefix (relative to UPLOAD_DIR) under which a container
+ *  and its extracted frames live. This is what gets persisted to
+ *  Image.originalPath / thumbnailPath so `storage.getUrl(path)` resolves
+ *  correctly to `/uploads/projects/<pid>/images/<cid>/...`. */
+function videoContainerStorageKey(
+  projectId: string,
+  containerId: string
+): string {
+  return path.posix.join('projects', projectId, 'images', containerId);
+}
+
+/** Absolute filesystem path for the container directory — UPLOAD_DIR
+ *  prepended to the storage key. Used for `mkdir`, `rm`, sharp/extract
+ *  I/O. Stays in node `path` (OS separators) so Windows dev still works. */
 function videoContainerDir(projectId: string, containerId: string): string {
   return path.join(
     config.UPLOAD_DIR,
@@ -65,12 +77,13 @@ function videoContainerDir(projectId: string, containerId: string): string {
  *  consumers that need a different channel build their own URL via the
  *  /frame-data?channel=X route. */
 function frameStorageKey(
+  projectId: string,
   containerId: string,
   frameIndex: number,
   channelName: string
 ): string {
   return path.posix.join(
-    containerId,
+    videoContainerStorageKey(projectId, containerId),
     'frames',
     String(frameIndex).padStart(4, '0'),
     `${channelName}.png`
@@ -228,7 +241,7 @@ export async function uploadVideoFromFile(options: {
     reportProgress('persisting', 0.9, 'Persisting frame records');
     const frameRows = Array.from({ length: result.frameCount }, (_, i) => ({
       name: `${originalName} (frame ${i + 1})`,
-      originalPath: frameStorageKey(containerId, i, defaultChannel),
+      originalPath: frameStorageKey(projectId, containerId, i, defaultChannel),
       thumbnailPath: null,
       projectId,
       width: result.width || null,
@@ -244,11 +257,12 @@ export async function uploadVideoFromFile(options: {
       await prisma.image.createMany({ data: frameRows });
     }
 
+    const containerKey = videoContainerStorageKey(projectId, containerId);
     await prisma.image.update({
       where: { id: containerId },
       data: {
-        originalPath: path.posix.join(containerId, `original${ext}`),
-        thumbnailPath: path.posix.join(containerId, 'thumbnail.jpg'),
+        originalPath: path.posix.join(containerKey, `original${ext}`),
+        thumbnailPath: path.posix.join(containerKey, 'thumbnail.jpg'),
         width: result.width || null,
         height: result.height || null,
         frameCount: result.frameCount,

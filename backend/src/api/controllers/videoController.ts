@@ -255,13 +255,11 @@ export class VideoController {
           `${channelName}.png`
         );
       } else {
-        absPath = path.join(
-          config.UPLOAD_DIR,
-          'projects',
-          image.projectId,
-          'images',
-          image.originalPath
-        );
+        // ``originalPath`` is the full storage key relative to UPLOAD_DIR
+        // (e.g. ``projects/<pid>/images/<cid>/original.nd2`` for a video
+        // container, or ``<userId>/<projectId>/originals/...`` for a
+        // standalone upload). Joining directly preserves both shapes.
+        absPath = path.join(config.UPLOAD_DIR, image.originalPath);
       }
 
       // Defence in depth: ensure the resolved path is still under the
