@@ -7,6 +7,7 @@ import { useLocalizedModels } from '@/hooks/useLocalizedModels';
 import { Badge } from '@/components/ui/badge';
 import Logo from '@/components/header/Logo';
 import UserProfileDropdown from '@/components/header/UserProfileDropdown';
+import FeedbackButton from '@/components/feedback/FeedbackButton';
 import MobileMenu from '@/components/header/MobileMenu';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 // api unused - available for future use
@@ -222,6 +223,7 @@ const DashboardHeader = () => {
             ></div>
             {getSelectedModelInfo().displayName}
           </Badge>
+          <FeedbackButton />
           <UserProfileDropdown
             username={user?.email?.split('@')[0] || 'User'}
           />
