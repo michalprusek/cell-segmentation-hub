@@ -119,6 +119,17 @@ export const useProjectData = (
             // counts only — sufficient for the grid view. The segmentation
             // editor loads full polygon data independently.
             segmentationResult: img.segmentationResult || undefined,
+            // Video-container metadata (ND2 / TIFF / MP4). Without these
+            // the segmentation editor's VideoModeOverlay can't tell a
+            // container from a standalone image, so frame slider /
+            // play-pause / channel switcher never render and the canvas
+            // stays empty when the user opens a video in the editor.
+            isVideoContainer: img.isVideoContainer,
+            parentVideoId: img.parentVideoId,
+            frameIndex: img.frameIndex,
+            frameCount: img.frameCount,
+            videoDurationMs: img.videoDurationMs,
+            channels: img.channels,
           };
         });
 
