@@ -1140,14 +1140,22 @@ const SegmentationEditor = () => {
   const visiblePolygonsCount = editor.polygons.length - hiddenPolygonIds.size;
   const hiddenPolygonsCount = hiddenPolygonIds.size;
 
-  // Video mode: when the selected image is a video container, render the
-  // VideoModeOverlay (frame slider, channel switcher, window/level, kymo
-  // modal) alongside the static-image editor. The overlay is a no-op for
-  // standalone images so the existing single-image flow stays untouched.
-  const videoContainerId = (selectedImage as { isVideoContainer?: boolean })
-    .isVideoContainer
+  // Video mode: render the VideoModeOverlay (frame slider, play/pause,
+  // channel switcher, window/level, kymograph modal) whenever the
+  // selected image is part of a video — either the container row OR any
+  // of its extracted frame children. Frames are what the user actually
+  // opens in practice (containers are filtered out of the gallery), so
+  // the overlay has to keep working from frame URLs too.
+  //
+  // The overlay scopes itself to the container (parent), not the frame,
+  // because the frame list + channels live on the container row.
+  const videoMeta = selectedImage as {
+    isVideoContainer?: boolean;
+    parentVideoId?: string | null;
+  };
+  const videoContainerId = videoMeta.isVideoContainer
     ? imageId
-    : null;
+    : (videoMeta.parentVideoId ?? null);
 
   return (
     <SegmentationErrorBoundary>

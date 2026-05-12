@@ -905,11 +905,17 @@ export class ImageController {
         return;
       }
 
+      // Hide video container rows from the gallery — users see frame
+      // children directly (one row per extracted frame), so the
+      // container becomes a service-only entity. Standalone images
+      // (isVideoContainer = false, parentVideoId = null) and extracted
+      // frames (isVideoContainer = false, parentVideoId set) are both
+      // returned by this filter; only the parent container is hidden.
+      const galleryWhere = { projectId, isVideoContainer: false };
+
       // Get images with segmentation data in a single optimized query
       const images = await prisma.image.findMany({
-        where: {
-          projectId,
-        },
+        where: galleryWhere,
         include: {
           segmentation: true,
         },
@@ -922,7 +928,7 @@ export class ImageController {
 
       // Get total count for pagination
       const totalCount = await prisma.image.count({
-        where: { projectId },
+        where: galleryWhere,
       });
 
       // Get storage provider for URL generation
