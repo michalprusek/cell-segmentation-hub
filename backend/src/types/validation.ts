@@ -128,21 +128,42 @@ export const isProjectType = (v: unknown): v is ProjectType =>
 export const coerceProjectType = (v: unknown): ProjectType =>
   isProjectType(v) ? v : 'spheroid';
 
-/**
- * Models compatible with each project type. Mirror of the same constant
- * in `src/types/index.ts` (frontend) — kept duplicated because frontend
- * and backend have separate build trees and no shared import path.
+/** All known model identifiers — kept as a literal union so the
+ *  MODEL_TYPE_COMPATIBILITY map below catches typos at compile time
+ *  (a misspelled model id in any array becomes a TS error). Mirrors the
+ *  `ModelType` union in `@/lib/modelUtils.ts`; intentionally duplicated
+ *  here to avoid a circular import. */
+type KnownModelId =
+  | 'hrnet'
+  | 'cbam_resunet'
+  | 'unet_spherohq'
+  | 'unet_attention_aspp'
+  | 'sperm'
+  | 'wound'
+  | 'microtubule';
+
+/** Models compatible with each project type. Cross-type segmentation is
+ * blocked at both frontend (dropdown filter) and backend (400 on submit).
  *
- * Cross-type segmentation requests fail with 400.
+ * - `spheroid_invasive` is locked to `unet_attention_aspp` because core
+ *   detection is tied to that model's postprocessing path.
+ * - `wound`, `sperm` and `microtubules` use their dedicated specialised
+ *   models only. `microtubules` ships with the v7 DINOv3 + DPT + PySOAX
+ *   pipeline producing per-instance polyline centerlines.
+ * - Standard `spheroid` projects can use any of the general spheroid
+ *   models, with `unet_attention_aspp` excluded so users wanting core
+ *   detection are nudged toward marking the project disintegrated.
  */
-export const MODEL_TYPE_COMPATIBILITY: Record<ProjectType, readonly string[]> =
-  {
-    spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
-    spheroid_invasive: ['unet_attention_aspp'],
-    wound: ['wound'],
-    sperm: ['sperm'],
-    microtubules: ['microtubule'],
-  } as const;
+export const MODEL_TYPE_COMPATIBILITY: Record<
+  ProjectType,
+  readonly KnownModelId[]
+> = {
+  spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
+  spheroid_invasive: ['unet_attention_aspp'],
+  wound: ['wound'],
+  sperm: ['sperm'],
+  microtubules: ['microtubule'],
+} as const;
 
 export const isModelCompatibleWithType = (
   model: string,
@@ -401,3 +422,22 @@ export type AddImageToQueueData = z.infer<typeof addImageToQueueSchema>;
 export type BatchQueueData = z.infer<typeof batchQueueSchema>;
 export type ResetStuckItemsData = z.infer<typeof resetStuckItemsSchema>;
 export type CleanupQueueData = z.infer<typeof cleanupQueueSchema>;
+
+// ============================================================================
+// Feedback (bug reports + feature requests)
+// ============================================================================
+
+// Mirrored as a DB CHECK constraint in 20260513_add_feedback so an attacker
+// who bypasses the API layer still can't insert an unknown type.
+export const FEEDBACK_TYPES = ['bug', 'feature'] as const;
+export type FeedbackType = (typeof FEEDBACK_TYPES)[number];
+
+export const createFeedbackSchema = z.object({
+  type: z.enum(FEEDBACK_TYPES),
+  // Length caps match the DB columns; the trim() prevents users from sending
+  // whitespace-only content that the .min(1) check would otherwise accept.
+  title: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(5000),
+});
+
+export type CreateFeedbackData = z.infer<typeof createFeedbackSchema>;

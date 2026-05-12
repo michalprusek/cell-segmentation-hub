@@ -1992,4 +1992,26 @@ export default {
       failed: "Échec de l'export des métriques des spermatozoïdes",
     },
   },
+  feedback: {
+    buttonTitle: 'Envoyer un retour',
+    buttonAriaLabel: 'Ouvrir le formulaire de retour',
+    title: 'Envoyer un retour',
+    subtitle:
+      'Trouvé un bug ou une idée ? Dites-le nous — nous lisons chaque rapport.',
+    typeBug: 'Rapport de bug',
+    typeFeature: 'Demande de fonctionnalité',
+    titleLabel: 'Titre',
+    titlePlaceholder: 'Résumé court',
+    bodyLabel: 'Détails',
+    bodyPlaceholder:
+      "Étapes pour reproduire, ce que vous attendiez, captures d'écran si pertinent...",
+    submit: 'Envoyer',
+    submittedSuccess: 'Merci ! Votre retour a été envoyé.',
+    submitFailed: "Impossible d'envoyer le retour",
+    attachmentPrompt:
+      "Glissez une capture d'écran ici, ou cliquez pour sélectionner (PNG/JPG ≤ 5 Mo)",
+    attachmentTooLarge: 'Fichier trop volumineux — limite 5 Mo',
+    attachmentInvalidType: 'Uniquement des images PNG ou JPG',
+    removeAttachment: 'Supprimer la pièce jointe',
+  },
 };

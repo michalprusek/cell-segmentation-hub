@@ -20,6 +20,7 @@ import healthRoutes from './healthRoutes';
 import cacheRoutes from './cacheRoutes';
 import databaseRoutes from './database';
 import rateLimitAdminRoutes from './rateLimitAdmin';
+import feedbackRoutes from './feedbackRoutes';
 
 interface RouteInfo {
   path: string;
@@ -83,6 +84,7 @@ export function setupRoutes(app: Express): void {
   app.use('/api/cache', cacheRoutes); // Cache and session management routes
   app.use('/api/database', databaseRoutes); // Database management and monitoring routes
   app.use('/api/admin/rate-limits', rateLimitAdminRoutes); // Rate limiting administration routes
+  app.use('/api/feedback', feedbackRoutes); // User-submitted bug reports + feature requests
 
   // Test email routes (enabled in all environments for debugging)
   app.use('/api/test-email', testEmailRoutes);

@@ -37,6 +37,11 @@ export interface EmailConfig {
 
 export interface EmailServiceOptions {
   to: string;
+  /** Optional Reply-To header. Used by the feedback flow so that
+   *  hitting Reply on the maintainer-notification email lands in the
+   *  submitter's inbox, not the no-reply sender. nodemailer forwards
+   *  this to SMTP as a standard header. */
+  replyTo?: string;
   subject: string;
   html?: string;
   text?: string;

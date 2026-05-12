@@ -23,6 +23,10 @@ export default tseslint.config(
       // test files), and linting it from here would also bypass the
       // backend's stricter rule set.
       'backend/**',
+      // `.remember/` is scratch state for the local "remember" skill —
+      // gitignored, never shipped, and may contain bare-expression
+      // timestamp files that we don't want to lint.
+      '.remember/**',
     ],
   },
   {

@@ -226,9 +226,14 @@ export async function sendEmailWithRetry(
     }
 
     const fromConfig = config.from as { name: string; email: string };
+    // Caller-supplied replyTo (e.g. feedback flow) wins over the default
+    // no-reply Reply-To so the maintainer can reply to the user's email
+    // by hitting Reply directly in their mail client.
+    const replyToHeader =
+      options.replyTo ?? `"${fromConfig.name}" <${fromConfig.email}>`;
     const mailOptions: SendMailOptions = {
       from: `"${fromConfig.name}" <${fromConfig.email}>`,
-      replyTo: `"${fromConfig.name}" <${fromConfig.email}>`, // Explicit Reply-To for Gmail
+      replyTo: replyToHeader,
       to: options.to,
       subject: options.subject,
       html: options.html,
