@@ -1148,6 +1148,23 @@ const SegmentationEditor = () => {
   const isVideoMode =
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
 
+  // Seed video.frameIndex from the URL imageId on first container load.
+  // useVideoFrames defaults to frame 0 internally; without this sync,
+  // opening /segmentation/<pid>/<frame97Id> would show frame 0 in the
+  // canvas and "1 / 300" in the header. We seed once, when the
+  // container metadata arrives and the URL points at a known frame.
+  useEffect(() => {
+    if (!isVideoMode || !video.container || !imageId) return;
+    const idx = video.container.frames.findIndex(f => f.id === imageId);
+    if (idx >= 0 && idx !== video.frameIndex) {
+      video.setFrameIndex(idx);
+    }
+    // Intentionally NOT depending on video.frameIndex — that would
+    // fight Play / scrubber on every tick. Only re-run when the URL
+    // changes or the container is first loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVideoMode, video.container, imageId]);
+
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading
   if (projectLoading && !projectImages.length) {
@@ -1240,7 +1257,7 @@ const SegmentationEditor = () => {
 
               {/* Canvas Area */}
               <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-                <div className="flex-1 lg:flex-1 p-2 min-h-0 h-[calc(100vh-300px)] lg:h-auto">
+                <div className="flex-1 lg:flex-1 p-2 min-h-0 h-[calc(100vh-300px)] lg:h-auto overflow-hidden">
                   <CanvasContainer
                     ref={editor.canvasRef}
                     editMode={editor.editMode}
