@@ -53,6 +53,11 @@ import EditorHeader from './components/EditorHeader';
 import StatusBar from './components/StatusBar';
 import EditorLayout from './components/layout/EditorLayout';
 
+// Video-mode overlay (frame slider + channel switcher + window/level
+// slider + kymograph modal). No-op for standalone images.
+import { VideoModeOverlay } from './components/VideoModeOverlay';
+import type { ProjectType } from '@/types';
+
 const EMPTY_HOVERED_VERTEX = { polygonId: null, vertexIndex: null } as const;
 
 const SegmentationEditor = () => {
@@ -1135,6 +1140,15 @@ const SegmentationEditor = () => {
   const visiblePolygonsCount = editor.polygons.length - hiddenPolygonIds.size;
   const hiddenPolygonsCount = hiddenPolygonIds.size;
 
+  // Video mode: when the selected image is a video container, render the
+  // VideoModeOverlay (frame slider, channel switcher, window/level, kymo
+  // modal) alongside the static-image editor. The overlay is a no-op for
+  // standalone images so the existing single-image flow stays untouched.
+  const videoContainerId = (selectedImage as { isVideoContainer?: boolean })
+    .isVideoContainer
+    ? imageId
+    : null;
+
   return (
     <SegmentationErrorBoundary>
       <EditorLayout>
@@ -1156,6 +1170,13 @@ const SegmentationEditor = () => {
           queueStats={queueStats}
           isWebSocketConnected={isWebSocketConnected}
         />
+
+        {videoContainerId && (
+          <VideoModeOverlay
+            videoContainerId={videoContainerId}
+            projectType={project?.type as ProjectType | undefined}
+          />
+        )}
 
         {/* Main Content Area */}
         <div className="flex flex-1 overflow-hidden">
@@ -1337,7 +1358,7 @@ const SegmentationEditor = () => {
           {/* Loading indicator overlay */}
           {isReloading && (
             <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm z-20 flex items-center justify-center">
-              <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-lg">
+              <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-lg dark:bg-gray-900">
                 <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 <span className="text-sm text-gray-600 dark:text-gray-400">
                   {t('segmentationEditor.reloadingSegmentation')}

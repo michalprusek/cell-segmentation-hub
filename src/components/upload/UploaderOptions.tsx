@@ -46,7 +46,7 @@ const UploaderOptions = ({
             </div>
           )}
 
-          <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+          <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:bg-gray-900">
             <h3 className="text-lg font-semibold mb-3 dark:text-white">
               {t('projects.projectSelection')}
             </h3>

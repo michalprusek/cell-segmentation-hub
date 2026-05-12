@@ -19,7 +19,15 @@ export const UPLOAD_CONFIG = {
   // Total limits - using centralized constants
   MAX_TOTAL_FILES: FILE_LIMITS.MAX_FILES_PER_BATCH,
 
-  // Supported file types - mapped from centralized formats
+  // Supported file types - mapped from centralized formats.
+  //
+  // Videos are extracted frame-by-frame on upload by the backend's
+  // VideoUploadService. ND2 (Nikon NIS-Elements) has no registered MIME
+  // type so the browser usually reports application/octet-stream for it;
+  // both the dropzone accept map and the per-file validator additionally
+  // honour the .nd2 extension. The same is true for multi-page TIFF
+  // stacks — they share image/tiff with single-page TIFFs and are
+  // disambiguated server-side by inspecting the page count.
   SUPPORTED_FILE_TYPES: [
     'image/jpeg',
     'image/jpg',
@@ -27,6 +35,30 @@ export const UPLOAD_CONFIG = {
     'image/tiff',
     'image/tif',
     'image/bmp',
+    'video/mp4',
+    'video/avi',
+    'video/x-msvideo',
+    'video/quicktime',
+    'video/x-matroska',
+    'video/webm',
+    'application/octet-stream', // .nd2 fallback — disambiguated by extension
+  ],
+
+  // Filename-extension fallback used when the browser fails to assign a
+  // recognised MIME type (e.g. ND2 in Firefox / Chrome on Linux).
+  SUPPORTED_EXTENSIONS: [
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.tif',
+    '.tiff',
+    '.bmp',
+    '.mp4',
+    '.avi',
+    '.mov',
+    '.mkv',
+    '.webm',
+    '.nd2',
   ],
 
   // Upload behavior - using centralized constants

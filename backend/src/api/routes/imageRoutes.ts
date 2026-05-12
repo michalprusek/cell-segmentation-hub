@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { ImageController } from '../controllers/imageController';
+import { VideoController } from '../controllers/videoController';
 import { authenticate } from '../../middleware/auth';
 import {
   validateParams,
@@ -8,6 +9,7 @@ import {
 } from '../../middleware/validation';
 import {
   uploadImages,
+  uploadSingleVideo,
   handleUploadError,
   validateUploadedFiles,
 } from '../../middleware/upload';
@@ -91,6 +93,46 @@ router.post(
   handleUploadError,
   validateUploadedFiles,
   imageController.uploadImages
+);
+
+/**
+ * Upload a video (or microscopy stack) to a project. Extracts frames
+ * synchronously and creates one child Image row per frame.
+ * POST /projects/:id/videos
+ */
+router.post(
+  '/:id/videos',
+  validateParams(projectIdSchema),
+  uploadSingleVideo,
+  handleUploadError,
+  VideoController.upload
+);
+
+/**
+ * Fetch the raw PNG for a specific channel of a video frame.
+ * GET /images/:imageId/frame-data?channel=irm
+ */
+router.get(
+  '/:imageId/frame-data',
+  VideoController.getFrameData
+);
+
+/**
+ * List the frames of a video container in temporal order.
+ * GET /images/:imageId/video-frames
+ */
+router.get(
+  '/:imageId/video-frames',
+  VideoController.getVideoFrames
+);
+
+/**
+ * Update the channel metadata on a video container row.
+ * PATCH /images/:imageId/channels
+ */
+router.patch(
+  '/:imageId/channels',
+  VideoController.updateChannels
 );
 
 /**

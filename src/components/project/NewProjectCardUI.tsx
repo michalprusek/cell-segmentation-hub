@@ -11,7 +11,7 @@ const NewProjectCardUI = ({ onClick }: NewProjectCardUIProps) => {
 
   return (
     <div
-      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden h-full hover:shadow-md transition-shadow cursor-pointer"
+      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden h-full hover:shadow-md transition-shadow cursor-pointer dark:bg-gray-900"
       onClick={onClick}
     >
       <div className="p-6 flex flex-col items-center justify-center h-full min-h-[200px]">

@@ -47,7 +47,7 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
             {images.map(image => (
               <div
                 key={image.id}
-                className="flex items-center border p-3 rounded-md space-x-4 hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="flex items-center border p-3 rounded-md space-x-4 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-900"
                 onClick={() => handleSelectImage(image.id)}
               >
                 <div className="flex items-center h-5">

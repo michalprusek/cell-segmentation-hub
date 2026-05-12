@@ -26,6 +26,8 @@ const PROJECT_TYPE_BADGE: Record<ProjectType, string> = {
     'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 border-amber-300 dark:border-amber-700',
   sperm:
     'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 border-purple-300 dark:border-purple-700',
+  microtubules:
+    'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-200 border-cyan-300 dark:border-cyan-700',
 };
 
 interface ProjectHeaderProps {
@@ -49,7 +51,7 @@ const ProjectHeader = ({
   return (
     <>
       <DashboardHeader />
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 dark:bg-gray-900">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-4">
             <Button

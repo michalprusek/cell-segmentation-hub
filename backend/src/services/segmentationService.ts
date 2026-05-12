@@ -1254,6 +1254,15 @@ export class SegmentationService {
         ...((polygon as any).instanceId && {
           instanceId: (polygon as any).instanceId,
         }),
+        // Microtubule cross-frame tracking carries the trackId on every
+        // sibling polyline; the editor uses it to colour-code tracks.
+        ...((polygon as any).trackId && {
+          trackId: (polygon as any).trackId,
+        }),
+        // _embedding is intentionally NOT propagated to the editor —
+        // it's a several-KB-per-polyline blob used only server-side by
+        // the tracker and kymograph routes. Stripping it here saves
+        // ~30-40 MB on a 100-frame video with 30 MTs per frame.
       })
     );
 
@@ -1730,6 +1739,10 @@ export class SegmentationService {
             ...((polygon as any).instanceId && {
               instanceId: (polygon as any).instanceId,
             }),
+            ...((polygon as any).trackId && {
+              trackId: (polygon as any).trackId,
+            }),
+            // _embedding intentionally stripped — server-only blob.
           })
         );
 

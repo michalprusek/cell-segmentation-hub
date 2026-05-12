@@ -204,6 +204,7 @@ export default {
       spheroid_invasive: 'Sphéroïdes désintégrés',
       wound: 'Cicatrisation des plaies',
       sperm: 'Spermatozoïdes',
+      microtubules: 'Microtubules',
     },
     projectNamePlaceholder: 'ex. : Sphéroïdes de cellules HeLa',
     projectDescPlaceholder:
@@ -337,11 +338,11 @@ export default {
     },
   },
   images: {
-    uploadImages: 'Télécharger des images',
-    dragDrop: 'Glissez et déposez les images ici',
+    uploadImages: 'Télécharger des images ou vidéos',
+    dragDrop: 'Glissez et déposez les images ou vidéos ici',
     clickToSelect: 'ou cliquez pour sélectionner des fichiers',
     acceptedFormats:
-      'Formats acceptés : JPEG, PNG, TIFF, BMP (max 20MB par fichier)',
+      'Images : JPEG, PNG, TIFF, BMP (max 20 Mo) — Vidéos : MP4, AVI, MOV, MKV, WebM, ND2, TIFF multipage (max 100 Go)',
     uploadProgress: 'Progression du téléchargement',
     readyToUpload: 'Prêt à télécharger',
     uploadingTo: "Sélectionnez d'abord un projet",
@@ -355,7 +356,7 @@ export default {
     noAnalysesYet: "Pas encore d'analyses",
     runAnalysis: "Exécuter l'analyse",
     viewResults: 'Voir les résultats',
-    dropImagesHere: 'Déposez les images ici...',
+    dropImagesHere: 'Déposez les fichiers ici...',
     selectProjectFirst: "Veuillez d'abord sélectionner un projet",
     projectRequired:
       'Vous devez sélectionner un projet avant de pouvoir télécharger des images',
@@ -429,8 +430,10 @@ export default {
         'Choisissez le modèle IA à utiliser pour la segmentation cellulaire',
       sections: {
         spheroid: 'Modèles de sphéroïdes',
+        spheroid_invasive: 'Modèles de sphéroïdes désintégrés',
         sperm: 'Modèles de spermatozoïdes',
         wound: 'Modèles de cicatrisation',
+        microtubule: 'Modèles de microtubules',
       },
       models: {
         hrnet: {
@@ -463,6 +466,11 @@ export default {
           description:
             'U-Net avec encodeur MiT-B5 (SegFormer) pour la segmentation binaire des plaies en microscopie de scratch-assay (~32 ms sur A5000, 90 % IoU sur le jeu de test externe)',
         },
+        microtubule: {
+          name: 'Microtubules (DINOv3 + PySOAX)',
+          description:
+            "Segmentation d'instances pour les time-lapses de microtubules IRM/TIRF. Le backbone DINOv3-L ViT-L/16 + fusion DPT produit des polylignes centerline par MT et un embedding 32-d par pixel qui alimente le tracking inter-trames et la génération de kymographe. ~8 s/image ; seul modèle de la plateforme à sortie polyligne native.",
+        },
       },
     },
     detectHoles: 'Détecter les Trous',
@@ -488,6 +496,8 @@ export default {
         'Modèle de morphologie spermatique avec extraction de squelette pour la mesure de la tête, de la pièce intermédiaire et de la queue',
       wound:
         'Modèle U-Net + MiT-B5 (encodeur SegFormer) pour la segmentation des plaies en microscopie de scratch-assay. Une seule région de plaie binaire par image ; idéal pour les time-lapses de cicatrisation.',
+      microtubule:
+        "Segmentation d'instances de microtubules pour la microscopie IRM/TIRF. Encodeur DINOv3-L + DPT, post-traitement PySOAX, sortie polyligne native avec tracking basé sur embedding.",
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
     dataUsageDescription:

@@ -65,7 +65,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
             key={index}
             className="border dark:border-gray-700 rounded-lg overflow-hidden"
           >
-            <div className="bg-gray-100 dark:bg-gray-700 p-3 font-medium flex justify-between items-center">
+            <div className="bg-gray-100 dark:bg-gray-700 p-3 font-medium flex justify-between items-center dark:bg-gray-800">
               <span>
                 {t('metrics.spheroid')} #{index + 1}
               </span>

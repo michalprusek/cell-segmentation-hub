@@ -534,7 +534,7 @@ const Profile = () => {
             <ArrowLeft className="mr-2 h-4 w-4" />
             {t('common.back')}
           </Button>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white dark:text-gray-100">
             {t('profile.title')}
           </h1>
         </div>
@@ -583,7 +583,7 @@ const Profile = () => {
                         <AvatarUploadButton
                           onFileSelect={handleAvatarFileSelect}
                           disabled={isUploadingAvatar}
-                          className="rounded-full p-2 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-600"
+                          className="rounded-full p-2 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-600 dark:bg-gray-900 dark:border-gray-700"
                         />
                       </div>
                     </div>
@@ -714,7 +714,7 @@ const Profile = () => {
                     {t('profile.statistics')}
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md dark:bg-gray-900">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                         {t('profile.totalImagesProcessed')}
                       </h3>
@@ -739,7 +739,7 @@ const Profile = () => {
                         </p>
                       )}
                     </div>
-                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md dark:bg-gray-900">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                         {t('profile.averageProcessingTime')}
                       </h3>
@@ -750,7 +750,7 @@ const Profile = () => {
                         -8% {t('profile.fromLastMonth')}
                       </p>
                     </div>
-                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md dark:bg-gray-900">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                         {t('profile.storageUsed')}
                       </h3>
@@ -772,7 +772,7 @@ const Profile = () => {
                         </p>
                       )}
                     </div>
-                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md dark:bg-gray-900">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                         {t('profile.apiRequests')}
                       </h3>

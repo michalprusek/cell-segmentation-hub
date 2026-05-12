@@ -9,6 +9,7 @@ import { WebSocketService } from './websocketService';
 import { batchProcessor } from '../utils/batchProcessor';
 import { SegmentationUpdateData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
+import { scheduleTrackingForContainer } from './tracking/trackerService';
 
 export interface QueueStats {
   queued: number;
@@ -580,10 +581,38 @@ export class QueueService {
       };
     }
 
-    const firstItem = await this.prisma.segmentationQueue.findFirst({
-      where: whereClause,
-      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+    // Queue fairness: when several users have pending work, avoid back-
+    // to-back picks from the same user so a 200-frame video upload from
+    // user A can't block user B for hours.  We look at the last 5
+    // processed queue items and prefer a pending item from a user not
+    // in that window.  Falls back to plain priority/createdAt order
+    // when only one user is contending.
+    const recentlyProcessed = await this.prisma.segmentationQueue.findMany({
+      where: { status: { in: ['processing', 'completed'] } },
+      orderBy: [{ completedAt: 'desc' }, { startedAt: 'desc' }],
+      take: 5,
+      select: { userId: true },
     });
+    const recentUserIds = Array.from(
+      new Set(recentlyProcessed.map(r => r.userId))
+    );
+
+    let firstItem = null;
+    if (recentUserIds.length > 0) {
+      firstItem = await this.prisma.segmentationQueue.findFirst({
+        where: {
+          ...whereClause,
+          userId: { notIn: recentUserIds },
+        },
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      });
+    }
+    if (!firstItem) {
+      firstItem = await this.prisma.segmentationQueue.findFirst({
+        where: whereClause,
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      });
+    }
 
     if (!firstItem) {
       return [];
@@ -807,6 +836,29 @@ export class QueueService {
           await this.prisma.segmentationQueue.delete({
             where: { id: item.id },
           });
+
+          // If this image is a video frame and its container's batch is
+          // now fully segmented, run cross-frame tracking. Best-effort,
+          // fire-and-forget. The split on error category matters: a DB
+          // failure is real and gets logger.error; the scheduler itself
+          // is fire-and-forget (no await) so its rejections are caught
+          // inside scheduleTrackingForContainer.
+          try {
+            const imageMeta = await this.prisma.image.findUnique({
+              where: { id: item.imageId },
+              select: { parentVideoId: true },
+            });
+            if (imageMeta?.parentVideoId) {
+              scheduleTrackingForContainer(imageMeta.parentVideoId);
+            }
+          } catch (trackErr) {
+            logger.error(
+              `Failed to look up parentVideoId for tracking dispatch: ${(trackErr as Error).message}`,
+              trackErr as Error,
+              'QueueService',
+              { imageId: item.imageId }
+            );
+          }
 
           // Emit success notification via WebSocket
           if (this.websocketService) {

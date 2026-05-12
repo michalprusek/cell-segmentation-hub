@@ -209,7 +209,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   };
 
   return (
-    <div className="w-14 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 gap-2">
+    <div className="w-14 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 gap-2 dark:bg-gray-900">
       {/* Mode buttons */}
       <ModeButton mode={EditMode.View} />
       <ModeButton mode={EditMode.EditVertices} />
@@ -229,7 +229,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
           size="icon"
           onClick={onZoomIn}
           disabled={disabled}
-          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
         >
           <ZoomIn size={20} />
         </Button>
@@ -246,7 +246,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
           size="icon"
           onClick={onZoomOut}
           disabled={disabled}
-          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
         >
           <ZoomOut size={20} />
         </Button>
@@ -263,7 +263,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
           size="icon"
           onClick={onResetView}
           disabled={disabled}
-          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
         >
           <Maximize2 size={20} />
         </Button>

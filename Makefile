@@ -454,25 +454,30 @@ optimize-all: optimize-batch test-production
 # Download ML model weights
 download-weights:
 	@echo "📥 Downloading ML model weights..."
-	@echo "This will download ~1.8 GB of model weights"
+	@echo "This will download ~3.0 GB of model weights (incl. microtubule v7)"
 	@if [ \! -d "backend/segmentation/weights" ]; then mkdir -p backend/segmentation/weights; fi
 	@cd backend/segmentation && python scripts/download_weights.py
+	@./scripts/download-microtubule-weights.sh
 	@echo "✅ Weights download complete\!"
 
 # Check if model weights exist
 check-weights:
 	@echo "🔍 Checking model weights..."
 	@if [ -d "backend/segmentation/weights" ] && [ -n "$$(ls -A backend/segmentation/weights/*.pth 2>/dev/null)" ]; then \
-		echo "✅ Model weights found"; \
-		echo ""; \
-		du -sh backend/segmentation/weights; \
+		echo "✅ Spheroid model weights (.pth) found"; \
 	else \
-		echo "❌ Model weights missing\!"; \
-		echo ""; \
-		echo "Run: make download-weights"; \
-		echo "Or mount existing weights as volume"; \
+		echo "❌ Spheroid model weights missing\!"; \
+		echo "   Run: make download-weights"; \
 		exit 1; \
 	fi
+	@if [ -f "backend/segmentation/weights/microtubule_v7.pt" ]; then \
+		echo "✅ Microtubule v7 weights found ($$(du -h backend/segmentation/weights/microtubule_v7.pt | cut -f1))"; \
+	else \
+		echo "⚠️  Microtubule v7 weights missing (microtubule_v7.pt)"; \
+		echo "   Run: ./scripts/download-microtubule-weights.sh"; \
+	fi
+	@echo ""
+	@du -sh backend/segmentation/weights
 
 # Show detailed weights information
 weights-info:

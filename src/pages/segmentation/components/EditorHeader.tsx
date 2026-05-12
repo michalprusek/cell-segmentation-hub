@@ -124,7 +124,7 @@ const EditorHeader = ({
         <Button
           variant="ghost"
           size="sm"
-          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60"
+          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 dark:bg-gray-900"
           onClick={handleHomeClick}
         >
           <Home className="h-4 w-4" />
@@ -135,7 +135,7 @@ const EditorHeader = ({
         <Button
           variant="ghost"
           size="sm"
-          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 max-w-32 sm:max-w-48"
+          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 max-w-32 sm:max-w-48 dark:bg-gray-900"
           onClick={handleBackClick}
         >
           <FolderOpen className="h-4 w-4 mr-2" />
@@ -215,7 +215,7 @@ const EditorHeader = ({
             size="sm"
             onClick={() => onNavigate('prev')}
             disabled={currentImageIndex <= 0}
-            className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700"
+            className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700 dark:bg-gray-900"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">{t('common.back')}</span>
@@ -225,7 +225,7 @@ const EditorHeader = ({
             size="sm"
             onClick={() => onNavigate('next')}
             disabled={currentImageIndex >= totalImages - 1}
-            className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700"
+            className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700 dark:bg-gray-900"
           >
             <span className="hidden sm:inline">{t('common.next')}</span>
             <ChevronRight className="h-4 w-4 ml-1" />

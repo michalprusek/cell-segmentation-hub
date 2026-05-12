@@ -177,7 +177,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           onClick={() => canActivate && setEditMode(mode)}
           className={`flex items-center gap-2 transition-all duration-200 ${
             isActive ? getModeColor(mode) : 'hover:bg-gray-50'
-          }`}
+          } dark:hover:bg-gray-800 dark:bg-gray-900`}
           title={getModeDescription(mode)}
         >
           <Icon size={16} />
@@ -203,7 +203,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 p-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex flex-wrap items-center gap-2 p-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 dark:bg-gray-900">
       {/* Mode Selection */}
       <div className="flex items-center gap-1 mr-4">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">

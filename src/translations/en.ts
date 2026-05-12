@@ -212,6 +212,7 @@ export default {
       spheroid_invasive: 'Disintegrated spheroids',
       wound: 'Wound healing',
       sperm: 'Sperm',
+      microtubules: 'Microtubules',
     },
     projectNamePlaceholder: 'e.g., HeLa Cell Spheroids',
     projectDescPlaceholder:
@@ -338,11 +339,11 @@ export default {
     deleteImages: 'Failed to delete selected images',
   },
   images: {
-    uploadImages: 'Upload Images',
-    dragDrop: 'Drag & drop images here',
+    uploadImages: 'Upload Images or Videos',
+    dragDrop: 'Drag & drop images or videos here',
     clickToSelect: 'or click to select files',
     acceptedFormats:
-      'Accepted formats: JPEG, PNG, TIFF, BMP (max 20MB per file)',
+      'Images: JPEG, PNG, TIFF, BMP (max 20 MB) — Videos: MP4, AVI, MOV, MKV, WebM, ND2, multi-page TIFF (max 100 GB)',
     uploadProgress: 'Upload Progress',
     readyToUpload: 'Ready to Upload',
     uploadingTo: 'Select a project first',
@@ -356,7 +357,7 @@ export default {
     noAnalysesYet: 'No analyses yet',
     runAnalysis: 'Run Analysis',
     viewResults: 'View Results',
-    dropImagesHere: 'Drop the images here...',
+    dropImagesHere: 'Drop the files here...',
     selectProjectFirst: 'Please select a project first',
     projectRequired: 'You must select a project before you can upload images',
     pending: 'Pending',
@@ -432,8 +433,10 @@ export default {
       description: 'Choose the AI model to use for cell segmentation',
       sections: {
         spheroid: 'Spheroid Models',
+        spheroid_invasive: 'Disintegrated Spheroid Models',
         sperm: 'Sperm Models',
         wound: 'Wound Healing Models',
+        microtubule: 'Microtubule Models',
       },
       models: {
         hrnet: {
@@ -466,6 +469,11 @@ export default {
           description:
             'U-Net with MiT-B5 (SegFormer) encoder for binary wound segmentation in scratch-assay microscopy (~32 ms on A5000, 90% IoU on external test set)',
         },
+        microtubule: {
+          name: 'Microtubule (DINOv3 + PySOAX)',
+          description:
+            'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT fusion produces per-instance polyline centerlines plus a 32-d per-pixel embedding that drives cross-frame tracking and kymograph generation. ~8 s/frame; the only model in the platform with native polyline output.',
+        },
       },
     },
     detectHoles: 'Detect Holes',
@@ -491,6 +499,8 @@ export default {
         'Sperm morphology model with skeleton extraction for head, midpiece, and tail measurement',
       wound:
         'U-Net + MiT-B5 (SegFormer encoder) model for wound segmentation in scratch-assay microscopy. Single binary wound region per image; ideal for healing-rate timelapses.',
+      microtubule:
+        'Microtubule instance segmentation for IRM/TIRF microscopy. DINOv3-L + DPT encoder, PySOAX postprocessing, native polyline output with embedding-based cross-frame tracking.',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:

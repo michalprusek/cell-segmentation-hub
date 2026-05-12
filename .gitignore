@@ -155,3 +155,6 @@ scripts/certbot-logs/
 
 # External / scratch model artifacts dropped at repo root
 path_c_v24c/
+
+# HuggingFace model cache (transformers + DINOv3 backbone downloads)
+backend/segmentation/.hf-cache/

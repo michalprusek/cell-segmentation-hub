@@ -35,6 +35,17 @@ export interface Polygon {
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat with rows stored before sperm model)
   partClass?: PolygonPartClass;
   instanceId?: string;
+  /** Cross-frame microtubule track ID; populated by the tracker after a
+   *  video container's batch finishes segmentation. Equal across frames
+   *  for sibling polylines representing the same MT over time. */
+  trackId?: string;
+  /** Base64-encoded float16 (M × 32) embedding sampled at each polyline
+   *  point during microtubule inference. Internal — used by the tracker
+   *  and kymograph services on the backend. Read paths SHOULD strip this
+   *  field before serving to the editor (it's a several-KB-per-polyline
+   *  blob with no UI consumer). Field name starts with ``_`` to signal
+   *  "internal" in JSON dumps. */
+  _embedding?: string;
 }
 
 export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';

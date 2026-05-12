@@ -131,7 +131,7 @@ const ProjectToolbar = ({
       <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         {/* Select All checkbox - only show when showSelectAll is true */}
         {showSelectAll && (
-          <label className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <label className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors dark:bg-gray-900 dark:hover:bg-gray-800">
             <Checkbox
               checked={isAllSelected}
               indeterminate={isPartiallySelected}

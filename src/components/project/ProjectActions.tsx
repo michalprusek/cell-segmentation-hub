@@ -135,7 +135,7 @@ const ProjectActions = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white"
+              className="h-8 w-8 rounded-full shadow-sm bg-white/80 hover:bg-white text-gray-700 dark:bg-gray-800/80 dark:hover:bg-gray-700 dark:text-gray-100 backdrop-blur-sm dark:text-gray-300 dark:bg-gray-900"
               onClick={e => {
                 e.stopPropagation();
                 e.preventDefault();

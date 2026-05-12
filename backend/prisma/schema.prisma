@@ -91,14 +91,28 @@ model Image {
   height                 Int?
   mimeType               String?
   displayOrder           Int?                // Manual ordering for time-series (wound healing etc.); null => fall back to createdAt
+  // --- Video container support (added 2026-05-12 for microtubule + wound video projects) ---
+  // A row with isVideoContainer = true represents the original uploaded video
+  // (MP4 / multi-page TIFF / ND2). Each extracted frame is a sibling Image row
+  // with parentVideoId pointing back at the container. The container itself is
+  // never segmented; queue items always reference frame rows.
+  isVideoContainer       Boolean             @default(false)
+  parentVideoId          String?
+  frameIndex             Int?                // 0-based position within parent video; null for standalone images
+  frameCount             Int?                // Total frame count on the container row; null for frame / standalone rows
+  videoDurationMs        Int?                // Source duration in ms; null when unknown or not a video
+  channels               Json?               // [{name, type:'irm'|'fluorescent', wavelengthNm?, displayColor?, isSegmentationSource}] on container rows
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
   project                Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentVideo            Image?              @relation("VideoFrames", fields: [parentVideoId], references: [id], onDelete: Cascade)
+  frames                 Image[]             @relation("VideoFrames")
   queueEntries           SegmentationQueue[]
   segmentation           Segmentation?
 
   @@index([projectId, segmentationStatus], map: "idx_image_project_status")
   @@index([projectId, displayOrder], map: "idx_image_project_order")
+  @@index([parentVideoId, frameIndex], map: "idx_image_video_frame")
   @@map("images")
 }
 

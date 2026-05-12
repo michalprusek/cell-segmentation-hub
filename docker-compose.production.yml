@@ -155,10 +155,19 @@ services:
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
       - CUDA_LAUNCH_BLOCKING=0
       - ML_GPU_PRIORITY=high
+      # Microtubule v7 requires a HuggingFace token to download the gated
+      # DINOv3 ViT-L/16 backbone (~1.1 GB) on first model load. Read from
+      # .env.production at compose time so the token isn't baked into the
+      # image. Absent token → microtubule model fails to load (other
+      # models unaffected).
+      - HF_TOKEN=${HF_TOKEN}
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ./backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro
       - ./backend/uploads/blue:/app/uploads
+      # Persist HuggingFace cache across container restarts so the 1.1 GB
+      # DINOv3 backbone download survives `docker compose down`.
+      - ./backend/segmentation/.hf-cache:/home/app/.cache/huggingface
     restart: always
     deploy:
       resources:

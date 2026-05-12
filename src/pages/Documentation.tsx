@@ -87,7 +87,7 @@ const Documentation = () => {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
             {/* Sidebar */}
             <aside className="lg:col-span-1">
-              <div className="sticky top-24 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="sticky top-24 bg-white rounded-lg shadow-sm border border-gray-200 p-6 dark:bg-gray-900 dark:border-gray-700">
                 <h3 className="font-semibold text-lg mb-4">
                   {t('docs.navigation')}
                 </h3>
@@ -98,7 +98,7 @@ const Documentation = () => {
                       activeSection === 'introduction'
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
-                    }`}
+                    } dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-900`}
                   >
                     <Info className="w-4 h-4 mr-2" />
                     {t('docs.nav.introduction')}
@@ -109,7 +109,7 @@ const Documentation = () => {
                       activeSection === 'getting-started'
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
-                    }`}
+                    } dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-900`}
                   >
                     <BookOpen className="w-4 h-4 mr-2" />
                     {t('docs.nav.gettingStarted')}
@@ -120,7 +120,7 @@ const Documentation = () => {
                       activeSection === 'upload-images'
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
-                    }`}
+                    } dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-900`}
                   >
                     <FileText className="w-4 h-4 mr-2" />
                     {t('docs.nav.uploadingImages')}
@@ -131,7 +131,7 @@ const Documentation = () => {
                       activeSection === 'models-selection'
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
-                    }`}
+                    } dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-900`}
                   >
                     <Cpu className="w-4 h-4 mr-2" />
                     {t('docs.nav.modelSelection')}
@@ -142,7 +142,7 @@ const Documentation = () => {
                       activeSection === 'segmentation'
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
-                    }`}
+                    } dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-900`}
                   >
                     <Microscope className="w-4 h-4 mr-2" />
                     {t('docs.nav.segmentationProcess')}
@@ -153,7 +153,7 @@ const Documentation = () => {
                       activeSection === 'segmentation-editor'
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
-                    }`}
+                    } dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-900`}
                   >
                     <Edit3 className="w-4 h-4 mr-2" />
                     {t('docs.nav.segmentationEditor')}
@@ -164,7 +164,7 @@ const Documentation = () => {
                       activeSection === 'export-features'
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
-                    }`}
+                    } dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-900`}
                   >
                     <Download className="w-4 h-4 mr-2" />
                     {t('docs.nav.exportFeatures')}
@@ -175,7 +175,7 @@ const Documentation = () => {
                       activeSection === 'shared-projects'
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
-                    }`}
+                    } dark:text-gray-300 dark:hover:bg-gray-800 dark:bg-gray-900`}
                   >
                     <Users className="w-4 h-4 mr-2" />
                     {t('docs.nav.sharedProjects')}
@@ -185,10 +185,10 @@ const Documentation = () => {
             </aside>
 
             {/* Documentation Content */}
-            <div className="lg:col-span-3 bg-white rounded-lg shadow-sm border border-gray-200 p-6 md:p-8">
+            <div className="lg:col-span-3 bg-white rounded-lg shadow-sm border border-gray-200 p-6 md:p-8 dark:bg-gray-900 dark:border-gray-700">
               <div className="prose max-w-none">
                 <section id="introduction" className="mb-12">
-                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {t('docs.introduction.title')}
                   </h2>
                   <div className="glass-morphism rounded-xl overflow-hidden p-6 mb-6 bg-gradient-to-r from-blue-50 to-purple-50">
@@ -204,7 +204,7 @@ const Documentation = () => {
                         <h3 className="text-xl font-semibold mb-2">
                           {t('docs.introduction.whatIs')}
                         </h3>
-                        <p className="text-gray-700">
+                        <p className="text-gray-700 dark:text-gray-300">
                           {t('docs.introduction.description')}
                         </p>
                       </div>
@@ -217,7 +217,7 @@ const Documentation = () => {
                 </section>
 
                 <section id="getting-started" className="mb-12">
-                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {t('docs.gettingStarted.title')}
                   </h2>
 
@@ -256,7 +256,7 @@ const Documentation = () => {
                 </section>
 
                 <section id="upload-images" className="mb-12">
-                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {t('docs.uploadImages.title')}
                   </h2>
 
@@ -301,7 +301,7 @@ const Documentation = () => {
                 </section>
 
                 <section id="models-selection" className="mb-12">
-                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {t('docs.modelSelection.title')}
                   </h2>
 
@@ -402,7 +402,7 @@ const Documentation = () => {
                 </section>
 
                 <section id="segmentation" className="mb-12">
-                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {t('docs.segmentationProcess.title')}
                   </h2>
 
@@ -474,7 +474,7 @@ const Documentation = () => {
                 </section>
 
                 <section id="segmentation-editor" className="mb-12">
-                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {t('docs.segmentationEditor.title')}
                   </h2>
 
@@ -486,8 +486,8 @@ const Documentation = () => {
                     {t('docs.segmentationEditor.editingModes')}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div className="bg-gray-50 border rounded-lg p-4">
-                      <h4 className="font-semibold text-gray-800 mb-2">
+                    <div className="bg-gray-50 border rounded-lg p-4 dark:bg-gray-900">
+                      <h4 className="font-semibold text-gray-800 mb-2 dark:text-gray-100">
                         {t('docs.segmentationEditor.modes.view.title')}
                       </h4>
                       <p className="text-sm text-gray-600">
@@ -567,7 +567,7 @@ const Documentation = () => {
                   <h3 className="text-xl font-semibold mb-3">
                     {t('docs.segmentationEditor.shortcuts')}
                   </h3>
-                  <div className="bg-gray-50 border rounded-lg p-4 mb-6">
+                  <div className="bg-gray-50 border rounded-lg p-4 mb-6 dark:bg-gray-900">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="font-medium mb-1">
@@ -652,7 +652,7 @@ const Documentation = () => {
                 </section>
 
                 <section id="export-features" className="mb-12">
-                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {t('docs.exportFeatures.title')}
                   </h2>
 
@@ -824,7 +824,7 @@ const Documentation = () => {
                 </section>
 
                 <section id="shared-projects" className="mb-12">
-                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {t('docs.sharedProjects.title')}
                   </h2>
 
@@ -870,7 +870,7 @@ const Documentation = () => {
                   </div>
                 </section>
 
-                <div className="flex justify-between items-center mt-8 pt-4 border-t border-gray-200">
+                <div className="flex justify-between items-center mt-8 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <Link
                     to="/"
                     className="inline-flex items-center text-blue-600 hover:text-blue-800"
