@@ -586,13 +586,15 @@ export class ImageService {
     const { page, limit, status, sortBy, sortOrder } = options;
     const skip = (page - 1) * limit;
 
-    // Build where clause. Hide individual video frame rows from the
-    // gallery — only top-level rows (standalone images + video containers)
-    // are returned. Video frames are reachable via the editor's video-mode
-    // routes, not the project gallery.
+    // Build where clause. Hide video CONTAINER rows from the gallery —
+    // users see frame children directly (one row per extracted frame),
+    // so the container becomes a service-only entity. Standalone images
+    // (isVideoContainer = false, parentVideoId = null) and extracted
+    // frames (isVideoContainer = false, parentVideoId set) are both
+    // returned by this filter; only the parent container is hidden.
     const where: Prisma.ImageWhereInput = {
       projectId,
-      parentVideoId: null,
+      isVideoContainer: false,
     };
 
     if (status) {
