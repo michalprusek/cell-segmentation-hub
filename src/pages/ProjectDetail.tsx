@@ -1271,8 +1271,11 @@ const ProjectDetail = () => {
 
     // Multi-channel video project: pick the channel first. The dialog calls
     // back into handleSegmentAll with the picked channel so we can reuse the
-    // rest of this function unchanged.
-    if (channelOverride === undefined) {
+    // rest of this function unchanged. Defense-in-depth: also bail when a
+    // non-string slipped in via an onClick adapter (React passes the
+    // SyntheticEvent as the first arg when handleSegmentAll is wired
+    // directly, instead of through an arrow wrapper).
+    if (typeof channelOverride !== 'string') {
       const detectedChannels = extractChannelsFromPaths(
         images.map(img => (img as { originalPath?: string }).originalPath)
       );
@@ -1544,7 +1547,7 @@ const ProjectDetail = () => {
             <QueueStatsPanel
               stats={queueStats}
               isConnected={isConnected}
-              onSegmentAll={handleSegmentAll}
+              onSegmentAll={() => handleSegmentAll()}
               onCancelSegmentation={handleCancelSegmentation}
               batchSubmitted={batchSubmitted || hasActiveQueue}
               isCancelling={isCancelling}
