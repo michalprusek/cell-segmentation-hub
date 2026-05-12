@@ -1,11 +1,13 @@
 /**
  * Session-only display state for the editor.
  *
- * Holds the currently-selected channel, the min/max window-level cutoffs
- * for the ImageJ-style image adjustment, and the active frame index for
- * video containers. Nothing here is persisted — switching frames, channels
- * or closing the editor resets it. The window/level slider applies as a
- * canvas-side LUT remap; the source pixel data never changes.
+ * Holds the currently-selected channel, the active video frame index,
+ * the min/max window-level cutoffs (ImageJ-style LUT remap), and the
+ * brightness/contrast values applied via a CSS filter on the rendered
+ * canvas. None of it is persisted across reloads — but within one
+ * session all four display sliders **persist across frame and channel
+ * changes** so the user can scrub a 300-frame video without losing
+ * their adjustments every frame.
  */
 
 import {
@@ -27,13 +29,28 @@ interface ImageDisplayState {
   windowMin: number;
   /** Upper window cutoff (0..255) — pixels above this are mapped to 255. */
   windowMax: number;
+  /** Brightness as a percentage (0..200, 100 = unchanged). Applied via
+   *  CSS `filter: brightness(b/100)` on the rendered image. */
+  brightness: number;
+  /** Contrast as a percentage (0..200, 100 = unchanged). Applied via
+   *  CSS `filter: contrast(c/100)` on the rendered image. */
+  contrast: number;
 }
 
 interface ImageDisplayContextValue extends ImageDisplayState {
   setFrameIndex: (frameIndex: number) => void;
   setChannel: (channel: string | null) => void;
   setWindow: (min: number, max: number) => void;
+  setWindowMin: (min: number) => void;
+  setWindowMax: (max: number) => void;
+  setBrightness: (brightness: number) => void;
+  setContrast: (contrast: number) => void;
+  /** Reset window/level back to identity (0..255). */
   resetWindow: () => void;
+  /** Reset brightness/contrast back to 100/100. */
+  resetBrightnessContrast: () => void;
+  /** Reset all four display parameters at once. */
+  resetDisplay: () => void;
 }
 
 const DEFAULT_STATE: ImageDisplayState = {
@@ -41,11 +58,16 @@ const DEFAULT_STATE: ImageDisplayState = {
   channel: null,
   windowMin: 0,
   windowMax: 255,
+  brightness: 100,
+  contrast: 100,
 };
 
 const ImageDisplayContext = createContext<ImageDisplayContextValue | null>(
   null
 );
+
+const clampWindow = (n: number) => Math.max(0, Math.min(255, n));
+const clampPercent = (n: number) => Math.max(0, Math.min(200, n));
 
 export function ImageDisplayProvider({
   children,
@@ -59,26 +81,63 @@ export function ImageDisplayProvider({
     channel: initialChannel,
   });
 
+  // Frame/channel changes used to reset windowMin/Max — the user found
+  // that annoying when scrubbing a 300-frame video. Now we only update
+  // the index/channel and let all four display sliders persist.
   const setFrameIndex = useCallback((frameIndex: number) => {
-    // Reset window/level when navigating to a new frame — different frames
-    // (especially in fluorescence) can have wildly different histograms.
-    setState(s => ({ ...s, frameIndex, windowMin: 0, windowMax: 255 }));
+    setState(s => ({ ...s, frameIndex }));
   }, []);
 
   const setChannel = useCallback((channel: string | null) => {
-    setState(s => ({ ...s, channel, windowMin: 0, windowMax: 255 }));
+    setState(s => ({ ...s, channel }));
   }, []);
 
   const setWindow = useCallback((min: number, max: number) => {
     setState(s => ({
       ...s,
-      windowMin: Math.max(0, Math.min(255, min)),
-      windowMax: Math.max(0, Math.min(255, max)),
+      windowMin: clampWindow(min),
+      windowMax: clampWindow(max),
     }));
+  }, []);
+
+  const setWindowMin = useCallback((min: number) => {
+    setState(s => ({
+      ...s,
+      windowMin: clampWindow(Math.min(min, s.windowMax)),
+    }));
+  }, []);
+
+  const setWindowMax = useCallback((max: number) => {
+    setState(s => ({
+      ...s,
+      windowMax: clampWindow(Math.max(max, s.windowMin)),
+    }));
+  }, []);
+
+  const setBrightness = useCallback((brightness: number) => {
+    setState(s => ({ ...s, brightness: clampPercent(brightness) }));
+  }, []);
+
+  const setContrast = useCallback((contrast: number) => {
+    setState(s => ({ ...s, contrast: clampPercent(contrast) }));
   }, []);
 
   const resetWindow = useCallback(() => {
     setState(s => ({ ...s, windowMin: 0, windowMax: 255 }));
+  }, []);
+
+  const resetBrightnessContrast = useCallback(() => {
+    setState(s => ({ ...s, brightness: 100, contrast: 100 }));
+  }, []);
+
+  const resetDisplay = useCallback(() => {
+    setState(s => ({
+      ...s,
+      windowMin: 0,
+      windowMax: 255,
+      brightness: 100,
+      contrast: 100,
+    }));
   }, []);
 
   const value = useMemo<ImageDisplayContextValue>(
@@ -87,9 +146,27 @@ export function ImageDisplayProvider({
       setFrameIndex,
       setChannel,
       setWindow,
+      setWindowMin,
+      setWindowMax,
+      setBrightness,
+      setContrast,
       resetWindow,
+      resetBrightnessContrast,
+      resetDisplay,
     }),
-    [state, setFrameIndex, setChannel, setWindow, resetWindow]
+    [
+      state,
+      setFrameIndex,
+      setChannel,
+      setWindow,
+      setWindowMin,
+      setWindowMax,
+      setBrightness,
+      setContrast,
+      resetWindow,
+      resetBrightnessContrast,
+      resetDisplay,
+    ]
   );
 
   return (
