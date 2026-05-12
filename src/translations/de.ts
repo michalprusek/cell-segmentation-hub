@@ -730,6 +730,12 @@ export default {
     incompatibleModelTitle: 'Mit diesem Modell kann nicht segmentiert werden',
     incompatibleModelDesc:
       'Das ausgewählte Modell "{{model}}" ist nicht mit dem Projekttyp ({{type}}) kompatibel. Erlaubte Modelle: {{allowed}}. Bitte ändern Sie das Modell in den Einstellungen oder den Projekttyp.',
+    channelPicker: {
+      title: 'Kanal zur Segmentierung auswählen',
+      description:
+        'Dieses Projekt enthält Videoframes mit mehreren Kanälen. Wählen Sie den zu segmentierenden Kanal.',
+      confirm: 'Segmentieren',
+    },
     mode: {
       view: 'Anzeigen und navigieren',
       edit: 'Bearbeiten',

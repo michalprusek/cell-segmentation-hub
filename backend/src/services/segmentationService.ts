@@ -44,11 +44,21 @@ export interface SegmentationRequest {
     | 'resunet_advanced'
     | 'resunet_small'
     | 'sperm'
-    | 'wound';
+    | 'wound'
+    | 'microtubule';
   threshold?: number;
   userId: string;
   detectHoles?: boolean;
+  // Per-request channel override for multi-channel video frames. When set,
+  // the worker swaps the trailing "<channel>.<ext>" segment of the image's
+  // originalPath so it reads the user-selected channel's PNG instead of the
+  // default segmentation source.
+  channel?: string;
 }
+
+// resolveChannelPath lives in utils/channelPath.ts so tests can import it
+// without dragging in the heavy service module.
+import { resolveChannelPath } from '../utils/channelPath';
 
 export interface SegmentationResponse {
   success: boolean;
@@ -358,6 +368,7 @@ export class SegmentationService {
       threshold = 0.5,
       userId,
       detectHoles,
+      channel,
     } = request;
     const startTime = Date.now();
 
@@ -402,9 +413,20 @@ export class SegmentationService {
         userId
       );
 
-      // Get image buffer from storage
+      // Get image buffer from storage. If the caller passed a channel
+      // override for a multi-channel video frame, rewrite the path to point
+      // at that channel's PNG; for non-frame rows (or no channel set) the
+      // helper is a no-op and we read the default originalPath.
       const storage = getStorageProvider();
-      const imageBuffer = await storage.getBuffer(image.originalPath);
+      const resolvedPath = resolveChannelPath(image.originalPath, channel);
+      if (channel && resolvedPath !== image.originalPath) {
+        logger.info(
+          'Channel override applied for video-frame segmentation',
+          'SegmentationService',
+          { imageId, channel, originalPath: image.originalPath, resolvedPath }
+        );
+      }
+      const imageBuffer = await storage.getBuffer(resolvedPath);
 
       if (!imageBuffer) {
         throw new Error('Failed to load image from storage');

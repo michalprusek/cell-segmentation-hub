@@ -1816,7 +1816,8 @@ class ApiClient {
     threshold?: number,
     priority?: number,
     forceResegment?: boolean,
-    detectHoles?: boolean
+    detectHoles?: boolean,
+    channel?: string
   ): Promise<BatchQueueResponse> {
     const response = await this.instance.post('/queue/batch', {
       imageIds,
@@ -1826,6 +1827,7 @@ class ApiClient {
       priority,
       forceResegment,
       detectHoles,
+      ...(channel !== undefined ? { channel } : {}),
     });
     return this.extractData<BatchQueueResponse>(response);
   }
