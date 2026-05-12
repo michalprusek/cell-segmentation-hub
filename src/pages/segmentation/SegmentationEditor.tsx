@@ -35,6 +35,8 @@ import VerticalToolbar from './components/VerticalToolbar';
 import TopToolbar from './components/TopToolbar';
 import PolygonListPanel from './components/PolygonListPanel';
 import SpermInstancePanel from './components/SpermInstancePanel';
+import ChannelsSection from './components/sidebar/ChannelsSection';
+import DisplaySection from './components/sidebar/DisplaySection';
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
 import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 
@@ -1352,8 +1354,14 @@ const SegmentationEditor = () => {
                   </CanvasContainer>
                 </div>
 
-                {/* Right: Polygon List Panel + Sperm Instance Panel */}
-                <div className="flex flex-col w-full lg:w-72 h-64 lg:h-full">
+                {/* Right: Channels + Display (video only) + Polygon List + Sperm Instance Panel */}
+                <div className="flex flex-col w-full lg:w-72 h-64 lg:h-full overflow-y-auto">
+                  {isVideoMode && video.container && (
+                    <>
+                      <ChannelsSection channels={video.container.channels} />
+                      <DisplaySection />
+                    </>
+                  )}
                   <PolygonListPanel
                     loading={projectLoading}
                     polygons={editor.polygons}
