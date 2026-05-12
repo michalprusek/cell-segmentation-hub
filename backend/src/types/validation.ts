@@ -422,3 +422,22 @@ export type AddImageToQueueData = z.infer<typeof addImageToQueueSchema>;
 export type BatchQueueData = z.infer<typeof batchQueueSchema>;
 export type ResetStuckItemsData = z.infer<typeof resetStuckItemsSchema>;
 export type CleanupQueueData = z.infer<typeof cleanupQueueSchema>;
+
+// ============================================================================
+// Feedback (bug reports + feature requests)
+// ============================================================================
+
+// Mirrored as a DB CHECK constraint in 20260513_add_feedback so an attacker
+// who bypasses the API layer still can't insert an unknown type.
+export const FEEDBACK_TYPES = ['bug', 'feature'] as const;
+export type FeedbackType = (typeof FEEDBACK_TYPES)[number];
+
+export const createFeedbackSchema = z.object({
+  type: z.enum(FEEDBACK_TYPES),
+  // Length caps match the DB columns; the trim() prevents users from sending
+  // whitespace-only content that the .min(1) check would otherwise accept.
+  title: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(5000),
+});
+
+export type CreateFeedbackData = z.infer<typeof createFeedbackSchema>;
