@@ -62,9 +62,15 @@ const DEFAULT_STATE: ImageDisplayState = {
   contrast: 100,
 };
 
-const ImageDisplayContext = createContext<ImageDisplayContextValue | null>(
-  null
-);
+/**
+ * Exported so callers that want to *optionally* read the context (e.g.
+ * `<CanvasImage>` which renders for both standalone and video images)
+ * can use `useContext(ImageDisplayContext)` directly and fall back to
+ * defaults when unwrapped. The `useImageDisplay` hook below remains
+ * the strict version that throws on a missing provider.
+ */
+export const ImageDisplayContext =
+  createContext<ImageDisplayContextValue | null>(null);
 
 const clampWindow = (n: number) => Math.max(0, Math.min(255, n));
 const clampPercent = (n: number) => Math.max(0, Math.min(200, n));
