@@ -2014,4 +2014,23 @@ export default {
     attachmentInvalidType: 'Uniquement des images PNG ou JPG',
     removeAttachment: 'Supprimer la pièce jointe',
   },
+  editor: {
+    channelSwitcher: {
+      title: 'Canal',
+      detectionSource: 'Source de segmentation',
+    },
+    windowLevel: {
+      title: 'Affichage',
+      min: 'Min',
+      max: 'Max',
+      brightness: 'Luminosité',
+      contrast: 'Contraste',
+      reset: 'Réinitialiser',
+    },
+    frameNavigation: {
+      frame: 'Image',
+      play: 'Lecture',
+      pause: 'Pause',
+    },
+  },
 };

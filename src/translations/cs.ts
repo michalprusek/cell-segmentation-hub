@@ -2036,4 +2036,23 @@ export default {
     attachmentInvalidType: 'Pouze obrázky PNG nebo JPG',
     removeAttachment: 'Odebrat přílohu',
   },
+  editor: {
+    channelSwitcher: {
+      title: 'Kanál',
+      detectionSource: 'Zdroj segmentace',
+    },
+    windowLevel: {
+      title: 'Zobrazení',
+      min: 'Min',
+      max: 'Max',
+      brightness: 'Jas',
+      contrast: 'Kontrast',
+      reset: 'Resetovat',
+    },
+    frameNavigation: {
+      frame: 'Snímek',
+      play: 'Přehrát',
+      pause: 'Pauza',
+    },
+  },
 };

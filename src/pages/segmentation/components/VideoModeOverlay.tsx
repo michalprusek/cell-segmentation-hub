@@ -1,26 +1,29 @@
 /**
- * Composes the video-mode UI (frame slider, channel switcher, window/level
- * slider, kymograph modal) into a single overlay that the
- * SegmentationEditor can mount when the active image is a video
- * container. Keeps the editor itself agnostic of video specifics so the
- * static-image code path stays untouched.
+ * Headless video-mode wiring for the segmentation editor.
  *
- * Wired up via two hooks on the editor side:
- *   const overlay = useVideoModeOverlay(imageId);
- *   {overlay.isActive && <VideoModeOverlay {...overlay.props} />}
+ * Previously this component owned the entire visual chrome (channel
+ * switcher, window/level, frame slider, FPS combobox). After the
+ * 2026-05 reorganization those pieces moved into the editor's header
+ * (Play, scrubber, editable frame #) and the right sidebar (Channels
+ * card, Display card with 4 sliders).
+ *
+ * What remains here:
+ *   1. Keyboard navigation (`←` / `→` step a frame, `Space` toggles
+ *      playback). Mounted on `document` so it works regardless of focus.
+ *   2. Sync of `frameIndex` from `useVideoFrames` into `ImageDisplayContext`
+ *      so the canvas + sidebar consume one source of truth.
+ *   3. The kymograph modal mount (microtubule projects only) — opened
+ *      via the global "segmentation:open-kymograph" CustomEvent from
+ *      the polyline right-click menu.
+ *
+ * The component renders nothing visible by itself.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ChannelSwitcher } from './ChannelSwitcher';
-import { FrameSlider } from './FrameSlider';
-import { WindowLevelSlider } from './WindowLevelSlider';
 import { KymographModal } from './KymographModal';
-import {
-  ImageDisplayProvider,
-  useImageDisplay,
-} from '../contexts/ImageDisplayContext';
+import { useImageDisplay } from '../contexts/ImageDisplayContext';
 import { useVideoFrames, VideoFrame } from '../hooks/useVideoFrames';
-import type { ProjectType, VideoChannel } from '@/types';
+import type { ProjectType } from '@/types';
 
 interface VideoModeOverlayProps {
   videoContainerId: string;
@@ -28,22 +31,6 @@ interface VideoModeOverlayProps {
   /** Called whenever the editor should reload its polygons for a different
    *  frame imageId. */
   onActiveFrameChange?: (frame: VideoFrame | null) => void;
-}
-
-/** Top-of-canvas controls: channel + window/level. Bottom-of-canvas
- *  controls (frame slider) are rendered separately so the layout
- *  matches the editor's existing left-toolbar / bottom-controls split. */
-function TopControls({
-  channels,
-}: {
-  channels: VideoChannel[] | null | undefined;
-}) {
-  return (
-    <div className="flex items-center gap-3 px-3 py-2 bg-background border-b">
-      <ChannelSwitcher channels={channels} />
-      <WindowLevelSlider />
-    </div>
-  );
 }
 
 /** Keyboard handler: ←/→ step frames, Space toggle playback. Mounted on
@@ -76,28 +63,22 @@ function useFrameNavigationKeys(
   }, [step, toggle]);
 }
 
-function VideoModeOverlayInner({
+export function VideoModeOverlay({
   videoContainerId,
   projectType,
   onActiveFrameChange,
 }: VideoModeOverlayProps) {
-  const {
-    container,
-    frameIndex,
-    currentFrame,
-    setFrameIndex,
-    step,
-    isPlaying,
-    toggle,
-    fps,
-    setFps,
-  } = useVideoFrames(videoContainerId);
+  const { container, frameIndex, currentFrame, step, toggle } =
+    useVideoFrames(videoContainerId);
   const { setFrameIndex: setDisplayFrame } = useImageDisplay();
 
   useFrameNavigationKeys(step, toggle);
 
   // Propagate frame changes outward: tell the editor "load polygons for
-  // this image id" and update the display context.
+  // this image id" and update the display context. The editor itself
+  // also calls useVideoFrames (lifted in commit 3) — both calls share
+  // React Query cache via the queryKey, but each has its own local
+  // frameIndex state. We only sync the *displayed* index here.
   useEffect(() => {
     setDisplayFrame(frameIndex);
     onActiveFrameChange?.(currentFrame);
@@ -127,39 +108,17 @@ function VideoModeOverlayInner({
   }, [openKymograph]);
 
   if (!container) return null;
+  if (!kymographFor || projectType !== 'microtubules') return null;
 
   return (
-    <>
-      <TopControls channels={container.channels} />
-      <FrameSlider
-        frameIndex={frameIndex}
-        frameCount={container.frameCount}
-        isPlaying={isPlaying}
-        fps={fps}
-        onFrameChange={setFrameIndex}
-        onStep={step}
-        onToggle={toggle}
-        onFpsChange={setFps}
-      />
-      {kymographFor && projectType === 'microtubules' && (
-        <KymographModal
-          open={true}
-          onClose={closeKymograph}
-          videoContainerId={videoContainerId}
-          polylineId={kymographFor}
-          frameIndex={frameIndex}
-          channels={container.channels}
-        />
-      )}
-    </>
-  );
-}
-
-export function VideoModeOverlay(props: VideoModeOverlayProps) {
-  return (
-    <ImageDisplayProvider>
-      <VideoModeOverlayInner {...props} />
-    </ImageDisplayProvider>
+    <KymographModal
+      open={true}
+      onClose={closeKymograph}
+      videoContainerId={videoContainerId}
+      polylineId={kymographFor}
+      frameIndex={frameIndex}
+      channels={container.channels}
+    />
   );
 }
 

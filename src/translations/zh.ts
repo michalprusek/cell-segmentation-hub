@@ -1894,4 +1894,23 @@ export default {
     attachmentInvalidType: '仅支持 PNG 或 JPG 图片',
     removeAttachment: '移除附件',
   },
+  editor: {
+    channelSwitcher: {
+      title: '通道',
+      detectionSource: '分割源',
+    },
+    windowLevel: {
+      title: '显示',
+      min: '最小值',
+      max: '最大值',
+      brightness: '亮度',
+      contrast: '对比度',
+      reset: '重置',
+    },
+    frameNavigation: {
+      frame: '帧',
+      play: '播放',
+      pause: '暂停',
+    },
+  },
 };

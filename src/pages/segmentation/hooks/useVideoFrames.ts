@@ -45,8 +45,6 @@ interface UseVideoFramesResult {
   play: () => void;
   pause: () => void;
   toggle: () => void;
-  setFps: (fps: number) => void;
-  fps: number;
 }
 
 /** Internal client helper. Backend currently returns frames sorted by
@@ -88,7 +86,13 @@ export function useVideoFrames(
 
   const [frameIndex, setFrameIndexState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [fps, setFps] = useState(10);
+
+  // Playback rate is fixed at 10 fps — biology users' target. The
+  // user-facing FPS combobox was removed in the 2026-05 editor UI
+  // reorganization since switching frame rates mid-playback wasn't
+  // useful in practice and only added top-bar clutter.
+  const PLAYBACK_FPS = 10;
+  const PLAYBACK_INTERVAL_MS = 1000 / PLAYBACK_FPS;
 
   // Clamp index whenever the frame list changes (e.g., on first load).
   useEffect(() => {
@@ -131,26 +135,23 @@ export function useVideoFrames(
       }
       return;
     }
-    timerRef.current = setInterval(
-      () => {
-        setFrameIndexState(prev => {
-          if (!container) return prev;
-          if (prev + 1 >= container.frames.length) {
-            // Stop at the end. Could loop instead, but for a kymograph
-            // workflow stopping is the safer default.
-            setIsPlaying(false);
-            return prev;
-          }
-          return prev + 1;
-        });
-      },
-      Math.max(50, Math.round(1000 / fps))
-    );
+    timerRef.current = setInterval(() => {
+      setFrameIndexState(prev => {
+        if (!container) return prev;
+        if (prev + 1 >= container.frames.length) {
+          // Stop at the end. Could loop instead, but for a kymograph
+          // workflow stopping is the safer default.
+          setIsPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, PLAYBACK_INTERVAL_MS);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
     };
-  }, [isPlaying, fps, container]);
+  }, [isPlaying, container]);
 
   const play = useCallback(() => setIsPlaying(true), []);
   const pause = useCallback(() => setIsPlaying(false), []);
@@ -168,7 +169,5 @@ export function useVideoFrames(
     play,
     pause,
     toggle,
-    setFps,
-    fps,
   };
 }

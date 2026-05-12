@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { cn } from '@/lib/utils';
+import { ImageDisplayContext } from '../../contexts/ImageDisplayContext';
 
 interface CanvasImageProps {
   src: string;
@@ -11,7 +12,30 @@ interface CanvasImageProps {
 }
 
 /**
- * Komponenta pro zobrazení podkladového obrázku na plátně
+ * Optional consumer of ImageDisplayContext. For standalone (non-video)
+ * images the editor never wraps in the provider, so we read the raw
+ * context value (null when unwrapped) and fall back to the identity
+ * filter. The full ``useImageDisplay`` hook throws when unwrapped, so
+ * we go straight to ``useContext`` here.
+ */
+function useDisplayFilter(): { filter: string } {
+  const ctx = useContext(ImageDisplayContext);
+  const brightness = ctx?.brightness ?? 100;
+  const contrast = ctx?.contrast ?? 100;
+  return {
+    filter: `brightness(${brightness / 100}) contrast(${contrast / 100})`,
+  };
+}
+
+/**
+ * Komponenta pro zobrazení podkladového obrázku na plátně.
+ *
+ * When wrapped in an ImageDisplayProvider (video-mode editor) the
+ * canvas image picks up brightness + contrast as a CSS filter. The
+ * filter is applied by the browser compositor *after* applyWindowLevel
+ * has written its LUT-remapped pixels into the source PNG, so the two
+ * effects compose: pixel-level min/max remap → composite-time
+ * brightness/contrast adjustment.
  */
 const CanvasImage = ({
   src,
@@ -21,6 +45,8 @@ const CanvasImage = ({
   loading = true,
   onLoad,
 }: CanvasImageProps) => {
+  const { filter } = useDisplayFilter();
+
   const handleLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
     const img = event.currentTarget;
     if (onLoad) {
@@ -47,6 +73,7 @@ const CanvasImage = ({
         WebkitUserSelect: 'none',
         MozUserSelect: 'none',
         msUserSelect: 'none',
+        filter,
       }}
       onLoad={handleLoad}
       draggable={false}

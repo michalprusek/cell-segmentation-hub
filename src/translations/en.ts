@@ -2097,4 +2097,23 @@ export default {
     attachmentInvalidType: 'Only PNG or JPG images',
     removeAttachment: 'Remove attachment',
   },
+  editor: {
+    channelSwitcher: {
+      title: 'Channel',
+      detectionSource: 'Segmentation source',
+    },
+    windowLevel: {
+      title: 'Display',
+      min: 'Min',
+      max: 'Max',
+      brightness: 'Brightness',
+      contrast: 'Contrast',
+      reset: 'Reset',
+    },
+    frameNavigation: {
+      frame: 'Frame',
+      play: 'Play',
+      pause: 'Pause',
+    },
+  },
 };
