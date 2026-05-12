@@ -1015,12 +1015,24 @@ export class ImageController {
             ? await storage.getUrl(image.segmentationThumbnailPath)
             : null;
 
+          // Video containers / extracted frames are not directly
+          // browser-renderable — the original is a binary ND2 / TIFF
+          // stack or a per-channel PNG buried in frames/. Route the
+          // canvas image source through the /display endpoint, which
+          // resolves to the segmentation-source channel PNG (see
+          // getVideoFrameForDisplay in imageService). Standalone
+          // images keep using the direct /uploads/<path> URL.
+          const displayUrl =
+            image.isVideoContainer || image.parentVideoId
+              ? `/api/images/${image.id}/display`
+              : originalUrl;
+
           return {
             id: image.id,
             name: image.name,
             thumbnail_url: thumbnailUrl,
-            url: originalUrl,
-            image_url: originalUrl,
+            url: displayUrl,
+            image_url: displayUrl,
             projectId: image.projectId,
             segmentationStatus: image.segmentationStatus,
             fileSize: image.fileSize,
