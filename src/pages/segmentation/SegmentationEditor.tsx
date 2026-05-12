@@ -35,6 +35,8 @@ import VerticalToolbar from './components/VerticalToolbar';
 import TopToolbar from './components/TopToolbar';
 import PolygonListPanel from './components/PolygonListPanel';
 import SpermInstancePanel from './components/SpermInstancePanel';
+import ChannelsSection from './components/sidebar/ChannelsSection';
+import DisplaySection from './components/sidebar/DisplaySection';
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
 import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 
@@ -56,6 +58,8 @@ import EditorLayout from './components/layout/EditorLayout';
 // Video-mode overlay (frame slider + channel switcher + window/level
 // slider + kymograph modal). No-op for standalone images.
 import { VideoModeOverlay } from './components/VideoModeOverlay';
+import { ImageDisplayProvider } from './contexts/ImageDisplayContext';
+import { useVideoFrames } from './hooks/useVideoFrames';
 import type { ProjectType } from '@/types';
 
 const EMPTY_HOVERED_VERTEX = { polygonId: null, vertexIndex: null } as const;
@@ -1118,6 +1122,31 @@ const SegmentationEditor = () => {
     [editor.polygons, hiddenPolygonIds]
   );
 
+  // Video mode: derive videoContainerId from the selected row. Frames
+  // (which are what the user opens in practice) carry the container id
+  // in parentVideoId; the rare case of opening a container directly
+  // uses imageId. useMemo so the value is stable across renders.
+  // CRITICAL: this must run BEFORE any early returns below so the
+  // useVideoFrames hook is called unconditionally on every render.
+  const videoContainerId = useMemo(() => {
+    if (!selectedImage) return null;
+    const meta = selectedImage as {
+      isVideoContainer?: boolean;
+      parentVideoId?: string | null;
+    };
+    return meta.isVideoContainer
+      ? (imageId ?? null)
+      : (meta.parentVideoId ?? null);
+  }, [selectedImage, imageId]);
+
+  // Lift video-frames state to editor scope so the header (Play
+  // button + scrubber) and the still-mounted VideoModeOverlay
+  // (kymograph modal + key bindings) read from the same source.
+  // useVideoFrames(null) short-circuits internally via `enabled: !!id`.
+  const video = useVideoFrames(videoContainerId);
+  const isVideoMode =
+    !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
+
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading
   if (projectLoading && !projectImages.length) {
@@ -1140,255 +1169,257 @@ const SegmentationEditor = () => {
   const visiblePolygonsCount = editor.polygons.length - hiddenPolygonIds.size;
   const hiddenPolygonsCount = hiddenPolygonIds.size;
 
-  // Video mode: render the VideoModeOverlay (frame slider, play/pause,
-  // channel switcher, window/level, kymograph modal) whenever the
-  // selected image is part of a video — either the container row OR any
-  // of its extracted frame children. Frames are what the user actually
-  // opens in practice (containers are filtered out of the gallery), so
-  // the overlay has to keep working from frame URLs too.
-  //
-  // The overlay scopes itself to the container (parent), not the frame,
-  // because the frame list + channels live on the container row.
-  const videoMeta = selectedImage as {
-    isVideoContainer?: boolean;
-    parentVideoId?: string | null;
-  };
-  const videoContainerId = videoMeta.isVideoContainer
-    ? imageId
-    : (videoMeta.parentVideoId ?? null);
-
   return (
     <SegmentationErrorBoundary>
-      <EditorLayout>
-        {/* Header */}
-        <EditorHeader
-          projectId={projectId || ''}
-          projectTitle={project?.name || t('projects.noProjects')}
-          imageName={
-            selectedImage.name ? selectedImage.name.normalize('NFC') : ''
-          }
-          currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
-          totalImages={projectImages?.length || 0}
-          onNavigate={navigateToImage}
-          hasUnsavedChanges={editor.hasUnsavedChanges}
-          onSave={editor.handleSave}
-          imageId={imageId}
-          segmentationStatus={selectedImage?.segmentationStatus}
-          lastUpdate={lastUpdate}
-          queueStats={queueStats}
-          isWebSocketConnected={isWebSocketConnected}
-        />
-
-        {videoContainerId && (
-          <VideoModeOverlay
-            videoContainerId={videoContainerId}
-            projectType={project?.type as ProjectType | undefined}
-          />
-        )}
-
-        {/* Main Content Area */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left: Vertical Toolbar */}
-          <VerticalToolbar
-            editMode={editor.editMode}
-            selectedPolygonId={editor.selectedPolygonId}
-            setEditMode={editor.setEditMode}
-            disabled={projectLoading}
-            onZoomIn={editor.handleZoomIn}
-            onZoomOut={editor.handleZoomOut}
-            onResetView={editor.handleResetView}
+      {/* ImageDisplayProvider lives at the editor level so the header
+          (frame # / scrubber), the sidebar (Channels + Display
+          sections, future PR), and the canvas (brightness/contrast
+          CSS filter) can all read/write the same display state. */}
+      <ImageDisplayProvider>
+        <EditorLayout>
+          {/* Header */}
+          <EditorHeader
+            projectId={projectId || ''}
+            projectTitle={project?.name || t('projects.noProjects')}
+            imageName={
+              selectedImage.name ? selectedImage.name.normalize('NFC') : ''
+            }
+            currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
+            totalImages={projectImages?.length || 0}
+            onNavigate={navigateToImage}
+            hasUnsavedChanges={editor.hasUnsavedChanges}
+            onSave={editor.handleSave}
+            imageId={imageId}
+            segmentationStatus={selectedImage?.segmentationStatus}
+            lastUpdate={lastUpdate}
+            queueStats={queueStats}
+            isWebSocketConnected={isWebSocketConnected}
+            videoFrameCount={
+              isVideoMode ? video.container?.frameCount : undefined
+            }
+            videoFrameIndex={isVideoMode ? video.frameIndex : undefined}
+            onVideoFrameChange={isVideoMode ? video.setFrameIndex : undefined}
+            videoIsPlaying={isVideoMode ? video.isPlaying : undefined}
+            onVideoToggle={isVideoMode ? video.toggle : undefined}
           />
 
-          {/* Center: Canvas and Top Toolbar */}
-          <div className="flex-1 flex flex-col">
-            {/* Top Toolbar */}
-            <TopToolbar
-              canUndo={editor.canUndo}
-              canRedo={editor.canRedo}
-              hasUnsavedChanges={editor.hasUnsavedChanges}
-              handleUndo={editor.handleUndo}
-              handleRedo={editor.handleRedo}
-              handleSave={editor.handleSave}
+          {videoContainerId && (
+            <VideoModeOverlay
+              videoContainerId={videoContainerId}
+              projectType={project?.type as ProjectType | undefined}
+            />
+          )}
+
+          {/* Main Content Area */}
+          <div className="flex flex-1 overflow-hidden">
+            {/* Left: Vertical Toolbar */}
+            <VerticalToolbar
+              editMode={editor.editMode}
+              selectedPolygonId={editor.selectedPolygonId}
+              setEditMode={editor.setEditMode}
               disabled={projectLoading}
-              isSaving={editor.isSaving}
+              onZoomIn={editor.handleZoomIn}
+              onZoomOut={editor.handleZoomOut}
+              onResetView={editor.handleResetView}
             />
 
-            {/* Canvas Area */}
-            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-              <div className="flex-1 lg:flex-1 p-2 min-h-0 h-[calc(100vh-300px)] lg:h-auto">
-                <CanvasContainer
-                  ref={editor.canvasRef}
-                  editMode={editor.editMode}
-                  onMouseDown={editor.handleMouseDown}
-                  onMouseMove={editor.handleMouseMove}
-                  onMouseUp={editor.handleMouseUp}
-                  onDoubleClick={editor.handleCreatePolylineDoubleClick}
-                  loading={projectLoading}
-                  // Legacy compatibility props
-                  slicingMode={legacyModes.slicingMode}
-                  pointAddingMode={legacyModes.pointAddingMode}
-                  deleteMode={legacyModes.deleteMode}
-                >
-                  <CanvasContent transform={editor.transform}>
-                    {/* Base Image */}
-                    {selectedImage && (
-                      <CanvasImage
-                        src={ensureBrowserCompatibleUrl(
-                          selectedImage.id,
-                          selectedImage.url,
-                          selectedImage.name
-                        )}
+            {/* Center: Canvas and Top Toolbar */}
+            <div className="flex-1 flex flex-col">
+              {/* Top Toolbar */}
+              <TopToolbar
+                canUndo={editor.canUndo}
+                canRedo={editor.canRedo}
+                hasUnsavedChanges={editor.hasUnsavedChanges}
+                handleUndo={editor.handleUndo}
+                handleRedo={editor.handleRedo}
+                handleSave={editor.handleSave}
+                disabled={projectLoading}
+                isSaving={editor.isSaving}
+              />
+
+              {/* Canvas Area */}
+              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                <div className="flex-1 lg:flex-1 p-2 min-h-0 h-[calc(100vh-300px)] lg:h-auto">
+                  <CanvasContainer
+                    ref={editor.canvasRef}
+                    editMode={editor.editMode}
+                    onMouseDown={editor.handleMouseDown}
+                    onMouseMove={editor.handleMouseMove}
+                    onMouseUp={editor.handleMouseUp}
+                    onDoubleClick={editor.handleCreatePolylineDoubleClick}
+                    loading={projectLoading}
+                    // Legacy compatibility props
+                    slicingMode={legacyModes.slicingMode}
+                    pointAddingMode={legacyModes.pointAddingMode}
+                    deleteMode={legacyModes.deleteMode}
+                  >
+                    <CanvasContent transform={editor.transform}>
+                      {/* Base Image */}
+                      {selectedImage && (
+                        <CanvasImage
+                          src={ensureBrowserCompatibleUrl(
+                            selectedImage.id,
+                            selectedImage.url,
+                            selectedImage.name
+                          )}
+                          width={imageDimensions?.width || canvasWidth}
+                          height={imageDimensions?.height || canvasHeight}
+                          alt={t('common.image')}
+                          onLoad={handleImageLoad}
+                        />
+                      )}
+
+                      {/* SVG Overlay for polygon rendering - uses same dimensions as image */}
+                      <svg
                         width={imageDimensions?.width || canvasWidth}
                         height={imageDimensions?.height || canvasHeight}
-                        alt={t('common.image')}
-                        onLoad={handleImageLoad}
-                      />
-                    )}
-
-                    {/* SVG Overlay for polygon rendering - uses same dimensions as image */}
-                    <svg
-                      width={imageDimensions?.width || canvasWidth}
-                      height={imageDimensions?.height || canvasHeight}
-                      viewBox={`0 0 ${imageDimensions?.width || canvasWidth} ${imageDimensions?.height || canvasHeight}`}
-                      className="absolute top-0 left-0"
-                      style={{
-                        width: imageDimensions?.width || canvasWidth,
-                        height: imageDimensions?.height || canvasHeight,
-                        maxWidth: 'none',
-                        pointerEvents: 'auto',
-                        zIndex: 10,
-                      }}
-                      onClick={e => {
-                        // Unselect polygon when clicking on empty canvas area
-                        // BUT skip deselection when in modes that require point placement (centralized SSOT config)
-                        if (
-                          e.target === e.currentTarget &&
-                          !shouldPreventCanvasDeselection(editor.editMode)
-                        ) {
-                          editor.handlePolygonSelection(null);
-                        }
-                      }}
-                      data-transform={JSON.stringify(editor.transform)}
-                      data-image-dims={JSON.stringify(imageDimensions)}
-                      data-polygon-count={editor.polygons.length}
-                    >
-                      {/* SVG Filters for glow effects */}
-                      <CanvasSvgFilters />
-
-                      {/* Render all polygons */}
-                      {visiblePolygons.map(polygon => (
-                        <CanvasPolygon
-                          key={generateSafePolygonKey(
-                            polygon,
-                            editor.isUndoRedoInProgress
-                          )}
-                          polygon={polygon}
-                          isSelected={polygon.id === editor.selectedPolygonId}
-                          hoveredVertex={
-                            editor.hoveredVertex || EMPTY_HOVERED_VERTEX
+                        viewBox={`0 0 ${imageDimensions?.width || canvasWidth} ${imageDimensions?.height || canvasHeight}`}
+                        className="absolute top-0 left-0"
+                        style={{
+                          width: imageDimensions?.width || canvasWidth,
+                          height: imageDimensions?.height || canvasHeight,
+                          maxWidth: 'none',
+                          pointerEvents: 'auto',
+                          zIndex: 10,
+                        }}
+                        onClick={e => {
+                          // Unselect polygon when clicking on empty canvas area
+                          // BUT skip deselection when in modes that require point placement (centralized SSOT config)
+                          if (
+                            e.target === e.currentTarget &&
+                            !shouldPreventCanvasDeselection(editor.editMode)
+                          ) {
+                            editor.handlePolygonSelection(null);
                           }
-                          vertexDragState={editor.vertexDragState}
-                          zoom={editor.transform.zoom}
-                          isUndoRedoInProgress={editor.isUndoRedoInProgress}
-                          isHovered={polygon.id === hoveredPolygonId}
+                        }}
+                        data-transform={JSON.stringify(editor.transform)}
+                        data-image-dims={JSON.stringify(imageDimensions)}
+                        data-polygon-count={editor.polygons.length}
+                      >
+                        {/* SVG Filters for glow effects */}
+                        <CanvasSvgFilters />
+
+                        {/* Render all polygons */}
+                        {visiblePolygons.map(polygon => (
+                          <CanvasPolygon
+                            key={generateSafePolygonKey(
+                              polygon,
+                              editor.isUndoRedoInProgress
+                            )}
+                            polygon={polygon}
+                            isSelected={polygon.id === editor.selectedPolygonId}
+                            hoveredVertex={
+                              editor.hoveredVertex || EMPTY_HOVERED_VERTEX
+                            }
+                            vertexDragState={editor.vertexDragState}
+                            zoom={editor.transform.zoom}
+                            isUndoRedoInProgress={editor.isUndoRedoInProgress}
+                            isHovered={polygon.id === hoveredPolygonId}
+                            editMode={editor.editMode}
+                            onSelectPolygon={editor.handlePolygonClick}
+                            onDeletePolygon={handleDeletePolygonFromContextMenu}
+                            onSlicePolygon={handleSlicePolygonFromContextMenu}
+                            onEditPolygon={handleEditPolygonFromContextMenu}
+                            onChangePartClass={handleChangePartClass}
+                            onChangeInstanceId={handleChangeInstanceId}
+                            availableInstanceIds={availableInstanceIds}
+                            onDeleteVertex={handleDeleteVertexFromContextMenu}
+                            onHover={setHoveredPolygonId}
+                          />
+                        ))}
+
+                        {/* Vertices are now rendered inside CanvasPolygon component */}
+
+                        {/* Temporary geometry (preview lines, temp points, etc.) */}
+                        <CanvasTemporaryGeometryLayer
+                          transform={editor.transform}
                           editMode={editor.editMode}
-                          onSelectPolygon={editor.handlePolygonClick}
-                          onDeletePolygon={handleDeletePolygonFromContextMenu}
-                          onSlicePolygon={handleSlicePolygonFromContextMenu}
-                          onEditPolygon={handleEditPolygonFromContextMenu}
-                          onChangePartClass={handleChangePartClass}
-                          onChangeInstanceId={handleChangeInstanceId}
-                          availableInstanceIds={availableInstanceIds}
-                          onDeleteVertex={handleDeleteVertexFromContextMenu}
-                          onHover={setHoveredPolygonId}
+                          tempPoints={editor.tempPoints}
+                          cursorPosition={editor.cursorPosition}
+                          interactionState={editor.interactionState}
+                          selectedPolygonId={editor.selectedPolygonId}
+                          polygons={editor.polygons}
                         />
-                      ))}
+                      </svg>
+                    </CanvasContent>
 
-                      {/* Vertices are now rendered inside CanvasPolygon component */}
+                    {/* Mode Instructions Overlay */}
+                    <ModeInstructions
+                      editMode={editor.editMode}
+                      interactionState={editor.interactionState}
+                      selectedPolygonId={editor.selectedPolygonId}
+                      tempPoints={editor.tempPoints}
+                      isShiftPressed={editor.keyboardState.isShiftPressed()}
+                    />
+                  </CanvasContainer>
+                </div>
 
-                      {/* Temporary geometry (preview lines, temp points, etc.) */}
-                      <CanvasTemporaryGeometryLayer
-                        transform={editor.transform}
-                        editMode={editor.editMode}
-                        tempPoints={editor.tempPoints}
-                        cursorPosition={editor.cursorPosition}
-                        interactionState={editor.interactionState}
-                        selectedPolygonId={editor.selectedPolygonId}
-                        polygons={editor.polygons}
-                      />
-                    </svg>
-                  </CanvasContent>
-
-                  {/* Mode Instructions Overlay */}
-                  <ModeInstructions
-                    editMode={editor.editMode}
-                    interactionState={editor.interactionState}
-                    selectedPolygonId={editor.selectedPolygonId}
-                    tempPoints={editor.tempPoints}
-                    isShiftPressed={editor.keyboardState.isShiftPressed()}
-                  />
-                </CanvasContainer>
-              </div>
-
-              {/* Right: Polygon List Panel + Sperm Instance Panel */}
-              <div className="flex flex-col w-full lg:w-72 h-64 lg:h-full">
-                <PolygonListPanel
-                  loading={projectLoading}
-                  polygons={editor.polygons}
-                  selectedPolygonId={editor.selectedPolygonId}
-                  onSelectPolygon={editor.handlePolygonSelection}
-                  hiddenPolygonIds={hiddenPolygonIds}
-                  onTogglePolygonVisibility={handleTogglePolygonVisibility}
-                  onRenamePolygon={handleRenamePolygon}
-                  onDeletePolygon={handleDeletePolygonFromPanel}
-                />
-                {hasPolylines && (
-                  <SpermInstancePanel
+                {/* Right: Channels + Display (video only) + Polygon List + Sperm Instance Panel */}
+                <div className="flex flex-col w-full lg:w-72 h-64 lg:h-full overflow-y-auto">
+                  {isVideoMode && video.container && (
+                    <>
+                      <ChannelsSection channels={video.container.channels} />
+                      <DisplaySection />
+                    </>
+                  )}
+                  <PolygonListPanel
+                    loading={projectLoading}
                     polygons={editor.polygons}
                     selectedPolygonId={editor.selectedPolygonId}
                     onSelectPolygon={editor.handlePolygonSelection}
-                    activePartClass={activePartClass}
-                    onPartClassChange={setActivePartClass}
-                    activeInstanceId={activeInstanceId}
-                    onInstanceIdChange={setActiveInstanceId}
+                    hiddenPolygonIds={hiddenPolygonIds}
+                    onTogglePolygonVisibility={handleTogglePolygonVisibility}
+                    onRenamePolygon={handleRenamePolygon}
+                    onDeletePolygon={handleDeletePolygonFromPanel}
                   />
-                )}
+                  {hasPolylines && (
+                    <SpermInstancePanel
+                      polygons={editor.polygons}
+                      selectedPolygonId={editor.selectedPolygonId}
+                      onSelectPolygon={editor.handlePolygonSelection}
+                      activePartClass={activePartClass}
+                      onPartClassChange={setActivePartClass}
+                      activeInstanceId={activeInstanceId}
+                      onInstanceIdChange={setActiveInstanceId}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Bottom: Status Bar with Keyboard Shortcuts */}
-        <div className="relative">
-          {/* Keyboard Shortcuts Button - positioned in bottom left corner */}
-          <KeyboardShortcutsHelp className="absolute left-2 bottom-2 z-10" />
+          {/* Bottom: Status Bar with Keyboard Shortcuts */}
+          <div className="relative">
+            {/* Keyboard Shortcuts Button - positioned in bottom left corner */}
+            <KeyboardShortcutsHelp className="absolute left-2 bottom-2 z-10" />
 
-          {/* Loading indicator overlay */}
-          {isReloading && (
-            <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm z-20 flex items-center justify-center">
-              <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-lg dark:bg-gray-900">
-                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('segmentationEditor.reloadingSegmentation')}
-                </span>
+            {/* Loading indicator overlay */}
+            {isReloading && (
+              <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm z-20 flex items-center justify-center">
+                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-lg dark:bg-gray-900">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {t('segmentationEditor.reloadingSegmentation')}
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Status Bar */}
-          <StatusBar
-            polygons={editor.polygons}
-            editMode={editor.editMode}
-            selectedPolygonId={editor.selectedPolygonId}
-            visiblePolygonsCount={visiblePolygonsCount}
-            hiddenPolygonsCount={hiddenPolygonsCount}
-          />
-        </div>
-      </EditorLayout>
-      {/* Opt-in dev overlay: append ?perf=1 to the URL or set
-          localStorage.segPerfOverlay='1'. Renders null in production
-          by default — no bundle cost beyond the module itself. */}
-      <FpsMeter />
+            {/* Status Bar */}
+            <StatusBar
+              polygons={editor.polygons}
+              editMode={editor.editMode}
+              selectedPolygonId={editor.selectedPolygonId}
+              visiblePolygonsCount={visiblePolygonsCount}
+              hiddenPolygonsCount={hiddenPolygonsCount}
+            />
+          </div>
+        </EditorLayout>
+        {/* Opt-in dev overlay: append ?perf=1 to the URL or set
+            localStorage.segPerfOverlay='1'. Renders null in production
+            by default — no bundle cost beyond the module itself. */}
+        <FpsMeter />
+      </ImageDisplayProvider>
     </SegmentationErrorBoundary>
   );
 };

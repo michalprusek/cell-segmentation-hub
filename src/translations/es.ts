@@ -2065,4 +2065,23 @@ export default {
     attachmentInvalidType: 'Solo imágenes PNG o JPG',
     removeAttachment: 'Quitar adjunto',
   },
+  editor: {
+    channelSwitcher: {
+      title: 'Canal',
+      detectionSource: 'Fuente de segmentación',
+    },
+    windowLevel: {
+      title: 'Visualización',
+      min: 'Mín',
+      max: 'Máx',
+      brightness: 'Brillo',
+      contrast: 'Contraste',
+      reset: 'Restablecer',
+    },
+    frameNavigation: {
+      frame: 'Cuadro',
+      play: 'Reproducir',
+      pause: 'Pausar',
+    },
+  },
 };
