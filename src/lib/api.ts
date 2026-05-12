@@ -1003,6 +1003,9 @@ class ApiClient {
       levelOfDetail: 'low' | 'medium' | 'high';
       totalImages: number;
       imagesWithThumbnails: number;
+      // Distinct channels across all video containers in this project.
+      // Empty for non-video projects. Drives the Segment-All channel picker.
+      projectChannels?: string[];
     };
   }> {
     const response = await this.instance.get(
