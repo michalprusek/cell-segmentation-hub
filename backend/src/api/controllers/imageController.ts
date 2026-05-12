@@ -1032,6 +1032,17 @@ export class ImageController {
             segmentationResult: thumbnailData,
             segmentationThumbnailUrl: segmentationThumbnailUrl,
             segmentationThumbnailPath: image.segmentationThumbnailPath,
+            // Video-container metadata (ND2 / TIFF stack / MP4) — without
+            // these the editor's VideoModeOverlay can't tell a container
+            // from a standalone image, so frame slider / play / channel
+            // switcher never render and the canvas stays empty.
+            isVideoContainer: image.isVideoContainer,
+            parentVideoId: image.parentVideoId,
+            frameIndex: image.frameIndex,
+            frameCount: image.frameCount,
+            videoDurationMs: image.videoDurationMs,
+            channels: image.channels,
+            displayOrder: image.displayOrder,
           };
         })
       );
