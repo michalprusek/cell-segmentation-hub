@@ -1161,6 +1161,14 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('microtubule')
+            # Microtubule activations are large (~7 GB for 1024x1024).  Without
+            # an explicit empty_cache the allocator keeps the reserved-but-
+            # unallocated blocks pinned, so a follow-up call ends up requesting
+            # fresh blocks instead of reusing freed ones, racing the per-process
+            # memory limit.  Releasing the cache between calls is cheap
+            # (<5 ms) compared to the 8 s inference itself.
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     def predict_batch(self, images: List[Image.Image], model_name: str, batch_size: Optional[int] = None,
                      threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> List[Dict[str, Any]]:

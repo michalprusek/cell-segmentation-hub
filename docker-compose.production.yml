@@ -145,7 +145,10 @@ services:
       - ML_INFERENCE_WORKERS=${ML_INFERENCE_WORKERS:-1}
       - ML_ENABLE_PARALLEL_INFERENCE=${ML_ENABLE_PARALLEL_INFERENCE:-false}
       - ML_MAX_CONCURRENT_USERS=${ML_MAX_CONCURRENT_USERS:-1}
-      - ML_MEMORY_LIMIT_GB=${ML_MEMORY_LIMIT_GB:-8}
+      # Microtubule v7 (DINOv3-L + DPT) needs ~7-8 GB for a single 1024x1024
+      # forward pass; the previous 8 GB cap tripped CUDA OOM. 14 GB leaves
+      # room on the shared A5000 (24 GB total) for the other tenant.
+      - ML_MEMORY_LIMIT_GB=${ML_MEMORY_LIMIT_GB:-14}
       - ML_ENABLE_CUDA_STREAMS=true
       - GPU_MEMORY_WARNING_THRESHOLD=90
       - GPU_MEMORY_CRITICAL_THRESHOLD=95

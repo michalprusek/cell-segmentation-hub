@@ -569,6 +569,12 @@ export default {
     incompatibleModelTitle: 'Tímto modelem nelze segmentovat',
     incompatibleModelDesc:
       'Aktuálně vybraný model "{{model}}" není kompatibilní s typem tohoto projektu ({{type}}). Povolené modely pro tento typ: {{allowed}}. Změňte prosím model v Nastavení nebo změňte typ projektu.',
+    channelPicker: {
+      title: 'Vyberte kanál k segmentaci',
+      description:
+        'Tento projekt obsahuje snímky videa s více kanály. Vyberte, který kanál se má segmentovat.',
+      confirm: 'Segmentovat',
+    },
     mode: {
       view: 'Zobrazit a navigovat',
       edit: 'Upravit',

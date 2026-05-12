@@ -69,6 +69,9 @@ export interface BatchQueueData {
   priority?: QueuePriority;
   forceResegment?: boolean;
   detectHoles?: boolean;
+  // Optional channel override for multi-channel video frames. Validated by
+  // batchQueueSchema (^[A-Za-z0-9_-]+$, 1-64 chars).
+  channel?: string;
 }
 
 /**

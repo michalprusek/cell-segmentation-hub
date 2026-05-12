@@ -237,7 +237,8 @@ export class QueueService {
     threshold = 0.5,
     priority = 0,
     forceResegment = false,
-    detectHoles = true
+    detectHoles = true,
+    channel?: string
   ): Promise<SegmentationQueue[]> {
     try {
       const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -307,6 +308,7 @@ export class QueueService {
                 priority,
                 status: 'queued',
                 batchId,
+                channel: channel ?? null,
               },
             });
           });
@@ -509,6 +511,13 @@ export class QueueService {
     const batches: QueueBatch[] = [];
     const processedImageIds = new Set<string>();
 
+    // Heavy models that need the full GPU memory budget per inference must run
+    // strictly serial — the queue worker would otherwise dispatch up to 4
+    // concurrent /api/v1/segment requests which OOM the ML container.  When the
+    // first batch we picked is one of these, cap the dispatch to a single
+    // batch and let the next tick pick up the rest.
+    const SERIAL_DISPATCH_MODELS = new Set(['microtubule']);
+
     for (let i = 0; i < maxBatches; i++) {
       const batchItems = await this.getNextBatchExcluding(processedImageIds);
       if (batchItems.length === 0) {
@@ -532,6 +541,15 @@ export class QueueService {
 
       // Mark these images as being processed to avoid duplicates
       batchItems.forEach(item => processedImageIds.add(item.imageId));
+
+      if (SERIAL_DISPATCH_MODELS.has(firstItem.model)) {
+        logger.info(
+          'Serial-dispatch model picked — capping at 1 concurrent batch',
+          'QueueService',
+          { model: firstItem.model, batchId }
+        );
+        break;
+      }
     }
 
     // Only log when there are actually batches to process (avoid spam when queue is empty)
@@ -774,6 +792,7 @@ export class QueueService {
             threshold: threshold,
             userId: firstItem.userId,
             detectHoles: firstItem.detectHoles ?? false,
+            channel: firstItem.channel ?? undefined,
           }
         );
         results = [singleResult];

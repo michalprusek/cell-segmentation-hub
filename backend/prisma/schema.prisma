@@ -151,6 +151,11 @@ model SegmentationQueue {
   error       String?
   retryCount  Int       @default(0)
   batchId     String?
+  // Optional per-queue-item channel override for multi-channel video frames
+  // (e.g. "488_nm", "640_nm"). When null, segmentation reads the frame's
+  // default originalPath; when set, the worker rewrites the channel segment
+  // of the path so the user's Segment-All channel choice is honored.
+  channel     String?
   createdAt   DateTime  @default(now())
   startedAt   DateTime?
   completedAt DateTime?

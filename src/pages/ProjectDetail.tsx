@@ -15,6 +15,10 @@ import ProjectImages from '@/components/project/ProjectImages';
 import ProjectUploaderSection from '@/components/project/ProjectUploaderSection';
 import { QueueStatsPanel } from '@/components/project/QueueStatsPanel';
 import { ExportProgressPanel } from '@/components/project/ExportProgressPanel';
+import {
+  SegmentChannelDialog,
+  extractChannelsFromPaths,
+} from '@/components/project/SegmentChannelDialog';
 import { useSharedAdvancedExport } from '@/pages/export/hooks/useSharedAdvancedExport';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
@@ -59,6 +63,13 @@ const ProjectDetail = () => {
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
+  // Channel-picker state for Segment All on multi-channel video projects.
+  // `pendingChannelChoice` is non-null while the dialog is open; resolving it
+  // triggers the actual dispatch with the picked channel.
+  const [pendingChannelChoice, setPendingChannelChoice] = useState<{
+    channels: string[];
+    defaultChannel: string;
+  } | null>(null);
 
   const lastStatusRef = useRef<{ [imageId: string]: string }>({});
 
@@ -1238,7 +1249,7 @@ const ProjectDetail = () => {
     }
   };
 
-  const handleSegmentAll = async () => {
+  const handleSegmentAll = async (channelOverride?: string) => {
     if (!id || !user?.id) {
       toast.error(t('errors.noProjectOrUser'));
       return;
@@ -1256,6 +1267,24 @@ const ProjectDetail = () => {
     // Prevent double submission
     if (batchSubmitted) {
       return;
+    }
+
+    // Multi-channel video project: pick the channel first. The dialog calls
+    // back into handleSegmentAll with the picked channel so we can reuse the
+    // rest of this function unchanged.
+    if (channelOverride === undefined) {
+      const detectedChannels = extractChannelsFromPaths(
+        images.map(img => (img as { originalPath?: string }).originalPath)
+      );
+      if (detectedChannels.length > 1 && !pendingChannelChoice) {
+        // Default to the first channel; backend already validates against the
+        // queue row's set so an unknown token returns 400 cleanly.
+        setPendingChannelChoice({
+          channels: detectedChannels,
+          defaultChannel: detectedChannels[0],
+        });
+        return;
+      }
     }
 
     try {
@@ -1377,7 +1406,8 @@ const ProjectDetail = () => {
             confidenceThreshold,
             0, // priority
             forceResegment,
-            detectHoles
+            detectHoles,
+            channelOverride
           );
           processedCount += response.queuedCount;
         }
@@ -1645,6 +1675,23 @@ const ProjectDetail = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Channel picker — opens when Segment All is clicked on a project
+          whose extracted video frames span more than one channel. The dialog
+          re-invokes handleSegmentAll with the picked channel as the override
+          argument so the rest of the dispatch path stays unchanged. */}
+      <SegmentChannelDialog
+        open={pendingChannelChoice !== null}
+        channels={pendingChannelChoice?.channels ?? []}
+        defaultChannel={pendingChannelChoice?.defaultChannel ?? ''}
+        onConfirm={ch => {
+          setPendingChannelChoice(null);
+          // Defer to next tick so the dialog can fully close before the
+          // toast machinery (driven by handleSegmentAll) fires.
+          setTimeout(() => handleSegmentAll(ch), 0);
+        }}
+        onCancel={() => setPendingChannelChoice(null)}
+      />
     </motion.div>
   );
 };

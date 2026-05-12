@@ -665,6 +665,11 @@ export default {
     incompatibleModelTitle: '无法使用此模型进行分割',
     incompatibleModelDesc:
       '当前选择的模型 "{{model}}" 与此项目类型 ({{type}}) 不兼容。允许的模型: {{allowed}}。请在设置中更改模型或更改项目类型。',
+    channelPicker: {
+      title: '选择要分割的通道',
+      description: '该项目包含具有多个通道的视频帧。选择要分割的通道。',
+      confirm: '分割',
+    },
     mode: {
       view: '查看和导航',
       edit: '编辑',

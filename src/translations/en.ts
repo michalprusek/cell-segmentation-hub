@@ -570,6 +570,12 @@ export default {
     incompatibleModelTitle: 'Cannot segment with this model',
     incompatibleModelDesc:
       'The currently selected model "{{model}}" is not compatible with this project\'s type ({{type}}). Allowed models for this type: {{allowed}}. Please change the model in Settings or change the project type.',
+    channelPicker: {
+      title: 'Select channel to segment',
+      description:
+        'This project contains video frames with multiple channels. Choose which channel to segment.',
+      confirm: 'Segment',
+    },
     mode: {
       view: 'View and navigate',
       edit: 'Edit',
