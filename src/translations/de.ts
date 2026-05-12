@@ -2005,4 +2005,26 @@ export default {
       failed: 'Export der Spermien-Metriken fehlgeschlagen',
     },
   },
+  feedback: {
+    buttonTitle: 'Feedback senden',
+    buttonAriaLabel: 'Feedback-Formular öffnen',
+    title: 'Feedback senden',
+    subtitle:
+      'Einen Fehler gefunden oder eine Idee? Schreiben Sie uns — wir lesen jeden Bericht.',
+    typeBug: 'Fehlerbericht',
+    typeFeature: 'Funktionsanfrage',
+    titleLabel: 'Titel',
+    titlePlaceholder: 'Kurze Zusammenfassung',
+    bodyLabel: 'Details',
+    bodyPlaceholder:
+      'Schritte zur Reproduktion, was Sie erwartet haben, Screenshots wenn relevant...',
+    submit: 'Senden',
+    submittedSuccess: 'Danke! Ihr Feedback wurde gesendet.',
+    submitFailed: 'Feedback konnte nicht gesendet werden',
+    attachmentPrompt:
+      'Screenshot hierher ziehen oder klicken zum Auswählen (PNG/JPG ≤ 5 MB)',
+    attachmentTooLarge: 'Datei zu groß — Limit ist 5 MB',
+    attachmentInvalidType: 'Nur PNG- oder JPG-Bilder',
+    removeAttachment: 'Anhang entfernen',
+  },
 };

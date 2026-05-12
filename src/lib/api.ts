@@ -593,6 +593,30 @@ class ApiClient {
     return this.extractData(response);
   }
 
+  /**
+   * Submit an in-app bug report or feature request. The optional
+   * `attachment` is sent as multipart/form-data; backend caps it at
+   * 5 MB and image/png|jpeg.
+   */
+  async submitFeedback(
+    data: { type: 'bug' | 'feature'; title: string; body: string },
+    attachment?: File
+  ): Promise<{ id: string; emailQueued: boolean }> {
+    const formData = new FormData();
+    formData.append('type', data.type);
+    formData.append('title', data.title);
+    formData.append('body', data.body);
+    if (attachment) {
+      formData.append('attachment', attachment);
+    }
+
+    const response = await this.instance.post('/feedback', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    return this.extractData(response);
+  }
+
   // Helper method to extract data from backend response structure
   private extractData<T>(
     response: AxiosResponse<{ success: boolean; data: T; message?: string } | T>

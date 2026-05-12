@@ -318,7 +318,9 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
               }
               const msg =
                 (err as { response?: { data?: { error?: string } } })?.response
-                  ?.data?.error ?? (err as Error)?.message ?? 'unknown error';
+                  ?.data?.error ??
+                (err as Error)?.message ??
+                'unknown error';
               logger.error(
                 `[UploadContext] video upload failed: ${vfile.name} — ${msg}`,
                 err
@@ -343,13 +345,14 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                 : videoCancelled > 0 && videoFailed === 0 && videoSuccess === 0
                   ? 'cancelled'
                   : 'completed';
-            const opSummary = [
-              videoSuccess > 0 ? `${videoSuccess} uploaded` : null,
-              videoFailed > 0 ? `${videoFailed} failed` : null,
-              videoCancelled > 0 ? `${videoCancelled} cancelled` : null,
-            ]
-              .filter(Boolean)
-              .join(', ') || 'no files processed';
+            const opSummary =
+              [
+                videoSuccess > 0 ? `${videoSuccess} uploaded` : null,
+                videoFailed > 0 ? `${videoFailed} failed` : null,
+                videoCancelled > 0 ? `${videoCancelled} cancelled` : null,
+              ]
+                .filter(Boolean)
+                .join(', ') || 'no files processed';
             setSessions(prev => ({
               ...prev,
               [sessionId]: {

@@ -2014,4 +2014,26 @@ export default {
       failed: 'Export metrik spermií selhal',
     },
   },
+  feedback: {
+    buttonTitle: 'Odeslat zpětnou vazbu',
+    buttonAriaLabel: 'Otevřít formulář zpětné vazby',
+    title: 'Odeslat zpětnou vazbu',
+    subtitle:
+      'Našli jste chybu nebo máte nápad? Napište nám — každý report čteme.',
+    typeBug: 'Hlášení chyby',
+    typeFeature: 'Návrh funkce',
+    titleLabel: 'Název',
+    titlePlaceholder: 'Krátké shrnutí',
+    bodyLabel: 'Detaily',
+    bodyPlaceholder:
+      'Kroky k reprodukci, co jste očekávali, případně screenshoty...',
+    submit: 'Odeslat',
+    submittedSuccess: 'Díky! Vaše zpětná vazba byla odeslána.',
+    submitFailed: 'Zpětnou vazbu se nepodařilo odeslat',
+    attachmentPrompt:
+      'Sem přetáhněte snímek obrazovky nebo klikněte pro výběr (PNG/JPG ≤ 5 MB)',
+    attachmentTooLarge: 'Soubor je příliš velký — limit je 5 MB',
+    attachmentInvalidType: 'Pouze obrázky PNG nebo JPG',
+    removeAttachment: 'Odebrat přílohu',
+  },
 };

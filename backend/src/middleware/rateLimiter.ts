@@ -178,6 +178,19 @@ export const bulkUploadRateLimiter = createRateLimiter({
 });
 
 /**
+ * Per-user limit on the /api/feedback POST endpoint. 5 submissions per
+ * minute is generous for legitimate use but cheap enough to absorb
+ * occasional duplicate-submit click spam without paging the maintainer.
+ * Default keyGenerator falls back to IP when auth is missing, so
+ * unauthenticated curl gets the same budget.
+ */
+export const feedbackRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: 'Too many feedback submissions, please wait a minute',
+});
+
+/**
  * ML processing rate limiter
  */
 export const mlProcessingRateLimiter = createRateLimiter({
