@@ -206,6 +206,7 @@ class QueueController {
         priority = 0,
         forceResegment = false,
         detectHoles = true,
+        channel,
       } = req.body;
 
       const userId = this.validateUser(req, res);
@@ -274,7 +275,8 @@ class QueueController {
         threshold,
         priority,
         forceResegment,
-        detectHoles
+        detectHoles,
+        channel
       );
 
       // Emit WebSocket updates

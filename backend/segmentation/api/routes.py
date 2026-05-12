@@ -2,6 +2,7 @@
 
 import time
 import logging
+import threading
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Form
@@ -27,6 +28,16 @@ logger = logging.getLogger(__name__)
 
 # Initialize router
 router = APIRouter()
+
+# Microtubule v7 (DINOv3-L + DPT + PySOAX) holds ~7 GB of GPU activations
+# during a single 1024x1024 forward pass.  The per-process memory limit is
+# ML_MEMORY_LIMIT_GB; with multiple concurrent requests from the queue worker
+# (default parallel batches = 4) we'd try to allocate 4 * 7 GB simultaneously,
+# which fragments the allocator and trips OOM even when total free VRAM is
+# >15 GB.  Serialising microtubule inference at the request layer with a
+# threading.Lock keeps lighter models (hrnet, sperm, wound) parallel while
+# preventing the heavy model from racing itself.
+_microtubule_inference_lock = threading.Lock()
 
 from fastapi import Request
 
@@ -150,7 +161,15 @@ async def segment_image(
             # Microtubule v7 takes the user threshold as the seed_prob cutoff
             # (default 0.5). PySOAX hyperparameters are fixed to the production
             # Optuna-tuned defaults; detect_holes is not meaningful for polylines.
-            result = loader.predict_microtubule(image, threshold)
+            #
+            # Serialise on _microtubule_inference_lock: the model needs the full
+            # GPU memory budget for one forward pass and racing two of these
+            # OOMs even with empty_cache between.  Holding the lock across the
+            # entire predict_microtubule call is fine — FastAPI sync routes run
+            # on uvicorn's worker thread pool, so blocking here only blocks the
+            # worker thread, not the event loop.
+            with _microtubule_inference_lock:
+                result = loader.predict_microtubule(image, threshold)
         else:
             result = loader.predict(image, model, threshold, detect_holes)
         inference_time = time.time() - inference_start

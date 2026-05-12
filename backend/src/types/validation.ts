@@ -80,6 +80,17 @@ export const batchQueueSchema = z.object({
   priority: queuePrioritySchema.optional().default(0),
   forceResegment: z.boolean().optional().default(false),
   detectHoles: z.boolean().optional().default(true),
+  // Per-batch channel override for multi-channel video frames.
+  // Matches the channel labels in images.channels[].id (e.g. "488_nm",
+  // "640_nm", "ch_0"). When set, the worker reads frames/NNNN/<channel>.png
+  // for every video-frame image in the batch instead of each frame's default
+  // originalPath. Limited to 64 chars to bound the path-rewrite below.
+  channel: z
+    .string()
+    .min(1, 'Kanál nesmí být prázdný')
+    .max(64, 'Kanál může mít maximálně 64 znaků')
+    .regex(/^[A-Za-z0-9_-]+$/, 'Kanál může obsahovat jen alfanumerické znaky, _ a -')
+    .optional(),
 });
 
 /**
