@@ -699,8 +699,9 @@ export const getStorageStats = asyncHandler(
       },
     });
 
+    // fileSize is BigInt — coerce per row to stay in number arithmetic.
     const totalBytes = images.reduce(
-      (sum, img) => sum + (img.fileSize || 0),
+      (sum, img) => sum + Number(img.fileSize ?? 0n),
       0
     );
     const totalMB = Math.round((totalBytes / (1024 * 1024)) * 100) / 100;
@@ -754,7 +755,8 @@ export const getUserStorageStats = asyncHandler(
     for (const project of userProjects) {
       for (const image of project.images) {
         if (image.fileSize) {
-          totalStorageBytes += image.fileSize;
+          // fileSize is BigInt — coerce per row to stay in number arithmetic.
+          totalStorageBytes += Number(image.fileSize);
         }
         totalImages++;
       }
