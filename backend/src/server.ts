@@ -34,6 +34,16 @@ import {
   cleanupRateLimitingSystem,
 } from './monitoring/rateLimitingInitialization';
 
+// JSON.stringify throws on BigInt by default; Image.fileSize is now
+// BigInt (PostgreSQL BIGINT) to support files > 2 GB (ND2 stacks).
+// Serialise as JS number — covers any file size up to ~9 PB (2^53),
+// well beyond the 100 GB upload cap.
+//
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(BigInt.prototype as any).toJSON = function (): number {
+  return Number(this);
+};
+
 const app = express();
 
 // Trust proxy (important for rate limiting and logging real IPs)

@@ -584,7 +584,10 @@ export async function getProjectStats(
           completed: segmentationStatusCounts.completed || 0,
           failed: segmentationStatusCounts.failed || 0,
         },
-        totalFileSize: totalFileSize._sum.fileSize || 0,
+        // _sum.fileSize is BigInt | null — coerce so the JSON response
+        // is a plain number (BigInt.toJSON in server.ts handles direct
+        // BigInt values too, but explicit coercion keeps the shape stable).
+        totalFileSize: Number(totalFileSize._sum.fileSize ?? 0n),
       },
       segmentations: {
         total: totalSegmentations,

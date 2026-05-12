@@ -87,7 +87,11 @@ model Image {
   segmentationThumbnailPath String?          // New field for segmentation thumbnail
   projectId              String
   segmentationStatus     String              @default("no_segmentation")
-  fileSize               Int?
+  // BigInt because ND2 / TIFF stacks routinely exceed 2 GB (INT4 max);
+  // the previous Int caused Prisma "Unable to fit … into INT4" on upload.
+  // Frontend receives this as a JS number via the controller mapper —
+  // 2^53 covers up to 9 PB which is well beyond any conceivable file size.
+  fileSize               BigInt?
   width                  Int?
   height                 Int?
   mimeType               String?

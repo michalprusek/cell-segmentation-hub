@@ -202,7 +202,9 @@ export async function calculateUserStorage(
       },
     });
 
-    const totalImageBytes = imagesSizeResult._sum.fileSize || 0;
+    // _sum.fileSize is BigInt | null since the column moved to BigInt
+    // — coerce to number for the downstream Math.floor / percentage math.
+    const totalImageBytes = Number(imagesSizeResult._sum.fileSize ?? 0n);
 
     // Estimate thumbnail sizes (typically 10-20% of original)
     const estimatedThumbnailBytes = Math.floor(totalImageBytes * 0.15);
