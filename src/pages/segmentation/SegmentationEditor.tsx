@@ -44,6 +44,7 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 import CanvasContainer from './components/canvas/CanvasContainer';
 import CanvasContent from './components/canvas/CanvasContent';
 import CanvasImage from './components/canvas/CanvasImage';
+import VideoFrameImage from './components/canvas/VideoFrameImage';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
@@ -1254,10 +1255,29 @@ const SegmentationEditor = () => {
                     deleteMode={legacyModes.deleteMode}
                   >
                     <CanvasContent transform={editor.transform}>
-                      {/* Base Image */}
+                      {/* Base Image — video mode binds src to the play
+                          head (useVideoFrames.currentFrame.id) and the
+                          active channel (useImageDisplay.channel), so
+                          scrubbing / Play / channel-switch actually
+                          swap the canvas image. Prefetch warms the
+                          next ten frames during playback so the swap
+                          is instant rather than a roundtrip per frame.
+                          Standalone images keep the static URL. */}
                       {selectedImage && (
-                        <CanvasImage
-                          src={ensureBrowserCompatibleUrl(
+                        <VideoFrameImage
+                          isVideoMode={isVideoMode}
+                          currentFrameId={video.currentFrame?.id ?? null}
+                          upcomingFrameIds={
+                            isVideoMode && video.isPlaying && video.container
+                              ? video.container.frames
+                                  .slice(
+                                    video.frameIndex + 1,
+                                    video.frameIndex + 11
+                                  )
+                                  .map(f => f.id)
+                              : undefined
+                          }
+                          fallbackSrc={ensureBrowserCompatibleUrl(
                             selectedImage.id,
                             selectedImage.url,
                             selectedImage.name
