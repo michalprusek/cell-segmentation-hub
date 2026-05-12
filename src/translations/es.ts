@@ -2043,4 +2043,26 @@ export default {
       failed: 'Error al exportar métricas de espermatozoides',
     },
   },
+  feedback: {
+    buttonTitle: 'Enviar comentarios',
+    buttonAriaLabel: 'Abrir formulario de comentarios',
+    title: 'Enviar comentarios',
+    subtitle:
+      '¿Encontraste un error o tienes una idea? Cuéntanos — leemos cada informe.',
+    typeBug: 'Reporte de error',
+    typeFeature: 'Solicitud de función',
+    titleLabel: 'Título',
+    titlePlaceholder: 'Resumen breve',
+    bodyLabel: 'Detalles',
+    bodyPlaceholder:
+      'Pasos para reproducir, qué esperabas, capturas si es relevante...',
+    submit: 'Enviar',
+    submittedSuccess: '¡Gracias! Tu comentario fue enviado.',
+    submitFailed: 'No se pudo enviar el comentario',
+    attachmentPrompt:
+      'Arrastra una captura aquí, o haz clic para seleccionar (PNG/JPG ≤ 5 MB)',
+    attachmentTooLarge: 'Archivo demasiado grande — el límite es 5 MB',
+    attachmentInvalidType: 'Solo imágenes PNG o JPG',
+    removeAttachment: 'Quitar adjunto',
+  },
 };

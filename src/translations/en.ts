@@ -2076,4 +2076,25 @@ export default {
       failed: 'Failed to export sperm metrics',
     },
   },
+  feedback: {
+    buttonTitle: 'Send feedback',
+    buttonAriaLabel: 'Open feedback form',
+    title: 'Send feedback',
+    subtitle: 'Found a bug or have an idea? Tell us — we read every report.',
+    typeBug: 'Bug report',
+    typeFeature: 'Feature request',
+    titleLabel: 'Title',
+    titlePlaceholder: 'Short summary',
+    bodyLabel: 'Details',
+    bodyPlaceholder:
+      'Steps to reproduce, what you expected, screenshots if relevant...',
+    submit: 'Submit',
+    submittedSuccess: 'Thanks! Your feedback was sent.',
+    submitFailed: "Couldn't send feedback",
+    attachmentPrompt:
+      'Drag a screenshot here, or click to select (PNG/JPG ≤ 5 MB)',
+    attachmentTooLarge: 'File too large — limit is 5 MB',
+    attachmentInvalidType: 'Only PNG or JPG images',
+    removeAttachment: 'Remove attachment',
+  },
 };
