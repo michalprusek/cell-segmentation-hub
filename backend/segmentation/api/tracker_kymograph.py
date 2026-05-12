@@ -172,21 +172,42 @@ def _build_cost_matrix(
         )
 
     P, Q = len(prev), len(nxt)
-    cost = np.full((P, Q), fill_value=1.0, dtype=np.float32)
+    # First pass: compute cosine distance for every pair where BOTH
+    # embeddings are present. Track which cells are "missing" so the
+    # second pass can substitute a neutral cost from the same matrix.
+    cost = np.full((P, Q), fill_value=np.nan, dtype=np.float32)
+    spat_matrix = np.zeros((P, Q), dtype=np.float32)
     for i in range(P):
         for j in range(Q):
-            spat = float(np.linalg.norm(prev_cent[i] - nxt_cent[j])) / max(
-                img_diag, 1.0
-            )
+            spat_matrix[i, j] = float(
+                np.linalg.norm(prev_cent[i] - nxt_cent[j])
+            ) / max(img_diag, 1.0)
             if prev_emb[i] is None or nxt_emb[j] is None:
-                cosine = 1.0  # neutral when embedding missing
-            else:
-                a = prev_emb[i]
-                b = nxt_emb[j]
-                denom = float(np.linalg.norm(a) * np.linalg.norm(b)) + 1e-9
-                cosine = 1.0 - float(np.dot(a, b) / denom)
-            cost[i, j] = cosine + spatial_weight * spat
-    return cost
+                continue
+            a = prev_emb[i]
+            b = nxt_emb[j]
+            denom = float(np.linalg.norm(a) * np.linalg.norm(b)) + 1e-9
+            cost[i, j] = 1.0 - float(np.dot(a, b) / denom)
+
+    # Round-2 review finding: previously cells without an embedding got
+    # cosine=1.0, which combined with cost_threshold=0.5 effectively
+    # **rejected** the polyline rather than degrading to spatial-only.
+    # Substitute the MEDIAN of the valid cosine distances (or a sensible
+    # constant if no valid pairs exist). The polyline still has to win
+    # its row in the Hungarian assignment AND clear cost_threshold, so
+    # this is a true "neutral" — neither rewarded nor punished.
+    valid_mask = ~np.isnan(cost)
+    if valid_mask.any():
+        neutral_cosine = float(np.median(cost[valid_mask]))
+    else:
+        # Whole batch is missing embeddings (older segmentation runs
+        # before the embedding-persistence change): fall back to a tight
+        # spatial-only match. 0.3 ≈ typical inter-MT distance once
+        # normalised; keeps the threshold useful.
+        neutral_cosine = 0.3
+    cost = np.where(valid_mask, cost, neutral_cosine)
+    cost = cost + spatial_weight * spat_matrix
+    return cost.astype(np.float32)
 
 
 def _new_track_id() -> str:

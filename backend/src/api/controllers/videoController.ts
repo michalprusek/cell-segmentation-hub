@@ -134,21 +134,31 @@ export class VideoController {
    * canonical project storage layout before extracting frames.
    */
   static async upload(req: Request, res: Response): Promise<void> {
+    // Multer dropped the file to disk before this handler even ran, so
+    // ANY early return (auth, validation, project not found) leaves a
+    // potentially 100 GB tmp file behind. Round-2 review flagged this as
+    // a disk-pressure DoS surface — every bail-out path now goes through
+    // a single cleanup point.
+    const file = req.file as Express.Multer.File | undefined;
+    const cleanupTmp = async () => {
+      if (file?.path) {
+        await fs.rm(file.path, { force: true }).catch(() => undefined);
+      }
+    };
+
     try {
       const projectId = req.params.id;
       const userId = await assertProjectAccess(req, res, projectId);
-      if (!userId) return;
-
-      const file = req.file as Express.Multer.File | undefined;
+      if (!userId) {
+        await cleanupTmp();
+        return;
+      }
       if (!file) {
         ResponseHelper.error(res, 'No file uploaded', 400);
         return;
       }
       if (!isVideoFilename(file.originalname)) {
-        // Clean up the tmp file the dropped-by-multer would otherwise leave.
-        if (file.path) {
-          await fs.rm(file.path, { force: true }).catch(() => undefined);
-        }
+        await cleanupTmp();
         ResponseHelper.error(
           res,
           `Not a recognised video format: ${path.extname(file.originalname)}`,
@@ -157,6 +167,9 @@ export class VideoController {
         return;
       }
 
+      // uploadVideoFromFile owns the tmp file from here — it either
+      // renames it into place (success) or removes it via cleanupOnFailure
+      // (failure). Either way, no second cleanupTmp() in the success path.
       const result = await uploadVideoFromFile({
         projectId,
         originalName: file.originalname,
@@ -170,6 +183,11 @@ export class VideoController {
         channels: result.channels,
       });
     } catch (err) {
+      // The service's own catch already cleaned the tmp file on
+      // extraction failure; but if we threw before reaching the service
+      // (e.g. uncaught from assertProjectAccess), the file is still
+      // there. Best-effort cleanup is cheap.
+      await cleanupTmp();
       const message = (err as Error).message;
       logger.error(
         `Video upload failed: ${message}`,

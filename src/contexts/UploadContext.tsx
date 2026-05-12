@@ -251,8 +251,16 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
           // Videos first — sequential, single endpoint per file. We
           // accumulate counts so the session card reports a single
           // combined success/fail tally for mixed batches.
+          //
+          // Round 2 review caught: previously a cancel produced
+          // videoSuccess==0 && videoFailed==0, which fell through to the
+          // "completed, no toast" branch — user clicks Cancel and the
+          // session card silently says "complete". Track cancellations
+          // separately so we can report status: 'cancelled' and an
+          // explicit info toast.
           let videoSuccess = 0;
           let videoFailed = 0;
+          let videoCancelled = 0;
           // Surface the first failure's user-facing message so the
           // aggregate toast tells the user *why* the upload failed, not
           // just *that* it did.
@@ -293,12 +301,19 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
               videoSuccess++;
             } catch (err) {
               // axios cancellation isn't a real failure — abort
-              // shouldn't inflate videoFailed or land a "video upload
-              // failed" toast.
+              // shouldn't inflate videoFailed. But it IS a meaningful
+              // state distinct from "completed"; remember the count so
+              // the finaliser below can mark the session 'cancelled'
+              // and fire an info toast.
               if (axios.isCancel(err)) {
                 logger.info(
                   `[UploadContext] video upload cancelled: ${vfile.name}`
                 );
+                videoCancelled++;
+                // Count remaining unattempted files as cancelled too —
+                // when the user hits Cancel mid-batch they cancel the
+                // whole queue, not just the in-flight upload.
+                videoCancelled += videoFiles.length - 1 - i;
                 break;
               }
               const msg =
@@ -318,25 +333,42 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
           // don't fall through into the image upload paths with an empty
           // imageFiles array (which would otherwise post zero-file form).
           if (imageFiles.length === 0) {
+            // Status precedence: failed > cancelled > completed. A batch
+            // that produced both a real failure and a cancel is treated
+            // as 'failed' because there's a fault to investigate; a
+            // batch with only cancels is 'cancelled'.
+            const finalStatus =
+              videoFailed > 0 && videoSuccess === 0
+                ? 'failed'
+                : videoCancelled > 0 && videoFailed === 0 && videoSuccess === 0
+                  ? 'cancelled'
+                  : 'completed';
+            const opSummary = [
+              videoSuccess > 0 ? `${videoSuccess} uploaded` : null,
+              videoFailed > 0 ? `${videoFailed} failed` : null,
+              videoCancelled > 0 ? `${videoCancelled} cancelled` : null,
+            ]
+              .filter(Boolean)
+              .join(', ') || 'no files processed';
             setSessions(prev => ({
               ...prev,
               [sessionId]: {
                 ...prev[sessionId],
-                status:
-                  videoFailed > 0 && videoSuccess === 0
-                    ? 'failed'
-                    : 'completed',
+                status: finalStatus,
                 overallProgress: 100,
                 successCount: videoSuccess,
                 failedCount: videoFailed,
                 chunkProgress: null,
-                currentOperation:
-                  videoFailed > 0
-                    ? `${videoSuccess} videos uploaded, ${videoFailed} failed`
-                    : `${videoSuccess} video(s) uploaded successfully`,
+                currentOperation: opSummary,
               },
             }));
-            if (videoFailed > 0 && videoSuccess > 0) {
+            if (videoCancelled > 0 && videoFailed === 0 && videoSuccess === 0) {
+              toast.info(`Upload cancelled (${videoCancelled} file(s))`);
+            } else if (videoCancelled > 0 && videoSuccess > 0) {
+              toast.info(
+                `${videoSuccess} uploaded, ${videoCancelled} cancelled`
+              );
+            } else if (videoFailed > 0 && videoSuccess > 0) {
               toast.warning(
                 `${videoSuccess} videos uploaded, ${videoFailed} failed`,
                 firstFailureMessage

@@ -84,7 +84,29 @@ async function isBatchComplete(containerId: string): Promise<boolean> {
   return frames.every(f => f.segmentationStatus === 'segmented');
 }
 
-export async function runTrackingForContainer(containerId: string): Promise<void> {
+/**
+ * In-flight guard against the race that round 2 found: each `'segmented'`
+ * webhook for a frame in the same container fires
+ * scheduleTrackingForContainer; with a 200-frame video, the last few
+ * `'segmented'` events all observe isBatchComplete()==true concurrently
+ * and overlap. Two concurrent runTrackingForContainer passes write
+ * different trackIds to the same Segmentation rows ("last writer wins"
+ * looks like flapping trackIds to the editor). A module-scope Set keeps
+ * each containerId to a single in-flight pass; later triggers are
+ * dropped silently because the work is already underway.
+ */
+const _inFlightTrackers = new Set<string>();
+
+export async function runTrackingForContainer(
+  containerId: string
+): Promise<void> {
+  if (_inFlightTrackers.has(containerId)) {
+    logger.debug(
+      `Tracker: container ${containerId} already in flight, skipping duplicate trigger`,
+      'TrackerService'
+    );
+    return;
+  }
   if (!(await isBatchComplete(containerId))) {
     logger.debug(
       `Tracker: batch ${containerId} not yet complete, skipping`,
@@ -92,6 +114,17 @@ export async function runTrackingForContainer(containerId: string): Promise<void
     );
     return;
   }
+  _inFlightTrackers.add(containerId);
+  try {
+    await _runTrackingForContainerInner(containerId);
+  } finally {
+    _inFlightTrackers.delete(containerId);
+  }
+}
+
+async function _runTrackingForContainerInner(
+  containerId: string
+): Promise<void> {
 
   const frames = await prisma.image.findMany({
     where: { parentVideoId: containerId },
@@ -188,19 +221,52 @@ export async function runTrackingForContainer(containerId: string): Promise<void
   // Use the interactive transaction overload so we can set the timeout.
   // The array-form overload from Prisma 5.x does not accept timeout
   // options; the function-form does.
-  for (let i = 0; i < updates.length; i += TX_CHUNK_SIZE) {
-    const chunk = updates.slice(i, i + TX_CHUNK_SIZE);
-    await prisma.$transaction(
-      async tx => {
-        for (const u of chunk) {
-          await tx.segmentation.update({
-            where: { id: u.segmentationId },
-            data: { polygons: u.polygonsJson },
-          });
-        }
-      },
-      { timeout: TX_TIMEOUT_MS, maxWait: 10_000 }
+  //
+  // Round-2 caveat: chunking trades batch atomicity for predictable
+  // timeout behaviour. If chunk #N fails after chunks 0..N-1 committed,
+  // the container is left half-tracked. We can't recover that mid-pass
+  // (Prisma doesn't expose nested savepoints across separate
+  // transactions in this overload), so the contract is: log the partial
+  // commit count loudly and re-throw so the caller's error path runs.
+  // Ops can then re-trigger tracking; the next pass overwrites trackIds
+  // idempotently using the same Hungarian output as long as embeddings
+  // are stable.
+  let chunksCommitted = 0;
+  const totalChunks = Math.ceil(updates.length / TX_CHUNK_SIZE);
+  try {
+    for (let i = 0; i < updates.length; i += TX_CHUNK_SIZE) {
+      const chunk = updates.slice(i, i + TX_CHUNK_SIZE);
+      await prisma.$transaction(
+        async tx => {
+          for (const u of chunk) {
+            await tx.segmentation.update({
+              where: { id: u.segmentationId },
+              data: { polygons: u.polygonsJson },
+            });
+          }
+        },
+        { timeout: TX_TIMEOUT_MS, maxWait: 10_000 }
+      );
+      chunksCommitted++;
+    }
+  } catch (err) {
+    const rowsCommitted = chunksCommitted * TX_CHUNK_SIZE;
+    const rowsTotal = updates.length;
+    logger.error(
+      `Tracker write-back aborted after chunk ${chunksCommitted}/${totalChunks}; ` +
+        `${rowsCommitted}/${rowsTotal} rows committed, remainder skipped — ` +
+        `container is now half-tracked, re-run tracker to converge`,
+      err as Error,
+      'TrackerService',
+      {
+        containerId,
+        chunksCommitted,
+        totalChunks,
+        rowsCommitted,
+        rowsTotal,
+      }
     );
+    throw err;
   }
 
   const uniqueTracks = new Set(Object.values(assignments)).size;
