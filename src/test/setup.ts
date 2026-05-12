@@ -385,6 +385,11 @@ vi.mock('@/lib/api', () => ({
     getQueueItems: vi.fn(() => Promise.resolve([])),
     removeFromQueue: vi.fn(),
 
+    // Feedback
+    submitFeedback: vi.fn(() =>
+      Promise.resolve({ id: 'fb-test', emailQueued: true })
+    ),
+
     // Generic HTTP methods
     post: vi.fn(),
     get: vi.fn(),
@@ -438,6 +443,9 @@ vi.mock('@/lib/api', () => ({
     ),
     getQueueItems: vi.fn(() => Promise.resolve([])),
     removeFromQueue: vi.fn(),
+    submitFeedback: vi.fn(() =>
+      Promise.resolve({ id: 'fb-test', emailQueued: true })
+    ),
     post: vi.fn(),
     get: vi.fn(),
     put: vi.fn(),
