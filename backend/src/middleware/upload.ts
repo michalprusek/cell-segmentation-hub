@@ -162,6 +162,80 @@ try {
  */
 export const uploadSingleVideo = videoUpload.single('video');
 
+// Feedback attachments are end-user screenshots — strictly image/png or
+// image/jpeg, capped at 5 MB. Disk storage keeps memory pressure low and
+// matches the videoUpload pattern (uniform error surfaces).
+const FEEDBACK_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+const FEEDBACK_ATTACHMENT_TMP_DIR =
+  process.env.FEEDBACK_TMP_DIR ??
+  path.join(os.tmpdir(), 'spheroseg-feedback-uploads');
+
+try {
+  mkdirSync(FEEDBACK_ATTACHMENT_TMP_DIR, { recursive: true });
+} catch (err) {
+  logger.warn(
+    `Failed to ensure feedback tmp dir ${FEEDBACK_ATTACHMENT_TMP_DIR}: ${(err as Error).message}`,
+    'UploadMiddleware'
+  );
+}
+
+const ALLOWED_FEEDBACK_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
+const ALLOWED_FEEDBACK_EXTENSIONS = ['.png', '.jpg', '.jpeg'] as const;
+
+const feedbackAttachmentFileFilter: multer.Options['fileFilter'] = (
+  req,
+  file,
+  cb
+) => {
+  // Defence in depth: MIME, then extension. A motivated attacker can lie
+  // about either one alone but matching both narrows the abuse surface.
+  if (
+    typeof file.mimetype !== 'string' ||
+    !(ALLOWED_FEEDBACK_MIME_TYPES as readonly string[]).includes(file.mimetype)
+  ) {
+    return cb(
+      new Error(
+        `Unsupported attachment type: ${file.mimetype}. Allowed: ${ALLOWED_FEEDBACK_MIME_TYPES.join(', ')}`
+      )
+    );
+  }
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!(ALLOWED_FEEDBACK_EXTENSIONS as readonly string[]).includes(ext)) {
+    return cb(
+      new Error(
+        `Unsupported attachment extension: ${ext}. Allowed: ${ALLOWED_FEEDBACK_EXTENSIONS.join(', ')}`
+      )
+    );
+  }
+  cb(null, true);
+};
+
+const feedbackUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, FEEDBACK_ATTACHMENT_TMP_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      const token =
+        Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+      cb(null, `${token}${ext}`);
+    },
+  }),
+  limits: {
+    fileSize: FEEDBACK_ATTACHMENT_MAX_BYTES,
+    files: 1,
+    // No body-form text fields larger than a feedback body could ever be.
+    fields: 10,
+    fieldSize: 64 * 1024,
+  },
+  fileFilter: feedbackAttachmentFileFilter,
+});
+
+/**
+ * Multer middleware for the optional drag-and-drop attachment on the
+ * feedback form. Form field name: "attachment". Single image only.
+ */
+export const uploadFeedbackAttachment = feedbackUpload.single('attachment');
+
 /**
  * Error handler for multer upload errors
  */
