@@ -1070,6 +1070,27 @@ export class ImageController {
         })
       );
 
+      // Aggregate distinct channels across all video containers in this
+      // project so the Segment-All picker can populate even on page 1
+      // (one channel's frames may all sort before the other's, so the
+      // paginated images alone aren't sufficient).
+      const containers = await prisma.image.findMany({
+        where: { projectId, isVideoContainer: true },
+        select: { channels: true },
+      });
+      const projectChannels = Array.from(
+        new Set(
+          containers
+            .flatMap(c => (Array.isArray(c.channels) ? c.channels : []))
+            .map((ch: unknown) =>
+              ch && typeof ch === 'object' && 'name' in ch
+                ? String((ch as { name: unknown }).name)
+                : null
+            )
+            .filter((n): n is string => !!n)
+        )
+      ).sort();
+
       const response = {
         images: transformedImages,
         pagination: {
@@ -1084,6 +1105,10 @@ export class ImageController {
           imagesWithThumbnails: transformedImages.filter(
             img => img.segmentationResult
           ).length,
+          // Distinct channel names across all video containers in the
+          // project. Empty for non-video projects. Drives the
+          // Segment-All channel picker on the frontend.
+          projectChannels,
         },
       };
 

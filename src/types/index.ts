@@ -539,6 +539,10 @@ export interface ProjectImage {
   frameCount?: number | null;
   videoDurationMs?: number | null;
   channels?: VideoChannel[] | null;
+  // Storage key of the underlying file (e.g. frames/NNNN/<channel>.png).
+  // Surfaced so the Segment-All channel picker can derive distinct channels
+  // by regex over the path; not used by the canvas.
+  originalPath?: string | null;
 }
 
 /** Shape of one entry in the ``channels`` JSON column on an Image row.
