@@ -11,14 +11,26 @@ import { JOB_STATUSES } from './index';
 export const uuidSchema = z.string().uuid('Musí být platné UUID');
 
 /**
- * Segmentation model validation
+ * Segmentation model validation. Mirror of the KnownModelId union further
+ * down in this file — keep them in lock-step: every member of one must be
+ * a member of the other. The Microtubules video project uses 'microtubule'
+ * (added 2026-05-12 with PR #142) so frontend Segment-All requests against
+ * a Microtubules project send model='microtubule' and need to validate.
  */
 export const segmentationModelSchema = z.enum(
-  ['hrnet', 'cbam_resunet', 'unet_spherohq', 'unet_attention_aspp', 'sperm', 'wound'],
+  [
+    'hrnet',
+    'cbam_resunet',
+    'unet_spherohq',
+    'unet_attention_aspp',
+    'sperm',
+    'wound',
+    'microtubule',
+  ],
   {
     errorMap: () => ({
       message:
-        'Model musí být hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp, sperm nebo wound',
+        'Model musí být hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp, sperm, wound nebo microtubule',
     }),
   }
 );
