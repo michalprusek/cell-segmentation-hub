@@ -36,6 +36,25 @@ const FloatingUploadProgress: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id]);
 
+  // On mount (e.g. after a page refresh that aborted an in-flight upload),
+  // the UploadContext restores sessions from localStorage and flips the
+  // 'uploading' status to 'cancelled'. activeSession is null in that case,
+  // so without picking the most recent restored session here, the card
+  // would never reappear and the user would lose any sense of what
+  // happened. Pick the most recent restored session so the X-to-dismiss
+  // surface is reachable.
+  useEffect(() => {
+    if (visibleSessionId) return;
+    if (activeSession) return;
+    const candidates = Object.values(sessions);
+    if (candidates.length === 0) return;
+    const mostRecent = candidates.reduce((best, s) =>
+      s.startedAt > best.startedAt ? s : best
+    );
+    setVisibleSessionId(mostRecent.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-collapse completed sessions after 8 seconds
   useEffect(() => {
     if (!displaySession) return;
