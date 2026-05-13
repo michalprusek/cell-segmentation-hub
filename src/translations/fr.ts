@@ -4,6 +4,7 @@ export default {
     loading: 'Chargement...',
     save: 'Enregistrer',
     cancel: 'Annuler',
+    apply: 'Appliquer',
     dismiss: 'Fermer',
     delete: 'Supprimer',
     edit: 'Modifier',
@@ -2037,8 +2038,18 @@ export default {
   },
   editor: {
     channelSwitcher: {
-      title: 'Canal',
+      title: 'Canaux',
       detectionSource: 'Source de segmentation',
+    },
+    channels: {
+      toggleVisibility: 'Basculer la visibilité du canal',
+      editColor: 'Modifier la couleur',
+      colorDialog: {
+        title: 'Couleur du canal :',
+        description:
+          'Choisissez comment ce canal teinte la superposition composite. Le blanc conserve l’échelle de gris sous-jacente.',
+        customLabel: 'Personnalisé',
+      },
     },
     windowLevel: {
       title: 'Affichage',

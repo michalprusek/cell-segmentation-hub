@@ -4,6 +4,7 @@ export default {
     loading: 'Načítání...',
     save: 'Uložit',
     cancel: 'Zrušit',
+    apply: 'Použít',
     dismiss: 'Zavřít',
     delete: 'Smazat',
     edit: 'Upravit',
@@ -2059,8 +2060,18 @@ export default {
   },
   editor: {
     channelSwitcher: {
-      title: 'Kanál',
+      title: 'Kanály',
       detectionSource: 'Zdroj segmentace',
+    },
+    channels: {
+      toggleVisibility: 'Přepnout viditelnost kanálu',
+      editColor: 'Upravit barvu',
+      colorDialog: {
+        title: 'Barva kanálu:',
+        description:
+          'Vyberte, jak tento kanál obarví složený overlay. Bílá ponechá podkladovou škálu šedi beze změny.',
+        customLabel: 'Vlastní',
+      },
     },
     windowLevel: {
       title: 'Zobrazení',

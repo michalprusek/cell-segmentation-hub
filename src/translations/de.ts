@@ -4,6 +4,7 @@ export default {
     loading: 'Laden...',
     save: 'Speichern',
     cancel: 'Abbrechen',
+    apply: 'Anwenden',
     dismiss: 'Schließen',
     delete: 'Löschen',
     edit: 'Bearbeiten',
@@ -2050,8 +2051,18 @@ export default {
   },
   editor: {
     channelSwitcher: {
-      title: 'Kanal',
+      title: 'Kanäle',
       detectionSource: 'Segmentierungsquelle',
+    },
+    channels: {
+      toggleVisibility: 'Kanal-Sichtbarkeit umschalten',
+      editColor: 'Farbe bearbeiten',
+      colorDialog: {
+        title: 'Kanal-Farbe:',
+        description:
+          'Wählen Sie, wie dieser Kanal das zusammengesetzte Overlay einfärbt. Weiß lässt die zugrundeliegende Graustufe unverändert.',
+        customLabel: 'Benutzerdefiniert',
+      },
     },
     windowLevel: {
       title: 'Anzeige',

@@ -4,6 +4,7 @@ export default {
     loading: '加载中...',
     save: '保存',
     cancel: '取消',
+    apply: '应用',
     dismiss: '关闭',
     delete: '删除',
     edit: '编辑',
@@ -1917,6 +1918,15 @@ export default {
     channelSwitcher: {
       title: '通道',
       detectionSource: '分割源',
+    },
+    channels: {
+      toggleVisibility: '切换通道可见性',
+      editColor: '编辑颜色',
+      colorDialog: {
+        title: '通道颜色：',
+        description: '选择此通道如何为合成叠加层着色。白色保持底层灰度不变。',
+        customLabel: '自定义',
+      },
     },
     windowLevel: {
       title: '显示',
