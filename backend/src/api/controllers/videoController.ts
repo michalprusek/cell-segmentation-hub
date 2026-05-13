@@ -85,14 +85,9 @@ async function assertProjectAccess(
   return userId;
 }
 
-/** Resolve the container row for an arbitrary imageId, asserting that the
- *  caller has access to its parent project. Returns null on access denial
- *  (handler should then return). */
-async function loadAuthorisedContainer(
-  req: Request,
-  res: Response,
-  imageId: string
-) {
+/** Common image row loader used by the video / frame controllers.
+ *  Returns null on bad id / missing row after writing the response. */
+async function loadImageById(req: Request, res: Response, imageId: string) {
   if (typeof imageId !== 'string' || imageId.length === 0) {
     ResponseHelper.error(res, 'imageId required', 400);
     return null;
@@ -118,6 +113,19 @@ async function loadAuthorisedContainer(
     ResponseHelper.error(res, 'Image not found', 404);
     return null;
   }
+  return image;
+}
+
+/** Resolve the container row for an arbitrary imageId, asserting that the
+ *  caller has access to its parent project. Returns null on access denial
+ *  (handler should then return). */
+async function loadAuthorisedContainer(
+  req: Request,
+  res: Response,
+  imageId: string
+) {
+  const image = await loadImageById(req, res, imageId);
+  if (!image) return null;
   const userId = await assertProjectAccess(req, res, image.projectId);
   if (!userId) return null;
   return image;
@@ -204,6 +212,12 @@ export class VideoController {
    * Streams the raw PNG for a specific channel of a video-frame image.
    * For standalone (non-video) images and missing channel queries we
    * fall back to ``originalPath``.
+   *
+   * **No authentication required** — same security model as
+   * `/images/:imageId/display`: the image UUID is the capability token.
+   * Browser `<img>` tags can't attach a JWT, and adding a signed-URL
+   * scheme just for canvas rendering is more attack surface than the
+   * UUID-as-capability model already in use across the gallery.
    */
   static async getFrameData(req: Request, res: Response): Promise<void> {
     try {
@@ -222,7 +236,7 @@ export class VideoController {
         return;
       }
 
-      const image = await loadAuthorisedContainer(req, res, imageId);
+      const image = await loadImageById(req, res, imageId);
       if (!image) return;
 
       let absPath: string;
