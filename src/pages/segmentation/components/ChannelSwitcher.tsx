@@ -41,12 +41,15 @@ export function ChannelSwitcher({ channels }: ChannelSwitcherProps) {
   }, [channels, channel, setChannel]);
 
   if (!channels || channels.length === 0) return null;
-  // Single-channel videos: surface a static label, no dropdown.
+  // Single-channel videos: surface a static label, no dropdown. Use the
+  // human-friendly displayName when available (TIFF/ND2 metadata or
+  // "Channel N" fallback), but fall back to the path-safe `name` for
+  // legacy uploads that predate the metadata-aware extractors.
   if (channels.length === 1) {
     return (
       <span className="text-xs text-muted-foreground px-2">
         {t('editor.channelSwitcher.title', { defaultValue: 'Channel' })}:{' '}
-        {channels[0].name}
+        {channels[0].displayName ?? channels[0].name}
       </span>
     );
   }
@@ -71,7 +74,7 @@ export function ChannelSwitcher({ channels }: ChannelSwitcherProps) {
                   className="inline-block h-2 w-2 rounded-full"
                   style={{ backgroundColor: ch.displayColor ?? '#888' }}
                 />
-                <span>{ch.name}</span>
+                <span>{ch.displayName ?? ch.name}</span>
                 {ch.isSegmentationSource && (
                   <span
                     className="text-[10px] text-muted-foreground"

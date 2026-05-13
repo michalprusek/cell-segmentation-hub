@@ -96,21 +96,27 @@ def main() -> int:
                 return 4
 
         # Channel metadata: name + emission wavelength.
+        # `displayName` is the human-friendly label (ND2 metadata name, or
+        # "Channel N" 1-based fallback). `name` is the path-safe form
+        # used for the PNG filename and URLs.
         channel_meta = []
         for c in range(C):
             try:
                 ch = f.metadata.channels[c]
-                raw_name = getattr(ch.channel, "name", None) or f"ch{c}"
+                raw_name = getattr(ch.channel, "name", None)
                 emission = None
                 em_info = getattr(ch.channel, "emissionLambdaNm", None)
                 if isinstance(em_info, (int, float)):
                     emission = float(em_info)
             except Exception:
-                raw_name = f"ch{c}"
+                raw_name = None
                 emission = None
+            has_raw = isinstance(raw_name, str) and raw_name.strip() != ""
+            display = raw_name if has_raw else f"Channel {c + 1}"
             channel_meta.append({
                 "rawName": raw_name,
-                "name": _sanitize_name(raw_name, f"ch{c}"),
+                "displayName": display,
+                "name": _sanitize_name(raw_name, f"Channel_{c + 1}"),
                 "wavelengthNm": emission,
             })
 
@@ -140,7 +146,11 @@ def main() -> int:
         "width": int(W),
         "height": int(H),
         "channels": [
-            {"name": ch["name"], "wavelengthNm": ch["wavelengthNm"]}
+            {
+                "name": ch["name"],
+                "displayName": ch["displayName"],
+                "wavelengthNm": ch["wavelengthNm"],
+            }
             for ch in channel_meta
         ],
     }

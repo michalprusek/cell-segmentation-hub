@@ -54,9 +54,9 @@ describe('lazyWithRetry chunk-load detection', () => {
   });
 
   it('does NOT match unrelated errors', () => {
-    expect(isChunkLoadFailure(new Error('TypeError: x is not a function'))).toBe(
-      false
-    );
+    expect(
+      isChunkLoadFailure(new Error('TypeError: x is not a function'))
+    ).toBe(false);
     expect(isChunkLoadFailure(new Error('NetworkError'))).toBe(false);
     expect(isChunkLoadFailure(null)).toBe(false);
     expect(isChunkLoadFailure(undefined)).toBe(false);

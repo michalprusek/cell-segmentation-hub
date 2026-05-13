@@ -11,8 +11,14 @@
 export type ChannelType = 'irm' | 'fluorescent';
 
 export interface ChannelMeta {
-  /** Stable channel name (matches the on-disk filename). */
+  /** Stable channel name (matches the on-disk filename). Path-safe:
+   *  validated against `/^[A-Za-z0-9_-]{1,64}$/` at every boundary. */
   name: string;
+  /** Human-friendly label sourced from upload metadata (TIFF ImageJ
+   *  labels, ND2 channel names) or the `"Channel N"` (1-based) fallback.
+   *  UI components should render `displayName ?? name`. Undefined for
+   *  legacy uploads — consumers must tolerate that. */
+  displayName?: string;
   /** Whether this channel shows label-free microtubule structure (IRM/BF/
    *  DIC) or fluorescent signal. The segmenter only runs on IRM channels. */
   type: ChannelType;

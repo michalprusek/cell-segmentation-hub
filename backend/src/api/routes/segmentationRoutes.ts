@@ -194,6 +194,13 @@ router.post(
       .withMessage(
         'sourceChannel must be alnum / underscore / dash, up to 64 chars'
       ),
+    // channelColor: optional hex `#RRGGBB`. When supplied, the ML
+    // renderer uses a black→color gradient instead of viridis.
+    body('channelColor')
+      .optional()
+      .isString()
+      .matches(/^#[0-9A-Fa-f]{6}$/)
+      .withMessage('channelColor must be #RRGGBB hex'),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
@@ -248,6 +255,7 @@ router.post(
         polylineId: req.body.polylineId,
         frameIndex: req.body.frameIndex,
         sourceChannel: req.body.sourceChannel,
+        channelColor: req.body.channelColor,
       });
       ResponseHelper.success(res, result);
     } catch (err) {
