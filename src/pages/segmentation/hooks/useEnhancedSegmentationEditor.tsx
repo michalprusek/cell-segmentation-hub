@@ -718,8 +718,70 @@ export const useEnhancedSegmentationEditor = ({
   // Ref to hold the polyline finalization callback (set after interactions hook)
   const polylineDoubleClickRef = useRef<(() => void) | null>(null);
   const handleEnterPolyline = useCallback(() => {
-    polylineDoubleClickRef.current?.();
-  }, []);
+    // CreatePolyline mode: forward to the interactions-hook finaliser.
+    if (editMode === EditMode.CreatePolyline) {
+      polylineDoubleClickRef.current?.();
+      return;
+    }
+
+    // AddPoints mode on a polyline endpoint: pressing Enter commits the
+    // tempPoints as an extension of the polyline. This is the only path
+    // that makes sense for open paths — extending from the END outward
+    // never wraps back to a different vertex, so there's no "click
+    // another vertex to finish" trigger. Enter is the natural finish key.
+    if (editMode !== EditMode.AddPoints) return;
+    if (!selectedPolygonId) return;
+    if (!interactionState.isAddingPoints) return;
+    if (!interactionState.addPointStartVertex) return;
+    if (tempPoints.length === 0) return;
+
+    const polygon = polygons.find(p => p.id === selectedPolygonId);
+    if (!polygon || polygon.geometry !== 'polyline') return;
+
+    const startIdx = interactionState.addPointStartVertex.vertexIndex;
+    const last = polygon.points.length - 1;
+    let extended;
+    if (startIdx === 0) {
+      // Extending from the head: new points were placed in click order
+      // from the head outward, so reverse them to land the most recent
+      // click furthest from the original head.
+      extended = [...[...tempPoints].reverse(), ...polygon.points];
+    } else if (startIdx === last) {
+      // Extending from the tail: append in order.
+      extended = [...polygon.points, ...tempPoints];
+    } else {
+      // Not an endpoint — Enter is undefined here. Fall back to no-op
+      // so the user gets ESC + retry instead of a corrupt geometry.
+      return;
+    }
+
+    updatePolygons(
+      polygons.map(p =>
+        p.id === selectedPolygonId ? { ...p, points: extended } : p
+      )
+    );
+    setTempPoints([]);
+    setInteractionState(s => ({
+      ...s,
+      isAddingPoints: false,
+      addPointStartVertex: null,
+      addPointEndVertex: null,
+    }));
+    // Drop back to vertex editing so the user can refine the freshly
+    // extended path right away.
+    setEditMode(EditMode.EditVertices);
+  }, [
+    editMode,
+    selectedPolygonId,
+    interactionState.isAddingPoints,
+    interactionState.addPointStartVertex,
+    tempPoints,
+    polygons,
+    updatePolygons,
+    setTempPoints,
+    setInteractionState,
+    setEditMode,
+  ]);
 
   // Escape handler - always return to View mode
   const handleEscape = useCallback(() => {
