@@ -294,7 +294,7 @@ const CanvasPolygon = React.memo(
               stroke makes the click target comfortable without changing
               the rendered look. Pointer-events confined to the stroke so
               the surrounding canvas drag/zoom still works. */}
-          {isPolyline && projectType === 'microtubules' && pathString && (
+          {isPolyline && pathString && (
             <path
               d={pathString}
               fill="none"

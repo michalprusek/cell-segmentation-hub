@@ -851,11 +851,6 @@ export const useEnhancedSegmentationEditor = ({
     setInteractionState,
     setEditMode,
     updatePolygons,
-    // Forward project type so the slicing hook can gate the
-    // polyline-specific dispatch (split-at-cut) to MT only — sperm
-    // polylines fall through to the existing slicePolygon path which
-    // rejects them, preserving the legacy "Slicing failed" toast UX.
-    projectType,
   });
 
   // Handle slice completion when two temp points are placed in slice mode
