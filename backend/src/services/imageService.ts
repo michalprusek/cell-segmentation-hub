@@ -1058,6 +1058,67 @@ export class ImageService {
           );
         }
       }
+
+      // Cascade cleanup: when a deleted frame leaves its parent video
+      // container with no remaining children, the container becomes an
+      // orphan row. The gallery filter (`isVideoContainer: false` in
+      // getProjectImagesWithThumbnails) hides containers from the user,
+      // so without this pass the row + its storage (`original.<ext>`,
+      // `thumbnail.jpg`) would linger forever — storage usage drift +
+      // stale "Segment All" badges on the project header. Same
+      // transaction so a partial cascade doesn't leak inconsistent state.
+      const parentVideoIds = [
+        ...new Set(
+          imagesToDelete
+            .map(i => i.parentVideoId)
+            .filter((id): id is string => typeof id === 'string')
+        ),
+      ];
+
+      for (const parentId of parentVideoIds) {
+        try {
+          const remaining = await tx.image.count({
+            where: { parentVideoId: parentId },
+          });
+          if (remaining > 0) continue;
+
+          const container = await tx.image.findUnique({
+            where: { id: parentId },
+            select: {
+              id: true,
+              name: true,
+              originalPath: true,
+              thumbnailPath: true,
+              isVideoContainer: true,
+            },
+          });
+          if (!container || !container.isVideoContainer) continue;
+
+          await storage.delete(container.originalPath);
+          if (container.thumbnailPath) {
+            await storage.delete(container.thumbnailPath);
+          }
+          await tx.image.delete({ where: { id: container.id } });
+          deletedCount++;
+
+          logger.info('Orphan video container cleaned up', 'ImageService', {
+            containerId: container.id,
+            containerName: container.name,
+            projectId,
+            userId,
+          });
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Container ${parentId}: ${errorMsg}`);
+          logger.error(
+            'Failed to cleanup orphan video container',
+            error instanceof Error ? error : undefined,
+            'ImageService',
+            { containerId: parentId, projectId, userId }
+          );
+        }
+      }
     });
 
     // Check for images that weren't found
