@@ -9,7 +9,7 @@ import {
 } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
-import { TIMEOUTS } from '@/lib/constants';
+import { TIMEOUTS, FILE_LIMITS } from '@/lib/constants';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
 import {
   chunkFiles,
@@ -1843,17 +1843,42 @@ class ApiClient {
     failedIds: string[];
     errors: string[];
   }> {
-    const response = await this.instance.delete('/images/batch', {
-      data: {
-        imageIds,
-        projectId,
-      },
-    });
-    return this.extractData<{
-      deletedCount: number;
-      failedIds: string[];
-      errors: string[];
-    }>(response);
+    // Backend caps each request at FILE_LIMITS.CHUNK_SIZE_FILES via
+    // imageBatchDeleteSchema. Chunk sequentially so callers can pass any
+    // size — a 301-frame MT video would otherwise 400 with
+    // "Maximálně 100 obrázků může být smazáno najednou". Sequential (not
+    // parallel) because the service runs each chunk inside a Prisma
+    // transaction with sync storage deletes; parallel chunks would stress
+    // the DB pool + S3 throttling without real wall-clock win.
+    const chunkSize = FILE_LIMITS.CHUNK_SIZE_FILES;
+    let deletedCount = 0;
+    const failedIds: string[] = [];
+    const errors: string[] = [];
+
+    for (let i = 0; i < imageIds.length; i += chunkSize) {
+      const chunk = imageIds.slice(i, i + chunkSize);
+      try {
+        const response = await this.instance.delete('/images/batch', {
+          data: { imageIds: chunk, projectId },
+        });
+        const data = this.extractData<{
+          deletedCount: number;
+          failedIds: string[];
+          errors: string[];
+        }>(response);
+        deletedCount += data.deletedCount;
+        failedIds.push(...data.failedIds);
+        errors.push(...data.errors);
+      } catch (err) {
+        // Chunk-level failure (network blip, 5xx) — preserve partial
+        // progress instead of throwing away the whole operation.
+        const msg = err instanceof Error ? err.message : String(err);
+        failedIds.push(...chunk);
+        errors.push(`Chunk ${Math.floor(i / chunkSize) + 1}: ${msg}`);
+      }
+    }
+
+    return { deletedCount, failedIds, errors };
   }
 
   async getQueueStats(projectId: string): Promise<QueueStats> {
