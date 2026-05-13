@@ -1867,6 +1867,8 @@ export default {
   microtubule: {
     instancePanel: '微管实例',
     instance: '微管',
+    hideInstance: '隐藏微管',
+    showInstance: '显示微管',
   },
   sperm: {
     instancePanel: '精子实例',
