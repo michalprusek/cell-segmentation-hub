@@ -105,6 +105,15 @@ export default {
         'Kombinujeme nejmodernější AI modely s intuitivním rozhraním a poskytujeme výzkumníkům mocné nástroje pro analýzu mikroskopických obrázků se zaměřením na segmentaci sféroidů s bezkonkurenční přesností.',
       contactText: 'Pro dotazy nás prosím kontaktujte na',
     },
+    acknowledgments: {
+      badge: 'Poděkování',
+      title: 'Zvláštní poděkování',
+      lukasIntro: 'Děkujeme',
+      lukasName: 'Lukáši Veškrnovi',
+      lukasContribution:
+        'za poskytnutí celého modulu pro segmentaci hojení ran (wound healing) této platformě.',
+      visitPage: 'Navštívit stránku',
+    },
     cta: {
       title:
         'Jste připraveni transformovat svůj pracovní postup analýzy buněk?',

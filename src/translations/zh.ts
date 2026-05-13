@@ -105,6 +105,14 @@ export default {
         '我们将尖端的AI模型与直观的界面相结合，为研究人员提供强大的显微图像分析工具，专注于以无与伦比的精度进行球状体分割。',
       contactText: '如有疑问，请联系我们',
     },
+    acknowledgments: {
+      badge: '致谢',
+      title: '特别感谢',
+      lukasIntro: '感谢',
+      lukasName: 'Lukáš Veškrna',
+      lukasContribution: '为本平台贡献了完整的伤口愈合分割模块。',
+      visitPage: '访问页面',
+    },
     features: {
       badge: '强大功能',
       title: '生物医学研究的先进工具',

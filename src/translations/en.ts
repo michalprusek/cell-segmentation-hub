@@ -111,6 +111,15 @@ export default {
         'We combine cutting-edge AI models with an intuitive interface to provide researchers with powerful tools for microscopic image analysis, focusing on spheroid segmentation with unparalleled precision.',
       contactText: 'For inquiries, please contact us at',
     },
+    acknowledgments: {
+      badge: 'Acknowledgments',
+      title: 'Special Thanks',
+      lukasIntro: 'We thank',
+      lukasName: 'Lukáš Veškrna',
+      lukasContribution:
+        'for contributing the complete wound-healing segmentation module to this platform.',
+      visitPage: 'Visit page',
+    },
     cta: {
       title: 'Ready to Transform Your Cell Analysis Workflow?',
       subtitle:

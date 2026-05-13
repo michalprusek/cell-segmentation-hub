@@ -105,6 +105,15 @@ export default {
         'Combinamos modelos de IA de vanguardia con una interfaz intuitiva para proporcionar a los investigadores herramientas poderosas para el análisis de imágenes microscópicas, centrándonos en la segmentación de esferoides con precisión sin igual.',
       contactText: 'Para consultas, contáctenos en',
     },
+    acknowledgments: {
+      badge: 'Agradecimientos',
+      title: 'Agradecimientos especiales',
+      lukasIntro: 'Agradecemos a',
+      lukasName: 'Lukáš Veškrna',
+      lukasContribution:
+        'por contribuir con el módulo completo de segmentación de cicatrización de heridas a esta plataforma.',
+      visitPage: 'Visitar página',
+    },
     features: {
       badge: 'Capacidades Poderosas',
       title: 'Herramientas Avanzadas para la Investigación Biomédica',

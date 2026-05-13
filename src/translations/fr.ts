@@ -105,6 +105,15 @@ export default {
         "Nous combinons des modèles d'IA de pointe avec une interface intuitive pour fournir aux chercheurs des outils puissants pour l'analyse d'images microscopiques, en nous concentrant sur la segmentation de sphéroïdes avec une précision inégalée.",
       contactText: 'Pour toute demande, veuillez nous contacter à',
     },
+    acknowledgments: {
+      badge: 'Remerciements',
+      title: 'Remerciements particuliers',
+      lukasIntro: 'Nous remercions',
+      lukasName: 'Lukáš Veškrna',
+      lukasContribution:
+        'pour avoir contribué le module complet de segmentation de cicatrisation des plaies à cette plateforme.',
+      visitPage: 'Visiter la page',
+    },
     features: {
       badge: 'Capacités Puissantes',
       title: 'Outils Avancés pour la Recherche Biomédicale',
