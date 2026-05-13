@@ -1050,20 +1050,22 @@ const SegmentationEditor = () => {
     [editor.polygons]
   );
 
-  // Discriminate sperm (partClass present) vs microtubule (mt_ instanceId)
-  // polylines so the sidebar shows the right panel. Mixed / tie containers
-  // fall back to majority count; on tie, sperm wins (legacy default).
-  // In practice a project is single-model, so ties don't occur today.
+  // Discriminate sperm vs microtubule projects so the sidebar shows the
+  // right panel. Authoritative signal: `polygon.class` ('sperm' or
+  // 'microtubule') is stamped by the ML model when it produces the
+  // polygon. Each project uses one model, so the first polyline whose
+  // class we recognise is sufficient — no majority-counting needed.
+  // Legacy/manually-drawn polylines without `class` fall back to
+  // `partClass` (sperm head/midpiece/tail) or `mt_` instanceId prefix.
   const polylineKind = useMemo<'sperm' | 'microtubule' | null>(() => {
-    let sperm = 0;
-    let mt = 0;
     for (const p of editor.polygons) {
       if (p.geometry !== 'polyline') continue;
-      if (p.partClass) sperm++;
-      else if (isMicrotubuleInstance(p.instanceId)) mt++;
+      if (p.class === 'microtubule') return 'microtubule';
+      if (p.class === 'sperm') return 'sperm';
+      if (p.partClass) return 'sperm';
+      if (isMicrotubuleInstance(p.instanceId)) return 'microtubule';
     }
-    if (sperm === 0 && mt === 0) return null;
-    return mt > sperm ? 'microtubule' : 'sperm';
+    return null;
   }, [editor.polygons]);
 
   // Compute available sperm instance IDs for context menu (from existing polylines + active).

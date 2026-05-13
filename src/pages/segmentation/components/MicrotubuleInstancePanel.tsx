@@ -21,13 +21,17 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
 }) => {
   const { t } = useLanguage();
 
+  // A polyline belongs in the MT panel when:
+  //   (a) the ML model stamped class='microtubule' on it, OR
+  //   (b) it has no partClass (i.e. not sperm) AND an mt_ instanceId
+  //       (covers legacy data from before `class` was added).
   const microtubules = useMemo(
     () =>
       polygons.filter(
         p =>
           p.geometry === 'polyline' &&
           !p.partClass &&
-          isMicrotubuleInstance(p.instanceId)
+          (p.class === 'microtubule' || isMicrotubuleInstance(p.instanceId))
       ),
     [polygons]
   );
