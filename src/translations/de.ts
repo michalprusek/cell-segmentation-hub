@@ -1998,6 +1998,8 @@ export default {
   microtubule: {
     instancePanel: 'Mikrotubuli-Instanzen',
     instance: 'Mikrotubulus',
+    hideInstance: 'Mikrotubulus ausblenden',
+    showInstance: 'Mikrotubulus einblenden',
   },
   sperm: {
     instancePanel: 'Spermien-Instanzen',

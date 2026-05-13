@@ -1428,9 +1428,27 @@ const SegmentationEditor = () => {
                             onDeletePolygon={handleDeletePolygonFromContextMenu}
                             onSlicePolygon={handleSlicePolygonFromContextMenu}
                             onEditPolygon={handleEditPolygonFromContextMenu}
-                            onChangePartClass={handleChangePartClass}
-                            onChangeInstanceId={handleChangeInstanceId}
-                            availableInstanceIds={availableInstanceIds}
+                            // Sperm-specific context-menu actions
+                            // (head/midpiece/tail re-classify + "Assign to
+                            // instance N") are only meaningful in a sperm
+                            // project. Without this gate, MT users see the
+                            // same sperm menu and accidentally re-label or
+                            // merge MTs under a sperm-style instanceId.
+                            onChangePartClass={
+                              polylineKind === 'sperm'
+                                ? handleChangePartClass
+                                : undefined
+                            }
+                            onChangeInstanceId={
+                              polylineKind === 'sperm'
+                                ? handleChangeInstanceId
+                                : undefined
+                            }
+                            availableInstanceIds={
+                              polylineKind === 'sperm'
+                                ? availableInstanceIds
+                                : undefined
+                            }
                             onDeleteVertex={handleDeleteVertexFromContextMenu}
                             onHover={setHoveredPolygonId}
                           />
@@ -1496,6 +1514,8 @@ const SegmentationEditor = () => {
                       polygons={editor.polygons}
                       selectedPolygonId={editor.selectedPolygonId}
                       onSelectPolygon={editor.handlePolygonSelection}
+                      hiddenPolygonIds={hiddenPolygonIds}
+                      onToggleVisibility={handleTogglePolygonVisibility}
                     />
                   )}
                 </div>

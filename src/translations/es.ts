@@ -2036,6 +2036,8 @@ export default {
   microtubule: {
     instancePanel: 'Instancias de microtúbulos',
     instance: 'Microtúbulo',
+    hideInstance: 'Ocultar microtúbulo',
+    showInstance: 'Mostrar microtúbulo',
   },
   sperm: {
     instancePanel: 'Instancias de espermatozoides',
