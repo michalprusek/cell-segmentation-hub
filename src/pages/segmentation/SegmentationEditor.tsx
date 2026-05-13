@@ -459,6 +459,10 @@ const SegmentationEditor = () => {
     isFromGallery: shouldAutoCenter.current, // Use our auto-center flag
     activePartClassRef,
     activeInstanceIdRef,
+    // Drives MT-only polyline behaviours inside the hook + the
+    // slicing hook it owns (Enter-extends, polyline-slice). Sperm
+    // and other types fall back to the legacy paths.
+    projectType,
     onSave: async (polygons, targetImageId, targetDimensions, signal) => {
       const saveToImageId = targetImageId || imageId;
       if (!projectId || !saveToImageId) return;
