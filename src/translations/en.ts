@@ -2072,6 +2072,8 @@ export default {
     instance: 'Microtubule',
     hideInstance: 'Hide microtubule',
     showInstance: 'Show microtubule',
+    hideAll: 'Hide all',
+    showAll: 'Show all',
   },
   sperm: {
     instancePanel: 'Sperm Instances',
