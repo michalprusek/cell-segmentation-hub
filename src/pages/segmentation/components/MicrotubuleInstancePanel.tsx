@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Spline } from 'lucide-react';
+import { Spline, Eye, EyeOff } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Polygon } from '@/lib/segmentation';
 import { calculatePolylineLength } from '../utils/metricCalculations';
@@ -12,12 +12,19 @@ interface MicrotubuleInstancePanelProps {
   polygons: Polygon[];
   selectedPolygonId: string | null;
   onSelectPolygon: (id: string | null) => void;
+  // Visibility controls — wired through to the same hidden-id set that
+  // the PolygonListPanel + canvas use, so toggling here also hides the
+  // polyline on the canvas (not just the list row).
+  hiddenPolygonIds?: Set<string>;
+  onToggleVisibility?: (polygonId: string) => void;
 }
 
 const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   polygons,
   selectedPolygonId,
   onSelectPolygon,
+  hiddenPolygonIds,
+  onToggleVisibility,
 }) => {
   const { t } = useLanguage();
 
@@ -70,28 +77,60 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
           const colorKey = mt.trackId ?? mt.instanceId ?? '';
           const color = colorFromInstanceId(colorKey);
           const isSelected = selectedPolygonId === mt.id;
+          const isHidden = hiddenPolygonIds?.has(mt.id) ?? false;
           return (
-            <button
+            <div
               key={mt.id}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0 ${
+              className={`flex items-center gap-2 px-3 py-2 text-xs transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0 ${
                 isSelected
                   ? 'bg-violet-50 dark:bg-violet-900/20'
                   : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
               }`}
-              onClick={() => onSelectPolygon(isSelected ? null : mt.id)}
             >
-              <span
-                className="inline-block w-3 h-3 rounded-sm border border-black/10 dark:border-white/10 flex-shrink-0"
-                style={{ backgroundColor: color }}
-                aria-hidden
-              />
-              <span className="flex-1 font-mono truncate">
-                {t('microtubule.instance')} {idx + 1}
-              </span>
-              <span className="text-gray-400 whitespace-nowrap">
-                {Math.round(calculatePolylineLength(mt.points))} px
-              </span>
-            </button>
+              <button
+                type="button"
+                className={`flex flex-1 items-center gap-2 text-left ${isHidden ? 'opacity-50' : ''}`}
+                onClick={() => onSelectPolygon(isSelected ? null : mt.id)}
+              >
+                <span
+                  className="inline-block w-3 h-3 rounded-sm border border-black/10 dark:border-white/10 flex-shrink-0"
+                  style={{ backgroundColor: color }}
+                  aria-hidden
+                />
+                <span className="flex-1 font-mono truncate">
+                  {t('microtubule.instance')} {idx + 1}
+                </span>
+                <span className="text-gray-400 whitespace-nowrap">
+                  {Math.round(calculatePolylineLength(mt.points))} px
+                </span>
+              </button>
+              {onToggleVisibility && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    onToggleVisibility(mt.id);
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex-shrink-0"
+                  aria-label={
+                    isHidden
+                      ? t('microtubule.showInstance')
+                      : t('microtubule.hideInstance')
+                  }
+                  title={
+                    isHidden
+                      ? t('microtubule.showInstance')
+                      : t('microtubule.hideInstance')
+                  }
+                >
+                  {isHidden ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
