@@ -35,6 +35,15 @@ const imageController = new ImageController();
  */
 router.get('/:imageId/display', imageController.getImageForDisplay);
 
+/**
+ * Fetch the raw PNG for a specific channel of a video frame.
+ * GET /images/:imageId/frame-data?channel=irm
+ * Note: No authentication required — same UUID-as-capability model as
+ * /display above. Browser `<img>` tags can't attach a JWT, so requiring
+ * auth here would break the canvas image source in the editor.
+ */
+router.get('/:imageId/frame-data', VideoController.getFrameData);
+
 // All other routes require authentication (email verification disabled for development)
 router.use(authenticate);
 // router.use(requireEmailVerification); // Temporarily disabled for development
@@ -106,15 +115,6 @@ router.post(
   uploadSingleVideo,
   handleUploadError,
   VideoController.upload
-);
-
-/**
- * Fetch the raw PNG for a specific channel of a video frame.
- * GET /images/:imageId/frame-data?channel=irm
- */
-router.get(
-  '/:imageId/frame-data',
-  VideoController.getFrameData
 );
 
 /**
