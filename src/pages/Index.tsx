@@ -68,6 +68,42 @@ function Index() {
           </div>
         </section>
 
+        {/* Acknowledgments Section */}
+        <section id="acknowledgments" className="py-16">
+          <div className="container mx-auto px-4">
+            <div className="max-w-3xl mx-auto text-center animate-on-scroll">
+              <div className="inline-block bg-blue-100 px-4 py-2 rounded-full mb-4">
+                <span className="text-sm font-medium text-blue-700">
+                  {t('landing.acknowledgments.badge')}
+                </span>
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">
+                {t('landing.acknowledgments.title')}
+              </h2>
+              <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
+                {t('landing.acknowledgments.lukasIntro')}{' '}
+                <a
+                  href="https://veskrna.matfyz.cz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline font-semibold"
+                >
+                  {t('landing.acknowledgments.lukasName')}
+                </a>{' '}
+                {t('landing.acknowledgments.lukasContribution')}
+              </p>
+              <a
+                href="https://veskrna.matfyz.cz"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-4 text-blue-600 hover:underline text-sm"
+              >
+                {t('landing.acknowledgments.visitPage')} →
+              </a>
+            </div>
+          </div>
+        </section>
+
         {/* CTA Section */}
         <section className="py-20 relative overflow-hidden">
           <div className="absolute inset-0 -z-10">
