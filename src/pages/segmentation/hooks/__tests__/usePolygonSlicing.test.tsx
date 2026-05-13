@@ -733,13 +733,11 @@ describe('usePolygonSlicing', () => {
     });
   });
 
-  // Sperm projects must keep their pre-session slicing behaviour:
-  // attempting to slice an open polyline should NOT use the new MT
-  // polyline path — it should fall through to slicePolygon, which
-  // returns null on open shapes and triggers the legacy "Slicing
-  // failed" toast. The gating lives in usePolygonSlicing.handleSliceAction.
-  describe('projectType gating', () => {
-    // Minimal polyline fixture (2 points = open path with one segment)
+  // Polyline slicing is geometry-driven (not project-type-gated):
+  // any polyline — sperm, microtubule, future types — gets the
+  // split-at-one-crossing dispatch. Closed polygons keep the
+  // legacy two-crossing chord path.
+  describe('geometry dispatch', () => {
     const polyline: Polygon = {
       id: 'polyline-1',
       points: [
@@ -753,7 +751,7 @@ describe('usePolygonSlicing', () => {
       instanceId: 'sperm_x',
     };
 
-    it('uses slicePolyline + validateSlicePolyline when projectType === microtubules', () => {
+    it('uses slicePolyline + validateSlicePolyline for any polyline (sperm included)', () => {
       (validateSlicePolyline as unknown as vi.Mock).mockReturnValue({
         isValid: true,
       });
@@ -772,7 +770,6 @@ describe('usePolygonSlicing', () => {
           polygons: [polyline],
           selectedPolygonId: 'polyline-1',
           tempPoints: slicePoints,
-          projectType: 'microtubules',
         })
       );
 
@@ -790,54 +787,9 @@ describe('usePolygonSlicing', () => {
         slicePoints[0],
         slicePoints[1]
       );
-      // Polygon-path validators must NOT have been called for an MT polyline
+      // Polygon-path validators must NOT be called on a polyline
       expect(validateSliceLine).not.toHaveBeenCalled();
       expect(slicePolygon).not.toHaveBeenCalled();
-    });
-
-    it('falls back to slicePolygon for sperm projects (no MT polyline gate)', () => {
-      (validateSliceLine as unknown as vi.Mock).mockReturnValue({
-        isValid: true,
-      });
-      // slicePolygon legitimately returns null on open shapes — that
-      // triggers the legacy "Slicing failed" toast which is the
-      // intended sperm UX.
-      (slicePolygon as unknown as vi.Mock).mockReturnValue(null);
-
-      const slicePoints: Point[] = [
-        { x: 50, y: -5 },
-        { x: 50, y: 5 },
-      ];
-      const { result } = renderHook(() =>
-        usePolygonSlicing({
-          ...mockProps,
-          polygons: [polyline],
-          selectedPolygonId: 'polyline-1',
-          tempPoints: slicePoints,
-          projectType: 'sperm',
-        })
-      );
-
-      let sliceResult: boolean | undefined;
-      act(() => {
-        sliceResult = result.current.handleSliceAction();
-      });
-
-      expect(sliceResult).toBe(false);
-      // Polygon path was used (the legacy behaviour for sperm polylines)
-      expect(validateSliceLine).toHaveBeenCalledWith(
-        polyline,
-        slicePoints[0],
-        slicePoints[1]
-      );
-      expect(slicePolygon).toHaveBeenCalledWith(
-        polyline,
-        slicePoints[0],
-        slicePoints[1]
-      );
-      // MT-only branch must NOT have been reached
-      expect(validateSlicePolyline).not.toHaveBeenCalled();
-      expect(slicePolyline).not.toHaveBeenCalled();
     });
   });
 });
