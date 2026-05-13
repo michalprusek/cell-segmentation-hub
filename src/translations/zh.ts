@@ -1921,6 +1921,16 @@ export default {
       title: '通道',
       detectionSource: '分割源',
     },
+    kymograph: {
+      title: '时空图',
+      sourceChannel: '源通道',
+      tracked: '🔗 跨帧跟踪',
+      untracked: '⚠ 静态线（无跟踪）',
+      computing: '正在计算时空图…',
+      downloadPng: 'PNG',
+      downloadCsv: 'CSV',
+      showKymograph: '显示时空图',
+    },
     channels: {
       toggleVisibility: '切换通道可见性',
       editColor: '编辑颜色',

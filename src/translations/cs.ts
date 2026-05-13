@@ -2065,6 +2065,16 @@ export default {
       title: 'Kanály',
       detectionSource: 'Zdroj segmentace',
     },
+    kymograph: {
+      title: 'Kymograf',
+      sourceChannel: 'Zdrojový kanál',
+      tracked: '🔗 Sledováno napříč snímky',
+      untracked: '⚠ Statická čára (bez sledování)',
+      computing: 'Počítám kymograf…',
+      downloadPng: 'PNG',
+      downloadCsv: 'CSV',
+      showKymograph: 'Zobrazit kymograf',
+    },
     channels: {
       toggleVisibility: 'Přepnout viditelnost kanálu',
       editColor: 'Upravit barvu',

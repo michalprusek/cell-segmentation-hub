@@ -2094,6 +2094,16 @@ export default {
       title: 'Canales',
       detectionSource: 'Fuente de segmentación',
     },
+    kymograph: {
+      title: 'Kimógrafo',
+      sourceChannel: 'Canal de origen',
+      tracked: '🔗 Seguido entre fotogramas',
+      untracked: '⚠ Línea estática (sin seguimiento)',
+      computing: 'Calculando kimógrafo…',
+      downloadPng: 'PNG',
+      downloadCsv: 'CSV',
+      showKymograph: 'Mostrar kimógrafo',
+    },
     channels: {
       toggleVisibility: 'Alternar visibilidad del canal',
       editColor: 'Editar color',

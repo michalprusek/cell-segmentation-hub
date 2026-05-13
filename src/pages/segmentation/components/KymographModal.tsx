@@ -188,7 +188,22 @@ export function KymographModal({
             <img
               src={`data:image/png;base64,${result.pngBase64}`}
               alt={`Kymograph for ${polylineId}`}
-              className="max-w-full max-h-[500px]"
+              // The BE returns the kymograph as a (frame_count × 200 px)
+              // heatmap. For short videos (e.g. 3 frames → 200×3 native
+              // pixels) the original `max-w-full max-h-[500px]` rendered
+              // it at natural size — a sub-pixel-thin strip. Force a
+              // full-width fill + pixelated upscaling + min-height so the
+              // bands stay visible regardless of frame count, and
+              // `object-fit: fill` makes the heatmap blocks stretch to
+              // the assigned box (we don't need pixel-aspect fidelity —
+              // the *colours* carry the kymograph signal, not the pixel
+              // grid).
+              className="w-full max-h-[500px] block"
+              style={{
+                imageRendering: 'pixelated',
+                minHeight: '200px',
+                objectFit: 'fill',
+              }}
             />
           )}
         </div>
