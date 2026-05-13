@@ -9,6 +9,61 @@ import { retryWithBackoff, RETRY_CONFIGS } from './retryUtils';
 import { logger } from './logger';
 import { toast } from 'sonner';
 
+// After deploy, the in-page bundle still references chunk filenames
+// hashed with the previous build (e.g. `SignIn-DE8PRhyt.js`). Those files
+// no longer exist on the CDN, so dynamic import() throws. The user can't
+// see this — they just hit a blank screen on navigation. Auto-reload the
+// page so they get the fresh index.html with current chunk hashes. The
+// reload throttle prevents an infinite loop if the failure is something
+// else (genuine network error, CSP block, etc.).
+const RELOAD_KEY = 'spheroseg.chunkReloadAt';
+const RELOAD_THROTTLE_MS = 30_000;
+
+function tryAutoReload(): boolean {
+  if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+    return false;
+  }
+  try {
+    const lastRaw = sessionStorage.getItem(RELOAD_KEY);
+    const lastAt = lastRaw ? Number(lastRaw) : 0;
+    const now = Date.now();
+    if (lastAt && now - lastAt < RELOAD_THROTTLE_MS) {
+      logger.warn(
+        `Skipping auto-reload: last reload was ${Math.round((now - lastAt) / 1000)}s ago`
+      );
+      return false;
+    }
+    sessionStorage.setItem(RELOAD_KEY, String(now));
+    logger.info('Auto-reloading to recover from stale chunk reference');
+    window.location.reload();
+    return true;
+  } catch {
+    // sessionStorage unavailable (Safari private mode, quota) — skip
+    // throttling but still reload, accepting the small loop risk.
+    window.location.reload();
+    return true;
+  }
+}
+
+// Recognise the dynamic-import failure across browsers. Each browser
+// emits its own wording for the same underlying chunk-not-found case;
+// missing any of them means the user is stuck on a stale tab forever.
+//   Chrome:  "Failed to fetch dynamically imported module: <url>"
+//   Firefox: "error loading dynamically imported module: <url>"
+//   Safari:  "Importing a module script failed."
+function isChunkLoadFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message;
+  return (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('ChunkLoadError') ||
+    msg.includes('Loading chunk') ||
+    msg.includes('Failed to import')
+  );
+}
+
 /**
  * Create a lazy component with automatic retry on import failure
  */
@@ -20,21 +75,9 @@ export function lazyWithRetry<T extends ComponentType<any>>(
     const result = await retryWithBackoff(importFn, {
       ...RETRY_CONFIGS.dynamicImport,
       shouldRetry: (error, attempt) => {
-        // Check if it's a chunk load error
-        if (error instanceof Error) {
-          const isChunkError =
-            error.message.includes(
-              'Failed to fetch dynamically imported module'
-            ) ||
-            error.message.includes('ChunkLoadError') ||
-            error.message.includes('Loading chunk') ||
-            error.message.includes('Failed to import');
-
-          if (!isChunkError) {
-            return false; // Don't retry non-network errors
-          }
+        if (error instanceof Error && !isChunkLoadFailure(error)) {
+          return false; // Don't retry non-network errors
         }
-
         return attempt < 3;
       },
       onRetry: (error, attempt, nextDelay) => {
@@ -67,7 +110,18 @@ export function lazyWithRetry<T extends ComponentType<any>>(
       result.error
     );
 
-    // Show error with reload option
+    // Stale chunks on deploy: reload automatically (throttled) so the
+    // user doesn't have to find and click a button to recover. Falls
+    // through to the manual toast when throttled or when the error
+    // isn't a recognised chunk failure.
+    if (isChunkLoadFailure(result.error) && tryAutoReload()) {
+      // Reload is in-flight; throw to satisfy lazy() contract — the new
+      // page will replace this one before the boundary renders.
+      throw result.error;
+    }
+
+    // Show error with reload option (fallback when auto-reload is
+    // throttled to avoid loops, or for non-chunk errors).
     toast.error(`Failed to load ${componentName || 'component'}`, {
       description: 'Please refresh the page to try again',
       action: {
@@ -155,14 +209,12 @@ export class LazyImportErrorBoundary extends React.Component<
 
     onError?.(error);
 
-    // Check if it's a chunk load error
-    if (
-      error.message.includes('Failed to fetch dynamically imported module') ||
-      error.message.includes('ChunkLoadError') ||
-      error.message.includes('Loading chunk')
-    ) {
-      // Attempt automatic retry
-      this.handleRetry();
+    // Chunk load failure → if we haven't reloaded recently, do it now.
+    // Otherwise retry in-place with exponential backoff.
+    if (isChunkLoadFailure(error)) {
+      if (!tryAutoReload()) {
+        this.handleRetry();
+      }
     }
   }
 
