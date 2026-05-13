@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
+.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check ci ci-test dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
 
 # Detect Docker Compose version  
 DOCKER_COMPOSE := docker compose
@@ -252,6 +252,33 @@ lint-fix:
 type-check:
 	@echo "🔍 Running type checking in Docker..."
 	@$(DOCKER_COMPOSE) exec -T frontend npm run type-check
+
+# Local CI equivalent — fast deterministic gate run before opening a PR.
+# Covers TypeScript / ESLint / i18n: the three checks that actually catch
+# real regressions in this codebase. Pre-commit hook already runs most of
+# this; `make ci` is the explicit end-to-end variant.
+#
+# Vitest is intentionally NOT in this target — the suite has ~31% pre-
+# existing failures from prior refactors (webSocketManager, ND2 helpers,
+# legacy editor tests). Including it here would render `make ci` unusable
+# until the suite is healed. Use `make ci-test` to run vitest separately.
+ci:
+	@echo "🔍 [1/4] TypeScript (frontend)"
+	@npx tsc --noEmit
+	@echo "🔍 [2/4] TypeScript (backend)"
+	@cd backend && npm run type-check
+	@echo "🔍 [3/4] ESLint (strict — 0 warnings)"
+	@npx eslint --max-warnings=0 src/
+	@echo "🔍 [4/4] i18n completeness (6 locales)"
+	@node scripts/check-i18n.cjs
+	@echo "✅ All local CI checks passed"
+
+# Optional: run the Vitest suite. Currently has known pre-existing
+# failures (~31%). Use to investigate specific test files; don't treat
+# pass/fail as a gate until the suite is healed.
+ci-test:
+	@echo "🧪 Vitest (informational — has known pre-existing failures)"
+	@NODE_OPTIONS="--max-old-space-size=8192" npx vitest run --reporter=default --pool=forks
 
 # Development environment
 dev:

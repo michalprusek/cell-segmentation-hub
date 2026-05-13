@@ -14,6 +14,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import apiClient from '@/lib/api';
 import type { VideoChannel, ProjectImage } from '@/types';
 
+// Playback rate is fixed at 10 fps — biology users' target. The
+// user-facing FPS combobox was removed in the 2026-05 editor UI
+// reorganization since switching rates mid-playback wasn't useful in
+// practice and only added top-bar clutter.
+const PLAYBACK_FPS = 10;
+const PLAYBACK_INTERVAL_MS = 1000 / PLAYBACK_FPS;
+
 export interface VideoFrame {
   id: string;
   frameIndex: number;
@@ -86,13 +93,6 @@ export function useVideoFrames(
 
   const [frameIndex, setFrameIndexState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-
-  // Playback rate is fixed at 10 fps — biology users' target. The
-  // user-facing FPS combobox was removed in the 2026-05 editor UI
-  // reorganization since switching frame rates mid-playback wasn't
-  // useful in practice and only added top-bar clutter.
-  const PLAYBACK_FPS = 10;
-  const PLAYBACK_INTERVAL_MS = 1000 / PLAYBACK_FPS;
 
   // Clamp index whenever the frame list changes (e.g., on first load).
   useEffect(() => {
