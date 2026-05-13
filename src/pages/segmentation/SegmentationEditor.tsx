@@ -35,6 +35,8 @@ import VerticalToolbar from './components/VerticalToolbar';
 import TopToolbar from './components/TopToolbar';
 import PolygonListPanel from './components/PolygonListPanel';
 import SpermInstancePanel from './components/SpermInstancePanel';
+import MicrotubuleInstancePanel from './components/MicrotubuleInstancePanel';
+import { isMicrotubuleInstance } from './utils/instanceColors';
 import ChannelsSection from './components/sidebar/ChannelsSection';
 import DisplaySection from './components/sidebar/DisplaySection';
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
@@ -43,7 +45,6 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 // Canvas components
 import CanvasContainer from './components/canvas/CanvasContainer';
 import CanvasContent from './components/canvas/CanvasContent';
-import CanvasImage from './components/canvas/CanvasImage';
 import VideoFrameImage from './components/canvas/VideoFrameImage';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
@@ -1049,6 +1050,20 @@ const SegmentationEditor = () => {
     [editor.polygons]
   );
 
+  // Discriminate sperm (partClass present) vs microtubule (mt_ instanceId)
+  // polylines so the sidebar shows the right panel.
+  const polylineKind = useMemo<'sperm' | 'microtubule' | null>(() => {
+    let sperm = 0;
+    let mt = 0;
+    for (const p of editor.polygons) {
+      if (p.geometry !== 'polyline') continue;
+      if (p.partClass) sperm++;
+      else if (isMicrotubuleInstance(p.instanceId)) mt++;
+    }
+    if (sperm === 0 && mt === 0) return null;
+    return mt > sperm ? 'microtubule' : 'sperm';
+  }, [editor.polygons]);
+
   // Compute available sperm instance IDs for context menu (from existing polylines + active).
   // Two-stage memo: first derive a stable string key, then split into array only when key changes.
   // This prevents new array references on unrelated polygon edits (e.g. vertex drags).
@@ -1409,7 +1424,7 @@ const SegmentationEditor = () => {
                     onRenamePolygon={handleRenamePolygon}
                     onDeletePolygon={handleDeletePolygonFromPanel}
                   />
-                  {hasPolylines && (
+                  {hasPolylines && polylineKind === 'sperm' && (
                     <SpermInstancePanel
                       polygons={editor.polygons}
                       selectedPolygonId={editor.selectedPolygonId}
@@ -1418,6 +1433,13 @@ const SegmentationEditor = () => {
                       onPartClassChange={setActivePartClass}
                       activeInstanceId={activeInstanceId}
                       onInstanceIdChange={setActiveInstanceId}
+                    />
+                  )}
+                  {hasPolylines && polylineKind === 'microtubule' && (
+                    <MicrotubuleInstancePanel
+                      polygons={editor.polygons}
+                      selectedPolygonId={editor.selectedPolygonId}
+                      onSelectPolygon={editor.handlePolygonSelection}
                     />
                   )}
                 </div>

@@ -155,13 +155,27 @@ class MicrotubuleModel:
         params = pysoax_params or PYSOAX_PARAMS_DEFAULT
         instances = extract_soax_instances(binary, params, embeddings=embed)
 
+        import cv2
+
         centerlines_rc: list = []
         embedding_samples: list = []
         H, W = norm.shape
+        # Ramer-Douglas-Peucker tolerance — drops near-collinear points
+        # while preserving curvature. 0.75 px keeps the eye-visible shape
+        # but cuts vertex counts ~4-6x for typical PySOAX centerlines.
+        polyline_eps_px = 0.75
         for inst in instances:
             cl = np.asarray(inst["centerline"], dtype=np.float64)
             if cl.ndim != 2 or cl.shape[0] < 2 or cl.shape[1] != 2:
                 continue
+
+            if cl.shape[0] > 3:
+                cv_pts = cl.astype(np.float32).reshape(-1, 1, 2)
+                simplified = cv2.approxPolyDP(cv_pts, polyline_eps_px, closed=False)
+                cl_simp = simplified.reshape(-1, 2).astype(np.float64)
+                if cl_simp.shape[0] >= 2:
+                    cl = cl_simp
+
             centerlines_rc.append(cl)
 
             # Nearest-pixel sampling — cosine similarity is robust to a

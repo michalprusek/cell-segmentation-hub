@@ -4,6 +4,10 @@ import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
+import {
+  colorFromInstanceId,
+  isMicrotubuleInstance,
+} from '@/pages/segmentation/utils/instanceColors';
 
 interface CanvasPolygonProps {
   polygon: Polygon;
@@ -140,6 +144,14 @@ const CanvasPolygon = React.memo(
         return isSelected ? '#16a34a' : '#22c55e'; // green
       }
       if (isPolyline) {
+        // Microtubule polylines: deterministic per-instance HSL hash so
+        // each microtubule has a stable, visually distinct color across
+        // frames (instanceId is preserved by the tracker).
+        if (!polygon.partClass && isMicrotubuleInstance(polygon.instanceId)) {
+          return colorFromInstanceId(polygon.instanceId as string, {
+            selected: isSelected,
+          });
+        }
         // Part-class-based colors for sperm polylines
         switch (polygon.partClass) {
           case 'head':
