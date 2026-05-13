@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, 
 from fastapi.responses import JSONResponse
 import torch
 
+from ._errors import internal_error
 from .models import (
     SegmentationResponse, ModelsResponse, HealthResponse, 
     ErrorResponse, ModelType, ModelInfo
@@ -242,10 +243,8 @@ async def segment_image(
         )
     except Exception as e:
         processing_time = time.time() - start_time
-        logger.error(f"Segmentation failed after {processing_time:.2f}s: {e}")
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Segmentation failed: {str(e)}"
+        raise internal_error(
+            logger, f"Segmentation failed after {processing_time:.2f}s", e
         )
 
 @router.post("/batch-segment")

@@ -242,97 +242,117 @@ export class QueueService {
   ): Promise<SegmentationQueue[]> {
     try {
       const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const queueEntries: SegmentationQueue[] = [];
 
-      for (const imageId of imageIds) {
-        try {
-          // Check if image exists and user has access
-          const image = await this.imageService.getImageById(imageId, userId);
-          if (!image) {
-            logger.warn('Image not found or no access', 'QueueService', {
-              imageId,
-              userId,
-            });
-            continue;
-          }
-
-          // Skip if already in queue or processing (unless forceResegment)
-          if (
-            !forceResegment &&
-            (image.segmentationStatus === 'queued' ||
-              image.segmentationStatus === 'processing')
-          ) {
-            logger.info(
-              'Skipping image - already in queue or processing',
-              'QueueService',
-              {
-                imageId,
-                status: image.segmentationStatus,
-              }
-            );
-            continue;
-          }
-
-          // Use transaction for atomic operations
-          const queueEntry = await this.prisma.$transaction(async tx => {
-            // If forceResegment, delete existing segmentation results
-            if (
-              forceResegment &&
-              (image.segmentationStatus === 'completed' ||
-                image.segmentationStatus === 'segmented')
-            ) {
-              logger.info(
-                'Force resegment - removing existing segmentation',
-                'QueueService',
-                {
-                  imageId,
-                  oldStatus: image.segmentationStatus,
-                }
-              );
-
-              // Delete existing segmentation results
-              await tx.segmentation.deleteMany({
-                where: { imageId },
-              });
-            }
-
-            // Create queue entry
-            return await tx.segmentationQueue.create({
-              data: {
-                imageId,
-                projectId,
-                userId,
-                model,
-                threshold,
-                detectHoles,
-                priority,
-                status: 'queued',
-                batchId,
-                channel: channel ?? null,
-              },
-            });
-          });
-
-          // Update image status
-          await this.imageService.updateSegmentationStatus(
-            imageId,
-            'queued',
-            userId
-          );
-
-          queueEntries.push(queueEntry);
-        } catch (error) {
-          logger.error(
-            'Failed to add single image to batch',
-            error instanceof Error ? error : undefined,
-            'QueueService',
-            {
-              imageId,
-              batchId,
-            }
-          );
-        }
+      if (imageIds.length === 0) {
+        return [];
       }
+
+      // Bulk-load accessible images in one round trip. Previously this used
+      // a per-imageId getImageById loop (2 queries each) + a transaction +
+      // updateSegmentationStatus (2 more), totalling ~4*N queries — 40k for
+      // a 10k-image batch. The bulk version is 4 queries regardless of size.
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+
+      if (!user) {
+        throw new Error(`User ${userId} not found`);
+      }
+
+      const accessibleImages = await this.prisma.image.findMany({
+        where: {
+          id: { in: imageIds },
+          projectId,
+          project: {
+            OR: [
+              { userId },
+              {
+                shares: {
+                  some: {
+                    OR: [
+                      { sharedWithId: userId, status: 'accepted' },
+                      {
+                        email: user.email,
+                        status: { in: ['pending', 'accepted'] },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+        select: { id: true, segmentationStatus: true },
+      });
+
+      // Filter: skip already-queued/processing rows unless forceResegment.
+      // The same set drives both queue inserts and the status updateMany.
+      const candidateIds = accessibleImages
+        .filter(img => {
+          if (forceResegment) return true;
+          return (
+            img.segmentationStatus !== 'queued' &&
+            img.segmentationStatus !== 'processing'
+          );
+        })
+        .map(img => img.id);
+
+      // For force-resegment, identify rows that already have segmentation
+      // results so we can wipe them inside the transaction.
+      const idsNeedingSegmentationReset = forceResegment
+        ? accessibleImages
+            .filter(
+              img =>
+                img.segmentationStatus === 'completed' ||
+                img.segmentationStatus === 'segmented'
+            )
+            .map(img => img.id)
+        : [];
+
+      if (candidateIds.length === 0) {
+        logger.info(
+          'Batch added to segmentation queue (no eligible images)',
+          'QueueService',
+          { batchId, totalImages: imageIds.length, queuedImages: 0, model }
+        );
+        return [];
+      }
+
+      // Single transaction: clear existing segs (if forced), insert queue
+      // rows, flip image statuses, return the new rows.
+      const queueEntries = await this.prisma.$transaction(async tx => {
+        if (idsNeedingSegmentationReset.length > 0) {
+          await tx.segmentation.deleteMany({
+            where: { imageId: { in: idsNeedingSegmentationReset } },
+          });
+        }
+
+        await tx.segmentationQueue.createMany({
+          data: candidateIds.map(imageId => ({
+            imageId,
+            projectId,
+            userId,
+            model,
+            threshold,
+            detectHoles,
+            priority,
+            status: 'queued',
+            batchId,
+            channel: channel ?? null,
+          })),
+        });
+
+        await tx.image.updateMany({
+          where: { id: { in: candidateIds } },
+          data: { segmentationStatus: 'queued' },
+        });
+
+        return tx.segmentationQueue.findMany({
+          where: { batchId },
+          orderBy: { createdAt: 'asc' },
+        });
+      });
 
       logger.info('Batch added to segmentation queue', 'QueueService', {
         batchId,

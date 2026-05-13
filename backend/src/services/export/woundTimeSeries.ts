@@ -23,6 +23,7 @@ import path from 'path';
 import type ExcelJS from 'exceljs';
 import { logger } from '../../utils/logger';
 import type { ImageWithSegmentation } from '../metrics/metricsCalculator';
+import { calculatePolygonArea } from '../metrics/geometricPrimitives';
 import { renderWoundAreaChart } from './woundChartRenderer';
 
 export interface WoundTimePoint {
@@ -63,18 +64,6 @@ interface ParsedPolygon {
   parent_id?: string | null;
 }
 
-function shoelaceArea(points: ParsedPoint[]): number {
-  if (points.length < 3) {
-    return 0;
-  }
-  let sum = 0;
-  for (let i = 0; i < points.length; i++) {
-    const j = (i + 1) % points.length;
-    sum += points[i].x * points[j].y - points[j].x * points[i].y;
-  }
-  return Math.abs(sum) / 2;
-}
-
 function computeWoundAreaPct(
   polygonsJson: string,
   width: number | undefined,
@@ -109,7 +98,7 @@ function computeWoundAreaPct(
     if (!Array.isArray(poly.points) || poly.points.length < 3) {
       continue;
     }
-    const area = shoelaceArea(poly.points);
+    const area = calculatePolygonArea(poly.points);
     // A polygon is a hole only if both conditions hold: the ML pipeline
     // tagged it as ``internal`` AND we resolved a concrete ``parent_id``.
     // Requiring both prevents orphaned children (whose small parent was

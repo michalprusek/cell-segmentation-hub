@@ -4,7 +4,7 @@
  * Comprehensive TypeScript interfaces for WebSocket events and real-time updates.
  */
 
-import { QueueStatus, SegmentationModel } from './queue';
+import { QueueStatus, SegmentationModel, isSegmentationModel } from './queue';
 
 // ============================================================================
 // WebSocket Event Names
@@ -640,8 +640,7 @@ export function isSegmentationCompletedData(
     typeof d.segmentationId === 'string' &&
     typeof d.polygonCount === 'number' &&
     typeof d.processingTime === 'number' &&
-    typeof d.model === 'string' &&
-    ['hrnet', 'cbam_resunet'].includes(d.model as string)
+    isSegmentationModel(d.model)
   );
 }
 

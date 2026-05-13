@@ -11,6 +11,7 @@ from scipy.stats import wasserstein_distance
 
 # Import characteristic_functions from utils package
 from utils.characteristic_functions import calculate_all
+from api._errors import internal_error
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ async def calculate_metrics(request: MetricsRequest):
         return MetricsResponse(**metrics)
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to calculate metrics: {str(e)}")
+        raise internal_error(logger, "Failed to calculate metrics", e)
 
 @router.post("/batch-calculate-metrics")
 async def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[MetricsResponse]:
@@ -308,9 +309,8 @@ async def disintegration_index(request: DisintegrationRequest):
             len(request.core_polygons or [request.core_polygon])
             if (request.core_polygons or request.core_polygon) else 0,
         )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to compute disintegration index: {exc}",
+        raise internal_error(
+            logger, "Failed to compute disintegration index", exc
         ) from exc
 
 

@@ -4,6 +4,12 @@ import { QueueService } from '../services/queueService';
 import { SegmentationService } from '../services/segmentationService';
 import { ImageService } from '../services/imageService';
 
+// Force-reset `isProcessing` if a cycle exceeds this — kept conservatively
+// above the 5-minute ML axios timeout so normal long batches never trip it.
+// Without this, an ML container recreation during an in-flight POST can
+// leave the await hanging forever and freeze the queue (production-bug #10).
+const MAX_PROCESSING_MS = 10 * 60 * 1000;
+
 export class QueueWorker {
   private static instance: QueueWorker;
   private intervalId: NodeJS.Timeout | null = null;
@@ -11,6 +17,7 @@ export class QueueWorker {
   private cleanupIntervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
   private isProcessing = false;
+  private processingStartedAt: number | null = null;
   private immediateProcessTimer: NodeJS.Immediate | null = null;
   private queueService: QueueService;
   private imageService: ImageService;
@@ -129,12 +136,36 @@ export class QueueWorker {
    * Note: BATCH_LIMITS=1 means single-image processing; concurrency is at queue level.
    */
   private async processQueue(): Promise<void> {
-    // Prevent overlapping executions
+    // Prevent overlapping executions, but detect and break deadlocks where
+    // a previous cycle's await hangs forever (e.g. ML container recreated
+    // mid-flight). Force-reset after MAX_PROCESSING_MS and unstick DB items.
     if (this.isProcessing) {
-      return;
+      const elapsed = this.processingStartedAt
+        ? Date.now() - this.processingStartedAt
+        : 0;
+      if (elapsed > MAX_PROCESSING_MS) {
+        logger.error(
+          'Queue worker stuck — force-resetting after timeout',
+          new Error(`isProcessing held for ${elapsed}ms`),
+          'QueueWorker',
+          { elapsedMs: elapsed }
+        );
+        this.isProcessing = false;
+        this.processingStartedAt = null;
+        this.queueService.resetStuckItems(0).catch(err => {
+          logger.error(
+            'Failed to reset stuck items after worker timeout',
+            err instanceof Error ? err : new Error(String(err)),
+            'QueueWorker'
+          );
+        });
+      } else {
+        return;
+      }
     }
 
     this.isProcessing = true;
+    this.processingStartedAt = Date.now();
 
     try {
       // Try to get multiple batches for parallel processing
@@ -204,6 +235,7 @@ export class QueueWorker {
       );
     } finally {
       this.isProcessing = false;
+      this.processingStartedAt = null;
     }
   }
 

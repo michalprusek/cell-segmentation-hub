@@ -70,6 +70,7 @@ from api.models import ErrorResponse, HealthResponse
 from api.metrics_endpoint import router as metrics_router
 from api.monitoring import router as monitoring_router
 from api.tracker_kymograph import router as tracker_kymograph_router
+from api._errors import internal_error
 from ml.model_loader import ModelLoader
 
 # Log GPU initialization summary status
@@ -199,12 +200,14 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception(f"Unhandled exception on {request.url.path}: {exc}")
+    import uuid
+    correlation_id = uuid.uuid4().hex[:8]
+    logger.exception(f"[{correlation_id}] Unhandled exception on {request.url.path}: {exc}")
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
             error="Internal server error",
-            detail=str(exc)
+            detail=f"Internal error (id: {correlation_id})"
         ).model_dump()
     )
 
@@ -257,8 +260,7 @@ async def health():
             gpu_available=gpu_available
         )
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error(logger, "Health check failed", e)
 
 # Prometheus metrics - expose /metrics endpoint for Prometheus scraping
 Instrumentator().instrument(app).expose(app)

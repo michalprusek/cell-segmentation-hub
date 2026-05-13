@@ -286,90 +286,63 @@ const SegmentationEditor = () => {
     // For large datasets, process in chunks to prevent blocking
     const startTime = performance.now();
 
-    // Transform SegmentationPolygon[] to Polygon[] and filter out invalid polygons
+    // Transform SegmentationPolygon[] to Polygon[] and filter out invalid polygons.
+    // Spreads `segPoly` so any wire-level field (trackId, future additions) reaches
+    // the editor without manual maintenance; only parentIds[] needs explicit
+    // conversion to parent_id (singular).
     const polygons: Polygon[] = segmentationPolygons
       .filter(segPoly => {
         const minPoints = segPoly.geometry === 'polyline' ? 2 : 3;
         return segPoly.points && segPoly.points.length >= minPoints;
       })
-      .map(segPoly => {
+      .map((segPoly): Polygon | null => {
         const validPoints = segPoly.points
           .map(point => {
-            // Convert from array format [x, y] to object format {x, y}
             if (Array.isArray(point)) {
               return { x: point[0], y: point[1] };
             }
-            // Validate object points have numeric x and y
             if (typeof point === 'object' && point !== null) {
               if (typeof point.x === 'number' && typeof point.y === 'number') {
                 return point;
               }
-              // Skip invalid object points
               logger.warn(
                 'Skipping invalid point with non-numeric coordinates',
                 point
               );
               return null;
             }
-            // Skip other invalid formats
             logger.warn('Skipping invalid point format', point);
             return null;
           })
           .filter((point): point is { x: number; y: number } => point !== null);
 
-        // Only include polygon/polyline if it has enough valid points
         const minValidPoints = segPoly.geometry === 'polyline' ? 2 : 3;
-        if (validPoints.length >= minValidPoints) {
-          // CRITICAL: Validate and ensure polygon has a valid ID
-          if (!validatePolygonId(segPoly.id)) {
-            logPolygonIdIssue(
-              segPoly,
-              'Invalid or missing polygon ID from ML service'
-            );
-            // Generate fallback ID for polygons from ML service
-            const fallbackId = ensureValidPolygonId(segPoly.id, 'ml_polygon');
-            logger.warn(
-              `Generated fallback ID: ${fallbackId} for polygon with invalid ID: ${segPoly.id}`
-            );
-
-            return {
-              id: fallbackId,
-              points: validPoints,
-              type: segPoly.type,
-              class: segPoly.class,
-              confidence: segPoly.confidence,
-              area: segPoly.area,
-              parent_id:
-                segPoly.parentIds && segPoly.parentIds.length > 0
-                  ? segPoly.parentIds[0]
-                  : undefined,
-              geometry: segPoly.geometry,
-              partClass: segPoly.partClass,
-              instanceId: segPoly.instanceId,
-            };
-          }
-
-          return {
-            id: segPoly.id, // Now guaranteed to be valid
-            points: validPoints,
-            type: segPoly.type,
-            class: segPoly.class,
-            confidence: segPoly.confidence,
-            area: segPoly.area,
-            parent_id:
-              segPoly.parentIds && segPoly.parentIds.length > 0
-                ? segPoly.parentIds[0]
-                : undefined,
-            geometry: segPoly.geometry,
-            partClass: segPoly.partClass,
-            instanceId: segPoly.instanceId,
-          };
+        if (validPoints.length < minValidPoints) {
+          logger.warn('Dropping polygon due to insufficient valid points', {
+            polygonId: segPoly.id,
+          });
+          return null;
         }
 
-        logger.warn('Dropping polygon due to insufficient valid points', {
-          polygonId: segPoly.id,
-        });
-        return null;
+        let polygonId = segPoly.id;
+        if (!validatePolygonId(segPoly.id)) {
+          logPolygonIdIssue(
+            segPoly,
+            'Invalid or missing polygon ID from ML service'
+          );
+          polygonId = ensureValidPolygonId(segPoly.id, 'ml_polygon');
+          logger.warn(
+            `Generated fallback ID: ${polygonId} for polygon with invalid ID: ${segPoly.id}`
+          );
+        }
+
+        const { parentIds, ...rest } = segPoly;
+        return {
+          ...rest,
+          id: polygonId,
+          points: validPoints,
+          parent_id: parentIds?.[0],
+        };
       })
       .filter((polygon): polygon is Polygon => polygon !== null);
 
@@ -521,19 +494,20 @@ const SegmentationEditor = () => {
       }
 
       try {
-        // Transform Polygon[] to SegmentationPolygon[] for API
-        const polygonData: SegmentationPolygon[] = polygons.map(polygon => ({
-          id: polygon.id,
-          points: polygon.points,
-          type: polygon.type || 'external',
-          class: polygon.class || 'spheroid',
-          parentIds: polygon.parent_id ? [polygon.parent_id] : [], // Preserve parent_id as parentIds array
-          confidence: polygon.confidence,
-          area: polygon.area,
-          geometry: polygon.geometry,
-          partClass: polygon.partClass,
-          instanceId: polygon.instanceId,
-        }));
+        // Transform Polygon[] to SegmentationPolygon[] for API. Spread preserves
+        // every wire-level field (trackId for MT, future additions); only
+        // parent_id → parentIds[] needs explicit conversion. `_embedding` is a
+        // server-only blob (KB per polyline) — strip defensively even though
+        // backend already removes it before serving.
+        const polygonData: SegmentationPolygon[] = polygons.map(polygon => {
+          const { parent_id, _embedding: _drop, ...rest } = polygon;
+          return {
+            ...rest,
+            type: polygon.type || 'external',
+            class: polygon.class || 'spheroid',
+            parentIds: parent_id ? [parent_id] : [],
+          };
+        });
 
         const updatedResult = await apiClient.updateSegmentationResults(
           saveToImageId,

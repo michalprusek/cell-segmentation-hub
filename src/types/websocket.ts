@@ -43,8 +43,14 @@ export interface SegmentationStatusMessage extends BaseWebSocketMessage {
  */
 export interface QueueStatsMessage extends BaseWebSocketMessage {
   type: 'queueStats';
-  queueLength: number;
+  // Wire shape from backend queueService.emitQueueStatsUpdate: queued,
+  // processing, and total are always present. queueLength is a deprecated
+  // alias retained for older test fixtures and will be removed once they
+  // migrate; nothing on the wire populates it.
+  queued: number;
   processing: number;
+  total: number;
+  queueLength?: number;
   userPosition?: number;
   estimatedWaitTime?: number; // in seconds
   averageProcessingTime?: number; // in seconds
@@ -269,12 +275,14 @@ export interface SegmentationUpdate {
  * Queue statistics for UI display
  */
 export interface QueueStats {
-  queueLength: number;
+  // Match backend QueueStatsData wire shape. queueLength is retained as
+  // a deprecated alias for older fixtures; runtime never populates it.
+  queued: number;
   processing: number;
+  total: number;
+  queueLength?: number;
   userPosition?: number;
   estimatedWaitTime?: number;
-  // Extended for parallel processing
-  queued?: number; // For backward compatibility
   projectId?: string;
   // Parallel processing fields
   parallelProcessing?: {

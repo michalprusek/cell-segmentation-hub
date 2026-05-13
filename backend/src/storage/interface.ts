@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { UPLOAD_LIMITS } from '../config/uploadLimits';
 
 /**
  * Storage error class for handling storage-specific errors
@@ -165,9 +166,11 @@ export const DEFAULT_THUMBNAIL_SIZE = {
 };
 
 /**
- * Maximum file size (10MB)
+ * Maximum image file size. Single source of truth is uploadLimits — using
+ * a divergent hardcoded value here previously let small files through
+ * fileUploadSchema that multer (configured from uploadLimits) rejected.
  */
-export const MAX_FILE_SIZE = 10 * 1024 * 1024;
+export const MAX_FILE_SIZE = UPLOAD_LIMITS.MAX_FILE_SIZE_BYTES;
 
 /**
  * Validation schema for file uploads

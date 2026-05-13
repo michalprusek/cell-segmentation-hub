@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient, { AuthResponse } from '@/lib/api';
 import { User, Profile, getErrorMessage } from '@/types';
@@ -391,24 +391,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        profile,
-        token,
-        loading,
-        isAuthenticated,
-        signIn,
-        signUp,
-        signOut,
-        deleteAccount,
-        refreshProfile,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  // signIn/signUp/signOut/deleteAccount/refreshProfile are not wrapped in
+  // useCallback; their identities change every render. Listing them in the
+  // dep array would defeat the memo. We exclude them deliberately because
+  // their bodies reference only stable useState setters, react-router's
+  // navigate, and module-level apiClient — no captured local state — so
+  // stale-closure risk is bounded. A follow-up should wrap each callback
+  // in useCallback so the dep list becomes complete.
+  const value = useMemo(
+    () => ({
+      user,
+      profile,
+      token,
+      loading,
+      isAuthenticated,
+      signIn,
+      signUp,
+      signOut,
+      deleteAccount,
+      refreshProfile,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, profile, token, loading, isAuthenticated]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 // useAuth is exported from './exports' to avoid Fast Refresh warnings

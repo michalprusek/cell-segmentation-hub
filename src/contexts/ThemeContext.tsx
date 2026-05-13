@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/exports';
 import { getErrorMessage } from '@/types';
@@ -57,22 +57,25 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     fetchUserTheme();
   }, [user]);
 
-  const setTheme = async (newTheme: Theme) => {
-    localStorage.setItem('theme', newTheme);
-    setThemeState(newTheme);
-    applyTheme(newTheme);
+  const setTheme = useCallback(
+    async (newTheme: Theme) => {
+      localStorage.setItem('theme', newTheme);
+      setThemeState(newTheme);
+      applyTheme(newTheme);
 
-    // Uložení do databáze, pokud jsme přihlášeni
-    if (user) {
-      try {
-        await apiClient.updateUserProfile({ preferred_theme: newTheme });
-      } catch (error: unknown) {
-        logger.error('Error updating profile:', error);
-        const errorMessage = getErrorMessage(error) || 'Failed to save theme';
-        logger.error('Theme save error:', errorMessage);
+      // Uložení do databáze, pokud jsme přihlášeni
+      if (user) {
+        try {
+          await apiClient.updateUserProfile({ preferred_theme: newTheme });
+        } catch (error: unknown) {
+          logger.error('Error updating profile:', error);
+          const errorMessage = getErrorMessage(error) || 'Failed to save theme';
+          logger.error('Theme save error:', errorMessage);
+        }
       }
-    }
-  };
+    },
+    [user]
+  );
 
   const applyTheme = (theme: Theme) => {
     const root = window.document.documentElement;
@@ -148,14 +151,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [theme, loaded]);
 
+  const value = useMemo(() => ({ theme, setTheme }), [theme, setTheme]);
+
   if (!loaded) {
     return null; // Nezobrazovat nic, dokud nemáme načtený motiv
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
-      {children}
-    </ThemeContext.Provider>
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
   );
 };
 

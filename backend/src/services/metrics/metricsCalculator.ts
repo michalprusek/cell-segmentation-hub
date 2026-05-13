@@ -379,9 +379,9 @@ export class MetricsCalculator {
 
         const totalSpheroidAreaPx = externals
           .filter(p => p.partClass !== 'core')
-          .reduce((sum, p) => sum + this.polygonArea(p.points), 0);
+          .reduce((sum, p) => sum + calculatePolygonArea(p.points), 0);
         const coreAreaPx = cores.reduce(
-          (sum, p) => sum + this.polygonArea(p.points),
+          (sum, p) => sum + calculatePolygonArea(p.points),
           0
         );
         const invasionAreaPx = Math.max(0, totalSpheroidAreaPx - coreAreaPx);
@@ -517,21 +517,6 @@ export class MetricsCalculator {
       referenceMode: response.data.reference,
       nPixels: response.data.n_pixels,
     };
-  }
-
-  /** Shoelace polygon area (always non-negative). Used to sum spheroid and
-   * core areas for the per-image disintegration report.
-   */
-  private polygonArea(points: Point[]): number {
-    if (!points || points.length < 3) {return 0;}
-    let s = 0;
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i];
-      const b = points[(i + 1) % points.length];
-      if (!a || !b) {continue;}
-      s += a.x * b.y - b.x * a.y;
-    }
-    return Math.abs(s) / 2;
   }
 
   /**

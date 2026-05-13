@@ -124,28 +124,25 @@ const CanvasPolygon = React.memo(
 
     // For the path stroke width, we need to adjust based on zoom level
     // When zoomed in, the stroke appears thicker so we need to make it thinner
-    const getStrokeWidth = () => {
+    const strokeWidth = useMemo(() => {
       if (zoom > 4) {
         return 1.5 / zoom;
       } else if (zoom > 3) {
         return 2 / zoom;
       } else if (zoom < 0.5) {
-        // Make lines thinner at low zoom (specifically 40%)
         return 0.8 / zoom;
       } else if (zoom < 0.7) {
         return 1.2 / zoom;
       } else {
         return 2 / zoom;
       }
-    };
-
-    const strokeWidth = getStrokeWidth();
+    }, [zoom]);
 
     // Determine if polygon is internal based on parent_id or type
     const isInternal = parent_id || type === 'internal';
 
     // Determine path color based on polygon type, polyline partClass, and selection status
-    const getPathColor = () => {
+    const pathColor = useMemo(() => {
       // Spheroid 'core' (closed polygon, dense central region from ASPP model)
       if (!isPolyline && polygon.partClass === 'core') {
         return isSelected ? '#16a34a' : '#22c55e'; // green
@@ -167,7 +164,6 @@ const CanvasPolygon = React.memo(
           const colorKey = polygon.trackId ?? polygon.instanceId ?? '';
           return colorFromInstanceId(colorKey, { selected: isSelected });
         }
-        // Part-class-based colors for sperm polylines
         switch (polygon.partClass) {
           case 'head':
             return isSelected ? '#16a34a' : '#22c55e'; // green
@@ -184,9 +180,15 @@ const CanvasPolygon = React.memo(
       } else {
         return isSelected ? '#e11d48' : '#ef4444';
       }
-    };
-
-    const pathColor = getPathColor();
+    }, [
+      isPolyline,
+      polygon.partClass,
+      polygon.class,
+      polygon.instanceId,
+      polygon.trackId,
+      isSelected,
+      isInternal,
+    ]);
 
     // Compute hover-dependent stroke width multiplier
     const hoverStrokeMultiplier = isPolyline
@@ -465,7 +467,13 @@ const CanvasPolygon = React.memo(
       // we forget to compare it here, switching project types in the
       // same session (or a per-polygon override one day) wouldn't
       // re-render the menu and the user would see stale options.
-      prevProps.projectType === nextProps.projectType
+      prevProps.projectType === nextProps.projectType &&
+      // editMode flips between View / EditVertices / Slice / AddPoints /
+      // CreatePolygon / CreatePolyline / DeletePolygon and changes which
+      // interactions the polygon should accept. Skipping it caused the
+      // child to keep closures from the previous mode (e.g. View handlers
+      // still firing after switching to Slice).
+      prevProps.editMode === nextProps.editMode
     );
   }
 );

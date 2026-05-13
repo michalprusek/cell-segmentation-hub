@@ -104,6 +104,11 @@ export interface SegmentationPolygon {
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
   partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
   instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
+  /** Cross-frame microtubule track ID populated by backend tracker after a
+   *  video container's batch finishes segmentation. Sibling polylines for
+   *  the same MT share the same value across frames. Used by the editor
+   *  for stable colour-coding. */
+  trackId?: string;
 }
 
 export interface SegmentationResultData {

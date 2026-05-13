@@ -6,6 +6,10 @@ import {
 } from '../../utils/polygonValidation';
 import { polylineLength } from '../../utils/polygonGeometry';
 import {
+  calculatePolygonArea,
+  calculatePerimeter,
+} from '../metrics/geometricPrimitives';
+import {
   groupPolylinesByInstanceId,
   findPart,
 } from '../../utils/spermGrouping';
@@ -358,10 +362,10 @@ export class FormatConverter {
 
           // Calculate area (accounting for holes)
           const area =
-            this.calculatePolygonArea(polygon.points) -
+            calculatePolygonArea(polygon.points) -
             associatedInternalPolygons.reduce(
               (sum: number, internal: Polygon) =>
-                sum + this.calculatePolygonArea(internal.points),
+                sum + calculatePolygonArea(internal.points),
               0
             );
 
@@ -632,16 +636,16 @@ export class FormatConverter {
             external: externalPolygons.map((p: Polygon, idx: number) => ({
               id: idx + 1,
               points: p.points,
-              area: this.calculatePolygonArea(p.points),
-              perimeter: this.calculatePerimeter(p.points),
+              area: calculatePolygonArea(p.points),
+              perimeter: calculatePerimeter(p.points),
               boundingBox: this.calculateBoundingBox(p.points),
               centroid: this.calculateCentroid(p.points),
             })),
             internal: internalPolygons.map((p: Polygon, idx: number) => ({
               id: idx + 1,
               points: p.points,
-              area: this.calculatePolygonArea(p.points),
-              perimeter: this.calculatePerimeter(p.points),
+              area: calculatePolygonArea(p.points),
+              perimeter: calculatePerimeter(p.points),
             })),
           },
           ...(polylinesData.length > 0 && { polylines: polylinesData }),
@@ -652,12 +656,12 @@ export class FormatConverter {
             totalArea:
               externalPolygons.reduce(
                 (sum: number, p: Polygon) =>
-                  sum + this.calculatePolygonArea(p.points),
+                  sum + calculatePolygonArea(p.points),
                 0
               ) -
               internalPolygons.reduce(
                 (sum: number, p: Polygon) =>
-                  sum + this.calculatePolygonArea(p.points),
+                  sum + calculatePolygonArea(p.points),
                 0
               ),
             ...(polylinesData.length > 0 && {
@@ -703,47 +707,6 @@ export class FormatConverter {
     const maxY = Math.max(...ys);
 
     return [minX, minY, maxX - minX, maxY - minY];
-  }
-
-  /**
-   * Calculate polygon area using shoelace formula
-   */
-  private calculatePolygonArea(points: Point[]): number {
-    let area = 0;
-    const n = points.length;
-
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const pointI = points[i];
-      const pointJ = points[j];
-      if (pointI && pointJ) {
-        area += pointI.x * pointJ.y;
-        area -= pointJ.x * pointI.y;
-      }
-    }
-
-    return Math.abs(area / 2);
-  }
-
-  /**
-   * Calculate polygon perimeter
-   */
-  private calculatePerimeter(points: Point[]): number {
-    let perimeter = 0;
-    const n = points.length;
-
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const pointI = points[i];
-      const pointJ = points[j];
-      if (pointI && pointJ) {
-        const dx = pointJ.x - pointI.x;
-        const dy = pointJ.y - pointI.y;
-        perimeter += Math.sqrt(dx * dx + dy * dy);
-      }
-    }
-
-    return perimeter;
   }
 
   private buildSpermInstances(polylines: Polygon[]): {

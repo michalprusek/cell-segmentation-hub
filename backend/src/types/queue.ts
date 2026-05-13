@@ -23,7 +23,8 @@ export type SegmentationModel =
   | 'resunet_advanced'
   | 'resunet_small'
   | 'sperm'
-  | 'wound';
+  | 'wound'
+  | 'microtubule';
 
 /**
  * Queue item status
@@ -365,7 +366,8 @@ export function isSegmentationModel(
     value === 'resunet_advanced' ||
     value === 'resunet_small' ||
     value === 'sperm' ||
-    value === 'wound'
+    value === 'wound' ||
+    value === 'microtubule'
   );
 }
 

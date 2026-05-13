@@ -1,4 +1,11 @@
-import React, { useState, useEffect, ReactNode, useContext } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  ReactNode,
+  useContext,
+} from 'react';
 import { BASIC_MODEL_INFO } from '@/lib/modelUtils';
 import {
   ModelContext,
@@ -40,20 +47,26 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
     }
   }, [user?.id]);
 
-  const setSelectedModel = (model: ModelType) => {
-    const userId = user?.id;
-    setSelectedModelState(model);
-    localStorage.setItem(getUserStorageKey(userId, 'selectedModel'), model);
-  };
+  const setSelectedModel = useCallback(
+    (model: ModelType) => {
+      const userId = user?.id;
+      setSelectedModelState(model);
+      localStorage.setItem(getUserStorageKey(userId, 'selectedModel'), model);
+    },
+    [user?.id]
+  );
 
-  const setDetectHoles = (detectHoles: boolean) => {
-    const userId = user?.id;
-    setDetectHolesState(detectHoles);
-    localStorage.setItem(
-      getUserStorageKey(userId, 'detectHoles'),
-      detectHoles.toString()
-    );
-  };
+  const setDetectHoles = useCallback(
+    (detectHoles: boolean) => {
+      const userId = user?.id;
+      setDetectHolesState(detectHoles);
+      localStorage.setItem(
+        getUserStorageKey(userId, 'detectHoles'),
+        detectHoles.toString()
+      );
+    },
+    [user?.id]
+  );
 
   const getModelInfo = (modelId: ModelType): ModelInfo => {
     return (
@@ -68,19 +81,26 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
   // user had previously dialled in.
   const confidenceThreshold = getModelInfo(selectedModel).defaultThreshold;
 
+  const value = useMemo(
+    () => ({
+      selectedModel,
+      confidenceThreshold,
+      detectHoles,
+      setSelectedModel,
+      setDetectHoles,
+      getModelInfo,
+      availableModels: AVAILABLE_MODELS,
+    }),
+    [
+      selectedModel,
+      confidenceThreshold,
+      detectHoles,
+      setSelectedModel,
+      setDetectHoles,
+    ]
+  );
+
   return (
-    <ModelContext.Provider
-      value={{
-        selectedModel,
-        confidenceThreshold,
-        detectHoles,
-        setSelectedModel,
-        setDetectHoles,
-        getModelInfo,
-        availableModels: AVAILABLE_MODELS,
-      }}
-    >
-      {children}
-    </ModelContext.Provider>
+    <ModelContext.Provider value={value}>{children}</ModelContext.Provider>
   );
 };
