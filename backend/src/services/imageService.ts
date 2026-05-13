@@ -949,6 +949,7 @@ export class ImageService {
     errors: string[];
   }> {
     let deletedCount = 0;
+    let cascadedContainerCount = 0;
     const failedIds: string[] = [];
     const errors: string[] = [];
 
@@ -1077,13 +1078,18 @@ export class ImageService {
 
       for (const parentId of parentVideoIds) {
         try {
+          // Defensive `projectId` scope on both queries: `imagesToDelete`
+          // was already project-filtered, so the parentVideoId *should*
+          // belong to the same project — but corrupt cross-project FK
+          // data (from prior bugs) would otherwise let us delete a row
+          // outside the user's access scope.
           const remaining = await tx.image.count({
-            where: { parentVideoId: parentId },
+            where: { parentVideoId: parentId, projectId },
           });
           if (remaining > 0) continue;
 
-          const container = await tx.image.findUnique({
-            where: { id: parentId },
+          const container = await tx.image.findFirst({
+            where: { id: parentId, projectId },
             select: {
               id: true,
               name: true,
@@ -1099,7 +1105,12 @@ export class ImageService {
             await storage.delete(container.thumbnailPath);
           }
           await tx.image.delete({ where: { id: container.id } });
-          deletedCount++;
+          // Track cascaded container separately from user-requested
+          // deletes so the returned `deletedCount` keeps its existing
+          // semantic ("images the user asked to delete that were
+          // deleted"). Otherwise toasts like "N images deleted" lie by
+          // including bookkeeping rows the user never selected.
+          cascadedContainerCount++;
 
           logger.info('Orphan video container cleaned up', 'ImageService', {
             containerId: container.id,
@@ -1108,9 +1119,9 @@ export class ImageService {
             userId,
           });
         } catch (error) {
-          const errorMsg =
-            error instanceof Error ? error.message : 'Unknown error';
-          errors.push(`Container ${parentId}: ${errorMsg}`);
+          // Container cleanup is bookkeeping the user didn't initiate —
+          // don't pollute the user-facing `errors[]` (rendered in toasts)
+          // with confusing "Container <uuid>: ..." entries. Log-only.
           logger.error(
             'Failed to cleanup orphan video container',
             error instanceof Error ? error : undefined,
@@ -1134,13 +1145,15 @@ export class ImageService {
 
     logger.info('Batch delete operation completed', 'ImageService', {
       deletedCount,
+      cascadedContainerCount,
       failedCount: failedIds.length,
       userId,
       projectId,
     });
 
-    // Emit real-time project stats update for batch deleted images
-    if (deletedCount > 0) {
+    // Emit real-time project stats update if either user-requested
+    // images or cascaded containers were removed.
+    if (deletedCount > 0 || cascadedContainerCount > 0) {
       await this.emitProjectStatsUpdate(projectId, userId, 'updated');
     }
 
