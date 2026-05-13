@@ -49,11 +49,80 @@ interface UploadContextType {
 
 export const UploadContext = createContext<UploadContextType | null>(null);
 
+// Persist session metadata across page refreshes so the bottom-right
+// FloatingUploadProgress card doesn't vanish (and the user retains a
+// dismiss/cancel surface) when the user reloads mid-upload. Only metadata
+// is persisted — File objects are gone after refresh and can't be revived
+// from a string, so the AbortController + axios request are simply lost.
+// The restore step flips 'uploading' sessions to 'cancelled' with an
+// explicit message so the UX is honest about what happened.
+export const UPLOAD_SESSIONS_STORAGE_KEY = 'spheroseg.uploadSessions.v1';
+const STALE_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h cutoff
+
+function loadPersistedSessions(): Record<string, UploadSession> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(UPLOAD_SESSIONS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, UploadSession>;
+    if (!parsed || typeof parsed !== 'object') return {};
+
+    const now = Date.now();
+    const restored: Record<string, UploadSession> = {};
+    for (const [id, s] of Object.entries(parsed)) {
+      // Drop sessions older than the TTL — stale completed/cancelled
+      // cards aren't useful and would otherwise accumulate forever.
+      if (
+        !s ||
+        typeof s !== 'object' ||
+        typeof s.startedAt !== 'number' ||
+        now - s.startedAt > STALE_SESSION_TTL_MS
+      ) {
+        continue;
+      }
+      if (s.status === 'uploading') {
+        // The AbortController died with the previous page; the axios
+        // request was aborted by the browser. Surface the truth.
+        restored[id] = {
+          ...s,
+          status: 'cancelled',
+          chunkProgress: null,
+          currentOperation: 'Upload interrupted by page refresh',
+        };
+      } else {
+        restored[id] = s;
+      }
+    }
+    return restored;
+  } catch {
+    // Corrupt JSON or quota error — start fresh rather than crash boot.
+    return {};
+  }
+}
+
 export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [sessions, setSessions] = useState<Record<string, UploadSession>>({});
+  // Lazy initialiser: restore persisted sessions on first render so the
+  // card reappears synchronously, before any paint.
+  const [sessions, setSessions] = useState<Record<string, UploadSession>>(
+    loadPersistedSessions
+  );
   const { socket } = useWebSocket();
+
+  // Persist on every state change. Wrapped in try/catch because Safari
+  // private-mode + quota-exceeded throw — the card UX is best-effort.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        UPLOAD_SESSIONS_STORAGE_KEY,
+        JSON.stringify(sessions)
+      );
+    } catch {
+      /* storage unavailable — silently degrade */
+    }
+  }, [sessions]);
 
   // AbortController in a ref — NOT using useAbortController hook to avoid
   // auto-abort on unmount. The context provider lives at the app root and
