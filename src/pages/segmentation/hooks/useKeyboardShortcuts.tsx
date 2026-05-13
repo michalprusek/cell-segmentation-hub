@@ -215,9 +215,17 @@ export const useKeyboardShortcuts = ({
           }
           break;
 
-        // Enter - finalize polyline creation
+        // Enter - finalize polyline creation OR commit AddPoints extension
+        // when the user is extending a polyline endpoint outward. The
+        // single onEnter callback in the editor handles both contexts;
+        // it inspects editMode + interactionState to pick the right
+        // path, so the keyboard layer just routes Enter for both.
         case 'enter':
-          if (editMode === EditMode.CreatePolyline && onEnter) {
+          if (
+            (editMode === EditMode.CreatePolyline ||
+              editMode === EditMode.AddPoints) &&
+            onEnter
+          ) {
             event.preventDefault();
             onEnter();
           }
