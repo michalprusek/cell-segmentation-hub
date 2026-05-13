@@ -162,7 +162,8 @@ class MicrotubuleModel:
         H, W = norm.shape
         # Ramer-Douglas-Peucker tolerance — drops near-collinear points
         # while preserving curvature. 0.75 px keeps the eye-visible shape
-        # but cuts vertex counts ~4-6x for typical PySOAX centerlines.
+        # while substantially reducing vertex counts on typical PySOAX
+        # centerlines (every-pixel sampling → handful of inflection points).
         polyline_eps_px = 0.75
         for inst in instances:
             cl = np.asarray(inst["centerline"], dtype=np.float64)
@@ -170,11 +171,34 @@ class MicrotubuleModel:
                 continue
 
             if cl.shape[0] > 3:
-                cv_pts = cl.astype(np.float32).reshape(-1, 1, 2)
-                simplified = cv2.approxPolyDP(cv_pts, polyline_eps_px, closed=False)
-                cl_simp = simplified.reshape(-1, 2).astype(np.float64)
-                if cl_simp.shape[0] >= 2:
-                    cl = cl_simp
+                try:
+                    cv_pts = cl.astype(np.float32).reshape(-1, 1, 2)
+                    simplified = cv2.approxPolyDP(
+                        cv_pts, polyline_eps_px, closed=False
+                    )
+                    cl_simp = simplified.reshape(-1, 2).astype(np.float64)
+                    if cl_simp.shape[0] >= 2:
+                        cl = cl_simp
+                    else:
+                        # RDP over-simplified (eps too large for this curve).
+                        # Keep the original so the MT isn't dropped from the
+                        # output; surface the tuning issue via log.
+                        logger.warning(
+                            "RDP collapsed centerline to %d pts (eps=%.2f); "
+                            "keeping original (%d pts)",
+                            cl_simp.shape[0],
+                            polyline_eps_px,
+                            cl.shape[0],
+                        )
+                except cv2.error as exc:
+                    # One malformed centerline must not abort the whole
+                    # inference (would lose every other MT in the frame).
+                    logger.warning(
+                        "approxPolyDP failed on centerline shape=%s: %s; "
+                        "using unsimplified",
+                        cl.shape,
+                        exc,
+                    )
 
             centerlines_rc.append(cl)
 

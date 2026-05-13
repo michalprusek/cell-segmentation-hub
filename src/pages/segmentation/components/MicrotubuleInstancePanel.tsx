@@ -32,10 +32,15 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
     [polygons]
   );
 
+  // Stable identity for sort + color: prefer trackId (preserved across
+  // frames by the Hungarian tracker), fall back to instanceId before
+  // tracking has run on the container.
   const sorted = useMemo(
     () =>
       [...microtubules].sort((a, b) =>
-        (a.instanceId ?? '').localeCompare(b.instanceId ?? '')
+        (a.trackId ?? a.instanceId ?? '').localeCompare(
+          b.trackId ?? b.instanceId ?? ''
+        )
       ),
     [microtubules]
   );
@@ -56,8 +61,10 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
 
       <div className="max-h-64 overflow-y-auto">
         {sorted.map((mt, idx) => {
-          const id = mt.instanceId as string;
-          const color = colorFromInstanceId(id);
+          // trackId is the cross-frame stable key. Same MT keeps the same
+          // color when the user scrubs to the next frame.
+          const colorKey = mt.trackId ?? mt.instanceId ?? '';
+          const color = colorFromInstanceId(colorKey);
           const isSelected = selectedPolygonId === mt.id;
           return (
             <button

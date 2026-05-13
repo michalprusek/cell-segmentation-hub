@@ -1051,7 +1051,9 @@ const SegmentationEditor = () => {
   );
 
   // Discriminate sperm (partClass present) vs microtubule (mt_ instanceId)
-  // polylines so the sidebar shows the right panel.
+  // polylines so the sidebar shows the right panel. Mixed / tie containers
+  // fall back to majority count; on tie, sperm wins (legacy default).
+  // In practice a project is single-model, so ties don't occur today.
   const polylineKind = useMemo<'sperm' | 'microtubule' | null>(() => {
     let sperm = 0;
     let mt = 0;
