@@ -451,6 +451,139 @@ export function validateSliceLine(
 }
 
 /**
+ * Slice an OPEN polyline along a line at its first edge intersection,
+ * producing two independent polylines. Unlike `slicePolygon` (which
+ * needs two intersections to chord a closed region in half), a
+ * polyline needs only one — splitting a single segment into "before
+ * the cut" and "after the cut" subpaths. Both halves keep at least 2
+ * points; if the intersection falls inside the first or last edge
+ * such that one half would collapse to 1 point, slicing fails.
+ *
+ * Returns null when:
+ *   - the polyline has fewer than 2 points
+ *   - the slice line doesn't intersect any edge
+ *   - either resulting subpath would have < 2 points
+ */
+export function slicePolyline(
+  polygon: Polygon,
+  sliceStart: Point,
+  sliceEnd: Point
+): [Polygon, Polygon] | null {
+  if (!polygon.points || polygon.points.length < 2) return null;
+  const points = polygon.points;
+
+  // Walk edges in order and grab the first intersection. Multiple
+  // crossings on a single slice would be ambiguous (which split do we
+  // honour?), so we deliberately take the first and ignore the rest —
+  // matches the "draw a cut across the curve" mental model.
+  let hit: { edgeIndex: number; point: Point } | null = null;
+  for (let i = 0; i < points.length - 1; i++) {
+    const intersection = lineIntersection(
+      sliceStart,
+      sliceEnd,
+      points[i],
+      points[i + 1]
+    );
+    if (intersection) {
+      hit = { edgeIndex: i, point: intersection };
+      break;
+    }
+  }
+  if (!hit) return null;
+
+  const first = [...points.slice(0, hit.edgeIndex + 1), hit.point];
+  const second = [hit.point, ...points.slice(hit.edgeIndex + 1)];
+  if (first.length < 2 || second.length < 2) return null;
+
+  // Generate fresh instance ids so the two halves register as separate
+  // instances in the MT panel + colour palette. Keep the prefix style
+  // (`mt_<hex>` / `sperm_<hex>`) the rest of the pipeline expects so
+  // tracker + colour-hash continue to recognise them.
+  const prefix = polygon.instanceId?.startsWith('mt_')
+    ? 'mt_'
+    : polygon.instanceId?.startsWith('sperm_')
+      ? 'sperm_'
+      : '';
+  const makeInstanceId = () => {
+    const hex = Math.floor(Math.random() * 0xffffffff)
+      .toString(16)
+      .padStart(8, '0');
+    return prefix ? `${prefix}${hex}` : hex;
+  };
+
+  const base: Partial<Polygon> = {
+    type: polygon.type,
+    geometry: 'polyline',
+    confidence: polygon.confidence,
+    class: polygon.class,
+    partClass: polygon.partClass,
+    // trackId is intentionally NOT copied — the original MT split into
+    // two, so each half is a fresh "object" from the tracker's POV.
+    // Without dropping it, both halves would inherit the same trackId
+    // and the Hungarian matcher would behave erratically next frame.
+  };
+
+  const polyA: Polygon = {
+    ...(base as Polygon),
+    id: `polyline_${Date.now()}_a_${Math.random().toString(36).slice(2, 7)}`,
+    points: first,
+    instanceId: makeInstanceId(),
+    area: 0,
+  };
+  const polyB: Polygon = {
+    ...(base as Polygon),
+    id: `polyline_${Date.now()}_b_${Math.random().toString(36).slice(2, 7)}`,
+    points: second,
+    instanceId: makeInstanceId(),
+    area: 0,
+  };
+  return [polyA, polyB];
+}
+
+/**
+ * Validate a slice line against a polyline — same shape contract as
+ * validateSliceLine for polygons, but the success condition is "exactly
+ * one edge intersection with a non-degenerate split".
+ */
+export function validateSlicePolyline(
+  polygon: Polygon,
+  sliceStart: Point,
+  sliceEnd: Point
+): { isValid: boolean; reason?: string } {
+  if (!polygon.points || polygon.points.length < 2) {
+    return { isValid: false, reason: 'Polyline must have at least 2 points' };
+  }
+  const dx = sliceEnd.x - sliceStart.x;
+  const dy = sliceEnd.y - sliceStart.y;
+  if (Math.sqrt(dx * dx + dy * dy) < 1) {
+    return {
+      isValid: false,
+      reason: 'Slice line is too short — draw points further apart',
+    };
+  }
+  let count = 0;
+  for (let i = 0; i < polygon.points.length - 1; i++) {
+    if (
+      lineIntersection(
+        sliceStart,
+        sliceEnd,
+        polygon.points[i],
+        polygon.points[i + 1]
+      )
+    ) {
+      count++;
+    }
+  }
+  if (count === 0) {
+    return {
+      isValid: false,
+      reason: 'Slice line does not cross the polyline',
+    };
+  }
+  return { isValid: true };
+}
+
+/**
  * Find suggested slice points that would create a valid slice
  * This can be used for UI hints or automatic slice suggestions
  */
