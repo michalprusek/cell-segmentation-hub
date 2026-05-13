@@ -2010,6 +2010,8 @@ export default {
     instance: 'Mikrotubulus',
     hideInstance: 'Skrýt mikrotubulus',
     showInstance: 'Zobrazit mikrotubulus',
+    hideAll: 'Skrýt vše',
+    showAll: 'Zobrazit vše',
   },
   sperm: {
     instancePanel: 'Instance spermií',

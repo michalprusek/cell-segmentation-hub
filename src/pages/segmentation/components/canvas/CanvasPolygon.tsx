@@ -4,6 +4,7 @@ import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
+import type { ProjectType } from '@/types';
 import {
   colorFromInstanceId,
   isMicrotubuleInstance,
@@ -33,6 +34,11 @@ interface CanvasPolygonProps {
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
   onHover?: (polygonId: string | null) => void;
   editMode?: EditMode;
+  /** Project-type gate for the polyline context menu. Sperm items only
+   *  appear for ``'sperm'`` projects; the kymograph item is exclusive
+   *  to ``'microtubules'``. Without this gate, MT users saw the sperm
+   *  head/midpiece/tail items just because the callbacks were truthy. */
+  projectType?: ProjectType;
 }
 
 const CanvasPolygon = React.memo(
@@ -57,6 +63,7 @@ const CanvasPolygon = React.memo(
     onDuplicateVertex,
     onHover,
     editMode,
+    projectType,
   }: CanvasPolygonProps) => {
     const { id, points, type = 'external', parent_id } = polygon;
 
@@ -263,6 +270,7 @@ const CanvasPolygon = React.memo(
         onSlice={handleSlice}
         onEdit={handleEdit}
         isPolyline={isPolyline}
+        projectType={projectType}
         onChangePartClass={isPolyline ? handleChangePartClass : undefined}
         onChangeInstanceId={isPolyline ? handleChangeInstanceId : undefined}
         currentInstanceId={isPolyline ? polygon.instanceId : undefined}
@@ -447,7 +455,12 @@ const CanvasPolygon = React.memo(
       sameDragOffset &&
       prevProps.onChangePartClass === nextProps.onChangePartClass &&
       prevProps.onChangeInstanceId === nextProps.onChangeInstanceId &&
-      prevProps.availableInstanceIds === nextProps.availableInstanceIds
+      prevProps.availableInstanceIds === nextProps.availableInstanceIds &&
+      // projectType drives the context-menu's sperm-vs-MT gating; if
+      // we forget to compare it here, switching project types in the
+      // same session (or a per-polygon override one day) wouldn't
+      // re-render the menu and the user would see stale options.
+      prevProps.projectType === nextProps.projectType
     );
   }
 );

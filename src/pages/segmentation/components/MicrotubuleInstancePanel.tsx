@@ -58,9 +58,22 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
 
   if (sorted.length === 0) return null;
 
+  const allHidden = sorted.every(mt => hiddenPolygonIds?.has(mt.id) ?? false);
+  const handleToggleAll = () => {
+    if (!onToggleVisibility) return;
+    // Iterating onToggleVisibility per row is the only API we have; the
+    // current set drives the direction so a single click reaches a
+    // consistent end-state (no flicker between mixed states).
+    for (const mt of sorted) {
+      const isHidden = hiddenPolygonIds?.has(mt.id) ?? false;
+      if (allHidden && isHidden) onToggleVisibility(mt.id);
+      else if (!allHidden && !isHidden) onToggleVisibility(mt.id);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
-      <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+      <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <Spline className="h-4 w-4" />
           {t('microtubule.instancePanel')}{' '}
@@ -68,6 +81,25 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
             ({sorted.length})
           </span>
         </h4>
+        {onToggleVisibility && (
+          <button
+            type="button"
+            onClick={handleToggleAll}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            title={
+              allHidden ? t('microtubule.showAll') : t('microtubule.hideAll')
+            }
+          >
+            {allHidden ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
+            <span>
+              {allHidden ? t('microtubule.showAll') : t('microtubule.hideAll')}
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="max-h-64 overflow-y-auto">
