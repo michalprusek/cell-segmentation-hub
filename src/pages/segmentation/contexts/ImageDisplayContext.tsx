@@ -15,6 +15,7 @@ import {
   ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -95,17 +96,72 @@ export const ImageDisplayContext =
 const clampWindow = (n: number) => Math.max(0, Math.min(255, n));
 const clampPercent = (n: number) => Math.max(0, Math.min(200, n));
 
+/** localStorage key prefix for per-user channel-colour overrides. We
+ *  key on userId so two researchers sharing a browser don't see each
+ *  other's custom tints, and so an anonymous reload doesn't resurrect
+ *  the previous user's choices. */
+const COLOR_PREFS_KEY_PREFIX = 'spheroseg.channelColors.';
+
+function loadColorPrefs(userId: string | undefined): Record<string, string> {
+  if (!userId || typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(COLOR_PREFS_KEY_PREFIX + userId);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
 export function ImageDisplayProvider({
   children,
   initialChannel = null,
+  userId,
 }: {
   children: ReactNode;
   initialChannel?: string | null;
+  /** Drives per-user persistence of channel-colour overrides. When
+   *  unset (anonymous browsing) channel colours stay session-only. */
+  userId?: string;
 }) {
-  const [state, setState] = useState<ImageDisplayState>({
+  // Lazy initializer: hydrate the user's channel-colour preferences
+  // from localStorage on first render so reopens of the editor preserve
+  // "ch0 → red", "ch1 → green", etc.
+  const [state, setState] = useState<ImageDisplayState>(() => ({
     ...DEFAULT_STATE,
     channel: initialChannel,
-  });
+    channelColors: loadColorPrefs(userId),
+  }));
+
+  // Re-hydrate when userId becomes available (auth init races the
+  // first ImageDisplayProvider mount on cold loads). Keep any session
+  // edits made before auth landed — they take precedence over the
+  // persisted value.
+  useEffect(() => {
+    if (!userId) return;
+    setState(s => {
+      const persisted = loadColorPrefs(userId);
+      const merged: Record<string, string> = { ...persisted };
+      for (const [k, v] of Object.entries(s.channelColors)) merged[k] = v;
+      return { ...s, channelColors: merged };
+    });
+  }, [userId]);
+
+  // Persist on every channelColors change. Safari private + quota
+  // errors degrade silently — colour preference is best-effort UX.
+  useEffect(() => {
+    if (!userId || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        COLOR_PREFS_KEY_PREFIX + userId,
+        JSON.stringify(state.channelColors)
+      );
+    } catch {
+      /* storage unavailable — silently degrade */
+    }
+  }, [userId, state.channelColors]);
 
   // Frame/channel changes used to reset windowMin/Max — the user found
   // that annoying when scrubbing a 300-frame video. Now we only update

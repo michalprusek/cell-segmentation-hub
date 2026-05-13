@@ -1265,7 +1265,7 @@ const SegmentationEditor = () => {
           (frame # / scrubber), the sidebar (Channels + Display
           sections, future PR), and the canvas (brightness/contrast
           CSS filter) can all read/write the same display state. */}
-      <ImageDisplayProvider>
+      <ImageDisplayProvider userId={user?.id}>
         <EditorLayout>
           {/* Header */}
           <EditorHeader
