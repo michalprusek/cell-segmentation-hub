@@ -12,7 +12,11 @@ import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useWebSocket } from '@/contexts/useWebSocket';
 import { logger } from '@/lib/logger';
-import { ChunkProgress, DEFAULT_CHUNKING_CONFIG } from '@/lib/uploadUtils';
+import {
+  ChunkProgress,
+  DEFAULT_CHUNKING_CONFIG,
+  isVideoLikeUpload,
+} from '@/lib/uploadUtils';
 
 export interface UploadSession {
   id: string;
@@ -227,21 +231,11 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       // ffmpeg/nd2/tifffile extraction); throwing them through the bulk
       // /images endpoint would either be rejected by the smaller multer
       // budget or trigger a broken Sharp thumbnail pass on opaque bytes.
-      const VIDEO_EXTENSIONS = [
-        '.mp4',
-        '.avi',
-        '.mov',
-        '.mkv',
-        '.webm',
-        '.nd2',
-      ];
-      const isVideoFile = (f: File) => {
-        if (f.type.startsWith('video/')) return true;
-        const lower = f.name.toLowerCase();
-        return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext));
-      };
-      const videoFiles = files.filter(isVideoFile);
-      const imageFiles = files.filter(f => !isVideoFile(f));
+      // Shared with DropZone via isVideoLikeUpload — keeps DropZone's
+      // size-budget decision and this routing decision in lockstep, so a
+      // file accepted at drop time always reaches a matching endpoint.
+      const videoFiles = files.filter(isVideoLikeUpload);
+      const imageFiles = files.filter(f => !isVideoLikeUpload(f));
 
       // Run the actual upload asynchronously
       const doUpload = async () => {
