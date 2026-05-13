@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { useAuth } from './exports';
 import WebSocketManager from '@/services/webSocketManager';
@@ -95,11 +95,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     };
   }, [user, token]);
 
-  const value = {
-    manager: managerRef.current,
-    socket: socketInstance,
-    isConnected,
-  };
+  const value = useMemo(
+    () => ({
+      manager: managerRef.current,
+      socket: socketInstance,
+      isConnected,
+    }),
+    [socketInstance, isConnected]
+  );
 
   return (
     <WebSocketContext.Provider value={value}>

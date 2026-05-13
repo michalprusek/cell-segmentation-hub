@@ -1,5 +1,11 @@
 /* eslint-disable react-refresh/only-export-components -- context co-locates hook with provider */
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+} from 'react';
 
 interface ExportState {
   projectId: string | null;
@@ -65,17 +71,18 @@ export const ExportProvider: React.FC<{ children: React.ReactNode }> = ({
     [exportStates]
   );
 
+  const value = useMemo(
+    () => ({
+      exportStates,
+      updateExportState,
+      clearExportState,
+      getExportState,
+    }),
+    [exportStates, updateExportState, clearExportState, getExportState]
+  );
+
   return (
-    <ExportContext.Provider
-      value={{
-        exportStates,
-        updateExportState,
-        clearExportState,
-        getExportState,
-      }}
-    >
-      {children}
-    </ExportContext.Provider>
+    <ExportContext.Provider value={value}>{children}</ExportContext.Provider>
   );
 };
 

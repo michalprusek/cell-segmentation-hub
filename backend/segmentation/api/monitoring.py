@@ -9,6 +9,8 @@ import logging
 import sys
 import os
 
+from api._errors import internal_error
+
 # Add monitoring module to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
@@ -70,8 +72,7 @@ async def get_gpu_status() -> Dict[str, Any]:
             }
             
     except Exception as e:
-        logger.error(f"Error getting GPU status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error(logger, "Error getting GPU status", e)
 
 @router.get("/gpu/summary")
 async def get_gpu_summary() -> Dict[str, Any]:
@@ -93,8 +94,7 @@ async def get_gpu_summary() -> Dict[str, Any]:
         return summary
         
     except Exception as e:
-        logger.error(f"Error getting GPU summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error(logger, "Error getting GPU summary", e)
 
 @router.get("/gpu/batch-metrics")
 async def get_batch_metrics(limit: int = 50) -> Dict[str, Any]:
@@ -170,8 +170,7 @@ async def get_batch_metrics(limit: int = 50) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.error(f"Error getting batch metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error(logger, "Error getting batch metrics", e)
 
 @router.post("/gpu/export-metrics")
 async def export_metrics(filepath: Optional[str] = None) -> Dict[str, Any]:
@@ -201,8 +200,7 @@ async def export_metrics(filepath: Optional[str] = None) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.error(f"Error exporting metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error(logger, "Error exporting metrics", e)
 
 @router.get("/gpu/memory-pressure")
 async def check_memory_pressure() -> Dict[str, Any]:
@@ -233,8 +231,7 @@ async def check_memory_pressure() -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.error(f"Error checking memory pressure: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error(logger, "Error checking memory pressure", e)
 
 @router.post("/gpu/clear-cache")
 async def clear_gpu_cache() -> Dict[str, Any]:
@@ -271,5 +268,4 @@ async def clear_gpu_cache() -> Dict[str, Any]:
             }
             
     except Exception as e:
-        logger.error(f"Error clearing GPU cache: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error(logger, "Error clearing GPU cache", e)

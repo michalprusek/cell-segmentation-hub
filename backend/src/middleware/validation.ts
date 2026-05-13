@@ -3,6 +3,7 @@ import type { Express } from 'express-serve-static-core';
 import { ZodSchema, ZodError } from 'zod';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
+import { UPLOAD_LIMITS } from '../config/uploadLimits';
 
 export type ValidationTarget = 'body' | 'query' | 'params';
 
@@ -97,7 +98,7 @@ export const validateFile = (
 ): ((req: Request, res: Response, next: NextFunction) => void) => {
   const {
     required = false,
-    maxSize = 10 * 1024 * 1024, // 10MB default
+    maxSize = UPLOAD_LIMITS.MAX_FILE_SIZE_BYTES,
     allowedMimeTypes = [
       'image/jpeg',
       'image/jpg',
@@ -161,7 +162,7 @@ export const validateFiles = (
 ): ((req: Request, res: Response, next: NextFunction) => void) => {
   const {
     maxFiles = 10,
-    maxSize = 10 * 1024 * 1024, // 10MB default
+    maxSize = UPLOAD_LIMITS.MAX_FILE_SIZE_BYTES,
     allowedMimeTypes = [
       'image/jpeg',
       'image/jpg',

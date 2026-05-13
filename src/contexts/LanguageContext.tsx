@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import apiClient from '@/lib/api';
 import en from '@/translations/en';
 import cs from '@/translations/cs';
@@ -83,22 +83,25 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [user]);
 
   // Funkce pro nastavení jazyka
-  const setLanguage = async (newLanguage: Language) => {
-    // Aktualizujeme localStorage a stav
-    localStorage.setItem('language', newLanguage);
-    setLanguageState(newLanguage);
+  const setLanguage = useCallback(
+    async (newLanguage: Language) => {
+      // Aktualizujeme localStorage a stav
+      localStorage.setItem('language', newLanguage);
+      setLanguageState(newLanguage);
 
-    // Pokud jsme přihlášeni, aktualizujeme uživatelský profil
-    if (user) {
-      try {
-        await apiClient.updateUserProfile({ preferredLang: newLanguage });
-      } catch (error: unknown) {
-        const errorMessage =
-          getErrorMessage(error) || 'Failed to save language';
-        logger.error('Error updating profile language:', errorMessage, error);
+      // Pokud jsme přihlášeni, aktualizujeme uživatelský profil
+      if (user) {
+        try {
+          await apiClient.updateUserProfile({ preferredLang: newLanguage });
+        } catch (error: unknown) {
+          const errorMessage =
+            getErrorMessage(error) || 'Failed to save language';
+          logger.error('Error updating profile language:', errorMessage, error);
+        }
       }
-    }
-  };
+    },
+    [user]
+  );
 
   // Funkce pro překlad
   const t = useCallback(
@@ -146,20 +149,23 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
     [language]
   );
 
+  const value = useMemo(
+    () => ({
+      language,
+      setLanguage,
+      t,
+      translations: translations[language] as Translations,
+    }),
+    [language, setLanguage, t]
+  );
+
   // Čekáme, dokud se nenačte jazykové nastavení
   if (!loaded) {
     return null;
   }
 
   return (
-    <LanguageContext.Provider
-      value={{
-        language,
-        setLanguage,
-        t,
-        translations: translations[language] as Translations,
-      }}
-    >
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );
