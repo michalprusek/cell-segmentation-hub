@@ -5,7 +5,7 @@
  */
 
 import { useLanguage } from '@/contexts/useLanguage';
-import { ChannelSwitcher } from '../ChannelSwitcher';
+import { ChannelOverlayList } from '../ChannelOverlayList';
 import type { VideoChannel } from '@/types';
 
 interface ChannelsSectionProps {
@@ -16,7 +16,7 @@ export default function ChannelsSection({ channels }: ChannelsSectionProps) {
   const { t } = useLanguage();
 
   // Don't render the section at all when the video has no channel
-  // metadata or just one channel — there's nothing meaningful to show.
+  // metadata — there's nothing meaningful to show.
   if (!channels || channels.length === 0) return null;
 
   return (
@@ -27,7 +27,7 @@ export default function ChannelsSection({ channels }: ChannelsSectionProps) {
         </h3>
       </div>
       <div className="p-4">
-        <ChannelSwitcher channels={channels} />
+        <ChannelOverlayList channels={channels} />
       </div>
     </div>
   );

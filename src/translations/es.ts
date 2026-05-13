@@ -4,6 +4,7 @@ export default {
     loading: 'Cargando...',
     save: 'Guardar',
     cancel: 'Cancelar',
+    apply: 'Aplicar',
     dismiss: 'Descartar',
     delete: 'Eliminar',
     edit: 'Editar',
@@ -2088,8 +2089,18 @@ export default {
   },
   editor: {
     channelSwitcher: {
-      title: 'Canal',
+      title: 'Canales',
       detectionSource: 'Fuente de segmentación',
+    },
+    channels: {
+      toggleVisibility: 'Alternar visibilidad del canal',
+      editColor: 'Editar color',
+      colorDialog: {
+        title: 'Color del canal:',
+        description:
+          'Elija cómo este canal tiñe la superposición compuesta. El blanco mantiene la escala de grises sin cambios.',
+        customLabel: 'Personalizado',
+      },
     },
     windowLevel: {
       title: 'Visualización',

@@ -5,6 +5,7 @@ export default {
     save: 'Save',
     cancel: 'Cancel',
     cancelling: 'Cancelling...',
+    apply: 'Apply',
     dismiss: 'Dismiss',
     delete: 'Delete',
     edit: 'Edit',
@@ -2120,8 +2121,18 @@ export default {
   },
   editor: {
     channelSwitcher: {
-      title: 'Channel',
+      title: 'Channels',
       detectionSource: 'Segmentation source',
+    },
+    channels: {
+      toggleVisibility: 'Toggle channel visibility',
+      editColor: 'Edit colour',
+      colorDialog: {
+        title: 'Channel colour:',
+        description:
+          'Pick how this channel tints the composite overlay. White renders the underlying grayscale unchanged.',
+        customLabel: 'Custom',
+      },
     },
     windowLevel: {
       title: 'Display',
