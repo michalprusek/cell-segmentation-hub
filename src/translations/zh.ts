@@ -1856,6 +1856,10 @@ export default {
     developedAt: '开发于',
     designBy: '设计',
   },
+  microtubule: {
+    instancePanel: '微管实例',
+    instance: '微管',
+  },
   sperm: {
     instancePanel: '精子实例',
     instance: '精子',

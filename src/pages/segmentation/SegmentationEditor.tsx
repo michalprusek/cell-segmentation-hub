@@ -35,6 +35,8 @@ import VerticalToolbar from './components/VerticalToolbar';
 import TopToolbar from './components/TopToolbar';
 import PolygonListPanel from './components/PolygonListPanel';
 import SpermInstancePanel from './components/SpermInstancePanel';
+import MicrotubuleInstancePanel from './components/MicrotubuleInstancePanel';
+import { isMicrotubuleInstance } from './utils/instanceColors';
 import ChannelsSection from './components/sidebar/ChannelsSection';
 import DisplaySection from './components/sidebar/DisplaySection';
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
@@ -43,7 +45,6 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 // Canvas components
 import CanvasContainer from './components/canvas/CanvasContainer';
 import CanvasContent from './components/canvas/CanvasContent';
-import CanvasImage from './components/canvas/CanvasImage';
 import VideoFrameImage from './components/canvas/VideoFrameImage';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
@@ -1049,6 +1050,24 @@ const SegmentationEditor = () => {
     [editor.polygons]
   );
 
+  // Discriminate sperm vs microtubule projects so the sidebar shows the
+  // right panel. Authoritative signal: `polygon.class` ('sperm' or
+  // 'microtubule') is stamped by the ML model when it produces the
+  // polygon. Each project uses one model, so the first polyline whose
+  // class we recognise is sufficient — no majority-counting needed.
+  // Legacy/manually-drawn polylines without `class` fall back to
+  // `partClass` (sperm head/midpiece/tail) or `mt_` instanceId prefix.
+  const polylineKind = useMemo<'sperm' | 'microtubule' | null>(() => {
+    for (const p of editor.polygons) {
+      if (p.geometry !== 'polyline') continue;
+      if (p.class === 'microtubule') return 'microtubule';
+      if (p.class === 'sperm') return 'sperm';
+      if (p.partClass) return 'sperm';
+      if (isMicrotubuleInstance(p.instanceId)) return 'microtubule';
+    }
+    return null;
+  }, [editor.polygons]);
+
   // Compute available sperm instance IDs for context menu (from existing polylines + active).
   // Two-stage memo: first derive a stable string key, then split into array only when key changes.
   // This prevents new array references on unrelated polygon edits (e.g. vertex drags).
@@ -1409,7 +1428,7 @@ const SegmentationEditor = () => {
                     onRenamePolygon={handleRenamePolygon}
                     onDeletePolygon={handleDeletePolygonFromPanel}
                   />
-                  {hasPolylines && (
+                  {hasPolylines && polylineKind === 'sperm' && (
                     <SpermInstancePanel
                       polygons={editor.polygons}
                       selectedPolygonId={editor.selectedPolygonId}
@@ -1418,6 +1437,13 @@ const SegmentationEditor = () => {
                       onPartClassChange={setActivePartClass}
                       activeInstanceId={activeInstanceId}
                       onInstanceIdChange={setActiveInstanceId}
+                    />
+                  )}
+                  {hasPolylines && polylineKind === 'microtubule' && (
+                    <MicrotubuleInstancePanel
+                      polygons={editor.polygons}
+                      selectedPolygonId={editor.selectedPolygonId}
+                      onSelectPolygon={editor.handlePolygonSelection}
                     />
                   )}
                 </div>

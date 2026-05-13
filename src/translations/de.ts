@@ -1986,6 +1986,10 @@ export default {
     developedAt: 'Entwickelt am',
     designBy: 'Design von',
   },
+  microtubule: {
+    instancePanel: 'Mikrotubuli-Instanzen',
+    instance: 'Mikrotubulus',
+  },
   sperm: {
     instancePanel: 'Spermien-Instanzen',
     instance: 'Spermium',

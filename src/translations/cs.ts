@@ -1995,6 +1995,10 @@ export default {
       loading: 'Načítání...',
     },
   },
+  microtubule: {
+    instancePanel: 'Instance mikrotubulů',
+    instance: 'Mikrotubulus',
+  },
   sperm: {
     instancePanel: 'Instance spermií',
     instance: 'Spermie',

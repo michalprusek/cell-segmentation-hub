@@ -2057,6 +2057,10 @@ export default {
       loading: 'Loading...',
     },
   },
+  microtubule: {
+    instancePanel: 'Microtubule Instances',
+    instance: 'Microtubule',
+  },
   sperm: {
     instancePanel: 'Sperm Instances',
     instance: 'Sperm',

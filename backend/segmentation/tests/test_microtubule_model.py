@@ -112,3 +112,108 @@ def test_predict_microtubule_unloaded_raises(monkeypatch):
 
     with pytest.raises(ValueError, match="Microtubule model not loaded"):
         loader.predict_microtubule(Image.new("L", (16, 16)), threshold=0.5)
+
+
+def test_rdp_preserves_embedding_alignment(monkeypatch):
+    """The RDP simplification in wrapper.predict() must keep embedding
+    samples index-aligned with the simplified centerline.
+
+    Cross-frame tracking (`/api/v1/track`) uses Hungarian matching over
+    the 32-d embeddings sampled per polyline vertex. If the embedding
+    array is one shape and the polyline another, trackId assignments
+    silently corrupt — no exception, just wrong correspondences.
+    """
+    cv2 = pytest.importorskip("cv2")
+    pytest.importorskip("torch")
+    from models.microtubule.wrapper import MicrotubuleModel
+
+    # Synthetic wiggle on a 30-pt line: most points should be droppable
+    # by RDP (eps=0.75 px) since they are near-collinear.
+    rows = np.linspace(10.0, 40.0, 30)
+    cols = np.full_like(rows, 20.0) + 0.1 * np.sin(np.linspace(0, 6, 30))
+    wiggly = np.stack([rows, cols], axis=1)
+
+    # Stub the model + the internal helpers so we never touch torch.
+    mt = MicrotubuleModel.__new__(MicrotubuleModel)
+    mt._model = object()
+    mt._device = "cpu"
+
+    fake_embed = np.random.randn(32, 64, 64).astype(np.float32)
+
+    def fake_predict_seed_embed(_model, _norm, device):
+        seed_prob = np.zeros((64, 64), dtype=np.float32)
+        return seed_prob, fake_embed
+
+    def fake_extract(_binary, _params, embeddings=None):  # noqa: ARG001
+        return [{"centerline": wiggly}]
+
+    # Inject the fakes via the same import paths the wrapper uses.
+    import importlib
+
+    seg_mt = importlib.import_module("models.microtubule.segment_mt")
+    monkeypatch.setattr(seg_mt, "predict_seed_embed", fake_predict_seed_embed)
+    monkeypatch.setattr(
+        seg_mt, "PYSOAX_PARAMS_DEFAULT", {}, raising=False
+    )
+    monkeypatch.setattr(seg_mt, "_normalize", lambda x: x.astype(np.float32))
+
+    import pysoax  # absolute import, same as wrapper
+
+    monkeypatch.setattr(pysoax, "extract_soax_instances", fake_extract)
+
+    result = mt.predict(np.zeros((64, 64), dtype=np.float32), seed_threshold=0.5)
+    centerlines = result["centerlines_rc"]
+    embeddings = result["embedding_samples"]
+
+    assert len(centerlines) == 1
+    assert len(embeddings) == 1
+    # The load-bearing invariant: one embedding row per polyline vertex.
+    assert centerlines[0].shape[0] == embeddings[0].shape[0]
+    # And the simplification actually fired.
+    assert centerlines[0].shape[0] < wiggly.shape[0], (
+        "RDP should have dropped redundant near-collinear points"
+    )
+    # Endpoints preserved (RDP keeps first + last).
+    np.testing.assert_allclose(centerlines[0][0], wiggly[0], atol=1e-3)
+    np.testing.assert_allclose(centerlines[0][-1], wiggly[-1], atol=1e-3)
+
+
+def test_rdp_short_polyline_passthrough(monkeypatch):
+    """Centerlines with <=3 points must not be RDP-simplified.
+
+    The guard `cl.shape[0] > 3` in wrapper.predict() avoids degenerate
+    inputs to approxPolyDP. The polyline + matched embeddings should
+    pass through unchanged.
+    """
+    pytest.importorskip("cv2")
+    pytest.importorskip("torch")
+    from models.microtubule.wrapper import MicrotubuleModel
+
+    short_cl = np.array([[0.0, 0.0], [5.0, 5.0], [10.0, 10.0]], dtype=np.float64)
+
+    mt = MicrotubuleModel.__new__(MicrotubuleModel)
+    mt._model = object()
+    mt._device = "cpu"
+
+    fake_embed = np.random.randn(32, 16, 16).astype(np.float32)
+
+    import importlib
+
+    seg_mt = importlib.import_module("models.microtubule.segment_mt")
+    monkeypatch.setattr(
+        seg_mt, "predict_seed_embed",
+        lambda _m, _n, device: (np.zeros((16, 16), dtype=np.float32), fake_embed),
+    )
+    monkeypatch.setattr(seg_mt, "PYSOAX_PARAMS_DEFAULT", {}, raising=False)
+    monkeypatch.setattr(seg_mt, "_normalize", lambda x: x.astype(np.float32))
+
+    import pysoax
+
+    monkeypatch.setattr(
+        pysoax, "extract_soax_instances",
+        lambda _b, _p, embeddings=None: [{"centerline": short_cl}],
+    )
+
+    result = mt.predict(np.zeros((16, 16), dtype=np.float32), seed_threshold=0.5)
+    assert result["centerlines_rc"][0].shape == short_cl.shape
+    assert result["embedding_samples"][0].shape[0] == short_cl.shape[0]
