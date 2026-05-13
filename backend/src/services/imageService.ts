@@ -949,6 +949,7 @@ export class ImageService {
     errors: string[];
   }> {
     let deletedCount = 0;
+    let cascadedContainerCount = 0;
     const failedIds: string[] = [];
     const errors: string[] = [];
 
@@ -1058,6 +1059,77 @@ export class ImageService {
           );
         }
       }
+
+      // Cascade cleanup: when a deleted frame leaves its parent video
+      // container with no remaining children, the container becomes an
+      // orphan row. The gallery filter (`isVideoContainer: false` in
+      // getProjectImagesWithThumbnails) hides containers from the user,
+      // so without this pass the row + its storage (`original.<ext>`,
+      // `thumbnail.jpg`) would linger forever — storage usage drift +
+      // stale "Segment All" badges on the project header. Same
+      // transaction so a partial cascade doesn't leak inconsistent state.
+      const parentVideoIds = [
+        ...new Set(
+          imagesToDelete
+            .map(i => i.parentVideoId)
+            .filter((id): id is string => typeof id === 'string')
+        ),
+      ];
+
+      for (const parentId of parentVideoIds) {
+        try {
+          // Defensive `projectId` scope on both queries: `imagesToDelete`
+          // was already project-filtered, so the parentVideoId *should*
+          // belong to the same project — but corrupt cross-project FK
+          // data (from prior bugs) would otherwise let us delete a row
+          // outside the user's access scope.
+          const remaining = await tx.image.count({
+            where: { parentVideoId: parentId, projectId },
+          });
+          if (remaining > 0) continue;
+
+          const container = await tx.image.findFirst({
+            where: { id: parentId, projectId },
+            select: {
+              id: true,
+              name: true,
+              originalPath: true,
+              thumbnailPath: true,
+              isVideoContainer: true,
+            },
+          });
+          if (!container || !container.isVideoContainer) continue;
+
+          await storage.delete(container.originalPath);
+          if (container.thumbnailPath) {
+            await storage.delete(container.thumbnailPath);
+          }
+          await tx.image.delete({ where: { id: container.id } });
+          // Track cascaded container separately from user-requested
+          // deletes so the returned `deletedCount` keeps its existing
+          // semantic ("images the user asked to delete that were
+          // deleted"). Otherwise toasts like "N images deleted" lie by
+          // including bookkeeping rows the user never selected.
+          cascadedContainerCount++;
+
+          logger.info('Orphan video container cleaned up', 'ImageService', {
+            containerId: container.id,
+            containerName: container.name,
+            projectId,
+            userId,
+          });
+        } catch (error) {
+          // Container cleanup is bookkeeping the user didn't initiate —
+          // don't pollute the user-facing `errors[]` (rendered in toasts)
+          // with confusing "Container <uuid>: ..." entries. Log-only.
+          logger.error(
+            'Failed to cleanup orphan video container',
+            error instanceof Error ? error : undefined,
+            'ImageService',
+            { containerId: parentId, projectId, userId }
+          );
+        }
+      }
     });
 
     // Check for images that weren't found
@@ -1073,13 +1145,15 @@ export class ImageService {
 
     logger.info('Batch delete operation completed', 'ImageService', {
       deletedCount,
+      cascadedContainerCount,
       failedCount: failedIds.length,
       userId,
       projectId,
     });
 
-    // Emit real-time project stats update for batch deleted images
-    if (deletedCount > 0) {
+    // Emit real-time project stats update if either user-requested
+    // images or cascaded containers were removed.
+    if (deletedCount > 0 || cascadedContainerCount > 0) {
       await this.emitProjectStatsUpdate(projectId, userId, 'updated');
     }
 
