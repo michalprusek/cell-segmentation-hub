@@ -106,6 +106,7 @@ export function SegmentChannelDialog({
  * rows (no /frames/ segment) contribute nothing. Returns an empty array when
  * the project has no extracted frames or only one channel.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function extractChannelsFromPaths(
   paths: (string | null | undefined)[]
 ): string[] {

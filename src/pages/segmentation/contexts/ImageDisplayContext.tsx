@@ -69,6 +69,7 @@ const DEFAULT_STATE: ImageDisplayState = {
  * defaults when unwrapped. The `useImageDisplay` hook below remains
  * the strict version that throws on a missing provider.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export const ImageDisplayContext =
   createContext<ImageDisplayContextValue | null>(null);
 
@@ -182,6 +183,7 @@ export function ImageDisplayProvider({
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useImageDisplay(): ImageDisplayContextValue {
   const ctx = useContext(ImageDisplayContext);
   if (!ctx) {
@@ -195,6 +197,7 @@ export function useImageDisplay(): ImageDisplayContextValue {
 /** Apply a min/max window-level LUT to a source HTMLImageElement and
  *  draw it into the supplied canvas. ``min === 0 && max === 255`` is a
  *  no-op identity transform — callers may shortcut on that. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function applyWindowLevel(
   canvas: HTMLCanvasElement,
   src: HTMLImageElement | HTMLCanvasElement,
