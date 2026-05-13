@@ -28,6 +28,7 @@ import {
 import { useLanguage } from '@/contexts/useLanguage';
 import apiClient from '@/lib/api';
 import type { VideoChannel } from '@/types';
+import { useImageDisplay } from '../contexts/ImageDisplayContext';
 
 interface KymographModalProps {
   open: boolean;
@@ -56,6 +57,7 @@ export function KymographModal({
   channels,
 }: KymographModalProps) {
   const { t } = useLanguage();
+  const { channelColors } = useImageDisplay();
 
   // Pick a default source channel: prefer the first fluorescent channel
   // (typical kymograph use case is intensity dynamics on a labelled
@@ -87,12 +89,19 @@ export function KymographModal({
     let cancelled = false;
     setIsLoading(true);
     setError(null);
+    // Match the kymograph render colour to the per-channel tint the user
+    // already chose in the editor's multi-channel overlay. Default white
+    // (#FFFFFF) is "grayscale" — sent as #FFFFFF, the ML linear gradient
+    // collapses to a black→white intensity ramp, which is the natural
+    // single-channel grayscale kymograph.
+    const channelColor = channelColors[sourceChannel] ?? '#FFFFFF';
     apiClient
       .post('/segmentation/kymograph', {
         videoContainerId,
         polylineId,
         frameIndex,
         sourceChannel,
+        channelColor,
       })
       .then(res => {
         if (cancelled) return;
@@ -109,7 +118,14 @@ export function KymographModal({
     return () => {
       cancelled = true;
     };
-  }, [open, sourceChannel, videoContainerId, polylineId, frameIndex]);
+  }, [
+    open,
+    sourceChannel,
+    videoContainerId,
+    polylineId,
+    frameIndex,
+    channelColors,
+  ]);
 
   const handleDownload = (kind: 'png' | 'csv') => {
     if (!result) return;
@@ -154,7 +170,7 @@ export function KymographModal({
                 <SelectContent>
                   {channels.map(c => (
                     <SelectItem key={c.name} value={c.name}>
-                      {c.name}
+                      {c.displayName ?? c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

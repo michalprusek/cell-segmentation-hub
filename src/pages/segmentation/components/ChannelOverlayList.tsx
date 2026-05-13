@@ -70,10 +70,7 @@ export function ChannelOverlayList({ channels }: ChannelOverlayListProps) {
           const visible = visibleChannels.includes(ch.name);
           const color = channelColors[ch.name] ?? DEFAULT_CHANNEL_COLOR;
           return (
-            <div
-              key={ch.name}
-              className="flex items-center gap-2 text-sm"
-            >
+            <div key={ch.name} className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={visible}
                 onCheckedChange={() => toggleChannelVisibility(ch.name)}
@@ -99,7 +96,7 @@ export function ChannelOverlayList({ channels }: ChannelOverlayListProps) {
                 />
               </button>
               <span className="flex-1 truncate text-gray-700 dark:text-gray-300">
-                {ch.name}
+                {ch.displayName ?? ch.name}
               </span>
               {ch.isSegmentationSource && (
                 <span
@@ -119,10 +116,14 @@ export function ChannelOverlayList({ channels }: ChannelOverlayListProps) {
       {editingChannel && (
         <ChannelColorDialog
           open={editingChannel !== null}
-          channelName={editingChannel}
-          initialColor={
-            channelColors[editingChannel] ?? DEFAULT_CHANNEL_COLOR
+          channelName={
+            // Show the user-friendly label in the dialog title. The
+            // underlying value used for keying is still `editingChannel`
+            // (path-safe `name`) — that's what onConfirm writes back.
+            channels.find(c => c.name === editingChannel)?.displayName ??
+            editingChannel
           }
+          initialColor={channelColors[editingChannel] ?? DEFAULT_CHANNEL_COLOR}
           onConfirm={color => {
             setChannelColor(editingChannel, color);
             setEditingChannel(null);

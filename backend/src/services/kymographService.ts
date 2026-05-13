@@ -27,6 +27,9 @@ import { logger } from '../utils/logger';
 /** Same whitelist used by VideoController. Channel names must be alnum +
  *  underscore + dash so they can't escape the storage root. */
 const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/** Mirrors the pattern accepted by the ML KymographRequest. Defence in
+ *  depth — the controller layer also validates. */
+const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 
 interface PolylineRecord {
   id: string;
@@ -41,6 +44,10 @@ export interface KymographServiceInput {
   polylineId: string;
   frameIndex: number;
   sourceChannel: string;
+  /** Optional hex `#RRGGBB`. When supplied, the ML service renders the
+   *  kymograph as a black-to-color linear gradient instead of viridis,
+   *  matching the channel tint the user picked in the editor. */
+  channelColor?: string;
 }
 
 export interface KymographServiceResult {
@@ -84,13 +91,16 @@ function parsePolygons(json: string | null | undefined): PolylineRecord[] {
 export async function buildKymograph(
   input: KymographServiceInput
 ): Promise<KymographServiceResult> {
-  const { videoContainerId, polylineId, frameIndex, sourceChannel } = input;
+  const { videoContainerId, polylineId, frameIndex, sourceChannel, channelColor } = input;
 
   // Defence in depth: reject any sourceChannel containing path separators
   // or other unsafe characters. The route layer also validates, but this
   // service is a public entry point for any future caller.
   if (!CHANNEL_NAME_RE.test(sourceChannel)) {
     throw new Error('Invalid sourceChannel');
+  }
+  if (channelColor !== undefined && !HEX_COLOR_RE.test(channelColor)) {
+    throw new Error('Invalid channelColor (expected #RRGGBB)');
   }
 
   const container = await prisma.image.findUnique({
@@ -182,6 +192,7 @@ export async function buildKymograph(
       frames: framesPayload,
       target_width: 200,
       tracked: trackedMode,
+      ...(channelColor ? { channel_color: channelColor } : {}),
     },
     { timeout: 120_000 }
   );

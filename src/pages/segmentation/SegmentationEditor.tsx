@@ -62,7 +62,6 @@ import EditorLayout from './components/layout/EditorLayout';
 import { VideoModeOverlay } from './components/VideoModeOverlay';
 import { ImageDisplayProvider } from './contexts/ImageDisplayContext';
 import { useVideoFrames } from './hooks/useVideoFrames';
-import type { ProjectType } from '@/types';
 
 const EMPTY_HOVERED_VERTEX = { polygonId: null, vertexIndex: null } as const;
 

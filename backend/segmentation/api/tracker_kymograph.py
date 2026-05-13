@@ -294,6 +294,14 @@ class KymographRequest(BaseModel):
     frames: List[KymographFrameInput]
     target_width: int = Field(200, ge=10, le=2000)
     tracked: bool = False
+    # Hex `#RRGGBB`. When supplied, the kymograph is rendered as a linear
+    # black-to-color gradient (intensity → that hue) so it matches the
+    # channel tint the user chose in the editor's multi-channel overlay.
+    # When None, falls back to viridis (legacy behaviour).
+    channel_color: Optional[str] = Field(
+        None,
+        pattern=r"^#[0-9A-Fa-f]{6}$",
+    )
 
 
 class KymographResponse(BaseModel):
@@ -357,6 +365,32 @@ def _viridis(values: np.ndarray) -> np.ndarray:
     return (rgb * 255.0).astype(np.uint8)
 
 
+def _hex_to_rgb_array(hex_color: str) -> np.ndarray:
+    """Parse `#RRGGBB` → float32 ndarray of length 3, values in [0, 1]."""
+    h = hex_color.lstrip("#")
+    return np.array(
+        [int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)],
+        dtype=np.float32,
+    ) / 255.0
+
+
+def _linear_gradient(values: np.ndarray, hex_color: str) -> np.ndarray:
+    """Map a 2D float32 [0,1] array to RGB via a black→hex_color gradient.
+
+    Pure intensity-modulated single-hue render, matching the convention
+    most live-cell imaging tools use when the user picks a channel tint
+    (ImageJ "Fire" with all stops a single hue). Loses the perceptual-
+    uniformity of viridis but gains "the kymograph for the green channel
+    is rendered in green", which is what users intuitively expect after
+    they've already coloured the multi-channel overlay.
+    """
+    clipped = np.clip(values, 0.0, 1.0)
+    color = _hex_to_rgb_array(hex_color)  # shape (3,)
+    # Broadcast (F, W) × (3,) → (F, W, 3); each pixel is intensity × color.
+    rgb = clipped[..., None] * color
+    return (rgb * 255.0).astype(np.uint8)
+
+
 @router.post("/kymograph", response_model=KymographResponse)
 async def kymograph(req: KymographRequest) -> KymographResponse:
     """Render a kymograph for one microtubule polyline."""
@@ -402,7 +436,11 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     # normalise globally to expose dynamics. Add 1e-9 to avoid /0.
     mn, mx = float(kymo.min()), float(kymo.max())
     norm = (kymo - mn) / max(mx - mn, 1e-9)
-    rgb = _viridis(norm)
+    rgb = (
+        _linear_gradient(norm, req.channel_color)
+        if req.channel_color
+        else _viridis(norm)
+    )
 
     buf = io.BytesIO()
     PILImage.fromarray(rgb).save(buf, format="PNG")
