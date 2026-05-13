@@ -3,7 +3,12 @@ import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
 // import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { Point, Polygon } from '@/lib/segmentation';
-import { slicePolygon, validateSliceLine } from '@/lib/polygonSlicing';
+import {
+  slicePolygon,
+  slicePolyline,
+  validateSliceLine,
+  validateSlicePolyline,
+} from '@/lib/polygonSlicing';
 import { EditMode, InteractionState } from '../types';
 
 interface UsePolygonSlicingProps {
@@ -59,29 +64,26 @@ export const usePolygonSlicing = ({
       }
 
       const [sliceStart, sliceEnd] = pointsToUse;
+      const isPolyline = polygon.geometry === 'polyline';
 
-      // Attempting slice with points
-
-      // Validate slice line
-      const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
-
-      // Validation result obtained
+      // Dispatch by geometry. Closed polygons need two edge crossings
+      // (chord across the inside); open polylines need exactly one
+      // crossing of any segment, then split that segment in place.
+      const validation = isPolyline
+        ? validateSlicePolyline(polygon, sliceStart, sliceEnd)
+        : validateSliceLine(polygon, sliceStart, sliceEnd);
 
       if (!validation.isValid) {
-        // Show detailed error message to user
         const errorMessage = validation.reason
           ? `${t('segmentation.invalidSlice') || 'Invalid slice operation'}: ${validation.reason}`
           : t('segmentation.invalidSlice') || 'Invalid slice operation';
-
-        // Validation failed
         toast.error(errorMessage);
         return false;
       }
 
-      // Validation passed, performing slice
-
-      // Perform the slice
-      const result = slicePolygon(polygon, sliceStart, sliceEnd);
+      const result = isPolyline
+        ? slicePolyline(polygon, sliceStart, sliceEnd)
+        : slicePolygon(polygon, sliceStart, sliceEnd);
 
       if (result) {
         const [newPolygon1, newPolygon2] = result;
@@ -232,7 +234,10 @@ export const usePolygonSlicing = ({
     }
 
     const [sliceStart, sliceEnd] = tempPoints;
-    const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
+    const validation =
+      polygon.geometry === 'polyline'
+        ? validateSlicePolyline(polygon, sliceStart, sliceEnd)
+        : validateSliceLine(polygon, sliceStart, sliceEnd);
 
     return validation.isValid;
   }, [selectedPolygonId, tempPoints, polygons]);
@@ -255,7 +260,9 @@ export const usePolygonSlicing = ({
     }
 
     const [sliceStart, sliceEnd] = tempPoints;
-    return validateSliceLine(polygon, sliceStart, sliceEnd);
+    return polygon.geometry === 'polyline'
+      ? validateSlicePolyline(polygon, sliceStart, sliceEnd)
+      : validateSliceLine(polygon, sliceStart, sliceEnd);
   }, [selectedPolygonId, tempPoints, polygons]);
 
   return {
