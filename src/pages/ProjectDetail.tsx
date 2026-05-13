@@ -80,6 +80,7 @@ const ProjectDetail = () => {
     projectType,
     setProjectType,
     images,
+    projectChannels,
     loading,
     updateImages,
     refreshImageSegmentation,
@@ -1276,9 +1277,19 @@ const ProjectDetail = () => {
     // SyntheticEvent as the first arg when handleSegmentAll is wired
     // directly, instead of through an arrow wrapper).
     if (typeof channelOverride !== 'string') {
-      const detectedChannels = extractChannelsFromPaths(
-        images.map(img => (img as { originalPath?: string }).originalPath)
-      );
+      // Prefer the BE-aggregated `projectChannels` (sourced from the video
+      // container's `channels` JSON — all declared channels regardless of
+      // which one is the segmentation source). `extractChannelsFromPaths`
+      // is a fallback for legacy data: it only sees the channel that's
+      // referenced in `originalPath` (per-frame ch0.png), so it would
+      // hide ch1/ch2 even though they live on disk and the user wants
+      // to pick one to segment.
+      const detectedChannels =
+        projectChannels && projectChannels.length > 0
+          ? projectChannels
+          : extractChannelsFromPaths(
+              images.map(img => (img as { originalPath?: string }).originalPath)
+            );
       if (detectedChannels.length > 1 && !pendingChannelChoice) {
         // Default to the first channel; backend already validates against the
         // queue row's set so an unknown token returns 400 cleanly.
