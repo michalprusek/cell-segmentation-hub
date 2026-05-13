@@ -548,7 +548,17 @@ export interface ProjectImage {
 /** Shape of one entry in the ``channels`` JSON column on an Image row.
  *  Set only on rows where ``isVideoContainer == true``. */
 export interface VideoChannel {
+  /** Path-safe identifier used as both the per-frame PNG filename
+   *  (`frames/NNNN/<name>.png`) and the API-level channel reference.
+   *  Validated against `/^[A-Za-z0-9_-]{1,64}$/` everywhere it crosses
+   *  a service boundary. */
   name: string;
+  /** Human-friendly label sourced from the upload's metadata (TIFF
+   *  ImageJ labels / ND2 channel names). Falls back to `"Channel N"`
+   *  (1-based) when the format carries no metadata. UI components
+   *  should render `displayName ?? name`. Older uploads (pre-2026-05-13)
+   *  have this undefined; consumers must tolerate that. */
+  displayName?: string;
   type: 'irm' | 'fluorescent';
   wavelengthNm?: number;
   displayColor?: string;

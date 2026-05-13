@@ -34,6 +34,7 @@ interface PythonResult {
   height: number;
   channels: Array<{
     name: string;
+    displayName?: string | null;
     wavelengthNm?: number | null;
   }>;
 }
@@ -131,6 +132,7 @@ function buildChannelMeta(
 
   return raw.map((r, i) => ({
     name: r.name,
+    displayName: r.displayName ?? undefined,
     type: isIrmChannel(r.name, r.wavelengthNm ?? undefined)
       ? 'irm'
       : 'fluorescent',
