@@ -279,6 +279,29 @@ const CanvasPolygon = React.memo(
           onMouseLeave={isPolyline ? handleMouseLeave : undefined}
           style={{ outline: 'none' }}
         >
+          {/* Polyline hit-area: invisible thick stroke layered UNDER the
+              visible path. Polylines are 1-D — the visible stroke is only
+              a couple of pixels wide, so right-click / hover would
+              otherwise demand pixel-perfect aim. A 12× wider transparent
+              stroke makes the click target comfortable without changing
+              the rendered look. Pointer-events confined to the stroke so
+              the surrounding canvas drag/zoom still works. */}
+          {isPolyline && pathString && (
+            <path
+              d={pathString}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={Math.max(strokeWidth * 12, 6)}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              onClick={handleClick}
+              onDoubleClick={handleDoubleClick}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="stroke"
+              style={{ cursor: 'pointer' }}
+            />
+          )}
+
           {/* Polygon/Polyline path - render even if path is empty for testing */}
           <path
             d={pathString || 'M0,0'}
@@ -319,8 +342,12 @@ const CanvasPolygon = React.memo(
             pointerEvents={isPolyline ? 'stroke' : 'all'}
           />
 
-          {/* Polyline endpoint markers (small circles at start and end) */}
-          {isPolyline && validPoints.length >= 2 && (
+          {/* Polyline endpoint markers — only when the polyline is
+              selected. In the default non-selected state we want the MTs
+              to read as plain curves on the image (no extra dots
+              cluttering the visual). When selected they reappear as a
+              visual aid for the vertex-editing workflow. */}
+          {isPolyline && isSelected && validPoints.length >= 2 && (
             <>
               <circle
                 cx={validPoints[0].x}
