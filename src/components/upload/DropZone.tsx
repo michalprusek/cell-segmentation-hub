@@ -5,14 +5,7 @@ import { useLanguage } from '@/contexts/useLanguage';
 import { toast } from 'sonner';
 import UPLOAD_CONFIG from '@/lib/uploadConfig';
 import { FILE_LIMITS } from '@/lib/constants';
-
-const VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.nd2'];
-
-function isVideoFile(file: File): boolean {
-  if (file.type.startsWith('video/')) return true;
-  const lower = file.name.toLowerCase();
-  return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext));
-}
+import { isVideoLikeUpload } from '@/lib/uploadUtils';
 
 interface DropZoneProps {
   disabled: boolean;
@@ -41,7 +34,7 @@ const DropZone: React.FC<DropZoneProps> = ({ disabled, onDrop }) => {
       // Videos / microscopy stacks get a larger size budget because the
       // upload payload is a single multi-frame file, vs. many smaller
       // single-image uploads.
-      const sizeBudget = isVideoFile(file)
+      const sizeBudget = isVideoLikeUpload(file)
         ? FILE_LIMITS.MAX_VIDEO_FILE_SIZE_BYTES
         : UPLOAD_CONFIG.MAX_FILE_SIZE_BYTES;
       if (file.size > sizeBudget) {

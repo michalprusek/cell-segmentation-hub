@@ -5,6 +5,34 @@
 import UPLOAD_CONFIG from './uploadConfig';
 import { sleep } from './retryUtils';
 
+const TRUE_VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.nd2'];
+
+const MULTI_PAGE_TIFF_EXTENSIONS = ['.tif', '.tiff'];
+
+// SSOT for "is this upload a video / microscopy stack". A bare extension
+// check was duplicated in DropZone + UploadContext; both must agree on
+// the routing (image multer caps at 20 MB, video multer at 100 GB), so
+// any drift between the two manifests as "small TIFF fails to upload"
+// or "large TIFF silently rejected client-side".
+//
+// Multi-page TIFFs are extension-ambiguous with single-page TIFFs (same
+// .tif extension), so the heuristic is size-based: anything over the
+// image cap is assumed to be a multi-page stack and routed through the
+// video pipeline (`tifffile`-driven extractor on the backend). This
+// keeps single-image TIFF uploads (< 20 MB) on the bulk image route.
+export function isVideoLikeUpload(file: File): boolean {
+  if (file.type.startsWith('video/')) return true;
+  const lower = file.name.toLowerCase();
+  if (TRUE_VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext))) return true;
+  if (
+    MULTI_PAGE_TIFF_EXTENSIONS.some(ext => lower.endsWith(ext)) &&
+    file.size > UPLOAD_CONFIG.MAX_FILE_SIZE_BYTES
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export interface ChunkingConfig {
   chunkSize: number;
   maxConcurrentChunks: number;
