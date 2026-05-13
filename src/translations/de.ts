@@ -105,6 +105,15 @@ export default {
         'Wir kombinieren modernste KI-Modelle mit einer intuitiven Benutzeroberfläche, um Forschern leistungsstarke Werkzeuge für die mikroskopische Bildanalyse zur Verfügung zu stellen, mit Fokus auf Sphäroid-Segmentierung mit unvergleichlicher Präzision.',
       contactText: 'Für Anfragen kontaktieren Sie uns bitte unter',
     },
+    acknowledgments: {
+      badge: 'Danksagungen',
+      title: 'Besonderer Dank',
+      lukasIntro: 'Wir danken',
+      lukasName: 'Lukáš Veškrna',
+      lukasContribution:
+        'für den Beitrag des kompletten Wundheilungs-Segmentierungsmoduls zu dieser Plattform.',
+      visitPage: 'Seite besuchen',
+    },
     cta: {
       title: 'Bereit, Ihren Zellanalyse-Workflow zu transformieren?',
       subtitle:
