@@ -2024,6 +2024,10 @@ export default {
       loading: 'Cargando...',
     },
   },
+  microtubule: {
+    instancePanel: 'Instancias de microtúbulos',
+    instance: 'Microtúbulo',
+  },
   sperm: {
     instancePanel: 'Instancias de espermatozoides',
     instance: 'Espermatozoide',

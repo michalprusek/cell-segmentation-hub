@@ -4,6 +4,10 @@ import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
+import {
+  colorFromInstanceId,
+  isMicrotubuleInstance,
+} from '@/pages/segmentation/utils/instanceColors';
 
 interface CanvasPolygonProps {
   polygon: Polygon;
@@ -140,6 +144,22 @@ const CanvasPolygon = React.memo(
         return isSelected ? '#16a34a' : '#22c55e'; // green
       }
       if (isPolyline) {
+        // Microtubule polylines: deterministic per-instance HSL hash. The
+        // tracker (backend/src/services/tracking/trackerService.ts) writes
+        // a stable `trackId` across frames; `instanceId` is freshly
+        // generated per-inference and only differs within a single frame.
+        // Prefer `trackId` so the same microtubule keeps its color when
+        // scrubbing; fall back to `instanceId` before tracking has run.
+        // `class='microtubule'` is the authoritative ML signal; `mt_`
+        // instanceId prefix is the legacy fallback.
+        const isMt =
+          !polygon.partClass &&
+          (polygon.class === 'microtubule' ||
+            isMicrotubuleInstance(polygon.instanceId));
+        if (isMt) {
+          const colorKey = polygon.trackId ?? polygon.instanceId ?? '';
+          return colorFromInstanceId(colorKey, { selected: isSelected });
+        }
         // Part-class-based colors for sperm polylines
         switch (polygon.partClass) {
           case 'head':
@@ -378,7 +398,9 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.type === nextProps.polygon.type &&
       prevProps.polygon.geometry === nextProps.polygon.geometry &&
       prevProps.polygon.partClass === nextProps.polygon.partClass &&
+      prevProps.polygon.class === nextProps.polygon.class &&
       prevProps.polygon.instanceId === nextProps.polygon.instanceId &&
+      prevProps.polygon.trackId === nextProps.polygon.trackId &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&

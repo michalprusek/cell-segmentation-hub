@@ -1973,6 +1973,10 @@ export default {
     developedAt: 'Développé à',
     designBy: 'Design par',
   },
+  microtubule: {
+    instancePanel: 'Instances de microtubules',
+    instance: 'Microtubule',
+  },
   sperm: {
     instancePanel: 'Instances de spermatozoïdes',
     instance: 'Spermatozoïde',
