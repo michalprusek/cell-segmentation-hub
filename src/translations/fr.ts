@@ -1988,6 +1988,8 @@ export default {
     instance: 'Microtubule',
     hideInstance: 'Masquer le microtubule',
     showInstance: 'Afficher le microtubule',
+    hideAll: 'Tout masquer',
+    showAll: 'Tout afficher',
   },
   sperm: {
     instancePanel: 'Instances de spermatozoïdes',

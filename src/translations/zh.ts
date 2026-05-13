@@ -1870,6 +1870,8 @@ export default {
     instance: '微管',
     hideInstance: '隐藏微管',
     showInstance: '显示微管',
+    hideAll: '全部隐藏',
+    showAll: '全部显示',
   },
   sperm: {
     instancePanel: '精子实例',

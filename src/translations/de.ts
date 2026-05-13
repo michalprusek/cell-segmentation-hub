@@ -2001,6 +2001,8 @@ export default {
     instance: 'Mikrotubulus',
     hideInstance: 'Mikrotubulus ausblenden',
     showInstance: 'Mikrotubulus einblenden',
+    hideAll: 'Alle ausblenden',
+    showAll: 'Alle einblenden',
   },
   sperm: {
     instancePanel: 'Spermien-Instanzen',

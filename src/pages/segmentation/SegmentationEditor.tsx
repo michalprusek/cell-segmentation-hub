@@ -92,6 +92,7 @@ const SegmentationEditor = () => {
   // Instead, we fetch only metadata and load segmentation data on-demand
   const {
     projectTitle,
+    projectType,
     images,
     loading: projectLoading,
     refreshImageSegmentation,
@@ -1295,7 +1296,7 @@ const SegmentationEditor = () => {
           {videoContainerId && (
             <VideoModeOverlay
               videoContainerId={videoContainerId}
-              projectType={project?.type as ProjectType | undefined}
+              projectType={projectType}
             />
           )}
 
@@ -1451,6 +1452,11 @@ const SegmentationEditor = () => {
                             }
                             onDeleteVertex={handleDeleteVertexFromContextMenu}
                             onHover={setHoveredPolygonId}
+                            // Drives sperm-vs-microtubule context-menu
+                            // gating inside PolygonContextMenu — sperm
+                            // items appear only on sperm projects, the
+                            // kymograph item only on microtubule projects.
+                            projectType={projectType}
                           />
                         ))}
 

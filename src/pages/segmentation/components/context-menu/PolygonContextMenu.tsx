@@ -6,8 +6,9 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
-import { Trash, Scissors, Edit, Link } from 'lucide-react';
+import { Trash, Scissors, Edit, Link, BarChart3 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
+import type { ProjectType } from '@/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,11 @@ interface PolygonContextMenuProps {
   onEdit: () => void;
   polygonId: string;
   isPolyline?: boolean;
+  /** Drives which polyline-specific items render. ``'sperm'`` shows the
+   *  head/midpiece/tail re-classify + "Assign to instance N" submenu;
+   *  ``'microtubules'`` shows "Show kymograph"; other types fall back
+   *  to edit + delete only. */
+  projectType?: ProjectType;
   onChangePartClass?: (partClass: 'head' | 'midpiece' | 'tail') => void;
   onChangeInstanceId?: (instanceId: string) => void;
   currentInstanceId?: string;
@@ -37,13 +43,28 @@ const PolygonContextMenu = ({
   onDelete,
   onSlice,
   onEdit,
-  polygonId: _polygonId,
+  polygonId,
   isPolyline = false,
+  projectType,
   onChangePartClass,
   onChangeInstanceId,
   currentInstanceId,
   availableInstanceIds,
 }: PolygonContextMenuProps) => {
+  const isSperm = projectType === 'sperm';
+  const isMicrotubules = projectType === 'microtubules';
+
+  // Fire the global "open kymograph" event that VideoModeOverlay
+  // already listens for — no new prop plumbing needed. The overlay
+  // mounts the KymographModal for the selected polylineId.
+  const handleShowKymograph = React.useCallback(() => {
+    if (typeof document === 'undefined') return;
+    document.dispatchEvent(
+      new CustomEvent('segmentation:open-kymograph', {
+        detail: { polylineId: polygonId },
+      })
+    );
+  }, [polygonId]);
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const { t } = useLanguage();
 
@@ -66,7 +87,23 @@ const PolygonContextMenu = ({
               <span>{t('contextMenu.splitPolygon')}</span>
             </ContextMenuItem>
           )}
-          {isPolyline && onChangePartClass && (
+          {isPolyline && isMicrotubules && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onClick={handleShowKymograph}
+                className="cursor-pointer"
+              >
+                <BarChart3 className="mr-2 h-4 w-4" />
+                <span>
+                  {t('editor.kymograph.showKymograph', {
+                    defaultValue: 'Show kymograph',
+                  })}
+                </span>
+              </ContextMenuItem>
+            </>
+          )}
+          {isPolyline && isSperm && onChangePartClass && (
             <>
               <ContextMenuSeparator />
               <ContextMenuItem
@@ -102,6 +139,7 @@ const PolygonContextMenu = ({
             </>
           )}
           {isPolyline &&
+            isSperm &&
             onChangeInstanceId &&
             availableInstanceIds &&
             availableInstanceIds.length > 0 && (
