@@ -1,53 +1,252 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code in this repository. **Read this fully before any non-trivial work.**
+
+The most important section is **[Verification Rules](#verification-rules)**. Read it twice. Failing to follow it is the #1 cause of production bugs in this project.
+
+---
 
 ## Production Safety
 
-**Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`.
+**Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`. Service: `spheroseg_blue`. URL: `https://spherosegapp.utia.cas.cz`. Test account: `12bprusek@gym-nymburk.cz` / `spheroids2026`.
+
+---
+
+## Verification Rules
+
+### The non-negotiable rule
+
+**"Done" is not "TypeScript compiles + ESLint clean".** Production bugs in this repo have repeatedly shipped despite green pre-commit because:
+
+- Types prove "compiles", not "behaves correctly".
+- Lint proves "follows rules", not "logic is right".
+- Vitest passing on isolated mocks proves nothing about real data.
+- The production-build minified bundle behaves differently than the dev server.
+
+**A change is "done" only when the runtime path that uses it has been observed working.** For user-facing changes, that means a real browser. For API changes, a real curl. For DB changes, a real query. No exceptions.
+
+### Verification gates per change category
+
+The mandatory verification depends on what changed. Apply **every** gate that matches; ignoring "minor" UI tweaks is how regressions slip in.
+
+#### A. UI / component / layout / styling change
+
+Always use **Playwright MCP** (`mcp__playwright__browser_*` tools). Sequence:
+
+```
+1. browser_navigate           → open the relevant route on https://spherosegapp.utia.cas.cz
+2. browser_snapshot           → a11y tree confirms the element exists in DOM
+3. browser_take_screenshot    → visual confirmation; review the screenshot
+4. browser_console_messages   → ANY error/warning means the feature is broken
+5. browser_click / _type      → trigger the user action this PR is about
+6. browser_wait_for           → for the post-action state (text appears, request settles)
+7. browser_snapshot again     → confirm the DOM changed as expected
+```
+
+Do not claim "the new panel renders correctly" without `browser_take_screenshot` showing it. Do not claim "the button works" without `browser_click` followed by a state verification step. **"It should work because the code looks right" is forbidden as a completion claim.**
+
+#### B. API endpoint / backend response shape change
+
+Three options, pick at least one:
+
+1. **`curl` against dev or production**: `curl -s -H "Authorization: Bearer $TOKEN" $URL | jq` — verify the exact field is present with the expected type. Don't trust the controller code; trust the wire response.
+2. **`browser_network_requests`** in Playwright: navigate to the page that calls the endpoint, inspect the actual request + response in the network panel.
+3. **`browser_evaluate`** to read React Query cache: `window.__REACT_QUERY_DEVTOOLS_GLOBAL_HOOK__` or by accessing the QueryClient via a known component's props.
+
+Common bug: backend exposes a field but the FE mapper strips it. Run BOTH the backend curl AND the FE state inspection to be sure.
+
+#### C. WebSocket / async / queue / state machine change
+
+- Trigger the action in the browser via Playwright.
+- Tail the relevant service log in parallel (`docker logs -f spheroseg-backend` or `spheroseg-ml`) and grep for the event.
+- Confirm the FE state actually changed (poll React state via `browser_evaluate` or visual via screenshot).
+- For multi-step flows (e.g. upload → queue → segment → display), verify each transition independently — don't rely on the final state alone.
+
+Bugs in this category include: queue worker stuck on `isProcessing=true`, WebSocket emit race with React Query invalidation, Socket.io reconnect dropping subscriptions. None are catchable by unit tests.
+
+#### D. Database / Prisma schema change
+
+- Run the migration in the dev container: `docker exec spheroseg-backend npx prisma migrate dev --name <name>`.
+- Inspect the resulting schema: `docker exec spheroseg-postgres psql -U spheroseg -d spheroseg_dev -c "\d <table>"`.
+- Verify column types, constraints, indexes match intent.
+- For production: **always** `prisma migrate deploy`, never `migrate dev` (the latter creates new migration files against the live DB).
+- BigInt vs Int4 has bitten this codebase before (fileSize overflow); double-check numeric column types match the JS-side number ranges.
+
+#### E. ML pipeline / Python / model wrapper change
+
+- Test inside the ML container: `docker exec spheroseg-ml python -c "..."` with a minimal repro.
+- Verify ndarray shapes and dtypes via `print(arr.shape, arr.dtype)` at boundaries — these are runtime contracts, not type-checked.
+- For changes that affect tracking embeddings or polyline output: assert the cross-frame invariant `len(centerlines[i]) == embedding_samples[i].shape[0]`. Misalignment silently corrupts Hungarian matching.
+- If the change is performance-sensitive (CUDA OOM territory), monitor with `nvidia-smi -l 1` during a real inference call.
+
+#### F. Cross-stack feature (frontend ↔ backend ↔ ML)
+
+End-to-end Playwright walk-through of the user journey is **mandatory**. Unit tests are insufficient because they mock the layer boundaries; real bugs live in the seams. Example sequence for "segment a microtubule video":
+
+```
+1. browser_navigate → project page
+2. browser_click "Segment All" → channel picker dialog should appear
+3. browser_click channel option + Confirm → toast + queue stats update
+4. (background) docker logs spheroseg-ml | grep -i microtubule → confirm inference
+5. browser_navigate → editor of frame 0
+6. browser_snapshot → confirm polylines render with per-MT colors
+7. browser_navigate → editor of frame 5
+8. browser_snapshot → same MTs keep same color (trackId stable)
+```
+
+#### G. Build / dependency / bundle config change
+
+- Always run `make build-service SERVICE=frontend` (or backend / ml-service) locally before claiming done. Minified production bundles strip dead code, rename identifiers, and split chunks differently from dev.
+- After a successful build, hit the **production-mode local preview** (`docker compose -f docker-compose.production.yml up -d --no-deps --force-recreate frontend`) and click through key flows in a browser. Dev-server HMR-friendly code can break under tree-shaking.
+
+### The "no console errors" policy
+
+**Any error in the browser console during a Playwright check is a bug.** Treat it as a blocker. Warnings are case-by-case: React `key` warnings = bug; deprecation warnings from libraries = file in tech debt log.
+
+```
+browser_console_messages → if length > 0 with severity 'error', the change is NOT done.
+```
+
+### The production-parity rule
+
+**A feature works locally ≠ a feature works in production.** Things that differ:
+
+- Bundled minified code (Vite tree-shake + chunk split)
+- Real network latency (200 ms+ vs 0 ms local)
+- Cold caches (no React Query memo, no service worker)
+- Nginx upstream DNS caching (a backend recreate may need `docker restart spheroseg-nginx`)
+- Real auth state (expired tokens mid-action, refresh races)
+- Real user data shapes (ND2 with IRM channel, missing frames, 200-frame videos)
+
+If the change is going to production, **build the production bundle locally and click through it** before deploying. The dev server is a development convenience, not a production proxy.
+
+### What to do when verification finds a bug
+
+1. Don't paper over it with `try/catch` or fallbacks unless that's the actual fix.
+2. Identify the root cause; verification revealed the symptom, the real bug may be one layer up.
+3. Reproduce minimally — confirm the bug exists in the smallest possible setup.
+4. Fix the root cause; re-run the same verification sequence; confirm it now passes.
+5. Add a regression test if and only if the test would have caught the bug. Don't pad the suite with shallow assertions.
+
+---
+
+## Test Suite Reality
+
+**Treat the test suite as currently broken.** Honest numbers as of 2026-05-13:
+
+| Suite                         | State                                                                                                                                                           |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest (frontend unit)        | ~31% failures (467/2543). Mostly webSocketManager, ND2 helpers, legacy editor tests. Healthy tests exist but mixed in; running the suite gives no clean signal. |
+| Playwright E2E (`tests/e2e/`) | Present, not regularly run, not in merge gate. Run manually via `make test-e2e`.                                                                                |
+| Backend Jest                  | Not validated regularly. Several `*.sperm.test.ts` files are untracked work-in-progress.                                                                        |
+| Python pytest                 | Not installed in the ML container. Test files parse but cannot run inside Docker.                                                                               |
+
+**Consequence**: a passing `npm test` proves nothing about the feature. Don't rely on it.
+
+### When to write tests
+
+- **Pure utility function with a deterministic contract** → unit test. See `instanceColors.test.ts` for the pattern.
+- **Regression fix for a real production bug** → write a test that fails before the fix and passes after. The bug provided the spec; encode it.
+- **Cross-frame / cross-layer invariant** → integration test with mocked layer boundaries (see `test_rdp_preserves_embedding_alignment` for the pattern).
+
+### When NOT to write tests
+
+- Shallow render tests that just confirm a component mounts — these are noise. They pass even when the feature is broken.
+- Tests against modules with broken imports — fix the import chain first.
+- Tests requiring infrastructure not gated on availability (e.g. ML model loaded) — guard with `pytest.importorskip` / `vi.skipIf`.
+- Padding existing suites to hit a coverage number.
+
+### Tests are not a substitute for verification
+
+Even if every test passes, **you still must Playwright-verify the user-facing change**. Tests prove "this assertion held under this scenario"; verification proves "the feature works in a real browser against real services". They are complementary, not interchangeable.
+
+---
+
+## Production Failure Patterns (Recognize and Prevent)
+
+Each of these shipped to production at least once in 2026 despite green pre-commit. Recognize and proactively check:
+
+1. **Field-missing-from-API-response**. Backend forgot to expose a field; FE renders empty/null. Check: `curl` the endpoint and assert field present.
+
+2. **FE mapper strips field**. Backend exposes field, but a `useProjectData`-style mapper drops it before it reaches components. Check: `browser_evaluate` on React Query state, not just the controller.
+
+3. **SyntheticEvent as first arg**. `onClick={handleX}` passes a React SyntheticEvent as the first argument, so `handleX(opt?: string)` treats the event as `opt`. Check: `typeof arg === 'string'` in handlers + Playwright click test.
+
+4. **Per-inference randomness claimed stable**. Claiming an ID is preserved across frames when it's `uuid.uuid4()` per call. Check: read the model code (`backend/segmentation/ml/model_loader.py`) before claiming behavior; for cross-frame stability use `trackId` (written by tracker), not `instanceId`.
+
+5. **Incomplete React.memo comparator**. Adding a new prop to a memoized component but forgetting to compare it; component never re-renders on prop change. Check: when touching a `React.memo` component's props, always update the comparator (`CanvasPolygon.tsx:387` style).
+
+6. **Build succeeds but bundle breaks**. ESLint/TS clean, but `make build-service SERVICE=frontend` fails on minification or chunk split, or the minified code behaves differently. Check: run the production build locally + open the production preview.
+
+7. **Migration runs but column is wrong type**. Prisma migration creates an Int4 where the FE will eventually push a number > 2³¹. Check: schema after migration + a real overflow value.
+
+8. **Nginx upstream DNS cache**. Backend recreated; nginx still points at old container IP → 502s. Check: after a backend `--force-recreate`, also restart nginx.
+
+9. **Docker compose without `--env-file`**. Env vars (e.g. `HF_TOKEN`) silently empty in the container. Check: `docker exec ... env | grep HF_TOKEN` after recreate.
+
+10. **Queue worker stuck on `isProcessing=true`**. ML recreate during an in-flight axios POST leaves the backend in a deadlock state. Check: tail backend logs after deploy; if no progress, restart backend.
+
+---
 
 ## Commands
 
-**This is a Docker-first project. Never run npm/node directly on the host — use `make` targets or Docker shells.**
+**Docker-first project. Never run npm/node directly on the host — use `make` targets or container shells.**
+
+### Daily development
 
 ```bash
-# Development
-make up                          # Start all services (frontend :3000, backend :3001, ML :8000)
+make up                          # Start all services (FE :3000, BE :3001, ML :8000)
 make down                        # Stop services
 make logs-f                      # Tail all logs
 make health                      # Health check
-
-# Shells (run npm/prisma commands inside these)
-make shell-fe                    # Frontend container shell
-make shell-be                    # Backend container shell
-make shell-ml                    # ML service container shell
-
-# Code quality (can run on host — these are fast)
-npx tsc --noEmit                 # TypeScript check (frontend)
-make lint                        # ESLint
-make type-check                  # Full TypeScript check (frontend + backend)
-
-# Testing
-make test                        # Unit tests (Vitest frontend, Jest backend)
-make test-e2e                    # Playwright E2E tests
-
-# Building (always use optimized builds)
-make build-optimized             # Smart build with auto-cleanup
-make build-service SERVICE=frontend  # Build one service
-make build-clean                 # Full rebuild without cache
-
-# Docker maintenance
-make docker-usage                # Check disk usage
-make optimize-storage            # Safe cleanup
+make shell-fe / shell-be / shell-ml  # Container shells
 ```
 
-### Database (run inside `make shell-be`)
+### Code quality (runs on host)
 
 ```bash
-npx prisma migrate dev --name migration_name
-npx prisma generate
-npx prisma studio                # Visual DB browser
+make ci                          # Full local CI gate: TS + ESLint(0) + i18n. ~30 s.
+make ci-test                     # Vitest run (currently 31% broken — informational only)
+npx tsc --noEmit                 # Frontend type check
+make lint                        # ESLint in Docker
 ```
+
+### Database (inside `make shell-be`)
+
+```bash
+npx prisma migrate dev --name <name>     # Dev migration (creates file)
+npx prisma migrate deploy                # Production migration (applies existing file)
+npx prisma generate
+npx prisma studio                        # Visual DB browser
+```
+
+### Building (always optimized)
+
+```bash
+make build-optimized                     # Smart build with auto-cleanup
+make build-service SERVICE=frontend      # Build single service
+make build-clean                         # Full no-cache rebuild
+```
+
+### Production
+
+```bash
+make prod                                              # Build + deploy
+docker compose -f docker-compose.production.yml \
+  --env-file .env.production up -d                     # Manual deploy (note --env-file!)
+curl https://spherosegapp.utia.cas.cz/health           # Verify
+```
+
+| Service     | Production      | Dev  |
+| ----------- | --------------- | ---- |
+| nginx (SSL) | 80/443          | —    |
+| Frontend    | 4000            | 3000 |
+| Backend     | 4001            | 3001 |
+| ML          | 4008            | 8000 |
+| PostgreSQL  | 5432 (internal) | 5432 |
+| Redis       | 6379 (internal) | 6379 |
+
+---
 
 ## Tech Stack
 
@@ -61,134 +260,115 @@ npx prisma studio                # Visual DB browser
 | Auth       | JWT access + refresh tokens                                                           |
 | i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via i18next                                      |
 
-## Architecture
+---
 
-### Frontend State Management
+## Architecture (skim level — read `docs/architecture/` for depth)
 
-- **Server state**: React Query (TanStack) with optimistic updates and query invalidation
-- **Client state**: React Contexts — Auth, Theme, Language, WebSocket, Upload, Export, Model, ImageDisplayContext (editor: channel + min/max + frame index)
-- **Real-time**: Socket.io events (`segmentationStatus`, `segmentationCompleted/Failed`, `queueStats`)
+### Frontend state
 
-### Segmentation Editor (`/src/pages/segmentation/`)
+- **Server state**: React Query (TanStack) with optimistic updates + query invalidation.
+- **Client state**: React Contexts — Auth, Theme, Language, WebSocket, Upload, Export, Model, ImageDisplayContext.
+- **Real-time**: Socket.io events (`segmentationStatus`, `segmentationCompleted/Failed`, `queueStats`).
 
-The editor is the most complex frontend component (~51KB orchestrator). Key patterns:
+### Segmentation editor (`/src/pages/segmentation/`)
 
-- **`SegmentationEditor.tsx`** — top-level orchestrator, wires hooks into canvas components
-- **`useEnhancedSegmentationEditor`** — core state: polygons, selection, undo/redo, transforms
-- **`useAdvancedInteractions`** — mouse/keyboard interactions, polygon creation, vertex editing
-- **EditMode enum** — state machine: `View | EditVertices | Slice | AddPoints | DeletePolygon | CreatePolygon | CreatePolyline`
-- **Polygon model** — closed polygons (`geometry: 'polygon'`) and open polylines (`geometry: 'polyline'`) with optional `partClass` + `instanceId` (sperm) or `trackId` + `_embedding` (microtubule cross-frame tracking)
-- **Canvas layers** — `CanvasPolygon` (per-polygon, React.memo with custom comparator), `CanvasVertex`, `CanvasTemporaryGeometryLayer`
-- **Coordinate system** — image coords ↔ canvas coords via `coordinateUtils.ts`, zoom-dependent stroke widths
+Most complex feature in the repo (~51 KB orchestrator). Key files:
 
-### Backend Architecture
+- `SegmentationEditor.tsx` — top-level orchestrator
+- `useEnhancedSegmentationEditor` — core state (polygons, selection, undo/redo, transforms)
+- `useAdvancedInteractions` — mouse/keyboard, polygon creation, vertex editing
+- `EditMode` enum — state machine: `View | EditVertices | Slice | AddPoints | DeletePolygon | CreatePolygon | CreatePolyline`
+- `Polygon` model — closed polygons (`geometry: 'polygon'`) + open polylines (`geometry: 'polyline'`) with optional `partClass` + `instanceId` (sperm) or `trackId` + `_embedding` (microtubule cross-frame tracking)
+- Canvas layers: `CanvasPolygon` (per-polygon, React.memo with custom comparator), `CanvasVertex`, `CanvasTemporaryGeometryLayer`
+
+### Backend (`/backend/`)
 
 ```
-Controllers → Services → Prisma ORM → Storage (local filesystem / S3)
+Controllers → Services → Prisma ORM → Storage (local FS / S3)
 ```
 
-- **API routes**: `/backend/src/api/routes/` with OpenAPI/Swagger docs at `:3001/api-docs`
-- **Queue system**: `SegmentationQueue` model with priority, retry, batch ID. Controller: `queueController.ts`. Supports up to 10,000 images per batch.
-- **Export formats**: COCO, YOLO, JSON in `/backend/src/services/export/`
+- API routes: `/backend/src/api/routes/`, Swagger at `:3001/api-docs`
+- Queue: `SegmentationQueue` model, controller `queueController.ts`, supports 10 000 imgs/batch
+- Export: COCO / YOLO / JSON in `/backend/src/services/export/`
 
-### ML Service (`/backend/segmentation/`)
+### ML service (`/backend/segmentation/`)
 
-- FastAPI app with PyTorch models, GPU (CUDA) with CPU fallback
-- Models: HRNet (~200ms), CBAM-ResUNet (~400ms), U-Net (~200ms), Sperm (specialized), Microtubule v7 (DINOv3-L + DPT + PySOAX, ~8 s/frame)
-- Weights auto-download from Google Drive. Check: `make check-weights`. Microtubule v7 is staged via `scripts/download-microtubule-weights.sh` (1.2 GB) and additionally needs `HF_TOKEN` for the gated DINOv3 backbone (~1.1 GB on first load).
-- Inference → postprocessing → polygon extraction (or polyline centerlines for sperm + microtubule)
-- Cross-frame routes: `/api/v1/track` (Hungarian matching across video frames using persisted 32-d embeddings) and `/api/v1/kymograph` (line-profile sampling + viridis heatmap rendering) live in `api/tracker_kymograph.py`.
+- FastAPI + PyTorch, CUDA with CPU fallback
+- Models: HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Sperm, Microtubule v7 (DINOv3-L + DPT + PySOAX, ~8 s/frame)
+- Weights from Google Drive; `make check-weights`. Microtubule v7: `scripts/download-microtubule-weights.sh` + `HF_TOKEN` for DINOv3 backbone.
+- Cross-frame routes: `/api/v1/track` (Hungarian matching on 32-d embeddings) + `/api/v1/kymograph` (line-profile + viridis) in `api/tracker_kymograph.py`.
 
 ### Video projects
 
-- A video container is one `Image` row with `isVideoContainer = true` and a `channels` JSON array. Each extracted frame is a child `Image` row with `parentVideoId` + `frameIndex` + `displayOrder`. The container itself is never enqueued.
-- Supported formats: MP4 / AVI / MOV / MKV / WebM (via `ffmpeg-static`), multi-page TIFF stacks (`tifffile` Python helper), Nikon ND2 (`nd2` Python helper). All extractors live in `backend/src/services/video/`.
-- Storage layout: `projects/<pid>/images/<videoId>/{original.ext, thumbnail.jpg, frames/NNNN/<channel>.png, ...}`.
-- Channels: ND2 + multi-page TIFF expose per-channel PNGs. IRM auto-detection by name (IRM / BF / DIC / TL) + null wavelength. Segmentation runs on the channel marked `isSegmentationSource = true`; kymograph defaults to the first fluorescent channel.
-- Cross-frame microtubule tracking: triggers automatically when all frames of a container reach status `'segmented'`; `backend/src/services/tracking/trackerService.ts` posts polylines + embeddings to ML `/track` and patches `trackId` back into each `Segmentation.polygons`.
-- Queue fairness: `getBatchItems` prefers users not in the recently-processed window so a 200-frame video can't monopolise the queue.
+- Video container = one `Image` row with `isVideoContainer=true` + `channels` JSON. Each frame is a child `Image` row with `parentVideoId` + `frameIndex` + `displayOrder`. Containers are never enqueued.
+- Formats: MP4 / AVI / MOV / MKV / WebM (ffmpeg-static), multi-page TIFF (`tifffile`), Nikon ND2 (`nd2`).
+- Storage: `projects/<pid>/images/<videoId>/{original.ext, thumbnail.jpg, frames/NNNN/<channel>.png, ...}`.
+- Channels: ND2 + TIFF expose per-channel PNGs. IRM auto-detected by name (IRM / BF / DIC / TL). Segmentation uses the channel marked `isSegmentationSource=true`.
+- Cross-frame MT tracking: auto-triggers when all frames reach `'segmented'`. `trackerService.ts` POSTs to ML `/track`, patches `trackId` into `Segmentation.polygons`.
+- Queue fairness: `getBatchItems` deprioritizes users recently processed so a 200-frame video can't monopolize.
 
-### Key Shared Libraries (`/src/lib/`)
+### Key shared libraries (`/src/lib/`)
 
-- **`api.ts`** — Axios client with JWT interceptors, token refresh, retry logic
-- **`polygonGeometry.ts`** — polygon area, perimeter, point-in-polygon, vertex operations (shared — don't duplicate these)
-- **`segmentation.ts`** — `Polygon` and `Point` type definitions, polygon creation
-- **`metricCalculations.ts`** (`/src/pages/segmentation/utils/`) — Feret diameter (rotating calipers), polyline length, perimeter (includes holes, ImageJ convention)
-- **`constants.ts`** — timeouts, retry config, WebSocket event names
+- `api.ts` — Axios client with JWT interceptors, token refresh, retry
+- `polygonGeometry.ts` — area, perimeter, point-in-polygon, vertex ops (don't duplicate)
+- `segmentation.ts` — `Polygon` + `Point` types
+- `metricCalculations.ts` (under `pages/segmentation/utils/`) — Feret diameter, polyline length, ImageJ-convention perimeter
+- `constants.ts` — timeouts, retry, WebSocket event names
+
+---
 
 ## Code Conventions
 
-### Pre-commit Hooks (Husky)
+### Pre-commit (Husky)
 
-Commits are validated by `.husky/pre-commit`:
+`.husky/pre-commit` validates every commit:
 
-- No `console.log` / `debugger` in production code
-- ESLint (0 warnings), Prettier formatting, TypeScript checking
-- **Conventional commits required**: `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`
-- **Direct commits to `main` are blocked** — use feature branches + PRs
+- No `console.log` / `debugger`
+- ESLint **0 warnings** (strict)
+- Prettier formatting
+- Frontend + backend TypeScript check
+- Conventional commits required (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`)
+- Direct commits to `main` blocked — use feature branches + PRs
 
-### Internationalization
+### i18n
 
-All user-facing strings must exist in all 6 translation files (`/src/translations/{en,cs,es,de,fr,zh}.ts`). Validate with `npm run i18n:validate`.
+All user-facing strings must exist in all 6 translation files (`/src/translations/{en,cs,es,de,fr,zh}.ts`). Validate: `node scripts/check-i18n.cjs`.
 
-### React Patterns in This Codebase
+### React patterns in this codebase
 
-- **React.memo with custom comparators** — used extensively in canvas components (`CanvasPolygon`, `CanvasVertex`). When adding props, update the comparator.
-- **`useCallback`/`useMemo` stability** — parent callbacks passed to memoized children must be stable. Arrays passed for reference-equality comparison need stabilized refs (see `availableInstanceIds` two-stage memo pattern).
+- **React.memo with custom comparators** — used heavily in canvas (`CanvasPolygon`, `CanvasVertex`). When adding props, update the comparator. Missed comparator entries are a recurring bug.
+- **`useCallback` / `useMemo` stability** — parent callbacks passed to memoized children must be stable. Arrays passed for reference-equality need stabilized refs (see `availableInstanceIds` two-stage memo pattern).
 - **`editor.getPolygons()`** — use this (reads latest ref) instead of `editor.polygons` (closure snapshot) when updating polygons from event handlers.
 
-## Key Directories
+### CI surface
 
-```
-src/pages/segmentation/      # Editor — the most complex feature
-src/components/ui/            # shadcn/ui primitives
-src/contexts/                 # React context providers
-src/hooks/                    # Shared custom hooks
-src/lib/                      # Utilities, API client, types
-src/translations/             # i18n files (6 languages)
-backend/src/api/              # Express routes + controllers
-backend/src/services/         # Business logic
-backend/prisma/               # Schema, migrations, seed
-backend/segmentation/         # Python ML service
-docker/                       # Dockerfiles (use *.optimized.Dockerfile)
-scripts/                      # Build, deploy, environment switching
-docs/                         # Detailed documentation (see below)
-```
+GitHub Actions is intentionally minimal (4 chronically-broken workflows were removed in PR #161):
 
-## Deployment
+- `codeql.yml` — passive security scanning (Security tab)
+- `nightly-drift.yml` — daily TS/ESLint/i18n + npm audit on `main`; opens labelled issue on failure, doesn't block PRs
+- GitGuardian App — secret leak detection
 
-```bash
-# Build and deploy
-make build-optimized                                    # Build all images
-docker compose -f docker-compose.production.yml up -d   # Deploy
-curl https://spherosegapp.utia.cas.cz/health            # Verify
+The real PR gate is local: pre-commit hook + `make ci` + Playwright verification + manual review.
 
-# Or use the make target
-make prod                                               # Build + deploy
-```
+---
 
-| Service     | Production      | Dev  |
-| ----------- | --------------- | ---- |
-| nginx (SSL) | 80/443          | -    |
-| Frontend    | 4000            | 3000 |
-| Backend     | 4001            | 3001 |
-| ML          | 4008            | 8000 |
-| PostgreSQL  | 5432 (internal) | 5432 |
-| Redis       | 6379 (internal) | 6379 |
+## Deploy Gotchas
 
-Database: `spheroseg_blue` on PostgreSQL (container: `spheroseg-postgres`).
+- **Production migrations use `prisma migrate deploy`**, never `migrate dev` (dev creates new files; deploy applies existing ones to a live DB).
+- **Bind-mounted configs need `--force-recreate`**, not just `nginx -s reload`. `sed -i` rewrites the inode; the running container holds the old one. Use `docker compose up -d --no-deps --force-recreate <service>`.
+- **HF cache bind-mount** (`backend/segmentation/.hf-cache`) must exist with `chown 999:999` before the ML container starts.
+- **Upload limits coupled across 3 layers** — images 20 MB (`FILE_LIMITS.MAX_FILE_SIZE_BYTES` + image multer + nginx). Videos/ND2 100 GB (`MAX_VIDEO_FILE_SIZE_BYTES` + separate `videoUpload` multer + `client_max_body_size 100G`). The smallest wins.
+- **`HF_TOKEN`** required for first microtubule load (DINOv3 backbone, ~1.1 GB). Lives in `.env.production` (gitignored).
+- **Always `--env-file .env.production`** when running `docker compose` against production. Without it, env vars silently empty.
+- **After backend `--force-recreate`, restart nginx too** — DNS cache pins old container IP.
 
-### Deploy gotchas
-
-- **Apply migrations in production with `prisma migrate deploy`**, not `migrate dev` (dev creates the migration file; deploy applies an existing one to a live DB).
-- **Bind-mounted configs need container recreate, not just `nginx -s reload`** — `sed -i` rewrites the inode, the running container holds the old one. Use `docker compose up -d --no-deps --force-recreate <service>`.
-- **HF cache bind-mount** (`backend/segmentation/.hf-cache`) must exist with `chown 999:999` (container user) before the ML container starts, otherwise transformers errors with `PermissionError at .../huggingface/hub`.
-- **Upload limits are coupled across 3 layers** — images: 20 MB (`FILE_LIMITS.MAX_FILE_SIZE_BYTES` + image multer + nginx). Videos / ND2: 100 GB (`MAX_VIDEO_FILE_SIZE_BYTES` + separate `videoUpload` multer + `client_max_body_size 100G`). All three must agree or the smallest wins.
-- **`HF_TOKEN` env var** required for first microtubule load (gated DINOv3 backbone download, ~1.1 GB). Lives in `.env.production` (gitignored). Subsequent loads read from the HF cache and don't need a valid token.
+---
 
 ## Email
 
-UTIA mail server (`hermes.utia.cas.cz:25`, STARTTLS, no auth). Delays of 2-10 minutes are normal — emails are queued for background processing. Config in `.env.production`.
+UTIA mail server (`hermes.utia.cas.cz:25`, STARTTLS, no auth). 2-10 min delays are normal (background queue). Config in `.env.production`.
+
+---
 
 ## Documentation Index
 
@@ -202,7 +382,6 @@ UTIA mail server (`hermes.utia.cas.cz:25`, STARTTLS, no auth). Delays of 2-10 mi
 | Testing guide                  | [`docs/testing-guide.md`](docs/testing-guide.md)                                                                                                                        |
 | i18n guide                     | [`docs/i18n-guide.md`](docs/i18n-guide.md)                                                                                                                              |
 | Git hooks                      | [`docs/hooks-guide.md`](docs/hooks-guide.md)                                                                                                                            |
-| Deployment                     | [`docs/superpowers/specs/2026-03-28-simplify-deployment-design.md`](docs/superpowers/specs/2026-03-28-simplify-deployment-design.md)                                    |
-| Polygon rendering optimization | [`docs/polygon-rendering-optimization.md`](docs/polygon-rendering-optimization.md) _(aspirational — describes files that don't exist; active render is naive `.map()`)_ |
 | API documentation              | [`docs/api/README.md`](docs/api/README.md)                                                                                                                              |
 | Getting started                | [`docs/development/getting-started.md`](docs/development/getting-started.md)                                                                                            |
+| Polygon rendering optimization | [`docs/polygon-rendering-optimization.md`](docs/polygon-rendering-optimization.md) _(aspirational — describes files that don't exist; active render is naive `.map()`)_ |
