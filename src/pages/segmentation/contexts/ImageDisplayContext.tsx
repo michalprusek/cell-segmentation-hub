@@ -22,9 +22,18 @@ import {
 interface ImageDisplayState {
   /** Active video frame (0-based). Undefined for non-video images. */
   frameIndex: number | undefined;
-  /** Active channel name (e.g. 'irm' or 'gfp'). Null when there is no
-   *  channel concept (single-channel video / standalone image). */
+  /** Single-channel back-compat — kept so the segmentation-source URL
+   *  fallback still works for non-video / single-channel videos. For
+   *  multi-channel overlay UX, drive rendering off `visibleChannels`. */
   channel: string | null;
+  /** Channels currently composited onto the canvas. Empty for non-video
+   *  images. Order is the rendering order (later channels paint on top
+   *  with additive blending). */
+  visibleChannels: string[];
+  /** Per-channel display colour (hex `#RRGGBB`). Default comes from the
+   *  video container's `displayColor` metadata; the user can change it
+   *  via the colour-picker modal. Grayscale = `#FFFFFF` (white). */
+  channelColors: Record<string, string>;
   /** Lower window cutoff (0..255) — pixels below this are mapped to 0. */
   windowMin: number;
   /** Upper window cutoff (0..255) — pixels above this are mapped to 255. */
@@ -40,6 +49,14 @@ interface ImageDisplayState {
 interface ImageDisplayContextValue extends ImageDisplayState {
   setFrameIndex: (frameIndex: number) => void;
   setChannel: (channel: string | null) => void;
+  /** Toggle whether `channel` is composited onto the canvas. The order
+   *  list grows on enable, removes the entry on disable. */
+  toggleChannelVisibility: (channel: string) => void;
+  /** Replace the full visible-channel list (used when initialising from
+   *  container metadata). */
+  setVisibleChannels: (channels: string[]) => void;
+  /** Set the display colour (hex `#RRGGBB`) for a single channel. */
+  setChannelColor: (channel: string, color: string) => void;
   setWindow: (min: number, max: number) => void;
   setWindowMin: (min: number) => void;
   setWindowMax: (max: number) => void;
@@ -56,6 +73,8 @@ interface ImageDisplayContextValue extends ImageDisplayState {
 const DEFAULT_STATE: ImageDisplayState = {
   frameIndex: undefined,
   channel: null,
+  visibleChannels: [],
+  channelColors: {},
   windowMin: 0,
   windowMax: 255,
   brightness: 100,
@@ -97,6 +116,29 @@ export function ImageDisplayProvider({
 
   const setChannel = useCallback((channel: string | null) => {
     setState(s => ({ ...s, channel }));
+  }, []);
+
+  const toggleChannelVisibility = useCallback((channel: string) => {
+    setState(s => {
+      const has = s.visibleChannels.includes(channel);
+      return {
+        ...s,
+        visibleChannels: has
+          ? s.visibleChannels.filter(c => c !== channel)
+          : [...s.visibleChannels, channel],
+      };
+    });
+  }, []);
+
+  const setVisibleChannels = useCallback((channels: string[]) => {
+    setState(s => ({ ...s, visibleChannels: channels }));
+  }, []);
+
+  const setChannelColor = useCallback((channel: string, color: string) => {
+    setState(s => ({
+      ...s,
+      channelColors: { ...s.channelColors, [channel]: color },
+    }));
   }, []);
 
   const setWindow = useCallback((min: number, max: number) => {
@@ -152,6 +194,9 @@ export function ImageDisplayProvider({
       ...state,
       setFrameIndex,
       setChannel,
+      toggleChannelVisibility,
+      setVisibleChannels,
+      setChannelColor,
       setWindow,
       setWindowMin,
       setWindowMax,
@@ -165,6 +210,9 @@ export function ImageDisplayProvider({
       state,
       setFrameIndex,
       setChannel,
+      toggleChannelVisibility,
+      setVisibleChannels,
+      setChannelColor,
       setWindow,
       setWindowMin,
       setWindowMax,

@@ -20,6 +20,7 @@
 
 import { useEffect, useMemo } from 'react';
 import CanvasImage from './CanvasImage';
+import MultiChannelCanvas from './MultiChannelCanvas';
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
 
 interface VideoFrameImageProps {
@@ -64,10 +65,12 @@ export default function VideoFrameImage({
   alt,
   onLoad,
 }: VideoFrameImageProps) {
-  const { channel } = useImageDisplay();
+  const { channel, visibleChannels, channelColors } = useImageDisplay();
 
-  // Compute the URL the canvas actually renders. Video mode binds to the
-  // play head; standalone keeps the parent's pre-computed src.
+  // Compute the legacy single-channel URL. We still use it when there
+  // is no multi-channel overlay configured (visibleChannels is empty)
+  // and for non-video standalone images. The MultiChannelCanvas pipeline
+  // takes over the moment the user picks any channels.
   const src = useMemo(() => {
     if (isVideoMode && currentFrameId) {
       return buildFrameSrc(currentFrameId, channel);
@@ -100,6 +103,24 @@ export default function VideoFrameImage({
       }
     };
   }, [isVideoMode, upcomingFrameIds, channel]);
+
+  // Multi-channel overlay mode: composite each visible channel via
+  // canvas with per-channel colour + min/max LUT remap. Falls through
+  // to the legacy single-channel <img> when there are no visible
+  // channels picked (covers standalone images and the first paint
+  // before initialisation has run).
+  if (isVideoMode && currentFrameId && visibleChannels.length > 0) {
+    return (
+      <MultiChannelCanvas
+        frameId={currentFrameId}
+        visibleChannels={visibleChannels}
+        channelColors={channelColors}
+        width={width}
+        height={height}
+        onLoad={onLoad}
+      />
+    );
+  }
 
   return (
     <CanvasImage
