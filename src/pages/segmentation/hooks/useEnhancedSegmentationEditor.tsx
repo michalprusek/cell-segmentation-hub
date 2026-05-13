@@ -46,6 +46,12 @@ interface UseEnhancedSegmentationEditorProps {
   isFromGallery?: boolean; // Add flag to trigger auto-reset
   activePartClassRef?: React.RefObject<'head' | 'midpiece' | 'tail'>;
   activeInstanceIdRef?: React.RefObject<string>;
+  /** Project type drives MT-only polyline behaviours (Enter-commits
+   *  AddPoints extension, polyline slice geometry). Sperm and other
+   *  polyline-bearing projects must keep their pre-MT-feature UX, so
+   *  any new behaviour gated on this flag falls through to the legacy
+   *  paths when the value isn't ``'microtubules'``. */
+  projectType?: import('@/types').ProjectType;
   // onPolygonSelection is now handled internally via usePolygonSelection for SSOT
 }
 
@@ -65,6 +71,7 @@ export const useEnhancedSegmentationEditor = ({
   isFromGallery = false,
   activePartClassRef,
   activeInstanceIdRef,
+  projectType,
   // onPolygonSelection is now handled internally
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
@@ -730,6 +737,11 @@ export const useEnhancedSegmentationEditor = ({
     // never wraps back to a different vertex, so there's no "click
     // another vertex to finish" trigger. Enter is the natural finish key.
     if (editMode !== EditMode.AddPoints) return;
+    // Gate to MT only: sperm projects predate the Enter-extends-polyline
+    // workflow and rely on "click another vertex to finalise" the old
+    // way. Leaving this active for sperm would silently change their
+    // muscle memory.
+    if (projectType !== 'microtubules') return;
     if (!selectedPolygonId) return;
     if (!interactionState.isAddingPoints) return;
     if (!interactionState.addPointStartVertex) return;
@@ -772,6 +784,7 @@ export const useEnhancedSegmentationEditor = ({
     setEditMode(EditMode.EditVertices);
   }, [
     editMode,
+    projectType,
     selectedPolygonId,
     interactionState.isAddingPoints,
     interactionState.addPointStartVertex,
@@ -838,6 +851,11 @@ export const useEnhancedSegmentationEditor = ({
     setInteractionState,
     setEditMode,
     updatePolygons,
+    // Forward project type so the slicing hook can gate the
+    // polyline-specific dispatch (split-at-cut) to MT only — sperm
+    // polylines fall through to the existing slicePolygon path which
+    // rejects them, preserving the legacy "Slicing failed" toast UX.
+    projectType,
   });
 
   // Handle slice completion when two temp points are placed in slice mode

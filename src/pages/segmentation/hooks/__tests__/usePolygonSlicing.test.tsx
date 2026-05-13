@@ -31,14 +31,21 @@ vi.mock('@/contexts/LanguageContext', () => ({
 
 vi.mock('@/lib/polygonSlicing', () => ({
   slicePolygon: vi.fn(),
+  slicePolyline: vi.fn(),
   validateSliceLine: vi.fn(),
+  validateSlicePolyline: vi.fn(),
 }));
 
 vi.mock('@/lib/errorUtils', () => ({
   getLocalizedErrorMessage: vi.fn((key: string) => key),
 }));
 
-import { slicePolygon, validateSliceLine } from '@/lib/polygonSlicing';
+import {
+  slicePolygon,
+  slicePolyline,
+  validateSliceLine,
+  validateSlicePolyline,
+} from '@/lib/polygonSlicing';
 
 describe('usePolygonSlicing', () => {
   let _testPolygons: ReturnType<typeof createTestPolygons>;
@@ -723,6 +730,114 @@ describe('usePolygonSlicing', () => {
 
       // Should not throw on unmount
       expect(() => unmount()).not.toThrow();
+    });
+  });
+
+  // Sperm projects must keep their pre-session slicing behaviour:
+  // attempting to slice an open polyline should NOT use the new MT
+  // polyline path — it should fall through to slicePolygon, which
+  // returns null on open shapes and triggers the legacy "Slicing
+  // failed" toast. The gating lives in usePolygonSlicing.handleSliceAction.
+  describe('projectType gating', () => {
+    // Minimal polyline fixture (2 points = open path with one segment)
+    const polyline: Polygon = {
+      id: 'polyline-1',
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ],
+      type: 'external',
+      geometry: 'polyline',
+      area: 0,
+      confidence: 1,
+      instanceId: 'sperm_x',
+    };
+
+    it('uses slicePolyline + validateSlicePolyline when projectType === microtubules', () => {
+      (validateSlicePolyline as unknown as vi.Mock).mockReturnValue({
+        isValid: true,
+      });
+      (slicePolyline as unknown as vi.Mock).mockReturnValue([
+        { ...polyline, id: 'a' },
+        { ...polyline, id: 'b' },
+      ]);
+
+      const slicePoints: Point[] = [
+        { x: 50, y: -5 },
+        { x: 50, y: 5 },
+      ];
+      const { result } = renderHook(() =>
+        usePolygonSlicing({
+          ...mockProps,
+          polygons: [polyline],
+          selectedPolygonId: 'polyline-1',
+          tempPoints: slicePoints,
+          projectType: 'microtubules',
+        })
+      );
+
+      act(() => {
+        result.current.handleSliceAction();
+      });
+
+      expect(validateSlicePolyline).toHaveBeenCalledWith(
+        polyline,
+        slicePoints[0],
+        slicePoints[1]
+      );
+      expect(slicePolyline).toHaveBeenCalledWith(
+        polyline,
+        slicePoints[0],
+        slicePoints[1]
+      );
+      // Polygon-path validators must NOT have been called for an MT polyline
+      expect(validateSliceLine).not.toHaveBeenCalled();
+      expect(slicePolygon).not.toHaveBeenCalled();
+    });
+
+    it('falls back to slicePolygon for sperm projects (no MT polyline gate)', () => {
+      (validateSliceLine as unknown as vi.Mock).mockReturnValue({
+        isValid: true,
+      });
+      // slicePolygon legitimately returns null on open shapes — that
+      // triggers the legacy "Slicing failed" toast which is the
+      // intended sperm UX.
+      (slicePolygon as unknown as vi.Mock).mockReturnValue(null);
+
+      const slicePoints: Point[] = [
+        { x: 50, y: -5 },
+        { x: 50, y: 5 },
+      ];
+      const { result } = renderHook(() =>
+        usePolygonSlicing({
+          ...mockProps,
+          polygons: [polyline],
+          selectedPolygonId: 'polyline-1',
+          tempPoints: slicePoints,
+          projectType: 'sperm',
+        })
+      );
+
+      let sliceResult: boolean | undefined;
+      act(() => {
+        sliceResult = result.current.handleSliceAction();
+      });
+
+      expect(sliceResult).toBe(false);
+      // Polygon path was used (the legacy behaviour for sperm polylines)
+      expect(validateSliceLine).toHaveBeenCalledWith(
+        polyline,
+        slicePoints[0],
+        slicePoints[1]
+      );
+      expect(slicePolygon).toHaveBeenCalledWith(
+        polyline,
+        slicePoints[0],
+        slicePoints[1]
+      );
+      // MT-only branch must NOT have been reached
+      expect(validateSlicePolyline).not.toHaveBeenCalled();
+      expect(slicePolyline).not.toHaveBeenCalled();
     });
   });
 });

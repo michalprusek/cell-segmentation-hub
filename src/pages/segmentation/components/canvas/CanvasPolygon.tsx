@@ -294,7 +294,7 @@ const CanvasPolygon = React.memo(
               stroke makes the click target comfortable without changing
               the rendered look. Pointer-events confined to the stroke so
               the surrounding canvas drag/zoom still works. */}
-          {isPolyline && pathString && (
+          {isPolyline && projectType === 'microtubules' && pathString && (
             <path
               d={pathString}
               fill="none"
@@ -350,35 +350,40 @@ const CanvasPolygon = React.memo(
             pointerEvents={isPolyline ? 'stroke' : 'all'}
           />
 
-          {/* Polyline endpoint markers — only when the polyline is
-              selected. In the default non-selected state we want the MTs
-              to read as plain curves on the image (no extra dots
-              cluttering the visual). When selected they reappear as a
-              visual aid for the vertex-editing workflow. */}
-          {isPolyline && isSelected && validPoints.length >= 2 && (
-            <>
-              <circle
-                cx={validPoints[0].x}
-                cy={validPoints[0].y}
-                r={Math.max(3 / zoom, 1.5)}
-                fill={pathColor}
-                stroke="white"
-                strokeWidth={Math.max(1 / zoom, 0.3)}
-                opacity={0.9}
-                pointerEvents="none"
-              />
-              <circle
-                cx={validPoints[validPoints.length - 1].x}
-                cy={validPoints[validPoints.length - 1].y}
-                r={Math.max(3 / zoom, 1.5)}
-                fill={pathColor}
-                stroke="white"
-                strokeWidth={Math.max(1 / zoom, 0.3)}
-                opacity={0.9}
-                pointerEvents="none"
-              />
-            </>
-          )}
+          {/* Polyline endpoint markers.
+              - Microtubule projects: only render when selected — the
+                MT visual identity is "plain curve on the image",
+                clutter-free in the default state.
+              - Sperm (and any other future polyline-bearing project):
+                always render the start + end dots. Sperm artwork has
+                always shown them and biologists expect that affordance
+                to mark head / tail orientation. */}
+          {isPolyline &&
+            validPoints.length >= 2 &&
+            (projectType === 'microtubules' ? isSelected : true) && (
+              <>
+                <circle
+                  cx={validPoints[0].x}
+                  cy={validPoints[0].y}
+                  r={Math.max(3 / zoom, 1.5)}
+                  fill={pathColor}
+                  stroke="white"
+                  strokeWidth={Math.max(1 / zoom, 0.3)}
+                  opacity={0.9}
+                  pointerEvents="none"
+                />
+                <circle
+                  cx={validPoints[validPoints.length - 1].x}
+                  cy={validPoints[validPoints.length - 1].y}
+                  r={Math.max(3 / zoom, 1.5)}
+                  fill={pathColor}
+                  stroke="white"
+                  strokeWidth={Math.max(1 / zoom, 0.3)}
+                  opacity={0.9}
+                  pointerEvents="none"
+                />
+              </>
+            )}
 
           {/* Render vertices using separate component for performance */}
           {!hideVertices && (
