@@ -6,6 +6,38 @@ The most important section is **[Verification Rules](#verification-rules)**. Rea
 
 ---
 
+## Ask when unclear — do not assume scope
+
+When a request is ambiguous or could be interpreted multiple ways,
+**use `AskUserQuestion` BEFORE coding**. Guessing what the user meant
+and shipping the wrong interpretation wastes a round-trip and erodes
+trust. Concrete situations that demand a clarification question:
+
+- **"All / everything"** statements that might have exceptions. Example
+  ("all today's changes should affect only MT projects") may exclude
+  changes the user actually wants kept universal (hover radius, slice
+  geometry). Ask which specific changes are in scope.
+- **Project-type or polyline-kind gating decisions** — features that
+  could plausibly belong to one project type, all of them, or some
+  subset. Don't assume; ask.
+- **Destructive operations on shared data** — even on a test account,
+  ask before wiping fixtures the user might still need.
+- **Choice between a simple FE-only fix and a broader BE/ML
+  refactor** — ask which trade-off the user wants.
+- **"Rotate / reformat / re-orient"** UI requests where the existing
+  orientation might already be correct (kymograph axes are a recent
+  example).
+
+When asking, surface 2–3 concrete options via `AskUserQuestion` rather
+than open-ended "what do you want?" — the user can compare side-by-side
+and pick. Always state the trade-offs.
+
+If you've already coded something and only THEN realise it was
+ambiguous, stop and ask before going further; don't keep building on
+the guess.
+
+---
+
 ## Production Safety
 
 **Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`. Service: `spheroseg_blue`. URL: `https://spherosegapp.utia.cas.cz`. Test account: `12bprusek@gym-nymburk.cz` / `spheroids2026`.

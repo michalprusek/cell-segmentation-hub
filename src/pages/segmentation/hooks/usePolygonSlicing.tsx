@@ -25,12 +25,6 @@ interface UsePolygonSlicingProps {
 
   // Data operations
   updatePolygons: (polygons: Polygon[]) => void;
-
-  /** Active project type — gates the polyline-specific slice dispatch
-   *  to ``'microtubules'`` only. Sperm polylines fall through to the
-   *  polygon slicer (which rejects open paths → existing "Slicing
-   *  failed" toast), preserving the legacy UX. */
-  projectType?: import('@/types').ProjectType;
 }
 
 /**
@@ -47,7 +41,6 @@ export const usePolygonSlicing = ({
   setInteractionState,
   setEditMode,
   updatePolygons,
-  projectType,
 }: UsePolygonSlicingProps) => {
   const { t } = useLanguage();
 
@@ -71,15 +64,14 @@ export const usePolygonSlicing = ({
       }
 
       const [sliceStart, sliceEnd] = pointsToUse;
-      // The polyline-specific "split at one crossing" dispatch is an
-      // MT-only feature. For sperm polylines we fall through to the
-      // closed-polygon path (`slicePolygon` returns null on open
-      // shapes → user sees the legacy "Slicing failed" toast,
-      // preserving pre-session behaviour).
-      const useMtPolylineSlice =
-        polygon.geometry === 'polyline' && projectType === 'microtubules';
+      // Geometry-based dispatch — polyline slicing is available for any
+      // polyline regardless of project type ("polyline slice is the
+      // same for all projects" per user request). Closed polygons need
+      // two edge crossings (chord across the inside); open polylines
+      // need exactly one crossing of any segment.
+      const isPolyline = polygon.geometry === 'polyline';
 
-      const validation = useMtPolylineSlice
+      const validation = isPolyline
         ? validateSlicePolyline(polygon, sliceStart, sliceEnd)
         : validateSliceLine(polygon, sliceStart, sliceEnd);
 
@@ -91,7 +83,7 @@ export const usePolygonSlicing = ({
         return false;
       }
 
-      const result = useMtPolylineSlice
+      const result = isPolyline
         ? slicePolyline(polygon, sliceStart, sliceEnd)
         : slicePolygon(polygon, sliceStart, sliceEnd);
 
@@ -146,7 +138,6 @@ export const usePolygonSlicing = ({
       setTempPoints,
       setInteractionState,
       setEditMode,
-      projectType,
       t,
     ]
   );
@@ -245,14 +236,13 @@ export const usePolygonSlicing = ({
     }
 
     const [sliceStart, sliceEnd] = tempPoints;
-    const useMtPolylineSlice =
-      polygon.geometry === 'polyline' && projectType === 'microtubules';
-    const validation = useMtPolylineSlice
-      ? validateSlicePolyline(polygon, sliceStart, sliceEnd)
-      : validateSliceLine(polygon, sliceStart, sliceEnd);
+    const validation =
+      polygon.geometry === 'polyline'
+        ? validateSlicePolyline(polygon, sliceStart, sliceEnd)
+        : validateSliceLine(polygon, sliceStart, sliceEnd);
 
     return validation.isValid;
-  }, [selectedPolygonId, tempPoints, polygons, projectType]);
+  }, [selectedPolygonId, tempPoints, polygons]);
 
   /**
    * Get slice preview information
@@ -272,12 +262,10 @@ export const usePolygonSlicing = ({
     }
 
     const [sliceStart, sliceEnd] = tempPoints;
-    const useMtPolylineSlice =
-      polygon.geometry === 'polyline' && projectType === 'microtubules';
-    return useMtPolylineSlice
+    return polygon.geometry === 'polyline'
       ? validateSlicePolyline(polygon, sliceStart, sliceEnd)
       : validateSliceLine(polygon, sliceStart, sliceEnd);
-  }, [selectedPolygonId, tempPoints, polygons, projectType]);
+  }, [selectedPolygonId, tempPoints, polygons]);
 
   return {
     // Actions
