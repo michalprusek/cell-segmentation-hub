@@ -125,6 +125,7 @@ export function VideoModeOverlay({
 /** Convenience helper for the editor: returns the overlay props bundle
  *  if the given image is a video container, null otherwise. The editor
  *  can early-return without any video pieces when null. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useVideoModeProps(
   imageId: string | null | undefined,
   isVideoContainer: boolean | undefined,

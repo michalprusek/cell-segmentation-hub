@@ -128,7 +128,8 @@ docker/nginx/ssl/            # SSL certificates
 docker/grafana/alerting/     # Monitoring alerts
 docker/logrotate/            # Log rotation configs
 scripts/backup-database.sh   # Database backup script
-.github/workflows/ci-cd.yml  # CI/CD pipeline
+.github/workflows/codeql.yml         # Security scanning (passive)
+.github/workflows/nightly-drift.yml  # Daily drift detection (opens issues on failure)
 ```
 
 ## Rollback Procedure

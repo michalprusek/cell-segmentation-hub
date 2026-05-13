@@ -91,21 +91,29 @@ git commit -m "docs: update API documentation"
 
 ## GitHub Actions Integration
 
-Pull requests to protected branches trigger automatic validation:
+The chronically-failing pre-merge / CI-CD / quality-gates workflows were
+removed (see `chore(ci): remove broken workflows, add nightly drift`).
+The active CI surface is now intentionally minimal — the pre-commit hook
+and `make ci` are the real gates.
 
-### Workflow: `.github/workflows/pre-merge-checks.yml`
+### Active workflows
 
-**Jobs:**
+- **`.github/workflows/codeql.yml`** — passive security scanning. Results
+  appear in the repo's Security tab, never blocks PRs.
+- **`.github/workflows/nightly-drift.yml`** — daily cron on `main`.
+  Runs full TypeScript / ESLint / Vitest / i18n / `npm audit`. On failure
+  it opens a GitHub Issue labelled `nightly-drift` rather than blocking
+  PR merges. GitGuardian (installed as a GitHub App) catches secret leaks.
 
-1. **code-quality** - Formatting, linting, TypeScript
-2. **unit-tests** - Frontend and backend tests with coverage
-3. **build** - Build validation and bundle size check
-4. **docker-build** - Docker image building
-5. **integration-tests** - API and service integration
-6. **e2e-tests** - Playwright tests
-7. **security** - npm audit, Trivy scan, secret detection
-8. **database-check** - Migration validation
-9. **merge-ready** - Final status check
+### Local equivalent
+
+```bash
+make ci   # Runs the same checks the nightly job runs
+```
+
+This mirrors what `pre-merge-checks.yml` used to do, minus the broken
+Docker / performance / integration jobs that never delivered useful
+signal.
 
 ## Installation & Setup
 

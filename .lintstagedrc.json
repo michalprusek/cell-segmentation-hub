@@ -1,6 +1,6 @@
 {
   "*.{ts,tsx}": [
-    "eslint --fix --cache --max-warnings=500 --format=stylish --no-warn-ignored",
+    "eslint --fix --cache --max-warnings=0 --format=stylish --no-warn-ignored",
     "prettier --write",
     "bash -c 'node scripts/code-quality-check.js || true'"
   ],
@@ -12,7 +12,7 @@
     "bash -c 'node scripts/verify-shared-types.cjs'"
   ],
   "*.{js,jsx}": [
-    "eslint --fix --cache --max-warnings=500 --format=stylish --no-warn-ignored",
+    "eslint --fix --cache --max-warnings=0 --format=stylish --no-warn-ignored",
     "prettier --write"
   ],
   "backend/src/**/*.{ts,tsx}": [],

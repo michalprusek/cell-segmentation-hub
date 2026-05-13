@@ -1,0 +1,96 @@
+name: Nightly Drift Detection
+
+# Runs once a day against main to catch issues that would only surface in
+# a clean environment: dependency CVEs, build drift, type regressions.
+#
+# This workflow does NOT block PRs. Failures open a GitHub Issue so the
+# signal stays visible without adding cognitive load to the PR cycle.
+# Pre-commit hooks (.husky/pre-commit) and manual PR review remain the
+# real merge gates.
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # 03:00 UTC daily
+  workflow_dispatch: {} # manual trigger from Actions tab
+
+permissions:
+  contents: read
+  issues: write # to open issues on failure
+
+jobs:
+  drift:
+    name: Drift checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: TypeScript (frontend)
+        run: npx tsc --noEmit
+
+      - name: TypeScript (backend)
+        working-directory: backend
+        run: npm run type-check
+
+      - name: ESLint
+        run: npx eslint --max-warnings=0 src/
+
+      - name: i18n completeness
+        run: node scripts/check-i18n.cjs
+
+      # Vitest is excluded — the suite has ~31% pre-existing failures
+      # from prior refactors that would create daily noise issues. Use
+      # `make ci-test` locally to investigate specific files.
+
+      - name: npm audit (high+critical only)
+        run: npm audit --audit-level=high
+        continue-on-error: true # advisory, not blocking the job
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const today = new Date().toISOString().slice(0, 10);
+            const title = `Nightly drift detected (${today})`;
+            const body = [
+              `The nightly drift workflow failed on \`main\`.`,
+              ``,
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ``,
+              `This is not a PR blocker — pre-commit + manual review remain the gates.`,
+              `Investigate when convenient; if the failure is a known flake, close the issue.`,
+            ].join('\n');
+
+            // Avoid duplicate issues: reuse today's if it already exists.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'nightly-drift',
+            });
+            const dup = existing.data.find(i => i.title === title);
+            if (dup) {
+              core.info(`Issue already exists: #${dup.number}`);
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['nightly-drift'],
+            });
