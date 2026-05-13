@@ -960,18 +960,44 @@ const SegmentationEditor = () => {
   const navigateToImage = (direction: 'prev' | 'next') => {
     if (!projectImages?.length) return;
 
+    const current = projectImages.find(img => img.id === imageId);
+    if (!current) return;
+
+    // Video frame children navigate by `frameIndex` ascending, not by
+    // gallery sort order. The gallery defaults to `updatedAt DESC` which
+    // would otherwise invert the meaning of next/back for users — frame 3
+    // sits at array index 0 (newest), frame 1 at index N-1 (oldest), so
+    // clicking "next" from frame 2 (array index 1) would jump to frame 1.
+    if (current.parentVideoId) {
+      const siblings = projectImages
+        .filter(img => img.parentVideoId === current.parentVideoId)
+        .sort((a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0));
+      const idx = siblings.findIndex(img => img.id === imageId);
+      if (idx < 0) return;
+      const target =
+        direction === 'next'
+          ? siblings[(idx + 1) % siblings.length]
+          : siblings[(idx - 1 + siblings.length) % siblings.length];
+      if (target) {
+        startTransition(() => {
+          navigate(`/segmentation/${projectId}/${target.id}`);
+        });
+      }
+      return;
+    }
+
+    // Standalone image: fall back to gallery sort order.
     const currentIndex = projectImages.findIndex(img => img.id === imageId);
     if (currentIndex === -1) return;
 
-    let nextIndex;
-
-    if (direction === 'next') {
-      nextIndex =
-        currentIndex < projectImages.length - 1 ? currentIndex + 1 : 0;
-    } else {
-      nextIndex =
-        currentIndex > 0 ? currentIndex - 1 : projectImages.length - 1;
-    }
+    const nextIndex =
+      direction === 'next'
+        ? currentIndex < projectImages.length - 1
+          ? currentIndex + 1
+          : 0
+        : currentIndex > 0
+          ? currentIndex - 1
+          : projectImages.length - 1;
 
     const nextImage = projectImages[nextIndex];
     if (nextImage) {
@@ -1129,8 +1155,34 @@ const SegmentationEditor = () => {
     [editor.editMode]
   );
 
-  const currentImageIndex =
-    projectImages?.findIndex(img => img.id === imageId) ?? -1;
+  // Compute navigation context that EditorHeader uses for the
+  // currentImageIndex / totalImages display + the Back/Next disabled
+  // gating. For video frame children we treat the sibling frames as the
+  // navigation domain (sorted by frameIndex ascending) so that the
+  // "X / Y" counter reads "Frame 2 / 3" instead of "Frame 1 of 301" and
+  // the Back button on the first frame (frameIndex 0) is correctly
+  // disabled regardless of gallery sort order.
+  const navContext = useMemo(() => {
+    if (!projectImages?.length) {
+      return { index: -1, total: 0 };
+    }
+    const current = projectImages.find(img => img.id === imageId);
+    if (current?.parentVideoId) {
+      const siblings = projectImages
+        .filter(img => img.parentVideoId === current.parentVideoId)
+        .sort((a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0));
+      return {
+        index: siblings.findIndex(img => img.id === imageId),
+        total: siblings.length,
+      };
+    }
+    return {
+      index: projectImages.findIndex(img => img.id === imageId),
+      total: projectImages.length,
+    };
+  }, [projectImages, imageId]);
+
+  const currentImageIndex = navContext.index;
 
   const visiblePolygons = useMemo(
     () =>
@@ -1222,7 +1274,7 @@ const SegmentationEditor = () => {
               selectedImage.name ? selectedImage.name.normalize('NFC') : ''
             }
             currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
-            totalImages={projectImages?.length || 0}
+            totalImages={navContext.total}
             onNavigate={navigateToImage}
             hasUnsavedChanges={editor.hasUnsavedChanges}
             onSave={editor.handleSave}

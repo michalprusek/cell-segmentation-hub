@@ -21,6 +21,13 @@ export const useProjectData = (
     import('@/types').ProjectType | undefined
   >(undefined);
   const [images, setImages] = useState<ProjectImage[]>([]);
+  // Distinct channel names across all video containers in this project,
+  // sourced from the BE response metadata. Used by the Segment-All channel
+  // picker — `extractChannelsFromPaths` only sees the segmentation-source
+  // channel per frame (others live on disk but aren't referenced in
+  // `originalPath`), so deriving from paths alone misses multi-channel
+  // videos. Container `channels` JSON is the source of truth.
+  const [projectChannels, setProjectChannels] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Track pending requests to prevent duplicates
@@ -54,6 +61,7 @@ export const useProjectData = (
         // Backend max is 100 per request; we use lod: 'low' which
         // returns only metadata counts (no polygon arrays) — fast & light.
         let allImages: any[] = [];
+        let aggregatedChannels: string[] = [];
         let page = 1;
         let hasMore = true;
         const limit = 100; // Use max backend limit for fewer round-trips
@@ -76,6 +84,15 @@ export const useProjectData = (
             }
 
             allImages = [...allImages, ...imagesResponse.images];
+            // BE recomputes projectChannels on every page (it queries all
+            // containers, not just the page slice), so keeping the last
+            // response's list is safe and avoids needing a separate fetch.
+            if (
+              imagesResponse.metadata?.projectChannels &&
+              Array.isArray(imagesResponse.metadata.projectChannels)
+            ) {
+              aggregatedChannels = imagesResponse.metadata.projectChannels;
+            }
 
             const totalImages =
               imagesResponse.pagination?.total || imagesResponse.total || 0;
@@ -141,6 +158,7 @@ export const useProjectData = (
         // The grid view uses server-generated thumbnail images, not raw polygons.
         // The segmentation editor loads full polygon data on its own.
         setImages(formattedImages);
+        setProjectChannels(aggregatedChannels);
 
         logger.debug(
           `Loaded ${formattedImages.length} images for project ${projectId}`
@@ -301,6 +319,7 @@ export const useProjectData = (
     projectType,
     setProjectType,
     images,
+    projectChannels,
     loading,
     updateImages,
     refreshImageSegmentation,
