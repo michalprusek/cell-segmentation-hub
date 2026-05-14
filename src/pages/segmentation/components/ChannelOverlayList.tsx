@@ -181,8 +181,7 @@ export function ChannelOverlayList({
                     onChange={e => setRenameValue(e.target.value)}
                     onBlur={() => commitRename(ch.name, renameValue)}
                     onKeyDown={e => {
-                      if (e.key === 'Enter')
-                        commitRename(ch.name, renameValue);
+                      if (e.key === 'Enter') commitRename(ch.name, renameValue);
                       else if (e.key === 'Escape') setRenamingChannel(null);
                     }}
                     className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0.5 text-sm text-gray-700 dark:text-gray-200"
