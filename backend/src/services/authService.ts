@@ -146,6 +146,11 @@ export async function register(data: RegisterData): Promise<{
         },
       });
 
+      // Persist refresh token in Redis so subsequent /auth/refresh-token calls
+      // can validate + rotate it. Without this, a freshly-registered user gets
+      // logged out the moment their first access token expires.
+      await sessionService.storeRefreshToken(newUser.id, refreshToken);
+
       logger.info('User registered successfully', 'AuthService', {
         email: data.email,
       });
@@ -249,18 +254,7 @@ export async function login(
       rememberMe
     );
 
-    // Store refresh token in Redis and create session
-    const userId = parseInt(user.id, 10);
-    await sessionService.storeRefreshToken(userId, refreshToken);
-    const _sessionId = await sessionService.createSession(
-      userId,
-      tokenPayload.email,
-      {
-        rememberMe,
-        userAgent: undefined, // Will be set by middleware if available
-        ipAddress: undefined, // Will be set by middleware if available
-      }
-    );
+    await sessionService.storeRefreshToken(user.id, refreshToken);
 
     logger.info('User logged in successfully', 'AuthService', {
       email: user.email,
@@ -293,50 +287,30 @@ export async function refreshToken(
   data: RefreshTokenData
 ): Promise<{ accessToken: string; refreshToken: string }> {
   try {
-    // Verify and rotate the refresh token
-    const newRefreshToken = await sessionService.rotateRefreshToken(
-      data.refreshToken
-    );
-
-    if (!newRefreshToken) {
+    const rotated = await sessionService.rotateRefreshToken(data.refreshToken);
+    if (!rotated) {
       throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
     }
 
-    // Get token data to create new access token
-    const tokenData = await sessionService.verifyRefreshToken(newRefreshToken);
-    if (!tokenData) {
-      throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
-    }
-
-    // Generate new access token
-    const tokenPayload: JwtPayload = {
-      userId: tokenData.userId.toString(),
-      email: '', // Will be filled from user data
-      emailVerified: true, // Will be filled from user data
-    };
-
-    // Get user data to fill the payload
-    const user = await prisma.user.findUnique({
-      where: { id: tokenData.userId.toString() },
-    });
-
+    const user = await prisma.user.findUnique({ where: { id: rotated.userId } });
     if (!user) {
       throw ApiError.unauthorized('Uživatel nenalezen');
     }
 
-    tokenPayload.email = user.email;
-    tokenPayload.emailVerified = user.emailVerified;
-
-    const { accessToken } = generateTokenPair(tokenPayload, true);
+    const { accessToken } = generateTokenPair(
+      {
+        userId: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+      },
+      true
+    );
 
     logger.info('Token refreshed successfully', 'AuthService', {
-      userId: tokenData.userId,
+      userId: user.id,
     });
 
-    return {
-      accessToken,
-      refreshToken: newRefreshToken,
-    };
+    return { accessToken, refreshToken: rotated.token };
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;

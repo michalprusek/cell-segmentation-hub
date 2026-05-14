@@ -50,6 +50,18 @@ export interface Polygon {
 
 export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
 
+/**
+ * Stable identifier for cross-frame UI state (hide / select / etc).
+ *
+ * Microtubule polylines carry a `trackId` written by the tracker after
+ * Hungarian matching on embeddings — same MT over time gets the same
+ * trackId across every frame in the video. `polygon.id` is per-inference
+ * (re-generated on every segmentation run), so it can NOT be used for
+ * any state that should persist when the user scrubs to a different
+ * frame. Use this helper everywhere a polygon is keyed in a Set/Map.
+ */
+export const polygonKey = (p: Polygon): string => p.trackId ?? p.id;
+
 // SegmentationResult type removed - use Polygon[] directly
 
 // Apply a simple thresholding algorithm to create a binary mask

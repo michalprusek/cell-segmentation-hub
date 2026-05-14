@@ -62,25 +62,28 @@ def _imagej_channel_labels(tf, count: int) -> list[str | None]:
         return [None] * count
 
 
-def _normalize_to_uint8(arr: np.ndarray) -> np.ndarray:
-    """Percentile-normalise a 2D array to uint8 PNG-friendly range.
+def _to_png_dtype(arr: np.ndarray) -> np.ndarray:
+    """Coerce to a dtype PIL can write losslessly to PNG, preserving bit depth.
 
-    Microscopy frames are typically 12-16 bit; clipping at the 1st/99.5th
-    percentiles matches the convention used by the v7 microtubule model
-    so the extracted PNGs look the same as what the model "sees".
+    PNG supports 8- and 16-bit unsigned grayscale natively.
+    - uint8/uint16 → as-is (Pillow picks 'L' / 'I;16')
+    - int16 → shift into uint16 range with the same offset; reversible
+    - other (float, int32, …) → rescale to uint16 per-frame
     """
-    if arr.dtype == np.uint8:
+    if arr.dtype in (np.uint8, np.uint16):
         return arr
-    lo, hi = np.percentile(arr, [1.0, 99.5])
+    if arr.dtype == np.int16:
+        return (arr.astype(np.int32) + 32768).astype(np.uint16)
+    lo, hi = float(arr.min()), float(arr.max())
     if hi <= lo:
-        hi = lo + 1.0
-    out = np.clip((arr.astype(np.float32) - lo) / (hi - lo), 0.0, 1.0)
-    return (out * 255.0).astype(np.uint8)
+        return np.zeros(arr.shape, dtype=np.uint16)
+    out = (arr.astype(np.float64) - lo) / (hi - lo) * 65535.0
+    return np.clip(out, 0.0, 65535.0).astype(np.uint16)
 
 
 def _save_png(arr: np.ndarray, path: Path) -> None:
     from PIL import Image
-    Image.fromarray(_normalize_to_uint8(arr)).save(path, format="PNG", optimize=True)
+    Image.fromarray(_to_png_dtype(arr)).save(path, format="PNG", optimize=True)
 
 
 def main() -> int:

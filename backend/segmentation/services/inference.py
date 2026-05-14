@@ -133,11 +133,31 @@ class InferenceService:
         """
         try:
             # Load image from bytes
-            image = Image.open(io.BytesIO(image_data)).convert('RGB')
+            image = Image.open(io.BytesIO(image_data))
             original_size = image.size  # (width, height)
 
-            # Convert to numpy array
-            image_np = np.array(image)
+            # 16-bit microscopy frames (mode 'I;16') would be flattened by a
+            # plain convert('RGB') (PIL takes the high byte only, losing the
+            # full dynamic range that the new lossless extractors preserve).
+            # Apply the same percentile clip the extractors used to do at
+            # storage time, then promote to 8-bit RGB — i.e. the model still
+            # gets the 8-bit input it was trained on, but the heavy lifting
+            # now happens on the full 12/16-bit source instead of a
+            # pre-quantised PNG.
+            if image.mode in ('I;16', 'I;16B', 'I;16L', 'I'):
+                arr = np.array(image, dtype=np.uint32 if image.mode == 'I' else np.uint16)
+                lo, hi = np.percentile(arr, [1.0, 99.5])
+                if hi <= lo:
+                    hi = lo + 1.0
+                arr8 = np.clip(
+                    (arr.astype(np.float32) - float(lo)) / (float(hi) - float(lo)),
+                    0.0,
+                    1.0,
+                )
+                arr8 = (arr8 * 255.0).astype(np.uint8)
+                image_np = np.stack([arr8] * 3, axis=-1)
+            else:
+                image_np = np.array(image.convert('RGB'))
 
             # Grayscale at original_size for downstream intensity analysis
             original_gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)

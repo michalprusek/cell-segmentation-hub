@@ -109,6 +109,9 @@ export interface SegmentationPolygon {
    *  the same MT share the same value across frames. Used by the editor
    *  for stable colour-coding. */
   trackId?: string;
+  /** Human-friendly label set in the editor. Mirrored across sibling
+   *  frames by the BE on save when the polyline carries a trackId. */
+  name?: string;
 }
 
 export interface SegmentationResultData {
