@@ -78,7 +78,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       onDownloadingChange,
     }) => {
       const { t } = useLanguage();
-      const isMTProject = projectType === 'microtubule';
+      // ProjectType is `'microtubules'` (plural) — `'microtubule'`
+      // (singular) is the model id, not the project type. Mis-comparing
+      // them silently hides the MT section on every MT project.
+      const isMTProject = projectType === 'microtubules';
 
       // Distinct channels across the project's video container rows.
       // De-dupe by machine name (the same channel might appear on
