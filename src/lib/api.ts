@@ -1776,6 +1776,24 @@ class ApiClient {
     return this.extractData(response);
   }
 
+  /** Update the `channels` JSON on a video-container Image. Used by the
+   *  editor's per-channel rename UI. The BE validates exactly the same
+   *  channel shape it returned, so callers should send the full array
+   *  with any modifications applied. */
+  async updateImageChannels(
+    imageId: string,
+    channels: Array<{
+      name: string;
+      displayName?: string;
+      type: 'irm' | 'fluorescent';
+      wavelengthNm?: number;
+      displayColor?: string;
+      isSegmentationSource: boolean;
+    }>
+  ): Promise<void> {
+    await this.instance.patch(`/images/${imageId}/channels`, { channels });
+  }
+
   async changePassword(data: {
     currentPassword: string;
     newPassword: string;

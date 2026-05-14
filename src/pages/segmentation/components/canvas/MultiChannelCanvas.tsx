@@ -103,13 +103,17 @@ export default function MultiChannelCanvas({
   loading = true,
   onLoad,
 }: MultiChannelCanvasProps) {
-  const { windowMin, windowMax, brightness, contrast } = useImageDisplay();
+  const { windowMin, windowMax, brightness, contrast, channelOpacities } =
+    useImageDisplay();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Stable key to bust the effect when any visible-channel order or
-  // colour changes. Serialising both keeps the dep array primitive and
+  // Stable key to bust the effect when any visible-channel order, colour,
+  // or opacity changes. Serialising keeps the dep array primitive and
   // avoids identity-based re-renders.
   const channelsKey = visibleChannels.join('|');
   const colorsKey = visibleChannels.map(c => channelColors[c] ?? '').join('|');
+  const opacitiesKey = visibleChannels
+    .map(c => channelOpacities[c] ?? 100)
+    .join('|');
 
   useEffect(() => {
     if (!visibleChannels.length || !canvasRef.current) return;
@@ -179,18 +183,30 @@ export default function MultiChannelCanvas({
       for (const { channel, bitmap } of loaded) {
         if (cancelled) return;
         const [cR, cG, cB] = hexToRgb(channelColors[channel] ?? '#FFFFFF');
+        // Per-channel opacity 0..100 — scales the channel's contribution
+        // to the additive composite. Skip the pixel multiply for full
+        // opacity (the common case) so the hot loop stays cheap.
+        const opacity = (channelOpacities[channel] ?? 100) / 100;
         offCtx.clearRect(0, 0, w, h);
         offCtx.drawImage(bitmap, 0, 0);
         const img = offCtx.getImageData(0, 0, w, h);
         const data = img.data;
-        for (let p = 0; p < data.length; p += 4) {
-          // Source PNG is grayscale → R, G, B are all the same value.
-          // LUT-remap first, then tint by channel colour.
-          const v = lut[data[p]];
-          data[p] = (v * cR) >> 8; // (v * cR) / 256 via shift
-          data[p + 1] = (v * cG) >> 8;
-          data[p + 2] = (v * cB) >> 8;
-          // alpha stays at PNG-source alpha (usually 255)
+        if (opacity >= 1) {
+          for (let p = 0; p < data.length; p += 4) {
+            // Source PNG is grayscale → R, G, B are all the same value.
+            // LUT-remap first, then tint by channel colour.
+            const v = lut[data[p]];
+            data[p] = (v * cR) >> 8;
+            data[p + 1] = (v * cG) >> 8;
+            data[p + 2] = (v * cB) >> 8;
+          }
+        } else {
+          for (let p = 0; p < data.length; p += 4) {
+            const v = lut[data[p]];
+            data[p] = ((v * cR) >> 8) * opacity;
+            data[p + 1] = ((v * cG) >> 8) * opacity;
+            data[p + 2] = ((v * cB) >> 8) * opacity;
+          }
         }
         offCtx.putImageData(img, 0, 0);
         ctx.drawImage(off, 0, 0);
@@ -210,6 +226,7 @@ export default function MultiChannelCanvas({
     frameId,
     channelsKey,
     colorsKey,
+    opacitiesKey,
     windowMin,
     windowMax,
     onLoad,
