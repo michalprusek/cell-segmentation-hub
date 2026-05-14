@@ -242,7 +242,19 @@ class SegmentationController {
         return;
       }
 
-      if (!['hrnet', 'resunet_advanced', 'resunet_small'].includes(model)) {
+      if (
+        ![
+          'hrnet',
+          'cbam_resunet',
+          'unet_spherohq',
+          'unet_attention_aspp',
+          'resunet_advanced',
+          'resunet_small',
+          'sperm',
+          'wound',
+          'microtubule',
+        ].includes(model)
+      ) {
         ResponseHelper.validationError(res, 'Neplatný model');
         return;
       }
