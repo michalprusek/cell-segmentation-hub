@@ -148,22 +148,8 @@ const CanvasPolygon = React.memo(
         return isSelected ? '#16a34a' : '#22c55e'; // green
       }
       if (isPolyline) {
-        // Microtubule polylines: deterministic per-instance HSL hash. The
-        // tracker (backend/src/services/tracking/trackerService.ts) writes
-        // a stable `trackId` across frames; `instanceId` is freshly
-        // generated per-inference and only differs within a single frame.
-        // Prefer `trackId` so the same microtubule keeps its color when
-        // scrubbing; fall back to `instanceId` before tracking has run.
-        // `class='microtubule'` is the authoritative ML signal; `mt_`
-        // instanceId prefix is the legacy fallback.
-        const isMt =
-          !polygon.partClass &&
-          (polygon.class === 'microtubule' ||
-            isMicrotubuleInstance(polygon.instanceId));
-        if (isMt) {
-          const colorKey = polygon.trackId ?? polygon.instanceId ?? '';
-          return colorFromInstanceId(colorKey, { selected: isSelected });
-        }
+        // Sperm body parts (head/midpiece/tail) use fixed colors so every
+        // sperm of the same part class reads as the same colour.
         switch (polygon.partClass) {
           case 'head':
             return isSelected ? '#16a34a' : '#22c55e'; // green
@@ -171,9 +157,24 @@ const CanvasPolygon = React.memo(
             return isSelected ? '#d97706' : '#f59e0b'; // orange
           case 'tail':
             return isSelected ? '#0891b2' : '#06b6d4'; // cyan
-          default:
-            return isSelected ? '#9333ea' : '#a855f7'; // purple (unclassified polyline)
         }
+        // Everything else (microtubules, manually-drawn polylines):
+        // deterministic per-polyline HSL hash. Priority of seed:
+        //   1. `trackId` — cross-frame stable, set by the MT tracker; the
+        //      same microtubule keeps its colour across frames.
+        //   2. `instanceId` only when it has the `mt_` prefix (real MT
+        //      identity from the ML model). A sentinel like the historical
+        //      `'sperm_1'` default would otherwise collapse every manually-
+        //      drawn polyline to the same colour.
+        //   3. `polygon.id` — always a UUID, guarantees each polyline gets
+        //      a distinct colour even when no instanceId / trackId exists.
+        const colorKey =
+          polygon.trackId ||
+          (isMicrotubuleInstance(polygon.instanceId)
+            ? polygon.instanceId
+            : null) ||
+          polygon.id;
+        return colorFromInstanceId(colorKey, { selected: isSelected });
       }
       if (isInternal) {
         return isSelected ? '#0b84da' : '#0ea5e9';
@@ -182,8 +183,8 @@ const CanvasPolygon = React.memo(
       }
     }, [
       isPolyline,
+      polygon.id,
       polygon.partClass,
-      polygon.class,
       polygon.instanceId,
       polygon.trackId,
       isSelected,
