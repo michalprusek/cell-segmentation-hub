@@ -146,6 +146,8 @@ export const useProjectData = (
             frameIndex: img.frameIndex,
             frameCount: img.frameCount,
             videoDurationMs: img.videoDurationMs,
+            pixelSizeUm: img.pixelSizeUm,
+            frameIntervalMs: img.frameIntervalMs,
             channels: img.channels,
             // Surface originalPath for the Segment-All channel picker —
             // extractChannelsFromPaths derives distinct channels from the

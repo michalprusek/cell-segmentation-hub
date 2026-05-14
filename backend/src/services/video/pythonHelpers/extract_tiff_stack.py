@@ -96,67 +96,92 @@ def _save_png(arr: np.ndarray, path: Path) -> None:
 def _detect_pixel_size_um(tf) -> float | None:
     """Best-effort extraction of isotropic pixel size in micrometers.
 
-    Tries three sources in order:
-      1. OME-XML `<Pixels PhysicalSizeX PhysicalSizeXUnit>`
-      2. ImageJ ``info`` block lines like "PixelWidth: 0.108 um"
-      3. Raw TIFF ``XResolution`` tag combined with ``ResolutionUnit``
+    Tries three sources, each unit-checked before returning:
+      1. OME-XML ``<Pixels PhysicalSizeX PhysicalSizeXUnit>``
+      2. ImageJ ``imagej_metadata`` dedicated keys, then regex over the
+         multi-line ``info`` block — unit comes from ``unit`` / ``xunit``
+         on the metadata dict (or an inline unit captured from the regex).
+      3. Raw TIFF ``XResolution`` (rational pixels/unit) combined with
+         ``ResolutionUnit`` (1=none, 2=inch, 3=cm).
 
-    Returns ``None`` on every failure path — this metadata is best-effort
-    and should never crash the extractor.
+    Returns ``None`` whenever the unit is unknown or absent — the
+    µm-typed field downstream must never carry an ambiguous value.
+    Parse failures are non-fatal but emit a one-line stderr warning so
+    ops can spot regressions in tifffile metadata shapes.
     """
+    # Helper: convert a value in `unit` to micrometers. Returns None for
+    # unknown / unsupported units rather than letting an ambiguous value
+    # pollute the µm-typed field downstream.
+    def _to_um(value: float, unit: str | None) -> float | None:
+        u = (unit or "").strip().lower()
+        if u in ("", "µm", "um", "micron", "microns", "micrometer", "micrometers"):
+            return value  # OME default + microscopy convention
+        if u in ("nm", "nanometer", "nanometers"):
+            return value / 1000.0
+        if u in ("mm", "millimeter", "millimeters"):
+            return value * 1000.0
+        if u in ("cm", "centimeter", "centimeters"):
+            return value * 10_000.0
+        if u in ("inch", "inches", "in"):
+            return value * 25_400.0
+        return None  # unknown unit — caller can still ask user to override
+
     # 1. OME-XML
     try:
         ome = getattr(tf, "ome_metadata", None)
         if isinstance(ome, str) and "<Pixels" in ome:
             import re
             m = re.search(r'PhysicalSizeX="([0-9.eE+-]+)"', ome)
-            unit = re.search(r'PhysicalSizeXUnit="([^"]+)"', ome)
+            unit_m = re.search(r'PhysicalSizeXUnit="([^"]+)"', ome)
             if m:
                 val = float(m.group(1))
-                # Default unit per OME spec is "µm" / "um". Some files
-                # store the literal "µm" UTF-8 byte, others ASCII "um".
-                # Convert nm / pm to µm; pass µm/um through unchanged.
-                u = (unit.group(1).lower() if unit else "um")
-                if u in ("µm", "um", "micrometer", "micrometers"):
-                    return val
-                if u in ("nm", "nanometer", "nanometers"):
-                    return val / 1000.0
-                if u in ("mm", "millimeter", "millimeters"):
-                    return val * 1000.0
-                # Unknown unit — return as-is so caller at least has a hint.
-                return val
-    except Exception:
-        pass
+                # OME default unit is µm when PhysicalSizeXUnit is absent.
+                converted = _to_um(val, unit_m.group(1) if unit_m else None)
+                if converted is not None:
+                    return converted
+    except Exception as exc:
+        sys.stderr.write(f"OME-XML pixel-size parse failed: {exc}\n")
 
-    # 2. ImageJ metadata
+    # 2. ImageJ metadata. Prefer explicit numeric keys; fall back to
+    # regex over the multi-line "info" string. In all cases consult the
+    # unit metadata before returning so an nm-calibrated STORM TIFF
+    # isn't silently reported as µm (off by 1000×).
     try:
         meta = getattr(tf, "imagej_metadata", None)
         if isinstance(meta, dict):
-            # ImageJ writes the calibration into ``info`` (multi-line
-            # string) for some plugins. The dedicated field is the
-            # filehandle-level resolution; we cover the explicit case
-            # first because it's unambiguous.
+            ij_unit = (
+                meta.get("unit")
+                or meta.get("xunit")
+                or meta.get("Unit")
+                or meta.get("xUnit")
+            )
             for key in ("PhysicalSizeX", "pixel_width", "pixelWidth"):
                 v = meta.get(key)
                 if isinstance(v, (int, float)) and v > 0:
-                    return float(v)
+                    converted = _to_um(float(v), ij_unit)
+                    if converted is not None:
+                        return converted
             info = meta.get("info") or meta.get("Info")
             if isinstance(info, str):
                 import re
-                # Match "PixelWidth: 0.108 um" or "spatial_resolution: 0.108"
+                # Look for an inline unit on the same line as the value.
                 for pat in (
-                    r"PixelWidth\s*[:=]\s*([0-9.eE+-]+)",
-                    r"pixel_width\s*[:=]\s*([0-9.eE+-]+)",
-                    r"spatial_resolution\s*[:=]\s*([0-9.eE+-]+)",
+                    r"PixelWidth\s*[:=]\s*([0-9.eE+-]+)\s*([A-Za-zµ]*)",
+                    r"pixel_width\s*[:=]\s*([0-9.eE+-]+)\s*([A-Za-zµ]*)",
+                    r"spatial_resolution\s*[:=]\s*([0-9.eE+-]+)\s*([A-Za-zµ]*)",
                 ):
                     m = re.search(pat, info)
                     if m:
                         try:
-                            return float(m.group(1))
+                            val = float(m.group(1))
                         except ValueError:
-                            pass
-    except Exception:
-        pass
+                            continue
+                        inline_unit = m.group(2) if m.lastindex >= 2 else None
+                        converted = _to_um(val, inline_unit or ij_unit)
+                        if converted is not None:
+                            return converted
+    except Exception as exc:
+        sys.stderr.write(f"ImageJ pixel-size parse failed: {exc}\n")
 
     # 3. Raw TIFF resolution tags (XResolution, ResolutionUnit).
     try:
@@ -181,10 +206,11 @@ def _detect_pixel_size_um(tf) -> float | None:
                             return unit_per_pixel * 25_400.0  # → µm
                         if unit_code == 3:  # cm
                             return unit_per_pixel * 10_000.0  # → µm
-                        # No unit info → caller can't trust the value.
+                        # ResolutionUnit == 1 ("none") — value is in
+                        # arbitrary units; safer to surface as missing.
                         return None
-    except Exception:
-        pass
+    except Exception as exc:
+        sys.stderr.write(f"Raw-TIFF resolution parse failed: {exc}\n")
 
     return None
 
@@ -200,7 +226,7 @@ def _detect_frame_interval_ms(tf) -> float | None:
     Returns ``None`` when no time metadata is present — caller decides
     whether to fall back to a Node-side ffmpeg estimate.
     """
-    # 1. OME-XML
+    # 1. OME-XML — TimeIncrement default unit is seconds per the spec.
     try:
         ome = getattr(tf, "ome_metadata", None)
         if isinstance(ome, str) and "<Pixels" in ome:
@@ -216,26 +242,27 @@ def _detect_frame_interval_ms(tf) -> float | None:
                     return val
                 if u in ("min", "minute", "minutes"):
                     return val * 60_000.0
-                return val * 1000.0  # assume seconds if unit unknown
-    except Exception:
-        pass
+                # OME spec default for TimeIncrement is seconds, so we
+                # treat an unknown unit as seconds rather than dropping
+                # the value (different policy from pixel size because
+                # the unit space for time is much narrower).
+                return val * 1000.0
+    except Exception as exc:
+        sys.stderr.write(f"OME-XML time-increment parse failed: {exc}\n")
 
-    # 2. ImageJ metadata.
+    # 2. ImageJ metadata. `finterval` is seconds per frame; `fps` is the
+    # alternate form (frames per second).
     try:
         meta = getattr(tf, "imagej_metadata", None)
         if isinstance(meta, dict):
-            # `finterval` is the canonical ImageJ field for time-lapse
-            # spacing in seconds. Stored as float by macros that call
-            # ``setFrameInterval``.
             v = meta.get("finterval")
             if isinstance(v, (int, float)) and v > 0:
                 return float(v) * 1000.0
-            # `fps` (frames per second) is the alternate form.
             fps = meta.get("fps")
             if isinstance(fps, (int, float)) and fps > 0:
                 return 1000.0 / float(fps)
-    except Exception:
-        pass
+    except Exception as exc:
+        sys.stderr.write(f"ImageJ time-increment parse failed: {exc}\n")
 
     return None
 
@@ -332,8 +359,9 @@ def main() -> int:
             sys.stdout.write(f"PROGRESS {(t + 1) / T:.4f}\n")
             sys.stdout.flush()
 
-    # If frame_interval is available, derive durationMs from it. Otherwise
-    # leave duration at None — only ND2 has a reliable cross-frame timeline.
+    # Approximate duration from the (constant) frame interval when we
+    # have it. TIFFs don't carry per-frame timestamps, so this is an
+    # extrapolation, not a measurement.
     duration_ms = (
         int(round(frame_interval_ms * (T - 1)))
         if frame_interval_ms is not None and T > 1

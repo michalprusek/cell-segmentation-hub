@@ -40,7 +40,7 @@ export interface MicrotubuleMetricsSectionProps {
 /**
  * MT-only export controls: band thickness, background margin
  * multiplier, channel multi-select. Renders inside the export dialog's
- * General tab when ``projectType === 'microtubule'``.
+ * General tab when ``projectType === 'microtubules'``.
  *
  * The backend re-reads the original ND2/TIFF on disk so the intensity
  * numbers are derived from raw 16-bit signal (the per-channel PNGs are
@@ -51,8 +51,7 @@ export const MicrotubuleMetricsSection: React.FC<
 > = ({ value, onChange, availableChannels }) => {
   const { t } = useLanguage();
 
-  const setEnabled = (enabled: boolean) =>
-    onChange({ ...value, enabled });
+  const setEnabled = (enabled: boolean) => onChange({ ...value, enabled });
 
   const setThickness = (raw: string) => {
     const n = Number.parseInt(raw, 10);
@@ -143,9 +142,7 @@ export const MicrotubuleMetricsSection: React.FC<
         </div>
 
         <div>
-          <Label className="text-sm">
-            {t('export.mt.channelsLabel')}
-          </Label>
+          <Label className="text-sm">{t('export.mt.channelsLabel')}</Label>
           {noChannels ? (
             <p className="text-xs text-muted-foreground mt-2">
               {t('export.mt.noChannels')}
