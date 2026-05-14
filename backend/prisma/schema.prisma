@@ -107,8 +107,7 @@ model Image {
   frameCount             Int?                // Total frame count on the container row; null for frame / standalone rows
   videoDurationMs        Int?                // Source duration in ms; null when unknown or not a video
   // Calibration metadata extracted from the upload (ND2 / OME-TIFF / ImageJ-TIFF).
-  // Both are set on container rows only (frames inherit by lookup). Float for
-  // sub-pixel sizes (typical 0.108 µm/px) and sub-millisecond intervals.
+  // Set on container rows only; frames + standalone images stay null.
   pixelSizeUm            Float?              // Isotropic XY pixel size in micrometers; null when unknown
   frameIntervalMs        Float?              // Wall-clock ms between consecutive frames; null when unknown
   channels               Json?               // [{name, type:'irm'|'fluorescent', wavelengthNm?, displayColor?, isSegmentationSource}] on container rows

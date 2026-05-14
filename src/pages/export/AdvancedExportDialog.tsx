@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -79,8 +79,8 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
     }) => {
       const { t } = useLanguage();
       // ProjectType is `'microtubules'` (plural) — `'microtubule'`
-      // (singular) is the model id, not the project type. Mis-comparing
-      // them silently hides the MT section on every MT project.
+      // (singular) is the model id from MODEL_TYPE_COMPATIBILITY, not
+      // the project type.
       const isMTProject = projectType === 'microtubules';
 
       // Distinct channels across the project's video container rows.
@@ -145,20 +145,26 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       }, [selectedImageIds, updateExportOptions]);
 
       // Auto-fill the pixel-to-µm scale from the first video container's
-      // upload metadata (ND2 voxel_size, OME-TIFF PhysicalSizeX, ImageJ
-      // TIFF). Skipped when the user has already typed a value or when
-      // no container carries calibration. Applies universally — pixel
-      // scale is meaningful for any project type with a known optical
-      // setup, not just microtubule.
+      // upload metadata. The sentinel ref guarantees we only fill once
+      // per dialog open — if the user clears the field intentionally,
+      // we don't re-populate it on the next images update.
+      const autoFilledScaleRef = useRef(false);
       useEffect(() => {
-        if (exportOptions.pixelToMicrometerScale != null) return;
+        if (autoFilledScaleRef.current) return;
+        if (exportOptions.pixelToMicrometerScale != null) {
+          // User-supplied (or previously auto-filled) value — treat as
+          // done. Future clears are now respected.
+          autoFilledScaleRef.current = true;
+          return;
+        }
         const containerWithScale = images.find(
           img =>
             img.isVideoContainer &&
-            typeof img.pixelSizeUm === 'number' &&
+            img.pixelSizeUm != null &&
             img.pixelSizeUm > 0
         );
         if (containerWithScale?.pixelSizeUm) {
+          autoFilledScaleRef.current = true;
           updateExportOptions({
             pixelToMicrometerScale: containerWithScale.pixelSizeUm,
           });
@@ -369,9 +375,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                 {isMTProject && (
                   <MicrotubuleMetricsSection
                     value={exportOptions.mtMetrics ?? MT_METRICS_DEFAULTS}
-                    onChange={next =>
-                      updateExportOptions({ mtMetrics: next })
-                    }
+                    onChange={next => updateExportOptions({ mtMetrics: next })}
                     availableChannels={availableChannels}
                   />
                 )}
