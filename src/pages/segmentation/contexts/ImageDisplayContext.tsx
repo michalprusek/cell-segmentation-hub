@@ -132,7 +132,8 @@ function loadOpacityPrefs(userId: string | undefined): Record<string, number> {
     if (!parsed || typeof parsed !== 'object') return {};
     const clean: Record<string, number> = {};
     for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === 'number' && Number.isFinite(v)) clean[k] = clampOpacity(v);
+      if (typeof v === 'number' && Number.isFinite(v))
+        clean[k] = clampOpacity(v);
     }
     return clean;
   } catch {

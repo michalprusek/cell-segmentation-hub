@@ -1071,6 +1071,7 @@ const SegmentationEditor = () => {
         frameImageId: imageId,
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     editor.polygons,
     persistedSelectionTrackId,
@@ -1319,44 +1320,26 @@ const SegmentationEditor = () => {
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
 
   // Seed video.frameIndex from the URL imageId on first container load.
-  // useVideoFrames defaults to frame 0 internally; without this sync,
-  // opening /segmentation/<pid>/<frame97Id> would show frame 0 in the
-  // canvas and "1 / 300" in the header. We seed once, when the
-  // container metadata arrives and the URL points at a known frame.
+  // Reverse direction (frameIndex → URL) is disabled — see the comment
+  // block below.
   useEffect(() => {
     if (!isVideoMode || !video.container || !imageId) return;
     const idx = video.container.frames.findIndex(f => f.id === imageId);
     if (idx >= 0 && idx !== video.frameIndex) {
       video.setFrameIndex(idx);
     }
-    // Intentionally NOT depending on video.frameIndex — that would
-    // fight Play / scrubber on every tick. Only re-run when the URL
-    // changes or the container is first loaded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVideoMode, video.container, imageId]);
 
-  // Reverse sync: mirror video.frameIndex back into the URL imageId.
-  // The header slider and Play loop mutate frameIndex locally, but the
-  // segmentation loader (loadSegmentation useEffect) only re-fires when
-  // URL imageId changes — back/next buttons work because they navigate()
-  // directly, slider/play didn't. `replace: true` keeps drag scrubbing
-  // and play-loop ticks from polluting browser history.
-  useEffect(() => {
-    if (!isVideoMode || !video.container) return;
-    const targetId = video.container.frames[video.frameIndex]?.id;
-    if (targetId && targetId !== imageId) {
-      startTransition(() => {
-        navigate(`/segmentation/${projectId}/${targetId}`, { replace: true });
-      });
-    }
-  }, [
-    isVideoMode,
-    video.container,
-    video.frameIndex,
-    imageId,
-    projectId,
-    navigate,
-  ]);
+  // Reverse sync (frameIndex → URL) temporarily DISABLED in production
+  // due to oscillation regression — `useVideoFrames.container.frames`
+  // ordering disagrees with the URL imageId selected from the gallery
+  // sort, causing seed + reverse-sync to fight each other at ~7Hz.
+  // Until that mismatch is resolved at the data layer, slider/play
+  // navigation falls back to the pre-#187 behaviour (slider scrubs the
+  // canvas but doesn't reload polylines — back/next buttons still do).
+  // Tracking issue: production showed 195+ console errors / sec on
+  // 621-frame MT videos with this effect enabled.
 
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading

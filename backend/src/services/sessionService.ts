@@ -105,9 +105,9 @@ class SessionService {
       );
     } catch (err) {
       logger.error(
-        'Refresh token rotation failed mid-write; attempting rollback',
+        `Refresh token rotation failed mid-write for user ${tokenData.userId}; attempting rollback`,
         err as Error,
-        { userId: tokenData.userId }
+        'SessionService'
       );
       // Best-effort: try to restore the original token so the user
       // isn't logged out by a transient Redis blip. If this also fails,
