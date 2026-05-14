@@ -267,6 +267,11 @@ export async function uploadVideoFromFile(options: {
         height: result.height || null,
         frameCount: result.frameCount,
         videoDurationMs: result.durationMs ?? null,
+        // Calibration extracted from the upload (ND2 voxel_size /
+        // OME-TIFF Pixels / ImageJ finterval). Both null when the source
+        // carries no metadata — the export modal lets users override.
+        pixelSizeUm: result.pixelSizeUm ?? null,
+        frameIntervalMs: result.frameIntervalMs ?? null,
         channels: result.channels as unknown as object,
         segmentationStatus: 'no_segmentation',
       },

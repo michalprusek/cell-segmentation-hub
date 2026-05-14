@@ -1059,6 +1059,12 @@ export class ImageController {
             frameIndex: image.frameIndex,
             frameCount: image.frameCount,
             videoDurationMs: image.videoDurationMs,
+            // Calibration metadata extracted at upload time. The export
+            // dialog reads pixelSizeUm to pre-fill the µm/px field for
+            // microtubule exports; frameIntervalMs is reserved for the
+            // upcoming time-series view.
+            pixelSizeUm: image.pixelSizeUm,
+            frameIntervalMs: image.frameIntervalMs,
             channels: image.channels,
             displayOrder: image.displayOrder,
             // Exposed so the Segment-All channel picker can derive the set

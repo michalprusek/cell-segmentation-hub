@@ -38,6 +38,16 @@ export interface ExtractionResult {
   frameCount: number;
   /** Source duration in ms (best-effort: ffprobe / ND2 metadata / N * dt). */
   durationMs: number | null;
+  /** Median wall-clock ms between consecutive frames. Best-effort:
+   *  ND2 event timestamps, OME-TIFF TimeIncrement, ImageJ ``finterval``,
+   *  or (for mp4/avi/mov) durationMs / frameCount. ``null`` when the
+   *  source carries no temporal calibration. */
+  frameIntervalMs: number | null;
+  /** Isotropic XY pixel size in micrometers. Best-effort: ND2
+   *  ``voxel_size().x``, OME-TIFF ``PhysicalSizeX``, ImageJ TIFF info
+   *  block, or raw TIFF ``XResolution``. ``null`` when missing or
+   *  ambiguous (e.g. raw TIFF without ``ResolutionUnit``). */
+  pixelSizeUm: number | null;
   /** Channels detected in the source. For single-channel videos this is
    *  a one-element array with type='fluorescent' and isSegmentationSource=false
    *  (user retags via the channels dialog). */

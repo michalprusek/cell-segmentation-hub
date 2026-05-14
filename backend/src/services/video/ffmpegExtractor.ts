@@ -197,9 +197,21 @@ export async function extractWithFfmpeg(
     height: probed?.height ?? null,
   });
 
+  // For container-encoded video (mp4/avi/mov/...) we don't have any
+  // physical calibration in the container. The temporal cadence comes
+  // from FPS — if ffprobe gave us a duration and a frame count, we can
+  // derive frame interval directly without a separate ffprobe pass for
+  // r_frame_rate (which is sometimes lying about VFR sources).
+  const frameIntervalMs =
+    probed?.durationMs != null && flatFiles.length > 1
+      ? probed.durationMs / (flatFiles.length - 1)
+      : null;
+
   return {
     frameCount: flatFiles.length,
     durationMs: probed?.durationMs ?? null,
+    frameIntervalMs,
+    pixelSizeUm: null,
     channels,
     width: probed?.width ?? 0,
     height: probed?.height ?? 0,
