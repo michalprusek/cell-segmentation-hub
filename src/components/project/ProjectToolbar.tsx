@@ -28,6 +28,7 @@ interface ProjectToolbarProps {
   showUploadButton?: boolean;
   showExportButton?: boolean;
   projectName?: string;
+  projectType?: string | null;
   images?: unknown[];
   selectedImageIds?: string[];
   // Selection props
@@ -55,6 +56,7 @@ const ProjectToolbar = ({
   showUploadButton = true,
   showExportButton = true,
   projectName = 'Project',
+  projectType,
   images = [],
   selectedImageIds,
   selectedCount = 0,
@@ -358,6 +360,7 @@ const ProjectToolbar = ({
           onClose={() => setShowExportDialog(false)}
           projectId={projectId}
           projectName={projectName}
+          projectType={projectType ?? null}
           images={images}
           selectedImageIds={selectedImageIds}
           onExportingChange={onExportingChange || setIsExporting}

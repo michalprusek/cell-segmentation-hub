@@ -698,6 +698,13 @@ export default {
       keyboard: 'Key: {{key}}',
       requiresSelection: 'Requires polygon selection',
       requiresPolygonSelection: 'Requires polygon selection',
+      resegment: 'Resegment frame',
+      resegmentTooltipModel: 'Model: {{model}} · {{threshold}}',
+      resegmentSuccess: 'Frame resegmented',
+      resegmentFailed: 'Resegmentation failed',
+      resegmentConfirmTitle: 'Replace existing polygons?',
+      resegmentConfirmDescription:
+        'Running the model will overwrite the current segmentation. Manual edits to polygons on this frame will be lost.',
       select: 'Select',
       undoTooltip: 'Undo (Ctrl+Z)',
       undo: 'Undo',
@@ -1100,6 +1107,22 @@ export default {
     imagesDeleted_other: '{{count}} images deleted',
   },
   export: {
+    // Microtubule-only metric controls.
+    mt: {
+      sectionTitle: 'Microtubule metrics',
+      sectionDescription:
+        'Per-MT length, area, and per-channel intensity from the raw ND2/TIFF file. Background-corrected using the median of pixels outside the dilated MT mask.',
+      enable: 'Compute per-channel intensity metrics',
+      thicknessLabel: 'MT thickness (px)',
+      thicknessHelp:
+        'Width of the sampling band along each polyline. 5 px matches typical microtubule diameter in 100x widefield.',
+      marginLabel: 'Background margin (× thickness)',
+      marginHelp:
+        'Excludes pixels within this radius (thickness × multiplier) of any MT from the background. Higher = more conservative.',
+      channelsLabel: 'Channels to sample',
+      noChannels:
+        'This project has no per-channel metadata. Re-upload the video to get channel-specific metrics.',
+    },
     // Dialog headers
     advancedExport: 'Advanced Export',
     advancedOptions: 'Advanced Export Options',

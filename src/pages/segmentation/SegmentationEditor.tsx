@@ -7,7 +7,7 @@ import React, {
   startTransition,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth, useLanguage } from '@/contexts/exports';
+import { useAuth, useLanguage, useModel } from '@/contexts/exports';
 import { useProjectData } from '@/hooks/useProjectData';
 import { sortImagesBySettings } from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
@@ -72,6 +72,7 @@ const SegmentationEditor = () => {
   }>();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { selectedModel, confidenceThreshold, detectHoles } = useModel();
   const navigate = useNavigate();
 
   // Track if this is the initial load (coming from Project Detail) vs internal navigation
@@ -137,6 +138,7 @@ const SegmentationEditor = () => {
   const [segmentationPolygons, setSegmentationPolygons] = useState<
     SegmentationPolygon[] | null
   >(null);
+  const [isResegmenting, setIsResegmenting] = useState(false);
   const [imageDimensions, setImageDimensions] = useState<{
     width: number;
     height: number;
@@ -1122,6 +1124,40 @@ const SegmentationEditor = () => {
     [handleUpdatePolygonField]
   );
 
+  // Re-run ML segmentation on the currently-open frame using the
+  // user-selected model + threshold. Overwrites the existing
+  // `Segmentation` row on the backend (upsert). After the batch
+  // endpoint returns, we reload polygons via the existing
+  // `reloadSegmentation` hook so the canvas reflects the new result.
+  const handleResegmentCurrentFrame = useCallback(async () => {
+    if (!imageId || isResegmenting) return;
+    setIsResegmenting(true);
+    try {
+      await apiClient.requestBatchSegmentation(
+        [imageId],
+        selectedModel,
+        confidenceThreshold,
+        detectHoles
+      );
+      await reloadSegmentation();
+      toast.success(t('segmentation.toolbar.resegmentSuccess'));
+    } catch (err) {
+      if (handleCancelledError(err, 'resegment current frame')) return;
+      logger.error('Resegment failed', err);
+      toast.error(t('segmentation.toolbar.resegmentFailed'));
+    } finally {
+      setIsResegmenting(false);
+    }
+  }, [
+    imageId,
+    isResegmenting,
+    selectedModel,
+    confidenceThreshold,
+    detectHoles,
+    reloadSegmentation,
+    t,
+  ]);
+
   // Convert new EditMode to legacy booleans for compatibility
   const legacyModes = useMemo(
     () => ({
@@ -1288,6 +1324,9 @@ const SegmentationEditor = () => {
               onZoomIn={editor.handleZoomIn}
               onZoomOut={editor.handleZoomOut}
               onResetView={editor.handleResetView}
+              onResegment={handleResegmentCurrentFrame}
+              isResegmenting={isResegmenting}
+              hasExistingPolygons={editor.getPolygons().length > 0}
             />
 
             {/* Center: Canvas and Top Toolbar */}
