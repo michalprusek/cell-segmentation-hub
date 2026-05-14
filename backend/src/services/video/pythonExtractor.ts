@@ -30,6 +30,12 @@ const HELPERS_DIR = path.join(_MODULE_DIR, 'pythonHelpers');
 interface PythonResult {
   frameCount: number;
   durationMs: number | null;
+  /** Median ms between consecutive frames; null when unknown. Emitted
+   *  by both extract_nd2.py (ND2 events) and extract_tiff_stack.py
+   *  (OME-XML / ImageJ ``finterval``). */
+  frameIntervalMs?: number | null;
+  /** Isotropic pixel size in µm; null when unknown. */
+  pixelSizeUm?: number | null;
   width: number;
   height: number;
   channels: Array<{
@@ -161,6 +167,8 @@ export async function extractTiffStack(
   return {
     frameCount: result.frameCount,
     durationMs: result.durationMs ?? null,
+    frameIntervalMs: result.frameIntervalMs ?? null,
+    pixelSizeUm: result.pixelSizeUm ?? null,
     channels,
     width: result.width,
     height: result.height,
@@ -186,6 +194,8 @@ export async function extractNd2(
   return {
     frameCount: result.frameCount,
     durationMs: result.durationMs ?? null,
+    frameIntervalMs: result.frameIntervalMs ?? null,
+    pixelSizeUm: result.pixelSizeUm ?? null,
     channels,
     width: result.width,
     height: result.height,
