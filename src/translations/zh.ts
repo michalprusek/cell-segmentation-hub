@@ -1954,6 +1954,10 @@ export default {
     channels: {
       toggleVisibility: '切换通道可见性',
       editColor: '编辑颜色',
+      opacity: '通道不透明度',
+      renameHint: '双击重命名',
+      renameFailed: '重命名失败',
+      renameTooLong: '名称太长（最多 128 个字符）',
       colorDialog: {
         title: '通道颜色：',
         description: '选择此通道如何为合成叠加层着色。白色保持底层灰度不变。',

@@ -2129,6 +2129,10 @@ export default {
     channels: {
       toggleVisibility: 'Alternar visibilidad del canal',
       editColor: 'Editar color',
+      opacity: 'Opacidad del canal',
+      renameHint: 'Doble clic para renombrar',
+      renameFailed: 'Error al renombrar',
+      renameTooLong: 'Nombre demasiado largo (máx 128 caracteres)',
       colorDialog: {
         title: 'Color del canal:',
         description:

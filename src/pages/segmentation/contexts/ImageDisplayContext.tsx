@@ -35,6 +35,9 @@ interface ImageDisplayState {
    *  video container's `displayColor` metadata; the user can change it
    *  via the colour-picker modal. Grayscale = `#FFFFFF` (white). */
   channelColors: Record<string, string>;
+  /** Per-channel opacity 0..100 (% of channel intensity contributed to
+   *  the additive overlay). Missing entry = 100 (full intensity). */
+  channelOpacities: Record<string, number>;
   /** Lower window cutoff (0..255) — pixels below this are mapped to 0. */
   windowMin: number;
   /** Upper window cutoff (0..255) — pixels above this are mapped to 255. */
@@ -58,6 +61,8 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   setVisibleChannels: (channels: string[]) => void;
   /** Set the display colour (hex `#RRGGBB`) for a single channel. */
   setChannelColor: (channel: string, color: string) => void;
+  /** Set per-channel opacity (0..100). Clamped at write. */
+  setChannelOpacity: (channel: string, opacity: number) => void;
   setWindow: (min: number, max: number) => void;
   setWindowMin: (min: number) => void;
   setWindowMax: (max: number) => void;
@@ -76,6 +81,7 @@ const DEFAULT_STATE: ImageDisplayState = {
   channel: null,
   visibleChannels: [],
   channelColors: {},
+  channelOpacities: {},
   windowMin: 0,
   windowMax: 255,
   brightness: 100,
@@ -95,12 +101,14 @@ export const ImageDisplayContext =
 
 const clampWindow = (n: number) => Math.max(0, Math.min(255, n));
 const clampPercent = (n: number) => Math.max(0, Math.min(200, n));
+const clampOpacity = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
 /** localStorage key prefix for per-user channel-colour overrides. We
  *  key on userId so two researchers sharing a browser don't see each
  *  other's custom tints, and so an anonymous reload doesn't resurrect
  *  the previous user's choices. */
 const COLOR_PREFS_KEY_PREFIX = 'spheroseg.channelColors.';
+const OPACITY_PREFS_KEY_PREFIX = 'spheroseg.channelOpacities.';
 
 function loadColorPrefs(userId: string | undefined): Record<string, string> {
   if (!userId || typeof window === 'undefined') return {};
@@ -110,6 +118,23 @@ function loadColorPrefs(userId: string | undefined): Record<string, string> {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return {};
     return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function loadOpacityPrefs(userId: string | undefined): Record<string, number> {
+  if (!userId || typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(OPACITY_PREFS_KEY_PREFIX + userId);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const clean: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'number' && Number.isFinite(v)) clean[k] = clampOpacity(v);
+    }
+    return clean;
   } catch {
     return {};
   }
@@ -133,6 +158,7 @@ export function ImageDisplayProvider({
     ...DEFAULT_STATE,
     channel: initialChannel,
     channelColors: loadColorPrefs(userId),
+    channelOpacities: loadOpacityPrefs(userId),
   }));
 
   // Re-hydrate when userId becomes available (auth init races the
@@ -142,10 +168,18 @@ export function ImageDisplayProvider({
   useEffect(() => {
     if (!userId) return;
     setState(s => {
-      const persisted = loadColorPrefs(userId);
-      const merged: Record<string, string> = { ...persisted };
-      for (const [k, v] of Object.entries(s.channelColors)) merged[k] = v;
-      return { ...s, channelColors: merged };
+      const persistedColors = loadColorPrefs(userId);
+      const mergedColors: Record<string, string> = { ...persistedColors };
+      for (const [k, v] of Object.entries(s.channelColors)) mergedColors[k] = v;
+      const persistedOpacities = loadOpacityPrefs(userId);
+      const mergedOpacities: Record<string, number> = { ...persistedOpacities };
+      for (const [k, v] of Object.entries(s.channelOpacities))
+        mergedOpacities[k] = v;
+      return {
+        ...s,
+        channelColors: mergedColors,
+        channelOpacities: mergedOpacities,
+      };
     });
   }, [userId]);
 
@@ -162,6 +196,18 @@ export function ImageDisplayProvider({
       /* storage unavailable — silently degrade */
     }
   }, [userId, state.channelColors]);
+
+  useEffect(() => {
+    if (!userId || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        OPACITY_PREFS_KEY_PREFIX + userId,
+        JSON.stringify(state.channelOpacities)
+      );
+    } catch {
+      /* storage unavailable — silently degrade */
+    }
+  }, [userId, state.channelOpacities]);
 
   // Frame/channel changes used to reset windowMin/Max — the user found
   // that annoying when scrubbing a 300-frame video. Now we only update
@@ -194,6 +240,16 @@ export function ImageDisplayProvider({
     setState(s => ({
       ...s,
       channelColors: { ...s.channelColors, [channel]: color },
+    }));
+  }, []);
+
+  const setChannelOpacity = useCallback((channel: string, opacity: number) => {
+    setState(s => ({
+      ...s,
+      channelOpacities: {
+        ...s.channelOpacities,
+        [channel]: clampOpacity(opacity),
+      },
     }));
   }, []);
 
@@ -253,6 +309,7 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelColor,
+      setChannelOpacity,
       setWindow,
       setWindowMin,
       setWindowMax,
@@ -269,6 +326,7 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelColor,
+      setChannelOpacity,
       setWindow,
       setWindowMin,
       setWindowMax,

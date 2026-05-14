@@ -2100,6 +2100,10 @@ export default {
     channels: {
       toggleVisibility: 'Přepnout viditelnost kanálu',
       editColor: 'Upravit barvu',
+      opacity: 'Průhlednost kanálu',
+      renameHint: 'Dvojklikem přejmenovat',
+      renameFailed: 'Přejmenování selhalo',
+      renameTooLong: 'Příliš dlouhé jméno (max 128 znaků)',
       colorDialog: {
         title: 'Barva kanálu:',
         description:

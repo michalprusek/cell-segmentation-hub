@@ -2078,6 +2078,10 @@ export default {
     channels: {
       toggleVisibility: 'Basculer la visibilité du canal',
       editColor: 'Modifier la couleur',
+      opacity: 'Opacité du canal',
+      renameHint: 'Double-cliquez pour renommer',
+      renameFailed: 'Échec du renommage',
+      renameTooLong: 'Nom trop long (max 128 caractères)',
       colorDialog: {
         title: 'Couleur du canal :',
         description:

@@ -1613,7 +1613,10 @@ const SegmentationEditor = () => {
                 <div className="flex flex-col w-full lg:w-72 h-64 lg:h-full overflow-y-auto">
                   {isVideoMode && video.container && (
                     <>
-                      <ChannelsSection channels={video.container.channels} />
+                      <ChannelsSection
+                        channels={video.container.channels}
+                        containerId={videoContainerId}
+                      />
                       <DisplaySection />
                     </>
                   )}
