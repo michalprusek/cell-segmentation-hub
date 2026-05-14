@@ -5,7 +5,9 @@ import {
   segmentImage,
   calculatePolygonArea,
   calculatePerimeter,
+  polygonKey,
   type Point,
+  type Polygon,
 } from '@/lib/segmentation';
 import {
   createTestPolygons,
@@ -583,6 +585,28 @@ describe('Segmentation Algorithms', () => {
       // These functions will throw when encountering invalid point structures
       expect(() => calculatePolygonArea(invalidPoints)).toThrow();
       expect(() => calculatePerimeter(invalidPoints)).toThrow();
+    });
+  });
+
+  describe('polygonKey', () => {
+    const basePoly: Polygon = {
+      id: 'poly_abc',
+      points: [{ x: 0, y: 0 }],
+      type: 'external',
+    };
+
+    it('returns trackId when present (cross-frame stable key)', () => {
+      expect(polygonKey({ ...basePoly, trackId: 'mt_42' })).toBe('mt_42');
+    });
+
+    it('falls back to id when trackId is absent', () => {
+      expect(polygonKey(basePoly)).toBe('poly_abc');
+    });
+
+    it('falls back to id when trackId is an empty string', () => {
+      // Empty trackId must NOT collide every untracked polygon to the
+      // same key — `||` (not `??`) treats '' as absent.
+      expect(polygonKey({ ...basePoly, trackId: '' })).toBe('poly_abc');
     });
   });
 });

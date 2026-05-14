@@ -17,7 +17,7 @@ import { useCoordinatedAbortController } from '@/hooks/shared/useAbortController
 import useDebounce from '@/hooks/useDebounce';
 import { EditMode } from './types';
 import { shouldPreventCanvasDeselection } from './config/modeConfig';
-import { Polygon } from '@/lib/segmentation';
+import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
@@ -143,9 +143,19 @@ const SegmentationEditor = () => {
     width: number;
     height: number;
   } | null>(null);
-  const [hiddenPolygonIds, setHiddenPolygonIds] = useState<Set<string>>(
+  // Stores STABLE keys (trackId where present, else polygon.id) so a
+  // microtubule hidden on one frame stays hidden when the user scrubs.
+  // Branded `Set<PolygonKey>` makes accidental key-by-other-string a
+  // compile error.
+  const [hiddenPolygonIds, setHiddenPolygonIds] = useState<Set<PolygonKey>>(
     new Set()
   );
+  // Cross-frame selection persistence: when the user picks an MT
+  // polyline, remember its trackId so frame scrubs can re-select the
+  // same MT instance on the new frame. null = no persistent selection.
+  const [persistedSelectionTrackId, setPersistedSelectionTrackId] = useState<
+    string | null
+  >(null);
   const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
@@ -742,7 +752,7 @@ const SegmentationEditor = () => {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
     const filteredPolygons = editor.polygons.filter(
-      polygon => !hiddenPolygonIds.has(polygon.id)
+      polygon => !hiddenPolygonIds.has(polygonKey(polygon))
     );
     logger.debug('🎨 Polygon rendering state:', {
       totalPolygons: editor.polygons.length,
@@ -991,35 +1001,97 @@ const SegmentationEditor = () => {
 
   // Legacy compatibility handlers
   const handleTogglePolygonVisibility = (polygonId: string) => {
+    // Map current-frame polygon.id → stable key (trackId or id) so the
+    // hide state survives frame changes for MTs.
+    const target = editor.polygons.find(p => p.id === polygonId);
+    if (!target) return;
+    const key = polygonKey(target);
     setHiddenPolygonIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(polygonId)) {
-        newSet.delete(polygonId);
+      if (newSet.has(key)) {
+        newSet.delete(key);
       } else {
-        newSet.add(polygonId);
+        newSet.add(key);
       }
       return newSet;
     });
   };
 
   const handleDeletePolygonFromPanel = (polygonId: string) => {
+    const target = editor.polygons.find(p => p.id === polygonId);
     editor.handleDeletePolygon(polygonId);
-    setHiddenPolygonIds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(polygonId);
-      return newSet;
-    });
+    if (target) {
+      const key = polygonKey(target);
+      setHiddenPolygonIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(key);
+        return newSet;
+      });
+    }
   };
+
+  // Capture trackId at click so frame scrubbing re-attaches selection
+  // to the same MT instance on the new frame.
+  const handleSelectPolygon = useCallback(
+    (polygonId: string | null) => {
+      if (polygonId === null) {
+        setPersistedSelectionTrackId(null);
+      } else {
+        const p = editor.polygons.find(x => x.id === polygonId);
+        setPersistedSelectionTrackId(p?.trackId ?? null);
+      }
+      editor.handlePolygonSelection(polygonId);
+    },
+    [editor]
+  );
+
+  // Cross-frame selection remap. When polygons load for a new frame
+  // (initialPolygons replaces editor.polygons), find the polygon that
+  // shares the persisted trackId and re-select it. If no sibling exists
+  // on this frame (track wasn't matched here), selection is left null
+  // by the editor's own image-change reset and we don't fight it — but
+  // we log so a missing match is debuggable when a user reports
+  // "selection lost".
+  useEffect(() => {
+    if (!persistedSelectionTrackId) return;
+    const match = editor.polygons.find(
+      p => p.trackId === persistedSelectionTrackId
+    );
+    if (match) {
+      if (editor.selectedPolygonId !== match.id) {
+        editor.setSelectedPolygonId(match.id);
+      }
+    } else if (editor.polygons.length > 0) {
+      // Polygons loaded but no match — track is not present on this
+      // frame. Surface via debug log so support can correlate user
+      // reports; UI deliberately stays quiet (toast on every scrub past
+      // a gap would be obnoxious).
+      logger.debug('Selected MT track not present on current frame', {
+        trackId: persistedSelectionTrackId,
+        frameImageId: imageId,
+      });
+    }
+  }, [
+    editor.polygons,
+    persistedSelectionTrackId,
+    editor.selectedPolygonId,
+    editor.setSelectedPolygonId,
+    imageId,
+  ]);
 
   // Context menu handlers for polygon right-click
   const handleDeletePolygonFromContextMenu = useCallback(
     (polygonId: string) => {
+      const target = editor.polygons.find(p => p.id === polygonId);
       editor.handleDeletePolygon(polygonId);
-      setHiddenPolygonIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(polygonId);
-        return newSet;
-      });
+      if (target) {
+        const key = polygonKey(target);
+        setHiddenPolygonIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(key);
+          return newSet;
+        });
+      }
     },
     [editor]
   );
@@ -1201,10 +1273,23 @@ const SegmentationEditor = () => {
   const visiblePolygons = useMemo(
     () =>
       editor.polygons.filter(polygon => {
-        if (hiddenPolygonIds.has(polygon.id) || !polygon.points) return false;
+        if (hiddenPolygonIds.has(polygonKey(polygon)) || !polygon.points)
+          return false;
         const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
         return polygon.points.length >= minPoints;
       }),
+    [editor.polygons, hiddenPolygonIds]
+  );
+
+  // Panels still consume polygon.id, so project the stable-key set
+  // down per frame.
+  const frameHiddenIds = useMemo(
+    () =>
+      new Set(
+        editor.polygons
+          .filter(p => hiddenPolygonIds.has(polygonKey(p)))
+          .map(p => p.id)
+      ),
     [editor.polygons, hiddenPolygonIds]
   );
 
@@ -1250,6 +1335,29 @@ const SegmentationEditor = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVideoMode, video.container, imageId]);
 
+  // Reverse sync: mirror video.frameIndex back into the URL imageId.
+  // The header slider and Play loop mutate frameIndex locally, but the
+  // segmentation loader (loadSegmentation useEffect) only re-fires when
+  // URL imageId changes — back/next buttons work because they navigate()
+  // directly, slider/play didn't. `replace: true` keeps drag scrubbing
+  // and play-loop ticks from polluting browser history.
+  useEffect(() => {
+    if (!isVideoMode || !video.container) return;
+    const targetId = video.container.frames[video.frameIndex]?.id;
+    if (targetId && targetId !== imageId) {
+      startTransition(() => {
+        navigate(`/segmentation/${projectId}/${targetId}`, { replace: true });
+      });
+    }
+  }, [
+    isVideoMode,
+    video.container,
+    video.frameIndex,
+    imageId,
+    projectId,
+    navigate,
+  ]);
+
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading
   if (projectLoading && !projectImages.length) {
@@ -1268,9 +1376,8 @@ const SegmentationEditor = () => {
     );
   }
 
-  // Spočítáme počty viditelných a skrytých polygonů
-  const visiblePolygonsCount = editor.polygons.length - hiddenPolygonIds.size;
-  const hiddenPolygonsCount = hiddenPolygonIds.size;
+  const visiblePolygonsCount = editor.polygons.length - frameHiddenIds.size;
+  const hiddenPolygonsCount = frameHiddenIds.size;
 
   return (
     <SegmentationErrorBoundary>
@@ -1414,7 +1521,7 @@ const SegmentationEditor = () => {
                             e.target === e.currentTarget &&
                             !shouldPreventCanvasDeselection(editor.editMode)
                           ) {
-                            editor.handlePolygonSelection(null);
+                            handleSelectPolygon(null);
                           }
                         }}
                         data-transform={JSON.stringify(editor.transform)}
@@ -1514,8 +1621,8 @@ const SegmentationEditor = () => {
                     loading={projectLoading}
                     polygons={editor.polygons}
                     selectedPolygonId={editor.selectedPolygonId}
-                    onSelectPolygon={editor.handlePolygonSelection}
-                    hiddenPolygonIds={hiddenPolygonIds}
+                    onSelectPolygon={handleSelectPolygon}
+                    hiddenPolygonIds={frameHiddenIds}
                     onTogglePolygonVisibility={handleTogglePolygonVisibility}
                     onRenamePolygon={handleRenamePolygon}
                     onDeletePolygon={handleDeletePolygonFromPanel}
@@ -1524,7 +1631,7 @@ const SegmentationEditor = () => {
                     <SpermInstancePanel
                       polygons={editor.polygons}
                       selectedPolygonId={editor.selectedPolygonId}
-                      onSelectPolygon={editor.handlePolygonSelection}
+                      onSelectPolygon={handleSelectPolygon}
                       activePartClass={activePartClass}
                       onPartClassChange={setActivePartClass}
                       activeInstanceId={activeInstanceId}
@@ -1535,8 +1642,8 @@ const SegmentationEditor = () => {
                     <MicrotubuleInstancePanel
                       polygons={editor.polygons}
                       selectedPolygonId={editor.selectedPolygonId}
-                      onSelectPolygon={editor.handlePolygonSelection}
-                      hiddenPolygonIds={hiddenPolygonIds}
+                      onSelectPolygon={handleSelectPolygon}
+                      hiddenPolygonIds={frameHiddenIds}
                       onToggleVisibility={handleTogglePolygonVisibility}
                     />
                   )}
@@ -1545,12 +1652,17 @@ const SegmentationEditor = () => {
             </div>
           </div>
 
-          {/* Bottom: Status Bar with Keyboard Shortcuts */}
-          <div className="relative">
-            {/* Keyboard Shortcuts Button - positioned in bottom left corner */}
-            <KeyboardShortcutsHelp className="absolute left-2 bottom-2 z-10" />
+          {/* Bottom: Status Bar with Keyboard Shortcuts inline */}
+          <div className="relative flex items-stretch bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+            {/* Keyboard Shortcuts Button — sits in the footer's flex flow
+                so it can't visually overlap the polygon counters next to
+                it (the previous absolute-positioning hid the leftmost
+                "polygons" label behind the button). */}
+            <div className="flex items-center pl-2 pr-1 flex-shrink-0">
+              <KeyboardShortcutsHelp />
+            </div>
 
-            {/* Loading indicator overlay */}
+            {/* Loading indicator overlay — spans the full footer */}
             {isReloading && (
               <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm z-20 flex items-center justify-center">
                 <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-lg dark:bg-gray-900">
@@ -1562,7 +1674,7 @@ const SegmentationEditor = () => {
               </div>
             )}
 
-            {/* Status Bar */}
+            {/* Status Bar — fills the remaining footer width */}
             <StatusBar
               polygons={editor.polygons}
               editMode={editor.editMode}

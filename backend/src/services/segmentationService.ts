@@ -32,6 +32,93 @@ export interface SegmentationPolygon {
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
   partClass?: PolygonPartClass;
   instanceId?: string;
+  /** Optional human-friendly label set in the editor. Persisted so that
+   *  cross-frame propagation can mirror renames onto sibling polylines. */
+  name?: string;
+  /** Stable cross-frame microtubule identifier written by the tracker.
+   *  Editor state (hide/select) keys on this; cross-frame mutation
+   *  propagation finds sibling polylines by matching trackId. */
+  trackId?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Cross-frame propagation pure helpers (exported for unit tests)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface TrackedPolyMeta {
+  trackId: string;
+  name?: string;
+  partClass?: string;
+}
+
+export interface TrackDiff {
+  renames: Map<string, { type: 'rename' } & TrackedPolyMeta>;
+  deletes: Set<string>;
+}
+
+export function extractTrackedPolys(
+  polys: unknown[]
+): Map<string, TrackedPolyMeta> {
+  const m = new Map<string, TrackedPolyMeta>();
+  for (const p of polys) {
+    const tid = (p as Record<string, unknown>).trackId;
+    if (typeof tid !== 'string' || tid === '') continue;
+    m.set(tid, {
+      trackId: tid,
+      name: (p as Record<string, unknown>).name as string | undefined,
+      partClass: (p as Record<string, unknown>).partClass as
+        | string
+        | undefined,
+    });
+  }
+  return m;
+}
+
+export function diffTrackOps(
+  previousPolys: unknown[],
+  newPolys: unknown[]
+): TrackDiff {
+  const previousByTrack = extractTrackedPolys(previousPolys);
+  const newByTrack = extractTrackedPolys(newPolys);
+  const renames: TrackDiff['renames'] = new Map();
+  const deletes: TrackDiff['deletes'] = new Set();
+  for (const [tid, prev] of previousByTrack.entries()) {
+    const next = newByTrack.get(tid);
+    if (!next) {
+      deletes.add(tid);
+      continue;
+    }
+    if (prev.name !== next.name || prev.partClass !== next.partClass) {
+      renames.set(tid, { type: 'rename', ...next });
+    }
+  }
+  // Fresh tracks (in new but not previous) intentionally don't propagate
+  // — they're user-painted on this frame only.
+  return { renames, deletes };
+}
+
+export function parsePolygonsJsonForDiff(
+  json: string,
+  ctx: { currentImageId: string; parentVideoId: string | null }
+): unknown[] {
+  try {
+    const raw = JSON.parse(json);
+    if (Array.isArray(raw)) return raw;
+    logger.warn(
+      'Existing segmentation polygons not an array; cross-frame diff falls back to empty previous state',
+      'SegmentationService',
+      ctx
+    );
+    return [];
+  } catch (err) {
+    logger.error(
+      'Existing segmentation polygons JSON malformed; cross-frame diff falls back to empty previous state',
+      err as Error,
+      'SegmentationService',
+      ctx
+    );
+    return [];
+  }
 }
 
 export interface SegmentationRequest {
@@ -1285,6 +1372,11 @@ export class SegmentationService {
         ...((polygon as any).trackId && {
           trackId: (polygon as any).trackId,
         }),
+        // Human-friendly label set in the editor; mirrored across
+        // sibling frames so a single rename is visible everywhere.
+        ...((polygon as any).name && {
+          name: (polygon as any).name,
+        }),
         // _embedding is intentionally NOT propagated to the editor —
         // it's a several-KB-per-polyline blob used only server-side by
         // the tracker and kymograph routes. Stripping it here saves
@@ -1368,10 +1460,14 @@ export class SegmentationService {
         polygon.parentIds && polygon.parentIds.length > 0
           ? polygon.parentIds[0]
           : undefined,
-      // Preserve polyline fields (sperm model)
+      // Preserve polyline fields (sperm + microtubule models). trackId
+      // and name MUST round-trip — they're the basis of cross-frame
+      // identity and the user-set label.
       ...(polygon.geometry && { geometry: polygon.geometry }),
       ...(polygon.partClass && { partClass: polygon.partClass }),
       ...(polygon.instanceId && { instanceId: polygon.instanceId }),
+      ...(polygon.trackId && { trackId: polygon.trackId }),
+      ...(polygon.name && { name: polygon.name }),
     }));
     const polygonsJson = JSON.stringify(dbPolygons);
 
@@ -1411,12 +1507,44 @@ export class SegmentationService {
         );
       }
 
-      const updated = await this.prisma.segmentation.update({
-        where: { id: existingSegmentation.id },
-        data: updateData,
-      });
+      // Cross-frame propagation for microtubule tracks: if this frame is
+      // a child of a video container and any polyline with a trackId was
+      // renamed, reclassified, or deleted, mirror the same change onto
+      // every sibling frame holding a polyline with that trackId. Runs
+      // in a single Prisma transaction so the video stays consistent —
+      // either all frames see the new state, or none of them do.
+      const siblingUpdateOps =
+        await this.computeCrossFrameTrackPropagation(
+          image.parentVideoId,
+          imageId,
+          existingSegmentation.polygons,
+          dbPolygons
+        );
 
-      // Generate thumbnails asynchronously after update
+      const txOps: Prisma.PrismaPromise<unknown>[] = [
+        this.prisma.segmentation.update({
+          where: { id: existingSegmentation.id },
+          data: updateData,
+        }),
+        ...siblingUpdateOps,
+      ];
+      const txResults = await this.prisma.$transaction(txOps);
+      const updated = txResults[0] as Awaited<
+        ReturnType<typeof this.prisma.segmentation.update>
+      >;
+
+      if (siblingUpdateOps.length > 0) {
+        logger.info(
+          `Cross-frame propagation: ${siblingUpdateOps.length} sibling frames updated for video ${image.parentVideoId}`,
+          'SegmentationService',
+          { imageId, parentVideoId: image.parentVideoId }
+        );
+      }
+
+      // Generate thumbnails asynchronously for the edited frame only.
+      // Sibling frames only got metadata mutations (rename/partClass/
+      // delete-by-track), not pixel changes — their existing thumbnails
+      // stay valid.
       this.thumbnailManager.generateAllThumbnails(updated.id).catch(error => {
         logger.error(
           `Failed to generate thumbnails after segmentation update for ${imageId}`,
@@ -1768,6 +1896,9 @@ export class SegmentationService {
             ...((polygon as any).trackId && {
               trackId: (polygon as any).trackId,
             }),
+            ...((polygon as any).name && {
+              name: (polygon as any).name,
+            }),
             // _embedding intentionally stripped — server-only blob.
           })
         );
@@ -1823,6 +1954,115 @@ export class SegmentationService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Mirrors metadata-only mutations (rename, partClass, delete-by-trackId)
+   * from this frame onto sibling frames of the same video. Geometry,
+   * confidence, and type stay per-frame. Returns Prisma update ops to
+   * run in the caller's transaction.
+   */
+  private async computeCrossFrameTrackPropagation(
+    parentVideoId: string | null,
+    currentImageId: string,
+    previousPolygonsJson: string,
+    newDbPolygons: Array<Record<string, unknown>>
+  ): Promise<Prisma.PrismaPromise<unknown>[]> {
+    if (!parentVideoId) return []; // Standalone image — nothing to propagate.
+
+    const previousParsed = parsePolygonsJsonForDiff(
+      previousPolygonsJson,
+      { currentImageId, parentVideoId }
+    );
+    const { renames, deletes } = diffTrackOps(
+      previousParsed,
+      newDbPolygons as unknown[]
+    );
+    // Fresh trackIds (in new but not previous) intentionally don't
+    // propagate — they're user-painted on this frame only.
+    if (renames.size === 0 && deletes.size === 0) return [];
+
+    // Pull every sibling frame's segmentation row in one query.
+    const siblings = await this.prisma.image.findMany({
+      where: {
+        parentVideoId,
+        id: { not: currentImageId },
+      },
+      select: {
+        id: true,
+        segmentation: { select: { id: true, polygons: true } },
+      },
+    });
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    for (const sib of siblings) {
+      if (!sib.segmentation) continue;
+      let parsed: unknown[];
+      try {
+        parsed = JSON.parse(sib.segmentation.polygons);
+        if (!Array.isArray(parsed)) {
+          logger.warn(
+            'Sibling segmentation polygons not an array; skipping propagation',
+            'SegmentationService',
+            {
+              siblingImageId: sib.id,
+              segmentationId: sib.segmentation.id,
+              parentVideoId,
+            }
+          );
+          continue;
+        }
+      } catch (err) {
+        logger.error(
+          'Sibling segmentation polygons JSON malformed; skipping propagation',
+          err as Error,
+          'SegmentationService',
+          {
+            siblingImageId: sib.id,
+            segmentationId: sib.segmentation.id,
+            parentVideoId,
+          }
+        );
+        continue;
+      }
+
+      let mutated = false;
+      const updatedPolys = parsed
+        .filter(p => {
+          const tid = (p as Record<string, unknown>).trackId;
+          if (typeof tid === 'string' && deletes.has(tid)) {
+            mutated = true;
+            return false;
+          }
+          return true;
+        })
+        .map(p => {
+          const tid = (p as Record<string, unknown>).trackId;
+          if (typeof tid !== 'string') return p;
+          const op = renames.get(tid);
+          if (!op) return p;
+          mutated = true;
+          const out: Record<string, unknown> = { ...(p as object) };
+          if (op.name !== undefined) out.name = op.name;
+          else delete out.name;
+          if (op.partClass !== undefined) out.partClass = op.partClass;
+          else delete out.partClass;
+          return out;
+        });
+
+      if (mutated) {
+        ops.push(
+          this.prisma.segmentation.update({
+            where: { id: sib.segmentation.id },
+            data: {
+              polygons: JSON.stringify(updatedPolys),
+              updatedAt: new Date(),
+            },
+          })
+        );
+      }
+    }
+    return ops;
   }
 }
 

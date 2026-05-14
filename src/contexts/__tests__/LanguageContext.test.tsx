@@ -49,11 +49,6 @@ vi.mock('@/lib/i18nLogger', () => ({
   i18nLogger: { logMissingKey: vi.fn() },
 }));
 
-vi.mock('@/lib/emergencyLogout', () => ({
-  isEmergencyLogout: vi.fn(() => false),
-  clearEmergencyFlag: vi.fn(),
-}));
-
 // Helper: localStorage mock as a simple in-memory store
 const createLocalStorageMock = () => {
   const store: Record<string, string> = {};

@@ -1107,8 +1107,19 @@ class ModelLoader:
         start_time = _time.time()
 
         try:
-            # PIL → grayscale numpy (H, W). Wrapper handles further conversion.
-            image_np = np.array(image.convert('L'))
+            # PIL → grayscale numpy (H, W), preserving native bit depth.
+            # `convert('L')` would quantise 'I;16' (16-bit microscopy PNG)
+            # to 8-bit BEFORE the wrapper's float32 percentile clip, so
+            # the model would run on truncated dynamic range. Pass the
+            # native dtype through; `_normalize` handles the rest.
+            if image.mode in ('I;16', 'I;16B', 'I;16L'):
+                image_np = np.array(image, dtype=np.uint16)
+            elif image.mode == 'I':
+                image_np = np.array(image, dtype=np.int32)
+            elif image.mode == 'F':
+                image_np = np.array(image, dtype=np.float32)
+            else:
+                image_np = np.array(image.convert('L'), dtype=np.uint8)
 
             result = mt_model.predict(image_np, seed_threshold=threshold)
             centerlines = result["centerlines_rc"]            # list of (M,2) float64

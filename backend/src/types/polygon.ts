@@ -51,4 +51,11 @@ export interface BasePolygon extends MinimalPolygon {
   id?: string;
   geometry?: 'polygon' | 'polyline';
   instanceId?: string;
+  /** Stable cross-frame identifier for microtubule polylines, written by
+   *  the tracker after Hungarian matching. Editor state (hide / select)
+   *  and BE cross-frame propagation both key on this. */
+  trackId?: string;
+  /** Human-friendly label set in the editor; mirrored across sibling
+   *  frames during cross-frame save propagation. */
+  name?: string;
 }
