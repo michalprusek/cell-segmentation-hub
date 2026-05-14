@@ -538,6 +538,12 @@ export interface ProjectImage {
   frameIndex?: number | null;
   frameCount?: number | null;
   videoDurationMs?: number | null;
+  // Calibration metadata extracted from the upload (ND2 voxel size,
+  // OME-TIFF Pixels, ImageJ finterval). Container rows only — frame
+  // rows inherit by parent lookup. ``null`` when the source had no
+  // calibration metadata.
+  pixelSizeUm?: number | null;
+  frameIntervalMs?: number | null;
   channels?: VideoChannel[] | null;
   // Storage key of the underlying file (e.g. frames/NNNN/<channel>.png).
   // Surfaced so the Segment-All channel picker can derive distinct channels
