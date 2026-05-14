@@ -10,9 +10,15 @@ import type { VideoChannel } from '@/types';
 
 interface ChannelsSectionProps {
   channels: VideoChannel[] | null | undefined;
+  /** Video container Image id. Required to persist channel renames
+   *  via PATCH /images/:id/channels. When omitted, rename UI hides. */
+  containerId?: string | null;
 }
 
-export default function ChannelsSection({ channels }: ChannelsSectionProps) {
+export default function ChannelsSection({
+  channels,
+  containerId,
+}: ChannelsSectionProps) {
   const { t } = useLanguage();
 
   // Don't render the section at all when the video has no channel
@@ -27,7 +33,7 @@ export default function ChannelsSection({ channels }: ChannelsSectionProps) {
         </h3>
       </div>
       <div className="p-4">
-        <ChannelOverlayList channels={channels} />
+        <ChannelOverlayList channels={channels} containerId={containerId} />
       </div>
     </div>
   );
