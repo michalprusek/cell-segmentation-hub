@@ -1059,10 +1059,9 @@ export class ImageController {
             frameIndex: image.frameIndex,
             frameCount: image.frameCount,
             videoDurationMs: image.videoDurationMs,
-            // Calibration metadata extracted at upload time. The export
-            // dialog reads pixelSizeUm to pre-fill the µm/px field for
-            // microtubule exports; frameIntervalMs is reserved for the
-            // upcoming time-series view.
+            // Calibration metadata extracted at upload time (µm/px and
+            // ms between frames). Populated on container rows only;
+            // null on frames + standalone images.
             pixelSizeUm: image.pixelSizeUm,
             frameIntervalMs: image.frameIntervalMs,
             channels: image.channels,
