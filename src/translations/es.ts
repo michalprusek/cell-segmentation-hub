@@ -766,6 +766,13 @@ export default {
       keyboard: 'Tecla: {{key}}',
       requiresSelection: 'Requiere selección de polígono',
       requiresPolygonSelection: 'Requiere selección de polígono',
+      resegment: 'Resegmentar fotograma',
+      resegmentTooltipModel: 'Modelo: {{model}} · {{threshold}}',
+      resegmentSuccess: 'Fotograma resegmentado',
+      resegmentFailed: 'Falló la resegmentación',
+      resegmentConfirmTitle: '¿Reemplazar polígonos existentes?',
+      resegmentConfirmDescription:
+        'Ejecutar el modelo sobrescribirá la segmentación actual. Las ediciones manuales de polígonos en este fotograma se perderán.',
       select: 'Seleccionar',
       undoTooltip: 'Deshacer (Ctrl+Z)',
       undo: 'Deshacer',
@@ -1105,6 +1112,21 @@ export default {
     imagesDeleted_other: '{{count}} imágenes eliminadas',
   },
   export: {
+    mt: {
+      sectionTitle: 'Métricas de microtúbulos',
+      sectionDescription:
+        'Longitud, área e intensidad por canal de cada MT desde el archivo ND2/TIFF original. Corregido con la mediana del fondo (fuera de la máscara MT dilatada).',
+      enable: 'Calcular métricas de intensidad por canal',
+      thicknessLabel: 'Grosor del MT (px)',
+      thicknessHelp:
+        'Ancho de la banda de muestreo a lo largo de cada polilínea. 5 px corresponde al diámetro típico del microtúbulo a 100× campo amplio.',
+      marginLabel: 'Margen del fondo (× grosor)',
+      marginHelp:
+        'Excluye píxeles dentro de este radio (grosor × multiplicador) de cualquier MT del fondo. Mayor = más conservador.',
+      channelsLabel: 'Canales a muestrear',
+      noChannels:
+        'Este proyecto no tiene metadatos de canales. Vuelva a subir el vídeo para obtener métricas por canal.',
+    },
     advancedExport: 'Exportación Avanzada',
     advancedOptions: 'Opciones Avanzadas de Exportación',
     configureSettings:

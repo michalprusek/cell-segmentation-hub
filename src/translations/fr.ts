@@ -767,6 +767,13 @@ export default {
       keyboard: 'Touche: {{key}}',
       requiresSelection: "Nécessite la sélection d'un polygone",
       requiresPolygonSelection: "Nécessite la sélection d'un polygone",
+      resegment: "Resegmenter l'image",
+      resegmentTooltipModel: 'Modèle: {{model}} · {{threshold}}',
+      resegmentSuccess: 'Image resegmentée',
+      resegmentFailed: 'Échec de la resegmentation',
+      resegmentConfirmTitle: 'Remplacer les polygones existants ?',
+      resegmentConfirmDescription:
+        "L'exécution du modèle écrasera la segmentation actuelle. Les modifications manuelles des polygones sur cette image seront perdues.",
       select: 'Sélectionner',
       undoTooltip: 'Annuler (Ctrl+Z)',
       undo: 'Annuler',
@@ -1110,6 +1117,21 @@ export default {
     imagesDeleted_other: '{{count}} images supprimées',
   },
   export: {
+    mt: {
+      sectionTitle: 'Métriques des microtubules',
+      sectionDescription:
+        "Longueur, aire et intensité par canal de chaque MT à partir du fichier ND2/TIFF d'origine. Corrigé par la médiane du fond (en dehors du masque MT dilaté).",
+      enable: 'Calculer les métriques d’intensité par canal',
+      thicknessLabel: 'Épaisseur du MT (px)',
+      thicknessHelp:
+        "Largeur de la bande d'échantillonnage le long de chaque polyligne. 5 px correspond au diamètre typique des microtubules en grand champ 100×.",
+      marginLabel: 'Marge du fond (× épaisseur)',
+      marginHelp:
+        "Exclut du fond les pixels situés dans ce rayon (épaisseur × multiplicateur) d'un MT. Plus élevé = plus conservateur.",
+      channelsLabel: 'Canaux à échantillonner',
+      noChannels:
+        'Ce projet ne contient pas de métadonnées de canaux. Téléversez à nouveau la vidéo pour obtenir des métriques par canal.',
+    },
     advancedExport: 'Export Avancé',
     advancedOptions: "Options d'Exportation Avancées",
     configureSettings:

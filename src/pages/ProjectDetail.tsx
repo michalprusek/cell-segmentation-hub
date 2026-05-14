@@ -1543,6 +1543,7 @@ const ProjectDetail = () => {
               viewMode={viewMode}
               setViewMode={setViewMode}
               projectName={projectTitle}
+              projectType={projectType}
               images={images}
               selectedCount={selectedCount}
               isAllSelected={isAllSelected}
