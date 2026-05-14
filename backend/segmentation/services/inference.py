@@ -133,11 +133,40 @@ class InferenceService:
         """
         try:
             # Load image from bytes
-            image = Image.open(io.BytesIO(image_data)).convert('RGB')
+            image = Image.open(io.BytesIO(image_data))
             original_size = image.size  # (width, height)
 
-            # Convert to numpy array
-            image_np = np.array(image)
+            # High-bit-depth microscopy frames (16-bit grayscale, signed
+            # int32, or 32-bit float) get clipped by a plain convert('RGB')
+            # — PIL keeps only the high byte for 'I;16', truncates negative
+            # for 'I', and clips to [0,255] for 'F'. Apply the same
+            # percentile normalisation the lossless extractors used to do
+            # at storage time, then promote to 8-bit RGB so the model
+            # sees the distribution it was trained on.
+            if image.mode in ('I;16', 'I;16B', 'I;16L', 'I', 'F'):
+                # PIL mode 'I' is signed int32, not uint32 — using
+                # np.uint32 here would reinterpret negatives as huge
+                # positives and break the percentile clip.
+                dtype_map = {
+                    'I;16': np.uint16,
+                    'I;16B': np.uint16,
+                    'I;16L': np.uint16,
+                    'I': np.int32,
+                    'F': np.float32,
+                }
+                arr = np.array(image, dtype=dtype_map[image.mode])
+                lo, hi = np.percentile(arr, [1.0, 99.5])
+                if hi <= lo:
+                    hi = lo + 1.0
+                arr8 = np.clip(
+                    (arr.astype(np.float32) - float(lo)) / (float(hi) - float(lo)),
+                    0.0,
+                    1.0,
+                )
+                arr8 = (arr8 * 255.0).astype(np.uint8)
+                image_np = np.stack([arr8] * 3, axis=-1)
+            else:
+                image_np = np.array(image.convert('RGB'))
 
             # Grayscale at original_size for downstream intensity analysis
             original_gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)

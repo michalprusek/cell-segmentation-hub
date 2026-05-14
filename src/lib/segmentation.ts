@@ -50,6 +50,19 @@ export interface Polygon {
 
 export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
 
+/** Branded string identifying a polygon for cross-frame UI state. Use
+ *  `Set<PolygonKey>` / `Map<PolygonKey, ...>` to make accidental keying
+ *  by arbitrary strings (filenames, ids of other entities) a compile
+ *  error. */
+export type PolygonKey = string & { readonly __brand: 'PolygonKey' };
+
+/** Cross-frame stable key for UI state: `trackId` if set (microtubule
+ *  polylines), else the per-inference `id`. Uses `||` not `??` so an
+ *  accidentally empty `trackId` falls back to id rather than colliding
+ *  every empty-trackId polygon to the same key. */
+export const polygonKey = (p: Polygon): PolygonKey =>
+  (p.trackId || p.id) as PolygonKey;
+
 // SegmentationResult type removed - use Polygon[] directly
 
 // Apply a simple thresholding algorithm to create a binary mask

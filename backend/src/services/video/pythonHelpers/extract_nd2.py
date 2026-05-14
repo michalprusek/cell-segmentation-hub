@@ -16,19 +16,36 @@ from pathlib import Path
 import numpy as np
 
 
-def _normalize_to_uint8(arr: np.ndarray) -> np.ndarray:
-    if arr.dtype == np.uint8:
+def _to_png_dtype(arr: np.ndarray) -> np.ndarray:
+    """Coerce to a dtype PIL can write losslessly to PNG, preserving bit depth.
+
+    PNG supports 8- and 16-bit unsigned grayscale natively.
+    - uint8/uint16 → as-is (Pillow picks 'L' / 'I;16')
+    - int16 → shift into uint16 range with the same offset; reversible
+    - other (float, int32, …) → rescale to uint16 per-frame; warned, since
+      microscopy float frames lose absolute scale across the sequence.
+    """
+    if arr.dtype in (np.uint8, np.uint16):
         return arr
-    lo, hi = np.percentile(arr, [1.0, 99.5])
+    if arr.dtype == np.int16:
+        return (arr.astype(np.int32) + 32768).astype(np.uint16)
+    lo, hi = float(arr.min()), float(arr.max())
     if hi <= lo:
-        hi = lo + 1.0
-    out = np.clip((arr.astype(np.float32) - lo) / (hi - lo), 0.0, 1.0)
-    return (out * 255.0).astype(np.uint8)
+        # Genuine flat-fields exist but are rare; far more likely the
+        # decoder returned an empty/uniform array. Surface on stderr
+        # (stdout is reserved for the PROGRESS / result-JSON protocol).
+        print(
+            f"WARNING: frame has min==max ({lo}); writing black PNG",
+            file=sys.stderr,
+        )
+        return np.zeros(arr.shape, dtype=np.uint16)
+    out = (arr.astype(np.float64) - lo) / (hi - lo) * 65535.0
+    return np.clip(out, 0.0, 65535.0).astype(np.uint16)
 
 
 def _save_png(arr: np.ndarray, path: Path) -> None:
     from PIL import Image
-    Image.fromarray(_normalize_to_uint8(arr)).save(path, format="PNG", optimize=True)
+    Image.fromarray(_to_png_dtype(arr)).save(path, format="PNG", optimize=True)
 
 
 def _sanitize_name(name: str | None, fallback: str) -> str:

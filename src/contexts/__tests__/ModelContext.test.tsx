@@ -45,11 +45,6 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@/lib/emergencyLogout', () => ({
-  isEmergencyLogout: vi.fn(() => false),
-  clearEmergencyFlag: vi.fn(),
-}));
-
 // localStorage mock with a controllable in-memory store
 const createStoreMock = (initial: Record<string, string> = {}) => {
   const store: Record<string, string> = { ...initial };

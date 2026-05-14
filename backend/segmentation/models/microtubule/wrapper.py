@@ -160,15 +160,12 @@ class MicrotubuleModel:
         centerlines_rc: list = []
         embedding_samples: list = []
         H, W = norm.shape
-        # Ramer-Douglas-Peucker tolerance — drops near-collinear points
-        # while preserving curvature. Bumped from 0.75 → 2.0 px after user
-        # feedback that polylines were too dense / visually cluttered on
-        # MT projects (every-pixel PySOAX sampling produced tens of points
-        # per centerline; 2.0 px keeps the rendered shape essentially
-        # identical at on-screen scales but reduces vertex counts by ~3×
-        # over the previous 0.75 px setting, matching the "cv approx
-        # simple" semantics the user requested).
-        polyline_eps_px = 2.0
+        # Ramer-Douglas-Peucker tolerance: density at curves (where it
+        # matters for tracking + visual fidelity) without flooding
+        # straight runs with redundant vertices. Tune empirically on
+        # real MT projects — values < 1 produce visible clutter, > 2
+        # truncate sharp bends and degrade embedding sampling.
+        polyline_eps_px = 1.0
         for inst in instances:
             cl = np.asarray(inst["centerline"], dtype=np.float64)
             if cl.ndim != 2 or cl.shape[0] < 2 or cl.shape[1] != 2:

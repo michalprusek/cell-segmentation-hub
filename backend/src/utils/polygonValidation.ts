@@ -42,6 +42,10 @@ export interface Polygon {
    *  conditionally spread it; otherwise the editor never sees the field
    *  and MT cross-frame colour stability is silently defeated. */
   trackId?: string;
+  /** Human-friendly label set in the editor; mirrored across sibling
+   *  frames during cross-frame propagation. Must be preserved here so a
+   *  rename survives subsequent reads. */
+  name?: string;
 }
 
 export interface ParsedPolygonResult {
@@ -323,6 +327,10 @@ export const PolygonValidator = {
     // Preserve cross-frame trackId written by trackerService.
     if (polygonObj.trackId && typeof polygonObj.trackId === 'string') {
       validatedPolygon.trackId = polygonObj.trackId;
+    }
+    // Preserve editor-set label so renames survive subsequent reads.
+    if (polygonObj.name && typeof polygonObj.name === 'string') {
+      validatedPolygon.name = polygonObj.name;
     }
 
     return validatedPolygon;
