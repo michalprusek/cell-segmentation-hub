@@ -136,16 +136,25 @@ class InferenceService:
             image = Image.open(io.BytesIO(image_data))
             original_size = image.size  # (width, height)
 
-            # 16-bit microscopy frames (mode 'I;16') would be flattened by a
-            # plain convert('RGB') (PIL takes the high byte only, losing the
-            # full dynamic range that the new lossless extractors preserve).
-            # Apply the same percentile clip the extractors used to do at
-            # storage time, then promote to 8-bit RGB — i.e. the model still
-            # gets the 8-bit input it was trained on, but the heavy lifting
-            # now happens on the full 12/16-bit source instead of a
-            # pre-quantised PNG.
-            if image.mode in ('I;16', 'I;16B', 'I;16L', 'I'):
-                arr = np.array(image, dtype=np.uint32 if image.mode == 'I' else np.uint16)
+            # High-bit-depth microscopy frames (16-bit grayscale, signed
+            # int32, or 32-bit float) get clipped by a plain convert('RGB')
+            # — PIL keeps only the high byte for 'I;16', truncates negative
+            # for 'I', and clips to [0,255] for 'F'. Apply the same
+            # percentile normalisation the lossless extractors used to do
+            # at storage time, then promote to 8-bit RGB so the model
+            # sees the distribution it was trained on.
+            if image.mode in ('I;16', 'I;16B', 'I;16L', 'I', 'F'):
+                # PIL mode 'I' is signed int32, not uint32 — using
+                # np.uint32 here would reinterpret negatives as huge
+                # positives and break the percentile clip.
+                dtype_map = {
+                    'I;16': np.uint16,
+                    'I;16B': np.uint16,
+                    'I;16L': np.uint16,
+                    'I': np.int32,
+                    'F': np.float32,
+                }
+                arr = np.array(image, dtype=dtype_map[image.mode])
                 lo, hi = np.percentile(arr, [1.0, 99.5])
                 if hi <= lo:
                     hi = lo + 1.0

@@ -17,7 +17,7 @@ import { useCoordinatedAbortController } from '@/hooks/shared/useAbortController
 import useDebounce from '@/hooks/useDebounce';
 import { EditMode } from './types';
 import { shouldPreventCanvasDeselection } from './config/modeConfig';
-import { Polygon, polygonKey } from '@/lib/segmentation';
+import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
@@ -142,10 +142,10 @@ const SegmentationEditor = () => {
     height: number;
   } | null>(null);
   // Stores STABLE keys (trackId where present, else polygon.id) so a
-  // microtubule hidden on frame 5 stays hidden when the user scrubs to
-  // frame 6 — polygon.id is per-inference and changes every frame, but
-  // trackId is stable across the whole video. See polygonKey() helper.
-  const [hiddenPolygonIds, setHiddenPolygonIds] = useState<Set<string>>(
+  // microtubule hidden on one frame stays hidden when the user scrubs.
+  // Branded `Set<PolygonKey>` makes accidental key-by-other-string a
+  // compile error.
+  const [hiddenPolygonIds, setHiddenPolygonIds] = useState<Set<PolygonKey>>(
     new Set()
   );
   // Cross-frame selection persistence: when the user picks an MT
@@ -1028,9 +1028,8 @@ const SegmentationEditor = () => {
     }
   };
 
-  // Selection wrapper — captures the trackId of the picked polygon so
-  // frame scrubbing can re-attach selection to the same MT instance on
-  // the new frame. Falls through to the editor's own selection logic.
+  // Capture trackId at click so frame scrubbing re-attaches selection
+  // to the same MT instance on the new frame.
   const handleSelectPolygon = useCallback(
     (polygonId: string | null) => {
       if (polygonId === null) {
@@ -1048,20 +1047,34 @@ const SegmentationEditor = () => {
   // (initialPolygons replaces editor.polygons), find the polygon that
   // shares the persisted trackId and re-select it. If no sibling exists
   // on this frame (track wasn't matched here), selection is left null
-  // by the editor's own image-change reset and we don't fight it.
+  // by the editor's own image-change reset and we don't fight it — but
+  // we log so a missing match is debuggable when a user reports
+  // "selection lost".
   useEffect(() => {
     if (!persistedSelectionTrackId) return;
     const match = editor.polygons.find(
       p => p.trackId === persistedSelectionTrackId
     );
-    if (match && editor.selectedPolygonId !== match.id) {
-      editor.setSelectedPolygonId(match.id);
+    if (match) {
+      if (editor.selectedPolygonId !== match.id) {
+        editor.setSelectedPolygonId(match.id);
+      }
+    } else if (editor.polygons.length > 0) {
+      // Polygons loaded but no match — track is not present on this
+      // frame. Surface via debug log so support can correlate user
+      // reports; UI deliberately stays quiet (toast on every scrub past
+      // a gap would be obnoxious).
+      logger.debug('Selected MT track not present on current frame', {
+        trackId: persistedSelectionTrackId,
+        frameImageId: imageId,
+      });
     }
   }, [
     editor.polygons,
     persistedSelectionTrackId,
     editor.selectedPolygonId,
     editor.setSelectedPolygonId,
+    imageId,
   ]);
 
   // Context menu handlers for polygon right-click
@@ -1232,9 +1245,8 @@ const SegmentationEditor = () => {
     [editor.polygons, hiddenPolygonIds]
   );
 
-  // Project the stable-key hidden set down to current-frame polygon.ids
-  // so the panel components (which only know about polygon.id) can keep
-  // their existing API — the cross-frame logic stays encapsulated here.
+  // Panels still consume polygon.id, so project the stable-key set
+  // down per frame.
   const frameHiddenIds = useMemo(
     () =>
       new Set(
@@ -1328,9 +1340,6 @@ const SegmentationEditor = () => {
     );
   }
 
-  // Counts are based on what's hidden *on the current frame*. The
-  // global hiddenPolygonIds Set may carry entries for siblings that
-  // don't exist on this frame (yet) — those shouldn't inflate counts.
   const visiblePolygonsCount = editor.polygons.length - frameHiddenIds.size;
   const hiddenPolygonsCount = frameHiddenIds.size;
 

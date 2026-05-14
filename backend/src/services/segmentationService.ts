@@ -41,6 +41,86 @@ export interface SegmentationPolygon {
   trackId?: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Cross-frame propagation pure helpers (exported for unit tests)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface TrackedPolyMeta {
+  trackId: string;
+  name?: string;
+  partClass?: string;
+}
+
+export interface TrackDiff {
+  renames: Map<string, { type: 'rename' } & TrackedPolyMeta>;
+  deletes: Set<string>;
+}
+
+export function extractTrackedPolys(
+  polys: unknown[]
+): Map<string, TrackedPolyMeta> {
+  const m = new Map<string, TrackedPolyMeta>();
+  for (const p of polys) {
+    const tid = (p as Record<string, unknown>).trackId;
+    if (typeof tid !== 'string' || tid === '') continue;
+    m.set(tid, {
+      trackId: tid,
+      name: (p as Record<string, unknown>).name as string | undefined,
+      partClass: (p as Record<string, unknown>).partClass as
+        | string
+        | undefined,
+    });
+  }
+  return m;
+}
+
+export function diffTrackOps(
+  previousPolys: unknown[],
+  newPolys: unknown[]
+): TrackDiff {
+  const previousByTrack = extractTrackedPolys(previousPolys);
+  const newByTrack = extractTrackedPolys(newPolys);
+  const renames: TrackDiff['renames'] = new Map();
+  const deletes: TrackDiff['deletes'] = new Set();
+  for (const [tid, prev] of previousByTrack.entries()) {
+    const next = newByTrack.get(tid);
+    if (!next) {
+      deletes.add(tid);
+      continue;
+    }
+    if (prev.name !== next.name || prev.partClass !== next.partClass) {
+      renames.set(tid, { type: 'rename', ...next });
+    }
+  }
+  // Fresh tracks (in new but not previous) intentionally don't propagate
+  // — they're user-painted on this frame only.
+  return { renames, deletes };
+}
+
+export function parsePolygonsJsonForDiff(
+  json: string,
+  ctx: { currentImageId: string; parentVideoId: string | null }
+): unknown[] {
+  try {
+    const raw = JSON.parse(json);
+    if (Array.isArray(raw)) return raw;
+    logger.warn(
+      'Existing segmentation polygons not an array; cross-frame diff falls back to empty previous state',
+      'SegmentationService',
+      ctx
+    );
+    return [];
+  } catch (err) {
+    logger.error(
+      'Existing segmentation polygons JSON malformed; cross-frame diff falls back to empty previous state',
+      err as Error,
+      'SegmentationService',
+      ctx
+    );
+    return [];
+  }
+}
+
 export interface SegmentationRequest {
   imageId: string;
   model?:
@@ -1380,13 +1460,12 @@ export class SegmentationService {
         polygon.parentIds && polygon.parentIds.length > 0
           ? polygon.parentIds[0]
           : undefined,
-      // Preserve polyline fields (sperm + microtubule models)
+      // Preserve polyline fields (sperm + microtubule models). trackId
+      // and name MUST round-trip — they're the basis of cross-frame
+      // identity and the user-set label.
       ...(polygon.geometry && { geometry: polygon.geometry }),
       ...(polygon.partClass && { partClass: polygon.partClass }),
       ...(polygon.instanceId && { instanceId: polygon.instanceId }),
-      // trackId previously stripped here — that broke cross-frame MT
-      // identity on every save. Without trackId persisted, the editor
-      // could not key hide/select state stably across frames.
       ...(polygon.trackId && { trackId: polygon.trackId }),
       ...(polygon.name && { name: polygon.name }),
     }));
@@ -1817,6 +1896,9 @@ export class SegmentationService {
             ...((polygon as any).trackId && {
               trackId: (polygon as any).trackId,
             }),
+            ...((polygon as any).name && {
+              name: (polygon as any).name,
+            }),
             // _embedding intentionally stripped — server-only blob.
           })
         );
@@ -1875,19 +1957,10 @@ export class SegmentationService {
   }
 
   /**
-   * Build Prisma update operations that propagate microtubule-track
-   * mutations from this frame to all sibling frames in the same video.
-   *
-   * Diff is computed on `trackId` only — points/confidence/type are
-   * per-frame (an MT genuinely moves and changes shape over time) and
-   * MUST NOT be mirrored. We only mirror metadata mutations:
-   *   - rename       (name changes between previousByTrack[t] and newByTrack[t])
-   *   - reclassify   (partClass changes between previousByTrack[t] and newByTrack[t])
-   *   - delete-track (trackId disappeared from newByTrack but was in previousByTrack)
-   *
-   * Returns an array of `prisma.segmentation.update` ops the caller
-   * should run inside the same transaction as the current-frame update,
-   * so the whole video stays consistent.
+   * Mirrors metadata-only mutations (rename, partClass, delete-by-trackId)
+   * from this frame onto sibling frames of the same video. Geometry,
+   * confidence, and type stay per-frame. Returns Prisma update ops to
+   * run in the caller's transaction.
    */
   private async computeCrossFrameTrackPropagation(
     parentVideoId: string | null,
@@ -1897,57 +1970,16 @@ export class SegmentationService {
   ): Promise<Prisma.PrismaPromise<unknown>[]> {
     if (!parentVideoId) return []; // Standalone image — nothing to propagate.
 
-    type TrackedPoly = {
-      trackId: string;
-      name?: string;
-      partClass?: string;
-    };
-    const extractTracks = (polys: unknown[]): Map<string, TrackedPoly> => {
-      const m = new Map<string, TrackedPoly>();
-      for (const p of polys) {
-        const tid = (p as Record<string, unknown>).trackId;
-        if (typeof tid !== 'string' || tid === '') continue;
-        m.set(tid, {
-          trackId: tid,
-          name: (p as Record<string, unknown>).name as string | undefined,
-          partClass: (p as Record<string, unknown>).partClass as
-            | string
-            | undefined,
-        });
-      }
-      return m;
-    };
-
-    let previousParsed: unknown[];
-    try {
-      previousParsed = JSON.parse(previousPolygonsJson);
-      if (!Array.isArray(previousParsed)) previousParsed = [];
-    } catch {
-      previousParsed = [];
-    }
-
-    const previousByTrack = extractTracks(previousParsed);
-    const newByTrack = extractTracks(newDbPolygons as unknown[]);
-
-    type Op = { type: 'rename' | 'reclassify' } & TrackedPoly;
-    const renames = new Map<string, Op>();
-    const deletes = new Set<string>();
-
-    for (const [tid, prev] of previousByTrack.entries()) {
-      const next = newByTrack.get(tid);
-      if (!next) {
-        deletes.add(tid);
-        continue;
-      }
-      if (prev.name !== next.name || prev.partClass !== next.partClass) {
-        renames.set(tid, { type: 'rename', ...next });
-      }
-    }
-    // Tracks that appeared fresh (newByTrack has them but previousByTrack
-    // doesn't) are user-painted new instances on this frame only — no
-    // propagation. The tracker writes trackId on segmentation, never on
-    // editor save, so this branch is rare but covered for symmetry.
-
+    const previousParsed = parsePolygonsJsonForDiff(
+      previousPolygonsJson,
+      { currentImageId, parentVideoId }
+    );
+    const { renames, deletes } = diffTrackOps(
+      previousParsed,
+      newDbPolygons as unknown[]
+    );
+    // Fresh trackIds (in new but not previous) intentionally don't
+    // propagate — they're user-painted on this frame only.
     if (renames.size === 0 && deletes.size === 0) return [];
 
     // Pull every sibling frame's segmentation row in one query.
@@ -1968,8 +2000,29 @@ export class SegmentationService {
       let parsed: unknown[];
       try {
         parsed = JSON.parse(sib.segmentation.polygons);
-        if (!Array.isArray(parsed)) continue;
-      } catch {
+        if (!Array.isArray(parsed)) {
+          logger.warn(
+            'Sibling segmentation polygons not an array; skipping propagation',
+            'SegmentationService',
+            {
+              siblingImageId: sib.id,
+              segmentationId: sib.segmentation.id,
+              parentVideoId,
+            }
+          );
+          continue;
+        }
+      } catch (err) {
+        logger.error(
+          'Sibling segmentation polygons JSON malformed; skipping propagation',
+          err as Error,
+          'SegmentationService',
+          {
+            siblingImageId: sib.id,
+            segmentationId: sib.segmentation.id,
+            parentVideoId,
+          }
+        );
         continue;
       }
 

@@ -93,6 +93,8 @@ export interface SegmentationRequest {
   threshold?: number;
 }
 
+import type { SpermPartClass } from '@/lib/segmentation';
+
 export interface SegmentationPolygon {
   id: string;
   points: Array<{ x: number; y: number }>;
@@ -102,7 +104,9 @@ export interface SegmentationPolygon {
   confidence?: number;
   area?: number;
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
-  partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
+  /** Sperm polyline part — shared with editor's SpermPartClass to avoid
+   *  drift if the model's part vocabulary expands. */
+  partClass?: SpermPartClass;
   instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
   /** Cross-frame microtubule track ID populated by backend tracker after a
    *  video container's batch finishes segmentation. Sibling polylines for

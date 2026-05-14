@@ -160,13 +160,11 @@ class MicrotubuleModel:
         centerlines_rc: list = []
         embedding_samples: list = []
         H, W = norm.shape
-        # Ramer-Douglas-Peucker tolerance — drops near-collinear points
-        # while preserving curvature. RDP is adaptive: straight runs lose
-        # the most points, sharp bends keep them, so a smaller eps mostly
-        # buys density in the *curves* of an MT (which is where the user
-        # cares most). Dropped from 2.0 → 1.0 px to roughly double sample
-        # density along bends while leaving straight segments nearly
-        # untouched. Also tightens embedding sampling for tracking.
+        # Ramer-Douglas-Peucker tolerance: density at curves (where it
+        # matters for tracking + visual fidelity) without flooding
+        # straight runs with redundant vertices. Tune empirically on
+        # real MT projects — values < 1 produce visible clutter, > 2
+        # truncate sharp bends and degrade embedding sampling.
         polyline_eps_px = 1.0
         for inst in instances:
             cl = np.asarray(inst["centerline"], dtype=np.float64)

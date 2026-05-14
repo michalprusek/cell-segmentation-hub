@@ -1,5 +1,6 @@
 import { executeRedisCommand } from '../config/redis';
 import { logger } from '../utils/logger';
+import { ApiError } from '../middleware/error';
 import crypto from 'crypto';
 
 interface RefreshToken {
@@ -17,7 +18,7 @@ class SessionService {
     userId: string,
     token: string,
     family?: string
-  ): Promise<boolean> {
+  ): Promise<void> {
     const key = `${this.REFRESH_TOKEN_PREFIX}${token}`;
     const tokenData: RefreshToken = {
       userId,
@@ -37,7 +38,15 @@ class SessionService {
       return true;
     });
 
-    return result === true;
+    if (result !== true) {
+      // Redis outage or write rejection — the caller MUST surface this
+      // rather than hand the client a usable access token that can
+      // never be refreshed (pre-fix behaviour presented to users as a
+      // mysterious 15-min logout).
+      throw ApiError.serviceUnavailable(
+        'Nelze uložit refresh token: Redis je dočasně nedostupný'
+      );
+    }
   }
 
   async verifyRefreshToken(token: string): Promise<RefreshToken | null> {
@@ -73,6 +82,11 @@ class SessionService {
    * Rotate a refresh token: verifies the old one, deletes it, and issues a
    * fresh one within the same family. Returns the new token together with
    * the verified userId so callers don't have to look it up twice.
+   *
+   * If Redis fails mid-rotation (old token already deleted, new store
+   * throws) we best-effort re-insert the old token so the user's
+   * session is preserved across the outage. Both branches return null
+   * to signal "not rotated".
    */
   async rotateRefreshToken(
     oldToken: string
@@ -83,15 +97,31 @@ class SessionService {
     await this.deleteRefreshToken(oldToken);
 
     const newToken = crypto.randomBytes(32).toString('hex');
-    const success = await this.storeRefreshToken(
-      tokenData.userId,
-      newToken,
-      tokenData.family
-    );
-    if (!success) {
-      logger.error('Failed to persist rotated refresh token', undefined, {
-        userId: tokenData.userId,
-      });
+    try {
+      await this.storeRefreshToken(
+        tokenData.userId,
+        newToken,
+        tokenData.family
+      );
+    } catch (err) {
+      logger.error(
+        'Refresh token rotation failed mid-write; attempting rollback',
+        err as Error,
+        { userId: tokenData.userId }
+      );
+      // Best-effort: try to restore the original token so the user
+      // isn't logged out by a transient Redis blip. If this also fails,
+      // we surface null and the caller will reject as 401 — better than
+      // silent partial state.
+      try {
+        await this.storeRefreshToken(
+          tokenData.userId,
+          oldToken,
+          tokenData.family
+        );
+      } catch {
+        // Both writes failed; nothing more we can do here.
+      }
       return null;
     }
 

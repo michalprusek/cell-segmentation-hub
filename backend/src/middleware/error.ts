@@ -280,6 +280,13 @@ export class ApiError extends Error {
   ): ApiError {
     return new ApiError(message, 500, code);
   }
+
+  static serviceUnavailable(
+    message = 'Služba dočasně nedostupná',
+    code = 'SERVICE_UNAVAILABLE'
+  ): ApiError {
+    return new ApiError(message, 503, code);
+  }
 }
 
 /**

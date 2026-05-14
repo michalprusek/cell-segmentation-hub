@@ -76,6 +76,13 @@ def _to_png_dtype(arr: np.ndarray) -> np.ndarray:
         return (arr.astype(np.int32) + 32768).astype(np.uint16)
     lo, hi = float(arr.min()), float(arr.max())
     if hi <= lo:
+        # Genuine flat-fields exist but are rare; far more likely the
+        # decoder returned an empty/uniform array. Surface on stderr
+        # (stdout is reserved for the PROGRESS / result-JSON protocol).
+        print(
+            f"WARNING: frame has min==max ({lo}); writing black PNG",
+            file=sys.stderr,
+        )
         return np.zeros(arr.shape, dtype=np.uint16)
     out = (arr.astype(np.float64) - lo) / (hi - lo) * 65535.0
     return np.clip(out, 0.0, 65535.0).astype(np.uint16)

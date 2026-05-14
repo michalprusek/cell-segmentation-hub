@@ -411,10 +411,9 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
                 detail=f"Frame image missing: {frame.image_path}",
             )
         # Load at native bit depth. convert('L') would force 8-bit and lose
-        # half the dynamic range of 16-bit microscopy frames (mode 'I;16').
-        # float32 is the working type for map_coordinates either way; the
-        # final per-frame normalisation in _viridis / _linear_gradient keeps
-        # absolute intensity comparable across time.
+        # half the dynamic range of 16-bit microscopy frames. float32 is
+        # the working type for map_coordinates either way; the global
+        # min/max normalisation below maps any range into [0,1].
         pil_frame = PILImage.open(path)
         if pil_frame.mode in ('I;16', 'I;16B', 'I;16L', 'I', 'F'):
             img = np.array(pil_frame, dtype=np.float32)
