@@ -568,9 +568,12 @@ export class ExportService {
       // the original ND2/TIFF for raw 16-bit signal (the per-channel PNGs
       // on disk are 8-bit display-mapped). MT-only and only when the
       // user enabled the section in the export modal.
+      // ProjectType is `'microtubules'` (plural) — `'microtubule'` is the
+      // model id, not the project type. Compare against the project-type
+      // string, otherwise the MT exporter is never invoked.
       if (
         options.mtMetrics?.enabled &&
-        (project.type ?? '') === 'microtubule' &&
+        (project.type ?? '') === 'microtubules' &&
         project.images?.length
       ) {
         exportTasks.push(
