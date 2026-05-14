@@ -706,6 +706,13 @@ export default {
       keyboard: '按键: {{key}}',
       requiresSelection: '需要选择多边形',
       requiresPolygonSelection: '需要选择多边形',
+      resegment: '重新分割帧',
+      resegmentTooltipModel: '模型: {{model}} · {{threshold}}',
+      resegmentSuccess: '帧已重新分割',
+      resegmentFailed: '重新分割失败',
+      resegmentConfirmTitle: '替换现有的多边形？',
+      resegmentConfirmDescription:
+        '运行模型将覆盖当前的分割结果。该帧上对多边形所做的手动编辑将丢失。',
       select: '选择',
       undoTooltip: '撤销 (Ctrl+Z)',
       undo: '撤销',
@@ -1021,6 +1028,19 @@ export default {
     imagesDeleted_other: '已删除 {{count}} 张图片',
   },
   export: {
+    mt: {
+      sectionTitle: '微管指标',
+      sectionDescription:
+        '从原始 ND2/TIFF 文件计算每条微管的长度、面积及每通道强度。使用扩张 MT 掩码外的中位数进行背景校正。',
+      enable: '计算每通道强度指标',
+      thicknessLabel: '微管厚度 (px)',
+      thicknessHelp: '沿每条多边折线采样的带宽。100× 宽场下典型微管直径约为 5 px。',
+      marginLabel: '背景余量 (× 厚度)',
+      marginHelp:
+        '将距任意 MT 此半径范围内的像素 (厚度 × 倍率) 排除出背景。越大越保守。',
+      channelsLabel: '要采样的通道',
+      noChannels: '该项目没有通道元数据。请重新上传视频以获取按通道的指标。',
+    },
     advancedExport: '高级导出',
     advancedOptions: '高级导出选项',
     configureSettings: '配置您的导出设置以创建全面的数据包',

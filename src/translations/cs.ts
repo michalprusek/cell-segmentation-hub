@@ -613,6 +613,13 @@ export default {
       keyboard: 'Klávesa: {{key}}',
       requiresSelection: 'Vyžaduje výběr polygonu',
       requiresPolygonSelection: 'Vyžaduje výběr polygonu',
+      resegment: 'Znovu segmentovat snímek',
+      resegmentTooltipModel: 'Model: {{model}} · {{threshold}}',
+      resegmentSuccess: 'Snímek byl znovu segmentován',
+      resegmentFailed: 'Resegmentace selhala',
+      resegmentConfirmTitle: 'Nahradit existující polygony?',
+      resegmentConfirmDescription:
+        'Spuštění modelu přepíše současnou segmentaci. Ruční úpravy polygonů na tomto snímku budou ztraceny.',
       select: 'Vybrat',
       undoTooltip: 'Zpět (Ctrl+Z)',
       undo: 'Zpět',
@@ -1110,6 +1117,21 @@ export default {
     imagesDeleted_other: '{{count}} obrázky smazány',
   },
   export: {
+    mt: {
+      sectionTitle: 'Metriky mikrotubulů',
+      sectionDescription:
+        'Délka, plocha a intenzita signálu pro každý MT z původního ND2/TIFF souboru. Odečteno median pozadí (mimo dilatovanou masku MT).',
+      enable: 'Spočítat intenzitu signálu pro každý kanál',
+      thicknessLabel: 'Tloušťka MT (px)',
+      thicknessHelp:
+        'Šířka pásu podél polyline, ze kterého se sbírá signál. 5 px odpovídá běžnému průměru mikrotubulu při 100× widefield.',
+      marginLabel: 'Okraj pozadí (× tloušťka)',
+      marginHelp:
+        'Pixely v tomto poloměru (tloušťka × násobek) od libovolného MT se z pozadí vyloučí. Vyšší = konzervativnější.',
+      channelsLabel: 'Kanály ke zpracování',
+      noChannels:
+        'Tento projekt nemá metadata o kanálech. Pro získání metrik podle kanálů znovu nahrajte video.',
+    },
     advancedExport: 'Pokročilý export',
     advancedOptions: 'Pokročilé možnosti exportu',
     configureSettings:

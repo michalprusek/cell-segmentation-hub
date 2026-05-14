@@ -78,6 +78,19 @@ export interface ExportOptions {
   includeDocumentation?: boolean;
   selectedImageIds?: string[];
   pixelToMicrometerScale?: number;
+  /**
+   * Microtubule-only metrics. Sent to the backend on POST /export and
+   * consumed by the export pipeline only when the project type is
+   * ``microtubule``. Re-reads the original ND2/TIFF to compute raw
+   * intensity per band.
+   */
+  mtMetrics?: {
+    enabled: boolean;
+    thicknessPx: number;
+    marginMultiplier: number;
+    /** Channel names (machine-safe ``name`` field from container.channels). */
+    channels: string[];
+  };
 }
 
 export const useSharedAdvancedExport = (

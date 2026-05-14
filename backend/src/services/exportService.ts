@@ -33,6 +33,10 @@ import {
   getProgressMessage,
   createZipArchive,
 } from './export/exportFileOperations';
+import {
+  computeMTMetrics,
+  writeMTMetrics,
+} from './export/mtMetricsExporter';
 
 const YOLO_WRITE_CONCURRENCY = 16;
 
@@ -54,6 +58,20 @@ export interface ExportOptions {
   includeDocumentation?: boolean;
   selectedImageIds?: string[];
   pixelToMicrometerScale?: number;
+  /**
+   * Microtubule-only export options. When ``enabled`` and the project is
+   * ``microtubule``, the export pipeline re-reads the original ND2/TIFF
+   * to compute per-polyline-per-channel intensity metrics into a new
+   * ``microtubule_metrics`` artefact. Length / area / intensity stats
+   * are derived from raw 16-bit signal, NOT from the 8-bit
+   * display-normalised per-channel PNGs.
+   */
+  mtMetrics?: {
+    enabled: boolean;
+    thicknessPx: number;
+    marginMultiplier: number;
+    channels: string[];
+  };
 }
 
 // Define type for project with images and segmentation data
@@ -77,6 +95,9 @@ export type ProjectWithImages = Prisma.ProjectGetPayload<{
         segmentationStatus: true;
         createdAt: true;
         updatedAt: true;
+        isVideoContainer: true;
+        parentVideoId: true;
+        frameIndex: true;
         segmentation: true;
       };
     };
@@ -382,6 +403,12 @@ export class ExportService {
               segmentationStatus: true,
               createdAt: true,
               updatedAt: true,
+              // Video-frame fields needed by the MT metrics exporter so it
+              // can group frames by their parent container and resolve
+              // the original ND2/TIFF on disk.
+              isVideoContainer: true,
+              parentVideoId: true,
+              frameIndex: true,
               segmentation: {
                 select: {
                   id: true,
@@ -532,6 +559,29 @@ export class ExportService {
           ).then(() => {
             progressStep++;
             this.updateJobProgress(jobId, 5 + progressStep * progressIncrement);
+          })
+        );
+      }
+
+      // Microtubule per-channel intensity metrics — independent of the
+      // standard metrics pipeline because they reach all the way back to
+      // the original ND2/TIFF for raw 16-bit signal (the per-channel PNGs
+      // on disk are 8-bit display-mapped). MT-only and only when the
+      // user enabled the section in the export modal.
+      if (
+        options.mtMetrics?.enabled &&
+        (project.type ?? '') === 'microtubule' &&
+        project.images?.length
+      ) {
+        exportTasks.push(
+          this.generateMTIntensityMetrics(
+            project.images as ImageWithSegmentation[],
+            exportDir,
+            options,
+            jobId
+          ).then(() => {
+            // No dedicated progress step — runs alongside metrics; the
+            // generic 90% allocation absorbs it.
           })
         );
       }
@@ -1261,6 +1311,91 @@ export class ExportService {
           path.join(metricsDir, 'metrics.json'),
           JSON.stringify(allMetrics, null, 2)
         );
+      }
+    }
+  }
+
+  /**
+   * Microtubule-only intensity / length / area metrics exporter.
+   *
+   * Computes per-(frame, polyline, channel) rows by re-reading the
+   * original ND2/TIFF on disk via the ML service's /mt-metrics route,
+   * then writes a long-format CSV/XLSX/JSON next to the standard
+   * metrics files.
+   *
+   * Failures are caught + logged + recorded as a warning rather than
+   * failing the whole export. Length/area columns alone are still
+   * useful, so partial loss (e.g. one video missing its ND2 on disk)
+   * shouldn't prevent the user from getting the rest.
+   */
+  private async generateMTIntensityMetrics(
+    images: ImageWithSegmentation[],
+    exportDir: string,
+    options: ExportOptions,
+    jobId?: string
+  ): Promise<void> {
+    if (!options.mtMetrics?.enabled) return;
+    if (jobId && this.isJobCancelled(jobId)) {
+      throw new Error('Export cancelled by user');
+    }
+
+    const projectId = images[0]?.projectId ?? '';
+    const formats = options.metricsFormats?.length
+      ? options.metricsFormats
+      : (['csv'] as const);
+
+    try {
+      const rows = await computeMTMetrics(
+        images.map(i => ({
+          id: i.id,
+          parentVideoId: i.parentVideoId ?? null,
+          frameIndex: i.frameIndex ?? null,
+          isVideoContainer: i.isVideoContainer,
+          segmentation: i.segmentation
+            ? { polygons: i.segmentation.polygons }
+            : null,
+        })),
+        projectId,
+        {
+          thicknessPx: options.mtMetrics.thicknessPx,
+          marginMultiplier: options.mtMetrics.marginMultiplier,
+          channels: options.mtMetrics.channels,
+          pixelToMicrometerScale:
+            options.pixelToMicrometerScale ?? null,
+        }
+      );
+
+      if (!rows.length) {
+        logger.info(
+          'MT intensity metrics: 0 rows produced; not writing files',
+          'ExportService',
+          { jobId, projectId }
+        );
+        return;
+      }
+
+      const metricsDir = path.join(exportDir, 'metrics');
+      await writeMTMetrics(rows, metricsDir, formats);
+      logger.info(
+        'MT intensity metrics: wrote files',
+        'ExportService',
+        { jobId, projectId, rows: rows.length, formats }
+      );
+    } catch (err) {
+      logger.error(
+        'MT intensity metrics: computation failed',
+        err instanceof Error ? err : new Error(String(err)),
+        'ExportService',
+        { jobId, projectId }
+      );
+      if (jobId) {
+        const job = this.exportJobs.get(jobId);
+        if (job) {
+          job.warnings = [
+            ...(job.warnings ?? []),
+            'Microtubule intensity metrics could not be computed (original file missing or ML service error). Standard metrics are still included.',
+          ];
+        }
       }
     }
   }

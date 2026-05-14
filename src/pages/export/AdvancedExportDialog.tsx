@@ -40,6 +40,7 @@ import { useLanguage } from '@/contexts/useLanguage';
 import { ProjectImage } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
+import { MicrotubuleMetricsSection } from './components/MicrotubuleMetricsSection';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 
 interface AdvancedExportDialogProps {
@@ -47,11 +48,21 @@ interface AdvancedExportDialogProps {
   onClose: () => void;
   projectId: string;
   projectName: string;
+  /** Used to gate microtubule-specific export controls. */
+  projectType?: string | null;
   images: ProjectImage[];
   selectedImageIds?: string[];
   onExportingChange?: (isExporting: boolean) => void;
   onDownloadingChange?: (isDownloading: boolean) => void;
 }
+
+/** Default MT metrics options when the user toggles the section on. */
+const MT_METRICS_DEFAULTS = {
+  enabled: false,
+  thicknessPx: 5,
+  marginMultiplier: 2,
+  channels: [] as string[],
+};
 
 export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
   React.memo(
@@ -60,12 +71,41 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       onClose,
       projectId,
       projectName,
+      projectType,
       images,
       selectedImageIds,
       onExportingChange,
       onDownloadingChange,
     }) => {
       const { t } = useLanguage();
+      const isMTProject = projectType === 'microtubule';
+
+      // Distinct channels across the project's video container rows.
+      // De-dupe by machine name (the same channel might appear on
+      // multiple uploaded videos in a multi-video project).
+      const availableChannels = React.useMemo(() => {
+        if (!isMTProject) return [];
+        const byName = new Map<
+          string,
+          { name: string; displayName?: string }
+        >();
+        for (const img of images) {
+          if (!img.isVideoContainer || !img.channels) continue;
+          for (const ch of img.channels) {
+            if (!byName.has(ch.name)) {
+              byName.set(ch.name, {
+                name: ch.name,
+                displayName: ch.displayName,
+              });
+            }
+          }
+        }
+        return Array.from(byName.values());
+      }, [images, isMTProject]);
+
+      // Local snapshot of MT options. We always merge into the shared
+      // exportOptions state when the user toggles or edits inputs so the
+      // export hook persists the same object that gets POSTed.
       const {
         exportOptions,
         updateExportOptions,
@@ -297,6 +337,20 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     />
                   </CardContent>
                 </Card>
+
+                {/* Microtubule-only section. Rendered only when the
+                    project type is `microtubule` because intensity
+                    sampling requires multi-channel video data + raw
+                    ND2/TIFF on disk. */}
+                {isMTProject && (
+                  <MicrotubuleMetricsSection
+                    value={exportOptions.mtMetrics ?? MT_METRICS_DEFAULTS}
+                    onChange={next =>
+                      updateExportOptions({ mtMetrics: next })
+                    }
+                    availableChannels={availableChannels}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent

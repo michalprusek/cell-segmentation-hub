@@ -774,6 +774,13 @@ export default {
       keyboard: 'Taste: {{key}}',
       requiresSelection: 'Erfordert Polygon-Auswahl',
       requiresPolygonSelection: 'Erfordert Polygon-Auswahl',
+      resegment: 'Frame neu segmentieren',
+      resegmentTooltipModel: 'Modell: {{model}} · {{threshold}}',
+      resegmentSuccess: 'Frame neu segmentiert',
+      resegmentFailed: 'Neusegmentierung fehlgeschlagen',
+      resegmentConfirmTitle: 'Vorhandene Polygone ersetzen?',
+      resegmentConfirmDescription:
+        'Das Ausführen des Modells überschreibt die aktuelle Segmentierung. Manuelle Bearbeitungen der Polygone in diesem Frame gehen verloren.',
       select: 'Auswählen',
       undoTooltip: 'Rückgängig (Strg+Z)',
       undo: 'Rückgängig',
@@ -1121,6 +1128,21 @@ export default {
     imagesDeleted_other: '{{count}} Bilder gelöscht',
   },
   export: {
+    mt: {
+      sectionTitle: 'Mikrotubuli-Metriken',
+      sectionDescription:
+        'Pro-MT-Länge, -Fläche und kanalweise Intensität aus der rohen ND2/TIFF-Datei. Hintergrundkorrektur über den Median außerhalb der dilatierten MT-Maske.',
+      enable: 'Kanalweise Intensitätsmetriken berechnen',
+      thicknessLabel: 'MT-Dicke (px)',
+      thicknessHelp:
+        'Breite des Abtastbands entlang jeder Polyline. 5 px entspricht dem typischen Mikrotubulus-Durchmesser bei 100× Widefield.',
+      marginLabel: 'Hintergrundrand (× Dicke)',
+      marginHelp:
+        'Pixel innerhalb dieses Radius (Dicke × Multiplikator) von einem MT werden vom Hintergrund ausgeschlossen. Höher = konservativer.',
+      channelsLabel: 'Zu abtastende Kanäle',
+      noChannels:
+        'Dieses Projekt hat keine Kanal-Metadaten. Laden Sie das Video erneut hoch, um kanalspezifische Metriken zu erhalten.',
+    },
     advancedExport: 'Erweiterter Export',
     advancedOptions: 'Erweiterte Export-Optionen',
     configureSettings:
