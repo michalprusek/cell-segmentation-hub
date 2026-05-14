@@ -36,6 +36,12 @@ export interface Polygon {
   type?: 'external' | 'internal';
   parent_id?: string;
   area?: number;
+  /** Cross-frame microtubule track ID populated by trackerService after a
+   *  video container's batch finishes segmentation. The validator must
+   *  preserve it so the response builder in segmentationService can
+   *  conditionally spread it; otherwise the editor never sees the field
+   *  and MT cross-frame colour stability is silently defeated. */
+  trackId?: string;
 }
 
 export interface ParsedPolygonResult {
@@ -313,6 +319,10 @@ export const PolygonValidator = {
     }
     if (polygonObj.instanceId && typeof polygonObj.instanceId === 'string') {
       (validatedPolygon as any).instanceId = polygonObj.instanceId;
+    }
+    // Preserve cross-frame trackId written by trackerService.
+    if (polygonObj.trackId && typeof polygonObj.trackId === 'string') {
+      validatedPolygon.trackId = polygonObj.trackId;
     }
 
     return validatedPolygon;
