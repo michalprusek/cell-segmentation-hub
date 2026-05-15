@@ -79,12 +79,12 @@ services:
     environment:
       - POSTGRES_USER=spheroseg
       - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=spheroseg_blue
+      - POSTGRES_DB=spheroseg
     volumes:
       - postgres_blue_data:/var/lib/postgresql/data
     restart: always
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U spheroseg -d spheroseg_blue']
+      test: ['CMD-SHELL', 'pg_isready -U spheroseg -d spheroseg']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -139,7 +139,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=production
-      - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres:5432/spheroseg_blue
+      - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres:5432/spheroseg
       - REDIS_URL=redis://redis:6379
       # Sequential processing - single worker for 8GB GPU limit safety
       - ML_INFERENCE_WORKERS=${ML_INFERENCE_WORKERS:-1}
