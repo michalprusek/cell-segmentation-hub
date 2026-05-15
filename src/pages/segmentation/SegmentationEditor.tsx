@@ -49,6 +49,7 @@ import CanvasContent from './components/canvas/CanvasContent';
 import VideoFrameImage from './components/canvas/VideoFrameImage';
 import FrameWindowPrefetcher from './components/canvas/FrameWindowPrefetcher';
 import FrameLoadingGate from './components/canvas/FrameLoadingGate';
+import { polygonVisibilityManager } from '@/lib/rendering/PolygonVisibilityManager';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
@@ -1348,7 +1349,8 @@ const SegmentationEditor = () => {
 
   const currentImageIndex = navContext.index;
 
-  const visiblePolygons = useMemo(
+  // Stage 1: filter hidden / degenerate polygons.
+  const renderablePolygons = useMemo(
     () =>
       editor.polygons.filter(polygon => {
         if (hiddenPolygonIds.has(polygonKey(polygon)) || !polygon.points)
@@ -1358,6 +1360,39 @@ const SegmentationEditor = () => {
       }),
     [editor.polygons, hiddenPolygonIds]
   );
+
+  // Stage 2: frustum-cull off-viewport polygons via the visibility manager.
+  // The manager's internal threshold guards small counts (< 10 polygons
+  // → no culling), so MT/single-polyline cases pay zero overhead. Sperm
+  // projects with 50+ polylines at high zoom typically halve the SVG
+  // node count under this filter. We pass through `selectedPolygonId`
+  // so the manager never culls the focused polygon even if it scrolls
+  // off-screen briefly during a drag.
+  const visiblePolygons = useMemo(() => {
+    if (renderablePolygons.length < 10) return renderablePolygons;
+    const containerWidth = imageDimensions?.width || canvasWidth;
+    const containerHeight = imageDimensions?.height || canvasHeight;
+    return polygonVisibilityManager.getVisiblePolygons(renderablePolygons, {
+      zoom: editor.transform.zoom,
+      offset: {
+        x: editor.transform.translateX,
+        y: editor.transform.translateY,
+      },
+      containerWidth,
+      containerHeight,
+      selectedPolygonId: editor.selectedPolygonId,
+      forceRenderSelected: true,
+    }).visiblePolygons;
+  }, [
+    renderablePolygons,
+    editor.transform.zoom,
+    editor.transform.translateX,
+    editor.transform.translateY,
+    editor.selectedPolygonId,
+    imageDimensions,
+    canvasWidth,
+    canvasHeight,
+  ]);
 
   // Panels still consume polygon.id, so project the stable-key set
   // down per frame.
