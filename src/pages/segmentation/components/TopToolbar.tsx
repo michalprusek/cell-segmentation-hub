@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Undo, Redo, Save } from 'lucide-react';
+import { Undo, Redo, Save, RotateCw, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 
 interface TopToolbarProps {
@@ -14,6 +14,12 @@ interface TopToolbarProps {
   handleUndo: () => void;
   handleRedo: () => void;
   handleSave: () => Promise<void>;
+
+  // Resegment action — optional; rendered to the right of Undo/Redo
+  // when provided. Parent decides whether to open a channel picker
+  // first (for multi-channel video frames) before invoking.
+  onResegment?: () => void;
+  isResegmenting?: boolean;
 
   // Optional props
   disabled?: boolean;
@@ -30,6 +36,8 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
   handleUndo,
   handleRedo,
   handleSave,
+  onResegment,
+  isResegmenting = false,
   disabled = false,
   isSaving = false,
 }) => {
@@ -65,6 +73,25 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
             {t('segmentation.toolbar.redo')}
           </span>
         </Button>
+        {onResegment && (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={disabled || isResegmenting}
+            onClick={onResegment}
+            title={t('segmentation.toolbar.resegment')}
+            className="flex items-center gap-2"
+          >
+            {isResegmenting ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <RotateCw size={16} />
+            )}
+            <span className="hidden sm:inline">
+              {t('segmentation.toolbar.resegment')}
+            </span>
+          </Button>
+        )}
       </div>
 
       {/* Right side - Save Button */}
