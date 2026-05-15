@@ -1280,6 +1280,18 @@ const SegmentationEditor = () => {
   // `Segmentation` row on the backend (upsert). After the batch
   // endpoint returns, we reload polygons via the existing
   // `reloadSegmentation` hook so the canvas reflects the new result.
+  // The backend enforces a per-project-type model whitelist (e.g. MT
+  // projects only accept `'microtubule'`). The user-chosen `selectedModel`
+  // is meaningful only for generic spheroid projects — for typed
+  // projects we override so the request never gets rejected with
+  // "Model X is not compatible with project type Y".
+  const effectiveResegmentModel = useMemo(() => {
+    if (projectType === 'microtubules') return 'microtubule';
+    if (projectType === 'sperm') return 'sperm';
+    if (projectType === 'wound') return 'wound';
+    return selectedModel;
+  }, [projectType, selectedModel]);
+
   const handleResegmentCurrentFrame = useCallback(async () => {
     if (!imageId || isResegmenting) return;
     setIsResegmenting(true);
@@ -1290,7 +1302,7 @@ const SegmentationEditor = () => {
       // outcome instead — see review pass-2 silent-failure #5.
       const result = await apiClient.requestBatchSegmentation(
         [imageId],
-        selectedModel,
+        effectiveResegmentModel,
         confidenceThreshold,
         detectHoles
       );
@@ -1316,7 +1328,7 @@ const SegmentationEditor = () => {
   }, [
     imageId,
     isResegmenting,
-    selectedModel,
+    effectiveResegmentModel,
     confidenceThreshold,
     detectHoles,
     reloadSegmentation,
@@ -1605,14 +1617,17 @@ const SegmentationEditor = () => {
               onZoomIn={editor.handleZoomIn}
               onZoomOut={editor.handleZoomOut}
               onResetView={editor.handleResetView}
-              onResegment={handleResegmentCurrentFrame}
-              isResegmenting={isResegmenting}
               hasExistingPolygons={editor.getPolygons().length > 0}
             />
 
             {/* Center: Canvas and Top Toolbar */}
             <div className="flex-1 flex flex-col">
-              {/* Top Toolbar */}
+              {/* Top Toolbar — Resegment lives here (next to Undo/Redo)
+                  per PR #195. The button is disabled with a spinner
+                  while the batch runs; once the batch returns,
+                  `handleResegmentCurrentFrame` calls `reloadSegmentation`
+                  so the new polyline drops into the canvas without a
+                  full reload. */}
               <TopToolbar
                 canUndo={editor.canUndo}
                 canRedo={editor.canRedo}
@@ -1620,6 +1635,8 @@ const SegmentationEditor = () => {
                 handleUndo={editor.handleUndo}
                 handleRedo={editor.handleRedo}
                 handleSave={editor.handleSave}
+                onResegment={handleResegmentCurrentFrame}
+                isResegmenting={isResegmenting}
                 disabled={projectLoading}
                 isSaving={editor.isSaving}
               />
