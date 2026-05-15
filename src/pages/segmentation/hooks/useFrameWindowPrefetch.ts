@@ -129,6 +129,20 @@ export function useFrameWindowPrefetch({
   const prefetchedRef = useRef<Set<string>>(new Set());
   const prefetchedPolygonsRef = useRef<Set<string>>(new Set());
 
+  // Reset the ref-tracked sets when the channel set or enable flag
+  // changes — a different channel needs its own URLs prefetched
+  // fresh, and disabling/re-enabling video mode should not leak
+  // stale "already prefetched" markers into the new session.
+  //
+  // MUST be declared BEFORE the main prefetch effect: React fires
+  // effects in source order, so putting reset after would clear the
+  // ref *after* the main effect populated it on mount, defeating the
+  // dedup on every subsequent window-shift.
+  useEffect(() => {
+    prefetchedRef.current.clear();
+    prefetchedPolygonsRef.current.clear();
+  }, [channelsKey, enabled]);
+
   // Effect: kick off image + polygon prefetch for each window frame.
   // Idempotent at the URL level — only NEW URLs trigger network calls.
   useEffect(() => {
@@ -205,15 +219,6 @@ export function useFrameWindowPrefetch({
     // arrays with identical content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, windowFrames, channelsKey, queryClient]);
-
-  // Reset the ref-tracked sets when the channel set or enable flag
-  // changes — a different channel needs its own URLs prefetched
-  // fresh, and disabling/re-enabling video mode should not leak
-  // stale "already prefetched" markers into the new session.
-  useEffect(() => {
-    prefetchedRef.current.clear();
-    prefetchedPolygonsRef.current.clear();
-  }, [channelsKey, enabled]);
 
   const readyCount = frameImageCache.readyCount(windowImageUrls);
   const isWindowReady =

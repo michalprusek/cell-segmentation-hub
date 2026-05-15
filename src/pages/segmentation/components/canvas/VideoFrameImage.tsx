@@ -36,7 +36,11 @@ interface VideoFrameImageProps {
   width?: number;
   height?: number;
   alt?: string;
-  onLoad?: (width: number, height: number) => void;
+  /** `channelsKey` identifies which channel set produced the load,
+   *  letting the parent invalidate "loaded" state when the channel
+   *  mix changes on the same frame. Single-channel fallback emits
+   *  the single `channel` name (or '' when none is selected). */
+  onLoad?: (width: number, height: number, channelsKey: string) => void;
 }
 
 export default function VideoFrameImage({
@@ -79,13 +83,20 @@ export default function VideoFrameImage({
     );
   }
 
+  // CanvasImage doesn't know about channels; we synthesise the
+  // channelsKey here so the parent contract is uniform.
+  const fallbackChannelsKey = channel ?? '';
+  const handleFallbackLoad = onLoad
+    ? (w: number, h: number) => onLoad(w, h, fallbackChannelsKey)
+    : undefined;
+
   return (
     <CanvasImage
       src={src}
       width={width}
       height={height}
       alt={alt}
-      onLoad={onLoad}
+      onLoad={handleFallbackLoad}
     />
   );
 }

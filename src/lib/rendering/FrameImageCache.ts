@@ -14,29 +14,26 @@
  */
 const DEFAULT_MAX_ENTRIES = 200;
 /** Backoff schedule for transient prefetch failures (e.g. nginx
- *  rate-limit 503 during initial mount burst). Total worst-case
- *  recovery is ~2.1 s for the entry to settle into either loaded
- *  or permanently errored. The prefetch hook tracks URLs by ref so
- *  the cache MUST self-heal here — the hook will never re-fire. */
+ *  rate-limit 503 during initial mount burst). The schedule's length
+ *  determines `MAX_RETRIES`; bumping the tuple grows the recovery
+ *  window without touching the state machine. */
 const RETRY_DELAYS_MS = [300, 600, 1200] as const;
+type RetryCount = 0 | 1 | 2 | 3;
+
+/** Tri-state cache entry status as a discriminated union — makes
+ *  `loaded && errored` unrepresentable. `retriesUsed` only exists
+ *  while pending, since it has no meaning post-resolution. */
+type CacheStatus =
+  | { kind: 'pending'; retriesUsed: RetryCount }
+  | { kind: 'loaded' }
+  | { kind: 'errored' };
 
 interface CacheEntry {
   image: HTMLImageElement;
   /** Resolves once the image fully loads. Lets prefetchers `await`
    *  the warm-up so a Play button can gate on "X frames ready". */
   ready: Promise<HTMLImageElement>;
-  /** Mirrors `image.complete && image.naturalWidth > 0`, but cheap
-   *  to check without touching the DOM property each call. */
-  loaded: boolean;
-  /** True once load fails for good (initial attempt + all retries
-   *  exhausted). The cache keeps the entry so repeated prefetch
-   *  calls don't spam new Image() — the next real consumer can
-   *  decide whether to retry. */
-  errored: boolean;
-  /** How many retry attempts have been used so far. The first
-   *  `RETRY_DELAYS_MS.length` errors are transparently retried
-   *  before flipping `errored = true`. */
-  retriesUsed: number;
+  status: CacheStatus;
 }
 
 export class FrameImageCache {
@@ -59,8 +56,7 @@ export class FrameImageCache {
   /** True only when the image element has loaded successfully and is
    *  safe to swap into an `<img>` or `drawImage` source. */
   isReady(url: string): boolean {
-    const entry = this.entries.get(url);
-    return !!entry && entry.loaded && !entry.errored;
+    return this.entries.get(url)?.status.kind === 'loaded';
   }
 
   /** Returns the warm image element if present, promoting it to MRU.
@@ -93,27 +89,28 @@ export class FrameImageCache {
 
     this.misses++;
     const image = new Image();
-    // `decoding="async"` lets the browser decode off the main thread
-    // when the element is later mounted, smoothing the swap.
     image.decoding = 'async';
     image.loading = 'eager';
     const entry: CacheEntry = {
       image,
-      loaded: false,
-      errored: false,
-      retriesUsed: 0,
+      status: { kind: 'pending', retriesUsed: 0 },
       ready: new Promise<HTMLImageElement>((resolve, reject) => {
         image.onload = () => {
-          entry.loaded = true;
+          entry.status = { kind: 'loaded' };
           resolve(image);
         };
         image.onerror = () => {
-          // Transient failure (typically rate-limit 503 during the
-          // initial prefetch burst, or a flaky upstream). Retry with
-          // exponential backoff before marking the entry errored.
-          if (entry.retriesUsed < RETRY_DELAYS_MS.length) {
-            const delay = RETRY_DELAYS_MS[entry.retriesUsed];
-            entry.retriesUsed++;
+          // Only retry while pending; if we've already settled into
+          // loaded/errored, ignore (defensive — the browser shouldn't
+          // re-fire onerror post-onload, but better safe).
+          if (entry.status.kind !== 'pending') return;
+          const used = entry.status.retriesUsed;
+          if (used < RETRY_DELAYS_MS.length) {
+            const delay = RETRY_DELAYS_MS[used];
+            entry.status = {
+              kind: 'pending',
+              retriesUsed: (used + 1) as RetryCount,
+            };
             window.setTimeout(() => {
               // The entry may have been aborted/evicted while we slept;
               // never re-fire a load against a stale element.
@@ -126,7 +123,7 @@ export class FrameImageCache {
             }, delay);
             return;
           }
-          entry.errored = true;
+          entry.status = { kind: 'errored' };
           reject(
             new Error(
               `FrameImageCache: failed to load ${url} after ${RETRY_DELAYS_MS.length} retries`
@@ -149,7 +146,7 @@ export class FrameImageCache {
    *  zombie HTTP connections open. */
   abort(url: string): void {
     const entry = this.entries.get(url);
-    if (!entry || entry.loaded || entry.errored) return;
+    if (!entry || entry.status.kind !== 'pending') return;
     // Setting src='' is the documented way to cancel a pending HTTP
     // request issued by `new Image()`. We drop the entry so the next
     // prefetch starts fresh.
@@ -163,7 +160,7 @@ export class FrameImageCache {
 
   clear(): void {
     for (const entry of this.entries.values()) {
-      if (!entry.loaded && !entry.errored) {
+      if (entry.status.kind === 'pending') {
         entry.image.src = '';
       }
     }
@@ -177,8 +174,8 @@ export class FrameImageCache {
     let readyCount = 0;
     let pendingCount = 0;
     for (const entry of this.entries.values()) {
-      if (entry.loaded) readyCount++;
-      else if (!entry.errored) pendingCount++;
+      if (entry.status.kind === 'loaded') readyCount++;
+      else if (entry.status.kind === 'pending') pendingCount++;
     }
     return {
       size: this.entries.size,
@@ -207,7 +204,7 @@ export class FrameImageCache {
       if (oldest.done) break;
       const url = oldest.value;
       const entry = this.entries.get(url);
-      if (entry && !entry.loaded && !entry.errored) {
+      if (entry?.status.kind === 'pending') {
         // Cancel in-flight before evicting so we don't leak connections.
         entry.image.src = '';
       }

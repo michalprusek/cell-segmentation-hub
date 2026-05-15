@@ -48,7 +48,7 @@ import CanvasContainer from './components/canvas/CanvasContainer';
 import CanvasContent from './components/canvas/CanvasContent';
 import VideoFrameImage from './components/canvas/VideoFrameImage';
 import FrameWindowPrefetcher from './components/canvas/FrameWindowPrefetcher';
-import EditorFrameLoadingOverlay from './components/canvas/EditorFrameLoadingOverlay';
+import FrameLoadingGate from './components/canvas/FrameLoadingGate';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
@@ -173,22 +173,14 @@ const SegmentationEditor = () => {
     width: 800,
     height: 600,
   });
-  // Tracks the imageId whose `<img>` element has fired onLoad. When
-  // this matches the URL `imageId`, the canvas is showing the
-  // intended frame — `EditorFrameLoadingOverlay` uses the mismatch
-  // to surface a Skeleton over the canvas so a scrub outside the
-  // prefetch window never blends "old frame + new polygons".
-  const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
-  // Latched "show overlay" derived from the (imageId, loadedImageId)
-  // mismatch but DEBOUNCED so that 10 FPS playback (which mismatches
-  // every 100 ms) doesn't flash a Skeleton between cached frames.
-  // The mismatch flips immediately on imageId change, but we wait
-  // ~150 ms before committing it to UI — by then cache hits (avg
-  // 5 ms) and warm-network loads (avg ~9 ms) have already settled
-  // via handleImageLoad → setLoadedImageId, clearing the mismatch.
-  // True slow loads (cold mount, network stall) still surface the
-  // overlay after the grace period.
-  const [showFrameOverlay, setShowFrameOverlay] = useState(false);
+  // `loadedFrameKey` is `${imageId}::${channelsKey}` — both axes
+  // need to match before the Skeleton overlay can step aside.
+  // Tracking just `imageId` would let a channel toggle keep a stale
+  // composite painted while the new channel still decodes.
+  // The debounce that latches "show overlay" lives inside
+  // `FrameLoadingGate`, which is rendered under ImageDisplayProvider
+  // (it needs `visibleChannels` to construct the target key).
+  const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
 
   // Use custom hook for segmentation reload logic
   const { isReloading, reloadSegmentation, cleanupReloadOperations } =
@@ -684,6 +676,16 @@ const SegmentationEditor = () => {
         // RAM. Empty / 404 frames are cached as `polygons: null` to
         // avoid retry storms on a fast scrub across non-segmented
         // frames.
+        if (segmentationData && !segmentationData.polygons) {
+          // Backend returned a non-null payload without a polygons
+          // field — distinguishes a misshaped 200 from a legitimate
+          // "no segmentation yet" so a misconfigured response doesn't
+          // silently masquerade as empty for 60 s of staleTime.
+          logger.warn(
+            'Segmentation response present but missing polygons field — caching as empty',
+            { imageId }
+          );
+        }
         setCachedSegmentationPolygons(queryClient, imageId, {
           polygons: segmentationData?.polygons ?? null,
           imageWidth: segmentationData?.imageWidth,
@@ -983,12 +985,15 @@ const SegmentationEditor = () => {
   }, [abortAll]);
 
   // Handle image load to get dimensions (only if not already set from segmentation data)
-  const handleImageLoad = (width: number, height: number) => {
-    // Mark this frame's image as visible so the Skeleton overlay can
-    // step aside. Captured here (and not in a useEffect) because
-    // onLoad fires exactly when the `<img>` element has decoded the
-    // current frame — the cheapest signal we get.
-    if (imageId) setLoadedImageId(imageId);
+  const handleImageLoad = (
+    width: number,
+    height: number,
+    channelsKey: string
+  ) => {
+    // Mark this `(imageId, channels)` pair as visible so the Skeleton
+    // overlay can step aside. The channelsKey comes from the canvas
+    // that just finished compositing — see `MultiChannelCanvas.onLoad`.
+    if (imageId) setLoadedFrameKey(`${imageId}::${channelsKey}`);
     setImageDimensions(current => {
       // Only update if dimensions are not already set from segmentation data
       if (!current) {
@@ -1391,22 +1396,9 @@ const SegmentationEditor = () => {
   const isVideoMode =
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
 
-  // Debounce the loading overlay so 10 FPS playback (imageId flips
-  // every 100 ms, loadedImageId catches up <10 ms later) never gets
-  // to commit a "visible" paint. Mismatch must persist for the full
-  // grace period — typical for true cold loads, never for cache hits.
-  // Always clear the latch on match (instant hide).
-  useEffect(() => {
-    const mismatched = isVideoMode && !!imageId && loadedImageId !== imageId;
-    if (!mismatched) {
-      setShowFrameOverlay(false);
-      return;
-    }
-    // Grace period: 150 ms is below human flicker perception (~250 ms)
-    // but well above cache-hit + fast-network completion times.
-    const timeout = window.setTimeout(() => setShowFrameOverlay(true), 150);
-    return () => window.clearTimeout(timeout);
-  }, [isVideoMode, imageId, loadedImageId]);
+  // The overlay debounce moved into `FrameLoadingGate` — it needs
+  // `visibleChannels` from ImageDisplayContext which is only mounted
+  // inside the provider subtree below.
 
   // Seed video.frameIndex from the URL imageId on first container load.
   // useVideoFrames defaults to frame 0 internally; without this sync,
@@ -1438,7 +1430,15 @@ const SegmentationEditor = () => {
   // navigate() + fetch cycles per second; the slider thumb already
   // moves locally without waiting for this sync, so we can wait
   // until the user pauses before committing the URL.
+  // Tracks the previous render's `isPlaying` so we can detect the
+  // playback→pause transition and FLUSH any pending mismatch right
+  // away. Without this, a user pausing mid-tick would leave the URL
+  // 100-200 ms behind the slider thumb until the debounce fires.
+  const wasPlayingRef = useRef(video.isPlaying);
   useEffect(() => {
+    const justPaused = wasPlayingRef.current && !video.isPlaying;
+    wasPlayingRef.current = video.isPlaying;
+
     if (!isVideoMode || !video.container) return;
     const targetId = video.container.frames[video.frameIndex]?.id;
     if (!targetId || targetId === imageId) return;
@@ -1449,7 +1449,7 @@ const SegmentationEditor = () => {
       });
     };
 
-    if (video.isPlaying) {
+    if (video.isPlaying || justPaused) {
       commit();
       return;
     }
@@ -1718,8 +1718,10 @@ const SegmentationEditor = () => {
                           Sits *inside* CanvasContent so the pan/zoom
                           transform aligns the overlay with the image
                           area, not the surrounding viewport chrome. */}
-                      <EditorFrameLoadingOverlay
-                        visible={showFrameOverlay}
+                      <FrameLoadingGate
+                        imageId={imageId ?? null}
+                        loadedFrameKey={loadedFrameKey}
+                        isVideoMode={isVideoMode}
                         width={imageDimensions?.width || canvasWidth}
                         height={imageDimensions?.height || canvasHeight}
                         label={t('segmentationEditor.loadingFrame')}
