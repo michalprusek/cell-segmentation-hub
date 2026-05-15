@@ -2072,6 +2072,7 @@ export default {
   error: 'Error',
   segmentationEditor: {
     reloadingSegmentation: 'Reloading segmentation...',
+    loadingFrame: 'Loading frame...',
     segmenting: 'Segmenting...',
     waitingInQueue: 'Waiting in queue...',
     retryingLoad: 'Having trouble loading. Retrying...',

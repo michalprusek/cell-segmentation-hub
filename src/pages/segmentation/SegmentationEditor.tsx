@@ -7,6 +7,7 @@ import React, {
   startTransition,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, useLanguage, useModel } from '@/contexts/exports';
 import { useProjectData } from '@/hooks/useProjectData';
 import { sortImagesBySettings } from '@/hooks/useImageFilter';
@@ -46,6 +47,8 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 import CanvasContainer from './components/canvas/CanvasContainer';
 import CanvasContent from './components/canvas/CanvasContent';
 import VideoFrameImage from './components/canvas/VideoFrameImage';
+import FrameWindowPrefetcher from './components/canvas/FrameWindowPrefetcher';
+import EditorFrameLoadingOverlay from './components/canvas/EditorFrameLoadingOverlay';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
@@ -62,6 +65,10 @@ import EditorLayout from './components/layout/EditorLayout';
 import { VideoModeOverlay } from './components/VideoModeOverlay';
 import { ImageDisplayProvider } from './contexts/ImageDisplayContext';
 import { useVideoFrames } from './hooks/useVideoFrames';
+import {
+  getCachedSegmentationPolygons,
+  setCachedSegmentationPolygons,
+} from './hooks/segmentationPolygonCache';
 
 const EMPTY_HOVERED_VERTEX = { polygonId: null, vertexIndex: null } as const;
 
@@ -74,6 +81,11 @@ const SegmentationEditor = () => {
   const { t } = useLanguage();
   const { selectedModel, confidenceThreshold, detectHoles } = useModel();
   const navigate = useNavigate();
+  // Shared cache between the editor's primary load and the
+  // sliding-window prefetch hook. Both write/read under the
+  // canonical segmentation-results query key so a scrub-back or a
+  // pre-warmed frame paints without a network round-trip.
+  const queryClient = useQueryClient();
 
   // Track if this is the initial load (coming from Project Detail) vs internal navigation
   const isInitialLoadRef = useRef(true);
@@ -161,6 +173,12 @@ const SegmentationEditor = () => {
     width: 800,
     height: 600,
   });
+  // Tracks the imageId whose `<img>` element has fired onLoad. When
+  // this matches the URL `imageId`, the canvas is showing the
+  // intended frame — `EditorFrameLoadingOverlay` uses the mismatch
+  // to surface a Skeleton over the canvas so a scrub outside the
+  // prefetch window never blends "old frame + new polygons".
+  const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
 
   // Use custom hook for segmentation reload logic
   const { isReloading, reloadSegmentation, cleanupReloadOperations } =
@@ -608,6 +626,29 @@ const SegmentationEditor = () => {
         return;
       }
 
+      // Cache hit: serve a previously-fetched / prefetched result
+      // without going to the network. The shared React Query cache
+      // is populated by the editor's own success path below and by
+      // the `useFrameWindowPrefetch` sliding window, so scrub-back
+      // and pre-warmed frames paint instantly.
+      const cached = getCachedSegmentationPolygons(queryClient, imageId);
+      if (cached !== undefined) {
+        if (!isMounted || imageId !== currentImageIdRef.current) return;
+        if (cached.imageWidth && cached.imageHeight) {
+          setImageDimensions({
+            width: cached.imageWidth,
+            height: cached.imageHeight,
+          });
+        } else if (selectedImage?.width && selectedImage?.height) {
+          setImageDimensions({
+            width: selectedImage.width,
+            height: selectedImage.height,
+          });
+        }
+        setSegmentationPolygons(cached.polygons);
+        return;
+      }
+
       try {
         const segmentationData = await apiClient.getSegmentationResults(
           imageId,
@@ -627,6 +668,17 @@ const SegmentationEditor = () => {
           );
           return;
         }
+
+        // Populate the shared cache with the *normalised* result so
+        // a future scrub-back or window-prefetch read can serve from
+        // RAM. Empty / 404 frames are cached as `polygons: null` to
+        // avoid retry storms on a fast scrub across non-segmented
+        // frames.
+        setCachedSegmentationPolygons(queryClient, imageId, {
+          polygons: segmentationData?.polygons ?? null,
+          imageWidth: segmentationData?.imageWidth,
+          imageHeight: segmentationData?.imageHeight,
+        });
 
         // Handle empty or null segmentation gracefully
         if (!segmentationData || !segmentationData.polygons) {
@@ -747,6 +799,7 @@ const SegmentationEditor = () => {
     selectedImage?.height,
     selectedImage?.segmentationStatus,
     getSignal,
+    queryClient,
   ]);
 
   useEffect(() => {
@@ -921,6 +974,11 @@ const SegmentationEditor = () => {
 
   // Handle image load to get dimensions (only if not already set from segmentation data)
   const handleImageLoad = (width: number, height: number) => {
+    // Mark this frame's image as visible so the Skeleton overlay can
+    // step aside. Captured here (and not in a useEffect) because
+    // onLoad fires exactly when the `<img>` element has decoded the
+    // current frame — the cheapest signal we get.
+    if (imageId) setLoadedImageId(imageId);
     setImageDimensions(current => {
       // Only update if dimensions are not already set from segmentation data
       if (!current) {
@@ -1071,6 +1129,11 @@ const SegmentationEditor = () => {
         frameImageId: imageId,
       });
     }
+    // Intentionally narrow deps: passing the whole `editor` object
+    // would re-fire on every render of useEnhancedSegmentationEditor
+    // (cursor moves, hovers). The destructured fields capture
+    // exactly the state this effect needs to react to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     editor.polygons,
     persistedSelectionTrackId,
@@ -1386,6 +1449,20 @@ const SegmentationEditor = () => {
           sections, future PR), and the canvas (brightness/contrast
           CSS filter) can all read/write the same display state. */}
       <ImageDisplayProvider userId={user?.id}>
+        {/* Headless sliding-window prefetcher: warms the FrameImageCache
+            for the per-channel PNGs around `video.frameIndex` and seeds
+            the React Query cache with polygon JSON for the same window.
+            Lives inside the provider so it can consume `visibleChannels`
+            + `channel` from useImageDisplay. Disabled outside video
+            mode — standalone images don't have an upcoming-frame
+            concept. */}
+        {isVideoMode && video.container && (
+          <FrameWindowPrefetcher
+            frames={video.container.frames}
+            currentIndex={video.frameIndex}
+            enabled={isVideoMode}
+          />
+        )}
         <EditorLayout>
           {/* Header */}
           <EditorHeader
@@ -1471,24 +1548,15 @@ const SegmentationEditor = () => {
                           head (useVideoFrames.currentFrame.id) and the
                           active channel (useImageDisplay.channel), so
                           scrubbing / Play / channel-switch actually
-                          swap the canvas image. Prefetch warms the
-                          next ten frames during playback so the swap
-                          is instant rather than a roundtrip per frame.
+                          swap the canvas image. The sliding-window
+                          prefetch (FrameWindowPrefetcher above) keeps
+                          the cache warm symmetrically around the
+                          current index for both scrub and playback.
                           Standalone images keep the static URL. */}
                       {selectedImage && (
                         <VideoFrameImage
                           isVideoMode={isVideoMode}
                           currentFrameId={video.currentFrame?.id ?? null}
-                          upcomingFrameIds={
-                            isVideoMode && video.isPlaying && video.container
-                              ? video.container.frames
-                                  .slice(
-                                    video.frameIndex + 1,
-                                    video.frameIndex + 11
-                                  )
-                                  .map(f => f.id)
-                              : undefined
-                          }
                           fallbackSrc={ensureBrowserCompatibleUrl(
                             selectedImage.id,
                             selectedImage.url,
@@ -1596,6 +1664,20 @@ const SegmentationEditor = () => {
                           polygons={editor.polygons}
                         />
                       </svg>
+
+                      {/* Skeleton-first loading overlay: hides the canvas
+                          while the new frame's image hasn't decoded yet.
+                          Sits *inside* CanvasContent so the pan/zoom
+                          transform aligns the overlay with the image
+                          area, not the surrounding viewport chrome. */}
+                      <EditorFrameLoadingOverlay
+                        visible={
+                          isVideoMode && !!imageId && loadedImageId !== imageId
+                        }
+                        width={imageDimensions?.width || canvasWidth}
+                        height={imageDimensions?.height || canvasHeight}
+                        label={t('segmentationEditor.loadingFrame')}
+                      />
                     </CanvasContent>
 
                     {/* Mode Instructions Overlay */}

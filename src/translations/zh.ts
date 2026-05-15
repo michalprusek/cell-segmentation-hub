@@ -1034,7 +1034,8 @@ export default {
         '从原始 ND2/TIFF 文件计算每条微管的长度、面积及每通道强度。使用扩张 MT 掩码外的中位数进行背景校正。',
       enable: '计算每通道强度指标',
       thicknessLabel: '微管厚度 (px)',
-      thicknessHelp: '沿每条多边折线采样的带宽。100× 宽场下典型微管直径约为 5 px。',
+      thicknessHelp:
+        '沿每条多边折线采样的带宽。100× 宽场下典型微管直径约为 5 px。',
       marginLabel: '背景余量 (× 厚度)',
       marginHelp:
         '将距任意 MT 此半径范围内的像素 (厚度 × 倍率) 排除出背景。越大越保守。',
@@ -1847,6 +1848,7 @@ export default {
   error: '错误',
   segmentationEditor: {
     reloadingSegmentation: '重新加载分割...',
+    loadingFrame: '正在加载帧...',
     segmenting: '分割中...',
     waitingInQueue: '队列中等待...',
     retryingLoad: '加载遇到问题，正在重试...',
