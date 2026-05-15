@@ -1320,8 +1320,14 @@ const SegmentationEditor = () => {
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
 
   // Seed video.frameIndex from the URL imageId on first container load.
-  // Reverse direction (frameIndex → URL) is disabled — see the comment
-  // block below.
+  // The `lastSeededIdx` ref tracks the URL-matching frameIndex that the
+  // editor has *observed* React commit to state — NOT just queued.
+  // Critical: we only update the ref in a separate "observation" effect
+  // below, after frameIndex actually equals urlIdx in a render cycle.
+  // Setting it inside this seed effect (before setFrameIndex propagates)
+  // would let reverse-sync fire on stale frameIndex=0 with the marker
+  // already "matched", which is what caused the oscillation regression.
+  const lastSeededIdx = useRef<number | null>(null);
   useEffect(() => {
     if (!isVideoMode || !video.container || !imageId) return;
     const idx = video.container.frames.findIndex(f => f.id === imageId);
@@ -1331,15 +1337,66 @@ const SegmentationEditor = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVideoMode, video.container, imageId]);
 
-  // Reverse sync (frameIndex → URL) temporarily DISABLED in production
-  // due to oscillation regression — `useVideoFrames.container.frames`
-  // ordering disagrees with the URL imageId selected from the gallery
-  // sort, causing seed + reverse-sync to fight each other at ~7Hz.
-  // Until that mismatch is resolved at the data layer, slider/play
-  // navigation falls back to the pre-#187 behaviour (slider scrubs the
-  // canvas but doesn't reload polylines — back/next buttons still do).
-  // Tracking issue: production showed 195+ console errors / sec on
-  // 621-frame MT videos with this effect enabled.
+  // Observation effect: only mark `lastSeededIdx` once frameIndex
+  // actually reflects the URL's matched index in a committed render.
+  // This breaks the race where the seed effect queues a setFrameIndex
+  // call but the value hasn't propagated yet.
+  useEffect(() => {
+    if (!isVideoMode || !video.container || !imageId) return;
+    const urlIdx = video.container.frames.findIndex(f => f.id === imageId);
+    if (urlIdx >= 0 && urlIdx === video.frameIndex) {
+      lastSeededIdx.current = urlIdx;
+    }
+  }, [isVideoMode, video.container, imageId, video.frameIndex]);
+
+  // Reset seed marker when container changes — next mount must
+  // re-prioritise URL over the local frameIndex state.
+  useEffect(() => {
+    lastSeededIdx.current = null;
+  }, [videoContainerId]);
+
+  // Reverse sync: mirror video.frameIndex back into URL imageId so the
+  // segmentation loader re-fires for slider scrubs and Play. Gating
+  // logic distinguishes the initial-mount race (frameIndex=0 default
+  // while URL points elsewhere) from a real user-initiated move:
+  //
+  // - If URL imageId is NOT in container.frames → navigate (recovery
+  //   path for stale/deep links).
+  // - If URL maps to urlIdx and frameIndex === urlIdx → in sync, no-op.
+  // - Otherwise, navigate only if seed has matched URL once
+  //   (lastSeededIdx === urlIdx). Before that, frameIndex=0 is the
+  //   initial state, not a user choice.
+  //
+  // `replace: true` keeps drag scrubbing and Play ticks out of history.
+  useEffect(() => {
+    if (!isVideoMode || !video.container) return;
+    const targetId = video.container.frames[video.frameIndex]?.id;
+    if (!targetId || targetId === imageId) return;
+    const urlIdx = video.container.frames.findIndex(f => f.id === imageId);
+    if (urlIdx === -1) {
+      // URL imageId outside this container — recover by navigating to
+      // whatever frame the slider currently points at.
+      startTransition(() => {
+        navigate(`/segmentation/${projectId}/${targetId}`, { replace: true });
+      });
+      return;
+    }
+    if (lastSeededIdx.current !== urlIdx) {
+      // Seed for THIS URL hasn't fired yet — bail.
+      return;
+    }
+    // Seed already matched this URL; user moved off it. Sync the URL.
+    startTransition(() => {
+      navigate(`/segmentation/${projectId}/${targetId}`, { replace: true });
+    });
+  }, [
+    isVideoMode,
+    video.container,
+    video.frameIndex,
+    imageId,
+    projectId,
+    navigate,
+  ]);
 
   // Show loading state only during initial load
   // Once we have basic image metadata, show the UI even if segmentation is still loading

@@ -36,6 +36,20 @@ const getImageComparator = (settings?: FilterSettings) => {
   const { sortField, sortDirection } = settings || getStoredSettings();
 
   return (a: ProjectImage, b: ProjectImage): number => {
+    // Frame siblings of the same video container are ALWAYS sorted by
+    // frameIndex ASC, regardless of the gallery sort field. Temporal
+    // order is the canonical truth for a video — back/next buttons,
+    // the slider, useVideoFrames and the BE all agree on this. Letting
+    // the user's `updatedAt DESC` preference invert frame order here
+    // is what caused PR #191's slider-oscillation regression.
+    const aParent = (a as { parentVideoId?: string | null }).parentVideoId;
+    const bParent = (b as { parentVideoId?: string | null }).parentVideoId;
+    if (aParent && bParent && aParent === bParent) {
+      const aIdx = (a as { frameIndex?: number | null }).frameIndex ?? 0;
+      const bIdx = (b as { frameIndex?: number | null }).frameIndex ?? 0;
+      return aIdx - bIdx;
+    }
+
     let comparison = 0;
 
     switch (sortField) {
