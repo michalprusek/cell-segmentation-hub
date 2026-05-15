@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FrameImageCache } from '../FrameImageCache';
 
 // jsdom provides a working `Image` constructor but onload doesn't fire
@@ -64,13 +64,66 @@ describe('FrameImageCache', () => {
     expect(cache.isReady('/a.png')).toBe(true);
   });
 
-  it('rejects the ready promise when the image errors', async () => {
-    const cache = new FrameImageCache();
-    const promise = cache.prefetch('/broken.png');
-    const img = cache.get('/broken.png')! as unknown as FakeImage;
-    img._fireError();
-    await expect(promise).rejects.toThrow(/failed to load/);
-    expect(cache.isReady('/broken.png')).toBe(false);
+  it('rejects only after retries are exhausted', async () => {
+    vi.useFakeTimers();
+    try {
+      const cache = new FrameImageCache();
+      const promise = cache.prefetch('/broken.png');
+      // Swallow the eventual rejection so unhandled-rejection
+      // diagnostics in the test runner don't blow up — we assert
+      // on it via the wrapped promise below.
+      const settled = expect(promise).rejects.toThrow(/after 3 retries/);
+      // Each error fire schedules the next attempt via setTimeout;
+      // we need 1 initial + 3 retries = 4 onerror events. The retry
+      // body re-assigns `image.src`, which on the fake harness does
+      // NOT auto-fire — so we keep grabbing the entry's image and
+      // firing manually.
+      let img = cache.get('/broken.png')! as unknown as FakeImage;
+      img._fireError();
+      await vi.advanceTimersByTimeAsync(300);
+      img = cache.get('/broken.png')! as unknown as FakeImage;
+      img._fireError();
+      await vi.advanceTimersByTimeAsync(600);
+      img = cache.get('/broken.png')! as unknown as FakeImage;
+      img._fireError();
+      await vi.advanceTimersByTimeAsync(1200);
+      img = cache.get('/broken.png')! as unknown as FakeImage;
+      img._fireError();
+      await settled;
+      expect(cache.isReady('/broken.png')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('recovers after a transient error via automatic retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const cache = new FrameImageCache();
+      const promise = cache.prefetch('/flaky.png');
+      // First attempt fails — cache should schedule retry, not reject.
+      const img1 = cache.get('/flaky.png')! as unknown as FakeImage;
+      img1._fireError();
+      // Promise must still be pending: race a sentinel that resolves
+      // immediately on the next microtask.
+      const racer = await Promise.race([
+        promise
+          .then(() => 'resolved' as const)
+          .catch(() => 'rejected' as const),
+        Promise.resolve('pending' as const),
+      ]);
+      expect(racer).toBe('pending');
+      // Advance past the first backoff and let the second attempt
+      // succeed. The same Image element is reused, so the onload
+      // handler is still attached.
+      await vi.advanceTimersByTimeAsync(300);
+      const img2 = cache.get('/flaky.png')! as unknown as FakeImage;
+      img2._fireLoad();
+      await expect(promise).resolves.toBeTruthy();
+      expect(cache.isReady('/flaky.png')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('evicts oldest entries past maxEntries', () => {

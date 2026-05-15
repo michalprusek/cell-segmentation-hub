@@ -13,6 +13,12 @@
  * collapse into that, so a flat string keeps the API simple.
  */
 const DEFAULT_MAX_ENTRIES = 200;
+/** Backoff schedule for transient prefetch failures (e.g. nginx
+ *  rate-limit 503 during initial mount burst). Total worst-case
+ *  recovery is ~2.1 s for the entry to settle into either loaded
+ *  or permanently errored. The prefetch hook tracks URLs by ref so
+ *  the cache MUST self-heal here — the hook will never re-fire. */
+const RETRY_DELAYS_MS = [300, 600, 1200] as const;
 
 interface CacheEntry {
   image: HTMLImageElement;
@@ -22,10 +28,15 @@ interface CacheEntry {
   /** Mirrors `image.complete && image.naturalWidth > 0`, but cheap
    *  to check without touching the DOM property each call. */
   loaded: boolean;
-  /** True once a load error fires. The cache keeps the entry so
-   *  repeated prefetch calls don't spam new Image() — the next real
-   *  consumer can decide whether to retry. */
+  /** True once load fails for good (initial attempt + all retries
+   *  exhausted). The cache keeps the entry so repeated prefetch
+   *  calls don't spam new Image() — the next real consumer can
+   *  decide whether to retry. */
   errored: boolean;
+  /** How many retry attempts have been used so far. The first
+   *  `RETRY_DELAYS_MS.length` errors are transparently retried
+   *  before flipping `errored = true`. */
+  retriesUsed: number;
 }
 
 export class FrameImageCache {
@@ -90,14 +101,37 @@ export class FrameImageCache {
       image,
       loaded: false,
       errored: false,
+      retriesUsed: 0,
       ready: new Promise<HTMLImageElement>((resolve, reject) => {
         image.onload = () => {
           entry.loaded = true;
           resolve(image);
         };
         image.onerror = () => {
+          // Transient failure (typically rate-limit 503 during the
+          // initial prefetch burst, or a flaky upstream). Retry with
+          // exponential backoff before marking the entry errored.
+          if (entry.retriesUsed < RETRY_DELAYS_MS.length) {
+            const delay = RETRY_DELAYS_MS[entry.retriesUsed];
+            entry.retriesUsed++;
+            window.setTimeout(() => {
+              // The entry may have been aborted/evicted while we slept;
+              // never re-fire a load against a stale element.
+              if (this.entries.get(url) !== entry) return;
+              // Setting src='' then re-assigning the same URL forces
+              // the browser to retrigger the request; assigning the
+              // same value without the reset would be a no-op.
+              entry.image.src = '';
+              entry.image.src = url;
+            }, delay);
+            return;
+          }
           entry.errored = true;
-          reject(new Error(`FrameImageCache: failed to load ${url}`));
+          reject(
+            new Error(
+              `FrameImageCache: failed to load ${url} after ${RETRY_DELAYS_MS.length} retries`
+            )
+          );
         };
       }),
     };
