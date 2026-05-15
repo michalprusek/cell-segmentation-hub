@@ -150,6 +150,13 @@ router.post(
       .optional()
       .isBoolean()
       .withMessage('Detect holes musí být boolean hodnota'),
+    body('channel')
+      .optional()
+      .isString()
+      .matches(/^[A-Za-z0-9_-]{1,64}$/)
+      .withMessage(
+        'Channel musí být alnum/underscore/dash, max 64 znaků'
+      ),
   ],
   handleValidation,
   segmentationController.batchSegment
