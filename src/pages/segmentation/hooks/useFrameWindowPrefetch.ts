@@ -23,11 +23,12 @@
  * playback is forward-only. See `FRAME_PREFETCH_WINDOW`.
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { frameImageCache } from '@/lib/rendering/FrameImageCache';
 import {
   buildFrameImageUrl,
+  getCachedSegmentationPolygons,
   segmentationPolygonsQueryKey,
   fetchSegmentationPolygonsForCache,
   SEGMENTATION_POLYGON_QUERY_OPTIONS,
@@ -117,48 +118,73 @@ export function useFrameWindowPrefetch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowFrames, channelsKey]);
 
+  // Track the set of URLs we've already kicked off so a window
+  // shift fires `prefetch()` only for the NEW URLs at the leading
+  // edge, not the 30+ already-warmed URLs at the trailing edge.
+  // During playback the slider advances by 1 frame at a time, so
+  // each tick should add just `channels.length` new URLs to this
+  // set — orders of magnitude below the nginx api-zone rate limit
+  // (30 r/s burst 80). Without this guard the prefetch fanout
+  // generated 50+ 503 responses per second during playback.
+  const prefetchedRef = useRef<Set<string>>(new Set());
+  const prefetchedPolygonsRef = useRef<Set<string>>(new Set());
+
   // Effect: kick off image + polygon prefetch for each window frame.
-  // Cleanup aborts only the still-pending entries — successfully
-  // loaded entries stay in the LRU and become cache hits on the next
-  // shift of the window.
+  // Idempotent at the URL level — only NEW URLs trigger network calls.
   useEffect(() => {
     if (!enabled || windowFrames.length === 0) return;
 
     const startedImageUrls: string[] = [];
 
-    // Image prefetch — fire and forget. Failures are non-fatal; the
-    // real `<img>` mount will surface them.
+    // Image prefetch — fire and forget for URLs we haven't seen.
+    // The ref-tracked set is more aggressive than FrameImageCache.has
+    // because evicted entries (rare, only past the 200-LRU cap)
+    // shouldn't trigger redundant re-fetches mid-playback — the
+    // browser HTTP cache (30 min) will serve them on real mount.
     const channelList = channels.length > 0 ? channels : [null];
     for (const frame of windowFrames) {
       for (const channel of channelList) {
         const url = buildFrameImageUrl(frame.id, channel);
-        if (!frameImageCache.has(url)) {
-          startedImageUrls.push(url);
-        }
+        if (prefetchedRef.current.has(url)) continue;
+        prefetchedRef.current.add(url);
+        startedImageUrls.push(url);
         frameImageCache.prefetch(url).catch(() => {
           /* silent — surfaced by the actual mount */
         });
       }
     }
 
-    // Polygon prefetch — seed React Query so the editor's main
-    // fetch can read from cache on scrub-back. Only attempt frames
-    // whose segmentation is actually present; skipping the others
-    // saves a round-trip per "queued" frame.
-    const polygonPromises: Promise<unknown>[] = [];
+    // Polygon prefetch — only call prefetchQuery for frames we
+    // haven't seen AND that aren't already in the React Query
+    // cache. Otherwise React Query will short-circuit cheaply, but
+    // the call still costs a microtask + an observer touch which at
+    // 10 FPS × 16 frames adds up.
     for (const frame of windowFrames) {
       const status = frame.segmentationStatus;
       if (status && status !== 'segmented' && status !== 'completed') continue;
-      polygonPromises.push(
-        queryClient.prefetchQuery({
+      if (prefetchedPolygonsRef.current.has(frame.id)) continue;
+      if (getCachedSegmentationPolygons(queryClient, frame.id) !== undefined) {
+        prefetchedPolygonsRef.current.add(frame.id);
+        continue;
+      }
+      prefetchedPolygonsRef.current.add(frame.id);
+      queryClient
+        .prefetchQuery({
           queryKey: segmentationPolygonsQueryKey(frame.id),
           queryFn: ({ signal }) =>
             fetchSegmentationPolygonsForCache(frame.id, signal),
           ...SEGMENTATION_POLYGON_QUERY_OPTIONS,
         })
-      );
+        .catch(() => {
+          /* prefetch is best-effort; main fetch path retries on real visit */
+        });
     }
 
+    // Snapshot the ref so the cleanup closure uses the same set that
+    // the effect body wrote to (silences exhaustive-deps stale-ref
+    // warning; the ref is intentionally reset elsewhere on channel
+    // changes, not here).
+    const prefetchedSet = prefetchedRef.current;
     return () => {
       // Cancel only image entries that started in *this* effect run
       // and have not finished loading yet. Already-loaded entries
@@ -166,6 +192,9 @@ export function useFrameWindowPrefetch({
       for (const url of startedImageUrls) {
         if (!frameImageCache.isReady(url)) {
           frameImageCache.abort(url);
+          // Allow a future window-shift to retry this URL — the
+          // abort means we never saw the response.
+          prefetchedSet.delete(url);
         }
       }
       // React Query handles its own cancellation when the queryClient
@@ -176,6 +205,15 @@ export function useFrameWindowPrefetch({
     // arrays with identical content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, windowFrames, channelsKey, queryClient]);
+
+  // Reset the ref-tracked sets when the channel set or enable flag
+  // changes — a different channel needs its own URLs prefetched
+  // fresh, and disabling/re-enabling video mode should not leak
+  // stale "already prefetched" markers into the new session.
+  useEffect(() => {
+    prefetchedRef.current.clear();
+    prefetchedPolygonsRef.current.clear();
+  }, [channelsKey, enabled]);
 
   const readyCount = frameImageCache.readyCount(windowImageUrls);
   const isWindowReady =
