@@ -1431,18 +1431,39 @@ const SegmentationEditor = () => {
   // URL imageId changes — back/next buttons work because they navigate()
   // directly, slider/play didn't. `replace: true` keeps drag scrubbing
   // and play-loop ticks from polluting browser history.
+  //
+  // Playback ticks at 10 FPS need IMMEDIATE sync so each tick triggers
+  // its fetch. Manual scrubs (slider drag, arrow-key mash) are
+  // DEBOUNCED — a 40 key/s mash would otherwise fan out 40 redundant
+  // navigate() + fetch cycles per second; the slider thumb already
+  // moves locally without waiting for this sync, so we can wait
+  // until the user pauses before committing the URL.
   useEffect(() => {
     if (!isVideoMode || !video.container) return;
     const targetId = video.container.frames[video.frameIndex]?.id;
-    if (targetId && targetId !== imageId) {
+    if (!targetId || targetId === imageId) return;
+
+    const commit = () => {
       startTransition(() => {
         navigate(`/segmentation/${projectId}/${targetId}`, { replace: true });
       });
+    };
+
+    if (video.isPlaying) {
+      commit();
+      return;
     }
+
+    // Debounce window: 120 ms is short enough that a paused user
+    // pressing → once feels instant (UI thumb already moved), long
+    // enough that a held-key burst at >8/s collapses to one commit.
+    const timer = window.setTimeout(commit, 120);
+    return () => window.clearTimeout(timer);
   }, [
     isVideoMode,
     video.container,
     video.frameIndex,
+    video.isPlaying,
     imageId,
     projectId,
     navigate,
