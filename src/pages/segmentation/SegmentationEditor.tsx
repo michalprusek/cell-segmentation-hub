@@ -40,6 +40,7 @@ import { isMicrotubuleInstance } from './utils/instanceColors';
 import ChannelsSection from './components/sidebar/ChannelsSection';
 import DisplaySection from './components/sidebar/DisplaySection';
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
+import { SegmentChannelDialog } from '@/components/project/SegmentChannelDialog';
 import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 
 // Canvas components
@@ -1197,39 +1198,48 @@ const SegmentationEditor = () => {
     [handleUpdatePolygonField]
   );
 
+  // Channel picker state for the resegment action on multi-channel
+  // video frames. `pendingResegment=true` means the user clicked
+  // Resegment in the toolbar and we're awaiting their channel choice
+  // (or running the request if only one channel exists).
+  const [showResegmentChannelDialog, setShowResegmentChannelDialog] =
+    useState(false);
+
   // Re-run ML segmentation on the currently-open frame using the
-  // user-selected model + threshold. Overwrites the existing
-  // `Segmentation` row on the backend (upsert). After the batch
-  // endpoint returns, we reload polygons via the existing
-  // `reloadSegmentation` hook so the canvas reflects the new result.
-  const handleResegmentCurrentFrame = useCallback(async () => {
-    if (!imageId || isResegmenting) return;
-    setIsResegmenting(true);
-    try {
-      await apiClient.requestBatchSegmentation(
-        [imageId],
-        selectedModel,
-        confidenceThreshold,
-        detectHoles
-      );
-      await reloadSegmentation();
-      toast.success(t('segmentation.toolbar.resegmentSuccess'));
-    } catch (err) {
-      if (handleCancelledError(err, 'resegment current frame')) return;
-      logger.error('Resegment failed', err);
-      toast.error(t('segmentation.toolbar.resegmentFailed'));
-    } finally {
-      setIsResegmenting(false);
-    }
-  }, [
-    imageId,
-    isResegmenting,
-    selectedModel,
-    confidenceThreshold,
-    detectHoles,
-    reloadSegmentation,
-    t,
-  ]);
+  // user-selected model + threshold. For multi-channel video frames
+  // the parent decides which channel to feed by passing `channel`.
+  const runResegment = useCallback(
+    async (channel?: string) => {
+      if (!imageId || isResegmenting) return;
+      setIsResegmenting(true);
+      try {
+        await apiClient.requestBatchSegmentation(
+          [imageId],
+          selectedModel,
+          confidenceThreshold,
+          detectHoles,
+          channel
+        );
+        await reloadSegmentation();
+        toast.success(t('segmentation.toolbar.resegmentSuccess'));
+      } catch (err) {
+        if (handleCancelledError(err, 'resegment current frame')) return;
+        logger.error('Resegment failed', err);
+        toast.error(t('segmentation.toolbar.resegmentFailed'));
+      } finally {
+        setIsResegmenting(false);
+      }
+    },
+    [
+      imageId,
+      isResegmenting,
+      selectedModel,
+      confidenceThreshold,
+      detectHoles,
+      reloadSegmentation,
+      t,
+    ]
+  );
 
   // Convert new EditMode to legacy booleans for compatibility
   const legacyModes = useMemo(
@@ -1318,6 +1328,20 @@ const SegmentationEditor = () => {
   const video = useVideoFrames(videoContainerId);
   const isVideoMode =
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
+
+  // Top-toolbar Resegment button entry-point. Declared here (after
+  // `video`) so React doesn't hit a TDZ on the video.container access.
+  // If the video container has more than one channel, open the picker
+  // so the user can pick which one ML should see; otherwise run.
+  const handleResegmentClick = useCallback(() => {
+    if (!imageId || isResegmenting) return;
+    const channels = video.container?.channels ?? [];
+    if (channels.length > 1) {
+      setShowResegmentChannelDialog(true);
+    } else {
+      void runResegment();
+    }
+  }, [imageId, isResegmenting, video.container, runResegment]);
 
   // Seed video.frameIndex from the URL imageId on first container load.
   // The `lastSeededIdx` ref tracks the URL-matching frameIndex that the
@@ -1471,8 +1495,6 @@ const SegmentationEditor = () => {
               onZoomIn={editor.handleZoomIn}
               onZoomOut={editor.handleZoomOut}
               onResetView={editor.handleResetView}
-              onResegment={handleResegmentCurrentFrame}
-              isResegmenting={isResegmenting}
               hasExistingPolygons={editor.getPolygons().length > 0}
             />
 
@@ -1486,6 +1508,8 @@ const SegmentationEditor = () => {
                 handleUndo={editor.handleUndo}
                 handleRedo={editor.handleRedo}
                 handleSave={editor.handleSave}
+                onResegment={imageId ? handleResegmentClick : undefined}
+                isResegmenting={isResegmenting}
                 disabled={projectLoading}
                 isSaving={editor.isSaving}
               />
@@ -1727,6 +1751,23 @@ const SegmentationEditor = () => {
             />
           </div>
         </EditorLayout>
+        {/* Channel picker for resegment on multi-channel video frames.
+            Reuses the same dialog as project-level Segment All. */}
+        {video.container?.channels && video.container.channels.length > 1 && (
+          <SegmentChannelDialog
+            open={showResegmentChannelDialog}
+            channels={video.container.channels.map(c => c.name)}
+            defaultChannel={
+              video.container.channels.find(c => c.isSegmentationSource)
+                ?.name ?? video.container.channels[0].name
+            }
+            onConfirm={channel => {
+              setShowResegmentChannelDialog(false);
+              void runResegment(channel);
+            }}
+            onCancel={() => setShowResegmentChannelDialog(false)}
+          />
+        )}
         {/* Opt-in dev overlay: append ?perf=1 to the URL or set
             localStorage.segPerfOverlay='1'. Renders null in production
             by default — no bundle cost beyond the module itself. */}
