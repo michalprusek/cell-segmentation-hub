@@ -179,6 +179,16 @@ const SegmentationEditor = () => {
   // to surface a Skeleton over the canvas so a scrub outside the
   // prefetch window never blends "old frame + new polygons".
   const [loadedImageId, setLoadedImageId] = useState<string | null>(null);
+  // Latched "show overlay" derived from the (imageId, loadedImageId)
+  // mismatch but DEBOUNCED so that 10 FPS playback (which mismatches
+  // every 100 ms) doesn't flash a Skeleton between cached frames.
+  // The mismatch flips immediately on imageId change, but we wait
+  // ~150 ms before committing it to UI — by then cache hits (avg
+  // 5 ms) and warm-network loads (avg ~9 ms) have already settled
+  // via handleImageLoad → setLoadedImageId, clearing the mismatch.
+  // True slow loads (cold mount, network stall) still surface the
+  // overlay after the grace period.
+  const [showFrameOverlay, setShowFrameOverlay] = useState(false);
 
   // Use custom hook for segmentation reload logic
   const { isReloading, reloadSegmentation, cleanupReloadOperations } =
@@ -1381,6 +1391,23 @@ const SegmentationEditor = () => {
   const isVideoMode =
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
 
+  // Debounce the loading overlay so 10 FPS playback (imageId flips
+  // every 100 ms, loadedImageId catches up <10 ms later) never gets
+  // to commit a "visible" paint. Mismatch must persist for the full
+  // grace period — typical for true cold loads, never for cache hits.
+  // Always clear the latch on match (instant hide).
+  useEffect(() => {
+    const mismatched = isVideoMode && !!imageId && loadedImageId !== imageId;
+    if (!mismatched) {
+      setShowFrameOverlay(false);
+      return;
+    }
+    // Grace period: 150 ms is below human flicker perception (~250 ms)
+    // but well above cache-hit + fast-network completion times.
+    const timeout = window.setTimeout(() => setShowFrameOverlay(true), 150);
+    return () => window.clearTimeout(timeout);
+  }, [isVideoMode, imageId, loadedImageId]);
+
   // Seed video.frameIndex from the URL imageId on first container load.
   // useVideoFrames defaults to frame 0 internally; without this sync,
   // opening /segmentation/<pid>/<frame97Id> would show frame 0 in the
@@ -1671,9 +1698,7 @@ const SegmentationEditor = () => {
                           transform aligns the overlay with the image
                           area, not the surrounding viewport chrome. */}
                       <EditorFrameLoadingOverlay
-                        visible={
-                          isVideoMode && !!imageId && loadedImageId !== imageId
-                        }
+                        visible={showFrameOverlay}
                         width={imageDimensions?.width || canvasWidth}
                         height={imageDimensions?.height || canvasHeight}
                         label={t('segmentationEditor.loadingFrame')}
