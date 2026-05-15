@@ -40,7 +40,7 @@ the guess.
 
 ## Production Safety
 
-**Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`. Service: `spheroseg_blue`. URL: `https://spherosegapp.utia.cas.cz`. Test account: `12bprusek@gym-nymburk.cz` / `spheroids2026`.
+**Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`. Single-stack deployment (no more blue-green); containers are named `spheroseg-*` (frontend/backend/ml/postgres/redis/nginx). Database: `spheroseg`. URL: `https://spherosegapp.utia.cas.cz`. Test account: `12bprusek@gym-nymburk.cz` / `spheroids2026`.
 
 ---
 
