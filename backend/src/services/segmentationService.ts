@@ -1757,7 +1757,8 @@ export class SegmentationService {
     model: 'hrnet' | 'resunet_advanced' | 'resunet_small' = 'hrnet',
     threshold = 0.5,
     userId: string,
-    detectHoles?: boolean
+    detectHoles?: boolean,
+    channel?: string
   ): Promise<{
     successful: number;
     failed: number;
@@ -1788,6 +1789,7 @@ export class SegmentationService {
           threshold,
           userId,
           detectHoles,
+          channel,
         });
 
         results.push({

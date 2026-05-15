@@ -1450,13 +1450,15 @@ class ApiClient {
     imageIds: string[],
     model?: string,
     threshold?: number,
-    detectHoles?: boolean
+    detectHoles?: boolean,
+    channel?: string
   ): Promise<SegmentationResult> {
     const response = await this.instance.post(`/segmentation/batch`, {
       imageIds,
       model: model || 'hrnet',
       threshold: threshold || 0.5,
       detectHoles: detectHoles,
+      ...(channel ? { channel } : {}),
     });
     return this.extractData(response);
   }

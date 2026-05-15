@@ -225,6 +225,7 @@ class SegmentationController {
         model = 'hrnet',
         threshold = 0.5,
         detectHoles = true,
+        channel,
       } = req.body;
 
       // Validate user authentication
@@ -288,7 +289,8 @@ class SegmentationController {
         model,
         threshold,
         userId,
-        detectHoles
+        detectHoles,
+        channel
       );
 
       ResponseHelper.success(res, result, 'Dávkové zpracování dokončeno');
