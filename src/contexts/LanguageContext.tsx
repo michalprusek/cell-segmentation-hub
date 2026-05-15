@@ -58,21 +58,23 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
     useState<Translations | null>(null);
 
   // Resolve preferred language from server profile (overrides localStorage)
-  // once authenticated; otherwise the local resolution from initial state
-  // stands. We deliberately don't re-fire this on every render — only when
-  // the user identity changes.
+  // once authenticated. Keys on `user?.id` rather than the whole user
+  // object or `language`: including `language` would re-fire the fetch
+  // each time the user picks a different locale (the effect's own
+  // setLanguageState mutates `language`, so the deps array would loop
+  // — every UI language toggle would cost an extra getUserProfile()).
+  // `language` is read via state at call time inside the closure.
+  const userId = user?.id ?? null;
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
         const profile = await apiClient.getUserProfile();
         const pref = profile?.preferredLang as Language | undefined;
         if (cancelled || !pref || !SUPPORTED_LANGUAGES.includes(pref)) return;
-        if (pref !== language) {
-          localStorage.setItem('language', pref);
-          setLanguageState(pref);
-        }
+        localStorage.setItem('language', pref);
+        setLanguageState(prev => (prev === pref ? prev : pref));
       } catch (err) {
         logger.error('Error loading language preference:', err);
       }
@@ -80,7 +82,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       cancelled = true;
     };
-  }, [user, language]);
+  }, [userId]);
 
   // Load the chunk for the current language. The provider returns null
   // until the first language is resolved, so consumers never see an
@@ -101,8 +103,14 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
             .then(strings => {
               if (!cancelled) setCurrentTranslations(strings);
             })
-            .catch(() => {
-              /* English missing too — nothing more we can do. */
+            .catch(enErr => {
+              // English fallback ALSO failed — without this log the app
+              // renders a blank page forever (`currentTranslations`
+              // stays null, provider returns null) with no diagnostic.
+              logger.error(
+                'CRITICAL: English fallback translation chunk failed to load — UI will be blank until a refresh',
+                enErr
+              );
             });
         }
       });

@@ -1284,12 +1284,26 @@ const SegmentationEditor = () => {
     if (!imageId || isResegmenting) return;
     setIsResegmenting(true);
     try {
-      await apiClient.requestBatchSegmentation(
+      // The batch endpoint returns HTTP 200 even when every image
+      // failed; the FE used to assume success on any 2xx and showed a
+      // green toast despite a no-op result. Surface the per-image
+      // outcome instead — see review pass-2 silent-failure #5.
+      const result = await apiClient.requestBatchSegmentation(
         [imageId],
         selectedModel,
         confidenceThreshold,
         detectHoles
       );
+      if (result.successful === 0) {
+        const firstError = result.results?.[0]?.error;
+        logger.error('Resegment returned 0 successes', { firstError, result });
+        toast.error(
+          firstError
+            ? `${t('segmentation.toolbar.resegmentFailed')}: ${firstError}`
+            : t('segmentation.toolbar.resegmentFailed')
+        );
+        return;
+      }
       await reloadSegmentation();
       toast.success(t('segmentation.toolbar.resegmentSuccess'));
     } catch (err) {

@@ -145,6 +145,22 @@ export interface SegmentationResult {
   updatedAt: string;
 }
 
+/** Actual shape returned by POST /api/segmentation/batch — the
+ *  controller wraps each image's outcome in this envelope and returns
+ *  HTTP 200 even when EVERY image failed. The previous typing claimed
+ *  `SegmentationResult` (a single result) which let the FE silently
+ *  treat all-failed batches as successes (false-green toast). */
+export interface BatchSegmentationResult {
+  successful: number;
+  failed: number;
+  results: Array<{
+    imageId: string;
+    success: boolean;
+    error?: string;
+    result?: SegmentationResult;
+  }>;
+}
+
 export interface QueueItem {
   id: string;
   imageId: string;
@@ -1451,7 +1467,7 @@ class ApiClient {
     model?: string,
     threshold?: number,
     detectHoles?: boolean
-  ): Promise<SegmentationResult> {
+  ): Promise<BatchSegmentationResult> {
     const response = await this.instance.post(`/segmentation/batch`, {
       imageIds,
       model: model || 'hrnet',

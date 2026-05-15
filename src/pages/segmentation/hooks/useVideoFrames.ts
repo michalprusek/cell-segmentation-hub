@@ -96,10 +96,22 @@ export function useVideoFrames(
     // than empty-then-correct.
     placeholderData: keepPreviousData,
   });
-  const container = data ?? null;
+  // `placeholderData: keepPreviousData` means `data` can still be the
+  // PREVIOUS container's frames briefly while a new container loads
+  // — guard so the consumer never derives `currentFrame` from a
+  // mismatched container (see review pass-2 #1).
+  const container = data && data.id === videoContainerId ? data : null;
 
   const [frameIndex, setFrameIndexState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Reset frameIndex when the container itself changes — without
+  // this, navigating from a 600-frame video at index 250 to a
+  // 50-frame video would derive a stale frame for one render.
+  useEffect(() => {
+    setFrameIndexState(0);
+    setIsPlaying(false);
+  }, [videoContainerId]);
 
   // Clamp index whenever the frame list changes (e.g., on first load).
   useEffect(() => {

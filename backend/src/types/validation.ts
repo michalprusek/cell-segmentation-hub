@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { JOB_STATUSES } from './index';
+import {
+  SEGMENTATION_MODELS,
+  SEGMENTATION_MODEL_ERROR_MESSAGE,
+} from '../constants/segmentationModels';
 
 // ============================================================================
 // Common validation schemas
@@ -17,23 +21,20 @@ export const uuidSchema = z.string().uuid('Musí být platné UUID');
  * (added 2026-05-12 with PR #142) so frontend Segment-All requests against
  * a Microtubules project send model='microtubule' and need to validate.
  */
-export const segmentationModelSchema = z.enum(
-  [
-    'hrnet',
-    'cbam_resunet',
-    'unet_spherohq',
-    'unet_attention_aspp',
-    'sperm',
-    'wound',
-    'microtubule',
-  ],
-  {
-    errorMap: () => ({
-      message:
-        'Model musí být hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp, sperm, wound nebo microtubule',
-    }),
-  }
-);
+// Single source of truth is `constants/segmentationModels.ts`; the
+// Zod schema is derived from the same const so the route validator,
+// controller fallback, and any Zod-validated path stay in lock-step.
+// Previously these drifted (Zod had 7 models, route+controller had 9),
+// making a `resunet_advanced` request pass the route but fail Zod-aware
+// internal callers — silent acceptance / rejection asymmetry.
+const _SEG_MODELS_TUPLE = SEGMENTATION_MODELS as unknown as [
+  SegmentationModelLiteral,
+  ...SegmentationModelLiteral[],
+];
+type SegmentationModelLiteral = (typeof SEGMENTATION_MODELS)[number];
+export const segmentationModelSchema = z.enum(_SEG_MODELS_TUPLE, {
+  errorMap: () => ({ message: SEGMENTATION_MODEL_ERROR_MESSAGE }),
+});
 
 /**
  * Queue priority validation

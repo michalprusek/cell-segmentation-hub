@@ -4,6 +4,10 @@ import { ImageService } from '../../services/imageService';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
+import {
+  SEGMENTATION_MODELS,
+  SEGMENTATION_MODEL_ERROR_MESSAGE,
+} from '../../constants/segmentationModels';
 
 class SegmentationController {
   private segmentationService: SegmentationService;
@@ -242,20 +246,12 @@ class SegmentationController {
         return;
       }
 
-      if (
-        ![
-          'hrnet',
-          'cbam_resunet',
-          'unet_spherohq',
-          'unet_attention_aspp',
-          'resunet_advanced',
-          'resunet_small',
-          'sperm',
-          'wound',
-          'microtubule',
-        ].includes(model)
-      ) {
-        ResponseHelper.validationError(res, 'Neplatný model');
+      // Defense-in-depth: the express-validator on the route already
+      // rejects invalid models, but if a future change ever bypasses
+      // that path (e.g. internal call from queueService) we still
+      // refuse. Single source of truth in constants/segmentationModels.ts.
+      if (!(SEGMENTATION_MODELS as readonly string[]).includes(model)) {
+        ResponseHelper.validationError(res, SEGMENTATION_MODEL_ERROR_MESSAGE);
         return;
       }
 

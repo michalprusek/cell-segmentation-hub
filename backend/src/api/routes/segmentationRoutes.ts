@@ -10,6 +10,10 @@ import {
 import { ResponseHelper } from '../../utils/response';
 import { buildKymograph } from '../../services/kymographService';
 import { logger } from '../../utils/logger';
+import {
+  SEGMENTATION_MODELS,
+  SEGMENTATION_MODEL_ERROR_MESSAGE,
+} from '../../constants/segmentationModels';
 
 // Middleware to handle express-validator results
 const handleValidation = (
@@ -128,20 +132,8 @@ router.post(
       .withMessage('Všechna ID obrázků musí být platná UUID'),
     body('model')
       .optional()
-      .isIn([
-        'hrnet',
-        'cbam_resunet',
-        'unet_spherohq',
-        'unet_attention_aspp',
-        'resunet_advanced',
-        'resunet_small',
-        'sperm',
-        'wound',
-        'microtubule',
-      ])
-      .withMessage(
-        'Model musí být jeden z podporovaných: hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp, resunet_advanced, resunet_small, sperm, wound, microtubule'
-      ),
+      .isIn([...SEGMENTATION_MODELS])
+      .withMessage(SEGMENTATION_MODEL_ERROR_MESSAGE),
     body('threshold')
       .optional()
       .isFloat({ min: 0.1, max: 0.9 })
