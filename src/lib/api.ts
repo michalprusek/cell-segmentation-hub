@@ -1466,13 +1466,19 @@ class ApiClient {
     imageIds: string[],
     model?: string,
     threshold?: number,
-    detectHoles?: boolean
+    detectHoles?: boolean,
+    // Channel override for multi-channel video frames. Forwarded to
+    // backend's `resolveChannelPath` so a TIRF_640 / TIRF_488 ND2
+    // frame gets segmented on the user-picked channel instead of the
+    // project's default `isSegmentationSource`.
+    channel?: string
   ): Promise<BatchSegmentationResult> {
     const response = await this.instance.post(`/segmentation/batch`, {
       imageIds,
       model: model || 'hrnet',
       threshold: threshold || 0.5,
       detectHoles: detectHoles,
+      ...(channel ? { channel } : {}),
     });
     return this.extractData(response);
   }

@@ -229,6 +229,7 @@ class SegmentationController {
         model = 'hrnet',
         threshold = 0.5,
         detectHoles = true,
+        channel,
       } = req.body;
 
       // Validate user authentication
@@ -246,10 +247,11 @@ class SegmentationController {
         return;
       }
 
-      // Defense-in-depth: the express-validator on the route already
-      // rejects invalid models, but if a future change ever bypasses
-      // that path (e.g. internal call from queueService) we still
-      // refuse. Single source of truth in constants/segmentationModels.ts.
+      // Defense-in-depth re-check. The express-validator on the route
+      // already rejects invalid models on the HTTP path, but if anyone
+      // later wires this method onto a different route without the
+      // same validator chain we still refuse. Single source of truth
+      // in constants/segmentationModels.ts.
       if (!(SEGMENTATION_MODELS as readonly string[]).includes(model)) {
         ResponseHelper.validationError(res, SEGMENTATION_MODEL_ERROR_MESSAGE);
         return;
@@ -284,7 +286,12 @@ class SegmentationController {
         model,
         threshold,
         userId,
-        detectHoles
+        detectHoles,
+        // Channel override for multi-channel video frames (TIRF_640
+        // vs TIRF_488 etc). Validated by the route at body('channel').
+        typeof channel === 'string' && channel.length > 0
+          ? channel
+          : undefined
       );
 
       ResponseHelper.success(res, result, 'Dávkové zpracování dokončeno');

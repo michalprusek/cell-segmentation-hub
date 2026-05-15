@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/exports';
 import { getErrorMessage } from '@/types';
@@ -57,22 +63,30 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   const [currentTranslations, setCurrentTranslations] =
     useState<Translations | null>(null);
 
+  // Tracks whether the user manually picked a language since the
+  // profile-fetch effect last started. Set by `setLanguage` below; the
+  // effect's onSuccess handler refuses to overwrite a manual choice
+  // (otherwise a slow server profile fetch resolving AFTER a user
+  // click would silently revert the click — review pass-3 #3).
+  const manualOverrideRef = useRef(false);
+
   // Resolve preferred language from server profile (overrides localStorage)
   // once authenticated. Keys on `user?.id` rather than the whole user
   // object or `language`: including `language` would re-fire the fetch
   // each time the user picks a different locale (the effect's own
   // setLanguageState mutates `language`, so the deps array would loop
   // — every UI language toggle would cost an extra getUserProfile()).
-  // `language` is read via state at call time inside the closure.
   const userId = user?.id ?? null;
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
+    manualOverrideRef.current = false;
     (async () => {
       try {
         const profile = await apiClient.getUserProfile();
         const pref = profile?.preferredLang as Language | undefined;
         if (cancelled || !pref || !SUPPORTED_LANGUAGES.includes(pref)) return;
+        if (manualOverrideRef.current) return;
         localStorage.setItem('language', pref);
         setLanguageState(prev => (prev === pref ? prev : pref));
       } catch (err) {
@@ -121,6 +135,9 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const setLanguage = useCallback(
     async (newLanguage: Language) => {
+      // Mark manual override so an in-flight profile fetch can't
+      // stomp the user's click (review pass-3 #3).
+      manualOverrideRef.current = true;
       localStorage.setItem('language', newLanguage);
       setLanguageState(newLanguage);
 

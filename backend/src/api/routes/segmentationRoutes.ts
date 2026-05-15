@@ -142,6 +142,15 @@ router.post(
       .optional()
       .isBoolean()
       .withMessage('Detect holes musí být boolean hodnota'),
+    // Channel override for multi-channel video frames. Same shape as
+    // batchQueueSchema.channel in validation.ts — alphanumeric + ._-
+    // bounded to 64 chars to prevent unbounded path-rewrite input.
+    body('channel')
+      .optional()
+      .isString()
+      .isLength({ max: 64 })
+      .matches(/^[A-Za-z0-9_.-]+$/)
+      .withMessage('Channel musí být alfanumerický řetězec do 64 znaků'),
   ],
   handleValidation,
   segmentationController.batchSegment
