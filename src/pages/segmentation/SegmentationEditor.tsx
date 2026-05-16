@@ -1281,103 +1281,12 @@ const SegmentationEditor = () => {
   // `Segmentation` row on the backend (upsert). After the batch
   // endpoint returns, we reload polygons via the existing
   // `reloadSegmentation` hook so the canvas reflects the new result.
-  // The backend enforces a per-project-type model whitelist (e.g. MT
-  // projects only accept `'microtubule'`). The user-chosen `selectedModel`
-  // is meaningful only for the generic spheroid project — for typed
-  // projects we override so the request never gets rejected with
-  // "Model X is not compatible with project type Y". The
-  // `spheroid_invasive` branch matches backend `MODEL_TYPE_COMPATIBILITY`
-  // which pins invasive projects to `unet_attention_aspp` (running
-  // HRNet on invasive data produces wrong-pipeline output silently).
-  const effectiveResegmentModel = useMemo(() => {
-    if (projectType === 'microtubules') return 'microtubule';
-    if (projectType === 'sperm') return 'sperm';
-    if (projectType === 'wound') return 'wound';
-    if (projectType === 'spheroid_invasive') return 'unet_attention_aspp';
-    return selectedModel;
-  }, [projectType, selectedModel]);
-
-  // Channel picker state for resegment on multi-channel video frames.
-  // True between Resegment-click and the user's channel choice; the
-  // request fires inside `runResegment` with the picked channel.
-  const [showResegmentChannelDialog, setShowResegmentChannelDialog] =
-    useState(false);
-
-  // Pure request — separated so both the direct (single-channel) path
-  // and the dialog's onConfirm callback share one source of truth for
-  // the network call + per-result handling.
-  const runResegment = useCallback(
-    async (channel?: string) => {
-      if (!imageId || isResegmenting) return;
-      setIsResegmenting(true);
-      try {
-        const result = await apiClient.requestBatchSegmentation(
-          [imageId],
-          effectiveResegmentModel,
-          confidenceThreshold,
-          detectHoles,
-          channel
-        );
-        // The batch endpoint returns HTTP 200 even when every image
-        // failed; surface the per-image outcome — see review pass-2.
-        if (result.successful === 0) {
-          const firstError = result.results?.[0]?.error;
-          logger.error('Resegment returned 0 successes', { firstError });
-          toast.error(
-            firstError
-              ? `${t('segmentation.toolbar.resegmentFailed')}: ${firstError}`
-              : t('segmentation.toolbar.resegmentFailed')
-          );
-          return;
-        }
-        // Defense-in-depth: a 1-image call always has either successful=1
-        // or successful=0, but if the helper is reused with >1 imageIds
-        // a partial failure must not be hidden by the success toast.
-        if (result.failed > 0) {
-          const firstError = result.results?.find(r => !r.success)?.error;
-          logger.warn('Resegment partial failure', { result });
-          toast.warning(
-            firstError
-              ? `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed: ${firstError})`
-              : `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed)`
-          );
-        } else {
-          toast.success(t('segmentation.toolbar.resegmentSuccess'));
-        }
-        await reloadSegmentation();
-      } catch (err) {
-        if (handleCancelledError(err, 'resegment current frame')) return;
-        logger.error('Resegment failed', err);
-        toast.error(t('segmentation.toolbar.resegmentFailed'));
-      } finally {
-        setIsResegmenting(false);
-      }
-    },
-    [
-      imageId,
-      isResegmenting,
-      effectiveResegmentModel,
-      confidenceThreshold,
-      detectHoles,
-      reloadSegmentation,
-      t,
-    ]
-  );
-
-  // Top-toolbar Resegment entry point. For multi-channel video frames
-  // we MUST let the user pick which channel to send (per CLAUDE.md
-  // editor spec); the backend's default segmentation source isn't
-  // always what the user is looking at on screen. For single-channel
-  // / non-video cases we commit immediately.
-  const handleResegmentCurrentFrame = useCallback(() => {
-    if (!imageId || isResegmenting) return;
-    const channels = video.container?.channels ?? [];
-    if (channels.length > 1) {
-      setShowResegmentChannelDialog(true);
-      return;
-    }
-    void runResegment();
-  }, [imageId, isResegmenting, video.container, runResegment]);
+  // The resegment hook chain MUST be declared after `const video = useVideoFrames(...)`
+  // because `handleResegmentCurrentFrame` captures `video.container`. Per
+  // CLAUDE.md production bug #11 + memory `feedback_react_hook_tdz_after_data_source`:
+  // useCallback/useMemo placed BEFORE the `const` they capture in deps
+  // throws "Cannot access 'X' before initialization" at runtime. Moved
+  // ~100 lines down to live next to `const video = useVideoFrames(...)`.
 
   // Convert new EditMode to legacy booleans for compatibility
   const legacyModes = useMemo(
@@ -1500,6 +1409,106 @@ const SegmentationEditor = () => {
   const video = useVideoFrames(videoContainerId);
   const isVideoMode =
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
+
+  // ───────────────── Resegment chain ─────────────────
+  // Re-runs ML segmentation on the currently-open frame. Lives HERE
+  // (after `const video = useVideoFrames`) because
+  // `handleResegmentCurrentFrame` captures `video.container`; placing
+  // the useCallback above the const triggers a TDZ at runtime that
+  // the minifier surfaces as "Cannot access 'X' before initialization"
+  // (CLAUDE.md production bug #11).
+
+  // The backend enforces a per-project-type model whitelist. The
+  // user-chosen `selectedModel` is meaningful only for the generic
+  // spheroid project — typed projects must use their matching model
+  // (`spheroid_invasive` → `unet_attention_aspp` per backend's
+  // MODEL_TYPE_COMPATIBILITY) or the request gets rejected.
+  const effectiveResegmentModel = useMemo(() => {
+    if (projectType === 'microtubules') return 'microtubule';
+    if (projectType === 'sperm') return 'sperm';
+    if (projectType === 'wound') return 'wound';
+    if (projectType === 'spheroid_invasive') return 'unet_attention_aspp';
+    return selectedModel;
+  }, [projectType, selectedModel]);
+
+  // Channel picker state for multi-channel video frames.
+  const [showResegmentChannelDialog, setShowResegmentChannelDialog] =
+    useState(false);
+
+  // Pure request helper — shared by the direct (single-channel) path
+  // and the dialog's onConfirm callback.
+  const runResegment = useCallback(
+    async (channel?: string) => {
+      if (!imageId || isResegmenting) return;
+      setIsResegmenting(true);
+      try {
+        const result = await apiClient.requestBatchSegmentation(
+          [imageId],
+          effectiveResegmentModel,
+          confidenceThreshold,
+          detectHoles,
+          channel
+        );
+        // Batch endpoint returns HTTP 200 even when every image failed;
+        // surface the per-image outcome (review pass-2 silent-failure #5).
+        if (result.successful === 0) {
+          const firstError = result.results?.[0]?.error;
+          logger.error('Resegment returned 0 successes', { firstError });
+          toast.error(
+            firstError
+              ? `${t('segmentation.toolbar.resegmentFailed')}: ${firstError}`
+              : t('segmentation.toolbar.resegmentFailed')
+          );
+          return;
+        }
+        // Defense-in-depth: a 1-image call is always all-or-nothing,
+        // but if the helper is ever reused with >1 imageIds a partial
+        // failure must not be hidden by the success toast.
+        if (result.failed > 0) {
+          const firstError = result.results?.find(r => !r.success)?.error;
+          logger.warn('Resegment partial failure', { result });
+          toast.warning(
+            firstError
+              ? `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed: ${firstError})`
+              : `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed)`
+          );
+        } else {
+          toast.success(t('segmentation.toolbar.resegmentSuccess'));
+        }
+        await reloadSegmentation();
+      } catch (err) {
+        if (handleCancelledError(err, 'resegment current frame')) return;
+        logger.error('Resegment failed', err);
+        toast.error(t('segmentation.toolbar.resegmentFailed'));
+      } finally {
+        setIsResegmenting(false);
+      }
+    },
+    [
+      imageId,
+      isResegmenting,
+      effectiveResegmentModel,
+      confidenceThreshold,
+      detectHoles,
+      reloadSegmentation,
+      t,
+    ]
+  );
+
+  // Top-toolbar Resegment entry point. Multichannel videos open the
+  // channel picker first (per CLAUDE.md spec); single-channel cases
+  // commit immediately.
+  const handleResegmentCurrentFrame = useCallback(() => {
+    if (!imageId || isResegmenting) return;
+    const channels = video.container?.channels ?? [];
+    if (channels.length > 1) {
+      setShowResegmentChannelDialog(true);
+      return;
+    }
+    void runResegment();
+  }, [imageId, isResegmenting, video.container, runResegment]);
+
+  // ─────────────── End resegment chain ───────────────
 
   // The overlay debounce moved into `FrameLoadingGate` — it needs
   // `visibleChannels` from ImageDisplayContext which is only mounted
