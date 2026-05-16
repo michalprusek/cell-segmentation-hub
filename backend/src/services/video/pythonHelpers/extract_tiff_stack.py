@@ -215,46 +215,211 @@ def _detect_pixel_size_um(tf) -> float | None:
     return None
 
 
+def _imagej_label_to_seconds(label: str) -> float | None:
+    """Parse a single ImageJ slice ``Labels`` entry to a timestamp in
+    seconds. ImageJ stores annotations like:
+      ``"t=0.5s"``         (most common explicit)
+      ``"Time=0.5 s"``
+      ``"0.500"``           (bare seconds — common in MicroManager)
+      ``"0.5 min"`` / ``"1 h"``  (rare but legal)
+    Returns ``None`` when the label carries no time-like token. Keep the
+    parser conservative so unrelated metadata (channel names, Z indices)
+    doesn't accidentally produce a spurious timestamp.
+    """
+    if not isinstance(label, str):
+        return None
+    patterns = (
+        re.compile(r"\bt\s*=\s*([0-9.]+)\s*([smhSMH]?)", re.IGNORECASE),
+        re.compile(r"\btime\s*[:=]\s*([0-9.]+)\s*([smhSMH]?)", re.IGNORECASE),
+        # Bare numeric value (assume seconds) — only when the entire
+        # label is a number; rejects "z=2" / channel names.
+        re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*([smhSMH]?)\s*$"),
+    )
+    for pat in patterns:
+        m = pat.search(label)
+        if not m:
+            continue
+        try:
+            value = float(m.group(1))
+        except ValueError:
+            continue
+        unit = (m.group(2) if m.lastindex and m.lastindex >= 2 else "") or ""
+        u = unit.lower()
+        if u in ("", "s"):
+            return value
+        if u == "m":
+            return value * 60.0
+        if u == "h":
+            return value * 3600.0
+        # Unit captured but unrecognised (e.g. ms suffix on Labels which
+        # the rest of the parser doesn't support). Keep walking the
+        # remaining patterns — the next one may match cleanly.
+    return None
+
+
+def _median_interval_ms(timestamps_s: list[float]) -> float | None:
+    """Compute the median Δ (in milliseconds) between consecutive entries
+    of a per-frame timestamp list.
+
+    Robustness rules — these reflect concrete failure modes observed in
+    real microscopy files:
+      - Sort ascending so out-of-order entries don't poison the result.
+      - Dedupe **timestamps**, not deltas, via `np.unique` with a 1 µs
+        tolerance. Multichannel OME files emit one ``<Plane>`` per (T,C);
+        consecutive channels typically share a DeltaT-per-T and serialise
+        with float noise. Deduping after `np.diff` (the previous
+        implementation) would conflate "legitimate zero-Δ paused frame"
+        with "channel duplicate" and skew the median upward.
+      - Drop non-positive deltas after dedupe (paranoia — sort + unique
+        already guarantee strictly increasing).
+
+    Returns ``None`` if fewer than two distinct timestamps remain.
+    """
+    if len(timestamps_s) < 2:
+        return None
+    arr = np.asarray(sorted(timestamps_s), dtype=np.float64)
+    # Cluster near-duplicates using a relative tolerance proportional to
+    # the typical frame duration. 1 µs absolute is well below any plausible
+    # microscopy frame rate (10 kHz cameras are 100 µs/frame) and matches
+    # the float noise that tifffile / OME writers commonly introduce.
+    deduped = arr[np.concatenate(([True], np.diff(arr) > 1e-6))]
+    if deduped.size < 2:
+        return None
+    deltas = np.diff(deduped)
+    deltas = deltas[deltas > 0]
+    if deltas.size == 0:
+        return None
+    return float(np.median(deltas)) * 1000.0
+
+
 def _detect_frame_interval_ms(tf) -> float | None:
     """Best-effort frame-interval extraction in milliseconds.
 
     Sources tried, in order:
-      1. OME-XML ``<Pixels TimeIncrement TimeIncrementUnit>``
-      2. ImageJ ``finterval`` (seconds per frame) or per-frame ``Labels``
-         timestamps.
+      1. OME-XML ``<Plane DeltaT="..." DeltaTUnit="...">`` — per-frame
+         timestamps, median of consecutive Δs (robust to dropped frames,
+         mirrors the ND2 ``Time [s]`` events branch in ``extract_nd2``).
+      2. OME-XML ``<Pixels TimeIncrement TimeIncrementUnit>`` — single
+         declared interval (fallback when no per-frame planes carry DeltaT).
+      3. ImageJ per-slice ``Labels`` timestamps (``t=0.5s`` / ``0.5`` / …),
+         median Δ same as #1.
+      4. ImageJ ``finterval`` (seconds per frame) or ``fps``.
 
     Returns ``None`` when no time metadata is present — caller decides
     whether to fall back to a Node-side ffmpeg estimate.
     """
-    # 1. OME-XML — TimeIncrement default unit is seconds per the spec.
+    # Stage 1+2: OME-XML.
     try:
         ome = getattr(tf, "ome_metadata", None)
-        if isinstance(ome, str) and "<Pixels" in ome:
-            import re
-            m = re.search(r'TimeIncrement="([0-9.eE+-]+)"', ome)
-            unit_m = re.search(r'TimeIncrementUnit="([^"]+)"', ome)
-            if m:
-                val = float(m.group(1))
-                u = (unit_m.group(1).lower() if unit_m else "s")
+        if isinstance(ome, str):
+            # Per-frame Plane DeltaT first. Multichannel files emit one
+            # `<Plane>` per (T,C) — channel acquisitions for the same T
+            # share a DeltaT, so duplicates collapse via the dedupe in
+            # `_median_interval_ms`. Unknown unit attributes return None
+            # rather than silently defaulting to seconds (an off-by-1000
+            # nm→µm-style mistake has shipped in this repo before; same
+            # principle applies here).
+            # Two-stage match: locate each `<Plane>` tag, then search the
+            # tag's attribute substring for DeltaT and DeltaTUnit
+            # independently. The previous one-shot regex assumed
+            # `DeltaTUnit` precedes `DeltaT`, which is wrong for OME
+            # writers that emit attributes in canonical order (DeltaT,
+            # then DeltaTUnit) — exposed by regression tests.
+            plane_tag_re = re.compile(r"<Plane\b([^>]*)>", re.IGNORECASE)
+            delta_t_re = re.compile(
+                r'\bDeltaT="([0-9.eE+-]+)"', re.IGNORECASE
+            )
+            unit_re = re.compile(r'\bDeltaTUnit="([^"]+)"', re.IGNORECASE)
+            timestamps_s: list[float] = []
+            unknown_units_seen: set[str] = set()
+            for tag in plane_tag_re.finditer(ome):
+                attrs = tag.group(1)
+                dt = delta_t_re.search(attrs)
+                if dt is None:
+                    continue
+                try:
+                    value = float(dt.group(1))
+                except ValueError:
+                    continue
+                unit_m = unit_re.search(attrs)
+                if unit_m is None:
+                    # Attribute absent — OME spec defaults to seconds.
+                    timestamps_s.append(value)
+                    continue
+                u = unit_m.group(1).lower()
                 if u in ("s", "sec", "second", "seconds"):
-                    return val * 1000.0
-                if u in ("ms", "millisecond", "milliseconds"):
-                    return val
-                if u in ("min", "minute", "minutes"):
-                    return val * 60_000.0
-                # OME spec default for TimeIncrement is seconds, so we
-                # treat an unknown unit as seconds rather than dropping
-                # the value (different policy from pixel size because
-                # the unit space for time is much narrower).
-                return val * 1000.0
-    except Exception as exc:
-        sys.stderr.write(f"OME-XML time-increment parse failed: {exc}\n")
+                    timestamps_s.append(value)
+                elif u in ("ms", "millisecond", "milliseconds"):
+                    timestamps_s.append(value / 1000.0)
+                elif u in ("min", "minute", "minutes"):
+                    timestamps_s.append(value * 60.0)
+                else:
+                    # Explicit but unrecognised unit — refuse to guess.
+                    unknown_units_seen.add(u)
+            if unknown_units_seen:
+                sys.stderr.write(
+                    "OME-XML DeltaT carried unrecognised units "
+                    f"{sorted(unknown_units_seen)} — dropped those planes "
+                    "rather than guess seconds\n"
+                )
+            interval_ms = _median_interval_ms(timestamps_s)
+            if interval_ms is not None:
+                return interval_ms
 
-    # 2. ImageJ metadata. `finterval` is seconds per frame; `fps` is the
-    # alternate form (frames per second).
+            if "<Pixels" in ome:
+                m = re.search(r'TimeIncrement="([0-9.eE+-]+)"', ome)
+                unit_m = re.search(r'TimeIncrementUnit="([^"]+)"', ome)
+                if m:
+                    val = float(m.group(1))
+                    if unit_m is None:
+                        return val * 1000.0  # spec default: seconds
+                    u = unit_m.group(1).lower()
+                    if u in ("s", "sec", "second", "seconds"):
+                        return val * 1000.0
+                    if u in ("ms", "millisecond", "milliseconds"):
+                        return val
+                    if u in ("min", "minute", "minutes"):
+                        return val * 60_000.0
+                    sys.stderr.write(
+                        f"OME-XML TimeIncrement unrecognised unit '{u}' — "
+                        "dropping value rather than guessing seconds\n"
+                    )
+    except Exception as exc:
+        sys.stderr.write(f"OME-XML time parse failed: {exc}\n")
+
+    # Stage 3+4: ImageJ metadata.
     try:
         meta = getattr(tf, "imagej_metadata", None)
         if isinstance(meta, dict):
+            # ImageJ Labels carry per-slice annotations for time-series
+            # acquisitions. We require at least 75 % of the labels to
+            # parse as time AND a strictly increasing sequence; this
+            # rejects interleaved channel/time labels like
+            # `["DAPI", "0.5s", "GFP", "1.0s"]` which would otherwise
+            # yield a median Δ that's wrong by the channel-count
+            # multiplier.
+            labels = meta.get("Labels")
+            if isinstance(labels, (list, tuple)) and len(labels) >= 2:
+                parsed = [_imagej_label_to_seconds(label) for label in labels]
+                ts = [v for v in parsed if v is not None]
+                density = len(ts) / len(labels)
+                strictly_increasing = all(
+                    ts[i] < ts[i + 1] for i in range(len(ts) - 1)
+                )
+                if len(ts) >= 2 and density >= 0.75 and strictly_increasing:
+                    interval_ms = _median_interval_ms(ts)
+                    if interval_ms is not None:
+                        return interval_ms
+                elif len(ts) >= 2:
+                    # Some labels parsed but density too low / not
+                    # monotonic — refuse to guess.
+                    sys.stderr.write(
+                        f"ImageJ Labels: {len(ts)}/{len(labels)} parsed as time "
+                        f"(density {density:.2f}, increasing={strictly_increasing}); "
+                        "ignoring — likely interleaved with non-time labels\n"
+                    )
+
+            # `finterval` is seconds per frame; `fps` is the alternate.
             v = meta.get("finterval")
             if isinstance(v, (int, float)) and v > 0:
                 return float(v) * 1000.0
