@@ -25,6 +25,8 @@ model User {
   sharedProjects    ProjectShare[]      @relation("SharedWith")
   projectsSharedByMe ProjectShare[]     @relation("SharedBy")
   feedbacks         Feedback[]
+  folders           ProjectFolder[]
+  folderItems       ProjectFolderItem[]
 
   @@map("users")
 }
@@ -74,6 +76,7 @@ model Project {
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   segmentationQueue SegmentationQueue[]
   shares            ProjectShare[]
+  folderItems       ProjectFolderItem[]
 
   @@index([userId, updatedAt], map: "idx_project_user_updated")
   @@map("projects")
@@ -238,4 +241,54 @@ model Feedback {
   @@index([userId, createdAt], map: "idx_feedback_user_created")
   @@index([status, createdAt], map: "idx_feedback_status_created")
   @@map("feedbacks")
+}
+
+// User-owned folder for organizing projects in a file-explorer-style hierarchy.
+// parentId is self-referential (adjacency list): NULL = root level under userId.
+// The unique [userId, parentId, name] prevents two siblings sharing a name.
+// onDelete: Cascade on the self-relation makes folder deletion sweep the subtree;
+// the API layer additionally deletes owned projects whose ProjectFolderItem rows
+// pointed inside the subtree (shared projects are merely unlinked).
+// NOTE on root-folder uniqueness: Postgres treats NULL as DISTINCT in
+// UNIQUE indexes, so `@@unique([userId, parentId, name])` does NOT prevent
+// two root folders (parentId IS NULL) with the same name from coexisting.
+// The migration `20260516_add_project_folders/migration.sql` adds a SECOND
+// partial unique index — `uq_folder_root_sibling_name (userId, name) WHERE
+// parentId IS NULL` — which Prisma's schema language cannot express. Keep
+// both indexes in sync if you ever rename or rebuild this model.
+model ProjectFolder {
+  id        String              @id @default(uuid())
+  name      String
+  userId    String
+  parentId  String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    ProjectFolder?      @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  ProjectFolder[]     @relation("FolderTree")
+  items     ProjectFolderItem[]
+
+  @@unique([userId, parentId, name], map: "uq_folder_sibling_name")
+  @@index([userId, parentId], map: "idx_folder_user_parent")
+  @@map("project_folders")
+}
+
+// Per-user placement of a project into one of that user's folders.
+// userId is denormalized from folder.userId to keep the [userId, projectId]
+// uniqueness lookup index-only (each user keeps each project in at most one
+// folder). Cascade from folder removes the placement row when the folder is
+// deleted; cascade from project removes it when the project itself is deleted.
+model ProjectFolderItem {
+  id        String        @id @default(uuid())
+  userId    String
+  projectId String
+  folderId  String
+  createdAt DateTime      @default(now())
+  folder    ProjectFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId], map: "uq_folder_item_user_project")
+  @@index([folderId], map: "idx_folder_item_folder")
+  @@map("project_folder_items")
 }

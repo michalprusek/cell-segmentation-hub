@@ -1,7 +1,13 @@
 import { logger } from '@/lib/logger';
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { MoreVertical, Trash, Share, UserMinus } from 'lucide-react';
+import {
+  MoreVertical,
+  Trash,
+  Share,
+  UserMinus,
+  FolderInput,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +28,13 @@ interface ProjectActionsProps {
   isShared?: boolean;
   shareId?: string;
   onProjectUpdate?: (projectId: string, action: 'delete' | 'unshare') => void;
+  /**
+   * Triggers the parent's move-to-folder dialog. When undefined or
+   * hasAnyFolder is false, the menu item is hidden (no folders to move into,
+   * so the action wouldn't make sense — file-explorer convention).
+   */
+  onRequestMove?: (projectId: string) => void;
+  hasAnyFolder?: boolean;
 }
 
 const ProjectActions = ({
@@ -31,6 +44,8 @@ const ProjectActions = ({
   isShared = false,
   shareId,
   onProjectUpdate,
+  onRequestMove,
+  hasAnyFolder = false,
 }: ProjectActionsProps) => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
@@ -149,6 +164,21 @@ const ProjectActions = ({
             className="w-48"
             onClick={e => e.stopPropagation()}
           >
+            {hasAnyFolder && onRequestMove && (
+              <>
+                <DropdownMenuItem
+                  onClick={e => {
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+                    onRequestMove(projectId);
+                  }}
+                >
+                  <FolderInput className="h-4 w-4 mr-2" />
+                  {t('folders.moveTo')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             {!isShared && (
               <>
                 <DropdownMenuItem onClick={handleShare}>

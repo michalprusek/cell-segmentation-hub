@@ -2155,4 +2155,36 @@ export default {
       pause: 'Pausar',
     },
   },
+
+  folders: {
+    folder: 'Carpeta',
+    home: 'Inicio',
+    newFolder: 'Nueva carpeta',
+    createFolder: 'Crear carpeta',
+    create: 'Crear',
+    folderName: 'Nombre de la carpeta',
+    folderNamePlaceholder: 'p. ej. Experimento A',
+    rename: 'Renombrar',
+    renameFolder: 'Renombrar carpeta',
+    deleteFolder: 'Eliminar carpeta',
+    deleteFolderConfirm:
+      '¿Eliminar la carpeta «{{name}}»? Esto eliminará permanentemente {{projects}} proyecto(s) y {{subfolders}} subcarpeta(s). {{shared}} proyecto(s) compartido(s) volverán a la raíz.',
+    moveTo: 'Mover a…',
+    moveToRoot: 'Raíz (sin carpeta)',
+    openFolder: 'Abrir carpeta {{name}}',
+    empty: 'Carpeta vacía',
+    created: 'Carpeta creada',
+    renamed: 'Carpeta renombrada',
+    deleted: 'Carpeta eliminada',
+    moved: 'Movido correctamente',
+    moveSkipped: 'Movimiento omitido — sin acceso al proyecto',
+    movePartial:
+      'Movidos {{moved}} proyecto(s); {{skipped}} omitido(s) (sin acceso)',
+    moveAllSkipped: '{{count}} proyecto(s) omitido(s) — sin acceso',
+    deletePartial:
+      '{{deleted}} proyecto(s) eliminado(s); {{failed}} falló/fallaron. Carpeta conservada; inténtelo de nuevo.',
+    duplicateName: 'Ya existe una carpeta con este nombre aquí',
+    cannotMoveIntoSelf:
+      'Una carpeta no se puede mover dentro de sí misma o de su propia subcarpeta',
+  },
 };
