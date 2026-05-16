@@ -51,9 +51,11 @@ interface MultiChannelCanvasProps {
   height?: number;
   loading?: boolean;
   /** Notified once the first channel image has loaded with its natural
-   *  dimensions — the rest of the editor wires zoom + polygons against
-   *  the image-space coordinate system. */
-  onLoad?: (width: number, height: number) => void;
+   *  dimensions + the channelsKey that produced this load. The
+   *  channelsKey lets the editor distinguish "same frame, different
+   *  channel mix" — without it, a channel toggle on the current frame
+   *  would never re-arm the loading overlay. */
+  onLoad?: (width: number, height: number, channelsKey: string) => void;
 }
 
 /** Parse `#RRGGBB` (or `#rgb`) into a 3-element [r, g, b] tuple. White
@@ -164,7 +166,7 @@ export default function MultiChannelCanvas({
       const h = firstBmp.height;
       canvas.width = w;
       canvas.height = h;
-      onLoad?.(w, h);
+      onLoad?.(w, h, channelsKey);
 
       // Per-channel tint pipeline. We could colour-mix natively via
       // canvas blend modes (multiply→lighter), but the manual pixel
@@ -222,6 +224,12 @@ export default function MultiChannelCanvas({
       cancelled = true;
       controller.abort();
     };
+    // `channelOpacities` is intentionally absent — `opacitiesKey` is
+    // its primitive fingerprint; listing the object would re-fire on
+    // every parent render because Context spreads a fresh reference.
+    // Same trick already applies to visibleChannels (channelsKey) and
+    // channelColors (colorsKey).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     frameId,
     channelsKey,
@@ -230,10 +238,6 @@ export default function MultiChannelCanvas({
     windowMin,
     windowMax,
     onLoad,
-    // visibleChannels + channelColors purposefully excluded — `channelsKey`
-    // + `colorsKey` are their content fingerprints, primitive-safe for the
-    // dep array. Listing the arrays directly would re-fire on every
-    // parent render because they're freshly-spread objects.
     visibleChannels,
     channelColors,
   ]);

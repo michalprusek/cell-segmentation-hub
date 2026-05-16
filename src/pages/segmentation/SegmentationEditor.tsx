@@ -7,6 +7,7 @@ import React, {
   startTransition,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, useLanguage, useModel } from '@/contexts/exports';
 import { useProjectData } from '@/hooks/useProjectData';
 import { sortImagesBySettings } from '@/hooks/useImageFilter';
@@ -40,13 +41,16 @@ import { isMicrotubuleInstance } from './utils/instanceColors';
 import ChannelsSection from './components/sidebar/ChannelsSection';
 import DisplaySection from './components/sidebar/DisplaySection';
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
-import { SegmentChannelDialog } from '@/components/project/SegmentChannelDialog';
 import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 
 // Canvas components
 import CanvasContainer from './components/canvas/CanvasContainer';
 import CanvasContent from './components/canvas/CanvasContent';
 import VideoFrameImage from './components/canvas/VideoFrameImage';
+import FrameWindowPrefetcher from './components/canvas/FrameWindowPrefetcher';
+import FrameLoadingGate from './components/canvas/FrameLoadingGate';
+import { polygonVisibilityManager } from '@/lib/rendering/PolygonVisibilityManager';
+import { SegmentChannelDialog } from '@/components/project/SegmentChannelDialog';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
@@ -63,6 +67,10 @@ import EditorLayout from './components/layout/EditorLayout';
 import { VideoModeOverlay } from './components/VideoModeOverlay';
 import { ImageDisplayProvider } from './contexts/ImageDisplayContext';
 import { useVideoFrames } from './hooks/useVideoFrames';
+import {
+  getCachedSegmentationPolygons,
+  setCachedSegmentationPolygons,
+} from './hooks/segmentationPolygonCache';
 
 const EMPTY_HOVERED_VERTEX = { polygonId: null, vertexIndex: null } as const;
 
@@ -75,6 +83,11 @@ const SegmentationEditor = () => {
   const { t } = useLanguage();
   const { selectedModel, confidenceThreshold, detectHoles } = useModel();
   const navigate = useNavigate();
+  // Shared cache between the editor's primary load and the
+  // sliding-window prefetch hook. Both write/read under the
+  // canonical segmentation-results query key so a scrub-back or a
+  // pre-warmed frame paints without a network round-trip.
+  const queryClient = useQueryClient();
 
   // Track if this is the initial load (coming from Project Detail) vs internal navigation
   const isInitialLoadRef = useRef(true);
@@ -162,6 +175,14 @@ const SegmentationEditor = () => {
     width: 800,
     height: 600,
   });
+  // `loadedFrameKey` is `${imageId}::${channelsKey}` — both axes
+  // need to match before the Skeleton overlay can step aside.
+  // Tracking just `imageId` would let a channel toggle keep a stale
+  // composite painted while the new channel still decodes.
+  // The debounce that latches "show overlay" lives inside
+  // `FrameLoadingGate`, which is rendered under ImageDisplayProvider
+  // (it needs `visibleChannels` to construct the target key).
+  const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
 
   // Use custom hook for segmentation reload logic
   const { isReloading, reloadSegmentation, cleanupReloadOperations } =
@@ -609,6 +630,29 @@ const SegmentationEditor = () => {
         return;
       }
 
+      // Cache hit: serve a previously-fetched / prefetched result
+      // without going to the network. The shared React Query cache
+      // is populated by the editor's own success path below and by
+      // the `useFrameWindowPrefetch` sliding window, so scrub-back
+      // and pre-warmed frames paint instantly.
+      const cached = getCachedSegmentationPolygons(queryClient, imageId);
+      if (cached !== undefined) {
+        if (!isMounted || imageId !== currentImageIdRef.current) return;
+        if (cached.imageWidth && cached.imageHeight) {
+          setImageDimensions({
+            width: cached.imageWidth,
+            height: cached.imageHeight,
+          });
+        } else if (selectedImage?.width && selectedImage?.height) {
+          setImageDimensions({
+            width: selectedImage.width,
+            height: selectedImage.height,
+          });
+        }
+        setSegmentationPolygons(cached.polygons);
+        return;
+      }
+
       try {
         const segmentationData = await apiClient.getSegmentationResults(
           imageId,
@@ -628,6 +672,27 @@ const SegmentationEditor = () => {
           );
           return;
         }
+
+        // Populate the shared cache with the *normalised* result so
+        // a future scrub-back or window-prefetch read can serve from
+        // RAM. Empty / 404 frames are cached as `polygons: null` to
+        // avoid retry storms on a fast scrub across non-segmented
+        // frames.
+        if (segmentationData && !segmentationData.polygons) {
+          // Backend returned a non-null payload without a polygons
+          // field — distinguishes a misshaped 200 from a legitimate
+          // "no segmentation yet" so a misconfigured response doesn't
+          // silently masquerade as empty for 60 s of staleTime.
+          logger.warn(
+            'Segmentation response present but missing polygons field — caching as empty',
+            { imageId }
+          );
+        }
+        setCachedSegmentationPolygons(queryClient, imageId, {
+          polygons: segmentationData?.polygons ?? null,
+          imageWidth: segmentationData?.imageWidth,
+          imageHeight: segmentationData?.imageHeight,
+        });
 
         // Handle empty or null segmentation gracefully
         if (!segmentationData || !segmentationData.polygons) {
@@ -748,6 +813,7 @@ const SegmentationEditor = () => {
     selectedImage?.height,
     selectedImage?.segmentationStatus,
     getSignal,
+    queryClient,
   ]);
 
   useEffect(() => {
@@ -921,7 +987,15 @@ const SegmentationEditor = () => {
   }, [abortAll]);
 
   // Handle image load to get dimensions (only if not already set from segmentation data)
-  const handleImageLoad = (width: number, height: number) => {
+  const handleImageLoad = (
+    width: number,
+    height: number,
+    channelsKey: string
+  ) => {
+    // Mark this `(imageId, channels)` pair as visible so the Skeleton
+    // overlay can step aside. The channelsKey comes from the canvas
+    // that just finished compositing — see `MultiChannelCanvas.onLoad`.
+    if (imageId) setLoadedFrameKey(`${imageId}::${channelsKey}`);
     setImageDimensions(current => {
       // Only update if dimensions are not already set from segmentation data
       if (!current) {
@@ -1072,6 +1146,10 @@ const SegmentationEditor = () => {
         frameImageId: imageId,
       });
     }
+    // Intentionally narrow deps: passing the whole `editor` object
+    // would re-fire on every render of useEnhancedSegmentationEditor
+    // (cursor moves, hovers). The destructured fields capture
+    // exactly the state this effect needs to react to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     editor.polygons,
@@ -1198,48 +1276,17 @@ const SegmentationEditor = () => {
     [handleUpdatePolygonField]
   );
 
-  // Channel picker state for the resegment action on multi-channel
-  // video frames. `pendingResegment=true` means the user clicked
-  // Resegment in the toolbar and we're awaiting their channel choice
-  // (or running the request if only one channel exists).
-  const [showResegmentChannelDialog, setShowResegmentChannelDialog] =
-    useState(false);
-
   // Re-run ML segmentation on the currently-open frame using the
-  // user-selected model + threshold. For multi-channel video frames
-  // the parent decides which channel to feed by passing `channel`.
-  const runResegment = useCallback(
-    async (channel?: string) => {
-      if (!imageId || isResegmenting) return;
-      setIsResegmenting(true);
-      try {
-        await apiClient.requestBatchSegmentation(
-          [imageId],
-          selectedModel,
-          confidenceThreshold,
-          detectHoles,
-          channel
-        );
-        await reloadSegmentation();
-        toast.success(t('segmentation.toolbar.resegmentSuccess'));
-      } catch (err) {
-        if (handleCancelledError(err, 'resegment current frame')) return;
-        logger.error('Resegment failed', err);
-        toast.error(t('segmentation.toolbar.resegmentFailed'));
-      } finally {
-        setIsResegmenting(false);
-      }
-    },
-    [
-      imageId,
-      isResegmenting,
-      selectedModel,
-      confidenceThreshold,
-      detectHoles,
-      reloadSegmentation,
-      t,
-    ]
-  );
+  // user-selected model + threshold. Overwrites the existing
+  // `Segmentation` row on the backend (upsert). After the batch
+  // endpoint returns, we reload polygons via the existing
+  // `reloadSegmentation` hook so the canvas reflects the new result.
+  // The resegment hook chain MUST be declared after `const video = useVideoFrames(...)`
+  // because `handleResegmentCurrentFrame` captures `video.container`. Per
+  // CLAUDE.md production bug #11 + memory `feedback_react_hook_tdz_after_data_source`:
+  // useCallback/useMemo placed BEFORE the `const` they capture in deps
+  // throws "Cannot access 'X' before initialization" at runtime. Moved
+  // ~100 lines down to live next to `const video = useVideoFrames(...)`.
 
   // Convert new EditMode to legacy booleans for compatibility
   const legacyModes = useMemo(
@@ -1281,7 +1328,8 @@ const SegmentationEditor = () => {
 
   const currentImageIndex = navContext.index;
 
-  const visiblePolygons = useMemo(
+  // Stage 1: filter hidden / degenerate polygons.
+  const renderablePolygons = useMemo(
     () =>
       editor.polygons.filter(polygon => {
         if (hiddenPolygonIds.has(polygonKey(polygon)) || !polygon.points)
@@ -1291,6 +1339,39 @@ const SegmentationEditor = () => {
       }),
     [editor.polygons, hiddenPolygonIds]
   );
+
+  // Stage 2: frustum-cull off-viewport polygons via the visibility manager.
+  // The manager's internal threshold guards small counts (< 10 polygons
+  // → no culling), so MT/single-polyline cases pay zero overhead. Sperm
+  // projects with 50+ polylines at high zoom typically halve the SVG
+  // node count under this filter. We pass through `selectedPolygonId`
+  // so the manager never culls the focused polygon even if it scrolls
+  // off-screen briefly during a drag.
+  const visiblePolygons = useMemo(() => {
+    if (renderablePolygons.length < 10) return renderablePolygons;
+    const containerWidth = imageDimensions?.width || canvasWidth;
+    const containerHeight = imageDimensions?.height || canvasHeight;
+    return polygonVisibilityManager.getVisiblePolygons(renderablePolygons, {
+      zoom: editor.transform.zoom,
+      offset: {
+        x: editor.transform.translateX,
+        y: editor.transform.translateY,
+      },
+      containerWidth,
+      containerHeight,
+      selectedPolygonId: editor.selectedPolygonId,
+      forceRenderSelected: true,
+    }).visiblePolygons;
+  }, [
+    renderablePolygons,
+    editor.transform.zoom,
+    editor.transform.translateX,
+    editor.transform.translateY,
+    editor.selectedPolygonId,
+    imageDimensions,
+    canvasWidth,
+    canvasHeight,
+  ]);
 
   // Panels still consume polygon.id, so project the stable-key set
   // down per frame.
@@ -1329,94 +1410,174 @@ const SegmentationEditor = () => {
   const isVideoMode =
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
 
-  // Top-toolbar Resegment button entry-point. Declared here (after
-  // `video`) so React doesn't hit a TDZ on the video.container access.
-  // If the video container has more than one channel, open the picker
-  // so the user can pick which one ML should see; otherwise run.
-  const handleResegmentClick = useCallback(() => {
+  // ───────────────── Resegment chain ─────────────────
+  // Re-runs ML segmentation on the currently-open frame. Lives HERE
+  // (after `const video = useVideoFrames`) because
+  // `handleResegmentCurrentFrame` captures `video.container`; placing
+  // the useCallback above the const triggers a TDZ at runtime that
+  // the minifier surfaces as "Cannot access 'X' before initialization"
+  // (CLAUDE.md production bug #11).
+
+  // The backend enforces a per-project-type model whitelist. The
+  // user-chosen `selectedModel` is meaningful only for the generic
+  // spheroid project — typed projects must use their matching model
+  // (`spheroid_invasive` → `unet_attention_aspp` per backend's
+  // MODEL_TYPE_COMPATIBILITY) or the request gets rejected.
+  const effectiveResegmentModel = useMemo(() => {
+    if (projectType === 'microtubules') return 'microtubule';
+    if (projectType === 'sperm') return 'sperm';
+    if (projectType === 'wound') return 'wound';
+    if (projectType === 'spheroid_invasive') return 'unet_attention_aspp';
+    return selectedModel;
+  }, [projectType, selectedModel]);
+
+  // Channel picker state for multi-channel video frames.
+  const [showResegmentChannelDialog, setShowResegmentChannelDialog] =
+    useState(false);
+
+  // Pure request helper — shared by the direct (single-channel) path
+  // and the dialog's onConfirm callback.
+  const runResegment = useCallback(
+    async (channel?: string) => {
+      if (!imageId || isResegmenting) return;
+      setIsResegmenting(true);
+      try {
+        const result = await apiClient.requestBatchSegmentation(
+          [imageId],
+          effectiveResegmentModel,
+          confidenceThreshold,
+          detectHoles,
+          channel
+        );
+        // Batch endpoint returns HTTP 200 even when every image failed;
+        // surface the per-image outcome (review pass-2 silent-failure #5).
+        if (result.successful === 0) {
+          const firstError = result.results?.[0]?.error;
+          logger.error('Resegment returned 0 successes', { firstError });
+          toast.error(
+            firstError
+              ? `${t('segmentation.toolbar.resegmentFailed')}: ${firstError}`
+              : t('segmentation.toolbar.resegmentFailed')
+          );
+          return;
+        }
+        // Defense-in-depth: a 1-image call is always all-or-nothing,
+        // but if the helper is ever reused with >1 imageIds a partial
+        // failure must not be hidden by the success toast.
+        if (result.failed > 0) {
+          const firstError = result.results?.find(r => !r.success)?.error;
+          logger.warn('Resegment partial failure', { result });
+          toast.warning(
+            firstError
+              ? `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed: ${firstError})`
+              : `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed)`
+          );
+        } else {
+          toast.success(t('segmentation.toolbar.resegmentSuccess'));
+        }
+        await reloadSegmentation();
+      } catch (err) {
+        if (handleCancelledError(err, 'resegment current frame')) return;
+        logger.error('Resegment failed', err);
+        toast.error(t('segmentation.toolbar.resegmentFailed'));
+      } finally {
+        setIsResegmenting(false);
+      }
+    },
+    [
+      imageId,
+      isResegmenting,
+      effectiveResegmentModel,
+      confidenceThreshold,
+      detectHoles,
+      reloadSegmentation,
+      t,
+    ]
+  );
+
+  // Top-toolbar Resegment entry point. Multichannel videos open the
+  // channel picker first (per CLAUDE.md spec); single-channel cases
+  // commit immediately.
+  const handleResegmentCurrentFrame = useCallback(() => {
     if (!imageId || isResegmenting) return;
     const channels = video.container?.channels ?? [];
     if (channels.length > 1) {
       setShowResegmentChannelDialog(true);
-    } else {
-      void runResegment();
+      return;
     }
+    void runResegment();
   }, [imageId, isResegmenting, video.container, runResegment]);
 
+  // ─────────────── End resegment chain ───────────────
+
+  // The overlay debounce moved into `FrameLoadingGate` — it needs
+  // `visibleChannels` from ImageDisplayContext which is only mounted
+  // inside the provider subtree below.
+
   // Seed video.frameIndex from the URL imageId on first container load.
-  // The `lastSeededIdx` ref tracks the URL-matching frameIndex that the
-  // editor has *observed* React commit to state — NOT just queued.
-  // Critical: we only update the ref in a separate "observation" effect
-  // below, after frameIndex actually equals urlIdx in a render cycle.
-  // Setting it inside this seed effect (before setFrameIndex propagates)
-  // would let reverse-sync fire on stale frameIndex=0 with the marker
-  // already "matched", which is what caused the oscillation regression.
-  const lastSeededIdx = useRef<number | null>(null);
+  // useVideoFrames defaults to frame 0 internally; without this sync,
+  // opening /segmentation/<pid>/<frame97Id> would show frame 0 in the
+  // canvas and "1 / 300" in the header. We seed once, when the
+  // container metadata arrives and the URL points at a known frame.
   useEffect(() => {
     if (!isVideoMode || !video.container || !imageId) return;
     const idx = video.container.frames.findIndex(f => f.id === imageId);
     if (idx >= 0 && idx !== video.frameIndex) {
       video.setFrameIndex(idx);
     }
+    // Intentionally NOT depending on video.frameIndex — that would
+    // fight Play / scrubber on every tick. Only re-run when the URL
+    // changes or the container is first loaded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVideoMode, video.container, imageId]);
 
-  // Observation effect: only mark `lastSeededIdx` once frameIndex
-  // actually reflects the URL's matched index in a committed render.
-  // This breaks the race where the seed effect queues a setFrameIndex
-  // call but the value hasn't propagated yet.
-  useEffect(() => {
-    if (!isVideoMode || !video.container || !imageId) return;
-    const urlIdx = video.container.frames.findIndex(f => f.id === imageId);
-    if (urlIdx >= 0 && urlIdx === video.frameIndex) {
-      lastSeededIdx.current = urlIdx;
-    }
-  }, [isVideoMode, video.container, imageId, video.frameIndex]);
-
-  // Reset seed marker when container changes — next mount must
-  // re-prioritise URL over the local frameIndex state.
-  useEffect(() => {
-    lastSeededIdx.current = null;
-  }, [videoContainerId]);
-
-  // Reverse sync: mirror video.frameIndex back into URL imageId so the
-  // segmentation loader re-fires for slider scrubs and Play. Gating
-  // logic distinguishes the initial-mount race (frameIndex=0 default
-  // while URL points elsewhere) from a real user-initiated move:
+  // Reverse sync: mirror video.frameIndex back into the URL imageId.
+  // The header slider and Play loop mutate frameIndex locally, but the
+  // segmentation loader (loadSegmentation useEffect) only re-fires when
+  // URL imageId changes — back/next buttons work because they navigate()
+  // directly, slider/play didn't. `replace: true` keeps drag scrubbing
+  // and play-loop ticks from polluting browser history.
   //
-  // - If URL imageId is NOT in container.frames → navigate (recovery
-  //   path for stale/deep links).
-  // - If URL maps to urlIdx and frameIndex === urlIdx → in sync, no-op.
-  // - Otherwise, navigate only if seed has matched URL once
-  //   (lastSeededIdx === urlIdx). Before that, frameIndex=0 is the
-  //   initial state, not a user choice.
-  //
-  // `replace: true` keeps drag scrubbing and Play ticks out of history.
+  // Playback ticks at 10 FPS need IMMEDIATE sync so each tick triggers
+  // its fetch. Manual scrubs (slider drag, arrow-key mash) are
+  // DEBOUNCED — a 40 key/s mash would otherwise fan out 40 redundant
+  // navigate() + fetch cycles per second; the slider thumb already
+  // moves locally without waiting for this sync, so we can wait
+  // until the user pauses before committing the URL.
+  // Tracks the previous render's `isPlaying` so we can detect the
+  // playback→pause transition and FLUSH any pending mismatch right
+  // away. Without this, a user pausing mid-tick would leave the URL
+  // 100-200 ms behind the slider thumb until the debounce fires.
+  const wasPlayingRef = useRef(video.isPlaying);
   useEffect(() => {
+    const justPaused = wasPlayingRef.current && !video.isPlaying;
+    wasPlayingRef.current = video.isPlaying;
+
     if (!isVideoMode || !video.container) return;
     const targetId = video.container.frames[video.frameIndex]?.id;
     if (!targetId || targetId === imageId) return;
-    const urlIdx = video.container.frames.findIndex(f => f.id === imageId);
-    if (urlIdx === -1) {
-      // URL imageId outside this container — recover by navigating to
-      // whatever frame the slider currently points at.
+
+    const commit = () => {
       startTransition(() => {
         navigate(`/segmentation/${projectId}/${targetId}`, { replace: true });
       });
+    };
+
+    if (video.isPlaying || justPaused) {
+      commit();
       return;
     }
-    if (lastSeededIdx.current !== urlIdx) {
-      // Seed for THIS URL hasn't fired yet — bail.
-      return;
-    }
-    // Seed already matched this URL; user moved off it. Sync the URL.
-    startTransition(() => {
-      navigate(`/segmentation/${projectId}/${targetId}`, { replace: true });
-    });
+
+    // Debounce window: 120 ms is short enough that a paused user
+    // pressing → once feels instant (UI thumb already moved), long
+    // enough that a held-key burst at >8/s collapses to one commit.
+    const timer = window.setTimeout(commit, 120);
+    return () => window.clearTimeout(timer);
   }, [
     isVideoMode,
     video.container,
     video.frameIndex,
+    video.isPlaying,
     imageId,
     projectId,
     navigate,
@@ -1450,6 +1611,20 @@ const SegmentationEditor = () => {
           sections, future PR), and the canvas (brightness/contrast
           CSS filter) can all read/write the same display state. */}
       <ImageDisplayProvider userId={user?.id}>
+        {/* Headless sliding-window prefetcher: warms the FrameImageCache
+            for the per-channel PNGs around `video.frameIndex` and seeds
+            the React Query cache with polygon JSON for the same window.
+            Lives inside the provider so it can consume `visibleChannels`
+            + `channel` from useImageDisplay. Disabled outside video
+            mode — standalone images don't have an upcoming-frame
+            concept. */}
+        {isVideoMode && video.container && (
+          <FrameWindowPrefetcher
+            frames={video.container.frames}
+            currentIndex={video.frameIndex}
+            enabled={isVideoMode}
+          />
+        )}
         <EditorLayout>
           {/* Header */}
           <EditorHeader
@@ -1500,7 +1675,12 @@ const SegmentationEditor = () => {
 
             {/* Center: Canvas and Top Toolbar */}
             <div className="flex-1 flex flex-col">
-              {/* Top Toolbar */}
+              {/* Top Toolbar — Resegment lives here (next to Undo/Redo)
+                  per PR #195. The button is disabled with a spinner
+                  while the batch runs; once the batch returns,
+                  `handleResegmentCurrentFrame` calls `reloadSegmentation`
+                  so the new polyline drops into the canvas without a
+                  full reload. */}
               <TopToolbar
                 canUndo={editor.canUndo}
                 canRedo={editor.canRedo}
@@ -1508,7 +1688,7 @@ const SegmentationEditor = () => {
                 handleUndo={editor.handleUndo}
                 handleRedo={editor.handleRedo}
                 handleSave={editor.handleSave}
-                onResegment={imageId ? handleResegmentClick : undefined}
+                onResegment={handleResegmentCurrentFrame}
                 isResegmenting={isResegmenting}
                 disabled={projectLoading}
                 isSaving={editor.isSaving}
@@ -1535,24 +1715,15 @@ const SegmentationEditor = () => {
                           head (useVideoFrames.currentFrame.id) and the
                           active channel (useImageDisplay.channel), so
                           scrubbing / Play / channel-switch actually
-                          swap the canvas image. Prefetch warms the
-                          next ten frames during playback so the swap
-                          is instant rather than a roundtrip per frame.
+                          swap the canvas image. The sliding-window
+                          prefetch (FrameWindowPrefetcher above) keeps
+                          the cache warm symmetrically around the
+                          current index for both scrub and playback.
                           Standalone images keep the static URL. */}
                       {selectedImage && (
                         <VideoFrameImage
                           isVideoMode={isVideoMode}
                           currentFrameId={video.currentFrame?.id ?? null}
-                          upcomingFrameIds={
-                            isVideoMode && video.isPlaying && video.container
-                              ? video.container.frames
-                                  .slice(
-                                    video.frameIndex + 1,
-                                    video.frameIndex + 11
-                                  )
-                                  .map(f => f.id)
-                              : undefined
-                          }
                           fallbackSrc={ensureBrowserCompatibleUrl(
                             selectedImage.id,
                             selectedImage.url,
@@ -1660,6 +1831,20 @@ const SegmentationEditor = () => {
                           polygons={editor.polygons}
                         />
                       </svg>
+
+                      {/* Skeleton-first loading overlay: hides the canvas
+                          while the new frame's image hasn't decoded yet.
+                          Sits *inside* CanvasContent so the pan/zoom
+                          transform aligns the overlay with the image
+                          area, not the surrounding viewport chrome. */}
+                      <FrameLoadingGate
+                        imageId={imageId ?? null}
+                        loadedFrameKey={loadedFrameKey}
+                        isVideoMode={isVideoMode}
+                        width={imageDimensions?.width || canvasWidth}
+                        height={imageDimensions?.height || canvasHeight}
+                        label={t('segmentationEditor.loadingFrame')}
+                      />
                     </CanvasContent>
 
                     {/* Mode Instructions Overlay */}
@@ -1751,27 +1936,34 @@ const SegmentationEditor = () => {
             />
           </div>
         </EditorLayout>
-        {/* Channel picker for resegment on multi-channel video frames.
-            Reuses the same dialog as project-level Segment All. */}
-        {video.container?.channels && video.container.channels.length > 1 && (
-          <SegmentChannelDialog
-            open={showResegmentChannelDialog}
-            channels={video.container.channels.map(c => c.name)}
-            defaultChannel={
-              video.container.channels.find(c => c.isSegmentationSource)
-                ?.name ?? video.container.channels[0].name
-            }
-            onConfirm={channel => {
-              setShowResegmentChannelDialog(false);
-              void runResegment(channel);
-            }}
-            onCancel={() => setShowResegmentChannelDialog(false)}
-          />
-        )}
         {/* Opt-in dev overlay: append ?perf=1 to the URL or set
             localStorage.segPerfOverlay='1'. Renders null in production
             by default — no bundle cost beyond the module itself. */}
         <FpsMeter />
+
+        {/* Channel picker for resegment on multi-channel video frames.
+            Opens when the user clicks Resegment on a video whose
+            container exposes more than one channel. The picker forwards
+            the chosen channel to `runResegment` which threads it through
+            apiClient → /segmentation/batch → segmentationService. */}
+        <SegmentChannelDialog
+          open={showResegmentChannelDialog}
+          channels={video.container?.channels?.map(c => c.name) ?? []}
+          defaultChannel={
+            // Prefer the channel currently picked as the segmentation
+            // source (so the user's first click typically just confirms);
+            // fall back to the first channel in the container.
+            video.container?.channels?.find(c => c.isSegmentationSource)
+              ?.name ??
+            video.container?.channels?.[0]?.name ??
+            ''
+          }
+          onConfirm={channel => {
+            setShowResegmentChannelDialog(false);
+            void runResegment(channel);
+          }}
+          onCancel={() => setShowResegmentChannelDialog(false)}
+        />
       </ImageDisplayProvider>
     </SegmentationErrorBoundary>
   );

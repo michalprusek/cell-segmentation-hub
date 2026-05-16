@@ -2008,6 +2008,7 @@ export default {
   error: 'Chyba',
   segmentationEditor: {
     reloadingSegmentation: 'Obnovování segmentace...',
+    loadingFrame: 'Načítání snímku...',
     segmenting: 'Segmentování...',
     waitingInQueue: 'Čekání ve frontě...',
     retryingLoad: 'Načítání se nedaří. Zkouším znovu...',

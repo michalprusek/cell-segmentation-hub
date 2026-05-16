@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ImageController } from '../controllers/imageController';
 import { VideoController } from '../controllers/videoController';
 import { authenticate } from '../../middleware/auth';
+import { createCacheMiddleware } from '../../middleware/cache';
 import {
   validateParams,
   validateQuery,
@@ -21,6 +22,18 @@ import {
   imageReorderSchema,
 } from '../../types/validation';
 
+// Cache header preset for the per-frame PNG endpoints. The underlying
+// files are essentially static for a given frame (only re-extracted
+// manually), so a 30-minute browser cache lets a scrub-back replay the
+// same PNG without a round-trip. `stale-while-revalidate` keeps the
+// canvas painting during the silent background revalidation if the
+// max-age does expire mid-session.
+const framePngCache = createCacheMiddleware({
+  maxAge: 1800,
+  private: false,
+  staleWhileRevalidate: 300,
+});
+
 const router = Router();
 const imageController = new ImageController();
 
@@ -33,7 +46,7 @@ const imageController = new ImageController();
  * GET /images/:imageId/display
  * Note: No authentication required for image display
  */
-router.get('/:imageId/display', imageController.getImageForDisplay);
+router.get('/:imageId/display', framePngCache, imageController.getImageForDisplay);
 
 /**
  * Fetch the raw PNG for a specific channel of a video frame.
@@ -42,7 +55,7 @@ router.get('/:imageId/display', imageController.getImageForDisplay);
  * /display above. Browser `<img>` tags can't attach a JWT, so requiring
  * auth here would break the canvas image source in the editor.
  */
-router.get('/:imageId/frame-data', VideoController.getFrameData);
+router.get('/:imageId/frame-data', framePngCache, VideoController.getFrameData);
 
 // All other routes require authentication (email verification disabled for development)
 router.use(authenticate);

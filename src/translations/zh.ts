@@ -1848,6 +1848,7 @@ export default {
   error: '错误',
   segmentationEditor: {
     reloadingSegmentation: '重新加载分割...',
+    loadingFrame: '正在加载帧...',
     segmenting: '分割中...',
     waitingInQueue: '队列中等待...',
     retryingLoad: '加载遇到问题，正在重试...',

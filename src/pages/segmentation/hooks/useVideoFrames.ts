@@ -9,7 +9,7 @@
  * owns the frame-list metadata + playback loop.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import apiClient from '@/lib/api';
 import type { VideoChannel, ProjectImage } from '@/types';
@@ -88,11 +88,30 @@ export function useVideoFrames(
     queryFn: () => fetchVideoContainer(videoContainerId as string),
     enabled: !!videoContainerId,
     staleTime: 60_000,
+    // Keep the previous container's frame metadata visible while a
+    // background refetch is in flight (token refresh, network blip).
+    // Without this the slider snaps to 0/0 and the canvas dims during
+    // the brief window before fresh data arrives — same trade-off as
+    // the editor's overlay debounce: stale-then-correct is smoother
+    // than empty-then-correct.
+    placeholderData: keepPreviousData,
   });
-  const container = data ?? null;
+  // `placeholderData: keepPreviousData` means `data` can still be the
+  // PREVIOUS container's frames briefly while a new container loads
+  // — guard so the consumer never derives `currentFrame` from a
+  // mismatched container (see review pass-2 #1).
+  const container = data && data.id === videoContainerId ? data : null;
 
   const [frameIndex, setFrameIndexState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Reset frameIndex when the container itself changes — without
+  // this, navigating from a 600-frame video at index 250 to a
+  // 50-frame video would derive a stale frame for one render.
+  useEffect(() => {
+    setFrameIndexState(0);
+    setIsPlaying(false);
+  }, [videoContainerId]);
 
   // Clamp index whenever the frame list changes (e.g., on first load).
   useEffect(() => {

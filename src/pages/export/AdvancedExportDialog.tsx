@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -79,8 +79,8 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
     }) => {
       const { t } = useLanguage();
       // ProjectType is `'microtubules'` (plural) — `'microtubule'`
-      // (singular) is the model id from MODEL_TYPE_COMPATIBILITY, not
-      // the project type.
+      // (singular) is the model id, not the project type. Mis-comparing
+      // them silently hides the MT section on every MT project.
       const isMTProject = projectType === 'microtubules';
 
       // Distinct channels across the project's video container rows.
@@ -145,26 +145,20 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       }, [selectedImageIds, updateExportOptions]);
 
       // Auto-fill the pixel-to-µm scale from the first video container's
-      // upload metadata. The sentinel ref guarantees we only fill once
-      // per dialog open — if the user clears the field intentionally,
-      // we don't re-populate it on the next images update.
-      const autoFilledScaleRef = useRef(false);
+      // upload metadata (ND2 voxel_size, OME-TIFF PhysicalSizeX, ImageJ
+      // TIFF). Skipped when the user has already typed a value or when
+      // no container carries calibration. Applies universally — pixel
+      // scale is meaningful for any project type with a known optical
+      // setup, not just microtubule.
       useEffect(() => {
-        if (autoFilledScaleRef.current) return;
-        if (exportOptions.pixelToMicrometerScale != null) {
-          // User-supplied (or previously auto-filled) value — treat as
-          // done. Future clears are now respected.
-          autoFilledScaleRef.current = true;
-          return;
-        }
+        if (exportOptions.pixelToMicrometerScale != null) return;
         const containerWithScale = images.find(
           img =>
             img.isVideoContainer &&
-            img.pixelSizeUm != null &&
+            typeof img.pixelSizeUm === 'number' &&
             img.pixelSizeUm > 0
         );
         if (containerWithScale?.pixelSizeUm) {
-          autoFilledScaleRef.current = true;
           updateExportOptions({
             pixelToMicrometerScale: containerWithScale.pixelSizeUm,
           });
@@ -344,6 +338,21 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                   </CardContent>
                 </Card>
 
+                {/* Microtubule-only section. Rendered ABOVE the image
+                    grid because for MT projects the per-channel +
+                    band-width choices change which images make sense
+                    to export — deciding the metrics first feels more
+                    natural than scrolling past the image picker.
+                    Only mounted when projectType === 'microtubules'
+                    (intensity sampling needs the raw ND2/TIFF on disk). */}
+                {isMTProject && (
+                  <MicrotubuleMetricsSection
+                    value={exportOptions.mtMetrics ?? MT_METRICS_DEFAULTS}
+                    onChange={next => updateExportOptions({ mtMetrics: next })}
+                    availableChannels={availableChannels}
+                  />
+                )}
+
                 <Card className="p-3 sm:p-4">
                   <CardHeader className="p-0 pb-3 sm:pb-4">
                     <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
@@ -367,18 +376,6 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     />
                   </CardContent>
                 </Card>
-
-                {/* Microtubule-only section. Rendered only when the
-                    project type is `microtubule` because intensity
-                    sampling requires multi-channel video data + raw
-                    ND2/TIFF on disk. */}
-                {isMTProject && (
-                  <MicrotubuleMetricsSection
-                    value={exportOptions.mtMetrics ?? MT_METRICS_DEFAULTS}
-                    onChange={next => updateExportOptions({ mtMetrics: next })}
-                    availableChannels={availableChannels}
-                  />
-                )}
               </TabsContent>
 
               <TabsContent

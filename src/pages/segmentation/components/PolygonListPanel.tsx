@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useDeferredValue } from 'react';
 import {
   Eye,
   EyeOff,
@@ -49,6 +49,13 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Defer the heavy row mapping when polygons change rapidly (playback
+  // ticks at 10 FPS, undo/redo bursts). The counter + nav handlers below
+  // still use the live `polygons` ref so the "(N)" header and Prev/Next
+  // buttons stay snappy. Only the list body lags one render — invisible
+  // during fast updates.
+  const deferredPolygons = useDeferredValue(polygons);
 
   const handleStartRename = (polygon: Polygon) => {
     setEditingPolygonId(polygon.id);
@@ -226,7 +233,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
         data-scroll-area="true"
       >
         <div className="p-2 space-y-1">
-          {polygons.map((polygon, index) => {
+          {deferredPolygons.map((polygon, index) => {
             const isSelected = selectedPolygonId === polygon.id;
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;

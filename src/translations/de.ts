@@ -1978,6 +1978,7 @@ export default {
   error: 'Fehler',
   segmentationEditor: {
     reloadingSegmentation: 'Segmentierung wird neu geladen...',
+    loadingFrame: 'Frame wird geladen...',
     segmenting: 'Segmentierung läuft...',
     waitingInQueue: 'Warten in der Warteschlange...',
     retryingLoad: 'Ladeprobleme. Neuer Versuch...',

@@ -166,6 +166,91 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
     expect(errors).toMatch(/malformed polygons JSON/i);
   });
 
+  it('proceeds when a mix of segmented / no_segmentation / failed reaches final states', async () => {
+    // Regression: previously isBatchComplete required strict
+    // 'segmented' across all frames, so one no_segmentation or failed
+    // frame would block the tracker on the OTHER 600+ frames. The
+    // cross-frame color then went random (instanceId is per-inference
+    // UUID). The gate must accept any FINAL status — the tracker
+    // already skips empty-polyline contributions downstream.
+    prismaImageFindMany.mockImplementation(async ({ select }) => {
+      if (select?.segmentationStatus) {
+        return [
+          { segmentationStatus: 'segmented' },
+          { segmentationStatus: 'no_segmentation' },
+          { segmentationStatus: 'failed' },
+          { segmentationStatus: 'segmented' },
+        ];
+      }
+      return [
+        {
+          id: 'img-0',
+          frameIndex: 0,
+          segmentation: {
+            id: 'seg-0',
+            imageId: 'img-0',
+            polygons: JSON.stringify([
+              {
+                id: 'p0',
+                geometry: 'polyline',
+                points: [{ x: 1, y: 1 }, { x: 2, y: 2 }],
+              },
+            ]),
+          },
+        },
+        // No segmentation row at all for img-1 — the JOIN returns null.
+        { id: 'img-1', frameIndex: 1, segmentation: null },
+        { id: 'img-2', frameIndex: 2, segmentation: null },
+        {
+          id: 'img-3',
+          frameIndex: 3,
+          segmentation: {
+            id: 'seg-3',
+            imageId: 'img-3',
+            polygons: JSON.stringify([
+              {
+                id: 'p3',
+                geometry: 'polyline',
+                points: [{ x: 5, y: 5 }, { x: 6, y: 6 }],
+              },
+            ]),
+          },
+        },
+      ];
+    });
+
+    axiosPostMock.mockResolvedValue({
+      data: { assignments: { p0: 'track-X', p3: 'track-X' } },
+    });
+
+    await runTrackingForContainer('vid-mixed');
+
+    expect(axiosPostMock).toHaveBeenCalledOnce();
+    const updateCalls = prismaSegmentationUpdate.mock.calls.map(
+      c => (c[0] as { where: { id: string } }).where.id
+    );
+    expect(updateCalls).toContain('seg-0');
+    expect(updateCalls).toContain('seg-3');
+  });
+
+  it('still waits when any frame is in a pending state (queued / processing)', async () => {
+    // The complementary case: tracker MUST hold off while pending
+    // frames could still resolve into 'segmented' and contribute a
+    // polyline. The auto-trigger fires from each completed frame's
+    // 'segmented' webhook so a later trigger will catch the
+    // now-complete batch.
+    prismaImageFindMany.mockResolvedValue([
+      { segmentationStatus: 'segmented' },
+      { segmentationStatus: 'queued' },
+      { segmentationStatus: 'segmented' },
+    ]);
+
+    await runTrackingForContainer('vid-pending');
+
+    expect(axiosPostMock).not.toHaveBeenCalled();
+    expect(prismaSegmentationUpdate).not.toHaveBeenCalled();
+  });
+
   it('drops duplicate runs even when both callers race inside isBatchComplete', async () => {
     // Round-3 review caught: an in-flight guard that does
     //   has() -> await ... -> add()

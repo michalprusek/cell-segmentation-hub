@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useDeferredValue,
+} from 'react';
 import { ChevronDown, ChevronRight, Plus, Spline } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
@@ -52,10 +58,16 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
     new Set()
   );
 
+  // Defer panel re-derivation under rapid `polygons` updates (playback
+  // ticks at 10 FPS, multi-frame undo). The canvas reads live polygons;
+  // the panel can lag a render or two without user noticing — and React
+  // gets a free hand to prioritise canvas commits.
+  const deferredPolygons = useDeferredValue(polygons);
+
   // Get only polylines from polygons
   const polylines = useMemo(
-    () => polygons.filter(p => p.geometry === 'polyline'),
-    [polygons]
+    () => deferredPolygons.filter(p => p.geometry === 'polyline'),
+    [deferredPolygons]
   );
 
   // Group polylines by instanceId
