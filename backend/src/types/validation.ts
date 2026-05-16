@@ -459,11 +459,18 @@ export type CleanupQueueData = z.infer<typeof cleanupQueueSchema>;
 // Project folder schemas (file-explorer style hierarchy)
 // ============================================================================
 
+// `.trim()` runs LAST in Zod's pipeline, AFTER `.min(1)` — meaning a
+// whitespace-only input like " " would pass `.min(1)` validation and then
+// be trimmed to "" before reaching the service layer. Reorder so trim
+// happens first; the min(1) then catches the empty post-trim case.
+// (This bug shipped briefly with PR #202 and updateFolder accepted " " →
+// "" in the DB. createFolder had a defensive re-check; updateFolder did
+// not. Fixing at the schema level eliminates the divergence.)
 const folderNameSchema = z
   .string()
+  .trim()
   .min(1, 'Název složky je povinný')
-  .max(100, 'Název složky může mít maximálně 100 znaků')
-  .trim();
+  .max(100, 'Název složky může mít maximálně 100 znaků');
 
 export const createFolderSchema = z.object({
   name: folderNameSchema,
