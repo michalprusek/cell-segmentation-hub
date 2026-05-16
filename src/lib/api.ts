@@ -692,6 +692,15 @@ class ApiClient {
       result.image_count = imageCount;
     }
 
+    // Per-user folder placement. Backend returns `folderId: string | null`
+    // on each project; the FE always reads the canonical camelCase name. We
+    // explicitly copy `null` (not just truthy values) so callers can
+    // distinguish "at root" (folderId === null) from "not loaded yet"
+    // (folderId === undefined).
+    if (project.folderId !== undefined) {
+      result.folderId = (project.folderId as string | null) ?? null;
+    }
+
     return result;
   }
 
@@ -799,6 +808,9 @@ class ApiClient {
     page?: number;
     limit?: number;
     search?: string;
+    // "root" filters to projects without any folder placement; a uuid filters
+    // to a specific folder owned by the caller; undefined means no filter.
+    folderId?: string | 'root';
     _t?: number; // Cache-busting timestamp
   }): Promise<{
     projects: Project[];
@@ -914,6 +926,78 @@ class ApiClient {
   async deleteProject(id: string): Promise<void> {
     await this.instance.delete(`/projects/${id}`);
   }
+
+  // ---- Project folders --------------------------------------------------
+  //
+  // Folder tree is per-user (a placement of A's project in B's folder is B's
+  // organisation only and never visible to A). All endpoints require auth.
+
+  async getFolders(): Promise<import('@/types').ProjectFolder[]> {
+    const response = await this.instance.get('/folders');
+    const folders = this.extractData<unknown>(response);
+    return Array.isArray(folders)
+      ? (folders as import('@/types').ProjectFolder[])
+      : [];
+  }
+
+  async createFolder(data: {
+    name: string;
+    parentId?: string | null;
+  }): Promise<import('@/types').ProjectFolder> {
+    const response = await this.instance.post('/folders', data);
+    return this.extractData<import('@/types').ProjectFolder>(response);
+  }
+
+  async updateFolder(
+    id: string,
+    patch: { name?: string; parentId?: string | null }
+  ): Promise<import('@/types').ProjectFolder> {
+    const response = await this.instance.patch(`/folders/${id}`, patch);
+    return this.extractData<import('@/types').ProjectFolder>(response);
+  }
+
+  async deleteFolder(id: string): Promise<{
+    folderDeleted: boolean;
+    deletedProjectIds: string[];
+    unlinkedSharedProjectIds: string[];
+    failedProjectIds: { id: string; error: string }[];
+  }> {
+    // Server returns 200 on full success and 207 on partial (some projects
+    // failed to delete; folder kept in place). axios accepts both as
+    // success by default. Either way the wire payload carries the
+    // structured DeleteFolderResult; we extract from `data` (200) or read
+    // directly from response.data (207 wraps it differently).
+    const response = await this.instance.delete(`/folders/${id}`, {
+      validateStatus: s => (s >= 200 && s < 300) || s === 207,
+    });
+    if (response.status === 207) {
+      // 207 envelope: { success: false, message, data: DeleteFolderResult }
+      return response.data?.data ?? response.data;
+    }
+    return this.extractData(response);
+  }
+
+  async previewFolder(id: string): Promise<{
+    folderId: string;
+    ownedProjectCount: number;
+    sharedProjectCount: number;
+    subfolderCount: number;
+  }> {
+    const response = await this.instance.get(`/folders/${id}/preview`);
+    return this.extractData(response);
+  }
+
+  /** Move a set of projects into `folderId` (or `null` to send back to root). */
+  async moveProjectsToFolder(
+    folderId: string | null,
+    projectIds: string[]
+  ): Promise<{ movedProjectIds: string[]; skippedProjectIds: string[] }> {
+    const path =
+      folderId === null ? '/folders/root/items' : `/folders/${folderId}/items`;
+    const response = await this.instance.post(path, { projectIds });
+    return this.extractData(response);
+  }
+  // ----------------------------------------------------------------------
 
   // Sharing methods
   async shareProjectByEmail(

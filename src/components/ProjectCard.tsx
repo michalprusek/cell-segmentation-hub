@@ -6,6 +6,8 @@ import ProjectActions from '@/components/project/ProjectActions';
 import ProjectMetadata from '@/components/project/ProjectMetadata';
 import { Badge } from '@/components/ui/badge';
 import { Share2, Users, User } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { dragSourceProps } from '@/utils/dashboardDrag';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useAuth } from '@/contexts/useAuth';
 
@@ -22,6 +24,10 @@ interface ProjectCardProps {
   owner?: { email: string; name?: string };
   shareId?: string;
   onProjectUpdate?: (projectId: string, action: string) => void;
+  /** When true, opens the move-to-folder dialog for this project. */
+  onRequestMove?: (projectId: string) => void;
+  /** Whether at least one folder exists — controls visibility of "Move to…". */
+  hasAnyFolder?: boolean;
 }
 
 const ProjectCard = React.memo(
@@ -38,10 +44,16 @@ const ProjectCard = React.memo(
     owner,
     shareId,
     onProjectUpdate,
+    onRequestMove,
+    hasAnyFolder,
   }: ProjectCardProps) => {
     const { t } = useLanguage();
     const { user: _user } = useAuth();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    // HTML5 native DnD: clicking and dragging are decoupled by the browser,
+    // so onClick still fires reliably. dragSourceProps writes to a module-
+    // level ref that drop targets read on dragover/drop.
+    const drag = dragSourceProps({ type: 'project', id });
 
     const handleCardClick = (e: React.MouseEvent) => {
       // Don't navigate if any dialog is open
@@ -66,7 +78,10 @@ const ProjectCard = React.memo(
 
     return (
       <Card
-        className="overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer relative"
+        {...drag}
+        className={cn(
+          'overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer relative'
+        )}
         onClick={handleCardClick}
       >
         {isShared && (
@@ -96,6 +111,8 @@ const ProjectCard = React.memo(
                 isShared={isShared}
                 shareId={shareId}
                 onProjectUpdate={onProjectUpdate}
+                onRequestMove={onRequestMove}
+                hasAnyFolder={hasAnyFolder}
               />
             </div>
           </div>

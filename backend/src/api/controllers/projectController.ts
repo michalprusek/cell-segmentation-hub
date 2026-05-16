@@ -99,6 +99,13 @@ export const getProjects = asyncHandler(
       return;
     }
 
+    // folderId is "root" | <uuid> | undefined. The schema validates it as
+    // optional; the controller forwards whatever the client sent without
+    // re-parsing (any string here would already have been rejected by
+    // validateQuery upstream).
+    const rawFolderId =
+      typeof req.query.folderId === 'string' ? req.query.folderId : undefined;
+
     const queryParams: ProjectQueryParams = {
       page: page || 1,
       limit: limit || 10,
@@ -108,6 +115,7 @@ export const getProjects = asyncHandler(
         ? req.query.sortBy
         : 'createdAt') as 'createdAt' | 'updatedAt' | 'title',
       sortOrder: (sortOrder || 'desc') as 'asc' | 'desc',
+      folderId: rawFolderId as ProjectQueryParams['folderId'],
     };
 
     try {

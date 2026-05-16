@@ -2126,4 +2126,35 @@ export default {
       pause: 'Pauza',
     },
   },
+
+  folders: {
+    folder: 'Složka',
+    home: 'Domů',
+    newFolder: 'Nová složka',
+    createFolder: 'Vytvořit složku',
+    create: 'Vytvořit',
+    folderName: 'Název složky',
+    folderNamePlaceholder: 'např. Experiment A',
+    rename: 'Přejmenovat',
+    renameFolder: 'Přejmenovat složku',
+    deleteFolder: 'Smazat složku',
+    deleteFolderConfirm:
+      'Smazat složku „{{name}}"? Tato akce trvale smaže {{projects}} projektů a {{subfolders}} podsložek. {{shared}} sdílených projektů se vrátí do rootu.',
+    moveTo: 'Přesunout do…',
+    moveToRoot: 'Root (bez složky)',
+    openFolder: 'Otevřít složku {{name}}',
+    empty: 'Prázdná složka',
+    created: 'Složka vytvořena',
+    renamed: 'Složka přejmenována',
+    deleted: 'Složka smazána',
+    moved: 'Úspěšně přesunuto',
+    moveSkipped: 'Přesun přeskočen — žádný přístup k projektu',
+    movePartial:
+      'Přesunuto {{moved}} projektů; {{skipped}} přeskočeno (bez přístupu)',
+    moveAllSkipped: '{{count}} projektů přeskočeno — bez přístupu',
+    deletePartial:
+      'Smazáno {{deleted}} projektů; {{failed}} selhalo. Složka zůstala; zkuste znovu.',
+    duplicateName: 'Složka se stejným názvem zde už existuje',
+    cannotMoveIntoSelf: 'Složku nelze přesunout do sebe nebo do své podsložky',
+  },
 };

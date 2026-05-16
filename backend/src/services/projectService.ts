@@ -14,6 +14,10 @@ export interface ProjectWithMeta extends Project {
   isOwned: boolean;
   isShared: boolean;
   owner: Pick<User, 'id' | 'email'>;
+  // The folder the calling user has placed this project in, or null if at
+  // their root level. Per-user — two users viewing the same shared project
+  // may see different folderId values.
+  folderId: string | null;
 }
 
 /**
@@ -82,7 +86,7 @@ export async function getUserProjects(
   };
 }> {
   try {
-    const { page, limit, search, sortBy, sortOrder } = options;
+    const { page, limit, search, sortBy, sortOrder, folderId } = options;
 
     // Get user for context
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -114,6 +118,15 @@ export async function getUserProjects(
         ],
       };
       where.AND = [searchCondition];
+    }
+
+    // Folder placement filter (per-user). undefined = no filter;
+    // "root" = projects without a placement row for this user;
+    // <uuid> = projects with a placement row in this specific folder.
+    if (folderId === 'root') {
+      where.folderItems = { none: { userId } };
+    } else if (folderId) {
+      where.folderItems = { some: { userId, folderId } };
     }
 
     // Build order clause with type safety
@@ -174,6 +187,14 @@ export async function getUserProjects(
             status: true,
           },
         },
+        // Caller's placement for this project, if any. There can be at most
+        // one row per (userId, projectId) — enforced by the unique index on
+        // project_folder_items.
+        folderItems: {
+          where: { userId },
+          select: { folderId: true },
+          take: 1,
+        },
       },
     });
 
@@ -232,6 +253,7 @@ export async function getUserProjects(
         isOwned: project.userId === userId,
         isShared: project.userId !== userId && project.shares.length > 0,
         owner: project.user,
+        folderId: project.folderItems[0]?.folderId ?? null,
         // Enhanced project card metadata
         imageCount: totalImages,
         segmentedCount: segmentedImages,

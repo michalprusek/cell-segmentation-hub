@@ -2117,4 +2117,36 @@ export default {
       pause: 'Pause',
     },
   },
+
+  folders: {
+    folder: 'Ordner',
+    home: 'Start',
+    newFolder: 'Neuer Ordner',
+    createFolder: 'Ordner erstellen',
+    create: 'Erstellen',
+    folderName: 'Ordnername',
+    folderNamePlaceholder: 'z. B. Experiment A',
+    rename: 'Umbenennen',
+    renameFolder: 'Ordner umbenennen',
+    deleteFolder: 'Ordner löschen',
+    deleteFolderConfirm:
+      'Ordner „{{name}}" löschen? {{projects}} Projekt(e) und {{subfolders}} Unterordner werden dauerhaft entfernt. {{shared}} geteilte Projekte kehren ins Stammverzeichnis zurück.',
+    moveTo: 'Verschieben nach…',
+    moveToRoot: 'Stamm (kein Ordner)',
+    openFolder: 'Ordner {{name}} öffnen',
+    empty: 'Leerer Ordner',
+    created: 'Ordner erstellt',
+    renamed: 'Ordner umbenannt',
+    deleted: 'Ordner gelöscht',
+    moved: 'Erfolgreich verschoben',
+    moveSkipped: 'Verschieben übersprungen — kein Zugriff auf das Projekt',
+    movePartial:
+      '{{moved}} Projekt(e) verschoben; {{skipped}} übersprungen (kein Zugriff)',
+    moveAllSkipped: '{{count}} Projekt(e) übersprungen — kein Zugriff',
+    deletePartial:
+      '{{deleted}} Projekt(e) gelöscht; {{failed}} fehlgeschlagen. Ordner behalten; bitte erneut versuchen.',
+    duplicateName: 'Ein Ordner mit diesem Namen existiert hier bereits',
+    cannotMoveIntoSelf:
+      'Ein Ordner kann nicht in sich selbst oder einen eigenen Unterordner verschoben werden',
+  },
 };
