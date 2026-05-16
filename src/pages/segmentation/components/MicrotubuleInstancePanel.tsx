@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useDeferredValue, useMemo } from 'react';
 import { Spline, Eye, EyeOff } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Polygon } from '@/lib/segmentation';
@@ -28,19 +28,26 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
 }) => {
   const { t } = useLanguage();
 
+  // Defer the (filter + sort) re-derivation when polygons update
+  // rapidly (e.g. during playback ticking at 10 FPS). The canvas
+  // uses the live `polygons` reference; this panel can lag a frame
+  // or two without the user noticing, but unblocks the main thread
+  // for the canvas to commit on time.
+  const deferredPolygons = useDeferredValue(polygons);
+
   // A polyline belongs in the MT panel when:
   //   (a) the ML model stamped class='microtubule' on it, OR
   //   (b) it has no partClass (i.e. not sperm) AND an mt_ instanceId
   //       (covers legacy data from before `class` was added).
   const microtubules = useMemo(
     () =>
-      polygons.filter(
+      deferredPolygons.filter(
         p =>
           p.geometry === 'polyline' &&
           !p.partClass &&
           (p.class === 'microtubule' || isMicrotubuleInstance(p.instanceId))
       ),
-    [polygons]
+    [deferredPolygons]
   );
 
   // Stable identity for sort + color: prefer trackId (preserved across

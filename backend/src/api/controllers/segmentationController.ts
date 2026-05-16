@@ -4,6 +4,10 @@ import { ImageService } from '../../services/imageService';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
+import {
+  SEGMENTATION_MODELS,
+  SEGMENTATION_MODEL_ERROR_MESSAGE,
+} from '../../constants/segmentationModels';
 
 class SegmentationController {
   private segmentationService: SegmentationService;
@@ -243,20 +247,13 @@ class SegmentationController {
         return;
       }
 
-      if (
-        ![
-          'hrnet',
-          'cbam_resunet',
-          'unet_spherohq',
-          'unet_attention_aspp',
-          'resunet_advanced',
-          'resunet_small',
-          'sperm',
-          'wound',
-          'microtubule',
-        ].includes(model)
-      ) {
-        ResponseHelper.validationError(res, 'Neplatný model');
+      // Defense-in-depth re-check. The express-validator on the route
+      // already rejects invalid models on the HTTP path, but if anyone
+      // later wires this method onto a different route without the
+      // same validator chain we still refuse. Single source of truth
+      // in constants/segmentationModels.ts.
+      if (!(SEGMENTATION_MODELS as readonly string[]).includes(model)) {
+        ResponseHelper.validationError(res, SEGMENTATION_MODEL_ERROR_MESSAGE);
         return;
       }
 
@@ -290,7 +287,11 @@ class SegmentationController {
         threshold,
         userId,
         detectHoles,
-        channel
+        // Channel override for multi-channel video frames (TIRF_640
+        // vs TIRF_488 etc). Validated by the route at body('channel').
+        typeof channel === 'string' && channel.length > 0
+          ? channel
+          : undefined
       );
 
       ResponseHelper.success(res, result, 'Dávkové zpracování dokončeno');

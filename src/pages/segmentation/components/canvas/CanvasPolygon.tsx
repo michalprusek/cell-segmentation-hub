@@ -344,17 +344,18 @@ const CanvasPolygon = React.memo(
             pointerEvents={isPolyline ? 'stroke' : 'all'}
           />
 
-          {/* Polyline endpoint markers.
-              - Microtubule projects: only render when selected — the
-                MT visual identity is "plain curve on the image",
-                clutter-free in the default state.
-              - Sperm (and any other future polyline-bearing project):
-                always render the start + end dots. Sperm artwork has
-                always shown them and biologists expect that affordance
-                to mark head / tail orientation. */}
+          {/* Polyline endpoint markers — render ONLY when no draggable
+              vertices are on top (i.e. polyline not selected). When
+              selected, the `PolygonVertices` layer below paints the
+              draggable circles AT the same coordinates, and a fixed
+              marker underneath surfaces as a coloured dot when the
+              user drags the vertex — visual noise. MT projects stay
+              clutter-free in the unselected state too (no markers);
+              sperm keeps the head/tail orientation cue when idle. */}
           {isPolyline &&
+            !isSelected &&
             validPoints.length >= 2 &&
-            (projectType === 'microtubules' ? isSelected : true) && (
+            projectType !== 'microtubules' && (
               <>
                 <circle
                   cx={validPoints[0].x}

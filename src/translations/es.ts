@@ -2037,6 +2037,7 @@ export default {
   error: 'Error',
   segmentationEditor: {
     reloadingSegmentation: 'Recargando segmentación...',
+    loadingFrame: 'Cargando fotograma...',
     segmenting: 'Segmentando...',
     waitingInQueue: 'Esperando en cola...',
     retryingLoad: 'Problemas al cargar. Reintentando...',

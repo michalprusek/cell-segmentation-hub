@@ -73,15 +73,35 @@ function asTrackerPolylines(
   return { frame: frameIndex, polylines };
 }
 
-/** Returns true once every frame of the container has segmentation
- *  status `'segmented'` (the per-frame model succeeded). */
+/** Returns true once every frame of the container has reached a FINAL
+ *  segmentation status: `'segmented'` (succeeded), `'no_segmentation'`
+ *  (model returned empty), or `'failed'`. Frames in pending states
+ *  (`'queued'`, `'processing'`) still need to resolve before tracking
+ *  can produce a stable cross-frame identity.
+ *
+ *  Previously the gate required strict `'segmented'`, which meant a
+ *  single failed/empty frame indefinitely blocked the tracker on the
+ *  other 600 frames — and the cross-frame color went random because
+ *  `instanceId` (the only fallback) re-randomises per inference. The
+ *  tracker itself already skips empty frames via the
+ *  `polylines.length === 0` early-return downstream, so admitting
+ *  no_segmentation / failed states here is safe. */
+const FINAL_SEGMENTATION_STATUSES = new Set([
+  'segmented',
+  'no_segmentation',
+  'failed',
+]);
 async function isBatchComplete(containerId: string): Promise<boolean> {
   const frames = await prisma.image.findMany({
     where: { parentVideoId: containerId },
     select: { segmentationStatus: true },
   });
   if (frames.length === 0) return false;
-  return frames.every(f => f.segmentationStatus === 'segmented');
+  return frames.every(
+    f =>
+      f.segmentationStatus != null &&
+      FINAL_SEGMENTATION_STATUSES.has(f.segmentationStatus)
+  );
 }
 
 /**

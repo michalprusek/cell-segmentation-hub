@@ -1965,6 +1965,7 @@ export default {
   error: 'Erreur',
   segmentationEditor: {
     reloadingSegmentation: 'Rechargement de la segmentation...',
+    loadingFrame: 'Chargement de la trame...',
     segmenting: 'Segmentation en cours...',
     waitingInQueue: 'En attente dans la file...',
     retryingLoad: 'Problème de chargement. Nouvelle tentative...',
