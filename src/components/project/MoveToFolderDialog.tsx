@@ -77,17 +77,32 @@ const MoveToFolderDialog: React.FC<MoveToFolderDialogProps> = ({
     if (!subject) return;
     try {
       if (subject.kind === 'project') {
-        await moveProjects.mutateAsync({
+        const result = await moveProjects.mutateAsync({
           folderId: selected,
           projectIds: subject.ids,
         });
+        // Backend may silently drop projects the user can't access. Surface
+        // the partial outcome instead of pretending the whole move succeeded.
+        if (result.skippedProjectIds.length > 0) {
+          const moved = result.movedProjectIds.length;
+          const skipped = result.skippedProjectIds.length;
+          if (moved === 0) {
+            toast.warning(
+              String(t('folders.moveAllSkipped', { count: skipped }))
+            );
+          } else {
+            toast.warning(String(t('folders.movePartial', { moved, skipped })));
+          }
+        } else {
+          toast.success(String(t('folders.moved')));
+        }
       } else {
         await moveFolder.mutateAsync({
           id: subject.id,
           parentId: selected,
         });
+        toast.success(String(t('folders.moved')));
       }
-      toast.success(t('folders.moved'));
       onOpenChange(false);
     } catch {
       // hook handles error toast

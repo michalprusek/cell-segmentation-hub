@@ -957,10 +957,23 @@ class ApiClient {
   }
 
   async deleteFolder(id: string): Promise<{
+    folderDeleted: boolean;
     deletedProjectIds: string[];
     unlinkedSharedProjectIds: string[];
+    failedProjectIds: { id: string; error: string }[];
   }> {
-    const response = await this.instance.delete(`/folders/${id}`);
+    // Server returns 200 on full success and 207 on partial (some projects
+    // failed to delete; folder kept in place). axios accepts both as
+    // success by default. Either way the wire payload carries the
+    // structured DeleteFolderResult; we extract from `data` (200) or read
+    // directly from response.data (207 wraps it differently).
+    const response = await this.instance.delete(`/folders/${id}`, {
+      validateStatus: s => (s >= 200 && s < 300) || s === 207,
+    });
+    if (response.status === 207) {
+      // 207 envelope: { success: false, message, data: DeleteFolderResult }
+      return response.data?.data ?? response.data;
+    }
     return this.extractData(response);
   }
 

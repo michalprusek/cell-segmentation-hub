@@ -2126,6 +2126,12 @@ export default {
     renamed: 'Dossier renommé',
     deleted: 'Dossier supprimé',
     moved: 'Déplacé avec succès',
+    moveSkipped: "Déplacement ignoré — pas d'accès au projet",
+    movePartial:
+      "{{moved}} projet(s) déplacé(s) ; {{skipped}} ignoré(s) (pas d'accès)",
+    moveAllSkipped: "{{count}} projet(s) ignoré(s) — pas d'accès",
+    deletePartial:
+      '{{deleted}} projet(s) supprimé(s) ; {{failed}} échoué(s). Dossier conservé ; réessayez.',
     duplicateName: 'Un dossier portant ce nom existe déjà ici',
     cannotMoveIntoSelf:
       'Un dossier ne peut pas être déplacé dans lui-même ou dans son propre sous-dossier',

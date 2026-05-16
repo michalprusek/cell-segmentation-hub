@@ -47,10 +47,25 @@ const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({
   const handleConfirm = async () => {
     if (!folderId) return;
     try {
-      await mutation.mutateAsync(folderId);
-      toast.success(t('folders.deleted'));
-      onOpenChange(false);
-      onDeleted?.();
+      const result = await mutation.mutateAsync(folderId);
+      if (result.folderDeleted) {
+        toast.success(String(t('folders.deleted')));
+        onOpenChange(false);
+        onDeleted?.();
+      } else {
+        // Partial-failure path: some owned projects couldn't be deleted, so
+        // the folder was intentionally left in place. Surface what succeeded
+        // and what didn't; keep the dialog OPEN so the user can retry once
+        // the underlying problem is addressed.
+        toast.warning(
+          String(
+            t('folders.deletePartial', {
+              deleted: result.deletedProjectIds.length,
+              failed: result.failedProjectIds.length,
+            })
+          )
+        );
+      }
     } catch {
       // hook surfaces error toast
     }

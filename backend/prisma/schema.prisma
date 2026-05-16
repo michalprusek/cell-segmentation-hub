@@ -249,6 +249,13 @@ model Feedback {
 // onDelete: Cascade on the self-relation makes folder deletion sweep the subtree;
 // the API layer additionally deletes owned projects whose ProjectFolderItem rows
 // pointed inside the subtree (shared projects are merely unlinked).
+// NOTE on root-folder uniqueness: Postgres treats NULL as DISTINCT in
+// UNIQUE indexes, so `@@unique([userId, parentId, name])` does NOT prevent
+// two root folders (parentId IS NULL) with the same name from coexisting.
+// The migration `20260516_add_project_folders/migration.sql` adds a SECOND
+// partial unique index — `uq_folder_root_sibling_name (userId, name) WHERE
+// parentId IS NULL` — which Prisma's schema language cannot express. Keep
+// both indexes in sync if you ever rename or rebuild this model.
 model ProjectFolder {
   id        String              @id @default(uuid())
   name      String

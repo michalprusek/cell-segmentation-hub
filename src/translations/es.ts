@@ -2177,6 +2177,12 @@ export default {
     renamed: 'Carpeta renombrada',
     deleted: 'Carpeta eliminada',
     moved: 'Movido correctamente',
+    moveSkipped: 'Movimiento omitido — sin acceso al proyecto',
+    movePartial:
+      'Movidos {{moved}} proyecto(s); {{skipped}} omitido(s) (sin acceso)',
+    moveAllSkipped: '{{count}} proyecto(s) omitido(s) — sin acceso',
+    deletePartial:
+      '{{deleted}} proyecto(s) eliminado(s); {{failed}} falló/fallaron. Carpeta conservada; inténtelo de nuevo.',
     duplicateName: 'Ya existe una carpeta con este nombre aquí',
     cannotMoveIntoSelf:
       'Una carpeta no se puede mover dentro de sí misma o de su propia subcarpeta',

@@ -33,6 +33,17 @@ function handleFolderError(
       case 'INVALID_INPUT':
         ResponseHelper.badRequest(res, error.message, context);
         return true;
+      case 'PARTIAL_FAILURE':
+        // 207 Multi-Status: some operations succeeded, some failed.
+        // Reserved for any future handler that throws this; the canonical
+        // partial-success path for deleteFolder returns directly (below).
+        res.status(207).json({
+          success: false,
+          error: error.message,
+          code: 'PARTIAL_FAILURE',
+          details: error.details ?? {},
+        });
+        return true;
     }
   }
   logger.error(defaultMessage, error as Error, context);
@@ -110,6 +121,19 @@ export const deleteFolder = asyncHandler(
     }
     try {
       const result = await FolderService.deleteFolder(req.user.id, folderId);
+      // Partial-success path: at least one owned project failed to delete,
+      // so the folder was intentionally left in place. 207 Multi-Status
+      // signals "some succeeded, some didn't"; the body has the full
+      // breakdown so the frontend can render an actionable toast.
+      if (!result.folderDeleted) {
+        res.status(207).json({
+          success: false,
+          message: 'Některé projekty se nepodařilo smazat; složka zůstala zachována',
+          data: result,
+          code: 'PARTIAL_FAILURE',
+        });
+        return;
+      }
       ResponseHelper.success(res, result, 'Složka byla smazána');
     } catch (error) {
       handleFolderError(res, error, 'Nepodařilo se smazat složku', 'FolderController');
