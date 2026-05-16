@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Wand2 } from 'lucide-react';
 import {
   Card,
@@ -51,20 +51,77 @@ export const MicrotubuleMetricsSection: React.FC<
 > = ({ value, onChange, availableChannels }) => {
   const { t } = useLanguage();
 
-  const setEnabled = (enabled: boolean) =>
-    onChange({ ...value, enabled });
+  // Local text mirrors of the two numeric inputs. We need this because
+  // the previous implementation only updated the parent state when the
+  // typed value parsed AND fell in range — so a backspace (which goes
+  // through `''` → NaN → skip-update) left the input visually empty
+  // for one tick and then snapped back to the previous value, making
+  // it impossible to erase a digit. With a local string the user can
+  // freely type / delete; we propagate to the parent only when the
+  // current text is a valid integer in range, and snap back on blur
+  // if they leave the field invalid.
+  const [thicknessText, setThicknessText] = useState(String(value.thicknessPx));
+  const [marginText, setMarginText] = useState(String(value.marginMultiplier));
 
-  const setThickness = (raw: string) => {
+  // Re-sync local state when the parent value changes externally
+  // (preset switch, dialog re-open). Skip when the local text already
+  // matches a clean serialisation so an in-progress edit isn't stomped
+  // by a parent re-render.
+  useEffect(() => {
+    setThicknessText(prev =>
+      prev !== '' && Number.parseInt(prev, 10) === value.thicknessPx
+        ? prev
+        : String(value.thicknessPx)
+    );
+  }, [value.thicknessPx]);
+  useEffect(() => {
+    setMarginText(prev =>
+      prev !== '' && Number.parseInt(prev, 10) === value.marginMultiplier
+        ? prev
+        : String(value.marginMultiplier)
+    );
+  }, [value.marginMultiplier]);
+
+  const setEnabled = (enabled: boolean) => onChange({ ...value, enabled });
+
+  // Integer-only validators. User explicitly asked for integers in both
+  // fields, so the margin step changed from 0.1 (float) to 1 (integer).
+  const onThicknessChange = (raw: string) => {
+    setThicknessText(raw);
+    if (raw === '') return; // allow empty intermediate state for editing
     const n = Number.parseInt(raw, 10);
-    if (Number.isFinite(n) && n >= 1 && n <= 100) {
+    if (
+      Number.isFinite(n) &&
+      n >= 1 &&
+      n <= 100 &&
+      String(n) === raw // reject decimal / leading-zero / sign noise
+    ) {
       onChange({ ...value, thicknessPx: n });
     }
   };
 
-  const setMargin = (raw: string) => {
-    const n = Number.parseFloat(raw);
-    if (Number.isFinite(n) && n >= 0 && n <= 10) {
+  const onMarginChange = (raw: string) => {
+    setMarginText(raw);
+    if (raw === '') return;
+    const n = Number.parseInt(raw, 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 10 && String(n) === raw) {
       onChange({ ...value, marginMultiplier: n });
+    }
+  };
+
+  // On blur, if the field is empty or invalid, snap back to the last
+  // committed value so the user never leaves the form in an invalid
+  // state (the submit button would otherwise read NaN through props).
+  const onThicknessBlur = () => {
+    const n = Number.parseInt(thicknessText, 10);
+    if (!Number.isFinite(n) || n < 1 || n > 100) {
+      setThicknessText(String(value.thicknessPx));
+    }
+  };
+  const onMarginBlur = () => {
+    const n = Number.parseInt(marginText, 10);
+    if (!Number.isFinite(n) || n < 0 || n > 10) {
+      setMarginText(String(value.marginMultiplier));
     }
   };
 
@@ -109,12 +166,14 @@ export const MicrotubuleMetricsSection: React.FC<
             <Input
               id="mt-thickness"
               type="number"
+              inputMode="numeric"
               min={1}
               max={100}
               step={1}
-              value={value.thicknessPx}
+              value={thicknessText}
               disabled={disabledInputs}
-              onChange={e => setThickness(e.target.value)}
+              onChange={e => onThicknessChange(e.target.value)}
+              onBlur={onThicknessBlur}
               className="mt-1 text-sm"
             />
             <p className="text-xs text-muted-foreground mt-1">
@@ -128,12 +187,14 @@ export const MicrotubuleMetricsSection: React.FC<
             <Input
               id="mt-margin"
               type="number"
+              inputMode="numeric"
               min={0}
               max={10}
-              step={0.1}
-              value={value.marginMultiplier}
+              step={1}
+              value={marginText}
               disabled={disabledInputs}
-              onChange={e => setMargin(e.target.value)}
+              onChange={e => onMarginChange(e.target.value)}
+              onBlur={onMarginBlur}
               className="mt-1 text-sm"
             />
             <p className="text-xs text-muted-foreground mt-1">
@@ -143,9 +204,7 @@ export const MicrotubuleMetricsSection: React.FC<
         </div>
 
         <div>
-          <Label className="text-sm">
-            {t('export.mt.channelsLabel')}
-          </Label>
+          <Label className="text-sm">{t('export.mt.channelsLabel')}</Label>
           {noChannels ? (
             <p className="text-xs text-muted-foreground mt-2">
               {t('export.mt.noChannels')}

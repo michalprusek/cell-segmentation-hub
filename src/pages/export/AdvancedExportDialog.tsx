@@ -338,6 +338,21 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                   </CardContent>
                 </Card>
 
+                {/* Microtubule-only section. Rendered ABOVE the image
+                    grid because for MT projects the per-channel +
+                    band-width choices change which images make sense
+                    to export — deciding the metrics first feels more
+                    natural than scrolling past the image picker.
+                    Only mounted when projectType === 'microtubules'
+                    (intensity sampling needs the raw ND2/TIFF on disk). */}
+                {isMTProject && (
+                  <MicrotubuleMetricsSection
+                    value={exportOptions.mtMetrics ?? MT_METRICS_DEFAULTS}
+                    onChange={next => updateExportOptions({ mtMetrics: next })}
+                    availableChannels={availableChannels}
+                  />
+                )}
+
                 <Card className="p-3 sm:p-4">
                   <CardHeader className="p-0 pb-3 sm:pb-4">
                     <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
@@ -361,20 +376,6 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     />
                   </CardContent>
                 </Card>
-
-                {/* Microtubule-only section. Rendered only when the
-                    project type is `microtubule` because intensity
-                    sampling requires multi-channel video data + raw
-                    ND2/TIFF on disk. */}
-                {isMTProject && (
-                  <MicrotubuleMetricsSection
-                    value={exportOptions.mtMetrics ?? MT_METRICS_DEFAULTS}
-                    onChange={next =>
-                      updateExportOptions({ mtMetrics: next })
-                    }
-                    availableChannels={availableChannels}
-                  />
-                )}
               </TabsContent>
 
               <TabsContent
