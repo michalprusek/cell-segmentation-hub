@@ -1758,6 +1758,10 @@ export class SegmentationService {
     threshold = 0.5,
     userId: string,
     detectHoles?: boolean,
+    // Per-batch channel override for multi-channel video frames.
+    // When set, every per-image call inside this loop receives it so
+    // a multi-channel ND2 frame is segmented from the user-picked
+    // channel rather than the project's default `isSegmentationSource`.
     channel?: string
   ): Promise<{
     successful: number;

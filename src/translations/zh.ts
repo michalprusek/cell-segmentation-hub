@@ -1848,6 +1848,7 @@ export default {
   error: '错误',
   segmentationEditor: {
     reloadingSegmentation: '重新加载分割...',
+    loadingFrame: '正在加载帧...',
     segmenting: '分割中...',
     waitingInQueue: '队列中等待...',
     retryingLoad: '加载遇到问题，正在重试...',
@@ -1978,5 +1979,30 @@ export default {
       play: '播放',
       pause: '暂停',
     },
+  },
+
+  folders: {
+    folder: '文件夹',
+    home: '主页',
+    newFolder: '新建文件夹',
+    createFolder: '创建文件夹',
+    create: '创建',
+    folderName: '文件夹名称',
+    folderNamePlaceholder: '例如：实验 A',
+    rename: '重命名',
+    renameFolder: '重命名文件夹',
+    deleteFolder: '删除文件夹',
+    deleteFolderConfirm:
+      '删除文件夹"{{name}}"?将永久删除 {{projects}} 个项目和 {{subfolders}} 个子文件夹。{{shared}} 个共享项目将返回根目录。',
+    moveTo: '移动到…',
+    moveToRoot: '根目录(无文件夹)',
+    openFolder: '打开文件夹 {{name}}',
+    empty: '空文件夹',
+    created: '文件夹已创建',
+    renamed: '文件夹已重命名',
+    deleted: '文件夹已删除',
+    moved: '已成功移动',
+    duplicateName: '此处已存在同名文件夹',
+    cannotMoveIntoSelf: '无法将文件夹移动到自身或其子文件夹中',
   },
 };

@@ -15,9 +15,10 @@ interface TopToolbarProps {
   handleRedo: () => void;
   handleSave: () => Promise<void>;
 
-  // Resegment action — optional; rendered to the right of Undo/Redo
-  // when provided. Parent decides whether to open a channel picker
-  // first (for multi-channel video frames) before invoking.
+  // Resegment action — rendered to the right of Undo/Redo when
+  // provided. While `isResegmenting` is true the button is disabled
+  // and shows a spinner; the polyline result re-flows through the
+  // parent's `reloadSegmentation` once the batch returns.
   onResegment?: () => void;
   isResegmenting?: boolean;
 
@@ -27,7 +28,7 @@ interface TopToolbarProps {
 }
 
 /**
- * Horizontální toolbar s ovládacími prvky (bez mode selection)
+ * Horizontální toolbar s ovládacími prvky (bez mode selection).
  */
 const TopToolbar: React.FC<TopToolbarProps> = ({
   canUndo,

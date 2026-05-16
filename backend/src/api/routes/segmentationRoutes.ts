@@ -10,6 +10,10 @@ import {
 import { ResponseHelper } from '../../utils/response';
 import { buildKymograph } from '../../services/kymographService';
 import { logger } from '../../utils/logger';
+import {
+  SEGMENTATION_MODELS,
+  SEGMENTATION_MODEL_ERROR_MESSAGE,
+} from '../../constants/segmentationModels';
 
 // Middleware to handle express-validator results
 const handleValidation = (
@@ -128,20 +132,8 @@ router.post(
       .withMessage('Všechna ID obrázků musí být platná UUID'),
     body('model')
       .optional()
-      .isIn([
-        'hrnet',
-        'cbam_resunet',
-        'unet_spherohq',
-        'unet_attention_aspp',
-        'resunet_advanced',
-        'resunet_small',
-        'sperm',
-        'wound',
-        'microtubule',
-      ])
-      .withMessage(
-        'Model musí být jeden z podporovaných: hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp, resunet_advanced, resunet_small, sperm, wound, microtubule'
-      ),
+      .isIn([...SEGMENTATION_MODELS])
+      .withMessage(SEGMENTATION_MODEL_ERROR_MESSAGE),
     body('threshold')
       .optional()
       .isFloat({ min: 0.1, max: 0.9 })
@@ -150,13 +142,15 @@ router.post(
       .optional()
       .isBoolean()
       .withMessage('Detect holes musí být boolean hodnota'),
+    // Channel override for multi-channel video frames. Same shape as
+    // batchQueueSchema.channel in validation.ts — alphanumeric + ._-
+    // bounded to 64 chars to prevent unbounded path-rewrite input.
     body('channel')
       .optional()
       .isString()
-      .matches(/^[A-Za-z0-9_-]{1,64}$/)
-      .withMessage(
-        'Channel musí být alnum/underscore/dash, max 64 znaků'
-      ),
+      .isLength({ max: 64 })
+      .matches(/^[A-Za-z0-9_.-]+$/)
+      .withMessage('Channel musí být alfanumerický řetězec do 64 znaků'),
   ],
   handleValidation,
   segmentationController.batchSegment

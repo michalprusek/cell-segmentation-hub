@@ -400,6 +400,18 @@ export interface Project {
   user_id: string;
   imageCount?: number;
   thumbnail?: string;
+  // Per-user folder placement. `null` (or absent) means the project sits at
+  // the caller's root level. Two users can see different folderId values for
+  // the same shared project — see backend ProjectFolderItem model.
+  folderId?: string | null;
+}
+
+export interface ProjectFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface NewProject {

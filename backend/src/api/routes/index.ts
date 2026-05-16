@@ -21,6 +21,7 @@ import cacheRoutes from './cacheRoutes';
 import databaseRoutes from './database';
 import rateLimitAdminRoutes from './rateLimitAdmin';
 import feedbackRoutes from './feedbackRoutes';
+import projectFolderRoutes from './projectFolderRoutes';
 
 interface RouteInfo {
   path: string;
@@ -85,6 +86,7 @@ export function setupRoutes(app: Express): void {
   app.use('/api/database', databaseRoutes); // Database management and monitoring routes
   app.use('/api/admin/rate-limits', rateLimitAdminRoutes); // Rate limiting administration routes
   app.use('/api/feedback', feedbackRoutes); // User-submitted bug reports + feature requests
+  app.use('/api/folders', projectFolderRoutes); // Per-user project folder hierarchy
 
   // Test email routes (enabled in all environments for debugging)
   app.use('/api/test-email', testEmailRoutes);
@@ -233,6 +235,50 @@ function registerKnownRoutes(): void {
     path: '/api/projects/:projectId',
     method: 'DELETE',
     description: 'Smazání projektu',
+    authenticated: true,
+  });
+
+  // Project folder endpoints
+  registerRoute({
+    path: '/api/folders',
+    method: 'GET',
+    description: 'Seznam složek uživatele (plochý strom)',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/folders',
+    method: 'POST',
+    description: 'Vytvoření nové složky',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/folders/:id',
+    method: 'PATCH',
+    description: 'Přejmenování nebo přesun složky',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/folders/:id',
+    method: 'DELETE',
+    description: 'Kaskádové smazání složky a obsahu',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/folders/:id/preview',
+    method: 'GET',
+    description: 'Náhled počtů obsahu složky pro potvrzení mazání',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/folders/:id/items',
+    method: 'POST',
+    description: 'Přesun projektů do složky',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/folders/root/items',
+    method: 'POST',
+    description: 'Přesun projektů zpět do rootu',
     authenticated: true,
   });
 

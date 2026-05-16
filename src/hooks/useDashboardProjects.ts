@@ -16,6 +16,13 @@ export interface DashboardProjectsOptions {
   sortDirection: 'asc' | 'desc';
   userId: string | undefined;
   userEmail?: string;
+  // Filter to a specific folder's contents.
+  //   undefined → flat view: owned + shared in a single merged list (legacy).
+  //   "root"    → only projects without any placement row for this user.
+  //   <uuid>    → only projects placed inside this folder (owned + shared).
+  // When set, we skip the separate getSharedProjects call and trust the
+  // backend's combined OR (owned ∪ shared) gated by the folder placement.
+  folderId?: string | 'root';
 }
 
 // Interface for project data from API including optional images
@@ -28,6 +35,7 @@ export const useDashboardProjects = ({
   sortDirection,
   userId,
   userEmail,
+  folderId,
 }: DashboardProjectsOptions) => {
   const { t } = useLanguage();
   const { signOut } = useAuth();
@@ -69,30 +77,38 @@ export const useDashboardProjects = ({
         // Add cache-busting timestamp to prevent browser cache
         const timestamp = Date.now();
 
-        // Fetch owned projects first
-        const ownedResponse = await apiClient.getProjects({ _t: timestamp });
+        // Folder-scoped view: backend already merges owned+shared and gates
+        // on placement. We skip the separate /api/shared/projects call to
+        // avoid double-counting and to keep the URL the source of truth.
+        const ownedResponse = await apiClient.getProjects({
+          _t: timestamp,
+          ...(folderId !== undefined && { folderId }),
+        });
 
-        // Try to fetch shared projects, but don't fail if it errors
-        let sharedResponse = [];
-        try {
-          const response = await apiClient.getSharedProjects({ _t: timestamp });
-          // Handle both array and wrapped response formats
-          if (Array.isArray(response)) {
-            sharedResponse = response;
-          } else if (response && typeof response === 'object') {
-            // Check for data property or projects property
-            sharedResponse = response.data || response.projects || [];
-          } else {
+        let sharedResponse: unknown[] = [];
+        if (folderId === undefined) {
+          try {
+            const response = await apiClient.getSharedProjects({
+              _t: timestamp,
+            });
+            if (Array.isArray(response)) {
+              sharedResponse = response;
+            } else if (response && typeof response === 'object') {
+              sharedResponse =
+                (response as { data?: unknown[] }).data ||
+                (response as { projects?: unknown[] }).projects ||
+                [];
+            } else {
+              sharedResponse = [];
+            }
+            logger.debug('Shared projects response loaded', 'Dashboard', {
+              count: Array.isArray(sharedResponse) ? sharedResponse.length : 0,
+            });
+          } catch (shareError) {
+            logger.error('Failed to fetch shared projects', shareError);
+            logger.warn('Failed to fetch shared projects:', shareError);
             sharedResponse = [];
           }
-          logger.debug('Shared projects response loaded', 'Dashboard', {
-            count: Array.isArray(sharedResponse) ? sharedResponse.length : 0,
-          });
-        } catch (shareError) {
-          logger.error('Failed to fetch shared projects', shareError);
-          logger.warn('Failed to fetch shared projects:', shareError);
-          sharedResponse = [];
-          // Continue with just owned projects
         }
 
         const ownedProjects = ownedResponse.projects || [];
@@ -354,7 +370,16 @@ export const useDashboardProjects = ({
         }
       }
     },
-    [userId, userEmail, sortField, sortDirection, t, navigate, signOut]
+    [
+      userId,
+      userEmail,
+      sortField,
+      sortDirection,
+      folderId,
+      t,
+      navigate,
+      signOut,
+    ]
   );
 
   // Use debounced values to prevent excessive API calls
@@ -366,6 +391,7 @@ export const useDashboardProjects = ({
     debouncedUserId,
     debouncedSortField,
     debouncedSortDirection,
+    folderId,
     fetchProjects,
   ]);
 

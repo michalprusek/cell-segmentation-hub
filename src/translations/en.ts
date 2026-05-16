@@ -2072,6 +2072,7 @@ export default {
   error: 'Error',
   segmentationEditor: {
     reloadingSegmentation: 'Reloading segmentation...',
+    loadingFrame: 'Loading frame...',
     segmenting: 'Segmenting...',
     waitingInQueue: 'Waiting in queue...',
     retryingLoad: 'Having trouble loading. Retrying...',
@@ -2186,5 +2187,32 @@ export default {
       play: 'Play',
       pause: 'Pause',
     },
+  },
+
+  // Project folder hierarchy (file-explorer-style organisation of the gallery)
+  folders: {
+    folder: 'Folder',
+    home: 'Home',
+    newFolder: 'New folder',
+    createFolder: 'Create folder',
+    create: 'Create',
+    folderName: 'Folder name',
+    folderNamePlaceholder: 'e.g. Experiment A',
+    rename: 'Rename',
+    renameFolder: 'Rename folder',
+    deleteFolder: 'Delete folder',
+    deleteFolderConfirm:
+      'Delete folder "{{name}}"? This will permanently delete {{projects}} project(s) and {{subfolders}} subfolder(s). {{shared}} shared project(s) will return to root.',
+    moveTo: 'Move to…',
+    moveToRoot: 'Root (no folder)',
+    openFolder: 'Open folder {{name}}',
+    empty: 'Empty folder',
+    created: 'Folder created',
+    renamed: 'Folder renamed',
+    deleted: 'Folder deleted',
+    moved: 'Moved successfully',
+    duplicateName: 'A folder with this name already exists here',
+    cannotMoveIntoSelf:
+      'A folder cannot be moved into itself or its own subfolder',
   },
 };

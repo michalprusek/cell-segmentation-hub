@@ -1965,6 +1965,7 @@ export default {
   error: 'Erreur',
   segmentationEditor: {
     reloadingSegmentation: 'Rechargement de la segmentation...',
+    loadingFrame: 'Chargement de la trame...',
     segmenting: 'Segmentation en cours...',
     waitingInQueue: 'En attente dans la file...',
     retryingLoad: 'Problème de chargement. Nouvelle tentative...',
@@ -2102,5 +2103,31 @@ export default {
       play: 'Lecture',
       pause: 'Pause',
     },
+  },
+
+  folders: {
+    folder: 'Dossier',
+    home: 'Accueil',
+    newFolder: 'Nouveau dossier',
+    createFolder: 'Créer un dossier',
+    create: 'Créer',
+    folderName: 'Nom du dossier',
+    folderNamePlaceholder: 'ex. Expérience A',
+    rename: 'Renommer',
+    renameFolder: 'Renommer le dossier',
+    deleteFolder: 'Supprimer le dossier',
+    deleteFolderConfirm:
+      'Supprimer le dossier « {{name}} » ? Cette action supprimera définitivement {{projects}} projet(s) et {{subfolders}} sous-dossier(s). {{shared}} projet(s) partagé(s) retourneront à la racine.',
+    moveTo: 'Déplacer vers…',
+    moveToRoot: 'Racine (sans dossier)',
+    openFolder: 'Ouvrir le dossier {{name}}',
+    empty: 'Dossier vide',
+    created: 'Dossier créé',
+    renamed: 'Dossier renommé',
+    deleted: 'Dossier supprimé',
+    moved: 'Déplacé avec succès',
+    duplicateName: 'Un dossier portant ce nom existe déjà ici',
+    cannotMoveIntoSelf:
+      'Un dossier ne peut pas être déplacé dans lui-même ou dans son propre sous-dossier',
   },
 };

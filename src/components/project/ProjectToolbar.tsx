@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { SlidersHorizontal, Package, Trash2, Loader2 } from 'lucide-react';
+import {
+  SlidersHorizontal,
+  Package,
+  Trash2,
+  Loader2,
+  FolderPlus,
+  Plus,
+} from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -41,6 +48,13 @@ interface ProjectToolbarProps {
   // Export state callbacks
   onExportingChange?: (isExporting: boolean) => void;
   onDownloadingChange?: (isDownloading: boolean) => void;
+  /** Optional "New folder" affordance. Rendered only when provided — keeps
+   *  this toolbar reusable by the segmentation page where folders make no
+   *  sense. */
+  onCreateFolder?: () => void;
+  /** Optional "New project" trigger shown alongside the folder button.
+   *  Mirrors the dialog mode of NewProjectCard (controlled by Dashboard). */
+  onCreateProject?: () => void;
 }
 
 const ProjectToolbar = ({
@@ -67,6 +81,8 @@ const ProjectToolbar = ({
   showSelectAll = false,
   onExportingChange,
   onDownloadingChange,
+  onCreateFolder,
+  onCreateProject,
 }: ProjectToolbarProps) => {
   const { t } = useLanguage();
   const _navigate = useNavigate();
@@ -193,6 +209,30 @@ const ProjectToolbar = ({
               onChange={onSearchChange}
             />
           </div>
+        )}
+
+        {onCreateProject && (
+          <Button
+            variant="default"
+            size="sm"
+            className="flex items-center h-10 sm:h-9 justify-center"
+            onClick={onCreateProject}
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            {t('common.newProject')}
+          </Button>
+        )}
+
+        {onCreateFolder && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center h-10 sm:h-9 justify-center"
+            onClick={onCreateFolder}
+          >
+            <FolderPlus className="mr-1 h-4 w-4" />
+            {t('folders.newFolder')}
+          </Button>
         )}
 
         {/* Upload tlačítko zobrazit pouze pokud je požadováno */}

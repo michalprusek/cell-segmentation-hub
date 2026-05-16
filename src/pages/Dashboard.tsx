@@ -1,13 +1,28 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import type { DragItem } from '@/utils/dashboardDrag';
 
 import DashboardHeader from '@/components/DashboardHeader';
 import StatsOverview from '@/components/StatsOverview';
 import { useAuth, useLanguage } from '@/contexts/exports';
 import ProjectToolbar from '@/components/project/ProjectToolbar';
 import ProjectsTab from '@/components/dashboard/ProjectsTab';
+import FolderBreadcrumb from '@/components/project/FolderBreadcrumb';
+import CreateFolderDialog from '@/components/project/CreateFolderDialog';
+import RenameFolderDialog from '@/components/project/RenameFolderDialog';
+import DeleteFolderDialog from '@/components/project/DeleteFolderDialog';
+import MoveToFolderDialog, {
+  type MoveSubject,
+} from '@/components/project/MoveToFolderDialog';
+import NewProjectCard from '@/components/NewProjectCard';
 import { useDashboardProjects } from '@/hooks/useDashboardProjects';
+import {
+  useFolders,
+  useFolderPath,
+  useMoveProjects,
+  useMoveFolder,
+} from '@/hooks/useFolders';
 import { apiClient } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
@@ -33,6 +48,16 @@ const Dashboard = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
 
+  // Folder navigation lives in the URL so reloads and shareable links keep
+  // their position. `?folder=<uuid>` => inside that folder; no query => root.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentFolderId = searchParams.get('folder');
+
+  // Effective folderId passed to the project list query. The backend accepts
+  // "root" as the literal "show projects with no placement"; mapping null →
+  // "root" makes that contract explicit in one place.
+  const projectFolderQuery: string | 'root' = currentFolderId ?? 'root';
+
   const {
     projects,
     loading,
@@ -45,7 +70,113 @@ const Dashboard = () => {
     sortDirection,
     userId: user?.id,
     userEmail: user?.email,
+    folderId: projectFolderQuery,
   });
+
+  const {
+    data: flatFolders = [],
+    tree: folderTree,
+    byId: folderById,
+    isSuccess: foldersLoaded,
+  } = useFolders();
+  const path = useFolderPath(currentFolderId, folderById);
+
+  // Folders shown in the current view = direct children of currentFolderId.
+  const visibleFolders = useMemo(() => {
+    if (currentFolderId === null) {
+      return folderTree.map(n => ({ id: n.id, name: n.name }));
+    }
+    const node = (function findNode(
+      nodes: typeof folderTree
+    ): (typeof folderTree)[number] | null {
+      for (const n of nodes) {
+        if (n.id === currentFolderId) return n;
+        const found = findNode(n.children);
+        if (found) return found;
+      }
+      return null;
+    })(folderTree);
+    return (node?.children ?? []).map(n => ({ id: n.id, name: n.name }));
+  }, [folderTree, currentFolderId]);
+
+  const hasAnyFolder = flatFolders.length > 0;
+
+  // Fallback: if the URL points at a folder that no longer exists in our
+  // tree (someone deleted it, bookmarked URL, etc.) we'd otherwise filter
+  // projects to an empty set and confuse the user with a blank gallery.
+  // Wait until the folders query *successfully resolves* (foldersLoaded =
+  // useQuery.isSuccess) before deciding — checking `flatFolders.length`
+  // alone false-positives during the initial loading phase AND when the
+  // user simply has zero folders.
+  useEffect(() => {
+    if (currentFolderId && foldersLoaded && !folderById.has(currentFolderId)) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('folder');
+      setSearchParams(next, { replace: true });
+    }
+  }, [
+    currentFolderId,
+    foldersLoaded,
+    folderById,
+    searchParams,
+    setSearchParams,
+  ]);
+
+  // ----- Dialog state -----------------------------------------------------
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [moveSubject, setMoveSubject] = useState<MoveSubject | null>(null);
+
+  // ----- DnD: HTML5 native ------------------------------------------------
+  // We use plain draggable + onDragOver/onDrop because @dnd-kit's sensors
+  // call preventDefault on pointerdown, which silently breaks click events
+  // on the same element. Native HTML5 drag and click are separate event
+  // chains, so cards stay clickable AND draggable.
+  const moveProjectsMutation = useMoveProjects();
+  const moveFolderMutation = useMoveFolder();
+
+  const handleDropOnTarget = useCallback(
+    async (item: DragItem, destFolderId: string | null) => {
+      try {
+        if (item.type === 'project') {
+          await moveProjectsMutation.mutateAsync({
+            folderId: destFolderId,
+            projectIds: [item.id],
+          });
+          toast.success(String(t('folders.moved')));
+          // Current view is folder-scoped — drop a project out of it and the
+          // project should immediately disappear from the grid.
+          if (destFolderId !== currentFolderId) {
+            removeProjectOptimistically(item.id);
+          }
+        } else if (item.type === 'folder') {
+          if (item.id === destFolderId) return;
+          await moveFolderMutation.mutateAsync({
+            id: item.id,
+            parentId: destFolderId,
+          });
+          toast.success(String(t('folders.moved')));
+        }
+      } catch (err) {
+        logger.error('DnD move failed', err);
+      }
+    },
+    [
+      moveProjectsMutation,
+      moveFolderMutation,
+      removeProjectOptimistically,
+      currentFolderId,
+      t,
+    ]
+  );
 
   // Listen for WebSocket segmentation updates to refresh project cards
   const { lastUpdate } = useSegmentationQueue('DISABLE_GLOBAL');
@@ -55,7 +186,6 @@ const Dashboard = () => {
     const pendingToken = localStorage.getItem('pendingShareToken');
     if (!pendingToken || !user) return;
 
-    // Prevent duplicate processing by immediately removing the token
     localStorage.removeItem('pendingShareToken');
 
     let loadingToastId: string | number | undefined;
@@ -66,12 +196,10 @@ const Dashboard = () => {
         pendingToken
       );
 
-      // Show loading toast
       loadingToastId = toast.loading(t('sharing.processingInvitation'));
 
       const result = await apiClient.acceptShareInvitation(pendingToken);
 
-      // Dismiss loading toast on success
       if (loadingToastId) toast.dismiss(loadingToastId);
 
       if (!result.needsLogin) {
@@ -81,28 +209,21 @@ const Dashboard = () => {
             : undefined,
         });
 
-        // Delay to ensure database propagation and API cache refresh
-        // This prevents race conditions where shared projects are fetched before
-        // the database has fully propagated the new share relationship
         await new Promise(resolve =>
           setTimeout(resolve, SHARE_PROPAGATION_DELAY)
         );
 
-        // Refresh projects list to show the newly shared project
         await fetchProjects();
       }
     } catch (error: any) {
-      // Always dismiss loading toast on error
       if (loadingToastId) toast.dismiss(loadingToastId);
 
       logger.error('Failed to process pending share invitation:', error);
 
-      // Check if the error is because invitation was already accepted
       if (
         error?.response?.status === 409 ||
         error?.response?.data?.message?.includes('already')
       ) {
-        // Invitation was already accepted, wait for propagation and refresh
         logger.debug(
           'Share invitation was already accepted, refreshing projects'
         );
@@ -117,10 +238,8 @@ const Dashboard = () => {
         );
         await fetchProjects();
       } else if (error?.response?.status === 404) {
-        // Invalid or expired invitation
         toast.error(t('sharing.invitationInvalid'));
       } else {
-        // Show generic error for other cases
         toast.error(
           t('sharing.invitationError', 'Failed to process share invitation')
         );
@@ -129,32 +248,28 @@ const Dashboard = () => {
   }, [user, t, fetchProjects]);
 
   useEffect(() => {
-    // Process pending share invitation when user is authenticated
     if (user) {
       processPendingShareInvitation();
     }
   }, [user, processPendingShareInvitation]);
 
   useEffect(() => {
-    // Create a single debounced fetch handler to prevent rapid multiple calls
     const debouncedFetchProjects = (() => {
       let timeoutId: NodeJS.Timeout;
       return () => {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
           fetchProjects();
-        }, 300); // Wait 300ms after last event before fetching
+        }, 300);
       };
     })();
 
-    // Handle image updates with optimistic UI updates
     const handleImageUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
       const detail = customEvent.detail;
 
       if (!detail?.projectId) return;
 
-      // Update project immediately with new image count and thumbnail
       const updates: Record<string, any> = {};
 
       if (detail.imageCount !== undefined) {
@@ -175,7 +290,6 @@ const Dashboard = () => {
       }
     };
 
-    // Listen for project-created events (not delete/unshare - those use direct callback)
     window.addEventListener('project-created', debouncedFetchProjects);
     window.addEventListener('project-images-updated', handleImageUpdate);
     window.addEventListener('project-image-deleted', handleImageUpdate);
@@ -187,14 +301,12 @@ const Dashboard = () => {
     };
   }, [fetchProjects, updateProjectOptimistically]);
 
-  // Refresh projects when WebSocket reports segmentation completion
   useEffect(() => {
     if (
       lastUpdate &&
       (lastUpdate.status === 'segmented' ||
         lastUpdate.status === 'no_segmentation')
     ) {
-      // Delay slightly to ensure backend has updated the image count
       const timer = setTimeout(() => {
         fetchProjects();
       }, 500);
@@ -209,16 +321,35 @@ const Dashboard = () => {
     [navigate]
   );
 
+  const handleNavigateToFolder = useCallback(
+    (folderId: string | null) => {
+      // Manipulate the query string in place so we keep any unrelated params
+      // the rest of the app may have set.
+      const next = new URLSearchParams(searchParams);
+      if (folderId === null) next.delete('folder');
+      else next.set('folder', folderId);
+      setSearchParams(next, { replace: false });
+    },
+    [searchParams, setSearchParams]
+  );
+
+  // If the user just deleted the folder they were standing in, jump back to
+  // its parent (or root). Wired via DeleteFolderDialog's onDeleted callback.
+  const handleAfterDeleteCurrent = useCallback(() => {
+    if (!deleteTarget) return;
+    if (deleteTarget.id === currentFolderId) {
+      const me = folderById.get(currentFolderId);
+      handleNavigateToFolder(me?.parentId ?? null);
+    }
+  }, [deleteTarget, currentFolderId, folderById, handleNavigateToFolder]);
+
   const handleSort = useCallback(
     (field: 'name' | 'updatedAt' | 'segmentationStatus') => {
       let frontendField = field;
 
-      // Map field names to frontend fields (API client already handles backend mapping)
-      if (field === 'name')
-        frontendField = 'name'; // Now sort by 'name' directly
+      if (field === 'name') frontendField = 'name';
       else if (field === 'updatedAt') frontendField = 'updated_at';
 
-      // Toggle direction if same field
       const newDirection =
         frontendField === sortField
           ? sortDirection === 'asc'
@@ -234,7 +365,6 @@ const Dashboard = () => {
 
   const handleProjectUpdate = useCallback(
     (projectId: string, action: string) => {
-      // Remove project from UI immediately for delete, unshare, and access-denied actions
       if (
         action === 'delete' ||
         action === 'unshare' ||
@@ -246,10 +376,16 @@ const Dashboard = () => {
     [removeProjectOptimistically]
   );
 
-  // Memoize the StatsOverview component to prevent unnecessary re-renders
+  const handleRequestProjectMove = useCallback((projectId: string) => {
+    setMoveSubject({ kind: 'project', ids: [projectId] });
+  }, []);
+
+  const handleRequestFolderMove = useCallback((folderId: string) => {
+    setMoveSubject({ kind: 'folder', id: folderId });
+  }, []);
+
   const statsOverview = useMemo(() => <StatsOverview />, []);
 
-  // Memoize the toolbar component
   const projectToolbar = useMemo(
     () => (
       <ProjectToolbar
@@ -261,6 +397,8 @@ const Dashboard = () => {
         showSearchBar={false}
         showUploadButton={false}
         showExportButton={false}
+        onCreateProject={() => setNewProjectOpen(true)}
+        onCreateFolder={() => setCreateOpen(true)}
       />
     ),
     [sortField, sortDirection, handleSort, viewMode]
@@ -323,16 +461,62 @@ const Dashboard = () => {
                 {projectToolbar}
               </FlexBetween>
 
+              <div className="mb-4">
+                <FolderBreadcrumb
+                  path={path}
+                  onNavigate={handleNavigateToFolder}
+                  onDropToTarget={handleDropOnTarget}
+                />
+              </div>
+
               <ProjectsTab
                 projects={projects}
+                folders={visibleFolders}
                 viewMode={viewMode}
                 loading={loading}
                 onOpenProject={handleOpenProject}
                 onProjectUpdate={handleProjectUpdate}
+                onRequestProjectMove={handleRequestProjectMove}
+                hasAnyFolder={hasAnyFolder}
+                onOpenFolder={handleNavigateToFolder}
+                onRenameFolder={(id, name) => setRenameTarget({ id, name })}
+                onMoveFolder={handleRequestFolderMove}
+                onDeleteFolder={(id, name) => setDeleteTarget({ id, name })}
+                onDropItem={handleDropOnTarget}
               />
             </ContentCard>
           </div>
         </PageContainer>
+
+        {/* Folder dialogs are mounted at Dashboard level so opening one
+         *  from a nested grid card doesn't fight the card's own state. */}
+        <CreateFolderDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          parentId={currentFolderId}
+        />
+        <RenameFolderDialog
+          open={renameTarget !== null}
+          onOpenChange={open => !open && setRenameTarget(null)}
+          folderId={renameTarget?.id ?? ''}
+          currentName={renameTarget?.name ?? ''}
+        />
+        <DeleteFolderDialog
+          open={deleteTarget !== null}
+          onOpenChange={open => !open && setDeleteTarget(null)}
+          folderId={deleteTarget?.id ?? null}
+          folderName={deleteTarget?.name ?? ''}
+          onDeleted={handleAfterDeleteCurrent}
+        />
+        <MoveToFolderDialog
+          open={moveSubject !== null}
+          onOpenChange={open => !open && setMoveSubject(null)}
+          subject={moveSubject}
+        />
+        <NewProjectCard
+          isOpen={newProjectOpen}
+          onOpenChange={setNewProjectOpen}
+        />
       </div>
     </PageTransition>
   );
