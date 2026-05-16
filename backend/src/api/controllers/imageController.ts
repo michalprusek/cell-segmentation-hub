@@ -931,6 +931,53 @@ export class ImageController {
         where: galleryWhere,
       });
 
+      // Bubble calibration (pixelSizeUm / frameIntervalMs) from each
+      // video container down to its extracted frames. Calibration is
+      // stored only on the container row at upload time; downstream
+      // consumers (export dialog auto-fill, MT metrics scaling) need
+      // it on every frame row. Without this, the gallery filter
+      // (`isVideoContainer: false`) hides the only row carrying the
+      // value and every frame surfaces with null.
+      const parentIds = Array.from(
+        new Set(
+          images
+            .map(i => i.parentVideoId)
+            .filter(
+              (id): id is string => typeof id === 'string' && id.length > 0
+            )
+        )
+      );
+      const parentCalibrationById = new Map<
+        string,
+        { pixelSizeUm: number | null; frameIntervalMs: number | null }
+      >();
+      if (parentIds.length > 0) {
+        const parents = await prisma.image.findMany({
+          where: { id: { in: parentIds } },
+          select: { id: true, pixelSizeUm: true, frameIntervalMs: true },
+        });
+        for (const p of parents) {
+          parentCalibrationById.set(p.id, {
+            pixelSizeUm: p.pixelSizeUm,
+            frameIntervalMs: p.frameIntervalMs,
+          });
+        }
+        // FK is ON DELETE CASCADE so a frame outliving its parent
+        // should be impossible. If we ever observe it here, the gallery
+        // looks calibration-less without explanation — log so Sentry
+        // surfaces the integrity drift instead of swallowing it.
+        if (parents.length !== parentIds.length) {
+          const missing = parentIds.filter(
+            id => !parentCalibrationById.has(id)
+          );
+          logger.warn(
+            'Frames reference missing video container — calibration bubble will fall through',
+            'ImageController',
+            { missingParentIds: missing, projectId }
+          );
+        }
+      }
+
       // Get storage provider for URL generation
       const storage = getStorageProvider();
 
@@ -1060,10 +1107,19 @@ export class ImageController {
             frameCount: image.frameCount,
             videoDurationMs: image.videoDurationMs,
             // Calibration metadata extracted at upload time (µm/px and
-            // ms between frames). Populated on container rows only;
-            // null on frames + standalone images.
-            pixelSizeUm: image.pixelSizeUm,
-            frameIntervalMs: image.frameIntervalMs,
+            // ms between frames). Frame rows inherit from their parent
+            // container via `parentCalibrationById`; standalone images
+            // (no parent) fall back to their own row, which may still
+            // be null when the upload skipped extraction.
+            pixelSizeUm:
+              (image.parentVideoId
+                ? parentCalibrationById.get(image.parentVideoId)?.pixelSizeUm
+                : null) ?? image.pixelSizeUm,
+            frameIntervalMs:
+              (image.parentVideoId
+                ? parentCalibrationById.get(image.parentVideoId)
+                    ?.frameIntervalMs
+                : null) ?? image.frameIntervalMs,
             channels: image.channels,
             displayOrder: image.displayOrder,
             // Exposed so the Segment-All channel picker can derive the set
