@@ -616,6 +616,39 @@ export class ImageService {
       take: limit,
     });
 
+    // Bubble calibration metadata from each frame's parent container
+    // down to the frame row. The DB only stores pixelSizeUm /
+    // frameIntervalMs on container rows (filled at upload-time by the
+    // ND2/TIFF extractor), but the gallery listing intentionally
+    // excludes containers (`isVideoContainer: false` filter above),
+    // so consumers downstream — most importantly the export dialog's
+    // pixel-scale auto-fill — never see the calibration. Fetch each
+    // distinct parent container once and overlay its calibration
+    // onto its frames in the response.
+    const parentIds = Array.from(
+      new Set(
+        images
+          .map(i => i.parentVideoId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      )
+    );
+    const parentCalibrationById = new Map<
+      string,
+      { pixelSizeUm: number | null; frameIntervalMs: number | null }
+    >();
+    if (parentIds.length > 0) {
+      const parents = await this.prisma.image.findMany({
+        where: { id: { in: parentIds } },
+        select: { id: true, pixelSizeUm: true, frameIntervalMs: true },
+      });
+      for (const p of parents) {
+        parentCalibrationById.set(p.id, {
+          pixelSizeUm: p.pixelSizeUm,
+          frameIntervalMs: p.frameIntervalMs,
+        });
+      }
+    }
+
     // Add URLs to images
     const storage = getStorageProvider();
     const imagesWithUrls: ImageWithUrls[] = await Promise.all(
@@ -630,8 +663,20 @@ export class ImageService {
           ? await storage.getUrl(image.segmentationThumbnailPath)
           : undefined;
 
+        // If this row is a video frame, prefer its parent container's
+        // calibration over the row's own (which is always null in
+        // current schema). Standalone images keep their own values.
+        const parentCal = image.parentVideoId
+          ? parentCalibrationById.get(image.parentVideoId)
+          : null;
+        const pixelSizeUm = parentCal?.pixelSizeUm ?? image.pixelSizeUm;
+        const frameIntervalMs =
+          parentCal?.frameIntervalMs ?? image.frameIntervalMs;
+
         return {
           ...image,
+          pixelSizeUm,
+          frameIntervalMs,
           originalUrl,
           thumbnailUrl,
           segmentationThumbnailUrl,

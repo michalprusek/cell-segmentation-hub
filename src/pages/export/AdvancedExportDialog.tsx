@@ -144,23 +144,21 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         }
       }, [selectedImageIds, updateExportOptions]);
 
-      // Auto-fill the pixel-to-µm scale from the first video container's
-      // upload metadata (ND2 voxel_size, OME-TIFF PhysicalSizeX, ImageJ
-      // TIFF). Skipped when the user has already typed a value or when
-      // no container carries calibration. Applies universally — pixel
-      // scale is meaningful for any project type with a known optical
-      // setup, not just microtubule.
+      // Auto-fill the pixel-to-µm scale from the first image carrying
+      // upload-time calibration (ND2 voxel_size, OME-TIFF
+      // PhysicalSizeX, ImageJ TIFF). The backend bubbles each frame
+      // row's calibration down from its parent video container, so any
+      // image — frame or standalone — with a positive pixelSizeUm is
+      // a valid source. Skipped when the user has already typed a
+      // value or when no image carries calibration.
       useEffect(() => {
         if (exportOptions.pixelToMicrometerScale != null) return;
-        const containerWithScale = images.find(
-          img =>
-            img.isVideoContainer &&
-            typeof img.pixelSizeUm === 'number' &&
-            img.pixelSizeUm > 0
+        const calibrated = images.find(
+          img => typeof img.pixelSizeUm === 'number' && img.pixelSizeUm > 0
         );
-        if (containerWithScale?.pixelSizeUm) {
+        if (calibrated?.pixelSizeUm) {
           updateExportOptions({
-            pixelToMicrometerScale: containerWithScale.pixelSizeUm,
+            pixelToMicrometerScale: calibrated.pixelSizeUm,
           });
         }
       }, [images, exportOptions.pixelToMicrometerScale, updateExportOptions]);
