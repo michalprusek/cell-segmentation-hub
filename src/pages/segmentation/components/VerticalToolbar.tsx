@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import {
   MousePointer,
@@ -11,21 +11,8 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  Wand2,
-  Loader2,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useLanguage } from '@/contexts/useLanguage';
-import { useModel } from '@/contexts/exports';
 import { EditMode } from '../types';
 
 interface VerticalToolbarProps {
@@ -36,8 +23,6 @@ interface VerticalToolbarProps {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetView?: () => void;
-  onResegment?: () => Promise<void> | void;
-  isResegmenting?: boolean;
   hasExistingPolygons?: boolean;
 }
 
@@ -52,32 +37,9 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   onZoomIn,
   onZoomOut,
   onResetView,
-  onResegment,
-  isResegmenting = false,
-  hasExistingPolygons = false,
+  hasExistingPolygons: _hasExistingPolygons = false,
 }) => {
   const { t } = useLanguage();
-  const { selectedModel, confidenceThreshold, getModelInfo } = useModel();
-  const [showResegmentDialog, setShowResegmentDialog] = useState(false);
-
-  const modelDisplayName = getModelInfo(selectedModel).displayName;
-  const thresholdFormatted = confidenceThreshold.toFixed(2);
-
-  const resegmentDisabled = disabled || isResegmenting || !onResegment;
-
-  const handleResegmentClick = () => {
-    if (resegmentDisabled || !onResegment) return;
-    if (hasExistingPolygons) {
-      setShowResegmentDialog(true);
-    } else {
-      void onResegment();
-    }
-  };
-
-  const handleConfirmResegment = () => {
-    setShowResegmentDialog(false);
-    if (onResegment) void onResegment();
-  };
 
   const getModeIcon = (mode: EditMode) => {
     switch (mode) {
@@ -251,136 +213,78 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   return (
     <>
       <div className="w-14 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 gap-2 dark:bg-gray-900">
-        {/* Resegment current frame */}
-        {onResegment && (
-          <>
-            <div className="relative group">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleResegmentClick}
-                disabled={resegmentDisabled}
-                className={`
-                  w-12 h-12 rounded-lg transition-all duration-200
-                  hover:bg-indigo-100 dark:hover:bg-indigo-900/30
-                  ${resegmentDisabled ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
-              >
-                {isResegmenting ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <Wand2 size={20} />
-                )}
-              </Button>
-              <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-                <div className="font-medium">
-                  {t('segmentation.toolbar.resegment')}
-                </div>
-                <div className="text-xs text-gray-300 mt-1">
-                  {t('segmentation.toolbar.resegmentTooltipModel', {
-                    model: modelDisplayName,
-                    threshold: thresholdFormatted,
-                  })}
-                </div>
-                <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
-              </div>
-            </div>
-
-            {/* Separator below resegment */}
-            <div className="w-10 h-px bg-gray-300 dark:bg-gray-600 my-2" />
-          </>
-        )}
+        {/* Resegment lives in TopToolbar now (next to Undo/Redo). */}
 
         {/* Mode buttons */}
         <ModeButton mode={EditMode.View} />
-      <ModeButton mode={EditMode.EditVertices} />
-      <ModeButton mode={EditMode.AddPoints} />
-      <ModeButton mode={EditMode.CreatePolygon} />
-      <ModeButton mode={EditMode.CreatePolyline} />
-      <ModeButton mode={EditMode.Slice} />
-      <ModeButton mode={EditMode.DeletePolygon} />
+        <ModeButton mode={EditMode.EditVertices} />
+        <ModeButton mode={EditMode.AddPoints} />
+        <ModeButton mode={EditMode.CreatePolygon} />
+        <ModeButton mode={EditMode.CreatePolyline} />
+        <ModeButton mode={EditMode.Slice} />
+        <ModeButton mode={EditMode.DeletePolygon} />
 
-      {/* Separator */}
-      <div className="w-10 h-px bg-gray-300 dark:bg-gray-600 my-2" />
+        {/* Separator */}
+        <div className="w-10 h-px bg-gray-300 dark:bg-gray-600 my-2" />
 
-      {/* Zoom controls */}
-      <div className="relative group">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onZoomIn}
-          disabled={disabled}
-          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
-        >
-          <ZoomIn size={20} />
-        </Button>
-        <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-          <div className="font-medium">{t('segmentation.toolbar.zoomIn')}</div>
-          <div className="text-xs text-gray-300 mt-1">+</div>
-          <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
-        </div>
-      </div>
-
-      <div className="relative group">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onZoomOut}
-          disabled={disabled}
-          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
-        >
-          <ZoomOut size={20} />
-        </Button>
-        <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-          <div className="font-medium">{t('segmentation.toolbar.zoomOut')}</div>
-          <div className="text-xs text-gray-300 mt-1">-</div>
-          <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
-        </div>
-      </div>
-
-      <div className="relative group">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onResetView}
-          disabled={disabled}
-          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
-        >
-          <Maximize2 size={20} />
-        </Button>
-        <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-          <div className="font-medium">
-            {t('segmentation.toolbar.resetView')}
+        {/* Zoom controls */}
+        <div className="relative group">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onZoomIn}
+            disabled={disabled}
+            className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
+          >
+            <ZoomIn size={20} />
+          </Button>
+          <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+            <div className="font-medium">
+              {t('segmentation.toolbar.zoomIn')}
+            </div>
+            <div className="text-xs text-gray-300 mt-1">+</div>
+            <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
           </div>
-          <div className="text-xs text-gray-300 mt-1">R</div>
-          <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
+        </div>
+
+        <div className="relative group">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onZoomOut}
+            disabled={disabled}
+            className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
+          >
+            <ZoomOut size={20} />
+          </Button>
+          <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+            <div className="font-medium">
+              {t('segmentation.toolbar.zoomOut')}
+            </div>
+            <div className="text-xs text-gray-300 mt-1">-</div>
+            <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
+          </div>
+        </div>
+
+        <div className="relative group">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onResetView}
+            disabled={disabled}
+            className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 dark:bg-gray-800"
+          >
+            <Maximize2 size={20} />
+          </Button>
+          <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+            <div className="font-medium">
+              {t('segmentation.toolbar.resetView')}
+            </div>
+            <div className="text-xs text-gray-300 mt-1">R</div>
+            <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
+          </div>
         </div>
       </div>
-    </div>
-
-      <AlertDialog
-        open={showResegmentDialog}
-        onOpenChange={setShowResegmentDialog}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('segmentation.toolbar.resegmentConfirmTitle')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('segmentation.toolbar.resegmentConfirmDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>
-              {t('common.cancel')}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmResegment}>
-              {t('segmentation.toolbar.resegment')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 };

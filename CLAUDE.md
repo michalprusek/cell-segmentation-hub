@@ -40,7 +40,7 @@ the guess.
 
 ## Production Safety
 
-**Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`. Service: `spheroseg_blue`. URL: `https://spherosegapp.utia.cas.cz`. Test account: `12bprusek@gym-nymburk.cz` / `spheroids2026`.
+**Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`. Single-stack deployment (no more blue-green); containers are named `spheroseg-*` (frontend/backend/ml/postgres/redis/nginx). Database: `spheroseg`. URL: `https://spherosegapp.utia.cas.cz`. Test account: `12bprusek@gym-nymburk.cz` / `spheroids2026`.
 
 ---
 
@@ -164,7 +164,7 @@ If the change is going to production, **build the production bundle locally and 
 
 ## Test Suite Reality
 
-**Treat the test suite as currently broken.** Honest numbers as of 2026-05-13:
+**Treat the test suite as currently broken.** Honest numbers as of 2026-05-15:
 
 | Suite                         | State                                                                                                                                                           |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -218,6 +218,10 @@ Each of these shipped to production at least once in 2026 despite green pre-comm
 
 10. **Queue worker stuck on `isProcessing=true`**. ML recreate during an in-flight axios POST leaves the backend in a deadlock state. Check: tail backend logs after deploy; if no progress, restart backend.
 
+11. **TDZ on useCallback referencing a later `const`**. New `useCallback` / `useMemo` / `useEffect` placed BEFORE a `const x = ...` it captures in its deps array (or body) throws `Cannot access '<single letter>' before initialization` at runtime — TS doesn't catch it because the component body looks like a flat scope. Production minified bundle shows the error as a single letter (`'A'`, `'b'`). Check: when reordering hooks in `SegmentationEditor.tsx`, ensure any hook that touches `video.*`, `editor.*`, `selectedImage.*` is placed AFTER the corresponding `const video = ...`, etc.
+
+12. **Frame slider seed/reverse-sync race**. `useVideoFrames` defaults `frameIndex=0`. If reverse-sync (frameIndex→URL) fires before seed (URL→frameIndex) propagates a `setFrameIndex(N)`, the URL flips to `frames[0]` and oscillates with seed at ~7 Hz on multi-hundred-frame videos. Check: tests on a 600+-frame video; the editor must converge within 1-2 render commits. Pattern: 3-effect choreography with ref-tracked seed marker — see memory `project_frame_slider_race_pattern`.
+
 ---
 
 ## Commands
@@ -260,14 +264,26 @@ make build-service SERVICE=frontend      # Build single service
 make build-clean                         # Full no-cache rebuild
 ```
 
-### Production
+### Production (single-stack, post-2026-05-15)
+
+Blue-green is gone (see memory `project_blue_green_removal_2026_05_15`). Deploy is just a rebuild + recreate of the affected services:
 
 ```bash
-make prod                                              # Build + deploy
+# 1. Build the changed services
+make build-service SERVICE=backend                     # or frontend / ml
+# 2. Recreate (no need to stop the others)
 docker compose -f docker-compose.production.yml \
-  --env-file .env.production up -d                     # Manual deploy (note --env-file!)
-curl https://spherosegapp.utia.cas.cz/health           # Verify
+  --env-file .env.production \
+  up -d --no-deps --force-recreate backend             # repeat with frontend / ml
+# 3. Flush nginx upstream DNS cache after a backend recreate
+docker restart spheroseg-nginx
+# 4. Verify
+curl https://spherosegapp.utia.cas.cz/health           # → "production-healthy"
 ```
+
+`make prod` rebuilds and recreates everything; useful for big changes but unnecessary for service-scoped updates.
+
+There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / `migrate-database.sh` etc. — those orchestrated blue↔green switching that doesn't exist now.
 
 | Service     | Production      | Dev  |
 | ----------- | --------------- | ---- |
@@ -310,8 +326,10 @@ Most complex feature in the repo (~51 KB orchestrator). Key files:
 - `useEnhancedSegmentationEditor` — core state (polygons, selection, undo/redo, transforms)
 - `useAdvancedInteractions` — mouse/keyboard, polygon creation, vertex editing
 - `EditMode` enum — state machine: `View | EditVertices | Slice | AddPoints | DeletePolygon | CreatePolygon | CreatePolyline`
-- `Polygon` model — closed polygons (`geometry: 'polygon'`) + open polylines (`geometry: 'polyline'`) with optional `partClass` + `instanceId` (sperm) or `trackId` + `_embedding` (microtubule cross-frame tracking)
+- `Polygon` model — closed polygons (`geometry: 'polygon'`) + open polylines (`geometry: 'polyline'`) with optional `partClass` + `instanceId` (sperm) or `trackId` + `_embedding` (microtubule cross-frame tracking). UI state (hide/select/rename) keys on `polygonKey(p) = p.trackId ?? p.id` so it survives frame scrubs — branded `PolygonKey` type for compile-time safety.
 - Canvas layers: `CanvasPolygon` (per-polygon, React.memo with custom comparator), `CanvasVertex`, `CanvasTemporaryGeometryLayer`
+- Toolbars: `TopToolbar` carries Undo / Redo / **Resegment** (multi-channel videos open `SegmentChannelDialog` first) / Save. `VerticalToolbar` is left rail with edit-mode buttons + zoom + reset only — no resegment there since PR #195.
+- Frame slider in `EditorHeader` uses 3-effect choreography in `SegmentationEditor` (seed + observation + reverse-sync with ref-tracked `lastSeededIdx`) — required on multi-hundred-frame videos to prevent oscillation. See memory `project_frame_slider_race_pattern`.
 
 ### Backend (`/backend/`)
 
@@ -393,6 +411,9 @@ The real PR gate is local: pre-commit hook + `make ci` + Playwright verification
 - **`HF_TOKEN`** required for first microtubule load (DINOv3 backbone, ~1.1 GB). Lives in `.env.production` (gitignored).
 - **Always `--env-file .env.production`** when running `docker compose` against production. Without it, env vars silently empty.
 - **After backend `--force-recreate`, restart nginx too** — DNS cache pins old container IP.
+- **Volume names still carry `_blue_data` suffix** (postgres_blue_data, redis_blue_data). Cosmetic-only — internal Docker identifiers, never user-facing. Renaming requires manual volume copy; not worth the downtime for "spheroseg_data" prettiness.
+- **Upload directory still mounted from `./backend/uploads/blue`** on host, but container sees neutral `/app/uploads`. 17 GB of production data lives there; renaming the host path would need `docker compose down` + `mv` + remount. Same trade-off as volume names.
+- **DB password literal `spheroseg_blue_2024`** is a fixed credential string (NOT a DB name reference). Database itself is `spheroseg` since 2026-05-15. Rotating the password means changing the live user's `PG_PASSWORD` first.
 
 ---
 

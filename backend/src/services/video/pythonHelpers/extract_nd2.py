@@ -137,11 +137,9 @@ def main() -> int:
                 "wavelengthNm": emission,
             })
 
-        # Duration + frame interval: ND2 events carry per-frame "Time [s]".
-        # Median Δ between consecutive timestamps is more robust than
-        # (last-first)/(N-1): a single dropped frame inflates the average.
-        # We keep the legacy `duration_ms` (end-start) since downstream
-        # code is already wired to it.
+        # Duration and frame interval. duration_ms = end−start span;
+        # frame_interval_ms = median Δ of consecutive timestamps (more
+        # robust to a single dropped frame than the simple average).
         duration_ms = None
         frame_interval_ms = None
         try:
@@ -151,25 +149,32 @@ def main() -> int:
                 if len(ts) >= 2:
                     duration_ms = int((ts[-1] - ts[0]) * 1000)
                     deltas = np.diff(np.asarray(ts, dtype=np.float64))
-                    # Drop non-positive deltas (clock glitches) before median.
-                    pos = deltas[deltas > 0]
+                    pos = deltas[deltas > 0]  # drop clock-glitch negatives
                     if pos.size > 0:
                         frame_interval_ms = float(np.median(pos) * 1000.0)
-        except Exception:
-            pass
+        except Exception as exc:
+            sys.stderr.write(f"ND2 events parse failed: {exc}\n")
 
-        # Pixel calibration. `voxel_size()` returns named tuple (x, y, z)
-        # in micrometers. ND2 is essentially always isotropic in XY, but
-        # we explicitly pick `x` rather than asserting equality so a
-        # mildly anisotropic acquisition still produces a single value.
+        # Pixel calibration. `voxel_size()` returns (x, y, z) in µm; we
+        # pick x. Log a stderr warning when y differs noticeably so an
+        # anisotropic acquisition doesn't silently get x-only treatment.
         pixel_size_um = None
         try:
             v = f.voxel_size()
             x_um = getattr(v, "x", None) if v is not None else None
+            y_um = getattr(v, "y", None) if v is not None else None
             if isinstance(x_um, (int, float)) and x_um > 0:
+                if (
+                    isinstance(y_um, (int, float))
+                    and y_um > 0
+                    and abs(x_um - y_um) / x_um > 0.01
+                ):
+                    sys.stderr.write(
+                        f"ND2 anisotropic XY: x={x_um} y={y_um}, using x\n"
+                    )
                 pixel_size_um = float(x_um)
-        except Exception:
-            pass
+        except Exception as exc:
+            sys.stderr.write(f"ND2 voxel_size read failed: {exc}\n")
 
     for t in range(T):
         frame_dir = dest / "frames" / f"{t:04d}"
