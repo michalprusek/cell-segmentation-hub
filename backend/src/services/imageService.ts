@@ -647,6 +647,17 @@ export class ImageService {
           frameIntervalMs: p.frameIntervalMs,
         });
       }
+      // FK ON DELETE CASCADE should make this unreachable. If it
+      // fires, the gallery silently falls back to row-level nulls —
+      // log so the orphan drift gets investigated.
+      if (parents.length !== parentIds.length) {
+        const missing = parentIds.filter(id => !parentCalibrationById.has(id));
+        logger.warn(
+          'Frames reference missing video container — calibration bubble will fall through',
+          'ImageService',
+          { missingParentIds: missing, projectId }
+        );
+      }
     }
 
     // Add URLs to images
@@ -663,9 +674,10 @@ export class ImageService {
           ? await storage.getUrl(image.segmentationThumbnailPath)
           : undefined;
 
-        // If this row is a video frame, prefer its parent container's
-        // calibration over the row's own (which is always null in
-        // current schema). Standalone images keep their own values.
+        // Prefer parent container's calibration over the row's own
+        // (frames don't carry their own — `??` fallback also covers
+        // the future case where a per-frame override appears).
+        // Standalone images keep their own values.
         const parentCal = image.parentVideoId
           ? parentCalibrationById.get(image.parentVideoId)
           : null;

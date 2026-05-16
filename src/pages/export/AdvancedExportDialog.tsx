@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -126,6 +126,12 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       } = useSharedAdvancedExport(projectId);
 
       const [activeTab, setActiveTab] = useState('general');
+      // `pixelToMicrometerScale != null` was the old auto-fill guard, but
+      // it collapses three distinct states (untouched, user-cleared,
+      // user-typed-zero-then-erased) into one. Tracking interaction
+      // explicitly keeps the auto-fill safe to re-run when `images`
+      // resolves after the dialog has already opened.
+      const hasUserTouchedScaleRef = useRef(false);
 
       // Notify parent component when export state changes
       useEffect(() => {
@@ -149,9 +155,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       // PhysicalSizeX, ImageJ TIFF). The backend bubbles each frame
       // row's calibration down from its parent video container, so any
       // image — frame or standalone — with a positive pixelSizeUm is
-      // a valid source. Skipped when the user has already typed a
-      // value or when no image carries calibration.
+      // a valid source. Skipped once the user has interacted with the
+      // input (see `hasUserTouchedScaleRef`).
       useEffect(() => {
+        if (hasUserTouchedScaleRef.current) return;
         if (exportOptions.pixelToMicrometerScale != null) return;
         const calibrated = images.find(
           img => typeof img.pixelSizeUm === 'number' && img.pixelSizeUm > 0
@@ -302,6 +309,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                         placeholder={t('export.scalePlaceholder')}
                         value={exportOptions.pixelToMicrometerScale || ''}
                         onChange={e => {
+                          // Any interaction disables further auto-fill —
+                          // including clearing the field, so a user who
+                          // wipes the auto-suggested value doesn't get it
+                          // silently re-applied on the next image refresh.
+                          hasUserTouchedScaleRef.current = true;
                           const value = e.target.value;
 
                           // Handle empty string

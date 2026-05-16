@@ -962,6 +962,20 @@ export class ImageController {
             frameIntervalMs: p.frameIntervalMs,
           });
         }
+        // FK is ON DELETE CASCADE so a frame outliving its parent
+        // should be impossible. If we ever observe it here, the gallery
+        // looks calibration-less without explanation — log so Sentry
+        // surfaces the integrity drift instead of swallowing it.
+        if (parents.length !== parentIds.length) {
+          const missing = parentIds.filter(
+            id => !parentCalibrationById.has(id)
+          );
+          logger.warn(
+            'Frames reference missing video container — calibration bubble will fall through',
+            'ImageController',
+            { missingParentIds: missing, projectId }
+          );
+        }
       }
 
       // Get storage provider for URL generation
@@ -1093,8 +1107,8 @@ export class ImageController {
             frameCount: image.frameCount,
             videoDurationMs: image.videoDurationMs,
             // Calibration metadata extracted at upload time (µm/px and
-            // ms between frames). The bubble above lifts the parent
-            // container's values onto each frame row; standalone images
+            // ms between frames). Frame rows inherit from their parent
+            // container via `parentCalibrationById`; standalone images
             // (no parent) fall back to their own row, which may still
             // be null when the upload skipped extraction.
             pixelSizeUm:

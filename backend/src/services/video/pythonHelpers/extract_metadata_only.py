@@ -4,8 +4,8 @@
 The full extractors (``extract_nd2.py``, ``extract_tiff_stack.py``) do
 the frame-writing pass AND the metadata pass in one shot. For
 backfilling calibration on already-extracted containers, we only need
-the metadata — re-writing every frame would be wasteful and could
-disturb the already-deployed frame paths.
+the metadata — re-writing every frame would rewrite existing PNGs
+and invalidate cached thumbnails for no benefit.
 
 This helper reuses the pure metadata helpers from the existing
 extractors via direct imports (no PNG output, no full array load).
@@ -74,7 +74,14 @@ def _extract_nd2(path: Path) -> dict:
 
 
 def _extract_tiff(path: Path) -> dict:
-    """TIFF metadata via the helpers in ``extract_tiff_stack.py``."""
+    """TIFF metadata via the helpers in ``extract_tiff_stack.py``.
+
+    Mirrors ``_extract_nd2``'s per-step exception isolation: a parser
+    raising on one of the two values should leave the other intact, so
+    a partially-readable TIFF still backfills what it can. Errors are
+    logged to stderr (the agreed logging channel for this script) and
+    the offending field is left as ``None``.
+    """
     import tifffile  # type: ignore
 
     from extract_tiff_stack import (
@@ -82,11 +89,23 @@ def _extract_tiff(path: Path) -> dict:
         _detect_frame_interval_ms,
     )
 
+    pixel_size_um: float | None = None
+    frame_interval_ms: float | None = None
+
     with tifffile.TiffFile(str(path)) as tf:
-        return {
-            "pixelSizeUm": _detect_pixel_size_um(tf),
-            "frameIntervalMs": _detect_frame_interval_ms(tf),
-        }
+        try:
+            pixel_size_um = _detect_pixel_size_um(tf)
+        except Exception as exc:
+            sys.stderr.write(f"TIFF pixel-size detect failed: {exc}\n")
+        try:
+            frame_interval_ms = _detect_frame_interval_ms(tf)
+        except Exception as exc:
+            sys.stderr.write(f"TIFF frame-interval detect failed: {exc}\n")
+
+    return {
+        "pixelSizeUm": pixel_size_um,
+        "frameIntervalMs": frame_interval_ms,
+    }
 
 
 def main() -> int:
