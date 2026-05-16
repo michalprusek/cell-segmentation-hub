@@ -93,6 +93,33 @@ export function useFolderPath(
   }, [folderId, byId]);
 }
 
+/**
+ * Pulls the user-facing message out of an axios error. Backend errors come
+ * through axios as `err.response.data = { success: false, error, code, ... }`
+ * — the `error` field is the localized server message (Czech text from
+ * `FolderError`). Falling back to `err.message` alone shows
+ * "Request failed with status code 409" which is meaningless to users.
+ * Order of preference:
+ *   1. response.data.error    (FolderError envelope from backend)
+ *   2. response.data.message  (legacy success/info envelope)
+ *   3. native err.message     (network errors, no response body)
+ *   4. supplied fallback
+ */
+function extractServerMessage(err: unknown, fallback: string): string {
+  const axiosErr = err as
+    | {
+        response?: { data?: { error?: string; message?: string } };
+        message?: string;
+      }
+    | undefined;
+  return (
+    axiosErr?.response?.data?.error ??
+    axiosErr?.response?.data?.message ??
+    axiosErr?.message ??
+    fallback
+  );
+}
+
 // ----- Mutations -----------------------------------------------------------
 //
 // All folder mutations invalidate ['folders'] AND any cached project list,
@@ -144,7 +171,7 @@ export function useCreateFolder() {
     onError: (err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(FOLDERS_KEY, ctx.previous);
       logger.error('Failed to create folder', err);
-      toast.error((err as Error).message ?? 'Failed to create folder');
+      toast.error(extractServerMessage(err, 'Failed to create folder'));
     },
     onSettled: () => invalidateAll(qc),
   });
@@ -169,7 +196,7 @@ export function useRenameFolder() {
     onError: (err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(FOLDERS_KEY, ctx.previous);
       logger.error('Failed to rename folder', err);
-      toast.error((err as Error).message ?? 'Failed to rename folder');
+      toast.error(extractServerMessage(err, 'Failed to rename folder'));
     },
     onSettled: () => invalidateAll(qc),
   });
@@ -196,7 +223,7 @@ export function useMoveFolder() {
     onError: (err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(FOLDERS_KEY, ctx.previous);
       logger.error('Failed to move folder', err);
-      toast.error((err as Error).message ?? 'Failed to move folder');
+      toast.error(extractServerMessage(err, 'Failed to move folder'));
     },
     onSettled: () => invalidateAll(qc),
   });
@@ -211,7 +238,7 @@ export function useDeleteFolder() {
     // here are user-facing (cycle, permission), not "stale optimistic state".
     onError: err => {
       logger.error('Failed to delete folder', err);
-      toast.error((err as Error).message ?? 'Failed to delete folder');
+      toast.error(extractServerMessage(err, 'Failed to delete folder'));
     },
     onSettled: () => invalidateAll(qc),
   });
@@ -224,7 +251,7 @@ export function useMoveProjects() {
       apiClient.moveProjectsToFolder(vars.folderId, vars.projectIds),
     onError: err => {
       logger.error('Failed to move projects', err);
-      toast.error((err as Error).message ?? 'Failed to move projects');
+      toast.error(extractServerMessage(err, 'Failed to move projects'));
     },
     onSettled: () => invalidateAll(qc),
   });

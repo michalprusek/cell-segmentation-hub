@@ -47,6 +47,44 @@ class FolderError extends Error {
 
 export { FolderError };
 
+/**
+ * Translates known Prisma error codes into user-friendly FolderError variants.
+ * Anything else passes through unchanged so the controller's default 500
+ * handler logs the full technical detail (we don't want to mask unknown
+ * Prisma failures — they're real bugs deserving a Sentry entry).
+ *
+ *   P2002 — unique constraint violated         → DUPLICATE_NAME
+ *   P2003 — foreign key constraint violated    → PARENT_NOT_FOUND
+ *                                                  (typically a parentId
+ *                                                  that no longer exists)
+ *   P2025 — record-not-found during update     → NOT_FOUND
+ *                                                  (race: deleted between
+ *                                                  our pre-flight check
+ *                                                  and the write)
+ */
+function translatePrismaError(error: unknown): Error {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    switch (error.code) {
+      case 'P2002':
+        return new FolderError(
+          'DUPLICATE_NAME',
+          'Složka se stejným názvem na této úrovni už existuje'
+        );
+      case 'P2003':
+        return new FolderError(
+          'PARENT_NOT_FOUND',
+          'Cílová nadřazená složka neexistuje'
+        );
+      case 'P2025':
+        return new FolderError(
+          'NOT_FOUND',
+          'Složka byla mezitím smazána; obnovte stránku'
+        );
+    }
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}
+
 // ---------------------------------------------------------------------------
 // Read paths
 // ---------------------------------------------------------------------------
@@ -173,16 +211,7 @@ export async function createFolder(
     logger.info('Folder created', 'FolderService', { userId, folderId: folder.id });
     return folder;
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    ) {
-      throw new FolderError(
-        'DUPLICATE_NAME',
-        'Složka se stejným názvem na této úrovni už existuje'
-      );
-    }
-    throw error;
+    throw translatePrismaError(error);
   }
 }
 
