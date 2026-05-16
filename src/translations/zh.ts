@@ -2002,6 +2002,11 @@ export default {
     renamed: '文件夹已重命名',
     deleted: '文件夹已删除',
     moved: '已成功移动',
+    moveSkipped: '已跳过移动 — 无该项目访问权限',
+    movePartial: '已移动 {{moved}} 个项目;{{skipped}} 个已跳过(无访问权限)',
+    moveAllSkipped: '{{count}} 个项目已跳过 — 无访问权限',
+    deletePartial:
+      '已删除 {{deleted}} 个项目;{{failed}} 个失败。文件夹已保留,请重试。',
     duplicateName: '此处已存在同名文件夹',
     cannotMoveIntoSelf: '无法将文件夹移动到自身或其子文件夹中',
   },

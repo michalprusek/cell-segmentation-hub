@@ -147,15 +147,24 @@ const Dashboard = () => {
     async (item: DragItem, destFolderId: string | null) => {
       try {
         if (item.type === 'project') {
-          await moveProjectsMutation.mutateAsync({
+          // mutateAsync returns the backend's structured result: which
+          // projects actually moved vs which were dropped (no access).
+          // We optimistically remove BEFORE the success toast so a slow
+          // mutation doesn't show "Moved" with the card still visible.
+          if (destFolderId !== currentFolderId) {
+            removeProjectOptimistically(item.id);
+          }
+          const result = await moveProjectsMutation.mutateAsync({
             folderId: destFolderId,
             projectIds: [item.id],
           });
-          toast.success(String(t('folders.moved')));
-          // Current view is folder-scoped — drop a project out of it and the
-          // project should immediately disappear from the grid.
-          if (destFolderId !== currentFolderId) {
-            removeProjectOptimistically(item.id);
+          if (result.skippedProjectIds.length > 0) {
+            // Single-project DnD where the project was skipped means
+            // access was denied — the optimistic remove is wrong; the
+            // ['projects'] invalidation will restore it on next refetch.
+            toast.warning(String(t('folders.moveSkipped')));
+          } else {
+            toast.success(String(t('folders.moved')));
           }
         } else if (item.type === 'folder') {
           if (item.id === destFolderId) return;
@@ -166,6 +175,9 @@ const Dashboard = () => {
           toast.success(String(t('folders.moved')));
         }
       } catch (err) {
+        // The hook's onError already toasted; this only catches errors
+        // outside the mutation (e.g. removeProjectOptimistically failure)
+        // so they don't propagate as unhandled rejections.
         logger.error('DnD move failed', err);
       }
     },

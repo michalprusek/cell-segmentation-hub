@@ -2211,6 +2211,11 @@ export default {
     renamed: 'Folder renamed',
     deleted: 'Folder deleted',
     moved: 'Moved successfully',
+    moveSkipped: 'Move skipped — no access to that project',
+    movePartial: 'Moved {{moved}} project(s); {{skipped}} skipped (no access)',
+    moveAllSkipped: '{{count}} project(s) skipped — no access',
+    deletePartial:
+      'Deleted {{deleted}} project(s); {{failed}} failed. Folder kept; retry the failures.',
     duplicateName: 'A folder with this name already exists here',
     cannotMoveIntoSelf:
       'A folder cannot be moved into itself or its own subfolder',

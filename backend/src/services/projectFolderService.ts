@@ -20,6 +20,13 @@ export interface FolderContentsPreview {
 }
 
 class FolderError extends Error {
+  /**
+   * Optional structured payload — used by PARTIAL_FAILURE in deleteFolder to
+   * report which projects were successfully deleted before the failure so the
+   * controller can echo it to the client (avoids silent data loss).
+   */
+  public details?: Record<string, unknown>;
+
   constructor(
     public readonly code:
       | 'NOT_FOUND'
@@ -27,11 +34,14 @@ class FolderError extends Error {
       | 'CYCLE'
       | 'PARENT_NOT_FOUND'
       | 'PROJECT_NOT_ACCESSIBLE'
-      | 'INVALID_INPUT',
-    message: string
+      | 'INVALID_INPUT'
+      | 'PARTIAL_FAILURE',
+    message: string,
+    details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'FolderError';
+    this.details = details;
   }
 }
 
@@ -41,11 +51,6 @@ export { FolderError };
 // Read paths
 // ---------------------------------------------------------------------------
 
-/**
- * Returns the user's entire folder tree as a flat list. The client side composes
- * the tree from parentId — keeping the wire format flat avoids deep JSON nesting
- * and makes optimistic updates trivial (insert/update by id, recompute children).
- */
 export async function listUserFolders(userId: string): Promise<FolderDTO[]> {
   const folders = await prisma.projectFolder.findMany({
     where: { userId },
@@ -58,45 +63,47 @@ export async function listUserFolders(userId: string): Promise<FolderDTO[]> {
     },
     orderBy: [{ parentId: 'asc' }, { name: 'asc' }],
   });
-
   return folders;
 }
 
 /**
  * Returns the full set of folder ids in the subtree rooted at `folderId`
- * (inclusive). Uses Postgres recursive CTE — adjacency-list traversal in a
- * single round trip. Caller is responsible for ownership validation; this
- * function does NOT enforce userId on the CTE to keep the query simple, so
- * never expose its result without filtering by userId beforehand.
+ * (inclusive). Uses Postgres recursive CTE with three layered safeguards:
+ *
+ *   1. `UNION` (distinct) — if a cycle ever exists in the data (race, restore
+ *      gone wrong, future bug), the second expansion adds no new ids and the
+ *      CTE terminates. `UNION ALL` would loop forever, burning a connection.
+ *   2. `depth < 50` — even with `UNION` a corrupted path between distinct
+ *      cyclic nodes can be long; capping depth bounds the worst case.
+ *   3. `userId` filter on both seed and recursive step — defense-in-depth so
+ *      a future caller that forgets the pre-flight ownership check cannot
+ *      enumerate another user's folder ids.
  */
 async function subtreeFolderIds(
   tx: Prisma.TransactionClient,
-  folderId: string
+  folderId: string,
+  userId: string
 ): Promise<string[]> {
   const rows = await tx.$queryRaw<{ id: string }[]>`
     WITH RECURSIVE descendants AS (
-      SELECT id FROM project_folders WHERE id = ${folderId}
-      UNION ALL
-      SELECT f.id
+      SELECT id, 1 AS depth
+        FROM project_folders
+        WHERE id = ${folderId} AND "userId" = ${userId}
+      UNION
+      SELECT f.id, d.depth + 1
         FROM project_folders f
         JOIN descendants d ON f."parentId" = d.id
+        WHERE f."userId" = ${userId} AND d.depth < 50
     )
-    SELECT id FROM descendants
+    SELECT DISTINCT id FROM descendants
   `;
   return rows.map(r => r.id);
 }
 
-/**
- * Counts what's *inside* a folder for the delete-confirmation dialog.
- * Walks the subtree; for each placement counts owned vs shared projects.
- * Shared = the user is in ProjectFolderItem but doesn't own the underlying
- * project — deleting the folder will unlink (not delete) those.
- */
 export async function getFolderContentsPreview(
   userId: string,
   folderId: string
 ): Promise<FolderContentsPreview> {
-  // Ownership check first so we never reveal counts of folders the user doesn't own.
   const folder = await prisma.projectFolder.findFirst({
     where: { id: folderId, userId },
     select: { id: true },
@@ -105,7 +112,7 @@ export async function getFolderContentsPreview(
     throw new FolderError('NOT_FOUND', 'Složka nebyla nalezena');
   }
 
-  const subtreeIds = await subtreeFolderIds(prisma, folderId);
+  const subtreeIds = await subtreeFolderIds(prisma, folderId, userId);
   const subfolderCount = Math.max(0, subtreeIds.length - 1);
 
   const items = await prisma.projectFolderItem.findMany({
@@ -127,15 +134,6 @@ export async function getFolderContentsPreview(
 // Write paths
 // ---------------------------------------------------------------------------
 
-/**
- * Creates a folder. Parent (if provided) must belong to the same user.
- * Duplicate sibling names are rejected via the DB unique constraint —
- * Prisma surfaces P2002 which we translate to DUPLICATE_NAME.
- *
- * The Zod-inferred CreateFolderData widens `name` to `string | undefined`
- * because of `.trim()`; the route's validateBody guarantees the value is
- * present, so we re-narrow defensively at the boundary.
- */
 export async function createFolder(
   userId: string,
   data: { name?: string; parentId?: string | null }
@@ -190,100 +188,116 @@ export async function createFolder(
 
 /**
  * Renames a folder and/or moves it to a different parent.
- * Cycle check: a folder cannot become a descendant of itself — the recursive
- * CTE on the *current* state would still find the subtree before the move,
- * so we just verify the new parent is not in that set.
+ *
+ * The ownership lookup, cycle check, and update all run inside a single
+ * `$transaction` because otherwise two tabs could each see pre-move state
+ * and produce a cycle (tab A moves X under Y, tab B moves Y under X — both
+ * cycle checks pass, both updates commit). Holding a transaction takes a
+ * row-level lock on the inspected rows so the second tab serializes.
+ *
+ * Cycle check: a folder cannot become a descendant of itself. The recursive
+ * CTE on the pre-move state finds the subtree rooted at the moving folder;
+ * if the requested new parent is inside that set, reject.
  */
 export async function updateFolder(
   userId: string,
   folderId: string,
   patch: { name?: string; parentId?: string | null }
 ): Promise<FolderDTO> {
-  const folder = await prisma.projectFolder.findFirst({
-    where: { id: folderId, userId },
-    select: { id: true, parentId: true },
-  });
-  if (!folder) {
-    throw new FolderError('NOT_FOUND', 'Složka nebyla nalezena');
-  }
-
-  if (patch.parentId !== undefined) {
-    if (patch.parentId === folderId) {
-      throw new FolderError('CYCLE', 'Složku nelze přesunout do sebe sama');
-    }
-    if (patch.parentId !== null) {
-      const parent = await prisma.projectFolder.findFirst({
-        where: { id: patch.parentId, userId },
-        select: { id: true },
-      });
-      if (!parent) {
-        throw new FolderError(
-          'PARENT_NOT_FOUND',
-          'Nadřazená složka nebyla nalezena'
-        );
-      }
-      const descendants = await subtreeFolderIds(prisma, folderId);
-      if (descendants.includes(patch.parentId)) {
-        throw new FolderError(
-          'CYCLE',
-          'Složku nelze přesunout do své vlastní podsložky'
-        );
-      }
-    }
-  }
-
-  try {
-    const updated = await prisma.projectFolder.update({
-      where: { id: folderId },
-      data: {
-        ...(patch.name !== undefined && { name: patch.name }),
-        ...(patch.parentId !== undefined && { parentId: patch.parentId }),
-      },
-      select: {
-        id: true,
-        name: true,
-        parentId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+  return prisma.$transaction(async tx => {
+    const folder = await tx.projectFolder.findFirst({
+      where: { id: folderId, userId },
+      select: { id: true, parentId: true },
     });
-    logger.info('Folder updated', 'FolderService', { userId, folderId, patch });
-    return updated;
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    ) {
-      throw new FolderError(
-        'DUPLICATE_NAME',
-        'Složka se stejným názvem na této úrovni už existuje'
-      );
+    if (!folder) {
+      throw new FolderError('NOT_FOUND', 'Složka nebyla nalezena');
     }
-    throw error;
-  }
+
+    if (patch.parentId !== undefined) {
+      if (patch.parentId === folderId) {
+        throw new FolderError('CYCLE', 'Složku nelze přesunout do sebe sama');
+      }
+      if (patch.parentId !== null) {
+        const parent = await tx.projectFolder.findFirst({
+          where: { id: patch.parentId, userId },
+          select: { id: true },
+        });
+        if (!parent) {
+          throw new FolderError(
+            'PARENT_NOT_FOUND',
+            'Nadřazená složka nebyla nalezena'
+          );
+        }
+        const descendants = await subtreeFolderIds(tx, folderId, userId);
+        if (descendants.includes(patch.parentId)) {
+          throw new FolderError(
+            'CYCLE',
+            'Složku nelze přesunout do své vlastní podsložky'
+          );
+        }
+      }
+    }
+
+    try {
+      const updated = await tx.projectFolder.update({
+        where: { id: folderId },
+        data: {
+          ...(patch.name !== undefined && { name: patch.name }),
+          ...(patch.parentId !== undefined && { parentId: patch.parentId }),
+        },
+        select: {
+          id: true,
+          name: true,
+          parentId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      logger.info('Folder updated', 'FolderService', { userId, folderId, patch });
+      return updated;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new FolderError(
+          'DUPLICATE_NAME',
+          'Složka se stejným názvem na této úrovni už existuje'
+        );
+      }
+      throw error;
+    }
+  });
+}
+
+export interface DeleteFolderResult {
+  folderDeleted: boolean;
+  deletedProjectIds: string[];
+  unlinkedSharedProjectIds: string[];
+  failedProjectIds: { id: string; error: string }[];
 }
 
 /**
  * Deletes a folder and its entire subtree.
  *
  * Asymmetric semantics required by the file-explorer UX choice:
- *   - Owned projects placed inside the subtree → fully deleted (calls
- *     projectService.deleteProject so file storage, queue entries, shares
- *     are all cleaned up).
- *   - Shared projects placed inside the subtree → only their placements
- *     are dropped (we cannot delete projects owned by other users). The
- *     project itself stays intact for its real owner.
+ *   - Owned projects → fully deleted (calls projectService.deleteProject so
+ *     file storage, queue entries, shares are all cleaned up).
+ *   - Shared projects → only their placements are dropped (we cannot delete
+ *     projects owned by other users).
  *   - Subfolders → cascade-deleted via the FK.
  *
- * Project deletions happen sequentially because projectService.deleteProject
- * does file-system work outside the DB transaction; a Prisma $transaction
- * around it would not cover the FS operations anyway, and parallelism would
- * fight the same file paths. The final folder delete itself is fast.
+ * Partial-failure handling: project deletion does FS work outside any DB
+ * transaction. We run them through `Promise.allSettled` so a single failure
+ * doesn't strand the caller. If ANY owned-project deletion fails we DO NOT
+ * delete the folder — leaving it in place lets the user retry and see what
+ * still needs attention. The result always carries both lists; the
+ * controller maps `folderDeleted: false` to HTTP 207 Multi-Status.
  */
 export async function deleteFolder(
   userId: string,
   folderId: string
-): Promise<{ deletedProjectIds: string[]; unlinkedSharedProjectIds: string[] }> {
+): Promise<DeleteFolderResult> {
   const folder = await prisma.projectFolder.findFirst({
     where: { id: folderId, userId },
     select: { id: true },
@@ -292,7 +306,7 @@ export async function deleteFolder(
     throw new FolderError('NOT_FOUND', 'Složka nebyla nalezena');
   }
 
-  const subtreeIds = await subtreeFolderIds(prisma, folderId);
+  const subtreeIds = await subtreeFolderIds(prisma, folderId, userId);
   const placements = await prisma.projectFolderItem.findMany({
     where: { userId, folderId: { in: subtreeIds } },
     select: { projectId: true, project: { select: { userId: true } } },
@@ -305,27 +319,48 @@ export async function deleteFolder(
     else unlinkedSharedProjectIds.push(p.projectId);
   }
 
+  const results = await Promise.allSettled(
+    ownedProjectIds.map(pid => ProjectService.deleteProject(pid, userId))
+  );
   const deletedProjectIds: string[] = [];
-  for (const projectId of ownedProjectIds) {
-    try {
-      const deleted = await ProjectService.deleteProject(projectId, userId);
-      if (deleted) deletedProjectIds.push(projectId);
-    } catch (err) {
+  const failedProjectIds: { id: string; error: string }[] = [];
+  results.forEach((r, i) => {
+    const pid = ownedProjectIds[i];
+    if (r.status === 'fulfilled' && r.value) {
+      deletedProjectIds.push(pid);
+    } else if (r.status === 'rejected') {
       logger.error(
         'Failed to delete project during folder cascade',
-        err as Error,
+        r.reason as Error,
         'FolderService',
-        { userId, folderId, projectId }
+        { userId, folderId, projectId: pid }
       );
-      throw err;
+      failedProjectIds.push({
+        id: pid,
+        error: r.reason instanceof Error ? r.reason.message : String(r.reason),
+      });
     }
+  });
+
+  if (failedProjectIds.length > 0) {
+    logger.warn(
+      'Folder delete partial: kept folder due to failures',
+      'FolderService',
+      {
+        userId,
+        folderId,
+        deleted: deletedProjectIds.length,
+        failed: failedProjectIds.length,
+      }
+    );
+    return {
+      folderDeleted: false,
+      deletedProjectIds,
+      unlinkedSharedProjectIds,
+      failedProjectIds,
+    };
   }
 
-  // The folder delete cascades to:
-  //   * all subfolders (self-relation FK ON DELETE CASCADE)
-  //   * all remaining ProjectFolderItem placements inside the subtree
-  //     (folder→item FK ON DELETE CASCADE) — this is what handles the
-  //     "unlink shared projects" case.
   await prisma.projectFolder.delete({ where: { id: folderId } });
 
   logger.info('Folder deleted with subtree', 'FolderService', {
@@ -336,23 +371,14 @@ export async function deleteFolder(
     unlinkedSharedProjectIds: unlinkedSharedProjectIds.length,
   });
 
-  return { deletedProjectIds, unlinkedSharedProjectIds };
+  return {
+    folderDeleted: true,
+    deletedProjectIds,
+    unlinkedSharedProjectIds,
+    failedProjectIds: [],
+  };
 }
 
-/**
- * Moves a set of projects into a target folder, or to root when folderId === null.
- *
- * Pre-flight: every projectId must be either owned by the user or accepted-shared
- * with the user (`SharingService.hasProjectAccess`). Anything else is silently
- * dropped from the move — we report which ones moved so the caller can show a
- * partial-success message if needed.
- *
- * Storage:
- *   - Move to a folder: upsert ProjectFolderItem keyed on (userId, projectId).
- *     The unique index guarantees a project never sits in two folders for the
- *     same user; upsert replaces the previous placement atomically.
- *   - Move to root: delete the placement row (absence == root).
- */
 export async function moveProjectsToFolder(
   userId: string,
   folderId: string | null,
