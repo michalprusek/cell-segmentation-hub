@@ -2,6 +2,8 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Share2, User } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { dragSourceProps } from '@/utils/dashboardDrag';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useAuth } from '@/contexts/useAuth';
 import ProjectThumbnail from '@/components/project/ProjectThumbnail';
@@ -21,6 +23,8 @@ interface ProjectListItemProps {
   owner?: { email: string; name?: string };
   shareId?: string;
   onProjectUpdate?: (projectId: string, action: string) => void;
+  onRequestMove?: (projectId: string) => void;
+  hasAnyFolder?: boolean;
 }
 
 const ProjectListItem = React.memo(
@@ -37,9 +41,13 @@ const ProjectListItem = React.memo(
     owner,
     shareId,
     onProjectUpdate,
+    onRequestMove,
+    hasAnyFolder,
   }: ProjectListItemProps) => {
     const { t: _t } = useLanguage();
     const { user: _user } = useAuth();
+    const drag = dragSourceProps({ type: 'project', id });
+
     const handleCardClick = () => {
       if (onClick) {
         onClick();
@@ -52,7 +60,10 @@ const ProjectListItem = React.memo(
 
     return (
       <Card
-        className="overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full dark:hover:bg-gray-800 dark:bg-gray-900"
+        {...drag}
+        className={cn(
+          'overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full dark:hover:bg-gray-800 dark:bg-gray-900'
+        )}
         onClick={handleCardClick}
       >
         <div className="flex items-center p-4">
@@ -91,9 +102,12 @@ const ProjectListItem = React.memo(
           <div className="flex items-center ml-4 space-x-2">
             <ProjectActions
               projectId={id}
+              projectTitle={title}
               isShared={isShared}
               shareId={shareId}
               onProjectUpdate={onProjectUpdate}
+              onRequestMove={onRequestMove}
+              hasAnyFolder={hasAnyFolder}
             />
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <ArrowRight className="h-4 w-4" />

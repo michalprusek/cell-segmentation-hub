@@ -1978,6 +1978,7 @@ export default {
   error: 'Fehler',
   segmentationEditor: {
     reloadingSegmentation: 'Segmentierung wird neu geladen...',
+    loadingFrame: 'Frame wird geladen...',
     segmenting: 'Segmentierung läuft...',
     waitingInQueue: 'Warten in der Warteschlange...',
     retryingLoad: 'Ladeprobleme. Neuer Versuch...',
@@ -2115,5 +2116,31 @@ export default {
       play: 'Abspielen',
       pause: 'Pause',
     },
+  },
+
+  folders: {
+    folder: 'Ordner',
+    home: 'Start',
+    newFolder: 'Neuer Ordner',
+    createFolder: 'Ordner erstellen',
+    create: 'Erstellen',
+    folderName: 'Ordnername',
+    folderNamePlaceholder: 'z. B. Experiment A',
+    rename: 'Umbenennen',
+    renameFolder: 'Ordner umbenennen',
+    deleteFolder: 'Ordner löschen',
+    deleteFolderConfirm:
+      'Ordner „{{name}}" löschen? {{projects}} Projekt(e) und {{subfolders}} Unterordner werden dauerhaft entfernt. {{shared}} geteilte Projekte kehren ins Stammverzeichnis zurück.',
+    moveTo: 'Verschieben nach…',
+    moveToRoot: 'Stamm (kein Ordner)',
+    openFolder: 'Ordner {{name}} öffnen',
+    empty: 'Leerer Ordner',
+    created: 'Ordner erstellt',
+    renamed: 'Ordner umbenannt',
+    deleted: 'Ordner gelöscht',
+    moved: 'Erfolgreich verschoben',
+    duplicateName: 'Ein Ordner mit diesem Namen existiert hier bereits',
+    cannotMoveIntoSelf:
+      'Ein Ordner kann nicht in sich selbst oder einen eigenen Unterordner verschoben werden',
   },
 };

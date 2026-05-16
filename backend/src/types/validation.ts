@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { JOB_STATUSES } from './index';
+import {
+  SEGMENTATION_MODELS,
+  SEGMENTATION_MODEL_ERROR_MESSAGE,
+} from '../constants/segmentationModels';
 
 // ============================================================================
 // Common validation schemas
@@ -17,23 +21,20 @@ export const uuidSchema = z.string().uuid('Musí být platné UUID');
  * (added 2026-05-12 with PR #142) so frontend Segment-All requests against
  * a Microtubules project send model='microtubule' and need to validate.
  */
-export const segmentationModelSchema = z.enum(
-  [
-    'hrnet',
-    'cbam_resunet',
-    'unet_spherohq',
-    'unet_attention_aspp',
-    'sperm',
-    'wound',
-    'microtubule',
-  ],
-  {
-    errorMap: () => ({
-      message:
-        'Model musí být hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp, sperm, wound nebo microtubule',
-    }),
-  }
-);
+// Single source of truth is `constants/segmentationModels.ts`; the
+// Zod schema is derived from the same const so the route validator,
+// controller fallback, and any Zod-validated path stay in lock-step.
+// Previously these drifted (Zod had 7 models, route+controller had 9),
+// making a `resunet_advanced` request pass the route but fail Zod-aware
+// internal callers — silent acceptance / rejection asymmetry.
+const _SEG_MODELS_TUPLE = SEGMENTATION_MODELS as unknown as [
+  SegmentationModelLiteral,
+  ...SegmentationModelLiteral[],
+];
+type SegmentationModelLiteral = (typeof SEGMENTATION_MODELS)[number];
+export const segmentationModelSchema = z.enum(_SEG_MODELS_TUPLE, {
+  errorMap: () => ({ message: SEGMENTATION_MODEL_ERROR_MESSAGE }),
+});
 
 /**
  * Queue priority validation
@@ -233,6 +234,11 @@ export const updateProjectSchema = z.object({
 
 /**
  * Schema for project query parameters (pagination, search, sort)
+ *
+ * ``folderId`` filters by user-folder placement. Accepts:
+ *   - undefined / omitted: unfiltered (default — returns all projects the user can see).
+ *   - "root": projects that the user has NOT placed in any of their folders.
+ *   - <uuid>: projects placed inside the given folder (must belong to the caller).
  */
 export const projectQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
@@ -256,6 +262,9 @@ export const projectQuerySchema = z.object({
     })
     .optional()
     .default('desc'),
+  folderId: z
+    .union([z.literal('root'), z.string().uuid('Neplatné ID složky')])
+    .optional(),
 });
 
 /**
@@ -445,6 +454,52 @@ export type AddImageToQueueData = z.infer<typeof addImageToQueueSchema>;
 export type BatchQueueData = z.infer<typeof batchQueueSchema>;
 export type ResetStuckItemsData = z.infer<typeof resetStuckItemsSchema>;
 export type CleanupQueueData = z.infer<typeof cleanupQueueSchema>;
+
+// ============================================================================
+// Project folder schemas (file-explorer style hierarchy)
+// ============================================================================
+
+const folderNameSchema = z
+  .string()
+  .min(1, 'Název složky je povinný')
+  .max(100, 'Název složky může mít maximálně 100 znaků')
+  .trim();
+
+export const createFolderSchema = z.object({
+  name: folderNameSchema,
+  parentId: z.string().uuid('Neplatné ID nadřazené složky').nullable().optional(),
+});
+
+// PATCH semantics: any subset of { name, parentId } may be supplied.
+// parentId === null  → move to root.
+// parentId === undefined → leave unchanged.
+export const updateFolderSchema = z
+  .object({
+    name: folderNameSchema.optional(),
+    parentId: z.string().uuid('Neplatné ID nadřazené složky').nullable().optional(),
+  })
+  .refine(v => v.name !== undefined || v.parentId !== undefined, {
+    message: 'Aktualizace musí obsahovat alespoň jedno pole (name nebo parentId)',
+  });
+
+export const folderItemsSchema = z.object({
+  projectIds: z
+    .array(uuidSchema)
+    .min(1, 'Je potřeba alespoň jedno UUID')
+    .max(100, 'Maximum 100 projektů na jeden přesun')
+    .refine(arr => new Set(arr).size === arr.length, {
+      message: 'projectIds obsahují duplicity',
+    }),
+});
+
+export const folderIdSchema = z.object({
+  id: z.string().uuid('Neplatné ID složky'),
+});
+
+export type CreateFolderData = z.infer<typeof createFolderSchema>;
+export type UpdateFolderData = z.infer<typeof updateFolderSchema>;
+export type FolderItemsData = z.infer<typeof folderItemsSchema>;
+export type FolderIdParams = z.infer<typeof folderIdSchema>;
 
 // ============================================================================
 // Feedback (bug reports + feature requests)

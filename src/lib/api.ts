@@ -145,6 +145,22 @@ export interface SegmentationResult {
   updatedAt: string;
 }
 
+/** Actual shape returned by POST /api/segmentation/batch — the
+ *  controller wraps each image's outcome in this envelope and returns
+ *  HTTP 200 even when EVERY image failed. The previous typing claimed
+ *  `SegmentationResult` (a single result) which let the FE silently
+ *  treat all-failed batches as successes (false-green toast). */
+export interface BatchSegmentationResult {
+  successful: number;
+  failed: number;
+  results: Array<{
+    imageId: string;
+    success: boolean;
+    error?: string;
+    result?: SegmentationResult;
+  }>;
+}
+
 export interface QueueItem {
   id: string;
   imageId: string;
@@ -676,6 +692,15 @@ class ApiClient {
       result.image_count = imageCount;
     }
 
+    // Per-user folder placement. Backend returns `folderId: string | null`
+    // on each project; the FE always reads the canonical camelCase name. We
+    // explicitly copy `null` (not just truthy values) so callers can
+    // distinguish "at root" (folderId === null) from "not loaded yet"
+    // (folderId === undefined).
+    if (project.folderId !== undefined) {
+      result.folderId = (project.folderId as string | null) ?? null;
+    }
+
     return result;
   }
 
@@ -783,6 +808,9 @@ class ApiClient {
     page?: number;
     limit?: number;
     search?: string;
+    // "root" filters to projects without any folder placement; a uuid filters
+    // to a specific folder owned by the caller; undefined means no filter.
+    folderId?: string | 'root';
     _t?: number; // Cache-busting timestamp
   }): Promise<{
     projects: Project[];
@@ -898,6 +926,65 @@ class ApiClient {
   async deleteProject(id: string): Promise<void> {
     await this.instance.delete(`/projects/${id}`);
   }
+
+  // ---- Project folders --------------------------------------------------
+  //
+  // Folder tree is per-user (a placement of A's project in B's folder is B's
+  // organisation only and never visible to A). All endpoints require auth.
+
+  async getFolders(): Promise<import('@/types').ProjectFolder[]> {
+    const response = await this.instance.get('/folders');
+    const folders = this.extractData<unknown>(response);
+    return Array.isArray(folders)
+      ? (folders as import('@/types').ProjectFolder[])
+      : [];
+  }
+
+  async createFolder(data: {
+    name: string;
+    parentId?: string | null;
+  }): Promise<import('@/types').ProjectFolder> {
+    const response = await this.instance.post('/folders', data);
+    return this.extractData<import('@/types').ProjectFolder>(response);
+  }
+
+  async updateFolder(
+    id: string,
+    patch: { name?: string; parentId?: string | null }
+  ): Promise<import('@/types').ProjectFolder> {
+    const response = await this.instance.patch(`/folders/${id}`, patch);
+    return this.extractData<import('@/types').ProjectFolder>(response);
+  }
+
+  async deleteFolder(id: string): Promise<{
+    deletedProjectIds: string[];
+    unlinkedSharedProjectIds: string[];
+  }> {
+    const response = await this.instance.delete(`/folders/${id}`);
+    return this.extractData(response);
+  }
+
+  async previewFolder(id: string): Promise<{
+    folderId: string;
+    ownedProjectCount: number;
+    sharedProjectCount: number;
+    subfolderCount: number;
+  }> {
+    const response = await this.instance.get(`/folders/${id}/preview`);
+    return this.extractData(response);
+  }
+
+  /** Move a set of projects into `folderId` (or `null` to send back to root). */
+  async moveProjectsToFolder(
+    folderId: string | null,
+    projectIds: string[]
+  ): Promise<{ movedProjectIds: string[]; skippedProjectIds: string[] }> {
+    const path =
+      folderId === null ? '/folders/root/items' : `/folders/${folderId}/items`;
+    const response = await this.instance.post(path, { projectIds });
+    return this.extractData(response);
+  }
+  // ----------------------------------------------------------------------
 
   // Sharing methods
   async shareProjectByEmail(
@@ -1451,8 +1538,12 @@ class ApiClient {
     model?: string,
     threshold?: number,
     detectHoles?: boolean,
+    // Channel override for multi-channel video frames. Forwarded to
+    // backend's `resolveChannelPath` so a TIRF_640 / TIRF_488 ND2
+    // frame gets segmented on the user-picked channel instead of the
+    // project's default `isSegmentationSource`.
     channel?: string
-  ): Promise<SegmentationResult> {
+  ): Promise<BatchSegmentationResult> {
     const response = await this.instance.post(`/segmentation/batch`, {
       imageIds,
       model: model || 'hrnet',
