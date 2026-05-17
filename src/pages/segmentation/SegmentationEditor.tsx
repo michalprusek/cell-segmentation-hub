@@ -1780,6 +1780,7 @@ const SegmentationEditor = () => {
                             }
                             vertexDragState={editor.vertexDragState}
                             zoom={editor.transform.zoom}
+                            isZooming={editor.isZooming}
                             isUndoRedoInProgress={editor.isUndoRedoInProgress}
                             isHovered={polygon.id === hoveredPolygonId}
                             editMode={editor.editMode}

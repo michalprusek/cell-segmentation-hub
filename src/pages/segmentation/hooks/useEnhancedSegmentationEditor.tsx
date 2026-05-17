@@ -28,6 +28,7 @@ import { rafThrottle } from '@/lib/performanceUtils';
 import { useLanguage } from '@/contexts/exports';
 import { useAbortController } from '@/hooks/shared/useAbortController';
 import { handleCancelledError } from '@/lib/errorUtils';
+import type { ProjectType } from '@/types';
 
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];
@@ -46,12 +47,8 @@ interface UseEnhancedSegmentationEditorProps {
   isFromGallery?: boolean; // Add flag to trigger auto-reset
   activePartClassRef?: React.RefObject<'head' | 'midpiece' | 'tail'>;
   activeInstanceIdRef?: React.RefObject<string>;
-  /** Project type drives MT-only polyline behaviours (Enter-commits
-   *  AddPoints extension, polyline slice geometry). Sperm and other
-   *  polyline-bearing projects must keep their pre-MT-feature UX, so
-   *  any new behaviour gated on this flag falls through to the legacy
-   *  paths when the value isn't ``'microtubules'``. */
-  projectType?: import('@/types').ProjectType;
+  /** Gates MT-only polyline behaviours (Enter-commits, slice geometry). */
+  projectType?: ProjectType;
   // onPolygonSelection is now handled internally via usePolygonSelection for SSOT
 }
 
@@ -131,6 +128,12 @@ export const useEnhancedSegmentationEditor = ({
     polygonId: null,
     vertexIndex: null,
   });
+
+  // Zoom-in-progress flag. Set true on every wheel event, debounced
+  // false 150 ms after the last wheel. Polygon/vertex memo comparators
+  // short-circuit zoom-only re-renders while true.
+  const [isZooming, setIsZooming] = useState(false);
+  const zoomEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Transform state
   const [transform, setTransform] = useState<TransformState>(() =>
@@ -731,39 +734,65 @@ export const useEnhancedSegmentationEditor = ({
       return;
     }
 
-    // AddPoints mode on a polyline endpoint: pressing Enter commits the
-    // tempPoints as an extension of the polyline. This is the only path
-    // that makes sense for open paths — extending from the END outward
-    // never wraps back to a different vertex, so there's no "click
-    // another vertex to finish" trigger. Enter is the natural finish key.
+    // AddPoints + MT: Enter commits tempPoints as an endpoint extension.
+    // Sperm keeps the legacy "click vertex to finalise" workflow.
     if (editMode !== EditMode.AddPoints) return;
-    // Gate to MT only: sperm projects predate the Enter-extends-polyline
-    // workflow and rely on "click another vertex to finalise" the old
-    // way. Leaving this active for sperm would silently change their
-    // muscle memory.
     if (projectType !== 'microtubules') return;
     if (!selectedPolygonId) return;
-    if (!interactionState.isAddingPoints) return;
-    if (!interactionState.addPointStartVertex) return;
-    if (tempPoints.length === 0) return;
 
     const polygon = polygons.find(p => p.id === selectedPolygonId);
     if (!polygon || polygon.geometry !== 'polyline') return;
+    if (polygon.points.length < 2) return;
 
-    const startIdx = interactionState.addPointStartVertex.vertexIndex;
+    // Anchor recovery: Shift-only flow can reach Enter without ever
+    // setting addPointStartVertex (the click-handler path that normally
+    // seeds it never ran). Derive the nearest endpoint from the cursor
+    // position (or from the first tempPoint if cursor is unavailable).
+    let startIdx = interactionState.addPointStartVertex?.vertexIndex;
+    if (startIdx === undefined) {
+      const head = polygon.points[0];
+      const tail = polygon.points[polygon.points.length - 1];
+      const anchorRef = tempPoints.length > 0 ? tempPoints[0] : cursorPosition;
+      if (!anchorRef) {
+        startIdx = polygon.points.length - 1;
+      } else {
+        const dHead = (anchorRef.x - head.x) ** 2 + (anchorRef.y - head.y) ** 2;
+        const dTail = (anchorRef.x - tail.x) ** 2 + (anchorRef.y - tail.y) ** 2;
+        startIdx = dHead <= dTail ? 0 : polygon.points.length - 1;
+      }
+    }
+
+    // Points-to-append fallback: if the user pressed Enter without ever
+    // generating a tempPoint (very small shift-drag under
+    // MIN_AUTO_ADD_DISTANCE, or keyboard-only attempt), use the cursor
+    // as a single new point so Enter is not a silent no-op.
+    const pointsToAppend =
+      tempPoints.length > 0
+        ? tempPoints
+        : cursorPosition
+          ? [cursorPosition]
+          : [];
+    if (pointsToAppend.length === 0) {
+      logger.warn(
+        'handleEnterPolyline: no tempPoints and no cursor — nothing to append'
+      );
+      return;
+    }
+
     const last = polygon.points.length - 1;
     let extended;
     if (startIdx === 0) {
-      // Extending from the head: new points were placed in click order
-      // from the head outward, so reverse them to land the most recent
-      // click furthest from the original head.
-      extended = [...[...tempPoints].reverse(), ...polygon.points];
+      // Head extension: reverse so the most recent click is furthest out.
+      extended = [...[...pointsToAppend].reverse(), ...polygon.points];
     } else if (startIdx === last) {
-      // Extending from the tail: append in order.
-      extended = [...polygon.points, ...tempPoints];
+      extended = [...polygon.points, ...pointsToAppend];
     } else {
-      // Not an endpoint — Enter is undefined here. Fall back to no-op
-      // so the user gets ESC + retry instead of a corrupt geometry.
+      // Mid-polyline anchor — Enter is undefined here. Log loudly rather
+      // than silently no-op so user can diagnose via console.
+      logger.warn(
+        `handleEnterPolyline: anchor at index ${startIdx} (mid-polyline). ` +
+          `Press Esc and click a different vertex to splice instead.`
+      );
       return;
     }
 
@@ -779,16 +808,14 @@ export const useEnhancedSegmentationEditor = ({
       addPointStartVertex: null,
       addPointEndVertex: null,
     }));
-    // Drop back to vertex editing so the user can refine the freshly
-    // extended path right away.
     setEditMode(EditMode.EditVertices);
   }, [
     editMode,
     projectType,
     selectedPolygonId,
-    interactionState.isAddingPoints,
     interactionState.addPointStartVertex,
     tempPoints,
+    cursorPosition,
     polygons,
     updatePolygons,
     setTempPoints,
@@ -941,6 +968,17 @@ export const useEnhancedSegmentationEditor = ({
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
+      // Flag "zoom in progress" so PolygonVertices can skip re-rendering
+      // the (potentially hundreds of) vertex circles while the wheel is
+      // active. The SVG container CSS-scales for free, so vertices appear
+      // to grow/shrink with the image; they snap back to the proper
+      // 1/zoom screen size when the wheel stops (150ms idle below).
+      setIsZooming(true);
+      if (zoomEndTimerRef.current) clearTimeout(zoomEndTimerRef.current);
+      zoomEndTimerRef.current = setTimeout(() => {
+        setIsZooming(false);
+        zoomEndTimerRef.current = null;
+      }, 150);
       throttledZoom.fn(e);
     };
 
@@ -952,6 +990,10 @@ export const useEnhancedSegmentationEditor = ({
       return () => {
         element.removeEventListener('wheel', handleWheel);
         throttledZoom.cancel();
+        if (zoomEndTimerRef.current) {
+          clearTimeout(zoomEndTimerRef.current);
+          zoomEndTimerRef.current = null;
+        }
       };
     }
   }, [imageWidth, imageHeight, canvasWidth, canvasHeight, effectiveMinZoom]);
@@ -992,6 +1034,7 @@ export const useEnhancedSegmentationEditor = ({
     isSpacePressed: keyboardShortcuts.isSpacePressed,
     activePartClassRef,
     activeInstanceIdRef,
+    projectType,
     onPolygonSelection: polygonSelection.handlePolygonSelection, // Pass centralized selection handler
     setEditMode,
     setInteractionState,
@@ -1135,6 +1178,7 @@ export const useEnhancedSegmentationEditor = ({
     // State
     ...editorState,
     vertexDragState,
+    isZooming,
 
     // Refs
     canvasRef,

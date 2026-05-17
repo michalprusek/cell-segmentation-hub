@@ -14,6 +14,7 @@ import {
   createPolygon,
 } from '@/lib/polygonGeometry';
 import { vertexSpatialIndex } from '@/lib/rendering/VertexSpatialIndex';
+import type { ProjectType } from '@/types';
 
 /**
  * Advanced interaction handler inspired by SpheroSeg
@@ -32,6 +33,8 @@ interface UseAdvancedInteractionsProps {
   isSpacePressed?: () => boolean;
   activePartClassRef?: React.RefObject<'head' | 'midpiece' | 'tail'>;
   activeInstanceIdRef?: React.RefObject<string>;
+  /** Gates the MT-specific Add-Points auto-anchor flow. */
+  projectType?: ProjectType;
 
   // State setters
   onPolygonSelection: (id: string | null) => void; // Centralized selection handler
@@ -69,6 +72,7 @@ export const useAdvancedInteractions = ({
   isSpacePressed: isSpacePressedCallback,
   activePartClassRef,
   activeInstanceIdRef,
+  projectType,
   onPolygonSelection,
   setEditMode,
   setInteractionState,
@@ -248,7 +252,34 @@ export const useAdvancedInteractions = ({
       );
 
       if (!interactionState.isAddingPoints) {
-        // Start adding points - must click on a vertex
+        // MT polyline: auto-anchor at nearest endpoint, treat click as
+        // first new point. Enter commits via handleEnterPolyline.
+        const isMtPolyline =
+          projectType === 'microtubules' &&
+          selectedPolygon.geometry === 'polyline' &&
+          selectedPolygon.points.length >= 2;
+        if (isMtPolyline) {
+          const head = selectedPolygon.points[0];
+          const tail =
+            selectedPolygon.points[selectedPolygon.points.length - 1];
+          const distHead =
+            (imagePoint.x - head.x) ** 2 + (imagePoint.y - head.y) ** 2;
+          const distTail =
+            (imagePoint.x - tail.x) ** 2 + (imagePoint.y - tail.y) ** 2;
+          const anchorIndex =
+            distHead <= distTail ? 0 : selectedPolygon.points.length - 1;
+          setInteractionState({
+            ...interactionState,
+            isAddingPoints: true,
+            addPointStartVertex: {
+              polygonId: selectedPolygonId,
+              vertexIndex: anchorIndex,
+            },
+          });
+          setTempPoints([imagePoint]);
+          return;
+        }
+        // Other geometries / projects: keep the legacy click-vertex anchor.
         if (closestVertex) {
           setInteractionState({
             ...interactionState,
@@ -261,9 +292,10 @@ export const useAdvancedInteractions = ({
           setTempPoints([]);
         }
       } else {
-        // We're in adding points mode
+        // Two completion paths: click a different vertex = splice via
+        // insertPointsBetweenVertices (all geometries); Enter = endpoint
+        // extension (MT only) via handleEnterPolyline.
         if (closestVertex && interactionState.addPointStartVertex) {
-          // Check if clicking on different vertex to complete the sequence
           if (
             closestVertex.index !==
             interactionState.addPointStartVertex.vertexIndex
@@ -309,6 +341,7 @@ export const useAdvancedInteractions = ({
       interactionState,
       tempPoints,
       transform.zoom,
+      projectType,
       getPolygons,
       updatePolygons,
       setTempPoints,
@@ -708,6 +741,49 @@ export const useAdvancedInteractions = ({
         ? isShiftPressedCallback()
         : false;
 
+      // Shift-without-click bootstrap for MT polyline AddPoints: seed
+      // state so the next mouseMove can enter the equidistant branch.
+      if (
+        isShiftCurrentlyPressed &&
+        editMode === EditMode.AddPoints &&
+        !interactionState.isAddingPoints &&
+        selectedPolygonId &&
+        projectType === 'microtubules'
+      ) {
+        const selectedPolygon = getPolygons().find(
+          p => p.id === selectedPolygonId
+        );
+        if (
+          selectedPolygon &&
+          selectedPolygon.geometry === 'polyline' &&
+          selectedPolygon.points.length >= 2
+        ) {
+          const head = selectedPolygon.points[0];
+          const tail =
+            selectedPolygon.points[selectedPolygon.points.length - 1];
+          const distHead =
+            (imagePoint.x - head.x) ** 2 + (imagePoint.y - head.y) ** 2;
+          const distTail =
+            (imagePoint.x - tail.x) ** 2 + (imagePoint.y - tail.y) ** 2;
+          const anchorIndex =
+            distHead <= distTail ? 0 : selectedPolygon.points.length - 1;
+          setInteractionState({
+            ...interactionState,
+            isAddingPoints: true,
+            addPointStartVertex: {
+              polygonId: selectedPolygonId,
+              vertexIndex: anchorIndex,
+            },
+          });
+          lastAutoAddedPoint.current = selectedPolygon.points[anchorIndex];
+          // Seed tempPoints with the current cursor so Enter is always
+          // commit-able, even if the user releases Shift between this
+          // bootstrap tick and the next mouseMove.
+          setTempPoints([imagePoint]);
+          return;
+        }
+      }
+
       if (
         isShiftCurrentlyPressed &&
         (editMode === EditMode.CreatePolygon ||
@@ -826,6 +902,7 @@ export const useAdvancedInteractions = ({
       canvasRef,
       handlePan,
       isShiftPressedCallback,
+      projectType,
     ]
   );
 

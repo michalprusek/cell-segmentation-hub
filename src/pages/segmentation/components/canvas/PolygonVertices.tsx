@@ -17,6 +17,9 @@ interface PolygonVerticesProps {
   isUndoRedoInProgress?: boolean;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   editMode?: EditMode;
+  /** True while the wheel is actively zooming. Comparator-only —
+   *  not read at render time; suppresses zoom-driven re-renders. */
+  isZooming?: boolean;
 }
 
 const PolygonVertices = React.memo(
@@ -127,9 +130,12 @@ const PolygonVertices = React.memo(
       prevProps.polygonType !== nextProps.polygonType ||
       prevProps.isSelected !== nextProps.isSelected ||
       prevProps.isHovered !== nextProps.isHovered ||
-      prevProps.zoom !== nextProps.zoom ||
       prevProps.isUndoRedoInProgress !== nextProps.isUndoRedoInProgress
     ) {
+      return false;
+    }
+    // Skip zoom-only re-render while the wheel is active (see CanvasPolygon).
+    if (prevProps.zoom !== nextProps.zoom && !nextProps.isZooming) {
       return false;
     }
 
