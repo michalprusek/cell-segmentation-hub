@@ -1952,6 +1952,8 @@ export default {
       downloadPng: 'PNG',
       downloadCsv: 'CSV',
       showKymograph: '显示时空图',
+      axisTime: '时间 (帧) ↓',
+      axisAlong: '沿微管 (px) →',
     },
     channels: {
       toggleVisibility: '切换通道可见性',

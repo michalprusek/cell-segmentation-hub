@@ -190,7 +190,7 @@ export function KymographModal({
           )}
         </div>
 
-        <div className="min-h-[300px] flex items-center justify-center bg-black/5 rounded">
+        <div className="min-h-[300px] flex items-center justify-center bg-black/5 rounded p-4">
           {isLoading && (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -201,26 +201,69 @@ export function KymographModal({
           )}
           {error && <div className="text-destructive text-sm">{error}</div>}
           {!isLoading && !error && result && (
-            <img
-              src={`data:image/png;base64,${result.pngBase64}`}
-              alt={`Kymograph for ${polylineId}`}
-              // The BE returns the kymograph as a (frame_count × 200 px)
-              // heatmap. For short videos (e.g. 3 frames → 200×3 native
-              // pixels) the original `max-w-full max-h-[500px]` rendered
-              // it at natural size — a sub-pixel-thin strip. Force a
-              // full-width fill + pixelated upscaling + min-height so the
-              // bands stay visible regardless of frame count, and
-              // `object-fit: fill` makes the heatmap blocks stretch to
-              // the assigned box (we don't need pixel-aspect fidelity —
-              // the *colours* carry the kymograph signal, not the pixel
-              // grid).
-              className="w-full max-h-[500px] block"
+            // Axes: rows = frames (time, ↓ down = later); cols = position
+            // along the polyline (head → tail in the seed frame). Tick
+            // labels at 0 / 25 / 50 / 75 / 100% provide a scale; units
+            // are pixels for the spatial axis, frame index for time.
+            <div
+              className="grid w-full gap-1"
               style={{
-                imageRendering: 'pixelated',
-                minHeight: '200px',
-                objectFit: 'fill',
+                gridTemplateColumns: 'auto auto 1fr',
+                gridTemplateRows: '1fr auto auto',
               }}
-            />
+            >
+              {/* Y-axis name (column 0, row 0) — rotated. */}
+              <div className="flex items-center justify-center text-xs text-muted-foreground pr-1">
+                <span
+                  className="whitespace-nowrap"
+                  style={{
+                    writingMode: 'vertical-rl',
+                    transform: 'rotate(180deg)',
+                  }}
+                >
+                  {t('editor.kymograph.axisTime', {
+                    defaultValue: 'Time (frames) ↓',
+                  })}
+                </span>
+              </div>
+              {/* Y-axis tick labels (column 1, row 0). */}
+              <div className="flex flex-col justify-between text-[10px] text-muted-foreground tabular-nums pr-1 py-px">
+                {[0, 0.25, 0.5, 0.75, 1].map(f => (
+                  <span key={f}>
+                    {Math.round(f * Math.max(result.frameCount - 1, 0))}
+                  </span>
+                ))}
+              </div>
+              {/* Kymograph image (column 2, row 0). */}
+              <img
+                src={`data:image/png;base64,${result.pngBase64}`}
+                alt={`Kymograph for ${polylineId}`}
+                className="w-full max-h-[500px] block"
+                style={{
+                  imageRendering: 'pixelated',
+                  minHeight: '200px',
+                  objectFit: 'fill',
+                }}
+              />
+              {/* X-axis tick labels (column 2, row 1). */}
+              <div />
+              <div />
+              <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums px-px">
+                {[0, 0.25, 0.5, 0.75, 1].map(f => (
+                  <span key={f}>
+                    {Math.round(f * Math.max(result.lengthPx - 1, 0))}
+                  </span>
+                ))}
+              </div>
+              {/* X-axis name (column 2, row 2). */}
+              <div />
+              <div />
+              <div className="text-xs text-muted-foreground text-center">
+                {t('editor.kymograph.axisAlong', {
+                  defaultValue: 'Along microtubule (px) →',
+                })}
+              </div>
+            </div>
           )}
         </div>
 

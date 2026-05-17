@@ -2097,6 +2097,8 @@ export default {
       downloadPng: 'PNG',
       downloadCsv: 'CSV',
       showKymograph: 'Zobrazit kymograf',
+      axisTime: 'Čas (snímky) ↓',
+      axisAlong: 'Podél mikrotubule (px) →',
     },
     channels: {
       toggleVisibility: 'Přepnout viditelnost kanálu',
