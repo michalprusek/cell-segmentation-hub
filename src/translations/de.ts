@@ -2088,6 +2088,8 @@ export default {
       downloadPng: 'PNG',
       downloadCsv: 'CSV',
       showKymograph: 'Kymograph anzeigen',
+      axisTime: 'Zeit (Frames) ↓',
+      axisAlong: 'Entlang Mikrotubulus (px) →',
     },
     channels: {
       toggleVisibility: 'Kanal-Sichtbarkeit umschalten',

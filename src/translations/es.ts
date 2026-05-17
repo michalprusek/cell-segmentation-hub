@@ -2126,6 +2126,8 @@ export default {
       downloadPng: 'PNG',
       downloadCsv: 'CSV',
       showKymograph: 'Mostrar kimógrafo',
+      axisTime: 'Tiempo (frames) ↓',
+      axisAlong: 'A lo largo del microtúbulo (px) →',
     },
     channels: {
       toggleVisibility: 'Alternar visibilidad del canal',
