@@ -26,9 +26,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
       if (user) {
         try {
           const profileData = await apiClient.getUserProfile();
-
-          if (profileData && profileData.preferred_theme) {
-            const dbTheme = profileData.preferred_theme as Theme;
+          // BE serialises preferredTheme as `theme` on the wire
+          // (userService.ts). TS Profile still uses the DB column name.
+          const dbTheme = (profileData as { theme?: string } | undefined)
+            ?.theme as Theme | undefined;
+          if (dbTheme) {
             setThemeState(dbTheme);
             localStorage.setItem('theme', dbTheme);
             applyTheme(dbTheme);
@@ -66,7 +68,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
       // Uložení do databáze, pokud jsme přihlášeni
       if (user) {
         try {
-          await apiClient.updateUserProfile({ preferred_theme: newTheme });
+          // BE updateProfileSchema expects `theme`, not `preferred_theme`.
+          await apiClient.updateUserProfile({
+            theme: newTheme,
+          } as unknown as Parameters<typeof apiClient.updateUserProfile>[0]);
         } catch (error: unknown) {
           logger.error('Error updating profile:', error);
           const errorMessage = getErrorMessage(error) || 'Failed to save theme';

@@ -97,24 +97,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const localLanguage = localStorage.getItem('language');
 
       if (localTheme || localLanguage) {
-        const updateData: {
-          preferred_theme?: string;
-          preferredLang?: string;
-        } = {};
+        // Wire field names per BE updateProfileSchema: `theme`, `language`.
+        // TS UpdateProfile still uses DB column names (preferredTheme,
+        // preferredLang) so we cast at the boundary.
+        const updateData: { theme?: string; language?: string } = {};
 
         if (localTheme && ['light', 'dark', 'system'].includes(localTheme)) {
-          updateData.preferred_theme = localTheme;
+          updateData.theme = localTheme;
         }
 
         if (
           localLanguage &&
           ['en', 'cs', 'es', 'de', 'fr', 'zh'].includes(localLanguage)
         ) {
-          updateData.preferredLang = localLanguage;
+          updateData.language = localLanguage;
         }
 
         if (Object.keys(updateData).length > 0) {
-          await apiClient.updateUserProfile(updateData);
+          await apiClient.updateUserProfile(
+            updateData as unknown as Parameters<
+              typeof apiClient.updateUserProfile
+            >[0]
+          );
           logger.debug(
             'Successfully synced local preferences to database:',
             updateData
