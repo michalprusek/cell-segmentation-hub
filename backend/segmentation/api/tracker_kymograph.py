@@ -317,11 +317,8 @@ class KymographResponse(BaseModel):
 def _resample_profile(profile: np.ndarray, target_width: int) -> np.ndarray:
     """Nearest-neighbour resample of a 1D intensity profile to ``target_width``.
 
-    Linear interpolation (np.interp) was smoothing the data — averaging
-    adjacent pixel intensities — which hides genuine intensity steps along
-    the microtubule. We pick the source index nearest to each destination
-    position so every value in the kymograph row is a real, unaltered pixel
-    intensity sampled along the polyline.
+    Each output value is a real source pixel — no interpolation — so the
+    kymograph faithfully reports the raw intensity sampled along the polyline.
     """
     if profile.size == 0:
         return np.zeros(target_width, dtype=np.float32)
@@ -431,12 +428,14 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         H, W = img.shape
         pts = np.asarray(frame.polyline_rc, dtype=np.float32)
         if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
+            logger.warning(
+                "kymograph: frame %s polyline has <2 points; row filled with zeros",
+                frame.frame,
+            )
             rows.append(np.zeros(req.target_width, dtype=np.float32))
             continue
-        # scipy.ndimage.map_coordinates expects (channel, point) layout for
-        # row & column samplers. order=0 picks the nearest pixel rather
-        # than blending neighbours — required so the kymograph shows raw
-        # intensities along the polyline, not smoothed averages.
+        # map_coordinates: coords shape (2, N) — row 0 = row indices,
+        # row 1 = column indices. order=0 = nearest pixel (no blending).
         rows_idx = np.clip(pts[:, 0], 0, H - 1)
         cols_idx = np.clip(pts[:, 1], 0, W - 1)
         profile = map_coordinates(

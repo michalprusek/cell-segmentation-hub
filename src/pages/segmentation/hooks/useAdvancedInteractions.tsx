@@ -14,6 +14,7 @@ import {
   createPolygon,
 } from '@/lib/polygonGeometry';
 import { vertexSpatialIndex } from '@/lib/rendering/VertexSpatialIndex';
+import type { ProjectType } from '@/types';
 
 /**
  * Advanced interaction handler inspired by SpheroSeg
@@ -32,11 +33,8 @@ interface UseAdvancedInteractionsProps {
   isSpacePressed?: () => boolean;
   activePartClassRef?: React.RefObject<'head' | 'midpiece' | 'tail'>;
   activeInstanceIdRef?: React.RefObject<string>;
-  /** Project workflow type. Used to gate the MT-specific Add-Points
-   *  auto-anchor flow (click anywhere → anchor at nearest polyline
-   *  endpoint, Enter to commit). Other project types keep the old
-   *  "click vertex to anchor, click another vertex to finalise" UX. */
-  projectType?: import('@/types').ProjectType;
+  /** Gates the MT-specific Add-Points auto-anchor flow. */
+  projectType?: ProjectType;
 
   // State setters
   onPolygonSelection: (id: string | null) => void; // Centralized selection handler
@@ -254,13 +252,8 @@ export const useAdvancedInteractions = ({
       );
 
       if (!interactionState.isAddingPoints) {
-        // MT polyline: extend-by-click workflow. User shouldn't have to
-        // hunt for the endpoint vertex first — pick whichever endpoint
-        // (head or tail) is nearest to their click as the anchor, and
-        // treat this click itself as the first new point. Enter commits
-        // via handleEnterPolyline (useEnhancedSegmentationEditor.tsx).
-        // Sperm polylines keep the legacy click-vertex anchoring because
-        // their muscle memory predates this flow.
+        // MT polyline: auto-anchor at nearest endpoint, treat click as
+        // first new point. Enter commits via handleEnterPolyline.
         const isMtPolyline =
           projectType === 'microtubules' &&
           selectedPolygon.geometry === 'polyline' &&
@@ -299,17 +292,9 @@ export const useAdvancedInteractions = ({
           setTempPoints([]);
         }
       } else {
-        // We're in adding points mode. Two completion paths coexist for
-        // MT polylines:
-        //   1. Legacy splice — click on a DIFFERENT existing vertex to
-        //      close the sequence; the points between the two clicks get
-        //      inserted via insertPointsBetweenVertices. Works for any
-        //      anchor (including mid-polyline) and is how the user can
-        //      "splice into" an existing MT.
-        //   2. Endpoint extension — press Enter, handled by
-        //      handleEnterPolyline. Works only when anchor is head/tail.
-        // We accept both; the user picks based on whether they click a
-        // vertex or press Enter.
+        // Two completion paths: click a different vertex = splice via
+        // insertPointsBetweenVertices (all geometries); Enter = endpoint
+        // extension (MT only) via handleEnterPolyline.
         if (closestVertex && interactionState.addPointStartVertex) {
           if (
             closestVertex.index !==
@@ -756,15 +741,8 @@ export const useAdvancedInteractions = ({
         ? isShiftPressedCallback()
         : false;
 
-      // Bootstrap MT polyline Add-Points state when the user starts with
-      // Shift held instead of a click. Without this, isAddingPoints stays
-      // false (it normally flips inside the click handler) and the
-      // shift-auto-add branch below is unreachable, so Enter has nothing
-      // to commit. We pick the polyline endpoint nearest to the cursor as
-      // the anchor — exactly the same auto-anchor logic the click path
-      // uses — and seed lastAutoAddedPoint with that endpoint so the next
-      // shift-move starts laying down points at the MIN_AUTO_ADD_DISTANCE
-      // cadence away from the polyline tail/head.
+      // Shift-without-click bootstrap for MT polyline AddPoints: seed
+      // state so the next mouseMove can enter the equidistant branch.
       if (
         isShiftCurrentlyPressed &&
         editMode === EditMode.AddPoints &&
@@ -798,9 +776,10 @@ export const useAdvancedInteractions = ({
             },
           });
           lastAutoAddedPoint.current = selectedPolygon.points[anchorIndex];
-          // First mouseMove only transitions state; the next move (with
-          // isAddingPoints now true) starts populating tempPoints via the
-          // distance-gated branch below.
+          // Seed tempPoints with the current cursor so Enter is always
+          // commit-able, even if the user releases Shift between this
+          // bootstrap tick and the next mouseMove.
+          setTempPoints([imagePoint]);
           return;
         }
       }
