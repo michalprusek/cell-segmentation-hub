@@ -84,7 +84,11 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
     (async () => {
       try {
         const profile = await apiClient.getUserProfile();
-        const pref = profile?.preferredLang as Language | undefined;
+        // BE serialises preferredLang as `language` on the wire (see
+        // userService.getUserProfile). The TS Profile type still names
+        // the field after the DB column, hence the cast.
+        const pref = (profile as { language?: string } | undefined)
+          ?.language as Language | undefined;
         if (cancelled || !pref || !SUPPORTED_LANGUAGES.includes(pref)) return;
         if (manualOverrideRef.current) return;
         localStorage.setItem('language', pref);
@@ -143,7 +147,11 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (user) {
         try {
-          await apiClient.updateUserProfile({ preferredLang: newLanguage });
+          // BE updateProfileSchema expects `language`, not `preferredLang`.
+          // UpdateProfile TS type still uses the DB column name; cast.
+          await apiClient.updateUserProfile({
+            language: newLanguage,
+          } as unknown as Parameters<typeof apiClient.updateUserProfile>[0]);
         } catch (error: unknown) {
           const errorMessage =
             getErrorMessage(error) || 'Failed to save language';
