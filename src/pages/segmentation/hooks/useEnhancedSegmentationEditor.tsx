@@ -132,6 +132,15 @@ export const useEnhancedSegmentationEditor = ({
     vertexIndex: null,
   });
 
+  // Zoom-in-progress flag — set true on every wheel event, debounced
+  // false 150ms after the last wheel. PolygonVertices uses this to skip
+  // expensive vertex re-renders during continuous zoom (the SVG parent
+  // CSS-scales for free, so vertices visually grow with the image until
+  // the wheel settles and we snap them back to proper 1/zoom size).
+  const [isZooming, setIsZooming] = useState(false);
+  const isZoomingRef = useRef(false);
+  const zoomEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Transform state
   const [transform, setTransform] = useState<TransformState>(() =>
     calculateCenteringTransform(
@@ -941,6 +950,19 @@ export const useEnhancedSegmentationEditor = ({
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
+      // Flag "zoom in progress" so PolygonVertices can skip re-rendering
+      // the (potentially hundreds of) vertex circles while the wheel is
+      // active. The SVG container CSS-scales for free, so vertices appear
+      // to grow/shrink with the image; they snap back to the proper
+      // 1/zoom screen size when the wheel stops (150ms idle below).
+      isZoomingRef.current = true;
+      setIsZooming(true);
+      if (zoomEndTimerRef.current) clearTimeout(zoomEndTimerRef.current);
+      zoomEndTimerRef.current = setTimeout(() => {
+        isZoomingRef.current = false;
+        setIsZooming(false);
+        zoomEndTimerRef.current = null;
+      }, 150);
       throttledZoom.fn(e);
     };
 
@@ -992,6 +1014,7 @@ export const useEnhancedSegmentationEditor = ({
     isSpacePressed: keyboardShortcuts.isSpacePressed,
     activePartClassRef,
     activeInstanceIdRef,
+    projectType,
     onPolygonSelection: polygonSelection.handlePolygonSelection, // Pass centralized selection handler
     setEditMode,
     setInteractionState,
@@ -1135,6 +1158,7 @@ export const useEnhancedSegmentationEditor = ({
     // State
     ...editorState,
     vertexDragState,
+    isZooming,
 
     // Refs
     canvasRef,

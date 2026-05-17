@@ -17,6 +17,12 @@ interface PolygonVerticesProps {
   isUndoRedoInProgress?: boolean;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   editMode?: EditMode;
+  /** True while the wheel is actively zooming. When true, the memo
+   *  comparator below skips re-renders triggered by zoom changes —
+   *  vertices keep their last-computed SVG size and the parent CSS
+   *  transform scales them visually with the image, dodging the
+   *  per-vertex 1/zoom math that lags on 100+ point polylines. */
+  isZooming?: boolean;
 }
 
 const PolygonVertices = React.memo(
@@ -127,10 +133,24 @@ const PolygonVertices = React.memo(
       prevProps.polygonType !== nextProps.polygonType ||
       prevProps.isSelected !== nextProps.isSelected ||
       prevProps.isHovered !== nextProps.isHovered ||
-      prevProps.zoom !== nextProps.zoom ||
       prevProps.isUndoRedoInProgress !== nextProps.isUndoRedoInProgress
     ) {
       return false;
+    }
+    // Zoom change handling: if a zoom is currently in progress (rapid
+    // wheel events) we deliberately skip the vertex re-render. The CSS
+    // transform on the parent SVG container scales the circles visually
+    // for free; recomputing per-vertex 1/zoom radii every wheel tick is
+    // what makes the editor stutter on long polylines. The 150ms
+    // debounce in useEnhancedSegmentationEditor flips isZooming false
+    // when the wheel settles, at which point the next render goes
+    // through and the vertices snap to their proper screen-relative size.
+    if (prevProps.zoom !== nextProps.zoom) {
+      if (nextProps.isZooming) {
+        // Defer: skip this re-render, parent's transform handles visuals
+      } else {
+        return false;
+      }
     }
 
     // Compare points array (deep comparison)

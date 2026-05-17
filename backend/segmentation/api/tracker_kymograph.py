@@ -315,14 +315,23 @@ class KymographResponse(BaseModel):
 
 
 def _resample_profile(profile: np.ndarray, target_width: int) -> np.ndarray:
-    """Linear resample a 1D profile to ``target_width`` points."""
+    """Nearest-neighbour resample of a 1D intensity profile to ``target_width``.
+
+    Linear interpolation (np.interp) was smoothing the data — averaging
+    adjacent pixel intensities — which hides genuine intensity steps along
+    the microtubule. We pick the source index nearest to each destination
+    position so every value in the kymograph row is a real, unaltered pixel
+    intensity sampled along the polyline.
+    """
     if profile.size == 0:
         return np.zeros(target_width, dtype=np.float32)
     if profile.size == target_width:
         return profile.astype(np.float32)
-    src_x = np.linspace(0.0, 1.0, profile.size, dtype=np.float32)
-    dst_x = np.linspace(0.0, 1.0, target_width, dtype=np.float32)
-    return np.interp(dst_x, src_x, profile.astype(np.float32))
+    src_indices = np.round(
+        np.linspace(0.0, float(profile.size - 1), target_width)
+    ).astype(np.int32)
+    src_indices = np.clip(src_indices, 0, profile.size - 1)
+    return profile[src_indices].astype(np.float32)
 
 
 _VIRIDIS_RGB = np.array(
@@ -425,13 +434,15 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
             rows.append(np.zeros(req.target_width, dtype=np.float32))
             continue
         # scipy.ndimage.map_coordinates expects (channel, point) layout for
-        # row & column samplers. Clip into the frame to avoid silent zeros.
+        # row & column samplers. order=0 picks the nearest pixel rather
+        # than blending neighbours — required so the kymograph shows raw
+        # intensities along the polyline, not smoothed averages.
         rows_idx = np.clip(pts[:, 0], 0, H - 1)
         cols_idx = np.clip(pts[:, 1], 0, W - 1)
         profile = map_coordinates(
             img,
             np.stack([rows_idx, cols_idx]),
-            order=1,
+            order=0,
             mode="nearest",
         )
         rows.append(_resample_profile(profile, req.target_width))

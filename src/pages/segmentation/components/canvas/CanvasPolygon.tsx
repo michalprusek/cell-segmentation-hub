@@ -39,6 +39,10 @@ interface CanvasPolygonProps {
    *  to ``'microtubules'``. Without this gate, MT users saw the sperm
    *  head/midpiece/tail items just because the callbacks were truthy. */
   projectType?: ProjectType;
+  /** Wheel-zoom in progress. Forwarded to PolygonVertices so it can
+   *  skip the (expensive) per-vertex 1/zoom radius re-compute while
+   *  the wheel is active. */
+  isZooming?: boolean;
 }
 
 const CanvasPolygon = React.memo(
@@ -64,6 +68,7 @@ const CanvasPolygon = React.memo(
     onHover,
     editMode,
     projectType,
+    isZooming,
   }: CanvasPolygonProps) => {
     const { id, points, type = 'external', parent_id } = polygon;
 
@@ -397,6 +402,7 @@ const CanvasPolygon = React.memo(
               onDeleteVertex={onDeleteVertex}
               onDuplicateVertex={onDuplicateVertex}
               editMode={editMode}
+              isZooming={isZooming}
             />
           )}
         </g>
@@ -439,7 +445,13 @@ const CanvasPolygon = React.memo(
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
-      prevProps.zoom === nextProps.zoom &&
+      // Zoom equality is short-circuited when the wheel is actively
+      // zooming: we accept the previous zoom value (the SVG container
+      // CSS-scales the path + endpoint markers for free) so the per-
+      // vertex 1/zoom math is deferred until the wheel settles. Without
+      // this, every wheel tick re-renders every CanvasPolygon in the
+      // visible viewport, stuttering badly on long polylines.
+      (prevProps.zoom === nextProps.zoom || nextProps.isZooming === true) &&
       prevProps.hideVertices === nextProps.hideVertices &&
       sameViewport &&
       prevProps.hoveredVertex?.polygonId ===
