@@ -34,11 +34,10 @@ interface CanvasPolygonProps {
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
   onHover?: (polygonId: string | null) => void;
   editMode?: EditMode;
-  /** Project-type gate for the polyline context menu. Sperm items only
-   *  appear for ``'sperm'`` projects; the kymograph item is exclusive
-   *  to ``'microtubules'``. Without this gate, MT users saw the sperm
-   *  head/midpiece/tail items just because the callbacks were truthy. */
+  /** Gates polyline context-menu items by project (sperm parts vs. MT kymograph). */
   projectType?: ProjectType;
+  /** Wheel-zoom in progress. Skips per-vertex 1/zoom re-compute. */
+  isZooming?: boolean;
 }
 
 const CanvasPolygon = React.memo(
@@ -64,6 +63,7 @@ const CanvasPolygon = React.memo(
     onHover,
     editMode,
     projectType,
+    isZooming,
   }: CanvasPolygonProps) => {
     const { id, points, type = 'external', parent_id } = polygon;
 
@@ -397,6 +397,7 @@ const CanvasPolygon = React.memo(
               onDeleteVertex={onDeleteVertex}
               onDuplicateVertex={onDuplicateVertex}
               editMode={editMode}
+              isZooming={isZooming}
             />
           )}
         </g>
@@ -439,7 +440,9 @@ const CanvasPolygon = React.memo(
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
-      prevProps.zoom === nextProps.zoom &&
+      // Defer zoom-driven re-renders while the wheel is active — the
+      // parent SVG transform handles visual scaling.
+      (prevProps.zoom === nextProps.zoom || nextProps.isZooming === true) &&
       prevProps.hideVertices === nextProps.hideVertices &&
       sameViewport &&
       prevProps.hoveredVertex?.polygonId ===
@@ -456,10 +459,7 @@ const CanvasPolygon = React.memo(
       prevProps.onChangePartClass === nextProps.onChangePartClass &&
       prevProps.onChangeInstanceId === nextProps.onChangeInstanceId &&
       prevProps.availableInstanceIds === nextProps.availableInstanceIds &&
-      // projectType drives the context-menu's sperm-vs-MT gating; if
-      // we forget to compare it here, switching project types in the
-      // same session (or a per-polygon override one day) wouldn't
-      // re-render the menu and the user would see stale options.
+      // Drives context-menu gating; must be in comparator.
       prevProps.projectType === nextProps.projectType &&
       // editMode flips between View / EditVertices / Slice / AddPoints /
       // CreatePolygon / CreatePolyline / DeletePolygon and changes which
