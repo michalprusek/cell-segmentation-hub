@@ -314,21 +314,41 @@ class KymographResponse(BaseModel):
     tracked: bool
 
 
-def _resample_profile(profile: np.ndarray, target_width: int) -> np.ndarray:
-    """Nearest-neighbour resample of a 1D intensity profile to ``target_width``.
+def _arc_length_resample_polyline(
+    pts_rc: np.ndarray, n_samples: int
+) -> np.ndarray:
+    """Resample a polyline to ``n_samples`` arc-length-uniform points.
 
-    Each output value is a real source pixel — no interpolation — so the
-    kymograph faithfully reports the raw intensity sampled along the polyline.
+    Mirrors ImageJ's ``PolygonRoi.getInterpolatedPolygon(step, smooth=false)``:
+    walk the polyline at fixed arc-length step ``= total / (n - 1)``, emit
+    one point per step. The result has uniform spatial spacing, so a
+    kymograph row built from it preserves "column N = the same fractional
+    position along the microtubule" across frames (the property a biologist
+    expects from an ImageJ-style kymograph).
     """
-    if profile.size == 0:
-        return np.zeros(target_width, dtype=np.float32)
-    if profile.size == target_width:
-        return profile.astype(np.float32)
-    src_indices = np.round(
-        np.linspace(0.0, float(profile.size - 1), target_width)
-    ).astype(np.int32)
-    src_indices = np.clip(src_indices, 0, profile.size - 1)
-    return profile[src_indices].astype(np.float32)
+    if pts_rc.shape[0] < 2 or n_samples < 2:
+        return pts_rc.astype(np.float32)
+    segs = np.diff(pts_rc, axis=0)
+    seg_lengths = np.sqrt(np.sum(segs * segs, axis=1))
+    cum = np.concatenate([[0.0], np.cumsum(seg_lengths)])
+    total = float(cum[-1])
+    if total <= 0.0:
+        return np.tile(pts_rc[0], (n_samples, 1)).astype(np.float32)
+    targets = np.linspace(0.0, total, n_samples, dtype=np.float64)
+    # For each target arc length, find which segment contains it.
+    seg_idx = np.searchsorted(cum, targets, side="right") - 1
+    seg_idx = np.clip(seg_idx, 0, len(segs) - 1)
+    seg_start_cum = cum[seg_idx]
+    seg_len_at = seg_lengths[seg_idx]
+    # local in [0, 1] within the segment; guard zero-length segments.
+    local = np.where(
+        seg_len_at > 0.0,
+        (targets - seg_start_cum) / np.maximum(seg_len_at, 1e-12),
+        0.0,
+    )
+    local = np.clip(local, 0.0, 1.0)[:, None]
+    out = pts_rc[seg_idx] + local * segs[seg_idx]
+    return out.astype(np.float32)
 
 
 _VIRIDIS_RGB = np.array(
@@ -408,6 +428,22 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
 
     frames = sorted(req.frames, key=lambda f: f.frame)
 
+    # Choose the canonical sample count: round to the nearest integer of
+    # the seed (first) frame's polyline arc length. Matches ImageJ's
+    # convention of one sample per pixel along the line. The request's
+    # ``target_width`` acts as a clamp so we still cap output dimensions.
+    seed_pts = np.asarray(frames[0].polyline_rc, dtype=np.float64)
+    if seed_pts.ndim != 2 or seed_pts.shape[1] != 2 or seed_pts.shape[0] < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Seed-frame polyline has {seed_pts.shape[0]} vertex(es); "
+                "need >= 2."
+            ),
+        )
+    seed_arc = float(np.sum(np.linalg.norm(np.diff(seed_pts, axis=0), axis=1)))
+    n_samples = max(2, min(int(round(seed_arc)) + 1, req.target_width))
+
     rows: List[np.ndarray] = []
     for frame in frames:
         path = Path(frame.image_path)
@@ -417,9 +453,7 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
                 detail=f"Frame image missing: {frame.image_path}",
             )
         # Load at native bit depth. convert('L') would force 8-bit and lose
-        # half the dynamic range of 16-bit microscopy frames. float32 is
-        # the working type for map_coordinates either way; the global
-        # min/max normalisation below maps any range into [0,1].
+        # half the dynamic range of 16-bit microscopy frames.
         pil_frame = PILImage.open(path)
         if pil_frame.mode in ('I;16', 'I;16B', 'I;16L', 'I', 'F'):
             img = np.array(pil_frame, dtype=np.float32)
@@ -432,21 +466,28 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
                 "kymograph: frame %s polyline has <2 points; row filled with zeros",
                 frame.frame,
             )
-            rows.append(np.zeros(req.target_width, dtype=np.float32))
+            rows.append(np.zeros(n_samples, dtype=np.float32))
             continue
-        # map_coordinates: coords shape (2, N) — row 0 = row indices,
-        # row 1 = column indices. order=0 = nearest pixel (no blending).
-        rows_idx = np.clip(pts[:, 0], 0, H - 1)
-        cols_idx = np.clip(pts[:, 1], 0, W - 1)
+        # Step 1 (ImageJ-style): resample the polyline geometry to
+        # ``n_samples`` arc-length-uniform points. This is THE change
+        # that makes the kymograph spatially honest — vertex-only
+        # sampling was aliasing punctate signal between vertices.
+        sampled_pts = _arc_length_resample_polyline(pts, n_samples)
+        # Step 2: sample the underlying image at each interpolated point.
+        # order=0 = nearest pixel (no intensity blending). mode='constant',
+        # cval=0 = pixels outside the image read as 0 (matches ImageJ's
+        # getInterpolatedValue zero-fill, instead of edge-clamping which
+        # falsely brightened polylines that crossed the frame border).
         profile = map_coordinates(
             img,
-            np.stack([rows_idx, cols_idx]),
+            np.stack([sampled_pts[:, 0], sampled_pts[:, 1]]),
             order=0,
-            mode="nearest",
+            mode="constant",
+            cval=0.0,
         )
-        rows.append(_resample_profile(profile, req.target_width))
+        rows.append(profile.astype(np.float32))
 
-    kymo = np.stack(rows, axis=0)  # (F, target_width)
+    kymo = np.stack(rows, axis=0)  # (F, n_samples)
     if kymo.size == 0:
         raise HTTPException(status_code=500, detail="Empty kymograph result")
 
@@ -466,7 +507,7 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
 
     csv_buf = io.StringIO()
     writer = csv.writer(csv_buf)
-    writer.writerow(["frame", *[f"x{i}" for i in range(req.target_width)]])
+    writer.writerow(["frame", *[f"x{i}" for i in range(n_samples)]])
     for i, row in enumerate(kymo):
         writer.writerow([frames[i].frame, *row.tolist()])
     csv_b64 = base64.b64encode(csv_buf.getvalue().encode("utf-8")).decode("ascii")
