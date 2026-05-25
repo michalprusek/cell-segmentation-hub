@@ -25,5 +25,11 @@ try:
 except ImportError:
     MicrotubuleModel = None
 
+# SegFormer-B0 spheroid model: optional import (requires transformers).
+try:
+    from .segformer import SegFormerModel
+except ImportError:
+    SegFormerModel = None
+
 __all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel',
-           'WoundModel', 'MicrotubuleModel']
+           'WoundModel', 'MicrotubuleModel', 'SegFormerModel']

@@ -9,6 +9,7 @@ class ModelType(str, Enum):
     CBAM_RESUNET = "cbam_resunet"
     UNET_SPHEROHQ = "unet_spherohq"
     UNET_ATTENTION_ASPP = "unet_attention_aspp"
+    SEGFORMER = "segformer"
     SPERM = "sperm"
     WOUND = "wound"
 

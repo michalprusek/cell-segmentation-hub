@@ -162,6 +162,7 @@ type KnownModelId =
   | 'cbam_resunet'
   | 'unet_spherohq'
   | 'unet_attention_aspp'
+  | 'segformer'
   | 'sperm'
   | 'wound'
   | 'microtubule';
@@ -182,7 +183,7 @@ export const MODEL_TYPE_COMPATIBILITY: Record<
   ProjectType,
   readonly KnownModelId[]
 > = {
-  spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq'],
+  spheroid: ['hrnet', 'cbam_resunet', 'unet_spherohq', 'segformer'],
   spheroid_invasive: ['unet_attention_aspp'],
   wound: ['wound'],
   sperm: ['sperm'],

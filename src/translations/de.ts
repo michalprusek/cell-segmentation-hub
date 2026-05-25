@@ -475,6 +475,11 @@ export default {
           description:
             'Erweitertes UNet mit Attention Gates und ASPP zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (~0.35s/Bild)',
         },
+        segformer: {
+          name: 'SegFormer',
+          description:
+            'Transformer-basiertes Modell (SegFormer-B0) für Hellfeld-Sphäroide – höchste Genauigkeit (93% IoU) und sehr schnell (~13 ms/Bild)',
+        },
         sperm: {
           name: 'Spermien-Morphologie',
           description:
@@ -511,6 +516,8 @@ export default {
         'Schnellstes Modell nach Optimierungen! Hervorragend für Echtzeitverarbeitung (E2E ~286ms, 5.5 Bilder/s)',
       unet_attention_aspp:
         'Erweitertes UNet mit Attention Gates und ASPP-Bottleneck zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (35,5M Parameter)',
+      segformer:
+        'Transformer-basiertes SegFormer-B0-Modell, trainiert auf dem SpheroMix-Datensatz. Höchste Sphäroid-Genauigkeit der Plattform (93% IoU) bei gleichzeitig kleinstem und schnellstem Modell (~13 ms/Bild).',
       sperm:
         'Spermienmorphologie-Modell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
       wound:
