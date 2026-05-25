@@ -466,6 +466,11 @@ export default {
           description:
             'UNet amélioré avec Attention Gates et ASPP pour la détection de sphéroïdes en dissolution et de petites cellules satellites (~0.35s/image)',
         },
+        segformer: {
+          name: 'SegFormer',
+          description:
+            'Modèle basé sur un transformeur (SegFormer-B0) pour les sphéroïdes en fond clair — précision maximale (93% IoU) et très rapide (~13 ms/image)',
+        },
         sperm: {
           name: 'Morphologie des spermatozoïdes',
           description:
@@ -502,6 +507,8 @@ export default {
         'Le modèle le plus rapide après optimisations! Excellent pour le traitement en temps réel (E2E ~286ms, 5.5 img/s)',
       unet_attention_aspp:
         'UNet amélioré avec Attention Gates et goulot ASPP pour la détection de sphéroïdes en dissolution et de petites cellules satellites (35,5M paramètres)',
+      segformer:
+        'Modèle SegFormer-B0 basé sur un transformeur, entraîné sur le jeu de données SpheroMix. Meilleure précision de segmentation des sphéroïdes de la plateforme (93% IoU), tout en étant le modèle le plus petit et le plus rapide (~13 ms/image).',
       sperm:
         'Modèle de morphologie spermatique avec extraction de squelette pour la mesure de la tête, de la pièce intermédiaire et de la queue',
       wound:

@@ -12,6 +12,7 @@ export const SEGMENTATION_MODELS = [
   'cbam_resunet',
   'unet_spherohq',
   'unet_attention_aspp',
+  'segformer',
   'resunet_advanced',
   'resunet_small',
   'sperm',

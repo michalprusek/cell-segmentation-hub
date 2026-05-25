@@ -455,6 +455,11 @@ export default {
           description:
             'Vylepšený UNet s Attention Gates a ASPP pro detekci rozpadajících se sféroidů a malých satelitních buněk (~0.35s/snímek)',
         },
+        segformer: {
+          name: 'SegFormer',
+          description:
+            'Model založený na transformeru (SegFormer-B0) pro sféroidy ve světlém poli — nejvyšší přesnost (93% IoU) a velmi rychlý (~13 ms/snímek)',
+        },
         sperm: {
           name: 'Morfologie spermií',
           description:
@@ -491,6 +496,8 @@ export default {
         'Nejrychlejší model po optimalizacích! Výborný pro zpracování v reálném čase (E2E ~286ms, 5.5 obr/s)',
       unet_attention_aspp:
         'Vylepšený UNet s Attention Gates a ASPP bottleneck pro detekci rozpadajících se sféroidů a malých satelitních buněk (35.5M parametrů)',
+      segformer:
+        'Model SegFormer-B0 založený na transformeru, trénovaný na datasetu SpheroMix. Nejvyšší přesnost segmentace sféroidů v platformě (93% IoU) a zároveň nejmenší a nejrychlejší model (~13 ms/snímek).',
       sperm:
         'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
       wound:

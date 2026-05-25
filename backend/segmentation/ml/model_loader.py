@@ -66,6 +66,18 @@ except ImportError as e:
     MicrotubuleModel = None
     _microtubule_import_error = e
 
+# Optional SegFormer-B0 spheroid model import (requires transformers).
+_segformer_import_error = None
+try:
+    from models.segformer import SegFormerModel
+except ImportError as e:
+    logger.warning(
+        f"Could not import SegFormerModel: {e}. "
+        "SegFormer segmentation will not be available."
+    )
+    SegFormerModel = None
+    _segformer_import_error = e
+
 # Import the new inference executor
 from .inference_executor import (
     InferenceExecutor,
@@ -167,6 +179,13 @@ class ModelLoader:
             'class': UNetAttention,
             'pretrained_path': 'weights/unet_v4_weights.pth',
             'finetuned_path': 'weights/unet_v4_weights.pth',
+            'config_path': None
+        },
+        'segformer': {
+            # Will be None if transformers not installed
+            'class': SegFormerModel,
+            'pretrained_path': 'weights/segformer_b0_spheroseg.pth',
+            'finetuned_path': 'weights/segformer_b0_spheroseg.pth',
             'config_path': None
         },
         'sperm': {
@@ -278,6 +297,20 @@ class ModelLoader:
                     use_deep_supervision=False,
                     use_attention_gates=True, use_aspp=True
                 )
+            elif model_name == 'segformer':
+                # SegFormer-B0 wraps a HuggingFace model, so it can't use the
+                # generic torch.load + load_state_dict path below — it builds
+                # the HF architecture and loads weights via its own wrapper.
+                if SegFormerModel is None:
+                    raise ImportError(
+                        f"SegFormer model architecture not available: "
+                        f"{_segformer_import_error}"
+                    )
+                model = SegFormerModel()
+                model.load_weights(str(weights_full_path), self.device)
+                self.loaded_models[model_name] = model
+                logger.info(f"Successfully loaded SegFormer model from: {weights_full_path}")
+                return model
             elif model_name == 'sperm':
                 # Sperm segmentation model — uses its own pipeline (Mask2Former + graph assembly)
                 if SpermModel is None:

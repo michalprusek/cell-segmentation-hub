@@ -422,6 +422,11 @@ export default {
           description:
             '增强型UNet，配备注意力门控和ASPP，用于检测溶解中的球体和小型卫星细胞（约0.35秒/图像）',
         },
+        segformer: {
+          name: 'SegFormer',
+          description:
+            '基于 Transformer 的模型（SegFormer-B0），用于明场球体分割——精度最高（93% IoU）且速度极快（约 13 毫秒/图像）',
+        },
         sperm: {
           name: '精子形态学',
           description:
@@ -455,6 +460,8 @@ export default {
         '优化后最快的模型！非常适合实时处理 (E2E ~286ms, 5.5 图像/秒)',
       unet_attention_aspp:
         '增强型UNet，配备注意力门控和ASPP瓶颈层，用于检测溶解中的球体和小型卫星细胞（3550万参数）',
+      segformer:
+        '基于 Transformer 的 SegFormer-B0 模型，在 SpheroMix 数据集上训练。平台中球体分割精度最高（93% IoU），同时是体积最小、速度最快的模型（约 13 毫秒/图像）。',
       sperm: '精子形态模型，通过骨架提取测量头部、中段和尾部',
       wound:
         '用于划痕实验显微镜的伤口分割的U-Net + MiT-B5（SegFormer编码器）模型。每张图像一个二进制伤口区域；非常适合愈合速度的时间延迟拍摄。',

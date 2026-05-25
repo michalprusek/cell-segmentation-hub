@@ -4,6 +4,7 @@ export type ModelType =
   | 'cbam_resunet'
   | 'unet_spherohq'
   | 'unet_attention_aspp'
+  | 'segformer'
   | 'sperm'
   | 'wound'
   | 'microtubule';
@@ -87,6 +88,18 @@ export function getLocalizedModelInfo(
         batchSize: 1,
       },
     },
+    segformer: {
+      id: 'segformer',
+      size: 'small',
+      defaultThreshold: 0.5,
+      category: 'spheroid',
+      performance: {
+        avgTimePerImage: 0.2,
+        throughput: 5.0,
+        p95Latency: 0.3,
+        batchSize: 4,
+      },
+    },
     sperm: {
       id: 'sperm',
       size: 'medium',
@@ -133,6 +146,7 @@ export function getLocalizedModelInfo(
     cbam_resunet: 'cbam',
     unet_spherohq: 'unet_spherohq',
     unet_attention_aspp: 'unet_attention_aspp',
+    segformer: 'segformer',
     sperm: 'sperm',
     wound: 'wound',
     microtubule: 'microtubule',
@@ -158,6 +172,7 @@ export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
     'cbam_resunet',
     'unet_spherohq',
     'unet_attention_aspp',
+    'segformer',
     'sperm',
     'wound',
     'microtubule',
@@ -237,6 +252,22 @@ export const BASIC_MODEL_INFO: Record<
       throughput: 2.8,
       p95Latency: 0.5,
       batchSize: 1,
+    },
+  },
+  segformer: {
+    id: 'segformer',
+    name: 'SegFormer',
+    displayName: 'SegFormer',
+    description:
+      'Transformer-based model (SegFormer-B0) for bright-field spheroids — highest accuracy (93% IoU) and very fast (~13 ms/image)',
+    size: 'small',
+    defaultThreshold: 0.5,
+    category: 'spheroid',
+    performance: {
+      avgTimePerImage: 0.2,
+      throughput: 5.0,
+      p95Latency: 0.3,
+      batchSize: 4,
     },
   },
   sperm: {
