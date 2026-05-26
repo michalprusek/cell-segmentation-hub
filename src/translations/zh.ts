@@ -1048,6 +1048,7 @@ export default {
         '将距任意 MT 此半径范围内的像素 (厚度 × 倍率) 排除出背景。越大越保守。',
       channelsLabel: '要采样的通道',
       noChannels: '该项目没有通道元数据。请重新上传视频以获取按通道的指标。',
+      selectChannelRequired: '请至少选择一个通道以导出按通道的强度指标。',
     },
     advancedExport: '高级导出',
     advancedOptions: '高级导出选项',

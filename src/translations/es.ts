@@ -1133,6 +1133,8 @@ export default {
       channelsLabel: 'Canales a muestrear',
       noChannels:
         'Este proyecto no tiene metadatos de canales. Vuelva a subir el vídeo para obtener métricas por canal.',
+      selectChannelRequired:
+        'Seleccione al menos un canal para exportar las métricas de intensidad por canal.',
     },
     advancedExport: 'Exportación Avanzada',
     advancedOptions: 'Opciones Avanzadas de Exportación',

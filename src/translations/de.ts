@@ -1149,6 +1149,8 @@ export default {
       channelsLabel: 'Zu abtastende Kanäle',
       noChannels:
         'Dieses Projekt hat keine Kanal-Metadaten. Laden Sie das Video erneut hoch, um kanalspezifische Metriken zu erhalten.',
+      selectChannelRequired:
+        'Wählen Sie mindestens einen Kanal, um kanalspezifische Intensitätsmetriken zu exportieren.',
     },
     advancedExport: 'Erweiterter Export',
     advancedOptions: 'Erweiterte Export-Optionen',

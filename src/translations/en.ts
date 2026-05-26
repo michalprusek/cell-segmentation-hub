@@ -1129,6 +1129,8 @@ export default {
       channelsLabel: 'Channels to sample',
       noChannels:
         'This project has no per-channel metadata. Re-upload the video to get channel-specific metrics.',
+      selectChannelRequired:
+        'Select at least one channel to export per-channel intensity metrics.',
     },
     // Dialog headers
     advancedExport: 'Advanced Export',

@@ -234,6 +234,11 @@ export const MicrotubuleMetricsSection: React.FC<
               ))}
             </div>
           )}
+          {value.enabled && !noChannels && value.channels.length === 0 ? (
+            <p className="text-xs text-destructive mt-2">
+              {t('export.mt.selectChannelRequired')}
+            </p>
+          ) : null}
         </div>
       </CardContent>
     </Card>

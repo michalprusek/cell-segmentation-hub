@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useWebSocket } from '@/contexts/useWebSocket';
 import { logger } from '@/lib/logger';
@@ -207,6 +208,15 @@ export const useSharedAdvancedExport = (
             isExporting: false,
             completedJobId: jobId,
           });
+          // Surface any non-fatal warnings on resume-after-refresh too (the
+          // WS completion event may have been missed while the tab was away).
+          if (Array.isArray(status.warnings)) {
+            for (const w of status.warnings) {
+              if (typeof w === 'string' && w.trim()) {
+                toast.warning(w, { duration: 12000 });
+              }
+            }
+          }
         } else if (
           status.status === 'failed' ||
           status.status === 'cancelled'
@@ -457,7 +467,7 @@ export const useSharedAdvancedExport = (
       }
     };
 
-    const handleCompleted = (data: { jobId: string }) => {
+    const handleCompleted = (data: { jobId: string; warnings?: string[] }) => {
       if (data.jobId === currentJob.id) {
         updateState({
           currentJob: currentJob
@@ -467,6 +477,16 @@ export const useSharedAdvancedExport = (
           isExporting: false,
           completedJobId: data.jobId,
         });
+        // Surface non-fatal warnings (e.g. microtubule intensity omitted /
+        // could not be computed) so a "completed" export that quietly dropped
+        // some metrics isn't a silent failure.
+        if (Array.isArray(data.warnings)) {
+          for (const w of data.warnings) {
+            if (typeof w === 'string' && w.trim()) {
+              toast.warning(w, { duration: 12000 });
+            }
+          }
+        }
       }
     };
 

@@ -1138,6 +1138,8 @@ export default {
       channelsLabel: 'Canaux à échantillonner',
       noChannels:
         'Ce projet ne contient pas de métadonnées de canaux. Téléversez à nouveau la vidéo pour obtenir des métriques par canal.',
+      selectChannelRequired:
+        "Sélectionnez au moins un canal pour exporter les métriques d'intensité par canal.",
     },
     advancedExport: 'Export Avancé',
     advancedOptions: "Options d'Exportation Avancées",

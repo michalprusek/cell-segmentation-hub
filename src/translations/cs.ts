@@ -1138,6 +1138,8 @@ export default {
       channelsLabel: 'Kanály ke zpracování',
       noChannels:
         'Tento projekt nemá metadata o kanálech. Pro získání metrik podle kanálů znovu nahrajte video.',
+      selectChannelRequired:
+        'Pro export metrik intenzity podle kanálů vyberte alespoň jeden kanál.',
     },
     advancedExport: 'Pokročilý export',
     advancedOptions: 'Pokročilé možnosti exportu',
