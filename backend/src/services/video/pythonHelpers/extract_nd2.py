@@ -56,6 +56,77 @@ def _sanitize_name(name: str | None, fallback: str) -> str:
     return safe or fallback
 
 
+class UnsupportedND2(ValueError):
+    """Raised for ND2 layouts we deliberately reject with a user-facing
+    message (rather than silently mis-extracting)."""
+
+
+def normalize_to_tcyx(arr: np.ndarray, axes: str) -> np.ndarray:
+    """Reshape an ND2 array to canonical ``(T, C, Y, X)``.
+
+    Handles the real-world axis layouts we see in the wild:
+
+    - ``Z`` (focus stack)            → max-intensity projection (singleton Z
+      is simply squeezed).
+    - singleton loop axes (``P``     → squeezed away. NIS-Elements often
+      position, ``S`` sample, …)        exports per-field files that still
+                                        carry a length-1 ``P`` axis, which
+                                        the old ``TCYX``-only path rejected.
+    - missing ``T`` and/or ``C``     → inserted as length-1 so ``arr[t, c]``
+                                        indexing downstream always works.
+
+    A genuine multi-position acquisition (a ``P`` / other loop axis with
+    size > 1) has no single-video meaning, so it is rejected with an
+    actionable :class:`UnsupportedND2` message instead of silently
+    exporting only the first position.
+
+    ``axes`` is the dimension-name string aligned with ``arr`` (e.g.
+    ``"PTCYX"``); ``len(axes) == arr.ndim``.
+    """
+    ax = list(axes)
+
+    if "Z" in ax:
+        zi = ax.index("Z")
+        arr = arr.max(axis=zi) if arr.shape[zi] > 1 else np.squeeze(arr, axis=zi)
+        ax.pop(zi)
+
+    # Drop non-core axes. Singletons squeeze cleanly; a size>1 loop axis is
+    # multi-position content we can't fold into one video.
+    i = 0
+    while i < len(ax):
+        a = ax[i]
+        if a in ("T", "C", "Y", "X"):
+            i += 1
+            continue
+        if arr.shape[i] == 1:
+            arr = np.squeeze(arr, axis=i)
+            ax.pop(i)
+            continue
+        raise UnsupportedND2(
+            f"Multi-position ND2 not supported: this file has {arr.shape[i]} "
+            f"positions ('{a}' axis). In NIS-Elements split the points into "
+            f"separate single-field files and re-upload one per video."
+        )
+
+    if "Y" not in ax or "X" not in ax:
+        raise UnsupportedND2(
+            f"Unsupported ND2 axes '{''.join(ax)}' shape={arr.shape}: "
+            f"no Y/X image plane found."
+        )
+
+    # Insert any missing leading dims so the canonical order is complete.
+    if "T" not in ax:
+        arr = arr[None, ...]
+        ax.insert(0, "T")
+    if "C" not in ax:
+        ci = ax.index("Y")
+        arr = np.expand_dims(arr, axis=ci)
+        ax.insert(ci, "C")
+
+    perm = [ax.index(a) for a in ("T", "C", "Y", "X")]
+    return np.transpose(arr, perm)
+
+
 def main() -> int:
     if len(sys.argv) < 3:
         print("usage: extract_nd2.py <src.nd2> <dest_dir>", file=sys.stderr)
@@ -80,37 +151,25 @@ def main() -> int:
         W = sizes.get("X", 0)
 
         arr = f.asarray()
-        axes = "".join(f.sizes.keys())  # e.g. "TCYX" or "TZCYX"
+        axes = "".join(f.sizes.keys())  # e.g. "TCYX", "TZCYX", "PTCYX"
 
-        # Reduce Z via max projection if present.
-        if "Z" in axes and Z > 1:
-            z_idx = axes.index("Z")
-            arr = arr.max(axis=z_idx)
-            axes = axes.replace("Z", "")
-            Z = 1
+        # Normalize to canonical (T, C, Y, X) — squeezes singleton loop axes
+        # (e.g. a length-1 P from per-field NIS exports), max-projects Z, and
+        # rejects genuine multi-position files with a user-facing message.
+        try:
+            arr = normalize_to_tcyx(arr, axes)
+        except UnsupportedND2 as exc:
+            print(str(exc), file=sys.stderr)
+            return 4
 
-        # Normalize axes order to TCYX.
-        if axes == "CYX" and arr.ndim == 3:
-            arr = arr[None, ...]  # add T dim
-            T = 1
-        elif axes == "YX" and arr.ndim == 2:
-            arr = arr[None, None, ...]
-            T, C = 1, 1
-        elif axes == "TYX" and arr.ndim == 3:
-            arr = arr[:, None, :, :]
-            C = 1
-        elif axes != "TCYX":
-            # Try to reorder via numpy einsum-style transpose.
-            try:
-                target = "TCYX"
-                perm = [axes.index(ax) for ax in target if ax in axes]
-                arr = np.transpose(arr, perm)
-            except ValueError:
-                print(
-                    f"Unsupported ND2 axes='{axes}' shape={arr.shape}",
-                    file=sys.stderr,
-                )
-                return 4
+        # Trust the post-normalization shape over the raw `sizes` (which may
+        # have included the squeezed/projected axes).
+        T, C, H, W = (
+            int(arr.shape[0]),
+            int(arr.shape[1]),
+            int(arr.shape[2]),
+            int(arr.shape[3]),
+        )
 
         # Channel metadata: name + emission wavelength.
         # `displayName` is the human-friendly label (ND2 metadata name, or
