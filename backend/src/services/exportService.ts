@@ -839,8 +839,17 @@ export class ExportService {
         return 'skipped';
       }
 
+      // Video frames all share their parent container's base name
+      // (e.g. "clip.nd2 (frame 1)" → "clip"), so a plain `${base}_viz.png`
+      // collides across every frame and the parallel batch leaves only the
+      // last writer's file. Disambiguate frame rows with their frameIndex
+      // (image.id as a last resort) so each frame gets its own visualization.
       const imageNameWithoutExt = path.parse(image.name).name;
-      const vizPath = path.join(vizDir, `${imageNameWithoutExt}_viz.png`);
+      const vizFileName =
+        image.parentVideoId && image.frameIndex != null
+          ? `${imageNameWithoutExt}_frame_${String(image.frameIndex).padStart(4, '0')}_viz.png`
+          : `${imageNameWithoutExt}_viz.png`;
+      const vizPath = path.join(vizDir, vizFileName);
 
       let polygons;
       try {
@@ -1105,6 +1114,21 @@ export class ExportService {
     // Check if job was cancelled before starting metrics calculation
     if (jobId && this.isJobCancelled(jobId)) {
       throw new Error('Export cancelled by user');
+    }
+
+    // Microtubule annotations are open polylines, which the standard
+    // closed-polygon metrics calculator discards (geometry !== 'polyline'
+    // filter) — so this report would be header-only. The MT per-channel
+    // intensity exporter (`generateMTIntensityMetrics`) writes the
+    // metrics.{csv,xlsx,json} files for MT projects instead. Skip here to
+    // avoid emitting empty files and racing the MT writer on the same paths.
+    if (projectType === 'microtubules') {
+      logger.info(
+        'Microtubule project: standard polygon metrics skipped; the MT intensity exporter owns the metrics files',
+        'ExportService',
+        { jobId }
+      );
+      return;
     }
 
     const metricsDir = path.join(exportDir, 'metrics');

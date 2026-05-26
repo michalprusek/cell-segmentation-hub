@@ -496,21 +496,25 @@ export async function writeMTMetrics(
   if (!rows.length || !formats.length) return;
   await fs.mkdir(destDir, { recursive: true });
 
+  // For microtubule projects these ARE the standard metrics files — the
+  // closed-polygon report is skipped upstream (see exportService
+  // `generateMetrics`), so write the canonical `metrics.*` names rather
+  // than a separate `microtubule_metrics.*` the user might overlook.
   for (const fmt of formats) {
     if (fmt === 'csv') {
       await fs.writeFile(
-        path.join(destDir, 'microtubule_metrics.csv'),
+        path.join(destDir, 'metrics.csv'),
         rowsToCSV(rows),
         'utf8'
       );
     } else if (fmt === 'json') {
       await fs.writeFile(
-        path.join(destDir, 'microtubule_metrics.json'),
+        path.join(destDir, 'metrics.json'),
         JSON.stringify(rows, null, 2),
         'utf8'
       );
     } else if (fmt === 'excel') {
-      await writeXLSX(rows, path.join(destDir, 'microtubule_metrics.xlsx'));
+      await writeXLSX(rows, path.join(destDir, 'metrics.xlsx'));
     }
   }
 }
