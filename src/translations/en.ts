@@ -1131,6 +1131,10 @@ export default {
         'This project has no per-channel metadata. Re-upload the video to get channel-specific metrics.',
       selectChannelRequired:
         'Select at least one channel to export per-channel intensity metrics.',
+      incompleteTitle: 'Intensity calculation not selected',
+      incompleteBody:
+        'You have not enabled per-channel signal-intensity calculation, so the exported metrics will be incomplete: only microtubule length will be included, without the per-channel intensity columns. Export anyway?',
+      incompleteConfirm: 'Export anyway',
     },
     // Dialog headers
     advancedExport: 'Advanced Export',
