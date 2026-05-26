@@ -403,6 +403,18 @@ export default {
         wound: '伤口愈合模型',
         microtubule: '微管模型',
       },
+      presets: {
+        fast: '快速',
+        accurate: '精确',
+        robust: '稳健',
+        showMore: '显示更多模型',
+        showLess: '隐藏更多模型',
+      },
+      presetDescriptions: {
+        fast: '实时预览、大批量、弱 GPU',
+        accurate: '具有 HQ 图像的实验室，时间不紧张时',
+        robust: '外部实验室、未知光学、药物处理、异常形态',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -426,6 +438,11 @@ export default {
           name: 'SegFormer',
           description:
             '基于 Transformer 的模型（SegFormer-B0），用于明场球体分割——精度最高（93% IoU）且速度极快（约 13 毫秒/图像）',
+        },
+        mamba_unet: {
+          name: 'Mamba-UNet',
+          description:
+            '带双向 Mamba（状态空间）瓶颈的 U-Net——在分布外图像上鲁棒性最佳（未知光学、药物处理、异常形态）',
         },
         sperm: {
           name: '精子形态学',
@@ -462,6 +479,8 @@ export default {
         '增强型UNet，配备注意力门控和ASPP瓶颈层，用于检测溶解中的球体和小型卫星细胞（3550万参数）',
       segformer:
         '基于 Transformer 的 SegFormer-B0 模型，在 SpheroMix 数据集上训练。平台中球体分割精度最高（93% IoU），同时是体积最小、速度最快的模型（约 13 毫秒/图像）。',
+      mamba_unet:
+        '带双向 Mamba（状态空间）瓶颈的 U-Net（9075 万参数）。平台中最佳的分布外泛化能力（HTS-Seg IoU 0.587）——专为外部实验室、未知光学、药物处理和异常球体形态而设计。',
       sperm: '精子形态模型，通过骨架提取测量头部、中段和尾部',
       wound:
         '用于划痕实验显微镜的伤口分割的U-Net + MiT-B5（SegFormer编码器）模型。每张图像一个二进制伤口区域；非常适合愈合速度的时间延迟拍摄。',

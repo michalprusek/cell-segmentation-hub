@@ -31,5 +31,19 @@ try:
 except ImportError:
     SegFormerModel = None
 
+# Mamba-UNet spheroid model: optional import (requires mamba_ssm CUDA kernels).
+# Catch OSError too: a present-but-ABI-mismatched .so raises OSError/ImportError
+# on load, and we want that to disable only this model (with a log), not crash
+# the whole package import.
+try:
+    from .mamba_unet import UMamba
+except (ImportError, OSError) as _e:
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        "Could not import UMamba (Mamba-UNet): %s. Model unavailable.", _e
+    )
+    UMamba = None
+
 __all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel',
-           'WoundModel', 'MicrotubuleModel', 'SegFormerModel']
+           'WoundModel', 'MicrotubuleModel', 'SegFormerModel', 'UMamba']

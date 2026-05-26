@@ -436,6 +436,19 @@ export default {
         wound: 'Modely hojení ran',
         microtubule: 'Modely mikrotubulů',
       },
+      presets: {
+        fast: 'Rychlý',
+        accurate: 'Přesný',
+        robust: 'Robustní',
+        showMore: 'Zobrazit další modely',
+        showLess: 'Skrýt další modely',
+      },
+      presetDescriptions: {
+        fast: 'Náhled v reálném čase, velké dávky, slabší GPU',
+        accurate: 'Laboratoře s HQ snímky, když nezáleží na čase',
+        robust:
+          'Externí laboratoře, neznámá optika, léčené vzorky, neobvyklé morfologie',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -459,6 +472,11 @@ export default {
           name: 'SegFormer',
           description:
             'Model založený na transformeru (SegFormer-B0) pro sféroidy ve světlém poli — nejvyšší přesnost (93% IoU) a velmi rychlý (~13 ms/snímek)',
+        },
+        mamba_unet: {
+          name: 'Mamba-UNet',
+          description:
+            'U-Net s obousměrným Mamba (state-space) bottleneckem — nejlepší robustnost na snímcích mimo trénovací distribuci (neznámá optika, léčené vzorky, neobvyklé morfologie)',
         },
         sperm: {
           name: 'Morfologie spermií',
@@ -498,6 +516,8 @@ export default {
         'Vylepšený UNet s Attention Gates a ASPP bottleneck pro detekci rozpadajících se sféroidů a malých satelitních buněk (35.5M parametrů)',
       segformer:
         'Model SegFormer-B0 založený na transformeru, trénovaný na datasetu SpheroMix. Nejvyšší přesnost segmentace sféroidů v platformě (93% IoU) a zároveň nejmenší a nejrychlejší model (~13 ms/snímek).',
+      mamba_unet:
+        'U-Net s obousměrným Mamba (state-space) bottleneckem (90,75M parametrů). Nejlepší generalizace mimo distribuci v platformě (HTS-Seg IoU 0,587) — určený pro externí laboratoře, neznámou optiku, léčené vzorky a neobvyklé morfologie sféroidů.',
       sperm:
         'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
       wound:
