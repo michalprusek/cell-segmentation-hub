@@ -1140,6 +1140,10 @@ export default {
         'Ce projet ne contient pas de métadonnées de canaux. Téléversez à nouveau la vidéo pour obtenir des métriques par canal.',
       selectChannelRequired:
         "Sélectionnez au moins un canal pour exporter les métriques d'intensité par canal.",
+      incompleteTitle: "Calcul d'intensité non sélectionné",
+      incompleteBody:
+        "Vous n'avez pas activé le calcul de l'intensité du signal par canal ; les métriques exportées seront donc incomplètes : seule la longueur des microtubules sera incluse, sans les colonnes d'intensité par canal. Exporter quand même ?",
+      incompleteConfirm: 'Exporter quand même',
     },
     advancedExport: 'Export Avancé',
     advancedOptions: "Options d'Exportation Avancées",

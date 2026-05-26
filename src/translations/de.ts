@@ -1151,6 +1151,10 @@ export default {
         'Dieses Projekt hat keine Kanal-Metadaten. Laden Sie das Video erneut hoch, um kanalspezifische Metriken zu erhalten.',
       selectChannelRequired:
         'Wählen Sie mindestens einen Kanal, um kanalspezifische Intensitätsmetriken zu exportieren.',
+      incompleteTitle: 'Intensitätsberechnung nicht ausgewählt',
+      incompleteBody:
+        'Sie haben die kanalweise Signalintensitätsberechnung nicht aktiviert, daher sind die exportierten Metriken unvollständig: Es wird nur die Mikrotubuli-Länge einbezogen, ohne die kanalspezifischen Intensitätsspalten. Trotzdem exportieren?',
+      incompleteConfirm: 'Trotzdem exportieren',
     },
     advancedExport: 'Erweiterter Export',
     advancedOptions: 'Erweiterte Export-Optionen',

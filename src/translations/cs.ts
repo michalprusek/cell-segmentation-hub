@@ -1140,6 +1140,10 @@ export default {
         'Tento projekt nemá metadata o kanálech. Pro získání metrik podle kanálů znovu nahrajte video.',
       selectChannelRequired:
         'Pro export metrik intenzity podle kanálů vyberte alespoň jeden kanál.',
+      incompleteTitle: 'Výpočet intenzit nezvolen',
+      incompleteBody:
+        'Nemáte zapnutý výpočet intenzity signálu podle kanálů, takže exportované metriky budou neúplné: zahrnuta bude pouze délka mikrotubulů, bez sloupců s intenzitou podle kanálů. Přesto exportovat?',
+      incompleteConfirm: 'Přesto exportovat',
     },
     advancedExport: 'Pokročilý export',
     advancedOptions: 'Pokročilé možnosti exportu',

@@ -1049,6 +1049,10 @@ export default {
       channelsLabel: '要采样的通道',
       noChannels: '该项目没有通道元数据。请重新上传视频以获取按通道的指标。',
       selectChannelRequired: '请至少选择一个通道以导出按通道的强度指标。',
+      incompleteTitle: '未选择强度计算',
+      incompleteBody:
+        '您尚未启用按通道的信号强度计算，因此导出的指标将不完整：仅包含微管长度，而不含按通道的强度列。仍要导出吗？',
+      incompleteConfirm: '仍要导出',
     },
     advancedExport: '高级导出',
     advancedOptions: '高级导出选项',

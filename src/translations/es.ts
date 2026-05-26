@@ -1135,6 +1135,10 @@ export default {
         'Este proyecto no tiene metadatos de canales. Vuelva a subir el vídeo para obtener métricas por canal.',
       selectChannelRequired:
         'Seleccione al menos un canal para exportar las métricas de intensidad por canal.',
+      incompleteTitle: 'Cálculo de intensidad no seleccionado',
+      incompleteBody:
+        'No ha activado el cálculo de intensidad de señal por canal, por lo que las métricas exportadas estarán incompletas: solo se incluirá la longitud de los microtúbulos, sin las columnas de intensidad por canal. ¿Exportar de todos modos?',
+      incompleteConfirm: 'Exportar de todos modos',
     },
     advancedExport: 'Exportación Avanzada',
     advancedOptions: 'Opciones Avanzadas de Exportación',
