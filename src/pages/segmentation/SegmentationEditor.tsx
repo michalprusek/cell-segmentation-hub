@@ -550,6 +550,16 @@ const SegmentationEditor = () => {
           saveHeight,
           signal ? { signal } : undefined
         );
+        // Keep the shared React Query cache in sync with the just-saved
+        // server state. The editor's load path serves cache-first
+        // (cache hit short-circuits the network), so without this a
+        // delete-then-reopen within gcTime would resurrect the removed
+        // polygons from the stale cache entry seeded on initial load.
+        setCachedSegmentationPolygons(queryClient, saveToImageId, {
+          polygons: updatedResult.polygons ?? [],
+          imageWidth: saveWidth,
+          imageHeight: saveHeight,
+        });
         // Only update UI state if we're saving the current image (not autosave for different image)
         if (saveToImageId === imageId) {
           setSegmentationPolygons(updatedResult.polygons || []);
