@@ -1,6 +1,38 @@
 # Optimized multi-stage build for ML service with minimal size
 # This is the most critical optimization as ML images are the largest
 
+# Stage 0: CUDA-devel builder for Mamba-UNet kernels (mamba-ssm + causal-conv1d).
+# These are CUDA-compiled extensions with NO prebuilt wheel for torch 2.6, and the
+# pinned versions (2.2.4 / 1.4.0) avoid the triton 3.5 requirement of newer
+# releases. We compile them against torch 2.6.0+cu124 for the A5000 (sm_86) here.
+# This heavy CUDA-devel image is discarded; only the resulting wheels move forward.
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS mamba-builder
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3.10-dev python3-pip git build-essential ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+RUN ln -sf /usr/bin/python3.10 /usr/local/bin/python && \
+    python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+# torch must be importable: mamba-ssm builds with --no-build-isolation and its
+# setup.py imports torch to find CUDA paths + the C++ ABI flag.
+RUN pip install --no-cache-dir torch==2.6.0 \
+    --index-url https://download.pytorch.org/whl/cu124
+ENV TORCH_CUDA_ARCH_LIST="8.6" \
+    MAMBA_FORCE_BUILD="TRUE" \
+    CAUSAL_CONV1D_FORCE_BUILD="TRUE" \
+    MAX_JOBS="4"
+WORKDIR /mamba-wheels
+# Build from the git tags, NOT PyPI: the PyPI sdists for these packages omit the
+# csrc/ CUDA sources (they ship prebuilt wheels only), so a source build from
+# PyPI fails with "csrc/*.cpp missing". The git repos contain the sources.
+RUN pip wheel --no-cache-dir --no-build-isolation --no-deps \
+    "causal-conv1d @ git+https://github.com/Dao-AILab/causal-conv1d.git@v1.4.0" \
+    -w /mamba-wheels && \
+    pip wheel --no-cache-dir --no-build-isolation --no-deps \
+    "mamba-ssm @ git+https://github.com/state-spaces/mamba.git@v2.2.4" \
+    -w /mamba-wheels && \
+    ls -la /mamba-wheels
+
 # Stage 1: Python wheels builder
 FROM python:3.10-slim AS wheel-builder
 
@@ -38,7 +70,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Stage 2: Minimal runtime base
 FROM python:3.10-slim AS runtime-base
 
-# Install only essential runtime libraries
+# Install runtime libraries. gcc + python3-dev are required because mamba_ssm
+# pulls in Triton, which JIT-compiles a small CUDA driver helper (driver.c) at
+# runtime on first use and needs a host C compiler + Python headers. Without
+# them the compiled mamba kernels load but Triton dies with "Failed to find C
+# compiler". The other models don't use Triton.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libglib2.0-0 \
@@ -47,6 +83,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender-dev \
     libgl1 \
     libglib2.0-0 \
+    gcc \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -69,6 +107,15 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --no-index --find-links /wheels \
     -r /app/requirements.txt && \
     rm -rf /wheels
+
+# Install the CUDA-compiled Mamba kernels (built in the mamba-builder stage
+# against this exact torch 2.6.0+cu124). --no-deps: torch/einops/triton are
+# already satisfied above. If this layer is ever absent, the Mamba-UNet import
+# guard disables only that model — the service still starts.
+COPY --from=mamba-builder /mamba-wheels /mamba-wheels
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --no-deps /mamba-wheels/*.whl && \
+    rm -rf /mamba-wheels
 
 # Copy application code
 COPY --chown=app:app backend/segmentation/ .

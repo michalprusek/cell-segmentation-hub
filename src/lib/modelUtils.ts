@@ -5,9 +5,35 @@ export type ModelType =
   | 'unet_spherohq'
   | 'unet_attention_aspp'
   | 'segformer'
+  | 'mamba_unet'
   | 'sperm'
   | 'wound'
   | 'microtubule';
+
+/**
+ * Recommended-preset framing for the standard spheroid models. Three tiers are
+ * surfaced as primary cards (Fast/Accurate/Robust); the rest fall into a
+ * collapsed "Additional" group. View-layer only — not part of ModelInfo.
+ */
+export type SpheroidPresetTier = 'fast' | 'accurate' | 'robust' | 'additional';
+
+export const SPHEROID_PRESETS: Record<string, SpheroidPresetTier> = {
+  segformer: 'fast',
+  cbam_resunet: 'accurate',
+  mamba_unet: 'robust',
+  hrnet: 'additional',
+  unet_spherohq: 'additional',
+};
+
+/** Icon + ordering for the three primary preset tiers. */
+export const SPHEROID_PRESET_META: Record<
+  Exclude<SpheroidPresetTier, 'additional'>,
+  { icon: string; order: number }
+> = {
+  fast: { icon: '⚡', order: 0 },
+  accurate: { icon: '🎯', order: 1 },
+  robust: { icon: '🌍', order: 2 },
+};
 
 export type ModelCategory = 'spheroid' | 'sperm' | 'wound' | 'microtubule';
 
@@ -100,6 +126,18 @@ export function getLocalizedModelInfo(
         batchSize: 4,
       },
     },
+    mamba_unet: {
+      id: 'mamba_unet',
+      size: 'large',
+      defaultThreshold: 0.5,
+      category: 'spheroid',
+      performance: {
+        avgTimePerImage: 0.236,
+        throughput: 4.2,
+        p95Latency: 0.249,
+        batchSize: 2,
+      },
+    },
     sperm: {
       id: 'sperm',
       size: 'medium',
@@ -147,6 +185,7 @@ export function getLocalizedModelInfo(
     unet_spherohq: 'unet_spherohq',
     unet_attention_aspp: 'unet_attention_aspp',
     segformer: 'segformer',
+    mamba_unet: 'mamba_unet',
     sperm: 'sperm',
     wound: 'wound',
     microtubule: 'microtubule',
@@ -173,6 +212,7 @@ export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
     'unet_spherohq',
     'unet_attention_aspp',
     'segformer',
+    'mamba_unet',
     'sperm',
     'wound',
     'microtubule',
@@ -268,6 +308,22 @@ export const BASIC_MODEL_INFO: Record<
       throughput: 5.0,
       p95Latency: 0.3,
       batchSize: 4,
+    },
+  },
+  mamba_unet: {
+    id: 'mamba_unet',
+    name: 'Mamba-UNet',
+    displayName: 'Mamba-UNet',
+    description:
+      'U-Net with a bidirectional Mamba (state-space) bottleneck — best robustness on out-of-distribution images (external labs, unknown optics, drug-treated, unusual morphologies)',
+    size: 'large',
+    defaultThreshold: 0.5,
+    category: 'spheroid',
+    performance: {
+      avgTimePerImage: 0.236,
+      throughput: 4.2,
+      p95Latency: 0.249,
+      batchSize: 2,
     },
   },
   sperm: {

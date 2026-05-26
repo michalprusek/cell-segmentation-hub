@@ -31,5 +31,11 @@ try:
 except ImportError:
     SegFormerModel = None
 
+# Mamba-UNet spheroid model: optional import (requires mamba_ssm CUDA kernels).
+try:
+    from .mamba_unet import UMamba
+except ImportError:
+    UMamba = None
+
 __all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel',
-           'WoundModel', 'MicrotubuleModel', 'SegFormerModel']
+           'WoundModel', 'MicrotubuleModel', 'SegFormerModel', 'UMamba']

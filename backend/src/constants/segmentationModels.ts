@@ -13,6 +13,7 @@ export const SEGMENTATION_MODELS = [
   'unet_spherohq',
   'unet_attention_aspp',
   'segformer',
+  'mamba_unet',
   'resunet_advanced',
   'resunet_small',
   'sperm',

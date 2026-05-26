@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -13,8 +13,13 @@ import { toast } from 'sonner';
 import { ModelType } from '@/contexts/useModel';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useLocalizedModels } from '@/hooks/useLocalizedModels';
-import { ModelInfo } from '@/lib/modelUtils';
-import { Cpu, Zap, Target } from 'lucide-react';
+import {
+  ModelInfo,
+  SPHEROID_PRESETS,
+  SPHEROID_PRESET_META,
+  SpheroidPresetTier,
+} from '@/lib/modelUtils';
+import { Cpu, Zap, Target, ChevronDown, ChevronUp } from 'lucide-react';
 
 const ModelSettingsSection = () => {
   const { t } = useLanguage();
@@ -29,12 +34,26 @@ const ModelSettingsSection = () => {
   // The disintegrated-spheroid workflow uses a dedicated model
   // (unet_attention_aspp) — surface it as its own section so users
   // aren't tempted to pick it for standard spheroid analysis.
+  const [showAdditional, setShowAdditional] = useState(false);
+
   const spheroidModels = useMemo(
     () =>
       availableModels.filter(
         m => m.category === 'spheroid' && m.id !== 'unet_attention_aspp'
       ),
     [availableModels]
+  );
+
+  // Reframe the standard spheroid models into recommended presets
+  // (Fast/Accurate/Robust) + a collapsed "Additional" group.
+  const presetModel = (tier: SpheroidPresetTier) =>
+    spheroidModels.find(m => SPHEROID_PRESETS[m.id] === tier);
+  const additionalModels = useMemo(
+    () =>
+      spheroidModels.filter(
+        m => (SPHEROID_PRESETS[m.id] ?? 'additional') === 'additional'
+      ),
+    [spheroidModels]
   );
   const spheroidInvasiveModels = useMemo(
     () => availableModels.filter(m => m.id === 'unet_attention_aspp'),
@@ -128,7 +147,51 @@ const ModelSettingsSection = () => {
             <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               {t('settings.modelSelection.sections.spheroid')}
             </h4>
-            {spheroidModels.map(renderModelCard)}
+
+            {(['fast', 'accurate', 'robust'] as const).map(tier => {
+              const model = presetModel(tier);
+              if (!model) return null;
+              return (
+                <div key={tier} className="space-y-1.5">
+                  <div className="flex items-baseline gap-2">
+                    <span aria-hidden className="text-base">
+                      {SPHEROID_PRESET_META[tier].icon}
+                    </span>
+                    <span className="text-sm font-semibold">
+                      {t(`settings.modelSelection.presets.${tier}`)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">
+                    {t(`settings.modelSelection.presetDescriptions.${tier}`)}
+                  </p>
+                  {renderModelCard(model)}
+                </div>
+              );
+            })}
+
+            {additionalModels.length > 0 && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAdditional(v => !v)}
+                  className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  {showAdditional ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                  {showAdditional
+                    ? t('settings.modelSelection.presets.showLess')
+                    : t('settings.modelSelection.presets.showMore')}
+                </button>
+                {showAdditional && (
+                  <div className="space-y-4 pt-3">
+                    {additionalModels.map(renderModelCard)}
+                  </div>
+                )}
+              </div>
+            )}
 
             {spheroidInvasiveModels.length > 0 && (
               <>

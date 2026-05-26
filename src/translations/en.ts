@@ -448,6 +448,19 @@ export default {
         wound: 'Wound Healing Models',
         microtubule: 'Microtubule Models',
       },
+      presets: {
+        fast: 'Fast',
+        accurate: 'Accurate',
+        robust: 'Robust',
+        showMore: 'Show additional models',
+        showLess: 'Hide additional models',
+      },
+      presetDescriptions: {
+        fast: 'Real-time preview, large batches, weak GPU',
+        accurate: 'Labs with HQ-like images, when time is not critical',
+        robust:
+          'External labs, unknown optics, drug-treated, unusual morphologies',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -473,6 +486,11 @@ export default {
           name: 'SegFormer',
           description:
             'Transformer-based model (SegFormer-B0) for bright-field spheroids — highest accuracy (93% IoU) and very fast (~13 ms/image)',
+        },
+        mamba_unet: {
+          name: 'Mamba-UNet',
+          description:
+            'U-Net with a bidirectional Mamba (state-space) bottleneck — best robustness on out-of-distribution images (unknown optics, drug-treated, unusual morphologies)',
         },
         sperm: {
           name: 'Sperm Morphology',
@@ -512,6 +530,8 @@ export default {
         'Enhanced UNet with Attention Gates and ASPP bottleneck for detecting dissolving spheroids and small satellite cells (35.5M params)',
       segformer:
         'Transformer-based SegFormer-B0 model trained on the SpheroMix dataset. Highest spheroid accuracy in the platform (93% IoU) while being the smallest and fastest model (~13 ms/image).',
+      mamba_unet:
+        'U-Net with a bidirectional Mamba (state-space) bottleneck (90.75M params). Best out-of-distribution generalization in the platform (HTS-Seg IoU 0.587) — built for external labs, unknown optics, drug-treated and unusual spheroid morphologies.',
       sperm:
         'Sperm morphology model with skeleton extraction for head, midpiece, and tail measurement',
       wound:

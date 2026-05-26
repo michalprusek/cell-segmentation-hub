@@ -78,6 +78,18 @@ except ImportError as e:
     SegFormerModel = None
     _segformer_import_error = e
 
+# Optional Mamba-UNet spheroid model import (requires mamba_ssm CUDA kernels).
+_mamba_unet_import_error = None
+try:
+    from models.mamba_unet import UMamba
+except ImportError as e:
+    logger.warning(
+        f"Could not import UMamba (Mamba-UNet): {e}. "
+        "Mamba-UNet segmentation will not be available."
+    )
+    UMamba = None
+    _mamba_unet_import_error = e
+
 # Import the new inference executor
 from .inference_executor import (
     InferenceExecutor,
@@ -188,6 +200,13 @@ class ModelLoader:
             'finetuned_path': 'weights/segformer_b0_spheroseg.pth',
             'config_path': None
         },
+        'mamba_unet': {
+            # Will be None if mamba_ssm not installed
+            'class': UMamba,
+            'pretrained_path': 'weights/mamba_unet_spheroseg.pth',
+            'finetuned_path': 'weights/mamba_unet_spheroseg.pth',
+            'config_path': None
+        },
         'sperm': {
             'class': SpermModel,  # Will be None if sperm.py not yet copied
             'pretrained_path': 'sperm_final/best_model.pth',
@@ -288,6 +307,15 @@ class ModelLoader:
                 # UNet optimized for SpheroHQ dataset
                 model = UNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512, 1024],
                            use_instance_norm=True, dropout_rate=0.0, use_deep_supervision=False)
+            elif model_name == 'mamba_unet':
+                # U-Net + bidirectional Mamba bottleneck (best OOD generalization).
+                # Plain nn.Module with single-channel logits -> flows through the
+                # generic torch.load + sigmoid/threshold path below, like UNet.
+                if UMamba is None:
+                    raise ImportError(
+                        f"Mamba-UNet architecture not available: {_mamba_unet_import_error}"
+                    )
+                model = UMamba(in_channels=3, out_channels=1, use_instance_norm=True)
             elif model_name == 'unet_attention_aspp':
                 # Enhanced UNet with Attention Gates + ASPP for dissolving spheroids
                 model = UNetAttention(
