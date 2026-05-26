@@ -83,6 +83,11 @@ def normalize_to_tcyx(arr: np.ndarray, axes: str) -> np.ndarray:
     ``axes`` is the dimension-name string aligned with ``arr`` (e.g.
     ``"PTCYX"``); ``len(axes) == arr.ndim``.
     """
+    if len(axes) != arr.ndim:
+        raise UnsupportedND2(
+            f"ND2 axis metadata '{axes}' ({len(axes)} dims) does not match "
+            f"array ndim {arr.ndim} — cannot map to (T, C, Y, X)."
+        )
     ax = list(axes)
 
     if "Z" in ax:
@@ -142,16 +147,10 @@ def main() -> int:
         return 3
 
     with nd2.ND2File(str(src)) as f:
-        # sizes is an OrderedDict: {'T': N, 'C': N, 'Y': N, 'X': N} typically.
-        sizes = dict(f.sizes)
-        T = sizes.get("T", 1)
-        C = sizes.get("C", 1)
-        Z = sizes.get("Z", 1)
-        H = sizes.get("Y", 0)
-        W = sizes.get("X", 0)
-
         arr = f.asarray()
-        axes = "".join(f.sizes.keys())  # e.g. "TCYX", "TZCYX", "PTCYX"
+        # `f.sizes` is the dimension-name → size map, aligned with the
+        # `asarray()` axis order (e.g. "TCYX", "TZCYX", "PTCYX").
+        axes = "".join(f.sizes.keys())
 
         # Normalize to canonical (T, C, Y, X) — squeezes singleton loop axes
         # (e.g. a length-1 P from per-field NIS exports), max-projects Z, and
@@ -184,7 +183,8 @@ def main() -> int:
                 em_info = getattr(ch.channel, "emissionLambdaNm", None)
                 if isinstance(em_info, (int, float)):
                     emission = float(em_info)
-            except Exception:
+            except (IndexError, AttributeError, KeyError, TypeError):
+                # Optional per-channel metadata; fall back to "Channel N".
                 raw_name = None
                 emission = None
             has_raw = isinstance(raw_name, str) and raw_name.strip() != ""
