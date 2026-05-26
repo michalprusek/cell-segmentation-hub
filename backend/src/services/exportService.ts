@@ -35,7 +35,9 @@ import {
 } from './export/exportFileOperations';
 import {
   computeMTMetrics,
+  computeMTGeometry,
   writeMTMetrics,
+  type MTMetricsRow,
 } from './export/mtMetricsExporter';
 
 const YOLO_WRITE_CONCURRENCY = 16;
@@ -59,12 +61,13 @@ export interface ExportOptions {
   selectedImageIds?: string[];
   pixelToMicrometerScale?: number;
   /**
-   * Microtubule-only export options. When ``enabled`` and the project is
-   * ``microtubule``, the export pipeline re-reads the original ND2/TIFF
-   * to compute per-polyline-per-channel intensity metrics into a new
-   * ``microtubule_metrics`` artefact. Length / area / intensity stats
-   * are derived from raw 16-bit signal, NOT from the 8-bit
-   * display-normalised per-channel PNGs.
+   * Microtubule-only export options. For ``microtubules`` projects the MT
+   * metrics exporter owns the standard ``metrics.{csv,xlsx,json}`` files:
+   * microtubule length is always written (geometry, no channel needed), and
+   * when ``enabled`` with one or more ``channels`` selected, the pipeline
+   * re-reads the original ND2/TIFF to add per-channel intensity + band-area
+   * columns derived from raw 16-bit signal (NOT the 8-bit display-normalised
+   * per-channel PNGs).
    */
   mtMetrics?: {
     enabled: boolean;
@@ -563,29 +566,25 @@ export class ExportService {
         );
       }
 
-      // Microtubule per-channel intensity metrics — independent of the
-      // standard metrics pipeline because they reach all the way back to
-      // the original ND2/TIFF for raw 16-bit signal (the per-channel PNGs
-      // on disk are 8-bit display-mapped). MT-only and only when the
-      // user enabled the section in the export modal.
-      // ProjectType is `'microtubules'` (plural) — `'microtubule'` is the
-      // model id, not the project type. Compare against the project-type
-      // string, otherwise the MT exporter is never invoked.
+      // Microtubule metrics own the metrics.* files for MT projects (the
+      // standard closed-polygon report is skipped above — open polylines have
+      // no area). Runs whenever metrics are requested for an MT project, not
+      // just when the intensity section is on: it always writes microtubule
+      // LENGTH (geometry, no channel needed) and adds per-channel intensity
+      // columns only when a channel was selected. ProjectType is
+      // `'microtubules'` (plural) — `'microtubule'` is the model id.
       if (
-        options.mtMetrics?.enabled &&
         (project.type ?? '') === 'microtubules' &&
+        options.metricsFormats?.length &&
         project.images?.length
       ) {
         exportTasks.push(
-          this.generateMTIntensityMetrics(
+          this.generateMicrotubuleMetrics(
             project.images as ImageWithSegmentation[],
             exportDir,
             options,
             jobId
-          ).then(() => {
-            // No dedicated progress step — runs alongside metrics; the
-            // generic 90% allocation absorbs it.
-          })
+          )
         );
       }
 
@@ -628,8 +627,14 @@ export class ExportService {
       job.status = 'completed';
       job.completedAt = new Date();
 
-      // Notify completion via WebSocket
-      this.sendToUser(userId, 'export:completed', { jobId });
+      // Notify completion via WebSocket. Include any non-fatal warnings
+      // (e.g. MT intensity omitted / could not be computed) so the FE can
+      // surface them — a "completed" export that quietly dropped metrics is
+      // otherwise a silent failure.
+      this.sendToUser(userId, 'export:completed', {
+        jobId,
+        warnings: job.warnings ?? [],
+      });
 
       // Clean up temporary directory
       await fs.rm(exportDir, { recursive: true, force: true });
@@ -1343,25 +1348,24 @@ export class ExportService {
   }
 
   /**
-   * Microtubule-only intensity / length / area metrics exporter.
+   * Microtubule metrics exporter — owns the `metrics.{csv,xlsx,json}` files
+   * for MT projects (the standard closed-polygon report is skipped upstream
+   * because MT annotations are open polylines with no area).
    *
-   * Computes per-(frame, polyline, channel) rows by re-reading the
-   * original ND2/TIFF on disk via the ML service's /mt-metrics route,
-   * then writes a long-format CSV/XLSX/JSON next to the standard
-   * metrics files.
-   *
-   * Failures are caught + logged + recorded as a warning rather than
-   * failing the whole export. Length/area columns alone are still
-   * useful, so partial loss (e.g. one video missing its ND2 on disk)
-   * shouldn't prevent the user from getting the rest.
+   * Always writes microtubule LENGTH per (frame, polyline) — geometry only,
+   * computed Node-side from the stored polylines, no channel needed. When the
+   * user selected one or more channels it additionally re-reads the original
+   * ND2/TIFF via the ML `/mt-metrics` route to add per-channel intensity +
+   * band-area columns. If intensity can't be produced (no channel chosen, ML
+   * error, or original file missing) it falls back to length-only and records
+   * a user-facing warning rather than silently emitting nothing.
    */
-  private async generateMTIntensityMetrics(
+  private async generateMicrotubuleMetrics(
     images: ImageWithSegmentation[],
     exportDir: string,
     options: ExportOptions,
     jobId?: string
   ): Promise<void> {
-    if (!options.mtMetrics?.enabled) return;
     if (jobId && this.isJobCancelled(jobId)) {
       throw new Error('Export cancelled by user');
     }
@@ -1370,61 +1374,81 @@ export class ExportService {
     const formats = options.metricsFormats?.length
       ? options.metricsFormats
       : (['csv'] as const);
+    const scale = options.pixelToMicrometerScale ?? null;
+    const frameInputs = images.map(i => ({
+      id: i.id,
+      parentVideoId: i.parentVideoId ?? null,
+      frameIndex: i.frameIndex ?? null,
+      isVideoContainer: i.isVideoContainer,
+      segmentation: i.segmentation
+        ? { polygons: i.segmentation.polygons }
+        : null,
+    }));
+    const channels = options.mtMetrics?.enabled
+      ? options.mtMetrics.channels ?? []
+      : [];
 
-    try {
-      const rows = await computeMTMetrics(
-        images.map(i => ({
-          id: i.id,
-          parentVideoId: i.parentVideoId ?? null,
-          frameIndex: i.frameIndex ?? null,
-          isVideoContainer: i.isVideoContainer,
-          segmentation: i.segmentation
-            ? { polygons: i.segmentation.polygons }
-            : null,
-        })),
-        projectId,
-        {
-          thicknessPx: options.mtMetrics.thicknessPx,
-          marginMultiplier: options.mtMetrics.marginMultiplier,
-          channels: options.mtMetrics.channels,
-          pixelToMicrometerScale:
-            options.pixelToMicrometerScale ?? null,
-        }
-      );
+    const addWarning = (msg: string) => {
+      if (!jobId) return;
+      const job = this.exportJobs.get(jobId);
+      if (job) job.warnings = [...(job.warnings ?? []), msg];
+    };
 
-      if (!rows.length) {
-        logger.info(
-          'MT intensity metrics: 0 rows produced; not writing files',
+    let rows: MTMetricsRow[] = [];
+    let intensityIncluded = false;
+
+    if (channels.length > 0) {
+      try {
+        rows = await computeMTMetrics(frameInputs, projectId, {
+          thicknessPx: options.mtMetrics!.thicknessPx,
+          marginMultiplier: options.mtMetrics!.marginMultiplier,
+          channels,
+          pixelToMicrometerScale: scale,
+        });
+        intensityIncluded = rows.length > 0;
+      } catch (err) {
+        logger.error(
+          'MT intensity metrics failed; falling back to length-only',
+          err instanceof Error ? err : new Error(String(err)),
           'ExportService',
           { jobId, projectId }
         );
-        return;
+        addWarning(
+          'Per-channel signal-intensity metrics could not be computed (the original ND2/TIFF was unreadable or the ML service failed). The metrics file contains microtubule length only.'
+        );
+        rows = [];
       }
+    }
 
-      const metricsDir = path.join(exportDir, 'metrics');
-      await writeMTMetrics(rows, metricsDir, formats);
+    // Geometry-only fallback: no channel chosen, or intensity failed / empty.
+    if (!intensityIncluded) {
+      rows = computeMTGeometry(frameInputs, scale);
+      if (channels.length === 0) {
+        addWarning(
+          'Per-channel signal-intensity metrics were not exported because no channel was selected. The metrics file contains microtubule length only — enable "Calculate signal intensity for each channel" and pick a channel to include intensity.'
+        );
+      }
+    }
+
+    if (!rows.length) {
       logger.info(
-        'MT intensity metrics: wrote files',
-        'ExportService',
-        { jobId, projectId, rows: rows.length, formats }
-      );
-    } catch (err) {
-      logger.error(
-        'MT intensity metrics: computation failed',
-        err instanceof Error ? err : new Error(String(err)),
+        'MT metrics: no microtubule polylines found; no metrics file written',
         'ExportService',
         { jobId, projectId }
       );
-      if (jobId) {
-        const job = this.exportJobs.get(jobId);
-        if (job) {
-          job.warnings = [
-            ...(job.warnings ?? []),
-            'Microtubule intensity metrics could not be computed (original file missing or ML service error). Standard metrics are still included.',
-          ];
-        }
-      }
+      addWarning(
+        'No microtubule annotations were found in the selected images, so no metrics file was produced.'
+      );
+      return;
     }
+
+    const metricsDir = path.join(exportDir, 'metrics');
+    await writeMTMetrics(rows, metricsDir, formats);
+    logger.info(
+      'MT metrics: wrote files',
+      'ExportService',
+      { jobId, projectId, rows: rows.length, intensityIncluded, formats }
+    );
   }
 
   private async generateDocumentation(

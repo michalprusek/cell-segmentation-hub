@@ -48,15 +48,19 @@ export interface MTMetricsRow {
   imageId: string;
   instanceId: string;
   trackId: string | null;
+  /** Channel machine name, or '' for geometry-only rows (no channel picked). */
   channel: string;
   lengthPx: number;
   lengthUm: number | null;
-  areaPx: number;
+  // Intensity-dependent columns are null on geometry-only rows (no channel
+  // selected): the band area + per-channel signal stats need the raw raster,
+  // which is only read when a channel is actually sampled.
+  areaPx: number | null;
   areaUm2: number | null;
-  pixelCount: number;
-  sumIntensity: number;
-  meanIntensity: number;
-  stdIntensity: number;
+  pixelCount: number | null;
+  sumIntensity: number | null;
+  meanIntensity: number | null;
+  stdIntensity: number | null;
   medianBackground: number | null;
   signalMinusBackground: number | null;
 }
@@ -414,6 +418,66 @@ export async function computeMTMetrics(
     { projectId, rows: allRows.length }
   );
   return allRows;
+}
+
+/** Arc length in pixels = sum of consecutive segment lengths. */
+function polylineLengthPx(points: Array<{ x: number; y: number }>): number {
+  let len = 0;
+  for (let i = 1; i < points.length; i++) {
+    len += Math.hypot(
+      points[i].x - points[i - 1].x,
+      points[i].y - points[i - 1].y
+    );
+  }
+  return len;
+}
+
+/**
+ * Geometry-only metrics (microtubule length) computed Node-side straight from
+ * the stored polylines — no channel raster, no ML call. Used when an MT
+ * project is exported WITHOUT a selected channel: length is the fundamental
+ * MT measurement and must not be silently dropped just because no intensity
+ * channel was chosen. The intensity/area columns (which need the raw raster)
+ * are left null so the row schema matches the full intensity export.
+ */
+export function computeMTGeometry(
+  frameImages: FrameImageInput[],
+  pixelToMicrometerScale: number | null
+): MTMetricsRow[] {
+  const rows: MTMetricsRow[] = [];
+  for (const fr of frameImages) {
+    if (fr.isVideoContainer || !fr.parentVideoId || fr.frameIndex == null) {
+      continue;
+    }
+    const polylines = safeParsePolygons(fr.segmentation?.polygons)
+      .filter(p => (p.geometry ?? 'polygon') === 'polyline')
+      .filter(p => Array.isArray(p.points) && p.points!.length >= 2);
+    for (const p of polylines) {
+      const lengthPx = polylineLengthPx(p.points!);
+      rows.push({
+        frameIndex: fr.frameIndex,
+        imageId: fr.id,
+        instanceId:
+          p.instanceId ?? `mt_${fr.id.slice(0, 8)}_${p.points!.length}`,
+        trackId: p.trackId ?? null,
+        channel: '',
+        lengthPx,
+        lengthUm:
+          pixelToMicrometerScale != null
+            ? lengthPx * pixelToMicrometerScale
+            : null,
+        areaPx: null,
+        areaUm2: null,
+        pixelCount: null,
+        sumIntensity: null,
+        meanIntensity: null,
+        stdIntensity: null,
+        medianBackground: null,
+        signalMinusBackground: null,
+      });
+    }
+  }
+  return rows;
 }
 
 // ----------------------------------------------------------------------------

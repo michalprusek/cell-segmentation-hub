@@ -114,49 +114,39 @@ export function generateMetricsGuide(
 function buildMicrotubuleGuide({ lengthUnit, scaleInfo }: UnitContext): string {
   return `# Microtubule Metrics Reference Guide
 ${scaleInfo}
-## Polyline Geometry
+## Metrics file (\`metrics.csv\` / \`metrics.xlsx\` / \`metrics.json\`)
 
 The microtubule model produces **open polyline centerlines** (one polyline
-per microtubule instance), not closed polygons. Metrics are computed
-per-polyline and aggregated per-track when cross-frame tracking is
-available.
+per microtubule instance), not closed polygons — so the standard
+closed-polygon report (area / perimeter) does not apply. Instead the metrics
+file is a **long-format table with one row per (frame, polyline, channel)**.
+Microtubule **length** is always present; the per-channel **intensity**
+columns are filled only when a channel was selected in the export dialog
+(otherwise they are blank and \`channel\` is empty).
 
-### Length
-- **Description**: Sum of Euclidean distances between consecutive
-  centerline vertices.
-- **Formula**: L = Sum_i ||p_{i+1} - p_i||
-- **Units**: ${lengthUnit}
-- **Range**: [0, ∞)
+### Columns
+- **frameIndex** — 0-based frame index within the source video.
+- **imageId** — frame image id.
+- **instanceId** — unique per polyline (one MT = one instance).
+- **trackId** — stable across frames for the same MT when cross-frame
+  tracking ran; blank otherwise.
+- **channel** — sampled channel machine name; blank on length-only rows.
+- **lengthPx / lengthUm** — centerline arc length, Sum_i ||p_{i+1} - p_i||
+  (the ${lengthUnit} column is filled when a pixel→µm scale was supplied).
+- **areaPx / areaUm2** — area of the thickness-wide sampling band around the
+  centerline (intensity exports only).
+- **pixelCount** — number of pixels in the sampling band (intensity exports
+  only).
+- **sumIntensity / meanIntensity / stdIntensity** — raw 16-bit signal
+  statistics inside the band for this channel (intensity exports only).
+- **medianBackground** — median signal outside the dilated band union, used
+  as the per-frame background for this channel.
+- **signalMinusBackground** — meanIntensity − medianBackground
+  (background-corrected mean).
 
-### End-to-end distance
-- **Description**: Straight-line distance between the two endpoints of
-  the centerline.
-- **Units**: ${lengthUnit}
-
-### Tortuosity
-- **Description**: Length divided by end-to-end distance. 1.0 = perfectly
-  straight; higher values = more curved.
-- **Range**: [1.0, ∞)
-
-### Mean curvature
-- **Description**: Average absolute change in tangent direction between
-  consecutive segments. Higher values for kinkier filaments.
-- **Units**: 1/${lengthUnit}
-
-## Tracked metrics (videos only)
-
-When a polyline carries a \`trackId\`, the export also produces a
-per-track time-series:
-
-### Length over time
-- **Description**: One row per (trackId, frameIndex). Tracks growth /
-  shrinkage / catastrophe events.
-- **Use**: feed into your favourite dynamics analysis (mean polymerization
-  rate, +TIP comet velocity, etc.).
-
-### Displacement
-- **Description**: ||centroid(t) - centroid(t-1)|| per consecutive frame.
-- **Units**: ${lengthUnit}/frame
+Intensity is derived from the **raw 16-bit** ND2/TIFF signal, not the 8-bit
+display-normalised per-channel PNGs. The sampling band width (\`thickness\`)
+and the background margin are set in the export dialog.
 
 ## JSON export
 

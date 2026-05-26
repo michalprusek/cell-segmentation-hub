@@ -130,15 +130,12 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         currentJob,
       } = useSharedAdvancedExport(projectId);
 
-      // When the MT intensity section is enabled the user MUST pick at least
-      // one channel — otherwise the export silently produces nothing (the
-      // backend logs "MT metrics: no channels selected; skipping" and writes
-      // no metrics file). Block the export button to close that trap.
-      // Declared after `exportOptions` is in scope to avoid a use-before-init.
-      const mtBlocksExport =
-        isMTProject &&
-        (exportOptions.mtMetrics?.enabled ?? false) &&
-        (exportOptions.mtMetrics?.channels?.length ?? 0) === 0;
+      // Note: export is never blocked for microtubule projects. Without a
+      // selected channel the backend still exports microtubule LENGTH
+      // (geometry) and surfaces a warning that the per-channel intensity
+      // metrics were omitted — so there's no silent-empty trap and no
+      // dead-end when a project has no channel metadata. The channel picker
+      // shows an informational hint instead (see MicrotubuleMetricsSection).
 
       const [activeTab, setActiveTab] = useState('general');
       // `pixelToMicrometerScale != null` was the old auto-fill guard, but
@@ -929,7 +926,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                 onCancel={cancelExport}
                 onPrimaryAction={handleExport}
                 primaryText={t('export.startExport')}
-                disabled={mtBlocksExport}
+                disabled={false}
                 className="w-full sm:w-auto"
               />
             </DialogFooter>
