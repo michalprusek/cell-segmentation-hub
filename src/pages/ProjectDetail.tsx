@@ -1545,6 +1545,7 @@ const ProjectDetail = () => {
               projectName={projectTitle}
               projectType={projectType}
               images={images}
+              projectChannels={projectChannels}
               selectedCount={selectedCount}
               isAllSelected={isAllSelected}
               isPartiallySelected={isPartiallySelected}

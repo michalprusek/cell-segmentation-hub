@@ -51,6 +51,11 @@ interface AdvancedExportDialogProps {
   /** Used to gate microtubule-specific export controls. */
   projectType?: string | null;
   images: ProjectImage[];
+  /** Distinct channel names across the project's video containers
+   *  (BE-aggregated `metadata.projectChannels`). The container rows that
+   *  carry the `channels` JSON are filtered out of `images` by the gallery
+   *  endpoint, so this prop is the only source the MT channel picker has. */
+  projectChannels?: string[];
   selectedImageIds?: string[];
   onExportingChange?: (isExporting: boolean) => void;
   onDownloadingChange?: (isDownloading: boolean) => void;
@@ -73,6 +78,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       projectName,
       projectType,
       images,
+      projectChannels,
       selectedImageIds,
       onExportingChange,
       onDownloadingChange,
@@ -83,28 +89,27 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       // them silently hides the MT section on every MT project.
       const isMTProject = projectType === 'microtubules';
 
-      // Distinct channels across the project's video container rows.
-      // De-dupe by machine name (the same channel might appear on
-      // multiple uploaded videos in a multi-video project).
+      // Distinct channels across the project's video containers. These come
+      // from the BE-aggregated `projectChannels` (metadata on the thumbnails
+      // response): the container rows that actually carry the `channels` JSON
+      // are filtered out of `images` by the gallery endpoint, so scanning
+      // `images` for `isVideoContainer` rows always yielded an empty list and
+      // the picker never rendered — leaving `channels: []` and a silent
+      // empty MT metrics export. `projectChannels` is name-only, so the
+      // machine name doubles as the display label.
       const availableChannels = React.useMemo(() => {
-        if (!isMTProject) return [];
+        if (!isMTProject || !projectChannels) return [];
         const byName = new Map<
           string,
           { name: string; displayName?: string }
         >();
-        for (const img of images) {
-          if (!img.isVideoContainer || !img.channels) continue;
-          for (const ch of img.channels) {
-            if (!byName.has(ch.name)) {
-              byName.set(ch.name, {
-                name: ch.name,
-                displayName: ch.displayName,
-              });
-            }
+        for (const name of projectChannels) {
+          if (name && !byName.has(name)) {
+            byName.set(name, { name, displayName: name });
           }
         }
         return Array.from(byName.values());
-      }, [images, isMTProject]);
+      }, [projectChannels, isMTProject]);
 
       // Local snapshot of MT options. We always merge into the shared
       // exportOptions state when the user toggles or edits inputs so the
@@ -124,6 +129,13 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         wsConnected,
         currentJob,
       } = useSharedAdvancedExport(projectId);
+
+      // Note: export is never blocked for microtubule projects. Without a
+      // selected channel the backend still exports microtubule LENGTH
+      // (geometry) and surfaces a warning that the per-channel intensity
+      // metrics were omitted — so there's no silent-empty trap and no
+      // dead-end when a project has no channel metadata. The channel picker
+      // shows an informational hint instead (see MicrotubuleMetricsSection).
 
       const [activeTab, setActiveTab] = useState('general');
       // `pixelToMicrometerScale != null` was the old auto-fill guard, but
