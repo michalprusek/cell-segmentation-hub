@@ -3,10 +3,10 @@
 Inspired by Ma et al. 2024 (bowang-lab/U-Mamba). Standard CNN encoder/decoder
 (same as our UNet) preserves 2D spatial locality where it matters; the
 bottleneck is augmented with Mamba SSM blocks operating on the flattened
-spatial sequence -- at 1024^2 input the bottleneck is 32x32 = 1024 tokens,
-well within Mamba's effective range.
+spatial sequence -- at 1024^2 input the 4-pool bottleneck is 64x64 = 4096
+tokens, well within Mamba's effective range.
 
-Rationale: placing Mamba only at the deepest (32x32) feature level gives Mamba
+Rationale: placing Mamba only at the deepest (64x64) feature level gives Mamba
 long-range modelling power without the sequence-length blowup; the CNN portions
 handle local pattern extraction.
 

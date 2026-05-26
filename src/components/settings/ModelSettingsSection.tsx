@@ -15,7 +15,7 @@ import { useLanguage } from '@/contexts/useLanguage';
 import { useLocalizedModels } from '@/hooks/useLocalizedModels';
 import {
   ModelInfo,
-  SPHEROID_PRESETS,
+  getSpheroidPreset,
   SPHEROID_PRESET_META,
   SpheroidPresetTier,
 } from '@/lib/modelUtils';
@@ -47,12 +47,9 @@ const ModelSettingsSection = () => {
   // Reframe the standard spheroid models into recommended presets
   // (Fast/Accurate/Robust) + a collapsed "Additional" group.
   const presetModel = (tier: SpheroidPresetTier) =>
-    spheroidModels.find(m => SPHEROID_PRESETS[m.id] === tier);
+    spheroidModels.find(m => getSpheroidPreset(m.id) === tier);
   const additionalModels = useMemo(
-    () =>
-      spheroidModels.filter(
-        m => (SPHEROID_PRESETS[m.id] ?? 'additional') === 'additional'
-      ),
+    () => spheroidModels.filter(m => getSpheroidPreset(m.id) === 'additional'),
     [spheroidModels]
   );
   const spheroidInvasiveModels = useMemo(

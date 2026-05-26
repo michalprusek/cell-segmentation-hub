@@ -79,10 +79,12 @@ except ImportError as e:
     _segformer_import_error = e
 
 # Optional Mamba-UNet spheroid model import (requires mamba_ssm CUDA kernels).
+# OSError is caught alongside ImportError: an ABI-mismatched compiled .so can
+# raise OSError on load, and that must disable only this model, not the service.
 _mamba_unet_import_error = None
 try:
     from models.mamba_unet import UMamba
-except ImportError as e:
+except (ImportError, OSError) as e:
     logger.warning(
         f"Could not import UMamba (Mamba-UNet): {e}. "
         "Mamba-UNet segmentation will not be available."

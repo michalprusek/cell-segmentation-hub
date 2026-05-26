@@ -17,22 +17,38 @@ export type ModelType =
  */
 export type SpheroidPresetTier = 'fast' | 'accurate' | 'robust' | 'additional';
 
-export const SPHEROID_PRESETS: Record<string, SpheroidPresetTier> = {
+/** The standard spheroid models that participate in the preset framing.
+ *  Excludes `unet_attention_aspp` (the disintegrated/invasive model, shown in
+ *  its own section). `satisfies Record<SpheroidModelId, …>` makes forgetting to
+ *  classify a newly-added spheroid model a compile error. */
+type SpheroidModelId =
+  | 'hrnet'
+  | 'cbam_resunet'
+  | 'unet_spherohq'
+  | 'segformer'
+  | 'mamba_unet';
+
+export const SPHEROID_PRESETS = {
   segformer: 'fast',
   cbam_resunet: 'accurate',
   mamba_unet: 'robust',
   hrnet: 'additional',
   unet_spherohq: 'additional',
-};
+} as const satisfies Record<SpheroidModelId, SpheroidPresetTier>;
 
-/** Icon + ordering for the three primary preset tiers. */
+/** Preset tier for a model id. Non-spheroid (or unmapped) ids fall back to
+ *  'additional' so the lookup stays total over ModelType. */
+export const getSpheroidPreset = (id: ModelType): SpheroidPresetTier =>
+  (SPHEROID_PRESETS as Record<string, SpheroidPresetTier>)[id] ?? 'additional';
+
+/** Icon for each of the three primary preset tiers. */
 export const SPHEROID_PRESET_META: Record<
   Exclude<SpheroidPresetTier, 'additional'>,
-  { icon: string; order: number }
+  { icon: string }
 > = {
-  fast: { icon: '⚡', order: 0 },
-  accurate: { icon: '🎯', order: 1 },
-  robust: { icon: '🌍', order: 2 },
+  fast: { icon: '⚡' },
+  accurate: { icon: '🎯' },
+  robust: { icon: '🌍' },
 };
 
 export type ModelCategory = 'spheroid' | 'sperm' | 'wound' | 'microtubule';
