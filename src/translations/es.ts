@@ -432,6 +432,20 @@ export default {
         wound: 'Modelos de cicatrización',
         microtubule: 'Modelos de microtúbulos',
       },
+      presets: {
+        fast: 'Rápido',
+        accurate: 'Preciso',
+        robust: 'Robusto',
+        showMore: 'Mostrar modelos adicionales',
+        showLess: 'Ocultar modelos adicionales',
+      },
+      presetDescriptions: {
+        fast: 'Vista previa en tiempo real, lotes grandes, GPU débil',
+        accurate:
+          'Laboratorios con imágenes HQ, cuando el tiempo no es crítico',
+        robust:
+          'Laboratorios externos, óptica desconocida, muestras tratadas, morfologías inusuales',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -457,6 +471,11 @@ export default {
           name: 'SegFormer',
           description:
             'Modelo basado en transformador (SegFormer-B0) para esferoides de campo claro: máxima precisión (93% IoU) y muy rápido (~13 ms/imagen)',
+        },
+        mamba_unet: {
+          name: 'Mamba-UNet',
+          description:
+            'U-Net con cuello de botella Mamba (state-space) bidireccional: mejor robustez en imágenes fuera de distribución (óptica desconocida, muestras tratadas, morfologías inusuales)',
         },
         sperm: {
           name: 'Morfología espermática',
@@ -496,6 +515,8 @@ export default {
         'UNet mejorado con Attention Gates y cuello de botella ASPP para detectar esferoides en disolución y pequeñas células satélite (35,5M parámetros)',
       segformer:
         'Modelo SegFormer-B0 basado en transformador, entrenado con el conjunto de datos SpheroMix. La mayor precisión de segmentación de esferoides de la plataforma (93% IoU), siendo además el modelo más pequeño y rápido (~13 ms/imagen).',
+      mamba_unet:
+        'U-Net con cuello de botella Mamba (state-space) bidireccional (90,75M parámetros). La mejor generalización fuera de distribución de la plataforma (HTS-Seg IoU 0,587): para laboratorios externos, óptica desconocida, muestras tratadas y morfologías de esferoides inusuales.',
       sperm:
         'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
       wound:

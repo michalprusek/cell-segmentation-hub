@@ -454,6 +454,19 @@ export default {
         wound: 'Wundheilungs-Modelle',
         microtubule: 'Mikrotubuli-Modelle',
       },
+      presets: {
+        fast: 'Schnell',
+        accurate: 'Genau',
+        robust: 'Robust',
+        showMore: 'Weitere Modelle anzeigen',
+        showLess: 'Weitere Modelle ausblenden',
+      },
+      presetDescriptions: {
+        fast: 'Echtzeit-Vorschau, große Stapel, schwache GPU',
+        accurate: 'Labore mit HQ-Bildern, wenn Zeit keine Rolle spielt',
+        robust:
+          'Externe Labore, unbekannte Optik, behandelte Proben, ungewöhnliche Morphologien',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -479,6 +492,11 @@ export default {
           name: 'SegFormer',
           description:
             'Transformer-basiertes Modell (SegFormer-B0) für Hellfeld-Sphäroide – höchste Genauigkeit (93% IoU) und sehr schnell (~13 ms/Bild)',
+        },
+        mamba_unet: {
+          name: 'Mamba-UNet',
+          description:
+            'U-Net mit bidirektionalem Mamba (State-Space)-Bottleneck – beste Robustheit bei Out-of-Distribution-Bildern (unbekannte Optik, behandelte Proben, ungewöhnliche Morphologien)',
         },
         sperm: {
           name: 'Spermien-Morphologie',
@@ -518,6 +536,8 @@ export default {
         'Erweitertes UNet mit Attention Gates und ASPP-Bottleneck zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (35,5M Parameter)',
       segformer:
         'Transformer-basiertes SegFormer-B0-Modell, trainiert auf dem SpheroMix-Datensatz. Höchste Sphäroid-Genauigkeit der Plattform (93% IoU) bei gleichzeitig kleinstem und schnellstem Modell (~13 ms/Bild).',
+      mamba_unet:
+        'U-Net mit bidirektionalem Mamba (State-Space)-Bottleneck (90,75M Parameter). Beste Out-of-Distribution-Generalisierung der Plattform (HTS-Seg IoU 0,587) – für externe Labore, unbekannte Optik, behandelte Proben und ungewöhnliche Sphäroid-Morphologien.',
       sperm:
         'Spermienmorphologie-Modell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
       wound:

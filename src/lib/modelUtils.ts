@@ -5,9 +5,51 @@ export type ModelType =
   | 'unet_spherohq'
   | 'unet_attention_aspp'
   | 'segformer'
+  | 'mamba_unet'
   | 'sperm'
   | 'wound'
   | 'microtubule';
+
+/**
+ * Recommended-preset framing for the standard spheroid models. Three tiers are
+ * surfaced as primary cards (Fast/Accurate/Robust); the rest fall into a
+ * collapsed "Additional" group. View-layer only — not part of ModelInfo.
+ */
+export type SpheroidPresetTier = 'fast' | 'accurate' | 'robust' | 'additional';
+
+/** The standard spheroid models that participate in the preset framing.
+ *  Excludes `unet_attention_aspp` (the disintegrated/invasive model, shown in
+ *  its own section). `satisfies Record<SpheroidModelId, …>` makes forgetting to
+ *  classify a newly-added spheroid model a compile error. */
+type SpheroidModelId =
+  | 'hrnet'
+  | 'cbam_resunet'
+  | 'unet_spherohq'
+  | 'segformer'
+  | 'mamba_unet';
+
+export const SPHEROID_PRESETS = {
+  segformer: 'fast',
+  cbam_resunet: 'accurate',
+  mamba_unet: 'robust',
+  hrnet: 'additional',
+  unet_spherohq: 'additional',
+} as const satisfies Record<SpheroidModelId, SpheroidPresetTier>;
+
+/** Preset tier for a model id. Non-spheroid (or unmapped) ids fall back to
+ *  'additional' so the lookup stays total over ModelType. */
+export const getSpheroidPreset = (id: ModelType): SpheroidPresetTier =>
+  (SPHEROID_PRESETS as Record<string, SpheroidPresetTier>)[id] ?? 'additional';
+
+/** Icon for each of the three primary preset tiers. */
+export const SPHEROID_PRESET_META: Record<
+  Exclude<SpheroidPresetTier, 'additional'>,
+  { icon: string }
+> = {
+  fast: { icon: '⚡' },
+  accurate: { icon: '🎯' },
+  robust: { icon: '🌍' },
+};
 
 export type ModelCategory = 'spheroid' | 'sperm' | 'wound' | 'microtubule';
 
@@ -100,6 +142,18 @@ export function getLocalizedModelInfo(
         batchSize: 4,
       },
     },
+    mamba_unet: {
+      id: 'mamba_unet',
+      size: 'large',
+      defaultThreshold: 0.5,
+      category: 'spheroid',
+      performance: {
+        avgTimePerImage: 0.236,
+        throughput: 4.2,
+        p95Latency: 0.249,
+        batchSize: 2,
+      },
+    },
     sperm: {
       id: 'sperm',
       size: 'medium',
@@ -147,6 +201,7 @@ export function getLocalizedModelInfo(
     unet_spherohq: 'unet_spherohq',
     unet_attention_aspp: 'unet_attention_aspp',
     segformer: 'segformer',
+    mamba_unet: 'mamba_unet',
     sperm: 'sperm',
     wound: 'wound',
     microtubule: 'microtubule',
@@ -173,6 +228,7 @@ export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
     'unet_spherohq',
     'unet_attention_aspp',
     'segformer',
+    'mamba_unet',
     'sperm',
     'wound',
     'microtubule',
@@ -268,6 +324,22 @@ export const BASIC_MODEL_INFO: Record<
       throughput: 5.0,
       p95Latency: 0.3,
       batchSize: 4,
+    },
+  },
+  mamba_unet: {
+    id: 'mamba_unet',
+    name: 'Mamba-UNet',
+    displayName: 'Mamba-UNet',
+    description:
+      'U-Net with a bidirectional Mamba (state-space) bottleneck — best robustness on out-of-distribution images (external labs, unknown optics, drug-treated, unusual morphologies)',
+    size: 'large',
+    defaultThreshold: 0.5,
+    category: 'spheroid',
+    performance: {
+      avgTimePerImage: 0.236,
+      throughput: 4.2,
+      p95Latency: 0.249,
+      batchSize: 2,
     },
   },
   sperm: {

@@ -445,6 +445,20 @@ export default {
         wound: 'Modèles de cicatrisation',
         microtubule: 'Modèles de microtubules',
       },
+      presets: {
+        fast: 'Rapide',
+        accurate: 'Précis',
+        robust: 'Robuste',
+        showMore: 'Afficher plus de modèles',
+        showLess: 'Masquer les modèles supplémentaires',
+      },
+      presetDescriptions: {
+        fast: 'Aperçu en temps réel, grands lots, GPU faible',
+        accurate:
+          "Laboratoires avec images HQ, quand le temps n'est pas critique",
+        robust:
+          'Laboratoires externes, optique inconnue, échantillons traités, morphologies inhabituelles',
+      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -470,6 +484,11 @@ export default {
           name: 'SegFormer',
           description:
             'Modèle basé sur un transformeur (SegFormer-B0) pour les sphéroïdes en fond clair — précision maximale (93% IoU) et très rapide (~13 ms/image)',
+        },
+        mamba_unet: {
+          name: 'Mamba-UNet',
+          description:
+            'U-Net avec goulot Mamba (state-space) bidirectionnel — meilleure robustesse sur images hors distribution (optique inconnue, échantillons traités, morphologies inhabituelles)',
         },
         sperm: {
           name: 'Morphologie des spermatozoïdes',
@@ -509,6 +528,8 @@ export default {
         'UNet amélioré avec Attention Gates et goulot ASPP pour la détection de sphéroïdes en dissolution et de petites cellules satellites (35,5M paramètres)',
       segformer:
         'Modèle SegFormer-B0 basé sur un transformeur, entraîné sur le jeu de données SpheroMix. Meilleure précision de segmentation des sphéroïdes de la plateforme (93% IoU), tout en étant le modèle le plus petit et le plus rapide (~13 ms/image).',
+      mamba_unet:
+        'U-Net avec goulot Mamba (state-space) bidirectionnel (90,75M paramètres). Meilleure généralisation hors distribution de la plateforme (HTS-Seg IoU 0,587) : pour laboratoires externes, optique inconnue, échantillons traités et morphologies de sphéroïdes inhabituelles.',
       sperm:
         'Modèle de morphologie spermatique avec extraction de squelette pour la mesure de la tête, de la pièce intermédiaire et de la queue',
       wound:

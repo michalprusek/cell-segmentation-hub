@@ -45,5 +45,12 @@ tifffile>=2024.1.30
 nd2>=0.10.0
 huggingface_hub>=0.20
 
+# Mamba-UNet dependency. einops is a pure-Python runtime dep of mamba_ssm and is
+# safe to build in the slim wheel-builder. The CUDA-compiled kernels themselves
+# (mamba-ssm==2.2.4, causal-conv1d==1.4.0) are NOT listed here — they are built
+# in the dedicated CUDA-devel stage of docker/ml.optimized.Dockerfile (the slim
+# builder has no nvcc) and installed from those wheels in the runtime stage.
+einops>=0.7.0
+
 # Prometheus metrics
 prometheus-fastapi-instrumentator==6.1.0

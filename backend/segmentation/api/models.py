@@ -10,6 +10,7 @@ class ModelType(str, Enum):
     UNET_SPHEROHQ = "unet_spherohq"
     UNET_ATTENTION_ASPP = "unet_attention_aspp"
     SEGFORMER = "segformer"
+    MAMBA_UNET = "mamba_unet"
     SPERM = "sperm"
     WOUND = "wound"
 
