@@ -251,25 +251,28 @@ def mask_to_polyline(
     mask: np.ndarray,
     cls: int,
     mask_threshold: float = 0.5,
-    simplify_eps: float = 5.0,
+    simplify_eps: float = 1.5,
     pts_per_100px: float = 32.0,
     min_pts: int = 2,
 ) -> List[Tuple[float, float]]:
-    """Convert instance mask to a smooth polyline.
+    """Convert instance mask to a polyline.
 
-    Pipeline: skeleton → prune → BFS longest path → RDP simplify →
-    uniform resampling.
+    Pipeline: skeleton → prune → BFS longest path → RDP simplify.
 
-    The number of output points adapts to the arc length of the structure.
-    Head (cls=1) is always 3 points. Midpiece/tail use pts_per_100px density.
+    Head (cls=1) is uniformly resampled to a fixed 3-point arc. Midpiece
+    (cls=2) and tail (cls=3) return the RDP-simplified path directly, so
+    points are placed adaptively by curvature (dense at bends, sparse on
+    straight runs) like the microtubule pipeline — no uniform resampling.
 
     Args:
         mask: Soft mask (float32).
         cls: Class ID (1=Head, 2=Midpiece, 3=Tail).
         mask_threshold: Threshold for binarization.
-        simplify_eps: RDP epsilon for initial simplification (higher = smoother).
-        pts_per_100px: Output point density (points per 100px of arc length).
-        min_pts: Minimum number of output points.
+        simplify_eps: RDP epsilon — higher = fewer points / smoother. This is
+            the sole knob controlling midpiece/tail point density.
+        pts_per_100px: Unused (legacy uniform-resample density). Kept for
+            signature compatibility with connect_sperm_polylines.
+        min_pts: Unused (legacy minimum-point floor). Kept for compatibility.
     """
     bin_mask = (mask >= mask_threshold).astype(np.uint8)
     area = bin_mask.sum()
@@ -301,18 +304,20 @@ def mask_to_polyline(
 
     simplified = rdp_simplify(path, simplify_eps)
 
-    # Estimate arc length from simplified path to determine output point count
-    pts_arr = np.array(simplified, dtype=float)
-    arc_len = float(np.linalg.norm(pts_arr[1:] - pts_arr[:-1], axis=1).sum())
-    # Head (cls=1): always 3 points (start, midpoint, end) for a clean arc
+    # Head (cls=1): always a clean 3-point arc (start, midpoint, end).
+    # Uniform resample to exactly 3 — a short head reads best as a fixed
+    # simple arc and stays cheap to nudge by hand.
     if cls == 1:
-        n_output = 3
-    else:
-        n_output = max(min_pts, round(arc_len * pts_per_100px / 100.0))
+        return resample_polyline(simplified, 3)
 
-    # Uniform resampling along the simplified polyline — stable and follows
-    # the RDP-simplified path exactly without B-spline overshoot
-    return resample_polyline(simplified, n_output)
+    # Midpiece (cls=2) / tail (cls=3): adaptive sampling by curvature,
+    # mirroring the microtubule polyline pipeline. The RDP-simplified path
+    # already places vertices densely at bends and sparsely on straight
+    # runs, so return it directly instead of re-densifying with a uniform
+    # pts_per_100px resample. Fewer, curvature-aligned points trace the same
+    # curve (resampling only ever sampled along this path) but are far
+    # faster to edit by hand — moving two or three points reshapes the part.
+    return simplified
 
 
 def _orient_polyline_toward(
@@ -349,7 +354,7 @@ def _orient_polyline_toward(
 def connect_sperm_polylines(
     sperm: dict,
     mask_threshold: float = 0.3,
-    simplify_eps: float = 5.0,
+    simplify_eps: float = 1.5,
     pts_per_100px: float = 32.0,
 ) -> dict:
     """Generate connected polylines for a complete sperm (H+M+T).

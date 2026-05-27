@@ -161,6 +161,11 @@ export interface SegmentationResponse {
   };
   imageWidth?: number;
   imageHeight?: number;
+  // ISO timestamp of the segmentation row. Lets the editor's resegment
+  // completion poll detect when the ML has written a NEW result (the
+  // polygons themselves are deterministic, so this is the only signal that
+  // reliably changes on a resegment).
+  updatedAt?: string;
   error?: string;
 }
 
@@ -1400,6 +1405,8 @@ export class SegmentationService {
       // Add image dimensions for frontend rendering
       imageWidth: segmentationData.imageWidth || 0,
       imageHeight: segmentationData.imageHeight || 0,
+      // Surfaced so the editor's resegment poll can detect a fresh write.
+      updatedAt: segmentationData.updatedAt?.toISOString(),
     };
 
     logger.debug(

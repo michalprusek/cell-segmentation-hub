@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
+import { setCachedSegmentationPolygons } from './segmentationPolygonCache';
 
 interface UseSegmentationReloadProps {
   projectId?: string;
@@ -31,6 +33,7 @@ export function useSegmentationReload({
   maxRetries = 2,
 }: UseSegmentationReloadProps): UseSegmentationReloadReturn {
   const { t } = useLanguage();
+  const queryClient = useQueryClient();
 
   // Check for persisted loading state on mount
   const getPersistedLoadingState = () => {
@@ -218,8 +221,22 @@ export function useSegmentationReload({
         }
         onPolygonsLoaded(data.polygons);
       }
+
+      // Keep the shared React Query cache in sync with the freshly-reloaded
+      // result. The editor's load effect re-runs (and serves cache-first)
+      // when segmentationStatus flips to 'segmented' after a resegment — if
+      // the cache still held the pre-resegment polygons it would clobber the
+      // fresh ones we just loaded, so the new annotations must land in the
+      // cache too.
+      if (imageId) {
+        setCachedSegmentationPolygons(queryClient, imageId, {
+          polygons: data.polygons,
+          imageWidth: data.imageWidth,
+          imageHeight: data.imageHeight,
+        });
+      }
     },
-    [onPolygonsLoaded, onDimensionsUpdated, imageId]
+    [onPolygonsLoaded, onDimensionsUpdated, imageId, queryClient]
   );
 
   /**

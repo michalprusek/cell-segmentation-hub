@@ -72,7 +72,6 @@ export const useAdvancedInteractions = ({
   isSpacePressed: isSpacePressedCallback,
   activePartClassRef,
   activeInstanceIdRef,
-  projectType,
   onPolygonSelection,
   setEditMode,
   setInteractionState,
@@ -252,13 +251,15 @@ export const useAdvancedInteractions = ({
       );
 
       if (!interactionState.isAddingPoints) {
-        // MT polyline: auto-anchor at nearest endpoint, treat click as
-        // first new point. Enter commits via handleEnterPolyline.
-        const isMtPolyline =
-          projectType === 'microtubules' &&
+        // Open polyline: auto-anchor at nearest endpoint, treat click as
+        // first new point so the curve can be extended without first
+        // clicking the original endpoint. Enter commits via
+        // handleEnterPolyline. Closed polygons fall through to the
+        // legacy click-vertex splice path below.
+        const isExtendablePolyline =
           selectedPolygon.geometry === 'polyline' &&
           selectedPolygon.points.length >= 2;
-        if (isMtPolyline) {
+        if (isExtendablePolyline) {
           const head = selectedPolygon.points[0];
           const tail =
             selectedPolygon.points[selectedPolygon.points.length - 1];
@@ -341,7 +342,6 @@ export const useAdvancedInteractions = ({
       interactionState,
       tempPoints,
       transform.zoom,
-      projectType,
       getPolygons,
       updatePolygons,
       setTempPoints,
@@ -576,6 +576,12 @@ export const useAdvancedInteractions = ({
                 if (selectedPolygonId !== polygonId) {
                   onPolygonSelection(polygonId);
                 }
+                // Anchor at the clicked vertex — it becomes the PIVOT the new
+                // sequence grows from. On commit (handleEnterPolyline) the arm
+                // running from this pivot toward the drawn direction is
+                // replaced by the new points; the opposite arm (plus the
+                // pivot) is kept. A pivot that is itself an endpoint
+                // degenerates to a plain endpoint extension.
                 setEditMode(EditMode.AddPoints);
                 setInteractionState({
                   ...interactionState,
@@ -741,14 +747,13 @@ export const useAdvancedInteractions = ({
         ? isShiftPressedCallback()
         : false;
 
-      // Shift-without-click bootstrap for MT polyline AddPoints: seed
+      // Shift-without-click bootstrap for open-polyline AddPoints: seed
       // state so the next mouseMove can enter the equidistant branch.
       if (
         isShiftCurrentlyPressed &&
         editMode === EditMode.AddPoints &&
         !interactionState.isAddingPoints &&
-        selectedPolygonId &&
-        projectType === 'microtubules'
+        selectedPolygonId
       ) {
         const selectedPolygon = getPolygons().find(
           p => p.id === selectedPolygonId
@@ -902,7 +907,6 @@ export const useAdvancedInteractions = ({
       canvasRef,
       handlePan,
       isShiftPressedCallback,
-      projectType,
     ]
   );
 

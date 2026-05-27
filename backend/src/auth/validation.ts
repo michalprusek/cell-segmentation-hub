@@ -66,6 +66,13 @@ export const updateProfileSchema = z.object({
   modelThreshold: z.number().min(0).max(1).optional(),
   preferredLang: z.enum(['en', 'cs', 'es', 'fr', 'de', 'zh']).optional(),
   preferredTheme: z.enum(['light', 'dark']).optional(),
+  // Wire aliases the frontend actually sends: getUserProfile() serialises
+  // preferredLang/preferredTheme as `language`/`theme`, so the write side
+  // uses the same names. Without these, Zod silently strips them and the
+  // language/theme change is dropped (app reverts to the stale profile
+  // value on next load). Mapped back in AuthService.updateProfile.
+  language: z.enum(['en', 'cs', 'es', 'fr', 'de', 'zh']).optional(),
+  theme: z.enum(['light', 'dark', 'system']).optional(),
   emailNotifications: z.boolean().optional(),
   consentToMLTraining: z.boolean().optional(),
   consentToAlgorithmImprovement: z.boolean().optional(),
