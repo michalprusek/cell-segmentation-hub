@@ -32,6 +32,10 @@ import type { ProjectType } from '@/types';
 
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];
+  /** Increments on every fresh reload (resegment / WS completion) so the
+   *  polygon-sync effect replaces the canvas even when the new result has
+   *  the same polygon count as the old one (a length check alone misses it). */
+  reloadNonce?: number;
   imageWidth: number;
   imageHeight: number;
   canvasWidth: number;
@@ -58,6 +62,7 @@ interface UseEnhancedSegmentationEditorProps {
  */
 export const useEnhancedSegmentationEditor = ({
   initialPolygons = [],
+  reloadNonce = 0,
   imageWidth,
   imageHeight,
   canvasWidth,
@@ -198,6 +203,7 @@ export const useEnhancedSegmentationEditor = ({
 
   // Track image changes and polygon data
   const initialPolygonsRef = useRef<Polygon[]>([]);
+  const prevReloadNonceRef = useRef<number>(reloadNonce);
   const currentImageIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
   const previousImageIdRef = useRef<string | undefined>(imageId);
@@ -296,7 +302,12 @@ export const useEnhancedSegmentationEditor = ({
     const imageChanged = currentImageIdRef.current !== imageId;
     const lengthChanged =
       initialPolygons.length !== initialPolygonsRef.current.length;
-    const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
+    // A resegment usually returns the SAME polygon count with new geometry,
+    // so length/imageId stay put — the reload nonce is what tells us to
+    // replace the canvas with the freshly-loaded result.
+    const reloadChanged = reloadNonce !== prevReloadNonceRef.current;
+    const isNewData =
+      !hasInitialized.current || imageChanged || lengthChanged || reloadChanged;
 
     if (isNewData) {
       // First, cancel any ongoing autosave for the previous image
@@ -371,6 +382,7 @@ export const useEnhancedSegmentationEditor = ({
 
       // Update refs
       initialPolygonsRef.current = initialPolygons;
+      prevReloadNonceRef.current = reloadNonce;
       currentImageIdRef.current = imageId;
       hasInitialized.current = true;
 
@@ -386,7 +398,13 @@ export const useEnhancedSegmentationEditor = ({
     // setEditMode/setSelectedPolygonId are stable setState refs and intentionally
     // omitted to avoid re-running this initialization effect on each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPolygons, imageId, autosaveBeforeReset, abortAutosave]);
+  }, [
+    initialPolygons,
+    reloadNonce,
+    imageId,
+    autosaveBeforeReset,
+    abortAutosave,
+  ]);
 
   // Auto-reset view when opening image from gallery
   useEffect(() => {
@@ -734,67 +752,53 @@ export const useEnhancedSegmentationEditor = ({
       return;
     }
 
-    // AddPoints + MT: Enter commits tempPoints as an endpoint extension.
-    // Sperm keeps the legacy "click vertex to finalise" workflow.
+    // AddPoints on an open polyline: Enter commits tempPoints as an
+    // endpoint extension (any project type — gated on geometry below,
+    // not on project). Closed polygons keep the click-vertex splice flow.
     if (editMode !== EditMode.AddPoints) return;
-    if (projectType !== 'microtubules') return;
     if (!selectedPolygonId) return;
 
     const polygon = polygons.find(p => p.id === selectedPolygonId);
     if (!polygon || polygon.geometry !== 'polyline') return;
     if (polygon.points.length < 2) return;
 
-    // Anchor recovery: Shift-only flow can reach Enter without ever
-    // setting addPointStartVertex (the click-handler path that normally
-    // seeds it never ran). Derive the nearest endpoint from the cursor
-    // position (or from the first tempPoint if cursor is unavailable).
-    let startIdx = interactionState.addPointStartVertex?.vertexIndex;
-    if (startIdx === undefined) {
-      const head = polygon.points[0];
-      const tail = polygon.points[polygon.points.length - 1];
-      const anchorRef = tempPoints.length > 0 ? tempPoints[0] : cursorPosition;
-      if (!anchorRef) {
-        startIdx = polygon.points.length - 1;
-      } else {
-        const dHead = (anchorRef.x - head.x) ** 2 + (anchorRef.y - head.y) ** 2;
-        const dTail = (anchorRef.x - tail.x) ** 2 + (anchorRef.y - tail.y) ** 2;
-        startIdx = dHead <= dTail ? 0 : polygon.points.length - 1;
-      }
-    }
+    const pts = polygon.points;
+    const last = pts.length - 1;
 
-    // Points-to-append fallback: if the user pressed Enter without ever
-    // generating a tempPoint (very small shift-drag under
-    // MIN_AUTO_ADD_DISTANCE, or keyboard-only attempt), use the cursor
-    // as a single new point so Enter is not a silent no-op.
-    const pointsToAppend =
+    // The new points the user drew. Cursor fallback covers an Enter pressed
+    // before any tempPoint was generated (tiny shift-drag / keyboard-only).
+    const newPts =
       tempPoints.length > 0
         ? tempPoints
         : cursorPosition
           ? [cursorPosition]
           : [];
-    if (pointsToAppend.length === 0) {
+    if (newPts.length === 0) {
       logger.warn(
         'handleEnterPolyline: no tempPoints and no cursor — nothing to append'
       );
       return;
     }
 
-    const last = polygon.points.length - 1;
-    let extended;
-    if (startIdx === 0) {
-      // Head extension: reverse so the most recent click is furthest out.
-      extended = [...[...pointsToAppend].reverse(), ...polygon.points];
-    } else if (startIdx === last) {
-      extended = [...polygon.points, ...pointsToAppend];
-    } else {
-      // Mid-polyline anchor — Enter is undefined here. Log loudly rather
-      // than silently no-op so user can diagnose via console.
-      logger.warn(
-        `handleEnterPolyline: anchor at index ${startIdx} (mid-polyline). ` +
-          `Press Esc and click a different vertex to splice instead.`
-      );
-      return;
+    // "Redraw arm from a pivot": the user Shift-clicked a vertex (the pivot)
+    // and drew a new sequence. The arm running from the pivot toward the
+    // endpoint the sequence aims at is discarded and replaced by the new
+    // points; the opposite arm and the pivot are kept. Direction is decided
+    // by which endpoint the END of the drawn sequence is nearest. When the
+    // pivot is that same endpoint this degenerates to a plain extension, and
+    // when no pivot was seeded (Shift-only flow) we fall back to the nearest
+    // endpoint so it still extends.
+    const far = newPts[newPts.length - 1];
+    const d2 = (a: Point, b: Point) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+    const aimsTail = d2(far, pts[last]) <= d2(far, pts[0]);
+    let pivot = interactionState.addPointStartVertex?.vertexIndex;
+    if (pivot === undefined) {
+      pivot = aimsTail ? last : 0;
     }
+
+    const extended = aimsTail
+      ? [...pts.slice(0, pivot + 1), ...newPts]
+      : [...[...newPts].reverse(), ...pts.slice(pivot)];
 
     updatePolygons(
       polygons.map(p =>
@@ -811,7 +815,6 @@ export const useEnhancedSegmentationEditor = ({
     setEditMode(EditMode.EditVertices);
   }, [
     editMode,
-    projectType,
     selectedPolygonId,
     interactionState.addPointStartVertex,
     tempPoints,

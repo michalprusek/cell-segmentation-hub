@@ -35,6 +35,10 @@ export interface ProfileUpdateData {
   modelThreshold?: number;
   preferredLang?: string;
   preferredTheme?: string;
+  // Wire aliases the frontend sends (see updateProfileSchema); mapped onto
+  // preferredLang/preferredTheme in updateProfile().
+  language?: string;
+  theme?: string;
   emailNotifications?: boolean;
   consentToMLTraining?: boolean;
   consentToAlgorithmImprovement?: boolean;
@@ -640,8 +644,12 @@ export async function updateProfile(
       avatarUrl: profileData.avatarUrl,
       preferredModel: profileData.preferredModel,
       modelThreshold: profileData.modelThreshold,
-      preferredLang: profileData.preferredLang,
-      preferredTheme: profileData.preferredTheme,
+      // Accept both the DB column names and the wire aliases the frontend
+      // sends (`language`/`theme`). Without the alias fallback the language
+      // and theme changes are silently dropped and the app reverts to the
+      // stale profile value on the next load.
+      preferredLang: profileData.preferredLang ?? profileData.language,
+      preferredTheme: profileData.preferredTheme ?? profileData.theme,
       emailNotifications: profileData.emailNotifications,
       consentToMLTraining: profileData.consentToMLTraining,
       consentToAlgorithmImprovement: profileData.consentToAlgorithmImprovement,
