@@ -93,6 +93,9 @@ const SegmentationEditor = () => {
   const isInitialLoadRef = useRef(true);
   const previousImageIdRef = useRef<string | undefined>(undefined);
   const currentImageIdRef = useRef<string | undefined>(imageId);
+  // Monotonic token for the background resegment-completion poll so a new
+  // resegment (or image switch) invalidates a still-running poll.
+  const resegPollSeqRef = useRef(0);
 
   // Coordinated AbortController for all segmentation operations
   const { getSignal, abortAllOperations, abortAll } =
@@ -184,12 +187,25 @@ const SegmentationEditor = () => {
   // (it needs `visibleChannels` to construct the target key).
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
 
+  // Bumped every time fresh segmentation data is reloaded (resegment / WS
+  // completion). The editor's polygon-sync effect keys on this so a reload
+  // that yields the SAME polygon count but new geometry still replaces the
+  // canvas — a plain length check misses same-count resegments.
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const handleReloadedPolygons = useCallback(
+    (polys: SegmentationPolygon[] | null) => {
+      setSegmentationPolygons(polys);
+      setReloadNonce(n => n + 1);
+    },
+    []
+  );
+
   // Use custom hook for segmentation reload logic
   const { isReloading, reloadSegmentation, cleanupReloadOperations } =
     useSegmentationReload({
       projectId,
       imageId,
-      onPolygonsLoaded: setSegmentationPolygons,
+      onPolygonsLoaded: handleReloadedPolygons,
       onDimensionsUpdated: setImageDimensions,
       maxRetries: 2,
     });
@@ -457,6 +473,7 @@ const SegmentationEditor = () => {
   // Initialize enhanced editor
   const editor = useEnhancedSegmentationEditor({
     initialPolygons,
+    reloadNonce,
     imageWidth: imageDimensions?.width || 1024,
     imageHeight: imageDimensions?.height || 768,
     canvasWidth,
@@ -1445,6 +1462,71 @@ const SegmentationEditor = () => {
   const [showResegmentChannelDialog, setShowResegmentChannelDialog] =
     useState(false);
 
+  // Background poll that refreshes the editor when a resegment completes.
+  // The WebSocket completion event is not a dependable trigger, so we poll
+  // the result's `updatedAt` over plain HTTP (no AbortController, so a
+  // re-rendering editor can't cancel it) and apply the fresh polygons
+  // directly once it advances. A seq token invalidates a stale poll when a
+  // new resegment starts or the user switches frames.
+  const startResegmentPoll = useCallback(
+    (targetImageId: string, prevStamp: string | null, announce: boolean) => {
+      const seq = ++resegPollSeqRef.current;
+      const deadline = Date.now() + 120_000;
+      const tick = async () => {
+        if (
+          seq !== resegPollSeqRef.current ||
+          targetImageId !== currentImageIdRef.current ||
+          Date.now() > deadline
+        ) {
+          return;
+        }
+        let fresh = null;
+        try {
+          fresh = await apiClient.getSegmentationResults(targetImageId);
+        } catch {
+          // transient — keep polling
+        }
+        if (
+          seq !== resegPollSeqRef.current ||
+          targetImageId !== currentImageIdRef.current
+        ) {
+          return;
+        }
+        if (fresh && fresh.updatedAt && fresh.updatedAt !== prevStamp) {
+          // Apply the already-fetched fresh result DIRECTLY rather than via
+          // reloadSegmentation. reloadSegmentation runs a second fetch behind
+          // its own AbortController + cleanup, which a concurrent reload (or
+          // the editor's churn) can cancel — leaving onPolygonsLoaded (and
+          // the reloadNonce bump) unfired. Here we:
+          //   1. write the React Query cache so the editor's load effect
+          //      (which re-runs on the segmentationStatus flip and reads
+          //      cache-first) can't clobber us back to the stale result, and
+          //   2. push state + bump reloadNonce via handleReloadedPolygons so
+          //      the canvas re-syncs even at an unchanged polygon count.
+          if (fresh.imageWidth && fresh.imageHeight) {
+            setImageDimensions({
+              width: fresh.imageWidth,
+              height: fresh.imageHeight,
+            });
+          }
+          setCachedSegmentationPolygons(queryClient, targetImageId, {
+            polygons: fresh.polygons ?? null,
+            imageWidth: fresh.imageWidth,
+            imageHeight: fresh.imageHeight,
+          });
+          handleReloadedPolygons(fresh.polygons ?? null);
+          if (announce) {
+            toast.success(t('segmentation.toolbar.resegmentSuccess'));
+          }
+          return;
+        }
+        setTimeout(tick, 2000);
+      };
+      setTimeout(tick, 2000);
+    },
+    [handleReloadedPolygons, setImageDimensions, queryClient, t]
+  );
+
   // Pure request helper — shared by the direct (single-channel) path
   // and the dialog's onConfirm callback.
   const runResegment = useCallback(
@@ -1452,6 +1534,11 @@ const SegmentationEditor = () => {
       if (!imageId || isResegmenting) return;
       setIsResegmenting(true);
       try {
+        // Snapshot the current result timestamp so the completion poll can
+        // tell when the ML has written the *new* segmentation.
+        const prevStamp =
+          (await apiClient.getSegmentationResults(imageId).catch(() => null))
+            ?.updatedAt ?? null;
         const result = await apiClient.requestBatchSegmentation(
           [imageId],
           effectiveResegmentModel,
@@ -1482,10 +1569,13 @@ const SegmentationEditor = () => {
               ? `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed: ${firstError})`
               : `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed)`
           );
-        } else {
-          toast.success(t('segmentation.toolbar.resegmentSuccess'));
         }
-        await reloadSegmentation();
+        // The job is now QUEUED — the ML has not produced the new polygons
+        // yet. Kick off a non-blocking background poll that refreshes the
+        // canvas + fires the success toast once the new segmentation lands;
+        // isResegmenting is cleared right away (finally) so the button never
+        // appears stuck while the ML runs.
+        startResegmentPoll(imageId, prevStamp, result.failed === 0);
       } catch (err) {
         if (handleCancelledError(err, 'resegment current frame')) return;
         logger.error('Resegment failed', err);
@@ -1500,7 +1590,7 @@ const SegmentationEditor = () => {
       effectiveResegmentModel,
       confidenceThreshold,
       detectHoles,
-      reloadSegmentation,
+      startResegmentPoll,
       t,
     ]
   );

@@ -222,7 +222,15 @@ Each of these shipped to production at least once in 2026 despite green pre-comm
 
 12. **Frame slider seed/reverse-sync race**. `useVideoFrames` defaults `frameIndex=0`. If reverse-sync (frameIndex→URL) fires before seed (URL→frameIndex) propagates a `setFrameIndex(N)`, the URL flips to `frames[0]` and oscillates with seed at ~7 Hz on multi-hundred-frame videos. Check: tests on a 600+-frame video; the editor must converge within 1-2 render commits. Pattern: 3-effect choreography with ref-tracked seed marker — see memory `project_frame_slider_race_pattern`.
 
+13. **Editor doesn't refresh after resegment (same-count)**. The editor's polygon-sync effect in `useEnhancedSegmentationEditor.tsx` only pulls new data into the canvas when the polygon **count** or `imageId` changes. A resegment usually returns the **same count** with new geometry, so a reload (`setSegmentationPolygons`) updates page state but the canvas keeps the stale polygons. Fix pattern: a `reloadNonce` that increments on every reload and is part of the sync effect's `isNewData`. Also: the WebSocket completion event is NOT a dependable refresh trigger (it can silently not reach `handleSegmentationStatusUpdate`); a resegment must have a non-WS path (background poll on `getSegmentationResults().updatedAt`) to reload + show the success toast on completion. Check: delete a polygon → resegment → the new polygon must reappear AND the success toast fire WITHOUT a manual F5.
+
 ---
+
+## Do NOT hand back unverified fixes
+
+**Test comprehensively yourself BEFORE telling the user to try it.** Repeatedly shipping "should work" fixes that the user has to bounce back is the worst failure mode — it wastes their time and erodes trust. For any user-facing change, reproduce the user's exact flow end-to-end and observe the fixed behavior with your own tools (Playwright MCP + service logs + DB) before handoff.
+
+When your test harness genuinely cannot exercise a path (e.g. the injected-token Playwright session has an **unstable WebSocket** — it flaps connect/disconnect and triggers an abort storm that cancels in-flight fetches, so WS-completion-driven editor refreshes can't be observed), do NOT hand back and hope. Instead: (a) make the fix **not depend on the unverifiable path** (e.g. a background HTTP poll with a non-cancellable final fetch, independent of the WebSocket), then (b) verify THAT path, which the harness can exercise. Only escalate to the user once you have observed the fix working.
 
 ## Commands
 

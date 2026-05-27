@@ -32,6 +32,10 @@ import type { ProjectType } from '@/types';
 
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];
+  /** Increments on every fresh reload (resegment / WS completion) so the
+   *  polygon-sync effect replaces the canvas even when the new result has
+   *  the same polygon count as the old one (a length check alone misses it). */
+  reloadNonce?: number;
   imageWidth: number;
   imageHeight: number;
   canvasWidth: number;
@@ -58,6 +62,7 @@ interface UseEnhancedSegmentationEditorProps {
  */
 export const useEnhancedSegmentationEditor = ({
   initialPolygons = [],
+  reloadNonce = 0,
   imageWidth,
   imageHeight,
   canvasWidth,
@@ -198,6 +203,7 @@ export const useEnhancedSegmentationEditor = ({
 
   // Track image changes and polygon data
   const initialPolygonsRef = useRef<Polygon[]>([]);
+  const prevReloadNonceRef = useRef<number>(reloadNonce);
   const currentImageIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
   const previousImageIdRef = useRef<string | undefined>(imageId);
@@ -296,7 +302,12 @@ export const useEnhancedSegmentationEditor = ({
     const imageChanged = currentImageIdRef.current !== imageId;
     const lengthChanged =
       initialPolygons.length !== initialPolygonsRef.current.length;
-    const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
+    // A resegment usually returns the SAME polygon count with new geometry,
+    // so length/imageId stay put — the reload nonce is what tells us to
+    // replace the canvas with the freshly-loaded result.
+    const reloadChanged = reloadNonce !== prevReloadNonceRef.current;
+    const isNewData =
+      !hasInitialized.current || imageChanged || lengthChanged || reloadChanged;
 
     if (isNewData) {
       // First, cancel any ongoing autosave for the previous image
@@ -371,6 +382,7 @@ export const useEnhancedSegmentationEditor = ({
 
       // Update refs
       initialPolygonsRef.current = initialPolygons;
+      prevReloadNonceRef.current = reloadNonce;
       currentImageIdRef.current = imageId;
       hasInitialized.current = true;
 
@@ -386,7 +398,13 @@ export const useEnhancedSegmentationEditor = ({
     // setEditMode/setSelectedPolygonId are stable setState refs and intentionally
     // omitted to avoid re-running this initialization effect on each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPolygons, imageId, autosaveBeforeReset, abortAutosave]);
+  }, [
+    initialPolygons,
+    reloadNonce,
+    imageId,
+    autosaveBeforeReset,
+    abortAutosave,
+  ]);
 
   // Auto-reset view when opening image from gallery
   useEffect(() => {

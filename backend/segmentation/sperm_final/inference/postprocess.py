@@ -251,7 +251,7 @@ def mask_to_polyline(
     mask: np.ndarray,
     cls: int,
     mask_threshold: float = 0.5,
-    simplify_eps: float = 5.0,
+    simplify_eps: float = 1.5,
     pts_per_100px: float = 32.0,
     min_pts: int = 2,
 ) -> List[Tuple[float, float]]:
@@ -354,7 +354,7 @@ def _orient_polyline_toward(
 def connect_sperm_polylines(
     sperm: dict,
     mask_threshold: float = 0.3,
-    simplify_eps: float = 5.0,
+    simplify_eps: float = 1.5,
     pts_per_100px: float = 32.0,
 ) -> dict:
     """Generate connected polylines for a complete sperm (H+M+T).
