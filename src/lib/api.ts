@@ -628,18 +628,44 @@ class ApiClient {
    */
   async submitFeedback(
     data: { type: 'bug' | 'feature'; title: string; body: string },
-    attachment?: File
-  ): Promise<{ id: string; emailQueued: boolean }> {
+    attachment?: File,
+    onUploadProgress?: (progressPercent: number) => void
+  ): Promise<{
+    id: string;
+    emailQueued: boolean;
+    attachmentStored?: boolean;
+  }> {
     const formData = new FormData();
     formData.append('type', data.type);
     formData.append('title', data.title);
     formData.append('body', data.body);
     if (attachment) {
-      formData.append('attachment', attachment);
+      // Normalize the filename (NFC) so accented characters survive the
+      // multipart boundary — same guard as uploadVideo.
+      const normalizedName = attachment.name.normalize('NFC');
+      const payload =
+        normalizedName !== attachment.name
+          ? new File([attachment], normalizedName, {
+              type: attachment.type,
+              lastModified: attachment.lastModified,
+            })
+          : attachment;
+      formData.append('attachment', payload);
     }
 
     const response = await this.instance.post('/feedback', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      // The attachment can be a multi-GB video/ND2 that takes a long time
+      // to push over the wire — disable the client timeout (0 = no timeout)
+      // so a slow but healthy upload isn't aborted mid-stream.
+      timeout: 0,
+      onUploadProgress: progressEvent => {
+        if (onUploadProgress && progressEvent.total) {
+          onUploadProgress(
+            Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          );
+        }
+      },
     });
 
     return this.extractData(response);

@@ -9,7 +9,10 @@ import type { CreateFeedbackData } from '../../types/validation';
  * POST /api/feedback
  *
  * Authenticated. Accepts multipart/form-data with text fields
- * (type, title, body) and an optional `attachment` (PNG/JPG ≤ 5 MB).
+ * (type, title, body) and an optional `attachment` — a screenshot OR the
+ * microscopy video/ND2 the report is about (≤ 50 GB). Large files are
+ * streamed to disk and stored under `feedback/<id>/`; only small images
+ * are inlined into the notification email.
  *
  * Response shape on success:
  *   { id: string, emailQueued: boolean }
@@ -27,14 +30,32 @@ export const createFeedback = asyncHandler(async (req: Request, res: Response) =
 
   let attachment: FeedbackService.FeedbackAttachment | undefined;
   if (req.file) {
-    // Multer's diskStorage gives us a path; we read it into a buffer here
-    // so feedbackService can hand it to nodemailer in one shot. The temp
-    // file is unlinked in the finally block to avoid filling /tmp.
-    const buffer = await fs.readFile(req.file.path);
+    // Only small images are read into memory (for the inline email). Large
+    // files — videos / ND2 up to 50 GB — are NEVER buffered: reading a
+    // multi-GB file into memory would exhaust the container's RAM. They stay
+    // on disk and feedbackService moves them into feedback/<id>/.
+    const isInlineImage =
+      req.file.size <= FeedbackService.FEEDBACK_INLINE_EMAIL_MAX_BYTES &&
+      (req.file.mimetype === 'image/png' || req.file.mimetype === 'image/jpeg');
+    let buffer: Buffer | undefined;
+    if (isInlineImage) {
+      try {
+        buffer = await fs.readFile(req.file.path);
+      } catch (err) {
+        // Failing to read the small image for inlining must not sink the
+        // whole report — the file is already on disk and still gets stored +
+        // referenced; we just skip the inline copy.
+        logger.warn(
+          `Feedback inline-image read failed; sending without inline copy: ${(err as Error).message}`,
+          'FeedbackController'
+        );
+      }
+    }
     attachment = {
-      path: req.file.path,
+      stagedPath: req.file.path,
       mime: req.file.mimetype,
       filename: req.file.originalname,
+      sizeBytes: req.file.size,
       buffer,
     };
   }
@@ -52,28 +73,28 @@ export const createFeedback = asyncHandler(async (req: Request, res: Response) =
       userId: req.user.id,
       type: data.type,
       hasAttachment: Boolean(attachment),
+      attachmentBytes: attachment?.sizeBytes ?? 0,
+      attachmentStored: result.attachmentStored,
       emailQueued: result.emailQueued,
     });
 
     return ResponseHelper.success(
       res,
-      { id: result.id, emailQueued: result.emailQueued },
+      {
+        id: result.id,
+        emailQueued: result.emailQueued,
+        attachmentStored: result.attachmentStored,
+      },
       'Feedback submitted',
       201
     );
   } finally {
-    // Best-effort cleanup of the temp upload — the buffered copy is
-    // already in the queued email. Leaving the file on disk would slowly
-    // fill /tmp/spheroseg-feedback-uploads.
+    // Safety net: on success feedbackService renames the staged file into
+    // feedback/<id>/, so this unlink hits a now-missing path (ENOENT, ignored).
+    // It only does real work when the move never happened, keeping the
+    // staging dir free of orphans.
     if (req.file?.path) {
-      try {
-        await fs.unlink(req.file.path);
-      } catch (err) {
-        logger.warn(
-          `Failed to unlink feedback temp file ${req.file.path}: ${(err as Error).message}`,
-          'FeedbackController'
-        );
-      }
+      await fs.unlink(req.file.path).catch(() => undefined);
     }
   }
 });

@@ -27,6 +27,16 @@ vi.mock('../../utils/logger', () => ({
   },
 }));
 
+vi.mock('../../utils/config', () => ({
+  config: {
+    SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
+    UPLOAD_DIR: './test-uploads',
+    EXPORT_DIR: './test-exports',
+    STORAGE_TYPE: 'local',
+    NODE_ENV: 'test',
+  },
+}));
+
 vi.mock('fs/promises', () => {
   const noop = vi.fn().mockResolvedValue(undefined);
   const api = {

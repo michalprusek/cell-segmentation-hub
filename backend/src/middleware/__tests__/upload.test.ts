@@ -174,10 +174,14 @@ describe('Upload Middleware - Large Batch Support', () => {
         res.json({ success: true, fileCount: files.length });
       });
 
+      // NOTE: video MIME types (e.g. video/mp4) are intentionally NOT here —
+      // the upload multer shares `sharedFileFilter`, which accepts the merged
+      // image+video/ND2/TIFF set (video frames are extracted after landing on
+      // disk), so a video is a *supported* upload. Only genuinely unsupported
+      // document/archive types must be rejected.
       const unsupportedTypes = [
         { ext: 'txt', mime: 'text/plain' },
         { ext: 'pdf', mime: 'application/pdf' },
-        { ext: 'mp4', mime: 'video/mp4' },
         { ext: 'zip', mime: 'application/zip' },
       ];
 

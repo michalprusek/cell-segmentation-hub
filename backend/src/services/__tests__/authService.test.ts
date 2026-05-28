@@ -310,9 +310,10 @@ describe('AuthService', () => {
         refreshToken: 'new-refresh-token',
       };
 
-      sessionServiceMock.rotateRefreshToken.mockResolvedValueOnce(
-        'new-refresh-token'
-      );
+      sessionServiceMock.rotateRefreshToken.mockResolvedValueOnce({
+        token: 'new-refresh-token',
+        userId: 'user-id',
+      });
       sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce({
         userId: 'user-id',
       });

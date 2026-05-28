@@ -21,3 +21,6 @@ process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
 process.env.WS_ALLOWED_ORIGINS = 'http://localhost:3000';
 process.env.FROM_EMAIL = 'test@example.com';
 process.env.FROM_NAME = 'Test Platform';
+process.env.EMAIL_SERVICE = 'smtp';
+process.env.SMTP_HOST = 'localhost';
+process.env.SMTP_PORT = '25';

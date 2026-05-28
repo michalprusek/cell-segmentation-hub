@@ -2172,11 +2172,16 @@ export default {
     submit: 'Submit',
     submittedSuccess: 'Thanks! Your feedback was sent.',
     submitFailed: "Couldn't send feedback",
+    submittedNoEmail:
+      'Thanks! Your feedback was recorded (email notification is pending).',
+    attachmentStoreFailed:
+      "Your report was sent, but the attached file couldn't be stored — please try attaching it again.",
     attachmentPrompt:
-      'Drag a screenshot here, or click to select (PNG/JPG ≤ 5 MB)',
-    attachmentTooLarge: 'File too large — limit is 5 MB',
-    attachmentInvalidType: 'Only PNG or JPG images',
+      'Drag a file here, or click to select — a screenshot or the video/ND2 your report is about (up to 50 GB)',
+    attachmentTooLarge: 'File too large — limit is 50 GB',
+    attachmentInvalidType: 'Unsupported file type (image, video or ND2 only)',
     removeAttachment: 'Remove attachment',
+    uploading: 'Uploading…',
   },
   editor: {
     channelSwitcher: {
