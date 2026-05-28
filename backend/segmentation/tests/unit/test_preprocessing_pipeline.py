@@ -79,9 +79,13 @@ class TestPreprocessRGBImage:
     """_load_and_preprocess_image returns the correct tensor shape."""
 
     def test_preprocess_rgb_image(self, inference_service):
-        """RGB JPEG bytes → 4-D tensor (1, 3, H, W) and original size tuple."""
+        """RGB JPEG bytes → 4-D tensor (1, 3, H, W), original size tuple, and gray ndarray.
+
+        _load_and_preprocess_image() returns a 3-tuple:
+          (image_tensor, original_size, original_gray)
+        """
         img_bytes = _make_image_bytes(320, 240, mode="RGB", fmt="JPEG")
-        tensor, orig_size = inference_service._load_and_preprocess_image(img_bytes)
+        tensor, orig_size, orig_gray = inference_service._load_and_preprocess_image(img_bytes)
         assert isinstance(tensor, torch.Tensor)
         assert tensor.ndim == 4
         assert tensor.shape[0] == 1, "Batch dimension should be 1"
@@ -92,14 +96,14 @@ class TestPreprocessRGBImage:
     def test_preprocess_grayscale_conversion(self, inference_service):
         """Grayscale (L-mode) image is converted to 3-channel tensor."""
         img_bytes = _make_image_bytes(128, 128, mode="L", fmt="PNG")
-        tensor, _ = inference_service._load_and_preprocess_image(img_bytes)
+        tensor, _, _gray = inference_service._load_and_preprocess_image(img_bytes)
         assert tensor.shape[1] == 3, "Grayscale should be converted to 3 channels"
 
     def test_preprocess_rgba_handling(self, inference_service):
         """RGBA image is converted to RGB without raising an error."""
         img_bytes = _make_image_bytes(64, 64, mode="RGBA", fmt="PNG")
         # Should not raise
-        tensor, _ = inference_service._load_and_preprocess_image(img_bytes)
+        tensor, _, _gray = inference_service._load_and_preprocess_image(img_bytes)
         assert tensor.shape[1] == 3
 
     def test_preprocess_normalization(self, inference_service):
@@ -108,7 +112,7 @@ class TestPreprocessRGBImage:
         img = Image.new("RGB", (64, 64), color=(255, 255, 255))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
-        tensor, _ = inference_service._load_and_preprocess_image(buf.getvalue())
+        tensor, _, _gray = inference_service._load_and_preprocess_image(buf.getvalue())
         # After normalization of a white pixel: (1.0 - 0.485) / 0.229 ≈ 2.25 (positive)
         # But a black pixel would produce (0.0 - 0.485) / 0.229 ≈ -2.12 (negative)
         # The test verifies that the tensor is NOT simply in [0, 1] anymore
@@ -119,7 +123,7 @@ class TestPreprocessRGBImage:
     def test_preprocess_resize_to_target(self, inference_service):
         """Preprocessed tensor spatial dims match InferenceService.target_size."""
         img_bytes = _make_image_bytes(320, 240, mode="RGB", fmt="JPEG")
-        tensor, _ = inference_service._load_and_preprocess_image(img_bytes)
+        tensor, _, _gray = inference_service._load_and_preprocess_image(img_bytes)
         h, w = tensor.shape[2], tensor.shape[3]
         expected_h, expected_w = inference_service.target_size
         assert (h, w) == (expected_h, expected_w), (
@@ -130,7 +134,7 @@ class TestPreprocessRGBImage:
         """Returned original_size matches the actual input image dimensions."""
         for (W, H) in [(100, 100), (640, 480), (1920, 1080)]:
             img_bytes = _make_image_bytes(W, H, mode="RGB", fmt="PNG")
-            _, orig_size = inference_service._load_and_preprocess_image(img_bytes)
+            _, orig_size, _gray = inference_service._load_and_preprocess_image(img_bytes)
             assert orig_size == (W, H), f"Expected ({W}, {H}), got {orig_size}"
 
     def test_preprocess_invalid_bytes_raises(self, inference_service):
