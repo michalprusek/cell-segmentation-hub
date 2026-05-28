@@ -224,7 +224,8 @@ describe('WebSocket Test Utilities', () => {
       const statsHandler = vi.fn();
 
       mockSocket.on('segmentation-update', updateHandler);
-      mockSocket.on('queue-stats-update', statsHandler);
+      // __simulateQueueStatsUpdate fires the 'queueStats' event (backend event name)
+      mockSocket.on('queueStats', statsHandler);
 
       scenarios.simulateBatchProcessing('proj-1', 3);
 

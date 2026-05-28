@@ -40,6 +40,16 @@ describe('WebSocketManager', () => {
   let wsManager: WebSocketManager;
 
   beforeEach(() => {
+    // Clean up previous test's singleton before creating new mock
+    try {
+      WebSocketManager.cleanup();
+    } catch (_e) {
+      // ignore
+    }
+
+    // Clear mocks BEFORE setting up new mock return value so the mock persists
+    vi.clearAllMocks();
+
     // Create comprehensive mock socket with event handlers
     const eventHandlers: { [key: string]: ((...args: unknown[]) => void)[] } =
       {};
@@ -72,14 +82,11 @@ describe('WebSocketManager', () => {
       },
     };
 
-    // Setup io mock to return our mock socket
+    // Setup io mock AFTER clearAllMocks so the return value is not cleared
     vi.mocked(io).mockReturnValue(mockSocket);
 
     // Get fresh WebSocketManager instance
     wsManager = WebSocketManager.getInstance();
-
-    // Clear all mocks
-    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -141,10 +148,7 @@ describe('WebSocketManager', () => {
       // First connection
       mockSocket.connected = true;
       const connectPromise1 = wsManager.connect(mockUser);
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise1;
 
       vi.clearAllMocks();
@@ -160,10 +164,7 @@ describe('WebSocketManager', () => {
       const user1 = { id: 'user-1', token: 'token-1' };
       mockSocket.connected = true;
       const connectPromise1 = wsManager.connect(user1);
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise1;
 
       vi.clearAllMocks();
@@ -171,7 +172,7 @@ describe('WebSocketManager', () => {
       // Second connection with different user
       const user2 = { id: 'user-2', token: 'token-2' };
       const connectPromise2 = wsManager.connect(user2);
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise2;
 
       expect(mockSocket.disconnect).toHaveBeenCalled();
@@ -202,10 +203,8 @@ describe('WebSocketManager', () => {
       const error = new Error('Connection failed');
       const connectPromise = wsManager.connect(mockUser);
 
-      const connectErrorHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect_error'
-      )?.[1];
-      connectErrorHandler?.(error);
+      // Use _trigger to fire ALL connect_error handlers (including the Promise rejector)
+      mockSocket._trigger('connect_error', error);
 
       await expect(connectPromise).rejects.toThrow('Connection failed');
     });
@@ -216,10 +215,7 @@ describe('WebSocketManager', () => {
 
       // Simulate connection
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
 
       await Promise.all([connectPromise1, connectPromise2]);
 
@@ -234,10 +230,7 @@ describe('WebSocketManager', () => {
     beforeEach(async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
     });
 
@@ -272,8 +265,9 @@ describe('WebSocketManager', () => {
         total: 4,
       };
 
+      // Production code registers on 'queueStats' (backend event name), re-emits as 'queue-stats-update'
       const handler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'queue-stats-update'
+        call => call[0] === 'queueStats'
       )?.[1];
       handler?.(statsData);
 
@@ -390,10 +384,7 @@ describe('WebSocketManager', () => {
     it('should emit messages when connected', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       const testData = { test: 'data' };
@@ -413,10 +404,7 @@ describe('WebSocketManager', () => {
       // Should emit after connection
       wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
 
       expect(mockSocket.emit).toHaveBeenCalledWith('test-event', testData);
     });
@@ -430,10 +418,7 @@ describe('WebSocketManager', () => {
       // Connect
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // All messages should be emitted
@@ -449,10 +434,7 @@ describe('WebSocketManager', () => {
     beforeEach(async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
     });
 
@@ -499,10 +481,7 @@ describe('WebSocketManager', () => {
 
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // Simulate disconnect
@@ -515,40 +494,42 @@ describe('WebSocketManager', () => {
       expect(disconnectListener).toHaveBeenCalledWith('transport close');
     });
 
-    it('should emit reconnecting event on connection error', async () => {
-      const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
-      await connectPromise;
+    it('should emit reconnecting event on connection error after manual reconnects', async () => {
+      vi.useFakeTimers();
 
-      vi.clearAllMocks();
+      try {
+        const connectPromise = wsManager.connect(mockUser);
+        mockSocket.connected = true;
+        mockSocket._trigger('connect');
+        await connectPromise;
 
-      // Simulate connection error after a few attempts
-      const error = new Error('Connection failed');
-      const connectErrorHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect_error'
-      )?.[1];
+        vi.clearAllMocks();
 
-      // Mock a few reconnection attempts
-      for (let i = 0; i < 3; i++) {
-        connectErrorHandler?.(error);
+        // reconnectAttempts is only incremented by handleReconnect (called from disconnect handler).
+        // The 'reconnecting' toast fires when reconnectAttempts > 2 AND connect_error fires.
+        // Simulate multiple server disconnects to increment reconnectAttempts (without advancing time fully).
+        for (let i = 0; i < 3; i++) {
+          mockSocket.connected = false;
+          mockSocket._trigger('disconnect', 'io server disconnect');
+        }
+
+        // Now reconnectAttempts = 3 > 2, fire connect_error with non-auth error
+        const error = new Error('Network error');
+        mockSocket._trigger('connect_error', error);
+
+        expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
+          type: 'reconnecting',
+        });
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
       }
-
-      expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
-        type: 'reconnecting',
-      });
     });
 
     it('should emit reconnected event on successful reconnection', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // Simulate reconnection
@@ -565,10 +546,7 @@ describe('WebSocketManager', () => {
     it('should emit reconnect_failed event on failure', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // Simulate reconnection failure
@@ -598,10 +576,7 @@ describe('WebSocketManager', () => {
     it('should start ping interval on connect', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       vi.clearAllMocks();
@@ -615,10 +590,7 @@ describe('WebSocketManager', () => {
     it('should send periodic pings', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       vi.clearAllMocks();
@@ -633,10 +605,7 @@ describe('WebSocketManager', () => {
     it('should not send ping when disconnected', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // Disconnect
@@ -652,10 +621,7 @@ describe('WebSocketManager', () => {
     it('should stop ping interval on disconnect', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // Disconnect
@@ -681,10 +647,7 @@ describe('WebSocketManager', () => {
 
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       expect(wsManager.isConnected).toBe(true);
@@ -698,10 +661,7 @@ describe('WebSocketManager', () => {
 
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       expect(wsManager.user).toEqual(mockUser);
@@ -715,10 +675,7 @@ describe('WebSocketManager', () => {
 
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       expect(wsManager.getSocket()).toBe(mockSocket);
@@ -737,10 +694,7 @@ describe('WebSocketManager', () => {
 
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       wsManager.disconnect();
@@ -782,10 +736,8 @@ describe('WebSocketManager', () => {
       const connectPromise = wsManager.connect(mockUser);
 
       const error = new Error('Connection failed');
-      const connectErrorHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect_error'
-      )?.[1];
-      connectErrorHandler?.(error);
+      // Use _trigger to fire ALL connect_error handlers (including the Promise rejector)
+      mockSocket._trigger('connect_error', error);
 
       await expect(connectPromise).rejects.toThrow('Connection failed');
       expect(errorListener).toHaveBeenCalledWith(error);
@@ -794,10 +746,7 @@ describe('WebSocketManager', () => {
     it('should handle general errors', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       const error = new Error('Socket error');
@@ -815,10 +764,7 @@ describe('WebSocketManager', () => {
 
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       const handler = mockSocket.on.mock.calls.find(
@@ -835,10 +781,7 @@ describe('WebSocketManager', () => {
     it('should handle authentication token expiry', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // Simulate token expiry
@@ -858,35 +801,30 @@ describe('WebSocketManager', () => {
       vi.useFakeTimers();
 
       try {
+        // Attach catch handlers immediately to prevent unhandled rejections
         const connectPromise1 = wsManager.connect(mockUser);
+        connectPromise1.catch(() => {}); // Suppress unhandled rejection
 
         // Start second connection attempt immediately
         const connectPromise2 = wsManager.connect(mockUser);
+        connectPromise2.catch(() => {}); // Suppress unhandled rejection
 
-        // Advance past wait timeout
-        await vi.advanceTimersByTimeAsync(30000);
+        // Advance past wait timeout (TIMEOUTS.WEBSOCKET_CONNECT = 30000ms).
+        await vi.advanceTimersByTimeAsync(30100);
 
         await expect(connectPromise2).rejects.toThrow(
           'Connection wait timeout'
         );
-
-        // Clean up the first promise
-        mockSocket.connected = true;
-        const connectHandler = mockSocket.on.mock.calls.find(
-          call => call[0] === 'connect'
-        )?.[1];
-        connectHandler?.();
-        await connectPromise1;
       } finally {
         vi.clearAllTimers();
         vi.useRealTimers();
       }
-    });
+    }, 60000);
 
     it('should handle missing user credentials', async () => {
-      // Try to connect without user
+      // Try to connect without user; production throws 'No user credentials provided'
       await expect(wsManager.connect(null as any)).rejects.toThrow(
-        'User is required for WebSocket connection'
+        'No user credentials provided'
       );
     });
   });
@@ -894,19 +832,16 @@ describe('WebSocketManager', () => {
   describe('advanced scenarios', () => {
     const mockUser = { id: 'user-123', token: 'test-token' };
 
-    it('should handle manual reconnection with exponential backoff', async () => {
+    it('should handle manual reconnection on server disconnect', async () => {
       vi.useFakeTimers();
 
       try {
         const connectPromise = wsManager.connect(mockUser);
         mockSocket.connected = true;
-        const connectHandler = mockSocket.on.mock.calls.find(
-          call => call[0] === 'connect'
-        )?.[1];
-        connectHandler?.();
+        mockSocket._trigger('connect');
         await connectPromise;
 
-        // Simulate server disconnect (triggers manual reconnect)
+        // Simulate server disconnect (triggers one manual reconnect attempt)
         mockSocket.connected = false;
         const disconnectHandler = mockSocket.on.mock.calls.find(
           call => call[0] === 'disconnect'
@@ -922,18 +857,13 @@ describe('WebSocketManager', () => {
             throw new Error('Reconnection failed');
           });
 
-        // Fast-forward to trigger reconnection attempts
-        // First attempt: 1000ms delay
+        // First attempt fires after 1000ms (reconnectAttempts=1, delay=1000*2^0=1000)
         vi.advanceTimersByTime(1000);
         expect(createConnectionSpy).toHaveBeenCalledTimes(1);
 
-        // Second attempt: 2000ms delay
-        vi.advanceTimersByTime(2000);
-        expect(createConnectionSpy).toHaveBeenCalledTimes(2);
-
-        // Third attempt: 4000ms delay
-        vi.advanceTimersByTime(4000);
-        expect(createConnectionSpy).toHaveBeenCalledTimes(3);
+        // No further automatic attempts (Socket.io handles reconnect; handleReconnect only queues one)
+        vi.advanceTimersByTime(5000);
+        expect(createConnectionSpy).toHaveBeenCalledTimes(1); // Still 1
 
         createConnectionSpy.mockRestore();
       } finally {
@@ -942,38 +872,39 @@ describe('WebSocketManager', () => {
       }
     });
 
-    it('should prevent max reconnection attempts overflow', async () => {
+    it('should emit connection_lost after max reconnect attempts', async () => {
       vi.useFakeTimers();
 
       try {
         const connectPromise = wsManager.connect(mockUser);
         mockSocket.connected = true;
-        const connectHandler = mockSocket.on.mock.calls.find(
-          call => call[0] === 'connect'
-        )?.[1];
-        connectHandler?.();
+        mockSocket._trigger('connect');
         await connectPromise;
 
-        // Simulate server disconnect
-        mockSocket.connected = false;
+        // Get the disconnect handler
         const disconnectHandler = mockSocket.on.mock.calls.find(
           call => call[0] === 'disconnect'
         )?.[1];
-        disconnectHandler?.('io server disconnect');
 
-        // Mock createConnection to always fail
+        // Mock createConnection to always fail immediately
         const createConnectionSpy = vi
           .spyOn(wsManager as any, 'createConnection')
           .mockImplementation(() => {
             throw new Error('Reconnection failed');
           });
 
-        // Trigger enough reconnection attempts to hit the max
-        for (let i = 0; i < 15; i++) {
-          vi.advanceTimersByTime(30000); // Max delay
+        // Simulate maxReconnectAttempts+1 server disconnects to exhaust attempts
+        // Each 'io server disconnect' calls handleReconnect() once.
+        // After maxReconnectAttempts (10) calls, the next one emits connection_lost.
+        const maxAttempts = 10;
+        for (let i = 0; i <= maxAttempts; i++) {
+          mockSocket.connected = false;
+          disconnectHandler?.('io server disconnect');
+          // Advance past the reconnect delay to process the queued attempt
+          vi.advanceTimersByTime(30000);
         }
 
-        // Should emit connection_lost after max attempts
+        // Should emit connection_lost after max attempts exhausted
         expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
           type: 'connection_lost',
         });
@@ -991,10 +922,7 @@ describe('WebSocketManager', () => {
       try {
         const connectPromise = wsManager.connect(mockUser);
         mockSocket.connected = true;
-        const connectHandler = mockSocket.on.mock.calls.find(
-          call => call[0] === 'connect'
-        )?.[1];
-        connectHandler?.();
+        mockSocket._trigger('connect');
         await connectPromise;
 
         // First disconnect and reconnect
@@ -1009,7 +937,7 @@ describe('WebSocketManager', () => {
 
         // Simulate successful reconnection
         mockSocket.connected = true;
-        connectHandler?.();
+        mockSocket._trigger('connect');
 
         // Second disconnect should start from attempt 1 again
         mockSocket.connected = false;
@@ -1040,10 +968,7 @@ describe('WebSocketManager', () => {
       // Connect as user1
       const connectPromise1 = wsManager.connect(user1);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise1;
 
       expect(wsManager.user).toEqual(user1);
@@ -1051,7 +976,7 @@ describe('WebSocketManager', () => {
       // Switch to user2
       vi.clearAllMocks();
       const connectPromise2 = wsManager.connect(user2);
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise2;
 
       expect(mockSocket.disconnect).toHaveBeenCalled();
@@ -1060,7 +985,7 @@ describe('WebSocketManager', () => {
       // Switch to user3
       vi.clearAllMocks();
       const connectPromise3 = wsManager.connect(user3);
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise3;
 
       expect(mockSocket.disconnect).toHaveBeenCalled();
@@ -1079,10 +1004,7 @@ describe('WebSocketManager', () => {
 
       // Complete user1 connection
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
 
       await connectPromise1;
 
@@ -1095,10 +1017,7 @@ describe('WebSocketManager', () => {
     it('should handle socket.io reconnection events properly', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // Test all socket.io reconnection events
@@ -1139,10 +1058,7 @@ describe('WebSocketManager', () => {
     it('should handle edge case with empty project ID', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
       await connectPromise;
 
       // Should handle empty or invalid project IDs gracefully

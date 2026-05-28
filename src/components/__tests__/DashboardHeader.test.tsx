@@ -21,6 +21,56 @@ vi.mock('@/contexts/AuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// Both ThemeProvider and LanguageProvider (used in test-utils AllProviders)
+// call useAuth from '@/contexts/exports' → './useAuth', which would throw when
+// AuthProvider is a passthrough (no context provided). Mock both the concrete
+// hook AND the providers that call it so AllProviders renders cleanly.
+vi.mock('@/contexts/useAuth', () => ({
+  useAuth: vi.fn(() => ({
+    user: {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      username: 'testuser',
+    },
+    isAuthenticated: true,
+    login: vi.fn(),
+    logout: vi.fn(),
+    register: vi.fn(),
+    refreshToken: vi.fn(),
+    isLoading: false,
+  })),
+}));
+
+// ThemeProvider internally calls useAuth; replace with a no-op provider.
+vi.mock('@/contexts/ThemeContext', () => ({
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
+  useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
+}));
+
+// LanguageProvider also calls useAuth; mock useLanguage directly so the
+// component sees real translated strings without the provider needing auth.
+vi.mock('@/contexts/useLanguage', () => ({
+  useLanguage: vi.fn(() => ({
+    language: 'en',
+    setLanguage: vi.fn(),
+    t: (key: string, fallback?: string) => {
+      // Minimal translation table for strings used by DashboardHeader
+      const translations: Record<string, string> = {
+        'common.dashboard': 'Dashboard',
+        'common.settings': 'Settings',
+        'common.profile': 'Profile',
+        'common.project': 'Project',
+        'common.documentation': 'Documentation',
+        'status.disconnected': 'Disconnected',
+        'status.error': 'Error',
+        'status.processing': 'Processing',
+        'status.ready': 'Ready',
+      };
+      return translations[key] ?? fallback ?? key;
+    },
+  })),
+}));
+
 vi.mock('@/hooks/useLocalizedModels', () => ({
   useLocalizedModels: vi.fn(),
 }));
@@ -52,6 +102,10 @@ vi.mock('@/components/header/MobileMenu', () => ({
       <button onClick={() => setIsMenuOpen(false)}>Close</button>
     </div>
   ),
+}));
+
+vi.mock('@/components/feedback/FeedbackButton', () => ({
+  default: () => <div data-testid="feedback-button" />,
 }));
 
 describe('DashboardHeader', () => {
@@ -93,19 +147,24 @@ describe('DashboardHeader', () => {
 
     // Mock the hooks
     const { useAuth } = await import('@/contexts/AuthContext');
+    const { useAuth: useAuthHook } = await import('@/contexts/useAuth');
     const { useLocalizedModels } = await import('@/hooks/useLocalizedModels');
     const { useSegmentationQueue } = await import(
       '@/hooks/useSegmentationQueue'
     );
     const { fetchWithRetry } = await import('@/lib/httpUtils');
 
-    vi.mocked(useAuth).mockReturnValue({
+    const mockUserValue = {
       ...mockAuthContext,
       user: {
         ...mockAuthContext.user,
         email: 'test@example.com',
       },
-    });
+    };
+
+    // Keep both useAuth mocks in sync (AuthContext path and useAuth path).
+    vi.mocked(useAuth).mockReturnValue(mockUserValue);
+    vi.mocked(useAuthHook).mockReturnValue(mockUserValue);
 
     vi.mocked(useLocalizedModels).mockReturnValue(mockModelContext);
     vi.mocked(useSegmentationQueue).mockReturnValue(mockQueueContext);
@@ -180,11 +239,14 @@ describe('DashboardHeader', () => {
     const user = userEvent.setup();
     render(<DashboardHeader />);
 
+    // Badge has no [role] attribute; clicking the text element or any
+    // ancestor with onClick fires the event via bubbling.
+    const modelText = screen.getByText('HRNet v2');
+    // Walk up to find the clickable Badge element (has cursor-pointer class)
     const modelBadge =
-      screen.getByText('HRNet v2').closest('[role]') ||
-      screen.getByText('HRNet v2').parentElement;
+      modelText.closest('.cursor-pointer') || modelText.parentElement;
     if (modelBadge) {
-      await user.click(modelBadge);
+      await user.click(modelBadge as HTMLElement);
       expect(mockNavigate).toHaveBeenCalledWith('/settings?tab=models');
     }
   });
@@ -284,11 +346,11 @@ describe('DashboardHeader', () => {
   it('periodically checks ML service status', async () => {
     render(<DashboardHeader />);
 
-    // Wait for initial call
+    // Wait for initial call — component uses /health endpoint
     await waitFor(() => {
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/status'),
-        {},
+        expect.stringContaining('/health'),
+        expect.objectContaining({ method: 'GET' }),
         expect.objectContaining({
           retries: 2,
           delay: 500,
@@ -382,13 +444,17 @@ describe('DashboardHeader', () => {
 
   it('handles user without email gracefully', async () => {
     const { useAuth } = await import('@/contexts/AuthContext');
-    vi.mocked(useAuth).mockReturnValue({
+    const { useAuth: useAuthHook } = await import('@/contexts/useAuth');
+    const noEmailUser = {
       ...mockAuthContext,
       user: {
         ...mockAuthContext.user,
         email: undefined,
       },
-    });
+    };
+    // DashboardHeader uses useAuth from '@/contexts/useAuth'; update that mock too.
+    vi.mocked(useAuth).mockReturnValue(noEmailUser);
+    vi.mocked(useAuthHook).mockReturnValue(noEmailUser);
 
     render(<DashboardHeader />);
 

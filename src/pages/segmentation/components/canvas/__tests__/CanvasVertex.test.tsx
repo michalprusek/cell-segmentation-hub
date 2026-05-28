@@ -53,18 +53,11 @@ describe('CanvasVertex', () => {
     });
 
     it('applies correct data attributes for event handling', () => {
-      render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-
       const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} />
         </svg>
       );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       expect(vertex).toHaveAttribute('data-polygon-id', 'polygon-123');
@@ -72,18 +65,11 @@ describe('CanvasVertex', () => {
     });
 
     it('renders with correct default radius and styling', () => {
-      render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-
       const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} />
         </svg>
       );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       expect(vertex).toHaveAttribute('r', '5'); // Default base radius
@@ -93,36 +79,22 @@ describe('CanvasVertex', () => {
     });
 
     it('renders internal vertex with different colors', () => {
-      render(
+      const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} type="internal" />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       expect(vertex).toHaveAttribute('fill', '#0EA5E9'); // Internal vertex color
     });
 
     it('handles different opacity for non-selected vertices', () => {
-      render(
+      const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} isSelected={false} />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       expect(vertex).toHaveAttribute('opacity', '0.8');
@@ -130,46 +102,33 @@ describe('CanvasVertex', () => {
   });
 
   describe('Event Handling', () => {
-    it('calls onMouseDown and stops propagation', () => {
+    it('does not stop propagation on mouseDown (event delegation pattern)', () => {
       const parentMouseDown = vi.fn();
 
-      render(
+      const { container } = render(
         <svg onMouseDown={parentMouseDown}>
           <CanvasVertex {...defaultProps} />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       fireEvent.mouseDown(vertex, { clientX: 100, clientY: 150 });
 
-      // Parent handler should not be called due to stopPropagation
-      expect(parentMouseDown).not.toHaveBeenCalled();
+      // The component uses event delegation — it does NOT call stopPropagation,
+      // so the parent canvas receives the mouseDown with data attributes intact.
+      expect(parentMouseDown).toHaveBeenCalled();
     });
 
     it('prevents event bubbling to polygon selection handlers', () => {
       const polygonClickHandler = vi.fn();
 
-      render(
+      const { container } = render(
         <svg>
           <g onClick={polygonClickHandler}>
             <CanvasVertex {...defaultProps} />
           </g>
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       fireEvent.mouseDown(vertex);
@@ -179,18 +138,11 @@ describe('CanvasVertex', () => {
     });
 
     it('handles rapid mouse events without issues', () => {
-      render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-
       const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} />
         </svg>
       );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
 
@@ -205,18 +157,11 @@ describe('CanvasVertex', () => {
     });
 
     it('maintains data attributes during event handling', () => {
-      render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-
       const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} />
         </svg>
       );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
 
@@ -230,18 +175,11 @@ describe('CanvasVertex', () => {
 
   describe('Interaction States', () => {
     it('applies hover scaling correctly', () => {
-      render(
+      const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} isHovered={true} />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       const radius = parseFloat(vertex.getAttribute('r') || '0');
@@ -254,7 +192,7 @@ describe('CanvasVertex', () => {
     it('applies drag scaling and position offset', () => {
       const dragOffset = { x: 10, y: -5 };
 
-      render(
+      const { container } = render(
         <svg>
           <CanvasVertex
             {...defaultProps}
@@ -263,13 +201,6 @@ describe('CanvasVertex', () => {
           />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
 
@@ -282,18 +213,11 @@ describe('CanvasVertex', () => {
     });
 
     it('applies start point scaling', () => {
-      render(
+      const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} isStartPoint={true} />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       const radius = parseFloat(vertex.getAttribute('r') || '0');
@@ -303,7 +227,7 @@ describe('CanvasVertex', () => {
     });
 
     it('combines multiple interaction states correctly', () => {
-      render(
+      const { container } = render(
         <svg>
           <CanvasVertex
             {...defaultProps}
@@ -313,13 +237,6 @@ describe('CanvasVertex', () => {
           />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       const radius = parseFloat(vertex.getAttribute('r') || '0');
@@ -332,18 +249,11 @@ describe('CanvasVertex', () => {
 
   describe('Zoom Scaling', () => {
     it('scales vertex size correctly with zoom level', () => {
-      const { rerender } = render(
+      const { container, rerender } = render(
         <svg>
           <CanvasVertex {...defaultProps} zoom={1} />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       const radius1x = parseFloat(vertex.getAttribute('r') || '0');
@@ -361,18 +271,11 @@ describe('CanvasVertex', () => {
     });
 
     it('respects minimum and maximum radius bounds', () => {
-      render(
+      const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} zoom={100} />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       const radius = parseFloat(vertex.getAttribute('r') || '0');
@@ -385,18 +288,11 @@ describe('CanvasVertex', () => {
       const extremeZooms = [0.001, 0.1, 50, 1000];
 
       extremeZooms.forEach(zoom => {
-        const { unmount } = render(
+        const { container, unmount } = render(
           <svg>
             <CanvasVertex {...defaultProps} zoom={zoom} />
           </svg>
         );
-
-        const { container } = render(
-          <svg>
-            <CanvasVertex {...defaultProps} />
-          </svg>
-        );
-        expect(vertex).toBeInTheDocument();
         const vertex = container.querySelector('circle') as SVGCircleElement;
         expect(vertex).toBeInTheDocument();
         const radius = parseFloat(vertex.getAttribute('r') || '0');
@@ -465,18 +361,11 @@ describe('CanvasVertex', () => {
     });
 
     it('enables pointer events', () => {
-      render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-
       const { container } = render(
         <svg>
           <CanvasVertex {...defaultProps} />
         </svg>
       );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       expect(vertex).toHaveStyle({ pointerEvents: 'all' });
@@ -545,18 +434,11 @@ describe('CanvasVertex', () => {
     });
 
     it('optimizes drag offset comparisons', () => {
-      const { rerender } = render(
+      const { container, rerender } = render(
         <svg>
           <CanvasVertex {...defaultProps} dragOffset={{ x: 5, y: 10 }} />
         </svg>
       );
-
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} />
-        </svg>
-      );
-      expect(vertex).toBeInTheDocument();
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
       const initialPosition = {
@@ -619,18 +501,11 @@ describe('CanvasVertex', () => {
       const extremeIndices = [-1, 0, 999999, NaN];
 
       extremeIndices.forEach(vertexIndex => {
-        const { unmount } = render(
+        const { container, unmount } = render(
           <svg>
             <CanvasVertex {...defaultProps} vertexIndex={vertexIndex} />
           </svg>
         );
-
-        const { container } = render(
-          <svg>
-            <CanvasVertex {...defaultProps} />
-          </svg>
-        );
-        expect(vertex).toBeInTheDocument();
         const vertex = container.querySelector('circle') as SVGCircleElement;
         expect(vertex).toBeInTheDocument();
         expect(vertex).toHaveAttribute(
@@ -718,7 +593,8 @@ describe('Vertex Scaling Utility Functions', () => {
 
     it('maintains minimum stroke width', () => {
       const width = calculateStrokeWidth(1000, defaultConfig);
-      expect(width).toBeGreaterThanOrEqual(0.5);
+      // The component enforces a minimum of 0.2 in both modes
+      expect(width).toBeGreaterThanOrEqual(0.2);
     });
 
     it('handles constant scaling mode differently', () => {

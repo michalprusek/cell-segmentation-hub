@@ -185,7 +185,16 @@ describe('useCoordinatedAbortController', () => {
       useCoordinatedAbortController(operationKeys, 'test')
     );
 
-    // Initially, none should be aborted
+    // Initially, none should be aborted (no controllers created yet)
+    expect(result.current.areAllAborted()).toBe(false);
+
+    // Create controllers for all operations before aborting them,
+    // so areAllAborted can detect the aborted state.
+    act(() => {
+      result.current.getAllSignals();
+    });
+
+    // Still not aborted (controllers exist but are fresh)
     expect(result.current.areAllAborted()).toBe(false);
 
     // Abort all operations
@@ -201,6 +210,12 @@ describe('useCoordinatedAbortController', () => {
     const { result } = renderHook(() =>
       useCoordinatedAbortController(operationKeys, 'test')
     );
+
+    // Initialize all controllers first so isAborted reflects the actual signal
+    // state rather than "no controller exists" (which isAborted treats as aborted).
+    act(() => {
+      result.current.getAllSignals();
+    });
 
     // Abort only one operation
     act(() => {

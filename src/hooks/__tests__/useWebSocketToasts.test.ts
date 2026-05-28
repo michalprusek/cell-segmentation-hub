@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
 import { useWebSocketToasts } from '@/hooks/useWebSocketToasts';
 import { webSocketEventEmitter, WebSocketEvent } from '@/lib/websocketEvents';
-import { useLanguage } from '@/contexts/exports';
+import { useLanguage } from '@/contexts/useLanguage';
 
 // Mock sonner toast
 vi.mock('sonner', () => ({
@@ -15,8 +15,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Mock LanguageContext
-vi.mock('@/contexts/exports', () => ({
+// Mock LanguageContext - must match the import path used by the hook
+vi.mock('@/contexts/useLanguage', () => ({
   useLanguage: vi.fn(),
 }));
 

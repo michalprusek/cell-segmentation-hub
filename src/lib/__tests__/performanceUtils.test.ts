@@ -121,10 +121,15 @@ describe('Performance Utils', () => {
       const callback = vi.fn();
       const { fn: throttled } = rafThrottle(callback, 32); // ~30fps
 
+      // With fake timers, performance.now() starts at 0. Advance time past the
+      // interval so that the currentTime check (currentTime - lastTime >= 32)
+      // passes when the RAF callback fires.
+      vi.advanceTimersByTime(100); // advance past 32ms interval
+
       // Override RAF to execute callback immediately for this test
       vi.mocked(global.requestAnimationFrame).mockImplementation(
         (cb: FrameRequestCallback) => {
-          cb(performance.now());
+          cb(performance.now()); // performance.now() is now ≥ 100
           return 1;
         }
       );
@@ -611,10 +616,13 @@ describe('Performance Utils', () => {
       const viewportUpdate = vi.fn();
       const { fn: throttledViewportUpdate } = rafThrottle(viewportUpdate, 16);
 
+      // Advance fake time past the throttle interval so currentTime - lastTime >= 16
+      vi.advanceTimersByTime(100);
+
       // Reset RAF implementation for this test
       vi.mocked(global.requestAnimationFrame).mockImplementation(
         (callback: FrameRequestCallback) => {
-          // Execute immediately for test
+          // Execute immediately for test; performance.now() is now ≥ 100
           callback(performance.now());
           return Math.floor(Math.random() * 1000) + 1;
         }

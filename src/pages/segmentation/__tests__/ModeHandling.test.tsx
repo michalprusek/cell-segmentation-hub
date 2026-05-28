@@ -6,7 +6,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { EditMode } from '../types';
 import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
 import type { Polygon } from '@/lib/segmentation';
@@ -187,7 +186,7 @@ describe('Mode Switching and Interaction Handling', () => {
 
       // Verify initial state
       expect(screen.getByTestId('current-mode')).toHaveTextContent(
-        'DeletePolygon'
+        'delete-polygon'
       );
       expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
         'Click polygon to delete'
@@ -205,7 +204,7 @@ describe('Mode Switching and Interaction Handling', () => {
 
       // Mode should still be delete
       expect(screen.getByTestId('current-mode')).toHaveTextContent(
-        'DeletePolygon'
+        'delete-polygon'
       );
     });
 
@@ -234,7 +233,7 @@ describe('Mode Switching and Interaction Handling', () => {
       expect(mockOnPolygonDelete).toHaveBeenCalledTimes(3);
       expect(mockOnModeChange).not.toHaveBeenCalled();
       expect(screen.getByTestId('current-mode')).toHaveTextContent(
-        'DeletePolygon'
+        'delete-polygon'
       );
     });
 
@@ -253,7 +252,7 @@ describe('Mode Switching and Interaction Handling', () => {
       renderEditor(EditMode.Slice);
 
       // Verify initial state
-      expect(screen.getByTestId('current-mode')).toHaveTextContent('Slice');
+      expect(screen.getByTestId('current-mode')).toHaveTextContent('slice');
       expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
         'Select polygon to slice'
       );
@@ -269,7 +268,7 @@ describe('Mode Switching and Interaction Handling', () => {
       expect(mockOnModeChange).not.toHaveBeenCalled();
 
       // Mode should still be slice
-      expect(screen.getByTestId('current-mode')).toHaveTextContent('Slice');
+      expect(screen.getByTestId('current-mode')).toHaveTextContent('slice');
     });
 
     it('should update instructions after polygon selection in slice mode', async () => {
@@ -318,7 +317,7 @@ describe('Mode Switching and Interaction Handling', () => {
       expect(mockOnPolygonSelect).toHaveBeenCalledWith('poly-2');
 
       // Mode should remain slice
-      expect(screen.getByTestId('current-mode')).toHaveTextContent('Slice');
+      expect(screen.getByTestId('current-mode')).toHaveTextContent('slice');
     });
 
     it('should allow manual mode change from slice mode', async () => {
@@ -387,7 +386,7 @@ describe('Mode Switching and Interaction Handling', () => {
 
       // Verify current state
       expect(screen.getByTestId('current-mode')).toHaveTextContent(
-        'EditVertices'
+        'edit-vertices'
       );
       expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
         'poly-1'
@@ -411,7 +410,7 @@ describe('Mode Switching and Interaction Handling', () => {
     });
 
     it('should handle polygon clicks during mode transitions', async () => {
-      renderEditor(EditMode.View);
+      const { rerender } = renderEditor(EditMode.View);
 
       // Click polygon to enter edit mode
       fireEvent.click(
@@ -419,9 +418,18 @@ describe('Mode Switching and Interaction Handling', () => {
       );
       expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.EditVertices);
 
-      // Immediately switch to delete mode
-      fireEvent.click(screen.getByTestId('delete-mode-btn'));
-      expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.DeletePolygon);
+      // Rerender in delete mode (simulating the mode change)
+      rerender(
+        <MockSegmentationEditor
+          polygons={mockPolygons}
+          editMode={EditMode.DeletePolygon}
+          selectedPolygonId={null}
+          onModeChange={mockOnModeChange}
+          onPolygonSelect={mockOnPolygonSelect}
+          onPolygonDelete={mockOnPolygonDelete}
+          onPolygonSlice={mockOnPolygonSlice}
+        />
+      );
 
       // Click polygon in delete mode
       fireEvent.click(
@@ -431,16 +439,24 @@ describe('Mode Switching and Interaction Handling', () => {
     });
 
     it('should maintain mode consistency with keyboard shortcuts', async () => {
-      renderEditor(EditMode.View);
-      const user = userEvent.setup();
+      const { rerender } = renderEditor(EditMode.View);
 
-      // Simulate keyboard shortcut for delete mode (D key)
-      await user.keyboard('d');
-      // Note: Actual keyboard handling would be in the parent component
-      // Here we simulate the mode change that would result
+      // Simulate keyboard shortcut triggering a mode button click
       fireEvent.click(screen.getByTestId('delete-mode-btn'));
-
       expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.DeletePolygon);
+
+      // Rerender in delete mode (simulating the mode change taking effect)
+      rerender(
+        <MockSegmentationEditor
+          polygons={mockPolygons}
+          editMode={EditMode.DeletePolygon}
+          selectedPolygonId={null}
+          onModeChange={mockOnModeChange}
+          onPolygonSelect={mockOnPolygonSelect}
+          onPolygonDelete={mockOnPolygonDelete}
+          onPolygonSlice={mockOnPolygonSlice}
+        />
+      );
 
       // Click polygon should delete, not change mode
       fireEvent.click(

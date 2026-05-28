@@ -1,4 +1,4 @@
-import { vi, beforeEach, afterEach } from 'vitest';
+import { vi, beforeEach, afterEach, describe, it, expect } from 'vitest';
 
 /**
  * Console Mock Utility
@@ -106,3 +106,23 @@ export const getConsoleMock = (): ConsoleMock => {
     debug: console.debug as ReturnType<typeof vi.fn>,
   };
 };
+
+// This file is a utility module that happens to carry a .test.ts extension so
+// Vitest picks it up. The suite below validates the module's public API.
+describe('consoleMock utility', () => {
+  it('should export mockConsole, createConsoleMock, suppressConsole, getConsoleMock', () => {
+    expect(typeof mockConsole).toBe('function');
+    expect(typeof createConsoleMock).toBe('function');
+    expect(typeof suppressConsole).toBe('function');
+    expect(typeof getConsoleMock).toBe('function');
+  });
+
+  it('createConsoleMock should return spy functions for all console methods', () => {
+    const mock = createConsoleMock();
+    expect(typeof mock.log).toBe('function');
+    expect(typeof mock.error).toBe('function');
+    expect(typeof mock.warn).toBe('function');
+    expect(typeof mock.info).toBe('function');
+    expect(typeof mock.debug).toBe('function');
+  });
+});

@@ -1,5 +1,7 @@
+import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useSegmentationReload } from '../useSegmentationReload';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
@@ -14,6 +16,10 @@ vi.mock('@/lib/api', () => ({
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
+    loading: vi.fn(),
+    dismiss: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 
@@ -23,16 +29,58 @@ vi.mock('@/contexts/LanguageContext', () => ({
   }),
 }));
 
+vi.mock('@/contexts/useLanguage', () => ({
+  useLanguage: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
+    warn: vi.fn(),
   },
 }));
+
+// Mock retryWithBackoff to execute the fn directly (no delays in tests)
+vi.mock('@/lib/retryUtils', () => ({
+  retryWithBackoff: vi.fn(async (fn: () => Promise<any>) => {
+    try {
+      const data = await fn();
+      return { success: true, data, attempts: 1 };
+    } catch (error) {
+      return { success: false, error, attempts: 1 };
+    }
+  }),
+  RETRY_CONFIGS: {
+    api: {
+      maxAttempts: 3,
+      initialDelay: 300,
+      maxDelay: 1200,
+      backoffFactor: 2,
+    },
+  },
+}));
+
+// Mock the polygon cache helper
+vi.mock('../segmentationPolygonCache', () => ({
+  setCachedSegmentationPolygons: vi.fn(),
+}));
+
+// Wrapper with QueryClientProvider required by useSegmentationReload
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return ({ children }: { children: React.ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
+};
 
 describe('useSegmentationReload', () => {
   const mockProjectId = 'project-123';
   const mockImageId = 'image-456';
+  let wrapper: ReturnType<typeof createWrapper>;
   const mockPolygons = [
     {
       id: 'poly-1',
@@ -56,6 +104,7 @@ describe('useSegmentationReload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    wrapper = createWrapper();
   });
 
   afterEach(() => {
@@ -63,11 +112,13 @@ describe('useSegmentationReload', () => {
   });
 
   it('should initialize with isReloading as false', () => {
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+        }),
+      { wrapper }
     );
 
     expect(result.current.isReloading).toBe(false);
@@ -83,13 +134,15 @@ describe('useSegmentationReload', () => {
       imageHeight: mockDimensions.height,
     });
 
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-        onPolygonsLoaded,
-        onDimensionsUpdated,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+          onPolygonsLoaded,
+          onDimensionsUpdated,
+        }),
+      { wrapper }
     );
 
     let reloadPromise: Promise<boolean>;
@@ -114,12 +167,14 @@ describe('useSegmentationReload', () => {
       polygons: null,
     });
 
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-        onPolygonsLoaded,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+          onPolygonsLoaded,
+        }),
+      { wrapper }
     );
 
     const success = await act(
@@ -131,6 +186,8 @@ describe('useSegmentationReload', () => {
   });
 
   it('should retry on failure with exponential backoff', async () => {
+    // Use real timers for this test to avoid waitFor deadlock with fake timers
+    vi.useRealTimers();
     const onPolygonsLoaded = vi.fn();
 
     // First two calls fail, third succeeds
@@ -141,78 +198,84 @@ describe('useSegmentationReload', () => {
         polygons: mockPolygons,
       });
 
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-        onPolygonsLoaded,
-        maxRetries: 2,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+          onPolygonsLoaded,
+          maxRetries: 2,
+        }),
+      { wrapper }
     );
 
-    act(() => {
-      result.current.reloadSegmentation();
+    // First call - fails, schedules retry after 1s
+    await act(async () => {
+      await result.current.reloadSegmentation();
     });
 
-    // First attempt fails immediately
-    await waitFor(() => {
-      expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(1);
-    });
+    // First attempt was called, retry is scheduled
+    expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(1);
 
-    // Wait for first retry (1s delay)
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
+    // Wait for first retry (scheduleRetry uses 2^0 * 1000 = 1000ms)
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    await act(async () => {}); // flush
 
-    await waitFor(() => {
-      expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(2);
-    });
+    // Second attempt called
+    expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(2);
 
-    // Wait for second retry (2s delay)
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
+    // Wait for second retry (scheduleRetry uses 2^1 * 1000 = 2000ms)
+    await new Promise(resolve => setTimeout(resolve, 2200));
+    await act(async () => {}); // flush
 
-    await waitFor(() => {
-      expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(3);
-      expect(onPolygonsLoaded).toHaveBeenCalledWith(mockPolygons);
-    });
-  });
+    // Third attempt called, should succeed
+    await waitFor(
+      () => {
+        expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(3);
+        expect(onPolygonsLoaded).toHaveBeenCalledWith(mockPolygons);
+      },
+      { timeout: 1000 }
+    );
+  }, 10000); // 10s test timeout for the backoff waits
 
   it('should show error toast after all retries fail', async () => {
+    // Use real timers for this test to avoid waitFor deadlock with fake timers
+    vi.useRealTimers();
     vi.mocked(apiClient.getSegmentationResults).mockRejectedValue(
       new Error('Persistent error')
     );
 
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-        maxRetries: 1,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+          maxRetries: 1,
+        }),
+      { wrapper }
     );
 
-    act(() => {
-      result.current.reloadSegmentation();
+    // First call - fails, schedules retry after 1s
+    await act(async () => {
+      await result.current.reloadSegmentation();
     });
+    expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(1);
 
-    // First attempt fails
-    await waitFor(() => {
-      expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(1);
-    });
+    // Wait for retry (2^0 * 1000 = 1000ms)
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    await act(async () => {}); // flush
 
-    // Wait for retry
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
-
-    await waitFor(() => {
-      expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(2);
-      expect(toast.error).toHaveBeenCalledWith(
-        'toast.segmentation.reloadFailed'
-      );
-    });
-  });
+    // Second attempt - also fails, now exceeds maxRetries=1, toast.error is called
+    await waitFor(
+      () => {
+        expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(2);
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringContaining('toast.segmentation.reloadFailed')
+        );
+      },
+      { timeout: 1000 }
+    );
+  }, 5000); // 5s test timeout
 
   it('should handle aborted requests gracefully', async () => {
     const abortError = new Error('Aborted');
@@ -220,11 +283,13 @@ describe('useSegmentationReload', () => {
 
     vi.mocked(apiClient.getSegmentationResults).mockRejectedValue(abortError);
 
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+        }),
+      { wrapper }
     );
 
     const success = await act(
@@ -240,11 +305,13 @@ describe('useSegmentationReload', () => {
       () => new Promise(() => {}) // Never resolves
     );
 
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+        }),
+      { wrapper }
     );
 
     act(() => {
@@ -269,12 +336,14 @@ describe('useSegmentationReload', () => {
   it('should not reload without projectId or imageId', async () => {
     const onPolygonsLoaded = vi.fn();
 
-    const { result: resultNoProject } = renderHook(() =>
-      useSegmentationReload({
-        projectId: undefined,
-        imageId: mockImageId,
-        onPolygonsLoaded,
-      })
+    const { result: resultNoProject } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: undefined,
+          imageId: mockImageId,
+          onPolygonsLoaded,
+        }),
+      { wrapper }
     );
 
     const successNoProject = await act(
@@ -284,12 +353,14 @@ describe('useSegmentationReload', () => {
     expect(successNoProject).toBe(false);
     expect(onPolygonsLoaded).not.toHaveBeenCalled();
 
-    const { result: resultNoImage } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: undefined,
-        onPolygonsLoaded,
-      })
+    const { result: resultNoImage } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: undefined,
+          onPolygonsLoaded,
+        }),
+      { wrapper }
     );
 
     const successNoImage = await act(
@@ -301,11 +372,13 @@ describe('useSegmentationReload', () => {
   });
 
   it('should cleanup on unmount', () => {
-    const { unmount } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-      })
+    const { unmount } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+        }),
+      { wrapper }
     );
 
     unmount();
@@ -323,13 +396,15 @@ describe('useSegmentationReload', () => {
       polygons: mockPolygons,
     });
 
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-        onPolygonsLoaded,
-        onDimensionsUpdated,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+          onPolygonsLoaded,
+          onDimensionsUpdated,
+        }),
+      { wrapper }
     );
 
     await act(async () => {
@@ -341,11 +416,13 @@ describe('useSegmentationReload', () => {
   });
 
   it('should handle concurrent reload requests', async () => {
-    let _resolveFirst: (value: any) => void;
+    // Use real timers to avoid waitFor deadlock
+    vi.useRealTimers();
+
     let resolveSecond: (value: any) => void;
 
-    const firstPromise = new Promise(resolve => {
-      _resolveFirst = resolve;
+    const firstPromise = new Promise(() => {
+      // Never resolves - simulates an in-flight request
     });
 
     const secondPromise = new Promise(resolve => {
@@ -356,19 +433,21 @@ describe('useSegmentationReload', () => {
       .mockReturnValueOnce(firstPromise as any)
       .mockReturnValueOnce(secondPromise as any);
 
-    const { result } = renderHook(() =>
-      useSegmentationReload({
-        projectId: mockProjectId,
-        imageId: mockImageId,
-      })
+    const { result } = renderHook(
+      () =>
+        useSegmentationReload({
+          projectId: mockProjectId,
+          imageId: mockImageId,
+        }),
+      { wrapper }
     );
 
-    // Start first reload
+    // Start first reload (never resolves)
     act(() => {
       result.current.reloadSegmentation();
     });
 
-    // Start second reload (should cancel first)
+    // Start second reload (should abort/supersede first)
     act(() => {
       result.current.reloadSegmentation();
     });
@@ -378,11 +457,14 @@ describe('useSegmentationReload', () => {
       resolveSecond!({ polygons: mockPolygons });
     });
 
-    await waitFor(() => {
-      expect(result.current.isReloading).toBe(false);
-    });
+    await waitFor(
+      () => {
+        expect(result.current.isReloading).toBe(false);
+      },
+      { timeout: 3000 }
+    );
 
-    // First request should have been aborted
+    // Both requests were initiated
     expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(2);
   });
 });

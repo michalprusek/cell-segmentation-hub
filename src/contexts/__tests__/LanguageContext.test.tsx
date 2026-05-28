@@ -235,16 +235,25 @@ describe('LanguageContext', () => {
 
       const { result } = renderHook(() => useLanguage(), { wrapper });
 
+      // setLanguage only persists to the profile when AuthProvider has
+      // populated `user` (its init effect awaits getUserProfile). Wait for
+      // that async init to settle before acting, otherwise user is still
+      // null and the update is correctly skipped.
       await waitFor(() => {
-        expect(result.current.language).toBeDefined();
+        expect(vi.mocked(apiClient.getUserProfile)).toHaveBeenCalled();
+      });
+      await act(async () => {
+        await Promise.resolve();
       });
 
       await act(async () => {
         await result.current.setLanguage('es');
       });
 
+      // Wire field is `language` (BE serialises preferredLang as `language`;
+      // see PR #207/#208). Production setLanguage sends { language }.
       expect(vi.mocked(apiClient.updateUserProfile)).toHaveBeenCalledWith(
-        expect.objectContaining({ preferredLang: 'es' })
+        expect.objectContaining({ language: 'es' })
       );
     });
 
@@ -275,10 +284,12 @@ describe('LanguageContext', () => {
 
   describe('authenticated user language preference', () => {
     it('loads language from user profile when authenticated', async () => {
+      // BE serialises the preference as `language` on the wire (PR #207/#208);
+      // production reads profile.language, so the mock must use that name.
       const mockProfile = {
         id: '99',
         email: 'prof@example.com',
-        preferredLang: 'de',
+        language: 'de',
       };
       vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue(mockProfile as any);
