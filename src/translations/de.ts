@@ -2102,10 +2102,12 @@ export default {
     submittedSuccess: 'Danke! Ihr Feedback wurde gesendet.',
     submitFailed: 'Feedback konnte nicht gesendet werden',
     attachmentPrompt:
-      'Screenshot hierher ziehen oder klicken zum Auswählen (PNG/JPG ≤ 5 MB)',
-    attachmentTooLarge: 'Datei zu groß — Limit ist 5 MB',
-    attachmentInvalidType: 'Nur PNG- oder JPG-Bilder',
+      'Datei hierher ziehen oder klicken zum Auswählen — ein Screenshot oder das Video/ND2, um das es in Ihrem Bericht geht (bis zu 50 GB)',
+    attachmentTooLarge: 'Datei zu groß — Limit ist 50 GB',
+    attachmentInvalidType:
+      'Nicht unterstützter Dateityp (nur Bild, Video oder ND2)',
     removeAttachment: 'Anhang entfernen',
+    uploading: 'Hochladen…',
   },
   editor: {
     channelSwitcher: {

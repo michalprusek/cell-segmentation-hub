@@ -2090,10 +2090,12 @@ export default {
     submittedSuccess: 'Merci ! Votre retour a été envoyé.',
     submitFailed: "Impossible d'envoyer le retour",
     attachmentPrompt:
-      "Glissez une capture d'écran ici, ou cliquez pour sélectionner (PNG/JPG ≤ 5 Mo)",
-    attachmentTooLarge: 'Fichier trop volumineux — limite 5 Mo',
-    attachmentInvalidType: 'Uniquement des images PNG ou JPG',
+      "Glissez un fichier ici, ou cliquez pour sélectionner — une capture d'écran ou la vidéo/ND2 concernée par votre rapport (jusqu'à 50 Go)",
+    attachmentTooLarge: 'Fichier trop volumineux — limite 50 Go',
+    attachmentInvalidType:
+      'Type de fichier non pris en charge (image, vidéo ou ND2 uniquement)',
     removeAttachment: 'Supprimer la pièce jointe',
+    uploading: 'Téléversement…',
   },
   editor: {
     channelSwitcher: {

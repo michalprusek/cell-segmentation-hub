@@ -17,7 +17,32 @@ export interface FeedbackEmailData {
   title: string;
   body: string;
   submitterEmail: string;
-  hasAttachment?: boolean;
+  /** Present when the reporter attached a file. Large files (video/ND2)
+   *  are stored on the server and only referenced here; small images are
+   *  additionally inlined into this email. */
+  attachment?: {
+    filename: string;
+    sizeBytes: number;
+    /** Path relative to the uploads root. */
+    storageKey: string;
+    /** Absolute path inside the backend container. */
+    absolutePath: string;
+    /** True when the file is also attached inline to this email. */
+    inlined: boolean;
+  };
+}
+
+/** Human-readable byte size (1 decimal place above KB). */
+function humanizeBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = n / 1024;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i += 1;
+  }
+  return `${value.toFixed(1)} ${units[i]}`;
 }
 
 /** Escape user-provided strings before interpolating into the HTML body
@@ -43,6 +68,30 @@ export function renderFeedbackReceivedEmail(data: FeedbackEmailData): {
 
   // Stable mailbox-filter-friendly prefix.
   const subject = `[SpheroSeg ${data.type}] ${data.title}`;
+
+  const att = data.attachment;
+  const attachmentHtmlRow = att
+    ? `<tr><td style="padding: 4px 0; color: #6b7280;">Attachment:</td><td style="color: #059669;">${escapeHtml(att.filename)} (${humanizeBytes(att.sizeBytes)})</td></tr>`
+    : '';
+  const attachmentHtmlBlock = att
+    ? `<div style="background: #f0f9ff; border-left: 4px solid #0284c7; padding: 16px; border-radius: 4px; margin-bottom: 24px; font-size: 13px;">
+    <p style="margin: 0 0 8px 0; font-weight: 600;">Attachment stored on server</p>
+    <p style="margin: 0 0 4px 0; color: #374151;">${escapeHtml(att.filename)} &middot; ${humanizeBytes(att.sizeBytes)}</p>
+    <p style="margin: 0; color: #6b7280;">Path: <code style="background: #e0f2fe; padding: 2px 6px; border-radius: 3px; word-break: break-all;">${escapeHtml(att.absolutePath)}</code></p>
+    ${
+      att.inlined
+        ? '<p style="margin: 8px 0 0 0; color: #059669;">A copy is attached to this email.</p>'
+        : '<p style="margin: 8px 0 0 0; color: #b45309;">Too large to attach by email — retrieve it from the server path above.</p>'
+    }
+  </div>`
+    : '';
+  const attachmentText = att
+    ? `\nAttachment:  ${att.filename} (${humanizeBytes(att.sizeBytes)})\nStored at:   ${att.absolutePath}${
+        att.inlined
+          ? '\n             (a copy is also attached to this email)'
+          : '\n             (too large to attach — retrieve from the server path)'
+      }`
+    : '';
 
   const html = `<!DOCTYPE html>
 <html>
@@ -71,16 +120,14 @@ export function renderFeedbackReceivedEmail(data: FeedbackEmailData): {
       <td style="padding: 4px 0; color: #6b7280;">Feedback ID:</td>
       <td><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-size: 12px;">${escapeHtml(data.feedbackId)}</code></td>
     </tr>
-    ${
-      data.hasAttachment
-        ? `<tr><td style="padding: 4px 0; color: #6b7280;">Attachment:</td><td style="color: #059669;">included (see attachments)</td></tr>`
-        : ''
-    }
+    ${attachmentHtmlRow}
   </table>
 
   <div style="background: #f9fafb; border-left: 4px solid ${typeColor}; padding: 16px; border-radius: 4px; margin-bottom: 24px;">
     <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 14px; line-height: 1.6;">${escapeHtml(data.body)}</pre>
   </div>
+
+  ${attachmentHtmlBlock}
 
   <div style="border-top: 1px solid #e5e7eb; padding-top: 16px; color: #6b7280; font-size: 12px;">
     <p style="margin: 0;">Reply directly to this email to respond to the user — the Reply-To header is set to their address.</p>
@@ -93,7 +140,7 @@ export function renderFeedbackReceivedEmail(data: FeedbackEmailData): {
 
 From:        ${data.submitterEmail}
 Submitted:   ${submittedAt}
-Feedback ID: ${data.feedbackId}${data.hasAttachment ? '\nAttachment:  included (see attachments)' : ''}
+Feedback ID: ${data.feedbackId}${attachmentText}
 
 ${data.body}
 

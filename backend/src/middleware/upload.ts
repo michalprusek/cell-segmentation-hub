@@ -25,6 +25,7 @@ const ALL_SUPPORTED_EXTENSIONS = [
 import { getUploadLimitsForEnvironment } from '../config/uploadLimits';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
+import { config } from '../utils/config';
 
 // Get environment-specific upload limits
 const uploadLimits = getUploadLimitsForEnvironment();
@@ -162,13 +163,19 @@ try {
  */
 export const uploadSingleVideo = videoUpload.single('video');
 
-// Feedback attachments are end-user screenshots — strictly image/png or
-// image/jpeg, capped at 5 MB. Disk storage keeps memory pressure low and
-// matches the videoUpload pattern (uniform error surfaces).
-const FEEDBACK_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+// Feedback attachments: the reporter can attach the file their report is
+// about — a screenshot OR the microscopy video/ND2 that triggered it.
+// Capped at 50 GB (a tile-scan ND2 can reach that) and streamed to disk,
+// never buffered, so a huge upload can't exhaust container RAM. The same
+// image+video/ND2/TIFF MIME+extension filter as project uploads is reused.
+const FEEDBACK_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024 * 1024;
+
+// Stage uploads on the uploads volume (NOT os.tmpdir) so the feedback
+// service's final move into feedback/<id>/ is a same-filesystem rename
+// instead of a 50 GB cross-device copy.
 const FEEDBACK_ATTACHMENT_TMP_DIR =
   process.env.FEEDBACK_TMP_DIR ??
-  path.join(os.tmpdir(), 'spheroseg-feedback-uploads');
+  path.join(config.UPLOAD_DIR, 'feedback', '_staging');
 
 try {
   mkdirSync(FEEDBACK_ATTACHMENT_TMP_DIR, { recursive: true });
@@ -178,37 +185,6 @@ try {
     'UploadMiddleware'
   );
 }
-
-const ALLOWED_FEEDBACK_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
-const ALLOWED_FEEDBACK_EXTENSIONS = ['.png', '.jpg', '.jpeg'] as const;
-
-const feedbackAttachmentFileFilter: multer.Options['fileFilter'] = (
-  req,
-  file,
-  cb
-) => {
-  // Defence in depth: MIME, then extension. A motivated attacker can lie
-  // about either one alone but matching both narrows the abuse surface.
-  if (
-    typeof file.mimetype !== 'string' ||
-    !(ALLOWED_FEEDBACK_MIME_TYPES as readonly string[]).includes(file.mimetype)
-  ) {
-    return cb(
-      new Error(
-        `Unsupported attachment type: ${file.mimetype}. Allowed: ${ALLOWED_FEEDBACK_MIME_TYPES.join(', ')}`
-      )
-    );
-  }
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (!(ALLOWED_FEEDBACK_EXTENSIONS as readonly string[]).includes(ext)) {
-    return cb(
-      new Error(
-        `Unsupported attachment extension: ${ext}. Allowed: ${ALLOWED_FEEDBACK_EXTENSIONS.join(', ')}`
-      )
-    );
-  }
-  cb(null, true);
-};
 
 const feedbackUpload = multer({
   storage: multer.diskStorage({
@@ -227,12 +203,13 @@ const feedbackUpload = multer({
     fields: 10,
     fieldSize: 64 * 1024,
   },
-  fileFilter: feedbackAttachmentFileFilter,
+  fileFilter: sharedFileFilter,
 });
 
 /**
- * Multer middleware for the optional drag-and-drop attachment on the
- * feedback form. Form field name: "attachment". Single image only.
+ * Multer middleware for the optional attachment on the feedback form.
+ * Form field name: "attachment". A single file — a screenshot OR the
+ * video/ND2 the report is about — streamed to disk (≤ 50 GB).
  */
 export const uploadFeedbackAttachment = feedbackUpload.single('attachment');
 

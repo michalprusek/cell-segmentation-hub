@@ -46,12 +46,14 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
   const [body, setBody] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
 
   const reset = useCallback(() => {
     setType('bug');
     setTitle('');
     setBody('');
     setFile(null);
+    setUploadPct(null);
   }, []);
 
   const handleClose = useCallback(
@@ -69,10 +71,12 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
+    setUploadPct(file ? 0 : null);
     try {
       await apiClient.submitFeedback(
         { type, title: title.trim(), body: body.trim() },
-        file ?? undefined
+        file ?? undefined,
+        file ? setUploadPct : undefined
       );
       toast.success(
         t(
@@ -97,6 +101,7 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
       toast.error(fallback, detail ? { description: detail } : undefined);
     } finally {
       setSubmitting(false);
+      setUploadPct(null);
     }
   };
 
@@ -211,6 +216,20 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
             onChange={setFile}
             disabled={submitting}
           />
+
+          {submitting && file && (
+            <div className="space-y-1">
+              <div className="h-1.5 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-700">
+                <div
+                  className="h-full bg-blue-500 transition-all"
+                  style={{ width: `${uploadPct ?? 0}%` }}
+                />
+              </div>
+              <p className="text-right text-xs text-gray-500 dark:text-gray-400">
+                {t('feedback.uploading', 'Uploading…')} {uploadPct ?? 0}%
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="gap-2">

@@ -1964,10 +1964,12 @@ export default {
     submit: '提交',
     submittedSuccess: '谢谢！您的反馈已发送。',
     submitFailed: '发送反馈失败',
-    attachmentPrompt: '将截图拖到此处，或点击选择（PNG/JPG ≤ 5 MB）',
-    attachmentTooLarge: '文件过大——限制为 5 MB',
-    attachmentInvalidType: '仅支持 PNG 或 JPG 图片',
+    attachmentPrompt:
+      '将文件拖到此处，或点击选择——截图或报告所涉及的视频/ND2（最大 50 GB）',
+    attachmentTooLarge: '文件过大——限制为 50 GB',
+    attachmentInvalidType: '不支持的文件类型（仅限图片、视频或 ND2）',
     removeAttachment: '移除附件',
+    uploading: '上传中…',
   },
   editor: {
     channelSwitcher: {
