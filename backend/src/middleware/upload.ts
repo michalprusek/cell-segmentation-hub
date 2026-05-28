@@ -25,7 +25,6 @@ const ALL_SUPPORTED_EXTENSIONS = [
 import { getUploadLimitsForEnvironment } from '../config/uploadLimits';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
-import { config } from '../utils/config';
 
 // Get environment-specific upload limits
 const uploadLimits = getUploadLimitsForEnvironment();
@@ -172,10 +171,13 @@ const FEEDBACK_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024 * 1024;
 
 // Stage uploads on the uploads volume (NOT os.tmpdir) so the feedback
 // service's final move into feedback/<id>/ is a same-filesystem rename
-// instead of a 50 GB cross-device copy.
+// instead of a 50 GB cross-device copy. Read UPLOAD_DIR straight from the
+// env (the validated `config` singleton calls process.exit on a bad env at
+// import time, which would take down this module's consumers in tests);
+// falls back to os.tmpdir when UPLOAD_DIR is unset (dev/test).
 const FEEDBACK_ATTACHMENT_TMP_DIR =
   process.env.FEEDBACK_TMP_DIR ??
-  path.join(config.UPLOAD_DIR, 'feedback', '_staging');
+  path.join(process.env.UPLOAD_DIR || os.tmpdir(), 'feedback', '_staging');
 
 try {
   mkdirSync(FEEDBACK_ATTACHMENT_TMP_DIR, { recursive: true });
