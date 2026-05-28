@@ -2089,6 +2089,10 @@ export default {
     submit: 'Envoyer',
     submittedSuccess: 'Merci ! Votre retour a été envoyé.',
     submitFailed: "Impossible d'envoyer le retour",
+    submittedNoEmail:
+      'Merci ! Votre retour a été enregistré (la notification par e-mail est en attente).',
+    attachmentStoreFailed:
+      "Votre rapport a été envoyé, mais le fichier joint n'a pas pu être stocké — veuillez réessayer de le joindre.",
     attachmentPrompt:
       "Glissez un fichier ici, ou cliquez pour sélectionner — une capture d'écran ou la vidéo/ND2 concernée par votre rapport (jusqu'à 50 Go)",
     attachmentTooLarge: 'Fichier trop volumineux — limite 50 Go',

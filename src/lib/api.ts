@@ -630,7 +630,11 @@ class ApiClient {
     data: { type: 'bug' | 'feature'; title: string; body: string },
     attachment?: File,
     onUploadProgress?: (progressPercent: number) => void
-  ): Promise<{ id: string; emailQueued: boolean }> {
+  ): Promise<{
+    id: string;
+    emailQueued: boolean;
+    attachmentStored?: boolean;
+  }> {
     const formData = new FormData();
     formData.append('type', data.type);
     formData.append('title', data.title);

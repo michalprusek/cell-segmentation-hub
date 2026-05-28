@@ -1964,6 +1964,9 @@ export default {
     submit: '提交',
     submittedSuccess: '谢谢！您的反馈已发送。',
     submitFailed: '发送反馈失败',
+    submittedNoEmail: '谢谢！您的反馈已记录（邮件通知待发送）。',
+    attachmentStoreFailed:
+      '您的报告已发送，但附件未能存储——请重新尝试添加附件。',
     attachmentPrompt:
       '将文件拖到此处，或点击选择——截图或报告所涉及的视频/ND2（最大 50 GB）',
     attachmentTooLarge: '文件过大——限制为 50 GB',

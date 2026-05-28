@@ -230,12 +230,22 @@ export const handleUploadError = (
     });
 
     switch (error.code) {
-      case 'LIMIT_FILE_SIZE':
+      case 'LIMIT_FILE_SIZE': {
+        // handleUploadError is shared across the image (20 MB), video
+        // (100 GB) and feedback (50 GB) routes, so report the cap that
+        // actually applies to THIS request instead of the image default.
+        const url = req.originalUrl || '';
+        const limitLabel = url.includes('/feedback')
+          ? '50 GB'
+          : url.includes('/videos')
+            ? '100 GB'
+            : `${uploadLimits.MAX_FILE_SIZE_BYTES / (1024 * 1024)} MB`;
         ResponseHelper.validationError(
           res,
-          `Soubor je příliš velký. Maximální velikost: ${uploadLimits.MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB`
+          `Soubor je příliš velký. Maximální velikost: ${limitLabel}`
         );
         return;
+      }
       case 'LIMIT_FILE_COUNT':
         ResponseHelper.validationError(
           res,

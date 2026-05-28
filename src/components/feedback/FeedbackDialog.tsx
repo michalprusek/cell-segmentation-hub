@@ -73,17 +73,35 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
     setSubmitting(true);
     setUploadPct(file ? 0 : null);
     try {
-      await apiClient.submitFeedback(
+      const result = await apiClient.submitFeedback(
         { type, title: title.trim(), body: body.trim() },
         file ?? undefined,
         file ? setUploadPct : undefined
       );
-      toast.success(
-        t(
-          'feedback.submittedSuccess',
-          'Thanks! Your feedback was sent.'
-        ) as string
-      );
+      if (file && result.attachmentStored === false) {
+        // Report saved, but the file couldn't be persisted server-side —
+        // tell the user so they don't assume the maintainer received it.
+        toast.warning(
+          t(
+            'feedback.attachmentStoreFailed',
+            "Your report was sent, but the attached file couldn't be stored — please try attaching it again."
+          ) as string
+        );
+      } else if (result.emailQueued === false) {
+        toast.success(
+          t(
+            'feedback.submittedNoEmail',
+            'Thanks! Your feedback was recorded (email notification is pending).'
+          ) as string
+        );
+      } else {
+        toast.success(
+          t(
+            'feedback.submittedSuccess',
+            'Thanks! Your feedback was sent.'
+          ) as string
+        );
+      }
       onOpenChange(false);
       reset();
     } catch (err) {

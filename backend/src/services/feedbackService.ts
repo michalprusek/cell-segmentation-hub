@@ -55,8 +55,9 @@ export interface FeedbackAttachment {
   /** Size in bytes (from multer). */
   sizeBytes: number;
   /** Buffered content for an inline email attachment. Present ONLY for
-   *  small images; undefined for large files (which are never read into
-   *  memory — that would blow Node's ~2 GB Buffer cap and container RAM). */
+   *  small images; undefined for large files, which are never read into
+   *  memory — reading a multi-GB file would exhaust the container's RAM
+   *  (and exceed Node's Buffer length limit). */
   buffer?: Buffer;
 }
 
@@ -65,6 +66,11 @@ export interface CreateFeedbackResult {
   /** True if the email was successfully queued. Useful for the
    *  controller's response payload + tests. */
   emailQueued: boolean;
+  /** True when an attachment was provided AND persisted to disk. False when
+   *  one was provided but the move failed (the report is still saved — the
+   *  caller should warn the user their file was not stored). Undefined when
+   *  no attachment was provided. */
+  attachmentStored?: boolean;
 }
 
 interface StoredAttachment {
@@ -81,7 +87,11 @@ interface StoredAttachment {
 function sanitizeFilename(name: string): string {
   const base = path.basename(name);
   const safe = base.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
-  return safe || 'attachment';
+  // A name that survives as "." or ".." would make path.join resolve to the
+  // dir itself / its parent (rename onto a directory → EISDIR, attachment
+  // silently lost), so collapse any all-dots result to the fallback.
+  if (!safe || /^\.+$/.test(safe)) return 'attachment';
+  return safe;
 }
 
 /** Move the staged upload into its permanent feedback/<id>/ directory.
@@ -172,6 +182,9 @@ export async function createFeedback(
               inlined: Boolean(attachment.buffer),
             }
           : undefined,
+      // A file was submitted but the disk move failed — tell the maintainer
+      // so they can ask the reporter to re-send instead of assuming none.
+      attachmentFailed: Boolean(attachment) && !stored,
     });
 
     await sendEmail({
@@ -213,5 +226,9 @@ export async function createFeedback(
     );
   }
 
-  return { id: row.id, emailQueued };
+  return {
+    id: row.id,
+    emailQueued,
+    attachmentStored: attachment ? Boolean(stored) : undefined,
+  };
 }

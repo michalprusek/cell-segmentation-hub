@@ -41,6 +41,8 @@ const mockSendEmail = sendEmail as unknown as ReturnType<typeof vi.fn>;
 const mockLoggerError = logger.error as unknown as ReturnType<typeof vi.fn>;
 const mockRename = fs.rename as unknown as ReturnType<typeof vi.fn>;
 const mockMkdir = fs.mkdir as unknown as ReturnType<typeof vi.fn>;
+const mockCopyFile = fs.copyFile as unknown as ReturnType<typeof vi.fn>;
+const mockUnlink = fs.unlink as unknown as ReturnType<typeof vi.fn>;
 
 const USER_ID = 'user-123';
 const USER_EMAIL = 'reporter@example.com';
@@ -58,6 +60,8 @@ describe('feedbackService.createFeedback', () => {
     mockSendEmail.mockResolvedValue(undefined);
     mockRename.mockResolvedValue(undefined);
     mockMkdir.mockResolvedValue(undefined);
+    mockCopyFile.mockResolvedValue(undefined);
+    mockUnlink.mockResolvedValue(undefined);
   });
 
   it('persists the row and queues the notification email', async () => {
@@ -175,6 +179,114 @@ describe('feedbackService.createFeedback', () => {
     expect(emailArgs.attachments).toBeUndefined();
     expect(emailArgs.text).toContain('WellD03.nd2');
     expect(emailArgs.text).toContain('/app/uploads/feedback/fb-abc/WellD03.nd2');
+  });
+
+  it('keeps the report and flags it when the attachment fails to persist', async () => {
+    // A non-EXDEV rename error makes persistAttachment rethrow → caught.
+    mockRename.mockRejectedValueOnce(
+      Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    );
+    const attachment = {
+      stagedPath: '/app/uploads/feedback/_staging/x.png',
+      mime: 'image/png',
+      filename: 'shot.png',
+      sizeBytes: 4,
+      buffer: Buffer.from([1, 2, 3, 4]),
+    };
+
+    const result = await createFeedback(
+      USER_ID,
+      USER_EMAIL,
+      BASE_DATA,
+      attachment
+    );
+
+    // Non-EXDEV must NOT fall back to copy; the staged file is cleaned up.
+    expect(mockCopyFile).not.toHaveBeenCalled();
+    expect(mockUnlink).toHaveBeenCalledWith(attachment.stagedPath);
+    expect(mockLoggerError).toHaveBeenCalled();
+    // Only the emailSentAt update fires — no attachmentPath patch.
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: 'fb-abc' },
+      data: { emailSentAt: expect.any(Date) },
+    });
+    // Report still saved + emailed, but the email warns the file was lost
+    // and the result tells the caller to surface it.
+    const emailArgs = mockSendEmail.mock.calls[0][0];
+    expect(emailArgs.attachments).toBeUndefined();
+    expect(emailArgs.text).toContain('FAILED TO STORE');
+    expect(result).toEqual({
+      id: 'fb-abc',
+      emailQueued: true,
+      attachmentStored: false,
+    });
+  });
+
+  it('falls back to copy+unlink on a cross-device (EXDEV) rename', async () => {
+    mockRename.mockRejectedValueOnce(
+      Object.assign(new Error('cross-device link'), { code: 'EXDEV' })
+    );
+    const attachment = {
+      stagedPath: '/app/uploads/feedback/_staging/y.nd2',
+      mime: 'application/octet-stream',
+      filename: 'data.nd2',
+      sizeBytes: 9000,
+      buffer: undefined,
+    };
+
+    const result = await createFeedback(
+      USER_ID,
+      USER_EMAIL,
+      BASE_DATA,
+      attachment
+    );
+
+    expect(mockCopyFile).toHaveBeenCalledWith(
+      attachment.stagedPath,
+      '/app/uploads/feedback/fb-abc/data.nd2'
+    );
+    expect(mockUnlink).toHaveBeenCalledWith(attachment.stagedPath);
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: 'fb-abc' },
+      data: { attachmentPath: 'feedback/fb-abc/data.nd2' },
+    });
+    expect(result.attachmentStored).toBe(true);
+  });
+
+  it('sanitizes an attacker-controlled filename into feedback/<id>/', async () => {
+    const attachment = {
+      stagedPath: '/app/uploads/feedback/_staging/z',
+      mime: 'application/octet-stream',
+      filename: '../../../etc/passwd',
+      sizeBytes: 10,
+      buffer: undefined,
+    };
+
+    await createFeedback(USER_ID, USER_EMAIL, BASE_DATA, attachment);
+
+    // path.basename strips the traversal; the file lands inside feedback/<id>/.
+    expect(mockRename).toHaveBeenCalledWith(
+      attachment.stagedPath,
+      '/app/uploads/feedback/fb-abc/passwd'
+    );
+  });
+
+  it('falls back to "attachment" for an all-dots filename', async () => {
+    const attachment = {
+      stagedPath: '/app/uploads/feedback/_staging/z',
+      mime: 'application/octet-stream',
+      filename: '..',
+      sizeBytes: 10,
+      buffer: undefined,
+    };
+
+    await createFeedback(USER_ID, USER_EMAIL, BASE_DATA, attachment);
+
+    expect(mockRename).toHaveBeenCalledWith(
+      attachment.stagedPath,
+      '/app/uploads/feedback/fb-abc/attachment'
+    );
   });
 
   it("renders 'Feature request' wording for type='feature'", async () => {

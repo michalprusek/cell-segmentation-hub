@@ -2140,6 +2140,10 @@ export default {
     submit: 'Enviar',
     submittedSuccess: '¡Gracias! Tu comentario fue enviado.',
     submitFailed: 'No se pudo enviar el comentario',
+    submittedNoEmail:
+      '¡Gracias! Tu comentario fue registrado (la notificación por correo está pendiente).',
+    attachmentStoreFailed:
+      'Tu informe se envió, pero el archivo adjunto no se pudo almacenar — inténtalo de nuevo.',
     attachmentPrompt:
       'Arrastra un archivo aquí, o haz clic para seleccionar — una captura o el vídeo/ND2 sobre el que trata tu informe (hasta 50 GB)',
     attachmentTooLarge: 'Archivo demasiado grande — el límite es 50 GB',

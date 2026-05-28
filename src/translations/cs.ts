@@ -2110,6 +2110,10 @@ export default {
     submit: 'Odeslat',
     submittedSuccess: 'Díky! Vaše zpětná vazba byla odeslána.',
     submitFailed: 'Zpětnou vazbu se nepodařilo odeslat',
+    submittedNoEmail:
+      'Díky! Vaše zpětná vazba byla zaznamenána (e-mailová notifikace čeká ve frontě).',
+    attachmentStoreFailed:
+      'Hlášení bylo odesláno, ale přiložený soubor se nepodařilo uložit — zkuste ho prosím přiložit znovu.',
     attachmentPrompt:
       'Sem přetáhněte soubor nebo klikněte pro výběr — snímek obrazovky nebo video/ND2, kterého se hlášení týká (až 50 GB)',
     attachmentTooLarge: 'Soubor je příliš velký — limit je 50 GB',

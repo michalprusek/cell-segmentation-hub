@@ -2172,6 +2172,10 @@ export default {
     submit: 'Submit',
     submittedSuccess: 'Thanks! Your feedback was sent.',
     submitFailed: "Couldn't send feedback",
+    submittedNoEmail:
+      'Thanks! Your feedback was recorded (email notification is pending).',
+    attachmentStoreFailed:
+      "Your report was sent, but the attached file couldn't be stored — please try attaching it again.",
     attachmentPrompt:
       'Drag a file here, or click to select — a screenshot or the video/ND2 your report is about (up to 50 GB)',
     attachmentTooLarge: 'File too large — limit is 50 GB',

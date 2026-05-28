@@ -2101,6 +2101,10 @@ export default {
     submit: 'Senden',
     submittedSuccess: 'Danke! Ihr Feedback wurde gesendet.',
     submitFailed: 'Feedback konnte nicht gesendet werden',
+    submittedNoEmail:
+      'Danke! Ihr Feedback wurde gespeichert (E-Mail-Benachrichtigung steht aus).',
+    attachmentStoreFailed:
+      'Ihr Bericht wurde gesendet, aber die angehängte Datei konnte nicht gespeichert werden — bitte erneut anhängen.',
     attachmentPrompt:
       'Datei hierher ziehen oder klicken zum Auswählen — ein Screenshot oder das Video/ND2, um das es in Ihrem Bericht geht (bis zu 50 GB)',
     attachmentTooLarge: 'Datei zu groß — Limit ist 50 GB',

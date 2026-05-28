@@ -31,13 +31,26 @@ export const createFeedback = asyncHandler(async (req: Request, res: Response) =
   let attachment: FeedbackService.FeedbackAttachment | undefined;
   if (req.file) {
     // Only small images are read into memory (for the inline email). Large
-    // files — videos / ND2 up to 50 GB — are NEVER buffered: that would blow
-    // Node's ~2 GB Buffer cap and the container RAM. They stay on disk and
-    // feedbackService moves them into feedback/<id>/.
+    // files — videos / ND2 up to 50 GB — are NEVER buffered: reading a
+    // multi-GB file into memory would exhaust the container's RAM. They stay
+    // on disk and feedbackService moves them into feedback/<id>/.
     const isInlineImage =
       req.file.size <= FeedbackService.FEEDBACK_INLINE_EMAIL_MAX_BYTES &&
       (req.file.mimetype === 'image/png' || req.file.mimetype === 'image/jpeg');
-    const buffer = isInlineImage ? await fs.readFile(req.file.path) : undefined;
+    let buffer: Buffer | undefined;
+    if (isInlineImage) {
+      try {
+        buffer = await fs.readFile(req.file.path);
+      } catch (err) {
+        // Failing to read the small image for inlining must not sink the
+        // whole report — the file is already on disk and still gets stored +
+        // referenced; we just skip the inline copy.
+        logger.warn(
+          `Feedback inline-image read failed; sending without inline copy: ${(err as Error).message}`,
+          'FeedbackController'
+        );
+      }
+    }
     attachment = {
       stagedPath: req.file.path,
       mime: req.file.mimetype,
@@ -61,12 +74,17 @@ export const createFeedback = asyncHandler(async (req: Request, res: Response) =
       type: data.type,
       hasAttachment: Boolean(attachment),
       attachmentBytes: attachment?.sizeBytes ?? 0,
+      attachmentStored: result.attachmentStored,
       emailQueued: result.emailQueued,
     });
 
     return ResponseHelper.success(
       res,
-      { id: result.id, emailQueued: result.emailQueued },
+      {
+        id: result.id,
+        emailQueued: result.emailQueued,
+        attachmentStored: result.attachmentStored,
+      },
       'Feedback submitted',
       201
     );

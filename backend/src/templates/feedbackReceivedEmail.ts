@@ -30,6 +30,10 @@ export interface FeedbackEmailData {
     /** True when the file is also attached inline to this email. */
     inlined: boolean;
   };
+  /** True when the reporter submitted a file but it failed to persist on the
+   *  server (the report itself was still saved). Mutually exclusive with
+   *  `attachment`. */
+  attachmentFailed?: boolean;
 }
 
 /** Human-readable byte size (1 decimal place above KB). */
@@ -92,6 +96,15 @@ export function renderFeedbackReceivedEmail(data: FeedbackEmailData): {
           : '\n             (too large to attach — retrieve from the server path)'
       }`
     : '';
+  const attachmentFailedHtml = data.attachmentFailed
+    ? `<div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; border-radius: 4px; margin-bottom: 24px; font-size: 13px;">
+    <p style="margin: 0; font-weight: 600; color: #991b1b;">An attachment was submitted but failed to store on the server.</p>
+    <p style="margin: 8px 0 0 0; color: #7f1d1d;">Reply to ask the reporter to re-send it; see the server logs for the feedback ID above.</p>
+  </div>`
+    : '';
+  const attachmentFailedText = data.attachmentFailed
+    ? '\nAttachment:  SUBMITTED BUT FAILED TO STORE — ask the reporter to re-send (see server logs).'
+    : '';
 
   const html = `<!DOCTYPE html>
 <html>
@@ -128,6 +141,7 @@ export function renderFeedbackReceivedEmail(data: FeedbackEmailData): {
   </div>
 
   ${attachmentHtmlBlock}
+  ${attachmentFailedHtml}
 
   <div style="border-top: 1px solid #e5e7eb; padding-top: 16px; color: #6b7280; font-size: 12px;">
     <p style="margin: 0;">Reply directly to this email to respond to the user — the Reply-To header is set to their address.</p>
@@ -140,7 +154,7 @@ export function renderFeedbackReceivedEmail(data: FeedbackEmailData): {
 
 From:        ${data.submitterEmail}
 Submitted:   ${submittedAt}
-Feedback ID: ${data.feedbackId}${attachmentText}
+Feedback ID: ${data.feedbackId}${attachmentText}${attachmentFailedText}
 
 ${data.body}
 
