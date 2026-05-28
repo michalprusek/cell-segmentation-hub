@@ -46,12 +46,14 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
   const [body, setBody] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
 
   const reset = useCallback(() => {
     setType('bug');
     setTitle('');
     setBody('');
     setFile(null);
+    setUploadPct(null);
   }, []);
 
   const handleClose = useCallback(
@@ -69,17 +71,37 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
+    setUploadPct(file ? 0 : null);
     try {
-      await apiClient.submitFeedback(
+      const result = await apiClient.submitFeedback(
         { type, title: title.trim(), body: body.trim() },
-        file ?? undefined
+        file ?? undefined,
+        file ? setUploadPct : undefined
       );
-      toast.success(
-        t(
-          'feedback.submittedSuccess',
-          'Thanks! Your feedback was sent.'
-        ) as string
-      );
+      if (file && result.attachmentStored === false) {
+        // Report saved, but the file couldn't be persisted server-side —
+        // tell the user so they don't assume the maintainer received it.
+        toast.warning(
+          t(
+            'feedback.attachmentStoreFailed',
+            "Your report was sent, but the attached file couldn't be stored — please try attaching it again."
+          ) as string
+        );
+      } else if (result.emailQueued === false) {
+        toast.success(
+          t(
+            'feedback.submittedNoEmail',
+            'Thanks! Your feedback was recorded (email notification is pending).'
+          ) as string
+        );
+      } else {
+        toast.success(
+          t(
+            'feedback.submittedSuccess',
+            'Thanks! Your feedback was sent.'
+          ) as string
+        );
+      }
       onOpenChange(false);
       reset();
     } catch (err) {
@@ -97,6 +119,7 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
       toast.error(fallback, detail ? { description: detail } : undefined);
     } finally {
       setSubmitting(false);
+      setUploadPct(null);
     }
   };
 
@@ -211,6 +234,20 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
             onChange={setFile}
             disabled={submitting}
           />
+
+          {submitting && file && (
+            <div className="space-y-1">
+              <div className="h-1.5 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-700">
+                <div
+                  className="h-full bg-blue-500 transition-all"
+                  style={{ width: `${uploadPct ?? 0}%` }}
+                />
+              </div>
+              <p className="text-right text-xs text-gray-500 dark:text-gray-400">
+                {t('feedback.uploading', 'Uploading…')} {uploadPct ?? 0}%
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="gap-2">

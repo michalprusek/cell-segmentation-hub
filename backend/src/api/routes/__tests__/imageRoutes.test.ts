@@ -47,6 +47,7 @@ vi.mock('../../../middleware/validation', () => ({
 }));
 vi.mock('../../../middleware/upload', () => ({
   uploadImages: vi.fn((_req: any, _res: any, next: any) => next()),
+  uploadSingleVideo: vi.fn((_req: any, _res: any, next: any) => next()),
   handleUploadError: vi.fn((_req: any, _res: any, next: any) => next()),
   validateUploadedFiles: vi.fn((req: any, _res: any, next: any) => {
     req.files = [];

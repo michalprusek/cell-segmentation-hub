@@ -26,6 +26,16 @@ vi.mock('../websocketService', () => ({
 vi.mock('uuid', () => ({ v4: vi.fn(() => 'test-job-id-1234') }));
 vi.mock('../../utils/logger');
 
+vi.mock('../../utils/config', () => ({
+  config: {
+    SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
+    UPLOAD_DIR: './test-uploads',
+    EXPORT_DIR: './test-exports',
+    STORAGE_TYPE: 'local',
+    NODE_ENV: 'test',
+  },
+}));
+
 vi.mock('fs/promises', () => ({
   mkdir: vi.fn(),
   writeFile: vi.fn(),

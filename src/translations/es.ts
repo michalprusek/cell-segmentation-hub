@@ -2140,11 +2140,17 @@ export default {
     submit: 'Enviar',
     submittedSuccess: '¡Gracias! Tu comentario fue enviado.',
     submitFailed: 'No se pudo enviar el comentario',
+    submittedNoEmail:
+      '¡Gracias! Tu comentario fue registrado (la notificación por correo está pendiente).',
+    attachmentStoreFailed:
+      'Tu informe se envió, pero el archivo adjunto no se pudo almacenar — inténtalo de nuevo.',
     attachmentPrompt:
-      'Arrastra una captura aquí, o haz clic para seleccionar (PNG/JPG ≤ 5 MB)',
-    attachmentTooLarge: 'Archivo demasiado grande — el límite es 5 MB',
-    attachmentInvalidType: 'Solo imágenes PNG o JPG',
+      'Arrastra un archivo aquí, o haz clic para seleccionar — una captura o el vídeo/ND2 sobre el que trata tu informe (hasta 50 GB)',
+    attachmentTooLarge: 'Archivo demasiado grande — el límite es 50 GB',
+    attachmentInvalidType:
+      'Tipo de archivo no admitido (solo imagen, vídeo o ND2)',
     removeAttachment: 'Quitar adjunto',
+    uploading: 'Subiendo…',
   },
   editor: {
     channelSwitcher: {
