@@ -33,13 +33,18 @@ vi.mock('@/contexts/useAuth', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
-// Mock useLanguage — return key so assertions are stable across locale changes
-vi.mock('@/contexts/useLanguage', () => ({
-  useLanguage: () => ({
-    t: (key: string) => key,
-    language: 'en',
-  }),
-}));
+// Mock useLanguage — return key so assertions are stable across locale changes.
+// CRITICAL: the returned object AND its `t` must be referentially STABLE.
+// ShareAccept's validateToken is a useCallback with `t` in its deps, and the
+// validation effect depends on validateToken — an unstable `t` (a fresh fn each
+// render) re-fires the effect every render, looping validateShareToken and
+// racing waitFor (the source of this file's flakiness). Mirror the real
+// provider, which memoizes `t`. The stable object is created once inside the
+// (hoisted) factory closure so every useLanguage() call returns the same ref.
+vi.mock('@/contexts/useLanguage', () => {
+  const stableLanguage = { t: (key: string) => key, language: 'en' };
+  return { useLanguage: () => stableLanguage };
+});
 
 // Keep MemoryRouter functional but stub out useNavigate
 vi.mock('react-router-dom', async () => {

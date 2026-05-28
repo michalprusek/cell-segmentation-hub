@@ -631,6 +631,10 @@ describe('Cancel Performance Tests', () => {
 
       let successfulRecoveries = 0;
 
+      // Inject errors on a DETERMINISTIC schedule (every 3rd iteration) rather
+      // than Math.random(): a 30% random error rate over 20 trials is binomial
+      // and dips below the threshold a few percent of runs — inherent test
+      // flakiness. Fixed schedule → exactly 7 errors (i=0,3,...,18), 13 clean.
       for (let i = 0; i < 20; i++) {
         try {
           await act(async () => {
@@ -642,12 +646,9 @@ describe('Cancel Performance Tests', () => {
 
             const operationId = manager.registerOperation(operation);
 
-            // Randomly inject errors
-            if (Math.random() < 0.3) {
+            if (i % 3 === 0) {
               const errorCondition =
-                errorConditions[
-                  Math.floor(Math.random() * errorConditions.length)
-                ];
+                errorConditions[i % errorConditions.length];
               await errorCondition();
             }
 
@@ -659,8 +660,9 @@ describe('Cancel Performance Tests', () => {
         }
       }
 
-      // Should recover from most error conditions
-      expect(successfulRecoveries).toBeGreaterThan(10);
+      // 20 iterations, 7 inject an error before the recovery increment → 13
+      // clean recoveries. Assert the deterministic floor (well above 10).
+      expect(successfulRecoveries).toBe(13);
     });
   });
 
