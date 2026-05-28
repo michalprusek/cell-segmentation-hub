@@ -168,6 +168,7 @@ describe('ProjectService', () => {
           _count: { images: 5 },
           images: [],
           shares: [],
+          folderItems: [],
         },
       ];
 

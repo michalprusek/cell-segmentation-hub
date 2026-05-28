@@ -26,7 +26,56 @@ vi.mock('../../utils/config', () => ({
     SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
   },
 }));
-vi.mock('@prisma/client');
+vi.mock('@prisma/client', () => {
+  const mockPrismaClient = {
+    $connect: vi.fn(),
+    $disconnect: vi.fn(),
+    $transaction: vi.fn(),
+    segmentationQueue: {
+      create: vi.fn(),
+      createMany: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    image: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      count: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    user: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    project: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    segmentation: {
+      deleteMany: vi.fn(),
+    },
+  };
+  return {
+    PrismaClient: vi.fn().mockImplementation(function (this: any) {
+      Object.assign(this, mockPrismaClient);
+    }),
+    Prisma: { PrismaClientKnownRequestError: class extends Error {} },
+  };
+});
 vi.mock('../../services/queueService');
 vi.mock('../../services/segmentationService');
 vi.mock('../../services/imageService');
@@ -104,12 +153,13 @@ describe('QueueWorker - Parallel Processing', () => {
 
     // Mock QueueService.getInstance to return a mock
     mockQueueService = {
-      getMultipleBatches: vi.fn(),
-      processMultipleBatches: vi.fn(),
+      getMultipleBatches: vi.fn().mockResolvedValue([]),
+      processMultipleBatches: vi.fn().mockResolvedValue(undefined),
       setQueueWorker: vi.fn(),
-      resetStuckItems: vi.fn(),
-      getQueueHealthStatus: vi.fn(),
-      cleanupOldEntries: vi.fn(),
+      // resetStuckItems must return a Promise so .catch() in the worker doesn't throw
+      resetStuckItems: vi.fn().mockResolvedValue(0),
+      getQueueHealthStatus: vi.fn().mockResolvedValue({ healthy: true, issues: [], queueStats: { queued: 0, processing: 0, total: 0 } }),
+      cleanupOldEntries: vi.fn().mockResolvedValue(0),
     } as any;
 
     (QueueService.getInstance as Mock).mockReturnValue(mockQueueService);

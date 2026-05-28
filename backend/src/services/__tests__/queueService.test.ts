@@ -1,5 +1,40 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+// Mock config early to prevent process.exit(1) during trackerService import chain
+vi.mock('../../utils/config', () => ({
+  config: {
+    NODE_ENV: 'test',
+    PORT: 3001,
+    HOST: 'localhost',
+    DATABASE_URL: 'file:./test.db',
+    JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-chars',
+    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-chars',
+    JWT_ACCESS_EXPIRY: '15m',
+    JWT_REFRESH_EXPIRY: '7d',
+    JWT_REFRESH_EXPIRY_REMEMBER: '30d',
+    ALLOWED_ORIGINS: 'http://localhost:3000',
+    WS_ALLOWED_ORIGINS: 'http://localhost:3000',
+    UPLOAD_DIR: './test-uploads',
+    MAX_FILE_SIZE: 10485760,
+    STORAGE_TYPE: 'local',
+    SESSION_SECRET: 'test-session-secret',
+    REDIS_URL: 'redis://localhost:6379',
+    SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
+    FROM_EMAIL: 'test@example.com',
+    FROM_NAME: 'Test Platform',
+    EMAIL_SERVICE: 'none',
+    REQUIRE_EMAIL_VERIFICATION: false,
+  },
+  isDevelopment: false,
+  isProduction: false,
+  isTest: true,
+  getOrigins: () => ['http://localhost:3000'],
+}));
+// Mock trackerService to avoid its prismaClient + axios side effects
+vi.mock('../tracking/trackerService', () => ({
+  scheduleTrackingForContainer: vi.fn(),
+}));
+
 // --- Prisma mock ---
 const prismaMock = {
   segmentationQueue: {
@@ -16,6 +51,10 @@ const prismaMock = {
   image: {
     updateMany: vi.fn() as any,
     findFirst: vi.fn() as any,
+    findMany: vi.fn() as any,
+  },
+  user: {
+    findUnique: vi.fn() as any,
   },
   segmentation: {
     deleteMany: vi.fn() as any,
@@ -149,44 +188,47 @@ describe('QueueService', () => {
     it('queues multiple images, skips already-queued ones', async () => {
       const imageIds = ['img-1', 'img-2', 'img-3'];
 
-      const mockImageOk = {
-        id: 'img-1',
-        segmentationStatus: 'no_segmentation',
-      };
-      const mockImageQueued = {
-        id: 'img-2',
-        segmentationStatus: 'queued',
-      };
-      const mockImageOk2 = {
-        id: 'img-3',
-        segmentationStatus: 'no_segmentation',
-      };
+      // New bulk implementation: user.findUnique → image.findMany → $transaction
+      prismaMock.user.findUnique.mockResolvedValueOnce({ email: 'user@test.com' });
 
-      imageServiceMock.getImageById
-        .mockResolvedValueOnce(mockImageOk)
-        .mockResolvedValueOnce(mockImageQueued)
-        .mockResolvedValueOnce(mockImageOk2);
+      // image.findMany returns only the images accessible and not-yet-queued
+      // (img-2 with status 'queued' is returned but filtered client-side)
+      prismaMock.image.findMany.mockResolvedValueOnce([
+        { id: 'img-1', segmentationStatus: 'no_segmentation' },
+        { id: 'img-2', segmentationStatus: 'queued' },
+        { id: 'img-3', segmentationStatus: 'no_segmentation' },
+      ] as any);
 
       const queueEntry1 = { ...mockQueueEntry, id: 'qe-1', imageId: 'img-1' };
       const queueEntry3 = { ...mockQueueEntry, id: 'qe-3', imageId: 'img-3' };
 
-      prismaMock.$transaction
-        .mockResolvedValueOnce(queueEntry1 as any)
-        .mockResolvedValueOnce(queueEntry3 as any);
-
-      imageServiceMock.updateSegmentationStatus.mockResolvedValue(undefined);
+      // $transaction receives a callback; call it with a tx object that has the
+      // right shape so we can control what findMany returns at the end.
+      prismaMock.$transaction.mockImplementationOnce(async (cb: any) => {
+        const tx = {
+          segmentation: { deleteMany: vi.fn() },
+          segmentationQueue: {
+            createMany: vi.fn().mockResolvedValue({ count: 2 }),
+            findMany: vi.fn().mockResolvedValue([queueEntry1, queueEntry3]),
+          },
+          image: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) },
+        };
+        return cb(tx);
+      });
 
       const results = await service.addBatchToQueue(imageIds, 'project-id', 'user-id');
 
       // img-2 is skipped (already queued)
       expect(results).toHaveLength(2);
-      expect(results.map(r => r.imageId)).toEqual(
+      expect(results.map((r: any) => r.imageId)).toEqual(
         expect.arrayContaining(['img-1', 'img-3'])
       );
     });
 
     it('skips images not found or not accessible', async () => {
-      imageServiceMock.getImageById.mockResolvedValue(null);
+      // user found, but image.findMany returns empty (no accessible images)
+      prismaMock.user.findUnique.mockResolvedValueOnce({ email: 'user@test.com' });
+      prismaMock.image.findMany.mockResolvedValueOnce([]);
 
       const results = await service.addBatchToQueue(
         ['missing-img'],
@@ -196,6 +238,20 @@ describe('QueueService', () => {
 
       expect(results).toHaveLength(0);
       expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws when user is not found', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.addBatchToQueue(['img-1'], 'project-id', 'unknown-user')
+      ).rejects.toThrow('User unknown-user not found');
+    });
+
+    it('returns empty array for empty imageIds', async () => {
+      const results = await service.addBatchToQueue([], 'project-id', 'user-id');
+      expect(results).toHaveLength(0);
+      expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
     });
   });
 

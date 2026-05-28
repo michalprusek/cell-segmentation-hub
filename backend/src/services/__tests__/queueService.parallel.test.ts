@@ -82,6 +82,7 @@ vi.mock('@prisma/client', () => {
     },
     segmentationQueue: {
       create: vi.fn(),
+      createMany: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
@@ -257,6 +258,25 @@ describe('QueueService Parallel Processing', () => {
       }
     );
 
+    (prisma.segmentationQueue.createMany as MockedFunction<any>).mockImplementation(
+      async ({ data }: any) => {
+        const rows = Array.isArray(data) ? data : [];
+        for (const d of rows) {
+          queueStore.push({
+            id: `queue_${++queueIdCounter}`,
+            retryCount: 0,
+            error: null,
+            startedAt: null,
+            completedAt: null,
+            ...d,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        return { count: rows.length };
+      }
+    );
+
     // Helper to filter queueStore by a where clause
     const matchesWhere = (entry: any, where: any): boolean => {
       if (!where) return true;
@@ -320,11 +340,24 @@ describe('QueueService Parallel Processing', () => {
     // Mock image count to return a fixed value representing total test images
     const totalTestImages = concurrentUsers.reduce((sum, u) => sum + u.imageIds.length, 0);
     (prisma.image.count as MockedFunction<any>).mockResolvedValue(totalTestImages);
-    (prisma.image.findMany as MockedFunction<any>).mockResolvedValue([]);
+    // image.findMany is used by addBatchToQueue to bulk-load accessible images.
+    // Return all requested imageIds (from where.id.in) as accessible images with
+    // no_segmentation status so they are all eligible for queueing.
+    (prisma.image.findMany as MockedFunction<any>).mockImplementation(
+      async ({ where }: any = {}) => {
+        const ids: string[] = where?.id?.in ?? [];
+        return ids.map((id: string) => ({ id, segmentationStatus: 'no_segmentation' }));
+      }
+    );
     (prisma.image.findUnique as MockedFunction<any>).mockResolvedValue(null);
     (prisma.image.update as MockedFunction<any>).mockResolvedValue({});
     (prisma.image.updateMany as MockedFunction<any>).mockResolvedValue({ count: 0 });
     (prisma.project.findMany as MockedFunction<any>).mockResolvedValue([]);
+    // user.findUnique is called by addBatchToQueue to verify user exists.
+    // Return a minimal user object for any userId.
+    (prisma.user.findUnique as MockedFunction<any>).mockImplementation(
+      async ({ where }: any = {}) => ({ id: where?.id, email: `${where?.id}@test.com` })
+    );
     (prisma.user.create as MockedFunction<any>).mockResolvedValue({});
     (prisma.project.create as MockedFunction<any>).mockResolvedValue({});
     (prisma.image.create as MockedFunction<any>).mockResolvedValue({});
