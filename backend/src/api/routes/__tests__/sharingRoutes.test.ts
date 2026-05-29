@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import sharingRoutes from '../sharingRoutes';
 import { authenticate, optionalAuthenticate } from '../../../middleware/auth';
@@ -18,7 +12,8 @@ vi.mock('../../../utils/config', () => ({
     NODE_ENV: 'test',
     PORT: 3001,
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     ALLOWED_ORIGINS: 'http://localhost:3000',
@@ -68,16 +63,12 @@ vi.mock('../../../utils/response', () => ({
 
 import * as SharingService from '../../../services/sharingService';
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const mockedOptionalAuthenticate = optionalAuthenticate as MockedFunction<
   typeof optionalAuthenticate
 >;
 const mockedLogger = logger as Mocked<typeof logger>;
-const mockedSharingService = SharingService as Mocked<
-  typeof SharingService
->;
+const mockedSharingService = SharingService as Mocked<typeof SharingService>;
 
 const mockUser = {
   id: 'user-id-123',
@@ -111,19 +102,19 @@ describe('Sharing Routes', () => {
     mockedLogger.warn = vi.fn() as any;
     mockedLogger.debug = vi.fn() as any;
 
-    mockedAuthenticate.mockImplementation(
-      ((req: any, _res: any, next: any) => {
-        req.user = mockUser;
-        next();
-      }) as any
-    );
+    mockedAuthenticate.mockImplementation(((req: any, _res: any, next: any) => {
+      req.user = mockUser;
+      next();
+    }) as any);
 
-    mockedOptionalAuthenticate.mockImplementation(
-      ((req: any, _res: any, next: any) => {
-        req.user = mockUser;
-        next();
-      }) as any
-    );
+    mockedOptionalAuthenticate.mockImplementation(((
+      req: any,
+      _res: any,
+      next: any
+    ) => {
+      req.user = mockUser;
+      next();
+    }) as any);
 
     app.use('/api', sharingRoutes);
   });
@@ -154,13 +145,11 @@ describe('Sharing Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       const response = await request(app)
         .post('/api/projects/project-id-xyz/share/email')
@@ -240,13 +229,11 @@ describe('Sharing Routes', () => {
     });
 
     it('should return 401 without authentication', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app)
         .post('/api/projects/project-id-xyz/share/link')
@@ -287,17 +274,13 @@ describe('Sharing Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
-      await request(app)
-        .get('/api/projects/project-id-xyz/shares')
-        .expect(401);
+      await request(app).get('/api/projects/project-id-xyz/shares').expect(401);
     });
 
     it('should return 404 when project not found', async () => {
@@ -332,13 +315,11 @@ describe('Sharing Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app)
         .delete('/api/projects/project-id-xyz/shares/share-id-abc')
@@ -374,13 +355,11 @@ describe('Sharing Routes', () => {
     });
 
     it('should return 401 without authentication', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).get('/api/shared/projects').expect(401);
     });
@@ -419,11 +398,13 @@ describe('Sharing Routes', () => {
   // -------------------------------------------------------------------------
   describe('GET /api/share/validate/:token', () => {
     it('should validate a share token without requiring authentication', async () => {
-      mockedOptionalAuthenticate.mockImplementation(
-        ((_req: any, _res: any, next: any) => {
-          next();
-        }) as any
-      );
+      mockedOptionalAuthenticate.mockImplementation(((
+        _req: any,
+        _res: any,
+        next: any
+      ) => {
+        next();
+      }) as any);
       (mockedSharingService.validateShareToken as any) = jest
         .fn<any>()
         .mockResolvedValue({
@@ -452,11 +433,13 @@ describe('Sharing Routes', () => {
     });
 
     it('should return 404 for an invalid or expired token', async () => {
-      mockedOptionalAuthenticate.mockImplementation(
-        ((_req: any, _res: any, next: any) => {
-          next();
-        }) as any
-      );
+      mockedOptionalAuthenticate.mockImplementation(((
+        _req: any,
+        _res: any,
+        next: any
+      ) => {
+        next();
+      }) as any);
       (mockedSharingService.validateShareToken as any) = jest
         .fn<any>()
         .mockResolvedValue(null);
@@ -465,12 +448,14 @@ describe('Sharing Routes', () => {
     });
 
     it('should set needsLogin to true when user is not authenticated', async () => {
-      mockedOptionalAuthenticate.mockImplementation(
-        ((req: any, _res: any, next: any) => {
-          req.user = undefined;
-          next();
-        }) as any
-      );
+      mockedOptionalAuthenticate.mockImplementation(((
+        req: any,
+        _res: any,
+        next: any
+      ) => {
+        req.user = undefined;
+        next();
+      }) as any);
       (mockedSharingService.validateShareToken as any) = jest
         .fn<any>()
         .mockResolvedValue({
@@ -531,12 +516,14 @@ describe('Sharing Routes', () => {
     });
 
     it('should indicate needsLogin when unauthenticated user tries to accept', async () => {
-      mockedOptionalAuthenticate.mockImplementation(
-        ((req: any, _res: any, next: any) => {
-          req.user = undefined;
-          next();
-        }) as any
-      );
+      mockedOptionalAuthenticate.mockImplementation(((
+        req: any,
+        _res: any,
+        next: any
+      ) => {
+        req.user = undefined;
+        next();
+      }) as any);
       (mockedSharingService.acceptShareInvitation as any) = jest
         .fn<any>()
         .mockResolvedValue({

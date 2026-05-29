@@ -33,7 +33,9 @@ describe('WebSocketService - Parallel Processing', () => {
 
     // Mock Socket.IO constructor (Vitest 4: mockReturnValue can't be called
     // with `new` — use mockImplementation in function form).
-    (SocketIOServer as unknown as Mock).mockImplementation(function (this: any) {
+    (SocketIOServer as unknown as Mock).mockImplementation(function (
+      this: any
+    ) {
       Object.assign(this, mockSocketIOServer);
     });
 

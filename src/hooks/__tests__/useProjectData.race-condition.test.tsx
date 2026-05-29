@@ -1,6 +1,6 @@
 /**
- * Tests for race condition handling in useProjectData hook
- * Verifies the fix for the "no_segmentation" status override issue
+ * Tests for race condition handling in useProjectData hook.
+ * Verifies that status is preserved correctly during segmentation data refresh.
  */
 
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -16,9 +16,11 @@ vi.mock('@/lib/logger');
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
+// Stable t function reference to prevent useEffect infinite re-runs
+const stableT = (key: string) => key;
 vi.mock('@/contexts/useLanguage', () => ({
   useLanguage: () => ({
-    t: (key: string) => key,
+    t: stableT,
   }),
 }));
 vi.mock('@/contexts/useAuth', () => ({
@@ -26,95 +28,63 @@ vi.mock('@/contexts/useAuth', () => ({
     signOut: vi.fn(),
   }),
 }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 describe('useProjectData - Race Condition Handling', () => {
   const mockProjectId = 'test-project-id';
   const mockUserId = 'test-user-id';
   const mockImageId = 'test-image-id';
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
+  const mockProject = { id: mockProjectId, name: 'Test Project' };
+  // The hook normalizes 'segmented' → 'completed' in its status mapping
+  const makeMockImage = (status: string) => ({
+    id: mockImageId,
+    name: 'test.jpg',
+    url: 'http://test.jpg',
+    segmentationStatus: status,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
   describe('Status Override Prevention', () => {
     it('should NOT change status to no_segmentation when data fetch fails', async () => {
-      // Setup: Project with an image that has "segmented" status
-      const mockProject = {
-        id: mockProjectId,
-        name: 'Test Project',
-      };
-
-      const mockImage = {
-        id: mockImageId,
-        name: 'test.jpg',
-        url: 'http://test.jpg',
-        segmentationStatus: 'segmented',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      // Mock API responses
       (apiClient.getProject as any).mockResolvedValue(mockProject);
       (apiClient.getProjectImagesWithThumbnails as any).mockResolvedValue({
-        images: [mockImage],
+        images: [makeMockImage('segmented')],
         total: 1,
       });
-      (apiClient.getSegmentationResults as any).mockResolvedValue(null); // Simulate no data
+      // Always returns null — simulates fetch failure (retries 3 times)
+      (apiClient.getSegmentationResults as any).mockResolvedValue(null);
 
-      // Render hook
       const { result } = renderHook(() =>
         useProjectData(mockProjectId, mockUserId)
       );
 
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
+      await waitFor(() => expect(result.current.loading).toBe(false), {
+        timeout: 5000,
       });
 
-      // Verify initial state
+      // Hook normalizes 'segmented' → 'completed'
       expect(result.current.images).toHaveLength(1);
-      expect(result.current.images[0].segmentationStatus).toBe('segmented');
+      expect(result.current.images[0].segmentationStatus).toBe('completed');
 
-      // Trigger refresh that will fail to get segmentation data
+      // Run refresh with real timers (retry delays: 500 + 1000 + 2000 = 3.5s)
       await act(async () => {
         await result.current.refreshImageSegmentation(mockImageId);
       });
 
-      // Fast-forward through retry attempts
-      await act(async () => {
-        vi.advanceTimersByTime(500); // First retry
-        vi.advanceTimersByTime(1000); // Second retry
-        vi.advanceTimersByTime(2000); // Third retry
-      });
-
-      // CRITICAL: Status should remain 'segmented', NOT change to 'no_segmentation'
-      expect(result.current.images[0].segmentationStatus).toBe('segmented');
+      // CRITICAL: status must remain 'completed' — must NOT become 'no_segmentation'
+      expect(result.current.images[0].segmentationStatus).toBe('completed');
       expect(result.current.images[0].segmentationStatus).not.toBe(
         'no_segmentation'
       );
-    });
+    }, 15000);
 
     it('should retry multiple times before giving up', async () => {
-      // Setup
-      const mockProject = {
-        id: mockProjectId,
-        name: 'Test Project',
-      };
-
-      const mockImage = {
-        id: mockImageId,
-        name: 'test.jpg',
-        url: 'http://test.jpg',
-        segmentationStatus: 'segmented',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
       const mockSegmentationData = {
         polygons: [
           {
@@ -130,68 +100,54 @@ describe('useProjectData - Race Condition Handling', () => {
         imageHeight: 768,
       };
 
-      // Mock API responses
       (apiClient.getProject as any).mockResolvedValue(mockProject);
       (apiClient.getProjectImagesWithThumbnails as any).mockResolvedValue({
-        images: [mockImage],
+        images: [makeMockImage('segmented')],
         total: 1,
       });
-
-      // Fail first attempts, succeed on third retry
+      // Fail first two, succeed on third
       (apiClient.getSegmentationResults as any)
-        .mockResolvedValueOnce(null) // First attempt fails
-        .mockResolvedValueOnce(null) // Second attempt fails
-        .mockResolvedValueOnce(mockSegmentationData); // Third attempt succeeds
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockSegmentationData);
 
-      // Mock performance monitor
       (performanceMonitor.recordDatabaseFetch as any) = vi.fn();
 
-      // Render hook
       const { result } = renderHook(() =>
         useProjectData(mockProjectId, mockUserId)
       );
 
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
+      await waitFor(() => expect(result.current.loading).toBe(false), {
+        timeout: 5000,
       });
 
-      // Trigger refresh
+      // Run refresh with real timers (max retry delay = 500 + 1000 = 1.5s since 3rd attempt succeeds)
       await act(async () => {
-        const refreshPromise =
-          result.current.refreshImageSegmentation(mockImageId);
-
-        // Advance timers for each retry
-        vi.advanceTimersByTime(500); // First retry delay
-        vi.advanceTimersByTime(1000); // Second retry delay
-
-        await refreshPromise;
+        await result.current.refreshImageSegmentation(mockImageId);
       });
 
-      // Verify retries happened
+      // 3 calls: 1 initial + 2 retries
       expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(3);
 
-      // Verify performance monitoring
       expect(performanceMonitor.recordDatabaseFetch).toHaveBeenCalledWith(
         mockImageId,
         expect.any(Number),
         false,
         0
-      ); // First fail
+      );
       expect(performanceMonitor.recordDatabaseFetch).toHaveBeenCalledWith(
         mockImageId,
         expect.any(Number),
         false,
         1
-      ); // Second fail
+      );
       expect(performanceMonitor.recordDatabaseFetch).toHaveBeenCalledWith(
         mockImageId,
         expect.any(Number),
         true,
         2
-      ); // Third success
+      );
 
-      // Verify segmentation data was updated
       expect(result.current.images[0].segmentationResult).toEqual({
         polygons: mockSegmentationData.polygons,
         imageWidth: mockSegmentationData.imageWidth,
@@ -200,27 +156,11 @@ describe('useProjectData - Race Condition Handling', () => {
         confidence: undefined,
         processingTime: undefined,
       });
-
-      // Status should remain 'segmented'
-      expect(result.current.images[0].segmentationStatus).toBe('segmented');
-    });
+      // Status stays 'completed' (normalized from original 'segmented')
+      expect(result.current.images[0].segmentationStatus).toBe('completed');
+    }, 10000);
 
     it('should handle successful data fetch on first attempt', async () => {
-      // Setup
-      const mockProject = {
-        id: mockProjectId,
-        name: 'Test Project',
-      };
-
-      const mockImage = {
-        id: mockImageId,
-        name: 'test.jpg',
-        url: 'http://test.jpg',
-        segmentationStatus: 'segmented',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
       const mockSegmentationData = {
         polygons: [
           {
@@ -239,46 +179,37 @@ describe('useProjectData - Race Condition Handling', () => {
         processingTime: 1.2,
       };
 
-      // Mock API responses
       (apiClient.getProject as any).mockResolvedValue(mockProject);
       (apiClient.getProjectImagesWithThumbnails as any).mockResolvedValue({
-        images: [mockImage],
+        images: [makeMockImage('segmented')],
         total: 1,
       });
       (apiClient.getSegmentationResults as any).mockResolvedValue(
         mockSegmentationData
       );
-
-      // Mock performance monitor
       (performanceMonitor.recordDatabaseFetch as any) = vi.fn();
 
-      // Render hook
       const { result } = renderHook(() =>
         useProjectData(mockProjectId, mockUserId)
       );
 
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
+      await waitFor(() => expect(result.current.loading).toBe(false), {
+        timeout: 5000,
       });
 
-      // Trigger refresh
+      // First attempt succeeds — no retry delay
       await act(async () => {
         await result.current.refreshImageSegmentation(mockImageId);
       });
 
       // Should only call once (no retries needed)
       expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(1);
-
-      // Verify performance monitoring for successful first attempt
       expect(performanceMonitor.recordDatabaseFetch).toHaveBeenCalledWith(
         mockImageId,
         expect.any(Number),
         true,
         0
       );
-
-      // Verify segmentation data was updated
       expect(result.current.images[0].segmentationResult).toMatchObject({
         polygons: mockSegmentationData.polygons,
         imageWidth: mockSegmentationData.imageWidth,
@@ -287,54 +218,39 @@ describe('useProjectData - Race Condition Handling', () => {
         confidence: mockSegmentationData.confidence,
         processingTime: mockSegmentationData.processingTime,
       });
-
-      // Status should remain 'segmented'
-      expect(result.current.images[0].segmentationStatus).toBe('segmented');
-    });
+      expect(result.current.images[0].segmentationStatus).toBe('completed');
+    }, 10000);
 
     it('should not change status for images without segmentation results', async () => {
-      // Setup: Image with 'no_segmentation' status from backend
-      const mockProject = {
-        id: mockProjectId,
-        name: 'Test Project',
-      };
-
-      const mockImage = {
-        id: mockImageId,
-        name: 'test.jpg',
-        url: 'http://test.jpg',
-        segmentationStatus: 'no_segmentation', // Already no segmentation
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      // Mock API responses
       (apiClient.getProject as any).mockResolvedValue(mockProject);
       (apiClient.getProjectImagesWithThumbnails as any).mockResolvedValue({
-        images: [mockImage],
+        images: [makeMockImage('no_segmentation')],
         total: 1,
       });
       (apiClient.getSegmentationResults as any).mockResolvedValue(null);
 
-      // Render hook
       const { result } = renderHook(() =>
         useProjectData(mockProjectId, mockUserId)
       );
 
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
+      await waitFor(() => expect(result.current.loading).toBe(false), {
+        timeout: 5000,
       });
 
-      // Trigger refresh
+      // 'no_segmentation' stays as-is (no normalization for this status)
+      expect(result.current.images[0].segmentationStatus).toBe(
+        'no_segmentation'
+      );
+
+      // Run refresh with real timers
       await act(async () => {
         await result.current.refreshImageSegmentation(mockImageId);
       });
 
-      // Status should remain 'no_segmentation' as set by backend
+      // Status must remain 'no_segmentation'
       expect(result.current.images[0].segmentationStatus).toBe(
         'no_segmentation'
       );
-    });
+    }, 15000);
   });
 });

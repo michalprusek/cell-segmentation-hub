@@ -35,8 +35,12 @@ import { sendEmail } from '../emailService';
 import { logger } from '../../utils/logger';
 import { promises as fs } from 'fs';
 
-const mockCreate = prisma.feedback.create as unknown as ReturnType<typeof vi.fn>;
-const mockUpdate = prisma.feedback.update as unknown as ReturnType<typeof vi.fn>;
+const mockCreate = prisma.feedback.create as unknown as ReturnType<
+  typeof vi.fn
+>;
+const mockUpdate = prisma.feedback.update as unknown as ReturnType<
+  typeof vi.fn
+>;
 const mockSendEmail = sendEmail as unknown as ReturnType<typeof vi.fn>;
 const mockLoggerError = logger.error as unknown as ReturnType<typeof vi.fn>;
 const mockRename = fs.rename as unknown as ReturnType<typeof vi.fn>;
@@ -178,7 +182,9 @@ describe('feedbackService.createFeedback', () => {
     const emailArgs = mockSendEmail.mock.calls[0][0];
     expect(emailArgs.attachments).toBeUndefined();
     expect(emailArgs.text).toContain('WellD03.nd2');
-    expect(emailArgs.text).toContain('/app/uploads/feedback/fb-abc/WellD03.nd2');
+    expect(emailArgs.text).toContain(
+      '/app/uploads/feedback/fb-abc/WellD03.nd2'
+    );
   });
 
   it('keeps the report and flags it when the attachment fails to persist', async () => {

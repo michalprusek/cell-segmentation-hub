@@ -71,7 +71,10 @@ describe('cross-frame propagation diff', () => {
     });
 
     it('emits a delete when a trackId disappears from new polygons', () => {
-      const prev = [polyline('t1', { name: 'A' }), polyline('t2', { name: 'B' })];
+      const prev = [
+        polyline('t1', { name: 'A' }),
+        polyline('t2', { name: 'B' }),
+      ];
       const next = [polyline('t1', { name: 'A' })]; // t2 deleted
       const { renames, deletes } = diffTrackOps(prev, next);
       expect(renames.size).toBe(0);

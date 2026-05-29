@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import { segmentationRoutes } from '../segmentationRoutes';
 import { authenticate } from '../../../middleware/auth';
@@ -57,9 +51,7 @@ vi.mock('../../../utils/config', () => ({
   },
 }));
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const MockedResponseHelper = ResponseHelper as Mocked<typeof ResponseHelper>;
 const mockedLogger = logger as Mocked<typeof logger>;
 
@@ -95,7 +87,12 @@ describe('Segmentation Routes', () => {
 
     // ResponseHelper mocks
     (MockedResponseHelper.success as Mock).mockImplementation(
-      (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
+      (
+        res: express.Response,
+        data: unknown,
+        message: string,
+        statusCode: number = 200
+      ) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
@@ -178,7 +175,10 @@ describe('Segmentation Routes', () => {
     const validPolygons = [
       {
         id: 'poly-1',
-        points: [{ x: 0, y: 0 }, { x: 10, y: 0 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+        ],
         type: 'external',
       },
     ];
@@ -242,8 +242,9 @@ describe('Segmentation Routes', () => {
     });
 
     it('should proceed to controller with valid UUID', async () => {
-      const response = await request(app)
-        .delete(`/api/segmentation/images/${validImageId}/results`);
+      const response = await request(app).delete(
+        `/api/segmentation/images/${validImageId}/results`
+      );
 
       // 200 or 500 — auth and UUID validation passed
       expect([200, 500]).toContain(response.status);

@@ -13,7 +13,7 @@ from typing import Dict, Any, List
 # Use relative imports instead of sys.path manipulation
 from .model_loader import ModelManager
 from .postprocessing import PostprocessingService
-from ..ml.inference_executor import get_global_executor, InferenceError, InferenceResourceError
+from ml.inference_executor import get_global_executor, InferenceError, InferenceResourceError
 
 logger = logging.getLogger(__name__)
 

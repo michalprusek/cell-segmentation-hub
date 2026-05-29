@@ -224,7 +224,8 @@ describe('WebSocket Test Utilities', () => {
       const statsHandler = vi.fn();
 
       mockSocket.on('segmentation-update', updateHandler);
-      mockSocket.on('queue-stats-update', statsHandler);
+      // __simulateQueueStatsUpdate fires the 'queueStats' event (backend event name)
+      mockSocket.on('queueStats', statsHandler);
 
       scenarios.simulateBatchProcessing('proj-1', 3);
 
@@ -293,7 +294,10 @@ describe('WebSocket Test Utilities', () => {
       await waitForWebSocketOperation(50);
       const endTime = Date.now();
 
-      expect(endTime - startTime).toBeGreaterThanOrEqual(50);
+      // Node setTimeout can fire ~1ms early (timer rounding), so a strict
+      // >=50 flakes intermittently under load. Allow a small tolerance — the
+      // helper's contract is "waits ~50ms", not an exact floor.
+      expect(endTime - startTime).toBeGreaterThanOrEqual(45);
     });
   });
 

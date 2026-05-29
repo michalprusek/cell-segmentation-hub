@@ -622,7 +622,7 @@ export class PolygonTestScenarios {
       PolygonShapeTestFactory.createThinPolygon(),
       PolygonShapeTestFactory.createExtremeCoordinatesPolygon(),
       PolygonPointTestFactory.createManyPointsPolygon(5000),
-      ...PolygonShapeTestFactory.createPolygonWithHole(),
+      ...Object.values(PolygonShapeTestFactory.createPolygonWithHole()),
     ];
 
     return {

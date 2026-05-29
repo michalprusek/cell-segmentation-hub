@@ -337,9 +337,12 @@ describe('API Client', () => {
 
         await apiClient.refreshAccessToken();
 
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/refresh', {
-          refreshToken: 'valid-refresh-token',
-        });
+        expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+          '/auth/refresh-token',
+          {
+            refreshToken: 'valid-refresh-token',
+          }
+        );
       });
 
       test('should throw error when no refresh token available', async () => {
@@ -406,6 +409,7 @@ describe('API Client', () => {
               id: '1',
               name: 'Project 1', // Mapped from title to name
               description: 'Test project',
+              type: 'spheroid', // Default type when not provided by backend
               created_at: '2024-01-01T00:00:00Z',
               updated_at: '2024-01-01T00:00:00Z',
               user_id: 'user1',

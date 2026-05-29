@@ -107,9 +107,9 @@ const createMockApp = (): Express => {
 
     try {
       const { prisma } = await import('@/db');
-      const wsModule = await import('@/services/websocketService') as any;
+      const wsModule = (await import('@/services/websocketService')) as any;
       const webSocketService = wsModule.webSocketService;
-      const redisModule = await import('@/redis/client') as any;
+      const redisModule = (await import('@/redis/client')) as any;
       const redisClient = redisModule.redisClient;
 
       // Find upload
@@ -165,25 +165,29 @@ const createMockApp = (): Express => {
       }
 
       // Emit WebSocket events (errors are non-fatal)
-      Promise.resolve(webSocketService.emitToUser(userId, 'uploadCancelled', {
-        uploadId,
-        fileName: upload.fileName,
-        reason: 'User cancelled',
-        timestamp: new Date().toISOString(),
-      })).catch((_wsError: unknown) => {
+      Promise.resolve(
+        webSocketService.emitToUser(userId, 'uploadCancelled', {
+          uploadId,
+          fileName: upload.fileName,
+          reason: 'User cancelled',
+          timestamp: new Date().toISOString(),
+        })
+      ).catch((_wsError: unknown) => {
         console.warn('Failed to emit WebSocket event to user:', _wsError);
       });
 
-      Promise.resolve(webSocketService.emitToRoom(
-        `project:${upload.projectId}`,
-        'uploadCancelled',
-        {
-          uploadId,
-          fileName: upload.fileName,
-          userId,
-          timestamp: new Date().toISOString(),
-        }
-      )).catch((_wsError: unknown) => {
+      Promise.resolve(
+        webSocketService.emitToRoom(
+          `project:${upload.projectId}`,
+          'uploadCancelled',
+          {
+            uploadId,
+            fileName: upload.fileName,
+            userId,
+            timestamp: new Date().toISOString(),
+          }
+        )
+      ).catch((_wsError: unknown) => {
         console.warn('Failed to emit WebSocket event to room:', _wsError);
       });
 
@@ -223,14 +227,16 @@ describe('Upload Cancel API Tests', () => {
     const dbModule = vi.mocked(await import('@/db'));
     mockPrisma = dbModule.prisma;
 
-    const redisModule = await import('@/redis/client') as any;
+    const redisModule = (await import('@/redis/client')) as any;
     mockRedis = redisModule.redisClient;
 
-    const wsModule = await import('@/services/websocketService') as any;
+    const wsModule = (await import('@/services/websocketService')) as any;
     mockWebSocket = wsModule.webSocketService;
 
     // Default successful mock implementations
-    (mockPrisma as any).upload.findUnique.mockResolvedValue(mockUploadData.active);
+    (mockPrisma as any).upload.findUnique.mockResolvedValue(
+      mockUploadData.active
+    );
     (mockPrisma as any).upload.update.mockResolvedValue({
       ...mockUploadData.active,
       status: 'cancelled',
@@ -492,7 +498,7 @@ describe('Upload Cancel API Tests', () => {
     describe('File Cleanup', () => {
       it('should clean up temporary files', async () => {
         // Mock filesystem operations
-        const fsModule = await import('fs/promises') as any;
+        const fsModule = (await import('fs/promises')) as any;
         fsModule.rm = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
         await request(app).post('/api/uploads/upload-123/cancel').expect(200);
@@ -503,7 +509,7 @@ describe('Upload Cancel API Tests', () => {
 
       it('should handle file cleanup errors gracefully', async () => {
         // Mock filesystem error
-        const fsModule = await import('fs/promises') as any;
+        const fsModule = (await import('fs/promises')) as any;
         fsModule.rm = jest
           .fn<() => Promise<void>>()
           .mockRejectedValue(new Error('Permission denied'));
@@ -648,9 +654,12 @@ describe('Upload Cancel API Tests', () => {
         );
 
         // The cancel route handler (simplified inline)
-        rateLimitedApp.post('/api/uploads/:uploadId/cancel', async (req: any, res: any) => {
-          res.json({ success: true });
-        });
+        rateLimitedApp.post(
+          '/api/uploads/:uploadId/cancel',
+          async (req: any, res: any) => {
+            res.json({ success: true });
+          }
+        );
 
         // Make many requests
         const promises = Array.from({ length: 15 }, () =>

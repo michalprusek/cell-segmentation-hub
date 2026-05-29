@@ -38,7 +38,10 @@ import { ImageService } from '../imageService';
 
 describe('imageService.deleteImage video container branch (round-2 GAP-4)', () => {
   let prismaStub: {
-    image: { findFirst: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+    image: {
+      findFirst: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+    };
   };
   let websocketStub: { emitToUser: ReturnType<typeof vi.fn> };
   let svc: ImageService;
@@ -52,13 +55,11 @@ describe('imageService.deleteImage video container branch (round-2 GAP-4)', () =
       },
     };
     websocketStub = { emitToUser: vi.fn() };
-    svc = new ImageService(
-      prismaStub as never,
-      websocketStub as never
-    );
+    svc = new ImageService(prismaStub as never, websocketStub as never);
     // Stub the project-stats emit so it doesn't blow up looking for prisma.
-    (svc as unknown as { emitProjectStatsUpdate: () => Promise<void> }).emitProjectStatsUpdate =
-      vi.fn().mockResolvedValue(undefined);
+    (
+      svc as unknown as { emitProjectStatsUpdate: () => Promise<void> }
+    ).emitProjectStatsUpdate = vi.fn().mockResolvedValue(undefined);
   });
 
   it('removes the container directory recursively when isVideoContainer=true', async () => {

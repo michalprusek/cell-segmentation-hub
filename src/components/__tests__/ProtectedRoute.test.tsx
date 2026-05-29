@@ -21,8 +21,12 @@ const mockAuth = {
   isAuthenticated: false,
 };
 
-vi.mock('@/contexts/AuthContext', async () => {
-  const actual = await vi.importActual('@/contexts/AuthContext');
+vi.mock('@/contexts/useAuth', () => ({
+  useAuth: () => mockAuth,
+}));
+
+vi.mock('@/contexts/exports', async () => {
+  const actual = await vi.importActual('@/contexts/exports');
   return {
     ...actual,
     useAuth: () => mockAuth,
@@ -31,6 +35,10 @@ vi.mock('@/contexts/AuthContext', async () => {
 
 // Mock components
 const MockProtectedComponent = () => <div>Protected Content</div>;
+
+// Helper: wait for the 200ms grace period to pass and React to re-render
+// Uses waitFor which polls, so this works with real timers.
+const GRACE_PERIOD_MS = 300; // slightly more than the 200ms grace period
 
 describe('ProtectedRoute', () => {
   beforeEach(() => {
@@ -41,7 +49,7 @@ describe('ProtectedRoute', () => {
     mockNavigate.mockReset();
   });
 
-  it('should render protected content when authenticated', () => {
+  it('should render protected content when authenticated', async () => {
     mockAuth.isAuthenticated = true;
     mockAuth.user = { id: '1', email: 'test@example.com' };
 
@@ -51,7 +59,11 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    expect(screen.getByText('Protected Content')).toBeInTheDocument();
+    // Wait for grace period to expire
+    await waitFor(
+      () => expect(screen.getByText('Protected Content')).toBeInTheDocument(),
+      { timeout: GRACE_PERIOD_MS }
+    );
   });
 
   it('should show redirecting message when not authenticated', async () => {
@@ -64,7 +76,13 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    expect(screen.getByText('Redirecting to sign-in...')).toBeInTheDocument();
+    await waitFor(
+      () =>
+        expect(
+          screen.getByText('Redirecting to sign-in...')
+        ).toBeInTheDocument(),
+      { timeout: GRACE_PERIOD_MS }
+    );
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith(
@@ -84,6 +102,7 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
+    // During loading, the spinner is shown (both loading and grace period active)
     expect(screen.getByText('Loading your account...')).toBeInTheDocument();
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
   });
@@ -98,11 +117,11 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    // During grace period, should show loading
+    // During grace period (immediately after render), shows loading
     expect(screen.getByText('Loading your account...')).toBeInTheDocument();
   });
 
-  it('should render multiple children when authenticated', () => {
+  it('should render multiple children when authenticated', async () => {
     mockAuth.isAuthenticated = true;
     mockAuth.user = { id: '1', email: 'test@example.com' };
 
@@ -114,7 +133,10 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    expect(screen.getByText('Child 1')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByText('Child 1')).toBeInTheDocument(),
+      { timeout: GRACE_PERIOD_MS }
+    );
     expect(screen.getByText('Child 2')).toBeInTheDocument();
     expect(screen.getByText('Child 3')).toBeInTheDocument();
   });
@@ -129,14 +151,20 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    expect(screen.getByText('Redirecting to sign-in...')).toBeInTheDocument();
+    await waitFor(
+      () =>
+        expect(
+          screen.getByText('Redirecting to sign-in...')
+        ).toBeInTheDocument(),
+      { timeout: GRACE_PERIOD_MS }
+    );
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalled();
     });
   });
 
-  it('should handle authentication state transitions', () => {
+  it('should handle authentication state transitions', async () => {
     mockAuth.isAuthenticated = true;
     mockAuth.user = { id: '1', email: 'test@example.com' };
 
@@ -146,7 +174,10 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    expect(screen.getByText('Protected Content')).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByText('Protected Content')).toBeInTheDocument(),
+      { timeout: GRACE_PERIOD_MS }
+    );
 
     // Simulate logout
     mockAuth.isAuthenticated = false;
@@ -171,12 +202,15 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith(
-        '/sign-in?returnTo=%2Fprotected',
-        { replace: true }
-      );
-    });
+    await waitFor(
+      () => {
+        expect(mockNavigate).toHaveBeenCalledWith(
+          '/sign-in?returnTo=%2Fprotected',
+          { replace: true }
+        );
+      },
+      { timeout: GRACE_PERIOD_MS }
+    );
   });
 
   it('should handle edge case of authenticated user without user object', async () => {
@@ -189,7 +223,13 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    expect(screen.getByText('Redirecting to sign-in...')).toBeInTheDocument();
+    await waitFor(
+      () =>
+        expect(
+          screen.getByText('Redirecting to sign-in...')
+        ).toBeInTheDocument(),
+      { timeout: GRACE_PERIOD_MS }
+    );
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalled();

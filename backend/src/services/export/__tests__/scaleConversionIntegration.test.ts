@@ -1,10 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../../utils/config', () => ({
   config: {

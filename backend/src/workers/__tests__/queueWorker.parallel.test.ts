@@ -19,7 +19,8 @@ vi.mock('../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     ALLOWED_ORIGINS: 'http://localhost:3000',
     WS_ALLOWED_ORIGINS: 'http://localhost:3000',
     ML_SERVICE_URL: 'http://localhost:8000',
@@ -158,7 +159,11 @@ describe('QueueWorker - Parallel Processing', () => {
       setQueueWorker: vi.fn(),
       // resetStuckItems must return a Promise so .catch() in the worker doesn't throw
       resetStuckItems: vi.fn().mockResolvedValue(0),
-      getQueueHealthStatus: vi.fn().mockResolvedValue({ healthy: true, issues: [], queueStats: { queued: 0, processing: 0, total: 0 } }),
+      getQueueHealthStatus: vi.fn().mockResolvedValue({
+        healthy: true,
+        issues: [],
+        queueStats: { queued: 0, processing: 0, total: 0 },
+      }),
       cleanupOldEntries: vi.fn().mockResolvedValue(0),
     } as any;
 

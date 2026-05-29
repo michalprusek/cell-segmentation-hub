@@ -4,6 +4,17 @@ import { vi } from 'vitest';
 // Import React and configure for testing
 import _React from 'react';
 
+// Seed the English translation chunk synchronously so LanguageProvider's
+// lazy useState init has it on the first render. Without this the chunk
+// loads in an effect (post-render), so component tests querying by
+// translated text see raw i18n keys. See LanguageContext.primeTranslationCache.
+import enTranslations from '@/translations/en';
+import { primeTranslationCache } from '@/contexts/translationLoader';
+primeTranslationCache(
+  'en',
+  enTranslations as unknown as Parameters<typeof primeTranslationCache>[1]
+);
+
 // Force React to use development mode features in tests
 if (typeof window !== 'undefined') {
   // @ts-expect-error -- test mock override - Internal React flag

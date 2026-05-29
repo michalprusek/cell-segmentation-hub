@@ -1,0 +1,26 @@
+# Test-only dependencies for the ML service pytest suite.
+# NOT installed in the production image (pytest et al. are absent there by
+# design). Install into a GPU-enabled one-off container to run the tests:
+#
+#   HF=$(grep -E '^HF_TOKEN=' ../../.env.production | cut -d= -f2-)
+#   docker run --rm --gpus all --entrypoint /bin/sh \
+#     -e HF_TOKEN="$HF" \
+#     -v "$PWD":/app -w /app \
+#     -v "$PWD/.hf-cache":/home/app/.cache/huggingface \
+#     cell-segmentation-hub-ml \
+#     -c "pip install -q -r requirements-test.txt && \
+#         python -m pytest tests/unit -o addopts='' --asyncio-mode=auto \
+#           -m 'not slow' --continue-on-collection-errors \
+#           --timeout=60 --timeout-method=thread -p no:cacheprovider -q"
+#
+# Expected: 228 passed, 1 skipped, 1 deselected, 0 failed, 0 errors.
+# GPU is required: models/__init__ imports mamba_ssm/Triton, which fail to
+# initialise without a CUDA driver ("0 active drivers").
+
+pytest>=7.4
+pytest-asyncio>=0.23
+pytest-timeout>=2.2
+asgi-lifespan>=2.1
+# httpx MUST stay <0.28: starlette 0.27's TestClient passes app= to
+# httpx.Client, a kwarg removed in httpx 0.28 (TypeError at setup otherwise).
+httpx<0.28

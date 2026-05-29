@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import imageRouter from '../imageRoutes';
 import { authenticate } from '../../../middleware/auth';
@@ -41,9 +35,15 @@ vi.mock('../../../services/sharingService');
 vi.mock('../../../services/websocketService');
 vi.mock('../../../storage');
 vi.mock('../../../middleware/validation', () => ({
-  validateBody: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
-  validateParams: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
-  validateQuery: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
+  validateBody: vi.fn(
+    (_schema: any) => (_req: any, _res: any, next: any) => next()
+  ),
+  validateParams: vi.fn(
+    (_schema: any) => (_req: any, _res: any, next: any) => next()
+  ),
+  validateQuery: vi.fn(
+    (_schema: any) => (_req: any, _res: any, next: any) => next()
+  ),
 }));
 vi.mock('../../../middleware/upload', () => ({
   uploadImages: vi.fn((_req: any, _res: any, next: any) => next()),
@@ -74,9 +74,7 @@ vi.mock('../../../utils/config', () => ({
   },
 }));
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const MockedResponseHelper = ResponseHelper as Mocked<typeof ResponseHelper>;
 const mockedLogger = logger as Mocked<typeof logger>;
 
@@ -128,7 +126,12 @@ describe('Image Routes', () => {
 
     // ResponseHelper mocks
     (MockedResponseHelper.success as Mock).mockImplementation(
-      (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
+      (
+        res: express.Response,
+        data: unknown,
+        message: string,
+        statusCode: number = 200
+      ) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
@@ -188,7 +191,9 @@ describe('Image Routes', () => {
         .post(`/api/${validProjectId}/images`)
         .set('Authorization', 'Bearer valid-token')
         .timeout(5000)
-        .catch(() => {/* timeout is acceptable — auth was still called */});
+        .catch(() => {
+          /* timeout is acceptable — auth was still called */
+        });
 
       expect(mockedAuthenticate).toHaveBeenCalled();
     });
@@ -200,14 +205,13 @@ describe('Image Routes', () => {
         res.status(401).json({ success: false, message: 'Unauthorized' });
       });
 
-      await request(app)
-        .get(`/api/${validProjectId}/images`)
-        .expect(401);
+      await request(app).get(`/api/${validProjectId}/images`).expect(401);
     });
 
     it('should accept pagination query params', async () => {
-      const response = await request(app)
-        .get(`/api/${validProjectId}/images?page=1&limit=20`);
+      const response = await request(app).get(
+        `/api/${validProjectId}/images?page=1&limit=20`
+      );
 
       expect([200, 404, 500]).toContain(response.status);
       expect(mockedAuthenticate).toHaveBeenCalled();
@@ -234,8 +238,9 @@ describe('Image Routes', () => {
     });
 
     it('should return image data', async () => {
-      const response = await request(app)
-        .get(`/api/${validProjectId}/images/${validImageId}`);
+      const response = await request(app).get(
+        `/api/${validProjectId}/images/${validImageId}`
+      );
 
       // Regardless of service mock, auth and params passed
       expect([200, 404, 500]).toContain(response.status);
@@ -271,8 +276,9 @@ describe('Image Routes', () => {
     });
 
     it('should return success response shape on delete', async () => {
-      const response = await request(app)
-        .delete(`/api/${validProjectId}/images/${validImageId}`);
+      const response = await request(app).delete(
+        `/api/${validProjectId}/images/${validImageId}`
+      );
 
       expect([200, 404, 500]).toContain(response.status);
     });
@@ -300,9 +306,7 @@ describe('Image Routes', () => {
     });
 
     it('should reject missing imageIds body', async () => {
-      const response = await request(app)
-        .delete('/api/batch')
-        .send({});
+      const response = await request(app).delete('/api/batch').send({});
 
       expect([400, 500]).toContain(response.status);
     });
@@ -367,15 +371,13 @@ describe('Image Routes', () => {
       // authenticate should NOT be called for /display route (public)
       const _callCount = mockedAuthenticate.mock.calls.length;
 
-      await request(app)
-        .get(`/api/${validImageId}/display`);
+      await request(app).get(`/api/${validImageId}/display`);
 
       // authenticate may still be called later in the route stack, but
       // the display endpoint itself is declared before router.use(authenticate)
       // The key test is that it does NOT return 401 from auth
       // (it may 404 from service, which is fine)
-      const response = await request(app)
-        .get(`/api/${validImageId}/display`);
+      const response = await request(app).get(`/api/${validImageId}/display`);
       expect(response.status).not.toBe(401);
     });
   });
@@ -392,8 +394,9 @@ describe('Image Routes', () => {
     });
 
     it('should accept lod query parameter', async () => {
-      const response = await request(app)
-        .get(`/api/${validProjectId}/images-with-thumbnails?lod=low&page=1&limit=50`);
+      const response = await request(app).get(
+        `/api/${validProjectId}/images-with-thumbnails?lod=low&page=1&limit=50`
+      );
 
       expect([200, 404, 500]).toContain(response.status);
     });
@@ -407,8 +410,14 @@ describe('Image Routes', () => {
 
       const protectedRoutes = [
         { method: 'get', path: `/api/${validProjectId}/images` },
-        { method: 'get', path: `/api/${validProjectId}/images/${validImageId}` },
-        { method: 'delete', path: `/api/${validProjectId}/images/${validImageId}` },
+        {
+          method: 'get',
+          path: `/api/${validProjectId}/images/${validImageId}`,
+        },
+        {
+          method: 'delete',
+          path: `/api/${validProjectId}/images/${validImageId}`,
+        },
         { method: 'delete', path: '/api/batch' },
       ];
 

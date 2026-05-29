@@ -1,9 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 import { Readable } from 'stream';
 import { z } from 'zod';
@@ -51,7 +46,11 @@ const makeMockFile = (
 });
 
 describe('Validation Middleware', () => {
-  let mockReq: Partial<Request> & { body?: unknown; query?: unknown; params?: unknown };
+  let mockReq: Partial<Request> & {
+    body?: unknown;
+    query?: unknown;
+    params?: unknown;
+  };
   let mockRes: Partial<Response>;
   let mockNext: NextFunction;
 
@@ -122,7 +121,11 @@ describe('Validation Middleware', () => {
       const schema = z.object({ page: z.coerce.number().min(1) });
       mockReq.query = { page: '2' };
 
-      validate(schema, 'query')(mockReq as Request, mockRes as Response, mockNext);
+      validate(schema, 'query')(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
 
       expect(mockNext).toHaveBeenCalled();
       expect((mockReq as Request).query).toEqual({ page: 2 });
@@ -132,7 +135,11 @@ describe('Validation Middleware', () => {
       const schema = z.object({ id: z.string().uuid() });
       mockReq.params = { id: '123e4567-e89b-12d3-a456-426614174000' };
 
-      validate(schema, 'params')(mockReq as Request, mockRes as Response, mockNext);
+      validate(schema, 'params')(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
 
       expect(mockNext).toHaveBeenCalled();
     });
@@ -141,7 +148,11 @@ describe('Validation Middleware', () => {
       const schema = z.object({ id: z.string().uuid() });
       mockReq.params = { id: 'not-a-uuid' };
 
-      validate(schema, 'params')(mockReq as Request, mockRes as Response, mockNext);
+      validate(schema, 'params')(
+        mockReq as Request,
+        mockRes as Response,
+        mockNext
+      );
 
       expect(ResponseHelper.validationError).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
@@ -345,8 +356,16 @@ describe('Validation Middleware', () => {
 
     it('calls next() for a valid array of files', () => {
       mockReq.files = [
-        makeMockFile({ originalname: 'img1.jpg', mimetype: 'image/jpeg', size: 512 * 1024 }),
-        makeMockFile({ originalname: 'img2.png', mimetype: 'image/png', size: 256 * 1024 }),
+        makeMockFile({
+          originalname: 'img1.jpg',
+          mimetype: 'image/jpeg',
+          size: 512 * 1024,
+        }),
+        makeMockFile({
+          originalname: 'img2.png',
+          mimetype: 'image/png',
+          size: 256 * 1024,
+        }),
       ];
 
       validateFiles({

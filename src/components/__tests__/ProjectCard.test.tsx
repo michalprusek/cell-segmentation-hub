@@ -89,8 +89,11 @@ describe('ProjectCard', () => {
 
     render(<ProjectCard {...defaultProps} onClick={mockOnClick} />);
 
-    const card = screen.getByRole('button');
-    await user.click(card);
+    // Click the project title — a non-interactive area of the card.
+    // The ProjectActions mock renders a <button> which is intercepted by the
+    // isInteractive guard in handleCardClick; the title text is not guarded.
+    const title = screen.getByText(defaultProps.title);
+    await user.click(title);
 
     expect(mockOnClick).toHaveBeenCalled();
   });

@@ -1,14 +1,7 @@
 /* eslint-disable no-unexpected-multiline */
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  beforeAll,
-  afterAll,
-} from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db';
 import { generateTokenPair } from '../../auth/jwt';

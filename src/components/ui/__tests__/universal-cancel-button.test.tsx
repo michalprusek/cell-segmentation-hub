@@ -306,7 +306,8 @@ describe('UniversalCancelButton', () => {
 
   describe('Error Handling', () => {
     it('handles missing translation gracefully', () => {
-      mockT.mockReturnValue('missing.key');
+      // Use mockReturnValueOnce so the override doesn't leak into subsequent tests.
+      mockT.mockReturnValueOnce('missing.key');
 
       render(
         <UniversalCancelButton {...defaultProps} isOperationActive={true} />

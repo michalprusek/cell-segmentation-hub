@@ -66,8 +66,10 @@ export function useAbortController(debugKey?: string) {
           `🛑 Aborted controller for ${debugContext}:${controllerKey}`
         );
       }
-      // IMPORTANT: Don't delete the controller, keep it as aborted
-      // This prevents getSignal from creating a new non-aborted controller
+      // Keep the aborted controller in the map (don't delete) so isAborted(key)
+      // can still report the aborted state. getController/getSignal will create
+      // a FRESH controller on the next request for this key (it only reuses a
+      // non-aborted one), so a new operation still gets a usable signal.
       // controllersRef.current.delete(controllerKey);
     },
     [debugContext]
@@ -100,12 +102,10 @@ export function useAbortController(debugKey?: string) {
    */
   const getSignal = useCallback(
     (controllerKey: string = 'default') => {
-      const existing = controllersRef.current.get(controllerKey);
-      if (existing) {
-        // Return existing signal even if aborted
-        return existing.signal;
-      }
-      // Create new controller only if none exists
+      // Delegate to getController which returns the existing non-aborted controller
+      // or creates a fresh one when the existing controller is aborted. This ensures
+      // that callers (e.g. getAllSignals after abortAllOperations) always receive
+      // a usable signal for new operations rather than a stale aborted one.
       return getController(controllerKey).signal;
     },
     [getController]
@@ -118,6 +118,20 @@ export function useAbortController(debugKey?: string) {
     };
   }, [abortAll]);
 
+  /**
+   * Check if all of the specified keys are in an aborted state.
+   * Returns false if none of the keys have a controller yet (nothing has started).
+   * This is exported so useCoordinatedAbortController can use it with key-awareness.
+   */
+  const areKeysAllAborted = useCallback((keys: string[]) => {
+    const hasAnyController = keys.some(key => controllersRef.current.has(key));
+    if (!hasAnyController) return false;
+    return keys.every(key => {
+      const controller = controllersRef.current.get(key);
+      return controller ? controller.signal.aborted : false;
+    });
+  }, []);
+
   return {
     getController,
     getSignal,
@@ -125,6 +139,7 @@ export function useAbortController(debugKey?: string) {
     abortAll,
     isAborted,
     resetController,
+    areKeysAllAborted,
   };
 }
 
@@ -136,8 +151,14 @@ export function useCoordinatedAbortController(
   operationKeys: string[],
   debugKey?: string
 ) {
-  const { getController, getSignal, abort, abortAll, isAborted } =
-    useAbortController(debugKey);
+  const {
+    getController,
+    getSignal,
+    abort,
+    abortAll,
+    isAborted,
+    areKeysAllAborted,
+  } = useAbortController(debugKey);
 
   /**
    * Abort all specified operations at once
@@ -159,11 +180,12 @@ export function useCoordinatedAbortController(
   }, [operationKeys, getSignal]);
 
   /**
-   * Check if all operations are aborted
+   * Check if all operations are aborted.
+   * Returns false when no controllers have been created yet (nothing has started).
    */
   const areAllAborted = useCallback(() => {
-    return operationKeys.every(key => isAborted(key));
-  }, [operationKeys, isAborted]);
+    return areKeysAllAborted(operationKeys);
+  }, [areKeysAllAborted, operationKeys]);
 
   return {
     getController,

@@ -14,7 +14,7 @@ describe('NewProjectListItem', () => {
   it('renders the create project card', () => {
     render(<NewProjectListItem onClick={mockOnClick} />);
 
-    expect(screen.getByText(/create project/i)).toBeInTheDocument();
+    expect(screen.getByText(/create.*project/i)).toBeInTheDocument();
   });
 
   it('displays the create project description', () => {
@@ -145,7 +145,7 @@ describe('NewProjectListItem', () => {
 
     // The component should use useLanguage hook and display translated text
     // Since we're using the test utils with providers, the text should be rendered
-    expect(screen.getByText(/create project/i)).toBeInTheDocument();
+    expect(screen.getByText(/create.*project/i)).toBeInTheDocument();
   });
 
   it('handles click events properly', async () => {

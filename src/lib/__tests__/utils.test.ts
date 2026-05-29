@@ -82,14 +82,17 @@ describe('Utils', () => {
     });
 
     test('should handle spacing conflicts correctly', () => {
-      // Test that Tailwind merge resolves spacing conflicts properly
+      // tailwind-merge v2 keeps p-2 alongside px-4/py-3 because the axis-specific
+      // utilities are more specific but do NOT strip the shorthand in v2 semantics.
+      // The important behaviour is that px-4 and py-3 take effect (they win for
+      // their respective axes in the browser cascade), not that p-2 is absent.
       const result = cn('p-2 px-4 py-3', 'm-1 mx-2');
-      // Check that the result contains the expected classes without asserting order
       expect(result).toContain('py-3');
       expect(result).toContain('px-4');
       expect(result).toContain('mx-2');
       expect(result).toContain('m-1');
-      expect(result).not.toContain('p-2'); // Should be overridden by px-4 and py-3
+      // tailwind-merge v2 retains p-2 (compile-time class merging, not runtime CSS cascade)
+      expect(result).toContain('p-2');
     });
 
     test('should handle color conflicts', () => {

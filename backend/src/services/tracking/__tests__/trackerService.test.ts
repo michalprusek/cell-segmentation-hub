@@ -162,7 +162,9 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
     expect(updateCalls).toContain('seg-2');
 
     // The malformed row was logged at error level.
-    const errors = loggerErrorMock.mock.calls.map(c => c[0] as string).join('\n');
+    const errors = loggerErrorMock.mock.calls
+      .map(c => c[0] as string)
+      .join('\n');
     expect(errors).toMatch(/malformed polygons JSON/i);
   });
 
@@ -193,7 +195,10 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
               {
                 id: 'p0',
                 geometry: 'polyline',
-                points: [{ x: 1, y: 1 }, { x: 2, y: 2 }],
+                points: [
+                  { x: 1, y: 1 },
+                  { x: 2, y: 2 },
+                ],
               },
             ]),
           },
@@ -211,7 +216,10 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
               {
                 id: 'p3',
                 geometry: 'polyline',
-                points: [{ x: 5, y: 5 }, { x: 6, y: 6 }],
+                points: [
+                  { x: 5, y: 5 },
+                  { x: 6, y: 6 },
+                ],
               },
             ]),
           },

@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import cacheRoutes from '../cacheRoutes';
 import { authenticate } from '../../../middleware/auth';
@@ -18,7 +12,8 @@ vi.mock('../../../utils/config', () => ({
     NODE_ENV: 'test',
     PORT: 3001,
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     ALLOWED_ORIGINS: 'http://localhost:3000',
@@ -60,9 +55,7 @@ vi.mock('../../../utils/response', () => ({
   },
 }));
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const mockedLogger = logger as Mocked<typeof logger>;
 
 const mockUser = {
@@ -83,12 +76,10 @@ describe('Cache Routes', () => {
     mockedLogger.error = vi.fn() as any;
     mockedLogger.warn = vi.fn() as any;
 
-    mockedAuthenticate.mockImplementation(
-      ((req: any, _res: any, next: any) => {
-        req.user = mockUser;
-        next();
-      }) as any
-    );
+    mockedAuthenticate.mockImplementation(((req: any, _res: any, next: any) => {
+      req.user = mockUser;
+      next();
+    }) as any);
 
     app.use('/api/cache', cacheRoutes);
   });
@@ -113,17 +104,13 @@ describe('Cache Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
-      const response = await request(app)
-        .get('/api/cache/health')
-        .expect(401);
+      const response = await request(app).get('/api/cache/health').expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -165,13 +152,11 @@ describe('Cache Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).get('/api/cache/stats').expect(401);
     });
@@ -192,13 +177,11 @@ describe('Cache Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).get('/api/cache/keys/some-key').expect(401);
     });
@@ -248,13 +231,11 @@ describe('Cache Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app)
         .post('/api/cache/keys')
@@ -288,13 +269,11 @@ describe('Cache Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).delete('/api/cache/keys/some-key').expect(401);
     });
@@ -337,13 +316,11 @@ describe('Cache Routes', () => {
     });
 
     it('should return 401 without authentication', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).post('/api/cache/flush').send({}).expect(401);
     });
@@ -364,13 +341,11 @@ describe('Cache Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).get('/api/cache/sessions').expect(401);
     });
@@ -414,11 +389,9 @@ describe('Cache Routes', () => {
   // -------------------------------------------------------------------------
   describe('Authentication Boundary — all cache routes require auth', () => {
     it('should block every cache route when authenticate middleware fails', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res.status(401).json({ success: false, message: 'Unauthorized' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+      }) as any);
 
       const routes = [
         { method: 'get', path: '/api/cache/health' },

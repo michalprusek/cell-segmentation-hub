@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import healthRoutes from '../healthRoutes';
 import { logger } from '../../../utils/logger';
 
@@ -16,7 +10,8 @@ vi.mock('../../../utils/config', () => ({
     NODE_ENV: 'test',
     PORT: 3001,
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     ALLOWED_ORIGINS: 'http://localhost:3000',

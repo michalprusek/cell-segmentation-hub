@@ -59,8 +59,7 @@ describe('resolveChannelPath', () => {
   it('only rewrites the last /frames/<n>/ segment, not earlier path coincidences', () => {
     // Synthetic edge case: a userland project name that contains the word
     // "frames" should not collide with the actual frame segment.
-    const p =
-      'projects/p1/images/v1/frames/0001/488_nm.png';
+    const p = 'projects/p1/images/v1/frames/0001/488_nm.png';
     expect(resolveChannelPath(p, '640_nm')).toBe(
       'projects/p1/images/v1/frames/0001/640_nm.png'
     );

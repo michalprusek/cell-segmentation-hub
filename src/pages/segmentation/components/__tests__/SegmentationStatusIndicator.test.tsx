@@ -21,6 +21,10 @@ vi.mock('@/contexts/LanguageContext', () => ({
   useLanguage: () => ({ t: mockT }),
 }));
 
+vi.mock('@/contexts/useLanguage', () => ({
+  useLanguage: () => ({ t: mockT }),
+}));
+
 // Mock framer-motion to avoid animation issues in tests
 vi.mock('framer-motion', () => ({
   motion: {

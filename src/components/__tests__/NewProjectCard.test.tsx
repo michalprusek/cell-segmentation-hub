@@ -217,8 +217,10 @@ describe('NewProjectCard', () => {
   it('handles undefined onOpenChange gracefully', () => {
     render(<NewProjectCard isOpen={false} />);
 
-    // Should render in controlled mode but without callback
-    expect(screen.queryByTestId('new-project-card-ui')).not.toBeInTheDocument();
+    // When onOpenChange is undefined, the component falls back to the card+dialog
+    // branch (line 31: `if (onOpenChange === undefined)`), so the card UI IS rendered.
+    // The dialog is closed because isOpen=false drives the internal open state.
+    expect(screen.getByTestId('new-project-card-ui')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
