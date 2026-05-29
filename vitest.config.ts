@@ -33,6 +33,11 @@ export default defineConfig({
         'src/test-fixtures/',
         'src/**/__tests__/',
         'src/translations/',
+        // Vendored shadcn/ui primitives (Radix + Tailwind, copy-pasted from
+        // the shadcn generator) — third-party-derived UI components, not
+        // application logic. Excluded from coverage by convention, like
+        // node_modules. App code that composes them is still measured.
+        'src/components/ui/',
         'src/**/*.d.ts',
         'src/main.tsx',
         'src/vite-env.d.ts',
