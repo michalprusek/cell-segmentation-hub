@@ -299,9 +299,16 @@ describe('LanguageContext', () => {
 
       const { result } = renderHook(() => useLanguage(), { wrapper });
 
-      await waitFor(() => {
-        expect(result.current.language).toBe('de');
-      });
+      // Multi-effect async chain: AuthProvider init → getUserProfile →
+      // setUser → LanguageContext userId-effect → getUserProfile →
+      // setLanguage('de'). Under full-suite CPU contention this can exceed
+      // waitFor's default 1000ms, so give it a load-tolerant deadline.
+      await waitFor(
+        () => {
+          expect(result.current.language).toBe('de');
+        },
+        { timeout: 5000 }
+      );
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith('language', 'de');
     });

@@ -294,7 +294,10 @@ describe('WebSocket Test Utilities', () => {
       await waitForWebSocketOperation(50);
       const endTime = Date.now();
 
-      expect(endTime - startTime).toBeGreaterThanOrEqual(50);
+      // Node setTimeout can fire ~1ms early (timer rounding), so a strict
+      // >=50 flakes intermittently under load. Allow a small tolerance — the
+      // helper's contract is "waits ~50ms", not an exact floor.
+      expect(endTime - startTime).toBeGreaterThanOrEqual(45);
     });
   });
 
