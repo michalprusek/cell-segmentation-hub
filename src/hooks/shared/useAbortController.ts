@@ -66,8 +66,10 @@ export function useAbortController(debugKey?: string) {
           `🛑 Aborted controller for ${debugContext}:${controllerKey}`
         );
       }
-      // IMPORTANT: Don't delete the controller, keep it as aborted
-      // This prevents getSignal from creating a new non-aborted controller
+      // Keep the aborted controller in the map (don't delete) so isAborted(key)
+      // can still report the aborted state. getController/getSignal will create
+      // a FRESH controller on the next request for this key (it only reuses a
+      // non-aborted one), so a new operation still gets a usable signal.
       // controllersRef.current.delete(controllerKey);
     },
     [debugContext]

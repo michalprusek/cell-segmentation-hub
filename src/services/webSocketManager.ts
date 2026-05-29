@@ -273,10 +273,11 @@ class WebSocketManager {
     // Data events
     // Backend emits 'segmentationUpdate', we need to listen for that
     this.socket.on('segmentation-update', (update: SegmentationUpdate) => {
-      // Guard against malformed/null messages from server
+      // Guard against malformed/null messages from server. Drop them rather
+      // than forwarding — downstream listeners (useSegmentationQueue) read
+      // update.status without a null check, so a null would throw there.
       if (!update) {
-        logger.debug('Received null/undefined segmentation-update, ignoring');
-        this.emitToListeners('segmentation-update', update);
+        logger.debug('Received null/undefined segmentation-update, dropping');
         return;
       }
       // Development-only detailed logging
