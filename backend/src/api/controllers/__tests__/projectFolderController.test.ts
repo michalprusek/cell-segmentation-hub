@@ -17,7 +17,8 @@ vi.mock('../../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -46,8 +47,11 @@ vi.mock('../../../utils/logger', () => ({
 
 // Mock the FolderService functions but keep the REAL FolderError class so
 // instanceof checks in handleFolderError() work correctly.
-vi.mock('../../../services/projectFolderService', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../../../services/projectFolderService')>();
+vi.mock('../../../services/projectFolderService', async importOriginal => {
+  const real =
+    await importOriginal<
+      typeof import('../../../services/projectFolderService')
+    >();
   return {
     ...real,
     listUserFolders: vi.fn(),
@@ -127,7 +131,9 @@ describe('ProjectFolderController', () => {
     });
 
     it('returns 200 with folder list on success', async () => {
-      MockedFolderService.listUserFolders.mockResolvedValue([FOLDER_DTO as any]);
+      MockedFolderService.listUserFolders.mockResolvedValue([
+        FOLDER_DTO as any,
+      ]);
 
       const app = buildApp(listFolders);
       const res = await request(app).get('/').expect(200);
@@ -190,7 +196,10 @@ describe('ProjectFolderController', () => {
 
     it('returns 409 when name is duplicate (DUPLICATE_NAME)', async () => {
       MockedFolderService.createFolder.mockRejectedValue(
-        new FolderError('DUPLICATE_NAME', 'Folder with this name already exists')
+        new FolderError(
+          'DUPLICATE_NAME',
+          'Folder with this name already exists'
+        )
       );
 
       const app = buildApp(createFolder);
@@ -389,7 +398,7 @@ describe('ProjectFolderController', () => {
       expect(res.body.success).toBe(true);
       expect(MockedFolderService.moveProjectsToFolder).toHaveBeenCalledWith(
         USER.id,
-        FOLDER_ID,   // non-root: folderId passed as-is
+        FOLDER_ID, // non-root: folderId passed as-is
         [PROJECT_ID]
       );
     });
@@ -406,7 +415,7 @@ describe('ProjectFolderController', () => {
 
       expect(MockedFolderService.moveProjectsToFolder).toHaveBeenCalledWith(
         USER.id,
-        null,         // 'root' → null
+        null, // 'root' → null
         [PROJECT_ID]
       );
     });

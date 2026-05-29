@@ -1,7 +1,4 @@
-import {
-  MetricsCalculator,
-  ImageWithSegmentation,
-} from '../metricsCalculator';
+import { MetricsCalculator, ImageWithSegmentation } from '../metricsCalculator';
 
 const mockWorksheet = {
   columns: [] as Array<{ header?: string; key?: string; width?: number }>,

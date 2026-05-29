@@ -7,13 +7,7 @@
  */
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import {
   createProject,
@@ -69,7 +63,10 @@ vi.mock('../../../utils/config', () => ({
   },
 }));
 
-const MockedProjectService = projectService as unknown as Record<string, Mock<any>>;
+const MockedProjectService = projectService as unknown as Record<
+  string,
+  Mock<any>
+>;
 const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const mockedLogger = logger as Mocked<typeof logger>;
 
@@ -118,13 +115,29 @@ describe('Project Routes', () => {
 
     // Install ResponseHelper mocks
     (ResponseHelper.success as Mock).mockImplementation(
-      (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
+      (
+        res: express.Response,
+        data: unknown,
+        message: string,
+        statusCode: number = 200
+      ) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
     (ResponseHelper.paginated as Mock).mockImplementation(
-      (res: express.Response, data: unknown, pagination: unknown, message: string) => {
-        return res.status(200).json({ success: true, data: { projects: data, pagination }, message });
+      (
+        res: express.Response,
+        data: unknown,
+        pagination: unknown,
+        message: string
+      ) => {
+        return res
+          .status(200)
+          .json({
+            success: true,
+            data: { projects: data, pagination },
+            message,
+          });
       }
     );
     (ResponseHelper.notFound as Mock).mockImplementation(
@@ -237,9 +250,7 @@ describe('Project Routes', () => {
         pagination: mockPagination,
       });
 
-      const response = await request(app)
-        .get('/projects')
-        .expect(200);
+      const response = await request(app).get('/projects').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.projects).toHaveLength(1);
@@ -257,7 +268,13 @@ describe('Project Routes', () => {
       MockedProjectService.getUserProjects.mockResolvedValueOnce({
         projects: [],
         totalCount: 0,
-        pagination: { page: 1, limit: 10, totalPages: 0, hasNext: false, hasPrev: false },
+        pagination: {
+          page: 1,
+          limit: 10,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false,
+        },
       });
 
       const response = await request(app).get('/projects').expect(200);
@@ -268,12 +285,16 @@ describe('Project Routes', () => {
       MockedProjectService.getUserProjects.mockResolvedValueOnce({
         projects: [],
         totalCount: 0,
-        pagination: { page: 2, limit: 5, totalPages: 0, hasNext: false, hasPrev: false },
+        pagination: {
+          page: 2,
+          limit: 5,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false,
+        },
       });
 
-      await request(app)
-        .get('/projects?page=2&limit=5')
-        .expect(200);
+      await request(app).get('/projects?page=2&limit=5').expect(200);
 
       expect(MockedProjectService.getUserProjects).toHaveBeenCalledWith(
         mockUser.id,
@@ -299,9 +320,7 @@ describe('Project Routes', () => {
         res.status(401).json({ success: false, message: 'Unauthorized' });
       });
 
-      await request(app)
-        .get(`/projects/${validProjectId}`)
-        .expect(401);
+      await request(app).get(`/projects/${validProjectId}`).expect(401);
     });
 
     it('should return 404 for non-existent project', async () => {
@@ -329,7 +348,11 @@ describe('Project Routes', () => {
 
   describe('PUT /projects/:id — update project', () => {
     it('should update project successfully', async () => {
-      const updatedProject = { ...mockProject, title: 'Updated Name', name: 'Updated Name' };
+      const updatedProject = {
+        ...mockProject,
+        title: 'Updated Name',
+        name: 'Updated Name',
+      };
       MockedProjectService.updateProject.mockResolvedValueOnce(updatedProject);
 
       const response = await request(app)
@@ -394,9 +417,7 @@ describe('Project Routes', () => {
         res.status(401).json({ success: false, message: 'Unauthorized' });
       });
 
-      await request(app)
-        .delete(`/projects/${validProjectId}`)
-        .expect(401);
+      await request(app).delete(`/projects/${validProjectId}`).expect(401);
     });
 
     it('should return 404 for non-existent project', async () => {

@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import authRoutes from '../authRoutes';
 import { authenticate } from '../../../middleware/auth';
@@ -20,7 +14,8 @@ vi.mock('../../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -143,13 +138,23 @@ vi.mock('../../../api/controllers/authController', () => ({
   checkAuth: (req: any, res: any) =>
     res
       .status(200)
-      .json({ success: true, data: { user: req.user }, message: 'Authenticated' }),
+      .json({
+        success: true,
+        data: { user: req.user },
+        message: 'Authenticated',
+      }),
   getProfile: (_req: any, res: any) =>
     res
       .status(200)
-      .json({ success: true, data: { profile: {} }, message: 'Profile fetched' }),
+      .json({
+        success: true,
+        data: { profile: {} },
+        message: 'Profile fetched',
+      }),
   updateProfile: (_req: any, res: any) =>
-    res.status(200).json({ success: true, data: {}, message: 'Profile updated' }),
+    res
+      .status(200)
+      .json({ success: true, data: {}, message: 'Profile updated' }),
   getStorageStats: (_req: any, res: any) =>
     res
       .status(200)
@@ -164,9 +169,7 @@ vi.mock('../../../api/controllers/authController', () => ({
 
 import * as authController from '../../../api/controllers/authController';
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const mockedLogger = logger as Mocked<typeof logger>;
 
 // Controller spy references — in ESM mode, vi.spyOn wraps the live binding
@@ -192,12 +195,10 @@ describe('Auth Routes', () => {
     mockedLogger.error = vi.fn() as any;
     mockedLogger.warn = vi.fn() as any;
 
-    mockedAuthenticate.mockImplementation(
-      ((req: any, _res: any, next: any) => {
-        req.user = mockUser;
-        next();
-      }) as any
-    );
+    mockedAuthenticate.mockImplementation(((req: any, _res: any, next: any) => {
+      req.user = mockUser;
+      next();
+    }) as any);
 
     app.use('/api/auth', authRoutes);
   });
@@ -317,17 +318,13 @@ describe('Auth Routes', () => {
     });
 
     it('should return 401 without authentication', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .expect(401);
+      const response = await request(app).post('/api/auth/logout').expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -415,17 +412,13 @@ describe('Auth Routes', () => {
     });
 
     it('should return 401 without authentication', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
-      const response = await request(app)
-        .get('/api/auth/profile')
-        .expect(401);
+      const response = await request(app).get('/api/auth/profile').expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -444,11 +437,9 @@ describe('Auth Routes', () => {
     });
 
     it('should return 401 without a token', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res.status(401).json({ success: false, message: 'Neplatný token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res.status(401).json({ success: false, message: 'Neplatný token' });
+      }) as any);
 
       await request(app).get('/api/auth/check').expect(401);
     });
@@ -457,11 +448,9 @@ describe('Auth Routes', () => {
   // -------------------------------------------------------------------------
   describe('Authentication Boundary Tests', () => {
     it('should protect all routes mounted after router.use(authenticate)', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res.status(401).json({ success: false, message: 'Unauthorized' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+      }) as any);
 
       await request(app).get('/api/auth/check').expect(401);
       await request(app).get('/api/auth/profile').expect(401);
@@ -473,14 +462,12 @@ describe('Auth Routes', () => {
         .post('/api/auth/login')
         .send({ email: 'x@x.com', password: 'pass' });
 
-      await request(app)
-        .post('/api/auth/register')
-        .send({
-          firstName: 'A',
-          lastName: 'B',
-          email: 'a@b.com',
-          password: '12345678',
-        });
+      await request(app).post('/api/auth/register').send({
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@b.com',
+        password: '12345678',
+      });
 
       await request(app)
         .post('/api/auth/refresh-token')

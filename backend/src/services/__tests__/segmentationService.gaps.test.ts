@@ -152,7 +152,10 @@ describe('SegmentationService — uncovered paths', () => {
       prismaMock.segmentation.upsert.mockResolvedValue({ id: 'seg-2' });
 
       const badPolygon = makePolygon({
-        points: [{ x: 0, y: 0 }, { x: 1, y: 1 }], // only 2 points
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ], // only 2 points
       });
       const goodPolygon = makePolygon({ id: 'poly-good' });
 
@@ -179,7 +182,11 @@ describe('SegmentationService — uncovered paths', () => {
       prismaMock.segmentation.upsert.mockResolvedValue({ id: 'seg-3' });
 
       const nanPolygon = makePolygon({
-        points: [{ x: NaN, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 }],
+        points: [
+          { x: NaN, y: 0 },
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+        ],
       });
       const goodPolygon = makePolygon({ id: 'poly-ok' });
 
@@ -261,7 +268,10 @@ describe('SegmentationService — uncovered paths', () => {
       const polygon = makePolygon({ id: 'closed-1' }) as any;
       const polyline = {
         id: 'open-1',
-        points: [{ x: 0, y: 0 }, { x: 5, y: 5 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 5, y: 5 },
+        ],
         type: 'external',
         area: 0,
         confidence: 0.8,
@@ -303,7 +313,11 @@ describe('SegmentationService — uncovered paths', () => {
       prismaMock.segmentation.upsert.mockResolvedValue({ id: 'seg-7' });
 
       const noId = {
-        points: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 5, y: 0 },
+          { x: 5, y: 5 },
+        ],
         type: 'external',
         area: 12,
         confidence: 0.7,
@@ -398,7 +412,10 @@ describe('SegmentationService — uncovered paths', () => {
     it('preserves trackId on polylines (MT cross-frame identity)', async () => {
       const polyWithTrack = {
         id: 'mt-1',
-        points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 10 },
+        ],
         type: 'external',
         area: 0,
         confidence: 0.9,
@@ -420,7 +437,10 @@ describe('SegmentationService — uncovered paths', () => {
     it('strips _embedding from response (server-only blob)', async () => {
       const polyWithEmbedding = {
         id: 'mt-2',
-        points: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
         type: 'external',
         area: 0,
         confidence: 0.9,
@@ -442,7 +462,11 @@ describe('SegmentationService — uncovered paths', () => {
     it('converts parent_id to parentIds array', async () => {
       const internal = {
         id: 'int-1',
-        points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 2, y: 0 },
+          { x: 2, y: 2 },
+        ],
         type: 'internal',
         area: 4,
         confidence: 0.8,
@@ -499,7 +523,11 @@ describe('SegmentationService — uncovered paths', () => {
     const makePolygons = () => [
       {
         id: 'p-1',
-        points: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 5, y: 0 },
+          { x: 5, y: 5 },
+        ],
         type: 'external' as const,
         area: 12,
         confidence: 0.88,
@@ -578,8 +606,7 @@ describe('SegmentationService — uncovered paths', () => {
         768
       );
 
-      const createCall =
-        prismaMock.segmentation.create.mock.calls[0][0].data;
+      const createCall = prismaMock.segmentation.create.mock.calls[0][0].data;
       expect(createCall.imageWidth).toBe(1024);
       expect(createCall.imageHeight).toBe(768);
       expect(result.imageWidth).toBe(1024);
@@ -640,7 +667,11 @@ describe('SegmentationService — uncovered paths', () => {
 
       const polyWithParent = {
         id: 'int-p',
-        points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 0 },
+          { x: 1, y: 1 },
+        ],
         type: 'internal' as const,
         area: 1,
         confidence: 0.75,
@@ -676,7 +707,10 @@ describe('SegmentationService — uncovered paths', () => {
 
       const mtPolyline = {
         id: 'mt-poly',
-        points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 10 },
+        ],
         type: 'external' as const,
         area: 0,
         confidence: 0.9,
@@ -767,7 +801,10 @@ describe('SegmentationService — uncovered paths', () => {
         },
       ]);
 
-      const stats = await service.getProjectSegmentationStats('proj-1', 'user-1');
+      const stats = await service.getProjectSegmentationStats(
+        'proj-1',
+        'user-1'
+      );
 
       expect(stats.totalImages).toBe(5);
       expect(stats.processedImages).toBe(3);

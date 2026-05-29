@@ -27,7 +27,8 @@ vi.mock('../../utils/config', () => ({
     NODE_ENV: 'test',
     PORT: 3001,
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -104,10 +105,14 @@ const { prismaMock, sessionServiceMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../utils/database', () => ({
-  withTransaction: vi.fn().mockImplementation(
-    async (prismaClient: unknown, callback: (c: unknown) => Promise<unknown>) =>
-      callback(prismaClient)
-  ),
+  withTransaction: vi
+    .fn()
+    .mockImplementation(
+      async (
+        prismaClient: unknown,
+        callback: (c: unknown) => Promise<unknown>
+      ) => callback(prismaClient)
+    ),
 }));
 
 vi.mock('../../db', () => ({ prisma: prismaMock }));
@@ -122,7 +127,11 @@ vi.mock('../../storage/index', () => ({ getStorageProvider: vi.fn() }));
 vi.mock('sharp', () => ({ default: vi.fn() }));
 
 import * as authService from '../authService';
-import { hashPassword, verifyPassword, generateSecureToken } from '../../auth/password';
+import {
+  hashPassword,
+  verifyPassword,
+  generateSecureToken,
+} from '../../auth/password';
 import { generateTokenPair } from '../../auth/jwt';
 import * as EmailService from '../../services/emailService';
 import { UserNotFoundError } from '../../middleware/error';
@@ -388,7 +397,10 @@ describe('AuthService (gaps)', () => {
         emailVerified: false,
         verificationToken: 'tok-123',
       });
-      prismaMock.user.update.mockResolvedValueOnce({ ...baseUser, emailVerified: true });
+      prismaMock.user.update.mockResolvedValueOnce({
+        ...baseUser,
+        emailVerified: true,
+      });
 
       const result = await authService.verifyEmail('tok-123');
 
@@ -414,7 +426,8 @@ describe('AuthService (gaps)', () => {
     it('returns success message without revealing user existence when email unknown', async () => {
       prismaMock.user.findUnique.mockResolvedValueOnce(null);
 
-      const result = await authService.resendVerificationEmail('ghost@example.com');
+      const result =
+        await authService.resendVerificationEmail('ghost@example.com');
 
       // Must not reveal that the email isn't registered
       expect(result.message).toBeDefined();
@@ -428,7 +441,8 @@ describe('AuthService (gaps)', () => {
         profile: null,
       });
 
-      const result = await authService.resendVerificationEmail('user@example.com');
+      const result =
+        await authService.resendVerificationEmail('user@example.com');
 
       expect(result.message).toContain('ověřen');
     });
@@ -441,7 +455,8 @@ describe('AuthService (gaps)', () => {
       });
       prismaMock.user.update.mockResolvedValueOnce({ ...baseUser });
 
-      const result = await authService.resendVerificationEmail('user@example.com');
+      const result =
+        await authService.resendVerificationEmail('user@example.com');
 
       expect(prismaMock.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -528,7 +543,11 @@ describe('AuthService (gaps)', () => {
         ...baseUser,
         profile: { id: 'p1', userId: 'user-abc' },
       });
-      const updatedProfile = { id: 'p1', userId: 'user-abc', preferredLang: 'fr' };
+      const updatedProfile = {
+        id: 'p1',
+        userId: 'user-abc',
+        preferredLang: 'fr',
+      };
       prismaMock.profile.upsert.mockResolvedValueOnce(updatedProfile);
 
       await authService.updateProfile('user-abc', { language: 'fr' });

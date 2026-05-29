@@ -76,7 +76,9 @@ vi.mock('../../utils/config', () => ({
 }));
 vi.mock('../../storage/index', () => ({
   getStorageProvider: vi.fn(() => ({
-    getFileUrl: vi.fn((path: string) => Promise.resolve(`http://localhost/${path}`)),
+    getFileUrl: vi.fn((path: string) =>
+      Promise.resolve(`http://localhost/${path}`)
+    ),
     saveFile: vi.fn(() => Promise.resolve('/saved/path')),
     deleteFile: vi.fn(() => Promise.resolve()),
     getBuffer: vi.fn(() => Promise.resolve(Buffer.from('mock-image-data'))),
@@ -169,7 +171,9 @@ describe('SegmentationService - Concurrent Request Handling', () => {
 
     // Re-setup storage mock after clearAllMocks (clearAllMocks resets implementations)
     (getStorageProvider as Mock).mockReturnValue({
-      getFileUrl: vi.fn((path: string) => Promise.resolve(`http://localhost/${path}`)),
+      getFileUrl: vi.fn((path: string) =>
+        Promise.resolve(`http://localhost/${path}`)
+      ),
       saveFile: vi.fn(() => Promise.resolve('/saved/path')),
       deleteFile: vi.fn(() => Promise.resolve()),
       getBuffer: vi.fn(() => Promise.resolve(Buffer.from('mock-image-data'))),

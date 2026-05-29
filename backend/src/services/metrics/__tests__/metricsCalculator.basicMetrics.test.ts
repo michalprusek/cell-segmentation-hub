@@ -138,7 +138,9 @@ describe('MetricsCalculator — calculateBasicMetrics (fallback path)', () => {
   it('computes correct area for a 10×10 square', async () => {
     const image = buildImage('sq10', [extPolygon(square(10))]);
     const metrics = await calc.calculateImageMetrics(
-      [extPolygon(square(10))] as Parameters<typeof calc.calculateImageMetrics>[0],
+      [extPolygon(square(10))] as Parameters<
+        typeof calc.calculateImageMetrics
+      >[0],
       'sq10',
       'test.png'
     );
@@ -291,7 +293,7 @@ describe('MetricsCalculator — calculateBasicMetrics (fallback path)', () => {
 
   it('adds hole perimeter to perimeterWithHoles', async () => {
     const outer = square(10, 0, 0); // perimeter 40
-    const hole = square(4, 3, 3);   // perimeter 16
+    const hole = square(4, 3, 3); // perimeter 16
     const metrics = await calc.calculateImageMetrics(
       [extPolygon(outer), intPolygon(hole)],
       'with-hole',
@@ -302,7 +304,13 @@ describe('MetricsCalculator — calculateBasicMetrics (fallback path)', () => {
   });
 
   it('skips degenerate polygons with fewer than 3 points', async () => {
-    const degenerate = { type: 'external' as const, points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
+    const degenerate = {
+      type: 'external' as const,
+      points: [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
+    };
     const metrics = await calc.calculateImageMetrics(
       [degenerate as Parameters<typeof calc.calculateImageMetrics>[0][0]],
       'degen',
@@ -315,7 +323,11 @@ describe('MetricsCalculator — calculateBasicMetrics (fallback path)', () => {
   it('returns empty array when no external polygons provided', async () => {
     // Internal-only — no externals
     const metrics = await calc.calculateImageMetrics(
-      [intPolygon(square(5)) as unknown as Parameters<typeof calc.calculateImageMetrics>[0][0]],
+      [
+        intPolygon(square(5)) as unknown as Parameters<
+          typeof calc.calculateImageMetrics
+        >[0][0],
+      ],
       'no-ext',
       'test.png'
     );
@@ -493,7 +505,10 @@ describe('MetricsCalculator — calculateAllImageMetrics', () => {
     const polyline = {
       geometry: 'polyline' as const,
       type: 'external' as const,
-      points: [{ x: 0, y: 0 }, { x: 5, y: 0 }],
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 0 },
+      ],
     };
     const image = buildImage('a10', [extPolygon(square(10)), polyline]);
     const result = await calc.calculateAllImageMetrics([image]);

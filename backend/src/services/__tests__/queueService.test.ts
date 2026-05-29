@@ -84,8 +84,11 @@ const wsServiceMock = {
 vi.mock('../../utils/logger');
 vi.mock('../../utils/batchProcessor', () => ({
   batchProcessor: {
-    processBatch: vi.fn(async (items: unknown[], processor: (item: unknown) => Promise<unknown>) =>
-      Promise.all(items.map(processor))
+    processBatch: vi.fn(
+      async (
+        items: unknown[],
+        processor: (item: unknown) => Promise<unknown>
+      ) => Promise.all(items.map(processor))
     ),
   },
 }));
@@ -140,8 +143,12 @@ describe('QueueService', () => {
   describe('addToQueue', () => {
     it('creates a queue entry with correct fields', async () => {
       prismaMock.segmentationQueue.findFirst.mockResolvedValueOnce(null);
-      prismaMock.segmentationQueue.create.mockResolvedValueOnce(mockQueueEntry as any);
-      imageServiceMock.updateSegmentationStatus.mockResolvedValueOnce(undefined);
+      prismaMock.segmentationQueue.create.mockResolvedValueOnce(
+        mockQueueEntry as any
+      );
+      imageServiceMock.updateSegmentationStatus.mockResolvedValueOnce(
+        undefined
+      );
 
       const result = await service.addToQueue(
         'image-id',
@@ -173,7 +180,9 @@ describe('QueueService', () => {
     });
 
     it('throws when image is already queued', async () => {
-      prismaMock.segmentationQueue.findFirst.mockResolvedValueOnce(mockQueueEntry as any);
+      prismaMock.segmentationQueue.findFirst.mockResolvedValueOnce(
+        mockQueueEntry as any
+      );
 
       await expect(
         service.addToQueue('image-id', 'project-id', 'user-id')
@@ -189,7 +198,9 @@ describe('QueueService', () => {
       const imageIds = ['img-1', 'img-2', 'img-3'];
 
       // New bulk implementation: user.findUnique → image.findMany → $transaction
-      prismaMock.user.findUnique.mockResolvedValueOnce({ email: 'user@test.com' });
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        email: 'user@test.com',
+      });
 
       // image.findMany returns only the images accessible and not-yet-queued
       // (img-2 with status 'queued' is returned but filtered client-side)
@@ -216,7 +227,11 @@ describe('QueueService', () => {
         return cb(tx);
       });
 
-      const results = await service.addBatchToQueue(imageIds, 'project-id', 'user-id');
+      const results = await service.addBatchToQueue(
+        imageIds,
+        'project-id',
+        'user-id'
+      );
 
       // img-2 is skipped (already queued)
       expect(results).toHaveLength(2);
@@ -227,7 +242,9 @@ describe('QueueService', () => {
 
     it('skips images not found or not accessible', async () => {
       // user found, but image.findMany returns empty (no accessible images)
-      prismaMock.user.findUnique.mockResolvedValueOnce({ email: 'user@test.com' });
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        email: 'user@test.com',
+      });
       prismaMock.image.findMany.mockResolvedValueOnce([]);
 
       const results = await service.addBatchToQueue(
@@ -249,7 +266,11 @@ describe('QueueService', () => {
     });
 
     it('returns empty array for empty imageIds', async () => {
-      const results = await service.addBatchToQueue([], 'project-id', 'user-id');
+      const results = await service.addBatchToQueue(
+        [],
+        'project-id',
+        'user-id'
+      );
       expect(results).toHaveLength(0);
       expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
     });
@@ -259,8 +280,8 @@ describe('QueueService', () => {
   describe('getQueueStats', () => {
     it('returns queued and processing counts', async () => {
       prismaMock.segmentationQueue.count
-        .mockResolvedValueOnce(3)   // queued
-        .mockResolvedValueOnce(1);  // processing
+        .mockResolvedValueOnce(3) // queued
+        .mockResolvedValueOnce(1); // processing
 
       const stats = await service.getQueueStats('project-id', 'user-id');
 
@@ -333,7 +354,9 @@ describe('QueueService', () => {
       prismaMock.segmentationQueue.delete.mockResolvedValueOnce(
         mockQueueEntry as any
       );
-      imageServiceMock.updateSegmentationStatus.mockResolvedValueOnce(undefined);
+      imageServiceMock.updateSegmentationStatus.mockResolvedValueOnce(
+        undefined
+      );
 
       await service.removeFromQueue('queue-id', 'user-id');
 

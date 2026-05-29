@@ -191,7 +191,9 @@ describe('isPointInPolygon', () => {
   });
 
   it('detects point outside a square', () => {
-    expect(isPointInPolygon({ x: 15, y: 5 }, { points: square(10) })).toBe(false);
+    expect(isPointInPolygon({ x: 15, y: 5 }, { points: square(10) })).toBe(
+      false
+    );
   });
 });
 
@@ -233,11 +235,7 @@ describe('isPolygonInside', () => {
   });
 
   it('returns false for empty inputs', () => {
-    expect(isPolygonInside({ points: [] }, { points: square(10) })).toBe(
-      false
-    );
-    expect(isPolygonInside({ points: square(10) }, { points: [] })).toBe(
-      false
-    );
+    expect(isPolygonInside({ points: [] }, { points: square(10) })).toBe(false);
+    expect(isPolygonInside({ points: square(10) }, { points: [] })).toBe(false);
   });
 });

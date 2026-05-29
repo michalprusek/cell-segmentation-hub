@@ -127,8 +127,21 @@ describe('computeMTGeometry', () => {
 
   it('skips polygons (closed geometry) and only emits polylines', () => {
     const polygons = JSON.stringify([
-      { geometry: 'polygon', points: [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 0 }] },
-      { geometry: 'polyline', points: [{ x: 0, y: 0 }, { x: 3, y: 4 }] },
+      {
+        geometry: 'polygon',
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+          { x: 2, y: 0 },
+        ],
+      },
+      {
+        geometry: 'polyline',
+        points: [
+          { x: 0, y: 0 },
+          { x: 3, y: 4 },
+        ],
+      },
     ]);
     const rows = computeMTGeometry(
       [makeFrame({ segmentation: { polygons } })],
@@ -151,7 +164,11 @@ describe('computeMTGeometry', () => {
 
   it('computes arc-length correctly for a 3-4-5 right triangle polyline', () => {
     // (0,0)→(3,0)→(3,4): segments = 3 + 4 = 7 px
-    const pts = [{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 3, y: 4 }];
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 3, y: 0 },
+      { x: 3, y: 4 },
+    ];
     const rows = computeMTGeometry(
       [makeFrame({ segmentation: { polygons: polylineJson(pts) } })],
       null
@@ -161,7 +178,10 @@ describe('computeMTGeometry', () => {
   });
 
   it('converts px→µm when scale is provided', () => {
-    const pts = [{ x: 0, y: 0 }, { x: 10, y: 0 }];
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+    ];
     const scale = 0.25;
     const rows = computeMTGeometry(
       [makeFrame({ segmentation: { polygons: polylineJson(pts) } })],
@@ -172,7 +192,10 @@ describe('computeMTGeometry', () => {
   });
 
   it('leaves lengthUm as null when scale is null', () => {
-    const pts = [{ x: 0, y: 0 }, { x: 5, y: 0 }];
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 5, y: 0 },
+    ];
     const rows = computeMTGeometry(
       [makeFrame({ segmentation: { polygons: polylineJson(pts) } })],
       null
@@ -181,7 +204,10 @@ describe('computeMTGeometry', () => {
   });
 
   it('sets intensity columns to null (geometry-only row)', () => {
-    const pts = [{ x: 0, y: 0 }, { x: 1, y: 0 }];
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ];
     const rows = computeMTGeometry(
       [makeFrame({ segmentation: { polygons: polylineJson(pts) } })],
       null
@@ -198,13 +224,19 @@ describe('computeMTGeometry', () => {
   });
 
   it('uses trackId / instanceId from the polygon, falling back to generated id', () => {
-    const pts = [{ x: 0, y: 0 }, { x: 1, y: 0 }];
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ];
     const withIds = JSON.stringify([
-      { geometry: 'polyline', points: pts, instanceId: 'my-inst', trackId: 'my-track' },
+      {
+        geometry: 'polyline',
+        points: pts,
+        instanceId: 'my-inst',
+        trackId: 'my-track',
+      },
     ]);
-    const withoutIds = JSON.stringify([
-      { geometry: 'polyline', points: pts },
-    ]);
+    const withoutIds = JSON.stringify([{ geometry: 'polyline', points: pts }]);
 
     const [r1] = computeMTGeometry(
       [makeFrame({ segmentation: { polygons: withIds } })],
@@ -222,7 +254,10 @@ describe('computeMTGeometry', () => {
   });
 
   it('emits one row per polyline across multiple frames', () => {
-    const pts = [{ x: 0, y: 0 }, { x: 1, y: 0 }];
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ];
     const seg = { polygons: polylineJson(pts) };
     const frames = [
       makeFrame({ id: 'f1', frameIndex: 0, segmentation: seg }),
@@ -254,11 +289,10 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
 
   it('throws on invalid channel name (special chars)', async () => {
     await expect(
-      computeMTMetrics(
-        [makeFrame()],
-        'proj-1',
-        { ...BASE_OPTIONS, channels: ['bad channel!'] }
-      )
+      computeMTMetrics([makeFrame()], 'proj-1', {
+        ...BASE_OPTIONS,
+        channels: ['bad channel!'],
+      })
     ).rejects.toThrow(/Invalid channel name/);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
@@ -370,7 +404,14 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
     ]);
     // Frame with polygon (not polyline)
     const polygonOnly = JSON.stringify([
-      { geometry: 'polygon', points: [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 0 }] },
+      {
+        geometry: 'polygon',
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+          { x: 2, y: 0 },
+        ],
+      },
     ]);
     const result = await computeMTMetrics(
       [makeFrame({ segmentation: { polygons: polygonOnly } })],
@@ -399,7 +440,10 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
   };
 
   const frameSeg = polylineJson(
-    [{ x: 10, y: 20 }, { x: 30, y: 40 }],
+    [
+      { x: 10, y: 20 },
+      { x: 30, y: 40 },
+    ],
     { instanceId: 'inst-1', trackId: 'track-7' }
   );
 
@@ -518,7 +562,9 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
         { name: 'ch1', displayName: 'DAPI' },
       ],
     };
-    prismaMock.image.findMany.mockResolvedValueOnce([containerWithDisplayNames]);
+    prismaMock.image.findMany.mockResolvedValueOnce([
+      containerWithDisplayNames,
+    ]);
     axiosPostMock.mockResolvedValueOnce(mlResponse);
 
     await computeMTMetrics(
@@ -536,7 +582,11 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
 
   it('detects TIFF file kind from extension', async () => {
     prismaMock.image.findMany.mockResolvedValueOnce([
-      { ...containerRow, originalPath: 'projects/p1/video.tiff', mimeType: null },
+      {
+        ...containerRow,
+        originalPath: 'projects/p1/video.tiff',
+        mimeType: null,
+      },
     ]);
     axiosPostMock.mockResolvedValueOnce(mlResponse);
 
@@ -552,7 +602,11 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
 
   it('detects ND2 file kind from mimeType when extension is ambiguous', async () => {
     prismaMock.image.findMany.mockResolvedValueOnce([
-      { ...containerRow, originalPath: 'projects/p1/video.dat', mimeType: 'image/nd2' },
+      {
+        ...containerRow,
+        originalPath: 'projects/p1/video.dat',
+        mimeType: 'image/nd2',
+      },
     ]);
     axiosPostMock.mockResolvedValueOnce(mlResponse);
 
@@ -568,17 +622,39 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
 
   it('includes only frames that have polylines in the payload', async () => {
     prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
-    axiosPostMock.mockResolvedValueOnce({ data: { rows: [], frames_processed: 1, frame_height: 512, frame_width: 512 } });
+    axiosPostMock.mockResolvedValueOnce({
+      data: {
+        rows: [],
+        frames_processed: 1,
+        frame_height: 512,
+        frame_width: 512,
+      },
+    });
 
     const polygonOnly = JSON.stringify([
-      { geometry: 'polygon', points: [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 0 }] },
+      {
+        geometry: 'polygon',
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+          { x: 2, y: 0 },
+        ],
+      },
     ]);
 
     await computeMTMetrics(
       [
-        makeFrame({ id: 'f1', frameIndex: 0, segmentation: { polygons: frameSeg } }),
+        makeFrame({
+          id: 'f1',
+          frameIndex: 0,
+          segmentation: { polygons: frameSeg },
+        }),
         // Frame with only a closed polygon — should NOT appear in payload
-        makeFrame({ id: 'f2', frameIndex: 1, segmentation: { polygons: polygonOnly } }),
+        makeFrame({
+          id: 'f2',
+          frameIndex: 1,
+          segmentation: { polygons: polygonOnly },
+        }),
       ],
       'proj-1',
       { ...BASE_OPTIONS, channels: ['DAPI'] }
@@ -610,8 +686,16 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
 
     const rows = await computeMTMetrics(
       [
-        makeFrame({ id: 'frame-a', parentVideoId: 'video-1', segmentation: { polygons: frameSeg } }),
-        makeFrame({ id: 'frame-b', parentVideoId: 'video-2', segmentation: { polygons: frameSeg } }),
+        makeFrame({
+          id: 'frame-a',
+          parentVideoId: 'video-1',
+          segmentation: { polygons: frameSeg },
+        }),
+        makeFrame({
+          id: 'frame-b',
+          parentVideoId: 'video-2',
+          segmentation: { polygons: frameSeg },
+        }),
       ],
       'proj-1',
       { ...BASE_OPTIONS, channels: ['DAPI'] }

@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import { segmentationController } from '../segmentationController';
 import { authenticate } from '../../../middleware/auth';
@@ -65,7 +59,11 @@ describe('SegmentationController', () => {
   const mockPolygons = [
     {
       id: 'poly-1',
-      points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }],
+      points: [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 10 },
+      ],
       type: 'external',
     },
   ];
@@ -81,7 +79,12 @@ describe('SegmentationController', () => {
   // Install ResponseHelper mocks
   function installResponseMocks() {
     (MockedResponseHelper.success as Mock).mockImplementation(
-      (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
+      (
+        res: express.Response,
+        data: unknown,
+        message: string,
+        statusCode: number = 200
+      ) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
@@ -182,7 +185,9 @@ describe('SegmentationController', () => {
 
   describe('getSegmentationResults', () => {
     it('should return results for valid imageId', async () => {
-      mockMethod('getSegmentationResults').mockResolvedValueOnce(mockSegmentationResults);
+      mockMethod('getSegmentationResults').mockResolvedValueOnce(
+        mockSegmentationResults
+      );
       installResponseMocks();
 
       const response = await request(app)
@@ -224,15 +229,18 @@ describe('SegmentationController', () => {
 
     it('should return 400 when imageId is missing from params', async () => {
       // Route without imageId param still calls controller; controller validates
-      const response = await request(app)
-        .get(`/segmentation/images/${imageId}/results`);
+      const response = await request(app).get(
+        `/segmentation/images/${imageId}/results`
+      );
 
       // Any non-401 response means the auth layer passed
       expect(response.status).not.toBe(401);
     });
 
     it('should return 500 on service error', async () => {
-      mockMethod('getSegmentationResults').mockRejectedValueOnce(new Error('DB error'));
+      mockMethod('getSegmentationResults').mockRejectedValueOnce(
+        new Error('DB error')
+      );
       installResponseMocks();
 
       const response = await request(app)
@@ -245,7 +253,9 @@ describe('SegmentationController', () => {
 
   describe('updateSegmentationResults (saveSegmentation)', () => {
     it('should save manual segmentation edit successfully', async () => {
-      mockMethod('updateSegmentationResults').mockResolvedValueOnce(mockSegmentationResults);
+      mockMethod('updateSegmentationResults').mockResolvedValueOnce(
+        mockSegmentationResults
+      );
       installResponseMocks();
 
       const response = await request(app)
@@ -286,7 +296,9 @@ describe('SegmentationController', () => {
     });
 
     it('should return 500 on service error during update', async () => {
-      mockMethod('updateSegmentationResults').mockRejectedValueOnce(new Error('Write error'));
+      mockMethod('updateSegmentationResults').mockRejectedValueOnce(
+        new Error('Write error')
+      );
       installResponseMocks();
 
       const response = await request(app)
@@ -330,7 +342,9 @@ describe('SegmentationController', () => {
     });
 
     it('should return 500 when deletion fails', async () => {
-      mockMethod('deleteSegmentationResults').mockRejectedValueOnce(new Error('Deletion error'));
+      mockMethod('deleteSegmentationResults').mockRejectedValueOnce(
+        new Error('Deletion error')
+      );
       installResponseMocks();
 
       const response = await request(app)
@@ -422,7 +436,8 @@ describe('SegmentationController', () => {
     it('should validate max 50 images per batch', async () => {
       const ids = Array.from(
         { length: 51 },
-        (_, i) => `a1b2c3d4-e5f6-7890-ab${String(i).padStart(2, '0')}-ef1234567890`
+        (_, i) =>
+          `a1b2c3d4-e5f6-7890-ab${String(i).padStart(2, '0')}-ef1234567890`
       );
 
       const response = await request(app)
@@ -437,7 +452,9 @@ describe('SegmentationController', () => {
   describe('batchGetSegmentationResults', () => {
     it('should return batch results for multiple images', async () => {
       const batchResults = { [imageId]: mockSegmentationResults };
-      mockMethod('getBatchSegmentationResults').mockResolvedValueOnce(batchResults);
+      mockMethod('getBatchSegmentationResults').mockResolvedValueOnce(
+        batchResults
+      );
       installResponseMocks();
 
       const response = await request(app)

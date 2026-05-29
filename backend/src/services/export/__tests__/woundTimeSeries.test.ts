@@ -84,9 +84,7 @@ describe('shouldExportWoundTimeSeries', () => {
 
 describe('buildWoundTimeSeries — area computation', () => {
   it('computes 16% for a 40×40 external square in a 100×100 image', () => {
-    const points = buildWoundTimeSeries([
-      sampleExternalSquareImage() as never,
-    ]);
+    const points = buildWoundTimeSeries([sampleExternalSquareImage() as never]);
     expect(points).toHaveLength(1);
     expect(points[0].woundAreaPct).toBeCloseTo(16.0, 2);
     expect(points[0].polygonCount).toBe(1);
@@ -315,9 +313,7 @@ describe('writeStandaloneWoundChart', () => {
   let exportDir: string;
 
   beforeEach(async () => {
-    exportDir = await fsp.mkdtemp(
-      path.join(os.tmpdir(), 'wound-export-test-')
-    );
+    exportDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'wound-export-test-'));
   });
 
   afterEach(async () => {
@@ -345,5 +341,4 @@ describe('writeStandaloneWoundChart', () => {
     // Second call should overwrite, not append / fail.
     expect(readBack.equals(buf2)).toBe(true);
   });
-
 });

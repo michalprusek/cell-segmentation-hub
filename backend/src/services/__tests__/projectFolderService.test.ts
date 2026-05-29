@@ -110,7 +110,10 @@ describe('projectFolderService', () => {
 
   describe('listUserFolders()', () => {
     it('queries all folders for the given user ordered by parentId then name', async () => {
-      const rows = [makeFolder(), makeFolder({ id: 'folder-2', name: 'Another' })];
+      const rows = [
+        makeFolder(),
+        makeFolder({ id: 'folder-2', name: 'Another' }),
+      ];
       prismaMock.projectFolder.findMany.mockResolvedValue(rows);
 
       const result = await listUserFolders(USER_ID);
@@ -161,7 +164,9 @@ describe('projectFolderService', () => {
     });
 
     it('trims whitespace from the name before persisting', async () => {
-      prismaMock.projectFolder.create.mockResolvedValue(makeFolder({ name: 'Trimmed' }));
+      prismaMock.projectFolder.create.mockResolvedValue(
+        makeFolder({ name: 'Trimmed' })
+      );
 
       await createFolder(USER_ID, { name: '  Trimmed  ' });
 
@@ -170,7 +175,9 @@ describe('projectFolderService', () => {
     });
 
     it('throws FolderError(INVALID_INPUT) when name is blank', async () => {
-      await expect(createFolder(USER_ID, { name: '   ' })).rejects.toMatchObject({
+      await expect(
+        createFolder(USER_ID, { name: '   ' })
+      ).rejects.toMatchObject({
         name: 'FolderError',
         code: 'INVALID_INPUT',
       });
@@ -215,7 +222,9 @@ describe('projectFolderService', () => {
         })
       );
 
-      await expect(createFolder(USER_ID, { name: 'Dupe' })).rejects.toMatchObject({
+      await expect(
+        createFolder(USER_ID, { name: 'Dupe' })
+      ).rejects.toMatchObject({
         code: 'DUPLICATE_NAME',
       });
     });
@@ -228,7 +237,9 @@ describe('projectFolderService', () => {
         })
       );
 
-      await expect(createFolder(USER_ID, { name: 'Orphan' })).rejects.toMatchObject({
+      await expect(
+        createFolder(USER_ID, { name: 'Orphan' })
+      ).rejects.toMatchObject({
         code: 'PARENT_NOT_FOUND',
       });
     });
@@ -241,10 +252,15 @@ describe('projectFolderService', () => {
   describe('updateFolder()', () => {
     it('renames a folder in a transaction and returns updated DTO', async () => {
       const updated = makeFolder({ name: 'Renamed' });
-      prismaMock.projectFolder.findFirst.mockResolvedValue({ id: FOLDER_ID, parentId: null });
+      prismaMock.projectFolder.findFirst.mockResolvedValue({
+        id: FOLDER_ID,
+        parentId: null,
+      });
       prismaMock.projectFolder.update.mockResolvedValue(updated);
 
-      const result = await updateFolder(USER_ID, FOLDER_ID, { name: 'Renamed' });
+      const result = await updateFolder(USER_ID, FOLDER_ID, {
+        name: 'Renamed',
+      });
 
       expect(prismaMock.projectFolder.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -264,7 +280,10 @@ describe('projectFolderService', () => {
     });
 
     it('throws FolderError(CYCLE) when trying to move a folder into itself', async () => {
-      prismaMock.projectFolder.findFirst.mockResolvedValue({ id: FOLDER_ID, parentId: null });
+      prismaMock.projectFolder.findFirst.mockResolvedValue({
+        id: FOLDER_ID,
+        parentId: null,
+      });
 
       await expect(
         updateFolder(USER_ID, FOLDER_ID, { parentId: FOLDER_ID })
@@ -279,7 +298,10 @@ describe('projectFolderService', () => {
         // Second call: parent existence check
         .mockResolvedValueOnce({ id: CHILD_ID });
       // CTE returns both root and child in the subtree
-      prismaMock.$queryRaw.mockResolvedValue([{ id: FOLDER_ID }, { id: CHILD_ID }]);
+      prismaMock.$queryRaw.mockResolvedValue([
+        { id: FOLDER_ID },
+        { id: CHILD_ID },
+      ]);
 
       await expect(
         updateFolder(USER_ID, FOLDER_ID, { parentId: CHILD_ID })
@@ -297,7 +319,10 @@ describe('projectFolderService', () => {
     });
 
     it('translates P2002 inside the transaction into FolderError(DUPLICATE_NAME)', async () => {
-      prismaMock.projectFolder.findFirst.mockResolvedValue({ id: FOLDER_ID, parentId: null });
+      prismaMock.projectFolder.findFirst.mockResolvedValue({
+        id: FOLDER_ID,
+        parentId: null,
+      });
       prismaMock.projectFolder.update.mockRejectedValue(
         new Prisma.PrismaClientKnownRequestError('unique', {
           code: 'P2002',
@@ -312,7 +337,10 @@ describe('projectFolderService', () => {
 
     it('can move a folder to root by passing parentId: null', async () => {
       const updated = makeFolder({ parentId: null });
-      prismaMock.projectFolder.findFirst.mockResolvedValue({ id: FOLDER_ID, parentId: 'old-parent' });
+      prismaMock.projectFolder.findFirst.mockResolvedValue({
+        id: FOLDER_ID,
+        parentId: 'old-parent',
+      });
       prismaMock.projectFolder.update.mockResolvedValue(updated);
 
       const result = await updateFolder(USER_ID, FOLDER_ID, { parentId: null });
@@ -371,7 +399,9 @@ describe('projectFolderService', () => {
       expect(mockDeleteProject).toHaveBeenCalledTimes(2);
       expect(mockDeleteProject).toHaveBeenCalledWith(PROJECT_A, USER_ID);
       expect(mockDeleteProject).toHaveBeenCalledWith(PROJECT_B, USER_ID);
-      expect(result.deletedProjectIds).toEqual(expect.arrayContaining([PROJECT_A, PROJECT_B]));
+      expect(result.deletedProjectIds).toEqual(
+        expect.arrayContaining([PROJECT_A, PROJECT_B])
+      );
       expect(result.folderDeleted).toBe(true);
     });
 
@@ -420,7 +450,9 @@ describe('projectFolderService', () => {
     it('throws FolderError(NOT_FOUND) when folder does not belong to user', async () => {
       prismaMock.projectFolder.findFirst.mockResolvedValue(null);
 
-      await expect(getFolderContentsPreview(USER_ID, FOLDER_ID)).rejects.toMatchObject({
+      await expect(
+        getFolderContentsPreview(USER_ID, FOLDER_ID)
+      ).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
     });
@@ -445,11 +477,14 @@ describe('projectFolderService', () => {
       const CHILD_ID = 'folder-child';
       prismaMock.projectFolder.findFirst.mockResolvedValue({ id: FOLDER_ID });
       // Subtree has 2 entries → subfolderCount = 1
-      prismaMock.$queryRaw.mockResolvedValue([{ id: FOLDER_ID }, { id: CHILD_ID }]);
+      prismaMock.$queryRaw.mockResolvedValue([
+        { id: FOLDER_ID },
+        { id: CHILD_ID },
+      ]);
       prismaMock.projectFolderItem.findMany.mockResolvedValue([
-        { project: { userId: USER_ID } },   // owned
-        { project: { userId: USER_ID } },   // owned
-        { project: { userId: 'other' } },   // shared
+        { project: { userId: USER_ID } }, // owned
+        { project: { userId: USER_ID } }, // owned
+        { project: { userId: 'other' } }, // shared
       ]);
 
       const result = await getFolderContentsPreview(USER_ID, FOLDER_ID);
@@ -466,7 +501,10 @@ describe('projectFolderService', () => {
 
   describe('moveProjectsToFolder()', () => {
     beforeEach(() => {
-      mockHasProjectAccess.mockResolvedValue({ hasAccess: true, isOwner: true });
+      mockHasProjectAccess.mockResolvedValue({
+        hasAccess: true,
+        isOwner: true,
+      });
       prismaMock.projectFolder.findFirst.mockResolvedValue({ id: FOLDER_ID });
       prismaMock.projectFolderItem.upsert.mockResolvedValue({});
       prismaMock.projectFolderItem.deleteMany.mockResolvedValue({ count: 1 });
@@ -495,10 +533,13 @@ describe('projectFolderService', () => {
 
     it('returns movedProjectIds for accessible projects, skips inaccessible ones', async () => {
       mockHasProjectAccess
-        .mockResolvedValueOnce({ hasAccess: true, isOwner: true })  // proj-ok
+        .mockResolvedValueOnce({ hasAccess: true, isOwner: true }) // proj-ok
         .mockResolvedValueOnce({ hasAccess: false, isOwner: false }); // proj-denied
 
-      const result = await moveProjectsToFolder(USER_ID, FOLDER_ID, ['proj-ok', 'proj-denied']);
+      const result = await moveProjectsToFolder(USER_ID, FOLDER_ID, [
+        'proj-ok',
+        'proj-denied',
+      ]);
 
       expect(result.movedProjectIds).toEqual(['proj-ok']);
       expect(result.skippedProjectIds).toEqual(['proj-denied']);
@@ -514,9 +555,15 @@ describe('projectFolderService', () => {
     });
 
     it('returns empty lists immediately when all projects are inaccessible', async () => {
-      mockHasProjectAccess.mockResolvedValue({ hasAccess: false, isOwner: false });
+      mockHasProjectAccess.mockResolvedValue({
+        hasAccess: false,
+        isOwner: false,
+      });
 
-      const result = await moveProjectsToFolder(USER_ID, FOLDER_ID, ['bad-1', 'bad-2']);
+      const result = await moveProjectsToFolder(USER_ID, FOLDER_ID, [
+        'bad-1',
+        'bad-2',
+      ]);
 
       expect(prismaMock.projectFolderItem.upsert).not.toHaveBeenCalled();
       expect(result.movedProjectIds).toEqual([]);
@@ -544,7 +591,9 @@ describe('projectFolderService', () => {
     });
 
     it('stores optional details payload', () => {
-      const err = new FolderError('PARTIAL_FAILURE', 'partial', { deletedCount: 2 });
+      const err = new FolderError('PARTIAL_FAILURE', 'partial', {
+        deletedCount: 2,
+      });
       expect(err.details).toEqual({ deletedCount: 2 });
     });
   });

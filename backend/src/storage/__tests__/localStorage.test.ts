@@ -89,7 +89,11 @@ describe('LocalStorageProvider', () => {
     });
 
     // Default: sharp reports PNG 100×80
-    sharpInst.metadata.mockResolvedValue({ width: 100, height: 80, format: 'png' });
+    sharpInst.metadata.mockResolvedValue({
+      width: 100,
+      height: 80,
+      format: 'png',
+    });
     sharpInst.toFile.mockResolvedValue(undefined);
 
     // Files don't exist by default
@@ -113,7 +117,9 @@ describe('LocalStorageProvider', () => {
       // Re-create so we can capture the constructor's mkdir call
       fsMock.mkdir.mockResolvedValue(undefined);
       new LocalStorageProvider();
-      expect(fsMock.mkdir).toHaveBeenCalledWith('/app/uploads', { recursive: true });
+      expect(fsMock.mkdir).toHaveBeenCalledWith('/app/uploads', {
+        recursive: true,
+      });
     });
   });
 
@@ -156,7 +162,11 @@ describe('LocalStorageProvider', () => {
     });
 
     it('generates thumbnail when generateThumbnail=true and image mimeType', async () => {
-      sharpInst.metadata.mockResolvedValue({ width: 200, height: 150, format: 'jpeg' });
+      sharpInst.metadata.mockResolvedValue({
+        width: 200,
+        height: 150,
+        format: 'jpeg',
+      });
 
       const buf = Buffer.from('image-data');
       const result = await provider.upload(buf, 'u/p/originals/photo.jpg', {
@@ -166,7 +176,9 @@ describe('LocalStorageProvider', () => {
 
       // thumbnailKey replaces 'originals' with 'thumbnails' and extension with .jpg
       expect(result.thumbnailPath).toBe('u/p/thumbnails/photo.jpg');
-      expect(sharpInst.toFile).toHaveBeenCalledWith('/app/uploads/u/p/thumbnails/photo.jpg');
+      expect(sharpInst.toFile).toHaveBeenCalledWith(
+        '/app/uploads/u/p/thumbnails/photo.jpg'
+      );
     });
 
     it('does NOT generate thumbnail for non-image MIME type', async () => {
@@ -256,7 +268,9 @@ describe('LocalStorageProvider', () => {
       existsSyncMock.mockReturnValue(true);
       fsMock.unlink.mockRejectedValue(new Error('EPERM'));
 
-      await expect(provider.delete('u/p/originals/img.png')).rejects.toMatchObject({
+      await expect(
+        provider.delete('u/p/originals/img.png')
+      ).rejects.toMatchObject({
         code: 'DELETE_FAILED',
         statusCode: 500,
       });
@@ -380,7 +394,9 @@ describe('LocalStorageProvider', () => {
     it('throws StorageError(FILE_NOT_FOUND, 404) when file does not exist', async () => {
       existsSyncMock.mockReturnValue(false);
 
-      await expect(provider.getBuffer('u/p/originals/missing.png')).rejects.toMatchObject({
+      await expect(
+        provider.getBuffer('u/p/originals/missing.png')
+      ).rejects.toMatchObject({
         code: 'FILE_NOT_FOUND',
         statusCode: 404,
       });
@@ -402,7 +418,11 @@ describe('LocalStorageProvider', () => {
 
   describe('generateKey()', () => {
     it('produces a path with the structure userId/projectId/originals/timestamp_name.ext', () => {
-      const key = LocalStorageProvider.generateKey('uid-1', 'pid-2', 'photo.png');
+      const key = LocalStorageProvider.generateKey(
+        'uid-1',
+        'pid-2',
+        'photo.png'
+      );
       expect(key).toMatch(/^uid-1\/pid-2\/originals\/\d+_photo\.png$/);
     });
 
@@ -412,18 +432,30 @@ describe('LocalStorageProvider', () => {
     });
 
     it('falls back to "unknown" for undefined userId or projectId', () => {
-      const key = LocalStorageProvider.generateKey(undefined, undefined, 'file.png');
+      const key = LocalStorageProvider.generateKey(
+        undefined,
+        undefined,
+        'file.png'
+      );
       expect(key).toMatch(/^unknown\/unknown\/originals\//);
     });
 
     it('strips path traversal sequences from the filename', () => {
-      const key = LocalStorageProvider.generateKey('u', 'p', '../../etc/passwd.png');
+      const key = LocalStorageProvider.generateKey(
+        'u',
+        'p',
+        '../../etc/passwd.png'
+      );
       expect(key).not.toContain('..');
       expect(key).not.toContain('/etc/');
     });
 
     it('strips path traversal sequences from userId and projectId', () => {
-      const key = LocalStorageProvider.generateKey('../evil', '../../root', 'f.png');
+      const key = LocalStorageProvider.generateKey(
+        '../evil',
+        '../../root',
+        'f.png'
+      );
       expect(key).not.toContain('../');
     });
 

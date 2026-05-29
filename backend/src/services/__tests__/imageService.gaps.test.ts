@@ -136,7 +136,9 @@ describe('ImageService — uncovered paths', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     service = makeService();
-    storageMock.getUrl.mockImplementation(async (p: string) => `http://host/${p}`);
+    storageMock.getUrl.mockImplementation(
+      async (p: string) => `http://host/${p}`
+    );
     storageMock.delete.mockResolvedValue(undefined);
     prismaMock.user.findUnique.mockResolvedValue({ email: 'user@test.com' });
     prismaMock.project.findFirst.mockResolvedValue(mockProject);
@@ -322,9 +324,7 @@ describe('ImageService — uncovered paths', () => {
         await cb(tx);
       });
       // emitProjectStatsUpdate counts
-      prismaMock.image.count
-        .mockResolvedValueOnce(3)
-        .mockResolvedValueOnce(1);
+      prismaMock.image.count.mockResolvedValueOnce(3).mockResolvedValueOnce(1);
 
       const result = await service.deleteBatch(
         ['img-found', 'img-missing'],
@@ -366,9 +366,7 @@ describe('ImageService — uncovered paths', () => {
       });
 
       // emitProjectStatsUpdate
-      prismaMock.image.count
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0);
+      prismaMock.image.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
 
       const result = await service.deleteBatch(
         ['frame-last'],
@@ -382,7 +380,9 @@ describe('ImageService — uncovered paths', () => {
       expect(txDelete).toHaveBeenCalledTimes(2);
       // Storage for both frame and container should be cleaned
       expect(storageMock.delete).toHaveBeenCalledWith('uploads/video.nd2');
-      expect(storageMock.delete).toHaveBeenCalledWith('uploads/video_thumb.jpg');
+      expect(storageMock.delete).toHaveBeenCalledWith(
+        'uploads/video_thumb.jpg'
+      );
     });
 
     it('deletes thumbnail from storage when thumbnailPath is set', async () => {
@@ -401,9 +401,7 @@ describe('ImageService — uncovered paths', () => {
           },
         });
       });
-      prismaMock.image.count
-        .mockResolvedValueOnce(5)
-        .mockResolvedValueOnce(2);
+      prismaMock.image.count.mockResolvedValueOnce(5).mockResolvedValueOnce(2);
 
       await service.deleteBatch(['img-thumb'], 'user-1', 'proj-1');
 
@@ -446,12 +444,7 @@ describe('ImageService — uncovered paths', () => {
       prismaMock.image.findMany.mockResolvedValueOnce([{ id: 'img-1' }]);
 
       await expect(
-        service.reorderImages(
-          'proj-1',
-          'user-1',
-          ['img-1', 'img-ghost'],
-          'all'
-        )
+        service.reorderImages('proj-1', 'user-1', ['img-1', 'img-ghost'], 'all')
       ).rejects.toThrow('Image IDs do not belong to this project');
     });
 
@@ -524,7 +517,7 @@ describe('ImageService — uncovered paths', () => {
 
     it.each(['segmented', 'failed', 'no_segmentation'] as const)(
       'emits project stats update for status %s',
-      async (status) => {
+      async status => {
         prismaMock.user.findUnique.mockResolvedValue({ email: 'u@test.com' });
         // emitProjectStatsUpdate fetches imageCount + segmentedCount
         prismaMock.image.count
@@ -540,7 +533,7 @@ describe('ImageService — uncovered paths', () => {
 
     it.each(['queued', 'processing'] as const)(
       'does NOT emit project stats for status %s',
-      async (status) => {
+      async status => {
         prismaMock.user.findUnique.mockResolvedValue({ email: 'u@test.com' });
 
         await service.updateSegmentationStatus('img-ws', status, 'user-1');

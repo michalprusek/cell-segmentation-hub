@@ -265,7 +265,9 @@ describe('validatePasswordStrength', () => {
     // 'Ab1!' has: length<8(+0), lower(+1), upper(+1), digit(+1), special(+1), no-repeat(+1) = 5
     // isStrong threshold is >=5, so a 4-char fully-mixed password scores exactly 5
     const result = validatePasswordStrength('Ab1!');
-    expect(result.feedback).toContain('Password should be at least 8 characters');
+    expect(result.feedback).toContain(
+      'Password should be at least 8 characters'
+    );
     // score = 5 (all variety checks pass + no-repeat); verify isStrong reflects that
     expect(result.score).toBe(5);
     // Even though it technically scores "strong" by score, feedback highlights the length issue

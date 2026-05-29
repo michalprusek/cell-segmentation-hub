@@ -179,7 +179,9 @@ describe('ExportService — sperm Excel orchestration (generateMetrics)', () => 
     });
     MockFormatConverter.mockImplementation(function (this: any) {
       this.convertToCOCO = vi.fn().mockResolvedValue({});
-      this.convertToYOLO = vi.fn().mockResolvedValue({ content: '', warnings: [] });
+      this.convertToYOLO = vi
+        .fn()
+        .mockResolvedValue({ content: '', warnings: [] });
       this.convertToJSON = vi.fn().mockResolvedValue({});
     });
     MockMetricsCalculator.mockImplementation(function (this: any) {
@@ -232,16 +234,12 @@ describe('ExportService — sperm Excel orchestration (generateMetrics)', () => 
   it('falls back to polygon-metrics Excel and warns when sperm export returns false', async () => {
     spies.exportSpermToExcel.mockResolvedValue(false);
 
-    await callGenerateMetrics('sperm', [
-      buildImage('img1', []),
-    ]);
+    await callGenerateMetrics('sperm', [buildImage('img1', [])]);
 
     expect(spies.exportSpermToExcel).toHaveBeenCalledTimes(1);
     expect(spies.exportPolygonMetricsToExcel).toHaveBeenCalledTimes(1);
     expect(mockedLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'flagged as sperm but no polyline data'
-      ),
+      expect.stringContaining('flagged as sperm but no polyline data'),
       'ExportService',
       expect.objectContaining({ jobId: 'job-sperm-orch' })
     );
@@ -278,18 +276,14 @@ describe('ExportService — sperm Excel orchestration (generateMetrics)', () => 
   });
 
   it('routes spheroid projects through polygon-metrics Excel, never sperm', async () => {
-    await callGenerateMetrics('spheroid', [
-      buildImage('img1', []),
-    ]);
+    await callGenerateMetrics('spheroid', [buildImage('img1', [])]);
 
     expect(spies.exportSpermToExcel).not.toHaveBeenCalled();
     expect(spies.exportPolygonMetricsToExcel).toHaveBeenCalledTimes(1);
   });
 
   it('routes spheroid_invasive projects through DI-shaped Excel, never sperm', async () => {
-    await callGenerateMetrics('spheroid_invasive', [
-      buildImage('img1', []),
-    ]);
+    await callGenerateMetrics('spheroid_invasive', [buildImage('img1', [])]);
 
     expect(spies.exportSpermToExcel).not.toHaveBeenCalled();
     expect(spies.exportToExcel).toHaveBeenCalledTimes(1);
@@ -298,10 +292,7 @@ describe('ExportService — sperm Excel orchestration (generateMetrics)', () => 
   it('forwards image segmentation JSON unchanged to exportSpermToExcel', async () => {
     spies.exportSpermToExcel.mockResolvedValue(true);
 
-    const polylines = [
-      spermPolyline('head'),
-      spermPolyline('tail'),
-    ];
+    const polylines = [spermPolyline('head'), spermPolyline('tail')];
     await callGenerateMetrics('sperm', [buildImage('img-x', polylines)]);
 
     const passedImages = spies.exportSpermToExcel.mock.calls[0]?.[0];

@@ -117,10 +117,15 @@ describe('Upload Middleware - Large Batch Support', () => {
     });
 
     it('should reject individual files exceeding size limit', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
-        const files = req.files as Express.Multer.File[];
-        res.json({ success: true, fileCount: files.length });
-      });
+      app.post(
+        '/test-upload',
+        uploadImages,
+        handleUploadError,
+        (req: any, res: any) => {
+          const files = req.files as Express.Multer.File[];
+          res.json({ success: true, fileCount: files.length });
+        }
+      );
 
       // Create a file that exceeds the individual file size limit (20MB in test env)
       const mockFiles = UploadMockGenerator.createMockFiles(1, {
@@ -169,10 +174,15 @@ describe('Upload Middleware - Large Batch Support', () => {
     });
 
     it('should reject unsupported MIME types', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
-        const files = req.files as Express.Multer.File[];
-        res.json({ success: true, fileCount: files.length });
-      });
+      app.post(
+        '/test-upload',
+        uploadImages,
+        handleUploadError,
+        (req: any, res: any) => {
+          const files = req.files as Express.Multer.File[];
+          res.json({ success: true, fileCount: files.length });
+        }
+      );
 
       // NOTE: video MIME types (e.g. video/mp4) are intentionally NOT here —
       // the upload multer shares `sharedFileFilter`, which accepts the merged
@@ -205,9 +215,14 @@ describe('Upload Middleware - Large Batch Support', () => {
 
   describe('Error Handling', () => {
     it('should handle LIMIT_FILE_COUNT error with new message', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
-        res.json({ success: true });
-      });
+      app.post(
+        '/test-upload',
+        uploadImages,
+        handleUploadError,
+        (req: any, res: any) => {
+          res.json({ success: true });
+        }
+      );
 
       // Simulate the error by creating too many files
       const mockFiles = UploadMockGenerator.createMockFiles(25); // Exceeds test cap of 20
@@ -222,9 +237,14 @@ describe('Upload Middleware - Large Batch Support', () => {
     });
 
     it('should handle LIMIT_FILE_SIZE error', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
-        res.json({ success: true });
-      });
+      app.post(
+        '/test-upload',
+        uploadImages,
+        handleUploadError,
+        (req: any, res: any) => {
+          res.json({ success: true });
+        }
+      );
 
       const mockFiles = UploadMockGenerator.createMockFiles(1, {
         fileSize: 1024 * 1024 * 21, // 21MB - exceeds 20MB test limit
@@ -240,9 +260,14 @@ describe('Upload Middleware - Large Batch Support', () => {
     });
 
     it('should handle multiple error types in batch', async () => {
-      app.post('/test-upload', uploadImages, handleUploadError, (req: any, res: any) => {
-        res.json({ success: true });
-      });
+      app.post(
+        '/test-upload',
+        uploadImages,
+        handleUploadError,
+        (req: any, res: any) => {
+          res.json({ success: true });
+        }
+      );
 
       // Mix of invalid files: wrong MIME types, too large, etc.
       const invalidFiles = UploadMockGenerator.createInvalidFiles();
@@ -425,7 +450,9 @@ describe('Upload Middleware - Large Batch Support', () => {
 
       // Verify no cross-contamination of files between requests
       // Sort by fileCount since concurrent requests may complete out of order
-      const sortedResults = uploadResults.sort((a, b) => a.fileCount - b.fileCount);
+      const sortedResults = uploadResults.sort(
+        (a, b) => a.fileCount - b.fileCount
+      );
       expect(sortedResults).toHaveLength(concurrentRequests);
       expect(sortedResults[0].fileCount).toBe(10);
       expect(sortedResults[1].fileCount).toBe(11);

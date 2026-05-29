@@ -58,11 +58,20 @@ import nodemailer from 'nodemailer';
 import * as verificationEmailTemplate from '../../templates/verificationEmail';
 import * as envValidator from '../../utils/envValidator';
 
-const mockCreateTransport = nodemailer.createTransport as ReturnType<typeof vi.fn>;
-const mockSendEmailWithRetry = emailRetryService.sendEmailWithRetry as ReturnType<typeof vi.fn>;
-const mockQueueEmailForRetry = emailRetryService.queueEmailForRetry as ReturnType<typeof vi.fn>;
-const mockGenerateVerificationEmailHTML = verificationEmailTemplate.generateVerificationEmailHTML as ReturnType<typeof vi.fn>;
-const mockGetBooleanEnvVar = envValidator.getBooleanEnvVar as ReturnType<typeof vi.fn>;
+const mockCreateTransport = nodemailer.createTransport as ReturnType<
+  typeof vi.fn
+>;
+const mockSendEmailWithRetry =
+  emailRetryService.sendEmailWithRetry as ReturnType<typeof vi.fn>;
+const mockQueueEmailForRetry =
+  emailRetryService.queueEmailForRetry as ReturnType<typeof vi.fn>;
+const mockGenerateVerificationEmailHTML =
+  verificationEmailTemplate.generateVerificationEmailHTML as ReturnType<
+    typeof vi.fn
+  >;
+const mockGetBooleanEnvVar = envValidator.getBooleanEnvVar as ReturnType<
+  typeof vi.fn
+>;
 
 describe('EmailService', () => {
   const originalEnv = { ...process.env };
@@ -70,7 +79,9 @@ describe('EmailService', () => {
   beforeEach(() => {
     // resetMocks:true clears implementations — re-establish all of them
     mockCreateTransport.mockImplementation(() => createFakeTransporter());
-    (mockSendEmailWithRetry as any).mockResolvedValue({ messageId: 'mock-msg-id' });
+    (mockSendEmailWithRetry as any).mockResolvedValue({
+      messageId: 'mock-msg-id',
+    });
     (mockQueueEmailForRetry as any).mockReturnValue('queue-id-123');
     // Re-establish template mock that gets wiped by resetMocks
     mockGenerateVerificationEmailHTML.mockReturnValue({
@@ -78,12 +89,14 @@ describe('EmailService', () => {
       html: '<html>verify</html>',
     });
     // Re-establish envValidator to read from actual process.env
-    mockGetBooleanEnvVar.mockImplementation((key: string, defaultVal: boolean) => {
-      const val = process.env[key];
-      if (val === 'true') return true;
-      if (val === 'false') return false;
-      return defaultVal;
-    });
+    mockGetBooleanEnvVar.mockImplementation(
+      (key: string, defaultVal: boolean) => {
+        const val = process.env[key];
+        if (val === 'true') return true;
+        if (val === 'false') return false;
+        return defaultVal;
+      }
+    );
 
     process.env.SKIP_EMAIL_SEND = 'false';
     process.env.SMTP_HOST = 'mailhog';
@@ -152,7 +165,9 @@ describe('EmailService', () => {
 
     it('throws when transporter send fails', async () => {
       emailService.init();
-      (mockSendEmailWithRetry as any).mockRejectedValueOnce(new Error('SMTP unavailable'));
+      (mockSendEmailWithRetry as any).mockRejectedValueOnce(
+        new Error('SMTP unavailable')
+      );
 
       await expect(
         emailService.sendEmail({ to: 'user@example.com', subject: 'Test' })
@@ -161,7 +176,9 @@ describe('EmailService', () => {
 
     it('throws with descriptive message on any transporter failure', async () => {
       emailService.init();
-      (mockSendEmailWithRetry as any).mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      (mockSendEmailWithRetry as any).mockRejectedValueOnce(
+        new Error('ECONNREFUSED')
+      );
 
       await expect(
         emailService.sendEmail({ to: 'fail@example.com', subject: 'Boom' })
@@ -242,7 +259,9 @@ describe('EmailService', () => {
 
     it('returns false when transporter verify rejects', async () => {
       const fakeTransporter = {
-        verify: vi.fn(async () => { throw new Error('ECONNREFUSED'); }) as any,
+        verify: vi.fn(async () => {
+          throw new Error('ECONNREFUSED');
+        }) as any,
         sendMail: vi.fn() as any,
       };
       mockCreateTransport.mockReturnValueOnce(fakeTransporter);

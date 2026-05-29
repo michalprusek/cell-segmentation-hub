@@ -65,7 +65,9 @@ vi.mock('../metrics/metricsCalculator', () => ({
 
 vi.mock('../export/formatConverter', () => ({
   FormatConverter: vi.fn(),
-  resolveImageDimensions: vi.fn().mockResolvedValue({ width: 100, height: 100 }),
+  resolveImageDimensions: vi
+    .fn()
+    .mockResolvedValue({ width: 100, height: 100 }),
 }));
 
 vi.mock('../../utils/batchProcessor', () => ({
@@ -93,12 +95,19 @@ const PROJECT_ID = 'project-id';
 const USER_ID = 'user-id';
 
 // Typed references to the mocked functions
-const mockHasProjectAccess = (SharingService as any).hasProjectAccess as ReturnType<typeof vi.fn>;
-const mockPrismaProjectFindUnique = (prisma as any).project.findUnique as ReturnType<typeof vi.fn>;
+const mockHasProjectAccess = (SharingService as any)
+  .hasProjectAccess as ReturnType<typeof vi.fn>;
+const mockPrismaProjectFindUnique = (prisma as any).project
+  .findUnique as ReturnType<typeof vi.fn>;
 const mockUuidV4 = uuidv4 as unknown as ReturnType<typeof vi.fn>;
-const MockMetricsCalculator = MetricsCalculator as unknown as ReturnType<typeof vi.fn>;
-const MockFormatConverter = FormatConverter as unknown as ReturnType<typeof vi.fn>;
-const MockVisualizationGenerator = VisualizationGenerator as unknown as ReturnType<typeof vi.fn>;
+const MockMetricsCalculator = MetricsCalculator as unknown as ReturnType<
+  typeof vi.fn
+>;
+const MockFormatConverter = FormatConverter as unknown as ReturnType<
+  typeof vi.fn
+>;
+const MockVisualizationGenerator =
+  VisualizationGenerator as unknown as ReturnType<typeof vi.fn>;
 
 const resetSingleton = () => {
   (ExportService as any).instance = undefined;
@@ -128,14 +137,18 @@ describe('ExportService', () => {
     // constructable arrow function. Use function-form so `new MockX()`
     // sets properties on `this` and returns it.
     MockVisualizationGenerator.mockImplementation(function (this: any) {
-      this.generateVisualization = (vi.fn() as any).mockResolvedValue(undefined);
+      this.generateVisualization = (vi.fn() as any).mockResolvedValue(
+        undefined
+      );
     });
     MockMetricsCalculator.mockImplementation(function (this: any) {
       this.calculateAllMetrics = (vi.fn() as any).mockResolvedValue([]);
       this.calculateAllImageMetrics = (vi.fn() as any).mockResolvedValue([]);
       this.exportToExcel = (vi.fn() as any).mockResolvedValue(undefined);
       this.exportToCSV = (vi.fn() as any).mockResolvedValue(undefined);
-      this.exportPolygonMetricsToExcel = (vi.fn() as any).mockResolvedValue(undefined);
+      this.exportPolygonMetricsToExcel = (vi.fn() as any).mockResolvedValue(
+        undefined
+      );
       this.exportSpermToExcel = (vi.fn() as any).mockResolvedValue(false);
     });
     MockFormatConverter.mockImplementation(function (this: any) {
@@ -277,7 +290,11 @@ describe('ExportService', () => {
     });
 
     it('returns null for non-existent job', async () => {
-      const job = await service.getJobStatus('nonexistent', PROJECT_ID, USER_ID);
+      const job = await service.getJobStatus(
+        'nonexistent',
+        PROJECT_ID,
+        USER_ID
+      );
 
       expect(job).toBeNull();
     });

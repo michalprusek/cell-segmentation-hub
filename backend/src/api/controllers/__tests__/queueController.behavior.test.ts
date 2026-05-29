@@ -25,7 +25,8 @@ vi.mock('../../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -54,7 +55,9 @@ vi.mock('../../../utils/logger', () => ({
 
 // ImageService — constructible; stores created instances so we can retrieve them
 vi.mock('../../../services/imageService', () => {
-  const ImageService = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+  const ImageService = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>
+  ) {
     this.getImageById = vi.fn();
   });
   return { ImageService };
@@ -62,7 +65,9 @@ vi.mock('../../../services/imageService', () => {
 
 // SegmentationService — constructible stub
 vi.mock('../../../services/segmentationService', () => {
-  const SegmentationService = vi.fn().mockImplementation(function (this: Record<string, unknown>) {});
+  const SegmentationService = vi
+    .fn()
+    .mockImplementation(function (this: Record<string, unknown>) {});
   return { SegmentationService };
 });
 
@@ -132,8 +137,8 @@ import { prisma } from '../../../db';
 
 // The controller calls `new ImageService(prisma)` once at construction.
 // That instance is recorded in the mock's `.mock.instances` array.
-const imageServiceInstance = vi.mocked(ImageService).mock.instances[0] as
-  Record<string, ReturnType<typeof vi.fn>>;
+const imageServiceInstance = vi.mocked(ImageService).mock
+  .instances[0] as Record<string, ReturnType<typeof vi.fn>>;
 
 // The controller calls QueueService.getInstance() once at construction.
 // That call's return value is recorded in `.mock.results[0].value`.
@@ -143,10 +148,10 @@ const queueServiceInstance = vi.mocked(QueueService).getInstance.mock.results[0]
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const PROJECT_ID = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
-const USER_ID    = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
-const IMAGE_ID   = 'cccccccc-cccc-4ccc-cccc-cccccccccccc';
-const QUEUE_ID   = 'dddddddd-dddd-4ddd-dddd-dddddddddddd';
-const BATCH_ID   = 'eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee';
+const USER_ID = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
+const IMAGE_ID = 'cccccccc-cccc-4ccc-cccc-cccccccccccc';
+const QUEUE_ID = 'dddddddd-dddd-4ddd-dddd-dddddddddddd';
+const BATCH_ID = 'eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee';
 
 // ── App builders ───────────────────────────────────────────────────────────
 
@@ -188,7 +193,10 @@ describe('QueueController — behavioral', () => {
   describe('addImageToQueue', () => {
     it('returns 401 when user is not authenticated', async () => {
       const app = buildUnauthApp(queueController.addImageToQueue, 'imageId');
-      const res = await request(app).post(`/${IMAGE_ID}`).send({ model: 'hrnet' }).expect(401);
+      const res = await request(app)
+        .post(`/${IMAGE_ID}`)
+        .send({ model: 'hrnet' })
+        .expect(401);
       expect(res.body.success).toBe(false);
     });
 
@@ -196,17 +204,32 @@ describe('QueueController — behavioral', () => {
       imageServiceInstance.getImageById.mockResolvedValue(null);
 
       const app = buildApp(queueController.addImageToQueue, 'imageId');
-      const res = await request(app).post(`/${IMAGE_ID}`).send({ model: 'hrnet' }).expect(404);
+      const res = await request(app)
+        .post(`/${IMAGE_ID}`)
+        .send({ model: 'hrnet' })
+        .expect(404);
       expect(res.body.success).toBe(false);
     });
 
     it('returns 200 and queues the image when everything is valid', async () => {
-      imageServiceInstance.getImageById.mockResolvedValue({ id: IMAGE_ID, projectId: PROJECT_ID });
+      imageServiceInstance.getImageById.mockResolvedValue({
+        id: IMAGE_ID,
+        projectId: PROJECT_ID,
+      });
 
       const queueEntry = {
-        id: QUEUE_ID, imageId: IMAGE_ID, projectId: PROJECT_ID, userId: USER_ID,
-        model: 'hrnet', threshold: 0.5, priority: 0, detectHoles: true,
-        status: 'queued', createdAt: new Date(), updatedAt: new Date(), retryCount: 0,
+        id: QUEUE_ID,
+        imageId: IMAGE_ID,
+        projectId: PROJECT_ID,
+        userId: USER_ID,
+        model: 'hrnet',
+        threshold: 0.5,
+        priority: 0,
+        detectHoles: true,
+        status: 'queued',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        retryCount: 0,
       };
       queueServiceInstance.addToQueue.mockResolvedValue(queueEntry);
       queueServiceInstance.getQueueStats.mockResolvedValue({ pending: 1 });
@@ -220,16 +243,30 @@ describe('QueueController — behavioral', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.id).toBe(QUEUE_ID);
       expect(queueServiceInstance.addToQueue).toHaveBeenCalledWith(
-        IMAGE_ID, PROJECT_ID, USER_ID, 'hrnet', 0.5, 0, true
+        IMAGE_ID,
+        PROJECT_ID,
+        USER_ID,
+        'hrnet',
+        0.5,
+        0,
+        true
       );
     });
 
     it('returns 500 when queueService.addToQueue throws', async () => {
-      imageServiceInstance.getImageById.mockResolvedValue({ id: IMAGE_ID, projectId: PROJECT_ID });
-      queueServiceInstance.addToQueue.mockRejectedValue(new Error('DB is down'));
+      imageServiceInstance.getImageById.mockResolvedValue({
+        id: IMAGE_ID,
+        projectId: PROJECT_ID,
+      });
+      queueServiceInstance.addToQueue.mockRejectedValue(
+        new Error('DB is down')
+      );
 
       const app = buildApp(queueController.addImageToQueue, 'imageId');
-      const res = await request(app).post(`/${IMAGE_ID}`).send({ model: 'hrnet' }).expect(500);
+      const res = await request(app)
+        .post(`/${IMAGE_ID}`)
+        .send({ model: 'hrnet' })
+        .expect(500);
       expect(res.body.success).toBe(false);
     });
   });
@@ -239,13 +276,19 @@ describe('QueueController — behavioral', () => {
   describe('addBatchToQueue', () => {
     it('returns 401 when unauthenticated', async () => {
       const app = buildUnauthApp(queueController.addBatchToQueue);
-      const res = await request(app).post('/').send({ imageIds: [IMAGE_ID], projectId: PROJECT_ID }).expect(401);
+      const res = await request(app)
+        .post('/')
+        .send({ imageIds: [IMAGE_ID], projectId: PROJECT_ID })
+        .expect(401);
       expect(res.body.success).toBe(false);
     });
 
     it('returns 400 when imageIds is empty', async () => {
       const app = buildApp(queueController.addBatchToQueue);
-      const res = await request(app).post('/').send({ imageIds: [], projectId: PROJECT_ID }).expect(400);
+      const res = await request(app)
+        .post('/')
+        .send({ imageIds: [], projectId: PROJECT_ID })
+        .expect(400);
       expect(res.body.success).toBe(false);
     });
 
@@ -279,7 +322,10 @@ describe('QueueController — behavioral', () => {
     });
 
     it('returns 404 when project is not found or not accessible', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: USER_ID, email: 'u@t.com' } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
       vi.mocked(prisma.project.findFirst).mockResolvedValue(null);
 
       const app = buildApp(queueController.addBatchToQueue);
@@ -291,14 +337,31 @@ describe('QueueController — behavioral', () => {
     });
 
     it('returns 200 with queued count and entries on success', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: USER_ID, email: 'u@t.com' } as any);
-      vi.mocked(prisma.project.findFirst).mockResolvedValue({ id: PROJECT_ID, userId: USER_ID } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
+      vi.mocked(prisma.project.findFirst).mockResolvedValue({
+        id: PROJECT_ID,
+        userId: USER_ID,
+      } as any);
 
-      const fakeEntries = [{
-        id: QUEUE_ID, imageId: IMAGE_ID, projectId: PROJECT_ID, userId: USER_ID,
-        model: 'hrnet', threshold: 0.5, priority: 0, detectHoles: true,
-        status: 'queued', createdAt: new Date(), updatedAt: new Date(), retryCount: 0,
-      }];
+      const fakeEntries = [
+        {
+          id: QUEUE_ID,
+          imageId: IMAGE_ID,
+          projectId: PROJECT_ID,
+          userId: USER_ID,
+          model: 'hrnet',
+          threshold: 0.5,
+          priority: 0,
+          detectHoles: true,
+          status: 'queued',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          retryCount: 0,
+        },
+      ];
       queueServiceInstance.addBatchToQueue.mockResolvedValue(fakeEntries);
       queueServiceInstance.getQueueStats.mockResolvedValue({ pending: 1 });
 
@@ -312,7 +375,15 @@ describe('QueueController — behavioral', () => {
       expect(res.body.data.queuedCount).toBe(1);
       expect(res.body.data.totalRequested).toBe(1);
       expect(queueServiceInstance.addBatchToQueue).toHaveBeenCalledWith(
-        [IMAGE_ID], PROJECT_ID, USER_ID, 'hrnet', 0.5, 0, false, true, undefined
+        [IMAGE_ID],
+        PROJECT_ID,
+        USER_ID,
+        'hrnet',
+        0.5,
+        0,
+        false,
+        true,
+        undefined
       );
     });
   });
@@ -326,7 +397,10 @@ describe('QueueController — behavioral', () => {
     });
 
     it('returns 404 when project not found', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: USER_ID, email: 'u@t.com' } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
       vi.mocked(prisma.project.findFirst).mockResolvedValue(null);
 
       const app = buildApp(queueController.getQueueStats, 'projectId');
@@ -335,16 +409,27 @@ describe('QueueController — behavioral', () => {
     });
 
     it('returns 200 with stats on success', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: USER_ID, email: 'u@t.com' } as any);
-      vi.mocked(prisma.project.findFirst).mockResolvedValue({ id: PROJECT_ID } as any);
-      queueServiceInstance.getQueueStats.mockResolvedValue({ pending: 3, processing: 1 });
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
+      vi.mocked(prisma.project.findFirst).mockResolvedValue({
+        id: PROJECT_ID,
+      } as any);
+      queueServiceInstance.getQueueStats.mockResolvedValue({
+        pending: 3,
+        processing: 1,
+      });
 
       const app = buildApp(queueController.getQueueStats, 'projectId');
       const res = await request(app).get(`/${PROJECT_ID}`).expect(200);
 
       expect(res.body.success).toBe(true);
       expect(res.body.data).toEqual({ pending: 3, processing: 1 });
-      expect(queueServiceInstance.getQueueStats).toHaveBeenCalledWith(PROJECT_ID, USER_ID);
+      expect(queueServiceInstance.getQueueStats).toHaveBeenCalledWith(
+        PROJECT_ID,
+        USER_ID
+      );
     });
   });
 
@@ -357,7 +442,10 @@ describe('QueueController — behavioral', () => {
     });
 
     it('returns 404 when project inaccessible', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: USER_ID, email: 'u@t.com' } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
       vi.mocked(prisma.project.findFirst).mockResolvedValue(null);
 
       const app = buildApp(queueController.getQueueItems, 'projectId');
@@ -366,8 +454,13 @@ describe('QueueController — behavioral', () => {
     });
 
     it('returns 200 with items list', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: USER_ID, email: 'u@t.com' } as any);
-      vi.mocked(prisma.project.findFirst).mockResolvedValue({ id: PROJECT_ID } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
+      vi.mocked(prisma.project.findFirst).mockResolvedValue({
+        id: PROJECT_ID,
+      } as any);
       const items = [{ id: QUEUE_ID, status: 'queued' }];
       queueServiceInstance.getQueueItems.mockResolvedValue(items);
 
@@ -396,8 +489,15 @@ describe('QueueController — behavioral', () => {
     });
 
     it('removes item and returns 200 on success', async () => {
-      const queueItem = { id: QUEUE_ID, imageId: IMAGE_ID, projectId: PROJECT_ID, userId: USER_ID };
-      vi.mocked(prisma.segmentationQueue.findFirst).mockResolvedValue(queueItem as any);
+      const queueItem = {
+        id: QUEUE_ID,
+        imageId: IMAGE_ID,
+        projectId: PROJECT_ID,
+        userId: USER_ID,
+      };
+      vi.mocked(prisma.segmentationQueue.findFirst).mockResolvedValue(
+        queueItem as any
+      );
       queueServiceInstance.removeFromQueue.mockResolvedValue(undefined);
       queueServiceInstance.getQueueStats.mockResolvedValue({ pending: 0 });
 
@@ -405,7 +505,10 @@ describe('QueueController — behavioral', () => {
       const res = await request(app).delete(`/${QUEUE_ID}`).expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(queueServiceInstance.removeFromQueue).toHaveBeenCalledWith(QUEUE_ID, USER_ID);
+      expect(queueServiceInstance.removeFromQueue).toHaveBeenCalledWith(
+        QUEUE_ID,
+        USER_ID
+      );
     });
   });
 
@@ -459,7 +562,10 @@ describe('QueueController — behavioral', () => {
     });
 
     it('returns 200 with healthy status when pipeline is healthy', async () => {
-      queueServiceInstance.getQueueHealthStatus.mockResolvedValue({ healthy: true, issues: [] });
+      queueServiceInstance.getQueueHealthStatus.mockResolvedValue({
+        healthy: true,
+        issues: [],
+      });
 
       const app = buildApp(queueController.getQueueHealth);
       const res = await request(app).get('/').expect(200);
@@ -488,14 +594,20 @@ describe('QueueController — behavioral', () => {
   describe('resetStuckItems', () => {
     it('returns 401 when unauthenticated', async () => {
       const app = buildUnauthApp(queueController.resetStuckItems);
-      await request(app).post('/').send({ maxProcessingMinutes: 30 }).expect(401);
+      await request(app)
+        .post('/')
+        .send({ maxProcessingMinutes: 30 })
+        .expect(401);
     });
 
     it('returns 200 with reset count', async () => {
       queueServiceInstance.resetStuckItems.mockResolvedValue(3);
 
       const app = buildApp(queueController.resetStuckItems);
-      const res = await request(app).post('/').send({ maxProcessingMinutes: 30 }).expect(200);
+      const res = await request(app)
+        .post('/')
+        .send({ maxProcessingMinutes: 30 })
+        .expect(200);
 
       expect(res.body.success).toBe(true);
       expect(res.body.data.resetCount).toBe(3);
@@ -525,7 +637,10 @@ describe('QueueController — behavioral', () => {
 
   describe('cancelAllSegmentation', () => {
     it('returns 401 when unauthenticated', async () => {
-      const app = buildUnauthApp(queueController.cancelAllSegmentation, 'projectId');
+      const app = buildUnauthApp(
+        queueController.cancelAllSegmentation,
+        'projectId'
+      );
       await request(app).post(`/${PROJECT_ID}`).expect(401);
     });
 
@@ -560,7 +675,9 @@ describe('QueueController — behavioral', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.cancelledCount).toBe(7);
       expect(res.body.data.affectedProjects).toContain(PROJECT_ID);
-      expect(queueServiceInstance.cancelAllUserSegmentations).toHaveBeenCalledWith(USER_ID);
+      expect(
+        queueServiceInstance.cancelAllUserSegmentations
+      ).toHaveBeenCalledWith(USER_ID);
     });
   });
 });

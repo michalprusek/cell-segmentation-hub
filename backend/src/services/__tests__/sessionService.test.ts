@@ -48,10 +48,12 @@ describe('SessionService', () => {
       // hits prisma.user.findUnique({ id: "8" }) which returns null
       // and forces a 15-min auto-logout.
       let storedPayload: string | undefined;
-      mockSetEx.mockImplementation(async (_k: string, _ttl: number, v: string) => {
-        storedPayload = v;
-        return 'OK';
-      });
+      mockSetEx.mockImplementation(
+        async (_k: string, _ttl: number, v: string) => {
+          storedPayload = v;
+          return 'OK';
+        }
+      );
 
       await sessionService.storeRefreshToken(TEST_UUID, 'rt_abc');
 

@@ -1,9 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 
@@ -70,12 +65,14 @@ const mockPrismaUserFindUnique = prisma.user.findUnique as MockedFunction<
   typeof prisma.user.findUnique
 >;
 
-const buildUser = (overrides: Partial<{
-  id: string;
-  email: string;
-  emailVerified: boolean;
-  profile: null;
-}> = {}) => ({
+const buildUser = (
+  overrides: Partial<{
+    id: string;
+    email: string;
+    emailVerified: boolean;
+    profile: null;
+  }> = {}
+) => ({
   id: 'user-123',
   email: 'test@example.com',
   emailVerified: true,
@@ -336,9 +333,9 @@ describe('Auth Middleware', () => {
       mockReq.user = buildUser({ id: 'user-abc' });
       mockReq.params = { id: 'res-123' };
 
-      mockPrismaUserFindUnique.mockResolvedValue(
-        { userId: 'different-owner' } as never
-      );
+      mockPrismaUserFindUnique.mockResolvedValue({
+        userId: 'different-owner',
+      } as never);
 
       await middleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -354,9 +351,9 @@ describe('Auth Middleware', () => {
       mockReq.user = buildUser({ id: 'user-123' });
       mockReq.params = { id: 'res-123' };
 
-      mockPrismaUserFindUnique.mockResolvedValue(
-        { userId: 'user-123' } as never
-      );
+      mockPrismaUserFindUnique.mockResolvedValue({
+        userId: 'user-123',
+      } as never);
 
       await middleware(mockReq as Request, mockRes as Response, mockNext);
 

@@ -136,23 +136,25 @@ const makeService = () => {
 };
 
 // Minimal queue entry shape
-function makeQueueEntry(overrides: Partial<{
-  id: string;
-  imageId: string;
-  projectId: string;
-  userId: string;
-  model: string;
-  threshold: number;
-  priority: number;
-  status: string;
-  batchId: string | null;
-  detectHoles: boolean;
-  retryCount: number;
-  channel: string | null;
-  startedAt: Date | null;
-  completedAt: Date | null;
-  createdAt: Date;
-}> = {}) {
+function makeQueueEntry(
+  overrides: Partial<{
+    id: string;
+    imageId: string;
+    projectId: string;
+    userId: string;
+    model: string;
+    threshold: number;
+    priority: number;
+    status: string;
+    batchId: string | null;
+    detectHoles: boolean;
+    retryCount: number;
+    channel: string | null;
+    startedAt: Date | null;
+    completedAt: Date | null;
+    createdAt: Date;
+  }> = {}
+) {
   return {
     id: 'qe-1',
     imageId: 'img-1',
@@ -193,9 +195,8 @@ describe('QueueService — getNextBatchExcluding fairness logic', () => {
     const userBItem = makeQueueEntry({ userId: 'user-B', imageId: 'img-B' });
     prismaMock.segmentationQueue.findMany
       .mockResolvedValueOnce([{ userId: 'user-A' }]) // recentlyProcessed → user-A deprioritised
-      .mockResolvedValueOnce([userBItem]);             // batch findMany for user-B's item
-    prismaMock.segmentationQueue.findFirst
-      .mockResolvedValueOnce(userBItem); // preferred-user (notIn user-A) → user-B
+      .mockResolvedValueOnce([userBItem]); // batch findMany for user-B's item
+    prismaMock.segmentationQueue.findFirst.mockResolvedValueOnce(userBItem); // preferred-user (notIn user-A) → user-B
 
     const batches = await service.getMultipleBatches(1);
 
@@ -208,9 +209,9 @@ describe('QueueService — getNextBatchExcluding fairness logic', () => {
     const userAItem = makeQueueEntry({ userId: 'user-A', imageId: 'img-A' });
     prismaMock.segmentationQueue.findMany
       .mockResolvedValueOnce([{ userId: 'user-A' }]) // recentlyProcessed
-      .mockResolvedValueOnce([userAItem]);             // batch findMany
+      .mockResolvedValueOnce([userAItem]); // batch findMany
     prismaMock.segmentationQueue.findFirst
-      .mockResolvedValueOnce(null)      // preferred-user: no non-recent user
+      .mockResolvedValueOnce(null) // preferred-user: no non-recent user
       .mockResolvedValueOnce(userAItem); // plain-order fallback
 
     const batches = await service.getMultipleBatches(1);
@@ -250,10 +251,9 @@ describe('QueueService — getMultipleBatches serial-dispatch cap', () => {
     // getNextBatchExcluding: findMany(recentlyProcessed) → recentUserIds empty
     // → skip preferred-user findFirst → plain-order findFirst → findMany(batch)
     prismaMock.segmentationQueue.findMany
-      .mockResolvedValueOnce([])       // recentlyProcessed → empty
+      .mockResolvedValueOnce([]) // recentlyProcessed → empty
       .mockResolvedValueOnce([mtItem]); // batch findMany
-    prismaMock.segmentationQueue.findFirst
-      .mockResolvedValueOnce(mtItem);  // plain-order fallback
+    prismaMock.segmentationQueue.findFirst.mockResolvedValueOnce(mtItem); // plain-order fallback
 
     const batches = await service.getMultipleBatches(4);
 
@@ -262,20 +262,28 @@ describe('QueueService — getMultipleBatches serial-dispatch cap', () => {
   });
 
   it('allows multiple batches for non-serial models', async () => {
-    const hrItem1 = makeQueueEntry({ id: 'qe-1', imageId: 'img-1', model: 'hrnet' });
-    const hrItem2 = makeQueueEntry({ id: 'qe-2', imageId: 'img-2', model: 'hrnet' });
+    const hrItem1 = makeQueueEntry({
+      id: 'qe-1',
+      imageId: 'img-1',
+      model: 'hrnet',
+    });
+    const hrItem2 = makeQueueEntry({
+      id: 'qe-2',
+      imageId: 'img-2',
+      model: 'hrnet',
+    });
 
     // Each getNextBatchExcluding iteration:
     //   findMany(recentlyProcessed) → findFirst(fallback) → findMany(batch)
     prismaMock.segmentationQueue.findMany
-      .mockResolvedValueOnce([])          // recentlyProcessed (iter 1)
-      .mockResolvedValueOnce([hrItem1])   // batch items (iter 1)
-      .mockResolvedValueOnce([])          // recentlyProcessed (iter 2)
-      .mockResolvedValueOnce([hrItem2]);  // batch items (iter 2)
+      .mockResolvedValueOnce([]) // recentlyProcessed (iter 1)
+      .mockResolvedValueOnce([hrItem1]) // batch items (iter 1)
+      .mockResolvedValueOnce([]) // recentlyProcessed (iter 2)
+      .mockResolvedValueOnce([hrItem2]); // batch items (iter 2)
 
     prismaMock.segmentationQueue.findFirst
-      .mockResolvedValueOnce(hrItem1)   // plain-order (iter 1)
-      .mockResolvedValueOnce(hrItem2);  // plain-order (iter 2)
+      .mockResolvedValueOnce(hrItem1) // plain-order (iter 1)
+      .mockResolvedValueOnce(hrItem2); // plain-order (iter 2)
 
     const batches = await service.getMultipleBatches(2);
 
@@ -306,17 +314,19 @@ describe('QueueService — addBatchToQueue forceResegment', () => {
     ]);
 
     const qe = makeQueueEntry({ imageId: 'img-1' });
-    prismaMock.$transaction.mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        segmentation: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
-        segmentationQueue: {
-          createMany: vi.fn().mockResolvedValue({ count: 1 }),
-          findMany: vi.fn().mockResolvedValue([qe]),
-        },
-        image: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      };
-      return cb(tx);
-    });
+    prismaMock.$transaction.mockImplementationOnce(
+      async (cb: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          segmentation: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+          segmentationQueue: {
+            createMany: vi.fn().mockResolvedValue({ count: 1 }),
+            findMany: vi.fn().mockResolvedValue([qe]),
+          },
+          image: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        };
+        return cb(tx);
+      }
+    );
 
     const results = await service.addBatchToQueue(
       ['img-1'],
@@ -341,17 +351,23 @@ describe('QueueService — addBatchToQueue forceResegment', () => {
     ]);
 
     let txSegmentationDeleteMany: ReturnType<typeof vi.fn> | null = null;
-    prismaMock.$transaction.mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        segmentation: { deleteMany: (txSegmentationDeleteMany = vi.fn().mockResolvedValue({ count: 0 })) },
-        segmentationQueue: {
-          createMany: vi.fn().mockResolvedValue({ count: 1 }),
-          findMany: vi.fn().mockResolvedValue([makeQueueEntry()]),
-        },
-        image: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      };
-      return cb(tx);
-    });
+    prismaMock.$transaction.mockImplementationOnce(
+      async (cb: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          segmentation: {
+            deleteMany: (txSegmentationDeleteMany = vi
+              .fn()
+              .mockResolvedValue({ count: 0 })),
+          },
+          segmentationQueue: {
+            createMany: vi.fn().mockResolvedValue({ count: 1 }),
+            findMany: vi.fn().mockResolvedValue([makeQueueEntry()]),
+          },
+          image: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        };
+        return cb(tx);
+      }
+    );
 
     await service.addBatchToQueue(
       ['img-1'],
@@ -374,20 +390,24 @@ describe('QueueService — addBatchToQueue forceResegment', () => {
     ]);
 
     let capturedCreateManyData: unknown = null;
-    prismaMock.$transaction.mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        segmentation: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-        segmentationQueue: {
-          createMany: vi.fn().mockImplementation(({ data }: { data: unknown }) => {
-            capturedCreateManyData = data;
-            return Promise.resolve({ count: 1 });
-          }),
-          findMany: vi.fn().mockResolvedValue([makeQueueEntry()]),
-        },
-        image: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      };
-      return cb(tx);
-    });
+    prismaMock.$transaction.mockImplementationOnce(
+      async (cb: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          segmentation: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+          segmentationQueue: {
+            createMany: vi
+              .fn()
+              .mockImplementation(({ data }: { data: unknown }) => {
+                capturedCreateManyData = data;
+                return Promise.resolve({ count: 1 });
+              }),
+            findMany: vi.fn().mockResolvedValue([makeQueueEntry()]),
+          },
+          image: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        };
+        return cb(tx);
+      }
+    );
 
     await service.addBatchToQueue(
       ['img-1'],
@@ -436,7 +456,11 @@ describe('QueueService — processBatch retry handling', () => {
     );
 
     // retry update
-    prismaMock.segmentationQueue.update.mockResolvedValueOnce({ ...item, retryCount: 1, status: 'queued' });
+    prismaMock.segmentationQueue.update.mockResolvedValueOnce({
+      ...item,
+      retryCount: 1,
+      status: 'queued',
+    });
     imageServiceMock.updateSegmentationStatus.mockResolvedValueOnce(undefined);
 
     await service.processBatch([item]);
@@ -507,7 +531,9 @@ describe('QueueService — processBatch retry handling', () => {
       image_size: { width: 100, height: 100 },
     });
 
-    segmentationServiceMock.saveSegmentationResults.mockResolvedValueOnce(undefined);
+    segmentationServiceMock.saveSegmentationResults.mockResolvedValueOnce(
+      undefined
+    );
     imageServiceMock.updateSegmentationStatus.mockResolvedValueOnce(undefined);
     prismaMock.segmentationQueue.delete.mockResolvedValueOnce(item);
     prismaMock.image.findUnique.mockResolvedValueOnce({ parentVideoId: null });
@@ -545,7 +571,11 @@ describe('QueueService — resetStuckItems', () => {
     // resetStuckItems calls segmentationQueue.findMany first, then image.findMany
     prismaMock.segmentationQueue.findMany.mockResolvedValueOnce([item]); // stuckItems
     prismaMock.image.findMany.mockResolvedValueOnce([]); // orphaned images (none)
-    prismaMock.segmentationQueue.update.mockResolvedValueOnce({ ...item, status: 'queued', retryCount: 2 });
+    prismaMock.segmentationQueue.update.mockResolvedValueOnce({
+      ...item,
+      status: 'queued',
+      retryCount: 2,
+    });
     imageServiceMock.updateSegmentationStatus.mockResolvedValue(undefined);
 
     const count = await service.resetStuckItems();
@@ -572,7 +602,9 @@ describe('QueueService — resetStuckItems', () => {
       where: { id: 'qe-1' },
     });
     expect(imageServiceMock.updateSegmentationStatus).toHaveBeenCalledWith(
-      'img-1', 'failed', 'user-id'
+      'img-1',
+      'failed',
+      'user-id'
     );
     expect(count).toBe(1);
   });
@@ -628,7 +660,9 @@ describe('QueueService — cleanupOldEntries', () => {
   });
 
   it('propagates DB error', async () => {
-    prismaMock.segmentationQueue.deleteMany.mockRejectedValueOnce(new Error('DB down'));
+    prismaMock.segmentationQueue.deleteMany.mockRejectedValueOnce(
+      new Error('DB down')
+    );
 
     await expect(service.cleanupOldEntries()).rejects.toThrow('DB down');
   });
@@ -734,11 +768,11 @@ describe('QueueService — getQueueHealthStatus', () => {
 
   it('returns healthy=true when there are no issues', async () => {
     prismaMock.segmentationQueue.count
-      .mockResolvedValueOnce(5)   // queued
-      .mockResolvedValueOnce(1)   // processing
+      .mockResolvedValueOnce(5) // queued
+      .mockResolvedValueOnce(1) // processing
       .mockResolvedValueOnce(100) // completed
-      .mockResolvedValueOnce(0)   // failed
-      .mockResolvedValueOnce(0);  // stuck (processing+old startedAt)
+      .mockResolvedValueOnce(0) // failed
+      .mockResolvedValueOnce(0); // stuck (processing+old startedAt)
     // findFirst for oldestQueued: recent date, so no "over 30 min" issue
     prismaMock.segmentationQueue.findFirst.mockResolvedValue({
       createdAt: new Date(),
@@ -756,11 +790,11 @@ describe('QueueService — getQueueHealthStatus', () => {
 
   it('reports stuck items issue when stuck > 0', async () => {
     prismaMock.segmentationQueue.count
-      .mockResolvedValueOnce(0)   // queued
-      .mockResolvedValueOnce(2)   // processing
-      .mockResolvedValueOnce(0)   // completed
-      .mockResolvedValueOnce(0)   // failed
-      .mockResolvedValueOnce(2);  // stuck
+      .mockResolvedValueOnce(0) // queued
+      .mockResolvedValueOnce(2) // processing
+      .mockResolvedValueOnce(0) // completed
+      .mockResolvedValueOnce(0) // failed
+      .mockResolvedValueOnce(2); // stuck
     prismaMock.segmentationQueue.findFirst.mockResolvedValue(null);
     segmentationServiceMock.checkServiceHealth.mockResolvedValue(true);
 
@@ -806,7 +840,11 @@ describe('QueueService — getQueueHealthStatus', () => {
     expect(status.healthy).toBe(false);
     expect(status.issues).toContain('Failed to check queue health');
     expect(status.queueStats).toEqual({
-      queued: 0, processing: 0, completed: 0, failed: 0, stuck: 0,
+      queued: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0,
+      stuck: 0,
     });
   });
 });

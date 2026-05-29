@@ -22,45 +22,47 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Hoisted mock state — must live inside vi.hoisted() so it's available in the
 // vi.mock factory closures (which are also hoisted).
 // ---------------------------------------------------------------------------
-const {
-  mockExecuteRedisCommand,
-  mockRedisClient,
-  setExecImpl,
-} = vi.hoisted(() => {
-  let execImpl: ((fn: (client: unknown) => Promise<unknown>) => Promise<unknown>) | null = null;
+const { mockExecuteRedisCommand, mockRedisClient, setExecImpl } = vi.hoisted(
+  () => {
+    let execImpl:
+      | ((fn: (client: unknown) => Promise<unknown>) => Promise<unknown>)
+      | null = null;
 
-  const mockExecuteRedisCommand = vi.fn(
-    async (fn: (client: Record<string, unknown>) => Promise<unknown>) => {
-      if (execImpl) {
-        return execImpl(fn);
+    const mockExecuteRedisCommand = vi.fn(
+      async (fn: (client: Record<string, unknown>) => Promise<unknown>) => {
+        if (execImpl) {
+          return execImpl(fn);
+        }
+        // Default: pass through a full stub client
+        return fn({
+          get: vi.fn(),
+          setEx: vi.fn(),
+          del: vi.fn(),
+          exists: vi.fn(),
+          incrBy: vi.fn(),
+          expire: vi.fn(),
+          ttl: vi.fn(),
+          scan: vi.fn(),
+          unlink: vi.fn(),
+          dbSize: vi.fn(),
+        });
       }
-      // Default: pass through a full stub client
-      return fn({
-        get: vi.fn(),
-        setEx: vi.fn(),
-        del: vi.fn(),
-        exists: vi.fn(),
-        incrBy: vi.fn(),
-        expire: vi.fn(),
-        ttl: vi.fn(),
-        scan: vi.fn(),
-        unlink: vi.fn(),
-        dbSize: vi.fn(),
-      });
-    }
-  ) as ReturnType<typeof vi.fn>;
+    ) as ReturnType<typeof vi.fn>;
 
-  const mockRedisClient = {
-    ping: vi.fn() as ReturnType<typeof vi.fn>,
-    info: vi.fn() as ReturnType<typeof vi.fn>,
-  };
+    const mockRedisClient = {
+      ping: vi.fn() as ReturnType<typeof vi.fn>,
+      info: vi.fn() as ReturnType<typeof vi.fn>,
+    };
 
-  return {
-    mockExecuteRedisCommand,
-    mockRedisClient,
-    setExecImpl: (v: typeof execImpl) => { execImpl = v; },
-  };
-});
+    return {
+      mockExecuteRedisCommand,
+      mockRedisClient,
+      setExecImpl: (v: typeof execImpl) => {
+        execImpl = v;
+      },
+    };
+  }
+);
 
 vi.mock('../../config/redis', () => ({
   executeRedisCommand: mockExecuteRedisCommand,
@@ -78,14 +80,27 @@ import { CacheService, CachePatterns } from '../cacheService';
 
 /** Simulate a single Redis command returning `returnVal`. */
 function oneCommand<T>(returnVal: T) {
-  mockExecuteRedisCommand.mockImplementationOnce(async (fn: (c: Record<string, unknown>) => Promise<unknown>) => {
-    const client: Record<string, unknown> = {};
-    // Provide stubs for every method; the first property access wins.
-    for (const m of ['get','setEx','del','exists','incrBy','expire','ttl','scan','unlink','dbSize']) {
-      client[m] = async () => returnVal;
+  mockExecuteRedisCommand.mockImplementationOnce(
+    async (fn: (c: Record<string, unknown>) => Promise<unknown>) => {
+      const client: Record<string, unknown> = {};
+      // Provide stubs for every method; the first property access wins.
+      for (const m of [
+        'get',
+        'setEx',
+        'del',
+        'exists',
+        'incrBy',
+        'expire',
+        'ttl',
+        'scan',
+        'unlink',
+        'dbSize',
+      ]) {
+        client[m] = async () => returnVal;
+      }
+      return fn(client);
     }
-    return fn(client);
-  });
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +271,10 @@ describe('CacheService (gaps)', () => {
       // Accumulate some stats
       mockExecuteRedisCommand
         .mockImplementationOnce(async (fn: any) =>
-          fn({ get: async () => JSON.stringify({ data: 'x', timestamp: Date.now(), ttl: 600 }) })
+          fn({
+            get: async () =>
+              JSON.stringify({ data: 'x', timestamp: Date.now(), ttl: 600 }),
+          })
         )
         .mockImplementationOnce(async (fn: any) =>
           fn({ get: async () => null })
@@ -331,7 +349,12 @@ describe('CacheService (gaps)', () => {
     it('counts a factory that throws as failed', async () => {
       const result = await service.warmCache([
         { key: 'ok', factory: async () => 'value' },
-        { key: 'bad', factory: async () => { throw new Error('factory boom'); } },
+        {
+          key: 'bad',
+          factory: async () => {
+            throw new Error('factory boom');
+          },
+        },
       ]);
 
       // 'ok' sets, 'bad' throws → 1 set call
@@ -374,7 +397,9 @@ describe('CacheService (gaps)', () => {
     });
 
     it('returns "unhealthy" when ping throws', async () => {
-      mockRedisClient.ping.mockRejectedValueOnce(new Error('connection refused'));
+      mockRedisClient.ping.mockRejectedValueOnce(
+        new Error('connection refused')
+      );
 
       const info = await service.getHealthInfo();
 
@@ -384,7 +409,9 @@ describe('CacheService (gaps)', () => {
 
     it('returns "healthy" with keyCount when ping succeeds', async () => {
       mockRedisClient.ping.mockResolvedValueOnce('PONG');
-      mockRedisClient.info.mockResolvedValueOnce('redis_version:7.0\r\nused_memory:1024\r\n');
+      mockRedisClient.info.mockResolvedValueOnce(
+        'redis_version:7.0\r\nused_memory:1024\r\n'
+      );
       mockExecuteRedisCommand.mockImplementationOnce(async (fn: any) =>
         fn({ dbSize: async () => 42 })
       );
@@ -499,7 +526,9 @@ describe('CacheService (gaps)', () => {
     it('dbQuery uses "db" namespace and DATABASE_QUERY TTL', async () => {
       // cache miss → factory called, then set
       mockExecuteRedisCommand
-        .mockImplementationOnce(async (fn: any) => fn({ get: async () => null }))
+        .mockImplementationOnce(async (fn: any) =>
+          fn({ get: async () => null })
+        )
         .mockImplementationOnce(async (fn: any) => {
           let capturedKey = '';
           let capturedTTL = 0;
@@ -522,7 +551,9 @@ describe('CacheService (gaps)', () => {
     it('userData uses "user" namespace', async () => {
       let capturedKey = '';
       mockExecuteRedisCommand
-        .mockImplementationOnce(async (fn: any) => fn({ get: async () => null }))
+        .mockImplementationOnce(async (fn: any) =>
+          fn({ get: async () => null })
+        )
         .mockImplementationOnce(async (fn: any) => {
           await fn({
             setEx: async (k: string) => {
@@ -533,14 +564,18 @@ describe('CacheService (gaps)', () => {
           return 'OK';
         });
 
-      await CachePatterns.userData('uid-1', 'profile', async () => ({ name: 'Alice' }));
+      await CachePatterns.userData('uid-1', 'profile', async () => ({
+        name: 'Alice',
+      }));
       expect(capturedKey).toContain('cache:user:');
     });
 
     it('fileMetadata uses "file" namespace', async () => {
       let capturedKey = '';
       mockExecuteRedisCommand
-        .mockImplementationOnce(async (fn: any) => fn({ get: async () => null }))
+        .mockImplementationOnce(async (fn: any) =>
+          fn({ get: async () => null })
+        )
         .mockImplementationOnce(async (fn: any) => {
           await fn({
             setEx: async (k: string) => {
@@ -551,14 +586,18 @@ describe('CacheService (gaps)', () => {
           return 'OK';
         });
 
-      await CachePatterns.fileMetadata('file-abc', async () => ({ size: 1024 }));
+      await CachePatterns.fileMetadata('file-abc', async () => ({
+        size: 1024,
+      }));
       expect(capturedKey).toContain('cache:file:');
     });
 
     it('statistics uses "stats" namespace', async () => {
       let capturedKey = '';
       mockExecuteRedisCommand
-        .mockImplementationOnce(async (fn: any) => fn({ get: async () => null }))
+        .mockImplementationOnce(async (fn: any) =>
+          fn({ get: async () => null })
+        )
         .mockImplementationOnce(async (fn: any) => {
           await fn({
             setEx: async (k: string) => {

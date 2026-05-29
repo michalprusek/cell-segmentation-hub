@@ -169,16 +169,27 @@ vi.mock('../../types/validation', () => ({
 
 // ---- Imports (after mocks) ----
 import { ExportService, type ExportJob } from '../exportService';
-import { sanitizeFilename, getProgressMessage } from '../export/exportFileOperations';
+import {
+  sanitizeFilename,
+  getProgressMessage,
+} from '../export/exportFileOperations';
 import { computeMTGeometry, writeMTMetrics } from '../export/mtMetricsExporter';
 import { MetricsCalculator } from '../metrics/metricsCalculator';
-import { FormatConverter, resolveImageDimensions } from '../export/formatConverter';
+import {
+  FormatConverter,
+  resolveImageDimensions,
+} from '../export/formatConverter';
 import * as fs from 'fs/promises';
 
 // Cast to constructor mocks so we can call mockImplementation in beforeEach
-const MockMetricsCalculator = MetricsCalculator as unknown as ReturnType<typeof vi.fn>;
-const MockFormatConverter = FormatConverter as unknown as ReturnType<typeof vi.fn>;
-const mockResolveImageDimensions = resolveImageDimensions as unknown as ReturnType<typeof vi.fn>;
+const MockMetricsCalculator = MetricsCalculator as unknown as ReturnType<
+  typeof vi.fn
+>;
+const MockFormatConverter = FormatConverter as unknown as ReturnType<
+  typeof vi.fn
+>;
+const mockResolveImageDimensions =
+  resolveImageDimensions as unknown as ReturnType<typeof vi.fn>;
 
 // Per-test spies — initialised in beforeEach
 let mockCalculateAllMetrics: ReturnType<typeof vi.fn>;
@@ -210,7 +221,9 @@ function resetMockImpls() {
   mockExportPolygonMetricsToExcel = vi.fn().mockResolvedValue(undefined);
   mockExportSpermToExcel = vi.fn().mockResolvedValue(false);
 
-  MockMetricsCalculator.mockImplementation(function (this: Record<string, unknown>) {
+  MockMetricsCalculator.mockImplementation(function (
+    this: Record<string, unknown>
+  ) {
     this.calculateAllMetrics = mockCalculateAllMetrics;
     this.calculateAllImageMetrics = mockCalculateAllImageMetrics;
     this.exportToExcel = mockExportToExcel;
@@ -220,10 +233,14 @@ function resetMockImpls() {
   });
 
   mockConvertToCOCO = vi.fn().mockResolvedValue({});
-  mockConvertToYOLO = vi.fn().mockResolvedValue({ content: 'yolo content', warnings: [] });
+  mockConvertToYOLO = vi
+    .fn()
+    .mockResolvedValue({ content: 'yolo content', warnings: [] });
   mockConvertToJSON = vi.fn().mockResolvedValue({});
 
-  MockFormatConverter.mockImplementation(function (this: Record<string, unknown>) {
+  MockFormatConverter.mockImplementation(function (
+    this: Record<string, unknown>
+  ) {
     this.convertToCOCO = mockConvertToCOCO;
     this.convertToYOLO = mockConvertToYOLO;
     this.convertToJSON = mockConvertToJSON;
@@ -287,7 +304,9 @@ function makeImage(
       processingTime: 200,
       imageWidth: 100,
       imageHeight: 100,
-      polygons: JSON.stringify([{ points: [{ x: 0, y: 0 }], geometry: 'polygon' }]),
+      polygons: JSON.stringify([
+        { points: [{ x: 0, y: 0 }], geometry: 'polygon' },
+      ]),
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -342,11 +361,21 @@ describe('getProgressMessage (pure helper)', () => {
   });
 
   it('returns stage message without detail', () => {
-    expect(getProgressMessage(10, 'images')).toBe('Copying original images... 10%');
-    expect(getProgressMessage(20, 'visualizations')).toBe('Generating visualizations... 20%');
-    expect(getProgressMessage(30, 'annotations')).toBe('Creating annotation files... 30%');
-    expect(getProgressMessage(40, 'metrics')).toBe('Calculating metrics... 40%');
-    expect(getProgressMessage(95, 'compression')).toBe('Creating archive... 95%');
+    expect(getProgressMessage(10, 'images')).toBe(
+      'Copying original images... 10%'
+    );
+    expect(getProgressMessage(20, 'visualizations')).toBe(
+      'Generating visualizations... 20%'
+    );
+    expect(getProgressMessage(30, 'annotations')).toBe(
+      'Creating annotation files... 30%'
+    );
+    expect(getProgressMessage(40, 'metrics')).toBe(
+      'Calculating metrics... 40%'
+    );
+    expect(getProgressMessage(95, 'compression')).toBe(
+      'Creating archive... 95%'
+    );
   });
 
   it('returns stage message with item progress', () => {
@@ -405,10 +434,23 @@ describe('ExportService — generateMetrics dispatch', () => {
           jobId?: string
         ) => Promise<void>;
       }
-    ).generateMetrics(images, exportDir, formats, projectName, projectType, opts, jobId);
+    ).generateMetrics(
+      images,
+      exportDir,
+      formats,
+      projectName,
+      projectType,
+      opts,
+      jobId
+    );
 
   it('skips metric calculation entirely for microtubules projects', async () => {
-    await callGenerateMetrics(service, 'microtubules', ['excel', 'csv'], [makeImage({})]);
+    await callGenerateMetrics(
+      service,
+      'microtubules',
+      ['excel', 'csv'],
+      [makeImage({})]
+    );
 
     expect(mockCalculateAllMetrics).not.toHaveBeenCalled();
     expect(mockExportPolygonMetricsToExcel).not.toHaveBeenCalled();
@@ -426,7 +468,12 @@ describe('ExportService — generateMetrics dispatch', () => {
   });
 
   it('routes spheroid_invasive project to exportToExcel (DI sheet)', async () => {
-    await callGenerateMetrics(service, 'spheroid_invasive', ['excel'], [makeImage({})]);
+    await callGenerateMetrics(
+      service,
+      'spheroid_invasive',
+      ['excel'],
+      [makeImage({})]
+    );
 
     expect(mockExportToExcel).toHaveBeenCalledOnce();
     expect(mockExportPolygonMetricsToExcel).not.toHaveBeenCalled();
@@ -460,18 +507,27 @@ describe('ExportService — generateMetrics dispatch', () => {
     await callGenerateMetrics(service, 'spheroid', ['json'], [makeImage({})]);
 
     const writeCalls = vi.mocked(fs.writeFile).mock.calls;
-    const jsonCall = writeCalls.find(([p]) => String(p).endsWith('metrics.json'));
+    const jsonCall = writeCalls.find(([p]) =>
+      String(p).endsWith('metrics.json')
+    );
     expect(jsonCall).toBeDefined();
   });
 
   it('handles multiple formats in a single call', async () => {
     mockExportSpermToExcel.mockResolvedValueOnce(true);
-    await callGenerateMetrics(service, 'sperm', ['excel', 'csv', 'json'], [makeImage({})]);
+    await callGenerateMetrics(
+      service,
+      'sperm',
+      ['excel', 'csv', 'json'],
+      [makeImage({})]
+    );
 
     expect(mockExportSpermToExcel).toHaveBeenCalledOnce();
     expect(mockExportToCSV).toHaveBeenCalledOnce();
     const writeCalls = vi.mocked(fs.writeFile).mock.calls;
-    expect(writeCalls.some(([p]) => String(p).endsWith('metrics.json'))).toBe(true);
+    expect(writeCalls.some(([p]) => String(p).endsWith('metrics.json'))).toBe(
+      true
+    );
   });
 
   it('throws "Export cancelled by user" when job is cancelled before calculation', async () => {
@@ -488,7 +544,14 @@ describe('ExportService — generateMetrics dispatch', () => {
     });
 
     await expect(
-      callGenerateMetrics(service, 'spheroid', ['excel'], [makeImage({})], {}, 'cancel-job')
+      callGenerateMetrics(
+        service,
+        'spheroid',
+        ['excel'],
+        [makeImage({})],
+        {},
+        'cancel-job'
+      )
     ).rejects.toThrow('Export cancelled by user');
 
     expect(mockCalculateAllMetrics).not.toHaveBeenCalled();
@@ -532,37 +595,60 @@ describe('ExportService — generateAnnotations dispatch', () => {
 
   it('COCO: calls convertToCOCO with segmentation dimensions', async () => {
     const image = makeImage({
-      segmentation: { ...makeImage({}).segmentation!, imageWidth: 640, imageHeight: 480 },
+      segmentation: {
+        ...makeImage({}).segmentation!,
+        imageWidth: 640,
+        imageHeight: 480,
+      },
     });
     await callGenerateAnnotations(service, ['coco'], [image]);
 
     expect(mockConvertToCOCO).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'img-1', filename: 'image.png', width: 640, height: 480 }),
+        expect.objectContaining({
+          id: 'img-1',
+          filename: 'image.png',
+          width: 640,
+          height: 480,
+        }),
       ])
     );
     const writeCalls = vi.mocked(fs.writeFile).mock.calls;
-    expect(writeCalls.some(([p]) => String(p).endsWith('annotations.json'))).toBe(true);
+    expect(
+      writeCalls.some(([p]) => String(p).endsWith('annotations.json'))
+    ).toBe(true);
   });
 
   it('COCO: falls back to image.width/height when segmentation has no dimensions', async () => {
     const image = makeImage({
       width: 320,
       height: 240,
-      segmentation: { ...makeImage({}).segmentation!, imageWidth: null, imageHeight: null },
+      segmentation: {
+        ...makeImage({}).segmentation!,
+        imageWidth: null,
+        imageHeight: null,
+      },
     });
     await callGenerateAnnotations(service, ['coco'], [image]);
 
     expect(mockConvertToCOCO).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ width: 320, height: 240 })])
+      expect.arrayContaining([
+        expect.objectContaining({ width: 320, height: 240 }),
+      ])
     );
   });
 
   it('COCO: image with no segmentation gets empty segmentationResults', async () => {
-    await callGenerateAnnotations(service, ['coco'], [makeImage({ segmentation: null })]);
+    await callGenerateAnnotations(
+      service,
+      ['coco'],
+      [makeImage({ segmentation: null })]
+    );
 
     expect(mockConvertToCOCO).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ segmentationResults: [] })])
+      expect.arrayContaining([
+        expect.objectContaining({ segmentationResults: [] }),
+      ])
     );
   });
 
@@ -571,11 +657,17 @@ describe('ExportService — generateAnnotations dispatch', () => {
 
     expect(mockConvertToJSON).toHaveBeenCalledOnce();
     const writeCalls = vi.mocked(fs.writeFile).mock.calls;
-    expect(writeCalls.some(([p]) => String(p).endsWith('segmentation_data.json'))).toBe(true);
+    expect(
+      writeCalls.some(([p]) => String(p).endsWith('segmentation_data.json'))
+    ).toBe(true);
   });
 
   it('YOLO: skips images with no segmentation', async () => {
-    await callGenerateAnnotations(service, ['yolo'], [makeImage({ segmentation: null })]);
+    await callGenerateAnnotations(
+      service,
+      ['yolo'],
+      [makeImage({ segmentation: null })]
+    );
     expect(mockConvertToYOLO).not.toHaveBeenCalled();
   });
 
@@ -629,12 +721,22 @@ describe('ExportService — cleanupOldJobs', () => {
     const jobs = getJobs(service);
     const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000);
     jobs.set('old-job', {
-      id: 'old-job', projectId: 'p', userId: 'u',
-      status: 'completed', progress: 100, createdAt: oldDate, options: {},
+      id: 'old-job',
+      projectId: 'p',
+      userId: 'u',
+      status: 'completed',
+      progress: 100,
+      createdAt: oldDate,
+      options: {},
     });
     jobs.set('new-job', {
-      id: 'new-job', projectId: 'p', userId: 'u',
-      status: 'pending', progress: 0, createdAt: new Date(), options: {},
+      id: 'new-job',
+      projectId: 'p',
+      userId: 'u',
+      status: 'pending',
+      progress: 0,
+      createdAt: new Date(),
+      options: {},
     });
 
     callCleanup(service);
@@ -687,10 +789,20 @@ describe('ExportService — generateMicrotubuleMetrics dispatch', () => {
     // Return a non-empty row list so writeMTMetrics is called
     vi.mocked(computeMTGeometry).mockReturnValueOnce([
       {
-        frameIndex: 0, imageId: 'img-1', instanceId: 'inst-1', trackId: null,
-        channel: '', lengthPx: 42, lengthUm: null,
-        areaPx: null, areaUm2: null, pixelCount: null, sumIntensity: null,
-        meanIntensity: null, stdIntensity: null, medianBackground: null,
+        frameIndex: 0,
+        imageId: 'img-1',
+        instanceId: 'inst-1',
+        trackId: null,
+        channel: '',
+        lengthPx: 42,
+        lengthUm: null,
+        areaPx: null,
+        areaUm2: null,
+        pixelCount: null,
+        sumIntensity: null,
+        meanIntensity: null,
+        stdIntensity: null,
+        medianBackground: null,
         signalMinusBackground: null,
       },
     ]);
@@ -704,40 +816,76 @@ describe('ExportService — generateMicrotubuleMetrics dispatch', () => {
   it('adds warning when no channel is selected', async () => {
     vi.mocked(computeMTGeometry).mockReturnValueOnce([
       {
-        frameIndex: 0, imageId: 'img-1', instanceId: 'inst-1', trackId: null,
-        channel: '', lengthPx: 10, lengthUm: null,
-        areaPx: null, areaUm2: null, pixelCount: null, sumIntensity: null,
-        meanIntensity: null, stdIntensity: null, medianBackground: null,
+        frameIndex: 0,
+        imageId: 'img-1',
+        instanceId: 'inst-1',
+        trackId: null,
+        channel: '',
+        lengthPx: 10,
+        lengthUm: null,
+        areaPx: null,
+        areaUm2: null,
+        pixelCount: null,
+        sumIntensity: null,
+        meanIntensity: null,
+        stdIntensity: null,
+        medianBackground: null,
         signalMinusBackground: null,
       },
     ]);
 
-    const jobs = (service as unknown as { exportJobs: Map<string, ExportJob> }).exportJobs;
+    const jobs = (service as unknown as { exportJobs: Map<string, ExportJob> })
+      .exportJobs;
     jobs.set('mt-job', {
-      id: 'mt-job', projectId: 'p', userId: 'u',
-      status: 'processing', progress: 50, createdAt: new Date(), options: {},
+      id: 'mt-job',
+      projectId: 'p',
+      userId: 'u',
+      status: 'processing',
+      progress: 50,
+      createdAt: new Date(),
+      options: {},
     });
 
-    await callGenerateMT(service, [makeImage({})], { metricsFormats: ['csv'] }, 'mt-job');
+    await callGenerateMT(
+      service,
+      [makeImage({})],
+      { metricsFormats: ['csv'] },
+      'mt-job'
+    );
 
     const job = jobs.get('mt-job');
-    expect(job?.warnings?.some(w => w.includes('no channel was selected'))).toBe(true);
+    expect(
+      job?.warnings?.some(w => w.includes('no channel was selected'))
+    ).toBe(true);
   });
 
   it('does not write metrics file and adds warning when no polylines exist', async () => {
     vi.mocked(computeMTGeometry).mockReturnValueOnce([]);
 
-    const jobs = (service as unknown as { exportJobs: Map<string, ExportJob> }).exportJobs;
+    const jobs = (service as unknown as { exportJobs: Map<string, ExportJob> })
+      .exportJobs;
     jobs.set('mt-empty', {
-      id: 'mt-empty', projectId: 'p', userId: 'u',
-      status: 'processing', progress: 50, createdAt: new Date(), options: {},
+      id: 'mt-empty',
+      projectId: 'p',
+      userId: 'u',
+      status: 'processing',
+      progress: 50,
+      createdAt: new Date(),
+      options: {},
     });
 
-    await callGenerateMT(service, [makeImage({})], { metricsFormats: ['csv'] }, 'mt-empty');
+    await callGenerateMT(
+      service,
+      [makeImage({})],
+      { metricsFormats: ['csv'] },
+      'mt-empty'
+    );
 
     expect(writeMTMetrics).not.toHaveBeenCalled();
     const job = jobs.get('mt-empty');
-    expect(job?.warnings?.some(w => w.includes('No microtubule annotations'))).toBe(true);
+    expect(
+      job?.warnings?.some(w => w.includes('No microtubule annotations'))
+    ).toBe(true);
   });
 });
 

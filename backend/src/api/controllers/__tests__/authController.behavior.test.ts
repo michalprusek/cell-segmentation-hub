@@ -18,7 +18,8 @@ vi.mock('../../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -100,9 +101,18 @@ function buildApp(
   app.delete(path, handler);
   // Minimal error handler so asyncHandler-propagated errors produce JSON
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  app.use((err: Error & { statusCode?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    res.status(err.statusCode ?? 500).json({ success: false, error: err.message });
-  });
+  app.use(
+    (
+      err: Error & { statusCode?: number },
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction
+    ) => {
+      res
+        .status(err.statusCode ?? 500)
+        .json({ success: false, error: err.message });
+    }
+  );
   return app;
 }
 
@@ -262,7 +272,9 @@ describe('AuthController — extended behavioral', () => {
       const res = await request(app).get('/sometoken123').expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(MockedAuthService.verifyEmail).toHaveBeenCalledWith('sometoken123');
+      expect(MockedAuthService.verifyEmail).toHaveBeenCalledWith(
+        'sometoken123'
+      );
     });
 
     it('propagates service error when token is invalid', async () => {
@@ -283,7 +295,8 @@ describe('AuthController — extended behavioral', () => {
   describe('resendVerificationEmail', () => {
     it('returns 200 when service succeeds', async () => {
       MockedAuthService.resendVerificationEmail = vi.fn().mockResolvedValue({
-        message: 'Pokud email existuje a není ověřen, byl odeslán ověřovací email.',
+        message:
+          'Pokud email existuje a není ověřen, byl odeslán ověřovací email.',
       });
 
       const app = buildApp(resendVerificationEmail, false);
@@ -341,7 +354,10 @@ describe('AuthController — extended behavioral', () => {
   describe('updateProfile', () => {
     it('returns 401 when unauthenticated', async () => {
       const app = buildApp(updateProfile, false);
-      const res = await request(app).put('/').send({ firstName: 'Jan' }).expect(401);
+      const res = await request(app)
+        .put('/')
+        .send({ firstName: 'Jan' })
+        .expect(401);
       expect(res.body.success).toBe(false);
     });
 
@@ -350,7 +366,10 @@ describe('AuthController — extended behavioral', () => {
       MockedAuthService.updateProfile = vi.fn().mockResolvedValue(updated);
 
       const app = buildApp(updateProfile, true);
-      const res = await request(app).put('/').send({ firstName: 'Jan' }).expect(200);
+      const res = await request(app)
+        .put('/')
+        .send({ firstName: 'Jan' })
+        .expect(200);
 
       expect(res.body.success).toBe(true);
       expect(res.body.data).toEqual(updated);
@@ -531,7 +550,9 @@ describe('AuthController — extended behavioral', () => {
       // width and height must be > 0
       const res = await request(app)
         .post('/')
-        .send({ cropData: JSON.stringify({ x: 0, y: 0, width: -5, height: 100 }) })
+        .send({
+          cropData: JSON.stringify({ x: 0, y: 0, width: -5, height: 100 }),
+        })
         .expect(400);
       expect(res.body.success).toBe(false);
     });

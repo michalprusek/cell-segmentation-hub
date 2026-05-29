@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import userRoutes from '../userRoutes';
 import { authenticate } from '../../../middleware/auth';
@@ -18,7 +12,8 @@ vi.mock('../../../utils/config', () => ({
     NODE_ENV: 'test',
     PORT: 3001,
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     ALLOWED_ORIGINS: 'http://localhost:3000',
@@ -50,9 +45,7 @@ vi.mock('../../../db');
 
 import * as UserService from '../../../services/userService';
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const mockedLogger = logger as Mocked<typeof logger>;
 const mockedUserService = UserService as Mocked<typeof UserService>;
 
@@ -116,12 +109,10 @@ describe('User Routes', () => {
     mockedLogger.error = vi.fn() as any;
     mockedLogger.warn = vi.fn() as any;
 
-    mockedAuthenticate.mockImplementation(
-      ((req: any, _res: any, next: any) => {
-        req.user = mockUser;
-        next();
-      }) as any
-    );
+    mockedAuthenticate.mockImplementation(((req: any, _res: any, next: any) => {
+      req.user = mockUser;
+      next();
+    }) as any);
 
     app.use('/api/users', userRoutes);
   });
@@ -145,21 +136,19 @@ describe('User Routes', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.email).toBe('test@example.com');
       expect(mockedAuthenticate).toHaveBeenCalled();
-      expect(mockedUserService.getUserProfile).toHaveBeenCalledWith(mockUser.id);
+      expect(mockedUserService.getUserProfile).toHaveBeenCalledWith(
+        mockUser.id
+      );
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
-      const response = await request(app)
-        .get('/api/users/profile')
-        .expect(401);
+      const response = await request(app).get('/api/users/profile').expect(401);
 
       expect(response.body.success).toBe(false);
     });
@@ -215,13 +204,11 @@ describe('User Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app)
         .put('/api/users/profile')
@@ -260,13 +247,11 @@ describe('User Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app)
         .post('/api/users/change-password')
@@ -308,13 +293,11 @@ describe('User Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).delete('/api/users/account').expect(401);
     });
@@ -349,13 +332,11 @@ describe('User Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).get('/api/users/settings').expect(401);
     });
@@ -394,13 +375,11 @@ describe('User Routes', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res
-            .status(401)
-            .json({ success: false, message: 'Chybí autentizační token' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
 
       await request(app).get('/api/users/storage-stats').expect(401);
     });
@@ -458,11 +437,9 @@ describe('User Routes', () => {
   // -------------------------------------------------------------------------
   describe('Authentication Boundary — all user routes require auth', () => {
     it('should block every user route when authenticate middleware fails', async () => {
-      mockedAuthenticate.mockImplementation(
-        ((_req: any, res: any) => {
-          res.status(401).json({ success: false, message: 'Unauthorized' });
-        }) as any
-      );
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+      }) as any);
 
       const routes = [
         { method: 'get', path: '/api/users/profile' },

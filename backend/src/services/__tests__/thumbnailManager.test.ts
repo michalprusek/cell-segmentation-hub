@@ -1,10 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  vi,
-} from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Mock } from 'vitest';
 
 // `thumbnailManager` is a thin orchestrator: it wires RetryService +
@@ -31,7 +25,9 @@ const { state } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../utils/retryService', () => {
-  const RetryServiceMock: any = vi.fn().mockImplementation(function (this: any) {
+  const RetryServiceMock: any = vi.fn().mockImplementation(function (
+    this: any
+  ) {
     this.executeWithRetry = (...args: unknown[]) =>
       state.executeWithRetry(...args);
   });
@@ -53,7 +49,9 @@ vi.mock('../../utils/batchProcessor', () => ({
 }));
 
 vi.mock('../segmentationThumbnailService', () => ({
-  SegmentationThumbnailService: vi.fn().mockImplementation(function (this: any) {
+  SegmentationThumbnailService: vi.fn().mockImplementation(function (
+    this: any
+  ) {
     this.generateSegmentationThumbnail = (id: string) =>
       state.generateSegmentationThumbnail(id);
   }),

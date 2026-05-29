@@ -3,13 +3,7 @@
  * Ensures that the last image in batch receives correct results even when some images are invalid
  */
 
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SegmentationService } from '../segmentationService';
 import { getStorageProvider } from '../../storage';
 import axios from 'axios';
@@ -40,7 +34,9 @@ describe('SegmentationService - Batch Index Fix', () => {
     (axios.create as any).mockReturnValue(mockAxiosInstance);
 
     mockStorage = {
-      getBuffer: (vi.fn() as any).mockResolvedValue(Buffer.from('test-image-data')),
+      getBuffer: (vi.fn() as any).mockResolvedValue(
+        Buffer.from('test-image-data')
+      ),
     };
     (getStorageProvider as any).mockReturnValue(mockStorage);
 

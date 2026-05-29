@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import { queueRoutes } from '../queueRoutes';
 import { authenticate } from '../../../middleware/auth';
@@ -40,9 +34,15 @@ vi.mock('../../../services/segmentationService');
 vi.mock('../../../services/imageService');
 vi.mock('../../../services/websocketService');
 vi.mock('../../../middleware/validation', () => ({
-  validateBody: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
-  validateParams: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
-  validateQuery: vi.fn((_schema: any) => (_req: any, _res: any, next: any) => next()),
+  validateBody: vi.fn(
+    (_schema: any) => (_req: any, _res: any, next: any) => next()
+  ),
+  validateParams: vi.fn(
+    (_schema: any) => (_req: any, _res: any, next: any) => next()
+  ),
+  validateQuery: vi.fn(
+    (_schema: any) => (_req: any, _res: any, next: any) => next()
+  ),
 }));
 vi.mock('../../../utils/config', () => ({
   config: {
@@ -64,9 +64,7 @@ vi.mock('../../../utils/config', () => ({
   },
 }));
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const MockedResponseHelper = ResponseHelper as Mocked<typeof ResponseHelper>;
 const mockedLogger = logger as Mocked<typeof logger>;
 
@@ -103,7 +101,12 @@ describe('Queue Routes', () => {
 
     // ResponseHelper mocks
     (MockedResponseHelper.success as Mock).mockImplementation(
-      (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
+      (
+        res: express.Response,
+        data: unknown,
+        message: string,
+        statusCode: number = 200
+      ) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
@@ -219,8 +222,9 @@ describe('Queue Routes', () => {
     });
 
     it('should accept valid UUID projectId', async () => {
-      const response = await request(app)
-        .get(`/api/queue/projects/${validProjectId}/stats`);
+      const response = await request(app).get(
+        `/api/queue/projects/${validProjectId}/stats`
+      );
 
       expect([200, 400, 401, 404, 500]).toContain(response.status);
       expect(mockedAuthenticate).toHaveBeenCalled();
@@ -247,8 +251,9 @@ describe('Queue Routes', () => {
     });
 
     it('should accept valid UUID with pagination query params', async () => {
-      const response = await request(app)
-        .get(`/api/queue/projects/${validProjectId}/items?page=1&limit=10`);
+      const response = await request(app).get(
+        `/api/queue/projects/${validProjectId}/items?page=1&limit=10`
+      );
 
       expect([200, 400, 401, 404, 500]).toContain(response.status);
       expect(mockedAuthenticate).toHaveBeenCalled();
@@ -261,9 +266,7 @@ describe('Queue Routes', () => {
         res.status(401).json({ success: false, message: 'Unauthorized' });
       });
 
-      await request(app)
-        .delete(`/api/queue/items/${validQueueId}`)
-        .expect(401);
+      await request(app).delete(`/api/queue/items/${validQueueId}`).expect(401);
     });
 
     it('should reject non-UUID queueId', async () => {
@@ -275,8 +278,9 @@ describe('Queue Routes', () => {
     });
 
     it('should accept valid UUID queueId', async () => {
-      const response = await request(app)
-        .delete(`/api/queue/items/${validQueueId}`);
+      const response = await request(app).delete(
+        `/api/queue/items/${validQueueId}`
+      );
 
       expect([200, 400, 404, 500]).toContain(response.status);
       expect(mockedAuthenticate).toHaveBeenCalled();
@@ -289,9 +293,7 @@ describe('Queue Routes', () => {
         res.status(401).json({ success: false, message: 'Unauthorized' });
       });
 
-      await request(app)
-        .get('/api/queue/stats')
-        .expect(401);
+      await request(app).get('/api/queue/stats').expect(401);
     });
 
     it('should call authenticate before handler', async () => {
@@ -307,9 +309,7 @@ describe('Queue Routes', () => {
         res.status(401).json({ success: false, message: 'Unauthorized' });
       });
 
-      await request(app)
-        .post('/api/queue/reset-stuck')
-        .expect(401);
+      await request(app).post('/api/queue/reset-stuck').expect(401);
     });
 
     it('should reject maxProcessingMinutes out of range', async () => {
@@ -336,9 +336,7 @@ describe('Queue Routes', () => {
         res.status(401).json({ success: false, message: 'Unauthorized' });
       });
 
-      await request(app)
-        .post('/api/queue/cancel-all-user')
-        .expect(401);
+      await request(app).post('/api/queue/cancel-all-user').expect(401);
     });
 
     it('should call authenticate middleware', async () => {
