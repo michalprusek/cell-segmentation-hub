@@ -164,13 +164,11 @@ describe('ML Authentication Security Tests', () => {
         (req: any, res: any, _next: any) => {
           const authHeader = req.headers['authorization'];
           if (!authHeader) {
-            res
-              .status(401)
-              .json({
-                success: false,
-                message: 'Missing token',
-                source: 'Auth',
-              });
+            res.status(401).json({
+              success: false,
+              message: 'Missing token',
+              source: 'Auth',
+            });
             return Promise.resolve();
           }
           return Promise.resolve();
@@ -655,13 +653,11 @@ describe('ML Authentication Security Tests', () => {
       // (refresh tokens have a different audience/issuer in real jwt.ts)
       mockedAuthenticate.mockImplementation(
         (req: any, res: any, _next: any) => {
-          res
-            .status(401)
-            .json({
-              success: false,
-              message: 'Invalid token type',
-              source: 'Auth',
-            });
+          res.status(401).json({
+            success: false,
+            message: 'Invalid token type',
+            source: 'Auth',
+          });
           return Promise.resolve();
         }
       );

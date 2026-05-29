@@ -136,21 +136,17 @@ vi.mock('../../../api/controllers/authController', () => ({
   resendVerificationEmail: (_req: any, res: any) =>
     res.status(200).json({ success: true, message: 'Verification resent' }),
   checkAuth: (req: any, res: any) =>
-    res
-      .status(200)
-      .json({
-        success: true,
-        data: { user: req.user },
-        message: 'Authenticated',
-      }),
+    res.status(200).json({
+      success: true,
+      data: { user: req.user },
+      message: 'Authenticated',
+    }),
   getProfile: (_req: any, res: any) =>
-    res
-      .status(200)
-      .json({
-        success: true,
-        data: { profile: {} },
-        message: 'Profile fetched',
-      }),
+    res.status(200).json({
+      success: true,
+      data: { profile: {} },
+      message: 'Profile fetched',
+    }),
   updateProfile: (_req: any, res: any) =>
     res
       .status(200)

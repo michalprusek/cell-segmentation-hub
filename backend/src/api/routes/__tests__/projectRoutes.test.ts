@@ -131,13 +131,11 @@ describe('Project Routes', () => {
         pagination: unknown,
         message: string
       ) => {
-        return res
-          .status(200)
-          .json({
-            success: true,
-            data: { projects: data, pagination },
-            message,
-          });
+        return res.status(200).json({
+          success: true,
+          data: { projects: data, pagination },
+          message,
+        });
       }
     );
     (ResponseHelper.notFound as Mock).mockImplementation(

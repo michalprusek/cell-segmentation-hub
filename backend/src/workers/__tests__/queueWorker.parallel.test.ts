@@ -159,13 +159,11 @@ describe('QueueWorker - Parallel Processing', () => {
       setQueueWorker: vi.fn(),
       // resetStuckItems must return a Promise so .catch() in the worker doesn't throw
       resetStuckItems: vi.fn().mockResolvedValue(0),
-      getQueueHealthStatus: vi
-        .fn()
-        .mockResolvedValue({
-          healthy: true,
-          issues: [],
-          queueStats: { queued: 0, processing: 0, total: 0 },
-        }),
+      getQueueHealthStatus: vi.fn().mockResolvedValue({
+        healthy: true,
+        issues: [],
+        queueStats: { queued: 0, processing: 0, total: 0 },
+      }),
       cleanupOldEntries: vi.fn().mockResolvedValue(0),
     } as any;
 
