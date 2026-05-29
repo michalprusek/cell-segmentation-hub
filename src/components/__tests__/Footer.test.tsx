@@ -39,8 +39,8 @@ describe('Footer', () => {
     expect(emailLink).toBeInTheDocument();
     expect(emailLink).toHaveAttribute('href', 'mailto:prusek@utia.cas.cz');
 
-    // Institution - should display institution name from translations
-    expect(screen.getByText(/ÚTIA AV ČR/)).toBeInTheDocument();
+    // Institution - should display institution name from translations (appears multiple times in footer)
+    expect(screen.getAllByText(/ÚTIA AV ČR/).length).toBeGreaterThanOrEqual(1);
 
     // Address
     expect(
@@ -166,11 +166,10 @@ describe('Footer', () => {
   it('separates copyright section with border', () => {
     render(<Footer />);
 
-    const copyrightSection = document.querySelector(
-      '.border-t.border-gray-200'
-    );
+    // The copyright div has mt-12, pt-8, and border-t classes
+    const copyrightSection = document.querySelector('.mt-12.pt-8.border-t');
     expect(copyrightSection).toBeInTheDocument();
-    expect(copyrightSection).toHaveClass('mt-12', 'pt-8');
+    expect(copyrightSection).toHaveClass('border-gray-200');
   });
 
   it('centers copyright text', () => {

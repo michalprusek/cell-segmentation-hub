@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import {
   shareProjectByEmail,
@@ -64,7 +58,10 @@ vi.mock('../../../utils/config', () => ({
 }));
 
 // Double-cast via unknown to avoid both `never` inference and TS overlap errors
-const MockedSharingService = SharingService as unknown as Record<string, Mock<any>>;
+const MockedSharingService = SharingService as unknown as Record<
+  string,
+  Mock<any>
+>;
 const mockAuthMiddleware = authenticate as MockedFunction<typeof authenticate>;
 const MockedResponseHelper = ResponseHelper as Mocked<typeof ResponseHelper>;
 const mockedLogger = logger as Mocked<typeof logger>;
@@ -97,7 +94,12 @@ describe('SharingController', () => {
 
   function installResponseMocks() {
     (MockedResponseHelper.success as Mock).mockImplementation(
-      (res: express.Response, data: unknown, message: string, statusCode: number = 200) => {
+      (
+        res: express.Response,
+        data: unknown,
+        message: string,
+        statusCode: number = 200
+      ) => {
         return res.status(statusCode).json({ success: true, data, message });
       }
     );
@@ -152,13 +154,29 @@ describe('SharingController', () => {
     mockedLogger.debug = vi.fn() as MockedFunction<typeof logger.debug>;
 
     // Register routes
-    app.post('/projects/:id/share/email', mockAuthMiddleware, shareProjectByEmail);
-    app.post('/projects/:id/share/link', mockAuthMiddleware, shareProjectByLink);
+    app.post(
+      '/projects/:id/share/email',
+      mockAuthMiddleware,
+      shareProjectByEmail
+    );
+    app.post(
+      '/projects/:id/share/link',
+      mockAuthMiddleware,
+      shareProjectByLink
+    );
     app.get('/projects/:id/shares', mockAuthMiddleware, getProjectShares);
-    app.delete('/projects/:id/shares/:shareId', mockAuthMiddleware, revokeProjectShare);
+    app.delete(
+      '/projects/:id/shares/:shareId',
+      mockAuthMiddleware,
+      revokeProjectShare
+    );
     app.get('/projects/shared', mockAuthMiddleware, getSharedProjects);
     app.post('/share/accept/:token', acceptShareInvitation);
-    app.post('/share/accept-auth/:token', mockAuthMiddleware, acceptShareInvitation);
+    app.post(
+      '/share/accept-auth/:token',
+      mockAuthMiddleware,
+      acceptShareInvitation
+    );
   });
 
   afterEach(() => {
@@ -168,11 +186,15 @@ describe('SharingController', () => {
 
   describe('shareProjectByEmail', () => {
     it('should share project and return share details', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.shareProjectByEmail as Mock<any>).mockResolvedValueOnce(mockShare);
+      (
+        MockedSharingService.shareProjectByEmail as Mock<any>
+      ).mockResolvedValueOnce(mockShare);
       installResponseMocks();
 
       const response = await request(app)
@@ -181,7 +203,9 @@ describe('SharingController', () => {
         .expect(201);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toMatchObject({ email: 'recipient@example.com' });
+      expect(response.body.data).toMatchObject({
+        email: 'recipient@example.com',
+      });
     });
 
     it('should return 401 when not authenticated', async () => {
@@ -205,7 +229,9 @@ describe('SharingController', () => {
     });
 
     it('should return 404 when project not found', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: false,
         isOwner: false,
       });
@@ -220,7 +246,9 @@ describe('SharingController', () => {
     });
 
     it('should return 403 when user is not the project owner', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: false,
       });
@@ -235,11 +263,15 @@ describe('SharingController', () => {
     });
 
     it('should return 400 when project already shared with user', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.shareProjectByEmail as Mock<any>).mockRejectedValueOnce(
+      (
+        MockedSharingService.shareProjectByEmail as Mock<any>
+      ).mockRejectedValueOnce(
         new Error('Project is already shared with this user')
       );
       installResponseMocks();
@@ -253,13 +285,15 @@ describe('SharingController', () => {
     });
 
     it('should return 500 on unexpected service error', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.shareProjectByEmail as Mock<any>).mockRejectedValueOnce(
-        new Error('Unexpected DB failure')
-      );
+      (
+        MockedSharingService.shareProjectByEmail as Mock<any>
+      ).mockRejectedValueOnce(new Error('Unexpected DB failure'));
       installResponseMocks();
 
       const response = await request(app)
@@ -273,11 +307,15 @@ describe('SharingController', () => {
 
   describe('shareProjectByLink', () => {
     it('should generate shareable link successfully', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.shareProjectByLink as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.shareProjectByLink as Mock<any>
+      ).mockResolvedValueOnce({
         ...mockShare,
         shareToken,
         tokenExpiry: new Date('2025-01-01'),
@@ -314,7 +352,9 @@ describe('SharingController', () => {
     });
 
     it('should return 403 when user is not owner', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: false,
       });
@@ -331,13 +371,15 @@ describe('SharingController', () => {
 
   describe('getProjectShares', () => {
     it('should return list of shares for a project', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: true,
         isOwner: true,
       });
-      (MockedSharingService.getProjectShares as Mock<any>).mockResolvedValueOnce([
-        { ...mockShare, sharedWith: null },
-      ]);
+      (
+        MockedSharingService.getProjectShares as Mock<any>
+      ).mockResolvedValueOnce([{ ...mockShare, sharedWith: null }]);
       installResponseMocks();
 
       const response = await request(app)
@@ -368,7 +410,9 @@ describe('SharingController', () => {
     });
 
     it('should return 404 when project not found', async () => {
-      (MockedSharingService.hasProjectAccess as Mock<any>).mockResolvedValueOnce({
+      (
+        MockedSharingService.hasProjectAccess as Mock<any>
+      ).mockResolvedValueOnce({
         hasAccess: false,
         isOwner: false,
       });
@@ -384,7 +428,9 @@ describe('SharingController', () => {
 
   describe('revokeProjectShare', () => {
     it('should revoke share successfully', async () => {
-      (MockedSharingService.revokeShare as Mock<any>).mockResolvedValueOnce(undefined);
+      (MockedSharingService.revokeShare as Mock<any>).mockResolvedValueOnce(
+        undefined
+      );
       installResponseMocks();
 
       const response = await request(app)
@@ -449,7 +495,9 @@ describe('SharingController', () => {
         },
         needsLogin: false,
       };
-      (MockedSharingService.acceptShareInvitation as Mock<any>).mockResolvedValueOnce(acceptedShare);
+      (
+        MockedSharingService.acceptShareInvitation as Mock<any>
+      ).mockResolvedValueOnce(acceptedShare);
       installResponseMocks();
 
       const response = await request(app)
@@ -477,7 +525,9 @@ describe('SharingController', () => {
         },
         needsLogin: true,
       };
-      (MockedSharingService.acceptShareInvitation as Mock<any>).mockResolvedValueOnce(pendingResult);
+      (
+        MockedSharingService.acceptShareInvitation as Mock<any>
+      ).mockResolvedValueOnce(pendingResult);
       installResponseMocks();
 
       const response = await request(app)
@@ -489,9 +539,9 @@ describe('SharingController', () => {
     });
 
     it('should return 404 for invalid or expired token', async () => {
-      (MockedSharingService.acceptShareInvitation as Mock<any>).mockRejectedValueOnce(
-        new Error('Invalid or expired share token')
-      );
+      (
+        MockedSharingService.acceptShareInvitation as Mock<any>
+      ).mockRejectedValueOnce(new Error('Invalid or expired share token'));
       installResponseMocks();
 
       const response = await request(app)
@@ -502,7 +552,9 @@ describe('SharingController', () => {
     });
 
     it('should return 400 when invitation email does not match', async () => {
-      (MockedSharingService.acceptShareInvitation as Mock<any>).mockRejectedValueOnce(
+      (
+        MockedSharingService.acceptShareInvitation as Mock<any>
+      ).mockRejectedValueOnce(
         new Error('Invitation sent to a different email')
       );
       installResponseMocks();
@@ -536,24 +588,24 @@ describe('SharingController', () => {
           createdAt: new Date('2024-01-01'),
         },
       ];
-      (MockedSharingService.getSharedProjects as Mock<any>).mockResolvedValueOnce(mockSharedProjects);
+      (
+        MockedSharingService.getSharedProjects as Mock<any>
+      ).mockResolvedValueOnce(mockSharedProjects);
       installResponseMocks();
 
-      const response = await request(app)
-        .get('/projects/shared')
-        .expect(200);
+      const response = await request(app).get('/projects/shared').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     it('should return empty array when no shared projects', async () => {
-      (MockedSharingService.getSharedProjects as Mock<any>).mockResolvedValueOnce([]);
+      (
+        MockedSharingService.getSharedProjects as Mock<any>
+      ).mockResolvedValueOnce([]);
       installResponseMocks();
 
-      const response = await request(app)
-        .get('/projects/shared')
-        .expect(200);
+      const response = await request(app).get('/projects/shared').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data).toEqual([]);
@@ -571,22 +623,18 @@ describe('SharingController', () => {
         }
       );
 
-      const response = await request(app)
-        .get('/projects/shared')
-        .expect(401);
+      const response = await request(app).get('/projects/shared').expect(401);
 
       expect(response.body.success).toBe(false);
     });
 
     it('should return 500 on service error', async () => {
-      (MockedSharingService.getSharedProjects as Mock<any>).mockRejectedValueOnce(
-        new Error('DB connection lost')
-      );
+      (
+        MockedSharingService.getSharedProjects as Mock<any>
+      ).mockRejectedValueOnce(new Error('DB connection lost'));
       installResponseMocks();
 
-      const response = await request(app)
-        .get('/projects/shared')
-        .expect(500);
+      const response = await request(app).get('/projects/shared').expect(500);
 
       expect(response.body.success).toBe(false);
     });

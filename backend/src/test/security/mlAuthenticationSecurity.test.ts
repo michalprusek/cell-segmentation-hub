@@ -28,7 +28,8 @@ vi.mock('../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -68,9 +69,7 @@ vi.mock('../../utils/logger', () => ({
   },
 }));
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const mockedApiLimiter = apiLimiter as MockedFunction<typeof apiLimiter>;
 
 describe('ML Authentication Security Tests', () => {
@@ -103,7 +102,8 @@ describe('ML Authentication Security Tests', () => {
       return Promise.resolve();
     }) as any);
 
-    mockedApiLimiter.mockImplementation(((req: any, res: any, next: any) => next()) as any);
+    mockedApiLimiter.mockImplementation(((req: any, res: any, next: any) =>
+      next()) as any);
   });
 
   describe('OWASP A01: Broken Access Control', () => {
@@ -114,11 +114,11 @@ describe('ML Authentication Security Tests', () => {
         email: 'other@example.com',
       });
 
-      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => { 
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         req.user = otherUser;
         next();
         return Promise.resolve();
-       });
+      });
 
       // Attempt to access queue with different user credentials
       const response = await request(app)
@@ -142,11 +142,11 @@ describe('ML Authentication Security Tests', () => {
         },
       });
 
-      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => { 
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         req.user = regularUser;
         next();
         return Promise.resolve();
-       });
+      });
 
       // Regular user should not be able to access admin-level ML operations
       const response = await request(app)
@@ -160,14 +160,20 @@ describe('ML Authentication Security Tests', () => {
 
     it('should enforce authentication on all protected endpoints', async () => {
       // Simulate the real authenticate middleware: reject requests with no token
-      mockedAuthenticate.mockImplementation((req: any, res: any, _next: any) => {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-          res.status(401).json({ success: false, message: 'Missing token', source: 'Auth' });
+      mockedAuthenticate.mockImplementation(
+        (req: any, res: any, _next: any) => {
+          const authHeader = req.headers['authorization'];
+          if (!authHeader) {
+            res.status(401).json({
+              success: false,
+              message: 'Missing token',
+              source: 'Auth',
+            });
+            return Promise.resolve();
+          }
           return Promise.resolve();
         }
-        return Promise.resolve();
-      });
+      );
 
       const protectedEndpoints = [
         { method: 'get', path: '/api/ml/queue' },
@@ -645,10 +651,16 @@ describe('ML Authentication Security Tests', () => {
     it('should prevent JWT token confusion', async () => {
       // Simulate the real authenticate middleware: only accept access tokens
       // (refresh tokens have a different audience/issuer in real jwt.ts)
-      mockedAuthenticate.mockImplementation((req: any, res: any, _next: any) => {
-        res.status(401).json({ success: false, message: 'Invalid token type', source: 'Auth' });
-        return Promise.resolve();
-      });
+      mockedAuthenticate.mockImplementation(
+        (req: any, res: any, _next: any) => {
+          res.status(401).json({
+            success: false,
+            message: 'Invalid token type',
+            source: 'Auth',
+          });
+          return Promise.resolve();
+        }
+      );
 
       // Test with refresh token used as access token
       const response = await request(app)

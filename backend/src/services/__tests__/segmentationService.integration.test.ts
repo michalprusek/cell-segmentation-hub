@@ -3,13 +3,7 @@
  * Tests the complete flow including WebSocket updates and database writes
  */
 
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SegmentationService } from '../segmentationService';
 import { PrismaClient as _PrismaClient } from '@prisma/client';
 import { getStorageProvider } from '../../storage';
@@ -61,8 +55,12 @@ describe.skip('SegmentationService - Integration Tests', () => {
     (axios.create as any).mockReturnValue(mockAxiosInstance);
 
     mockStorage = {
-      getBuffer: (vi.fn() as any).mockResolvedValue(Buffer.from('test-image-data')),
-      uploadFile: (vi.fn() as any).mockResolvedValue({ url: 'https://storage.example.com/file' }),
+      getBuffer: (vi.fn() as any).mockResolvedValue(
+        Buffer.from('test-image-data')
+      ),
+      uploadFile: (vi.fn() as any).mockResolvedValue({
+        url: 'https://storage.example.com/file',
+      }),
     };
     (getStorageProvider as any).mockReturnValue(mockStorage);
 
@@ -77,7 +75,9 @@ describe.skip('SegmentationService - Integration Tests', () => {
         update: vi.fn(),
         findMany: vi.fn(),
       },
-      $transaction: vi.fn((callback: (prisma: any) => any) => callback(mockPrisma)),
+      $transaction: vi.fn((callback: (prisma: any) => any) =>
+        callback(mockPrisma)
+      ),
     };
 
     mockWsEmitter = new MockWebSocketEmitter();

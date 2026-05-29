@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import WebSocketProvider from '@/contexts/WebSocketContext';
 import { useWebSocket } from '@/contexts/exports';
-import { AuthContext } from '@/contexts/useAuth';
+import { AuthContext } from '@/contexts/AuthContext.types';
 import WebSocketManager from '@/services/webSocketManager';
 
 // Mock WebSocketManager
@@ -43,6 +43,13 @@ describe('WebSocketContext', () => {
   let mockManager: any;
   let mockInstance: any;
 
+  // createWrapper is available to all nested describe blocks
+  const createWrapper = (authValue: any) => {
+    return ({ children }: { children: React.ReactNode }) => (
+      <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
+    );
+  };
+
   beforeEach(() => {
     // Get fresh mocks
     mockManager = WebSocketManager as any;
@@ -59,14 +66,6 @@ describe('WebSocketContext', () => {
   describe('WebSocketProvider', () => {
     const mockUser = { id: 'user-123', name: 'Test User' };
     const mockToken = 'test-token';
-
-    const createWrapper = (authValue: any) => {
-      return ({ children }: { children: React.ReactNode }) => (
-        <AuthContext.Provider value={authValue}>
-          {children}
-        </AuthContext.Provider>
-      );
-    };
 
     it('should render children', () => {
       const authValue = {

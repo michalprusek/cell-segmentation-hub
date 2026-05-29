@@ -262,15 +262,22 @@ describe(
 
     describe('retryWithTimeout', () => {
       it('should timeout if operation takes too long', async () => {
-        const fn = vi
-          .fn()
-          .mockImplementation(
-            () => new Promise(resolve => setTimeout(resolve, 5000))
-          );
+        // The implementation only interrupts between retry attempts (during sleep),
+        // not inside an in-flight await fn(). To test abort-via-timeout, fn must
+        // fail immediately so retries happen, and the abort fires during the sleep
+        // between retries.
+        const fn = vi.fn().mockRejectedValue(new Error('transient failure'));
 
-        const promise = retryWithTimeout(fn, 1000, { maxAttempts: 3 });
+        // timeout=50ms, initialDelay=500ms → abort fires at 50ms, well before
+        // the first retry sleep (500ms) completes → sleep is interrupted → abort.
+        const promise = retryWithTimeout(fn, 50, {
+          maxAttempts: 3,
+          initialDelay: 500,
+          maxDelay: 500,
+        });
 
-        await vi.advanceTimersByTimeAsync(1000);
+        // Advance past the timeout so the AbortController fires
+        await vi.advanceTimersByTimeAsync(100);
 
         const result = await promise;
         expect(result.success).toBe(false);
@@ -323,12 +330,15 @@ describe(
           initialDelay: 100,
         });
 
+        // Attach the rejection handler BEFORE advancing timers so that the
+        // promise rejection doesn't become an "unhandled rejection".
         const promise = retryableFn();
+        const expectation = expect(promise).rejects.toThrow(error);
 
         await vi.advanceTimersByTimeAsync(0);
         await vi.advanceTimersByTimeAsync(150);
 
-        await expect(promise).rejects.toThrow(error);
+        await expectation;
       });
     });
 

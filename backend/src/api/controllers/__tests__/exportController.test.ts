@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ExportController } from '../exportController';
 import { ExportService } from '../../../services/exportService';
 import { authenticate } from '../../../middleware/auth';
@@ -81,7 +75,9 @@ describe('ExportController', () => {
     };
 
     // Make getInstance return our mock service
-    (MockedExportService.getInstance as Mock<any>) = vi.fn().mockReturnValue(mockService);
+    (MockedExportService.getInstance as Mock<any>) = vi
+      .fn()
+      .mockReturnValue(mockService);
 
     // Mock logger methods
     mockedLogger.info = vi.fn() as MockedFunction<typeof logger.info>;
@@ -175,7 +171,10 @@ describe('ExportController', () => {
 
       const response = await request(app)
         .post(`/projects/${projectId}/export`)
-        .send({ options: { annotationFormats: ['coco'] }, projectName: 'Test Project' })
+        .send({
+          options: { annotationFormats: ['coco'] },
+          projectName: 'Test Project',
+        })
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -382,7 +381,11 @@ describe('ExportController', () => {
     it('should return export history list', async () => {
       const mockHistory = [
         { id: jobId, status: 'completed', createdAt: new Date('2024-01-01') },
-        { id: 'other-job-id', status: 'failed', createdAt: new Date('2024-01-02') },
+        {
+          id: 'other-job-id',
+          status: 'failed',
+          createdAt: new Date('2024-01-02'),
+        },
       ];
       mockService.getExportHistory.mockResolvedValueOnce(mockHistory);
 
@@ -423,9 +426,7 @@ describe('ExportController', () => {
 
   describe('getExportFormats', () => {
     it('should return available export formats without authentication', async () => {
-      const response = await request(app)
-        .get('/export/formats')
-        .expect(200);
+      const response = await request(app).get('/export/formats').expect(200);
 
       expect(response.body).toHaveProperty('annotations');
       expect(response.body).toHaveProperty('metrics');
@@ -434,9 +435,7 @@ describe('ExportController', () => {
     });
 
     it('should include coco, yolo, json annotation formats', async () => {
-      const response = await request(app)
-        .get('/export/formats')
-        .expect(200);
+      const response = await request(app).get('/export/formats').expect(200);
 
       const annotationIds = response.body.annotations.map(
         (f: { id: string }) => f.id
@@ -447,9 +446,7 @@ describe('ExportController', () => {
     });
 
     it('should include excel, csv, json metrics formats', async () => {
-      const response = await request(app)
-        .get('/export/formats')
-        .expect(200);
+      const response = await request(app).get('/export/formats').expect(200);
 
       const metricsIds = response.body.metrics.map((f: { id: string }) => f.id);
       expect(metricsIds).toContain('excel');

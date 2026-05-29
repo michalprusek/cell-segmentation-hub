@@ -15,34 +15,11 @@ import {
   type Language,
   type Translations,
 } from './LanguageContext.types';
-
-// Dynamic loaders — each language bundles into its own chunk via Vite's
-// import() splitting. The initial app bundle ships ONE language (the
-// user's preferred or browser default), not all six (which was ~150 KB
-// of unused JSON-shaped TypeScript before this change).
-const TRANSLATION_LOADERS: Record<Language, () => Promise<Translations>> = {
-  en: () => import('@/translations/en').then(m => m.default as Translations),
-  cs: () => import('@/translations/cs').then(m => m.default as Translations),
-  es: () => import('@/translations/es').then(m => m.default as Translations),
-  fr: () => import('@/translations/fr').then(m => m.default as Translations),
-  de: () => import('@/translations/de').then(m => m.default as Translations),
-  zh: () => import('@/translations/zh').then(m => m.default as Translations),
-};
-
-const SUPPORTED_LANGUAGES = Object.keys(TRANSLATION_LOADERS) as Language[];
-
-// Module-scope cache so a language re-selection across mount/unmount
-// doesn't re-fetch the chunk; the dynamic import is already cached by
-// the bundler but keeping the parsed module avoids re-instantiation.
-const _translationCache = new Map<Language, Translations>();
-
-async function loadTranslation(lang: Language): Promise<Translations> {
-  const cached = _translationCache.get(lang);
-  if (cached) return cached;
-  const mod = await TRANSLATION_LOADERS[lang]();
-  _translationCache.set(lang, mod);
-  return mod;
-}
+import {
+  SUPPORTED_LANGUAGES,
+  loadTranslation,
+  getCachedTranslation,
+} from './translationLoader';
 
 function resolveInitialLanguage(): Language {
   const local = localStorage.getItem('language') as Language | null;
@@ -60,8 +37,15 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   const [language, setLanguageState] = useState<Language>(
     resolveInitialLanguage
   );
+  // Lazy init from the module cache so a pre-loaded language (notably the
+  // test-seeded English chunk) is available on the very first synchronous
+  // render. In production the cache is empty at first paint, so this is
+  // null exactly as before — no behavior change — but it also lets a
+  // re-mount reuse an already-parsed chunk without a flash.
   const [currentTranslations, setCurrentTranslations] =
-    useState<Translations | null>(null);
+    useState<Translations | null>(
+      () => getCachedTranslation(resolveInitialLanguage()) ?? null
+    );
 
   // Tracks whether the user manually picked a language since the
   // profile-fetch effect last started. Set by `setLanguage` below; the

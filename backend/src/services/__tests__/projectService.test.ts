@@ -68,7 +68,9 @@ vi.mock('../sharingService', () => ({
 import * as projectService from '../projectService';
 import * as SharingService from '../sharingService';
 
-const mockHasProjectAccess = SharingService.hasProjectAccess as MockedFunction<typeof SharingService.hasProjectAccess>;
+const mockHasProjectAccess = SharingService.hasProjectAccess as MockedFunction<
+  typeof SharingService.hasProjectAccess
+>;
 
 describe('ProjectService', () => {
   beforeEach(() => {

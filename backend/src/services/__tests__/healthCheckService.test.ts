@@ -131,7 +131,9 @@ describe('HealthCheckService', () => {
     });
 
     it('returns degraded when non-critical service (ML) fails', async () => {
-      (mockAxiosGet as any).mockRejectedValue(new Error('ML service unavailable'));
+      (mockAxiosGet as any).mockRejectedValue(
+        new Error('ML service unavailable')
+      );
 
       const result = await service.checkHealth();
 
@@ -140,7 +142,9 @@ describe('HealthCheckService', () => {
     });
 
     it('returns unhealthy when critical service (database) fails', async () => {
-      (mockPrismaQueryRaw as any).mockRejectedValue(new Error('DB connection refused'));
+      (mockPrismaQueryRaw as any).mockRejectedValue(
+        new Error('DB connection refused')
+      );
 
       const result = await service.checkHealth();
 

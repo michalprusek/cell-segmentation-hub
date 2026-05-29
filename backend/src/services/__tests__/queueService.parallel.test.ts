@@ -23,7 +23,8 @@ vi.mock('../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -201,10 +202,14 @@ describe('QueueService Parallel Processing', () => {
 
     // Setup mock services
     mockSegmentationService = {
-      requestBatchSegmentation: vi.fn().mockImplementation(async (images: any[]) =>
-        images.map(() => mockSegmentationResults())
-      ),
-      requestSegmentation: vi.fn().mockImplementation(async () => mockSegmentationResults()),
+      requestBatchSegmentation: vi
+        .fn()
+        .mockImplementation(async (images: any[]) =>
+          images.map(() => mockSegmentationResults())
+        ),
+      requestSegmentation: vi
+        .fn()
+        .mockImplementation(async () => mockSegmentationResults()),
       saveSegmentationResults: (vi.fn() as any).mockResolvedValue(undefined),
       checkServiceHealth: (vi.fn() as any).mockResolvedValue(true),
     } as any;
@@ -214,7 +219,9 @@ describe('QueueService Parallel Processing', () => {
       getImageById: vi.fn().mockImplementation(async (imageId: string) => ({
         id: imageId,
         segmentationStatus: 'no_segmentation',
-        projectId: concurrentUsers.find(u => u.imageIds.includes(imageId))?.projectId || 'project_1',
+        projectId:
+          concurrentUsers.find(u => u.imageIds.includes(imageId))?.projectId ||
+          'project_1',
         name: `${imageId}.tif`,
         width: 512,
         height: 512,
@@ -258,24 +265,24 @@ describe('QueueService Parallel Processing', () => {
       }
     );
 
-    (prisma.segmentationQueue.createMany as MockedFunction<any>).mockImplementation(
-      async ({ data }: any) => {
-        const rows = Array.isArray(data) ? data : [];
-        for (const d of rows) {
-          queueStore.push({
-            id: `queue_${++queueIdCounter}`,
-            retryCount: 0,
-            error: null,
-            startedAt: null,
-            completedAt: null,
-            ...d,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
-        }
-        return { count: rows.length };
+    (
+      prisma.segmentationQueue.createMany as MockedFunction<any>
+    ).mockImplementation(async ({ data }: any) => {
+      const rows = Array.isArray(data) ? data : [];
+      for (const d of rows) {
+        queueStore.push({
+          id: `queue_${++queueIdCounter}`,
+          retryCount: 0,
+          error: null,
+          startedAt: null,
+          completedAt: null,
+          ...d,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
       }
-    );
+      return { count: rows.length };
+    });
 
     // Helper to filter queueStore by a where clause
     const matchesWhere = (entry: any, where: any): boolean => {
@@ -294,7 +301,9 @@ describe('QueueService Parallel Processing', () => {
       });
     };
 
-    (prisma.segmentationQueue.findMany as MockedFunction<any>).mockImplementation(
+    (
+      prisma.segmentationQueue.findMany as MockedFunction<any>
+    ).mockImplementation(
       async ({ where, take, orderBy: _orderBy }: any = {}) => {
         let results = queueStore.filter(e => matchesWhere(e, where));
         if (take !== undefined) results = results.slice(0, take);
@@ -302,21 +311,25 @@ describe('QueueService Parallel Processing', () => {
       }
     );
 
-    (prisma.segmentationQueue.findFirst as MockedFunction<any>).mockImplementation(
-      async ({ where }: any = {}) => queueStore.find(e => matchesWhere(e, where)) || null
+    (
+      prisma.segmentationQueue.findFirst as MockedFunction<any>
+    ).mockImplementation(
+      async ({ where }: any = {}) =>
+        queueStore.find(e => matchesWhere(e, where)) || null
     );
 
     (prisma.segmentationQueue.count as MockedFunction<any>).mockImplementation(
-      async ({ where }: any = {}) => queueStore.filter(e => matchesWhere(e, where)).length
+      async ({ where }: any = {}) =>
+        queueStore.filter(e => matchesWhere(e, where)).length
     );
 
-    (prisma.segmentationQueue.updateMany as MockedFunction<any>).mockImplementation(
-      async ({ where, data }: any) => {
-        const matching = queueStore.filter(e => matchesWhere(e, where));
-        matching.forEach(e => Object.assign(e, data));
-        return { count: matching.length };
-      }
-    );
+    (
+      prisma.segmentationQueue.updateMany as MockedFunction<any>
+    ).mockImplementation(async ({ where, data }: any) => {
+      const matching = queueStore.filter(e => matchesWhere(e, where));
+      matching.forEach(e => Object.assign(e, data));
+      return { count: matching.length };
+    });
 
     (prisma.segmentationQueue.update as MockedFunction<any>).mockImplementation(
       async ({ where, data }: any) => {
@@ -338,25 +351,38 @@ describe('QueueService Parallel Processing', () => {
     );
 
     // Mock image count to return a fixed value representing total test images
-    const totalTestImages = concurrentUsers.reduce((sum, u) => sum + u.imageIds.length, 0);
-    (prisma.image.count as MockedFunction<any>).mockResolvedValue(totalTestImages);
+    const totalTestImages = concurrentUsers.reduce(
+      (sum, u) => sum + u.imageIds.length,
+      0
+    );
+    (prisma.image.count as MockedFunction<any>).mockResolvedValue(
+      totalTestImages
+    );
     // image.findMany is used by addBatchToQueue to bulk-load accessible images.
     // Return all requested imageIds (from where.id.in) as accessible images with
     // no_segmentation status so they are all eligible for queueing.
     (prisma.image.findMany as MockedFunction<any>).mockImplementation(
       async ({ where }: any = {}) => {
         const ids: string[] = where?.id?.in ?? [];
-        return ids.map((id: string) => ({ id, segmentationStatus: 'no_segmentation' }));
+        return ids.map((id: string) => ({
+          id,
+          segmentationStatus: 'no_segmentation',
+        }));
       }
     );
     (prisma.image.findUnique as MockedFunction<any>).mockResolvedValue(null);
     (prisma.image.update as MockedFunction<any>).mockResolvedValue({});
-    (prisma.image.updateMany as MockedFunction<any>).mockResolvedValue({ count: 0 });
+    (prisma.image.updateMany as MockedFunction<any>).mockResolvedValue({
+      count: 0,
+    });
     (prisma.project.findMany as MockedFunction<any>).mockResolvedValue([]);
     // user.findUnique is called by addBatchToQueue to verify user exists.
     // Return a minimal user object for any userId.
     (prisma.user.findUnique as MockedFunction<any>).mockImplementation(
-      async ({ where }: any = {}) => ({ id: where?.id, email: `${where?.id}@test.com` })
+      async ({ where }: any = {}) => ({
+        id: where?.id,
+        email: `${where?.id}@test.com`,
+      })
     );
     (prisma.user.create as MockedFunction<any>).mockResolvedValue({});
     (prisma.project.create as MockedFunction<any>).mockResolvedValue({});
@@ -808,11 +834,16 @@ describe('QueueService Parallel Processing', () => {
       (prisma.$transaction as MockedFunction<any>).mockImplementation(
         async (callback: any) => {
           if (activeConnections >= MAX_POOL) {
-            throw new Error('Connection pool exhausted: timeout waiting for connection');
+            throw new Error(
+              'Connection pool exhausted: timeout waiting for connection'
+            );
           }
           activeConnections++;
           try {
-            const result = typeof callback === 'function' ? await callback(prisma) : undefined;
+            const result =
+              typeof callback === 'function'
+                ? await callback(prisma)
+                : undefined;
             return result;
           } finally {
             activeConnections--;
@@ -925,7 +956,9 @@ describe('QueueService Parallel Processing', () => {
       for (let round = 0; round < 3; round++) {
         for (const operation of concurrentOperations) {
           operationPromises.push(
-            Promise.resolve(operation()).catch(error => ({ error: error instanceof Error ? error.message : String(error) }))
+            Promise.resolve(operation()).catch(error => ({
+              error: error instanceof Error ? error.message : String(error),
+            }))
           );
         }
       }
@@ -1125,19 +1158,19 @@ describe('QueueService Parallel Processing', () => {
 
       // Mock segmentation service to fail for one specific call (batch_size=1 so requestSegmentation is used)
       let callCount = 0;
-      (
-        mockSegmentationService.requestSegmentation as any
-      ).mockImplementation(async () => {
-        callCount++;
+      (mockSegmentationService.requestSegmentation as any).mockImplementation(
+        async () => {
+          callCount++;
 
-        // Fail the second call (representing one user's failure during recovery)
-        if (callCount === 2) {
-          throw new Error('ML service temporarily unavailable');
+          // Fail the second call (representing one user's failure during recovery)
+          if (callCount === 2) {
+            throw new Error('ML service temporarily unavailable');
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 10));
+          return mockSegmentationResults();
         }
-
-        await new Promise(resolve => setTimeout(resolve, 10));
-        return mockSegmentationResults();
-      });
+      );
 
       // Process exactly 2 batches sequentially:
       // - Call 1: success (callCount=1)
@@ -1146,7 +1179,9 @@ describe('QueueService Parallel Processing', () => {
       const processingResults: PromiseSettledResult<void>[] = [];
       for (let i = 0; i < 2; i++) {
         const batch = await queueService.getNextBatch();
-        const result = await Promise.allSettled([queueService.processBatch(batch)]);
+        const result = await Promise.allSettled([
+          queueService.processBatch(batch),
+        ]);
         processingResults.push(...result);
       }
 
@@ -1262,18 +1297,18 @@ describe('QueueService Parallel Processing', () => {
       // Mock segmentation service to fail initially, then recover
       // Note: batch_size=1 always, so requestSegmentation is used (not requestBatchSegmentation)
       let failureCount = 0;
-      (
-        mockSegmentationService.requestSegmentation as any
-      ).mockImplementation(async () => {
-        failureCount++;
+      (mockSegmentationService.requestSegmentation as any).mockImplementation(
+        async () => {
+          failureCount++;
 
-        // Fail first two attempts, succeed afterwards
-        if (failureCount <= 2) {
-          throw new Error(`Temporary failure ${failureCount}`);
+          // Fail first two attempts, succeed afterwards
+          if (failureCount <= 2) {
+            throw new Error(`Temporary failure ${failureCount}`);
+          }
+
+          return mockSegmentationResults();
         }
-
-        return mockSegmentationResults();
-      });
+      );
 
       // Attempt processing multiple times
       let processingAttempts = 0;
@@ -1286,8 +1321,12 @@ describe('QueueService Parallel Processing', () => {
             await queueService.processBatch(batch);
             // processBatch catches errors internally and always resolves
             // Check if the item was successfully processed (removed from queue) by checking retryCount
-            const processedCount = await prisma.segmentationQueue.count({ where: { status: 'queued', retryCount: 0 } });
-            const totalCount = await prisma.segmentationQueue.count({ where: { status: 'queued' } });
+            const processedCount = await prisma.segmentationQueue.count({
+              where: { status: 'queued', retryCount: 0 },
+            });
+            const totalCount = await prisma.segmentationQueue.count({
+              where: { status: 'queued' },
+            });
             if (totalCount < 4 || processedCount < 4) {
               // Some item was either processed or retried
               successfulProcessing = true;
@@ -1382,10 +1421,17 @@ describe('QueueService Parallel Processing', () => {
       expect(metrics.totalTime).toBeLessThan(1000); // Should complete within 1 second
       expect(metrics.averageBatchTime).toBeLessThan(500); // Average batch time under 500ms
 
-      // Verify parallel processing performance benefit
-      // In test environment with instant mocks, timing may be 0ms so we guard against division by zero
+      // Verify parallel processing performance benefit.
+      // With instant mocks (and especially under coverage instrumentation),
+      // EITHER the total time OR the summed batch times can measure 0ms, so
+      // guard both — a 0 in the numerator was the source of intermittent
+      // "expected 0 to be greater than 0" failures. When timing is too fast
+      // to measure, assume the nominal 4x benefit.
       const sequentialEstimate = batchTimes.reduce((a, b) => a + b, 0); // Sum of all batch times
-      const parallelBenefit = metrics.totalTime > 0 ? sequentialEstimate / metrics.totalTime : 4; // Assume 4x if timing is too fast to measure
+      const parallelBenefit =
+        metrics.totalTime > 0 && sequentialEstimate > 0
+          ? sequentialEstimate / metrics.totalTime
+          : 4; // unmeasurable timing → nominal benefit
 
       expect(parallelBenefit).toBeGreaterThan(0); // Parallel processing provides some benefit (even if not measurable in fast tests)
 

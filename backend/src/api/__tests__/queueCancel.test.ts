@@ -3,14 +3,7 @@
  * Tests POST /api/queue/batch/:batchId/cancel functionality
  */
 
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-  beforeAll,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import request from 'supertest';
 import express, { Express } from 'express';
@@ -74,7 +67,6 @@ vi.mock('../../services/websocketService', () => ({
 //     cancelBatch: vi.fn(),
 //   },
 // }));
-
 
 // Test data fixtures
 const mockSegmentationJobs = {
@@ -159,7 +151,9 @@ const createMockApp = (): Express => {
 
     try {
       const { prisma } = await import('../../db');
-      const { WebSocketService } = await import('../../services/websocketService');
+      const { WebSocketService } = await import(
+        '../../services/websocketService'
+      );
       const webSocketService = WebSocketService.getInstance() as any; // Use module mock
       // mlService doesn't exist - create inline mock (tests mock at module level via mockMLServiceInstance)
       const mlService = mockMLServiceInstance;
@@ -241,24 +235,32 @@ const createMockApp = (): Express => {
 
       // Emit WebSocket events (non-blocking, errors are swallowed)
       Promise.resolve()
-        .then(() => webSocketService.emitToUser(userId, 'batchCancelled', {
-          batchId,
-          projectId: project.id,
-          cancelledJobs: jobsToCancel.length,
-          completedJobs: completedJobs.length,
-          timestamp: new Date().toISOString(),
-        }))
+        .then(() =>
+          webSocketService.emitToUser(userId, 'batchCancelled', {
+            batchId,
+            projectId: project.id,
+            cancelledJobs: jobsToCancel.length,
+            completedJobs: completedJobs.length,
+            timestamp: new Date().toISOString(),
+          })
+        )
         .catch(() => {});
 
       Promise.resolve()
-        .then(() => webSocketService.emitToRoom(`project:${project.id}`, 'batchCancelled', {
-          batchId,
-          projectId: project.id,
-          userId,
-          cancelledJobs: jobsToCancel.length,
-          completedJobs: completedJobs.length,
-          timestamp: new Date().toISOString(),
-        }))
+        .then(() =>
+          webSocketService.emitToRoom(
+            `project:${project.id}`,
+            'batchCancelled',
+            {
+              batchId,
+              projectId: project.id,
+              userId,
+              cancelledJobs: jobsToCancel.length,
+              completedJobs: completedJobs.length,
+              timestamp: new Date().toISOString(),
+            }
+          )
+        )
         .catch(() => {});
 
       // Send queue stats update
@@ -267,13 +269,15 @@ const createMockApp = (): Express => {
         totalJobs - completedJobs.length - jobsToCancel.length;
 
       Promise.resolve()
-        .then(() => webSocketService.emitToRoom(`project:${project.id}`, 'queueStats', {
-          projectId: project.id,
-          queued: 0,
-          processing: 0,
-          completed: completedJobs.length,
-          total: totalJobs,
-        }))
+        .then(() =>
+          webSocketService.emitToRoom(`project:${project.id}`, 'queueStats', {
+            projectId: project.id,
+            queued: 0,
+            processing: 0,
+            completed: completedJobs.length,
+            total: totalJobs,
+          })
+        )
         .catch(() => {});
 
       res.json({
@@ -807,8 +811,12 @@ describe('Segmentation Batch Cancel API Tests', () => {
           .mockResolvedValueOnce(cancelledBatch);
 
         // Run requests sequentially to ensure predictable mock consumption
-        const response1 = await request(app).post('/api/queue/batch/batch-123/cancel');
-        const response2 = await request(app).post('/api/queue/batch/batch-123/cancel');
+        const response1 = await request(app).post(
+          '/api/queue/batch/batch-123/cancel'
+        );
+        const response2 = await request(app).post(
+          '/api/queue/batch/batch-123/cancel'
+        );
 
         expect(response1.status).toBe(200);
         expect(response2.status).toBe(400);

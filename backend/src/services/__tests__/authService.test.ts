@@ -8,7 +8,8 @@ vi.mock('../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -84,9 +85,11 @@ const { prismaMock, sessionServiceMock } = vi.hoisted(() => ({
 
 // Mock withTransaction to just call the callback with the prisma client passed in
 vi.mock('../../utils/database', () => ({
-  withTransaction: vi.fn().mockImplementation(
-    async (prismaClient: any, callback: any) => callback(prismaClient)
-  ),
+  withTransaction: vi
+    .fn()
+    .mockImplementation(async (prismaClient: any, callback: any) =>
+      callback(prismaClient)
+    ),
 }));
 
 // Mock dependencies
@@ -382,7 +385,9 @@ describe('AuthService', () => {
       const refreshToken = 'valid-refresh-token';
       const specificError = new Error('Redis connection failed');
 
-      sessionServiceMock.deleteRefreshToken.mockRejectedValueOnce(specificError);
+      sessionServiceMock.deleteRefreshToken.mockRejectedValueOnce(
+        specificError
+      );
 
       await expect(authService.logout(refreshToken)).rejects.toThrow();
     });

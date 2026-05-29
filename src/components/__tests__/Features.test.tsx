@@ -279,8 +279,11 @@ describe('Features', () => {
   it('uses semantic HTML elements', () => {
     render(<Features />);
 
-    const section = screen.getByRole('region');
-    expect(section.tagName.toLowerCase()).toBe('section');
+    // The <section> has no aria-label so it does not have the ARIA "region" role;
+    // query it directly by tag/id instead.
+    const section = document.querySelector('section#features');
+    expect(section).toBeInTheDocument();
+    expect(section!.tagName.toLowerCase()).toBe('section');
 
     const headings = screen.getAllByRole('heading');
     expect(headings.length).toBeGreaterThanOrEqual(7); // 1 main + 6 feature headings

@@ -43,7 +43,9 @@ import {
 } from '../emailRetryService';
 import { retryService } from '../../utils/retryService';
 
-const mockExecuteWithRetry = retryService.executeWithRetry as ReturnType<typeof vi.fn>;
+const mockExecuteWithRetry = retryService.executeWithRetry as ReturnType<
+  typeof vi.fn
+>;
 
 describe('EmailRetryService', () => {
   beforeEach(() => {
@@ -61,7 +63,9 @@ describe('EmailRetryService', () => {
       const mockTransporter = {
         sendMail: vi.fn(() => Promise.resolve(mockResult)) as any,
       };
-      mockExecuteWithRetry.mockImplementationOnce(async (fn: () => unknown) => fn() as any);
+      mockExecuteWithRetry.mockImplementationOnce(
+        async (fn: () => unknown) => fn() as any
+      );
       mockTransporter.sendMail.mockResolvedValueOnce(mockResult as any);
 
       const config = {
@@ -90,9 +94,9 @@ describe('EmailRetryService', () => {
       // Simulate retry logic: executeWithRetry calls the fn twice internally
       mockExecuteWithRetry.mockImplementationOnce(async (fn: () => unknown) => {
         try {
-          return await fn() as any;
+          return (await fn()) as any;
         } catch {
-          return await fn() as any; // retry once
+          return (await fn()) as any; // retry once
         }
       });
 
@@ -113,7 +117,10 @@ describe('EmailRetryService', () => {
     it('detects duplicates within TTL', () => {
       testHelpers.recordEmailSent('user@example.com', 'Welcome!');
 
-      const isDuplicate = testHelpers.wasEmailAlreadySent('user@example.com', 'Welcome!');
+      const isDuplicate = testHelpers.wasEmailAlreadySent(
+        'user@example.com',
+        'Welcome!'
+      );
 
       expect(isDuplicate).toBe(true);
     });
@@ -121,13 +128,19 @@ describe('EmailRetryService', () => {
     it('is case-insensitive for email and subject', () => {
       testHelpers.recordEmailSent('User@Example.COM', 'WELCOME!');
 
-      const isDuplicate = testHelpers.wasEmailAlreadySent('user@example.com', 'welcome!');
+      const isDuplicate = testHelpers.wasEmailAlreadySent(
+        'user@example.com',
+        'welcome!'
+      );
 
       expect(isDuplicate).toBe(true);
     });
 
     it('returns false when no record exists', () => {
-      const isDuplicate = testHelpers.wasEmailAlreadySent('new@example.com', 'Hello');
+      const isDuplicate = testHelpers.wasEmailAlreadySent(
+        'new@example.com',
+        'Hello'
+      );
 
       expect(isDuplicate).toBe(false);
     });
@@ -137,7 +150,10 @@ describe('EmailRetryService', () => {
       testHelpers.recordEmailSent('old@example.com', 'Old subject');
       testHelpers.clearSentEmails(); // clear simulates TTL expiry for test purposes
 
-      const isDuplicate = testHelpers.wasEmailAlreadySent('old@example.com', 'Old subject');
+      const isDuplicate = testHelpers.wasEmailAlreadySent(
+        'old@example.com',
+        'Old subject'
+      );
 
       expect(isDuplicate).toBe(false);
     });
@@ -145,11 +161,15 @@ describe('EmailRetryService', () => {
 
   describe('recordEmailSent', () => {
     it('records in sent map so subsequent calls detect duplicate', () => {
-      expect(testHelpers.wasEmailAlreadySent('track@example.com', 'Track me')).toBe(false);
+      expect(
+        testHelpers.wasEmailAlreadySent('track@example.com', 'Track me')
+      ).toBe(false);
 
       testHelpers.recordEmailSent('track@example.com', 'Track me');
 
-      expect(testHelpers.wasEmailAlreadySent('track@example.com', 'Track me')).toBe(true);
+      expect(
+        testHelpers.wasEmailAlreadySent('track@example.com', 'Track me')
+      ).toBe(true);
     });
   });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
-import { render } from '@/test-utils/reactTestUtils';
+import { render as rtlRender, screen } from '@testing-library/react';
+import React from 'react';
 import ImageUploader from '@/components/ImageUploader';
 
 // Mock the sub-components
@@ -19,7 +19,7 @@ vi.mock('@/components/upload/DropZone', () => ({
           }
         }}
       />
-      <span>Drag & drop images here or click to browse</span>
+      <span>Drag &amp; drop images here or click to browse</span>
     </div>
   ),
 }));
@@ -45,6 +45,17 @@ vi.mock('@/components/upload/UploaderOptions', () => ({
   ),
 }));
 
+// Mock react-router-dom — stub out hooks that need a Router context
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useParams: () => ({}),
+    useNavigate: () => vi.fn(),
+    useLocation: () => ({ pathname: '/' }),
+  };
+});
+
 // Mock sonner toast
 vi.mock('sonner', () => ({
   toast: {
@@ -66,6 +77,18 @@ vi.mock('@/contexts/useUpload', () => ({
   }),
 }));
 
+// Mock useLanguage to avoid LanguageProvider complexity
+vi.mock('@/contexts/useLanguage', () => ({
+  useLanguage: () => ({
+    t: (key: string) => key,
+    language: 'en',
+    setLanguage: vi.fn(),
+  }),
+}));
+
+// Minimal wrapper — no Router, no heavy providers
+const render = (ui: React.ReactElement) => rtlRender(ui);
+
 describe('ImageUploader', () => {
   const defaultProps = {
     onUploadComplete: vi.fn(),
@@ -78,7 +101,7 @@ describe('ImageUploader', () => {
   it('renders upload area with correct text', () => {
     render(<ImageUploader {...defaultProps} />);
 
-    expect(screen.getByText(/drag & drop images here/i)).toBeInTheDocument();
+    expect(screen.getByText(/drag.*drop images here/i)).toBeInTheDocument();
   });
 
   it('accepts image files only', () => {
@@ -124,15 +147,6 @@ describe('ImageUploader', () => {
   });
 
   it('handles project ID from URL params', () => {
-    vi.mock('react-router-dom', async () => {
-      const actual = await vi.importActual('react-router-dom');
-      return {
-        ...actual,
-        useParams: () => ({ id: 'test-project-id' }),
-        useNavigate: () => vi.fn(),
-      };
-    });
-
     render(<ImageUploader {...defaultProps} />);
 
     expect(screen.getByTestId('dropzone')).toBeInTheDocument();

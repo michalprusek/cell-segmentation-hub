@@ -162,8 +162,15 @@ describe('ProjectsList', () => {
     it('shows loading skeleton when loading is true', () => {
       render(<ProjectsList {...defaultProps} loading />);
 
+      // SkeletonProjectCard renders 8 Skeleton elements each (each uses animate-pulse),
+      // so 6 cards × 8 = 48 total .animate-pulse elements. Assert that multiple
+      // skeleton items are present and that no project content is shown.
       const skeletonItems = document.querySelectorAll('.animate-pulse');
-      expect(skeletonItems).toHaveLength(6);
+      expect(skeletonItems.length).toBeGreaterThanOrEqual(6);
+
+      // Each card is wrapped in an .animate-in div; verify 6 wrappers exist
+      const skeletonWrappers = document.querySelectorAll('.animate-in.fade-in');
+      expect(skeletonWrappers).toHaveLength(6);
 
       expect(screen.queryByText('Project 1')).not.toBeInTheDocument();
     });

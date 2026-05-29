@@ -123,9 +123,7 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     extractMock.mockResolvedValue({
       frameCount: 5,
       durationMs: 5000,
-      channels: [
-        { name: 'irm', type: 'irm', isSegmentationSource: true },
-      ],
+      channels: [{ name: 'irm', type: 'irm', isSegmentationSource: true }],
       width: 128,
       height: 96,
     });
@@ -196,7 +194,9 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     // the secondary mark-as-failed failure.
     expect(loggerErrorMock).toHaveBeenCalled();
     const errorMessages = loggerErrorMock.mock.calls.map(c => c[0] as string);
-    expect(errorMessages.some(m => m.includes('Video upload failed'))).toBe(true);
+    expect(errorMessages.some(m => m.includes('Video upload failed'))).toBe(
+      true
+    );
     expect(
       errorMessages.some(m => m.includes('mark container as extraction_failed'))
     ).toBe(true);

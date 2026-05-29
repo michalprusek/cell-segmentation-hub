@@ -10,14 +10,10 @@ const mockThemeContext = {
   setTheme: vi.fn(),
 };
 
-vi.mock('@/contexts/ThemeContext', () => ({
+// The component imports useTheme from '@/contexts/exports' → './useTheme'.
+// Mocking '@/contexts/useTheme' intercepts that import correctly.
+vi.mock('@/contexts/useTheme', () => ({
   useTheme: () => mockThemeContext,
-  Theme: {
-    LIGHT: 'light',
-    DARK: 'dark',
-    SYSTEM: 'system',
-  },
-  ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 describe('ThemeSwitcher', () => {

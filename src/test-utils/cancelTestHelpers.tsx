@@ -36,8 +36,15 @@ export interface MockAbortController {
 
 export interface MockOperationManager {
   operations: Map<string, CancelOperation>;
+  stats: {
+    total: number;
+    active: number;
+    cancelled: number;
+    completed: number;
+  };
   registerOperation: ReturnType<typeof vi.fn>;
   cancelOperation: ReturnType<typeof vi.fn>;
+  cancelAllOperations: ReturnType<typeof vi.fn>;
   updateOperation: ReturnType<typeof vi.fn>;
   removeOperation: ReturnType<typeof vi.fn>;
   getOperation: ReturnType<typeof vi.fn>;
@@ -92,8 +99,17 @@ export const createMockAbortController = (): MockAbortController => {
 export const createMockOperationManager = (): MockOperationManager => {
   const operations = new Map<string, CancelOperation>();
 
-  return {
+  const manager: MockOperationManager = {
     operations,
+    get stats() {
+      const all = Array.from(operations.values());
+      return {
+        total: operations.size,
+        active: all.filter(op => op.status === 'active').length,
+        cancelled: all.filter(op => op.status === 'cancelled').length,
+        completed: all.filter(op => op.status === 'completed').length,
+      };
+    },
     registerOperation: vi.fn((operation: CancelOperation) => {
       operations.set(operation.id, operation);
       return operation.id;
@@ -107,8 +123,9 @@ export const createMockOperationManager = (): MockOperationManager => {
         status: 'cancelling',
       });
 
-      // Simulate async cancellation
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Simulate async cancellation with a minimal delay so the function remains
+      // async (returns a Promise) without blocking stress / throughput tests.
+      await new Promise(resolve => setTimeout(resolve, 0));
 
       operations.set(id, {
         ...operation,
@@ -117,6 +134,23 @@ export const createMockOperationManager = (): MockOperationManager => {
       });
 
       return true;
+    }),
+    cancelAllOperations: vi.fn(async (): Promise<void> => {
+      const ids = Array.from(operations.keys());
+      for (const id of ids) {
+        const operation = operations.get(id);
+        if (
+          operation &&
+          operation.status !== 'cancelled' &&
+          operation.status !== 'completed'
+        ) {
+          operations.set(id, {
+            ...operation,
+            status: 'cancelled',
+            endTime: Date.now(),
+          });
+        }
+      }
     }),
     updateOperation: vi.fn((id: string, updates: Partial<CancelOperation>) => {
       const operation = operations.get(id);
@@ -137,6 +171,8 @@ export const createMockOperationManager = (): MockOperationManager => {
       operations.clear();
     }),
   };
+
+  return manager;
 };
 
 /**

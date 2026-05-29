@@ -15,9 +15,9 @@ from api.metrics_endpoint import router as metrics_router  # noqa: E402
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
-    app = FastAPI()
-    app.include_router(metrics_router)
-    return TestClient(app)
+    _app = FastAPI()
+    _app.include_router(metrics_router)
+    return TestClient(_app)
 
 
 def _circle(cx: float, cy: float, r: float, n: int = 96) -> list:

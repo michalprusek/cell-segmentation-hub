@@ -59,13 +59,15 @@ export const createMockSocket = () => {
     },
 
     __simulateSegmentationUpdate: (update: SegmentationUpdate) => {
+      // The production WebSocketManager registers on 'segmentation-update'
       const handler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentationUpdate'
+        call => call[0] === 'segmentation-update'
       )?.[1];
       handler?.(update);
     },
 
     __simulateQueueStatsUpdate: (stats: QueueStats) => {
+      // The production WebSocketManager registers on 'queueStats' (backend event name)
       const handler = mockSocket.on.mock.calls.find(
         call => call[0] === 'queueStats'
       )?.[1];

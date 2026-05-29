@@ -312,7 +312,7 @@ describe('CanvasContainer - Core Functionality', () => {
 
       const totalTime = performance.now() - startTime;
       // Verify that re-renders complete successfully
-      expect(totalTime).toBeFinite();
+      expect(Number.isFinite(totalTime)).toBe(true);
       expect(screen.getByTestId('canvas-container')).toBeInTheDocument();
     });
 

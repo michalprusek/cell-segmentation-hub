@@ -798,8 +798,9 @@ describe('WebSocket Real-time Workflows', () => {
       ];
 
       malformedData.forEach(data => {
-        const handler =
-          testEnv.mockSocket.__getEventHandler('segmentationUpdate');
+        const handler = testEnv.mockSocket.__getEventHandler(
+          'segmentation-update'
+        );
         // Handler should exist and be callable (may throw for malformed data, which is acceptable)
         expect(handler).toBeDefined();
         expect(typeof handler).toBe('function');

@@ -28,15 +28,29 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 @pytest.fixture
 def client() -> TestClient:
-    """Create a test client for the FastAPI app."""
-    return TestClient(app)
+    """Create a test client for the FastAPI app.
+
+    Uses the context-manager form so that the lifespan startup/shutdown runs
+    (initialises app.state.model_loader) before the test body executes.
+    """
+    with TestClient(app) as tc:
+        yield tc
 
 
 @pytest.fixture
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
-    """Create an async test client for the FastAPI app."""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
+    """Create an async test client for the FastAPI app.
+
+    Uses asgi_lifespan.LifespanManager so that the FastAPI lifespan context
+    (model-loader init) runs before any test request, matching how the real
+    server behaves.
+    """
+    import httpx
+    from asgi_lifespan import LifespanManager
+    async with LifespanManager(app) as manager:
+        transport = httpx.ASGITransport(app=manager.app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
 
 
 @pytest.fixture

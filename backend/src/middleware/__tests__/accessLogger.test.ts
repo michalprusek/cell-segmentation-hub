@@ -1,10 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 import * as fs from 'fs';
 import { accessLogger, testExports } from '../accessLogger';
@@ -223,7 +217,11 @@ describe('Access Logger Middleware', () => {
 
     it('should fallback to req.ip when headers missing', () => {
       const { getClientIP } = testExports;
-      Object.defineProperty(mockReq, 'ip', { value: '127.0.0.1', writable: true, configurable: true });
+      Object.defineProperty(mockReq, 'ip', {
+        value: '127.0.0.1',
+        writable: true,
+        configurable: true,
+      });
       mockReq.headers = {};
 
       const ip = getClientIP(mockReq as Request);

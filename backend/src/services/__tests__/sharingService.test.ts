@@ -158,7 +158,10 @@ describe('SharingService', () => {
       prismaMock.project.findFirst.mockResolvedValueOnce(mockProject);
       prismaMock.projectShare.create.mockResolvedValueOnce(mockShare);
 
-      const result = await sharingService.shareProjectByLink('project-1', 'owner-1');
+      const result = await sharingService.shareProjectByLink(
+        'project-1',
+        'owner-1'
+      );
 
       expect(result).toEqual(mockShare);
       expect(prismaMock.projectShare.create).toHaveBeenCalledWith(
@@ -207,7 +210,10 @@ describe('SharingService', () => {
       prismaMock.projectShare.findMany.mockResolvedValueOnce(mockShares);
       process.env.FRONTEND_URL = 'http://localhost:3000';
 
-      const result = await sharingService.getProjectShares('project-1', 'owner-1');
+      const result = await sharingService.getProjectShares(
+        'project-1',
+        'owner-1'
+      );
 
       expect(result).toHaveLength(2);
       expect(prismaMock.projectShare.findMany).toHaveBeenCalledWith(
@@ -234,7 +240,10 @@ describe('SharingService', () => {
       prismaMock.projectShare.findFirst
         .mockResolvedValueOnce(null) // not a recipient share
         .mockResolvedValueOnce({ id: 'share-1', projectId: 'project-1' }); // owner's share
-      prismaMock.projectShare.update.mockResolvedValueOnce({ id: 'share-1', status: 'revoked' });
+      prismaMock.projectShare.update.mockResolvedValueOnce({
+        id: 'share-1',
+        status: 'revoked',
+      });
 
       await sharingService.revokeShare('share-1', 'owner-1');
 
@@ -264,10 +273,17 @@ describe('SharingService', () => {
         status: 'pending',
         tokenExpiry: null,
         email: null,
-        project: { id: 'project-1', user: { id: 'owner-1', email: 'owner@example.com' } },
+        project: {
+          id: 'project-1',
+          user: { id: 'owner-1', email: 'owner@example.com' },
+        },
         sharedBy: { id: 'owner-1', email: 'owner@example.com' },
       };
-      const updatedShare = { ...mockShare, status: 'accepted', sharedWithId: 'user-2' };
+      const updatedShare = {
+        ...mockShare,
+        status: 'accepted',
+        sharedWithId: 'user-2',
+      };
 
       prismaMock.projectShare.findFirst
         .mockResolvedValueOnce(mockShare) // token lookup
@@ -279,7 +295,10 @@ describe('SharingService', () => {
         sharedWith: { id: 'user-2' },
       });
 
-      const result = await sharingService.acceptShareInvitation('valid-token', 'user-2');
+      const result = await sharingService.acceptShareInvitation(
+        'valid-token',
+        'user-2'
+      );
 
       expect(result.needsLogin).toBe(false);
       expect(prismaMock.projectShare.update).toHaveBeenCalledWith(
@@ -306,7 +325,10 @@ describe('SharingService', () => {
         status: 'pending',
         tokenExpiry: null,
         email: null,
-        project: { id: 'project-1', user: { id: 'owner-1', email: 'owner@example.com' } },
+        project: {
+          id: 'project-1',
+          user: { id: 'owner-1', email: 'owner@example.com' },
+        },
         sharedBy: { id: 'owner-1' },
       };
       prismaMock.projectShare.findFirst.mockResolvedValueOnce(mockShare);
@@ -320,9 +342,15 @@ describe('SharingService', () => {
 
   describe('hasProjectAccess', () => {
     it('returns hasAccess true and isOwner true for project owner', async () => {
-      prismaMock.project.findFirst.mockResolvedValueOnce({ id: 'project-1', userId: 'owner-1' });
+      prismaMock.project.findFirst.mockResolvedValueOnce({
+        id: 'project-1',
+        userId: 'owner-1',
+      });
 
-      const result = await sharingService.hasProjectAccess('project-1', 'owner-1');
+      const result = await sharingService.hasProjectAccess(
+        'project-1',
+        'owner-1'
+      );
 
       expect(result).toEqual({ hasAccess: true, isOwner: true });
     });
@@ -339,7 +367,10 @@ describe('SharingService', () => {
         status: 'accepted',
       });
 
-      const result = await sharingService.hasProjectAccess('project-1', 'user-2');
+      const result = await sharingService.hasProjectAccess(
+        'project-1',
+        'user-2'
+      );
 
       expect(result).toEqual({
         hasAccess: true,
@@ -357,7 +388,10 @@ describe('SharingService', () => {
       prismaMock.projectShare.findFirst.mockResolvedValueOnce(null);
       prismaMock.projectShare.findMany.mockResolvedValueOnce([]);
 
-      const result = await sharingService.hasProjectAccess('project-1', 'user-3');
+      const result = await sharingService.hasProjectAccess(
+        'project-1',
+        'user-3'
+      );
 
       expect(result).toEqual({ hasAccess: false, isOwner: false });
     });
@@ -366,7 +400,10 @@ describe('SharingService', () => {
       prismaMock.project.findFirst.mockResolvedValueOnce(null);
       prismaMock.user.findUnique.mockResolvedValueOnce(null);
 
-      const result = await sharingService.hasProjectAccess('project-1', 'ghost-user');
+      const result = await sharingService.hasProjectAccess(
+        'project-1',
+        'ghost-user'
+      );
 
       expect(result).toEqual({ hasAccess: false, isOwner: false });
     });

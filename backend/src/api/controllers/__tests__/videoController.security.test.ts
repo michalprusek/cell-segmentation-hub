@@ -29,14 +29,19 @@ import request from 'supertest';
 
 // --- mocks (must come before importing the SUT) ------------------------
 
-const { fsAccessMock, prismaImageFindUnique, prismaImageUpdate, prismaUserFindUnique, prismaProjectFindFirst } =
-  vi.hoisted(() => ({
-    fsAccessMock: vi.fn(),
-    prismaImageFindUnique: vi.fn(),
-    prismaImageUpdate: vi.fn(),
-    prismaUserFindUnique: vi.fn(),
-    prismaProjectFindFirst: vi.fn(),
-  }));
+const {
+  fsAccessMock,
+  prismaImageFindUnique,
+  prismaImageUpdate,
+  prismaUserFindUnique,
+  prismaProjectFindFirst,
+} = vi.hoisted(() => ({
+  fsAccessMock: vi.fn(),
+  prismaImageFindUnique: vi.fn(),
+  prismaImageUpdate: vi.fn(),
+  prismaUserFindUnique: vi.fn(),
+  prismaProjectFindFirst: vi.fn(),
+}));
 
 vi.mock('fs/promises', () => ({
   default: { access: fsAccessMock, rm: vi.fn() },
@@ -166,7 +171,10 @@ describe('VideoController security regressions (round-2 GAP-2 + GAP-3)', () => {
         const res = await request(buildApp())
           .get('/images/frame-1/frame-data')
           .query({ channel: evil });
-        expect(res.status, `expected 400 for channel=${JSON.stringify(evil)}`).toBe(400);
+        expect(
+          res.status,
+          `expected 400 for channel=${JSON.stringify(evil)}`
+        ).toBe(400);
       }
       // After all invalid attempts, still no DB lookups (regex first gate).
       expect(prismaImageFindUnique).not.toHaveBeenCalled();

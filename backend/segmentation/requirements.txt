@@ -54,3 +54,8 @@ einops>=0.7.0
 
 # Prometheus metrics
 prometheus-fastapi-instrumentator==6.1.0
+
+# Test infrastructure (not used at runtime; installed separately in test envs)
+# asgi-lifespan: enables FastAPI lifespan in async httpx test clients
+# httpx: pinned to match starlette 0.27.0 TestClient compatibility
+# asgi-lifespan>=2.1

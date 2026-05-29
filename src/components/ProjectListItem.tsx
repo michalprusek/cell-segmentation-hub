@@ -62,7 +62,7 @@ const ProjectListItem = React.memo(
       <Card
         {...drag}
         className={cn(
-          'overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full dark:hover:bg-gray-800 dark:bg-gray-900'
+          'overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full dark:bg-gray-900'
         )}
         onClick={handleCardClick}
       >

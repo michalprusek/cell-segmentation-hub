@@ -1,9 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 
@@ -53,9 +48,9 @@ vi.mock('../../utils/response', () => ({
 vi.mock('../../config/uploadLimits', () => ({
   __esModule: true,
   getUploadLimitsForEnvironment: vi.fn(() => ({
-    AUTH_WINDOW_MS: 15 * 60 * 1000,   // 15 minutes
+    AUTH_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
     AUTH_MAX_REQUESTS: 20,
-    API_WINDOW_MS: 5 * 60 * 1000,     // 5 minutes
+    API_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
     API_MAX_REQUESTS: 1000,
     UPLOAD_WINDOW_MS: 5 * 60 * 1000,
     UPLOAD_MAX_REQUESTS: 200,
@@ -69,10 +64,7 @@ vi.mock('../../config/uploadLimits', () => ({
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import rateLimit from 'express-rate-limit';
-import {
-  authRateLimiter,
-  apiRateLimiter,
-} from '../rateLimiter';
+import { authRateLimiter, apiRateLimiter } from '../rateLimiter';
 
 const mockRateLimit = rateLimit as MockedFunction<typeof rateLimit>;
 
@@ -149,7 +141,9 @@ describe('Rate Limiter Middleware', () => {
   // -------------------------------------------------------------------------
   describe('rate limiter configurations', () => {
     it('express-rate-limit factory was called at least twice (auth + api)', () => {
-      expect(mockRateLimit.mock.calls.length + capturedConfigs.length).toBeGreaterThan(0);
+      expect(
+        mockRateLimit.mock.calls.length + capturedConfigs.length
+      ).toBeGreaterThan(0);
       // The module defines many limiters — at least authRateLimiter + apiRateLimiter
       expect(capturedConfigs.length).toBeGreaterThanOrEqual(2);
     });
@@ -209,7 +203,9 @@ describe('Rate Limiter Middleware', () => {
     const getSkipFn = (): ((req: Partial<Request>) => boolean) => {
       const cfg = capturedConfigs[0];
       if (!cfg) {
-        throw new Error('No rate limiter configs captured — ensure rateLimiter module was imported');
+        throw new Error(
+          'No rate limiter configs captured — ensure rateLimiter module was imported'
+        );
       }
       return cfg.skip as (req: Partial<Request>) => boolean;
     };
@@ -256,7 +252,9 @@ describe('Rate Limiter Middleware', () => {
     ) => void) => {
       const cfg = capturedConfigs[0];
       if (!cfg) {
-        throw new Error('No rate limiter configs captured — ensure rateLimiter module was imported');
+        throw new Error(
+          'No rate limiter configs captured — ensure rateLimiter module was imported'
+        );
       }
       return cfg.handler as (
         req: Partial<Request>,

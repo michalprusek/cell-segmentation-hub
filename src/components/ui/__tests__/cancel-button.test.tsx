@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
@@ -63,6 +63,8 @@ const CancelButton: React.FC<CancelButtonProps> = ({
     setIsCancelling(true);
     try {
       await onCancel(operationId);
+    } catch {
+      // Error is handled externally; reset loading state
     } finally {
       setIsCancelling(false);
     }
@@ -379,14 +381,14 @@ describe('CancelButton Component', () => {
 
       expect(button).toHaveFocus();
 
-      // Press Enter
-      fireEvent.keyDown(button, { key: 'Enter', code: 'Enter' });
+      // Press Enter via userEvent (simulates full browser keyboard interaction)
+      await user.keyboard('{Enter}');
       expect(mockOnCancel).toHaveBeenCalledWith('upload-001');
 
       vi.clearAllMocks();
 
-      // Press Space
-      fireEvent.keyDown(button, { key: ' ', code: 'Space' });
+      // Press Space via userEvent
+      await user.keyboard(' ');
       expect(mockOnCancel).toHaveBeenCalledWith('upload-001');
     });
   });
@@ -417,8 +419,13 @@ describe('CancelButton Component', () => {
     });
 
     it('should reset loading state after error', async () => {
-      const error = new Error('Network error');
-      mockOnCancel.mockRejectedValue(error);
+      let rejectCancel: (err: Error) => void;
+      mockOnCancel.mockImplementation(
+        () =>
+          new Promise<void>((_, reject) => {
+            rejectCancel = reject;
+          })
+      );
 
       render(
         <CancelButton
@@ -430,13 +437,20 @@ describe('CancelButton Component', () => {
       );
 
       const button = screen.getByTestId('cancel-button');
-      await user.click(button);
 
-      // Should show loading state initially
-      expect(button).toHaveTextContent('Cancelling...');
-      expect(button).toBeDisabled();
+      // Click but do NOT await so we can check intermediate state
+      user.click(button);
 
-      // Should reset after error
+      // Should show loading state while the promise is pending
+      await waitFor(() => {
+        expect(button).toHaveTextContent('Cancelling...');
+        expect(button).toBeDisabled();
+      });
+
+      // Now reject the promise to trigger error path
+      rejectCancel!(new Error('Network error'));
+
+      // Should reset after error resolves
       await waitFor(() => {
         expect(button).toHaveTextContent('Cancel Segmentation');
         expect(button).not.toBeDisabled();

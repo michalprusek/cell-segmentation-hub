@@ -9,21 +9,24 @@ const mockSetLanguage = vi.fn();
 let mockLanguage = 'en';
 const mockT = vi.fn((key: string) => key);
 
-vi.mock('@/contexts/LanguageContext', async () => {
-  const actual = await vi.importActual('@/contexts/LanguageContext');
-  return {
-    ...actual,
-    useLanguage: () => ({
-      language: mockLanguage,
-      setLanguage: mockSetLanguage,
-      t: mockT,
-    }),
-  };
-});
+// The component imports useLanguage from '@/contexts/exports' → './useLanguage'.
+// Mocking '@/contexts/useLanguage' intercepts that import correctly.
+vi.mock('@/contexts/useLanguage', () => ({
+  useLanguage: () => ({
+    language: mockLanguage,
+    setLanguage: mockSetLanguage,
+    t: mockT,
+  }),
+}));
 
 describe('LanguageSwitcher', () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    // Use clearAllMocks (not resetAllMocks) to preserve global mock implementations
+    // set in setup.ts (e.g. IntersectionObserver) that floating-ui/radix needs.
+    vi.clearAllMocks();
+    mockSetLanguage.mockReset();
+    mockT.mockReset();
+    mockT.mockImplementation((key: string) => key);
     mockLanguage = 'en';
   });
 

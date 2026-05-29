@@ -1,10 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { ImageController } from '../imageController';
@@ -21,7 +15,8 @@ vi.mock('../../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -35,7 +30,9 @@ vi.mock('../../../utils/config', () => ({
 vi.mock('../../../services/imageService');
 vi.mock('../../../middleware/auth');
 vi.mock('../../../services/segmentationThumbnailService', () => ({
-  SegmentationThumbnailService: vi.fn().mockImplementation(function (this: any) {
+  SegmentationThumbnailService: vi.fn().mockImplementation(function (
+    this: any
+  ) {
     this.generateThumbnail = vi.fn(() => Promise.resolve());
   }),
 }));
@@ -117,7 +114,10 @@ describe('ImageController - Large Batch Upload Tests', () => {
   };
 
   // Helper function to create mock FormData with files
-  const createMockFormData = (fileCount: number, fileSize: number = 1024): Express.Multer.File[] => {
+  const createMockFormData = (
+    fileCount: number,
+    fileSize: number = 1024
+  ): Express.Multer.File[] => {
     const files = Array.from({ length: fileCount }, (_, i) => ({
       fieldname: 'images',
       originalname: `test-image-${i + 1}.jpg`,
@@ -206,7 +206,9 @@ describe('ImageController - Large Batch Upload Tests', () => {
         updatedAt: new Date(),
       }));
 
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(mockUploadedImages);
+      mockImageService.uploadImagesWithProgress.mockResolvedValue(
+        mockUploadedImages
+      );
 
       const response = await request(app)
         .post('/api/projects/project-123/images')
@@ -252,7 +254,9 @@ describe('ImageController - Large Batch Upload Tests', () => {
         updatedAt: new Date(),
       }));
 
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(mockUploadedImages);
+      mockImageService.uploadImagesWithProgress.mockResolvedValue(
+        mockUploadedImages
+      );
 
       const response = await request(app)
         .post('/api/projects/project-123/images-50')
@@ -408,7 +412,9 @@ describe('ImageController - Large Batch Upload Tests', () => {
         },
       ];
 
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(mockUploadedImages);
+      mockImageService.uploadImagesWithProgress.mockResolvedValue(
+        mockUploadedImages
+      );
 
       // Simulate concurrent requests
       const requests = Array.from({ length: 5 }, () =>
@@ -422,7 +428,9 @@ describe('ImageController - Large Batch Upload Tests', () => {
         expect(response.body.success).toBe(true);
       });
 
-      expect(mockImageService.uploadImagesWithProgress).toHaveBeenCalledTimes(5);
+      expect(mockImageService.uploadImagesWithProgress).toHaveBeenCalledTimes(
+        5
+      );
     });
 
     it('should handle upload timeout gracefully', async () => {
@@ -471,7 +479,9 @@ describe('ImageController - Large Batch Upload Tests', () => {
         updatedAt: new Date(),
       }));
 
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(mockUploadedImages);
+      mockImageService.uploadImagesWithProgress.mockResolvedValue(
+        mockUploadedImages
+      );
 
       const response = await request(app)
         .post('/api/projects/project-123/images-memory')
@@ -598,7 +608,9 @@ describe('ImageController - Large Batch Upload Tests', () => {
           updatedAt: new Date(),
         },
       ];
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(mockUploadedImages);
+      mockImageService.uploadImagesWithProgress.mockResolvedValue(
+        mockUploadedImages
+      );
 
       const response = await request(app)
         .post('/api/projects/project-123/images-suspicious')
@@ -646,7 +658,9 @@ describe('ImageController - Large Batch Upload Tests', () => {
         },
       ];
 
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(mockUploadedImages);
+      mockImageService.uploadImagesWithProgress.mockResolvedValue(
+        mockUploadedImages
+      );
 
       const response = await request(app)
         .post('/api/projects/project-123/images-mismatch')
@@ -676,7 +690,9 @@ describe('ImageController - Large Batch Upload Tests', () => {
         },
       ];
 
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(mockUploadedImages);
+      mockImageService.uploadImagesWithProgress.mockResolvedValue(
+        mockUploadedImages
+      );
 
       const response = await request(app)
         .post('/api/projects/project-123/images')

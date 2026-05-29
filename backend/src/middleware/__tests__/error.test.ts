@@ -1,9 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 
 // All mocks BEFORE source imports
@@ -42,7 +37,10 @@ import { errorHandler, ApiError, notFoundHandler } from '../error';
 // -------------------------------------------------------------------------
 
 /** Build a minimal Prisma error object */
-const buildPrismaError = (code: string, meta?: Record<string, unknown>): Error => {
+const buildPrismaError = (
+  code: string,
+  meta?: Record<string, unknown>
+): Error => {
   const err = new Error(`Prisma error ${code}`) as Error & {
     name: string;
     code: string;
@@ -119,7 +117,9 @@ describe('Error Middleware', () => {
 
       expect(ResponseHelper.validationError).toHaveBeenCalledWith(
         mockRes,
-        expect.objectContaining({ email: expect.arrayContaining(['Invalid email']) }),
+        expect.objectContaining({
+          email: expect.arrayContaining(['Invalid email']),
+        }),
         expect.any(String)
       );
     });
@@ -131,7 +131,9 @@ describe('Error Middleware', () => {
 
       expect(ResponseHelper.validationError).toHaveBeenCalledWith(
         mockRes,
-        expect.objectContaining({ 'user.email': expect.arrayContaining(['Required']) }),
+        expect.objectContaining({
+          'user.email': expect.arrayContaining(['Required']),
+        }),
         expect.any(String)
       );
     });
@@ -327,7 +329,7 @@ describe('Error Middleware', () => {
 
       expect(ResponseHelper.notFound).toHaveBeenCalledWith(
         mockRes,
-        expect.stringContaining('DELETE'),
+        expect.stringContaining('DELETE')
       );
     });
 
@@ -338,7 +340,7 @@ describe('Error Middleware', () => {
 
       expect(ResponseHelper.notFound).toHaveBeenCalledWith(
         mockRes,
-        expect.stringContaining('/api/unknown'),
+        expect.stringContaining('/api/unknown')
       );
     });
   });

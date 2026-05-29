@@ -235,7 +235,7 @@ describe('API Client - Advanced Features', () => {
 
       // Verify refresh was called
       expect(callableMock.post).toHaveBeenCalledWith(
-        '/auth/refresh',
+        '/auth/refresh-token',
         expect.objectContaining({ refreshToken: 'valid-refresh-token' })
       );
 

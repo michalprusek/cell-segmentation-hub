@@ -14,21 +14,25 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/hooks/useLocalizedModels', () => ({
   useLocalizedModels: vi.fn(() => ({
-    selectedModel: 'hrnet',
+    // Use 'segformer' as selected model (maps to 'fast' preset tier, shown in main section)
+    selectedModel: 'segformer',
     confidenceThreshold: 0.5,
     detectHoles: true,
     setSelectedModel: vi.fn(),
     setDetectHoles: vi.fn(),
     availableModels: [
       {
-        id: 'hrnet',
+        // 'segformer' maps to the 'fast' preset tier so it appears in the
+        // primary (non-collapsed) section of the component.
+        id: 'segformer',
         displayName: 'HRNet',
         size: 'medium',
         description: 'High-resolution network',
         category: 'spheroid',
       },
       {
-        id: 'unet',
+        // 'cbam_resunet' maps to the 'accurate' preset tier.
+        id: 'cbam_resunet',
         displayName: 'U-Net',
         size: 'small',
         description: 'Classic U-Net',
@@ -93,21 +97,22 @@ describe('ModelSettingsSection', () => {
     const { useLocalizedModels } = await import('@/hooks/useLocalizedModels');
     const setSelectedModel = vi.fn();
     vi.mocked(useLocalizedModels).mockReturnValueOnce({
-      selectedModel: 'hrnet',
+      // Use preset-tier IDs so models appear in primary (non-collapsed) sections.
+      selectedModel: 'segformer',
       confidenceThreshold: 0.5,
       detectHoles: true,
       setSelectedModel,
       setDetectHoles: vi.fn(),
       availableModels: [
         {
-          id: 'hrnet',
+          id: 'segformer', // maps to 'fast' tier
           displayName: 'HRNet',
           size: 'medium',
           description: '',
           category: 'spheroid',
         },
         {
-          id: 'unet',
+          id: 'cbam_resunet', // maps to 'accurate' tier
           displayName: 'U-Net',
           size: 'small',
           description: '',
@@ -123,6 +128,6 @@ describe('ModelSettingsSection', () => {
     render(<ModelSettingsSection />);
     const unetRadio = screen.getByRole('radio', { name: /u-net/i });
     await user.click(unetRadio);
-    expect(setSelectedModel).toHaveBeenCalledWith('unet');
+    expect(setSelectedModel).toHaveBeenCalledWith('cbam_resunet');
   });
 });

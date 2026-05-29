@@ -12,7 +12,7 @@ const NewProjectListItem = ({ onClick }: NewProjectListItemProps) => {
 
   return (
     <Card
-      className="overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 w-full dark:hover:bg-gray-800 dark:bg-gray-900"
+      className="overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 w-full dark:bg-gray-900"
       onClick={onClick}
     >
       <div className="flex items-center p-4">

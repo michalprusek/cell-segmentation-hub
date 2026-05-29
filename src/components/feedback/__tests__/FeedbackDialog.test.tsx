@@ -47,8 +47,8 @@ describe('FeedbackDialog', () => {
       screen.getByPlaceholderText(/Steps to reproduce/i)
     ).toBeInTheDocument();
 
-    // Dropzone prompt text
-    expect(screen.getByText(/Drag a screenshot here/i)).toBeInTheDocument();
+    // Dropzone prompt text (now accepts a file — screenshot or video/ND2)
+    expect(screen.getByText(/Drag a file here/i)).toBeInTheDocument();
   });
 
   it('disables submit until both title and body have content', () => {
@@ -92,7 +92,8 @@ describe('FeedbackDialog', () => {
         title: 'Bug in editor',
         body: 'When I click X, Y happens',
       },
-      undefined
+      undefined, // no attachment
+      undefined // no progress callback (only passed when a file is attached)
     );
 
     await waitFor(() => {

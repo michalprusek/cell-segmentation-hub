@@ -104,7 +104,9 @@ const mockFile = {
 };
 
 const mockGetStorageProvider = getStorageProvider as ReturnType<typeof vi.fn>;
-const mockGenerateKey = (LocalStorageProvider as any).generateKey as ReturnType<typeof vi.fn>;
+const mockGenerateKey = (LocalStorageProvider as any).generateKey as ReturnType<
+  typeof vi.fn
+>;
 const mockGetBaseUrl = getBaseUrl as ReturnType<typeof vi.fn>;
 
 describe('ImageService', () => {
@@ -122,7 +124,9 @@ describe('ImageService', () => {
     );
     mockGetBaseUrl.mockReturnValue('http://localhost:3001');
     storageMock.upload.mockResolvedValue(mockUploadResult);
-    storageMock.getUrl.mockResolvedValue('http://localhost:3001/uploads/test.jpg');
+    storageMock.getUrl.mockResolvedValue(
+      'http://localhost:3001/uploads/test.jpg'
+    );
     storageMock.delete.mockResolvedValue(undefined);
   });
 
@@ -137,7 +141,9 @@ describe('ImageService', () => {
       ]);
 
       expect(prismaMock.project.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ id: 'project-id' }) })
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'project-id' }),
+        })
       );
       expect(storageMock.upload).toHaveBeenCalledTimes(1);
       expect(prismaMock.image.create).toHaveBeenCalledTimes(1);
@@ -191,7 +197,9 @@ describe('ImageService', () => {
     };
 
     beforeEach(() => {
-      prismaMock.user.findUnique.mockResolvedValue({ email: 'user@test.com' } as any);
+      prismaMock.user.findUnique.mockResolvedValue({
+        email: 'user@test.com',
+      } as any);
       prismaMock.project.findFirst.mockResolvedValue(mockProject as any);
     });
 
@@ -274,9 +282,7 @@ describe('ImageService', () => {
       prismaMock.image.findFirst.mockResolvedValueOnce(mockImage as any);
       prismaMock.image.delete.mockResolvedValueOnce(mockImage as any);
       // emitProjectStatsUpdate calls image.count twice
-      prismaMock.image.count
-        .mockResolvedValueOnce(5)
-        .mockResolvedValueOnce(3);
+      prismaMock.image.count.mockResolvedValueOnce(5).mockResolvedValueOnce(3);
 
       await service.deleteImage('image-id', 'user-id');
 
@@ -315,9 +321,7 @@ describe('ImageService', () => {
       });
 
       // emitProjectStatsUpdate
-      prismaMock.image.count
-        .mockResolvedValueOnce(4)
-        .mockResolvedValueOnce(2);
+      prismaMock.image.count.mockResolvedValueOnce(4).mockResolvedValueOnce(2);
 
       const result = await service.deleteBatch(
         ['image-id'],
@@ -344,8 +348,16 @@ describe('ImageService', () => {
     it('computes totalImages, totalSize, and byStatus correctly', async () => {
       prismaMock.project.findFirst.mockResolvedValueOnce(mockProject as any);
       prismaMock.image.findMany.mockResolvedValueOnce([
-        { fileSize: 500, segmentationStatus: 'segmented', mimeType: 'image/jpeg' },
-        { fileSize: 300, segmentationStatus: 'no_segmentation', mimeType: 'image/png' },
+        {
+          fileSize: 500,
+          segmentationStatus: 'segmented',
+          mimeType: 'image/jpeg',
+        },
+        {
+          fileSize: 300,
+          segmentationStatus: 'no_segmentation',
+          mimeType: 'image/png',
+        },
         { fileSize: 200, segmentationStatus: 'failed', mimeType: 'image/jpeg' },
       ] as any);
 
@@ -396,7 +408,11 @@ describe('ImageService', () => {
         segmentationStatus: 'processing',
       } as any);
       // emitProjectStatsUpdate: does NOT emit for 'processing' status
-      await service.updateSegmentationStatus('image-id', 'processing', 'user-id');
+      await service.updateSegmentationStatus(
+        'image-id',
+        'processing',
+        'user-id'
+      );
 
       expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user-id' },

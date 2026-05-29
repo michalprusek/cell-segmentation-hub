@@ -147,7 +147,8 @@ describe('Hero', () => {
     render(<Hero />);
 
     const images = document.querySelectorAll('img');
-    expect(images).toHaveLength(2);
+    // Component renders 3 showcase images
+    expect(images).toHaveLength(3);
 
     images.forEach(img => {
       expect(img).toHaveAttribute('alt');
@@ -255,8 +256,9 @@ describe('Hero', () => {
   it('has proper grid layout for images', () => {
     render(<Hero />);
 
+    // Component uses a 3-column grid on md+ screens
     const imageGrid = document.querySelector(
-      '.grid.grid-cols-1.md\\:grid-cols-2.gap-8'
+      '.grid.grid-cols-1.md\\:grid-cols-3.gap-6'
     );
     expect(imageGrid).toBeInTheDocument();
   });
@@ -342,10 +344,11 @@ describe('Hero', () => {
   it('has gradient overlays on image containers', () => {
     render(<Hero />);
 
+    // Component has 3 image containers, each with a gradient overlay
     const gradientOverlays = document.querySelectorAll(
       '.bg-gradient-to-r.from-blue-500\\/10.to-purple-500\\/10'
     );
-    expect(gradientOverlays).toHaveLength(2);
+    expect(gradientOverlays).toHaveLength(3);
 
     gradientOverlays.forEach(overlay => {
       expect(overlay).toHaveClass('absolute', 'inset-0');

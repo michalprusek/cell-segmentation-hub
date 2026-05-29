@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
@@ -57,9 +51,7 @@ vi.mock('../../../utils/config', () => ({
 // Import router AFTER mocks are in place
 import { exportRoutes } from '../exportRoutes';
 
-const mockedAuthenticate = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockedAuthenticate = authenticate as MockedFunction<typeof authenticate>;
 const mockedLogger = logger as Mocked<typeof logger>;
 
 const mockUser = {
@@ -77,7 +69,7 @@ describe('Export Routes', () => {
 
   beforeEach(() => {
     // Reset service mock methods (but keep the same instance reference)
-    Object.values(mockServiceInstance).forEach((fn) => fn.mockReset());
+    Object.values(mockServiceInstance).forEach(fn => fn.mockReset());
 
     app = express();
     app.use(express.json());
@@ -339,7 +331,11 @@ describe('Export Routes', () => {
 
     it('should return export history', async () => {
       const mockHistory = [
-        { id: validJobId, status: 'completed', createdAt: new Date('2024-01-01') },
+        {
+          id: validJobId,
+          status: 'completed',
+          createdAt: new Date('2024-01-01'),
+        },
       ];
       mockServiceInstance.getExportHistory.mockResolvedValueOnce(mockHistory);
 

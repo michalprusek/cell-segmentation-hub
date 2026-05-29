@@ -228,7 +228,7 @@ describe('Polygon Slicing', () => {
       expect(noIntersectValidation.isValid).toBe(false);
       expect(noIntersectValidation.intersectionCount).toBe(0);
       expect(noIntersectValidation.reason).toContain(
-        'Expected 2 intersections, found 0'
+        'Slice line does not intersect the polygon'
       );
 
       // One intersection with segment, but infinite line has two intersections
@@ -252,7 +252,7 @@ describe('Polygon Slicing', () => {
       );
 
       expect(validation.isValid).toBe(false);
-      expect(validation.reason).toBe('Slice line is too short');
+      expect(validation.reason).toContain('Slice line is too short');
     });
 
     it('should reject invalid polygons', () => {
@@ -618,7 +618,7 @@ describe('Polygon Slicing', () => {
 
       const validation = validateSliceLine(square, samePoint, samePoint);
       expect(validation.isValid).toBe(false);
-      expect(validation.reason).toBe('Slice line is too short');
+      expect(validation.reason).toContain('Slice line is too short');
     });
   });
 

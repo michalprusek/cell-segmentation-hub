@@ -3,8 +3,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Vitest hoists `vi.mock(...)` above all top-level statements. To share
 // state between the factory and the test body, declare those bindings
 // inside `vi.hoisted(() => ({ ... }))` — that block also gets hoisted.
-const { mockExecuteRedisCommand, mockRedisClient, getExecuteRedisCommandImpl, setExecuteRedisCommandImpl } = vi.hoisted(() => {
-  let executeRedisCommandImpl: ((client: any) => Promise<unknown>) | null = null;
+const {
+  mockExecuteRedisCommand,
+  mockRedisClient,
+  getExecuteRedisCommandImpl,
+  setExecuteRedisCommandImpl,
+} = vi.hoisted(() => {
+  let executeRedisCommandImpl: ((client: any) => Promise<unknown>) | null =
+    null;
 
   const mockExecuteRedisCommand = vi.fn(
     async (fn: (client: any) => Promise<unknown>) => {
@@ -74,7 +80,9 @@ describe('CacheService', () => {
         fn({ get: async () => cachedEntry })
       );
 
-      const result = await service.get<{ userId: string; name: string }>('user:123');
+      const result = await service.get<{ userId: string; name: string }>(
+        'user:123'
+      );
 
       expect(result).toEqual({ userId: '123', name: 'Alice' });
     });
@@ -100,9 +108,7 @@ describe('CacheService', () => {
         .mockImplementationOnce(async (fn: any) =>
           fn({ get: async () => expiredEntry })
         )
-        .mockImplementationOnce(async (fn: any) =>
-          fn({ del: async () => 1 })
-        );
+        .mockImplementationOnce(async (fn: any) => fn({ del: async () => 1 }));
 
       const result = await service.get('stale-key');
 
@@ -110,7 +116,9 @@ describe('CacheService', () => {
     });
 
     it('returns null and does not throw when Redis is unavailable', async () => {
-      mockExecuteRedisCommand.mockRejectedValueOnce(new Error('Redis ECONNREFUSED') as any);
+      mockExecuteRedisCommand.mockRejectedValueOnce(
+        new Error('Redis ECONNREFUSED') as any
+      );
 
       const result = await service.get('any-key');
 
@@ -124,7 +132,11 @@ describe('CacheService', () => {
         fn({ setEx: async () => 'OK' })
       );
 
-      const result = await service.set('user:profile:1', { name: 'Bob' }, { ttl: 600 });
+      const result = await service.set(
+        'user:profile:1',
+        { name: 'Bob' },
+        { ttl: 600 }
+      );
 
       expect(result).toBe(true);
     });
@@ -146,7 +158,9 @@ describe('CacheService', () => {
     });
 
     it('returns false when Redis set fails', async () => {
-      mockExecuteRedisCommand.mockRejectedValueOnce(new Error('write failed') as any);
+      mockExecuteRedisCommand.mockRejectedValueOnce(
+        new Error('write failed') as any
+      );
 
       const result = await service.set('fail-key', 'value');
 
@@ -218,7 +232,10 @@ describe('CacheService', () => {
     it('deletes matching keys and returns count', async () => {
       mockExecuteRedisCommand.mockImplementationOnce(async (fn: any) =>
         fn({
-          scan: async () => ({ cursor: 0, keys: ['cache:user:1', 'cache:user:2'] }),
+          scan: async () => ({
+            cursor: 0,
+            keys: ['cache:user:1', 'cache:user:2'],
+          }),
           unlink: async () => 2,
         })
       );
@@ -242,7 +259,9 @@ describe('CacheService', () => {
     });
 
     it('handles Redis error gracefully and returns 0', async () => {
-      mockExecuteRedisCommand.mockRejectedValueOnce(new Error('scan error') as any);
+      mockExecuteRedisCommand.mockRejectedValueOnce(
+        new Error('scan error') as any
+      );
 
       const deletedCount = await service.invalidatePattern('any:*');
 
@@ -253,7 +272,11 @@ describe('CacheService', () => {
   describe('getStats', () => {
     it('returns hits, misses, and hitRate after operations', async () => {
       // Simulate a hit
-      const cachedEntry = JSON.stringify({ data: 'x', timestamp: Date.now(), ttl: 600 });
+      const cachedEntry = JSON.stringify({
+        data: 'x',
+        timestamp: Date.now(),
+        ttl: 600,
+      });
       mockExecuteRedisCommand
         .mockImplementationOnce(async (fn: any) =>
           fn({ get: async () => cachedEntry })

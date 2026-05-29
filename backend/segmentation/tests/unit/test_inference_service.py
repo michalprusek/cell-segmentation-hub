@@ -33,7 +33,9 @@ class TestInferenceService:
         """Create a mock model manager."""
         mock_manager = Mock(spec=ModelManager)
         mock_manager.get_model = Mock()
+        mock_manager.load_model = Mock()
         mock_manager.models = {}
+        mock_manager.device = torch.device('cpu')
         return mock_manager
     
     @pytest.fixture
@@ -108,78 +110,78 @@ class TestInferenceService:
         img_byte_arr = io.BytesIO()
         sample_image.save(img_byte_arr, format='PNG')
         img_byte_arr = img_byte_arr.getvalue()
-        
-        # Mock model manager to return a model
+
+        # Mock model manager to return a model via load_model (what segment_image calls)
         mock_model = Mock()
         mock_model.eval.return_value = mock_model
         mock_model.to.return_value = mock_model
         mock_output = torch.sigmoid(torch.rand(1, 1, 1024, 1024))
         mock_model.return_value = mock_output
-        mock_model_manager.get_model.return_value = mock_model
-        
+        mock_model_manager.load_model.return_value = mock_model
+
         # Call segment_image
         result = await inference_service.segment_image(
             image_data=img_byte_arr,
             model_name='test_model',
             threshold=0.5
         )
-        
+
         assert isinstance(result, dict)
         assert 'polygons' in result
-        assert 'metadata' in result
+        assert 'processing_stats' in result
     
     @pytest.mark.asyncio
     async def test_segment_image_with_grayscale(self, inference_service, mock_model_manager):
         """Test segmentation with grayscale image."""
         grayscale_image = Image.new('L', (256, 256), color=128)
-        
+
         # Convert to bytes
         import io
         img_byte_arr = io.BytesIO()
         grayscale_image.save(img_byte_arr, format='PNG')
         img_byte_arr = img_byte_arr.getvalue()
-        
-        # Mock model
+
+        # Mock model via load_model
         mock_model = Mock()
         mock_model.eval.return_value = mock_model
         mock_model.to.return_value = mock_model
         mock_output = torch.sigmoid(torch.rand(1, 1, 1024, 1024))
         mock_model.return_value = mock_output
-        mock_model_manager.get_model.return_value = mock_model
-        
+        mock_model_manager.load_model.return_value = mock_model
+
         result = await inference_service.segment_image(
             image_data=img_byte_arr,
             model_name='test_model'
         )
-        
+
         assert isinstance(result, dict)
     
     @pytest.mark.asyncio
     async def test_segment_image_different_sizes(self, inference_service, mock_model_manager):
         """Test segmentation with images of different sizes."""
         small_image = Image.new('RGB', (100, 100), color='white')
-        
+
         # Convert to bytes
         import io
         img_byte_arr = io.BytesIO()
         small_image.save(img_byte_arr, format='PNG')
         img_byte_arr = img_byte_arr.getvalue()
-        
-        # Mock model
+
+        # Mock model via load_model
         mock_model = Mock()
         mock_model.eval.return_value = mock_model
         mock_model.to.return_value = mock_model
         mock_output = torch.sigmoid(torch.rand(1, 1, 1024, 1024))
         mock_model.return_value = mock_output
-        mock_model_manager.get_model.return_value = mock_model
-        
+        mock_model_manager.load_model.return_value = mock_model
+
         result = await inference_service.segment_image(
             image_data=img_byte_arr,
             model_name='test_model'
         )
-        
+
         assert isinstance(result, dict)
-        assert 'metadata' in result
+        assert 'processing_stats' in result
     
     @pytest.mark.asyncio
     async def test_segment_image_with_threshold(self, inference_service, sample_image, mock_model_manager):
@@ -189,15 +191,15 @@ class TestInferenceService:
         img_byte_arr = io.BytesIO()
         sample_image.save(img_byte_arr, format='PNG')
         img_byte_arr = img_byte_arr.getvalue()
-        
-        # Mock model
+
+        # Mock model via load_model
         mock_model = Mock()
         mock_model.eval.return_value = mock_model
         mock_model.to.return_value = mock_model
         mock_output = torch.sigmoid(torch.rand(1, 1, 1024, 1024))
         mock_model.return_value = mock_output
-        mock_model_manager.get_model.return_value = mock_model
-        
+        mock_model_manager.load_model.return_value = mock_model
+
         # Test with different thresholds
         for threshold in [0.3, 0.5, 0.7]:
             result = await inference_service.segment_image(
@@ -238,15 +240,15 @@ class TestInferenceService:
         img_byte_arr = io.BytesIO()
         sample_image.save(img_byte_arr, format='PNG')
         img_byte_arr = img_byte_arr.getvalue()
-        
-        # Mock model
+
+        # Mock model via load_model
         mock_model = Mock()
         mock_model.eval.return_value = mock_model
         mock_model.to.return_value = mock_model
         mock_output = torch.sigmoid(torch.rand(1, 1, 1024, 1024))
         mock_model.return_value = mock_output
-        mock_model_manager.get_model.return_value = mock_model
-        
+        mock_model_manager.load_model.return_value = mock_model
+
         # Test with detect_holes=True
         result_with_holes = await inference_service.segment_image(
             image_data=img_byte_arr,
@@ -254,7 +256,7 @@ class TestInferenceService:
             detect_holes=True
         )
         assert isinstance(result_with_holes, dict)
-        
+
         # Test with detect_holes=False
         result_without_holes = await inference_service.segment_image(
             image_data=img_byte_arr,

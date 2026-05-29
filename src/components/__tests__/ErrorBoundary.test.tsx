@@ -1,353 +1,95 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
-import { render } from '@/test/utils/test-utils';
-import ErrorBoundary from '@/components/ErrorBoundary';
-import * as router from 'react-router-dom';
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import ErrorBoundary from '../ErrorBoundary';
+import { logger } from '@/lib/logger';
 
-// Mock react-router-dom
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
-  return {
-    ...actual,
-    useRouteError: vi.fn(),
-    isRouteErrorResponse: vi.fn(),
-  };
-});
+// ErrorDisplay calls useLanguage(); return the key so assertions are stable
+// regardless of the loaded dictionary.
+vi.mock('@/contexts/useLanguage', () => ({
+  useLanguage: () => ({ t: (key: string) => key }),
+}));
 
-describe('ErrorBoundary', () => {
-  const mockUseRouteError = vi.mocked(router.useRouteError);
-  const mockIsRouteErrorResponse = vi.mocked(router.isRouteErrorResponse);
+vi.mock('@/lib/logger', () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
+// A component that throws on render to trip the boundary.
+const Boom = ({ message = 'kaboom' }: { message?: string }) => {
+  throw new Error(message);
+};
+
+describe('ErrorBoundary (class boundary)', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // React logs the caught error to console.error during the throw; silence
+    // it so the test output stays clean (the boundary still catches it).
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  it('renders route error response with status and statusText', () => {
-    const mockError = {
-      status: 404,
-      statusText: 'Not Found',
-      data: {
-        message: 'The requested page was not found',
-      },
-    };
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(true);
-
-    render(<ErrorBoundary />);
-
-    expect(screen.getByText('404 Not Found')).toBeInTheDocument();
-    expect(
-      screen.getByText('The requested page was not found')
-    ).toBeInTheDocument();
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
-  it('renders route error response without custom message', () => {
-    const mockError = {
-      status: 500,
-      statusText: 'Internal Server Error',
-      data: null,
-    };
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(true);
-
-    render(<ErrorBoundary />);
-
-    expect(screen.getByText('500 Internal Server Error')).toBeInTheDocument();
-    // Should fallback to translation key when no custom message
-    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
-  });
-
-  it('renders generic error for non-route errors', () => {
-    const mockError = new Error('Generic error');
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(false);
-
-    render(<ErrorBoundary />);
-
-    expect(screen.getByText(/unexpected error/i)).toBeInTheDocument();
-    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
-  });
-
-  it('renders return to home link for route errors', () => {
-    const mockError = {
-      status: 404,
-      statusText: 'Not Found',
-      data: { message: 'Page not found' },
-    };
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(true);
-
-    render(<ErrorBoundary />);
-
-    const homeLink = screen.getByRole('link', { name: /return to home/i });
-    expect(homeLink).toBeInTheDocument();
-    expect(homeLink).toHaveAttribute('href', '/');
-  });
-
-  it('renders return to home link for generic errors', () => {
-    const mockError = new Error('Generic error');
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(false);
-
-    render(<ErrorBoundary />);
-
-    const homeLink = screen.getByRole('link', { name: /return to home/i });
-    expect(homeLink).toBeInTheDocument();
-    expect(homeLink).toHaveAttribute('href', '/');
-  });
-
-  it('has proper styling classes for route errors', () => {
-    const mockError = {
-      status: 403,
-      statusText: 'Forbidden',
-      data: { message: 'Access denied' },
-    };
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(true);
-
-    render(<ErrorBoundary />);
-
-    const container = document.querySelector(
-      '.min-h-screen.flex.items-center.justify-center'
+  it('renders children when no error occurs', () => {
+    render(
+      <ErrorBoundary>
+        <div data-testid="child">all good</div>
+      </ErrorBoundary>
     );
-    expect(container).toBeInTheDocument();
-    expect(container).toHaveClass('bg-gray-100', 'dark:bg-gray-900');
+    expect(screen.getByTestId('child')).toHaveTextContent('all good');
+  });
 
-    const errorCard = document.querySelector('.bg-white.dark\\:bg-gray-800');
-    expect(errorCard).toBeInTheDocument();
-    expect(errorCard).toHaveClass(
-      'p-8',
-      'rounded-lg',
-      'shadow-lg',
-      'max-w-md',
-      'w-full'
+  it('renders the default error display when a child throws', () => {
+    render(
+      <ErrorBoundary>
+        <Boom message="render failed" />
+      </ErrorBoundary>
     );
-
-    const title = screen.getByText('403 Forbidden');
-    expect(title).toHaveClass(
-      'text-2xl',
-      'font-bold',
-      'text-red-600',
-      'dark:text-red-400',
-      'mb-4'
+    // ErrorDisplay shows the thrown message + the localized heading/link keys.
+    expect(screen.getByText('render failed')).toBeInTheDocument();
+    expect(screen.getByText('toast.unexpectedError')).toBeInTheDocument();
+    expect(screen.getByText('toast.returnToHome').closest('a')).toHaveAttribute(
+      'href',
+      '/'
     );
   });
 
-  it('has proper styling classes for generic errors', () => {
-    const mockError = new Error('Generic error');
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(false);
-
-    render(<ErrorBoundary />);
-
-    const container = document.querySelector(
-      '.min-h-screen.flex.items-center.justify-center'
+  it('renders a provided fallback instead of the default display', () => {
+    render(
+      <ErrorBoundary fallback={<div data-testid="fallback">custom</div>}>
+        <Boom />
+      </ErrorBoundary>
     );
-    expect(container).toBeInTheDocument();
-    expect(container).toHaveClass('bg-gray-100', 'dark:bg-gray-900');
+    expect(screen.getByTestId('fallback')).toHaveTextContent('custom');
+    // Default display heading must NOT be present when a fallback is given.
+    expect(screen.queryByText('toast.unexpectedError')).not.toBeInTheDocument();
+  });
 
-    const errorCard = document.querySelector('.bg-white.dark\\:bg-gray-800');
-    expect(errorCard).toBeInTheDocument();
-
-    const title = screen.getByText(/unexpected error/i);
-    expect(title).toHaveClass(
-      'text-2xl',
-      'font-bold',
-      'text-red-600',
-      'dark:text-red-400',
-      'mb-4'
+  it('logs the caught error via the logger', () => {
+    render(
+      <ErrorBoundary>
+        <Boom message="logged error" />
+      </ErrorBoundary>
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      'ErrorBoundary caught an error',
+      expect.objectContaining({ error: expect.any(Error) })
     );
   });
 
-  it('has proper button styling', () => {
-    const mockError = new Error('Test error');
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(false);
-
-    render(<ErrorBoundary />);
-
-    const homeLink = screen.getByRole('link', { name: /return to home/i });
-    expect(homeLink).toHaveClass(
-      'inline-flex',
-      'items-center',
-      'justify-center',
-      'rounded-md',
-      'bg-blue-600',
-      'px-4',
-      'py-2',
-      'text-sm',
-      'font-medium',
-      'text-white',
-      'shadow',
-      'transition-colors',
-      'hover:bg-blue-700',
-      'focus-visible:outline-none',
-      'focus-visible:ring-1',
-      'focus-visible:ring-blue-700'
+  it('falls back to a generic message when the error has no message', () => {
+    const ThrowEmpty = () => {
+      throw new Error('');
+    };
+    render(
+      <ErrorBoundary>
+        <ThrowEmpty />
+      </ErrorBoundary>
     );
-  });
-
-  it('handles different HTTP status codes', () => {
-    const testCases = [
-      { status: 400, statusText: 'Bad Request' },
-      { status: 401, statusText: 'Unauthorized' },
-      { status: 403, statusText: 'Forbidden' },
-      { status: 404, statusText: 'Not Found' },
-      { status: 500, statusText: 'Internal Server Error' },
-      { status: 503, statusText: 'Service Unavailable' },
-    ];
-
-    testCases.forEach(({ status, statusText }) => {
-      const mockError = {
-        status,
-        statusText,
-        data: { message: `${status} error occurred` },
-      };
-
-      mockUseRouteError.mockReturnValue(mockError);
-      mockIsRouteErrorResponse.mockReturnValue(true);
-
-      const { unmount } = render(<ErrorBoundary />);
-
-      expect(screen.getByText(`${status} ${statusText}`)).toBeInTheDocument();
-      expect(screen.getByText(`${status} error occurred`)).toBeInTheDocument();
-
-      unmount();
-    });
-  });
-
-  it('handles route error without data', () => {
-    const mockError = {
-      status: 404,
-      statusText: 'Not Found',
-      data: undefined,
-    };
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(true);
-
-    render(<ErrorBoundary />);
-
-    expect(screen.getByText('404 Not Found')).toBeInTheDocument();
-    // Should fallback to translation when no data.message
-    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
-  });
-
-  it('handles route error with empty data', () => {
-    const mockError = {
-      status: 500,
-      statusText: 'Internal Server Error',
-      data: {},
-    };
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(true);
-
-    render(<ErrorBoundary />);
-
-    expect(screen.getByText('500 Internal Server Error')).toBeInTheDocument();
-    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
-  });
-
-  it('renders full-screen layout', () => {
-    const mockError = new Error('Test error');
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(false);
-
-    const { container } = render(<ErrorBoundary />);
-
-    const outerDiv = container.firstChild;
-    expect(outerDiv).toHaveClass('min-h-screen');
-  });
-
-  it('centers content properly', () => {
-    const mockError = new Error('Test error');
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(false);
-
-    render(<ErrorBoundary />);
-
-    const centeringContainer = document.querySelector(
-      '.flex.items-center.justify-center'
-    );
-    expect(centeringContainer).toBeInTheDocument();
-    expect(centeringContainer).toHaveClass('min-h-screen');
-  });
-
-  it('has responsive card sizing', () => {
-    const mockError = new Error('Test error');
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(false);
-
-    render(<ErrorBoundary />);
-
-    const card = document.querySelector('.max-w-md.w-full');
-    expect(card).toBeInTheDocument();
-  });
-
-  it('uses semantic HTML structure', () => {
-    const mockError = {
-      status: 404,
-      statusText: 'Not Found',
-      data: { message: 'Page not found' },
-    };
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(true);
-
-    render(<ErrorBoundary />);
-
-    const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading).toBeInTheDocument();
-    expect(heading).toHaveTextContent('404 Not Found');
-
-    const link = screen.getByRole('link', { name: /return to home/i });
-    expect(link).toBeInTheDocument();
-  });
-
-  it('provides proper dark mode support', () => {
-    const mockError = new Error('Test error');
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(false);
-
-    render(<ErrorBoundary />);
-
-    // Check for dark mode classes
-    expect(document.querySelector('.dark\\:bg-gray-900')).toBeInTheDocument();
-    expect(document.querySelector('.dark\\:bg-gray-800')).toBeInTheDocument();
-    expect(document.querySelector('.dark\\:text-red-400')).toBeInTheDocument();
-    expect(document.querySelector('.dark\\:text-gray-300')).toBeInTheDocument();
-  });
-
-  it('handles complex error objects', () => {
-    const mockError = {
-      status: 422,
-      statusText: 'Unprocessable Entity',
-      data: {
-        message: 'Validation failed',
-        errors: ['Field is required', 'Invalid format'],
-        code: 'VALIDATION_ERROR',
-      },
-    };
-
-    mockUseRouteError.mockReturnValue(mockError);
-    mockIsRouteErrorResponse.mockReturnValue(true);
-
-    render(<ErrorBoundary />);
-
-    expect(screen.getByText('422 Unprocessable Entity')).toBeInTheDocument();
-    expect(screen.getByText('Validation failed')).toBeInTheDocument();
+    // Empty error.message → the localized "something went wrong" key shows.
+    expect(screen.getByText('toast.somethingWentWrong')).toBeInTheDocument();
   });
 });

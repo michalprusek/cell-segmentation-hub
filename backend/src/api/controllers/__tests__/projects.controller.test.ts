@@ -1,12 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import {
   createProject,
@@ -26,7 +20,8 @@ vi.mock('../../../utils/config', () => ({
     HOST: 'localhost',
     DATABASE_URL: 'file:./test.db',
     JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET:
+      'test-refresh-secret-for-testing-only-32-characters-long',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     JWT_REFRESH_EXPIRY_REMEMBER: '30d',
@@ -46,9 +41,7 @@ vi.mock('../../../utils/logger', () => ({
 }));
 
 const MockProjectService = projectService as Mocked<typeof projectService>;
-const mockAuthMiddleware = authenticate as MockedFunction<
-  typeof authenticate
->;
+const mockAuthMiddleware = authenticate as MockedFunction<typeof authenticate>;
 
 describe('ProjectController', () => {
   let app: express.Application;
@@ -178,7 +171,9 @@ describe('ProjectController', () => {
         description: projectData.description,
       };
 
-      MockProjectService.createProject.mockResolvedValueOnce(createdProject as any);
+      MockProjectService.createProject.mockResolvedValueOnce(
+        createdProject as any
+      );
 
       const response = await request(app)
         .post('/projects')
@@ -252,7 +247,9 @@ describe('ProjectController', () => {
 
   describe('GET /projects/:id', () => {
     it('should return project successfully', async () => {
-      MockProjectService.getProjectById.mockResolvedValueOnce(mockProject as any);
+      MockProjectService.getProjectById.mockResolvedValueOnce(
+        mockProject as any
+      );
 
       const response = await request(app)
         .get(`/projects/${mockProject.id}`)
@@ -309,7 +306,9 @@ describe('ProjectController', () => {
         updatedAt: new Date(),
       };
 
-      MockProjectService.updateProject.mockResolvedValueOnce(updatedProject as any);
+      MockProjectService.updateProject.mockResolvedValueOnce(
+        updatedProject as any
+      );
 
       const response = await request(app)
         .put(`/projects/${mockProject.id}`)
@@ -368,7 +367,9 @@ describe('ProjectController', () => {
         ...mockProject,
         imageCount: 5,
       };
-      MockProjectService.deleteProject.mockResolvedValueOnce(deletedProject as any);
+      MockProjectService.deleteProject.mockResolvedValueOnce(
+        deletedProject as any
+      );
 
       const response = await request(app)
         .delete(`/projects/${mockProject.id}`)

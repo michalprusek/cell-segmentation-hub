@@ -70,7 +70,7 @@ describe('UserService', () => {
       prismaMock.project.count.mockResolvedValueOnce(3);
       prismaMock.image.count
         .mockResolvedValueOnce(10) // total
-        .mockResolvedValueOnce(8)  // processed
+        .mockResolvedValueOnce(8) // processed
         .mockResolvedValueOnce(2); // today
       prismaMock.segmentation.count.mockResolvedValueOnce(8);
       prismaMock.image.aggregate.mockResolvedValueOnce({
@@ -121,7 +121,9 @@ describe('UserService', () => {
       prismaMock.project.count.mockResolvedValueOnce(0);
       prismaMock.image.count.mockResolvedValue(0);
       prismaMock.segmentation.count.mockResolvedValueOnce(0);
-      prismaMock.image.aggregate.mockResolvedValueOnce({ _sum: { fileSize: null } });
+      prismaMock.image.aggregate.mockResolvedValueOnce({
+        _sum: { fileSize: null },
+      });
 
       const result = await getUserProfile(testUserId);
 
@@ -135,8 +137,8 @@ describe('UserService', () => {
       prismaMock.project.count.mockResolvedValueOnce(5);
       prismaMock.image.count
         .mockResolvedValueOnce(100) // total images
-        .mockResolvedValueOnce(80)  // processed
-        .mockResolvedValueOnce(3);  // today
+        .mockResolvedValueOnce(80) // processed
+        .mockResolvedValueOnce(3); // today
       prismaMock.segmentation.count.mockResolvedValueOnce(80);
       prismaMock.image.aggregate.mockResolvedValueOnce({
         _sum: { fileSize: 10 * 1024 * 1024 },
@@ -156,7 +158,9 @@ describe('UserService', () => {
       prismaMock.project.count.mockResolvedValueOnce(0);
       prismaMock.image.count.mockResolvedValue(0);
       prismaMock.segmentation.count.mockResolvedValueOnce(0);
-      prismaMock.image.aggregate.mockResolvedValueOnce({ _sum: { fileSize: null } });
+      prismaMock.image.aggregate.mockResolvedValueOnce({
+        _sum: { fileSize: null },
+      });
 
       const result = await getUserStats(testUserId);
 
@@ -191,7 +195,9 @@ describe('UserService', () => {
     });
 
     it('returns zero usage when no files exist', async () => {
-      prismaMock.image.aggregate.mockResolvedValueOnce({ _sum: { fileSize: null } });
+      prismaMock.image.aggregate.mockResolvedValueOnce({
+        _sum: { fileSize: null },
+      });
 
       const result = await calculateUserStorage(testUserId);
 
@@ -201,9 +207,13 @@ describe('UserService', () => {
     });
 
     it('propagates storage query errors', async () => {
-      prismaMock.image.aggregate.mockRejectedValueOnce(new Error('storage error'));
+      prismaMock.image.aggregate.mockRejectedValueOnce(
+        new Error('storage error')
+      );
 
-      await expect(calculateUserStorage(testUserId)).rejects.toThrow('storage error');
+      await expect(calculateUserStorage(testUserId)).rejects.toThrow(
+        'storage error'
+      );
     });
   });
 
@@ -244,7 +254,9 @@ describe('UserService', () => {
     });
 
     it('propagates profile update errors', async () => {
-      prismaMock.profile.upsert.mockRejectedValueOnce(new Error('update failed'));
+      prismaMock.profile.upsert.mockRejectedValueOnce(
+        new Error('update failed')
+      );
 
       await expect(
         updateUserProfile(testUserId, { language: 'en' })
