@@ -18,10 +18,24 @@ export default defineConfig({
     },
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text', 'json', 'json-summary', 'html'],
+      // Scope coverage to application source only. Without an explicit
+      // include the v8 provider instruments the whole repo (root configs,
+      // the Playwright e2e suite under tests/, generated files), so the
+      // reported denominator was ~300k "lines" and the percentage was
+      // meaningless. Measure src/ app code; exclude test infra, the static
+      // translation dictionaries (data, not logic), and type-only files.
+      include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'node_modules/',
         'src/test/',
+        'src/test-utils/',
+        'src/test-fixtures/',
+        'src/**/__tests__/',
+        'src/translations/',
+        'src/**/*.d.ts',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
         '**/*.d.ts',
         '**/*.config.*',
         'dist/',
