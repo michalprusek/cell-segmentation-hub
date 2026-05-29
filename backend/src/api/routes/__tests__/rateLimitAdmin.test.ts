@@ -409,12 +409,10 @@ describe('PUT /tiers/user', () => {
   });
 
   it('returns 400 when tier is not a valid enum value', async () => {
-    const res = await request(app)
-      .put('/tiers/user')
-      .send({
-        userId: '00000000-0000-0000-0000-000000000001',
-        tier: 'superadmin',
-      });
+    const res = await request(app).put('/tiers/user').send({
+      userId: '00000000-0000-0000-0000-000000000001',
+      tier: 'superadmin',
+    });
     expect(res.status).toBe(400);
   });
 
