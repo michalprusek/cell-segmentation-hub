@@ -19,6 +19,7 @@ vi.mock('../config', () => ({
 import {
   ACCESS_TOKEN_COOKIE,
   REFRESH_TOKEN_COOKIE,
+  AUTH_HINT_COOKIE,
   durationToMs,
   setAuthCookies,
   clearAuthCookies,
@@ -103,6 +104,23 @@ describe('authCookies', () => {
       expect(refreshCall![2].maxAge).toBe(30 * 24 * 60 * 60 * 1000);
     });
 
+    it('sets a JS-readable (non-httpOnly) auth hint cookie carrying no secret', () => {
+      const res = makeRes();
+      setAuthCookies(res, 'access-jwt', 'refresh-tok');
+
+      const hintCall = res.cookie.mock.calls.find(
+        c => c[0] === AUTH_HINT_COOKIE
+      );
+      expect(hintCall).toBeDefined();
+      expect(hintCall![1]).toBe('1'); // a presence flag, never a token
+      expect(hintCall![2]).toMatchObject({
+        httpOnly: false, // the SPA must be able to read it
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // tracks the refresh cookie lifetime
+      });
+    });
+
     it('omits Secure outside production', () => {
       const res = makeRes();
       setAuthCookies(res, 'a', 'r');
@@ -122,7 +140,7 @@ describe('authCookies', () => {
   });
 
   describe('clearAuthCookies', () => {
-    it('clears both cookies with matching paths', () => {
+    it('clears all three cookies with matching paths', () => {
       const res = makeRes();
       clearAuthCookies(res);
 
@@ -132,8 +150,12 @@ describe('authCookies', () => {
       const refreshClear = res.clearCookie.mock.calls.find(
         c => c[0] === REFRESH_TOKEN_COOKIE
       );
+      const hintClear = res.clearCookie.mock.calls.find(
+        c => c[0] === AUTH_HINT_COOKIE
+      );
       expect(accessClear![1]).toMatchObject({ path: '/' });
       expect(refreshClear![1]).toMatchObject({ path: '/api/auth' });
+      expect(hintClear![1]).toMatchObject({ path: '/', httpOnly: false });
     });
   });
 

@@ -17,6 +17,15 @@ import { config } from './config';
 
 export const ACCESS_TOKEN_COOKIE = 'access_token';
 export const REFRESH_TOKEN_COOKIE = 'refresh_token';
+/**
+ * Non-secret, JS-readable presence flag. The httpOnly tokens are invisible to
+ * the SPA, so without this it would have to probe /auth/profile on every cold
+ * load just to learn "am I logged in?" — generating a guaranteed 401 (and a
+ * console error) for every logged-out visitor. This cookie carries NO
+ * credential — only the boolean fact that a session was established — and is
+ * set/cleared atomically with the auth cookies so it can't drift out of sync.
+ */
+export const AUTH_HINT_COOKIE = 'authenticated';
 
 /** The refresh cookie is only ever sent to the auth endpoints. */
 const REFRESH_TOKEN_PATH = '/api/auth';
@@ -77,10 +86,22 @@ export const setAuthCookies = (
   const refreshExpiry = rememberMe
     ? config.JWT_REFRESH_EXPIRY_REMEMBER
     : config.JWT_REFRESH_EXPIRY;
+  const refreshMaxAge = durationToMs(refreshExpiry);
   res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
     ...baseCookieOptions(),
     path: REFRESH_TOKEN_PATH,
-    maxAge: durationToMs(refreshExpiry),
+    maxAge: refreshMaxAge,
+  });
+
+  // JS-readable presence hint (NOT httpOnly), lives as long as the session can
+  // be refreshed. Lets the SPA skip the cold-load /auth/profile probe when
+  // logged out. Carries no secret.
+  res.cookie(AUTH_HINT_COOKIE, '1', {
+    httpOnly: false,
+    secure: config.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+    maxAge: refreshMaxAge,
   });
 };
 
@@ -119,5 +140,10 @@ export const clearAuthCookies = (res: Response): void => {
   res.clearCookie(REFRESH_TOKEN_COOKIE, {
     ...baseCookieOptions(),
     path: REFRESH_TOKEN_PATH,
+  });
+  res.clearCookie(AUTH_HINT_COOKIE, {
+    ...baseCookieOptions(),
+    httpOnly: false,
+    path: '/',
   });
 };

@@ -21,11 +21,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // The tokens are httpOnly cookies the client can't read, so the only
-        // way to know whether a session exists is to ask the server. The
-        // `suppressAuthErrors` flag makes a 401 (even after a silent refresh
-        // attempt) a plain rejection — no "session expired" toast or redirect
-        // for a never-logged-in visitor's first page load.
+        // The tokens are httpOnly cookies the client can't read. The non-secret
+        // `authenticated` hint cookie (set/cleared by the server alongside the
+        // tokens) tells us whether a session might exist — so a logged-out
+        // visitor's cold load makes NO auth request at all (no guaranteed 401
+        // / console error). Only probe when the hint is present.
+        const hasSessionHint = document.cookie
+          .split(';')
+          .some(c => c.trim().startsWith('authenticated='));
+        if (!hasSessionHint) {
+          setUser(null);
+          setProfile(null);
+          setIsAuthenticated(false);
+          return;
+        }
+
+        // A hint exists → verify the session. `suppressAuthErrors` keeps a
+        // stale-hint 401 (session died server-side) a silent sign-out rather
+        // than a "session expired" toast/redirect.
         const profileData = await apiClient.getUserProfile({
           suppressAuthErrors: true,
         });

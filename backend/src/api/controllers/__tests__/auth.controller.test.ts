@@ -115,11 +115,16 @@ describe('Auth Controller Functions', () => {
       });
       expect(response.body.data.accessToken).toBeUndefined();
       expect(response.body.data.refreshToken).toBeUndefined();
-      // Tokens are delivered as httpOnly cookies.
+      // Tokens are delivered as httpOnly cookies; the non-secret hint cookie
+      // is intentionally NOT httpOnly (the SPA must read it).
       const cookies = response.headers['set-cookie'] as unknown as string[];
-      expect(cookies.some(c => c.startsWith('access_token='))).toBe(true);
-      expect(cookies.some(c => c.startsWith('refresh_token='))).toBe(true);
-      expect(cookies.every(c => /HttpOnly/i.test(c))).toBe(true);
+      const accessCookie = cookies.find(c => c.startsWith('access_token='));
+      const refreshCookie = cookies.find(c => c.startsWith('refresh_token='));
+      const hintCookie = cookies.find(c => c.startsWith('authenticated='));
+      expect(accessCookie).toMatch(/HttpOnly/i);
+      expect(refreshCookie).toMatch(/HttpOnly/i);
+      expect(hintCookie).toBeDefined();
+      expect(hintCookie).not.toMatch(/HttpOnly/i);
     });
 
     it('should return 400 for invalid email', async () => {

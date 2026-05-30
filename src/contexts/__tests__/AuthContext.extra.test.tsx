@@ -107,6 +107,8 @@ const validAuthResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The init probe only runs when the `authenticated` hint cookie is present.
+  document.cookie = 'authenticated=1';
   vi.mocked(apiClient.getUserProfile).mockRejectedValue(
     new Error('Not authenticated')
   );

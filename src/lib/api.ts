@@ -231,6 +231,13 @@ class ApiClient {
         ) {
           originalRequest._retry = true;
 
+          // The init profile probe sets `X-Suppress-Auth-Events` so a
+          // stale-hint/expired session on cold load is handled silently — no
+          // "session expired" toast, no redirect, and the failed-refresh is a
+          // debug log, not an error (it's an expected outcome there, not a bug).
+          const suppressAuthEvents =
+            originalRequest?.headers?.['X-Suppress-Auth-Events'] === '1';
+
           try {
             // The httpOnly refresh_token cookie is sent automatically; this
             // re-mints the access_token cookie. No token handling here.
@@ -240,7 +247,17 @@ class ApiClient {
             // along automatically.
             return this.instance(originalRequest);
           } catch (refreshError) {
-            logger.error('Token refresh failed, forcing logout:', refreshError);
+            if (suppressAuthEvents) {
+              logger.debug(
+                'Token refresh failed during init probe',
+                refreshError
+              );
+            } else {
+              logger.error(
+                'Token refresh failed, forcing logout:',
+                refreshError
+              );
+            }
             // Fall through to signed-out handling below.
           }
 
@@ -253,12 +270,6 @@ class ApiClient {
           // useSharedAdvancedExport hook would retry forever because its
           // useEffect re-fires whenever the download state changes, and
           // there was no auth-driven unmount to break the loop.
-          //
-          // The init profile probe sets the `X-Suppress-Auth-Events` header
-          // so a never-logged-in visitor doesn't get a spurious "session
-          // expired" toast or a redirect on first load.
-          const suppressAuthEvents =
-            originalRequest?.headers?.['X-Suppress-Auth-Events'] === '1';
           if (!suppressAuthEvents) {
             logger.debug('🔒 Authentication failed - signing out');
             this.handleSignedOut();

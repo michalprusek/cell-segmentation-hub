@@ -74,7 +74,11 @@ describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorageMock.clear();
-    // Default: the init /auth/profile probe fails → unauthenticated state.
+    // The init probe only runs when the non-secret `authenticated` hint cookie
+    // is present. Set it so these tests exercise the probe path; the default
+    // profile mock rejects, so the result is still the unauthenticated state
+    // unless a test overrides getUserProfile.
+    document.cookie = 'authenticated=1';
     vi.mocked(apiClient.getUserProfile).mockRejectedValue(
       new Error('Not authenticated')
     );
@@ -100,6 +104,22 @@ describe('AuthContext', () => {
 
       expect(result.current.isAuthenticated).toBe(false);
       expect(result.current.user).toBeNull();
+    });
+
+    it('skips the /auth/profile probe entirely on a logged-out cold load (no hint cookie)', async () => {
+      // No `authenticated` hint cookie → a fresh visitor makes ZERO auth
+      // requests (avoids the guaranteed 401 + console error).
+      document.cookie = 'authenticated=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.user).toBeNull();
+      expect(vi.mocked(apiClient.getUserProfile)).not.toHaveBeenCalled();
     });
 
     it('should restore the session from the /auth/profile probe on mount', async () => {
