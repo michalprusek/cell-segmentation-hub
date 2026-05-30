@@ -3,12 +3,12 @@ import {
   applyThresholding,
   findContours,
   segmentImage,
-  calculatePolygonArea,
   calculatePerimeter,
   polygonKey,
   type Point,
   type Polygon,
 } from '@/lib/segmentation';
+import { calculatePolygonArea } from '@/lib/polygonGeometry';
 import {
   createTestPolygons,
   createMockImageData,

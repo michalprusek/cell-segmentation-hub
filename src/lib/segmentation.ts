@@ -136,8 +136,6 @@ export const segmentImage = async (
   };
 };
 
-export { calculatePolygonArea } from './polygonGeometry';
-
 // Calculate polygon perimeter
 export const calculatePerimeter = (polygon: Point[]): number => {
   let perimeter = 0;
