@@ -22,6 +22,19 @@ export interface SegmentationPoint {
   y: number;
 }
 
+/**
+ * Wire/API shape of a polygon (`parentIds` is the API array form of the DB's
+ * scalar `parent_id`). This is the typed contract for the backend.
+ *
+ * To add a NEW optional metadata field to the polygon data path:
+ *   1. Register it in `OPTIONAL_POLYGON_FIELDS` (the SSOT) in
+ *      `backend/src/utils/polygonValidation.ts` so it survives the untrusted
+ *      ML → DB validate path.
+ *   2. Add the explicit field here AND to the frontend twin
+ *      `SegmentationPolygon` in `src/lib/api.ts`.
+ * The mappers below (save / update / serve) spread already-validated data, so
+ * they need NO per-field edits — the field passes through automatically.
+ */
 export interface SegmentationPolygon {
   id: string;
   points: SegmentationPoint[];
@@ -39,6 +52,67 @@ export interface SegmentationPolygon {
    *  Editor state (hide/select) keys on this; cross-frame mutation
    *  propagation finds sibling polylines by matching trackId. */
   trackId?: string;
+}
+
+/**
+ * Editor-omitted polygon fields: stripped at the serve boundary
+ * (`getSegmentationResults` / `getBatchSegmentationResults`) before sending to
+ * the frontend. `_embedding` is a several-KB-per-polyline blob used only
+ * server-side by the tracker + kymograph routes; omitting it saves ~30-40 MB
+ * on a 100-frame microtubule video. It still round-trips through save/update
+ * (DB <-> internal) — it is only the response to the editor that drops it.
+ */
+export const EDITOR_OMITTED_POLYGON_FIELDS = ['_embedding'] as const;
+
+/**
+ * Build the DB-storage shape from an internal/validated polygon: spread every
+ * field through, then perform the one genuine transform — collapse the API's
+ * `parentIds[]` to the DB's scalar `parent_id`. Editor-only fields are NOT
+ * stripped here (they are server-side state that must persist); the serve
+ * boundary handles omission. Operates on already-validated data, so a spread
+ * is safe (the untrusted-input whitelist lives in the validator).
+ */
+function toDbPolygon(
+  polygon: SegmentationPolygon & Record<string, unknown>
+): Record<string, unknown> {
+  const { parentIds, ...rest } = polygon;
+  const dbPolygon: Record<string, unknown> = { ...rest };
+  // parentIds[] (API) -> parent_id (DB scalar). Preserve any pre-existing
+  // scalar parent_id when no array form is present.
+  if (parentIds && parentIds.length > 0) {
+    dbPolygon.parent_id = parentIds[0];
+  }
+  return dbPolygon;
+}
+
+/**
+ * Build the API/wire response shape from a stored/validated polygon: spread
+ * every field through (so future fields pass automatically), then perform the
+ * two genuine transforms — promote the DB's scalar `parent_id` to the API's
+ * `parentIds[]`, and strip the editor-omitted fields (`_embedding`).
+ */
+function toApiPolygon(
+  polygon: Record<string, unknown>,
+  fallbackId: () => string
+): SegmentationPolygon {
+  const { parent_id, ...rest } = polygon;
+  const api = rest as Record<string, unknown>;
+  for (const omitted of EDITOR_OMITTED_POLYGON_FIELDS) {
+    delete api[omitted];
+  }
+  return {
+    ...api,
+    id: (api.id as string) || fallbackId(),
+    points: ((api.points as SegmentationPoint[]) || []).map(p => ({
+      x: p.x,
+      y: p.y,
+    })),
+    area: (api.area as number) || 0,
+    confidence: (api.confidence as number) || 0.8,
+    type: (api.type as 'external' | 'internal') || 'external',
+    parentIds:
+      typeof parent_id === 'string' && parent_id ? [parent_id] : undefined,
+  } as SegmentationPolygon;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -891,33 +965,21 @@ export class SegmentationService {
           (segmentationResult.polygons?.length || 0) - validPolygons.length,
       });
 
-      // Assign IDs to polygons and fix parent_id relationships
+      // Assign IDs to polygons and convert to DB storage shape. toDbPolygon
+      // spreads every (already-validated) field through and collapses
+      // parentIds[] -> parent_id, so new optional fields need no edits here.
       const polygonsWithIds = validPolygons.map((polygon, index) => {
         // Generate ID if missing
         if (!polygon.id) {
           polygon.id = `polygon_${index + 1}`;
         }
 
-        // For database storage, we need to convert parentIds array to parent_id string
-        const dbPolygon: any = {
-          id: polygon.id,
-          points: polygon.points,
-          type: polygon.type,
-          area: polygon.area || 0,
-          confidence: polygon.confidence || 0.8,
-          // Preserve polyline fields for sperm model
-          ...(polygon.geometry && { geometry: polygon.geometry }),
-          ...(polygon.partClass && { partClass: polygon.partClass }),
-          ...(polygon.instanceId && { instanceId: polygon.instanceId }),
-        };
-
-        // Convert parentIds array to parent_id for database storage
-        if (polygon.parentIds && polygon.parentIds.length > 0) {
-          dbPolygon.parent_id = polygon.parentIds[0];
-        } else if ((polygon as any).parent_id) {
-          dbPolygon.parent_id = (polygon as any).parent_id;
-        }
-
+        const dbPolygon = toDbPolygon(
+          polygon as SegmentationPolygon & Record<string, unknown>
+        );
+        // Preserve historical defaults for the two numeric fields.
+        dbPolygon.area = polygon.area || 0;
+        dbPolygon.confidence = polygon.confidence || 0.8;
         return dbPolygon;
       });
 
@@ -954,8 +1016,10 @@ export class SegmentationService {
         polygonCount: polygonsWithIds.length,
         averageConfidence:
           polygonsWithIds.length > 0
-            ? polygonsWithIds.reduce((sum, p) => sum + (p.confidence || 0), 0) /
-              polygonsWithIds.length
+            ? polygonsWithIds.reduce(
+                (sum, p) => sum + ((p.confidence as number) || 0),
+                0
+              ) / polygonsWithIds.length
             : 0,
       };
 
@@ -1352,41 +1416,12 @@ export class SegmentationService {
     const polygons = polygonResult.isValid ? polygonResult.polygons : [];
 
     // Convert Polygon[] to SegmentationPolygon[] by adding required properties
-    const segmentationPolygons: SegmentationPolygon[] = polygons.map(
-      (polygon, _index) => ({
-        id: polygon.id || uuidv4(), // Preserve existing ID or generate new one
-        points: polygon.points.map(p => ({ x: p.x, y: p.y })),
-        area: polygon.area || 0, // Preserve area if available
-        confidence: polygon.confidence || 0.8,
-        type: (polygon as any).type || 'external', // Preserve original type or default to external
-        parentIds: (polygon as any).parent_id
-          ? [(polygon as any).parent_id]
-          : undefined, // Convert parent_id to parentIds array
-        // Preserve polyline fields (sperm model)
-        ...((polygon as any).geometry && {
-          geometry: (polygon as any).geometry,
-        }),
-        ...((polygon as any).partClass && {
-          partClass: (polygon as any).partClass,
-        }),
-        ...((polygon as any).instanceId && {
-          instanceId: (polygon as any).instanceId,
-        }),
-        // Microtubule cross-frame tracking carries the trackId on every
-        // sibling polyline; the editor uses it to colour-code tracks.
-        ...((polygon as any).trackId && {
-          trackId: (polygon as any).trackId,
-        }),
-        // Human-friendly label set in the editor; mirrored across
-        // sibling frames so a single rename is visible everywhere.
-        ...((polygon as any).name && {
-          name: (polygon as any).name,
-        }),
-        // _embedding is intentionally NOT propagated to the editor —
-        // it's a several-KB-per-polyline blob used only server-side by
-        // the tracker and kymograph routes. Stripping it here saves
-        // ~30-40 MB on a 100-frame video with 30 MTs per frame.
-      })
+    // toApiPolygon spreads every stored field through (so future metadata
+    // passes automatically), promotes parent_id -> parentIds[], and strips
+    // EDITOR_OMITTED_POLYGON_FIELDS (_embedding) — the ~30-40 MB saving on a
+    // 100-frame microtubule video.
+    const segmentationPolygons: SegmentationPolygon[] = polygons.map(polygon =>
+      toApiPolygon(polygon as unknown as Record<string, unknown>, uuidv4)
     );
 
     const result: SegmentationResponse = {
@@ -1456,26 +1491,14 @@ export class SegmentationService {
       where: { imageId },
     });
 
-    // Transform SegmentationPolygon[] to database format (parentIds -> parent_id)
-    const dbPolygons = polygons.map(polygon => ({
-      id: polygon.id,
-      points: polygon.points,
-      type: polygon.type,
-      area: polygon.area,
-      confidence: polygon.confidence,
-      parent_id:
-        polygon.parentIds && polygon.parentIds.length > 0
-          ? polygon.parentIds[0]
-          : undefined,
-      // Preserve polyline fields (sperm + microtubule models). trackId
-      // and name MUST round-trip — they're the basis of cross-frame
-      // identity and the user-set label.
-      ...(polygon.geometry && { geometry: polygon.geometry }),
-      ...(polygon.partClass && { partClass: polygon.partClass }),
-      ...(polygon.instanceId && { instanceId: polygon.instanceId }),
-      ...(polygon.trackId && { trackId: polygon.trackId }),
-      ...(polygon.name && { name: polygon.name }),
-    }));
+    // Transform SegmentationPolygon[] to database format. toDbPolygon spreads
+    // every field through (so trackId, name, partClass and any future field
+    // round-trip — they're the basis of cross-frame identity and the user-set
+    // label) and collapses parentIds[] -> parent_id. No per-field edits needed
+    // when a new optional field is added.
+    const dbPolygons = polygons.map(polygon =>
+      toDbPolygon(polygon as SegmentationPolygon & Record<string, unknown>)
+    );
     const polygonsJson = JSON.stringify(dbPolygons);
 
     // Calculate statistics from polygons
@@ -1885,35 +1908,10 @@ export class SegmentationService {
           ? polygonResult.polygons
           : [];
 
-        // Convert Polygon[] to SegmentationPolygon[] with IDs - same as single method
-        const polygons: SegmentationPolygon[] = parsedPolygons.map(
-          (polygon, _index) => ({
-            id: polygon.id || uuidv4(), // Preserve existing ID or generate new one
-            points: polygon.points.map(p => ({ x: p.x, y: p.y })),
-            area: polygon.area || 0, // Preserve area if available
-            confidence: polygon.confidence || 0.8,
-            type: (polygon as any).type || 'external', // Preserve original type or default to external
-            parentIds: (polygon as any).parent_id
-              ? [(polygon as any).parent_id]
-              : undefined, // Convert parent_id to parentIds array
-            // Preserve polyline fields (sperm model)
-            ...((polygon as any).geometry && {
-              geometry: (polygon as any).geometry,
-            }),
-            ...((polygon as any).partClass && {
-              partClass: (polygon as any).partClass,
-            }),
-            ...((polygon as any).instanceId && {
-              instanceId: (polygon as any).instanceId,
-            }),
-            ...((polygon as any).trackId && {
-              trackId: (polygon as any).trackId,
-            }),
-            ...((polygon as any).name && {
-              name: (polygon as any).name,
-            }),
-            // _embedding intentionally stripped — server-only blob.
-          })
+        // Same serve-boundary transform as getSegmentationResults: spread +
+        // parent_id->parentIds[] + strip EDITOR_OMITTED_POLYGON_FIELDS.
+        const polygons: SegmentationPolygon[] = parsedPolygons.map(polygon =>
+          toApiPolygon(polygon as unknown as Record<string, unknown>, uuidv4)
         );
 
         // Use same response format as single getSegmentationResults method
