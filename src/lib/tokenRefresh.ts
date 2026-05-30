@@ -1,64 +1,24 @@
 import { logger } from '@/lib/logger';
 import apiClient from '@/lib/api';
 
+// Proactively refresh the access cookie on a fixed cadence, comfortably
+// shorter than the backend's access-token lifetime (JWT_ACCESS_EXPIRY = 15m).
+// The tokens are httpOnly cookies now, so the client can't read their expiry
+// to schedule precisely — a fixed interval below the lifetime is both simpler
+// and sufficient. This keeps the session (and the WebSocket handshake's auth
+// cookie) alive during long idle periods, rather than waiting for the next
+// request's 401 to trigger a reactive refresh.
+const REFRESH_INTERVAL_MS = 13 * 60 * 1000; // 13 min (< 15 min access expiry)
+
 class TokenRefreshManager {
-  private refreshTimer: NodeJS.Timeout | null = null;
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private isRefreshing = false;
 
   /**
-   * Schedule token refresh before access token expires
-   */
-  scheduleTokenRefresh(accessToken: string) {
-    this.clearRefreshTimer();
-
-    if (!accessToken) return;
-
-    try {
-      // Decode JWT to get expiry time
-      const tokenParts = accessToken.split('.');
-      if (tokenParts.length !== 3) return;
-
-      let payload;
-      try {
-        // Handle URL-safe base64 decoding
-        const base64 = tokenParts[1].replace(/-/g, '+').replace(/_/g, '/');
-        // Add padding if necessary
-        const paddedBase64 = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-        payload = JSON.parse(atob(paddedBase64));
-      } catch (parseError) {
-        logger.warn('Failed to parse JWT token:', parseError);
-        return;
-      }
-
-      if (!payload.exp || typeof payload.exp !== 'number') {
-        logger.warn('JWT token missing or invalid exp claim');
-        return;
-      }
-
-      const expiryTime = payload.exp * 1000; // Convert to milliseconds
-      const currentTime = Date.now();
-      const timeToExpiry = expiryTime - currentTime;
-
-      // Refresh token 2 minutes before it expires, but at least 30 seconds from now
-      const refreshTime = Math.max(timeToExpiry - 2 * 60 * 1000, 30 * 1000);
-
-      if (refreshTime > 0) {
-        logger.debug(
-          '🔄 Scheduling token refresh in',
-          refreshTime / 1000,
-          'seconds'
-        );
-        this.refreshTimer = setTimeout(() => {
-          this.refreshTokenIfNeeded();
-        }, refreshTime);
-      }
-    } catch (error) {
-      logger.error('Failed to schedule token refresh:', error);
-    }
-  }
-
-  /**
-   * Manually refresh token if needed
+   * Refresh the access cookie via the refresh_token cookie. No-ops if a
+   * refresh is already in flight. On failure (refresh cookie gone/expired)
+   * the timer is stopped; the next API call's 401 interceptor routes the
+   * user to sign-in.
    */
   async refreshTokenIfNeeded(): Promise<boolean> {
     if (this.isRefreshing) {
@@ -66,30 +26,14 @@ class TokenRefreshManager {
       return false;
     }
 
-    if (!apiClient.isAuthenticated()) {
-      logger.debug('User not authenticated, skipping token refresh');
-      return false;
-    }
-
     try {
       this.isRefreshing = true;
       logger.debug('Proactive token refresh...');
-
-      // Directly refresh the token — don't go through getUserProfile which would
-      // trigger the 401 interceptor and create a double-refresh race condition
       await apiClient.refreshAccessToken();
-
-      const newAccessToken = apiClient.getAccessToken();
-      if (newAccessToken) {
-        this.scheduleTokenRefresh(newAccessToken);
-        logger.debug('Token refreshed successfully');
-        return true;
-      }
-      logger.error('Token refresh completed but no access token was returned');
-      return false;
+      return true;
     } catch (error) {
-      logger.error('Token refresh failed:', error);
-      this.clearRefreshTimer();
+      logger.error('Proactive token refresh failed:', error);
+      this.stopTokenRefreshManager();
       return false;
     } finally {
       this.isRefreshing = false;
@@ -97,30 +41,25 @@ class TokenRefreshManager {
   }
 
   /**
-   * Clear the refresh timer
-   */
-  clearRefreshTimer() {
-    if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-  }
-
-  /**
-   * Start token refresh management
+   * Start the proactive refresh interval. Called by AuthContext once a
+   * session is established (login, register, or a valid init probe).
    */
   startTokenRefreshManager() {
-    const accessToken = apiClient.getAccessToken();
-    if (accessToken) {
-      this.scheduleTokenRefresh(accessToken);
-    }
+    this.stopTokenRefreshManager();
+    this.refreshTimer = setInterval(() => {
+      void this.refreshTokenIfNeeded();
+    }, REFRESH_INTERVAL_MS);
   }
 
   /**
-   * Stop token refresh management
+   * Stop the proactive refresh interval. Called on logout/account deletion
+   * or when a refresh fails.
    */
   stopTokenRefreshManager() {
-    this.clearRefreshTimer();
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
     this.isRefreshing = false;
   }
 }

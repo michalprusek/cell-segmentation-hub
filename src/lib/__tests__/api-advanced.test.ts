@@ -2,47 +2,37 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ===== SETUP MOCKS BEFORE ANY IMPORTS =====
 // Use vi.hoisted so these variables are available before module imports
-const {
-  mockAxiosInstance,
-  requestInterceptorRef,
-  responseInterceptorRef,
-  responseErrorHandlerRef,
-} = vi.hoisted(() => {
-  const requestInterceptorRef: { value: any } = { value: undefined };
-  const responseInterceptorRef: { value: any } = { value: undefined };
-  const responseErrorHandlerRef: { value: any } = { value: undefined };
+const { mockAxiosInstance, responseInterceptorRef, responseErrorHandlerRef } =
+  vi.hoisted(() => {
+    const responseInterceptorRef: { value: any } = { value: undefined };
+    const responseErrorHandlerRef: { value: any } = { value: undefined };
 
-  const mockAxiosInstance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-    interceptors: {
-      request: {
-        use: vi.fn((success: any, _error: any) => {
-          requestInterceptorRef.value = success;
-          return 0;
-        }),
-        eject: vi.fn(),
+    // No request interceptor any more (auth rides in the cookie), so we only
+    // capture the response interceptor's success + error handlers.
+    const mockAxiosInstance = {
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      interceptors: {
+        request: { use: vi.fn(), eject: vi.fn() },
+        response: {
+          use: vi.fn((success: any, error: any) => {
+            responseInterceptorRef.value = success;
+            responseErrorHandlerRef.value = error;
+            return 0;
+          }),
+          eject: vi.fn(),
+        },
       },
-      response: {
-        use: vi.fn((success: any, error: any) => {
-          responseInterceptorRef.value = success;
-          responseErrorHandlerRef.value = error;
-          return 0;
-        }),
-        eject: vi.fn(),
-      },
-    },
-  };
+    };
 
-  return {
-    mockAxiosInstance,
-    requestInterceptorRef,
-    responseInterceptorRef,
-    responseErrorHandlerRef,
-  };
-});
+    return {
+      mockAxiosInstance,
+      responseInterceptorRef,
+      responseErrorHandlerRef,
+    };
+  });
 
 // Mock axios.create to return our mock
 vi.mock('axios', () => ({
@@ -113,86 +103,14 @@ describe('API Client - Advanced Features', () => {
   });
 
   // ===== Token Management Tests =====
-  describe('Token Management and Storage', () => {
-    it('should load tokens from localStorage on initialization', () => {
-      // ApiClient is a singleton. After logout() the token is cleared.
-      // We verify the no-token state: getAccessToken returns null/undefined and
-      // isAuthenticated returns false.
-      // (The singleton may have been modified by other tests, so we reset it.)
-      (apiClient as any).accessToken = null;
-      (apiClient as any).refreshToken = null;
-
-      const hasToken = apiClient.getAccessToken();
-
-      // No access token
-      expect(hasToken).toBeNull();
-      expect(apiClient.isAuthenticated()).toBe(false);
-    });
-
-    it('should prioritize localStorage over sessionStorage', async () => {
-      // Token priority is tested via login — login stores tokens
-      // and subsequent calls use the in-memory token (loaded from storage at init)
-      mockAxiosInstance.post.mockResolvedValueOnce({
-        data: {
-          success: true,
-          data: {
-            accessToken: 'local-priority-token',
-            refreshToken: 'local-refresh',
-            user: { id: '1', email: 'test@example.com', username: 'test' },
-          },
-        },
-      });
-
-      await apiClient.login('test@example.com', 'password');
-
-      // After login, token is stored (will call setItem on the rememberMe storage)
-      expect(apiClient.isAuthenticated()).toBe(true);
-      expect(apiClient.getAccessToken()).toBe('local-priority-token');
-    });
-
-    it('should clear tokens from both storages on logout', async () => {
-      mockAxiosInstance.post.mockResolvedValue({
-        data: { success: true },
-      });
-
-      await apiClient.logout();
-
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
-      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith(
-        'refreshToken'
-      );
-    });
-  });
+  // Token storage was removed in the cookie cutover. The old localStorage
+  // tests (getAccessToken, isAuthenticated, prioritize, clear-on-logout)
+  // have been deleted because those methods and behaviours no longer exist.
 
   // ===== Interceptor Tests =====
-  describe('Request Interceptors', () => {
-    it('should add authorization header to requests when authenticated', () => {
-      // Set the in-memory token directly (the interceptor reads this.accessToken)
-      (apiClient as any).accessToken = 'test-access-token';
-
-      const requestConfig = { headers: {} };
-
-      // Call the captured request interceptor
-      const modifiedConfig = requestInterceptorRef.value(requestConfig);
-
-      expect(modifiedConfig.headers.Authorization).toBe(
-        'Bearer test-access-token'
-      );
-
-      // Cleanup
-      (apiClient as any).accessToken = null;
-    });
-
-    it('should not add authorization header when not authenticated', () => {
-      (apiClient as any).accessToken = null;
-
-      const requestConfig = { headers: {} };
-      const modifiedConfig = requestInterceptorRef.value(requestConfig);
-
-      expect(modifiedConfig.headers.Authorization).toBeUndefined();
-    });
+  describe('Response Interceptor', () => {
+    // The request interceptor was removed in the cookie cutover — auth is
+    // now carried by withCredentials cookies, not Authorization headers.
 
     it('should pass through successful responses', () => {
       const response = { data: { success: true }, status: 200 };
@@ -205,39 +123,30 @@ describe('API Client - Advanced Features', () => {
   // ===== Token Refresh Tests =====
   describe('Automatic Token Refresh', () => {
     it('should refresh token on 401 and retry request', async () => {
-      // Setup: Mock refresh endpoint
-      mockAxiosInstance.post.mockResolvedValueOnce({
-        data: { success: true, data: { accessToken: 'new-token' } },
-      });
-
-      // Create 401 error
+      // Create 401 error for a non-auth endpoint
       const error = {
         response: { status: 401 },
         config: { url: '/test-endpoint', headers: {} },
       };
 
-      // Set refresh token in memory (the error handler uses this.refreshToken)
-      (apiClient as any).refreshToken = 'valid-refresh-token';
-
-      // Make instance callable for the retry request (axios instance can be called as function)
+      // Make instance callable for the refresh POST + the retry request
       const callableMock = vi
         .fn()
-        .mockResolvedValueOnce({ data: { result: 'success' } });
+        .mockResolvedValueOnce({ data: { result: 'success' } }); // retry succeeds
+      callableMock.post = vi.fn().mockResolvedValueOnce({ data: {} }); // refresh succeeds
       Object.assign(callableMock, mockAxiosInstance);
+      callableMock.post = vi.fn().mockResolvedValueOnce({ data: {} });
       (apiClient as any).instance = callableMock;
 
-      // Call the captured error handler — should refresh and retry
+      // Call the captured error handler — should call /auth/refresh-token then retry
       try {
         await responseErrorHandlerRef.value(error);
       } catch (_err) {
         // Retry may fail if mock isn't set up perfectly — just verify refresh was called
       }
 
-      // Verify refresh was called
-      expect(callableMock.post).toHaveBeenCalledWith(
-        '/auth/refresh-token',
-        expect.objectContaining({ refreshToken: 'valid-refresh-token' })
-      );
+      // Verify refresh endpoint was called with no body (cookies carry the token)
+      expect(callableMock.post).toHaveBeenCalledWith('/auth/refresh-token');
 
       // Restore instance
       (apiClient as any).instance = mockAxiosInstance;
@@ -262,7 +171,7 @@ describe('API Client - Advanced Features', () => {
       );
     });
 
-    it('should clear tokens when refresh fails', async () => {
+    it('should surface signed-out state when refresh fails', async () => {
       const originalRequest = { url: '/protected-endpoint', headers: {} };
 
       const unauthorizedError = {
@@ -270,21 +179,17 @@ describe('API Client - Advanced Features', () => {
         config: originalRequest,
       };
 
-      // Set refresh token
-      localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'refreshToken') return 'invalid-refresh-token';
-        return null;
-      });
-
-      // Mock failed refresh
+      // Mock failed refresh (httpOnly cookie is expired/invalid)
       mockAxiosInstance.post.mockRejectedValue(new Error('Refresh failed'));
 
+      // The request should reject — there are no client-side tokens to clear
+      // (they live in httpOnly cookies the server manages)
       await expect(
         responseErrorHandlerRef.value(unauthorizedError)
-      ).rejects.toThrow();
+      ).rejects.toBeDefined();
 
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
+      // No localStorage writes expected — tokens are not stored client-side
+      expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
 
     it('should not retry request that already has _retry flag', async () => {

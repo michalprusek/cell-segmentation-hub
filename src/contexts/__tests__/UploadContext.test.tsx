@@ -11,14 +11,12 @@ import apiClient from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     updateUserProfile: vi.fn(),
     uploadImages: vi.fn(),
     uploadImagesChunked: vi.fn(),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     updateUserProfile: vi.fn(),
     uploadImages: vi.fn(),

@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { config, getOrigins } from './utils/config';
 import { getUploadLimitsForEnvironment } from './config/uploadLimits';
 
@@ -142,6 +143,11 @@ app.use(
     limit: uploadLimits.EXPRESS_URL_ENCODED_LIMIT,
   })
 );
+
+// Cookie parsing — populates req.cookies with the httpOnly auth cookies
+// (access_token / refresh_token) that carry the JWTs since the cookie
+// cutover. See utils/authCookies.ts.
+app.use(cookieParser());
 
 // Request logging
 app.use(createRequestLogger('API'));

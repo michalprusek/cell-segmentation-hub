@@ -27,6 +27,16 @@ vi.mock('socket.io', () => ({
 }));
 vi.mock('jsonwebtoken', () => jwtMock);
 vi.mock('../../utils/logger');
+// websocketService imports authCookies, which imports config. Stub config so
+// the real config (which calls process.exit on a missing test env) is skipped
+// and the real cookie-header parser is still exercised.
+vi.mock('../../utils/config', () => ({
+  config: {
+    UPLOAD_DIR: '/tmp/test-uploads',
+    NODE_ENV: 'test',
+    JWT_ACCESS_SECRET: 'test-secret',
+  },
+}));
 
 import { WebSocketService } from '../websocketService';
 import { Server as SocketIOServer } from 'socket.io';
@@ -290,8 +300,8 @@ describe('WebSocketService - Core Unit Tests', () => {
       const socket = {
         id: 'socket-2',
         handshake: {
-          auth: { token: 'bad-token' },
-          headers: {},
+          auth: {},
+          headers: { cookie: 'access_token=bad-token' },
         },
       };
       const next = vi.fn();
@@ -320,8 +330,8 @@ describe('WebSocketService - Core Unit Tests', () => {
       const socket = {
         id: 'socket-3',
         handshake: {
-          auth: { token: 'valid-format-token' },
-          headers: {},
+          auth: {},
+          headers: { cookie: 'access_token=valid-format-token' },
         },
       };
       const next = vi.fn();
@@ -353,8 +363,8 @@ describe('WebSocketService - Core Unit Tests', () => {
       const socket: any = {
         id: 'socket-4',
         handshake: {
-          auth: { token: 'good-token' },
-          headers: {},
+          auth: {},
+          headers: { cookie: 'access_token=good-token' },
         },
       };
       const next = vi.fn();

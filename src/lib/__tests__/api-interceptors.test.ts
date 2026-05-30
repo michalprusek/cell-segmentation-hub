@@ -129,59 +129,57 @@ beforeEach(() => {
 
 describe('login', () => {
   const authData = {
-    accessToken: 'at',
-    refreshToken: 'rt',
     user: { id: '1', email: 'a@b.com', username: 'ab' },
   };
 
-  it('stores tokens in localStorage when rememberMe=true (default)', async () => {
+  it('sends rememberMe=true in POST body by default and returns { user }', async () => {
     mockAxiosInstance.post.mockResolvedValue(wrap(authData));
 
-    await apiClient.login('a@b.com', 'pw');
+    const result = await apiClient.login('a@b.com', 'pw');
 
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', 'at');
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('refreshToken', 'rt');
-    expect(apiClient.isAuthenticated()).toBe(true);
-    expect(apiClient.getAccessToken()).toBe('at');
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+      '/auth/login',
+      expect.objectContaining({ email: 'a@b.com', rememberMe: true })
+    );
+    expect(result.user).toEqual(authData.user);
+    // No tokens in client storage — they live in httpOnly cookies
+    expect(localStorageMock.setItem).not.toHaveBeenCalled();
+    expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
   });
 
-  it('stores tokens in sessionStorage when rememberMe=false', async () => {
+  it('sends rememberMe=false in POST body when specified', async () => {
     mockAxiosInstance.post.mockResolvedValue(wrap(authData));
 
-    await apiClient.login('a@b.com', 'pw', false);
+    const result = await apiClient.login('a@b.com', 'pw', false);
 
-    expect(sessionStorageMock.setItem).toHaveBeenCalledWith(
-      'accessToken',
-      'at'
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+      '/auth/login',
+      expect.objectContaining({ rememberMe: false })
     );
-    expect(sessionStorageMock.setItem).toHaveBeenCalledWith(
-      'refreshToken',
-      'rt'
-    );
-    // localStorage should NOT have been used for storage
-    expect(localStorageMock.setItem).not.toHaveBeenCalledWith(
-      'accessToken',
-      expect.anything()
-    );
+    expect(result.user).toEqual(authData.user);
+    // No storage writes regardless of rememberMe
+    expect(localStorageMock.setItem).not.toHaveBeenCalled();
+    expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
   });
 
-  it('returns AuthResponse with user, accessToken, refreshToken', async () => {
+  it('returns AuthResponse with only { user } (no tokens in body)', async () => {
     mockAxiosInstance.post.mockResolvedValue(wrap(authData));
 
     const result = await apiClient.login('a@b.com', 'pw');
 
     expect(result.user).toEqual(authData.user);
-    expect(result.accessToken).toBe('at');
-    expect(result.refreshToken).toBe('rt');
+    // accessToken and refreshToken are NOT in the response (they're cookies)
+    expect((result as any).accessToken).toBeUndefined();
+    expect((result as any).refreshToken).toBeUndefined();
   });
 
   it('handles flat (non-nested) backend response', async () => {
-    // Some older backends return data directly without .data wrapper
+    // Some backends return data directly without .data wrapper
     mockAxiosInstance.post.mockResolvedValue({ data: authData });
 
     const result = await apiClient.login('a@b.com', 'pw');
 
-    expect(result.accessToken).toBe('at');
+    expect(result.user).toEqual(authData.user);
   });
 });
 
@@ -189,12 +187,10 @@ describe('login', () => {
 
 describe('register', () => {
   const authData = {
-    accessToken: 'reg-at',
-    refreshToken: 'reg-rt',
     user: { id: '2', email: 'new@example.com', username: 'newu' },
   };
 
-  it('posts to /auth/register and stores tokens', async () => {
+  it('posts to /auth/register with correct body and returns { user }', async () => {
     mockAxiosInstance.post.mockResolvedValue(wrap(authData));
 
     const result = await apiClient.register(
@@ -213,15 +209,18 @@ describe('register', () => {
       })
     );
     expect(result.user.email).toBe('new@example.com');
-    expect(apiClient.isAuthenticated()).toBe(true);
+    // No storage writes — tokens are in httpOnly cookies set by the server
+    expect(localStorageMock.setItem).not.toHaveBeenCalled();
   });
 
-  it('works without username or consent options', async () => {
+  it('works without username or consent options and returns { user }', async () => {
     mockAxiosInstance.post.mockResolvedValue(wrap(authData));
 
     const result = await apiClient.register('new@example.com', 'pw123');
 
-    expect(result.accessToken).toBe('reg-at');
+    expect(result.user.email).toBe('new@example.com');
+    // No token fields in the response body
+    expect((result as any).accessToken).toBeUndefined();
   });
 });
 
@@ -229,17 +228,18 @@ describe('register', () => {
 
 describe('refreshAccessToken deduplication', () => {
   it('two concurrent calls share a single in-flight request', async () => {
-    (apiClient as any).refreshToken = 'shared-rt';
-
     let resolveRefresh!: (v: any) => void;
     const refreshPromise = new Promise<void>(res => {
       resolveRefresh = res;
     });
 
+    // _doRefresh posts /auth/refresh-token with NO body; the refresh_token
+    // cookie is sent automatically via withCredentials. Return a minimal
+    // response (the body is not read).
     mockAxiosInstance.post.mockReturnValue(
       new Promise(r => {
         refreshPromise.then(() => {
-          r(wrap({ accessToken: 'new-at', refreshToken: 'new-rt' }));
+          r({ data: {} }); // empty body — tokens are in Set-Cookie
         });
       })
     );
@@ -254,38 +254,29 @@ describe('refreshAccessToken deduplication', () => {
 
     // Backend was only called once despite two concurrent callers
     expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
-    expect(apiClient.getAccessToken()).toBe('new-at');
-  });
-});
-
-// ── _doRefresh: no refresh token guard ───────────────────────────────────────
-
-describe('_doRefresh – no refresh token', () => {
-  it('throws "No refresh token available" when refreshToken is null', async () => {
-    (apiClient as any).refreshToken = null;
-
-    await expect((apiClient as any)._doRefresh()).rejects.toThrow(
-      'No refresh token available'
-    );
+    // Verify the call had no body argument
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/refresh-token');
   });
 });
 
 // ── response interceptor: 401 without refreshToken ───────────────────────────
 
-describe('response interceptor – 401 with no refreshToken', () => {
-  it('clears storage and rejects when there is no refresh token', async () => {
-    (apiClient as any).refreshToken = null;
-    (apiClient as any).accessToken = null;
+describe('response interceptor – 401 with failed refresh', () => {
+  it('rejects and does not write localStorage when refresh attempt fails', async () => {
+    // Simulate the refresh attempt failing (the httpOnly cookie is expired)
+    mockAxiosInstance.post.mockRejectedValue(new Error('401 Unauthorized'));
 
     const error = {
       response: { status: 401 },
       config: { url: '/protected', headers: {} },
     };
 
-    await expect(responseErrorHandlerRef.value(error)).rejects.toEqual(error);
+    // The interceptor should reject — no client-side tokens to clear
+    await expect(responseErrorHandlerRef.value(error)).rejects.toBeDefined();
 
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
+    // No localStorage writes — auth tokens live in httpOnly cookies only
+    expect(localStorageMock.removeItem).not.toHaveBeenCalled();
+    expect(sessionStorageMock.removeItem).not.toHaveBeenCalled();
   });
 });
 

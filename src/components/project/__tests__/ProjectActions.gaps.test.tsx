@@ -21,8 +21,6 @@ import { toast } from 'sonner';
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     getUserProfile: vi
       .fn()
       .mockResolvedValue({ preferred_theme: 'system', preferredLang: 'en' }),

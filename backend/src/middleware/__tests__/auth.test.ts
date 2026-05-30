@@ -14,8 +14,15 @@ vi.mock('../../db', () => ({
 
 vi.mock('../../auth/jwt', () => ({
   __esModule: true,
-  extractTokenFromHeader: vi.fn(),
   verifyAccessToken: vi.fn(),
+}));
+
+// The access token is read from req.cookies[ACCESS_TOKEN_COOKIE] now. Mock
+// authCookies so the middleware import doesn't pull in the real config
+// (which calls process.exit on a missing test env).
+vi.mock('../../utils/authCookies', () => ({
+  __esModule: true,
+  ACCESS_TOKEN_COOKIE: 'access_token',
 }));
 
 vi.mock('../../utils/response', () => ({
@@ -41,11 +48,7 @@ vi.mock('../../utils/logger', () => ({
 }));
 
 import { prisma } from '../../db';
-import {
-  extractTokenFromHeader,
-  verifyAccessToken,
-  JwtPayload,
-} from '../../auth/jwt';
+import { verifyAccessToken, JwtPayload } from '../../auth/jwt';
 import { ResponseHelper } from '../../utils/response';
 import {
   authenticate,
@@ -55,9 +58,6 @@ import {
 } from '../auth';
 
 // Typed mock helpers
-const mockExtractTokenFromHeader = extractTokenFromHeader as MockedFunction<
-  typeof extractTokenFromHeader
->;
 const mockVerifyAccessToken = verifyAccessToken as MockedFunction<
   typeof verifyAccessToken
 >;
@@ -97,6 +97,7 @@ describe('Auth Middleware', () => {
 
     mockReq = {
       headers: {},
+      cookies: {},
       params: {},
     };
 
@@ -114,9 +115,8 @@ describe('Auth Middleware', () => {
   // authenticate
   // -----------------------------------------------------------------------
   describe('authenticate', () => {
-    it('returns 401 when Authorization header is absent', async () => {
-      mockReq.headers = {};
-      mockExtractTokenFromHeader.mockReturnValue(null);
+    it('returns 401 when the access_token cookie is absent', async () => {
+      mockReq.cookies = {};
 
       await authenticate(mockReq as Request, mockRes as Response, mockNext);
 
@@ -128,9 +128,8 @@ describe('Auth Middleware', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('returns 401 when token extraction returns null', async () => {
-      mockReq.headers = { authorization: 'InvalidHeader' };
-      mockExtractTokenFromHeader.mockReturnValue(null);
+    it('returns 401 when the access_token cookie is empty', async () => {
+      mockReq.cookies = {};
 
       await authenticate(mockReq as Request, mockRes as Response, mockNext);
 
@@ -139,8 +138,7 @@ describe('Auth Middleware', () => {
     });
 
     it('returns 401 with expired-token message when token is expired', async () => {
-      mockReq.headers = { authorization: 'Bearer expired.token.here' };
-      mockExtractTokenFromHeader.mockReturnValue('expired.token.here');
+      mockReq.cookies = { access_token: 'expired.token.here' };
       mockVerifyAccessToken.mockImplementation(() => {
         throw new Error('Access token expired');
       });
@@ -156,8 +154,7 @@ describe('Auth Middleware', () => {
     });
 
     it('returns 401 with invalid-token message for other JWT errors', async () => {
-      mockReq.headers = { authorization: 'Bearer bad.token' };
-      mockExtractTokenFromHeader.mockReturnValue('bad.token');
+      mockReq.cookies = { access_token: 'bad.token' };
       mockVerifyAccessToken.mockImplementation(() => {
         throw new Error('Invalid access token');
       });
@@ -173,8 +170,7 @@ describe('Auth Middleware', () => {
     });
 
     it('returns 401 when user is not found in the database', async () => {
-      mockReq.headers = { authorization: 'Bearer valid.token' };
-      mockExtractTokenFromHeader.mockReturnValue('valid.token');
+      mockReq.cookies = { access_token: 'valid.token' };
       mockVerifyAccessToken.mockReturnValue(buildPayload());
       mockPrismaUserFindUnique.mockResolvedValue(null);
 
@@ -189,8 +185,7 @@ describe('Auth Middleware', () => {
     });
 
     it('sets req.user with correct fields on success', async () => {
-      mockReq.headers = { authorization: 'Bearer valid.token' };
-      mockExtractTokenFromHeader.mockReturnValue('valid.token');
+      mockReq.cookies = { access_token: 'valid.token' };
       mockVerifyAccessToken.mockReturnValue(buildPayload());
       const dbUser = buildUser();
       mockPrismaUserFindUnique.mockResolvedValue(dbUser as never);
@@ -206,8 +201,7 @@ describe('Auth Middleware', () => {
     });
 
     it('calls next() on successful authentication', async () => {
-      mockReq.headers = { authorization: 'Bearer valid.token' };
-      mockExtractTokenFromHeader.mockReturnValue('valid.token');
+      mockReq.cookies = { access_token: 'valid.token' };
       mockVerifyAccessToken.mockReturnValue(buildPayload());
       mockPrismaUserFindUnique.mockResolvedValue(buildUser() as never);
 
@@ -218,8 +212,7 @@ describe('Auth Middleware', () => {
     });
 
     it('returns 500 on an unexpected error', async () => {
-      mockReq.headers = { authorization: 'Bearer valid.token' };
-      mockExtractTokenFromHeader.mockReturnValue('valid.token');
+      mockReq.cookies = { access_token: 'valid.token' };
       mockVerifyAccessToken.mockReturnValue(buildPayload());
       mockPrismaUserFindUnique.mockRejectedValue(
         new Error('DB connection failed')
@@ -367,8 +360,7 @@ describe('Auth Middleware', () => {
   // -----------------------------------------------------------------------
   describe('optionalAuthenticate', () => {
     it('calls next() without setting req.user when no token is present', async () => {
-      mockReq.headers = {};
-      mockExtractTokenFromHeader.mockReturnValue(null);
+      mockReq.cookies = {};
 
       await optionalAuthenticate(
         mockReq as Request,
@@ -381,8 +373,7 @@ describe('Auth Middleware', () => {
     });
 
     it('sets req.user and calls next() when token is valid', async () => {
-      mockReq.headers = { authorization: 'Bearer valid.token' };
-      mockExtractTokenFromHeader.mockReturnValue('valid.token');
+      mockReq.cookies = { access_token: 'valid.token' };
       mockVerifyAccessToken.mockReturnValue(buildPayload());
       const dbUser = buildUser();
       mockPrismaUserFindUnique.mockResolvedValue(dbUser as never);
@@ -403,8 +394,7 @@ describe('Auth Middleware', () => {
     });
 
     it('calls next() without setting user when token verification throws', async () => {
-      mockReq.headers = { authorization: 'Bearer bad.token' };
-      mockExtractTokenFromHeader.mockReturnValue('bad.token');
+      mockReq.cookies = { access_token: 'bad.token' };
       mockVerifyAccessToken.mockImplementation(() => {
         throw new Error('Invalid token');
       });
@@ -420,8 +410,7 @@ describe('Auth Middleware', () => {
     });
 
     it('calls next() without user when database lookup throws', async () => {
-      mockReq.headers = { authorization: 'Bearer valid.token' };
-      mockExtractTokenFromHeader.mockReturnValue('valid.token');
+      mockReq.cookies = { access_token: 'valid.token' };
       mockVerifyAccessToken.mockReturnValue(buildPayload());
       mockPrismaUserFindUnique.mockRejectedValue(new Error('DB error'));
 

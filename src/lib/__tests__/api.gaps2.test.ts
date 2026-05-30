@@ -412,36 +412,27 @@ describe('requestBatchSegmentation', () => {
   });
 });
 
-// ── logout with no refresh token ──────────────────────────────────────────────
+// ── logout always POSTs to /auth/logout ───────────────────────────────────────
+//
+// After the cookie cutover, logout() always POSTs /auth/logout regardless of
+// any client-side state. There is no refreshToken gate — the browser sends
+// the httpOnly refresh_token cookie automatically; the server revokes it.
 
 describe('logout', () => {
-  it('skips POST /auth/logout when refreshToken is null', async () => {
-    (apiClient as unknown as { refreshToken: null }).refreshToken = null;
+  it('always POSTs /auth/logout even when no in-memory refresh token', async () => {
+    mockAxiosInstance.post.mockResolvedValue({ data: {} });
     await apiClient.logout();
-    expect(mockAxiosInstance.post).not.toHaveBeenCalled();
-    // tokens should still be cleared
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/logout');
+    // No localStorage operations — tokens are not stored client-side
+    expect(localStorageMock.removeItem).not.toHaveBeenCalled();
   });
 });
 
-// ── isAuthenticated and getAccessToken ────────────────────────────────────────
-
-describe('utility methods', () => {
-  it('isAuthenticated returns true when accessToken is set', () => {
-    (apiClient as unknown as { accessToken: string }).accessToken = 'tok';
-    expect(apiClient.isAuthenticated()).toBe(true);
-  });
-
-  it('isAuthenticated returns false when accessToken is null', () => {
-    (apiClient as unknown as { accessToken: null }).accessToken = null;
-    expect(apiClient.isAuthenticated()).toBe(false);
-  });
-
-  it('getAccessToken returns the current access token', () => {
-    (apiClient as unknown as { accessToken: string }).accessToken = 'mytoken';
-    expect(apiClient.getAccessToken()).toBe('mytoken');
-  });
-});
+// ── isAuthenticated / getAccessToken were deleted in the cookie cutover ───────
+//
+// These methods no longer exist on ApiClient. The tests that exercised them
+// have been removed. Auth state is now determined solely by the httpOnly
+// cookie the browser sends on every request.
 
 // ── getExportDownloadToken ────────────────────────────────────────────────────
 

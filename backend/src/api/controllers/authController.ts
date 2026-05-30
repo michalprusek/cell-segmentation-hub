@@ -4,6 +4,11 @@ import { promises as fs } from 'fs';
 import * as AuthService from '../../services/authService';
 import * as UserService from '../../services/userService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
+import {
+  setAuthCookies,
+  clearAuthCookies,
+  REFRESH_TOKEN_COOKIE,
+} from '../../utils/authCookies';
 import { prisma } from '../../db';
 import { logger } from '../../utils/logger';
 import { UserNotFoundError } from '../../middleware/error';
@@ -17,7 +22,6 @@ import {
   type ResetPasswordRequestData,
   type ResetPasswordConfirmData,
   type ChangePasswordData,
-  type RefreshTokenData,
 } from '../../auth/validation';
 
 /**
@@ -106,7 +110,14 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 
   const result = await AuthService.register(data);
 
-  return ResponseHelper.success(res, result, result.message, 201);
+  // Registration logs the user in immediately. Tokens travel only in
+  // httpOnly cookies now — never the body. Registration creates a
+  // rememberMe session (see authService), so the refresh cookie is long-lived.
+  setAuthCookies(res, result.accessToken, result.refreshToken, {
+    rememberMe: true,
+  });
+
+  return ResponseHelper.success(res, { user: result.user }, result.message, 201);
 });
 
 /**
@@ -205,7 +216,17 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
   const result = await AuthService.login(data);
 
-  return ResponseHelper.success(res, result, 'Přihlášení bylo úspěšné');
+  // Tokens go into httpOnly cookies only; the body carries the user.
+  // rememberMe controls the refresh cookie's Max-Age (7d vs 30d).
+  setAuthCookies(res, result.accessToken, result.refreshToken, {
+    rememberMe: data.rememberMe ?? false,
+  });
+
+  return ResponseHelper.success(
+    res,
+    { user: result.user },
+    'Přihlášení bylo úspěšné'
+  );
 });
 
 /**
@@ -213,11 +234,21 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
  */
 export const refreshToken = asyncHandler(
   async (req: Request, res: Response) => {
-    const data: RefreshTokenData = req.body;
+    const token = req.cookies?.[REFRESH_TOKEN_COOKIE];
+    if (!token) {
+      return ResponseHelper.unauthorized(res, 'Chybí refresh token');
+    }
 
-    const result = await AuthService.refreshToken(data);
+    const result = await AuthService.refreshToken({ refreshToken: token });
 
-    return ResponseHelper.success(res, result, 'Token byl úspěšně obnoven');
+    // The rotated refresh token lives for the full server-side Redis TTL
+    // (30d), so the refreshed cookie gets the long-lived Max-Age. The new
+    // tokens travel only in the cookies — the body carries no secrets.
+    setAuthCookies(res, result.accessToken, result.refreshToken, {
+      rememberMe: true,
+    });
+
+    return ResponseHelper.success(res, null, 'Token byl úspěšně obnoven');
   }
 );
 
@@ -225,11 +256,20 @@ export const refreshToken = asyncHandler(
  * Logout user
  */
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
+  const token = req.cookies?.[REFRESH_TOKEN_COOKIE];
 
-  if (refreshToken) {
-    await AuthService.logout(refreshToken);
+  if (token) {
+    // Revocation is best-effort: a Redis blip must not leave the user
+    // unable to log out. We log and continue so the cookies are still
+    // cleared and the client ends up signed out either way.
+    try {
+      await AuthService.logout(token);
+    } catch (error) {
+      logger.error('Logout revocation failed; clearing cookies anyway:', error);
+    }
   }
+
+  clearAuthCookies(res);
 
   return ResponseHelper.success(res, null, 'Odhlášení bylo úspěšné');
 });
@@ -648,6 +688,10 @@ export const deleteAccount = asyncHandler(
 
     const user = req.user;
     await AuthService.deleteAccount(user.id);
+
+    // The session is gone — clear the auth cookies so the browser doesn't
+    // keep sending dead tokens for the deleted user.
+    clearAuthCookies(res);
 
     return ResponseHelper.success(res, null, 'Účet byl úspěšně smazán');
   }

@@ -65,12 +65,10 @@ describe('WebSocketContext', () => {
 
   describe('WebSocketProvider', () => {
     const mockUser = { id: 'user-123', name: 'Test User' };
-    const mockToken = 'test-token';
 
     it('should render children', () => {
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -88,10 +86,9 @@ describe('WebSocketContext', () => {
       expect(screen.getByTestId('child')).toBeInTheDocument();
     });
 
-    it('should initialize WebSocket manager when user and token are available', async () => {
+    it('should initialize WebSocket manager when user is available', async () => {
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -108,9 +105,9 @@ describe('WebSocketContext', () => {
 
       await waitFor(() => {
         expect(mockManager.getInstance).toHaveBeenCalled();
+        // Auth travels in the httpOnly cookie; connect only needs the user id.
         expect(mockInstance.connect).toHaveBeenCalledWith({
           id: mockUser.id,
-          token: mockToken,
         });
       });
     });
@@ -118,7 +115,6 @@ describe('WebSocketContext', () => {
     it('should not initialize when user is not available', () => {
       const authValue = {
         user: null,
-        token: null,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -137,10 +133,10 @@ describe('WebSocketContext', () => {
       expect(mockInstance.connect).not.toHaveBeenCalled();
     });
 
-    it('should not initialize when token is not available', () => {
+    it('should not initialize when user becomes null after being set', async () => {
+      // Start authenticated
       const authValue = {
         user: mockUser,
-        token: null,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -148,21 +144,44 @@ describe('WebSocketContext', () => {
         isLoading: false,
       };
 
-      render(
+      const { rerender } = render(
         <WebSocketProvider>
           <div>Test</div>
         </WebSocketProvider>,
         { wrapper: createWrapper(authValue) }
       );
 
-      expect(mockManager.getInstance).not.toHaveBeenCalled();
-      expect(mockInstance.connect).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(mockInstance.connect).toHaveBeenCalledTimes(1);
+      });
+
+      // User logs out — user becomes null
+      const loggedOutValue = {
+        user: null,
+        login: vi.fn(),
+        logout: vi.fn(),
+        register: vi.fn(),
+        updateProfile: vi.fn(),
+        isLoading: false,
+      };
+
+      rerender(
+        <AuthContext.Provider value={loggedOutValue}>
+          <WebSocketProvider>
+            <div>Test</div>
+          </WebSocketProvider>
+        </AuthContext.Provider>
+      );
+
+      // connect should not be called again after logout
+      await waitFor(() => {
+        expect(mockInstance.connect).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('should register connection event listeners', async () => {
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -195,7 +214,6 @@ describe('WebSocketContext', () => {
 
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -248,7 +266,6 @@ describe('WebSocketContext', () => {
     it('should update connection state on disconnect event', async () => {
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -298,7 +315,6 @@ describe('WebSocketContext', () => {
     it('should clean up event listeners on unmount', async () => {
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -327,7 +343,6 @@ describe('WebSocketContext', () => {
       // Start with no user
       const initialAuthValue = {
         user: null,
-        token: null,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -345,7 +360,6 @@ describe('WebSocketContext', () => {
       // User logs in - change auth state and rerender
       const loggedInAuthValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -362,9 +376,9 @@ describe('WebSocketContext', () => {
       );
 
       await waitFor(() => {
+        // Auth travels via httpOnly cookie; only user id is passed.
         expect(mockInstance.connect).toHaveBeenCalledWith({
           id: mockUser.id,
-          token: mockToken,
         });
       });
     });
@@ -372,7 +386,6 @@ describe('WebSocketContext', () => {
     it('should prevent duplicate initialization', async () => {
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -410,7 +423,6 @@ describe('WebSocketContext', () => {
 
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -437,7 +449,6 @@ describe('WebSocketContext', () => {
     it('should provide manager and socket to context consumers', async () => {
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -483,7 +494,6 @@ describe('WebSocketContext', () => {
     it('should return context value when used within provider', () => {
       const authValue = {
         user: null,
-        token: null,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -525,13 +535,11 @@ describe('WebSocketContext', () => {
 
   describe('integration scenarios', () => {
     const mockUser = { id: 'user-123', name: 'Test User' };
-    const mockToken = 'test-token';
 
     it('should handle full login/logout cycle', async () => {
       // Start with no user
       const initialAuthValue = {
         user: null,
-        token: null,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -562,7 +570,6 @@ describe('WebSocketContext', () => {
       // User logs in - update mock and rerender
       const loggedInAuthValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),
@@ -579,9 +586,9 @@ describe('WebSocketContext', () => {
       );
 
       await waitFor(() => {
+        // Auth travels via httpOnly cookie; only user id is passed.
         expect(mockInstance.connect).toHaveBeenCalledWith({
           id: mockUser.id,
-          token: mockToken,
         });
       });
 
@@ -591,10 +598,10 @@ describe('WebSocketContext', () => {
 
     it('should handle rapid auth state changes', async () => {
       const authStates = [
-        { user: null, token: null },
-        { user: mockUser, token: mockToken },
-        { user: null, token: null },
-        { user: mockUser, token: mockToken },
+        { user: null },
+        { user: mockUser },
+        { user: null },
+        { user: mockUser },
       ];
 
       const TestComponent = () => {
@@ -639,7 +646,6 @@ describe('WebSocketContext', () => {
     it('should maintain stable context value across re-renders', async () => {
       const authValue = {
         user: mockUser,
-        token: mockToken,
         login: vi.fn(),
         logout: vi.fn(),
         register: vi.fn(),

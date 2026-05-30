@@ -298,17 +298,19 @@ describe('API Client – uncovered branches', () => {
   // --------------------------------------------------------------------------
 
   describe('deleteAccount', () => {
-    it('clears tokens after successful deletion', async () => {
+    it('calls DELETE /auth/profile on successful deletion', async () => {
       mockAxiosInstance.delete.mockResolvedValue({});
       await apiClient.deleteAccount();
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
+      expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/auth/profile');
+      // No localStorage writes — tokens are httpOnly cookies
+      expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
 
-    it('clears tokens even when the request fails', async () => {
+    it('propagates error when the delete request fails', async () => {
       mockAxiosInstance.delete.mockRejectedValue(new Error('network error'));
       await expect(apiClient.deleteAccount()).rejects.toThrow('network error');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
+      // DELETE endpoint was called
+      expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/auth/profile');
     });
   });
 

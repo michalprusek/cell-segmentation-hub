@@ -9,23 +9,19 @@ import apiClient from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     updateUserProfile: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(() => null),
     deleteAccount: vi.fn(),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     updateUserProfile: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(() => null),
     deleteAccount: vi.fn(),
   },
 }));
@@ -89,11 +85,9 @@ describe('LanguageContext', () => {
     });
 
     // Default: not authenticated, no profile
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
     vi.mocked(apiClient.getUserProfile).mockRejectedValue(
       new Error('Not authenticated')
     );
-    vi.mocked(apiClient.getAccessToken).mockReturnValue(null);
   });
 
   describe('initial language detection', () => {
@@ -224,9 +218,7 @@ describe('LanguageContext', () => {
         email: 'user@example.com',
         preferredLang: 'en',
       };
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue(mockProfile as any);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('token-abc');
       vi.mocked(apiClient.updateUserProfile).mockResolvedValue(
         undefined as any
       );
@@ -258,7 +250,6 @@ describe('LanguageContext', () => {
     });
 
     it('does not call apiClient.updateUserProfile when not authenticated', async () => {
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
       vi.mocked(apiClient.getUserProfile).mockRejectedValue(
         new Error('Not authenticated')
       );
@@ -291,9 +282,7 @@ describe('LanguageContext', () => {
         email: 'prof@example.com',
         language: 'de',
       };
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue(mockProfile as any);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('token-xyz');
 
       localStorageMock.getItem.mockReturnValue(null);
 

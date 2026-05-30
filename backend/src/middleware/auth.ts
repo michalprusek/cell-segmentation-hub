@@ -1,12 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../db';
-import {
-  verifyAccessToken,
-  extractTokenFromHeader,
-  JwtPayload,
-} from '../auth/jwt';
+import { verifyAccessToken, JwtPayload } from '../auth/jwt';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
+import { ACCESS_TOKEN_COOKIE } from '../utils/authCookies';
 
 // Extend Express Request interface to include user
 declare module 'express-serve-static-core' {
@@ -53,7 +50,7 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const token = extractTokenFromHeader(req.headers.authorization);
+    const token = req.cookies?.[ACCESS_TOKEN_COOKIE];
 
     if (!token) {
       ResponseHelper.unauthorized(res, 'Chybí autentizační token', 'Auth');
@@ -228,7 +225,7 @@ export const optionalAuthenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const token = extractTokenFromHeader(req.headers.authorization);
+    const token = req.cookies?.[ACCESS_TOKEN_COOKIE];
 
     if (!token) {
       return next(); // No token, continue without user

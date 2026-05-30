@@ -119,7 +119,10 @@ describe('WebSocketManager', () => {
   });
 
   describe('connection management', () => {
-    const mockUser = { id: 'user-123', token: 'test-token' };
+    // After the cookie cutover, connect() takes { id } only — no token.
+    // The socket is created with withCredentials: true so the httpOnly
+    // access_token cookie is sent automatically on the handshake.
+    const mockUser = { id: 'user-123' };
 
     it('should establish connection with correct configuration', async () => {
       const connectPromise = wsManager.connect(mockUser);
@@ -131,9 +134,7 @@ describe('WebSocketManager', () => {
       await connectPromise;
 
       expect(io).toHaveBeenCalledWith('http://localhost:3001', {
-        auth: {
-          token: mockUser.token,
-        },
+        withCredentials: true,
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionAttempts: 10,
@@ -161,7 +162,7 @@ describe('WebSocketManager', () => {
 
     it('should disconnect before connecting with different user', async () => {
       // First connection
-      const user1 = { id: 'user-1', token: 'token-1' };
+      const user1 = { id: 'user-1' };
       mockSocket.connected = true;
       const connectPromise1 = wsManager.connect(user1);
       mockSocket._trigger('connect');
@@ -169,17 +170,18 @@ describe('WebSocketManager', () => {
 
       vi.clearAllMocks();
 
-      // Second connection with different user
-      const user2 = { id: 'user-2', token: 'token-2' };
+      // Second connection with different user — should disconnect first
+      const user2 = { id: 'user-2' };
       const connectPromise2 = wsManager.connect(user2);
       mockSocket._trigger('connect');
       await connectPromise2;
 
       expect(mockSocket.disconnect).toHaveBeenCalled();
+      // New socket should be created with withCredentials (no auth.token)
       expect(io).toHaveBeenCalledWith(
         'http://localhost:3001',
         expect.objectContaining({
-          auth: { token: user2.token },
+          withCredentials: true,
         })
       );
     });

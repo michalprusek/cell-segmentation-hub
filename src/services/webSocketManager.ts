@@ -47,7 +47,7 @@ class WebSocketManager {
   private socket: Socket | null = null;
   private isConnecting = false;
   private isInitialized = false;
-  private currentUser: { id: string; token: string } | null = null;
+  private currentUser: { id: string } | null = null;
   private eventListeners: EventListenerRegistry = {};
   private messageQueue: Array<{ event: string; data: unknown }> = [];
   private reconnectAttempts = 0;
@@ -80,13 +80,9 @@ class WebSocketManager {
   /**
    * Initialize connection with user credentials
    */
-  async connect(user: { id: string; token: string }): Promise<void> {
+  async connect(user: { id: string }): Promise<void> {
     // If already connected with same user, don't reconnect
-    if (
-      this.socket?.connected &&
-      this.currentUser?.id === user.id &&
-      this.currentUser?.token === user.token
-    ) {
+    if (this.socket?.connected && this.currentUser?.id === user.id) {
       logger.debug('WebSocket already connected for user:', user.id);
       return;
     }
@@ -160,9 +156,10 @@ class WebSocketManager {
     logger.info('Creating WebSocket connection to:', serverUrl);
 
     this.socket = io(serverUrl, {
-      auth: {
-        token: this.currentUser.token,
-      },
+      // Auth travels in the httpOnly access_token cookie, which the browser
+      // attaches to the same-origin handshake automatically. withCredentials
+      // ensures the cookie is sent on the polling/websocket upgrade requests.
+      withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true, // Enable automatic reconnection
       reconnectionAttempts: 10,

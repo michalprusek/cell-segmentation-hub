@@ -14,7 +14,6 @@ import {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
@@ -22,66 +21,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Check if user is authenticated by checking if we have tokens
-        if (apiClient.isAuthenticated()) {
-          // Get the current access token
-          const accessToken = apiClient.getAccessToken();
-          setToken(accessToken);
+        // The tokens are httpOnly cookies the client can't read. The non-secret
+        // `authenticated` hint cookie (set/cleared by the server alongside the
+        // tokens) tells us whether a session might exist — so a logged-out
+        // visitor's cold load makes NO auth request at all (no guaranteed 401
+        // / console error). Only probe when the hint is present.
+        const hasSessionHint = document.cookie
+          .split(';')
+          .some(c => c.trim().startsWith('authenticated='));
+        if (!hasSessionHint) {
+          setUser(null);
+          setProfile(null);
+          setIsAuthenticated(false);
+          return;
+        }
 
-          // Try to fetch user profile to verify token is still valid
-          const profileData = await apiClient.getUserProfile();
-          logger.debug('Profile data received in AuthContext:', profileData);
+        // A hint exists → verify the session. `suppressAuthErrors` keeps a
+        // stale-hint 401 (session died server-side) a silent sign-out rather
+        // than a "session expired" toast/redirect.
+        const profileData = await apiClient.getUserProfile({
+          suppressAuthErrors: true,
+        });
+        logger.debug('Profile data received in AuthContext:', profileData);
 
-          // Validate profileData exists and has required fields
-          if (profileData && profileData.id && profileData.email) {
-            // Create user object from profile data
-            const userData = {
-              id: profileData.id,
-              email: profileData.email,
-              username: profileData.username,
-              emailVerified: true, // Assume verified if we got profile
-            };
+        // Validate profileData exists and has required fields
+        if (profileData && profileData.id && profileData.email) {
+          // Create user object from profile data
+          const userData = {
+            id: profileData.id,
+            email: profileData.email,
+            username: profileData.username,
+            emailVerified: true, // Assume verified if we got profile
+          };
 
-            // Set both user and profile data
-            setUser(userData);
-            setProfile(profileData);
-            setIsAuthenticated(true);
+          // Set both user and profile data
+          setUser(userData);
+          setProfile(profileData);
+          setIsAuthenticated(true);
 
-            // Start token refresh management
-            tokenRefreshManager.startTokenRefreshManager();
-          } else {
-            logger.error('Invalid profile data received:', {
-              hasProfileData: !!profileData,
-              hasId: !!(profileData && profileData.id),
-              hasEmail: !!(profileData && profileData.email),
-            });
-            // Stop token refresh management
-            tokenRefreshManager.stopTokenRefreshManager();
-            // Clear state if profile data is invalid
-            setUser(null);
-            setProfile(null);
-            setToken(null);
-            setIsAuthenticated(false);
-            try {
-              await apiClient.logout();
-            } catch (logoutError) {
-              logger.error('Error during logout:', logoutError);
-            }
-          }
+          // Start proactive refresh so the session (and the WS auth cookie)
+          // stays alive during long idle periods.
+          tokenRefreshManager.startTokenRefreshManager();
+        } else {
+          logger.error('Invalid profile data received:', {
+            hasProfileData: !!profileData,
+            hasId: !!(profileData && profileData.id),
+            hasEmail: !!(profileData && profileData.email),
+          });
+          tokenRefreshManager.stopTokenRefreshManager();
+          setUser(null);
+          setProfile(null);
+          setIsAuthenticated(false);
         }
       } catch (error) {
-        logger.error('Error initializing auth:', error);
-        // Stop token refresh management
+        // No valid session (401) or a transient error — render signed-out.
+        logger.debug('No active session on init:', error);
         tokenRefreshManager.stopTokenRefreshManager();
-        // If token is invalid, clear it
-        try {
-          await apiClient.logout();
-        } catch (logoutError) {
-          logger.error('Error during logout:', logoutError);
-        }
         setUser(null);
         setProfile(null);
-        setToken(null);
         setIsAuthenticated(false);
       } finally {
         setLoading(false);
@@ -145,15 +142,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         rememberMe
       );
 
-      // Set user state immediately
+      // Set user state immediately (tokens were set as httpOnly cookies by
+      // the server; the client never sees them).
       setUser(authResponse.user);
       setIsAuthenticated(true);
 
-      // Get and set the access token
-      const accessToken = apiClient.getAccessToken();
-      setToken(accessToken);
-
-      // Start token refresh management
+      // Start proactive refresh management
       tokenRefreshManager.startTokenRefreshManager();
 
       // Emit event for localized toast (handled by useAuthToasts hook)
@@ -216,11 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(authResponse.user);
       setIsAuthenticated(true);
 
-      // Get and set the access token
-      const accessToken = apiClient.getAccessToken();
-      setToken(accessToken);
-
-      // Start token refresh management
+      // Start proactive refresh management (tokens are httpOnly cookies).
       tokenRefreshManager.startTokenRefreshManager();
 
       // Emit event for localized toast (handled by useAuthToasts hook)
@@ -276,7 +266,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(null);
       setProfile(null);
-      setToken(null);
       setIsAuthenticated(false);
 
       // Toast message will be shown by the calling component
@@ -287,7 +276,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       tokenRefreshManager.stopTokenRefreshManager();
       setUser(null);
       setProfile(null);
-      setToken(null);
       setIsAuthenticated(false);
 
       const errorMessage = getErrorMessage(error) || 'Sign out failed';
@@ -323,7 +311,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(null);
       setProfile(null);
-      setToken(null);
       setIsAuthenticated(false);
 
       // Toast message will be shown by the calling component
@@ -374,14 +361,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Update isAuthenticated and token when user state changes
+  // isAuthenticated is derived purely from the user state now — there is no
+  // client-readable token to consult (the access token is an httpOnly cookie).
   useEffect(() => {
-    const isAuth = apiClient.isAuthenticated() && !!user;
-    setIsAuthenticated(isAuth);
-    if (isAuth) {
-      const currentToken = apiClient.getAccessToken();
-      setToken(currentToken);
-    }
+    setIsAuthenticated(!!user);
   }, [user]);
 
   // signIn/signUp/signOut/deleteAccount/refreshProfile are not wrapped in
@@ -395,7 +378,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       profile,
-      token,
       loading,
       isAuthenticated,
       signIn,
@@ -405,7 +387,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, profile, token, loading, isAuthenticated]
+    [user, profile, loading, isAuthenticated]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
