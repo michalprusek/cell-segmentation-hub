@@ -16,20 +16,18 @@ import { useSegmentationReload } from './hooks/useSegmentationReload';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { useCoordinatedAbortController } from '@/hooks/shared/useAbortController';
 import useDebounce from '@/hooks/useDebounce';
-import { EditMode } from './types';
 import { shouldPreventCanvasDeselection } from './config/modeConfig';
-import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
+import { polygonKey } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
-import {
-  generateSafePolygonKey,
-  validatePolygonId,
-  ensureValidPolygonId,
-  logPolygonIdIssue,
-} from '@/lib/polygonIdUtils';
+import { generateSafePolygonKey } from '@/lib/polygonIdUtils';
 import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
+import { transformSegmentationPolygons } from './utils/transformSegmentationPolygons';
+import { usePolygonHandlers } from './hooks/usePolygonHandlers';
+import { useSegmentationLoader } from './hooks/useSegmentationLoader';
+import { useResegment } from './hooks/useResegment';
 
 // New layout components
 import VerticalToolbar from './components/VerticalToolbar';
@@ -37,7 +35,7 @@ import TopToolbar from './components/TopToolbar';
 import PolygonListPanel from './components/PolygonListPanel';
 import SpermInstancePanel from './components/SpermInstancePanel';
 import MicrotubuleInstancePanel from './components/MicrotubuleInstancePanel';
-import { isMicrotubuleInstance } from './utils/instanceColors';
+import { usePolygonRenderProps } from './hooks/usePolygonRenderProps';
 import ChannelsSection from './components/sidebar/ChannelsSection';
 import DisplaySection from './components/sidebar/DisplaySection';
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
@@ -49,7 +47,6 @@ import CanvasContent from './components/canvas/CanvasContent';
 import VideoFrameImage from './components/canvas/VideoFrameImage';
 import FrameWindowPrefetcher from './components/canvas/FrameWindowPrefetcher';
 import FrameLoadingGate from './components/canvas/FrameLoadingGate';
-import { polygonVisibilityManager } from '@/lib/rendering/PolygonVisibilityManager';
 import { SegmentChannelDialog } from '@/components/project/SegmentChannelDialog';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
@@ -67,10 +64,7 @@ import EditorLayout from './components/layout/EditorLayout';
 import { VideoModeOverlay } from './components/VideoModeOverlay';
 import { ImageDisplayProvider } from './contexts/ImageDisplayContext';
 import { useVideoFrames } from './hooks/useVideoFrames';
-import {
-  getCachedSegmentationPolygons,
-  setCachedSegmentationPolygons,
-} from './hooks/segmentationPolygonCache';
+import { setCachedSegmentationPolygons } from './hooks/segmentationPolygonCache';
 
 const EMPTY_HOVERED_VERTEX = { polygonId: null, vertexIndex: null } as const;
 
@@ -93,9 +87,6 @@ const SegmentationEditor = () => {
   const isInitialLoadRef = useRef(true);
   const previousImageIdRef = useRef<string | undefined>(undefined);
   const currentImageIdRef = useRef<string | undefined>(imageId);
-  // Monotonic token for the background resegment-completion poll so a new
-  // resegment (or image switch) invalidates a still-running poll.
-  const resegPollSeqRef = useRef(0);
 
   // Coordinated AbortController for all segmentation operations
   const { getSignal, abortAllOperations, abortAll } =
@@ -151,41 +142,29 @@ const SegmentationEditor = () => {
     [projectTitle]
   );
 
-  // State for segmentation polygons from API
-  const [segmentationPolygons, setSegmentationPolygons] = useState<
-    SegmentationPolygon[] | null
-  >(null);
-  const [isResegmenting, setIsResegmenting] = useState(false);
-  const [imageDimensions, setImageDimensions] = useState<{
-    width: number;
-    height: number;
-  } | null>(null);
-  // Stores STABLE keys (trackId where present, else polygon.id) so a
-  // microtubule hidden on one frame stays hidden when the user scrubs.
-  // Branded `Set<PolygonKey>` makes accidental key-by-other-string a
-  // compile error.
-  const [hiddenPolygonIds, setHiddenPolygonIds] = useState<Set<PolygonKey>>(
-    new Set()
-  );
-  // Cross-frame selection persistence: when the user picks an MT
-  // polyline, remember its trackId so frame scrubs can re-select the
-  // same MT instance on the new frame. null = no persistent selection.
-  const [persistedSelectionTrackId, setPersistedSelectionTrackId] = useState<
-    string | null
-  >(null);
-  const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
     height: 600,
   });
-  // `loadedFrameKey` is `${imageId}::${channelsKey}` — both axes
-  // need to match before the Skeleton overlay can step aside.
-  // Tracking just `imageId` would let a channel toggle keep a stale
-  // composite painted while the new channel still decodes.
-  // The debounce that latches "show overlay" lives inside
-  // `FrameLoadingGate`, which is rendered under ImageDisplayProvider
-  // (it needs `visibleChannels` to construct the target key).
-  const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
+
+  // Segmentation data-load cluster: polygons + dimensions + loadedFrameKey state
+  // + the primary loadSegmentation effect (cache-first → API) + handleImageLoad.
+  const {
+    segmentationPolygons,
+    setSegmentationPolygons,
+    imageDimensions,
+    setImageDimensions,
+    loadedFrameKey,
+    handleImageLoad,
+  } = useSegmentationLoader({
+    projectId,
+    imageId,
+    selectedImage,
+    getSignal,
+    queryClient,
+    t,
+    currentImageIdRef,
+  });
 
   // Bumped every time fresh segmentation data is reloaded (resegment / WS
   // completion). The editor's polygon-sync effect keys on this so a reload
@@ -197,7 +176,7 @@ const SegmentationEditor = () => {
       setSegmentationPolygons(polys);
       setReloadNonce(n => n + 1);
     },
-    []
+    [setSegmentationPolygons]
   );
 
   // Use custom hook for segmentation reload logic
@@ -323,123 +302,10 @@ const SegmentationEditor = () => {
   const canvasHeight = canvasDimensions.height;
 
   // Get initial polygons from segmentation data
-  const initialPolygons = useMemo(() => {
-    // Return empty array if no segmentation data exists or if it's not an array
-    if (
-      !segmentationPolygons ||
-      !Array.isArray(segmentationPolygons) ||
-      segmentationPolygons.length === 0
-    ) {
-      return [];
-    }
-
-    // For large datasets, process in chunks to prevent blocking
-    const startTime = performance.now();
-
-    // Transform SegmentationPolygon[] to Polygon[] and filter out invalid polygons.
-    // Spreads `segPoly` so any wire-level field (trackId, future additions) reaches
-    // the editor without manual maintenance; only parentIds[] needs explicit
-    // conversion to parent_id (singular).
-    const polygons: Polygon[] = segmentationPolygons
-      .filter(segPoly => {
-        const minPoints = segPoly.geometry === 'polyline' ? 2 : 3;
-        return segPoly.points && segPoly.points.length >= minPoints;
-      })
-      .map((segPoly): Polygon | null => {
-        const validPoints = segPoly.points
-          .map(point => {
-            if (Array.isArray(point)) {
-              return { x: point[0], y: point[1] };
-            }
-            if (typeof point === 'object' && point !== null) {
-              if (typeof point.x === 'number' && typeof point.y === 'number') {
-                return point;
-              }
-              logger.warn(
-                'Skipping invalid point with non-numeric coordinates',
-                point
-              );
-              return null;
-            }
-            logger.warn('Skipping invalid point format', point);
-            return null;
-          })
-          .filter((point): point is { x: number; y: number } => point !== null);
-
-        const minValidPoints = segPoly.geometry === 'polyline' ? 2 : 3;
-        if (validPoints.length < minValidPoints) {
-          logger.warn('Dropping polygon due to insufficient valid points', {
-            polygonId: segPoly.id,
-          });
-          return null;
-        }
-
-        let polygonId = segPoly.id;
-        if (!validatePolygonId(segPoly.id)) {
-          logPolygonIdIssue(
-            segPoly,
-            'Invalid or missing polygon ID from ML service'
-          );
-          polygonId = ensureValidPolygonId(segPoly.id, 'ml_polygon');
-          logger.warn(
-            `Generated fallback ID: ${polygonId} for polygon with invalid ID: ${segPoly.id}`
-          );
-        }
-
-        const { parentIds, ...rest } = segPoly;
-        return {
-          ...rest,
-          id: polygonId,
-          points: validPoints,
-          parent_id: parentIds?.[0],
-        };
-      })
-      .filter((polygon): polygon is Polygon => polygon !== null);
-
-    const invalidCount = segmentationPolygons.length - polygons.length;
-    const processingTime = performance.now() - startTime;
-
-    if (invalidCount > 0) {
-      logger.warn(
-        `⚠️ Filtered out ${invalidCount} invalid polygons (missing or insufficient points)`
-      );
-    }
-
-    // Monitor processing time to detect performance issues
-    if (processingTime > 100) {
-      logger.warn(
-        `⚠️ Polygon processing took ${processingTime.toFixed(2)}ms for ${segmentationPolygons.length} polygons`
-      );
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      logger.debug('🔄 Transformed segmentation polygons for editor:', {
-        hasSegmentationData: true,
-        inputCount: segmentationPolygons.length,
-        validCount: polygons.length,
-        filteredOut: invalidCount,
-        processingTime: `${processingTime.toFixed(2)}ms`,
-        imageDimensions,
-        firstPolygon: polygons[0]
-          ? {
-              id: polygons[0].id,
-              type: polygons[0].type,
-              parent_id: polygons[0].parent_id,
-              pointsCount: polygons[0].points?.length || 0,
-              firstPoints: polygons[0].points?.slice(0, 3),
-            }
-          : null,
-        internalPolygonCount: polygons.filter(
-          p => p.type === 'internal' || p.parent_id
-        ).length,
-        externalPolygonCount: polygons.filter(
-          p => p.type === 'external' && !p.parent_id
-        ).length,
-      });
-    }
-
-    return polygons;
-  }, [segmentationPolygons, imageDimensions]);
+  const initialPolygons = useMemo(
+    () => transformSegmentationPolygons(segmentationPolygons, imageDimensions),
+    [segmentationPolygons, imageDimensions]
+  );
 
   // Determine if we should trigger auto-center (only on initial load from Project Detail)
   const shouldAutoCenter = useRef(false);
@@ -603,284 +469,6 @@ const SegmentationEditor = () => {
     // 3. Leaving the editor (unmount autosave)
   });
 
-  // Load segmentation data with proper cancellation handling
-  useEffect(() => {
-    let isMounted = true;
-
-    // Update current image ref immediately
-    currentImageIdRef.current = imageId;
-
-    const loadSegmentation = async () => {
-      if (!projectId || !imageId) return;
-
-      // Get abort signal for main loading operation
-      const signal = getSignal('main-loading');
-
-      // Immediately clear polygons when switching images to prevent showing old data
-      setSegmentationPolygons(null);
-      setImageDimensions(null); // Also clear image dimensions
-      logger.debug(
-        '🧹 Cleared polygons and dimensions for new image:',
-        imageId
-      );
-
-      // Check if the image has completed segmentation before trying to fetch results
-      const hasSegmentation =
-        selectedImage?.segmentationStatus === 'completed' ||
-        selectedImage?.segmentationStatus === 'segmented';
-
-      if (!hasSegmentation) {
-        logger.debug(
-          'Image does not have completed segmentation, skipping fetch:',
-          {
-            imageId,
-            status: selectedImage?.segmentationStatus,
-          }
-        );
-
-        // Set image dimensions from project data if available
-        if (selectedImage?.width && selectedImage?.height) {
-          logger.debug(
-            '📐 Setting image dimensions from project data (no segmentation):',
-            {
-              width: selectedImage.width,
-              height: selectedImage.height,
-            }
-          );
-          if (isMounted && imageId === currentImageIdRef.current) {
-            setImageDimensions({
-              width: selectedImage.width,
-              height: selectedImage.height,
-            });
-          }
-        }
-        return;
-      }
-
-      // Cache hit: serve a previously-fetched / prefetched result
-      // without going to the network. The shared React Query cache
-      // is populated by the editor's own success path below and by
-      // the `useFrameWindowPrefetch` sliding window, so scrub-back
-      // and pre-warmed frames paint instantly.
-      const cached = getCachedSegmentationPolygons(queryClient, imageId);
-      if (cached !== undefined) {
-        if (!isMounted || imageId !== currentImageIdRef.current) return;
-        if (cached.imageWidth && cached.imageHeight) {
-          setImageDimensions({
-            width: cached.imageWidth,
-            height: cached.imageHeight,
-          });
-        } else if (selectedImage?.width && selectedImage?.height) {
-          setImageDimensions({
-            width: selectedImage.width,
-            height: selectedImage.height,
-          });
-        }
-        setSegmentationPolygons(cached.polygons);
-        return;
-      }
-
-      try {
-        const segmentationData = await apiClient.getSegmentationResults(
-          imageId,
-          {
-            signal,
-          }
-        );
-
-        // Verify we're still on the same image and component is mounted
-        if (
-          !isMounted ||
-          imageId !== currentImageIdRef.current ||
-          signal.aborted
-        ) {
-          logger.debug(
-            '🛑 Segmentation load cancelled - image changed or component unmounted'
-          );
-          return;
-        }
-
-        // Populate the shared cache with the *normalised* result so
-        // a future scrub-back or window-prefetch read can serve from
-        // RAM. Empty / 404 frames are cached as `polygons: null` to
-        // avoid retry storms on a fast scrub across non-segmented
-        // frames.
-        if (segmentationData && !segmentationData.polygons) {
-          // Backend returned a non-null payload without a polygons
-          // field — distinguishes a misshaped 200 from a legitimate
-          // "no segmentation yet" so a misconfigured response doesn't
-          // silently masquerade as empty for 60 s of staleTime.
-          logger.warn(
-            'Segmentation response present but missing polygons field — caching as empty',
-            { imageId }
-          );
-        }
-        setCachedSegmentationPolygons(queryClient, imageId, {
-          polygons: segmentationData?.polygons ?? null,
-          imageWidth: segmentationData?.imageWidth,
-          imageHeight: segmentationData?.imageHeight,
-        });
-
-        // Handle empty or null segmentation gracefully
-        if (!segmentationData || !segmentationData.polygons) {
-          logger.debug('No segmentation data found for image:', imageId);
-          if (isMounted && imageId === currentImageIdRef.current) {
-            setSegmentationPolygons(null);
-          }
-
-          // Still try to set image dimensions from project data if available
-          if (selectedImage?.width && selectedImage?.height) {
-            logger.debug(
-              '📐 Setting image dimensions from project data (no segmentation):',
-              {
-                width: selectedImage.width,
-                height: selectedImage.height,
-              }
-            );
-            if (isMounted && imageId === currentImageIdRef.current) {
-              setImageDimensions({
-                width: selectedImage.width,
-                height: selectedImage.height,
-              });
-            }
-          }
-          return;
-        }
-
-        const polygons = segmentationData.polygons;
-
-        // Extract image dimensions from segmentation data if available
-        if (segmentationData.imageWidth && segmentationData.imageHeight) {
-          logger.debug('📐 Setting image dimensions from segmentation data:', {
-            width: segmentationData.imageWidth,
-            height: segmentationData.imageHeight,
-          });
-          if (isMounted && imageId === currentImageIdRef.current) {
-            setImageDimensions({
-              width: segmentationData.imageWidth,
-              height: segmentationData.imageHeight,
-            });
-          }
-        } else if (selectedImage?.width && selectedImage?.height) {
-          // Fallback to image dimensions from project data (database)
-          logger.debug(
-            '📐 Setting image dimensions from project data (fallback):',
-            {
-              width: selectedImage.width,
-              height: selectedImage.height,
-            }
-          );
-          if (isMounted && imageId === currentImageIdRef.current) {
-            setImageDimensions({
-              width: selectedImage.width,
-              height: selectedImage.height,
-            });
-          }
-        }
-
-        logger.debug('📥 Loaded segmentation polygons from API:', {
-          imageId,
-          polygonCount: polygons.length,
-          imageDimensions:
-            segmentationData.imageWidth && segmentationData.imageHeight
-              ? `${segmentationData.imageWidth}x${segmentationData.imageHeight}`
-              : 'not available',
-          firstPolygon: polygons[0]
-            ? {
-                id: polygons[0].id,
-                type: polygons[0].type,
-                pointsCount: polygons[0].points?.length || 0,
-                samplePoints: polygons[0].points?.slice(0, 3),
-              }
-            : null,
-        });
-
-        // Final check before setting state
-        if (isMounted && imageId === currentImageIdRef.current) {
-          setSegmentationPolygons(polygons);
-        }
-      } catch (error: any) {
-        // Handle cancellation gracefully - don't show errors for cancelled requests
-        if (handleCancelledError(error, 'segmentation loading')) {
-          return;
-        }
-
-        // Only handle real errors if we're still on the same image
-        if (isMounted && imageId === currentImageIdRef.current) {
-          logger.error('Failed to load segmentation:', error);
-          // Set to null instead of showing error for missing segmentation
-          if (
-            error &&
-            typeof error === 'object' &&
-            'response' in error &&
-            (error as { response?: { status?: number } }).response?.status ===
-              404
-          ) {
-            logger.debug('No segmentation found for image (404):', imageId);
-            setSegmentationPolygons(null);
-          } else {
-            toast.error(t('toast.operationFailed'));
-            setSegmentationPolygons(null);
-          }
-        }
-      }
-    };
-
-    loadSegmentation();
-
-    return () => {
-      isMounted = false;
-      // Don't abort here - let the coordinated controller handle it
-    };
-  }, [
-    projectId,
-    imageId,
-    t,
-    selectedImage?.width,
-    selectedImage?.height,
-    selectedImage?.segmentationStatus,
-    getSignal,
-    queryClient,
-  ]);
-
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-    const filteredPolygons = editor.polygons.filter(
-      polygon => !hiddenPolygonIds.has(polygonKey(polygon))
-    );
-    logger.debug('🎨 Polygon rendering state:', {
-      totalPolygons: editor.polygons.length,
-      visiblePolygons: filteredPolygons.length,
-      hiddenCount: hiddenPolygonIds.size,
-      imageDimensions,
-      transform: editor.transform,
-      svgViewBox: `0 0 ${imageDimensions?.width || canvasWidth} ${imageDimensions?.height || canvasHeight}`,
-      firstPolygon: filteredPolygons[0]
-        ? {
-            id: filteredPolygons[0].id,
-            pointsCount: filteredPolygons[0].points?.length || 0,
-            samplePoints: filteredPolygons[0].points?.slice(0, 5),
-            bounds:
-              filteredPolygons[0].points?.length > 0
-                ? {
-                    minX: Math.min(...filteredPolygons[0].points.map(p => p.x)),
-                    maxX: Math.max(...filteredPolygons[0].points.map(p => p.x)),
-                    minY: Math.min(...filteredPolygons[0].points.map(p => p.y)),
-                    maxY: Math.max(...filteredPolygons[0].points.map(p => p.y)),
-                  }
-                : null,
-          }
-        : null,
-    });
-  }, [
-    editor.polygons,
-    hiddenPolygonIds,
-    imageDimensions,
-    canvasHeight,
-    canvasWidth,
-    editor.transform,
-  ]);
-
   // Listen for segmentation completion and auto-reload polygons (debounced) with cancellation
   const handleSegmentationStatusUpdate = useCallback(() => {
     // Only proceed if we have a WebSocket update for the current image
@@ -1013,41 +601,6 @@ const SegmentationEditor = () => {
     };
   }, [abortAll]);
 
-  // Handle image load to get dimensions (only if not already set from segmentation data)
-  const handleImageLoad = (
-    width: number,
-    height: number,
-    channelsKey: string
-  ) => {
-    // Mark this `(imageId, channels)` pair as visible so the Skeleton
-    // overlay can step aside. The channelsKey comes from the canvas
-    // that just finished compositing — see `MultiChannelCanvas.onLoad`.
-    if (imageId) setLoadedFrameKey(`${imageId}::${channelsKey}`);
-    setImageDimensions(current => {
-      // Only update if dimensions are not already set from segmentation data
-      if (!current) {
-        logger.debug('📐 Setting image dimensions from image load:', {
-          width,
-          height,
-        });
-        return { width, height };
-      }
-
-      // Log if dimensions differ between image and segmentation data
-      if (current.width !== width || current.height !== height) {
-        logger.warn('⚠️ Image dimensions mismatch:', {
-          fromSegmentation: current,
-          fromImage: { width, height },
-          imageId,
-        });
-        // Keep segmentation data dimensions (they're more reliable)
-        return current;
-      }
-
-      return current;
-    });
-  };
-
   // Navigation functions
   const navigateToImage = (direction: 'prev' | 'next') => {
     if (!projectImages?.length) return;
@@ -1101,207 +654,85 @@ const SegmentationEditor = () => {
     }
   };
 
-  // Legacy compatibility handlers
-  const handleTogglePolygonVisibility = (polygonId: string) => {
-    // Map current-frame polygon.id → stable key (trackId or id) so the
-    // hide state survives frame changes for MTs.
-    const target = editor.polygons.find(p => p.id === polygonId);
-    if (!target) return;
-    const key = polygonKey(target);
-    setHiddenPolygonIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        newSet.add(key);
-      }
-      return newSet;
-    });
-  };
-
-  const handleDeletePolygonFromPanel = (polygonId: string) => {
-    const target = editor.polygons.find(p => p.id === polygonId);
-    editor.handleDeletePolygon(polygonId);
-    if (target) {
-      const key = polygonKey(target);
-      setHiddenPolygonIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(key);
-        return newSet;
-      });
-    }
-  };
-
-  // Capture trackId at click so frame scrubbing re-attaches selection
-  // to the same MT instance on the new frame.
-  const handleSelectPolygon = useCallback(
-    (polygonId: string | null) => {
-      if (polygonId === null) {
-        setPersistedSelectionTrackId(null);
-      } else {
-        const p = editor.polygons.find(x => x.id === polygonId);
-        setPersistedSelectionTrackId(p?.trackId ?? null);
-      }
-      editor.handlePolygonSelection(polygonId);
-    },
-    [editor]
-  );
-
-  // Cross-frame selection remap. When polygons load for a new frame
-  // (initialPolygons replaces editor.polygons), find the polygon that
-  // shares the persisted trackId and re-select it. If no sibling exists
-  // on this frame (track wasn't matched here), selection is left null
-  // by the editor's own image-change reset and we don't fight it — but
-  // we log so a missing match is debuggable when a user reports
-  // "selection lost".
-  useEffect(() => {
-    if (!persistedSelectionTrackId) return;
-    const match = editor.polygons.find(
-      p => p.trackId === persistedSelectionTrackId
-    );
-    if (match) {
-      if (editor.selectedPolygonId !== match.id) {
-        editor.setSelectedPolygonId(match.id);
-      }
-    } else if (editor.polygons.length > 0) {
-      // Polygons loaded but no match — track is not present on this
-      // frame. Surface via debug log so support can correlate user
-      // reports; UI deliberately stays quiet (toast on every scrub past
-      // a gap would be obnoxious).
-      logger.debug('Selected MT track not present on current frame', {
-        trackId: persistedSelectionTrackId,
-        frameImageId: imageId,
-      });
-    }
-    // Intentionally narrow deps: passing the whole `editor` object
-    // would re-fire on every render of useEnhancedSegmentationEditor
-    // (cursor moves, hovers). The destructured fields capture
-    // exactly the state this effect needs to react to.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    editor.polygons,
-    persistedSelectionTrackId,
-    editor.selectedPolygonId,
-    editor.setSelectedPolygonId,
-    imageId,
-  ]);
-
-  // Context menu handlers for polygon right-click
-  const handleDeletePolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
-      const target = editor.polygons.find(p => p.id === polygonId);
-      editor.handleDeletePolygon(polygonId);
-      if (target) {
-        const key = polygonKey(target);
-        setHiddenPolygonIds(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(key);
-          return newSet;
-        });
-      }
-    },
-    [editor]
-  );
-
-  const handleSlicePolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
-      // Select the polygon and switch to slice mode (skip to step 2)
-      editor.setSelectedPolygonId(polygonId);
-      editor.setEditMode(EditMode.Slice);
-    },
-    [editor]
-  );
-
-  const handleEditPolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
-      // Select the polygon and switch to edit vertices mode
-      editor.setSelectedPolygonId(polygonId);
-      editor.setEditMode(EditMode.EditVertices);
-    },
-    [editor]
-  );
-
-  // Context menu handlers for vertex right-click
-  const handleDeleteVertexFromContextMenu = useCallback(
-    (polygonId: string, vertexIndex: number) => {
-      editor.handleDeleteVertex(polygonId, vertexIndex);
-    },
-    [editor]
-  );
+  // Polygon CRUD handlers + owned state (hiddenPolygonIds, hoveredPolygonId,
+  // persistedSelectionTrackId) + the MT cross-frame selection remap effect.
+  // Called BEFORE usePolygonRenderProps because that hook takes hiddenPolygonIds
+  // as a parameter.
+  const {
+    hiddenPolygonIds,
+    hoveredPolygonId,
+    setHoveredPolygonId,
+    handleTogglePolygonVisibility,
+    handleDeletePolygonFromPanel,
+    handleSelectPolygon,
+    handleDeletePolygonFromContextMenu,
+    handleSlicePolygonFromContextMenu,
+    handleEditPolygonFromContextMenu,
+    handleDeleteVertexFromContextMenu,
+    handleRenamePolygon,
+    handleChangeInstanceId,
+    handleChangePartClass,
+  } = usePolygonHandlers({ editor, imageId });
 
   // Check if any polylines exist to conditionally show SpermInstancePanel
-  const hasPolylines = useMemo(
-    () => editor.polygons.some(p => p.geometry === 'polyline'),
-    [editor.polygons]
-  );
+  // Pure render-derivation pipeline (polyline/instance discrimination, legacy
+  // edit-mode booleans, two-stage hidden/degenerate → frustum-cull filter).
+  // Extracted to usePolygonRenderProps for isolated unit testing.
+  const {
+    hasPolylines,
+    polylineKind,
+    availableInstanceIds,
+    legacyModes,
+    visiblePolygons,
+    frameHiddenIds,
+  } = usePolygonRenderProps({
+    editor,
+    hiddenPolygonIds,
+    imageDimensions,
+    canvasWidth,
+    canvasHeight,
+    activeInstanceId,
+  });
 
-  // Discriminate sperm vs microtubule projects so the sidebar shows the
-  // right panel. Authoritative signal: `polygon.class` ('sperm' or
-  // 'microtubule') is stamped by the ML model when it produces the
-  // polygon. Each project uses one model, so the first polyline whose
-  // class we recognise is sufficient — no majority-counting needed.
-  // Legacy/manually-drawn polylines without `class` fall back to
-  // `partClass` (sperm head/midpiece/tail) or `mt_` instanceId prefix.
-  const polylineKind = useMemo<'sperm' | 'microtubule' | null>(() => {
-    for (const p of editor.polygons) {
-      if (p.geometry !== 'polyline') continue;
-      if (p.class === 'microtubule') return 'microtubule';
-      if (p.class === 'sperm') return 'sperm';
-      if (p.partClass) return 'sperm';
-      if (isMicrotubuleInstance(p.instanceId)) return 'microtubule';
-    }
-    return null;
-  }, [editor.polygons]);
-
-  // Compute available sperm instance IDs for context menu (from existing polylines + active).
-  // Two-stage memo: first derive a stable string key, then split into array only when key changes.
-  // This prevents new array references on unrelated polygon edits (e.g. vertex drags).
-  const availableInstanceKey = useMemo(() => {
-    const ids = new Set<string>();
-    for (const p of editor.polygons) {
-      if (p.geometry === 'polyline' && p.instanceId) ids.add(p.instanceId);
-    }
-    ids.add(activeInstanceId);
-    return Array.from(ids).sort().join(',');
-  }, [editor.polygons, activeInstanceId]);
-
-  const availableInstanceIds = useMemo(
-    () => availableInstanceKey.split(',').filter(Boolean),
-    [availableInstanceKey]
-  );
-
-  // Generic handler for updating a single field on a polygon by ID
-  const handleUpdatePolygonField = useCallback(
-    (polygonId: string, updates: Partial<Polygon>) => {
-      const currentPolygons = editor.getPolygons();
-      const updatedPolygons = currentPolygons.map(p =>
-        p.id === polygonId ? { ...p, ...updates } : p
-      );
-      editor.updatePolygons(updatedPolygons);
-    },
-    // editor object reference is stable; tracking individual methods avoids
-    // re-creating this callback when unrelated editor state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor.getPolygons, editor.updatePolygons]
-  );
-
-  const handleRenamePolygon = useCallback(
-    (polygonId: string, name: string) =>
-      handleUpdatePolygonField(polygonId, { name }),
-    [handleUpdatePolygonField]
-  );
-
-  const handleChangeInstanceId = useCallback(
-    (polygonId: string, instanceId: string) =>
-      handleUpdatePolygonField(polygonId, { instanceId }),
-    [handleUpdatePolygonField]
-  );
-
-  const handleChangePartClass = useCallback(
-    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') =>
-      handleUpdatePolygonField(polygonId, { partClass }),
-    [handleUpdatePolygonField]
-  );
+  // Development-only debug logger: logs polygon rendering state.
+  // Moved here (after usePolygonHandlers) so hiddenPolygonIds is in scope.
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const filteredPolygons = editor.polygons.filter(
+      polygon => !hiddenPolygonIds.has(polygonKey(polygon))
+    );
+    logger.debug('🎨 Polygon rendering state:', {
+      totalPolygons: editor.polygons.length,
+      visiblePolygons: filteredPolygons.length,
+      hiddenCount: hiddenPolygonIds.size,
+      imageDimensions,
+      transform: editor.transform,
+      svgViewBox: `0 0 ${imageDimensions?.width || canvasWidth} ${imageDimensions?.height || canvasHeight}`,
+      firstPolygon: filteredPolygons[0]
+        ? {
+            id: filteredPolygons[0].id,
+            pointsCount: filteredPolygons[0].points?.length || 0,
+            samplePoints: filteredPolygons[0].points?.slice(0, 5),
+            bounds:
+              filteredPolygons[0].points?.length > 0
+                ? {
+                    minX: Math.min(...filteredPolygons[0].points.map(p => p.x)),
+                    maxX: Math.max(...filteredPolygons[0].points.map(p => p.x)),
+                    minY: Math.min(...filteredPolygons[0].points.map(p => p.y)),
+                    maxY: Math.max(...filteredPolygons[0].points.map(p => p.y)),
+                  }
+                : null,
+          }
+        : null,
+    });
+  }, [
+    editor.polygons,
+    hiddenPolygonIds,
+    imageDimensions,
+    canvasHeight,
+    canvasWidth,
+    editor.transform,
+  ]);
 
   // Re-run ML segmentation on the currently-open frame using the
   // user-selected model + threshold. Overwrites the existing
@@ -1314,17 +745,6 @@ const SegmentationEditor = () => {
   // useCallback/useMemo placed BEFORE the `const` they capture in deps
   // throws "Cannot access 'X' before initialization" at runtime. Moved
   // ~100 lines down to live next to `const video = useVideoFrames(...)`.
-
-  // Convert new EditMode to legacy booleans for compatibility
-  const legacyModes = useMemo(
-    () => ({
-      editMode: editor.editMode === EditMode.EditVertices,
-      slicingMode: editor.editMode === EditMode.Slice,
-      pointAddingMode: editor.editMode === EditMode.AddPoints,
-      deleteMode: editor.editMode === EditMode.DeletePolygon,
-    }),
-    [editor.editMode]
-  );
 
   // Compute navigation context that EditorHeader uses for the
   // currentImageIndex / totalImages display + the Back/Next disabled
@@ -1355,63 +775,6 @@ const SegmentationEditor = () => {
 
   const currentImageIndex = navContext.index;
 
-  // Stage 1: filter hidden / degenerate polygons.
-  const renderablePolygons = useMemo(
-    () =>
-      editor.polygons.filter(polygon => {
-        if (hiddenPolygonIds.has(polygonKey(polygon)) || !polygon.points)
-          return false;
-        const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
-        return polygon.points.length >= minPoints;
-      }),
-    [editor.polygons, hiddenPolygonIds]
-  );
-
-  // Stage 2: frustum-cull off-viewport polygons via the visibility manager.
-  // The manager's internal threshold guards small counts (< 10 polygons
-  // → no culling), so MT/single-polyline cases pay zero overhead. Sperm
-  // projects with 50+ polylines at high zoom typically halve the SVG
-  // node count under this filter. We pass through `selectedPolygonId`
-  // so the manager never culls the focused polygon even if it scrolls
-  // off-screen briefly during a drag.
-  const visiblePolygons = useMemo(() => {
-    if (renderablePolygons.length < 10) return renderablePolygons;
-    const containerWidth = imageDimensions?.width || canvasWidth;
-    const containerHeight = imageDimensions?.height || canvasHeight;
-    return polygonVisibilityManager.getVisiblePolygons(renderablePolygons, {
-      zoom: editor.transform.zoom,
-      offset: {
-        x: editor.transform.translateX,
-        y: editor.transform.translateY,
-      },
-      containerWidth,
-      containerHeight,
-      selectedPolygonId: editor.selectedPolygonId,
-      forceRenderSelected: true,
-    }).visiblePolygons;
-  }, [
-    renderablePolygons,
-    editor.transform.zoom,
-    editor.transform.translateX,
-    editor.transform.translateY,
-    editor.selectedPolygonId,
-    imageDimensions,
-    canvasWidth,
-    canvasHeight,
-  ]);
-
-  // Panels still consume polygon.id, so project the stable-key set
-  // down per frame.
-  const frameHiddenIds = useMemo(
-    () =>
-      new Set(
-        editor.polygons
-          .filter(p => hiddenPolygonIds.has(polygonKey(p)))
-          .map(p => p.id)
-      ),
-    [editor.polygons, hiddenPolygonIds]
-  );
-
   // Video mode: derive videoContainerId from the selected row. Frames
   // (which are what the user opens in practice) carry the container id
   // in parentVideoId; the rare case of opening a container directly
@@ -1438,176 +801,29 @@ const SegmentationEditor = () => {
     !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
 
   // ───────────────── Resegment chain ─────────────────
-  // Re-runs ML segmentation on the currently-open frame. Lives HERE
-  // (after `const video = useVideoFrames`) because
-  // `handleResegmentCurrentFrame` captures `video.container`; placing
-  // the useCallback above the const triggers a TDZ at runtime that
-  // the minifier surfaces as "Cannot access 'X' before initialization"
-  // (CLAUDE.md production bug #11).
-
-  // The backend enforces a per-project-type model whitelist. The
-  // user-chosen `selectedModel` is meaningful only for the generic
-  // spheroid project — typed projects must use their matching model
-  // (`spheroid_invasive` → `unet_attention_aspp` per backend's
-  // MODEL_TYPE_COMPATIBILITY) or the request gets rejected.
-  const effectiveResegmentModel = useMemo(() => {
-    if (projectType === 'microtubules') return 'microtubule';
-    if (projectType === 'sperm') return 'sperm';
-    if (projectType === 'wound') return 'wound';
-    if (projectType === 'spheroid_invasive') return 'unet_attention_aspp';
-    return selectedModel;
-  }, [projectType, selectedModel]);
-
-  // Channel picker state for multi-channel video frames.
-  const [showResegmentChannelDialog, setShowResegmentChannelDialog] =
-    useState(false);
-
-  // Background poll that refreshes the editor when a resegment completes.
-  // The WebSocket completion event is not a dependable trigger, so we poll
-  // the result's `updatedAt` over plain HTTP (no AbortController, so a
-  // re-rendering editor can't cancel it) and apply the fresh polygons
-  // directly once it advances. A seq token invalidates a stale poll when a
-  // new resegment starts or the user switches frames.
-  const startResegmentPoll = useCallback(
-    (targetImageId: string, prevStamp: string | null, announce: boolean) => {
-      const seq = ++resegPollSeqRef.current;
-      const deadline = Date.now() + 120_000;
-      const tick = async () => {
-        if (
-          seq !== resegPollSeqRef.current ||
-          targetImageId !== currentImageIdRef.current ||
-          Date.now() > deadline
-        ) {
-          return;
-        }
-        let fresh = null;
-        try {
-          fresh = await apiClient.getSegmentationResults(targetImageId);
-        } catch {
-          // transient — keep polling
-        }
-        if (
-          seq !== resegPollSeqRef.current ||
-          targetImageId !== currentImageIdRef.current
-        ) {
-          return;
-        }
-        if (fresh && fresh.updatedAt && fresh.updatedAt !== prevStamp) {
-          // Apply the already-fetched fresh result DIRECTLY rather than via
-          // reloadSegmentation. reloadSegmentation runs a second fetch behind
-          // its own AbortController + cleanup, which a concurrent reload (or
-          // the editor's churn) can cancel — leaving onPolygonsLoaded (and
-          // the reloadNonce bump) unfired. Here we:
-          //   1. write the React Query cache so the editor's load effect
-          //      (which re-runs on the segmentationStatus flip and reads
-          //      cache-first) can't clobber us back to the stale result, and
-          //   2. push state + bump reloadNonce via handleReloadedPolygons so
-          //      the canvas re-syncs even at an unchanged polygon count.
-          if (fresh.imageWidth && fresh.imageHeight) {
-            setImageDimensions({
-              width: fresh.imageWidth,
-              height: fresh.imageHeight,
-            });
-          }
-          setCachedSegmentationPolygons(queryClient, targetImageId, {
-            polygons: fresh.polygons ?? null,
-            imageWidth: fresh.imageWidth,
-            imageHeight: fresh.imageHeight,
-          });
-          handleReloadedPolygons(fresh.polygons ?? null);
-          if (announce) {
-            toast.success(t('segmentation.toolbar.resegmentSuccess'));
-          }
-          return;
-        }
-        setTimeout(tick, 2000);
-      };
-      setTimeout(tick, 2000);
-    },
-    [handleReloadedPolygons, setImageDimensions, queryClient, t]
-  );
-
-  // Pure request helper — shared by the direct (single-channel) path
-  // and the dialog's onConfirm callback.
-  const runResegment = useCallback(
-    async (channel?: string) => {
-      if (!imageId || isResegmenting) return;
-      setIsResegmenting(true);
-      try {
-        // Snapshot the current result timestamp so the completion poll can
-        // tell when the ML has written the *new* segmentation.
-        const prevStamp =
-          (await apiClient.getSegmentationResults(imageId).catch(() => null))
-            ?.updatedAt ?? null;
-        const result = await apiClient.requestBatchSegmentation(
-          [imageId],
-          effectiveResegmentModel,
-          confidenceThreshold,
-          detectHoles,
-          channel
-        );
-        // Batch endpoint returns HTTP 200 even when every image failed;
-        // surface the per-image outcome (review pass-2 silent-failure #5).
-        if (result.successful === 0) {
-          const firstError = result.results?.[0]?.error;
-          logger.error('Resegment returned 0 successes', { firstError });
-          toast.error(
-            firstError
-              ? `${t('segmentation.toolbar.resegmentFailed')}: ${firstError}`
-              : t('segmentation.toolbar.resegmentFailed')
-          );
-          return;
-        }
-        // Defense-in-depth: a 1-image call is always all-or-nothing,
-        // but if the helper is ever reused with >1 imageIds a partial
-        // failure must not be hidden by the success toast.
-        if (result.failed > 0) {
-          const firstError = result.results?.find(r => !r.success)?.error;
-          logger.warn('Resegment partial failure', { result });
-          toast.warning(
-            firstError
-              ? `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed: ${firstError})`
-              : `${t('segmentation.toolbar.resegmentSuccess')} (${result.failed} failed)`
-          );
-        }
-        // The job is now QUEUED — the ML has not produced the new polygons
-        // yet. Kick off a non-blocking background poll that refreshes the
-        // canvas + fires the success toast once the new segmentation lands;
-        // isResegmenting is cleared right away (finally) so the button never
-        // appears stuck while the ML runs.
-        startResegmentPoll(imageId, prevStamp, result.failed === 0);
-      } catch (err) {
-        if (handleCancelledError(err, 'resegment current frame')) return;
-        logger.error('Resegment failed', err);
-        toast.error(t('segmentation.toolbar.resegmentFailed'));
-      } finally {
-        setIsResegmenting(false);
-      }
-    },
-    [
-      imageId,
-      isResegmenting,
-      effectiveResegmentModel,
-      confidenceThreshold,
-      detectHoles,
-      startResegmentPoll,
-      t,
-    ]
-  );
-
-  // Top-toolbar Resegment entry point. Multichannel videos open the
-  // channel picker first (per CLAUDE.md spec); single-channel cases
-  // commit immediately.
-  const handleResegmentCurrentFrame = useCallback(() => {
-    if (!imageId || isResegmenting) return;
-    const channels = video.container?.channels ?? [];
-    if (channels.length > 1) {
-      setShowResegmentChannelDialog(true);
-      return;
-    }
-    void runResegment();
-  }, [imageId, isResegmenting, video.container, runResegment]);
-
+  // Lives HERE (after `const video = useVideoFrames`) to avoid the TDZ that
+  // would result from passing video.container?.channels before `video` is
+  // defined. CLAUDE.md production bug #11.
+  const {
+    isResegmenting,
+    showResegmentChannelDialog,
+    setShowResegmentChannelDialog,
+    runResegment,
+    handleResegmentCurrentFrame,
+  } = useResegment({
+    projectId,
+    imageId,
+    projectType,
+    selectedModel,
+    confidenceThreshold,
+    detectHoles,
+    videoChannels: video.container?.channels ?? null,
+    queryClient,
+    t,
+    onReloaded: handleReloadedPolygons,
+    setImageDimensions,
+    currentImageIdRef,
+  });
   // ─────────────── End resegment chain ───────────────
 
   // The overlay debounce moved into `FrameLoadingGate` — it needs

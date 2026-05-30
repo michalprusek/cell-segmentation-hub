@@ -34,6 +34,10 @@ describe('DeleteAccountDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Cookie-auth: AuthProvider only probes /auth/profile when the non-secret
+    // `authenticated` hint cookie is present. Set it so the provider hydrates
+    // the user (the getUserProfile mock then decides authed vs signed-out).
+    document.cookie = 'authenticated=1';
     mockNavigate.mockReset();
   });
 
