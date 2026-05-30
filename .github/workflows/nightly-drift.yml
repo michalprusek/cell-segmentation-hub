@@ -51,9 +51,10 @@ jobs:
       - name: i18n completeness
         run: node scripts/check-i18n.cjs
 
-      # Vitest is excluded — the suite has ~31% pre-existing failures
-      # from prior refactors that would create daily noise issues. Use
-      # `make ci-test` locally to investigate specific files.
+      # Vitest now runs as a required check on every PR (ci.yml). This nightly
+      # job stays type/lint/i18n/audit-only to keep the daily drift signal
+      # lightweight; the full green suite (BE + FE, 90%+ coverage) gates merges
+      # in CI, not here.
 
       - name: npm audit (high+critical only)
         run: npm audit --audit-level=high
