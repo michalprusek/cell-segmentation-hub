@@ -21,11 +21,13 @@ const ROOT = path.resolve(__dirname, '..');
 
 /** @type {Array<{name: string, frontend: string, backend: string}>} */
 const SHARED_CONSTS = [
-  {
-    name: 'MODEL_TYPE_COMPATIBILITY',
-    frontend: path.join(ROOT, 'src', 'types', 'index.ts'),
-    backend: path.join(ROOT, 'backend', 'src', 'types', 'validation.ts'),
-  },
+  // NOTE: MODEL_TYPE_COMPATIBILITY is no longer textually compared here. Both
+  // sides now DERIVE it (by inversion) from their respective model-registry
+  // SSOTs — frontend `src/lib/models/modelRegistry.ts`, backend
+  // `backend/src/constants/modelRegistry.ts` — so neither file holds a literal
+  // object block to diff. Each side's registry is covered by its own unit
+  // tests (FE `src/lib/models/__tests__/modelRegistry.test.ts`, BE
+  // `backend/src/constants/__tests__/modelRegistry.test.ts`).
   {
     name: 'PROJECT_TYPES',
     frontend: path.join(ROOT, 'src', 'types', 'index.ts'),
