@@ -1,4 +1,11 @@
 import type { Polygon as _Polygon } from '@/lib/segmentation';
+// Model identity + compatibility are derived from the frontend model registry
+// SSOT (`@/lib/models/modelRegistry`), which mirrors the backend SSOT. They
+// are re-exported below so existing `@/types` consumers stay untouched.
+import {
+  type ModelType as RegistryModelType,
+  MODEL_TYPE_COMPATIBILITY as REGISTRY_MODEL_TYPE_COMPATIBILITY,
+} from '@/lib/models/modelRegistry';
 
 // Auth types
 export interface User {
@@ -346,24 +353,15 @@ export type ProjectType = (typeof PROJECT_TYPES)[number];
 export const isProjectType = (v: unknown): v is ProjectType =>
   typeof v === 'string' && (PROJECT_TYPES as readonly string[]).includes(v);
 
-/** All known model identifiers — kept as a literal union so the
- *  MODEL_TYPE_COMPATIBILITY map below catches typos at compile time
- *  (a misspelled model id in any array becomes a TS error). Mirrors the
- *  `ModelType` union in `@/lib/modelUtils.ts`; intentionally duplicated
- *  here to avoid a circular import. */
-type KnownModelId =
-  | 'hrnet'
-  | 'cbam_resunet'
-  | 'unet_spherohq'
-  | 'unet_attention_aspp'
-  | 'segformer'
-  | 'mamba_unet'
-  | 'sperm'
-  | 'wound'
-  | 'microtubule';
+/** All known model identifiers, derived from the frontend model registry
+ *  SSOT (`@/lib/models/modelRegistry`), which mirrors the backend SSOT.
+ *  Re-exported as `KnownModelId` so existing `@/types` consumers are
+ *  untouched and a removed model becomes a compile error everywhere. */
+type KnownModelId = RegistryModelType;
 
-/** Models compatible with each project type. Cross-type segmentation is
- * blocked at both frontend (dropdown filter) and backend (400 on submit).
+/** Models compatible with each project type, derived (by inversion) from the
+ * model registry SSOT. Cross-type segmentation is blocked at both frontend
+ * (dropdown filter) and backend (400 on submit).
  *
  * - `spheroid_invasive` is locked to `unet_attention_aspp` because core
  *   detection is tied to that model's postprocessing path.
@@ -377,19 +375,7 @@ type KnownModelId =
 export const MODEL_TYPE_COMPATIBILITY: Record<
   ProjectType,
   readonly KnownModelId[]
-> = {
-  spheroid: [
-    'hrnet',
-    'cbam_resunet',
-    'unet_spherohq',
-    'segformer',
-    'mamba_unet',
-  ],
-  spheroid_invasive: ['unet_attention_aspp'],
-  wound: ['wound'],
-  sperm: ['sperm'],
-  microtubules: ['microtubule'],
-} as const;
+> = REGISTRY_MODEL_TYPE_COMPATIBILITY;
 
 export const isModelCompatibleWithType = (
   model: string,
