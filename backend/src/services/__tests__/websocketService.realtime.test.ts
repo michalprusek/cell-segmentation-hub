@@ -57,6 +57,11 @@ vi.mock('jsonwebtoken', () => ({
     verify: vi.fn(),
   },
 }));
+// websocketService imports authCookies → config. Stub config so the real
+// one (which process.exit's on a missing test env) is skipped.
+vi.mock('../../utils/config', () => ({
+  config: { UPLOAD_DIR: '/tmp/test-uploads', NODE_ENV: 'test' },
+}));
 
 // Import after mocking
 import { WebSocketService } from '../websocketService';
@@ -117,7 +122,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -166,7 +171,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -213,7 +218,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -262,7 +267,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -311,7 +316,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -363,7 +368,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -425,7 +430,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -468,7 +473,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -529,7 +534,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -568,7 +573,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: invalidToken },
+        extraHeaders: { cookie: `access_token=${invalidToken}` },
       });
 
       clientSocket.on('connect_error', (error: any) => {
@@ -599,7 +604,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {
@@ -657,7 +662,7 @@ describe('WebSocket Real-time Updates', () => {
       // Create multiple clients
       for (let i = 0; i < connectionCount; i++) {
         const client = Client(`http://localhost:${port}`, {
-          auth: { token: mockToken },
+          extraHeaders: { cookie: `access_token=${mockToken}` },
         });
 
         client.on('connect', () => {
@@ -709,7 +714,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', () => {

@@ -14,7 +14,6 @@ import {
   resetPasswordRequestSchema,
   resetPasswordConfirmSchema,
   changePasswordSchema,
-  refreshTokenSchema,
   resendVerificationSchema,
   updateProfileSchema,
 } from '../../auth/validation';
@@ -37,11 +36,10 @@ router.post(
   authController.login
 );
 
-router.post(
-  '/refresh-token',
-  validateBody(refreshTokenSchema),
-  authController.refreshToken
-);
+// The refresh token now arrives in the httpOnly `refresh_token` cookie, not
+// the body — so there is nothing to validateBody here. The controller 401s
+// if the cookie is missing.
+router.post('/refresh-token', authController.refreshToken);
 
 // Alias for backward compatibility. The frontend used to call /auth/refresh
 // while the canonical path has always been /auth/refresh-token. The stale
@@ -50,11 +48,7 @@ router.post(
 // and rejected it — meaning every real session-expiry forced a full logout.
 // Keep this alias forever so any cached frontend bundle or third-party
 // client still works after the URL was canonicalised.
-router.post(
-  '/refresh',
-  validateBody(refreshTokenSchema),
-  authController.refreshToken
-);
+router.post('/refresh', authController.refreshToken);
 
 router.post(
   '/logout',

@@ -35,8 +35,8 @@ export interface RegisterRequest {
 }
 
 export interface AuthResponse {
-  accessToken: string;
-  refreshToken: string;
+  // Tokens live in httpOnly cookies set by the server — never in the body.
+  // The client only ever sees the user payload.
   user: {
     id: string;
     email: string;
@@ -196,9 +196,6 @@ export interface BatchQueueResponse {
 
 class ApiClient {
   private instance: AxiosInstance;
-  private accessToken: string | null = null;
-  private refreshToken: string | null = null;
-  private rememberMePreferred: boolean = true;
   private baseURL: string;
 
   constructor(baseURL: string = config.apiBaseUrl) {
@@ -209,21 +206,11 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      // Send the httpOnly auth cookies on every request. This is the only
+      // transport for the access/refresh tokens since the cookie cutover —
+      // there is no Authorization header any more.
+      withCredentials: true,
     });
-
-    // Load tokens from localStorage
-    this.loadTokensFromStorage();
-
-    // Request interceptor to add auth token
-    this.instance.interceptors.request.use(
-      config => {
-        if (this.accessToken) {
-          config.headers.Authorization = `Bearer ${this.accessToken}`;
-        }
-        return config;
-      },
-      error => Promise.reject(error)
-    );
 
     // Response interceptor to handle token refresh
     this.instance.interceptors.response.use(
@@ -233,34 +220,31 @@ class ApiClient {
 
         // Don't try to refresh tokens for auth endpoints (login, register, refresh)
         const isAuthEndpoint =
-          originalRequest.url?.includes('/auth/login') ||
-          originalRequest.url?.includes('/auth/register') ||
-          originalRequest.url?.includes('/auth/refresh');
+          originalRequest?.url?.includes('/auth/login') ||
+          originalRequest?.url?.includes('/auth/register') ||
+          originalRequest?.url?.includes('/auth/refresh');
 
         if (
           error.response?.status === 401 &&
           !originalRequest._retry &&
           !isAuthEndpoint
         ) {
-          if (this.refreshToken) {
-            originalRequest._retry = true;
+          originalRequest._retry = true;
 
-            try {
-              logger.debug('🔄 Attempting token refresh...');
-              await this.refreshAccessToken();
-              // Retry the original request with new token
-              originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
-              return this.instance(originalRequest);
-            } catch (refreshError) {
-              logger.error(
-                'Token refresh failed, forcing logout:',
-                refreshError
-              );
-              // Fall through to force logout below
-            }
+          try {
+            // The httpOnly refresh_token cookie is sent automatically; this
+            // re-mints the access_token cookie. No token handling here.
+            logger.debug('🔄 Attempting token refresh...');
+            await this.refreshAccessToken();
+            // Retry the original request — the new access_token cookie rides
+            // along automatically.
+            return this.instance(originalRequest);
+          } catch (refreshError) {
+            logger.error('Token refresh failed, forcing logout:', refreshError);
+            // Fall through to signed-out handling below.
           }
 
-          // No refresh token, or refresh failed - force logout.
+          // Refresh failed → the session is unrecoverable.
           //
           // Note: this is reached for the POST /export/.../download-token
           // endpoint too. A previous version of this file tried to
@@ -268,39 +252,16 @@ class ApiClient {
           // export failures, but that caused an infinite-loop bug: the
           // useSharedAdvancedExport hook would retry forever because its
           // useEffect re-fires whenever the download state changes, and
-          // there was no auth-driven unmount to break the loop. If the
-          // refresh token is also dead we truly have no way to recover
-          // the session, so logout is the correct behaviour.
-          logger.debug('🔒 Authentication failed - logging out');
-
-          this.clearTokensFromStorage();
-
-          if (typeof window !== 'undefined') {
-            import('./authEvents')
-              .then(({ authEventEmitter }) => {
-                authEventEmitter.emit({
-                  type: 'token_expired',
-                  data: {
-                    message: 'Session expired',
-                    description:
-                      'Your session has expired. Please sign in again.',
-                  },
-                });
-              })
-              .catch(err => {
-                logger.error('Failed to emit auth event', err);
-              });
-
-            if (
-              window.location.pathname !== '/sign-in' &&
-              window.location.pathname !== '/sign-up' &&
-              !window.location.pathname.startsWith('/public') &&
-              !window.location.pathname.startsWith('/share')
-            ) {
-              setTimeout(() => {
-                window.location.replace('/sign-in');
-              }, 50);
-            }
+          // there was no auth-driven unmount to break the loop.
+          //
+          // The init profile probe sets the `X-Suppress-Auth-Events` header
+          // so a never-logged-in visitor doesn't get a spurious "session
+          // expired" toast or a redirect on first load.
+          const suppressAuthEvents =
+            originalRequest?.headers?.['X-Suppress-Auth-Events'] === '1';
+          if (!suppressAuthEvents) {
+            logger.debug('🔒 Authentication failed - signing out');
+            this.handleSignedOut();
           }
 
           return Promise.reject(error);
@@ -354,39 +315,41 @@ class ApiClient {
     );
   }
 
-  private loadTokensFromStorage(): void {
-    // Try localStorage first (remember me), then sessionStorage (session only)
-    this.accessToken =
-      localStorage.getItem('accessToken') ||
-      sessionStorage.getItem('accessToken');
-    this.refreshToken =
-      localStorage.getItem('refreshToken') ||
-      sessionStorage.getItem('refreshToken');
-
-    // Set rememberMePreferred based on where tokens were found
-    this.rememberMePreferred = localStorage.getItem('accessToken') !== null;
-  }
-
-  private saveTokensToStorage(
-    rememberMe: boolean = this.rememberMePreferred
-  ): void {
-    const storage = rememberMe ? localStorage : sessionStorage;
-    if (this.accessToken) {
-      storage.setItem('accessToken', this.accessToken);
+  /**
+   * Surface a signed-out state when the session is unrecoverable (a 401 that
+   * even a token refresh couldn't fix). The server already cleared/expired
+   * the auth cookies; here we just notify the app and route to sign-in.
+   * Cookies are httpOnly, so there is nothing for the client to clear.
+   */
+  private handleSignedOut(): void {
+    if (typeof window === 'undefined') {
+      return;
     }
-    if (this.refreshToken) {
-      storage.setItem('refreshToken', this.refreshToken);
-    }
-  }
 
-  private clearTokensFromStorage(): void {
-    // Clear from both localStorage and sessionStorage
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    sessionStorage.removeItem('accessToken');
-    sessionStorage.removeItem('refreshToken');
-    this.accessToken = null;
-    this.refreshToken = null;
+    import('./authEvents')
+      .then(({ authEventEmitter }) => {
+        authEventEmitter.emit({
+          type: 'token_expired',
+          data: {
+            message: 'Session expired',
+            description: 'Your session has expired. Please sign in again.',
+          },
+        });
+      })
+      .catch(err => {
+        logger.error('Failed to emit auth event', err);
+      });
+
+    if (
+      window.location.pathname !== '/sign-in' &&
+      window.location.pathname !== '/sign-up' &&
+      !window.location.pathname.startsWith('/public') &&
+      !window.location.pathname.startsWith('/share')
+    ) {
+      setTimeout(() => {
+        window.location.replace('/sign-in');
+      }, 50);
+    }
   }
 
   // Auth methods
@@ -394,8 +357,10 @@ class ApiClient {
    * Authenticates a user with email and password
    * @param {string} email - User's email address
    * @param {string} password - User's password
-   * @param {boolean} rememberMe - Whether to persist the session
-   * @returns {Promise<AuthResponse>} Authentication tokens and user information
+   * @param {boolean} rememberMe - Whether to persist the session (controls
+   *   the refresh-cookie Max-Age server-side)
+   * @returns {Promise<AuthResponse>} The authenticated user (tokens are set
+   *   as httpOnly cookies by the server, not returned in the body)
    * @throws {Error} If authentication fails or network error occurs
    * @example
    * const response = await apiClient.login('user@example.com', 'securePass123', true);
@@ -411,57 +376,12 @@ class ApiClient {
       rememberMe,
     });
 
-    // Sanitize response before logging
-    const sanitizedLoginResponse = {
-      success: response.data?.success,
-      status: response.status,
-      data: response.data?.data
-        ? {
-            user: response.data.data.user,
-            // Mask any token fields
-            accessToken: response.data.data.accessToken
-              ? '[REDACTED]'
-              : undefined,
-            refreshToken: response.data.data.refreshToken
-              ? '[REDACTED]'
-              : undefined,
-            access_token: response.data.data.access_token
-              ? '[REDACTED]'
-              : undefined,
-            refresh_token: response.data.data.refresh_token
-              ? '[REDACTED]'
-              : undefined,
-            id_token: response.data.data.id_token ? '[REDACTED]' : undefined,
-            token: response.data.data.token ? '[REDACTED]' : undefined,
-          }
-        : undefined,
-    };
-    logger.debug('🔍 Backend response:', sanitizedLoginResponse);
-
-    // Handle backend response structure: { success: true, data: { user, accessToken, refreshToken } }
+    // The server set the access/refresh tokens as httpOnly cookies. The body
+    // carries only the user — there are no tokens to extract or store.
     const backendData = response.data.data || response.data;
-    const { accessToken, refreshToken, user } = backendData;
+    const { user } = backendData;
 
-    logger.debug('🔍 Extracted data:', {
-      accessToken: !!accessToken,
-      refreshToken: !!refreshToken,
-      user: !!user,
-    });
-
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
-    this.rememberMePreferred = rememberMe;
-    this.saveTokensToStorage(rememberMe);
-
-    logger.debug('🔑 Tokens saved to localStorage and memory');
-    logger.debug('🔍 isAuthenticated() now returns:', this.isAuthenticated());
-
-    // Return in expected format
-    return {
-      accessToken,
-      refreshToken,
-      user,
-    };
+    return { user };
   }
 
   /**
@@ -471,7 +391,8 @@ class ApiClient {
    * @param {string} request.password - User's password
    * @param {string} [request.username] - Optional username
    * @param {boolean} [request.consentToMLTraining] - Consent for ML training
-   * @returns {Promise<AuthResponse>} Authentication tokens and user information
+   * @returns {Promise<AuthResponse>} The newly registered user (tokens are
+   *   set as httpOnly cookies by the server, not returned in the body)
    * @throws {Error} If registration fails or email already exists
    * @example
    * const response = await apiClient.register({
@@ -497,53 +418,21 @@ class ApiClient {
       ...consentOptions,
     });
 
-    // Sanitize response before logging
-    const sanitizedResponse = {
-      ...response.data,
-      data: response.data?.data
-        ? {
-            ...response.data.data,
-            accessToken: response.data.data.accessToken
-              ? '[REDACTED]'
-              : undefined,
-            refreshToken: response.data.data.refreshToken
-              ? '[REDACTED]'
-              : undefined,
-            token: response.data.data.token ? '[REDACTED]' : undefined,
-            apiKey: response.data.data.apiKey ? '[REDACTED]' : undefined,
-            user: response.data.data.user,
-          }
-        : undefined,
-    };
-    logger.debug('🔍 Backend register response:', sanitizedResponse);
-
-    // Handle backend response structure: { success: true, data: { user, accessToken, refreshToken } }
+    // Registration logs the user in via httpOnly cookies set by the server.
+    // The body carries only the user.
     const backendData = response.data.data || response.data;
-    const { accessToken, refreshToken, user } = backendData;
+    const { user } = backendData;
 
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
-    this.saveTokensToStorage();
-
-    // Return in expected format
-    return {
-      accessToken,
-      refreshToken,
-      user,
-    };
+    return { user };
   }
 
   async logout(): Promise<void> {
     try {
-      if (this.refreshToken) {
-        await this.instance.post('/auth/logout', {
-          refreshToken: this.refreshToken,
-        });
-      }
+      // The refresh_token cookie is sent automatically; the server revokes
+      // the session and clears both auth cookies via Set-Cookie.
+      await this.instance.post('/auth/logout');
     } catch (error) {
       logger.error('Logout error:', error);
-    } finally {
-      this.clearTokensFromStorage();
     }
   }
 
@@ -564,10 +453,6 @@ class ApiClient {
   }
 
   private async _doRefresh(): Promise<void> {
-    if (!this.refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
     // The backend route is /auth/refresh-token (see authRoutes.ts). A
     // stale /auth/refresh URL used to fall through to the `router.use(
     // authenticate)` catch-all below the POST routes, which returned 401
@@ -575,19 +460,13 @@ class ApiClient {
     // meaning the refresh flow was permanently broken and every
     // mid-session token expiry forced a full logout. Use the canonical
     // path. The backend also keeps a /refresh alias for safety.
-    const response = await this.instance.post('/auth/refresh-token', {
-      refreshToken: this.refreshToken,
-    });
-
-    const data = this.extractData<{
-      accessToken: string;
-      refreshToken: string;
-    }>(response);
-    this.accessToken = data.accessToken;
-    if (data.refreshToken) {
-      this.refreshToken = data.refreshToken;
-    }
-    this.saveTokensToStorage();
+    //
+    // The refresh_token cookie (Path=/api/auth) is sent automatically; the
+    // server rotates it and re-mints the access_token cookie via Set-Cookie.
+    // There is nothing to read from the response body. A 401 here (missing or
+    // expired refresh cookie) rejects, which the response interceptor treats
+    // as an unrecoverable session.
+    await this.instance.post('/auth/refresh-token');
   }
 
   async uploadAvatar(
@@ -1889,12 +1768,23 @@ class ApiClient {
   }
 
   // User profile methods
-  async getUserProfile(): Promise<Profile> {
+  /**
+   * Fetch the current user's profile. When `suppressAuthErrors` is set (used
+   * by the AuthContext init probe), a 401 that even a token refresh can't fix
+   * is surfaced as a plain rejection — no "session expired" toast or redirect.
+   * This keeps a never-logged-in visitor's first page load silent.
+   */
+  async getUserProfile(options?: {
+    suppressAuthErrors?: boolean;
+  }): Promise<Profile> {
     // Add cache-busting to ensure fresh data after avatar upload
     const response = await this.instance.get('/auth/profile', {
       headers: {
         'Cache-Control': 'no-cache',
         Pragma: 'no-cache',
+        ...(options?.suppressAuthErrors
+          ? { 'X-Suppress-Auth-Events': '1' }
+          : {}),
       },
       params: {
         _t: Date.now(), // Cache buster parameter
@@ -1946,15 +1836,12 @@ class ApiClient {
   }
 
   async deleteAccount(): Promise<void> {
-    try {
-      await this.instance.delete('/auth/profile');
-      // Clear tokens after successful deletion
-      this.clearTokensFromStorage();
-    } catch (error) {
-      // Clear tokens even if the request fails (user might want to logout anyway)
-      this.clearTokensFromStorage();
-      throw error;
-    }
+    // Deleting the account invalidates the session server-side (the user row
+    // is gone, so the access/refresh tokens stop verifying). Auth lives in
+    // httpOnly cookies now — there is nothing for the client to clear. The
+    // backend clears the auth cookies on success; AuthContext resets the
+    // user state and navigates away.
+    await this.instance.delete('/auth/profile');
   }
 
   // Queue management methods
@@ -2105,15 +1992,6 @@ class ApiClient {
     config?: AxiosRequestConfig
   ): Promise<AxiosResponse<T>> {
     return this.instance.delete(url, config);
-  }
-
-  // Utility methods
-  isAuthenticated(): boolean {
-    return !!this.accessToken;
-  }
-
-  getAccessToken(): string | null {
-    return this.accessToken;
   }
 
   /**

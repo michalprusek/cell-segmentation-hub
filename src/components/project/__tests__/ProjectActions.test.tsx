@@ -6,8 +6,6 @@ import ProjectActions from '../ProjectActions';
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     login: vi.fn(),
     logout: vi.fn(),
     refreshAccessToken: vi.fn(),
@@ -21,7 +19,6 @@ vi.mock('@/lib/api', () => ({
       .mockResolvedValue({ projects: [], total: 0, page: 1, totalPages: 1 }),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
     deleteProject: vi.fn().mockResolvedValue(undefined),
     revokeProjectShare: vi.fn().mockResolvedValue(undefined),
   },

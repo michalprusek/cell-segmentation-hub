@@ -9,23 +9,19 @@ import apiClient from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     updateUserProfile: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(() => null),
     deleteAccount: vi.fn(),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     updateUserProfile: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(() => null),
     deleteAccount: vi.fn(),
   },
 }));
@@ -85,11 +81,9 @@ describe('ModelContext', () => {
       configurable: true,
     });
 
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
     vi.mocked(apiClient.getUserProfile).mockRejectedValue(
       new Error('Not authenticated')
     );
-    vi.mocked(apiClient.getAccessToken).mockReturnValue(null);
   });
 
   describe('error boundaries', () => {
@@ -154,12 +148,10 @@ describe('ModelContext', () => {
 
     it('saves to user-specific localStorage key when authenticated', async () => {
       const userId = 'user-42';
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue({
         id: userId,
         email: 'u@example.com',
       } as any);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('tok');
 
       const authedWrapper = ({ children }: { children: ReactNode }) => (
         <MemoryRouter>

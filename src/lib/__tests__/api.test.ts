@@ -103,9 +103,12 @@ describe('API Client', () => {
   });
 
   describe('Initial State', () => {
-    test('should have correct initial authentication state', () => {
-      expect(apiClient.isAuthenticated()).toBe(false);
-      expect(apiClient.getAccessToken()).toBeNull();
+    test('should create the axios instance with withCredentials for cookie auth', () => {
+      // Tokens travel only in httpOnly cookies now, so every request must
+      // carry credentials. There is no client-readable token state.
+      expect(mockAxios.create).toHaveBeenCalledWith(
+        expect.objectContaining({ withCredentials: true })
+      );
     });
 
     test('should have axios instance configured', () => {
@@ -115,13 +118,12 @@ describe('API Client', () => {
 
   describe('Authentication Methods', () => {
     describe('login', () => {
-      test('should login successfully and store tokens', async () => {
+      test('should login and return the user (tokens come back as cookies)', async () => {
         const mockResponse = {
           data: {
             success: true,
             data: {
-              accessToken: 'new-access-token',
-              refreshToken: 'new-refresh-token',
+              // The server sets tokens as httpOnly cookies; the body has user.
               user: {
                 id: '1',
                 email: 'test@example.com',
@@ -141,31 +143,19 @@ describe('API Client', () => {
           rememberMe: true,
         });
 
+        // Body carries only the user — no tokens are returned or stored.
         expect(result).toEqual({
-          accessToken: 'new-access-token',
-          refreshToken: 'new-refresh-token',
           user: { id: '1', email: 'test@example.com', username: 'testuser' },
         });
-
-        expect(localStorageMock.setItem).toHaveBeenCalledWith(
-          'accessToken',
-          'new-access-token'
-        );
-        expect(localStorageMock.setItem).toHaveBeenCalledWith(
-          'refreshToken',
-          'new-refresh-token'
-        );
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+        expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
       });
 
-      test('should handle remember me false and use sessionStorage', async () => {
+      test('should forward rememberMe=false to the server (cookie Max-Age)', async () => {
         const mockResponse = {
           data: {
             success: true,
-            data: {
-              accessToken: 'access-token',
-              refreshToken: 'refresh-token',
-              user: { id: '1', email: 'test@example.com' },
-            },
+            data: { user: { id: '1', email: 'test@example.com' } },
           },
         };
 
@@ -173,21 +163,19 @@ describe('API Client', () => {
 
         await apiClient.login('test@example.com', 'password123', false);
 
-        expect(sessionStorageMock.setItem).toHaveBeenCalledWith(
-          'accessToken',
-          'access-token'
-        );
-        expect(sessionStorageMock.setItem).toHaveBeenCalledWith(
-          'refreshToken',
-          'refresh-token'
-        );
+        // rememberMe now only affects the refresh-cookie lifetime server-side.
+        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/login', {
+          email: 'test@example.com',
+          password: 'password123',
+          rememberMe: false,
+        });
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+        expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
       });
 
-      test('should handle direct data response format', async () => {
+      test('should handle direct data response format (no data envelope)', async () => {
         const mockResponse = {
           data: {
-            accessToken: 'direct-access-token',
-            refreshToken: 'direct-refresh-token',
             user: { id: '1', email: 'test@example.com' },
           },
         };
@@ -196,8 +184,7 @@ describe('API Client', () => {
 
         const result = await apiClient.login('test@example.com', 'password123');
 
-        expect(result.accessToken).toBe('direct-access-token');
-        expect(result.refreshToken).toBe('direct-refresh-token');
+        expect(result.user).toEqual({ id: '1', email: 'test@example.com' });
       });
 
       test('should handle login errors', async () => {
@@ -216,8 +203,7 @@ describe('API Client', () => {
           data: {
             success: true,
             data: {
-              accessToken: 'reg-access-token',
-              refreshToken: 'reg-refresh-token',
+              // Tokens are set as httpOnly cookies; body carries the user.
               user: { id: '1', email: 'new@example.com', username: 'newuser' },
             },
           },
@@ -246,8 +232,6 @@ describe('API Client', () => {
         });
 
         expect(result).toEqual({
-          accessToken: 'reg-access-token',
-          refreshToken: 'reg-refresh-token',
           user: { id: '1', email: 'new@example.com', username: 'newuser' },
         });
       });
@@ -276,88 +260,40 @@ describe('API Client', () => {
     });
 
     describe('logout', () => {
-      test('should logout and clear tokens', async () => {
+      test('should POST /auth/logout with no body (refresh cookie carries the token)', async () => {
         mockAxiosInstance.post.mockResolvedValue({});
 
-        // Set up client with tokens
-        (apiClient as any).refreshToken = 'test-refresh-token';
-
         await apiClient.logout();
 
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/logout', {
-          refreshToken: 'test-refresh-token',
-        });
-
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith(
-          'refreshToken'
-        );
-        expect(sessionStorageMock.removeItem).toHaveBeenCalledWith(
-          'accessToken'
-        );
-        expect(sessionStorageMock.removeItem).toHaveBeenCalledWith(
-          'refreshToken'
-        );
+        // No body — the refresh_token cookie is sent automatically and the
+        // server clears both cookies. Nothing to remove client-side.
+        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/logout');
+        expect(localStorageMock.removeItem).not.toHaveBeenCalled();
+        expect(sessionStorageMock.removeItem).not.toHaveBeenCalled();
       });
 
-      test('should clear tokens even if logout request fails', async () => {
+      test('should resolve without throwing even if the logout request fails', async () => {
         mockAxiosInstance.post.mockRejectedValue(new Error('Network error'));
 
-        (apiClient as any).refreshToken = 'test-refresh-token';
-
-        await apiClient.logout();
-
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith(
-          'refreshToken'
-        );
-      });
-
-      test('should handle logout without refresh token', async () => {
-        (apiClient as any).refreshToken = null;
-
-        await apiClient.logout();
-
-        expect(mockAxiosInstance.post).not.toHaveBeenCalled();
-        expect(localStorageMock.removeItem).toHaveBeenCalled();
+        await expect(apiClient.logout()).resolves.toBeUndefined();
       });
     });
 
     describe('refreshAccessToken', () => {
-      test('should refresh access token successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: { accessToken: 'new-access-token' },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-        (apiClient as any).refreshToken = 'valid-refresh-token';
+      test('should POST /auth/refresh-token with no body (cookie carries the token)', async () => {
+        mockAxiosInstance.post.mockResolvedValue({ data: { success: true } });
 
         await apiClient.refreshAccessToken();
 
         expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-          '/auth/refresh-token',
-          {
-            refreshToken: 'valid-refresh-token',
-          }
+          '/auth/refresh-token'
         );
       });
 
-      test('should throw error when no refresh token available', async () => {
-        (apiClient as any).refreshToken = null;
-
-        await expect(apiClient.refreshAccessToken()).rejects.toThrow(
-          'No refresh token available'
-        );
-      });
-
-      test('should handle refresh token failure', async () => {
+      test('should propagate a refresh failure (dead/missing refresh cookie)', async () => {
         mockAxiosInstance.post.mockRejectedValue(
           new Error('Invalid refresh token')
         );
-        (apiClient as any).refreshToken = 'invalid-refresh-token';
 
         await expect(apiClient.refreshAccessToken()).rejects.toThrow(
           'Invalid refresh token'
@@ -791,32 +727,6 @@ describe('API Client', () => {
           '/projects/project1/images/1'
         );
       });
-    });
-  });
-
-  describe('Utility Methods', () => {
-    test('isAuthenticated should return true when access token exists', () => {
-      (apiClient as any).accessToken = 'valid-token';
-
-      expect(apiClient.isAuthenticated()).toBe(true);
-    });
-
-    test('isAuthenticated should return false when no access token', () => {
-      (apiClient as any).accessToken = null;
-
-      expect(apiClient.isAuthenticated()).toBe(false);
-    });
-
-    test('getAccessToken should return current access token', () => {
-      (apiClient as any).accessToken = 'current-token';
-
-      expect(apiClient.getAccessToken()).toBe('current-token');
-    });
-
-    test('getAccessToken should return null when no token', () => {
-      (apiClient as any).accessToken = null;
-
-      expect(apiClient.getAccessToken()).toBeNull();
     });
   });
 

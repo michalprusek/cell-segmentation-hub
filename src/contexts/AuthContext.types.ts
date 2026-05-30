@@ -10,7 +10,6 @@ export interface ConsentOptions {
 export interface AuthContextType {
   user: User | null;
   profile: Profile | null;
-  token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
   signIn: (

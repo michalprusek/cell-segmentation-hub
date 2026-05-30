@@ -35,7 +35,7 @@ export const useSegmentationQueue = (
   const isDisabled =
     projectId === 'DISABLE_GLOBAL' || disableEventHandlers === true;
 
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const { manager: contextManager, isConnected: contextIsConnected } =
     useWebSocket();
   const { t } = useLanguage();
@@ -298,7 +298,7 @@ export const useSegmentationQueue = (
       logger.debug('useSegmentationQueue - setting up event listeners');
     }
 
-    if (!user || !token) {
+    if (!user) {
       if (process.env.NODE_ENV === 'development') {
         logger.debug(
           'useSegmentationQueue - no auth, cleaning up event listeners'
@@ -397,7 +397,6 @@ export const useSegmentationQueue = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     user,
-    token,
     contextManager,
     isDisabled,
     onSegmentationCancelled,

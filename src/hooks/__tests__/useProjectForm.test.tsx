@@ -10,14 +10,12 @@ import { useProjectForm } from '@/hooks/useProjectForm';
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi
       .fn()
       .mockResolvedValue({ preferred_theme: 'system', preferredLang: 'en' }),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(() => null),
     updateUserProfile: vi.fn(),
     deleteAccount: vi.fn(),
     createProject: vi.fn(),
@@ -191,7 +189,6 @@ describe('useProjectForm', () => {
     it('calls onSuccess and onClose after a successful API call', async () => {
       // Simulate an authenticated user by making isAuthenticated return true
       // and getUserProfile resolve so AuthProvider considers the user logged in.
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue({
         id: 'user-1',
         email: 'test@test.com',
@@ -230,7 +227,6 @@ describe('useProjectForm', () => {
     });
 
     it('resets projectName and projectDescription after successful creation', async () => {
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue({
         id: 'user-1',
         email: 'test@test.com',
@@ -265,7 +261,6 @@ describe('useProjectForm', () => {
     });
 
     it('isCreating is false after successful creation', async () => {
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue({
         id: 'user-1',
         email: 'test@test.com',
@@ -300,7 +295,6 @@ describe('useProjectForm', () => {
 
   describe('handleCreateProject — API error', () => {
     it('shows a localized error toast when apiClient.createProject throws', async () => {
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockResolvedValue({
         id: 'user-2',
         email: 'fail@test.com',

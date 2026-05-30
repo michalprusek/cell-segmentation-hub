@@ -35,12 +35,10 @@ let rootSetAttributeSpy: ReturnType<typeof vi.spyOn>;
 // Mock apiClient
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(),
     updateUserProfile: vi.fn(),
     deleteAccount: vi.fn(),
   },
@@ -100,11 +98,9 @@ describe('ThemeContext', () => {
     vi.spyOn(document.body.classList, 'remove');
 
     // Reset API client mocks
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
     vi.mocked(apiClient.getUserProfile).mockRejectedValue(
       new Error('Not authenticated')
     );
-    vi.mocked(apiClient.getAccessToken).mockReturnValue(null);
     vi.mocked(apiClient.updateUserProfile).mockResolvedValue({});
 
     // Mock matchMedia to return light theme by default
@@ -148,8 +144,6 @@ describe('ThemeContext', () => {
         email: 'test@example.com',
       };
 
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('token');
       // AuthProvider calls getUserProfile first (to hydrate user state).
       // ThemeProvider's effect re-runs once user is set and calls it again.
       // Provide two resolved values: first for AuthProvider, second for ThemeProvider.
@@ -171,7 +165,6 @@ describe('ThemeContext', () => {
 
     it('should handle error when loading user profile', async () => {
       localStorageMock.getItem.mockReturnValue('dark');
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.getUserProfile).mockRejectedValueOnce(
         new Error('Profile load failed')
       );
@@ -201,8 +194,6 @@ describe('ThemeContext', () => {
     });
 
     it('should update user profile when authenticated', async () => {
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('token');
       // AuthProvider calls getUserProfile on mount to hydrate the user object.
       // ThemeProvider only calls updateUserProfile when user is truthy.
       vi.mocked(apiClient.getUserProfile).mockResolvedValue({
@@ -228,8 +219,6 @@ describe('ThemeContext', () => {
     });
 
     it('should handle profile update error gracefully', async () => {
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('token');
       vi.mocked(apiClient.updateUserProfile).mockRejectedValueOnce(
         new Error('Update failed')
       );

@@ -805,16 +805,13 @@ describe('api.ts — extra branch coverage', () => {
     expect(result.totalImages).toBe(5);
   });
 
-  it('deleteAccount — clears tokens even when DELETE throws', async () => {
+  it('deleteAccount — propagates DELETE error and calls the endpoint', async () => {
     mockAxiosInstance.delete.mockRejectedValue(new Error('Network error'));
-
-    (apiClient as any).accessToken = 'tk';
-    (apiClient as any).refreshToken = 'rtk';
 
     await expect((apiClient as any).deleteAccount()).rejects.toThrow(
       'Network error'
     );
-    expect(apiClient.isAuthenticated()).toBe(false);
+    expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/auth/profile');
   });
 
   // ── updateImageChannels ───────────────────────────────────────────────────
@@ -1129,30 +1126,24 @@ describe('api.ts — extra branch coverage', () => {
     const p1 = (apiClient as any).refreshAccessToken();
     const p2 = (apiClient as any).refreshAccessToken();
 
-    resolveRefresh({
-      data: {
-        success: true,
-        data: { accessToken: 'new-tok', refreshToken: 'new-ref' },
-      },
-    });
+    // Resolve with an empty body — the new tokens are in Set-Cookie, not the body
+    resolveRefresh({ data: {} });
     await Promise.all([p1, p2]);
 
-    // Despite two callers, only one POST was made
+    // Despite two callers, only one POST was made to /auth/refresh-token
     expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
-    expect((apiClient as any).accessToken).toBe('new-tok');
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/refresh-token');
   });
 
   // ── logout error swallowing ───────────────────────────────────────────────
 
-  it('logout — clears tokens even when POST /auth/logout throws', async () => {
+  it('logout — resolves without throwing even when POST /auth/logout fails', async () => {
     mockAxiosInstance.post.mockRejectedValue(new Error('Server down'));
 
-    (apiClient as any).accessToken = 'tk';
-    (apiClient as any).refreshToken = 'rtk';
+    // logout() swallows the network error (try/catch in production code)
+    await expect((apiClient as any).logout()).resolves.toBeUndefined();
 
-    await (apiClient as any).logout();
-
-    expect(apiClient.isAuthenticated()).toBe(false);
-    expect(apiClient.getAccessToken()).toBeNull();
+    // The POST to /auth/logout was attempted
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/logout');
   });
 });

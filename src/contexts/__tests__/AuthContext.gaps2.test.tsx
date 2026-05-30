@@ -7,9 +7,9 @@
  *  3. signUp: emits signup_success on success + navigates to /dashboard
  *  4. deleteAccount: throws when confirmationText doesn't match user.email
  *  5. deleteAccount: throws when confirmationText is undefined
- *  6. isAuthenticated derived effect: user present + isAuthenticated() true → token updated
+ *  6. isAuthenticated derived effect: derived purely from the user state
  *  7. refreshProfile: sets profile when getUserProfile succeeds and user is set
- *  8. initializeAuth: sets token to null when apiClient.isAuthenticated() is false
+ *  8. initializeAuth: renders signed-out when the /auth/profile probe rejects
  *  9. syncLocalPreferencesToDatabase: called but theme is 'invalid' → NOT forwarded
  * 10. signIn: emits signin_success on successful login
  */
@@ -37,8 +37,6 @@ const mockTokenRefreshManager = vi.hoisted(() => ({
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
@@ -48,8 +46,6 @@ vi.mock('@/lib/api', () => ({
     deleteAccount: vi.fn(),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
@@ -94,8 +90,7 @@ const validAuthResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
-  vi.mocked(apiClient.getAccessToken).mockReturnValue(null);
+  // Default: the init /auth/profile probe rejects → signed out.
   vi.mocked(apiClient.getUserProfile).mockRejectedValue(new Error('No auth'));
   vi.mocked(localStorage.getItem).mockReturnValue(null);
 });
@@ -136,8 +131,6 @@ describe('signIn – login failure', () => {
 describe('signIn – success', () => {
   it('emits signin_success after successful login', async () => {
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -190,8 +183,6 @@ describe('signUp – registration failure', () => {
 describe('signUp – success', () => {
   it('sets user and emits signup_success on successful registration', async () => {
     vi.mocked(apiClient.register).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -218,8 +209,6 @@ describe('signUp – success', () => {
 describe('deleteAccount – confirmation mismatch', () => {
   it('throws immediately when confirmationText does not match user.email', async () => {
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -242,8 +231,6 @@ describe('deleteAccount – confirmation mismatch', () => {
 describe('deleteAccount – no confirmation', () => {
   it('throws when confirmationText is undefined', async () => {
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -266,8 +253,6 @@ describe('deleteAccount – no confirmation', () => {
 describe('refreshProfile – success', () => {
   it('updates profile when getUserProfile returns data', async () => {
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile)
       .mockResolvedValueOnce(validProfile) // init
       .mockResolvedValueOnce(validProfile) // post-login
@@ -288,17 +273,20 @@ describe('refreshProfile – success', () => {
   });
 });
 
-// ── 8. initializeAuth: not authenticated → token stays null ──────────────────
+// ── 8. initializeAuth: profile probe fails → signed out ──────────────────────
 
 describe('initializeAuth – not authenticated', () => {
-  it('leaves token null when apiClient.isAuthenticated() is false', async () => {
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
-
+  it('renders signed-out and silences errors when the profile probe rejects', async () => {
+    // Default beforeEach already makes getUserProfile reject.
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.token).toBeNull();
     expect(result.current.isAuthenticated).toBe(false);
-    expect(apiClient.getUserProfile).not.toHaveBeenCalled();
+    expect(result.current.user).toBeNull();
+    // The init probe always runs (no client-side token to gate on) and uses
+    // the suppress-errors variant so a fresh visitor sees no error toast.
+    expect(apiClient.getUserProfile).toHaveBeenCalledWith({
+      suppressAuthErrors: true,
+    });
   });
 });

@@ -182,7 +182,7 @@ describe('WebSocketService – gap coverage', () => {
       await middleware(
         {
           id: 's2',
-          handshake: { auth: { token: 'bad' }, headers: {} },
+          handshake: { auth: {}, headers: { cookie: 'access_token=bad' } },
         },
         next
       );
@@ -202,7 +202,7 @@ describe('WebSocketService – gap coverage', () => {
       await middleware(
         {
           id: 's3',
-          handshake: { auth: { token: 'tok' }, headers: {} },
+          handshake: { auth: {}, headers: { cookie: 'access_token=tok' } },
         },
         next
       );
@@ -228,7 +228,7 @@ describe('WebSocketService – gap coverage', () => {
       });
       const socket: Record<string, unknown> = {
         id: 's4',
-        handshake: { auth: { token: 'goodtok' }, headers: {} },
+        handshake: { auth: {}, headers: { cookie: 'access_token=goodtok' } },
       };
       const next = vi.fn();
       await middleware(socket, next);

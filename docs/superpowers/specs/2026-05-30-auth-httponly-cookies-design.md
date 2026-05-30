@@ -18,7 +18,7 @@ JavaScript can never read them, closing the XSS-exfiltration vector.
 
 ## Decisions (agreed)
 
-1. **Hard cutover** — cookie is the *only* transport. The backend stops
+1. **Hard cutover** — cookie is the _only_ transport. The backend stops
    returning tokens in the body and stops reading the `Authorization` header /
    `req.body.refreshToken`. No header fallback, no dual path. All currently
    logged-in users (incl. the test account) are logged out once and re-login.
@@ -27,16 +27,16 @@ JavaScript can never read them, closing the XSS-exfiltration vector.
    cookie policy (`SameSite=Strict`) works identically in dev and prod.
 3. **CSRF: SameSite=Strict, no token** — for a same-origin SPA, Strict blocks
    cross-site requests from carrying the cookie. No double-submit token. (Strict
-   only blocks the cross-site *navigation*; the SPA's subsequent same-origin
+   only blocks the cross-site _navigation_; the SPA's subsequent same-origin
    XHRs still carry the cookie, so there is no in-app UX cost.)
 4. **Dead-code removal is a first-class deliverable** — the old localStorage /
-   header / `auth.token` paths are *deleted*, not left as compat.
+   header / `auth.token` paths are _deleted_, not left as compat.
 
 ## Cookie design
 
-| Cookie | Flags | Path | Max-Age |
-|---|---|---|---|
-| `access_token` | `httpOnly; Secure*; SameSite=Strict` | `/` | access-token expiry (15m) |
+| Cookie          | Flags                                | Path        | Max-Age                                    |
+| --------------- | ------------------------------------ | ----------- | ------------------------------------------ |
+| `access_token`  | `httpOnly; Secure*; SameSite=Strict` | `/`         | access-token expiry (15m)                  |
 | `refresh_token` | `httpOnly; Secure*; SameSite=Strict` | `/api/auth` | refresh expiry (7d, or 30d for rememberMe) |
 
 `Secure` is set in production only (dev over http via the Vite proxy must omit
@@ -66,7 +66,7 @@ to the cookie `Max-Age` instead of a JS-side preference.
 ## Frontend changes (`src/`)
 
 - **`lib/api.ts`**: set `withCredentials: true` on the axios instance. **Remove**
-  the `Authorization`-header request interceptor and *all* `localStorage` token
+  the `Authorization`-header request interceptor and _all_ `localStorage` token
   get/set/remove. The 401→refresh response interceptor simply calls
   `/api/auth/refresh` (cookie auto-sent) and retries — no token handling.
 - **`contexts/AuthContext.tsx`**: `isAuthenticated` is derived from the `user`
@@ -84,7 +84,7 @@ FE: localStorage token I/O, the Authorization interceptor, `getAccessToken` /
 `getRefreshToken` / `rememberMePreferred` token logic if unreferenced after the
 change, the `token` field threaded through `webSocketManager` and `AuthContext`.
 BE: token fields in response bodies, `req.body.refreshToken` reads, the
-`extractTokenFromHeader` call sites *and the function itself in `auth/jwt.ts`*
+`extractTokenFromHeader` call sites _and the function itself in `auth/jwt.ts`_
 if nothing else uses it, the `handshake.auth.token` branch.
 
 ## Error handling

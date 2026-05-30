@@ -4,7 +4,7 @@
  * Targets branches in AuthContext.tsx NOT covered by the existing
  * AuthContext.test.tsx (70% → higher):
  *
- *  1. initializeAuth: profileData with missing id/email → logout + clear state
+ *  1. initializeAuth: profileData with missing id/email → renders signed-out
  *  2. initializeAuth: profileData has user.id/email nested under a `user` key
  *     (profile shape returned by some mock configurations)
  *  3. syncLocalPreferencesToDatabase:
@@ -48,8 +48,6 @@ const mockTokenRefreshManager = vi.hoisted(() => ({
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
@@ -59,8 +57,6 @@ vi.mock('@/lib/api', () => ({
     deleteAccount: vi.fn(),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
@@ -111,8 +107,6 @@ const validAuthResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
-  vi.mocked(apiClient.getAccessToken).mockReturnValue(null);
   vi.mocked(apiClient.getUserProfile).mockRejectedValue(
     new Error('Not authenticated')
   );
@@ -130,15 +124,13 @@ afterEach(() => {
 // ── 1. initializeAuth: invalid profileData (missing id) ──────────────────────
 
 describe('initializeAuth – invalid profileData (missing id)', () => {
-  it('clears state and calls logout when profile has no id', async () => {
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('tok');
-    // Profile missing required `id` field
+  it('renders signed-out when the profile has no id', async () => {
+    // Profile missing required `id` field → treated as no session. The init
+    // no longer calls logout here; it just renders signed-out.
     vi.mocked(apiClient.getUserProfile).mockResolvedValue({
       email: 'user@example.com',
       // id intentionally absent
     } as any);
-    vi.mocked(apiClient.logout).mockResolvedValue(undefined);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -146,17 +138,14 @@ describe('initializeAuth – invalid profileData (missing id)', () => {
 
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.user).toBeNull();
-    expect(apiClient.logout).toHaveBeenCalled();
+    expect(apiClient.logout).not.toHaveBeenCalled();
   });
 
   it('clears state when profile has no email', async () => {
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('tok');
     vi.mocked(apiClient.getUserProfile).mockResolvedValue({
       id: 'u1',
       // email intentionally absent
     } as any);
-    vi.mocked(apiClient.logout).mockResolvedValue(undefined);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -177,8 +166,6 @@ describe('syncLocalPreferencesToDatabase – valid theme + language', () => {
       return null;
     });
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
     vi.mocked(apiClient.updateUserProfile).mockResolvedValue(validProfile);
 
@@ -201,8 +188,6 @@ describe('syncLocalPreferencesToDatabase – valid theme + language', () => {
       return null;
     });
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
     vi.mocked(apiClient.updateUserProfile).mockResolvedValue(validProfile);
 
@@ -225,8 +210,6 @@ describe('syncLocalPreferencesToDatabase – valid theme + language', () => {
   it('does NOT call updateUserProfile when no theme or language in localStorage', async () => {
     // localStorage returns null for both keys (set in beforeEach)
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -249,8 +232,6 @@ describe('syncLocalPreferencesToDatabase – API error is swallowed', () => {
       return null;
     });
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
     vi.mocked(apiClient.updateUserProfile).mockRejectedValue(
       new Error('DB error')
@@ -274,8 +255,6 @@ describe('syncLocalPreferencesToDatabase – API error is swallowed', () => {
 describe('signIn – profile fetch after login fails', () => {
   it('still sets user and succeeds when post-login getUserProfile rejects', async () => {
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     // First call (post-login) → fails; any subsequent call is fine
     vi.mocked(apiClient.getUserProfile).mockRejectedValue(
       new Error('Profile load failed')
@@ -299,8 +278,6 @@ describe('signIn – profile fetch after login fails', () => {
 describe('signUp – profile fetch after register fails', () => {
   it('still sets user and succeeds when post-register getUserProfile rejects', async () => {
     vi.mocked(apiClient.register).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockRejectedValue(
       new Error('No profile yet')
     );
@@ -323,8 +300,6 @@ describe('signOut – API error path', () => {
   it('clears local state and emits logout_error even when logout API throws', async () => {
     // First sign in
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
     vi.mocked(apiClient.logout).mockRejectedValue(new Error('Network error'));
 
@@ -337,8 +312,6 @@ describe('signOut – API error path', () => {
 
     expect(result.current.isAuthenticated).toBe(true);
 
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
-
     await act(async () => {
       await result.current.signOut();
     });
@@ -346,7 +319,6 @@ describe('signOut – API error path', () => {
     // State is cleared despite the API error
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.user).toBeNull();
-    expect(result.current.token).toBeNull();
 
     // logout_error event emitted
     await waitFor(() => {
@@ -364,8 +336,6 @@ describe('signOut – API error path', () => {
 describe('deleteAccount – API error', () => {
   it('rethrows and emits profile_error event when deleteAccount API throws', async () => {
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
     vi.mocked(apiClient.deleteAccount).mockRejectedValue(
       new Error('Delete failed')
@@ -400,7 +370,6 @@ describe('deleteAccount – API error', () => {
 describe('refreshProfile – user is null', () => {
   it('does not call getUserProfile when user is null', async () => {
     // Not authenticated
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -422,8 +391,6 @@ describe('refreshProfile – API error', () => {
   it('rethrows and emits profile_error when getUserProfile fails', async () => {
     // Sign in first
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     // First call (init) → success; second call (post-login profile) → success;
     // third call (refreshProfile) → failure
     vi.mocked(apiClient.getUserProfile)
@@ -462,8 +429,6 @@ describe('refreshProfile – API error', () => {
 describe('isAuthenticated derived from user state', () => {
   it('becomes false when user is cleared via sign out', async () => {
     vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
-    vi.mocked(apiClient.getAccessToken).mockReturnValue('at');
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
     vi.mocked(apiClient.logout).mockResolvedValue(undefined);
 
@@ -475,8 +440,6 @@ describe('isAuthenticated derived from user state', () => {
     });
 
     await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
-
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
 
     await act(async () => {
       await result.current.signOut();

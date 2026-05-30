@@ -15,7 +15,7 @@ interface WebSocketProviderProps {
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   children,
 }) => {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [isConnected, setIsConnected] = React.useState(false);
   const [socketInstance, setSocketInstance] = React.useState<Socket | null>(
     null
@@ -38,8 +38,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     const connectHandler = onConnect.current;
     const disconnectHandler = onDisconnect.current;
 
-    // Clean up when no auth
-    if (!user || !token) {
+    // Clean up when no auth. The access token now lives in an httpOnly
+    // cookie, so the user object is the only signal the FE has that a
+    // session exists; the cookie is attached to the handshake automatically.
+    if (!user) {
       if (managerRef.current) {
         managerRef.current.off('connect', connectHandler);
         managerRef.current.off('disconnect', disconnectHandler);
@@ -66,8 +68,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         manager.on('connect', connectHandler);
         manager.on('disconnect', disconnectHandler);
 
-        // Connect to WebSocket
-        await manager.connect({ id: user.id, token });
+        // Connect to WebSocket (auth via the httpOnly cookie)
+        await manager.connect({ id: user.id });
 
         // Update socket instance after connection
         setSocketInstance(manager.getSocket());
@@ -93,7 +95,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       }
       isInitializedRef.current = false;
     };
-  }, [user, token]);
+  }, [user]);
 
   const value = useMemo(
     () => ({
