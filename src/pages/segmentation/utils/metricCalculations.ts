@@ -1,8 +1,5 @@
-import {
-  Point,
-  calculatePolygonArea,
-  calculatePerimeter,
-} from '@/lib/segmentation';
+import { Point, calculatePerimeter } from '@/lib/segmentation';
+import { calculatePolygonArea } from '@/lib/polygonGeometry';
 import { logger } from '@/lib/logger';
 
 // Type for a 2D vector
