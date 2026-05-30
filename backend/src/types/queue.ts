@@ -6,6 +6,10 @@
  */
 
 import { Request } from 'express';
+import {
+  SEGMENTATION_MODELS,
+  type KnownModelId,
+} from '../constants/modelRegistry';
 // import { z } from 'zod';
 
 // ============================================================================
@@ -15,16 +19,8 @@ import { Request } from 'express';
 /**
  * Available segmentation models
  */
-export type SegmentationModel =
-  | 'hrnet'
-  | 'cbam_resunet'
-  | 'unet_spherohq'
-  | 'unet_attention_aspp'
-  | 'resunet_advanced'
-  | 'resunet_small'
-  | 'sperm'
-  | 'wound'
-  | 'microtubule';
+/** Alias of the canonical model id type — derived from the registry SSOT. */
+export type SegmentationModel = KnownModelId;
 
 /**
  * Queue item status
@@ -359,15 +355,8 @@ export function isSegmentationModel(
   value: unknown
 ): value is SegmentationModel {
   return (
-    value === 'hrnet' ||
-    value === 'cbam_resunet' ||
-    value === 'unet_spherohq' ||
-    value === 'unet_attention_aspp' ||
-    value === 'resunet_advanced' ||
-    value === 'resunet_small' ||
-    value === 'sperm' ||
-    value === 'wound' ||
-    value === 'microtubule'
+    typeof value === 'string' &&
+    (SEGMENTATION_MODELS as readonly string[]).includes(value)
   );
 }
 

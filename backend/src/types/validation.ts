@@ -152,50 +152,26 @@ export const isProjectType = (v: unknown): v is ProjectType =>
 export const coerceProjectType = (v: unknown): ProjectType =>
   isProjectType(v) ? v : 'spheroid';
 
-/** All known model identifiers — kept as a literal union so the
- *  MODEL_TYPE_COMPATIBILITY map below catches typos at compile time
- *  (a misspelled model id in any array becomes a TS error). Mirrors the
- *  `ModelType` union in `@/lib/modelUtils.ts`; intentionally duplicated
- *  here to avoid a circular import. */
-type KnownModelId =
-  | 'hrnet'
-  | 'cbam_resunet'
-  | 'unet_spherohq'
-  | 'unet_attention_aspp'
-  | 'segformer'
-  | 'mamba_unet'
-  | 'sperm'
-  | 'wound'
-  | 'microtubule';
-
-/** Models compatible with each project type. Cross-type segmentation is
- * blocked at both frontend (dropdown filter) and backend (400 on submit).
+/** Model identifiers and the model↔project-type compatibility map now derive
+ *  from the single source of truth in `../constants/modelRegistry`. Adding or
+ *  removing a model there updates this automatically — no more hand-synced
+ *  copies (this file and the whitelist had already drifted to 9 vs 11).
  *
- * - `spheroid_invasive` is locked to `unet_attention_aspp` because core
- *   detection is tied to that model's postprocessing path.
- * - `wound`, `sperm` and `microtubules` use their dedicated specialised
- *   models only. `microtubules` ships with the v7 DINOv3 + DPT + PySOAX
- *   pipeline producing per-instance polyline centerlines.
- * - Standard `spheroid` projects can use any of the general spheroid
- *   models, with `unet_attention_aspp` excluded so users wanting core
- *   detection are nudged toward marking the project disintegrated.
- */
-export const MODEL_TYPE_COMPATIBILITY: Record<
-  ProjectType,
-  readonly KnownModelId[]
-> = {
-  spheroid: [
-    'hrnet',
-    'cbam_resunet',
-    'unet_spherohq',
-    'segformer',
-    'mamba_unet',
-  ],
-  spheroid_invasive: ['unet_attention_aspp'],
-  wound: ['wound'],
-  sperm: ['sperm'],
-  microtubules: ['microtubule'],
-} as const;
+ *  Cross-tree (frontend) parity is guaranteed by two independent equality
+ *  tests pinning each side to the canonical matrix, plus the source-level
+ *  `scripts/check-model-parity.cjs` guard. Compatibility rationale:
+ *  - `spheroid_invasive` is locked to `unet_attention_aspp` (core detection is
+ *    tied to that model's postprocessing path).
+ *  - `wound`, `sperm`, `microtubules` use their dedicated specialised models.
+ *  - Standard `spheroid` projects use the general spheroid models;
+ *    `unet_attention_aspp` is excluded there on purpose. */
+import {
+  MODEL_TYPE_COMPATIBILITY,
+  type KnownModelId,
+} from '../constants/modelRegistry';
+
+export { MODEL_TYPE_COMPATIBILITY };
+export type { KnownModelId };
 
 export const isModelCompatibleWithType = (
   model: string,

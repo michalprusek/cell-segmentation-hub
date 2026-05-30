@@ -1,29 +1,15 @@
 /**
- * Single source of truth for the segmentation model whitelist.
- *
- * Three call sites used to maintain their own copies of this list and
- * drifted apart (review pass-2 found 7 vs 9 vs 9 between Zod /
- * express-validator route / controller). Extract once, import
- * everywhere — a new model added in one place is a compile error
- * (TS) if not added here.
+ * Segmentation model whitelist — now derived from the single source of truth
+ * in `modelRegistry.ts`. Historically three call sites maintained their own
+ * copies and drifted apart (this list had even kept two deleted models,
+ * `resunet_advanced` / `resunet_small`). Add or remove a model in
+ * `modelRegistry.ts` only.
  */
-export const SEGMENTATION_MODELS = [
-  'hrnet',
-  'cbam_resunet',
-  'unet_spherohq',
-  'unet_attention_aspp',
-  'segformer',
-  'mamba_unet',
-  'resunet_advanced',
-  'resunet_small',
-  'sperm',
-  'wound',
-  'microtubule',
-] as const;
+export {
+  SEGMENTATION_MODELS,
+  type KnownModelId as SegmentationModel,
+} from './modelRegistry';
 
-export type SegmentationModel = (typeof SEGMENTATION_MODELS)[number];
+import { SEGMENTATION_MODELS } from './modelRegistry';
 
-/** Human-readable error message listing supported models. Mirrored
- *  across the two validators so the message a client sees is the
- *  same regardless of which path rejects them. */
 export const SEGMENTATION_MODEL_ERROR_MESSAGE = `Model musí být jeden z podporovaných: ${SEGMENTATION_MODELS.join(', ')}`;
