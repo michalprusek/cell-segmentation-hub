@@ -36,6 +36,12 @@ export interface Polygon {
   type?: 'external' | 'internal';
   parent_id?: string;
   area?: number;
+  /** Open polyline (sperm tail / microtubule) vs closed polygon. */
+  geometry?: 'polygon' | 'polyline';
+  /** Sperm body part (head/midpiece/tail) or spheroid 'core'. */
+  partClass?: PolygonPartClass;
+  /** Per-detection sperm instance grouping id. */
+  instanceId?: string;
   /** Cross-frame microtubule track ID populated by trackerService after a
    *  video container's batch finishes segmentation. The validator must
    *  preserve it so the response builder in segmentationService can
@@ -47,6 +53,58 @@ export interface Polygon {
    *  rename survives subsequent reads. */
   name?: string;
 }
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * OPTIONAL POLYGON FIELD SSOT (single source of truth)
+ * ─────────────────────────────────────────────────────────────────────────
+ * This table is the ONE place to register an optional polygon metadata field.
+ * `validateSinglePolygon` iterates it, so adding a new optional field that
+ * should survive the untrusted-ML → DB → editor round-trip means adding ONE
+ * entry here (plus the explicit TS field on the typed contracts — see the
+ * `SegmentationPolygon` interfaces in backend `segmentationService.ts` and
+ * frontend `src/lib/api.ts`, both of which point back here).
+ *
+ * SECURITY BOUNDARY: this validator runs on UNTRUSTED ML-service output, so it
+ * intentionally does NOT blind-spread arbitrary input. Each entry whitelists a
+ * known field with a `coerce` fn that returns the cleaned value to store, or
+ * `undefined` to drop it. Unknown/junk fields never appear here and are
+ * therefore always discarded.
+ *
+ * NOTE: `_embedding` is deliberately ABSENT — it is a heavy server-only blob
+ * that must never be admitted through this untrusted-input path. The 3 mappers
+ * in `segmentationService.ts` operate on already-validated internal data and
+ * spread it (so `_embedding` does pass through there) but the serve boundary
+ * strips it again via `EDITOR_OMITTED_POLYGON_FIELDS`.
+ */
+export interface OptionalPolygonField {
+  /** Field name as it appears on both the raw input and the stored polygon. */
+  key: string;
+  /**
+   * Returns the cleaned value to copy onto the validated polygon, or
+   * `undefined` to drop the field. Must not mutate its argument.
+   */
+  coerce: (value: unknown) => unknown;
+}
+
+const coerceNonEmptyString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.length > 0 ? value : undefined;
+
+export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
+  // partClass accepts both sperm parts (head/midpiece/tail) and 'core' for
+  // ASPP spheroid core polygons; older code only validated SpermPartClass
+  // which silently stripped 'core' during polygon JSON load.
+  {
+    key: 'partClass',
+    coerce: value =>
+      isValidPolygonPartClass(value) ? (value as PolygonPartClass) : undefined,
+  },
+  { key: 'instanceId', coerce: coerceNonEmptyString },
+  // Preserve cross-frame trackId written by trackerService.
+  { key: 'trackId', coerce: coerceNonEmptyString },
+  // Preserve editor-set label so renames survive subsequent reads.
+  { key: 'name', coerce: coerceNonEmptyString },
+] as const;
 
 export interface ParsedPolygonResult {
   polygons: Polygon[];
@@ -311,26 +369,24 @@ export const PolygonValidator = {
       validatedPolygon.area = polygonObj.area;
     }
 
-    // Preserve polyline fields (sperm model)
+    // Preserve polyline geometry (sperm / microtubule). 'polygon' is the
+    // implicit default and never stored explicitly.
     if (polygonObj.geometry === 'polyline') {
-      (validatedPolygon as any).geometry = 'polyline';
+      validatedPolygon.geometry = 'polyline';
     }
-    // partClass accepts both sperm parts (head/midpiece/tail) and 'core' for
-    // ASPP spheroid core polygons; older code only validated SpermPartClass
-    // which silently stripped 'core' during polygon JSON load.
-    if (isValidPolygonPartClass(polygonObj.partClass)) {
-      (validatedPolygon as any).partClass = polygonObj.partClass;
-    }
-    if (polygonObj.instanceId && typeof polygonObj.instanceId === 'string') {
-      (validatedPolygon as any).instanceId = polygonObj.instanceId;
-    }
-    // Preserve cross-frame trackId written by trackerService.
-    if (polygonObj.trackId && typeof polygonObj.trackId === 'string') {
-      validatedPolygon.trackId = polygonObj.trackId;
-    }
-    // Preserve editor-set label so renames survive subsequent reads.
-    if (polygonObj.name && typeof polygonObj.name === 'string') {
-      validatedPolygon.name = polygonObj.name;
+
+    // Copy every registered optional metadata field via the SSOT table. This
+    // is the ONLY place that needs editing to admit a new optional field; the
+    // per-field whitelist preserves the untrusted-input security boundary.
+    const validatedRecord = validatedPolygon as unknown as Record<
+      string,
+      unknown
+    >;
+    for (const field of OPTIONAL_POLYGON_FIELDS) {
+      const coerced = field.coerce(polygonObj[field.key]);
+      if (coerced !== undefined) {
+        validatedRecord[field.key] = coerced;
+      }
     }
 
     return validatedPolygon;
