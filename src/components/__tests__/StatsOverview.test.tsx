@@ -6,8 +6,6 @@ import StatsOverview from '@/components/StatsOverview';
 // Mock the API client — include auth methods that AuthProvider needs.
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { tokenRefreshManager } from '@/lib/tokenRefresh';
 
 vi.mock('@/lib/logger', () => ({
@@ -12,25 +12,12 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
-    getUserProfile: vi.fn().mockResolvedValue({ id: '1' }),
     refreshAccessToken: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
-const makeJwt = (payloadOverrides: Record<string, unknown> = {}): string => {
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(
-    JSON.stringify({
-      sub: 'user-1',
-      exp: Math.floor(Date.now() / 1000) + 3600, // expires in 1 hour
-      ...payloadOverrides,
-    })
-  );
-  const sig = 'fake-signature';
-  return `${header}.${payload}.${sig}`;
-};
+// 13 minutes in ms — matches REFRESH_INTERVAL_MS in tokenRefresh.ts
+const REFRESH_INTERVAL_MS = 13 * 60 * 1000;
 
 describe('TokenRefreshManager', () => {
   beforeEach(() => {
@@ -43,101 +30,105 @@ describe('TokenRefreshManager', () => {
     vi.useRealTimers();
   });
 
-  describe('clearRefreshTimer', () => {
-    it('clears the scheduled timer without error when no timer is set', () => {
-      expect(() => tokenRefreshManager.clearRefreshTimer()).not.toThrow();
+  describe('stopTokenRefreshManager', () => {
+    it('clears the interval without error when no timer is set', () => {
+      expect(() => tokenRefreshManager.stopTokenRefreshManager()).not.toThrow();
     });
 
-    it('clears an active timer so it does not fire', () => {
-      const token = makeJwt(); // expires in 1 hour → refresh scheduled ~58 min
-      tokenRefreshManager.scheduleTokenRefresh(token);
-      tokenRefreshManager.clearRefreshTimer();
+    it('clears an active interval so refreshAccessToken does not fire after stop', async () => {
+      const { default: apiClient } = await import('@/lib/api');
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
 
-      // Advance well past when the refresh would have fired
-      vi.advanceTimersByTime(60 * 60 * 1000);
+      tokenRefreshManager.startTokenRefreshManager();
+      tokenRefreshManager.stopTokenRefreshManager();
 
-      // If timer still fired we'd see getUserProfile called — but we cleared it
-      // Just assert no error was thrown
-      expect(true).toBe(true);
+      // Advance past the interval — should NOT trigger since timer was cleared
+      await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS + 1000);
+
+      expect(vi.mocked(apiClient.refreshAccessToken)).not.toHaveBeenCalled();
+    });
+
+    it('calling stop multiple times does not throw', () => {
+      tokenRefreshManager.startTokenRefreshManager();
+      expect(() => {
+        tokenRefreshManager.stopTokenRefreshManager();
+        tokenRefreshManager.stopTokenRefreshManager();
+      }).not.toThrow();
     });
   });
 
-  describe('scheduleTokenRefresh', () => {
-    it('does nothing when given an empty string', () => {
-      expect(() => tokenRefreshManager.scheduleTokenRefresh('')).not.toThrow();
-    });
-
-    it('does nothing for a malformed JWT (wrong number of parts)', () => {
-      expect(() =>
-        tokenRefreshManager.scheduleTokenRefresh('not.a.valid.jwt.token')
-      ).not.toThrow();
-    });
-
-    it('does nothing for a JWT with unparseable payload', () => {
-      expect(() =>
-        tokenRefreshManager.scheduleTokenRefresh('header.!!!.sig')
-      ).not.toThrow();
-    });
-
-    it('does nothing for a JWT without an exp claim', () => {
-      const header = btoa(JSON.stringify({ alg: 'HS256' }));
-      const payload = btoa(JSON.stringify({ sub: 'user-1' })); // no exp
-      expect(() =>
-        tokenRefreshManager.scheduleTokenRefresh(`${header}.${payload}.sig`)
-      ).not.toThrow();
-    });
-
-    it('schedules refresh at least 30 seconds from now for a soon-expiring token', async () => {
+  describe('startTokenRefreshManager', () => {
+    it('sets an interval that triggers refreshAccessToken after ~13 minutes', async () => {
       const { default: apiClient } = await import('@/lib/api');
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue(makeJwt());
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
 
-      const expiringSoonToken = makeJwt({
-        exp: Math.floor(Date.now() / 1000) + 10, // expires in 10 seconds
-      });
+      tokenRefreshManager.startTokenRefreshManager();
 
-      tokenRefreshManager.scheduleTokenRefresh(expiringSoonToken);
-
-      // Timer should be at 30s minimum — advancing 29s should not trigger it
-      vi.advanceTimersByTime(29_000);
+      // Not yet triggered before interval
       expect(vi.mocked(apiClient.refreshAccessToken)).not.toHaveBeenCalled();
+
+      // Advance exactly one interval
+      await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS);
+
+      expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(1);
+    });
+
+    it('fires again after two intervals', async () => {
+      const { default: apiClient } = await import('@/lib/api');
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
+
+      tokenRefreshManager.startTokenRefreshManager();
+      await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS * 2);
+
+      expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(2);
+    });
+
+    it('replacing an existing timer does not cause double-firing', async () => {
+      const { default: apiClient } = await import('@/lib/api');
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
+
+      tokenRefreshManager.startTokenRefreshManager();
+      // Start again — should clear the first timer
+      tokenRefreshManager.startTokenRefreshManager();
+
+      await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS);
+
+      // Exactly one call despite two starts (second start cleared first timer)
+      expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('refreshTokenIfNeeded', () => {
-    it('returns false when user is not authenticated', async () => {
+    it('calls refreshAccessToken and returns true on success', async () => {
       const { default: apiClient } = await import('@/lib/api');
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
-
-      const result = await tokenRefreshManager.refreshTokenIfNeeded();
-      expect(result).toBe(false);
-    });
-
-    it('returns true and reschedules when refresh succeeds', async () => {
-      const { default: apiClient } = await import('@/lib/api');
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue(makeJwt());
 
       const result = await tokenRefreshManager.refreshTokenIfNeeded();
+
       expect(result).toBe(true);
+      expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(1);
     });
 
-    it('returns false when refreshAccessToken throws', async () => {
+    it('returns false and stops the timer when refreshAccessToken throws', async () => {
       const { default: apiClient } = await import('@/lib/api');
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
       vi.mocked(apiClient.refreshAccessToken).mockRejectedValue(
         new Error('Network error')
       );
 
+      tokenRefreshManager.startTokenRefreshManager();
       const result = await tokenRefreshManager.refreshTokenIfNeeded();
+
       expect(result).toBe(false);
+
+      // Timer should have been stopped — further interval ticks should not re-fire
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
+      await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS * 2);
+      // The only call was the one inside refreshTokenIfNeeded above (which rejected)
+      expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(1);
     });
 
     it('does not refresh concurrently (deduplicates in-flight refresh)', async () => {
       const { default: apiClient } = await import('@/lib/api');
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue(makeJwt());
 
       let resolveRefresh!: () => void;
       vi.mocked(apiClient.refreshAccessToken).mockReturnValue(
@@ -152,27 +143,49 @@ describe('TokenRefreshManager', () => {
       resolveRefresh();
       const [r1, r2] = await Promise.all([p1, p2]);
 
-      // First call succeeds, second is deduplicated via isRefreshing flag
+      // First call succeeds, second is deduplicated via isRefreshing guard
       expect(r1).toBe(true);
       expect(r2).toBe(false);
       expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(1);
     });
+
+    it('allows a second refresh after the first completes', async () => {
+      const { default: apiClient } = await import('@/lib/api');
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
+
+      const r1 = await tokenRefreshManager.refreshTokenIfNeeded();
+      const r2 = await tokenRefreshManager.refreshTokenIfNeeded();
+
+      expect(r1).toBe(true);
+      expect(r2).toBe(true);
+      expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(2);
+    });
   });
 
-  describe('start / stop manager', () => {
-    it('startTokenRefreshManager does nothing when no token is available', async () => {
+  describe('start / stop integration', () => {
+    it('stop after start prevents interval from firing', async () => {
       const { default: apiClient } = await import('@/lib/api');
-      vi.mocked(apiClient.getAccessToken).mockReturnValue(null);
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
 
-      expect(() =>
-        tokenRefreshManager.startTokenRefreshManager()
-      ).not.toThrow();
+      tokenRefreshManager.startTokenRefreshManager();
+      tokenRefreshManager.stopTokenRefreshManager();
+
+      await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS * 3);
+
+      expect(vi.mocked(apiClient.refreshAccessToken)).not.toHaveBeenCalled();
     });
 
-    it('stopTokenRefreshManager clears timer and resets refreshing state', () => {
-      const token = makeJwt();
-      tokenRefreshManager.scheduleTokenRefresh(token);
-      expect(() => tokenRefreshManager.stopTokenRefreshManager()).not.toThrow();
+    it('start after stop resumes the interval', async () => {
+      const { default: apiClient } = await import('@/lib/api');
+      vi.mocked(apiClient.refreshAccessToken).mockResolvedValue(undefined);
+
+      tokenRefreshManager.startTokenRefreshManager();
+      tokenRefreshManager.stopTokenRefreshManager();
+      tokenRefreshManager.startTokenRefreshManager();
+
+      await vi.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS);
+
+      expect(vi.mocked(apiClient.refreshAccessToken)).toHaveBeenCalledTimes(1);
     });
   });
 });

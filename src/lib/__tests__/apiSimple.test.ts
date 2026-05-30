@@ -69,8 +69,6 @@ describe('API Client Basic Tests', () => {
   // Snapshot the constructor-time call data in beforeAll, BEFORE the first test's
   // clearAllMocks runs. This preserves the mock call records from module initialization.
   let initAxiosCreateArgs: Record<string, unknown> | undefined;
-  let initRequestInterceptorFn: ((config: unknown) => unknown) | undefined;
-  let initRequestInterceptorErr: ((err: unknown) => Promise<never>) | undefined;
   let initResponseInterceptorFn: ((res: unknown) => unknown) | undefined;
   let initResponseInterceptorErr:
     | ((err: unknown) => Promise<unknown>)
@@ -83,10 +81,6 @@ describe('API Client Basic Tests', () => {
       string,
       unknown
     >;
-    initRequestInterceptorFn =
-      mockAxiosInstance.interceptors.request.use.mock.calls[0]?.[0];
-    initRequestInterceptorErr =
-      mockAxiosInstance.interceptors.request.use.mock.calls[0]?.[1];
     initResponseInterceptorFn =
       mockAxiosInstance.interceptors.response.use.mock.calls[0]?.[0];
     initResponseInterceptorErr =
@@ -107,11 +101,14 @@ describe('API Client Basic Tests', () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        withCredentials: true,
       });
     });
 
-    test('should set up request and response interceptors', () => {
-      expect(initRequestInterceptorFn).toBeDefined();
+    test('should set up response interceptor', () => {
+      // After the cookie cutover there is no request interceptor —
+      // withCredentials carries the auth cookies automatically.
+      // Only the response interceptor (for 401 → refresh → retry) is set up.
       expect(initResponseInterceptorFn).toBeDefined();
     });
 
@@ -124,29 +121,6 @@ describe('API Client Basic Tests', () => {
       // the source: loadTokensFromStorage() reads 'accessToken' and 'refreshToken'.
       expect(initAxiosCreateArgs).toBeDefined(); // constructor completed
       expect(typeof localStorageMock.getItem).toBe('function'); // mock is wired up
-    });
-  });
-
-  describe('Request Interceptor', () => {
-    test('should add authorization header when token exists', () => {
-      // Use the snapshotted interceptor function from module initialisation
-      expect(initRequestInterceptorFn).toBeDefined();
-
-      const mockConfig = { headers: {} };
-      const configWithToken = initRequestInterceptorFn!(mockConfig);
-
-      // Should return config (may not have auth header without actual token)
-      expect(configWithToken).toBeDefined();
-      expect(configWithToken.headers).toBeDefined();
-    });
-
-    test('should handle request interceptor errors', async () => {
-      expect(initRequestInterceptorErr).toBeDefined();
-      const error = new Error('Request error');
-
-      await expect(initRequestInterceptorErr!(error)).rejects.toThrow(
-        'Request error'
-      );
     });
   });
 

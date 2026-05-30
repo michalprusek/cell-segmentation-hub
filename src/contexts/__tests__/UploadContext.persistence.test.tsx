@@ -9,7 +9,6 @@ import { useUpload } from '@/contexts/useUpload';
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     uploadImages: vi.fn(),
     uploadImagesChunked: vi.fn(),
     uploadVideo: vi.fn(),

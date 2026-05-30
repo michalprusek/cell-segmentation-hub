@@ -15,25 +15,23 @@ const localStorageMock = {
 };
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
-// Mock the apiClient to match the actual interface
+// Mock the apiClient to match the actual interface. Note: the client no
+// longer exposes isAuthenticated()/getAccessToken() — auth lives in httpOnly
+// cookies and the only client-visible signal is the /auth/profile response.
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(),
     updateUserProfile: vi.fn(),
     deleteAccount: vi.fn(),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(),
     updateUserProfile: vi.fn(),
     deleteAccount: vi.fn(),
   },
@@ -76,12 +74,14 @@ describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorageMock.clear();
-    // Reset mock implementations to default unauthenticated state
-    vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
+    // The init probe only runs when the non-secret `authenticated` hint cookie
+    // is present. Set it so these tests exercise the probe path; the default
+    // profile mock rejects, so the result is still the unauthenticated state
+    // unless a test overrides getUserProfile.
+    document.cookie = 'authenticated=1';
     vi.mocked(apiClient.getUserProfile).mockRejectedValue(
       new Error('Not authenticated')
     );
-    vi.mocked(apiClient.getAccessToken).mockReturnValue(null);
     vi.mocked(apiClient.login).mockReset();
     vi.mocked(apiClient.logout).mockReset();
     vi.mocked(apiClient.register).mockReset();
@@ -95,8 +95,7 @@ describe('AuthContext', () => {
 
   describe('initial state', () => {
     it('should initialize with unauthenticated state', async () => {
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
-
+      // Default beforeEach makes the /auth/profile probe reject → signed out.
       const { result } = renderHook(() => useAuth(), { wrapper });
 
       await waitFor(() => {
@@ -107,7 +106,23 @@ describe('AuthContext', () => {
       expect(result.current.user).toBeNull();
     });
 
-    it('should check for existing token on mount', async () => {
+    it('skips the /auth/profile probe entirely on a logged-out cold load (no hint cookie)', async () => {
+      // No `authenticated` hint cookie → a fresh visitor makes ZERO auth
+      // requests (avoids the guaranteed 401 + console error).
+      document.cookie = 'authenticated=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.user).toBeNull();
+      expect(vi.mocked(apiClient.getUserProfile)).not.toHaveBeenCalled();
+    });
+
+    it('should restore the session from the /auth/profile probe on mount', async () => {
       const mockProfile = {
         id: '1',
         email: 'test@example.com',
@@ -118,10 +133,8 @@ describe('AuthContext', () => {
           username: undefined,
         },
       };
-      const mockToken = 'existing-token';
 
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue(mockToken);
+      // A valid cookie → /auth/profile resolves → session restored.
       vi.mocked(apiClient.getUserProfile).mockResolvedValueOnce(mockProfile);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -130,14 +143,15 @@ describe('AuthContext', () => {
         expect(result.current.loading).toBe(false);
       });
 
+      // The init probe is the suppress-errors variant (silent on 401).
+      expect(vi.mocked(apiClient.getUserProfile)).toHaveBeenCalledWith({
+        suppressAuthErrors: true,
+      });
       expect(result.current.isAuthenticated).toBe(true);
       expect(result.current.user).toEqual(mockProfile.user);
-      expect(result.current.token).toBe(mockToken);
     });
 
-    it('should handle invalid token on mount', async () => {
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('invalid-token');
+    it('should render signed-out when the /auth/profile probe fails on mount', async () => {
       vi.mocked(apiClient.getUserProfile).mockRejectedValueOnce(
         new Error('Unauthorized')
       );
@@ -150,7 +164,6 @@ describe('AuthContext', () => {
 
       expect(result.current.isAuthenticated).toBe(false);
       expect(result.current.user).toBeNull();
-      expect(vi.mocked(apiClient.logout)).toHaveBeenCalled();
     });
   });
 
@@ -165,9 +178,6 @@ describe('AuthContext', () => {
       };
 
       vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('access-token');
-      // Set up apiClient.isAuthenticated to return true after login
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -187,11 +197,10 @@ describe('AuthContext', () => {
         true
       );
 
-      // Check that user state was updated
+      // Check that user state was updated (no client-side token any more)
       expect(result.current.user).toEqual(mockResponse.user);
-      expect(result.current.token).toBe('access-token');
 
-      // Wait for the useEffect to process the user change and set isAuthenticated
+      // isAuthenticated is derived from the user state.
       await waitFor(() => {
         expect(result.current.isAuthenticated).toBe(true);
       });
@@ -255,11 +264,7 @@ describe('AuthContext', () => {
       };
 
       vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('access-token');
       vi.mocked(apiClient.logout).mockResolvedValueOnce(undefined);
-
-      // Initially mock as authenticated after login
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -278,9 +283,6 @@ describe('AuthContext', () => {
         expect(result.current.isAuthenticated).toBe(true);
       });
 
-      // Mock as unauthenticated after logout
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
-
       // Then sign out
       await act(async () => {
         await result.current.signOut();
@@ -289,7 +291,6 @@ describe('AuthContext', () => {
       expect(vi.mocked(apiClient.logout)).toHaveBeenCalled();
       expect(result.current.isAuthenticated).toBe(false);
       expect(result.current.user).toBeNull();
-      expect(result.current.token).toBeNull();
     });
 
     it('should handle sign out error gracefully', async () => {
@@ -301,11 +302,9 @@ describe('AuthContext', () => {
       };
 
       vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('access-token');
       vi.mocked(apiClient.logout).mockRejectedValueOnce(
         new Error('Network error')
       );
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -323,18 +322,14 @@ describe('AuthContext', () => {
         expect(result.current.isAuthenticated).toBe(true);
       });
 
-      // Mock as unauthenticated after logout attempt
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
-
       // Then try to sign out with error
       await act(async () => {
         await result.current.signOut();
       });
 
-      // Should still logout locally even if API call fails
+      // Should still clear local state even if the API call fails.
       expect(result.current.isAuthenticated).toBe(false);
       expect(result.current.user).toBeNull();
-      expect(result.current.token).toBeNull();
     });
   });
 
@@ -354,8 +349,6 @@ describe('AuthContext', () => {
       };
 
       vi.mocked(apiClient.register).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('access-token');
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -375,7 +368,6 @@ describe('AuthContext', () => {
         consentOptions
       );
       expect(result.current.user).toEqual(mockResponse.user);
-      expect(result.current.token).toBe('access-token');
 
       await waitFor(() => {
         expect(result.current.isAuthenticated).toBe(true);
@@ -440,9 +432,7 @@ describe('AuthContext', () => {
       };
 
       vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('access-token');
       vi.mocked(apiClient.deleteAccount).mockResolvedValueOnce(undefined);
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -459,9 +449,6 @@ describe('AuthContext', () => {
       await waitFor(() => {
         expect(result.current.isAuthenticated).toBe(true);
       });
-
-      // Mock as unauthenticated after account deletion
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(false);
 
       // Then delete account
       await act(async () => {
@@ -482,8 +469,6 @@ describe('AuthContext', () => {
       };
 
       vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.getAccessToken).mockReturnValue('access-token');
-      vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 

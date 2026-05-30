@@ -7,6 +7,11 @@ import { Server as SocketIOServer } from 'socket.io';
 vi.mock('http');
 vi.mock('socket.io');
 vi.mock('@prisma/client');
+// websocketService imports authCookies → config. Stub config so the real
+// one (which process.exit's on a missing test env) is skipped.
+vi.mock('../../utils/config', () => ({
+  config: { UPLOAD_DIR: '/tmp/test-uploads', NODE_ENV: 'test' },
+}));
 
 describe('WebSocketService - Parallel Processing', () => {
   let webSocketService: WebSocketService;

@@ -1,6 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { logger } from '../utils/logger';
+import { getAccessTokenFromCookieHeader } from '../utils/authCookies';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { QueueService } from './queueService';
@@ -157,13 +158,16 @@ export class WebSocketService {
           origin: socket.handshake.headers.origin,
         });
 
-        const token =
-          socket.handshake.auth.token ||
-          socket.handshake.headers.authorization?.replace('Bearer ', '');
+        // The browser attaches the httpOnly access_token cookie to the
+        // same-origin handshake automatically; we read it from the raw
+        // Cookie header (there is no Express req.cookies on a socket).
+        const token = getAccessTokenFromCookieHeader(
+          socket.handshake.headers.cookie
+        );
 
         if (!token) {
           logger.warn(
-            'WebSocket connection attempted without token',
+            'WebSocket connection attempted without auth cookie',
             'WebSocketService'
           );
           return next(new Error('Authentication token required'));

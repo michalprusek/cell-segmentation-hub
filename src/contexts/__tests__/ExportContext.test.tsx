@@ -5,12 +5,10 @@ import { ExportProvider, useExportContext } from '@/contexts/ExportContext';
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     updateUserProfile: vi.fn(),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     updateUserProfile: vi.fn(),
   },

@@ -1,5 +1,6 @@
 import request from 'supertest';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { MockedFunction } from 'vitest';
 
@@ -59,6 +60,9 @@ describe('Auth Controller Functions', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
+    // Tokens travel in httpOnly cookies now, so the test app needs the same
+    // cookie parser the real server uses (server.ts) to populate req.cookies.
+    app.use(cookieParser());
 
     // Setup routes
     app.post('/auth/register', register);
@@ -105,10 +109,22 @@ describe('Auth Controller Functions', () => {
         .expect(201);
 
       expect(response.body.success).toBe(true);
+      // Body carries only the user — never tokens.
       expect(response.body.data).toMatchObject({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
+        user: { id: 'user-id', email: userData.email },
       });
+      expect(response.body.data.accessToken).toBeUndefined();
+      expect(response.body.data.refreshToken).toBeUndefined();
+      // Tokens are delivered as httpOnly cookies; the non-secret hint cookie
+      // is intentionally NOT httpOnly (the SPA must read it).
+      const cookies = response.headers['set-cookie'] as unknown as string[];
+      const accessCookie = cookies.find(c => c.startsWith('access_token='));
+      const refreshCookie = cookies.find(c => c.startsWith('refresh_token='));
+      const hintCookie = cookies.find(c => c.startsWith('authenticated='));
+      expect(accessCookie).toMatch(/HttpOnly/i);
+      expect(refreshCookie).toMatch(/HttpOnly/i);
+      expect(hintCookie).toBeDefined();
+      expect(hintCookie).not.toMatch(/HttpOnly/i);
     });
 
     it('should return 400 for invalid email', async () => {
@@ -185,10 +201,20 @@ describe('Auth Controller Functions', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
+      // Body carries only the user — never tokens.
       expect(response.body.data).toMatchObject({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
+        user: { id: 'user-id', email: loginData.email },
       });
+      expect(response.body.data.accessToken).toBeUndefined();
+      expect(response.body.data.refreshToken).toBeUndefined();
+      const cookies = response.headers['set-cookie'] as unknown as string[];
+      const accessCookie = cookies.find(c => c.startsWith('access_token='));
+      const refreshCookie = cookies.find(c => c.startsWith('refresh_token='));
+      expect(accessCookie).toMatch(/HttpOnly/i);
+      expect(accessCookie).toMatch(/SameSite=Strict/i);
+      expect(accessCookie).toMatch(/Path=\//i);
+      // The refresh cookie is path-scoped to the auth endpoints.
+      expect(refreshCookie).toMatch(/Path=\/api\/auth/i);
     });
 
     it('should return 400 for missing email', async () => {
@@ -226,11 +252,7 @@ describe('Auth Controller Functions', () => {
   });
 
   describe('POST /auth/refresh', () => {
-    it('should refresh token successfully', async () => {
-      const refreshData = {
-        refreshToken: 'valid-refresh-token',
-      };
-
+    it('should refresh token successfully (reading the refresh cookie)', async () => {
       const newTokens = {
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
@@ -240,38 +262,34 @@ describe('Auth Controller Functions', () => {
 
       const response = await request(app)
         .post('/auth/refresh')
-        .send(refreshData)
+        .set('Cookie', 'refresh_token=valid-refresh-token')
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toMatchObject({
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
+      // The new tokens go back as cookies, not in the body.
+      expect(response.body.data?.accessToken).toBeUndefined();
+      expect(response.body.data?.refreshToken).toBeUndefined();
+      // The service is called with the token read from the cookie.
+      expect(authService.refreshToken).toHaveBeenCalledWith({
+        refreshToken: 'valid-refresh-token',
       });
+      const cookies = response.headers['set-cookie'] as unknown as string[];
+      expect(cookies.some(c => c.startsWith('access_token='))).toBe(true);
+      expect(cookies.some(c => c.startsWith('refresh_token='))).toBe(true);
     });
 
-    it('should return 400 for missing refresh token', async () => {
-      // refreshToken controller doesn't validate body, so test what happens
-      // when the service throws
-      const { ApiError } = await import('../../../middleware/error');
-      const unauthorizedError = (ApiError as any).unauthorized(
-        'Neplatný nebo vypršený refresh token'
-      );
-      authService.refreshToken.mockRejectedValueOnce(unauthorizedError);
-
+    it('should return 401 when the refresh cookie is missing (no service call)', async () => {
       const response = await request(app)
         .post('/auth/refresh')
         .send({})
         .expect(401);
 
       expect(response.body.success).toBe(false);
+      // Short-circuits before touching the service — no cookie, no refresh.
+      expect(authService.refreshToken).not.toHaveBeenCalled();
     });
 
-    it('should return 401 for invalid refresh token', async () => {
-      const refreshData = {
-        refreshToken: 'invalid-refresh-token',
-      };
-
+    it('should return 401 for an invalid refresh cookie', async () => {
       const { ApiError } = await import('../../../middleware/error');
       const unauthorizedError = (ApiError as any).unauthorized(
         'Neplatný nebo vypršený refresh token'
@@ -280,7 +298,7 @@ describe('Auth Controller Functions', () => {
 
       const response = await request(app)
         .post('/auth/refresh')
-        .send(refreshData)
+        .set('Cookie', 'refresh_token=invalid-refresh-token')
         .expect(401);
 
       expect(response.body.success).toBe(false);
@@ -288,39 +306,38 @@ describe('Auth Controller Functions', () => {
   });
 
   describe('POST /auth/logout', () => {
-    it('should logout successfully', async () => {
-      const logoutData = {
-        refreshToken: 'valid-refresh-token',
-      };
-
+    it('should logout successfully (revoking the cookie token and clearing cookies)', async () => {
       authService.logout.mockResolvedValueOnce(undefined);
 
       const response = await request(app)
         .post('/auth/logout')
-        .send(logoutData)
+        .set('Cookie', 'refresh_token=valid-refresh-token')
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(authService.logout).toHaveBeenCalledWith(logoutData.refreshToken);
+      expect(authService.logout).toHaveBeenCalledWith('valid-refresh-token');
+      // Both cookies are cleared (Max-Age=0 / Expires in the past).
+      const cookies = response.headers['set-cookie'] as unknown as string[];
+      expect(cookies.some(c => c.startsWith('access_token=;'))).toBe(true);
+      expect(cookies.some(c => c.startsWith('refresh_token=;'))).toBe(true);
     });
 
-    it('should handle logout error gracefully', async () => {
-      const logoutData = {
-        refreshToken: 'invalid-refresh-token',
-      };
-
+    it('clears cookies and returns 200 even if session revocation fails', async () => {
+      // Logout must always end the client session — a revocation error is
+      // logged but the cookies are still cleared and the response is 200.
       const { ApiError } = await import('../../../middleware/error');
-      const internalError = (ApiError as any).internalError(
-        'Odhlášení se nezdařilo'
+      authService.logout.mockRejectedValueOnce(
+        (ApiError as any).internalError('Odhlášení se nezdařilo')
       );
-      authService.logout.mockRejectedValueOnce(internalError);
 
       const response = await request(app)
         .post('/auth/logout')
-        .send(logoutData)
-        .expect(500);
+        .set('Cookie', 'refresh_token=invalid-refresh-token')
+        .expect(200);
 
-      expect(response.body.success).toBe(false);
+      expect(response.body.success).toBe(true);
+      const cookies = response.headers['set-cookie'] as unknown as string[];
+      expect(cookies.some(c => c.startsWith('refresh_token=;'))).toBe(true);
     });
   });
 

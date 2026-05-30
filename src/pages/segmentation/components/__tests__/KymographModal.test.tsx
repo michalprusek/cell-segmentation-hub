@@ -41,8 +41,6 @@ import type { VideoChannel } from '@/types';
 const mockApiPost = vi.fn();
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
@@ -94,8 +92,6 @@ vi.mock('@/lib/api', () => ({
     delete: vi.fn(),
   },
   apiClient: {
-    isAuthenticated: vi.fn(() => false),
-    getAccessToken: vi.fn(() => null),
     post: (...args: unknown[]) => mockApiPost(...args),
     get: vi.fn(),
   },

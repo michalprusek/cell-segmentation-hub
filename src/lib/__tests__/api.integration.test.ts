@@ -50,9 +50,6 @@ describe('API Integration Tests', () => {
     vi.clearAllMocks();
     // Point singleton's axios instance to our mock
     (apiClient as any).instance = mockAxiosInstance;
-    // Clear any existing tokens between tests
-    (apiClient as any).accessToken = null;
-    (apiClient as any).refreshToken = null;
   });
 
   afterEach(() => {
@@ -87,9 +84,8 @@ describe('API Integration Tests', () => {
         ...loginData,
         rememberMe: true,
       });
-      expect(result).toEqual(response);
-      // Tokens should be stored after login
-      expect(apiClient.isAuthenticated()).toBe(true);
+      // Tokens are set as httpOnly cookies server-side; only the user is returned.
+      expect(result).toEqual({ user: response.user });
     });
 
     it('should handle registration with validation', async () => {
@@ -119,7 +115,8 @@ describe('API Integration Tests', () => {
         password,
         username,
       });
-      expect(result).toEqual(response);
+      // Tokens are set as httpOnly cookies server-side; only the user is returned.
+      expect(result).toEqual({ user: response.user });
     });
 
     it('should handle login errors gracefully', async () => {
@@ -157,9 +154,7 @@ describe('API Integration Tests', () => {
 
   describe('Project Management', () => {
     beforeEach(() => {
-      // Set auth tokens for authenticated requests
-      (apiClient as any).accessToken = 'test-access-token';
-      (apiClient as any).refreshToken = 'test-refresh-token';
+      // Auth is via httpOnly cookies — no client-side token fields to set.
     });
 
     it('should fetch projects list', async () => {
@@ -268,9 +263,6 @@ describe('API Integration Tests', () => {
     });
 
     it('should handle unauthorized access', async () => {
-      // Clear auth token
-      (apiClient as any).accessToken = null;
-
       const error = new Error('Unauthorized');
       (error as any).response = {
         status: 401,
@@ -284,8 +276,7 @@ describe('API Integration Tests', () => {
 
   describe('Image Upload', () => {
     beforeEach(() => {
-      (apiClient as any).accessToken = 'test-access-token';
-      (apiClient as any).refreshToken = 'test-refresh-token';
+      // Auth is via httpOnly cookies — no client-side token fields to set.
     });
 
     it('should upload an image successfully', async () => {
@@ -377,8 +368,7 @@ describe('API Integration Tests', () => {
 
   describe('Segmentation', () => {
     beforeEach(() => {
-      (apiClient as any).accessToken = 'test-access-token';
-      (apiClient as any).refreshToken = 'test-refresh-token';
+      // Auth is via httpOnly cookies — no client-side token fields to set.
     });
 
     it('should request batch segmentation', async () => {
@@ -464,7 +454,7 @@ describe('API Integration Tests', () => {
         data: { success: true, data: queueStatus },
       });
 
-      const result = await apiClient.getQueueStats();
+      const result = await apiClient.getQueueStats('project-1');
 
       expect(result).toEqual(queueStatus);
     });
@@ -488,8 +478,6 @@ describe('API Integration Tests', () => {
       // The ApiClient does not implement automatic retry — retries are done
       // by the response interceptor for specific status codes (429 rate limiting).
       // For generic 500 errors the error is re-thrown immediately.
-      (apiClient as any).accessToken = 'test-access-token';
-
       const serverError = new Error('Server error');
       (serverError as any).response = {
         status: 500,
@@ -500,37 +488,28 @@ describe('API Integration Tests', () => {
       await expect(apiClient.getProjects()).rejects.toThrow('Server error');
     });
 
-    it('should store new tokens after successful token refresh', async () => {
-      // Set an initial refresh token
-      (apiClient as any).accessToken = 'old-access-token';
-      (apiClient as any).refreshToken = 'old-refresh-token';
-
-      const refreshResponse = {
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-      };
-
+    it('should complete token refresh without error (cookie rotation is server-side)', async () => {
+      // Tokens are httpOnly cookies; the client posts to /auth/refresh-token with
+      // no body and reads nothing from the response — the server rotates the cookies.
       mockAxiosInstance.post.mockResolvedValue({
-        data: { success: true, data: refreshResponse },
+        data: { success: true },
       });
 
-      await apiClient.refreshAccessToken();
-
-      expect((apiClient as any).accessToken).toBe('new-access-token');
+      await expect(apiClient.refreshAccessToken()).resolves.toBeUndefined();
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+        '/auth/refresh-token'
+      );
     });
 
-    it('should clear tokens after logout', async () => {
-      (apiClient as any).accessToken = 'test-access-token';
-      (apiClient as any).refreshToken = 'test-refresh-token';
-
+    it('should call /auth/logout on logout (server clears cookies)', async () => {
       mockAxiosInstance.post.mockResolvedValue({
         data: { success: true },
       });
 
       await apiClient.logout();
 
-      expect(apiClient.isAuthenticated()).toBe(false);
-      expect(apiClient.getAccessToken()).toBeNull();
+      // The server clears the httpOnly auth cookies via Set-Cookie.
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/logout');
     });
   });
 });

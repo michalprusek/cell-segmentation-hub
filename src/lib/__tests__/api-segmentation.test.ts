@@ -786,27 +786,24 @@ describe('API Client - Segmentation & Queue Methods', () => {
     });
 
     describe('deleteAccount', () => {
-      test('should delete account successfully and clear tokens', async () => {
+      test('should call DELETE /auth/profile successfully', async () => {
         mockAxiosInstance.delete.mockResolvedValue({});
 
         await apiClient.deleteAccount();
 
         expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/auth/profile');
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith(
-          'refreshToken'
-        );
+        // No localStorage/sessionStorage writes — tokens are httpOnly cookies
+        expect(localStorageMock.removeItem).not.toHaveBeenCalled();
+        expect(sessionStorageMock.removeItem).not.toHaveBeenCalled();
       });
 
-      test('should clear tokens even if delete request fails', async () => {
+      test('should propagate errors when delete request fails', async () => {
         mockAxiosInstance.delete.mockRejectedValue(new Error('Server error'));
 
         await expect(apiClient.deleteAccount()).rejects.toThrow('Server error');
 
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith(
-          'refreshToken'
-        );
+        // The DELETE endpoint was called (the error came from the server response)
+        expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/auth/profile');
       });
     });
   });

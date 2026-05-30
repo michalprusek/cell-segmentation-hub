@@ -18,12 +18,10 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/lib/api', () => ({
   default: {
-    isAuthenticated: vi.fn(() => false),
     getUserProfile: vi.fn(),
     login: vi.fn(),
     logout: vi.fn(),
     register: vi.fn(),
-    getAccessToken: vi.fn(),
     updateUserProfile: vi.fn(),
     deleteAccount: vi.fn(),
     deleteImage: vi.fn(),

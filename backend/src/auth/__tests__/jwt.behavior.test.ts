@@ -43,7 +43,6 @@ import {
   generateTokenPair,
   verifyAccessToken,
   verifyRefreshToken,
-  extractTokenFromHeader,
   getTokenExpiration,
   isTokenExpired,
   JwtPayload,
@@ -296,42 +295,6 @@ describe('verifyRefreshToken', () => {
     } finally {
       (config as Record<string, unknown>).JWT_REFRESH_SECRET = savedSecret;
     }
-  });
-});
-
-// ── extractTokenFromHeader ────────────────────────────────────────────────────
-
-describe('extractTokenFromHeader', () => {
-  it('extracts the token from a valid "Bearer <token>" header', () => {
-    const result = extractTokenFromHeader('Bearer my-token-value');
-    expect(result).toBe('my-token-value');
-  });
-
-  it('returns null when the header is undefined', () => {
-    expect(extractTokenFromHeader(undefined)).toBeNull();
-  });
-
-  it('returns null when the header is an empty string', () => {
-    expect(extractTokenFromHeader('')).toBeNull();
-  });
-
-  it('returns null when the scheme is not "Bearer"', () => {
-    expect(extractTokenFromHeader('Basic abc123==')).toBeNull();
-  });
-
-  it('returns null when there is no space after "Bearer"', () => {
-    expect(extractTokenFromHeader('Bearertoken')).toBeNull();
-  });
-
-  it('returns null when the header has more than two parts', () => {
-    // "Bearer token extra" → 3 parts → invalid
-    expect(extractTokenFromHeader('Bearer token extra')).toBeNull();
-  });
-
-  it('returns null when the token part is empty ("Bearer ")', () => {
-    // split(' ') on 'Bearer ' gives ['Bearer', ''] — parts[1] is ''
-    // The implementation returns parts[1] || null, so '' → null
-    expect(extractTokenFromHeader('Bearer ')).toBeNull();
   });
 });
 
