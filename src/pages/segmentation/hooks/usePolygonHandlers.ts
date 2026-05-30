@@ -224,7 +224,6 @@ export function usePolygonHandlers({
     hoveredPolygonId,
     setHoveredPolygonId,
     persistedSelectionTrackId,
-    setPersistedSelectionTrackId,
     handleTogglePolygonVisibility,
     handleDeletePolygonFromPanel,
     handleSelectPolygon,

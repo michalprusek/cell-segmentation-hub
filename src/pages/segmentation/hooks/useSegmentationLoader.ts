@@ -280,7 +280,7 @@ export function useSegmentationLoader({
         if (isMounted && imageId === currentImageIdRef.current) {
           setSegmentationPolygons(polygons);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Handle cancellation gracefully - don't show errors for cancelled requests
         if (handleCancelledError(error, 'segmentation loading')) {
           return;

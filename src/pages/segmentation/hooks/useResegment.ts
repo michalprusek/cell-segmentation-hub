@@ -6,14 +6,6 @@ import { handleCancelledError } from '@/lib/errorUtils';
 import { toast } from 'sonner';
 import { setCachedSegmentationPolygons } from './segmentationPolygonCache';
 
-/**
- * Minimal channel type for the multi-channel picker.
- */
-interface VideoChannel {
-  name: string;
-  isSegmentationSource?: boolean;
-}
-
 interface UseResegmentParams {
   projectId: string | undefined;
   imageId: string | undefined;
@@ -21,8 +13,12 @@ interface UseResegmentParams {
   selectedModel: string;
   confidenceThreshold: number;
   detectHoles: boolean;
-  /** Channels from video.container?.channels (or null for standalone images). */
-  videoChannels: VideoChannel[] | null | undefined;
+  /**
+   * Channels from `video.container?.channels` (or null for standalone images).
+   * Only the count is read here (to decide whether to open the channel picker),
+   * so the element shape is intentionally opaque.
+   */
+  videoChannels: readonly unknown[] | null | undefined;
   queryClient: QueryClient;
   /** Translation function. */
   t: (key: string) => string;
