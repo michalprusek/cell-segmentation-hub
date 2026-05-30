@@ -500,7 +500,7 @@ describe('SegmentationService — getProjectSegmentationStats', () => {
     expect(stats.models['hrnet']).toBe(2);
     expect(
         (stats.models as Record<string, number>)['resunet_advanced']
-      ).toBeUndefined();
+      ).toBe(1);
     expect(stats.processedImages).toBe(3);
   });
 });
