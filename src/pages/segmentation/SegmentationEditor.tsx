@@ -16,9 +16,8 @@ import { useSegmentationReload } from './hooks/useSegmentationReload';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { useCoordinatedAbortController } from '@/hooks/shared/useAbortController';
 import useDebounce from '@/hooks/useDebounce';
-import { EditMode } from './types';
 import { shouldPreventCanvasDeselection } from './config/modeConfig';
-import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
+import { polygonKey } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
@@ -26,6 +25,7 @@ import { handleCancelledError } from '@/lib/errorUtils';
 import { generateSafePolygonKey } from '@/lib/polygonIdUtils';
 import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
 import { transformSegmentationPolygons } from './utils/transformSegmentationPolygons';
+import { usePolygonHandlers } from './hooks/usePolygonHandlers';
 
 // New layout components
 import VerticalToolbar from './components/VerticalToolbar';
@@ -155,20 +155,6 @@ const SegmentationEditor = () => {
     width: number;
     height: number;
   } | null>(null);
-  // Stores STABLE keys (trackId where present, else polygon.id) so a
-  // microtubule hidden on one frame stays hidden when the user scrubs.
-  // Branded `Set<PolygonKey>` makes accidental key-by-other-string a
-  // compile error.
-  const [hiddenPolygonIds, setHiddenPolygonIds] = useState<Set<PolygonKey>>(
-    new Set()
-  );
-  // Cross-frame selection persistence: when the user picks an MT
-  // polyline, remember its trackId so frame scrubs can re-select the
-  // same MT instance on the new frame. null = no persistent selection.
-  const [persistedSelectionTrackId, setPersistedSelectionTrackId] = useState<
-    string | null
-  >(null);
-  const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
     height: 600,
@@ -725,44 +711,6 @@ const SegmentationEditor = () => {
     queryClient,
   ]);
 
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-    const filteredPolygons = editor.polygons.filter(
-      polygon => !hiddenPolygonIds.has(polygonKey(polygon))
-    );
-    logger.debug('🎨 Polygon rendering state:', {
-      totalPolygons: editor.polygons.length,
-      visiblePolygons: filteredPolygons.length,
-      hiddenCount: hiddenPolygonIds.size,
-      imageDimensions,
-      transform: editor.transform,
-      svgViewBox: `0 0 ${imageDimensions?.width || canvasWidth} ${imageDimensions?.height || canvasHeight}`,
-      firstPolygon: filteredPolygons[0]
-        ? {
-            id: filteredPolygons[0].id,
-            pointsCount: filteredPolygons[0].points?.length || 0,
-            samplePoints: filteredPolygons[0].points?.slice(0, 5),
-            bounds:
-              filteredPolygons[0].points?.length > 0
-                ? {
-                    minX: Math.min(...filteredPolygons[0].points.map(p => p.x)),
-                    maxX: Math.max(...filteredPolygons[0].points.map(p => p.x)),
-                    minY: Math.min(...filteredPolygons[0].points.map(p => p.y)),
-                    maxY: Math.max(...filteredPolygons[0].points.map(p => p.y)),
-                  }
-                : null,
-          }
-        : null,
-    });
-  }, [
-    editor.polygons,
-    hiddenPolygonIds,
-    imageDimensions,
-    canvasHeight,
-    canvasWidth,
-    editor.transform,
-  ]);
-
   // Listen for segmentation completion and auto-reload polygons (debounced) with cancellation
   const handleSegmentationStatusUpdate = useCallback(() => {
     // Only proceed if we have a WebSocket update for the current image
@@ -983,133 +931,25 @@ const SegmentationEditor = () => {
     }
   };
 
-  // Legacy compatibility handlers
-  const handleTogglePolygonVisibility = (polygonId: string) => {
-    // Map current-frame polygon.id → stable key (trackId or id) so the
-    // hide state survives frame changes for MTs.
-    const target = editor.polygons.find(p => p.id === polygonId);
-    if (!target) return;
-    const key = polygonKey(target);
-    setHiddenPolygonIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        newSet.add(key);
-      }
-      return newSet;
-    });
-  };
-
-  const handleDeletePolygonFromPanel = (polygonId: string) => {
-    const target = editor.polygons.find(p => p.id === polygonId);
-    editor.handleDeletePolygon(polygonId);
-    if (target) {
-      const key = polygonKey(target);
-      setHiddenPolygonIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(key);
-        return newSet;
-      });
-    }
-  };
-
-  // Capture trackId at click so frame scrubbing re-attaches selection
-  // to the same MT instance on the new frame.
-  const handleSelectPolygon = useCallback(
-    (polygonId: string | null) => {
-      if (polygonId === null) {
-        setPersistedSelectionTrackId(null);
-      } else {
-        const p = editor.polygons.find(x => x.id === polygonId);
-        setPersistedSelectionTrackId(p?.trackId ?? null);
-      }
-      editor.handlePolygonSelection(polygonId);
-    },
-    [editor]
-  );
-
-  // Cross-frame selection remap. When polygons load for a new frame
-  // (initialPolygons replaces editor.polygons), find the polygon that
-  // shares the persisted trackId and re-select it. If no sibling exists
-  // on this frame (track wasn't matched here), selection is left null
-  // by the editor's own image-change reset and we don't fight it — but
-  // we log so a missing match is debuggable when a user reports
-  // "selection lost".
-  useEffect(() => {
-    if (!persistedSelectionTrackId) return;
-    const match = editor.polygons.find(
-      p => p.trackId === persistedSelectionTrackId
-    );
-    if (match) {
-      if (editor.selectedPolygonId !== match.id) {
-        editor.setSelectedPolygonId(match.id);
-      }
-    } else if (editor.polygons.length > 0) {
-      // Polygons loaded but no match — track is not present on this
-      // frame. Surface via debug log so support can correlate user
-      // reports; UI deliberately stays quiet (toast on every scrub past
-      // a gap would be obnoxious).
-      logger.debug('Selected MT track not present on current frame', {
-        trackId: persistedSelectionTrackId,
-        frameImageId: imageId,
-      });
-    }
-    // Intentionally narrow deps: passing the whole `editor` object
-    // would re-fire on every render of useEnhancedSegmentationEditor
-    // (cursor moves, hovers). The destructured fields capture
-    // exactly the state this effect needs to react to.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    editor.polygons,
-    persistedSelectionTrackId,
-    editor.selectedPolygonId,
-    editor.setSelectedPolygonId,
-    imageId,
-  ]);
-
-  // Context menu handlers for polygon right-click
-  const handleDeletePolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
-      const target = editor.polygons.find(p => p.id === polygonId);
-      editor.handleDeletePolygon(polygonId);
-      if (target) {
-        const key = polygonKey(target);
-        setHiddenPolygonIds(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(key);
-          return newSet;
-        });
-      }
-    },
-    [editor]
-  );
-
-  const handleSlicePolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
-      // Select the polygon and switch to slice mode (skip to step 2)
-      editor.setSelectedPolygonId(polygonId);
-      editor.setEditMode(EditMode.Slice);
-    },
-    [editor]
-  );
-
-  const handleEditPolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
-      // Select the polygon and switch to edit vertices mode
-      editor.setSelectedPolygonId(polygonId);
-      editor.setEditMode(EditMode.EditVertices);
-    },
-    [editor]
-  );
-
-  // Context menu handlers for vertex right-click
-  const handleDeleteVertexFromContextMenu = useCallback(
-    (polygonId: string, vertexIndex: number) => {
-      editor.handleDeleteVertex(polygonId, vertexIndex);
-    },
-    [editor]
-  );
+  // Polygon CRUD handlers + owned state (hiddenPolygonIds, hoveredPolygonId,
+  // persistedSelectionTrackId) + the MT cross-frame selection remap effect.
+  // Called BEFORE usePolygonRenderProps because that hook takes hiddenPolygonIds
+  // as a parameter.
+  const {
+    hiddenPolygonIds,
+    hoveredPolygonId,
+    setHoveredPolygonId,
+    handleTogglePolygonVisibility,
+    handleDeletePolygonFromPanel,
+    handleSelectPolygon,
+    handleDeletePolygonFromContextMenu,
+    handleSlicePolygonFromContextMenu,
+    handleEditPolygonFromContextMenu,
+    handleDeleteVertexFromContextMenu,
+    handleRenamePolygon,
+    handleChangeInstanceId,
+    handleChangePartClass,
+  } = usePolygonHandlers({ editor, imageId });
 
   // Check if any polylines exist to conditionally show SpermInstancePanel
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
@@ -1131,38 +971,45 @@ const SegmentationEditor = () => {
     activeInstanceId,
   });
 
-  // Generic handler for updating a single field on a polygon by ID
-  const handleUpdatePolygonField = useCallback(
-    (polygonId: string, updates: Partial<Polygon>) => {
-      const currentPolygons = editor.getPolygons();
-      const updatedPolygons = currentPolygons.map(p =>
-        p.id === polygonId ? { ...p, ...updates } : p
-      );
-      editor.updatePolygons(updatedPolygons);
-    },
-    // editor object reference is stable; tracking individual methods avoids
-    // re-creating this callback when unrelated editor state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor.getPolygons, editor.updatePolygons]
-  );
-
-  const handleRenamePolygon = useCallback(
-    (polygonId: string, name: string) =>
-      handleUpdatePolygonField(polygonId, { name }),
-    [handleUpdatePolygonField]
-  );
-
-  const handleChangeInstanceId = useCallback(
-    (polygonId: string, instanceId: string) =>
-      handleUpdatePolygonField(polygonId, { instanceId }),
-    [handleUpdatePolygonField]
-  );
-
-  const handleChangePartClass = useCallback(
-    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') =>
-      handleUpdatePolygonField(polygonId, { partClass }),
-    [handleUpdatePolygonField]
-  );
+  // Development-only debug logger: logs polygon rendering state.
+  // Moved here (after usePolygonHandlers) so hiddenPolygonIds is in scope.
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const filteredPolygons = editor.polygons.filter(
+      polygon => !hiddenPolygonIds.has(polygonKey(polygon))
+    );
+    logger.debug('🎨 Polygon rendering state:', {
+      totalPolygons: editor.polygons.length,
+      visiblePolygons: filteredPolygons.length,
+      hiddenCount: hiddenPolygonIds.size,
+      imageDimensions,
+      transform: editor.transform,
+      svgViewBox: `0 0 ${imageDimensions?.width || canvasWidth} ${imageDimensions?.height || canvasHeight}`,
+      firstPolygon: filteredPolygons[0]
+        ? {
+            id: filteredPolygons[0].id,
+            pointsCount: filteredPolygons[0].points?.length || 0,
+            samplePoints: filteredPolygons[0].points?.slice(0, 5),
+            bounds:
+              filteredPolygons[0].points?.length > 0
+                ? {
+                    minX: Math.min(...filteredPolygons[0].points.map(p => p.x)),
+                    maxX: Math.max(...filteredPolygons[0].points.map(p => p.x)),
+                    minY: Math.min(...filteredPolygons[0].points.map(p => p.y)),
+                    maxY: Math.max(...filteredPolygons[0].points.map(p => p.y)),
+                  }
+                : null,
+          }
+        : null,
+    });
+  }, [
+    editor.polygons,
+    hiddenPolygonIds,
+    imageDimensions,
+    canvasHeight,
+    canvasWidth,
+    editor.transform,
+  ]);
 
   // Re-run ML segmentation on the currently-open frame using the
   // user-selected model + threshold. Overwrites the existing
