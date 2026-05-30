@@ -10,6 +10,7 @@ import { batchProcessor } from '../utils/batchProcessor';
 import { SegmentationUpdateData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
 import { scheduleTrackingForContainer } from './tracking/trackerService';
+import type { KnownModelId } from '../constants/modelRegistry';
 
 export interface QueueStats {
   queued: number;
@@ -808,7 +809,7 @@ export class QueueService {
         const singleResult = await this.segmentationService.requestSegmentation(
           {
             imageId: firstItem.imageId,
-            model: model as 'hrnet' | 'resunet_advanced' | 'resunet_small',
+            model: model as KnownModelId,
             threshold: threshold,
             userId: firstItem.userId,
             detectHoles: firstItem.detectHoles ?? false,

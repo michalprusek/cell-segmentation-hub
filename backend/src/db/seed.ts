@@ -16,8 +16,6 @@ dotenv.config();
 // Segmentation models matching production configuration
 const SEGMENTATION_MODELS = {
   hrnet: { id: 'hrnet', name: 'HRNetV2' },
-  resunet_advanced: { id: 'resunet_advanced', name: 'ResUNet Advanced' },
-  resunet_small: { id: 'resunet_small', name: 'ResUNet Small' },
 };
 
 const prisma = new PrismaClient();
@@ -115,7 +113,7 @@ async function seedDatabase(): Promise<void> {
             create: {
               username: 'testuser',
               bio: 'Testovací uživatel',
-              preferredModel: 'resunet_advanced',
+              preferredModel: 'hrnet',
               modelThreshold: 0.6,
               preferredLang: 'cs',
               preferredTheme: 'dark',
@@ -142,7 +140,7 @@ async function seedDatabase(): Promise<void> {
             userId: existingTest.id,
             username: 'testuser',
             bio: 'Testovací uživatel',
-            preferredModel: 'resunet_advanced',
+            preferredModel: 'hrnet',
             modelThreshold: 0.6,
             preferredLang: 'cs',
             preferredTheme: 'dark',

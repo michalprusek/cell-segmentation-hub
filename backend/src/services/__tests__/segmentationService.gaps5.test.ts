@@ -498,7 +498,9 @@ describe('SegmentationService — getProjectSegmentationStats', () => {
 
     const stats = await svc.getProjectSegmentationStats('proj-1', 'user-1');
     expect(stats.models['hrnet']).toBe(2);
-    expect(stats.models['resunet_advanced']).toBe(1);
+    expect(
+        (stats.models as Record<string, number>)['resunet_advanced']
+      ).toBeUndefined();
     expect(stats.processedImages).toBe(3);
   });
 });

@@ -8,6 +8,10 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import type { JobStatus } from '../types';
 import {
+  SEGMENTATION_MODELS,
+  type KnownModelId,
+} from '../constants/modelRegistry';
+import {
   PolygonValidator,
   type PolygonPartClass,
 } from '../utils/polygonValidation';
@@ -123,16 +127,7 @@ export function parsePolygonsJsonForDiff(
 
 export interface SegmentationRequest {
   imageId: string;
-  model?:
-    | 'hrnet'
-    | 'cbam_resunet'
-    | 'unet_spherohq'
-    | 'unet_attention_aspp'
-    | 'resunet_advanced'
-    | 'resunet_small'
-    | 'sperm'
-    | 'wound'
-    | 'microtubule';
+  model?: KnownModelId;
   threshold?: number;
   userId: string;
   detectHoles?: boolean;
@@ -1761,7 +1756,7 @@ export class SegmentationService {
    */
   async batchProcess(
     imageIds: string[],
-    model: 'hrnet' | 'resunet_advanced' | 'resunet_small' = 'hrnet',
+    model: KnownModelId = 'hrnet',
     threshold = 0.5,
     userId: string,
     detectHoles?: boolean,
