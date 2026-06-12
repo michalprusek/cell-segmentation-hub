@@ -17,7 +17,7 @@ import {
   extractTiffStack,
 } from './pythonExtractor';
 import {
-  ExtractionResult,
+  ExtractionOutcome,
   ProgressCallback,
 } from './types';
 
@@ -46,7 +46,7 @@ export async function extractVideo(
   sourcePath: string,
   destDir: string,
   options: { onProgress?: ProgressCallback } = {}
-): Promise<ExtractionResult> {
+): Promise<ExtractionOutcome> {
   const kind = detectVideoKind(sourcePath);
   if (kind === null) {
     throw new Error(`Unsupported video format: ${path.extname(sourcePath)}`);
@@ -55,10 +55,14 @@ export async function extractVideo(
   await fs.mkdir(destDir, { recursive: true });
 
   switch (kind) {
+    // ffmpeg + TIFF always yield a single container's frames at
+    // <dest>/frames/...; only ND2 can fan out into multiple positions.
     case 'mp4-like':
-      return extractWithFfmpeg(sourcePath, destDir, options);
+      return { single: await extractWithFfmpeg(sourcePath, destDir, options) };
     case 'tiff-stack':
-      return extractTiffStack(sourcePath, destDir, options.onProgress);
+      return {
+        single: await extractTiffStack(sourcePath, destDir, options.onProgress),
+      };
     case 'nd2':
       return extractNd2(sourcePath, destDir, options.onProgress);
     default: {
@@ -75,7 +79,7 @@ export async function extractVideoSafe(
   sourcePath: string,
   destDir: string,
   options: { onProgress?: ProgressCallback } = {}
-): Promise<ExtractionResult> {
+): Promise<ExtractionOutcome> {
   try {
     return await extractVideo(sourcePath, destDir, options);
   } catch (err) {

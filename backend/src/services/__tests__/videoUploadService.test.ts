@@ -63,6 +63,7 @@ vi.mock('fs/promises', () => ({
     rm: fsRmMock,
     readdir: fsReaddirMock,
     copyFile: vi.fn(),
+    cp: vi.fn(),
     unlink: vi.fn(),
   },
   stat: fsStatMock,
@@ -71,6 +72,7 @@ vi.mock('fs/promises', () => ({
   rm: fsRmMock,
   readdir: fsReaddirMock,
   copyFile: vi.fn(),
+  cp: vi.fn(),
   unlink: vi.fn(),
 }));
 
@@ -121,11 +123,13 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
 
   it('happy path: creates container row, renames tmp, creates frame rows', async () => {
     extractMock.mockResolvedValue({
-      frameCount: 5,
-      durationMs: 5000,
-      channels: [{ name: 'irm', type: 'irm', isSegmentationSource: true }],
-      width: 128,
-      height: 96,
+      single: {
+        frameCount: 5,
+        durationMs: 5000,
+        channels: [{ name: 'irm', type: 'irm', isSegmentationSource: true }],
+        width: 128,
+        height: 96,
+      },
     });
 
     const result = await uploadVideoFromFile({
@@ -149,6 +153,65 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     expect(framesCall?.data?.[0]?.parentVideoId).toBe('container-1');
     // Container metadata is updated AFTER frames land.
     expect(prismaImageUpdate).toHaveBeenCalledOnce();
+  });
+
+  it('multi-position ND2: fans out into one container per XY position', async () => {
+    // Position 0 reuses the pre-created row; positions 1..N get fresh rows.
+    let nextId = 0;
+    prismaImageCreate.mockImplementation(() =>
+      Promise.resolve({ id: `container-${++nextId}` })
+    );
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+
+    const mkPos = (index: number, name: string | null) => ({
+      positionIndex: index,
+      positionName: name,
+      stageXUm: index,
+      stageYUm: -index,
+      framesSubdir: `pos_${String(index).padStart(4, '0')}`,
+      result: {
+        frameCount: 1,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [
+          { name: 'IRM', type: 'irm', isSegmentationSource: true },
+          { name: 'TIRF_488', type: 'fluorescent', isSegmentationSource: false },
+        ],
+        width: 2048,
+        height: 2048,
+      },
+    });
+    extractMock.mockResolvedValue({
+      positions: [
+        mkPos(0, 'D03_0000'),
+        mkPos(1, 'D03_0001'),
+        mkPos(2, 'D03_0002'),
+      ],
+    });
+
+    const result = await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'WellD03.nd2',
+      mimeType: 'image/nd2',
+      tempFilePath: '/tmp/multer/well.nd2',
+    });
+
+    // 3 positions → 3 containers (1 pre-created + 2 extra creates).
+    expect(result.positionCount).toBe(3);
+    expect(result.containerIds).toHaveLength(3);
+    expect(result.containerId).toBe('container-1');
+    expect(prismaImageCreate).toHaveBeenCalledTimes(3);
+    // Each position writes its own frame rows + container metadata update.
+    expect(prismaImageCreateMany).toHaveBeenCalledTimes(3);
+    // Position container names carry the metadata label.
+    const updateNames = prismaImageUpdate.mock.calls
+      .map(c => (c[0] as { data?: { name?: string } })?.data?.name)
+      .filter(Boolean);
+    expect(updateNames).toContain('WellD03.nd2 — D03_0000');
+    expect(updateNames).toContain('WellD03.nd2 — D03_0002');
+    // Frames are relocated per position: 1 original move + 3 frame moves.
+    expect(fsRenameMock).toHaveBeenCalledTimes(4);
   });
 
   it('rollback: when extractor throws, container is marked failed AND baseDir is removed', async () => {

@@ -57,6 +57,36 @@ export interface ExtractionResult {
   height: number;
 }
 
+/** One XY position split out of a multi-position ND2 (well-plate /
+ *  multipoint). Each becomes its own video container. */
+export interface ExtractedPosition {
+  /** 0-based position index within the source acquisition. */
+  positionIndex: number;
+  /** Label from the ND2 ``XYPosLoop`` metadata (e.g. ``"D03_0000"``), or
+   *  null when the acquisition left the point unnamed (caller falls back to
+   *  a 1-based ordinal). */
+  positionName: string | null;
+  /** Stage coordinates in µm when present — traceability back to the
+   *  microscope stage; not currently persisted, but carried for callers. */
+  stageXUm: number | null;
+  stageYUm: number | null;
+  /** Subdirectory under the extraction dest holding this position's frames:
+   *  ``<dest>/<framesSubdir>/frames/<TTTT>/<channel>.png``. */
+  framesSubdir: string;
+  /** This position's frame/channel/calibration metadata — identical in
+   *  shape to a single-position extraction. */
+  result: ExtractionResult;
+}
+
+/** What an extraction produced. Non-ND2 formats and single-position ND2
+ *  yield ``single`` (frames at ``<dest>/frames/...``). A multi-position ND2
+ *  yields ``positions`` — one entry per XY position, each destined for its
+ *  own container. Exactly one of the two fields is set. */
+export interface ExtractionOutcome {
+  single?: ExtractionResult;
+  positions?: ExtractedPosition[];
+}
+
 export interface ExtractionProgress {
   /** 0 to 1, monotonically increasing. */
   progress: number;

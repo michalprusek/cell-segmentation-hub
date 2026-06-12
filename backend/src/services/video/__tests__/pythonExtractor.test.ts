@@ -468,7 +468,13 @@ describe('pythonExtractor', () => {
       const fake = makeFakeChild();
       setupSpawn(fake);
       resolveWith(fake, [JSON.stringify(pyResult)]);
-      return extractNd2('/file.nd2', '/dest');
+      // Single-position ND2 → outcome.single. Unwrap so these field-surfacing
+      // assertions stay focused on the ExtractionResult shape.
+      const outcome = await extractNd2('/file.nd2', '/dest');
+      if (!outcome.single) {
+        throw new Error('expected a single-position extraction result');
+      }
+      return outcome.single;
     }
 
     it('surfaces frameCount, width, height', async () => {
@@ -496,6 +502,70 @@ describe('pythonExtractor', () => {
     it('normalises durationMs: numeric value passes through', async () => {
       const r = await runExtraction(makePythonResult({ durationMs: 1200 }));
       expect(r.durationMs).toBe(1200);
+    });
+  });
+
+  // ── Multi-position ND2 (well-plate / multipoint) ──────────────────────────
+
+  describe('multi-position ND2 mapping', () => {
+    it('maps a positions[] payload to outcome.positions with identity + result', async () => {
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+      const payload = {
+        positions: [
+          {
+            index: 0,
+            name: 'D03_0000',
+            stageXUm: 38443.6,
+            stageYUm: -14865.9,
+            framesSubdir: 'pos_0000',
+            frameCount: 1,
+            durationMs: null,
+            frameIntervalMs: null,
+            pixelSizeUm: 0.072,
+            width: 2048,
+            height: 2048,
+            channels: [
+              { name: 'IRM', displayName: 'IRM', wavelengthNm: 525 },
+              { name: 'TIRF_488', displayName: 'TIRF 488', wavelengthNm: 525 },
+            ],
+          },
+          {
+            index: 1,
+            name: null,
+            stageXUm: 100,
+            stageYUm: 200,
+            framesSubdir: 'pos_0001',
+            frameCount: 1,
+            durationMs: null,
+            frameIntervalMs: null,
+            pixelSizeUm: 0.072,
+            width: 2048,
+            height: 2048,
+            channels: [
+              { name: 'IRM', displayName: 'IRM', wavelengthNm: 525 },
+              { name: 'TIRF_488', displayName: 'TIRF 488', wavelengthNm: 525 },
+            ],
+          },
+        ],
+      };
+      resolveWith(fake, [JSON.stringify(payload)]);
+      const outcome = await extractNd2('/well.nd2', '/dest');
+
+      expect(outcome.single).toBeUndefined();
+      expect(outcome.positions).toHaveLength(2);
+      const [p0, p1] = outcome.positions!;
+      expect(p0.positionIndex).toBe(0);
+      expect(p0.positionName).toBe('D03_0000');
+      expect(p0.framesSubdir).toBe('pos_0000');
+      expect(p0.stageXUm).toBe(38443.6);
+      // IRM auto-detected as the segmentation source within each position.
+      expect(p0.result.channels.find(c => c.isSegmentationSource)?.name).toBe(
+        'IRM'
+      );
+      expect(p0.result.frameCount).toBe(1);
+      // Unnamed point → positionName null (caller falls back to ordinal).
+      expect(p1.positionName).toBeNull();
     });
   });
 });

@@ -16,6 +16,8 @@ import { logger } from '../../utils/logger';
 import {
   ChannelMeta,
   defaultColorForWavelength,
+  ExtractedPosition,
+  ExtractionOutcome,
   ExtractionResult,
   isIrmChannel,
   ProgressCallback,
@@ -44,15 +46,30 @@ interface PythonResult {
   }>;
 }
 
-async function runHelper(
+/** One position entry in a multi-position ND2 result: a single-position
+ *  result plus position identity + the frames subdir it was written to. */
+interface PythonPosition extends PythonResult {
+  index: number;
+  name: string | null;
+  stageXUm: number | null;
+  stageYUm: number | null;
+  framesSubdir: string;
+}
+
+/** ``extract_nd2.py`` prints either a single result or, for multi-position
+ *  files, ``{ positions: [...] }``. The discriminant is the ``positions``
+ *  key. */
+type PythonNd2Result = PythonResult | { positions: PythonPosition[] };
+
+async function runHelper<T = PythonResult>(
   scriptName: string,
   args: readonly string[],
   onProgress?: ProgressCallback
-): Promise<PythonResult> {
+): Promise<T> {
   const interpreter = process.env.PYTHON_BIN || 'python3';
   const scriptPath = path.join(HELPERS_DIR, scriptName);
 
-  return new Promise<PythonResult>((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     const child = spawn(interpreter, [scriptPath, ...args]);
     let stdout = '';
     let stderr = '';
@@ -174,29 +191,59 @@ export async function extractTiffStack(
   };
 }
 
+/** Map a single Python result object to an ExtractionResult (builds channel
+ *  metadata + IRM source detection). Shared by the single and per-position
+ *  ND2 branches. */
+function toExtractionResult(r: PythonResult): ExtractionResult {
+  return {
+    frameCount: r.frameCount,
+    durationMs: r.durationMs ?? null,
+    frameIntervalMs: r.frameIntervalMs,
+    pixelSizeUm: r.pixelSizeUm,
+    channels: buildChannelMeta(r.channels, true),
+    width: r.width,
+    height: r.height,
+  };
+}
+
 export async function extractNd2(
   sourcePath: string,
   destDir: string,
   onProgress?: ProgressCallback
-): Promise<ExtractionResult> {
-  const result = await runHelper(
+): Promise<ExtractionOutcome> {
+  const raw = await runHelper<PythonNd2Result>(
     'extract_nd2.py',
     [sourcePath, destDir],
     onProgress
   );
-  const channels = buildChannelMeta(result.channels, true);
+
+  // Multi-position (well-plate / multipoint): one container per XY position.
+  // The `positions` key is the discriminant; presence alone narrows the
+  // union (the type guarantees it's an array).
+  if ('positions' in raw) {
+    const positions: ExtractedPosition[] = raw.positions.map(p => ({
+      positionIndex: p.index,
+      positionName: p.name ?? null,
+      stageXUm: p.stageXUm ?? null,
+      stageYUm: p.stageYUm ?? null,
+      framesSubdir: p.framesSubdir,
+      result: toExtractionResult(p),
+    }));
+    logger.info('Multi-position ND2 extracted', 'VideoExtractor', {
+      sourcePath,
+      positions: positions.length,
+      framesEach: positions[0]?.result.frameCount,
+      channels: positions[0]?.result.channels.length,
+    });
+    return { positions };
+  }
+
+  // Single-position (historical path) — frames at <dest>/frames/...
+  const result = toExtractionResult(raw);
   logger.info('ND2 file extracted', 'VideoExtractor', {
     sourcePath,
     frames: result.frameCount,
-    channels: channels.length,
+    channels: result.channels.length,
   });
-  return {
-    frameCount: result.frameCount,
-    durationMs: result.durationMs ?? null,
-    frameIntervalMs: result.frameIntervalMs,
-    pixelSizeUm: result.pixelSizeUm,
-    channels,
-    width: result.width,
-    height: result.height,
-  };
+  return { single: result };
 }
