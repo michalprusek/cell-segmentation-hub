@@ -36,6 +36,7 @@ import sharp from 'sharp';
 import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
+import { assertSafeStorageSegment } from '../utils/storagePath';
 import { extractVideoSafe } from './video/videoExtractor';
 import type {
   ChannelMeta,
@@ -75,7 +76,12 @@ function videoContainerStorageKey(
   projectId: string,
   containerId: string
 ): string {
-  return path.posix.join('projects', projectId, 'images', containerId);
+  return path.posix.join(
+    'projects',
+    assertSafeStorageSegment(projectId, 'projectId'),
+    'images',
+    assertSafeStorageSegment(containerId, 'containerId')
+  );
 }
 
 /** Absolute filesystem path for the container directory — UPLOAD_DIR
@@ -85,9 +91,9 @@ function videoContainerDir(projectId: string, containerId: string): string {
   return path.join(
     config.UPLOAD_DIR,
     'projects',
-    projectId,
+    assertSafeStorageSegment(projectId, 'projectId'),
     'images',
-    containerId
+    assertSafeStorageSegment(containerId, 'containerId')
   );
 }
 
@@ -105,7 +111,7 @@ function frameStorageKey(
     videoContainerStorageKey(projectId, containerId),
     'frames',
     String(frameIndex).padStart(4, '0'),
-    `${channelName}.png`
+    `${assertSafeStorageSegment(channelName, 'channel')}.png`
   );
 }
 
@@ -165,7 +171,9 @@ async function moveFile(srcPath: string, destPath: string): Promise<void> {
     return;
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
-    if (e.code !== 'EXDEV') throw err;
+    if (e.code !== 'EXDEV') {
+      throw err;
+    }
     await fs.copyFile(srcPath, destPath);
     await fs.unlink(srcPath).catch(() => undefined);
   }
@@ -180,7 +188,9 @@ async function moveDir(srcDir: string, destDir: string): Promise<void> {
     return;
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
-    if (e.code !== 'EXDEV') throw err;
+    if (e.code !== 'EXDEV') {
+      throw err;
+    }
     await fs.cp(srcDir, destDir, { recursive: true });
     await fs.rm(srcDir, { recursive: true, force: true }).catch(() => undefined);
   }
@@ -212,10 +222,14 @@ async function finalizeContainer(params: {
 }): Promise<void> {
   const { containerId, baseDir, projectId, displayName, result } = params;
 
-  const defaultChannel =
+  // Channel names originate in source metadata (ND2/OME-TIFF); guard before
+  // they reach the thumbnail read-path and the frame storage keys.
+  const defaultChannel = assertSafeStorageSegment(
     result.channels.find(c => c.isSegmentationSource)?.name ??
-    result.channels[0]?.name ??
-    'video';
+      result.channels[0]?.name ??
+      'video',
+    'channel'
+  );
 
   const thumbnailPath = path.join(baseDir, 'thumbnail.jpg');
   await generateContainerThumbnail(
@@ -306,7 +320,7 @@ export async function uploadVideoFromFile(options: {
     phase: VideoUploadProgressEvent['phase'],
     progress: number,
     message?: string
-  ) => {
+  ): void => {
     onProgress?.({
       videoContainerId: containerId,
       filename: originalName,
@@ -338,8 +352,14 @@ export async function uploadVideoFromFile(options: {
     // 2. Move multer's temp file into the canonical location.
     reportProgress('saving', 0.05, 'Persisting original');
     await fs.mkdir(baseDir, { recursive: true });
+    // ``ext`` comes from the user-supplied filename — guard the canonical
+    // ``original.<ext>`` leaf name once and reuse it everywhere below.
     const ext = path.extname(originalName) || '.bin';
-    const originalPath = path.join(baseDir, `original${ext}`);
+    const originalFileName = assertSafeStorageSegment(
+      `original${ext}`,
+      'original file'
+    );
+    const originalPath = path.join(baseDir, originalFileName);
     await moveFile(tempFilePath, originalPath);
 
     // Storage key of the moved source file. Used as-is for an ordinary
@@ -347,7 +367,7 @@ export async function uploadVideoFromFile(options: {
     // container its own per-position TIFF and deletes this source afterward.
     const sourceOriginalKey = path.posix.join(
       videoContainerStorageKey(projectId, containerId),
-      `original${ext}`
+      originalFileName
     );
 
     // 3. Run the extractor end-to-end.
@@ -409,6 +429,17 @@ export async function uploadVideoFromFile(options: {
     for (let i = 0; i < positions.length; i++) {
       const pos = positions[i];
       const label = positionLabel(pos);
+      // The extractor names these (``pos_%04d`` / ``original.tif``), but guard
+      // before they enter filesystem paths so a future extractor change can't
+      // silently introduce traversal.
+      const framesSubdir = assertSafeStorageSegment(
+        pos.framesSubdir,
+        'framesSubdir'
+      );
+      const originalFile = assertSafeStorageSegment(
+        pos.originalFile,
+        'originalFile'
+      );
 
       let cid: string;
       let cBaseDir: string;
@@ -437,10 +468,10 @@ export async function uploadVideoFromFile(options: {
       // Relocate this position's frames + its single-position TIFF original
       // into the container dir, then drop the now-empty pos_<NNNN> staging
       // subdir.
-      const stagingDir = path.join(baseDir, pos.framesSubdir);
+      const stagingDir = path.join(baseDir, framesSubdir);
       await moveDir(path.join(stagingDir, 'frames'), path.join(cBaseDir, 'frames'));
-      const originalDest = path.join(cBaseDir, pos.originalFile);
-      await moveFile(path.join(stagingDir, pos.originalFile), originalDest);
+      const originalDest = path.join(cBaseDir, originalFile);
+      await moveFile(path.join(stagingDir, originalFile), originalDest);
       await fs
         .rm(stagingDir, { recursive: true, force: true })
         .catch(() => undefined);
@@ -454,7 +485,7 @@ export async function uploadVideoFromFile(options: {
         result: pos.result,
         originalStorageKey: path.posix.join(
           videoContainerStorageKey(projectId, cid),
-          pos.originalFile
+          originalFile
         ),
         fileSize: Number(originalStat.size),
         mimeType: 'image/tiff',
@@ -469,10 +500,9 @@ export async function uploadVideoFromFile(options: {
 
     // The multi-position source ND2 has been fully split into per-position
     // frames + TIFF originals; drop it so it isn't counted/served as position
-    // 0's original (its key now points at position 0's TIFF).
-    await fs
-      .rm(path.join(baseDir, `original${ext}`), { force: true })
-      .catch(() => undefined);
+    // 0's original (its key now points at position 0's TIFF). ``originalPath``
+    // is the same join computed when the source was first persisted.
+    await fs.rm(originalPath, { force: true }).catch(() => undefined);
 
     reportProgress('completed', 1.0, 'Video ready');
     logger.info('Multi-position video upload complete', 'VideoUploadService', {
