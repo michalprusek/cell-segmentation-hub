@@ -200,9 +200,15 @@ async function finalizeContainer(params: {
   projectId: string;
   displayName: string;
   result: ExtractionResult;
-  /** Storage key of the shared original file (under position 0's dir for a
-   *  multi-position upload, or this container's own dir otherwise). */
+  /** Storage key of this container's original file. Each container owns its
+   *  original (a single-position TIFF for split positions, or the source
+   *  file for an ordinary single-position upload). */
   originalStorageKey: string;
+  /** When set, overwrite the container's fileSize/mimeType — used by the
+   *  multi-position path where each container's real original is its own
+   *  per-position TIFF, not the create-time source file. */
+  fileSize?: number;
+  mimeType?: string;
 }): Promise<void> {
   const { containerId, baseDir, projectId, displayName, result } = params;
 
@@ -254,6 +260,8 @@ async function finalizeContainer(params: {
       frameIntervalMs: result.frameIntervalMs ?? null,
       channels: result.channels as unknown as object,
       segmentationStatus: 'no_segmentation',
+      ...(params.fileSize !== undefined ? { fileSize: params.fileSize } : {}),
+      ...(params.mimeType !== undefined ? { mimeType: params.mimeType } : {}),
     },
   });
 }
@@ -334,9 +342,10 @@ export async function uploadVideoFromFile(options: {
     const originalPath = path.join(baseDir, `original${ext}`);
     await moveFile(tempFilePath, originalPath);
 
-    // The original file is stored once under position 0's dir; every
-    // container (including extra positions) references it from there.
-    const sharedOriginalKey = path.posix.join(
+    // Storage key of the moved source file. Used as-is for an ordinary
+    // single-position upload; the multi-position path instead gives each
+    // container its own per-position TIFF and deletes this source afterward.
+    const sourceOriginalKey = path.posix.join(
       videoContainerStorageKey(projectId, containerId),
       `original${ext}`
     );
@@ -361,7 +370,7 @@ export async function uploadVideoFromFile(options: {
         projectId,
         displayName: originalName,
         result: outcome.result,
-        originalStorageKey: sharedOriginalKey,
+        originalStorageKey: sourceOriginalKey,
       });
 
       reportProgress('completed', 1.0, 'Video ready');
@@ -381,10 +390,14 @@ export async function uploadVideoFromFile(options: {
       };
     }
 
-    // 4b. Multi-position ND2: one container per XY position. Position 0
-    // reuses the pre-created container; the rest get fresh rows. Frames the
-    // extractor wrote to <baseDir>/<framesSubdir>/frames are relocated into
-    // each container's own frames dir.
+    // 4b. Multi-position ND2: one container per XY position, each fully
+    // self-contained. Position 0 reuses the pre-created container; the rest
+    // get fresh rows. For every position the extractor wrote a frames subtree
+    // AND a single-position OME-TIFF original under <baseDir>/<framesSubdir>/;
+    // both are relocated into the container's own dir so each container owns
+    // its original (the metrics reader can't index the multi-position source
+    // ND2 by position, and a shared original would dangle when any one
+    // position is deleted).
     const positions = [...outcome.positions].sort(
       (a, b) => a.positionIndex - b.positionIndex
     );
@@ -395,6 +408,7 @@ export async function uploadVideoFromFile(options: {
     reportProgress('persisting', 0.85, 'Persisting positions');
     for (let i = 0; i < positions.length; i++) {
       const pos = positions[i];
+      const label = positionLabel(pos);
 
       let cid: string;
       let cBaseDir: string;
@@ -404,16 +418,12 @@ export async function uploadVideoFromFile(options: {
       } else {
         const extra = await prisma.image.create({
           data: {
-            name: `${originalName} — ${positionLabel(pos)}`,
+            name: `${originalName} — ${label}`,
             originalPath: '',
             thumbnailPath: null,
             projectId,
-            // Only position 0 holds the physical original on disk; extra
-            // positions share it, so they contribute 0 bytes. Counting the
-            // full file size on every position would N×-overcount the user's
-            // storage quota (a 800 MB / 8-position ND2 would read as 6.4 GB).
-            fileSize: 0,
-            mimeType,
+            fileSize: 0, // overwritten in finalizeContainer with the TIFF size
+            mimeType: 'image/tiff',
             segmentationStatus: 'pending_extraction',
             isVideoContainer: true,
           },
@@ -424,26 +434,30 @@ export async function uploadVideoFromFile(options: {
         await fs.mkdir(cBaseDir, { recursive: true });
       }
 
-      // Relocate this position's frames into the container's frames dir,
-      // then drop the now-empty pos_<NNNN> staging subdir.
-      await moveDir(
-        path.join(baseDir, pos.framesSubdir, 'frames'),
-        path.join(cBaseDir, 'frames')
-      );
+      // Relocate this position's frames + its single-position TIFF original
+      // into the container dir, then drop the now-empty pos_<NNNN> staging
+      // subdir.
+      const stagingDir = path.join(baseDir, pos.framesSubdir);
+      await moveDir(path.join(stagingDir, 'frames'), path.join(cBaseDir, 'frames'));
+      const originalDest = path.join(cBaseDir, pos.originalFile);
+      await moveFile(path.join(stagingDir, pos.originalFile), originalDest);
       await fs
-        .rm(path.join(baseDir, pos.framesSubdir), {
-          recursive: true,
-          force: true,
-        })
+        .rm(stagingDir, { recursive: true, force: true })
         .catch(() => undefined);
 
+      const originalStat = await fs.stat(originalDest);
       await finalizeContainer({
         containerId: cid,
         baseDir: cBaseDir,
         projectId,
-        displayName: `${originalName} — ${positionLabel(pos)}`,
+        displayName: `${originalName} — ${label}`,
         result: pos.result,
-        originalStorageKey: sharedOriginalKey,
+        originalStorageKey: path.posix.join(
+          videoContainerStorageKey(projectId, cid),
+          pos.originalFile
+        ),
+        fileSize: Number(originalStat.size),
+        mimeType: 'image/tiff',
       });
 
       reportProgress(
@@ -452,6 +466,13 @@ export async function uploadVideoFromFile(options: {
         `Position ${i + 1}/${positions.length}`
       );
     }
+
+    // The multi-position source ND2 has been fully split into per-position
+    // frames + TIFF originals; drop it so it isn't counted/served as position
+    // 0's original (its key now points at position 0's TIFF).
+    await fs
+      .rm(path.join(baseDir, `original${ext}`), { force: true })
+      .catch(() => undefined);
 
     reportProgress('completed', 1.0, 'Video ready');
     logger.info('Multi-position video upload complete', 'VideoUploadService', {

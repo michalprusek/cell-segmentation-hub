@@ -174,6 +174,7 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
       stageXUm: index,
       stageYUm: -index,
       framesSubdir: `pos_${String(index).padStart(4, '0')}`,
+      originalFile: 'original.tif',
       result: {
         frameCount: 1,
         durationMs: null,
@@ -216,19 +217,23 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
       .filter(Boolean);
     expect(updateNames).toContain('WellD03.nd2 — D03_0000');
     expect(updateNames).toContain('WellD03.nd2 — D03_0002');
-    // Frames are relocated per position: 1 original move + 3 frame moves.
-    expect(fsRenameMock).toHaveBeenCalledTimes(4);
-    // All positions share ONE original.nd2 under position 0's (container-1)
-    // dir — the efficiency invariant: the source is never copied N times.
+    // Moves: 1 source temp→original, then per position a frames-dir move +
+    // a per-position TIFF move = 1 + 3*2 = 7.
+    expect(fsRenameMock).toHaveBeenCalledTimes(7);
+    // Each container owns its OWN single-position TIFF original (self-
+    // contained — no shared/dangling original across positions).
     const originalPaths = prismaImageUpdate.mock.calls
       .map(c => (c[0] as { data?: { originalPath?: string } })?.data?.originalPath)
-      .filter(Boolean);
-    expect(originalPaths).toHaveLength(3);
-    expect(
-      originalPaths.every(
-        p => p === 'projects/proj-1/images/container-1/original.nd2'
-      )
-    ).toBe(true);
+      .filter(Boolean)
+      .sort();
+    expect(originalPaths).toEqual([
+      'projects/proj-1/images/container-1/original.tif',
+      'projects/proj-1/images/container-2/original.tif',
+      'projects/proj-1/images/container-3/original.tif',
+    ]);
+    // The multi-position source ND2 is deleted after the split.
+    const rmTargets = fsRmMock.mock.calls.map(c => String(c[0]));
+    expect(rmTargets.some(p => p.endsWith('original.nd2'))).toBe(true);
   });
 
   it('multi-position partial failure: rolls back ALL created containers (no orphan frame rows)', async () => {
@@ -244,6 +249,7 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
       stageXUm: null,
       stageYUm: null,
       framesSubdir: `pos_${String(index).padStart(4, '0')}`,
+      originalFile: 'original.tif',
       result: {
         frameCount: 1,
         durationMs: null,

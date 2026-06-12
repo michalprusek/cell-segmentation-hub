@@ -363,6 +363,27 @@ def _position_interval_ms(
     return _median_interval_ms([timestamps_s[i] for i in idx])
 
 
+def _save_position_tiff(arr_tcyx: np.ndarray, path: Path) -> None:
+    """Write one position's normalized ``(T, C, Y, X)`` array as a
+    self-contained single-position OME-TIFF (16-bit preserved, zlib-
+    compressed).
+
+    This is the per-position *original* that downstream readers (the MT
+    metrics ML endpoint) load instead of the multi-position source ND2 —
+    which they can't index by position and would mis-read or crash on. The
+    canonical ``TCYX`` axes tag is what ``_normalize_axes_tiff`` keys on, so
+    each position round-trips back to exactly its own ``(T, C, Y, X)``.
+    """
+    import tifffile
+    tifffile.imwrite(
+        str(path),
+        arr_tcyx,
+        ome=True,
+        metadata={"axes": "TCYX"},
+        compression="zlib",
+    )
+
+
 def _write_frames(arr_tcyx: np.ndarray, frames_root: Path, channel_names: list[str],
                   on_frame=None) -> None:
     """Write one PNG per (frame, channel) under ``frames_root/<TTTT>/``.
@@ -516,6 +537,10 @@ def main() -> int:
             _write_frames(norm, dest / subdir / "frames", channel_names,
                           on_frame=_tick)
 
+            # Per-position single-position original the metrics reader can load
+            # (the multi-position source ND2 can't be indexed by position).
+            _save_position_tiff(norm, dest / subdir / "original.tif")
+
             frame_interval_ms = _position_interval_ms(
                 timestamps, p, t_count, p_count, time_outer
             )
@@ -531,6 +556,7 @@ def main() -> int:
                 "stageXUm": pos_meta[p]["stageXUm"],
                 "stageYUm": pos_meta[p]["stageYUm"],
                 "framesSubdir": subdir,
+                "originalFile": "original.tif",
                 "frameCount": int(T),
                 "durationMs": duration_ms,
                 "frameIntervalMs": frame_interval_ms,

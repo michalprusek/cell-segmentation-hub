@@ -54,6 +54,7 @@ interface PythonPosition extends PythonResult {
   stageXUm: number | null;
   stageYUm: number | null;
   framesSubdir: string;
+  originalFile: string;
 }
 
 /** ``extract_nd2.py`` prints either a single result or, for multi-position
@@ -227,6 +228,7 @@ export async function extractNd2(
       stageXUm: p.stageXUm ?? null,
       stageYUm: p.stageYUm ?? null,
       framesSubdir: p.framesSubdir,
+      originalFile: p.originalFile,
       result: toExtractionResult(p),
     }));
     logger.info('Multi-position ND2 extracted', 'VideoExtractor', {

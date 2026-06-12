@@ -73,6 +73,11 @@ export interface ExtractedPosition {
   /** Subdirectory under the extraction dest holding this position's frames:
    *  ``<dest>/<framesSubdir>/frames/<TTTT>/<channel>.png``. */
   framesSubdir: string;
+  /** Filename (inside ``framesSubdir``) of this position's self-contained
+   *  single-position original — a 16-bit ``TCYX`` OME-TIFF the metrics
+   *  reader can load (the multi-position source ND2 can't be indexed by
+   *  position). Relocated alongside the frames into the container dir. */
+  originalFile: string;
   /** This position's frame/channel/calibration metadata — identical in
    *  shape to a single-position extraction. */
   result: ExtractionResult;
