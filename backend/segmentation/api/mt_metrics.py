@@ -175,6 +175,21 @@ def _normalize_axes_nd2(arr: np.ndarray, axes: str) -> np.ndarray:
         return arr[:, None, :, :]
     if axes == "YX" and arr.ndim == 2:
         return arr[None, None, :, :]
+    # A position (P) / series (S) loop axis means a multi-position file.
+    # Uploads split these into per-position single-position TIFF originals
+    # (see videoUploadService), so a multi-position file should never reach
+    # here. Reject clearly rather than letting the transpose below fail with
+    # a raw ValueError if one ever does.
+    for loop_axis in ("P", "S"):
+        if loop_axis in axes and arr.shape[axes.index(loop_axis)] > 1:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Multi-position ND2 ('{loop_axis}' axis) is not a single "
+                    f"video; metrics read per-position originals, not the "
+                    f"source file. axes='{axes}' shape={arr.shape}"
+                ),
+            )
     # Try a generic transpose for any other order that contains TCYX.
     target = "TCYX"
     if all(ax in axes for ax in target):
@@ -204,6 +219,15 @@ def _normalize_axes_tiff(arr: np.ndarray, axes: str) -> np.ndarray:
         return arr.transpose(3, 0, 1, 2)
     if axes == "TYX" and arr.ndim == 3:
         return arr[:, None, :, :]
+    # Single timepoint, multiple channels. A T=1 TCYX TIFF round-trips with
+    # the singleton T squeezed to CYX (e.g. per-position originals split from
+    # a snapshot multipoint ND2). This MUST be matched before the
+    # "leading axis is time" heuristic below, which would otherwise read the
+    # C channels as T timepoints.
+    if axes == "CYX" and arr.ndim == 3:
+        return arr[None, :, :, :]
+    if axes == "YX" and arr.ndim == 2:
+        return arr[None, None, :, :]
     if arr.ndim == 3 and arr.shape[0] > 1 and arr.shape[-1] not in (3, 4):
         # Heuristic: leading axis is time, single channel (matches the
         # fallback in extract_tiff_stack.py).

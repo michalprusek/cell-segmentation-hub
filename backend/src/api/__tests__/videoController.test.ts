@@ -165,6 +165,8 @@ const MOCK_UPLOAD_RESULT = {
   containerId: 'video-1',
   frameCount: 5,
   channels: [{ name: 'BF', isSegmentationSource: true }],
+  positionCount: 1,
+  containerIds: ['video-1'],
 };
 
 // ---------------------------------------------------------------------------
