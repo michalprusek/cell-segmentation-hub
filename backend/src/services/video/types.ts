@@ -57,6 +57,45 @@ export interface ExtractionResult {
   height: number;
 }
 
+/** One XY position split out of a multi-position ND2 (well-plate /
+ *  multipoint). Each becomes its own video container. */
+export interface ExtractedPosition {
+  /** 0-based position index within the source acquisition. */
+  positionIndex: number;
+  /** Label from the ND2 ``XYPosLoop`` metadata (e.g. ``"D03_0000"``), or
+   *  null when the acquisition left the point unnamed (caller falls back to
+   *  a 1-based ordinal). */
+  positionName: string | null;
+  /** Stage coordinates in µm when present — traceability back to the
+   *  microscope stage; not currently persisted, but carried for callers. */
+  stageXUm: number | null;
+  stageYUm: number | null;
+  /** Subdirectory under the extraction dest holding this position's frames:
+   *  ``<dest>/<framesSubdir>/frames/<TTTT>/<channel>.png``. */
+  framesSubdir: string;
+  /** Filename (inside ``framesSubdir``) of this position's self-contained
+   *  single-position original — a 16-bit ``TCYX`` OME-TIFF the metrics
+   *  reader can load (the multi-position source ND2 can't be indexed by
+   *  position). Relocated alongside the frames into the container dir. */
+  originalFile: string;
+  /** This position's frame/channel/calibration metadata — identical in
+   *  shape to a single-position extraction. */
+  result: ExtractionResult;
+}
+
+/** What an extraction produced — a discriminated union so the
+ *  "single vs multi" choice is a compile-time tag, not a documented
+ *  convention.
+ *
+ *  - ``single``: non-ND2 formats and single-position ND2; frames at
+ *    ``<dest>/frames/...``.
+ *  - ``multi``: a multi-position ND2 — one ``ExtractedPosition`` per XY
+ *    position (non-empty by construction), each destined for its own
+ *    container. */
+export type ExtractionOutcome =
+  | { kind: 'single'; result: ExtractionResult }
+  | { kind: 'multi'; positions: ExtractedPosition[] };
+
 export interface ExtractionProgress {
   /** 0 to 1, monotonically increasing. */
   progress: number;

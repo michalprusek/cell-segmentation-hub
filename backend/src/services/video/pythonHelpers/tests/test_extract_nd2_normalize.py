@@ -34,7 +34,13 @@ HERE = os.path.dirname(__file__)
 HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
-from extract_nd2 import normalize_to_tcyx, UnsupportedND2  # noqa: E402
+from extract_nd2 import (  # noqa: E402
+    _position_interval_ms,
+    normalize_to_tcyx,
+    position_axis,
+    select_position,
+    UnsupportedND2,
+)
 
 
 def _mk(shape):
@@ -81,9 +87,98 @@ def test_singleton_z_squeezed():
     assert normalize_to_tcyx(_mk((2, 1, 2, 4, 5)), "TZCYX").shape == (2, 2, 4, 5)
 
 
-def test_multiposition_rejected():
+def test_multiposition_rejected_by_normalize():
+    # normalize_to_tcyx is the single-position normalizer; an unsplit P>1
+    # array is a programming error and must still be rejected (callers split
+    # with select_position first).
     _expect_unsupported("PTCYX", (3, 2, 4, 5))
     _expect_unsupported("PCYX", (4, 3, 4, 5))
+
+
+def test_position_axis_detection():
+    assert position_axis("PTCYX") == "P"
+    assert position_axis("TCYX") is None
+    assert position_axis("SCYX") == "S"  # series/scene fallback
+    assert position_axis("TPCYX") == "P"  # P preferred over a later axis
+
+
+def test_select_position_slices_p_axis():
+    # PTCYX, P=3 → each selection drops P and yields a TCYX single position.
+    arr = _mk((3, 2, 4, 5, 6))  # P T C Y X
+    sub, sub_axes = select_position(arr, "PTCYX", 1)
+    assert sub_axes == "TCYX"
+    assert sub.shape == (2, 4, 5, 6)
+    # The slice must equal direct numpy indexing on the P axis.
+    assert np.array_equal(sub, arr[1])
+    # And normalizing the slice gives canonical TCYX unchanged.
+    assert normalize_to_tcyx(sub, sub_axes).shape == (2, 4, 5, 6)
+
+
+def test_select_position_snapshot_no_time_axis():
+    # WellD03 shape: PCYX (no T) → each position is a single multi-channel
+    # frame; normalize then inserts the missing T as length-1.
+    arr = _mk((3, 2, 8, 8))  # P C Y X
+    sub, sub_axes = select_position(arr, "PCYX", 2)
+    assert sub_axes == "CYX"
+    assert sub.shape == (2, 8, 8)
+    assert normalize_to_tcyx(sub, sub_axes).shape == (1, 2, 8, 8)
+
+
+def test_select_position_p_in_middle():
+    # TPCYX (T outer, P inner is a common NIS layout) — P is axis 1.
+    arr = _mk((4, 3, 2, 5, 6))  # T P C Y X
+    sub, sub_axes = select_position(arr, "TPCYX", 0)
+    assert sub_axes == "TCYX"
+    assert sub.shape == (4, 2, 5, 6)
+    assert np.array_equal(sub, arr[:, 0])
+
+
+def test_select_position_out_of_range_rejected():
+    arr = _mk((3, 2, 4, 5))  # PCYX, P=3
+    for bad in (-1, 3, 99):
+        try:
+            select_position(arr, "PCYX", bad)
+        except UnsupportedND2:
+            continue
+        raise AssertionError(f"expected UnsupportedND2 for position {bad}")
+
+
+def test_select_position_no_position_axis_rejected():
+    arr = _mk((2, 3, 4, 5))  # TCYX — nothing to select
+    try:
+        select_position(arr, "TCYX", 0)
+    except UnsupportedND2:
+        return
+    raise AssertionError("expected UnsupportedND2 when no P/S axis present")
+
+
+def test_position_interval_t_outer_vs_p_outer():
+    # T=3, P=2. A position's frame interval must be recovered from ITS OWN
+    # timestamps, picked out of the flat T*P event list by loop-nesting order.
+    # A transposed index formula would silently mis-assign intervals.
+    #
+    # T-outer (time loop outermost): flat order t*P+p →
+    #   [t0p0, t0p1, t1p0, t1p1, t2p0, t2p1]
+    ts_t_outer = [0.0, 100.0, 1.0, 101.0, 2.0, 102.0]
+    # position 0 frames at indices 0,2,4 → values 0,1,2 → 1000 ms median Δ
+    assert _position_interval_ms(ts_t_outer, 0, 3, 2, True) == 1000.0
+    # position 1 frames at indices 1,3,5 → values 100,101,102 → 1000 ms
+    assert _position_interval_ms(ts_t_outer, 1, 3, 2, True) == 1000.0
+
+    # P-outer (position loop outermost): flat order p*T+t →
+    #   [p0t0, p0t1, p0t2, p1t0, p1t1, p1t2]
+    ts_p_outer = [0.0, 1.0, 2.0, 50.0, 51.0, 52.0]
+    assert _position_interval_ms(ts_p_outer, 0, 3, 2, False) == 1000.0
+    assert _position_interval_ms(ts_p_outer, 1, 3, 2, False) == 1000.0
+
+
+def test_position_interval_guards_return_none():
+    # t_count < 2 → no interval to compute.
+    assert _position_interval_ms([0.0, 1.0], 0, 1, 2, True) is None
+    # time_outer unknown → refuse to guess the nesting.
+    assert _position_interval_ms([0.0, 1.0], 0, 3, 2, None) is None
+    # event count != T*P → partial/unexpected list, don't guess.
+    assert _position_interval_ms([0.0, 1.0, 2.0], 0, 3, 2, True) is None
 
 
 def test_missing_yx_rejected():
