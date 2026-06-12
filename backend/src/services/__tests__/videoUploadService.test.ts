@@ -23,6 +23,7 @@ const {
   prismaImageCreate,
   prismaImageUpdate,
   prismaImageCreateMany,
+  prismaImageDeleteMany,
   extractMock,
   fsStatMock,
   fsMkdirMock,
@@ -35,6 +36,7 @@ const {
   prismaImageCreate: vi.fn(),
   prismaImageUpdate: vi.fn(),
   prismaImageCreateMany: vi.fn(),
+  prismaImageDeleteMany: vi.fn(),
   extractMock: vi.fn(),
   fsStatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock('../../db/prismaClient', () => ({
       create: prismaImageCreate,
       update: prismaImageUpdate,
       createMany: prismaImageCreateMany,
+      deleteMany: prismaImageDeleteMany,
     },
   },
 }));
@@ -119,11 +122,13 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     prismaImageCreate.mockResolvedValue({ id: 'container-1' });
     prismaImageUpdate.mockResolvedValue({});
     prismaImageCreateMany.mockResolvedValue({ count: 5 });
+    prismaImageDeleteMany.mockResolvedValue({ count: 0 });
   });
 
   it('happy path: creates container row, renames tmp, creates frame rows', async () => {
     extractMock.mockResolvedValue({
-      single: {
+      kind: 'single',
+      result: {
         frameCount: 5,
         durationMs: 5000,
         channels: [{ name: 'irm', type: 'irm', isSegmentationSource: true }],
@@ -183,6 +188,7 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
       },
     });
     extractMock.mockResolvedValue({
+      kind: 'multi',
       positions: [
         mkPos(0, 'D03_0000'),
         mkPos(1, 'D03_0001'),
@@ -212,6 +218,99 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     expect(updateNames).toContain('WellD03.nd2 — D03_0002');
     // Frames are relocated per position: 1 original move + 3 frame moves.
     expect(fsRenameMock).toHaveBeenCalledTimes(4);
+    // All positions share ONE original.nd2 under position 0's (container-1)
+    // dir — the efficiency invariant: the source is never copied N times.
+    const originalPaths = prismaImageUpdate.mock.calls
+      .map(c => (c[0] as { data?: { originalPath?: string } })?.data?.originalPath)
+      .filter(Boolean);
+    expect(originalPaths).toHaveLength(3);
+    expect(
+      originalPaths.every(
+        p => p === 'projects/proj-1/images/container-1/original.nd2'
+      )
+    ).toBe(true);
+  });
+
+  it('multi-position partial failure: rolls back ALL created containers (no orphan frame rows)', async () => {
+    let nextId = 0;
+    prismaImageCreate.mockImplementation(() =>
+      Promise.resolve({ id: `container-${++nextId}` })
+    );
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+
+    const mkPos = (index: number) => ({
+      positionIndex: index,
+      positionName: `P${index}`,
+      stageXUm: null,
+      stageYUm: null,
+      framesSubdir: `pos_${String(index).padStart(4, '0')}`,
+      result: {
+        frameCount: 1,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: null,
+        channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+        width: 64,
+        height: 64,
+      },
+    });
+    extractMock.mockResolvedValue({
+      kind: 'multi',
+      positions: [mkPos(0), mkPos(1), mkPos(2)],
+    });
+    // Fail finalize on the 3rd position's thumbnail, AFTER positions 0-1
+    // committed frame rows + container updates.
+    let sharpCalls = 0;
+    sharpMock.mockImplementation(() =>
+      ++sharpCalls >= 3
+        ? Promise.reject(new Error('thumb boom'))
+        : Promise.resolve(undefined)
+    );
+
+    // generateContainerThumbnail wraps the sharp rejection; that wrapper
+    // error is what propagates and triggers the rollback.
+    await expect(
+      uploadVideoFromFile({
+        projectId: 'proj-1',
+        originalName: 'Well.nd2',
+        mimeType: 'image/nd2',
+        tempFilePath: '/tmp/multer/well.nd2',
+      })
+    ).rejects.toThrow(/Failed to generate thumbnail/);
+
+    // Child frame rows for ALL created containers are deleted (not left
+    // pointing at rm'd files).
+    const deleteManyCalls = prismaImageDeleteMany.mock.calls.map(c => c[0]);
+    expect(
+      deleteManyCalls.some(
+        c =>
+          c?.where?.parentVideoId?.in &&
+          ['container-1', 'container-2', 'container-3'].every(id =>
+            c.where.parentVideoId.in.includes(id)
+          )
+      )
+    ).toBe(true);
+    // Extra-position container rows (2,3) deleted; primary (1) kept + marked.
+    expect(
+      deleteManyCalls.some(
+        c =>
+          Array.isArray(c?.where?.id?.in) &&
+          c.where.id.in.includes('container-2') &&
+          c.where.id.in.includes('container-3') &&
+          !c.where.id.in.includes('container-1')
+      )
+    ).toBe(true);
+    expect(prismaImageUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'container-1' },
+        data: { segmentationStatus: 'extraction_failed' },
+      })
+    );
+    // All three dirs cleaned.
+    const rmTargets = fsRmMock.mock.calls.map(c => String(c[0]));
+    ['container-1', 'container-2', 'container-3'].forEach(id =>
+      expect(rmTargets.some(p => p.includes(id))).toBe(true)
+    );
   });
 
   it('rollback: when extractor throws, container is marked failed AND baseDir is removed', async () => {
@@ -261,7 +360,7 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
       true
     );
     expect(
-      errorMessages.some(m => m.includes('mark container as extraction_failed'))
+      errorMessages.some(m => m.includes('roll back containers'))
     ).toBe(true);
   });
 });

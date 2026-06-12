@@ -35,6 +35,7 @@ HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
 from extract_nd2 import (  # noqa: E402
+    _position_interval_ms,
     normalize_to_tcyx,
     position_axis,
     select_position,
@@ -149,6 +150,35 @@ def test_select_position_no_position_axis_rejected():
     except UnsupportedND2:
         return
     raise AssertionError("expected UnsupportedND2 when no P/S axis present")
+
+
+def test_position_interval_t_outer_vs_p_outer():
+    # T=3, P=2. A position's frame interval must be recovered from ITS OWN
+    # timestamps, picked out of the flat T*P event list by loop-nesting order.
+    # A transposed index formula would silently mis-assign intervals.
+    #
+    # T-outer (time loop outermost): flat order t*P+p →
+    #   [t0p0, t0p1, t1p0, t1p1, t2p0, t2p1]
+    ts_t_outer = [0.0, 100.0, 1.0, 101.0, 2.0, 102.0]
+    # position 0 frames at indices 0,2,4 → values 0,1,2 → 1000 ms median Δ
+    assert _position_interval_ms(ts_t_outer, 0, 3, 2, True) == 1000.0
+    # position 1 frames at indices 1,3,5 → values 100,101,102 → 1000 ms
+    assert _position_interval_ms(ts_t_outer, 1, 3, 2, True) == 1000.0
+
+    # P-outer (position loop outermost): flat order p*T+t →
+    #   [p0t0, p0t1, p0t2, p1t0, p1t1, p1t2]
+    ts_p_outer = [0.0, 1.0, 2.0, 50.0, 51.0, 52.0]
+    assert _position_interval_ms(ts_p_outer, 0, 3, 2, False) == 1000.0
+    assert _position_interval_ms(ts_p_outer, 1, 3, 2, False) == 1000.0
+
+
+def test_position_interval_guards_return_none():
+    # t_count < 2 → no interval to compute.
+    assert _position_interval_ms([0.0, 1.0], 0, 1, 2, True) is None
+    # time_outer unknown → refuse to guess the nesting.
+    assert _position_interval_ms([0.0, 1.0], 0, 3, 2, None) is None
+    # event count != T*P → partial/unexpected list, don't guess.
+    assert _position_interval_ms([0.0, 1.0, 2.0], 0, 3, 2, True) is None
 
 
 def test_missing_yx_rejected():

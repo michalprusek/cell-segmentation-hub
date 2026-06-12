@@ -78,14 +78,18 @@ export interface ExtractedPosition {
   result: ExtractionResult;
 }
 
-/** What an extraction produced. Non-ND2 formats and single-position ND2
- *  yield ``single`` (frames at ``<dest>/frames/...``). A multi-position ND2
- *  yields ``positions`` — one entry per XY position, each destined for its
- *  own container. Exactly one of the two fields is set. */
-export interface ExtractionOutcome {
-  single?: ExtractionResult;
-  positions?: ExtractedPosition[];
-}
+/** What an extraction produced — a discriminated union so the
+ *  "single vs multi" choice is a compile-time tag, not a documented
+ *  convention.
+ *
+ *  - ``single``: non-ND2 formats and single-position ND2; frames at
+ *    ``<dest>/frames/...``.
+ *  - ``multi``: a multi-position ND2 — one ``ExtractedPosition`` per XY
+ *    position (non-empty by construction), each destined for its own
+ *    container. */
+export type ExtractionOutcome =
+  | { kind: 'single'; result: ExtractionResult }
+  | { kind: 'multi'; positions: ExtractedPosition[] };
 
 export interface ExtractionProgress {
   /** 0 to 1, monotonically increasing. */

@@ -353,14 +353,14 @@ export async function uploadVideoFromFile(options: {
     });
 
     // 4a. Single-position / ordinary video: finalize the pre-created row.
-    if (outcome.single) {
+    if (outcome.kind === 'single') {
       reportProgress('persisting', 0.85, 'Generating thumbnail');
       await finalizeContainer({
         containerId,
         baseDir,
         projectId,
         displayName: originalName,
-        result: outcome.single,
+        result: outcome.result,
         originalStorageKey: sharedOriginalKey,
       });
 
@@ -368,14 +368,14 @@ export async function uploadVideoFromFile(options: {
       logger.info('Video upload complete', 'VideoUploadService', {
         containerId,
         projectId,
-        frames: outcome.single.frameCount,
-        channels: outcome.single.channels.length,
+        frames: outcome.result.frameCount,
+        channels: outcome.result.channels.length,
       });
 
       return {
         containerId,
-        frameCount: outcome.single.frameCount,
-        channels: outcome.single.channels,
+        frameCount: outcome.result.frameCount,
+        channels: outcome.result.channels,
         positionCount: 1,
         containerIds: [containerId],
       };
@@ -385,7 +385,7 @@ export async function uploadVideoFromFile(options: {
     // reuses the pre-created container; the rest get fresh rows. Frames the
     // extractor wrote to <baseDir>/<framesSubdir>/frames are relocated into
     // each container's own frames dir.
-    const positions = [...(outcome.positions ?? [])].sort(
+    const positions = [...outcome.positions].sort(
       (a, b) => a.positionIndex - b.positionIndex
     );
     if (positions.length === 0) {
@@ -408,7 +408,11 @@ export async function uploadVideoFromFile(options: {
             originalPath: '',
             thumbnailPath: null,
             projectId,
-            fileSize: Number(fileStat.size),
+            // Only position 0 holds the physical original on disk; extra
+            // positions share it, so they contribute 0 bytes. Counting the
+            // full file size on every position would N×-overcount the user's
+            // storage quota (a 800 MB / 8-position ND2 would read as 6.4 GB).
+            fileSize: 0,
             mimeType,
             segmentationStatus: 'pending_extraction',
             isVideoContainer: true,
@@ -475,22 +479,36 @@ export async function uploadVideoFromFile(options: {
       { containerId, projectId, originalName }
     );
 
-    // Mark every created container as failed BEFORE cleanup so the rows'
-    // state reflects reality even if the rm -rf takes a while or fails.
-    for (const id of createdContainerIds) {
-      try {
-        await prisma.image.update({
-          where: { id },
-          data: { segmentationStatus: 'extraction_failed' },
-        });
-      } catch (secondaryErr) {
-        logger.error(
-          `Failed to mark container as extraction_failed: ${(secondaryErr as Error).message}`,
-          secondaryErr as Error,
-          'VideoUploadService',
-          { containerId: id }
-        );
+    // A mid-fan-out failure can leave already-finalized positions (0..k-1)
+    // with committed child frame rows whose on-disk PNGs are about to be
+    // rm'd by cleanupOnFailure. The Image self-relation only cascade-deletes
+    // frames when the CONTAINER row is deleted, not when it's merely updated,
+    // so we must remove the frames explicitly to avoid rows that point at
+    // deleted files.
+    try {
+      // 1. Drop child frame rows for every container this upload created.
+      await prisma.image.deleteMany({
+        where: { parentVideoId: { in: createdContainerIds } },
+      });
+      // 2. Delete the extra-position container rows entirely; keep only the
+      //    primary (position 0) row as the extraction_failed marker, mirroring
+      //    the single-position path's "keep a row to record the failure".
+      const extraIds = createdContainerIds.filter(id => id !== containerId);
+      if (extraIds.length > 0) {
+        await prisma.image.deleteMany({ where: { id: { in: extraIds } } });
       }
+      // 3. Mark the primary container failed.
+      await prisma.image.update({
+        where: { id: containerId },
+        data: { segmentationStatus: 'extraction_failed' },
+      });
+    } catch (secondaryErr) {
+      logger.error(
+        `Failed to roll back containers after upload failure: ${(secondaryErr as Error).message}`,
+        secondaryErr as Error,
+        'VideoUploadService',
+        { containerId, createdContainerIds }
+      );
     }
 
     await cleanupOnFailure();

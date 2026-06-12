@@ -468,13 +468,13 @@ describe('pythonExtractor', () => {
       const fake = makeFakeChild();
       setupSpawn(fake);
       resolveWith(fake, [JSON.stringify(pyResult)]);
-      // Single-position ND2 → outcome.single. Unwrap so these field-surfacing
-      // assertions stay focused on the ExtractionResult shape.
+      // Single-position ND2 → outcome.kind === 'single'. Unwrap so these
+      // field-surfacing assertions stay focused on the ExtractionResult shape.
       const outcome = await extractNd2('/file.nd2', '/dest');
-      if (!outcome.single) {
+      if (outcome.kind !== 'single') {
         throw new Error('expected a single-position extraction result');
       }
-      return outcome.single;
+      return outcome.result;
     }
 
     it('surfaces frameCount, width, height', async () => {
@@ -552,9 +552,10 @@ describe('pythonExtractor', () => {
       resolveWith(fake, [JSON.stringify(payload)]);
       const outcome = await extractNd2('/well.nd2', '/dest');
 
-      expect(outcome.single).toBeUndefined();
+      expect(outcome.kind).toBe('multi');
+      if (outcome.kind !== 'multi') throw new Error('expected multi');
       expect(outcome.positions).toHaveLength(2);
-      const [p0, p1] = outcome.positions!;
+      const [p0, p1] = outcome.positions;
       expect(p0.positionIndex).toBe(0);
       expect(p0.positionName).toBe('D03_0000');
       expect(p0.framesSubdir).toBe('pos_0000');

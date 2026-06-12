@@ -9,8 +9,10 @@ axis:
 
 - **Single position** (no ``P`` axis, or ``P`` == 1): writes
   ``<dest>/frames/<TTTT>/<channel>.png`` and prints one result JSON —
-  the historical contract, byte-for-byte unchanged so existing callers
-  and single-field uploads are unaffected.
+  the historical contract. Frame layout and result-JSON shape are
+  unchanged, so existing callers and single-field uploads are unaffected
+  (the ``PROGRESS`` line cadence differs slightly but is parsed
+  position-independently by the Node side).
 - **Multi position** (``P`` > 1 — well-plate / multipoint acquisitions):
   each XY position is a *distinct field of view*, not a time frame, so we
   split it into its own ``<dest>/pos_<PPPP>/frames/<TTTT>/<channel>.png``
@@ -79,8 +81,10 @@ def _sanitize_name(name: str | None, fallback: str) -> str:
 
 
 class UnsupportedND2(ValueError):
-    """Raised for ND2 layouts we deliberately reject with a user-facing
-    message (rather than silently mis-extracting)."""
+    """Raised for ND2 layouts we deliberately reject — either with a
+    user-facing message (bad axes, no Y/X plane, too many positions) or as
+    an internal guard (an unsplit multi-position array reaching the
+    single-position normalizer), rather than silently mis-extracting."""
 
 
 def normalize_to_tcyx(arr: np.ndarray, axes: str) -> np.ndarray:
@@ -286,6 +290,16 @@ def _read_position_meta(f, p_count: int) -> list[dict]:
                 continue
             params = getattr(loop, "parameters", None)
             points = getattr(params, "points", None) or []
+            # If the point list doesn't line up 1:1 with the P axis, names
+            # could be paired with the wrong field of view. Frames are still
+            # sliced correctly by axis index (labels are cosmetic), but warn
+            # so a mislabeled well isn't mistaken for ground truth.
+            if len(points) != p_count:
+                sys.stderr.write(
+                    f"WARNING: XYPosLoop has {len(points)} point(s) but the P "
+                    f"axis has {p_count} position(s); position labels may be "
+                    f"unreliable\n"
+                )
             for i, pt in enumerate(points[:p_count]):
                 name = getattr(pt, "name", None)
                 if isinstance(name, str) and name.strip():
@@ -408,13 +422,20 @@ def main() -> int:
         timestamps = _event_timestamps_s(f)
 
         # Lazy access keeps peak memory to one position at a time for big
-        # multipoint files (P multiplies the on-disk size). Fall back to a
-        # full in-RAM array if dask isn't available.
+        # multipoint files (the decoded array is P× one position's size).
+        # Fall back to a full in-RAM array if dask isn't available — this
+        # materializes the whole P×T×C×Y×X array, so log at warn with the
+        # position count so an OOM on a large multipoint file is diagnosable
+        # rather than a bare "python helper exited" downstream.
         try:
             darr = f.to_dask()
             use_dask = True
         except Exception as exc:
-            sys.stderr.write(f"ND2 to_dask failed ({exc}); using asarray\n")
+            sys.stderr.write(
+                f"WARNING: ND2 to_dask failed ({exc}); falling back to a full "
+                f"in-RAM asarray for {p_count} position(s) — may OOM on large "
+                f"multipoint files\n"
+            )
             darr = None
             use_dask = False
 

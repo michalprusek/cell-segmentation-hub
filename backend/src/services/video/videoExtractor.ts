@@ -58,10 +58,14 @@ export async function extractVideo(
     // ffmpeg + TIFF always yield a single container's frames at
     // <dest>/frames/...; only ND2 can fan out into multiple positions.
     case 'mp4-like':
-      return { single: await extractWithFfmpeg(sourcePath, destDir, options) };
+      return {
+        kind: 'single',
+        result: await extractWithFfmpeg(sourcePath, destDir, options),
+      };
     case 'tiff-stack':
       return {
-        single: await extractTiffStack(sourcePath, destDir, options.onProgress),
+        kind: 'single',
+        result: await extractTiffStack(sourcePath, destDir, options.onProgress),
       };
     case 'nd2':
       return extractNd2(sourcePath, destDir, options.onProgress);

@@ -235,7 +235,7 @@ export async function extractNd2(
       framesEach: positions[0]?.result.frameCount,
       channels: positions[0]?.result.channels.length,
     });
-    return { positions };
+    return { kind: 'multi', positions };
   }
 
   // Single-position (historical path) — frames at <dest>/frames/...
@@ -245,5 +245,5 @@ export async function extractNd2(
     frames: result.frameCount,
     channels: result.channels.length,
   });
-  return { single: result };
+  return { kind: 'single', result };
 }
