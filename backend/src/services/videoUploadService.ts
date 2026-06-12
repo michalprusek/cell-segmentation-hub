@@ -500,10 +500,9 @@ export async function uploadVideoFromFile(options: {
 
     // The multi-position source ND2 has been fully split into per-position
     // frames + TIFF originals; drop it so it isn't counted/served as position
-    // 0's original (its key now points at position 0's TIFF).
-    await fs
-      .rm(path.join(baseDir, originalFileName), { force: true })
-      .catch(() => undefined);
+    // 0's original (its key now points at position 0's TIFF). ``originalPath``
+    // is the same join computed when the source was first persisted.
+    await fs.rm(originalPath, { force: true }).catch(() => undefined);
 
     reportProgress('completed', 1.0, 'Video ready');
     logger.info('Multi-position video upload complete', 'VideoUploadService', {
