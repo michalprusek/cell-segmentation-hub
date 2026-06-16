@@ -530,15 +530,22 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
 
     # Blob-motion detection runs on the RAW (un-normalised) matrix so the
     # background-subtraction and SNR estimates inside detect_blobs see real
-    # intensities, not a [0,1]-rescaled version.
-    raw_tracks: List[Dict[str, Any]] = (
-        detect_blobs(kymo) if req.detect_velocity else []
-    )
-    tracks: Optional[List[KymographTrack]] = (
-        [KymographTrack(**tr) for tr in raw_tracks]
-        if req.detect_velocity
-        else None
-    )
+    # intensities, not a [0,1]-rescaled version. The velocity layer is
+    # OPTIONAL: a detection failure must never break the kymograph itself, so
+    # we degrade to "no tracks" rather than 500-ing the whole request.
+    raw_tracks: List[Dict[str, Any]] = []
+    tracks: Optional[List[KymographTrack]] = None
+    if req.detect_velocity:
+        try:
+            raw_tracks = detect_blobs(kymo)
+            tracks = [KymographTrack(**tr) for tr in raw_tracks]
+        except Exception:
+            logger.exception(
+                "kymograph velocity detection failed; "
+                "returning kymograph without tracks"
+            )
+            raw_tracks = []
+            tracks = []
 
     # Per-frame normalisation could obscure intensity changes — instead we
     # normalise globally to expose dynamics. Add 1e-9 to avoid /0.
@@ -556,9 +563,12 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
 
     overlay_b64: Optional[str] = None
     if req.detect_velocity and req.render_overlay and raw_tracks:
-        overlay_b64 = base64.b64encode(
-            render_overlay(rgb, raw_tracks)
-        ).decode("ascii")
+        try:
+            overlay_b64 = base64.b64encode(
+                render_overlay(rgb, raw_tracks)
+            ).decode("ascii")
+        except Exception:
+            logger.exception("kymograph overlay render failed; omitting overlay")
 
     csv_buf = io.StringIO()
     writer = csv.writer(csv_buf)
