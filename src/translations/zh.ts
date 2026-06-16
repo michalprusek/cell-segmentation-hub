@@ -1054,6 +1054,13 @@ export default {
     imagesDeleted_other: '已删除 {{count}} 张图片',
   },
   export: {
+    mtKymographs: {
+      title: '微管图速度分析',
+      description: '在每个微管的微管图上检测移动粒子并导出其速度。',
+      enable: '包含微管图分析',
+      velocityMetrics: '速度指标 (CSV)',
+      segmentedImages: '分割的微管图图像 (PNG)',
+    },
     mt: {
       sectionTitle: '微管指标',
       sectionDescription:

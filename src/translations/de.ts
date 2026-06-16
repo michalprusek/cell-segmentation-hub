@@ -1155,6 +1155,14 @@ export default {
     imagesDeleted_other: '{{count}} Bilder gelöscht',
   },
   export: {
+    mtKymographs: {
+      title: 'Kymograph-Geschwindigkeitsanalyse',
+      description:
+        'Erkennt bewegte Partikel auf einem Kymographen für jeden Mikrotubulus und exportiert ihre Geschwindigkeiten.',
+      enable: 'Kymograph-Analyse einbeziehen',
+      velocityMetrics: 'Geschwindigkeitsmetriken (CSV)',
+      segmentedImages: 'Segmentierte Kymograph-Bilder (PNG)',
+    },
     mt: {
       sectionTitle: 'Mikrotubuli-Metriken',
       sectionDescription:

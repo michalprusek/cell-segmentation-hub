@@ -92,6 +92,16 @@ export interface ExportOptions {
     /** Channel names (machine-safe ``name`` field from container.channels). */
     channels: string[];
   };
+  /**
+   * Microtubule-only kymograph export. When enabled (MT projects only), the
+   * backend builds a kymograph per microtubule, runs blob-motion detection,
+   * and writes segmented kymograph images and/or a velocity-metrics CSV.
+   */
+  mtKymographs?: {
+    enabled: boolean;
+    includeVelocityMetrics: boolean;
+    includeSegmentedImages: boolean;
+  };
 }
 
 export const useSharedAdvancedExport = (

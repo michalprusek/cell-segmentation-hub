@@ -1135,6 +1135,14 @@ export default {
   },
   export: {
     // Microtubule-only metric controls.
+    mtKymographs: {
+      title: 'Kymograph velocity analysis',
+      description:
+        'Detect moving particles on a kymograph for each microtubule and export their velocities.',
+      enable: 'Include kymograph analysis',
+      velocityMetrics: 'Velocity metrics (CSV)',
+      segmentedImages: 'Segmented kymograph images (PNG)',
+    },
     mt: {
       sectionTitle: 'Microtubule metrics',
       sectionDescription:

@@ -1144,6 +1144,14 @@ export default {
     imagesDeleted_other: '{{count}} obrázky smazány',
   },
   export: {
+    mtKymographs: {
+      title: 'Analýza rychlosti z kymografu',
+      description:
+        'Detekce pohyblivých částic na kymografu pro každý mikrotubul a export jejich rychlostí.',
+      enable: 'Zahrnout analýzu kymografů',
+      velocityMetrics: 'Metriky rychlosti (CSV)',
+      segmentedImages: 'Segmentované kymografy (PNG)',
+    },
     mt: {
       sectionTitle: 'Metriky mikrotubulů',
       sectionDescription:
