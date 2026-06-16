@@ -42,7 +42,7 @@ interface PolylineRecord {
 /** Raw track shape returned by the ML ``/kymograph`` endpoint (snake_case,
  *  velocities in px/frame). Converted to the camelCase + um/s shape below. */
 interface MlTrack {
-  points: number[][];
+  points: KymoPoint[];
   net_pxframe: number;
   snr: number;
   runs: Array<{
@@ -81,9 +81,12 @@ export interface KymographRun {
   t1: number;
 }
 
+/** A sub-pixel trajectory sample: `[frame, xPosition]` along the polyline. */
+export type KymoPoint = [frame: number, x: number];
+
 /** One moving particle detected on the kymograph. */
 export interface KymographTrack {
-  points: number[][]; // [[frame, xSubpixel], ...]
+  points: KymoPoint[]; // time-ordered
   netVelocityPxPerFrame: number;
   netVelocityUmPerSec: number | null;
   snr: number;
@@ -268,6 +271,16 @@ export async function buildKymograph(
   const toUms = (pxPerFrame: number): number | null =>
     umPerSecPerPxFrame != null ? pxPerFrame * umPerSecPerPxFrame : null;
 
+  // Surface a contract violation: detection was requested but the ML service
+  // returned no tracks[] array (vs. legitimately empty). Don't let it look
+  // identical to "no particles found".
+  if (detectVelocity && !Array.isArray(payload.tracks)) {
+    logger.warn(
+      'ML kymograph response missing tracks[] despite detectVelocity',
+      'KymographService',
+      { videoContainerId, polylineId }
+    );
+  }
   const tracks: KymographTrack[] | undefined = Array.isArray(payload.tracks)
     ? (payload.tracks as MlTrack[]).map(tr => ({
         points: tr.points,

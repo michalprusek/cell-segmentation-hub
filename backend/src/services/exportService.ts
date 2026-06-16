@@ -39,7 +39,10 @@ import {
   writeMTMetrics,
   type MTMetricsRow,
 } from './export/mtMetricsExporter';
-import { exportMicrotubuleKymographs } from './export/mtKymographExporter';
+import {
+  exportMicrotubuleKymographs,
+  type MTKymographOptions,
+} from './export/mtKymographExporter';
 
 const YOLO_WRITE_CONCURRENCY = 16;
 
@@ -82,11 +85,7 @@ export interface ExportOptions {
    * toggles) writes segmented kymograph PNGs and/or a velocity-metrics CSV into
    * ``kymographs/``. Ignored for non-MT projects.
    */
-  mtKymographs?: {
-    enabled: boolean;
-    includeVelocityMetrics: boolean;
-    includeSegmentedImages: boolean;
-  };
+  mtKymographs?: MTKymographOptions;
 }
 
 // Define type for project with images and segmentation data

@@ -8,6 +8,7 @@ import ExportStateManager from '@/lib/exportStateManager';
 import { useExportContext } from '@/contexts/ExportContext';
 import { useAbortController } from '@/hooks/shared/useAbortController';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
+import type { MicrotubuleKymographsOptions } from '../components/MicrotubuleKymographsSection';
 
 // Sanitize filename to remove/replace invalid characters
 const sanitizeFilename = (filename: string): string => {
@@ -97,11 +98,7 @@ export interface ExportOptions {
    * backend builds a kymograph per microtubule, runs blob-motion detection,
    * and writes segmented kymograph images and/or a velocity-metrics CSV.
    */
-  mtKymographs?: {
-    enabled: boolean;
-    includeVelocityMetrics: boolean;
-    includeSegmentedImages: boolean;
-  };
+  mtKymographs?: MicrotubuleKymographsOptions;
 }
 
 export const useSharedAdvancedExport = (

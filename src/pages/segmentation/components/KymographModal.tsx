@@ -52,8 +52,12 @@ interface KymographRun {
   t1: number;
 }
 
+/** Sub-pixel trajectory sample `[frame, xPosition]`. Mirrors the backend
+ *  `KymoPoint` (FE/BE wire types are hand-synced per repo convention). */
+type KymoPoint = [frame: number, x: number];
+
 interface KymographTrack {
-  points: number[][]; // [[frame, x], ...]
+  points: KymoPoint[]; // time-ordered
   netVelocityPxPerFrame: number;
   netVelocityUmPerSec: number | null;
   snr: number;
