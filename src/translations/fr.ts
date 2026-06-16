@@ -2117,6 +2117,14 @@ export default {
       showKymograph: 'Afficher le kymographe',
       axisTime: 'Temps (images) ↓',
       axisAlong: 'Le long du microtubule (px) →',
+      velocityAnalysis: 'Analyse de vitesse',
+      colVelocity: 'Vitesse nette',
+      colRuns: 'Segments',
+      colSnr: 'SNR',
+      noBlobs: 'Aucune particule en mouvement détectée',
+      downloadTracks: 'CSV de vitesse',
+      uncalibrated:
+        "Pas de calibration taille de pixel / intervalle d'images — vitesses en px/image.",
     },
     channels: {
       toggleVisibility: 'Basculer la visibilité du canal',

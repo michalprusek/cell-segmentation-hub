@@ -1990,6 +1990,13 @@ export default {
       showKymograph: '显示时空图',
       axisTime: '时间 (帧) ↓',
       axisAlong: '沿微管 (px) →',
+      velocityAnalysis: '速度分析',
+      colVelocity: '净速度',
+      colRuns: '运动段',
+      colSnr: '信噪比',
+      noBlobs: '未检测到移动粒子',
+      downloadTracks: '速度 CSV',
+      uncalibrated: '无像素尺寸/帧间隔校准——速度以 px/帧 显示。',
     },
     channels: {
       toggleVisibility: '切换通道可见性',

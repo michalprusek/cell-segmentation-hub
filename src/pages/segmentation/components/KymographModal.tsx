@@ -1,11 +1,13 @@
 /**
  * Modal that renders a kymograph for a microtubule polyline.
  *
- * The frontend just orchestrates UI state — the heavy lifting is in the
- * backend, which samples raw image intensity along the selected polyline
- * across every frame (using the tracked geometry if available, otherwise
- * the polyline from the current frame as a static reference line) and
- * returns a viridis-colour-mapped PNG plus the underlying CSV.
+ * The frontend orchestrates UI state; the backend samples raw image intensity
+ * along the selected polyline across every frame and returns a colour-mapped
+ * PNG plus the underlying CSV. When "Velocity analysis" is enabled the backend
+ * also runs blob-motion detection and returns one track per moving particle
+ * (with µm/s velocities derived from the container calibration). Those tracks
+ * are drawn as an interactive SVG overlay on top of the kymograph and listed in
+ * a velocity table.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -18,6 +20,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -39,6 +43,23 @@ interface KymographModalProps {
   channels: VideoChannel[] | null | undefined;
 }
 
+interface KymographRun {
+  velocityPxPerFrame: number;
+  sePxPerFrame: number;
+  velocityUmPerSec: number | null;
+  seUmPerSec: number | null;
+  t0: number;
+  t1: number;
+}
+
+interface KymographTrack {
+  points: number[][]; // [[frame, x], ...]
+  netVelocityPxPerFrame: number;
+  netVelocityUmPerSec: number | null;
+  snr: number;
+  runs: KymographRun[];
+}
+
 interface KymographResponse {
   pngBase64: string;
   csvBase64: string;
@@ -46,6 +67,18 @@ interface KymographResponse {
   lengthPx: number;
   tracked: boolean;
   sourceChannel: string;
+  pixelSizeUm: number | null;
+  frameIntervalMs: number | null;
+  tracks?: KymographTrack[];
+}
+
+// Direction-coded colours for the overlay + table dots.
+const ANTERO = '#f87171'; // net position increasing (+)
+const RETRO = '#38bdf8'; // net position decreasing (−)
+const STATIC = '#a3a3a3';
+function trackColor(netPxFrame: number): string {
+  if (Math.abs(netPxFrame) < 0.02) return STATIC;
+  return netPxFrame > 0 ? ANTERO : RETRO;
 }
 
 export function KymographModal({
@@ -74,9 +107,11 @@ export function KymographModal({
   const [sourceChannel, setSourceChannel] = useState<string | null>(
     defaultChannel
   );
+  const [detectVelocity, setDetectVelocity] = useState(true);
   const [result, setResult] = useState<KymographResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTrack, setActiveTrack] = useState<number | null>(null);
 
   useEffect(() => {
     if (defaultChannel && sourceChannel == null) {
@@ -102,6 +137,7 @@ export function KymographModal({
         frameIndex,
         sourceChannel,
         channelColor,
+        detectVelocity,
       })
       .then(res => {
         if (cancelled) return;
@@ -125,21 +161,37 @@ export function KymographModal({
     polylineId,
     frameIndex,
     channelColors,
+    detectVelocity,
   ]);
 
   const handleDownload = (kind: 'png' | 'csv') => {
     if (!result) return;
     const data = kind === 'png' ? result.pngBase64 : result.csvBase64;
     const mime = kind === 'png' ? 'image/png' : 'text/csv';
-    const blob = base64ToBlob(data, mime);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `kymograph-${polylineId}.${kind}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    triggerDownload(
+      base64ToBlob(data, mime),
+      `kymograph-${polylineId}.${kind}`
+    );
+  };
+
+  const handleDownloadTracks = () => {
+    if (!result?.tracks) return;
+    const csv = tracksToCsv(result.tracks);
+    triggerDownload(
+      new Blob([csv], { type: 'text/csv' }),
+      `kymograph-velocity-${polylineId}.csv`
+    );
+  };
+
+  const tracks = result?.tracks ?? [];
+  const calibrated =
+    result?.pixelSizeUm != null && result.frameIntervalMs != null;
+
+  const fmtVelocity = (track: KymographTrack): string => {
+    if (track.netVelocityUmPerSec != null) {
+      return `${track.netVelocityUmPerSec >= 0 ? '+' : ''}${track.netVelocityUmPerSec.toFixed(3)} µm/s`;
+    }
+    return `${track.netVelocityPxPerFrame.toFixed(3)} px/fr`;
   };
 
   return (
@@ -152,7 +204,7 @@ export function KymographModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {channels && channels.length > 1 && (
             <>
               <span className="text-sm">
@@ -177,6 +229,18 @@ export function KymographModal({
               </Select>
             </>
           )}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="kymo-velocity"
+              checked={detectVelocity}
+              onCheckedChange={v => setDetectVelocity(v === true)}
+            />
+            <Label htmlFor="kymo-velocity" className="text-sm cursor-pointer">
+              {t('editor.kymograph.velocityAnalysis', {
+                defaultValue: 'Velocity analysis',
+              })}
+            </Label>
+          </div>
           {result && (
             <span className="text-xs text-muted-foreground">
               {result.tracked
@@ -202,9 +266,7 @@ export function KymographModal({
           {error && <div className="text-destructive text-sm">{error}</div>}
           {!isLoading && !error && result && (
             // Axes: rows = frames (time, ↓ down = later); cols = position
-            // along the polyline (head → tail in the seed frame). Tick
-            // labels at 0 / 25 / 50 / 75 / 100% provide a scale; units
-            // are pixels for the spatial axis, frame index for time.
+            // along the polyline (head → tail in the seed frame).
             <div
               className="grid w-full gap-1"
               style={{
@@ -234,17 +296,50 @@ export function KymographModal({
                   </span>
                 ))}
               </div>
-              {/* Kymograph image (column 2, row 0). */}
-              <img
-                src={`data:image/png;base64,${result.pngBase64}`}
-                alt={`Kymograph for ${polylineId}`}
-                className="w-full max-h-[500px] block"
-                style={{
-                  imageRendering: 'pixelated',
-                  minHeight: '200px',
-                  objectFit: 'fill',
-                }}
-              />
+              {/* Kymograph image + velocity overlay (column 2, row 0). */}
+              <div className="relative">
+                <img
+                  src={`data:image/png;base64,${result.pngBase64}`}
+                  alt={`Kymograph for ${polylineId}`}
+                  className="w-full max-h-[500px] block"
+                  style={{
+                    imageRendering: 'pixelated',
+                    minHeight: '200px',
+                    objectFit: 'fill',
+                  }}
+                />
+                {detectVelocity && tracks.length > 0 && (
+                  // preserveAspectRatio="none" + objectFit:fill image ⇒ the
+                  // viewBox maps linearly onto the displayed kymograph, so a
+                  // track point (x, frame) lands exactly on its pixel.
+                  <svg
+                    className="absolute inset-0 w-full h-full"
+                    viewBox={`0 0 ${result.lengthPx} ${result.frameCount}`}
+                    preserveAspectRatio="none"
+                  >
+                    {tracks.map((tr, i) => (
+                      <polyline
+                        key={i}
+                        points={tr.points
+                          .map(([frame, x]) => `${x},${frame}`)
+                          .join(' ')}
+                        fill="none"
+                        stroke={trackColor(tr.netVelocityPxPerFrame)}
+                        strokeWidth={activeTrack === i ? 3 : 1.5}
+                        strokeOpacity={
+                          activeTrack === null || activeTrack === i ? 1 : 0.25
+                        }
+                        vectorEffect="non-scaling-stroke"
+                        style={{ cursor: 'pointer' }}
+                        onMouseEnter={() => setActiveTrack(i)}
+                        onMouseLeave={() => setActiveTrack(null)}
+                      >
+                        <title>{`#${i + 1}: ${fmtVelocity(tr)}`}</title>
+                      </polyline>
+                    ))}
+                  </svg>
+                )}
+              </div>
               {/* X-axis tick labels (column 2, row 1). */}
               <div />
               <div />
@@ -267,7 +362,86 @@ export function KymographModal({
           )}
         </div>
 
+        {/* Velocity table */}
+        {detectVelocity && result && !isLoading && (
+          <div className="max-h-48 overflow-auto rounded border">
+            {tracks.length === 0 ? (
+              <div className="p-3 text-sm text-muted-foreground">
+                {t('editor.kymograph.noBlobs', {
+                  defaultValue: 'No moving particles detected',
+                })}
+              </div>
+            ) : (
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-muted/80 text-muted-foreground">
+                  <tr>
+                    <th className="text-left px-2 py-1">#</th>
+                    <th className="text-left px-2 py-1">
+                      {t('editor.kymograph.colVelocity', {
+                        defaultValue: 'Net velocity',
+                      })}
+                    </th>
+                    <th className="text-right px-2 py-1">
+                      {t('editor.kymograph.colRuns', { defaultValue: 'Runs' })}
+                    </th>
+                    <th className="text-right px-2 py-1">
+                      {t('editor.kymograph.colSnr', { defaultValue: 'SNR' })}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tracks.map((tr, i) => (
+                    <tr
+                      key={i}
+                      className={`border-t cursor-pointer ${activeTrack === i ? 'bg-accent' : ''}`}
+                      onMouseEnter={() => setActiveTrack(i)}
+                      onMouseLeave={() => setActiveTrack(null)}
+                    >
+                      <td className="px-2 py-1">
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full mr-1 align-middle"
+                          style={{
+                            backgroundColor: trackColor(
+                              tr.netVelocityPxPerFrame
+                            ),
+                          }}
+                        />
+                        {i + 1}
+                      </td>
+                      <td className="px-2 py-1 tabular-nums">
+                        {fmtVelocity(tr)}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {tr.runs.length}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {tr.snr.toFixed(1)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {tracks.length > 0 && !calibrated && (
+              <div className="px-2 py-1 text-[10px] text-amber-600 border-t">
+                {t('editor.kymograph.uncalibrated', {
+                  defaultValue:
+                    'No pixel-size / frame-interval calibration — velocities shown in px/frame.',
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         <DialogFooter>
+          {detectVelocity && tracks.length > 0 && (
+            <Button variant="outline" onClick={handleDownloadTracks}>
+              <Download className="h-4 w-4 mr-1" />
+              {t('editor.kymograph.downloadTracks', {
+                defaultValue: 'Velocity CSV',
+              })}
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => handleDownload('png')}
@@ -288,6 +462,68 @@ export function KymographModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function tracksToCsv(tracks: KymographTrack[]): string {
+  const header = [
+    'track',
+    'net_velocity_um_s',
+    'net_velocity_px_frame',
+    'snr',
+    'run_index',
+    'run_velocity_um_s',
+    'run_se_um_s',
+    'run_velocity_px_frame',
+    't0',
+    't1',
+  ];
+  const lines = [header.join(',')];
+  tracks.forEach((tr, ti) => {
+    if (tr.runs.length === 0) {
+      lines.push(
+        [
+          ti + 1,
+          tr.netVelocityUmPerSec ?? '',
+          tr.netVelocityPxPerFrame,
+          tr.snr,
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+        ].join(',')
+      );
+    }
+    tr.runs.forEach((r, ri) => {
+      lines.push(
+        [
+          ti + 1,
+          tr.netVelocityUmPerSec ?? '',
+          tr.netVelocityPxPerFrame,
+          tr.snr,
+          ri + 1,
+          r.velocityUmPerSec ?? '',
+          r.seUmPerSec ?? '',
+          r.velocityPxPerFrame,
+          r.t0,
+          r.t1,
+        ].join(',')
+      );
+    });
+  });
+  return lines.join('\n');
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function base64ToBlob(b64: string, mime: string): Blob {

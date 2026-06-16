@@ -2129,6 +2129,14 @@ export default {
       showKymograph: 'Kymograph anzeigen',
       axisTime: 'Zeit (Frames) ↓',
       axisAlong: 'Entlang Mikrotubulus (px) →',
+      velocityAnalysis: 'Geschwindigkeitsanalyse',
+      colVelocity: 'Nettogeschwindigkeit',
+      colRuns: 'Läufe',
+      colSnr: 'SNR',
+      noBlobs: 'Keine bewegten Partikel erkannt',
+      downloadTracks: 'Geschwindigkeits-CSV',
+      uncalibrated:
+        'Keine Pixelgröße-/Bildintervall-Kalibrierung — Geschwindigkeiten in px/Frame.',
     },
     channels: {
       toggleVisibility: 'Kanal-Sichtbarkeit umschalten',

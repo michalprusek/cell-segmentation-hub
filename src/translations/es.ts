@@ -2168,6 +2168,14 @@ export default {
       showKymograph: 'Mostrar kimógrafo',
       axisTime: 'Tiempo (frames) ↓',
       axisAlong: 'A lo largo del microtúbulo (px) →',
+      velocityAnalysis: 'Análisis de velocidad',
+      colVelocity: 'Velocidad neta',
+      colRuns: 'Tramos',
+      colSnr: 'SNR',
+      noBlobs: 'No se detectaron partículas en movimiento',
+      downloadTracks: 'CSV de velocidad',
+      uncalibrated:
+        'Sin calibración de tamaño de píxel / intervalo de fotogramas — velocidades en px/fotograma.',
     },
     channels: {
       toggleVisibility: 'Alternar visibilidad del canal',
