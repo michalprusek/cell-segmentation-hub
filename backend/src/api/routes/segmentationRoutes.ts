@@ -214,6 +214,8 @@ router.post(
       .isString()
       .matches(/^#[0-9A-Fa-f]{6}$/)
       .withMessage('channelColor must be #RRGGBB hex'),
+    // detectVelocity: opt-in blob-motion analysis (velocity table + overlay).
+    body('detectVelocity').optional().isBoolean(),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
@@ -269,6 +271,7 @@ router.post(
         frameIndex: req.body.frameIndex,
         sourceChannel: req.body.sourceChannel,
         channelColor: req.body.channelColor,
+        detectVelocity: req.body.detectVelocity === true,
       });
       ResponseHelper.success(res, result);
     } catch (err) {
