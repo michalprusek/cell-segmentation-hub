@@ -30,7 +30,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.kymograph_velocity import detect_blobs
+from api.kymograph_velocity import detect_blobs, render_overlay
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +308,10 @@ class KymographRequest(BaseModel):
     # return one KymographTrack per moving particle (velocities in px/frame —
     # the Node backend converts to um/s with the container's calibration).
     detect_velocity: bool = False
+    # When True (with detect_velocity), also composite the detected tracks onto
+    # the kymograph and return it as ``overlay_png_base64`` — used by the export
+    # pipeline to ship "segmented kymograph" images without a browser.
+    render_overlay: bool = False
 
 
 class KymographRun(BaseModel):
@@ -342,6 +346,9 @@ class KymographResponse(BaseModel):
     tracked: bool
     # Populated only when the request set ``detect_velocity``; otherwise None.
     tracks: Optional[List[KymographTrack]] = None
+    # Populated only when ``render_overlay`` was set; base64 PNG of the
+    # kymograph with detected tracks drawn on top.
+    overlay_png_base64: Optional[str] = None
 
 
 def _arc_length_resample_polyline(
@@ -524,9 +531,14 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     # Blob-motion detection runs on the RAW (un-normalised) matrix so the
     # background-subtraction and SNR estimates inside detect_blobs see real
     # intensities, not a [0,1]-rescaled version.
-    tracks: Optional[List[KymographTrack]] = None
-    if req.detect_velocity:
-        tracks = [KymographTrack(**tr) for tr in detect_blobs(kymo)]
+    raw_tracks: List[Dict[str, Any]] = (
+        detect_blobs(kymo) if req.detect_velocity else []
+    )
+    tracks: Optional[List[KymographTrack]] = (
+        [KymographTrack(**tr) for tr in raw_tracks]
+        if req.detect_velocity
+        else None
+    )
 
     # Per-frame normalisation could obscure intensity changes — instead we
     # normalise globally to expose dynamics. Add 1e-9 to avoid /0.
@@ -542,6 +554,12 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     PILImage.fromarray(rgb).save(buf, format="PNG")
     png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
+    overlay_b64: Optional[str] = None
+    if req.detect_velocity and req.render_overlay and raw_tracks:
+        overlay_b64 = base64.b64encode(
+            render_overlay(rgb, raw_tracks)
+        ).decode("ascii")
+
     csv_buf = io.StringIO()
     writer = csv.writer(csv_buf)
     writer.writerow(["frame", *[f"x{i}" for i in range(n_samples)]])
@@ -556,4 +574,5 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         length_px=int(kymo.shape[1]),
         tracked=bool(req.tracked),
         tracks=tracks,
+        overlay_png_base64=overlay_b64,
     )

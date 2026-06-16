@@ -256,3 +256,48 @@ def _new_track(t: int, x: float, a: float) -> Dict[str, Any]:
         "gap": 0,
         "alive": True,
     }
+
+
+# Direction-coded overlay colours (match the frontend modal palette).
+_ANTERO = (248, 113, 113)  # net position increasing (+)
+_RETRO = (56, 189, 248)  # net position decreasing (-)
+_STATIC = (163, 163, 163)
+
+
+def _track_color(net_pxframe: float) -> tuple:
+    if abs(net_pxframe) < 0.02:
+        return _STATIC
+    return _ANTERO if net_pxframe > 0 else _RETRO
+
+
+def render_overlay(
+    base_rgb: np.ndarray,
+    tracks: List[Dict[str, Any]],
+    *,
+    y_scale: int = 3,
+) -> bytes:
+    """Draw detected tracks onto the kymograph as a standalone PNG.
+
+    ``base_rgb`` is the already-rendered (F, X, 3) uint8 kymograph. Each track
+    is drawn as a direction-coloured polyline. The image is stretched
+    vertically by ``y_scale`` so the (usually short) time axis is readable —
+    the same trick the offline prototype used. Returns PNG bytes.
+    """
+    import io
+
+    from PIL import Image as PILImage
+    from PIL import ImageDraw
+
+    T, X = base_rgb.shape[:2]
+    img = PILImage.fromarray(base_rgb, "RGB").resize(
+        (X, T * y_scale), PILImage.NEAREST
+    )
+    draw = ImageDraw.Draw(img)
+    for tr in tracks:
+        color = _track_color(tr["net_pxframe"])
+        pts = [(float(x), float(t) * y_scale) for t, x in tr["points"]]
+        if len(pts) > 1:
+            draw.line(pts, fill=color, width=2)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
