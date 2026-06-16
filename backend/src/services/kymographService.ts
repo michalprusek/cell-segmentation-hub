@@ -65,6 +65,9 @@ export interface KymographServiceInput {
   /** When true, the ML service also runs blob-motion detection and the
    *  result carries one ``KymographTrack`` per moving particle. */
   detectVelocity?: boolean;
+  /** When true (with detectVelocity), the result carries ``overlayPngBase64``
+   *  — the kymograph with detected tracks composited on top. Used by export. */
+  renderOverlay?: boolean;
 }
 
 /** One constant-velocity segment of a track. ``*UmPerSec`` fields are null
@@ -99,6 +102,8 @@ export interface KymographServiceResult {
   frameIntervalMs: number | null;
   /** Detected moving particles; present only when ``detectVelocity`` was set. */
   tracks?: KymographTrack[];
+  /** Base64 PNG of the kymograph + tracks; present only with ``renderOverlay``. */
+  overlayPngBase64?: string;
 }
 
 /** Resolves the on-disk PNG path for a given frame + channel. */
@@ -140,6 +145,7 @@ export async function buildKymograph(
     sourceChannel,
     channelColor,
     detectVelocity,
+    renderOverlay,
   } = input;
 
   // Defence in depth: reject any sourceChannel containing path separators
@@ -245,6 +251,7 @@ export async function buildKymograph(
       tracked: trackedMode,
       ...(channelColor ? { channel_color: channelColor } : {}),
       ...(detectVelocity ? { detect_velocity: true } : {}),
+      ...(detectVelocity && renderOverlay ? { render_overlay: true } : {}),
     },
     { timeout: 120_000 }
   );
@@ -296,5 +303,8 @@ export async function buildKymograph(
     pixelSizeUm,
     frameIntervalMs,
     ...(tracks ? { tracks } : {}),
+    ...(typeof payload.overlay_png_base64 === 'string'
+      ? { overlayPngBase64: payload.overlay_png_base64 }
+      : {}),
   };
 }
