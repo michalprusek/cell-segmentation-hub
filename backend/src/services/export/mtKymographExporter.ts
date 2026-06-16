@@ -48,20 +48,24 @@ function parsePolylines(json: string | null | undefined): PolylineRecord[] {
   }
 }
 
-/** Prefer the first fluorescent channel (motility signal); fall back to the
- *  segmentation source / first channel. Mirrors the editor modal default. */
-function pickSourceChannel(
+/** Channels to sample per microtubule. ALL fluorescent channels (motility can
+ *  live in any of them — picking just the first silently misses motion in the
+ *  others); fall back to the segmentation source / first channel when the
+ *  upload has no fluorescent channels. */
+function pickSourceChannels(
   channels: Array<{
     name: string;
     type?: string;
     isSegmentationSource?: boolean;
   }>
-): string | null {
-  if (channels.length === 0) return null;
-  const fluorescent = channels.find(c => c.type === 'fluorescent');
-  if (fluorescent) return fluorescent.name;
+): string[] {
+  if (channels.length === 0) return [];
+  const fluorescent = channels
+    .filter(c => c.type === 'fluorescent')
+    .map(c => c.name);
+  if (fluorescent.length > 0) return fluorescent;
   const source = channels.find(c => c.isSegmentationSource);
-  return source?.name ?? channels[0].name;
+  return [source?.name ?? channels[0].name];
 }
 
 const csvField = (v: number | string | null | undefined): string =>
@@ -111,8 +115,8 @@ export async function exportMicrotubuleKymographs(
           isSegmentationSource?: boolean;
         }>)
       : [];
-    const sourceChannel = pickSourceChannel(channels);
-    if (!sourceChannel) {
+    const sourceChannels = pickSourceChannels(channels);
+    if (sourceChannels.length === 0) {
       logger.warn(
         `Container ${container.id} has no usable channel; skipping kymographs`,
         CTX
@@ -150,72 +154,76 @@ export async function exportMicrotubuleKymographs(
     }
 
     for (const poly of selected) {
-      try {
-        const result = await buildKymograph({
-          videoContainerId: container.id,
-          polylineId: poly.id,
-          frameIndex: seedFrame.frameIndex,
-          sourceChannel,
-          detectVelocity: true,
-          renderOverlay: options.includeSegmentedImages,
-        });
+      // One kymograph per (microtubule × fluorescent channel) — motion may be
+      // in any channel, so we sample them all rather than guess one.
+      for (const sourceChannel of sourceChannels) {
+        try {
+          const result = await buildKymograph({
+            videoContainerId: container.id,
+            polylineId: poly.id,
+            frameIndex: seedFrame.frameIndex,
+            sourceChannel,
+            detectVelocity: true,
+            renderOverlay: options.includeSegmentedImages,
+          });
 
-        if (options.includeSegmentedImages && result.overlayPngBase64) {
-          await fs.writeFile(
-            path.join(outDir, `${safeVideo}__${poly.id}.png`),
-            Buffer.from(result.overlayPngBase64, 'base64')
+          if (options.includeSegmentedImages && result.overlayPngBase64) {
+            await fs.writeFile(
+              path.join(outDir, `${safeVideo}__${poly.id}__${sourceChannel}.png`),
+              Buffer.from(result.overlayPngBase64, 'base64')
+            );
+          }
+
+          if (options.includeVelocityMetrics && result.tracks) {
+            result.tracks.forEach((tr, ti) => {
+              const base = [
+                container.name,
+                poly.id,
+                sourceChannel,
+                ti + 1,
+                csvField(tr.netVelocityUmPerSec),
+                tr.netVelocityPxPerFrame,
+                tr.snr,
+              ];
+              if (tr.runs.length === 0) {
+                csvRows.push(
+                  [
+                    ...base,
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    csvField(result.pixelSizeUm),
+                    csvField(result.frameIntervalMs),
+                  ].join(',')
+                );
+              }
+              tr.runs.forEach((r, ri) => {
+                csvRows.push(
+                  [
+                    ...base,
+                    ri + 1,
+                    csvField(r.velocityUmPerSec),
+                    csvField(r.seUmPerSec),
+                    r.velocityPxPerFrame,
+                    r.t0,
+                    r.t1,
+                    csvField(result.pixelSizeUm),
+                    csvField(result.frameIntervalMs),
+                  ].join(',')
+                );
+              });
+            });
+          }
+        } catch (err) {
+          // One bad microtubule/channel must not abort the whole export.
+          logger.warn(
+            `Kymograph failed for ${container.name}/${poly.id}/${sourceChannel}: ${(err as Error).message}`,
+            CTX
           );
         }
-
-        if (options.includeVelocityMetrics && result.tracks) {
-          result.tracks.forEach((tr, ti) => {
-            const base = [
-              container.name,
-              poly.id,
-              sourceChannel,
-              ti + 1,
-              csvField(tr.netVelocityUmPerSec),
-              tr.netVelocityPxPerFrame,
-              tr.snr,
-            ];
-            if (tr.runs.length === 0) {
-              csvRows.push(
-                [
-                  ...base,
-                  '',
-                  '',
-                  '',
-                  '',
-                  '',
-                  '',
-                  csvField(result.pixelSizeUm),
-                  csvField(result.frameIntervalMs),
-                ].join(',')
-              );
-            }
-            tr.runs.forEach((r, ri) => {
-              csvRows.push(
-                [
-                  ...base,
-                  ri + 1,
-                  csvField(r.velocityUmPerSec),
-                  csvField(r.seUmPerSec),
-                  r.velocityPxPerFrame,
-                  r.t0,
-                  r.t1,
-                  csvField(result.pixelSizeUm),
-                  csvField(result.frameIntervalMs),
-                ].join(',')
-              );
-            });
-          });
-        }
-      } catch (err) {
-        // One bad microtubule must not abort the whole export.
-        logger.warn(
-          `Kymograph failed for ${container.name}/${poly.id}: ${(err as Error).message}`,
-          CTX
-        );
       }
     }
   }

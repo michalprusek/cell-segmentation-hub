@@ -561,8 +561,11 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     PILImage.fromarray(rgb).save(buf, format="PNG")
     png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
+    # Render the "segmented kymograph" whenever the caller asked for it — even
+    # with zero tracks (then it's just the kymograph, which is still the image
+    # the export wants). raw_tracks may be empty; render_overlay handles that.
     overlay_b64: Optional[str] = None
-    if req.detect_velocity and req.render_overlay and raw_tracks:
+    if req.render_overlay:
         try:
             overlay_b64 = base64.b64encode(
                 render_overlay(rgb, raw_tracks)
