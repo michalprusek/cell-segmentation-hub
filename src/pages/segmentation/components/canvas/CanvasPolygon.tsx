@@ -461,6 +461,18 @@ const CanvasPolygon = React.memo(
       prevProps.availableInstanceIds === nextProps.availableInstanceIds &&
       // Drives context-menu gating; must be in comparator.
       prevProps.projectType === nextProps.projectType &&
+      // Context-menu / vertex callbacks. These are identity-stable
+      // (usePolygonHandlers wraps them in useCallback([]) via editorRef), so
+      // comparing them costs nothing today and guards the documented
+      // stale-closure regression if a render site ever wraps one inline.
+      // onSelectPolygon is deliberately excluded: handlePolygonClick legitimately
+      // changes on polygon/selection edits, and comparing it would re-render
+      // every polygon on each edit.
+      prevProps.onDeletePolygon === nextProps.onDeletePolygon &&
+      prevProps.onSlicePolygon === nextProps.onSlicePolygon &&
+      prevProps.onEditPolygon === nextProps.onEditPolygon &&
+      prevProps.onDeleteVertex === nextProps.onDeleteVertex &&
+      prevProps.onHover === nextProps.onHover &&
       // editMode flips between View / EditVertices / Slice / AddPoints /
       // CreatePolygon / CreatePolyline / DeletePolygon and changes which
       // interactions the polygon should accept. Skipping it caused the

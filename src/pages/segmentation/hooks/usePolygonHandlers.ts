@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { EditMode } from '../types';
 import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
 import { logger } from '@/lib/logger';
@@ -42,6 +42,15 @@ export function usePolygonHandlers({
   editor,
   imageId,
 }: UsePolygonHandlersParams) {
+  // `editor` is a fresh object literal every render of
+  // useEnhancedSegmentationEditor. Mirror it into a ref so the handlers below
+  // are identity-stable (deps: []) yet always read the latest editor state and
+  // methods. Stable handler identities let the CanvasPolygon / PolygonVertices
+  // React.memo comparators actually hold — previously these recreated on every
+  // render and the comparators kept stale closures (wrong-polygon delete/slice).
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+
   // Stores STABLE keys (trackId where present, else polygon.id) so a
   // microtubule hidden on one frame stays hidden when the user scrubs.
   // Branded `Set<PolygonKey>` makes accidental key-by-other-string a
@@ -58,10 +67,10 @@ export function usePolygonHandlers({
   const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
 
   // Legacy compatibility handlers
-  const handleTogglePolygonVisibility = (polygonId: string) => {
+  const handleTogglePolygonVisibility = useCallback((polygonId: string) => {
     // Map current-frame polygon.id → stable key (trackId or id) so the
     // hide state survives frame changes for MTs.
-    const target = editor.polygons.find(p => p.id === polygonId);
+    const target = editorRef.current.polygons.find(p => p.id === polygonId);
     if (!target) return;
     const key = polygonKey(target);
     setHiddenPolygonIds(prev => {
@@ -73,11 +82,11 @@ export function usePolygonHandlers({
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const handleDeletePolygonFromPanel = (polygonId: string) => {
-    const target = editor.polygons.find(p => p.id === polygonId);
-    editor.handleDeletePolygon(polygonId);
+  const handleDeletePolygonFromPanel = useCallback((polygonId: string) => {
+    const target = editorRef.current.polygons.find(p => p.id === polygonId);
+    editorRef.current.handleDeletePolygon(polygonId);
     if (target) {
       const key = polygonKey(target);
       setHiddenPolygonIds(prev => {
@@ -86,22 +95,19 @@ export function usePolygonHandlers({
         return newSet;
       });
     }
-  };
+  }, []);
 
   // Capture trackId at click so frame scrubbing re-attaches selection
   // to the same MT instance on the new frame.
-  const handleSelectPolygon = useCallback(
-    (polygonId: string | null) => {
-      if (polygonId === null) {
-        setPersistedSelectionTrackId(null);
-      } else {
-        const p = editor.polygons.find(x => x.id === polygonId);
-        setPersistedSelectionTrackId(p?.trackId ?? null);
-      }
-      editor.handlePolygonSelection(polygonId);
-    },
-    [editor]
-  );
+  const handleSelectPolygon = useCallback((polygonId: string | null) => {
+    if (polygonId === null) {
+      setPersistedSelectionTrackId(null);
+    } else {
+      const p = editorRef.current.polygons.find(x => x.id === polygonId);
+      setPersistedSelectionTrackId(p?.trackId ?? null);
+    }
+    editorRef.current.handlePolygonSelection(polygonId);
+  }, []);
 
   // Cross-frame selection remap. When polygons load for a new frame
   // (initialPolygons replaces editor.polygons), find the polygon that
@@ -145,8 +151,8 @@ export function usePolygonHandlers({
   // Context menu handlers for polygon right-click
   const handleDeletePolygonFromContextMenu = useCallback(
     (polygonId: string) => {
-      const target = editor.polygons.find(p => p.id === polygonId);
-      editor.handleDeletePolygon(polygonId);
+      const target = editorRef.current.polygons.find(p => p.id === polygonId);
+      editorRef.current.handleDeletePolygon(polygonId);
       if (target) {
         const key = polygonKey(target);
         setHiddenPolygonIds(prev => {
@@ -156,48 +162,39 @@ export function usePolygonHandlers({
         });
       }
     },
-    [editor]
+    []
   );
 
-  const handleSlicePolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
-      // Select the polygon and switch to slice mode (skip to step 2)
-      editor.setSelectedPolygonId(polygonId);
-      editor.setEditMode(EditMode.Slice);
-    },
-    [editor]
-  );
+  const handleSlicePolygonFromContextMenu = useCallback((polygonId: string) => {
+    // Select the polygon and switch to slice mode (skip to step 2)
+    editorRef.current.setSelectedPolygonId(polygonId);
+    editorRef.current.setEditMode(EditMode.Slice);
+  }, []);
 
-  const handleEditPolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
-      // Select the polygon and switch to edit vertices mode
-      editor.setSelectedPolygonId(polygonId);
-      editor.setEditMode(EditMode.EditVertices);
-    },
-    [editor]
-  );
+  const handleEditPolygonFromContextMenu = useCallback((polygonId: string) => {
+    // Select the polygon and switch to edit vertices mode
+    editorRef.current.setSelectedPolygonId(polygonId);
+    editorRef.current.setEditMode(EditMode.EditVertices);
+  }, []);
 
   // Context menu handlers for vertex right-click
   const handleDeleteVertexFromContextMenu = useCallback(
     (polygonId: string, vertexIndex: number) => {
-      editor.handleDeleteVertex(polygonId, vertexIndex);
+      editorRef.current.handleDeleteVertex(polygonId, vertexIndex);
     },
-    [editor]
+    []
   );
 
   // Generic handler for updating a single field on a polygon by ID
   const handleUpdatePolygonField = useCallback(
     (polygonId: string, updates: Partial<Polygon>) => {
-      const currentPolygons = editor.getPolygons();
+      const currentPolygons = editorRef.current.getPolygons();
       const updatedPolygons = currentPolygons.map(p =>
         p.id === polygonId ? { ...p, ...updates } : p
       );
-      editor.updatePolygons(updatedPolygons);
+      editorRef.current.updatePolygons(updatedPolygons);
     },
-    // editor object reference is stable; tracking individual methods avoids
-    // re-creating this callback when unrelated editor state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor.getPolygons, editor.updatePolygons]
+    []
   );
 
   const handleRenamePolygon = useCallback(

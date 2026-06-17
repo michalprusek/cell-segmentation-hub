@@ -70,10 +70,10 @@ const SegmentationEditor = () => {
     images,
     loading: projectLoading,
     refreshImageSegmentation,
-  } = useProjectData(projectId, user?.id, {
-    fetchAll: false, // CRITICAL: Don't fetch all segmentation data upfront
-    // We'll handle prefetching adjacent images separately
-  });
+    // useProjectData always fetches metadata only (lod: 'low') and loads
+    // segmentation geometry on demand — there is no fetch-all path to disable,
+    // so no options arg is passed. Adjacent-frame prefetch is handled separately.
+  } = useProjectData(projectId, user?.id);
 
   // WebSocket connection for segmentation status updates
   const {
