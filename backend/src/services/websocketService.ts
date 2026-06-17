@@ -379,11 +379,16 @@ export class WebSocketService {
                 break;
 
               case 'segmentation':
-                // Cancel segmentation jobs via queue service
-                if (this.queueService && data.projectId) {
+                // Cancel segmentation jobs via queue service. operationId is
+                // the batchId. (This handler currently has no FE emitter — the
+                // active segmentation cancel is HTTP /queue/cancel-all-user —
+                // but wire it correctly so it cancels for real if ever used.)
+                if (this.queueService && data.operationId) {
                   try {
-                    // TODO: Implement cancelBatch method in QueueService
-                    // await this.queueService.cancelBatch(data.operationId, socket.userId);
+                    await this.queueService.cancelBatch(
+                      data.operationId,
+                      socket.userId
+                    );
                   } catch (error) {
                     logger.error(
                       'Failed to cancel segmentation via queue service',

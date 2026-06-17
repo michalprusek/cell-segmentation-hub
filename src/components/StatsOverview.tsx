@@ -77,6 +77,7 @@ const StatsOverview = () => {
   const [loading, setLoading] = useState(true);
   const [storageUsed, setStorageUsed] = useState('0 MB');
   const [storageGrowth, setStorageGrowth] = useState('0 MB');
+  const [failedProjectCount, setFailedProjectCount] = useState(0);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -157,6 +158,7 @@ const StatsOverview = () => {
         const imageResults = await Promise.all(imagePromises);
 
         // Aggregate results
+        let failedProjects = 0;
         for (const result of imageResults) {
           if (result.success && result.images && Array.isArray(result.images)) {
             totalImages += result.images.length;
@@ -170,6 +172,8 @@ const StatsOverview = () => {
               const createdAt = img.createdAt || img.created_at;
               return new Date(createdAt) >= today;
             }).length;
+          } else if (!result.success) {
+            failedProjects += 1;
           }
         }
 
@@ -177,6 +181,7 @@ const StatsOverview = () => {
         _setImageCount(totalImages);
         setCompletedImageCount(completedImages);
         setTodayUploadCount(todayImages);
+        setFailedProjectCount(failedProjects);
 
         // Fetch storage stats
         try {
@@ -252,11 +257,20 @@ const StatsOverview = () => {
   ];
 
   return (
-    <StatsGrid>
-      {stats.map((stat, index) => (
-        <StatCard key={index} {...stat} />
-      ))}
-    </StatsGrid>
+    <div>
+      <StatsGrid>
+        {stats.map((stat, index) => (
+          <StatCard key={index} {...stat} />
+        ))}
+      </StatsGrid>
+      {!loading && failedProjectCount > 0 && (
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          {t('dashboard.stats.incompleteWarning', {
+            count: failedProjectCount,
+          })}
+        </p>
+      )}
+    </div>
   );
 };
 

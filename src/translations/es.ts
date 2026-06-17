@@ -192,6 +192,8 @@ export default {
       uploadedTodayDesc: 'Imágenes de esferoides',
       storageUsed: 'Almacenamiento usado',
       totalSpaceUsed: 'Espacio total usado',
+      incompleteWarning:
+        'Las estadísticas pueden estar incompletas — no se pudo cargar {{count}} proyecto(s)',
     },
     completed: 'Completado',
     processing: 'Procesando',
@@ -1130,6 +1132,10 @@ export default {
         'Error al cargar los resultados de segmentación. Por favor, actualiza la página.',
       autosaveFailed:
         'Error en guardado automático - los cambios pueden perderse',
+    },
+    // Multi-channel canvas actions
+    multiChannel: {
+      allChannelsFailed: 'Error al cargar los canales de imagen',
     },
   },
   project: {

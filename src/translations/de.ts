@@ -192,6 +192,8 @@ export default {
       uploadedTodayDesc: 'Sphäroid-Bilder',
       storageUsed: 'Genutzter Speicher',
       totalSpaceUsed: 'Gesamt genutzter Speicher',
+      incompleteWarning:
+        'Statistiken möglicherweise unvollständig — {{count}} Projekt(e) konnten nicht geladen werden',
     },
     completed: 'Abgeschlossen',
     processing: 'Verarbeitung',
@@ -1145,6 +1147,10 @@ export default {
         'Laden der Segmentierungsergebnisse fehlgeschlagen. Bitte Seite aktualisieren.',
       autosaveFailed:
         'Automatisches Speichern fehlgeschlagen - Änderungen können verloren gehen',
+    },
+    // Multi-channel canvas actions
+    multiChannel: {
+      allChannelsFailed: 'Bildkanäle konnten nicht geladen werden',
     },
   },
   project: {

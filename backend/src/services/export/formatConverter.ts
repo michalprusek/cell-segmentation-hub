@@ -265,15 +265,19 @@ export interface RLEFormat {
 
 export class FormatConverter {
   /**
-   * Convert to COCO format
+   * Convert to COCO format.
+   * Returns the COCO data plus a count of images whose polygon JSON could
+   * not be parsed — the caller should surface this as a job warning so the
+   * user knows those images were emitted with zero annotations.
    */
-  async convertToCOCO(images: ImageData[]): Promise<COCOFormat> {
+  async convertToCOCO(images: ImageData[]): Promise<{ data: COCOFormat; parseFailures: number }> {
     const annotations: COCOAnnotation[] = [];
     const imagesList: COCOImage[] = [];
     let annotationId = 1;
     let hasSperm = false;
     let totalInvalidPartClass = 0;
     const sampleAffectedImages: string[] = [];
+    let parseFailures = 0;
 
     for (let imageIdx = 0; imageIdx < images.length; imageIdx++) {
       const image = images[imageIdx];
@@ -302,6 +306,7 @@ export class FormatConverter {
             }
           );
           parsedPolygons = [];
+          parseFailures += 1;
         }
       }
 
@@ -436,7 +441,7 @@ export class FormatConverter {
       );
     }
 
-    const cocoData = {
+    const cocoData: COCOFormat = {
       info: {
         description: 'Cell Segmentation Dataset',
         version: '1.0',
@@ -456,7 +461,7 @@ export class FormatConverter {
       ],
     };
 
-    return cocoData;
+    return { data: cocoData, parseFailures };
   }
 
   async convertToYOLO(
@@ -532,9 +537,11 @@ export class FormatConverter {
   }
 
   /**
-   * Convert to custom JSON format
+   * Convert to custom JSON format.
+   * Returns the export data plus a count of images whose polygon JSON could
+   * not be parsed — the caller should surface this as a job warning.
    */
-  async convertToJSON(images: ImageData[]): Promise<JSONExportFormat> {
+  async convertToJSON(images: ImageData[]): Promise<{ data: JSONExportFormat; parseFailures: number }> {
     const exportData: JSONExportFormat = {
       metadata: {
         version: '1.0',
@@ -546,6 +553,7 @@ export class FormatConverter {
     };
     let totalOrphans = 0;
     const orphanSampleImages: string[] = [];
+    let parseFailures = 0;
 
     for (let imageIdx = 0; imageIdx < images.length; imageIdx++) {
       const image = images[imageIdx];
@@ -573,6 +581,7 @@ export class FormatConverter {
             }
           );
           parsedPolygons = [];
+          parseFailures += 1;
         }
       }
 
@@ -686,7 +695,7 @@ export class FormatConverter {
       );
     }
 
-    return exportData;
+    return { data: exportData, parseFailures };
   }
 
   /**

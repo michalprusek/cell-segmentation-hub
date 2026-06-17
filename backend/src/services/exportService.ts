@@ -814,6 +814,16 @@ export class ExportService {
       `Parallel image copy completed: ${copiedCount} copied, ${skippedCount} skipped out of ${images.length} total`,
       'ExportService'
     );
+
+    if (skippedCount > 0 && jobId) {
+      const job = this.exportJobs.get(jobId);
+      if (job) {
+        job.warnings = [
+          ...(job.warnings ?? []),
+          `${skippedCount} of ${images.length} original image file(s) could not be copied (missing, permission-denied, or rejected path) and are absent from the export archive.`,
+        ];
+      }
+    }
   }
 
   private async generateVisualizations(
@@ -998,6 +1008,16 @@ export class ExportService {
       `Parallel visualization generation completed: ${processedCount} processed, ${skippedCount} skipped out of ${images.length} total`,
       'ExportService'
     );
+
+    if (skippedCount > 0 && jobId) {
+      const job = this.exportJobs.get(jobId);
+      if (job) {
+        job.warnings = [
+          ...(job.warnings ?? []),
+          `${skippedCount} of ${images.length} visualization(s) could not be generated (missing source image, corrupt polygon data, or rendering failure) and are absent from the export archive.`,
+        ];
+      }
+    }
   }
 
   private async generateAnnotations(
@@ -1035,12 +1055,21 @@ export class ExportService {
             : [],
         }));
 
-        const cocoData =
+        const { data: cocoData, parseFailures: cocoFailures } =
           await this.formatConverter.convertToCOCO(imageDataArray);
         await fs.writeFile(
           path.join(formatDir, 'annotations.json'),
           JSON.stringify(cocoData, null, 2)
         );
+        if (cocoFailures > 0 && jobId) {
+          const job = this.exportJobs.get(jobId);
+          if (job) {
+            job.warnings = [
+              ...(job.warnings ?? []),
+              `COCO export: ${cocoFailures} image(s) had corrupt polygon data and were emitted with zero annotations.`,
+            ];
+          }
+        }
       } else if (format === 'yolo') {
         await mapWithConcurrency(
           images,
@@ -1122,12 +1151,21 @@ export class ExportService {
             : [],
         }));
 
-        const jsonData =
+        const { data: jsonData, parseFailures: jsonFailures } =
           await this.formatConverter.convertToJSON(imageDataArray);
         await fs.writeFile(
           path.join(formatDir, 'segmentation_data.json'),
           JSON.stringify(jsonData, null, 2)
         );
+        if (jsonFailures > 0 && jobId) {
+          const job = this.exportJobs.get(jobId);
+          if (job) {
+            job.warnings = [
+              ...(job.warnings ?? []),
+              `JSON export: ${jsonFailures} image(s) had corrupt polygon data and were emitted with zero annotations.`,
+            ];
+          }
+        }
       }
     }
   }
@@ -1424,12 +1462,16 @@ export class ExportService {
 
     if (channels.length > 0) {
       try {
-        rows = await computeMTMetrics(frameInputs, projectId, {
+        const mtResult = await computeMTMetrics(frameInputs, projectId, {
           thicknessPx: options.mtMetrics!.thicknessPx,
           marginMultiplier: options.mtMetrics!.marginMultiplier,
           channels,
           pixelToMicrometerScale: scale,
         });
+        rows = mtResult.rows;
+        for (const reason of mtResult.skipped) {
+          addWarning(`MT intensity metrics skipped: ${reason}`);
+        }
         intensityIncluded = rows.length > 0;
       } catch (err) {
         logger.error(

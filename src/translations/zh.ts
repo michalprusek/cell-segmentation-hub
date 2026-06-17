@@ -181,6 +181,7 @@ export default {
       uploadedTodayDesc: '球体图像',
       storageUsed: '已用存储',
       totalSpaceUsed: '总使用空间',
+      incompleteWarning: '统计数据可能不完整 — 无法加载 {{count}} 个项目',
     },
     completed: '已完成',
     processing: '处理中',
@@ -1044,6 +1045,10 @@ export default {
       noPolygons: '未检测到分割多边形',
       reloadFailed: '加载分割结果失败。请刷新页面。',
       autosaveFailed: '自动保存失败 - 更改可能丢失',
+    },
+    // Multi-channel canvas actions
+    multiChannel: {
+      allChannelsFailed: '加载图像通道失败',
     },
   },
   project: {

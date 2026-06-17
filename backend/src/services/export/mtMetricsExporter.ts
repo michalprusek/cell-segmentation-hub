@@ -199,21 +199,25 @@ function resolveChannelIndices(
  * @param projectId    For logging context only.
  * @param options      User-supplied MT metric controls from the export
  *                     modal.
- * @returns Long-format rows ready to write to CSV / XLSX / JSON.
- *          Empty array if no eligible polylines were found.
+ * @returns Long-format rows ready to write to CSV / XLSX / JSON, plus
+ *          a list of human-readable skip reasons for videos that could
+ *          not be processed. The caller should surface these as job
+ *          warnings so the user knows which videos were omitted.
  */
 export async function computeMTMetrics(
   frameImages: FrameImageInput[],
   projectId: string,
   options: MTMetricsOptions
-): Promise<MTMetricsRow[]> {
+): Promise<{ rows: MTMetricsRow[]; skipped: string[] }> {
+  const skipped: string[] = [];
+
   if (!options.channels.length) {
     logger.info(
       'MT metrics: no channels selected; skipping',
       'mtMetricsExporter',
       { projectId }
     );
-    return [];
+    return { rows: [], skipped };
   }
 
   // Validate channel names defensively (the FE should have done this,
@@ -242,7 +246,7 @@ export async function computeMTMetrics(
       'mtMetricsExporter',
       { projectId }
     );
-    return [];
+    return { rows: [], skipped };
   }
 
   // Fetch all video container rows in a single query.
@@ -270,6 +274,7 @@ export async function computeMTMetrics(
         'mtMetricsExporter',
         { projectId, videoId }
       );
+      skipped.push(`Video ${videoId}: container row not found in database.`);
       continue;
     }
     const fileKind = detectFileKind(container.mimeType, container.originalPath);
@@ -279,6 +284,7 @@ export async function computeMTMetrics(
         'mtMetricsExporter',
         { projectId, videoId, originalPath: container.originalPath }
       );
+      skipped.push(`Video ${videoId}: could not determine file type (not ND2 or TIFF) — intensity metrics omitted.`);
       continue;
     }
     const containerChannels = Array.isArray(container.channels)
@@ -290,18 +296,19 @@ export async function computeMTMetrics(
         'mtMetricsExporter',
         { projectId, videoId }
       );
+      skipped.push(`Video ${videoId}: no channel metadata stored — intensity metrics omitted.`);
       continue;
     }
 
-    const { indices, names, skipped } = resolveChannelIndices(
+    const { indices, names, skipped: channelSkipped } = resolveChannelIndices(
       containerChannels,
       options.channels
     );
-    if (skipped.length) {
+    if (channelSkipped.length) {
       logger.warn(
         'MT metrics: some selected channels not found on this video',
         'mtMetricsExporter',
-        { projectId, videoId, skipped }
+        { projectId, videoId, skipped: channelSkipped }
       );
     }
     if (!indices.length) {
@@ -310,6 +317,7 @@ export async function computeMTMetrics(
         'mtMetricsExporter',
         { projectId, videoId }
       );
+      skipped.push(`Video ${videoId}: none of the selected channels (${options.channels.join(', ')}) were found on this video — intensity metrics omitted.`);
       continue;
     }
 
@@ -415,9 +423,9 @@ export async function computeMTMetrics(
   logger.info(
     'MT metrics: total rows produced',
     'mtMetricsExporter',
-    { projectId, rows: allRows.length }
+    { projectId, rows: allRows.length, skippedVideos: skipped.length }
   );
-  return allRows;
+  return { rows: allRows, skipped };
 }
 
 /** Arc length in pixels = sum of consecutive segment lengths. */

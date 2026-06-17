@@ -197,20 +197,29 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   /**
-   * Check if file exists
+   * Check if file exists.
+   *
+   * Returns false only for ENOENT (file not found). Any other FS error
+   * (EACCES, EIO, …) is re-thrown so callers are not misled into treating
+   * a permission or I/O failure as an absent file.
    */
   async exists(key: string): Promise<boolean> {
+    const filePath = path.join(this.uploadDir, key);
     try {
-      const filePath = path.join(this.uploadDir, key);
-      return existsSync(filePath);
+      await fs.stat(filePath);
+      return true;
     } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        return false;
+      }
       logger.error(
-        'Failed to check file existence',
-        error instanceof Error ? error : undefined,
+        `Unexpected FS error checking existence of "${key}" (code: ${code})`,
+        error instanceof Error ? error : new Error(String(error)),
         'LocalStorage',
-        { key }
+        { key, code }
       );
-      return false;
+      throw error;
     }
   }
 

@@ -97,6 +97,7 @@ async def lifespan(app: FastAPI):
         models_to_load = ["hrnet", "cbam_resunet", "unet_spherohq", "unet_attention_aspp", "sperm"]
         loaded_count = 0
         
+        models_failed: list[str] = []
         for model_name in models_to_load:
             try:
                 model_loader_instance.load_model(model_name)
@@ -104,7 +105,11 @@ async def lifespan(app: FastAPI):
                 loaded_count += 1
             except Exception as e:
                 logger.warning(f"Could not pre-load {model_name} model: {e}")
-        
+                models_failed.append(model_name)
+
+        # Expose failed models on app state so /health can surface them.
+        app.state.models_failed = models_failed
+
         logger.info(f"Pre-loaded {loaded_count}/{len(models_to_load)} models")
         
         logger.info("Segmentation microservice started successfully")

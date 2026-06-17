@@ -252,11 +252,23 @@ export class ImageController {
         completedData
       );
 
+      const failedCount = files.length - uploadedImages.length;
+      const failedFiles =
+        failedCount > 0
+          ? files
+              .filter(
+                f => !uploadedImages.find(img => img.name === f.originalname)
+              )
+              .map(f => ({ filename: f.originalname, reason: 'Upload failed' }))
+          : undefined;
+
       ResponseHelper.success(
         res,
         {
           images: uploadedImages,
           count: uploadedImages.length,
+          failedCount,
+          ...(failedFiles ? { failedFiles } : {}),
         },
         `Úspěšně nahráno ${uploadedImages.length} obrázků`
       );
@@ -992,6 +1004,9 @@ export class ImageController {
             polygonCount: number;
             pointCount: number;
             compressionRatio: number;
+            /** True when the stored polygon JSON could not be parsed/validated.
+             * Distinguishes "data corrupt" from "genuinely 0 segmentations". */
+            hasParseError?: boolean;
           } | null = null;
 
           if (image.segmentation) {
@@ -1043,7 +1058,8 @@ export class ImageController {
                   error instanceof Error ? error : new Error(String(error)),
                   'ImageController'
                 );
-                // Use safe default when parsing fails
+                // Use safe default when parsing fails; hasParseError lets the
+                // FE distinguish "data corrupt" from "genuinely 0 polygons".
                 thumbnailData = {
                   polygons: [],
                   imageWidth: image.segmentation.imageWidth,
@@ -1052,20 +1068,41 @@ export class ImageController {
                   polygonCount: 0,
                   pointCount: 0,
                   compressionRatio: 1.0,
+                  hasParseError: true,
                 };
               }
             }
           }
 
-          // Generate proper URLs using storage service
-          const originalUrl = await storage.getUrl(image.originalPath);
+          // Generate proper URLs using storage service.
+          // Each getUrl is wrapped individually so a single broken storage
+          // path (missing file, bad key) yields a null/fallback for that
+          // image rather than rejecting the entire Promise.all and 500-ing
+          // the gallery page.
+          const getUrlSafe = async (
+            storagePath: string,
+            fallback: string | null = null
+          ): Promise<string | null> => {
+            try {
+              return await storage.getUrl(storagePath);
+            } catch (urlErr) {
+              logger.error(
+                `Failed to resolve storage URL for path "${storagePath}" (image ${image.id})`,
+                urlErr instanceof Error ? urlErr : new Error(String(urlErr)),
+                'ImageController'
+              );
+              return fallback;
+            }
+          };
+
+          const originalUrl = await getUrlSafe(image.originalPath, null);
           const thumbnailUrl = image.thumbnailPath
-            ? await storage.getUrl(image.thumbnailPath)
+            ? await getUrlSafe(image.thumbnailPath, originalUrl)
             : originalUrl; // Fallback to original if no thumbnail
 
           // Generate segmentation thumbnail URL if it exists
           const segmentationThumbnailUrl = image.segmentationThumbnailPath
-            ? await storage.getUrl(image.segmentationThumbnailPath)
+            ? await getUrlSafe(image.segmentationThumbnailPath, null)
             : null;
 
           // Video containers / extracted frames are not directly
