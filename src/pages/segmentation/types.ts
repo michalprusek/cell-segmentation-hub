@@ -43,14 +43,6 @@ export const EDITING_CONSTANTS = {
   MAX_ZOOM: 10, // 1000% maximum zoom
 } as const;
 
-export interface DragState {
-  isDragging: boolean;
-  startX: number;
-  startY: number;
-  lastX: number;
-  lastY: number;
-}
-
 export interface VertexDragState {
   isDragging: boolean;
   polygonId: string | null;

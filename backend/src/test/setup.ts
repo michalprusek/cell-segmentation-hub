@@ -44,30 +44,6 @@ const createPrismaMock = () => {
 
 export const prismaMock = createPrismaMock();
 
-// Mock Redis client
-export const redisMock = {
-  get: vi.fn(),
-  set: vi.fn(),
-  del: vi.fn(),
-  exists: vi.fn(),
-  expire: vi.fn(),
-  flushall: vi.fn(),
-  quit: vi.fn(),
-  connect: vi.fn(),
-  disconnect: vi.fn(),
-};
-
-// Mock Bull queue
-export const queueMock = {
-  add: vi.fn(),
-  process: vi.fn(),
-  on: vi.fn(),
-  clean: vi.fn(),
-  pause: vi.fn(),
-  resume: vi.fn(),
-  close: vi.fn(),
-};
-
 // Mock JWT
 vi.mock('jsonwebtoken');
 
@@ -80,15 +56,6 @@ vi.mock('../db', () => ({
   prisma: createPrismaMock(),
   default: createPrismaMock(),
 }));
-
-// Mock Redis client
-vi.mock('../redis/client', () => ({
-  __esModule: true,
-  default: redisMock,
-}));
-
-// Mock Bull queue
-vi.mock('bull');
 
 // Mock file system operations
 vi.mock('fs/promises', () => ({

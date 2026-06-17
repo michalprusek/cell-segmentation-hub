@@ -159,36 +159,6 @@ vi.mock('../healthRoutes', () => {
   );
   return { default: r };
 });
-vi.mock('../cacheRoutes', () => {
-  const r = require('express').Router();
-  r.use(
-    (
-      _req: unknown,
-      res: { status: (c: number) => { json: (b: unknown) => void } }
-    ) => res.status(200).json({ stub: true })
-  );
-  return { default: r };
-});
-vi.mock('../database', () => {
-  const r = require('express').Router();
-  r.use(
-    (
-      _req: unknown,
-      res: { status: (c: number) => { json: (b: unknown) => void } }
-    ) => res.status(200).json({ stub: true })
-  );
-  return { default: r };
-});
-vi.mock('../rateLimitAdmin', () => {
-  const r = require('express').Router();
-  r.use(
-    (
-      _req: unknown,
-      res: { status: (c: number) => { json: (b: unknown) => void } }
-    ) => res.status(200).json({ stub: true })
-  );
-  return { default: r };
-});
 vi.mock('../feedbackRoutes', () => {
   const r = require('express').Router();
   r.use(
@@ -311,12 +281,7 @@ describe('setupRoutes() — route mounting', () => {
   });
 
   it('mounts /api/ml', async () => {
-    const res = await request(app).get('/api/ml/models');
-    expect(res.status).not.toBe(404);
-  });
-
-  it('mounts /api/admin/rate-limits', async () => {
-    const res = await request(app).get('/api/admin/rate-limits/status');
+    const res = await request(app).get('/api/ml/status');
     expect(res.status).not.toBe(404);
   });
 
@@ -342,7 +307,6 @@ describe('setupRoutes() — route mounting', () => {
     expect(paths).toContain('/api/auth/register');
     expect(paths).toContain('/api/auth/login');
     expect(paths).toContain('/api/projects');
-    expect(paths).toContain('/api/admin/rate-limits/status');
     expect(paths).toContain('/api/folders');
   });
 });
