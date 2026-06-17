@@ -1135,6 +1135,14 @@ export default {
   },
   export: {
     // Microtubule-only metric controls.
+    mtKymographs: {
+      title: 'Kymograph velocity analysis',
+      description:
+        'Detect moving particles on a kymograph for each microtubule and export their velocities.',
+      enable: 'Include kymograph analysis',
+      velocityMetrics: 'Velocity metrics (CSV)',
+      segmentedImages: 'Segmented kymograph images (PNG)',
+    },
     mt: {
       sectionTitle: 'Microtubule metrics',
       sectionDescription:
@@ -2199,6 +2207,14 @@ export default {
       showKymograph: 'Show kymograph',
       axisTime: 'Time (frames) ↓',
       axisAlong: 'Along microtubule (px) →',
+      velocityAnalysis: 'Velocity analysis',
+      colVelocity: 'Net velocity',
+      colRuns: 'Runs',
+      colSnr: 'SNR',
+      noBlobs: 'No moving particles detected',
+      downloadTracks: 'Velocity CSV',
+      uncalibrated:
+        'No pixel-size / frame-interval calibration — velocities shown in px/frame.',
     },
     channels: {
       toggleVisibility: 'Toggle channel visibility',

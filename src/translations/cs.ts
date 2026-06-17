@@ -1144,6 +1144,14 @@ export default {
     imagesDeleted_other: '{{count}} obrázky smazány',
   },
   export: {
+    mtKymographs: {
+      title: 'Analýza rychlosti z kymografu',
+      description:
+        'Detekce pohyblivých částic na kymografu pro každý mikrotubul a export jejich rychlostí.',
+      enable: 'Zahrnout analýzu kymografů',
+      velocityMetrics: 'Metriky rychlosti (CSV)',
+      segmentedImages: 'Segmentované kymografy (PNG)',
+    },
     mt: {
       sectionTitle: 'Metriky mikrotubulů',
       sectionDescription:
@@ -2138,6 +2146,14 @@ export default {
       showKymograph: 'Zobrazit kymograf',
       axisTime: 'Čas (snímky) ↓',
       axisAlong: 'Podél mikrotubule (px) →',
+      velocityAnalysis: 'Analýza rychlosti',
+      colVelocity: 'Čistá rychlost',
+      colRuns: 'Běhy',
+      colSnr: 'SNR',
+      noBlobs: 'Nedetekovány žádné pohyblivé částice',
+      downloadTracks: 'CSV rychlostí',
+      uncalibrated:
+        'Bez kalibrace velikosti pixelu / intervalu snímků — rychlosti v px/snímek.',
     },
     channels: {
       toggleVisibility: 'Přepnout viditelnost kanálu',
