@@ -10,8 +10,8 @@
  * a velocity table.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Loader2, Maximize, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -116,6 +116,89 @@ export function KymographModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<number | null>(null);
+
+  // --- Kymograph zoom / pan / scroll (native aspect ratio, no stretch) ------
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    x: number;
+    y: number;
+    sl: number;
+    st: number;
+  } | null>(null);
+  const [scale, setScale] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const effScale = scale ?? 1;
+
+  const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
+
+  const fitToView = useCallback(() => {
+    const vp = viewportRef.current;
+    if (!vp || !result) return;
+    const s = Math.min(
+      vp.clientWidth / result.lengthPx,
+      vp.clientHeight / result.frameCount
+    );
+    setScale(clampScale(s > 0 ? s : 1));
+  }, [result]);
+
+  // Fit each freshly-loaded kymograph to the viewport.
+  useEffect(() => {
+    if (result) fitToView();
+  }, [result, fitToView]);
+
+  const zoomBy = useCallback((factor: number) => {
+    const vp = viewportRef.current;
+    setScale(prev => {
+      const cur = prev ?? 1;
+      const next = clampScale(cur * factor);
+      if (vp) {
+        const ratio = next / cur;
+        const cx = vp.scrollLeft + vp.clientWidth / 2;
+        const cy = vp.scrollTop + vp.clientHeight / 2;
+        requestAnimationFrame(() => {
+          vp.scrollLeft = cx * ratio - vp.clientWidth / 2;
+          vp.scrollTop = cy * ratio - vp.clientHeight / 2;
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  // Ctrl/⌘ + wheel zoom — native non-passive listener so preventDefault works.
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+    };
+    vp.addEventListener('wheel', onWheel, { passive: false });
+    return () => vp.removeEventListener('wheel', onWheel);
+  }, [zoomBy, result]);
+
+  const onDragStart = (e: React.MouseEvent) => {
+    const vp = viewportRef.current;
+    if (!vp || e.button !== 0) return;
+    dragRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      sl: vp.scrollLeft,
+      st: vp.scrollTop,
+    };
+    setDragging(true);
+  };
+  const onDragMove = (e: React.MouseEvent) => {
+    const vp = viewportRef.current;
+    const d = dragRef.current;
+    if (!vp || !d) return;
+    vp.scrollLeft = d.sl - (e.clientX - d.x);
+    vp.scrollTop = d.st - (e.clientY - d.y);
+  };
+  const onDragEnd = () => {
+    dragRef.current = null;
+    setDragging(false);
+  };
 
   useEffect(() => {
     if (defaultChannel && sourceChannel == null) {
@@ -269,98 +352,139 @@ export function KymographModal({
           )}
           {error && <div className="text-destructive text-sm">{error}</div>}
           {!isLoading && !error && result && (
-            // Axes: rows = frames (time, ↓ down = later); cols = position
-            // along the polyline (head → tail in the seed frame).
-            <div
-              className="grid w-full gap-1"
-              style={{
-                gridTemplateColumns: 'auto auto 1fr',
-                gridTemplateRows: '1fr auto auto',
-              }}
-            >
-              {/* Y-axis name (column 0, row 0) — rotated. */}
-              <div className="flex items-center justify-center text-xs text-muted-foreground pr-1">
-                <span
-                  className="whitespace-nowrap"
-                  style={{
-                    writingMode: 'vertical-rl',
-                    transform: 'rotate(180deg)',
-                  }}
-                >
-                  {t('editor.kymograph.axisTime', {
-                    defaultValue: 'Time (frames) ↓',
+            // Native-aspect-ratio viewer: the kymograph is NOT stretched — it's
+            // shown at lengthPx×frameCount (× zoom) inside a scrollable box.
+            // Rows = frames (time ↓), cols = position along the microtubule.
+            <div className="w-full">
+              <div className="flex">
+                {/* Y-axis name (rotated). */}
+                <div className="flex items-center justify-center text-xs text-muted-foreground pr-1">
+                  <span
+                    className="whitespace-nowrap"
+                    style={{
+                      writingMode: 'vertical-rl',
+                      transform: 'rotate(180deg)',
+                    }}
+                  >
+                    {t('editor.kymograph.axisTime', {
+                      defaultValue: 'Time (frames) ↓',
+                    })}
+                  </span>
+                </div>
+                {/* Zoom / pan / scroll viewport. */}
+                <div className="relative min-w-0 flex-1">
+                  <div className="absolute right-2 top-2 z-10 flex gap-1">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="h-7 w-7"
+                      onClick={() => zoomBy(1.3)}
+                      title={t('editor.kymograph.zoomIn', {
+                        defaultValue: 'Zoom in',
+                      })}
+                    >
+                      <ZoomIn className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="h-7 w-7"
+                      onClick={() => zoomBy(1 / 1.3)}
+                      title={t('editor.kymograph.zoomOut', {
+                        defaultValue: 'Zoom out',
+                      })}
+                    >
+                      <ZoomOut className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="h-7 w-7"
+                      onClick={fitToView}
+                      title={t('editor.kymograph.fit', {
+                        defaultValue: 'Fit to view',
+                      })}
+                    >
+                      <Maximize className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div
+                    ref={viewportRef}
+                    className="max-h-[60vh] min-h-[240px] select-none overflow-auto rounded border bg-black/20"
+                    style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+                    onMouseDown={onDragStart}
+                    onMouseMove={onDragMove}
+                    onMouseUp={onDragEnd}
+                    onMouseLeave={onDragEnd}
+                  >
+                    {/* Inner box at native aspect × zoom; image + overlay share it. */}
+                    <div
+                      className="relative"
+                      style={{
+                        width: result.lengthPx * effScale,
+                        height: result.frameCount * effScale,
+                      }}
+                    >
+                      <img
+                        src={`data:image/png;base64,${result.pngBase64}`}
+                        alt={`Kymograph for ${polylineId}`}
+                        className="block h-full w-full"
+                        style={{ imageRendering: 'pixelated' }}
+                        draggable={false}
+                      />
+                      {detectVelocity && tracks.length > 0 && (
+                        // viewBox = native pixel grid; preserveAspectRatio="none"
+                        // maps it onto the (native-aspect) box ⇒ tracks stay
+                        // aligned at any zoom. non-scaling-stroke keeps lines
+                        // a constant on-screen width.
+                        <svg
+                          className="pointer-events-none absolute inset-0 h-full w-full"
+                          viewBox={`0 0 ${result.lengthPx} ${result.frameCount}`}
+                          preserveAspectRatio="none"
+                        >
+                          {tracks.map((tr, i) => (
+                            <polyline
+                              key={i}
+                              points={tr.points
+                                .map(([frame, x]) => `${x},${frame}`)
+                                .join(' ')}
+                              fill="none"
+                              stroke={trackColor(tr.netVelocityPxPerFrame)}
+                              strokeWidth={activeTrack === i ? 5 : 3}
+                              strokeOpacity={
+                                activeTrack === null || activeTrack === i
+                                  ? 1
+                                  : 0.25
+                              }
+                              vectorEffect="non-scaling-stroke"
+                              className="pointer-events-auto cursor-pointer"
+                              onMouseEnter={() => setActiveTrack(i)}
+                              onMouseLeave={() => setActiveTrack(null)}
+                            >
+                              <title>{`#${i + 1}: ${fmtVelocity(tr)}`}</title>
+                            </polyline>
+                          ))}
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* X-axis name + interaction hint. */}
+              <div className="flex items-center justify-between pl-5 pt-1 text-xs text-muted-foreground">
+                <span>
+                  {t('editor.kymograph.axisAlong', {
+                    defaultValue: 'Along microtubule (px) →',
                   })}
                 </span>
-              </div>
-              {/* Y-axis tick labels (column 1, row 0). */}
-              <div className="flex flex-col justify-between text-[10px] text-muted-foreground tabular-nums pr-1 py-px">
-                {[0, 0.25, 0.5, 0.75, 1].map(f => (
-                  <span key={f}>
-                    {Math.round(f * Math.max(result.frameCount - 1, 0))}
-                  </span>
-                ))}
-              </div>
-              {/* Kymograph image + velocity overlay (column 2, row 0). */}
-              <div className="relative">
-                <img
-                  src={`data:image/png;base64,${result.pngBase64}`}
-                  alt={`Kymograph for ${polylineId}`}
-                  className="w-full max-h-[55vh] block"
-                  style={{
-                    imageRendering: 'pixelated',
-                    minHeight: '200px',
-                    objectFit: 'fill',
-                  }}
-                />
-                {detectVelocity && tracks.length > 0 && (
-                  // preserveAspectRatio="none" + objectFit:fill image ⇒ the
-                  // viewBox maps linearly onto the displayed kymograph, so a
-                  // track point (x, frame) lands exactly on its pixel.
-                  <svg
-                    className="absolute inset-0 w-full h-full"
-                    viewBox={`0 0 ${result.lengthPx} ${result.frameCount}`}
-                    preserveAspectRatio="none"
-                  >
-                    {tracks.map((tr, i) => (
-                      <polyline
-                        key={i}
-                        points={tr.points
-                          .map(([frame, x]) => `${x},${frame}`)
-                          .join(' ')}
-                        fill="none"
-                        stroke={trackColor(tr.netVelocityPxPerFrame)}
-                        strokeWidth={activeTrack === i ? 5 : 3}
-                        strokeOpacity={
-                          activeTrack === null || activeTrack === i ? 1 : 0.25
-                        }
-                        vectorEffect="non-scaling-stroke"
-                        style={{ cursor: 'pointer' }}
-                        onMouseEnter={() => setActiveTrack(i)}
-                        onMouseLeave={() => setActiveTrack(null)}
-                      >
-                        <title>{`#${i + 1}: ${fmtVelocity(tr)}`}</title>
-                      </polyline>
-                    ))}
-                  </svg>
-                )}
-              </div>
-              {/* X-axis tick labels (column 2, row 1). */}
-              <div />
-              <div />
-              <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums px-px">
-                {[0, 0.25, 0.5, 0.75, 1].map(f => (
-                  <span key={f}>
-                    {Math.round(f * Math.max(result.lengthPx - 1, 0))}
-                  </span>
-                ))}
-              </div>
-              {/* X-axis name (column 2, row 2). */}
-              <div />
-              <div />
-              <div className="text-xs text-muted-foreground text-center">
-                {t('editor.kymograph.axisAlong', {
-                  defaultValue: 'Along microtubule (px) →',
-                })}
+                <span className="text-[10px]">
+                  {t('editor.kymograph.zoomHint', {
+                    defaultValue: 'drag to pan · Ctrl+wheel to zoom',
+                  })}
+                </span>
               </div>
             </div>
           )}
