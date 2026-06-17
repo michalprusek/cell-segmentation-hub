@@ -82,6 +82,13 @@ class TrackResponse(BaseModel):
 
     assignments: Dict[str, str]  # polylineId -> trackId
     track_count: int
+    # Number of polylines whose embedding payload was corrupt (base64/shape
+    # error).  Those polylines fell back to spatial-only matching.  A non-zero
+    # value here means the Hungarian assignment may be less accurate than usual;
+    # Node can surface this as a warning or log it for debugging.
+    corrupt_count: int = 0
+    # True when any embedding corruption was detected in this batch.
+    degraded: bool = False
 
 
 class EmbeddingDecodeError(ValueError):
@@ -144,8 +151,13 @@ def _build_cost_matrix(
     nxt: List[PolylineInput],
     img_diag: float,
     spatial_weight: float,
-) -> np.ndarray:
-    """Cost = (1 - mean cosine sim of embeddings) + λ · normalised dist."""
+) -> tuple[np.ndarray, int]:
+    """Cost = (1 - mean cosine sim of embeddings) + λ · normalised dist.
+
+    Returns a ``(cost_matrix, corrupt_count)`` tuple so the caller can
+    surface the number of corrupt embeddings in the API response without
+    the endpoint having to re-decode embeddings independently.
+    """
     prev_emb: List[Optional[np.ndarray]] = []
     prev_cent: List[np.ndarray] = []
     corrupt_count = 0
@@ -209,7 +221,7 @@ def _build_cost_matrix(
         neutral_cosine = 0.3
     cost = np.where(valid_mask, cost, neutral_cosine)
     cost = cost + spatial_weight * spat_matrix
-    return cost.astype(np.float32)
+    return cost.astype(np.float32), corrupt_count
 
 
 def _new_track_id() -> str:
@@ -239,6 +251,7 @@ async def track(req: TrackRequest) -> TrackResponse:
         img_diag = 1.0
 
     assignments: Dict[str, str] = {}
+    total_corrupt = 0
 
     # Seed: every polyline in the first frame gets a fresh trackId.
     for p in frames[0].polylines:
@@ -249,12 +262,13 @@ async def track(req: TrackRequest) -> TrackResponse:
             for p in next_f.polylines:
                 assignments[p.id] = _new_track_id()
             continue
-        cost = _build_cost_matrix(
+        cost, pair_corrupt = _build_cost_matrix(
             prev_f.polylines,
             next_f.polylines,
             img_diag,
             req.spatial_weight,
         )
+        total_corrupt += pair_corrupt
         row_ind, col_ind = linear_sum_assignment(cost)
         matched = set()
         for r, c in zip(row_ind, col_ind):
@@ -272,9 +286,14 @@ async def track(req: TrackRequest) -> TrackResponse:
     logger.info(
         f"Tracker: {len(req.frames)} frames, "
         f"{sum(len(f.polylines) for f in frames)} polylines, "
-        f"{track_count} tracks"
+        f"{track_count} tracks, {total_corrupt} corrupt embeddings"
     )
-    return TrackResponse(assignments=assignments, track_count=track_count)
+    return TrackResponse(
+        assignments=assignments,
+        track_count=track_count,
+        corrupt_count=total_corrupt,
+        degraded=total_corrupt > 0,
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -349,6 +368,10 @@ class KymographResponse(BaseModel):
     # Populated only when ``render_overlay`` was set; base64 PNG of the
     # kymograph with detected tracks drawn on top.
     overlay_png_base64: Optional[str] = None
+    # Set to a non-empty string when velocity detection crashed unexpectedly.
+    # An empty/absent field means detection either succeeded or was not requested.
+    # Distinguishes "no motility detected" (tracks=[]) from "detection crashed".
+    velocity_error: Optional[str] = None
 
 
 def _arc_length_resample_polyline(
@@ -535,15 +558,17 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     # we degrade to "no tracks" rather than 500-ing the whole request.
     raw_tracks: List[Dict[str, Any]] = []
     tracks: Optional[List[KymographTrack]] = None
+    velocity_error: Optional[str] = None
     if req.detect_velocity:
         try:
             raw_tracks = detect_blobs(kymo)
             tracks = [KymographTrack(**tr) for tr in raw_tracks]
-        except Exception:
+        except Exception as _vel_exc:
             logger.exception(
                 "kymograph velocity detection failed; "
                 "returning kymograph without tracks"
             )
+            velocity_error = str(_vel_exc)
             raw_tracks = []
             tracks = []
 
@@ -588,4 +613,5 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         tracked=bool(req.tracked),
         tracks=tracks,
         overlay_png_base64=overlay_b64,
+        velocity_error=velocity_error,
     )

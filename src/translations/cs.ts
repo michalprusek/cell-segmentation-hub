@@ -193,6 +193,8 @@ export default {
       uploadedTodayDesc: 'Obrázky sféroidů',
       storageUsed: 'Využité úložiště',
       totalSpaceUsed: 'Celkem využitého místa',
+      incompleteWarning:
+        'Statistiky mohou být neúplné — nepodařilo se načíst {{count}} projekt(y)',
     },
     completed: 'Dokončeno',
     processing: 'Zpracování',
@@ -1111,6 +1113,10 @@ export default {
       reloadFailed:
         'Nepodařilo se načíst výsledky segmentace. Obnovte prosím stránku.',
       autosaveFailed: 'Automatické ukládání selhalo - změny mohou být ztraceny',
+    },
+    // Multi-channel canvas actions
+    multiChannel: {
+      allChannelsFailed: 'Nepodařilo se načíst kanály obrázku',
     },
     upload: {
       failed: 'Nepodařilo se obnovit obrázky po nahrání',

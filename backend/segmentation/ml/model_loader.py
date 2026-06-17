@@ -96,6 +96,7 @@ except (ImportError, OSError) as e:
 from .inference_executor import (
     InferenceExecutor,
     InferenceTimeoutError,
+    InferenceResourceError,
     InferenceError,
     get_global_executor
 )
@@ -1327,11 +1328,25 @@ class ModelLoader:
                     # Check if we should reduce batch size based on memory pressure
                     if self.gpu_monitor and self.gpu_monitor.should_reduce_batch_size():
                         if current_batch_size > 1:
-                            logger.warning(f"Memory pressure detected, reducing batch size from {current_batch_size} to {current_batch_size // 2}")
-                            current_batch_size = max(1, current_batch_size // 2)
+                            new_batch_size = max(1, current_batch_size // 2)
+                            logger.warning(f"Memory pressure detected, reducing batch size from {current_batch_size} to {new_batch_size}")
+                            # Preserve the dropped tail so it is not silently skipped.
+                            # The outer loop advances by the original batch_size, so any
+                            # images beyond index new_batch_size inside this window would
+                            # otherwise be lost.  We store them here and process them
+                            # individually (batch-size-1) right after the main batch.
+                            _dropped_images = batch_images[new_batch_size:]
+                            _dropped_sizes = batch_original_sizes[new_batch_size:]
+                            current_batch_size = new_batch_size
                             batch_images = batch_images[:current_batch_size]
                             batch_original_sizes = batch_original_sizes[:current_batch_size]
                             batch_tensor = self.preprocess_image_batch(batch_images)
+                        else:
+                            _dropped_images = []
+                            _dropped_sizes = []
+                    else:
+                        _dropped_images = []
+                        _dropped_sizes = []
                 
                 # Perform batch inference with GPU OOM handling
                 try:
@@ -1344,10 +1359,10 @@ class ModelLoader:
                     )
                     logger.info(f"Batch inference completed, output shape: {batch_output.shape}")
                     
-                except torch.cuda.OutOfMemoryError as e:
+                except (torch.cuda.OutOfMemoryError, InferenceResourceError) as e:
                     logger.warning(f"GPU OOM with batch size {current_batch_size}, attempting recovery...")
                     torch.cuda.empty_cache()
-                    
+
                     # Try with batch size 1 as fallback
                     if current_batch_size > 1:
                         logger.info(f"Retrying with batch size 1...")
@@ -1366,9 +1381,8 @@ class ModelLoader:
                         logger.info(f"Successfully processed batch with single-image fallback")
                     else:
                         raise InferenceError(
-                            model_name=model_name,
-                            error=f"GPU out of memory even with batch size 1: {str(e)}"
-                        )
+                            f"GPU out of memory even with batch size 1 for {model_name}: {str(e)}"
+                        ) from e
                     
                 except InferenceTimeoutError as e:
                     self.is_processing = False
@@ -1506,9 +1520,97 @@ class ModelLoader:
                     }
                     
                     all_results.append(result)
-                    
+
                     logger.info(f"  Image {batch_start + i + 1}: {len(polygons)} polygons extracted")
-            
+
+                # Process any images that were dropped when the batch was halved
+                # under memory pressure.  Run each one individually (batch-size 1)
+                # so they are never silently skipped.
+                for drop_idx, (dropped_img, dropped_size) in enumerate(
+                    zip(_dropped_images, _dropped_sizes)
+                ):
+                    drop_tensor = self.preprocess_image_batch([dropped_img])
+                    drop_output = executor.execute_inference(
+                        model=model,
+                        input_tensor=drop_tensor,
+                        model_name=model_name,
+                        timeout=timeout,
+                        image_size=dropped_size,
+                    )
+                    if isinstance(drop_output, tuple):
+                        drop_output = drop_output[0]
+                    drop_masks = self.postprocess_mask_batch(drop_output, [dropped_size], threshold)
+                    for drop_mask in drop_masks:
+                        if not detect_holes:
+                            h, w = drop_mask.shape
+                            filled = drop_mask.copy()
+                            tc, _ = cv2.findContours(drop_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                            for c in tc:
+                                cv2.fillPoly(filled, [c], 255)
+                            drop_mask = filled
+                        if detect_holes:
+                            drop_contours, drop_hier = cv2.findContours(
+                                drop_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+                            )
+                        else:
+                            drop_contours, drop_hier = cv2.findContours(
+                                drop_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                            )
+                        drop_polygons = []
+                        drop_id_counter = 1
+                        if drop_hier is not None:
+                            drop_hier = drop_hier[0]
+                        for j, contour in enumerate(drop_contours):
+                            if cv2.contourArea(contour) < 50:
+                                continue
+                            pts = [{"x": float(pt[0][0]), "y": float(pt[0][1])} for pt in contour]
+                            if len(pts) < 3:
+                                continue
+                            ptype = "external"
+                            pid = None
+                            if detect_holes and drop_hier is not None:
+                                parent_idx = drop_hier[j][3]
+                                if parent_idx != -1:
+                                    ptype = "internal"
+                                    for ep in drop_polygons:
+                                        if ep.get("contour_index") == parent_idx:
+                                            pid = ep["id"]
+                                            break
+                            conf = float(torch.sigmoid(drop_output[0] if drop_output.dim() > 3 else drop_output).max().item())
+                            p_data = {
+                                "id": f"polygon_{drop_id_counter}",
+                                "points": pts,
+                                "type": ptype,
+                                "class": "spheroid",
+                                "confidence": conf,
+                                "vertices_count": len(contour),
+                                "contour_index": j,
+                            }
+                            if pid:
+                                p_data["parent_id"] = pid
+                            drop_polygons.append(p_data)
+                            drop_id_counter += 1
+                        for p in drop_polygons:
+                            p.pop("contour_index", None)
+                        drop_result = {
+                            "model_used": model_name,
+                            "threshold_used": threshold,
+                            "image_size": {"width": dropped_size[0], "height": dropped_size[1]},
+                            "polygons": drop_polygons,
+                            "processing_info": {
+                                "device": str(self.device),
+                                "num_polygons": len(drop_polygons),
+                                "confidence_scores": [p["confidence"] for p in drop_polygons],
+                                "batch_size": 1,
+                                "batch_position": current_batch_size + drop_idx + 1,
+                            },
+                        }
+                        all_results.append(drop_result)
+                        logger.info(
+                            f"  Dropped-tail image {batch_start + current_batch_size + drop_idx + 1}: "
+                            f"{len(drop_polygons)} polygons extracted"
+                        )
+
             logger.info(f"Batch processing completed: {len(images)} images processed in batches of {batch_size}")
             return all_results
             

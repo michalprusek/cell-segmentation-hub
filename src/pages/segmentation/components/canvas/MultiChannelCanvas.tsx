@@ -28,8 +28,10 @@
  */
 
 import React, { useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
+import { useLanguage } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
 
 interface MultiChannelCanvasProps {
@@ -107,7 +109,11 @@ export default function MultiChannelCanvas({
 }: MultiChannelCanvasProps) {
   const { windowMin, windowMax, brightness, contrast, channelOpacities } =
     useImageDisplay();
+  const { t } = useLanguage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Tracks the last frameId+channelsKey for which we already fired an
+  // all-channels-failed toast so we don't spam on every re-render.
+  const lastFailedKeyRef = useRef<string | null>(null);
   // Stable key to bust the effect when any visible-channel order, colour,
   // or opacity changes. Serialising keeps the dep array primitive and
   // avoids identity-based re-renders.
@@ -156,7 +162,23 @@ export default function MultiChannelCanvas({
       const loaded = images.filter(
         (i): i is { channel: string; bitmap: ImageBitmap } => i != null
       );
-      if (loaded.length === 0) return;
+      if (loaded.length === 0) {
+        // All channels failed (expired auth, nginx 502, storage break).
+        // Fire a single toast per failure event — deduped by frameId+channelsKey
+        // so a re-render storm doesn't spam the user.
+        const failedKey = `${frameId}:${channelsKey}`;
+        if (lastFailedKeyRef.current !== failedKey) {
+          lastFailedKeyRef.current = failedKey;
+          toast.error(
+            t('toast.multiChannel.allChannelsFailed') ||
+              'Failed to load image channels'
+          );
+        }
+        return;
+      }
+      // A successful load clears the dedupe key so a later retry that
+      // fails again will correctly fire a new toast.
+      lastFailedKeyRef.current = null;
 
       // First successful image dictates canvas dimensions — all
       // channels of a video share the same shape, so picking the
@@ -238,6 +260,7 @@ export default function MultiChannelCanvas({
     windowMin,
     windowMax,
     onLoad,
+    t,
     visibleChannels,
     channelColors,
   ]);

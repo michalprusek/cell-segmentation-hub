@@ -63,7 +63,7 @@ def validate_image(file: UploadFile) -> bool:
     return ext in valid_extensions
 
 @router.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """Health check endpoint"""
     try:
         device_info = {
@@ -71,13 +71,18 @@ async def health_check():
             "device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
             "device_name": torch.cuda.get_device_name() if torch.cuda.is_available() else "CPU"
         }
-        
+
+        # Surface models that failed to pre-load so deploy monitoring can detect
+        # missing weights or HF_TOKEN issues without reading log files.
+        models_failed = getattr(request.app.state, "models_failed", [])
+
         return {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "service": "cell-segmentation",
             "version": "1.0.0",
-            "device": device_info
+            "device": device_info,
+            "models_failed": models_failed,
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -114,15 +119,7 @@ async def get_status(loader = Depends(get_model_loader)):
         
     except Exception as e:
         logger.error(f"Failed to get status: {e}")
-        return {
-            "status": "error",
-            "is_processing": False,
-            "current_model": None,
-            "queue_length": 0,
-            "available": False,
-            "error": "Internal service error",
-            "timestamp": datetime.now().isoformat()
-        }
+        raise HTTPException(status_code=503, detail="Failed to get service status")
 
 @router.post("/segment")
 async def segment_image(

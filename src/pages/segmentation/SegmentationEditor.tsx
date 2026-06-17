@@ -499,6 +499,15 @@ const SegmentationEditor = () => {
               `Failed to reload segmentation after ${maxAttempts} attempts`,
               { imageId: debouncedLastUpdate.imageId }
             );
+            // Surface a recovery action to the user. Note: reloadSegmentation()
+            // already fires this toast via useSegmentationReload when its own
+            // internal retries exhaust. This catch fires only for unexpected
+            // throws that bypass that path (e.g. network abort outside the
+            // hook's guard), so there is no double-toast risk.
+            toast.error(
+              t('toast.segmentation.reloadFailed') ||
+                'Failed to load segmentation results. Please refresh the page.'
+            );
           }
         }
       };
@@ -534,6 +543,7 @@ const SegmentationEditor = () => {
     reloadSegmentation,
     setSegmentationPolygons,
     getSignal,
+    t,
   ]);
 
   useEffect(() => {

@@ -192,6 +192,8 @@ export default {
       uploadedTodayDesc: 'Images de sphéroïdes',
       storageUsed: 'Stockage utilisé',
       totalSpaceUsed: 'Espace total utilisé',
+      incompleteWarning:
+        'Les statistiques peuvent être incomplètes — impossible de charger {{count}} projet(s)',
     },
     completed: 'Terminé',
     processing: 'Traitement en cours',
@@ -1135,6 +1137,10 @@ export default {
         'Échec du chargement des résultats de segmentation. Veuillez actualiser la page.',
       autosaveFailed:
         'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
+    },
+    // Multi-channel canvas actions
+    multiChannel: {
+      allChannelsFailed: "Échec du chargement des canaux d'image",
     },
   },
   project: {

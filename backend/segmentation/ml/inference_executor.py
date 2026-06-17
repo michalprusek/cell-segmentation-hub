@@ -340,15 +340,25 @@ class InferenceExecutor:
                         image_size=image_size or (0, 0)
                     )
                 
+                except InferenceError as e:
+                    # InferenceResourceError, InferenceTimeoutError, etc. —
+                    # preserve the specific subtype so callers can distinguish
+                    # OOM from generic failures.
+                    session.update_status(InferenceStatus.FAILED, str(e))
+                    self.failure_count += 1
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    raise
+
                 except Exception as e:
                     # Update metrics
                     session.update_status(InferenceStatus.FAILED, str(e))
                     self.failure_count += 1
-                    
+
                     # Clean up on failure
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
-                    
+
                     logger.error(f"Inference failed for {model_name}: {e}")
                     raise InferenceError(f"Inference failed: {str(e)}") from e
         

@@ -200,6 +200,8 @@ export default {
       uploadedTodayDesc: 'Spheroid images',
       storageUsed: 'Storage Used',
       totalSpaceUsed: 'Total space used',
+      incompleteWarning:
+        "Stats may be incomplete — couldn't load {{count}} project(s)",
     },
     completed: 'Completed',
     processing: 'Processing',
@@ -1107,6 +1109,10 @@ export default {
       reloadFailed:
         'Failed to load segmentation results. Please refresh the page.',
       autosaveFailed: 'Autosave failed - changes may be lost',
+    },
+    // Multi-channel canvas actions
+    multiChannel: {
+      allChannelsFailed: 'Failed to load image channels',
     },
     // Success messages
     operationCompleted: 'Operation completed successfully',
