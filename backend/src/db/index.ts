@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
-import { prismaPool } from './prismaPool';
 import { databaseMetrics } from '../monitoring/databaseMetrics';
 import { getPrismaConfig } from './prismaConfig';
 
@@ -96,10 +95,7 @@ export const disconnectDatabase = async (): Promise<void> => {
     // Stop metrics collection
     databaseMetrics.stop();
 
-    // Shutdown connection pool
-    await prismaPool.shutdown();
-
-    // Disconnect legacy client as fallback
+    // Disconnect the Prisma client
     await prisma.$disconnect();
 
     logger.info(
@@ -115,104 +111,21 @@ export const disconnectDatabase = async (): Promise<void> => {
   }
 };
 
-// Enhanced database health check
+// Database health check
 export const checkDatabaseHealth = async (): Promise<{
   healthy: boolean;
   message: string;
 }> => {
   try {
-    // Try to use the enhanced pool health check first
-    const poolHealth = await prismaPool.healthCheck();
-
+    await prisma.$queryRaw`SELECT 1`;
     return {
-      healthy: poolHealth.healthy,
-      message: poolHealth.healthy
-        ? 'Database connection pool is healthy'
-        : 'Database connection pool issues detected',
+      healthy: true,
+      message: 'Database is accessible',
     };
-  } catch {
-    // Fallback to basic health check
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      return {
-        healthy: true,
-        message: 'Database is accessible (basic connection)',
-      };
-    } catch (fallbackError) {
-      logger.error(
-        'Database health check failed:',
-        fallbackError as Error,
-        'Database'
-      );
-      return { healthy: false, message: 'Database is not accessible' };
-    }
-  }
-};
-
-// Enhanced helper function for transactions with pooling
-export const transaction = async <T>(
-  callback: (
-    prisma: Omit<
-      PrismaClient,
-      '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
-    >
-  ) => Promise<T>
-): Promise<T> => {
-  try {
-    // Use the enhanced transaction handling from the pool
-    return await prismaPool.executeTransaction(
-      callback,
-      'legacy-transaction-helper'
-    );
   } catch (error) {
-    // Fallback to basic transaction if pool fails
-    logger.warn(
-      'Transaction pool failed, falling back to basic transaction:',
-      error
-    );
-    return await prisma.$transaction(callback);
+    logger.error('Database health check failed:', error as Error, 'Database');
+    return { healthy: false, message: 'Database is not accessible' };
   }
-};
-
-// Export enhanced database utilities
-export { prismaPool } from './prismaPool';
-export { databaseMetrics } from '../monitoring/databaseMetrics';
-export { databaseOptimization } from '../utils/databaseOptimization';
-export {
-  getDatabasePoolConfig,
-  getRetryConfig,
-  getHealthCheckConfig,
-  getPerformanceBaselines,
-} from '../config/database';
-
-// Enhanced transaction and query helpers
-export const executeQuery = async <T>(
-  operation: () => Promise<T>,
-  operationName?: string
-): Promise<T> => {
-  return prismaPool.executeQuery(operation, {
-    operationType: 'query',
-    operationName,
-  });
-};
-
-export const executeMutation = async <T>(
-  operation: () => Promise<T>,
-  operationName?: string
-): Promise<T> => {
-  return prismaPool.executeMutation(operation, operationName);
-};
-
-export const executeTransaction = async <T>(
-  operation: (
-    prisma: Omit<
-      PrismaClient,
-      '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
-    >
-  ) => Promise<T>,
-  operationName?: string
-): Promise<T> => {
-  return prismaPool.executeTransaction(operation, operationName);
 };
 
 export default prisma;

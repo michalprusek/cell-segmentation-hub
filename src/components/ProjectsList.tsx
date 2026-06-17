@@ -155,7 +155,6 @@ const ProjectsList = ({
           imageCount={project.imageCount}
           onClick={() => onOpenProject(project.id)}
           isShared={project.isShared}
-          sharedBy={project.sharedBy}
           owner={project.owner}
           shareId={project.shareId}
           onProjectUpdate={onProjectUpdate}

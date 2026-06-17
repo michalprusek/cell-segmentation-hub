@@ -1,12 +1,9 @@
 import { Point, calculatePerimeter } from '@/lib/segmentation';
-import { calculatePolygonArea } from '@/lib/polygonGeometry';
+import {
+  calculatePolygonArea,
+  calculateBoundingBox,
+} from '@/lib/polygonGeometry';
 import { logger } from '@/lib/logger';
-
-// Type for a 2D vector
-// interface Vector2D {
-//   x: number;
-//   y: number;
-// }
 
 /**
  * Calculate convex hull using Graham scan algorithm
@@ -219,18 +216,6 @@ const validatePolygonPoints = (
   );
 };
 
-// Calculate bounding box for polygon
-const calculateBoundingBox = (points: Array<{ x: number; y: number }>) => {
-  const xs = points.map(p => p.x);
-  const ys = points.map(p => p.y);
-  return {
-    minX: Math.min(...xs),
-    maxX: Math.max(...xs),
-    minY: Math.min(...ys),
-    maxY: Math.max(...ys),
-  };
-};
-
 // Calculate metrics with proper scientific formulas
 export const calculateMetrics = (
   polygon: { points: Array<{ x: number; y: number }> },
@@ -298,8 +283,8 @@ export const calculateMetrics = (
 
   // Calculate bounding box for extent calculation
   const bbox = calculateBoundingBox(polygon.points);
-  const width = bbox.maxX - bbox.minX;
-  const height = bbox.maxY - bbox.minY;
+  const width = bbox.width;
+  const height = bbox.height;
   const boundingBoxArea = width * height;
 
   // Extent: area / bounding box area

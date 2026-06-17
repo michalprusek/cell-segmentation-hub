@@ -17,9 +17,6 @@ import testEmailRoutes from './testEmailRoutes';
 import mlRoutes from './mlRoutes';
 import userRoutes from './userRoutes';
 import healthRoutes from './healthRoutes';
-import cacheRoutes from './cacheRoutes';
-import databaseRoutes from './database';
-import rateLimitAdminRoutes from './rateLimitAdmin';
 import feedbackRoutes from './feedbackRoutes';
 import projectFolderRoutes from './projectFolderRoutes';
 
@@ -82,9 +79,6 @@ export function setupRoutes(app: Express): void {
   app.use('/api/segmentation', segmentationRoutes);
   app.use('/api/queue', queueRoutes);
   app.use('/api/ml', mlRoutes); // ML service routes
-  app.use('/api/cache', cacheRoutes); // Cache and session management routes
-  app.use('/api/database', databaseRoutes); // Database management and monitoring routes
-  app.use('/api/admin/rate-limits', rateLimitAdminRoutes); // Rate limiting administration routes
   app.use('/api/feedback', feedbackRoutes); // User-submitted bug reports + feature requests
   app.use('/api/folders', projectFolderRoutes); // Per-user project folder hierarchy
 
@@ -363,13 +357,6 @@ function registerKnownRoutes(): void {
 
   // ML endpoints
   registerRoute({
-    path: '/api/ml/models',
-    method: 'GET',
-    description: 'Seznam dostupných ML modelů',
-    authenticated: false,
-  });
-
-  registerRoute({
     path: '/api/ml/status',
     method: 'GET',
     description: 'Stav ML služby',
@@ -381,13 +368,6 @@ function registerKnownRoutes(): void {
     method: 'GET',
     description: 'Zdravotní kontrola ML služby',
     authenticated: false,
-  });
-
-  registerRoute({
-    path: '/api/ml/queue',
-    method: 'GET',
-    description: 'Stav fronty ML zpracování',
-    authenticated: true,
   });
 
   // Documentation endpoints
@@ -411,158 +391,6 @@ function registerKnownRoutes(): void {
     description: 'Postman kolekce',
     authenticated: false,
   });
-
-  // Database management endpoints
-  registerRoute({
-    path: '/api/database/metrics',
-    method: 'GET',
-    description: 'Database connection pool metrics',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/database/health',
-    method: 'GET',
-    description: 'Comprehensive database health status',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/database/optimization-report',
-    method: 'GET',
-    description: 'Database performance tuning report',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/database/analyze-query',
-    method: 'POST',
-    description: 'Analyze SQL query for optimization',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/database/pool-config',
-    method: 'GET',
-    description: 'Database connection pool configuration',
-    authenticated: true,
-  });
-
-  // Rate limiting admin endpoints
-  registerRoute({
-    path: '/api/admin/rate-limits/status',
-    method: 'GET',
-    description: 'Rate limiting system status',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/configurations',
-    method: 'GET',
-    description: 'Rate limiting configurations',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/violations',
-    method: 'GET',
-    description: 'Rate limiting violations',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/whitelist/ips',
-    method: 'GET',
-    description: 'Get whitelisted IPs',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/whitelist/ips',
-    method: 'POST',
-    description: 'Add IP to whitelist',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/whitelist/users',
-    method: 'GET',
-    description: 'Get whitelisted users',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/whitelist/users',
-    method: 'POST',
-    description: 'Add user to whitelist',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/blacklist/ips',
-    method: 'POST',
-    description: 'Add IP to blacklist',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/blacklist/users',
-    method: 'POST',
-    description: 'Add user to blacklist',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/tiers',
-    method: 'GET',
-    description: 'User tier statistics',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/tiers/user',
-    method: 'PUT',
-    description: 'Update user tier',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/tiers/bulk',
-    method: 'PUT',
-    description: 'Bulk update user tiers',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/reset',
-    method: 'POST',
-    description: 'Reset rate limit for key',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/metrics',
-    method: 'GET',
-    description: 'Rate limiting metrics',
-    authenticated: true,
-  });
-
-  registerRoute({
-    path: '/api/admin/rate-limits/cleanup',
-    method: 'POST',
-    description: 'Cleanup expired records',
-    authenticated: true,
-  });
-
-  // Development-only database endpoints
-  if (process.env.NODE_ENV === 'development') {
-    registerRoute({
-      path: '/api/database/reset-metrics',
-      method: 'POST',
-      description: 'Reset database metrics (development)',
-      authenticated: true,
-    });
-  }
 }
 
 /**

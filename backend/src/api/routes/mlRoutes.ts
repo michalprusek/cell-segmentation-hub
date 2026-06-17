@@ -1,7 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
-import { authenticate } from '../../middleware/auth';
 import { apiLimiter } from '../../middleware/rateLimiter';
 import axios from 'axios';
 
@@ -10,77 +9,6 @@ const router = Router();
 /**
  * ML Service Routes - Machine Learning model inference and management
  */
-
-// Public endpoints
-router.get(
-  '/models',
-  apiLimiter,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      logger.info('📊 ML: Fetching available models');
-
-      // Placeholder response for available ML models
-      const models = [
-        {
-          id: 'hrnetv2',
-          name: 'HRNetV2',
-          description: 'Best accuracy, ~3.1s inference time',
-          version: '1.0.0',
-          status: 'active',
-        },
-        {
-          id: 'cbam-resunet',
-          name: 'CBAM-ResUNet',
-          description:
-            'Precise segmentation with attention mechanisms, optimized inference time',
-          version: '2.0.0',
-          status: 'active',
-        },
-        {
-          id: 'unet_spherohq',
-          name: 'UNet (SpheroHQ)',
-          description:
-            'Best performance on SpheroHQ dataset, balanced speed and accuracy',
-          version: '1.0.0',
-          status: 'active',
-        },
-        {
-          id: 'unet_attention_aspp',
-          name: 'UNet Attention-ASPP',
-          description:
-            'Enhanced UNet with Attention Gates and ASPP for dissolving spheroids and satellite cells',
-          version: '4.0.0',
-          status: 'active',
-        },
-        {
-          id: 'sperm',
-          name: 'Sperm Morphology',
-          description:
-            'Mask2Former + graph assembly for sperm head/midpiece/tail polyline extraction',
-          version: '1.0.0',
-          status: 'active',
-        },
-        {
-          id: 'wound',
-          name: 'Wound Healing',
-          description:
-            'U-Net++ (ResNeXt-50) for scratch-assay wound segmentation (binary mask, ~32ms on A5000)',
-          version: '2.0.0',
-          status: 'active',
-        },
-      ];
-
-      return ResponseHelper.success(
-        res,
-        models,
-        'Available ML models retrieved successfully'
-      );
-    } catch (error) {
-      logger.error('❌ ML: Error fetching models:', error);
-      next(error);
-    }
-  }
-);
 
 // Public status endpoint - no authentication required
 router.get(
@@ -195,60 +123,6 @@ router.get(
         },
         503
       );
-    }
-  }
-);
-
-// Protected endpoints
-router.use(authenticate);
-
-router.get(
-  '/queue',
-  apiLimiter,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      logger.info('📋 ML: Fetching queue status');
-
-      // Placeholder queue status
-      const queueStatus = {
-        totalItems: 0,
-        processing: 0,
-        pending: 0,
-        completed: 0,
-        failed: 0,
-        averageWaitTime: '2.3s',
-        estimatedProcessingTime: '0s',
-      };
-
-      return ResponseHelper.success(
-        res,
-        queueStatus,
-        'ML queue status retrieved successfully'
-      );
-    } catch (error) {
-      logger.error('❌ ML: Error fetching queue status:', error);
-      next(error);
-    }
-  }
-);
-
-router.post(
-  '/models/:modelId/warm-up',
-  apiLimiter,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { modelId } = req.params;
-      logger.info(`🔥 ML: Warming up model: ${modelId}`);
-
-      // Placeholder model warm-up
-      return ResponseHelper.success(
-        res,
-        { modelId, status: 'warming-up' },
-        `Model ${modelId} warm-up initiated`
-      );
-    } catch (error) {
-      logger.error('❌ ML: Error warming up model:', error);
-      next(error);
     }
   }
 );

@@ -4,8 +4,6 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Share2, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dragSourceProps } from '@/utils/dashboardDrag';
-import { useLanguage } from '@/contexts/useLanguage';
-import { useAuth } from '@/contexts/useAuth';
 import ProjectThumbnail from '@/components/project/ProjectThumbnail';
 import ProjectActions from '@/components/project/ProjectActions';
 import ProjectMetadata from '@/components/project/ProjectMetadata';
@@ -19,7 +17,6 @@ interface ProjectListItemProps {
   imageCount: number;
   onClick?: () => void;
   isShared?: boolean;
-  sharedBy?: { email: string };
   owner?: { email: string; name?: string };
   shareId?: string;
   onProjectUpdate?: (projectId: string, action: string) => void;
@@ -37,15 +34,12 @@ const ProjectListItem = React.memo(
     imageCount,
     onClick,
     isShared = false,
-    sharedBy: _sharedBy,
     owner,
     shareId,
     onProjectUpdate,
     onRequestMove,
     hasAnyFolder,
   }: ProjectListItemProps) => {
-    const { t: _t } = useLanguage();
-    const { user: _user } = useAuth();
     const drag = dragSourceProps({ type: 'project', id });
 
     const handleCardClick = () => {
