@@ -13,12 +13,15 @@ inside `segment_microtubules()`. Safe to import on any host.
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 PYSOAX_PARAMS_DEFAULT = {
@@ -71,11 +74,38 @@ def _normalize(img: np.ndarray) -> np.ndarray:
 
 
 def load_v7_model(ckpt_path: Path, device: str = "cuda"):
-    """Load v7 model checkpoint. Requires synth_irm on sys.path."""
+    """Load v7 model checkpoint. Requires synth_irm on sys.path.
+
+    Follows the same safe-load policy as WoundModel and SegFormerModel: try
+    ``weights_only=True`` first (mitigates CVE-2025-32434). The v7 checkpoint
+    embeds custom dataclass instances (``ckpt["args"]``) that pickle cannot
+    reconstruct under ``weights_only=True``, so the fallback is almost always
+    needed. The fallback is enabled by default (``ALLOW_UNSAFE_WEIGHTS``
+    defaults to ``"1"`` in the ML Dockerfile) because this is our own shipped
+    checkpoint; set ``ALLOW_UNSAFE_WEIGHTS=0`` to refuse the fallback.
+    """
     import torch
     from synth_irm.training.model_v4 import FilamentInstanceModelV4
 
-    ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+    try:
+        ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=True)
+    except Exception as e1:
+        if os.getenv("ALLOW_UNSAFE_WEIGHTS", "1") != "1":
+            logger.error(
+                "load_v7_model: weights_only=True failed (%s) and "
+                "ALLOW_UNSAFE_WEIGHTS is not set — refusing to load.",
+                e1,
+            )
+            raise
+        logger.warning(
+            "load_v7_model: SECURITY — weights_only=True failed (%s); "
+            "falling back to weights_only=False (arbitrary pickle). "
+            "Safe only for trusted checkpoints (our own). "
+            "Set ALLOW_UNSAFE_WEIGHTS=0 to refuse this fallback.",
+            e1,
+        )
+        ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+
     backbone = ckpt["args"].get("backbone", "facebook/dinov3-vitl16-pretrain-lvd1689m")
     model = FilamentInstanceModelV4(
         backbone_name=backbone,

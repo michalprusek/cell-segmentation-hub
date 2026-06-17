@@ -1722,51 +1722,46 @@ export class SegmentationService {
       throw new Error('Project not found or no access');
     }
 
-    const [totalImages, segmentationData] = await Promise.all([
+    // Run all aggregation queries in parallel — avoid loading polygon blobs into Node.
+    // polygons column is TEXT (serialised JSON), so we cast to json for server-side counting.
+    const [
+      totalImages,
+      aggResult,
+      modelGroups,
+      polygonCountRows,
+    ] = await Promise.all([
       this.prisma.image.count({ where: { projectId } }),
-      this.prisma.segmentation.findMany({
+      this.prisma.segmentation.aggregate({
         where: { image: { projectId } },
-        include: {
-          image: {
-            select: {
-              name: true,
-              segmentationStatus: true,
-            },
-          },
-        },
+        _avg: { confidence: true },
+        _count: { _all: true },
       }),
+      this.prisma.segmentation.groupBy({
+        by: ['model'],
+        where: { image: { projectId } },
+        _count: { _all: true },
+      }),
+      this.prisma.$queryRaw<Array<{ total: bigint }>>`
+        SELECT COALESCE(SUM(json_array_length(s.polygons::json)), 0) AS total
+        FROM segmentations s
+        JOIN images i ON i.id = s."imageId"
+        WHERE i."projectId" = ${projectId}
+      `,
     ]);
 
-    // Calculate statistics
-    const totalSegmented = segmentationData.length;
-
-    // Calculate total polygons using centralized validator
-    const totalPolygons = segmentationData.reduce((sum, data) => {
-      const polygonCount = PolygonValidator.getPolygonCount(data.polygons);
-      return sum + polygonCount;
-    }, 0);
-
-    const _averagePolygonsPerImage =
-      totalSegmented > 0 ? totalPolygons / totalSegmented : 0;
-
-    const averageConfidence =
-      segmentationData.length > 0
-        ? segmentationData.reduce(
-            (sum, data) => sum + (data.confidence || 0),
-            0
-          ) / segmentationData.length
-        : 0;
+    const totalSegmented = aggResult._count._all;
+    const averageConfidence = aggResult._avg.confidence ?? 0;
+    const totalPolygons = Number((polygonCountRows[0]?.total) ?? 0n);
 
     const modelUsage: Record<string, number> = {};
-    segmentationData.forEach(data => {
-      const model = data.model;
-      if (model) {
-        modelUsage[model] = (modelUsage[model] || 0) + 1;
+    for (const row of modelGroups) {
+      if (row.model) {
+        modelUsage[row.model] = row._count._all;
       }
-    });
+    }
 
     return {
-      totalImages: totalImages,
+      totalImages,
       processedImages: totalSegmented,
       totalPolygons,
       averageConfidence,

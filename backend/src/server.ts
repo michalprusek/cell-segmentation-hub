@@ -197,8 +197,14 @@ app.get('/metrics', getMetricsEndpoint());
 // Setup all API routes
 setupRoutes(app);
 
-// Serve static files (uploads)
-app.use('/uploads', express.static(config.UPLOAD_DIR || './uploads'));
+// Serve static files (uploads).
+// Thumbnails and originals are content-addressed by path and immutable after
+// upload, so a 7-day browser cache with ETag validation is safe and cuts
+// repeat gallery load time significantly.
+app.use(
+  '/uploads',
+  express.static(config.UPLOAD_DIR || './uploads', { maxAge: '7d', etag: true })
+);
 
 // 404 handler
 app.use(notFoundHandler);

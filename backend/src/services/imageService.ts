@@ -857,9 +857,6 @@ export class ImageService {
           ],
         },
       },
-      include: {
-        project: true,
-      },
     });
 
     if (!image) {
@@ -1252,25 +1249,30 @@ export class ImageService {
       throw ApiError.forbidden('Access denied to this project');
     }
 
-    // Get all images in the project
-    const images = await this.prisma.image.findMany({
-      where: { projectId },
-      select: {
-        fileSize: true,
-        segmentationStatus: true,
-        mimeType: true,
-      },
-    });
+    // Use server-side aggregation to avoid fetching all rows into Node.
+    // fileSize is BigInt in Postgres; _sum returns BigInt which we coerce to number
+    // (2^53 covers up to ~9 PB, safe for any realistic project size).
+    const [aggResult, statusGroups, mimeGroups] = await Promise.all([
+      this.prisma.image.aggregate({
+        where: { projectId },
+        _count: { _all: true },
+        _sum: { fileSize: true },
+      }),
+      this.prisma.image.groupBy({
+        by: ['segmentationStatus'],
+        where: { projectId },
+        _count: { _all: true },
+      }),
+      this.prisma.image.groupBy({
+        by: ['mimeType'],
+        where: { projectId },
+        _count: { _all: true },
+      }),
+    ]);
 
-    const totalImages = images.length;
-    // fileSize is BigInt — coerce per row before summing; 2^53 covers any
-    // realistic file size, so number arithmetic is safe.
-    const totalSize = images.reduce(
-      (sum, img) => sum + Number(img.fileSize ?? 0n),
-      0
-    );
+    const totalImages = aggResult._count._all;
+    const totalSize = Number(aggResult._sum.fileSize ?? 0n);
 
-    // Count by status
     const byStatus = {
       no_segmentation: 0,
       queued: 0,
@@ -1278,21 +1280,19 @@ export class ImageService {
       segmented: 0,
       failed: 0,
     };
+    for (const row of statusGroups) {
+      const key = row.segmentationStatus as keyof typeof byStatus;
+      if (key in byStatus) {
+        byStatus[key] = row._count._all;
+      }
+    }
 
-    // Count by MIME type
     const byMimeType: Record<string, number> = {};
-
-    images.forEach(image => {
-      // Count by status
-      if (image.segmentationStatus in byStatus) {
-        byStatus[image.segmentationStatus as keyof typeof byStatus]++;
+    for (const row of mimeGroups) {
+      if (row.mimeType) {
+        byMimeType[row.mimeType] = row._count._all;
       }
-
-      // Count by MIME type
-      if (image.mimeType) {
-        byMimeType[image.mimeType] = (byMimeType[image.mimeType] || 0) + 1;
-      }
-    });
+    }
 
     return {
       totalImages,

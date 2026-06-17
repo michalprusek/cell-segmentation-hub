@@ -925,11 +925,34 @@ export class ImageController {
       // returned by this filter; only the parent container is hidden.
       const galleryWhere = { projectId, isVideoContainer: false };
 
+      // For 'low' LOD the grid view only needs segmentation metadata (counts,
+      // model, confidence) — not the raw polygon JSON which can be ~200 KB per
+      // image on a 621-frame project.  Use a select that excludes the polygons
+      // column so Postgres never ships the blob to Node; the response shape is
+      // preserved (polygons: [] is set in the transform loop below).
+      const segmentationInclude =
+        levelOfDetail === 'low'
+          ? ({
+              select: {
+                id: true,
+                imageId: true,
+                model: true,
+                threshold: true,
+                confidence: true,
+                processingTime: true,
+                createdAt: true,
+                updatedAt: true,
+                imageHeight: true,
+                imageWidth: true,
+              },
+            } as const)
+          : (true as const);
+
       // Get images with segmentation data in a single optimized query
       const images = await prisma.image.findMany({
         where: galleryWhere,
         include: {
-          segmentation: true,
+          segmentation: segmentationInclude,
         },
         orderBy: {
           updatedAt: 'desc',
@@ -1012,7 +1035,21 @@ export class ImageController {
           if (image.segmentation) {
             // Use full segmentation data as we don't have thumbnails table yet
             const segmentationData = image.segmentation;
-            if (segmentationData.polygons) {
+            // For 'low' LOD the polygons field is excluded from the DB select
+            // (see segmentationInclude above).  Emit empty polygon arrays with
+            // zero counts — the grid view uses thumbnail images, not polygon
+            // overlays, so the counts are not meaningful there.
+            if (!('polygons' in segmentationData)) {
+              thumbnailData = {
+                polygons: [],
+                imageWidth: image.segmentation.imageWidth,
+                imageHeight: image.segmentation.imageHeight,
+                levelOfDetail,
+                polygonCount: 0,
+                pointCount: 0,
+                compressionRatio: 1.0,
+              };
+            } else if (segmentationData.polygons) {
               try {
                 const parsedPolygons = JSON.parse(segmentationData.polygons);
 
