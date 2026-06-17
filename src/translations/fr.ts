@@ -2129,6 +2129,7 @@ export default {
       zoomOut: 'Zoom arrière',
       fit: 'Ajuster à la vue',
       zoomHint: 'glisser pour déplacer · Ctrl+molette pour zoomer',
+      empty: 'Impossible de calculer le kymographe.',
       velocityAnalysis: 'Analyse de vitesse',
       colVelocity: 'Vitesse nette',
       colRuns: 'Segments',

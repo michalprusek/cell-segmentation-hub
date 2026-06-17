@@ -2211,6 +2211,7 @@ export default {
       zoomOut: 'Zoom out',
       fit: 'Fit to view',
       zoomHint: 'drag to pan · Ctrl+wheel to zoom',
+      empty: 'Kymograph could not be computed.',
       velocityAnalysis: 'Velocity analysis',
       colVelocity: 'Net velocity',
       colRuns: 'Runs',

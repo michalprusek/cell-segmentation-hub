@@ -10,7 +10,14 @@
  * a velocity table.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Download, Loader2, Maximize, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   Dialog,
@@ -125,26 +132,41 @@ export function KymographModal({
     sl: number;
     st: number;
   } | null>(null);
+  const lastGeomRef = useRef<string | null>(null);
   const [scale, setScale] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const effScale = scale ?? 1;
+
+  // A kymograph needs both a spatial and a temporal extent to be displayed; a
+  // degenerate result (lengthPx/frameCount ≤ 0) would otherwise divide-by-zero
+  // in fitToView and collapse the viewer to 0×0 with no feedback.
+  const validKymo = !!result && result.lengthPx > 0 && result.frameCount > 0;
 
   const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
 
   const fitToView = useCallback(() => {
     const vp = viewportRef.current;
-    if (!vp || !result) return;
+    if (!vp || !result || result.lengthPx <= 0 || result.frameCount <= 0) {
+      return;
+    }
     const s = Math.min(
       vp.clientWidth / result.lengthPx,
       vp.clientHeight / result.frameCount
     );
-    setScale(clampScale(s > 0 ? s : 1));
+    setScale(clampScale(Number.isFinite(s) && s > 0 ? s : 1));
   }, [result]);
 
-  // Fit each freshly-loaded kymograph to the viewport.
-  useEffect(() => {
-    if (result) fitToView();
-  }, [result, fitToView]);
+  // Fit only when the kymograph GEOMETRY changes (new polyline / different
+  // length) — this keeps the user's zoom across same-geometry refetches
+  // (channel switch, velocity toggle). useLayoutEffect fits before paint, so
+  // there is no one-frame flash at the initial native scale.
+  useLayoutEffect(() => {
+    if (!validKymo || !result) return;
+    const geom = `${result.lengthPx}x${result.frameCount}`;
+    if (geom === lastGeomRef.current) return;
+    lastGeomRef.current = geom;
+    fitToView();
+  }, [validKymo, result, fitToView]);
 
   const zoomBy = useCallback((factor: number) => {
     const vp = viewportRef.current;
@@ -165,6 +187,7 @@ export function KymographModal({
   }, []);
 
   // Ctrl/⌘ + wheel zoom — native non-passive listener so preventDefault works.
+  // Re-binds when the viewport (re)mounts, i.e. when validKymo flips true.
   useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
@@ -175,7 +198,7 @@ export function KymographModal({
     };
     vp.addEventListener('wheel', onWheel, { passive: false });
     return () => vp.removeEventListener('wheel', onWheel);
-  }, [zoomBy, result]);
+  }, [zoomBy, validKymo]);
 
   const onDragStart = (e: React.MouseEvent) => {
     const vp = viewportRef.current;
@@ -195,10 +218,17 @@ export function KymographModal({
     vp.scrollLeft = d.sl - (e.clientX - d.x);
     vp.scrollTop = d.st - (e.clientY - d.y);
   };
-  const onDragEnd = () => {
+  const onDragEnd = useCallback(() => {
     dragRef.current = null;
     setDragging(false);
-  };
+  }, []);
+
+  // End a pan even if the button is released outside the viewport / window.
+  useEffect(() => {
+    if (!dragging) return;
+    window.addEventListener('mouseup', onDragEnd);
+    return () => window.removeEventListener('mouseup', onDragEnd);
+  }, [dragging, onDragEnd]);
 
   useEffect(() => {
     if (defaultChannel && sourceChannel == null) {
@@ -351,7 +381,14 @@ export function KymographModal({
             </div>
           )}
           {error && <div className="text-destructive text-sm">{error}</div>}
-          {!isLoading && !error && result && (
+          {!isLoading && !error && result && !validKymo && (
+            <div className="text-sm text-muted-foreground">
+              {t('editor.kymograph.empty', {
+                defaultValue: 'Kymograph could not be computed.',
+              })}
+            </div>
+          )}
+          {!isLoading && !error && validKymo && result && (
             // Native-aspect-ratio viewer: the kymograph is NOT stretched — it's
             // shown at lengthPx×frameCount (× zoom) inside a scrollable box.
             // Rows = frames (time ↓), cols = position along the microtubule.

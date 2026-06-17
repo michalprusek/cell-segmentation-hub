@@ -2141,6 +2141,7 @@ export default {
       zoomOut: 'Verkleinern',
       fit: 'Einpassen',
       zoomHint: 'ziehen zum Verschieben · Strg+Rad zum Zoomen',
+      empty: 'Kymograph konnte nicht berechnet werden.',
       velocityAnalysis: 'Geschwindigkeitsanalyse',
       colVelocity: 'Nettogeschwindigkeit',
       colRuns: 'Läufe',

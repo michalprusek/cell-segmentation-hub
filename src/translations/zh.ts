@@ -2001,6 +2001,7 @@ export default {
       zoomOut: '缩小',
       fit: '适应窗口',
       zoomHint: '拖动平移 · Ctrl+滚轮缩放',
+      empty: '无法计算微管图。',
       velocityAnalysis: '速度分析',
       colVelocity: '净速度',
       colRuns: '运动段',

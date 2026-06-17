@@ -2180,6 +2180,7 @@ export default {
       zoomOut: 'Alejar',
       fit: 'Ajustar a la vista',
       zoomHint: 'arrastra para desplazar · Ctrl+rueda para zoom',
+      empty: 'No se pudo calcular el kimograma.',
       velocityAnalysis: 'Análisis de velocidad',
       colVelocity: 'Velocidad neta',
       colRuns: 'Tramos',

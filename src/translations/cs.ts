@@ -2150,6 +2150,7 @@ export default {
       zoomOut: 'Oddálit',
       fit: 'Přizpůsobit',
       zoomHint: 'táhni pro posun · Ctrl+kolečko pro zoom',
+      empty: 'Kymograf nelze spočítat.',
       velocityAnalysis: 'Analýza rychlosti',
       colVelocity: 'Čistá rychlost',
       colRuns: 'Běhy',
