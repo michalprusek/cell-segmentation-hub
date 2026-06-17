@@ -200,7 +200,7 @@ export function KymographModal({
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {t('editor.kymograph.title', { defaultValue: 'Kymograph' })}:{' '}
@@ -305,7 +305,7 @@ export function KymographModal({
                 <img
                   src={`data:image/png;base64,${result.pngBase64}`}
                   alt={`Kymograph for ${polylineId}`}
-                  className="w-full max-h-[500px] block"
+                  className="w-full max-h-[55vh] block"
                   style={{
                     imageRendering: 'pixelated',
                     minHeight: '200px',
@@ -329,7 +329,7 @@ export function KymographModal({
                           .join(' ')}
                         fill="none"
                         stroke={trackColor(tr.netVelocityPxPerFrame)}
-                        strokeWidth={activeTrack === i ? 3 : 1.5}
+                        strokeWidth={activeTrack === i ? 5 : 3}
                         strokeOpacity={
                           activeTrack === null || activeTrack === i ? 1 : 0.25
                         }
