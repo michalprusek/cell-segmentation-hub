@@ -13,7 +13,7 @@ services:
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     networks:
-      - blue-network
+      - app-network
     restart: always
     deploy:
       resources:
@@ -33,7 +33,7 @@ services:
     ports:
       - '9090:9090'
     volumes:
-      - ./monitoring/blue-prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/production-prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_monitoring_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -46,7 +46,7 @@ services:
       node-exporter:
         condition: service_healthy
     networks:
-      - blue-network
+      - app-network
     restart: always
     deploy:
       resources:
@@ -94,7 +94,7 @@ services:
       prometheus:
         condition: service_healthy
     networks:
-      - blue-network
+      - app-network
     restart: always
     deploy:
       resources:
@@ -111,9 +111,9 @@ services:
       retries: 3
 
 networks:
-  blue-network:
+  app-network:
     external: true
-    name: spheroseg-blue
+    name: spheroseg
 
 volumes:
   prometheus_monitoring_data:
