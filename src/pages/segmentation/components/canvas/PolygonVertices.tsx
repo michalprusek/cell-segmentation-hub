@@ -130,7 +130,13 @@ const PolygonVertices = React.memo(
       prevProps.polygonType !== nextProps.polygonType ||
       prevProps.isSelected !== nextProps.isSelected ||
       prevProps.isHovered !== nextProps.isHovered ||
-      prevProps.isUndoRedoInProgress !== nextProps.isUndoRedoInProgress
+      prevProps.isUndoRedoInProgress !== nextProps.isUndoRedoInProgress ||
+      // onDeleteVertex backs the per-vertex context menu and editMode gates
+      // which vertex interactions are live; omitting them kept stale closures
+      // (the documented memo-comparator footgun). onDeleteVertex is now
+      // identity-stable so this comparison is effectively free.
+      prevProps.onDeleteVertex !== nextProps.onDeleteVertex ||
+      prevProps.editMode !== nextProps.editMode
     ) {
       return false;
     }

@@ -192,6 +192,14 @@ export const useEnhancedSegmentationEditor = ({
     addPointEndVertex: null,
     isAddingPoints: false,
   });
+  // Mirror interaction state into a ref so the RAF-deferred mouse-move handler
+  // reads the latest value instead of a stale closure snapshot.
+  const interactionStateRef = useRef(interactionState);
+  interactionStateRef.current = interactionState;
+  // Pending RAF / undo-redo timer handles, cancelled on unmount to avoid
+  // setState-after-unmount when navigating mid-drag or right after an undo.
+  const mouseMoveRafRef = useRef<number | null>(null);
+  const undoRedoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // History management
   const [history, setHistory] = useState<Polygon[][]>([initialPolygons]);
@@ -200,6 +208,24 @@ export const useEnhancedSegmentationEditor = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUndoRedoInProgress, setIsUndoRedoInProgress] = useState(false);
+  // Ref mirror of historyIndex so updatePolygons can append to history via a
+  // functional setState without listing history/historyIndex in its deps —
+  // that previously recreated updatePolygons (and every wrapper callback) on
+  // every edit.
+  const historyIndexRef = useRef(historyIndex);
+  historyIndexRef.current = historyIndex;
+
+  // Cancel any pending RAF / undo-redo timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (mouseMoveRafRef.current !== null) {
+        cancelAnimationFrame(mouseMoveRafRef.current);
+      }
+      if (undoRedoTimeoutRef.current !== null) {
+        clearTimeout(undoRedoTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Track image changes and polygon data
   const initialPolygonsRef = useRef<Polygon[]>([]);
@@ -466,10 +492,14 @@ export const useEnhancedSegmentationEditor = ({
       setHasUnsavedChanges(true);
 
       if (addToHistory) {
-        const newHistory = history.slice(0, historyIndex + 1);
-        newHistory.push(newPolygons);
-        setHistory(newHistory);
-        setHistoryIndex(newHistory.length - 1);
+        // Functional updates keyed off historyIndexRef so this callback does
+        // NOT depend on history/historyIndex — keeping its identity stable
+        // across edits (every wrapper callback used to recreate per edit).
+        setHistory(prev => [
+          ...prev.slice(0, historyIndexRef.current + 1),
+          newPolygons,
+        ]);
+        setHistoryIndex(prev => prev + 1);
       }
 
       // Note: onPolygonsChange is intentionally not called here
@@ -482,7 +512,7 @@ export const useEnhancedSegmentationEditor = ({
         onPolygonsChange(newPolygons);
       }
     },
-    [history, historyIndex, onPolygonsChange]
+    [onPolygonsChange]
   );
 
   // Get current polygons
@@ -525,8 +555,12 @@ export const useEnhancedSegmentationEditor = ({
       }
 
       // Reset flag after a brief delay to ensure updates are applied
-      setTimeout(() => {
+      if (undoRedoTimeoutRef.current !== null) {
+        clearTimeout(undoRedoTimeoutRef.current);
+      }
+      undoRedoTimeoutRef.current = setTimeout(() => {
         setIsUndoRedoInProgress(false);
+        undoRedoTimeoutRef.current = null;
       }, 50);
     }
   }, [canUndo, historyIndex, history, savedHistoryIndex, onPolygonsChange]);
@@ -564,8 +598,12 @@ export const useEnhancedSegmentationEditor = ({
       }
 
       // Reset flag after a brief delay to ensure updates are applied
-      setTimeout(() => {
+      if (undoRedoTimeoutRef.current !== null) {
+        clearTimeout(undoRedoTimeoutRef.current);
+      }
+      undoRedoTimeoutRef.current = setTimeout(() => {
         setIsUndoRedoInProgress(false);
+        undoRedoTimeoutRef.current = null;
       }, 50);
     }
   }, [canRedo, historyIndex, history, savedHistoryIndex, onPolygonsChange]);
@@ -1004,10 +1042,14 @@ export const useEnhancedSegmentationEditor = ({
   // Enhanced pan handler with smooth continuous movement
   const handlePan = useCallback(
     (deltaX: number, deltaY: number) => {
+      // Read latest transform via ref — handlePan runs inside a RAF callback
+      // that could otherwise hold a closure one render behind, causing the
+      // documented pan drift/stutter.
+      const current = transformRef.current;
       const newTransform = {
-        ...transform,
-        translateX: transform.translateX + deltaX,
-        translateY: transform.translateY + deltaY,
+        ...current,
+        translateX: current.translateX + deltaX,
+        translateY: current.translateY + deltaY,
       };
 
       // Apply generous constraints that allow free movement
@@ -1021,7 +1063,7 @@ export const useEnhancedSegmentationEditor = ({
 
       setTransform(constrainedTransform);
     },
-    [transform, imageWidth, imageHeight, canvasWidth, canvasHeight]
+    [imageWidth, imageHeight, canvasWidth, canvasHeight]
   );
 
   // Initialize advanced interactions after handlePan is defined
@@ -1057,6 +1099,7 @@ export const useEnhancedSegmentationEditor = ({
     (e: React.MouseEvent<HTMLDivElement>) => {
       // PERFORMANCE OPTIMIZATION: Use RAF throttling for mouse move events
       const handleMouseMoveInternal = () => {
+        mouseMoveRafRef.current = null;
         // Track cursor position in image coordinates for visual feedback
         if (canvasRef.current) {
           const rect = canvasRef.current.getBoundingClientRect();
@@ -1071,46 +1114,30 @@ export const useEnhancedSegmentationEditor = ({
           const centerOffsetX = containerWidth / 2;
           const centerOffsetY = containerHeight / 2;
 
-          // Convert to image coordinates using the same calculation as getCanvasCoordinates
-          const imageX =
-            (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
-          const imageY =
-            (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
+          // Convert to image coordinates using the latest transform (ref, not
+          // a stale closure) — same calculation as getCanvasCoordinates.
+          const t = transformRef.current;
+          const imageX = (canvasX - centerOffsetX - t.translateX) / t.zoom;
+          const imageY = (canvasY - centerOffsetY - t.translateY) / t.zoom;
 
           // Use throttled version to prevent excessive re-renders
           throttledSetCursorPosition({ x: imageX, y: imageY });
         }
 
-        // Handle panning if active - use incremental deltas for smooth movement
-        if (interactionState.isPanning && interactionState.panStart) {
-          const deltaX = e.clientX - interactionState.panStart.x;
-          const deltaY = e.clientY - interactionState.panStart.y;
+        // Handle panning if active — read latest interaction state via ref and
+        // advance panStart functionally so we never spread a stale snapshot.
+        const istate = interactionStateRef.current;
+        if (istate.isPanning && istate.panStart) {
+          const deltaX = e.clientX - istate.panStart.x;
+          const deltaY = e.clientY - istate.panStart.y;
 
-          // PERFORMANCE OPTIMIZATION: Batch state updates to prevent cascade re-renders
-          // Import { unstable_batchedUpdates } from 'react-dom' at top of file
-          if (
-            typeof window !== 'undefined' &&
-            (window as any).React &&
-            (window as any).React.unstable_batchedUpdates
-          ) {
-            (window as any).React.unstable_batchedUpdates(() => {
-              // Apply the delta movement
-              handlePan(deltaX, deltaY);
-
-              // Update pan start position for next delta calculation
-              setInteractionState({
-                ...interactionState,
-                panStart: { x: e.clientX, y: e.clientY },
-              });
-            });
-          } else {
-            // Fallback for environments without batchedUpdates
-            handlePan(deltaX, deltaY);
-            setInteractionState({
-              ...interactionState,
-              panStart: { x: e.clientX, y: e.clientY },
-            });
-          }
+          // React 18 auto-batches these two updates — no manual batching needed.
+          // (The old window.React.unstable_batchedUpdates guard never matched.)
+          handlePan(deltaX, deltaY);
+          setInteractionState(prev => ({
+            ...prev,
+            panStart: { x: e.clientX, y: e.clientY },
+          }));
           return;
         }
 
@@ -1118,21 +1145,20 @@ export const useEnhancedSegmentationEditor = ({
         interactions.handleMouseMove(e);
       };
 
-      // PERFORMANCE FIX: Use requestAnimationFrame for smooth 60fps handling
+      // PERFORMANCE FIX: Use requestAnimationFrame for smooth 60fps handling;
+      // coalesce to a single pending frame (cancelled on unmount).
       if (typeof window !== 'undefined') {
-        window.requestAnimationFrame(handleMouseMoveInternal);
+        if (mouseMoveRafRef.current !== null) {
+          cancelAnimationFrame(mouseMoveRafRef.current);
+        }
+        mouseMoveRafRef.current = window.requestAnimationFrame(
+          handleMouseMoveInternal
+        );
       } else {
         handleMouseMoveInternal();
       }
     },
-    [
-      interactionState,
-      handlePan,
-      interactions,
-      transform,
-      canvasRef,
-      throttledSetCursorPosition,
-    ]
+    [handlePan, interactions, canvasRef, throttledSetCursorPosition]
   );
 
   // Computed values
