@@ -22,6 +22,7 @@ import base64
 import csv
 import io
 import logging
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -35,6 +36,25 @@ from api.kymograph_velocity import detect_blobs, render_overlay
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Storage root that the ML container may access. Matches the volume mount in
+# docker-compose (./backend/uploads → /app/uploads) and the UPLOAD_DIR env
+# that the backend service sets. Paths supplied by callers must resolve to a
+# descendant of this directory.
+_UPLOAD_ROOT = Path(os.getenv("UPLOAD_DIR", "/app/uploads")).resolve()
+
+
+def _assert_safe_path(p: Path, label: str) -> None:
+    """Raise HTTPException(400) if *p* resolves outside _UPLOAD_ROOT."""
+    try:
+        resolved = p.resolve()
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Invalid path for {label}")
+    if not str(resolved).startswith(str(_UPLOAD_ROOT) + os.sep) and resolved != _UPLOAD_ROOT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path for {label} is outside the allowed storage root",
+        )
 
 
 # ----------------------------------------------------------------------------
@@ -507,6 +527,7 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     rows: List[np.ndarray] = []
     for frame in frames:
         path = Path(frame.image_path)
+        _assert_safe_path(path, "image_path")
         if not path.exists():
             raise HTTPException(
                 status_code=404,

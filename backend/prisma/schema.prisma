@@ -125,6 +125,9 @@ model Image {
   @@index([projectId, segmentationStatus], map: "idx_image_project_status")
   @@index([projectId, displayOrder], map: "idx_image_project_order")
   @@index([parentVideoId, frameIndex], map: "idx_image_video_frame")
+  // Covers the MT tracker gate query ("are all frames of this container in a
+  // final status?") which filters by parentVideoId AND segmentationStatus.
+  @@index([parentVideoId, segmentationStatus], map: "idx_image_video_status")
   @@map("images")
 }
 
@@ -172,6 +175,9 @@ model SegmentationQueue {
 
   @@index([status, priority, createdAt], map: "idx_queue_status_priority")
   @@index([projectId, status], map: "idx_project_status")
+  // Speeds FK-cascade deletes (image -> its queue rows) and "is this image
+  // already queued?" lookups, which previously scanned the whole queue table.
+  @@index([imageId], map: "idx_queue_image")
   @@map("segmentation_queue")
 }
 

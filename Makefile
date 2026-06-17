@@ -301,8 +301,8 @@ prod:
 		echo "❌ .env.production not found!"; \
 		exit 1; \
 	fi
-	$(DOCKER_COMPOSE) -f docker-compose.production.yml build --parallel
-	$(DOCKER_COMPOSE) -f docker-compose.production.yml up -d
+	$(DOCKER_COMPOSE) --env-file .env.production -f docker-compose.production.yml build --parallel
+	$(DOCKER_COMPOSE) --env-file .env.production -f docker-compose.production.yml up -d
 	@echo "🎉 Production environment started!"
 
 # Generate SSL certificates for testing

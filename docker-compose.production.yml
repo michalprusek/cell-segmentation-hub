@@ -10,7 +10,10 @@ services:
         - VITE_WS_URL=
     container_name: spheroseg-frontend
     ports:
-      - '4000:80'
+      # Loopback only — the app is served publicly via nginx (443), which
+      # reaches this container over the docker network (frontend:80). This
+      # host port is debug access and must not be internet-facing.
+      - '127.0.0.1:4000:80'
     networks:
       - spheroseg-network
     environment:
@@ -30,7 +33,9 @@ services:
     container_name: spheroseg-backend
     env_file: .env.production
     ports:
-      - '4001:3001'
+      # Loopback only — nginx proxies the API over the docker network
+      # (backend:3001). Exposing 4001 publicly bypassed TLS + rate limiting.
+      - '127.0.0.1:4001:3001'
     networks:
       - spheroseg-network
     depends_on:
@@ -128,7 +133,10 @@ services:
         '30',
       ]
     ports:
-      - '4008:8000'
+      # Loopback only. The ML FastAPI service has NO auth layer; the backend
+      # and nginx reach it over the docker network (ml:8000). A public 4008
+      # let anyone drive the shared GPU unauthenticated — critical exposure.
+      - '127.0.0.1:4008:8000'
     networks:
       - spheroseg-network
     depends_on:
