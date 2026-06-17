@@ -158,3 +158,6 @@ path_c_v24c/
 
 # HuggingFace model cache (transformers + DINOv3 backbone downloads)
 backend/segmentation/.hf-cache/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
