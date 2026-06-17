@@ -41,6 +41,7 @@ import { ProjectImage } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
 import { MicrotubuleMetricsSection } from './components/MicrotubuleMetricsSection';
+import { MicrotubuleKymographsSection } from './components/MicrotubuleKymographsSection';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 import {
   AlertDialog,
@@ -77,6 +78,12 @@ const MT_METRICS_DEFAULTS = {
   thicknessPx: 5,
   marginMultiplier: 2,
   channels: [] as string[],
+};
+
+const MT_KYMOGRAPHS_DEFAULTS = {
+  enabled: false,
+  includeVelocityMetrics: true,
+  includeSegmentedImages: true,
 };
 
 export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
@@ -421,6 +428,17 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                         updateExportOptions({ mtMetrics: next })
                       }
                       availableChannels={availableChannels}
+                    />
+                  )}
+
+                  {isMTProject && (
+                    <MicrotubuleKymographsSection
+                      value={
+                        exportOptions.mtKymographs ?? MT_KYMOGRAPHS_DEFAULTS
+                      }
+                      onChange={next =>
+                        updateExportOptions({ mtKymographs: next })
+                      }
                     />
                   )}
 

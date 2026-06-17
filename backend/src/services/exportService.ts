@@ -39,6 +39,10 @@ import {
   writeMTMetrics,
   type MTMetricsRow,
 } from './export/mtMetricsExporter';
+import {
+  exportMicrotubuleKymographs,
+  type MTKymographOptions,
+} from './export/mtKymographExporter';
 
 const YOLO_WRITE_CONCURRENCY = 16;
 
@@ -75,6 +79,13 @@ export interface ExportOptions {
     marginMultiplier: number;
     channels: string[];
   };
+  /**
+   * Microtubule-only kymograph export. For ``microtubules`` projects, builds a
+   * kymograph per microtubule, runs blob-motion detection, and (per the
+   * toggles) writes segmented kymograph PNGs and/or a velocity-metrics CSV into
+   * ``kymographs/``. Ignored for non-MT projects.
+   */
+  mtKymographs?: MTKymographOptions;
 }
 
 // Define type for project with images and segmentation data
@@ -584,6 +595,20 @@ export class ExportService {
             exportDir,
             options,
             jobId
+          )
+        );
+      }
+
+      // MT kymographs (segmented images + velocity metrics) — MT projects only.
+      if (
+        (project.type ?? '') === 'microtubules' &&
+        options.mtKymographs?.enabled
+      ) {
+        exportTasks.push(
+          exportMicrotubuleKymographs(
+            project.id,
+            exportDir,
+            options.mtKymographs
           )
         );
       }

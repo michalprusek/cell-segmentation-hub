@@ -1054,6 +1054,13 @@ export default {
     imagesDeleted_other: '已删除 {{count}} 张图片',
   },
   export: {
+    mtKymographs: {
+      title: '微管图速度分析',
+      description: '在每个微管的微管图上检测移动粒子并导出其速度。',
+      enable: '包含微管图分析',
+      velocityMetrics: '速度指标 (CSV)',
+      segmentedImages: '分割的微管图图像 (PNG)',
+    },
     mt: {
       sectionTitle: '微管指标',
       sectionDescription:
@@ -1990,6 +1997,13 @@ export default {
       showKymograph: '显示时空图',
       axisTime: '时间 (帧) ↓',
       axisAlong: '沿微管 (px) →',
+      velocityAnalysis: '速度分析',
+      colVelocity: '净速度',
+      colRuns: '运动段',
+      colSnr: '信噪比',
+      noBlobs: '未检测到移动粒子',
+      downloadTracks: '速度 CSV',
+      uncalibrated: '无像素尺寸/帧间隔校准——速度以 px/帧 显示。',
     },
     channels: {
       toggleVisibility: '切换通道可见性',

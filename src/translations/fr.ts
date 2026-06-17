@@ -1145,6 +1145,14 @@ export default {
     imagesDeleted_other: '{{count}} images supprimées',
   },
   export: {
+    mtKymographs: {
+      title: 'Analyse de vitesse par kymographie',
+      description:
+        'Détecte les particules en mouvement sur un kymographe pour chaque microtubule et exporte leurs vitesses.',
+      enable: 'Inclure l’analyse de kymographie',
+      velocityMetrics: 'Métriques de vitesse (CSV)',
+      segmentedImages: 'Images de kymographe segmentées (PNG)',
+    },
     mt: {
       sectionTitle: 'Métriques des microtubules',
       sectionDescription:
@@ -2117,6 +2125,14 @@ export default {
       showKymograph: 'Afficher le kymographe',
       axisTime: 'Temps (images) ↓',
       axisAlong: 'Le long du microtubule (px) →',
+      velocityAnalysis: 'Analyse de vitesse',
+      colVelocity: 'Vitesse nette',
+      colRuns: 'Segments',
+      colSnr: 'SNR',
+      noBlobs: 'Aucune particule en mouvement détectée',
+      downloadTracks: 'CSV de vitesse',
+      uncalibrated:
+        "Pas de calibration taille de pixel / intervalle d'images — vitesses en px/image.",
     },
     channels: {
       toggleVisibility: 'Basculer la visibilité du canal',

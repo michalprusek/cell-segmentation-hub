@@ -30,6 +30,8 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.kymograph_velocity import detect_blobs, render_overlay
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -302,6 +304,36 @@ class KymographRequest(BaseModel):
         None,
         pattern=r"^#[0-9A-Fa-f]{6}$",
     )
+    # When True, run blob-motion detection on the sampled intensity matrix and
+    # return one KymographTrack per moving particle (velocities in px/frame —
+    # the Node backend converts to um/s with the container's calibration).
+    detect_velocity: bool = False
+    # When True (with detect_velocity), also composite the detected tracks onto
+    # the kymograph and return it as ``overlay_png_base64`` — used by the export
+    # pipeline to ship "segmented kymograph" images without a browser.
+    render_overlay: bool = False
+
+
+class KymographRun(BaseModel):
+    """One constant-velocity segment of a track's trajectory."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    v_pxframe: float
+    se_pxframe: float
+    t0: int
+    t1: int
+
+
+class KymographTrack(BaseModel):
+    """One moving particle detected on the kymograph."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    points: List[List[float]]  # [[frame, x_subpixel], ...], time-ordered
+    net_pxframe: float
+    snr: float
+    runs: List[KymographRun]
 
 
 class KymographResponse(BaseModel):
@@ -312,6 +344,11 @@ class KymographResponse(BaseModel):
     frame_count: int
     length_px: int
     tracked: bool
+    # Populated only when the request set ``detect_velocity``; otherwise None.
+    tracks: Optional[List[KymographTrack]] = None
+    # Populated only when ``render_overlay`` was set; base64 PNG of the
+    # kymograph with detected tracks drawn on top.
+    overlay_png_base64: Optional[str] = None
 
 
 def _arc_length_resample_polyline(
@@ -491,6 +528,25 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     if kymo.size == 0:
         raise HTTPException(status_code=500, detail="Empty kymograph result")
 
+    # Blob-motion detection runs on the RAW (un-normalised) matrix so the
+    # background-subtraction and SNR estimates inside detect_blobs see real
+    # intensities, not a [0,1]-rescaled version. The velocity layer is
+    # OPTIONAL: a detection failure must never break the kymograph itself, so
+    # we degrade to "no tracks" rather than 500-ing the whole request.
+    raw_tracks: List[Dict[str, Any]] = []
+    tracks: Optional[List[KymographTrack]] = None
+    if req.detect_velocity:
+        try:
+            raw_tracks = detect_blobs(kymo)
+            tracks = [KymographTrack(**tr) for tr in raw_tracks]
+        except Exception:
+            logger.exception(
+                "kymograph velocity detection failed; "
+                "returning kymograph without tracks"
+            )
+            raw_tracks = []
+            tracks = []
+
     # Per-frame normalisation could obscure intensity changes — instead we
     # normalise globally to expose dynamics. Add 1e-9 to avoid /0.
     mn, mx = float(kymo.min()), float(kymo.max())
@@ -505,6 +561,18 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     PILImage.fromarray(rgb).save(buf, format="PNG")
     png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
+    # Render the "segmented kymograph" whenever the caller asked for it — even
+    # with zero tracks (then it's just the kymograph, which is still the image
+    # the export wants). raw_tracks may be empty; render_overlay handles that.
+    overlay_b64: Optional[str] = None
+    if req.render_overlay:
+        try:
+            overlay_b64 = base64.b64encode(
+                render_overlay(rgb, raw_tracks)
+            ).decode("ascii")
+        except Exception:
+            logger.exception("kymograph overlay render failed; omitting overlay")
+
     csv_buf = io.StringIO()
     writer = csv.writer(csv_buf)
     writer.writerow(["frame", *[f"x{i}" for i in range(n_samples)]])
@@ -518,4 +586,6 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         frame_count=int(kymo.shape[0]),
         length_px=int(kymo.shape[1]),
         tracked=bool(req.tracked),
+        tracks=tracks,
+        overlay_png_base64=overlay_b64,
     )

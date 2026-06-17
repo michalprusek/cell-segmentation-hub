@@ -39,6 +39,20 @@ interface PolylineRecord {
   instanceId?: string;
 }
 
+/** Raw track shape returned by the ML ``/kymograph`` endpoint (snake_case,
+ *  velocities in px/frame). Converted to the camelCase + um/s shape below. */
+interface MlTrack {
+  points: KymoPoint[];
+  net_pxframe: number;
+  snr: number;
+  runs: Array<{
+    v_pxframe: number;
+    se_pxframe: number;
+    t0: number;
+    t1: number;
+  }>;
+}
+
 export interface KymographServiceInput {
   videoContainerId: string;
   polylineId: string;
@@ -48,6 +62,35 @@ export interface KymographServiceInput {
    *  kymograph as a black-to-color linear gradient instead of viridis,
    *  matching the channel tint the user picked in the editor. */
   channelColor?: string;
+  /** When true, the ML service also runs blob-motion detection and the
+   *  result carries one ``KymographTrack`` per moving particle. */
+  detectVelocity?: boolean;
+  /** When true (with detectVelocity), the result carries ``overlayPngBase64``
+   *  — the kymograph with detected tracks composited on top. Used by export. */
+  renderOverlay?: boolean;
+}
+
+/** One constant-velocity segment of a track. ``*UmPerSec`` fields are null
+ *  when the container has no calibration (pixelSizeUm / frameIntervalMs). */
+export interface KymographRun {
+  velocityPxPerFrame: number;
+  sePxPerFrame: number;
+  velocityUmPerSec: number | null;
+  seUmPerSec: number | null;
+  t0: number;
+  t1: number;
+}
+
+/** A sub-pixel trajectory sample: `[frame, xPosition]` along the polyline. */
+export type KymoPoint = [frame: number, x: number];
+
+/** One moving particle detected on the kymograph. */
+export interface KymographTrack {
+  points: KymoPoint[]; // time-ordered
+  netVelocityPxPerFrame: number;
+  netVelocityUmPerSec: number | null;
+  snr: number;
+  runs: KymographRun[];
 }
 
 export interface KymographServiceResult {
@@ -57,6 +100,13 @@ export interface KymographServiceResult {
   lengthPx: number;
   tracked: boolean;
   sourceChannel: string;
+  /** Container calibration (null when the source upload had no metadata). */
+  pixelSizeUm: number | null;
+  frameIntervalMs: number | null;
+  /** Detected moving particles; present only when ``detectVelocity`` was set. */
+  tracks?: KymographTrack[];
+  /** Base64 PNG of the kymograph + tracks; present only with ``renderOverlay``. */
+  overlayPngBase64?: string;
 }
 
 /** Resolves the on-disk PNG path for a given frame + channel. */
@@ -91,7 +141,15 @@ function parsePolygons(json: string | null | undefined): PolylineRecord[] {
 export async function buildKymograph(
   input: KymographServiceInput
 ): Promise<KymographServiceResult> {
-  const { videoContainerId, polylineId, frameIndex, sourceChannel, channelColor } = input;
+  const {
+    videoContainerId,
+    polylineId,
+    frameIndex,
+    sourceChannel,
+    channelColor,
+    detectVelocity,
+    renderOverlay,
+  } = input;
 
   // Defence in depth: reject any sourceChannel containing path separators
   // or other unsafe characters. The route layer also validates, but this
@@ -110,6 +168,8 @@ export async function buildKymograph(
       projectId: true,
       isVideoContainer: true,
       channels: true,
+      pixelSizeUm: true,
+      frameIntervalMs: true,
     },
   });
   if (!container || !container.isVideoContainer) {
@@ -193,16 +253,57 @@ export async function buildKymograph(
       target_width: 200,
       tracked: trackedMode,
       ...(channelColor ? { channel_color: channelColor } : {}),
+      ...(detectVelocity ? { detect_velocity: true } : {}),
+      ...(detectVelocity && renderOverlay ? { render_overlay: true } : {}),
     },
     { timeout: 120_000 }
   );
   const payload = res.data?.data ?? res.data ?? {};
+
+  // Calibration: px/frame -> um/s factor. Null when the upload carried no
+  // pixel size / frame interval (older videos, non-microscopy formats).
+  const pixelSizeUm = container.pixelSizeUm ?? null;
+  const frameIntervalMs = container.frameIntervalMs ?? null;
+  const umPerSecPerPxFrame =
+    pixelSizeUm != null && frameIntervalMs != null && frameIntervalMs > 0
+      ? pixelSizeUm / (frameIntervalMs / 1000)
+      : null;
+  const toUms = (pxPerFrame: number): number | null =>
+    umPerSecPerPxFrame != null ? pxPerFrame * umPerSecPerPxFrame : null;
+
+  // Surface a contract violation: detection was requested but the ML service
+  // returned no tracks[] array (vs. legitimately empty). Don't let it look
+  // identical to "no particles found".
+  if (detectVelocity && !Array.isArray(payload.tracks)) {
+    logger.warn(
+      'ML kymograph response missing tracks[] despite detectVelocity',
+      'KymographService',
+      { videoContainerId, polylineId }
+    );
+  }
+  const tracks: KymographTrack[] | undefined = Array.isArray(payload.tracks)
+    ? (payload.tracks as MlTrack[]).map(tr => ({
+        points: tr.points,
+        netVelocityPxPerFrame: tr.net_pxframe,
+        netVelocityUmPerSec: toUms(tr.net_pxframe),
+        snr: tr.snr,
+        runs: tr.runs.map(r => ({
+          velocityPxPerFrame: r.v_pxframe,
+          sePxPerFrame: r.se_pxframe,
+          velocityUmPerSec: toUms(r.v_pxframe),
+          seUmPerSec: toUms(r.se_pxframe),
+          t0: r.t0,
+          t1: r.t1,
+        })),
+      }))
+    : undefined;
 
   logger.info('Kymograph generated', 'KymographService', {
     videoContainerId,
     polylineId,
     tracked: trackedMode,
     frames: framesPayload.length,
+    velocityTracks: tracks?.length,
   });
 
   return {
@@ -212,5 +313,11 @@ export async function buildKymograph(
     lengthPx: payload.length_px,
     tracked: trackedMode,
     sourceChannel,
+    pixelSizeUm,
+    frameIntervalMs,
+    ...(tracks ? { tracks } : {}),
+    ...(typeof payload.overlay_png_base64 === 'string'
+      ? { overlayPngBase64: payload.overlay_png_base64 }
+      : {}),
   };
 }

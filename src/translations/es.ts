@@ -1140,6 +1140,14 @@ export default {
     imagesDeleted_other: '{{count}} imágenes eliminadas',
   },
   export: {
+    mtKymographs: {
+      title: 'Análisis de velocidad por kimografía',
+      description:
+        'Detecta partículas en movimiento en un kimograma para cada microtúbulo y exporta sus velocidades.',
+      enable: 'Incluir análisis de kimografía',
+      velocityMetrics: 'Métricas de velocidad (CSV)',
+      segmentedImages: 'Imágenes de kimograma segmentadas (PNG)',
+    },
     mt: {
       sectionTitle: 'Métricas de microtúbulos',
       sectionDescription:
@@ -2168,6 +2176,14 @@ export default {
       showKymograph: 'Mostrar kimógrafo',
       axisTime: 'Tiempo (frames) ↓',
       axisAlong: 'A lo largo del microtúbulo (px) →',
+      velocityAnalysis: 'Análisis de velocidad',
+      colVelocity: 'Velocidad neta',
+      colRuns: 'Tramos',
+      colSnr: 'SNR',
+      noBlobs: 'No se detectaron partículas en movimiento',
+      downloadTracks: 'CSV de velocidad',
+      uncalibrated:
+        'Sin calibración de tamaño de píxel / intervalo de fotogramas — velocidades en px/fotograma.',
     },
     channels: {
       toggleVisibility: 'Alternar visibilidad del canal',
