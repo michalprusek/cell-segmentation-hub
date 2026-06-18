@@ -37,12 +37,17 @@ networkx>=3.0
 segmentation-models-pytorch==0.3.4
 
 # Microtubule v7 dependencies (DINOv3 ViT-L/16 backbone via HuggingFace)
-# transformers 4.57+ is required to recognise the DINOv3 model config.
+# transformers 4.57+ is required to recognise the DINOv3 model config. Pinned to
+# 4.57.6 (not 4.57.0, which PyPI YANKED for a setup/install defect) — a bugfix
+# patch within the same 4.57 line that introduced DINOv3, so DINOv3 support is
+# preserved. Note: the arbitrary-code-exec advisory is only fixed in the 5.0
+# pre-release; staying on 4.57.x is a deliberate tradeoff (5.0 risks DINOv3
+# loading across SegFormer/Microtubule/Sperm — see the deferred ML-stack scope).
 # DINOv3 is gated — HF_TOKEN must be set before first load. tifffile is used
 # by both the model's percentile normalisation reference and the video
 # extractor (multi-page TIFF microscopy stacks). nd2 reads Nikon NIS-Elements
 # proprietary files (Apache-2.0, pure Python).
-transformers==4.57.0
+transformers==4.57.6
 tifffile>=2024.1.30
 nd2>=0.10.0
 huggingface_hub>=0.20
