@@ -2,13 +2,14 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 pydantic==2.5.0
-# requests 2.32.4+ fixes CVE-2024-47081 (.netrc credential leak)
-# and CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths).
-requests==2.32.4
-# python-multipart 0.0.18+ fixes CVE-2024-24762 (Content-Type header
-# ReDoS), CVE-2024-53981 (multipart boundary DoS), and CVE-2026-24486
-# (arbitrary file write via non-default config).
-python-multipart==0.0.18
+# requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
+# CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
+# later session-redirect advisory.
+requests==2.33.0
+# python-multipart 0.0.30 fixes CVE-2024-24762 (Content-Type header ReDoS),
+# CVE-2024-53981 (multipart boundary DoS), CVE-2026-24486 (arbitrary file
+# write), and the later high-severity multipart-parsing advisory.
+python-multipart==0.0.30
 psutil==5.9.5
 
 # ML dependencies (CUDA variant specified in Dockerfiles)
@@ -21,9 +22,10 @@ torchvision==0.21.0
 
 # Image processing
 opencv-python-headless==4.8.1.78
-# Pillow 10.4.0 fixes CVE-2023-50447 (ImageMath.eval arbitrary code
-# execution) and CVE-2024-28219 (buffer overflow in c_memcpy).
-Pillow==10.4.0
+# Pillow 12.2.0 fixes the earlier ImageMath.eval RCE / c_memcpy overflow plus
+# the later high-severity decoder advisories. ML code uses no removed PIL APIs
+# (only the Image.NEAREST alias + ImageDraw, both still valid in Pillow 12).
+Pillow==12.2.0
 numpy==1.24.3
 scipy==1.11.4
 scikit-image==0.22.0
