@@ -62,21 +62,43 @@ def _touches_border(polygon: np.ndarray, height: int, width: int,
     )
 
 
+def _fill_holes(mask: np.ndarray) -> np.ndarray:
+    """Fill interior holes so a ring / annulus mask becomes a solid disk.
+
+    SAM 3 often segments a thick-shelled capsule's OUTER boundary as an annulus
+    (the shell, hollow in the middle). Filling it lets containment see that the
+    inner-wall disk really sits inside the outer capsule.
+    """
+    cnts, _ = cv2.findContours(
+        mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+    if not cnts:
+        return mask
+    out = np.zeros(mask.shape, np.uint8)
+    cv2.drawContours(out, cnts, -1, 1, thickness=cv2.FILLED)
+    return out.astype(bool)
+
+
 def _merge_nested(masks, containment: float = _NEST_CONTAINMENT):
     """Indices of masks to KEEP: largest first, drop any >``containment`` nested.
 
     A capsule's inner wall / interior bubble is almost entirely contained in its
     outer-shell mask, so keeping only the outer mask yields one boundary per
-    capsule. Mirrors `training/make_yolo_dataset.py: merge_nested`.
+    capsule. Containment is measured on HOLE-FILLED masks: SAM 3's outer mask is
+    frequently a ring, and on the raw ring an inner disk falls in the hole and
+    looks "separate" (low overlap) — filling fixes that without ever merging two
+    genuinely separate capsules (their filled disks don't overlap). Mirrors
+    `training/make_yolo_dataset.py: merge_nested`.
     """
-    areas = [int(m.sum()) for m in masks]
+    filled = [_fill_holes(m) for m in masks]
+    areas = [int(f.sum()) for f in filled]
     order = sorted(range(len(masks)), key=lambda i: -areas[i])
     kept: list[int] = []
     for i in order:
         if areas[i] == 0:
             continue
         nested = any(
-            np.count_nonzero(masks[i] & masks[k]) / min(areas[i], areas[k])
+            np.count_nonzero(filled[i] & filled[k]) / min(areas[i], areas[k])
             > containment
             for k in kept
         )
@@ -177,8 +199,11 @@ class MicrocapsuleModel:
         for i in _merge_nested(masks):
             if scores[i] < conf:
                 continue
+            # Fill holes first so a ring/annulus outer mask yields the solid
+            # capsule's outer boundary (not its hollow inner edge).
             cnts, _ = cv2.findContours(
-                masks[i].astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                _fill_holes(masks[i]).astype(np.uint8),
+                cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE,
             )
             if not cnts:
                 continue

@@ -71,6 +71,24 @@ def _disk(size, cx, cy, r):
     return ((xx - cx) ** 2 + (yy - cy) ** 2) <= r * r
 
 
+def _ring(size, cx, cy, r_outer, r_inner):
+    yy, xx = np.ogrid[:size, :size]
+    d2 = (xx - cx) ** 2 + (yy - cy) ** 2
+    return (d2 <= r_outer * r_outer) & (d2 >= r_inner * r_inner)
+
+
+def test_merge_nested_collapses_outer_ring_and_inner_disk():
+    """SAM 3's outer mask is often an annulus; on the RAW ring an inner disk
+    barely overlaps, so containment must be measured on hole-FILLED masks."""
+    from models.microcapsule import _merge_nested
+
+    outer_ring = _ring(300, 150, 150, 100, 78)  # capsule shell (hollow centre)
+    inner_disk = _disk(300, 150, 150, 75)        # inner wall (sits in the hole)
+    # Raw overlap is tiny (disk falls in the ring's hole) but they ARE concentric.
+    kept = _merge_nested([inner_disk, outer_ring])
+    assert kept == [1]  # only the (filled) outer ring survives
+
+
 def test_merge_nested_drops_inner_and_bubble_keeps_outer():
     from models.microcapsule import _merge_nested
 
