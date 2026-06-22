@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,11 @@ const DashboardHeader = () => {
   const [mlServiceStatus, setMlServiceStatus] = useState<
     'idle' | 'processing' | 'error'
   >('idle');
+  // Mirror of mlServiceStatus readable inside the polling timeout without
+  // re-subscribing the effect — used to poll faster while in an error state so
+  // the indicator self-heals without a manual page refresh.
+  const mlStatusRef = useRef(mlServiceStatus);
+  mlStatusRef.current = mlServiceStatus;
   const { user } = useAuth();
   const { selectedModel: _selectedModel, getSelectedModelInfo } =
     useLocalizedModels();
@@ -145,11 +150,26 @@ const DashboardHeader = () => {
       }
     };
 
-    // Check immediately and then every 30 seconds (reduced frequency)
-    checkMlServiceStatus();
-    const interval = setInterval(checkMlServiceStatus, 30000);
+    // Check immediately, then self-heal: while the indicator is in an error
+    // state poll every 5s so it recovers on its own (e.g. after the ML service
+    // finishes loading a heavy model like SAM 3, or a transient blip) WITHOUT a
+    // manual page refresh; back off to 30s once the service is reachable again.
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const delay = mlStatusRef.current === 'error' ? 5000 : 30000;
+      timeoutId = setTimeout(async () => {
+        await checkMlServiceStatus();
+        scheduleNext();
+      }, delay);
+    };
+    checkMlServiceStatus().finally(scheduleNext);
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   // Determine status dot color

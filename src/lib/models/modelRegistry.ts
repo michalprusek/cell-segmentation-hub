@@ -239,10 +239,7 @@ export const MODEL_REGISTRY = {
     compatibleProjectTypes: ['microtubules'],
   },
   microcapsule: {
-    // SAM 3 is a large checkpoint (~3.4 GB) but runs ~1 s/image — between the
-    // fast spheroid models and the slow microtubule. Tagged 'medium' (yellow
-    // badge) rather than 'large' (red, which reads as an error to users).
-    size: 'medium',
+    size: 'large',
     defaultThreshold: 0.3,
     category: 'microcapsule',
     performance: {

@@ -241,7 +241,7 @@ describe('model registry SSOT', () => {
         displayName: 'Microcapsule (SAM 3)',
         description:
           'Instance segmentation for microcapsules (round objects) in bright-field microscopy. Meta SAM 3 with the "circle" prompt returns one clean, full-resolution boundary per capsule with a confidence score; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
-        size: 'medium',
+        size: 'large',
         defaultThreshold: 0.3,
         category: 'microcapsule',
         performance: {
