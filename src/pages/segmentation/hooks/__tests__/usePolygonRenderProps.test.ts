@@ -142,6 +142,29 @@ describe('usePolygonRenderProps', () => {
       const r = run({ polygons });
       expect(r.visiblePolygons).toHaveLength(50);
     });
+
+    it('still applies the hidden filter within a large set (50 in, 5 hidden → 45)', () => {
+      // Guards against a future "fast path" that skips the hidden filter for
+      // large N — the exact class of count-gated shortcut this PR removed.
+      const polygons = Array.from({ length: 50 }, (_, i) =>
+        poly({
+          id: `frag-${i}`,
+          points: [
+            { x: i, y: i },
+            { x: i + 1, y: i },
+            { x: i + 1, y: i + 1 },
+          ],
+        })
+      );
+      const hidden = new Set<PolygonKey>(
+        polygons.slice(0, 5).map(p => polygonKey(p))
+      );
+      const r = run({ polygons, hidden });
+      expect(r.visiblePolygons).toHaveLength(45);
+      expect(r.visiblePolygons.some(p => hidden.has(polygonKey(p)))).toBe(
+        false
+      );
+    });
   });
 
   describe('frameHiddenIds', () => {
