@@ -650,9 +650,8 @@ const SegmentationEditor = () => {
     handleChangePartClass,
   } = usePolygonHandlers({ editor, imageId });
 
-  // Check if any polylines exist to conditionally show SpermInstancePanel
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
-  // edit-mode booleans, two-stage hidden/degenerate → frustum-cull filter).
+  // edit-mode booleans, hidden/degenerate polygon filter — no viewport culling).
   // Extracted to usePolygonRenderProps for isolated unit testing.
   const {
     hasPolylines,
@@ -664,9 +663,6 @@ const SegmentationEditor = () => {
   } = usePolygonRenderProps({
     editor,
     hiddenPolygonIds,
-    imageDimensions,
-    canvasWidth,
-    canvasHeight,
     activeInstanceId,
   });
 

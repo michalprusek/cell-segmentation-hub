@@ -2,12 +2,6 @@ import { useMemo } from 'react';
 import { EditMode } from '../types';
 import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
 import { isMicrotubuleInstance } from '../utils/instanceColors';
-import { polygonVisibilityManager } from '@/lib/rendering/PolygonVisibilityManager';
-
-interface ImageDimensions {
-  width: number;
-  height: number;
-}
 
 /**
  * Minimal structural slice of the editor that the render pipeline reads.
@@ -18,32 +12,31 @@ interface ImageDimensions {
 interface RenderEditor {
   polygons: Polygon[];
   editMode: EditMode;
-  selectedPolygonId: string | null;
-  transform: { zoom: number; translateX: number; translateY: number };
 }
 
 interface UsePolygonRenderPropsParams {
   editor: RenderEditor;
   hiddenPolygonIds: Set<PolygonKey>;
-  imageDimensions: ImageDimensions | null;
-  canvasWidth: number;
-  canvasHeight: number;
   activeInstanceId: string;
 }
 
 /**
- * The pure render-derivation pipeline lifted verbatim from `SegmentationEditor`:
+ * The pure render-derivation pipeline lifted from `SegmentationEditor`:
  * polyline/instance discrimination, the legacy edit-mode booleans, and the
- * two-stage polygon render filter (hidden/degenerate → frustum cull). No side
- * effects, no React state — just memoised derivations over the editor + view
- * inputs, so it is independently unit-testable.
+ * render filter that drops hidden / degenerate polygons. No side effects, no
+ * React state — just memoised derivations over the editor input, so it is
+ * independently unit-testable.
+ *
+ * There is intentionally NO viewport culling: every renderable polygon is
+ * drawn. A fragmented ("decay") spheroid segments into many small polygons,
+ * and the previous frustum-cull pass dropped on-screen pieces because its
+ * viewport math conflated image dimensions with the canvas size. Rendering
+ * the full set is both correct and cheap — pan/zoom runs through a GPU CSS
+ * transform on the parent layer, so the memoised polygons never re-render.
  */
 export function usePolygonRenderProps({
   editor,
   hiddenPolygonIds,
-  imageDimensions,
-  canvasWidth,
-  canvasHeight,
   activeInstanceId,
 }: UsePolygonRenderPropsParams) {
   const hasPolylines = useMemo(
@@ -97,8 +90,10 @@ export function usePolygonRenderProps({
     [editor.editMode]
   );
 
-  // Stage 1: filter hidden / degenerate polygons.
-  const renderablePolygons = useMemo(
+  // Render filter: drop hidden polygons (keyed by the stable `polygonKey` so
+  // the hide survives frame scrubs) and degenerate shapes (closed polygons
+  // need ≥3 points, polylines ≥2). Everything that survives is rendered.
+  const visiblePolygons = useMemo(
     () =>
       editor.polygons.filter(polygon => {
         if (hiddenPolygonIds.has(polygonKey(polygon)) || !polygon.points)
@@ -108,39 +103,6 @@ export function usePolygonRenderProps({
       }),
     [editor.polygons, hiddenPolygonIds]
   );
-
-  // Stage 2: frustum-cull off-viewport polygons via the visibility manager.
-  // The manager's internal threshold guards small counts (< 10 polygons
-  // → no culling), so MT/single-polyline cases pay zero overhead. Sperm
-  // projects with 50+ polylines at high zoom typically halve the SVG
-  // node count under this filter. We pass through `selectedPolygonId`
-  // so the manager never culls the focused polygon even if it scrolls
-  // off-screen briefly during a drag.
-  const visiblePolygons = useMemo(() => {
-    if (renderablePolygons.length < 10) return renderablePolygons;
-    const containerWidth = imageDimensions?.width || canvasWidth;
-    const containerHeight = imageDimensions?.height || canvasHeight;
-    return polygonVisibilityManager.getVisiblePolygons(renderablePolygons, {
-      zoom: editor.transform.zoom,
-      offset: {
-        x: editor.transform.translateX,
-        y: editor.transform.translateY,
-      },
-      containerWidth,
-      containerHeight,
-      selectedPolygonId: editor.selectedPolygonId,
-      forceRenderSelected: true,
-    }).visiblePolygons;
-  }, [
-    renderablePolygons,
-    editor.transform.zoom,
-    editor.transform.translateX,
-    editor.transform.translateY,
-    editor.selectedPolygonId,
-    imageDimensions,
-    canvasWidth,
-    canvasHeight,
-  ]);
 
   // Panels still consume polygon.id, so project the stable-key set
   // down per frame.
@@ -159,7 +121,6 @@ export function usePolygonRenderProps({
     polylineKind,
     availableInstanceIds,
     legacyModes,
-    renderablePolygons,
     visiblePolygons,
     frameHiddenIds,
   };

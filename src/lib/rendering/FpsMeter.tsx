@@ -1,16 +1,9 @@
 /**
- * Development-only FPS + rendering stats overlay for the segmentation editor.
+ * Development-only FPS overlay for the segmentation editor.
  *
  * Opt-in via `?perf=1` query param or `localStorage.segPerfOverlay = '1'`.
  * Designed for validating performance work on the editor's render path
  * without shipping anything user-visible by default.
- *
- * Frustum culling is currently bypassed in the editor (see
- * `SegmentationEditor.tsx visiblePolygons`), so the visibility-manager
- * counters below will read their defaults (zero frames sampled, no
- * reduced-mode trigger). The overlay flags this explicitly with a
- * `culling: DISABLED` line so the zero values aren't misread as
- * indicators that culling is "working well".
  *
  * Uses an imperative rAF loop and a ref-only state update pattern so the
  * overlay itself doesn't cause additional renders of its parent tree.
@@ -18,16 +11,12 @@
 /* eslint-disable react-refresh/only-export-components -- exports helpers alongside overlay */
 
 import { useEffect, useRef, useState } from 'react';
-import { polygonVisibilityManager } from './PolygonVisibilityManager';
-import { boundingBoxCache } from './BoundingBoxCache';
 
 const FPS_WINDOW_MS = 1000;
 
 export interface FpsMeterSample {
   fps: number;
   frameCount: number;
-  visibility: ReturnType<typeof polygonVisibilityManager.getStats>;
-  cache: ReturnType<typeof boundingBoxCache.getStats>;
 }
 
 /**
@@ -76,7 +65,7 @@ export function isFpsOverlayEnabled(): boolean {
 }
 
 /**
- * Hook: returns a live FPS + stats sample while an rAF loop is running.
+ * Hook: returns a live FPS sample while an rAF loop is running.
  * Only runs while the component is mounted AND the overlay is enabled,
  * so disabling it has no runtime cost.
  */
@@ -87,8 +76,6 @@ export function useFpsSampler(enabled: boolean): FpsMeterSample {
   const [sample, setSample] = useState<FpsMeterSample>(() => ({
     fps: 0,
     frameCount: 0,
-    visibility: polygonVisibilityManager.getStats(),
-    cache: boundingBoxCache.getStats(),
   }));
 
   useEffect(() => {
@@ -106,8 +93,6 @@ export function useFpsSampler(enabled: boolean): FpsMeterSample {
         setSample({
           fps: samplerRef.current!.fps,
           frameCount: samplerRef.current!.frameCount,
-          visibility: polygonVisibilityManager.getStats(),
-          cache: boundingBoxCache.getStats(),
         });
       }
       raf = requestAnimationFrame(tick);
@@ -133,9 +118,6 @@ export function FpsMeter(): JSX.Element | null {
   const sample = useFpsSampler(enabled);
   if (!enabled) return null;
 
-  const vis = sample.visibility;
-  const cache = sample.cache;
-
   return (
     <div
       data-testid="fps-meter"
@@ -157,12 +139,7 @@ export function FpsMeter(): JSX.Element | null {
       }}
     >
       {`FPS ${sample.fps.toFixed(1)}
-frames ${sample.frameCount}
-culling DISABLED
-level ${vis.isUsingReducedRendering ? 'reduced' : 'normal'}
-cull-thresh ${vis.cullingThreshold}
-avgFrame ${vis.averageFrameTime.toFixed(2)}ms
-cache ${cache.size} (${(cache.hitRate * 100).toFixed(0)}% hit)`}
+frames ${sample.frameCount}`}
     </div>
   );
 }

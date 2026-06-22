@@ -8,9 +8,9 @@
  * MultiChannelCanvas can mount the cached element directly and skip
  * the HTTP roundtrip.
  *
- * Modeled on BoundingBoxCache (Map insertion-order LRU + hit/miss
- * stats). Key is the canonical frame URL — channel + frameId already
- * collapse into that, so a flat string keeps the API simple.
+ * A plain Map insertion-order LRU with hit/miss stats. Key is the
+ * canonical frame URL — channel + frameId already collapse into that,
+ * so a flat string keeps the API simple.
  */
 const DEFAULT_MAX_ENTRIES = 200;
 /** Backoff schedule for transient prefetch failures (e.g. nginx

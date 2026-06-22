@@ -4,8 +4,6 @@ import { usePolygonRenderProps } from '../usePolygonRenderProps';
 import { EditMode } from '../../types';
 import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
 
-const transform = { zoom: 1, translateX: 0, translateY: 0 };
-
 const poly = (over: Partial<Polygon> = {}): Polygon =>
   ({
     id: 'p1',
@@ -22,7 +20,6 @@ const run = (params: {
   polygons: Polygon[];
   hidden?: Set<PolygonKey>;
   editMode?: EditMode;
-  selectedPolygonId?: string | null;
   activeInstanceId?: string;
 }) =>
   renderHook(() =>
@@ -30,13 +27,8 @@ const run = (params: {
       editor: {
         polygons: params.polygons,
         editMode: params.editMode ?? EditMode.View,
-        selectedPolygonId: params.selectedPolygonId ?? null,
-        transform,
       },
       hiddenPolygonIds: params.hidden ?? new Set<PolygonKey>(),
-      imageDimensions: { width: 100, height: 100 },
-      canvasWidth: 100,
-      canvasHeight: 100,
       activeInstanceId: params.activeInstanceId ?? 'sperm_1',
     })
   ).result.current;
@@ -96,13 +88,8 @@ describe('usePolygonRenderProps', () => {
             editor: {
               polygons: p,
               editMode: EditMode.View,
-              selectedPolygonId: null,
-              transform,
             },
             hiddenPolygonIds: new Set<PolygonKey>(),
-            imageDimensions: null,
-            canvasWidth: 100,
-            canvasHeight: 100,
             activeInstanceId: 'sperm_1',
           }),
         { initialProps: { p: polygons } }
@@ -127,7 +114,7 @@ describe('usePolygonRenderProps', () => {
     });
   });
 
-  describe('renderablePolygons', () => {
+  describe('visiblePolygons', () => {
     it('drops hidden polygons (keyed by stable polygonKey) and degenerate shapes', () => {
       const visible = poly({ id: 'visible' });
       const hidden = poly({ id: 'hidden' });
@@ -136,14 +123,47 @@ describe('usePolygonRenderProps', () => {
         polygons: [visible, hidden, degenerate],
         hidden: new Set<PolygonKey>([polygonKey(hidden)]),
       });
-      expect(r.renderablePolygons.map(p => p.id)).toEqual(['visible']);
+      expect(r.visiblePolygons.map(p => p.id)).toEqual(['visible']);
     });
 
-    it('passes polygons straight through when under the cull threshold (<10)', () => {
-      const polygons = [poly({ id: 'a' }), poly({ id: 'b' })];
+    it('renders ALL polygons regardless of count — no viewport culling', () => {
+      // A fragmented spheroid: 50 small polygons, well above the old
+      // 10-polygon cull threshold. Every non-hidden polygon must render.
+      const polygons = Array.from({ length: 50 }, (_, i) =>
+        poly({
+          id: `frag-${i}`,
+          points: [
+            { x: i, y: i },
+            { x: i + 1, y: i },
+            { x: i + 1, y: i + 1 },
+          ],
+        })
+      );
       const r = run({ polygons });
-      // visiblePolygons === renderablePolygons (same ref) when count < 10
-      expect(r.visiblePolygons).toBe(r.renderablePolygons);
+      expect(r.visiblePolygons).toHaveLength(50);
+    });
+
+    it('still applies the hidden filter within a large set (50 in, 5 hidden → 45)', () => {
+      // Guards against a future "fast path" that skips the hidden filter for
+      // large N — the exact class of count-gated shortcut this PR removed.
+      const polygons = Array.from({ length: 50 }, (_, i) =>
+        poly({
+          id: `frag-${i}`,
+          points: [
+            { x: i, y: i },
+            { x: i + 1, y: i },
+            { x: i + 1, y: i + 1 },
+          ],
+        })
+      );
+      const hidden = new Set<PolygonKey>(
+        polygons.slice(0, 5).map(p => polygonKey(p))
+      );
+      const r = run({ polygons, hidden });
+      expect(r.visiblePolygons).toHaveLength(45);
+      expect(r.visiblePolygons.some(p => hidden.has(polygonKey(p)))).toBe(
+        false
+      );
     });
   });
 
