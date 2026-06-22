@@ -664,9 +664,6 @@ const SegmentationEditor = () => {
   } = usePolygonRenderProps({
     editor,
     hiddenPolygonIds,
-    imageDimensions,
-    canvasWidth,
-    canvasHeight,
     activeInstanceId,
   });
 

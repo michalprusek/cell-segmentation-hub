@@ -195,14 +195,6 @@ vi.mock('sonner', () => ({
   },
 }));
 
-vi.mock('@/lib/rendering/PolygonVisibilityManager', () => ({
-  polygonVisibilityManager: {
-    getVisiblePolygons: vi.fn((polys: any[]) => ({
-      visiblePolygons: polys,
-    })),
-  },
-}));
-
 vi.mock('@/lib/rendering/FpsMeter', () => ({
   FpsMeter: () => null,
 }));
