@@ -9,6 +9,8 @@ export default tseslint.config(
     ignores: [
       'dist',
       '**/dist/**',
+      'coverage',
+      '**/coverage/**',
       '**/*.d.ts',
       'characteristic_functions.py',
       // Migrated from .eslintignore
@@ -27,6 +29,12 @@ export default tseslint.config(
       // gitignored, never shipped, and may contain bare-expression
       // timestamp files that we don't want to lint.
       '.remember/**',
+      // `.claude/` is gitignored agent scratch space. It can hold nested
+      // git worktrees (full repo copies) whose `backend/**` subtrees are
+      // NOT matched by the root `backend/**` ignore above (that pattern only
+      // matches paths starting with `backend/`). Without this, `eslint .`
+      // lints other agents' in-flight worktrees and fails on their debt.
+      '.claude/**',
     ],
   },
   {
