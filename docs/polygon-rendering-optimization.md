@@ -6,9 +6,6 @@ Performance-critical paths in the segmentation editor and the utilities that kee
 
 ```
 SegmentationEditor.tsx (memoized visiblePolygons)
-  └─ PolygonVisibilityManager
-        ├─ AdaptiveThresholds (frame-time driven culling threshold)
-        └─ BoundingBoxCache   (identity-keyed AABB cache)
   └─ CanvasPolygon per visible polygon
         └─ Single-pass SVG path builder
 
@@ -23,20 +20,6 @@ polygonGeometry.ts
 All modules live under `src/lib/rendering/` or next to the editor. Nothing is lazy-loaded; the hot paths stay synchronous.
 
 ## Components
-
-### `BoundingBoxCache` — `src/lib/rendering/BoundingBoxCache.ts`
-
-Identity-keyed AABB cache. Returns the cached bounding box whenever a polygon's `points` array reference is unchanged. The editor mutates polygons immutably (replaces the points array on every edit), so reference equality is a sound invalidation signal and also cheap. Backed by a `Map` with a 5000-entry LRU cap (Map iteration order is insertion order → oldest entry is the first key).
-
-### `PolygonVisibilityManager` — `src/lib/rendering/PolygonVisibilityManager.ts`
-
-Frustum culling on polygon AABBs. Three guardrails:
-
-- Below 10 polygons: render everything. Avoids false negatives on tiny projects.
-- Below an adaptive threshold (~50–100 polygons, tightened when frame time exceeds 20 ms): render everything.
-- Above that threshold: cull polygons whose bounding box does not intersect the current viewport plus a zoom-scaled buffer.
-
-`forceRenderSelected` ensures the selected polygon is never culled, even when off-screen.
 
 ### `Quadtree<T>` — `src/lib/rendering/Quadtree.ts`
 
@@ -56,7 +39,7 @@ Still exported, still correct, still used by non-interactive callers (slicing, e
 
 `visiblePolygons` is a single `useMemo` that filters out hidden polygons and polygons below `minPoints`. Every remaining polygon is rendered regardless of zoom or translation.
 
-> **Note:** frustum culling via `polygonVisibilityManager.getVisiblePolygons` is currently **disabled**. The earlier viewport-bounds calculation misculled visible polygons at low zoom and after pan. The manager module and its tests are retained so the culling path can be re-enabled once the viewport math is proven correct on a large dataset.
+> **Note:** the editor performs no viewport frustum culling. An earlier `PolygonVisibilityManager` (backed by a `BoundingBoxCache`) culled off-viewport polygons above a count threshold, but its viewport math conflated the image dimensions with the on-screen canvas size and ignored the SVG `viewBox` scale, so it misculled visible polygons at low zoom and after pan — most visibly dropping fragments of "decay" spheroids that segment into hundreds of small polygons. The subsystem was removed (2026-06-22) in favour of rendering every polygon: pan/zoom rides a GPU CSS transform on the parent layer, so the memoised `CanvasPolygon`s don't re-render on viewport change and culling only ever saved DOM nodes, not frame-time.
 
 ### Hover / drag — `src/pages/segmentation/hooks/useAdvancedInteractions.tsx`
 
