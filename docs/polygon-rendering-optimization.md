@@ -74,7 +74,7 @@ Against the two reported lag scenarios (dev build, Chrome, M-class CPU):
 These are planned but not yet implemented:
 
 - **Canvas-based vertex rendering.** 4000 SVG `<circle>` elements for a selected 4000-point polygon still creates DOM pressure even with the quadtree handling hit tests. A `<canvas>` overlay rendering all vertices (with pointer events delegated through the spatial index) is the next step; it needs manual UI verification that interactions stay at parity with the SVG path, so it ships behind a feature flag.
-- **Web worker offload.** `polygonSlicing`, Feret-diameter, and bulk bbox computations over large polygons still run on the main thread. `src/lib/workerPool.ts` exists unused — the plan is a single dedicated `polygonGeometry.worker.ts` with `Float32Array` transferables for slicing and metric calculation on polygons above a size threshold (~500 points).
+- **Web worker offload.** `polygonSlicing`, Feret-diameter, and bulk geometry computations over large polygons still run on the main thread. There is no worker wired up today; the plan is a single dedicated `polygonGeometry.worker.ts` with `Float32Array` transferables for slicing and metric calculation on polygons above a size threshold (~500 points).
 
 ## What the earlier draft of this doc got wrong
 
