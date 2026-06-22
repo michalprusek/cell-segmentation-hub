@@ -117,6 +117,20 @@
         "expected_concurrent_throughput": 0.2
       },
       "note": "Microtubule v7 (DINOv3-L ViT-L/16 + DPT decoder + PySOAX postprocessing). DINOv3-L backbone is ~300M params and PySOAX is iterative (up to 5000 snake-evolution iterations per frame). Budget ~5-8s per frame on A5000 once warm; ~6.5 GB peak memory dominated by frozen DINOv3 activations at 448x448 FOV. Batch size pinned to 1 — frame-parallelism happens upstream via the queue."
+    },
+    "microcapsule": {
+      "optimal_batch_size": 1,
+      "max_safe_batch_size": 1,
+      "expected_throughput": 8.0,
+      "memory_limit_mb": 1500,
+      "p95_latency_ms": 200.0,
+      "production_optimized": true,
+      "concurrent_processing": {
+        "max_concurrent_users": 2,
+        "memory_per_user_mb": 1500,
+        "expected_concurrent_throughput": 8.0
+      },
+      "note": "Microcapsule YOLO11n-seg (~6 MB, Ultralytics). Instance segmentation runs at imgsz=1024; sub-second on CPU and faster on the A5000. Ultralytics drives its own per-image inference, so the wrapper is called once per image (batch size 1); throughput/memory are conservative estimates for the tiny nano model."
     }
   },
   "dynamic_batching": {

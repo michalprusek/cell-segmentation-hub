@@ -36,18 +36,19 @@ import {
 // ---------------------------------------------------------------------------
 
 describe('PROJECT_TYPES', () => {
-  it('contains exactly the five known project types', () => {
+  it('contains exactly the six known project types', () => {
     expect([...PROJECT_TYPES]).toEqual([
       'spheroid',
       'spheroid_invasive',
       'wound',
       'sperm',
       'microtubules',
+      'microcapsule',
     ]);
   });
 
-  it('is a readonly tuple (length 5)', () => {
-    expect(PROJECT_TYPES).toHaveLength(5);
+  it('is a readonly tuple (length 6)', () => {
+    expect(PROJECT_TYPES).toHaveLength(6);
   });
 });
 

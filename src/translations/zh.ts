@@ -204,6 +204,7 @@ export default {
       wound: '伤口愈合',
       sperm: '精子',
       microtubules: '微管',
+      microcapsule: '微胶囊',
     },
     projectNamePlaceholder: '例如：HeLa细胞球体',
     projectDescPlaceholder: '例如：用于药物耐受性研究的肿瘤球体分析',
@@ -403,6 +404,7 @@ export default {
         sperm: '精子模型',
         wound: '伤口愈合模型',
         microtubule: '微管模型',
+        microcapsule: '微胶囊模型',
       },
       presets: {
         fast: '快速',
@@ -460,6 +462,11 @@ export default {
           description:
             '面向 IRM/TIRF 微管延时实验的实例分割。DINOv3-L ViT-L/16 + DPT 融合生成每条微管的中线折线和每像素 32 维嵌入，可驱动跨帧跟踪和动态图（kymograph）生成。约 8 秒/帧；本平台唯一原生输出折线的模型。',
         },
+        microcapsule: {
+          name: 'Microcapsule (YOLO11n-seg)',
+          description:
+            '面向明场显微镜中微胶囊（圆形对象）的实例分割。紧凑型 YOLO11n-seg 模型（~6 MB，由 SAM 3 蒸馏）为每个胶囊返回一个多边形及置信度分数；被图像边缘截断的胶囊不计入指标（面积、周长、紧实度）。',
+        },
       },
     },
     detectHoles: '检测空洞',
@@ -487,6 +494,8 @@ export default {
         '用于划痕实验显微镜的伤口分割的U-Net + MiT-B5（SegFormer编码器）模型。每张图像一个二进制伤口区域；非常适合愈合速度的时间延迟拍摄。',
       microtubule:
         '面向 IRM/TIRF 显微镜的微管实例分割。DINOv3-L + DPT 编码器，PySOAX 后处理，原生折线输出，并支持基于嵌入的跨帧跟踪。',
+      microcapsule:
+        'YOLO11n-seg 微胶囊实例分割 — 输出每个胶囊的面积、周长和紧实度，被图像边缘截断的胶囊不计入指标（~6 MB，单张图像处理时间低于一秒）。',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',

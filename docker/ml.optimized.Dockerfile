@@ -106,6 +106,15 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     torch torchvision && \
     pip install --no-cache-dir --no-index --find-links /wheels \
     -r /app/requirements.txt && \
+    # ultralytics (microcapsule model) declares a hard dep on the NON-headless
+    # opencv-python, which collides with opencv-python-headless over the shared
+    # cv2 package. Reconcile to a single headless build: drop every opencv
+    # variant, then reinstall headless from the prebuilt wheels (offline,
+    # --no-deps so numpy isn't dragged back).
+    pip uninstall -y opencv-python opencv-contrib-python opencv-python-headless || true && \
+    pip install --no-cache-dir --no-index --find-links /wheels --no-deps \
+    opencv-python-headless && \
+    python -c "import cv2; print('cv2 OK', cv2.__version__)" && \
     rm -rf /wheels
 
 # Install the CUDA-compiled Mamba kernels (built in the mamba-builder stage

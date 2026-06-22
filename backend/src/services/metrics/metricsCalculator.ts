@@ -41,6 +41,12 @@ export interface PolygonMetrics {
   perimeterWithHoles: number;
   equivalentDiameter: number;
   circularity: number;
+  /** Per-instance detection score (microcapsule YOLO); undefined otherwise. */
+  confidence?: number;
+  /** Microcapsule completeness flag; undefined for non-microcapsule polygons.
+   *  Cut-off capsules (`false`) are already excluded upstream, so rows here are
+   *  always complete — carried for the focused microcapsule exporter. */
+  complete?: boolean;
   feretDiameterMax: number;
   feretDiameterMaxOrthogonalDistance: number;
   feretDiameterMin: number;
@@ -95,6 +101,11 @@ export interface ParsedPolygon {
   geometry?: 'polygon' | 'polyline';
   partClass?: PolygonPartClass;
   instanceId?: string;
+  /** Per-instance detection score (microcapsule YOLO). */
+  confidence?: number;
+  /** Microcapsule completeness: `false` when cut off by the image border.
+   *  Such capsules are excluded from metrics (see the parse filter below). */
+  complete?: boolean;
 }
 
 export interface SegmentationData {
@@ -169,10 +180,14 @@ export class MetricsCalculator {
         if (result.polygons) {
           try {
             const parsed: ParsedPolygon[] = JSON.parse(result.polygons);
-            // Filter to closed polygons only (exclude polylines used for sperm morphology)
+            // Filter to closed polygons only (exclude polylines used for sperm
+            // morphology). Also exclude border-cut microcapsules: an instance
+            // explicitly flagged `complete === false` is cropped by the image
+            // edge and must not contribute to metrics. Other project types never
+            // set `complete`, so `!== false` leaves them untouched.
             const polygons = parsed.filter(
               (p): p is ParsedPolygon & { type: 'external' | 'internal' } =>
-                p.geometry !== 'polyline' && !!p.type
+                p.geometry !== 'polyline' && !!p.type && p.complete !== false
             );
             totalPolygonCount += polygons.length;
 
@@ -255,15 +270,21 @@ export class MetricsCalculator {
    * Calculate metrics for polygons in a single image
    */
   async calculateImageMetrics(
-    polygons: Polygon[],
+    polygons: ParsedPolygon[],
     imageId: string,
     imageName: string
   ): Promise<PolygonMetrics[]> {
     const metrics: PolygonMetrics[] = [];
 
-    // Separate external and internal polygons
-    const externalPolygons = polygons.filter(p => p.type === 'external');
-    const internalPolygons = polygons.filter(p => p.type === 'internal');
+    // Separate external and internal polygons. Type-guard predicates narrow the
+    // optional `type` to a required literal so each element satisfies the
+    // MinimalPolygon shape the geometry helpers expect.
+    const externalPolygons = polygons.filter(
+      (p): p is ParsedPolygon & { type: 'external' } => p.type === 'external'
+    );
+    const internalPolygons = polygons.filter(
+      (p): p is ParsedPolygon & { type: 'internal' } => p.type === 'internal'
+    );
 
     // Calculate metrics for each external polygon
     for (let i = 0; i < externalPolygons.length; i++) {
@@ -303,6 +324,8 @@ export class MetricsCalculator {
           imageName,
           polygonId: i + 1,
           type: 'external',
+          confidence: polygon.confidence,
+          complete: polygon.complete,
           ...polygonMetrics,
         });
       } catch (error) {
@@ -322,6 +345,8 @@ export class MetricsCalculator {
           imageName,
           polygonId: i + 1,
           type: 'external',
+          confidence: polygon.confidence,
+          complete: polygon.complete,
           ...this.calculateBasicMetrics(polygon, holesForPolygon),
         });
       }
@@ -810,6 +835,195 @@ export class MetricsCalculator {
     await fs.mkdir(parentDir, { recursive: true });
     await workbook.xlsx.writeFile(outputPath);
     this.logger.info(`Polygon Metrics Excel written: ${outputPath}`, 'MetricsCalculator');
+  }
+
+  /**
+   * Focused Excel export for **microcapsule** projects. One row per *complete*
+   * capsule — border-cut capsules are already excluded upstream in
+   * `generateMetrics`. Columns are intentionally minimal: the user wants area,
+   * perimeter and compactness per capsule, not the full spheroid descriptor set.
+   *
+   * "Compactness" here is the **circularity** value (4π·A/P², in [0, 1], where
+   * 1.0 is a perfect circle) — the agreed, most-intuitive shape measure for
+   * round capsules. `PolygonMetrics.circularity` already holds exactly this;
+   * the unbounded reciprocal `PolygonMetrics.compactness` is deliberately not
+   * surfaced.
+   */
+  async exportMicrocapsuleMetricsToExcel(
+    metrics: PolygonMetrics[],
+    outputPath: string,
+    pixelToMicrometerScale?: number
+  ): Promise<void> {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Microcapsule Metrics');
+    const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
+    const areaUnit = isScaled ? 'um^2' : 'px^2';
+    const lengthUnit = isScaled ? 'um' : 'px';
+
+    worksheet.columns = [
+      { header: 'Image Name', key: 'imageName', width: 20 },
+      { header: 'Image ID', key: 'imageId', width: 15 },
+      { header: 'Capsule ID', key: 'polygonId', width: 12 },
+      { header: `Area (${areaUnit})`, key: 'area', width: 14 },
+      { header: `Perimeter (${lengthUnit})`, key: 'perimeter', width: 14 },
+      { header: 'Compactness', key: 'compactness', width: 12 },
+      {
+        header: `Equivalent Diameter (${lengthUnit})`,
+        key: 'equivalentDiameter',
+        width: 20,
+      },
+      { header: 'Confidence', key: 'confidence', width: 12 },
+    ];
+
+    const safeValue = (value: number, decimals = 2): number =>
+      isFinite(value) ? parseFloat(value.toFixed(decimals)) : 0;
+
+    // Only complete capsules reach here (excluded upstream), but guard anyway.
+    const rows = metrics.filter(m => m.complete !== false);
+    rows.forEach(m => {
+      worksheet.addRow({
+        imageName: m.imageName,
+        imageId: m.imageId,
+        polygonId: m.polygonId,
+        area: safeValue(m.area, 2),
+        perimeter: safeValue(m.perimeter, 2),
+        compactness: safeValue(m.circularity, 4),
+        equivalentDiameter: safeValue(m.equivalentDiameter, 2),
+        confidence:
+          typeof m.confidence === 'number' ? safeValue(m.confidence, 4) : '',
+      });
+    });
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    };
+
+    const summarySheet = workbook.addWorksheet('Summary');
+    const summaryData = this.generateMicrocapsuleSummary(
+      rows,
+      pixelToMicrometerScale
+    );
+    summaryData.forEach((row, index) => {
+      const excelRow = summarySheet.addRow(row);
+      if (index === 0) {
+        excelRow.font = { bold: true };
+        excelRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' },
+        };
+      }
+    });
+    summarySheet.columns.forEach(column => {
+      column.width = 26;
+    });
+
+    const parentDir = path.dirname(outputPath);
+    await fs.mkdir(parentDir, { recursive: true });
+    await workbook.xlsx.writeFile(outputPath);
+    this.logger.info(
+      `Microcapsule Metrics Excel written: ${outputPath}`,
+      'MetricsCalculator'
+    );
+  }
+
+  /**
+   * Focused CSV export for **microcapsule** projects — the CSV twin of
+   * `exportMicrocapsuleMetricsToExcel` (same focused columns, complete capsules
+   * only, "Compactness" = circularity 4π·A/P²).
+   */
+  async exportMicrocapsuleToCSV(
+    metrics: PolygonMetrics[],
+    outputPath: string,
+    pixelToMicrometerScale?: number
+  ): Promise<void> {
+    const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
+    const areaUnit = isScaled ? 'um^2' : 'px^2';
+    const lengthUnit = isScaled ? 'um' : 'px';
+
+    const csvStringifier = createObjectCsvStringifier({
+      header: [
+        { id: 'imageName', title: 'Image Name' },
+        { id: 'imageId', title: 'Image ID' },
+        { id: 'polygonId', title: 'Capsule ID' },
+        { id: 'area', title: `Area (${areaUnit})` },
+        { id: 'perimeter', title: `Perimeter (${lengthUnit})` },
+        { id: 'compactness', title: 'Compactness' },
+        {
+          id: 'equivalentDiameter',
+          title: `Equivalent Diameter (${lengthUnit})`,
+        },
+        { id: 'confidence', title: 'Confidence' },
+      ],
+    });
+
+    const records = metrics
+      .filter(m => m.complete !== false)
+      .map(m => ({
+        imageName: m.imageName,
+        imageId: m.imageId,
+        polygonId: m.polygonId,
+        area: m.area,
+        perimeter: m.perimeter,
+        // "Compactness" column carries the circularity value by design.
+        compactness: m.circularity,
+        equivalentDiameter: m.equivalentDiameter,
+        confidence: typeof m.confidence === 'number' ? m.confidence : '',
+      }));
+
+    const header = csvStringifier.getHeaderString();
+    const body = csvStringifier.stringifyRecords(records);
+
+    const parentDir = path.dirname(outputPath);
+    await fs.mkdir(parentDir, { recursive: true });
+    await fs.writeFile(outputPath, header + body);
+    this.logger.info(
+      `Microcapsule CSV created: ${outputPath}`,
+      'MetricsCalculator'
+    );
+  }
+
+  /**
+   * Summary aggregates for the microcapsule report: how many complete capsules
+   * were analysed plus area / compactness statistics.
+   */
+  private generateMicrocapsuleSummary(
+    metrics: PolygonMetrics[],
+    pixelToMicrometerScale?: number
+  ): SummaryStatisticsRow[] {
+    if (metrics.length === 0) {
+      return [['No complete microcapsules found']];
+    }
+
+    const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
+    const areaUnit = isScaled ? 'um^2' : 'px^2';
+    const lengthUnit = isScaled ? 'um' : 'px';
+
+    const areas = metrics.map(m => m.area);
+    const compactness = metrics.map(m => m.circularity);
+
+    return [
+      ['Microcapsule Summary'],
+      [''],
+      ['Metric', 'Value'],
+      ['Capsules analysed (complete)', metrics.length],
+      [`Average Area (${areaUnit})`, this.average(areas).toFixed(2)],
+      [`Minimum Area (${areaUnit})`, Math.min(...areas).toFixed(2)],
+      [`Maximum Area (${areaUnit})`, Math.max(...areas).toFixed(2)],
+      [
+        `Average Perimeter (${lengthUnit})`,
+        this.average(metrics.map(m => m.perimeter)).toFixed(2),
+      ],
+      [
+        `Average Equivalent Diameter (${lengthUnit})`,
+        this.average(metrics.map(m => m.equivalentDiameter)).toFixed(2),
+      ],
+      ['Average Compactness', this.average(compactness).toFixed(4)],
+      ['Minimum Compactness', Math.min(...compactness).toFixed(4)],
+      ['Maximum Compactness', Math.max(...compactness).toFixed(4)],
+    ];
   }
 
   async exportToExcel(

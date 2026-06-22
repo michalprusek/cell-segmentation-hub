@@ -218,6 +218,7 @@ export default {
       wound: 'Hojení ran',
       sperm: 'Spermie',
       microtubules: 'Mikrotubuly',
+      microcapsule: 'Mikrokapsle',
     },
     projectNamePlaceholder: 'např. HeLa buněčné sferoidy',
     projectDescPlaceholder:
@@ -437,6 +438,7 @@ export default {
         sperm: 'Modely spermií',
         wound: 'Modely hojení ran',
         microtubule: 'Modely mikrotubulů',
+        microcapsule: 'Modely mikrokapsulí',
       },
       presets: {
         fast: 'Rychlý',
@@ -495,6 +497,11 @@ export default {
           description:
             'Instanční segmentace mikrotubulů pro IRM/TIRF časosběrná videa. DINOv3-L ViT-L/16 + DPT fúze dává centerline polyline per MT a 32-d embedding na pixel, který umožňuje cross-frame tracking a generování kymografu. ~8 s/frame; jediný model v platformě s nativním polyline výstupem.',
         },
+        microcapsule: {
+          name: 'Microcapsule (YOLO11n-seg)',
+          description:
+            'Instanční segmentace mikrokapsulí (kulatých objektů) v mikroskopii světlého pole. Kompaktní model YOLO11n-seg (~6 MB, destilovaný z SAM 3) vrací jeden polygon na kapsuli s hodnotou spolehlivosti; kapsule přesahující okraj snímku jsou vyloučeny z metrik (plocha, obvod, kompaktnost).',
+        },
       },
     },
     detectHoles: 'Detekce Děr',
@@ -526,6 +533,8 @@ export default {
         'U-Net + MiT-B5 (SegFormer enkodér) model pro segmentaci ran v mikroskopii scratch-assay. Jedna binární oblast rány na snímek; ideální pro časové řady hojení.',
       microtubule:
         'Instanční segmentace mikrotubulů pro IRM/TIRF mikroskopii. DINOv3-L + DPT enkodér, PySOAX postprocessing, nativní polyline výstup s tracking přes 32-d embedding.',
+      microcapsule:
+        'Instanční segmentace mikrokapsulí metodou YOLO11n-seg — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik (~6 MB, zpracování pod jednu sekundu na snímek).',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:

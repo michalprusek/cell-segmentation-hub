@@ -59,6 +59,14 @@ huggingface_hub>=0.20
 # builder has no nvcc) and installed from those wheels in the runtime stage.
 einops>=0.7.0
 
+# Microcapsule model (YOLO11n-seg instance segmentation via Ultralytics).
+# ultralytics only needs torch>=1.8, so the load-bearing torch==2.6.0 pin above
+# is preserved (no bump). NOTE: ultralytics declares a hard dep on the NON-headless
+# `opencv-python`, which collides with `opencv-python-headless` above over the
+# shared `cv2` package. The ML Dockerfile reconciles this to a single headless
+# build right after install (see docker/ml.optimized.Dockerfile).
+ultralytics>=8.3,<9
+
 # Prometheus metrics
 prometheus-fastapi-instrumentator==6.1.0
 

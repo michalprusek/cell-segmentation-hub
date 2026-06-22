@@ -105,10 +105,60 @@ export function generateMetricsGuide(
       return buildWoundGuide(ctx);
     case 'microtubules':
       return buildMicrotubuleGuide(ctx);
+    case 'microcapsule':
+      return buildMicrocapsuleGuide(ctx);
     case 'spheroid':
     default:
       return buildSpheroidGuide(ctx);
   }
+}
+
+function buildMicrocapsuleGuide({
+  areaUnit,
+  lengthUnit,
+  scaleInfo,
+}: UnitContext): string {
+  return `# Microcapsule Metrics Reference Guide
+${scaleInfo}
+## Metrics file (\`metrics.csv\` / \`metrics.xlsx\`)
+
+The microcapsule model performs **instance segmentation**: each detected
+capsule is one closed polygon and gets **one row**. The report is intentionally
+focused on the three shape measures requested for capsules, plus identifiers.
+
+> **Completeness filter** — capsules whose mask touches the image border are
+> *cut off by the frame* and are **excluded from this report** (they are still
+> drawn, in grey, in the visualisation export, so you can see what was skipped).
+> Only whole capsules contribute to the metrics and the summary statistics.
+
+### Columns
+- **Image Name / Image ID** — source image identifiers.
+- **Capsule ID** — 1-based index within the image (largest capsule first).
+- **Area (${areaUnit})** — enclosed area via the Shoelace formula.
+- **Perimeter (${lengthUnit})** — boundary length, Sum_i ||p_{i+1} - p_i||
+  (ImageJ convention).
+- **Compactness** — circularity \`C = 4*pi * Area / Perimeter^2\`, in [0, 1]
+  where **1.0 = a perfect circle**. For round capsules this is the most
+  intuitive shape measure (a value near 1 means a clean circular capsule;
+  lower values indicate an irregular or dented boundary).
+- **Equivalent Diameter (${lengthUnit})** — diameter of the circle with the
+  same area, \`d = 2*sqrt(Area/pi)\`.
+- **Confidence** — the model's detection score for the capsule, in [0, 1].
+
+### Summary sheet
+Aggregates over the **complete** capsules only: how many were analysed, plus
+mean / min / max of area and compactness, and mean perimeter and equivalent
+diameter.
+
+## Visualisation
+Complete capsules are drawn and numbered in the configured external colour;
+capsules cut off by the image border are drawn **grey** and are not counted.
+
+## Annotation exports (COCO / YOLO / JSON)
+Every detected capsule — complete or cut-off — is exported as one instance
+(the completeness filter applies to metrics only, not to the geometry
+annotations).
+`;
 }
 
 function buildMicrotubuleGuide({ lengthUnit, scaleInfo }: UnitContext): string {

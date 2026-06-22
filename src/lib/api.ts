@@ -116,6 +116,10 @@ export interface SegmentationPolygon {
   /** Human-friendly label set in the editor. Mirrored across sibling
    *  frames by the BE on save when the polyline carries a trackId. */
   name?: string;
+  /** Microcapsule completeness flag: `false` when the capsule is cut off by
+   *  the image border. Drives grey rendering in the editor and exclusion from
+   *  metrics. Absent for other project types. */
+  complete?: boolean;
 }
 
 export interface SegmentationResultData {
@@ -1747,6 +1751,10 @@ class ApiClient {
                       ? poly.confidence
                       : undefined,
                   area: typeof poly.area === 'number' ? poly.area : undefined,
+                  complete:
+                    typeof poly.complete === 'boolean'
+                      ? poly.complete
+                      : undefined,
                 };
               })
               .filter(Boolean)

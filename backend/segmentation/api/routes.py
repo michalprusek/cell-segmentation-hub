@@ -168,6 +168,11 @@ async def segment_image(
             # worker thread, not the event loop.
             with _microtubule_inference_lock:
                 result = loader.predict_microtubule(image, threshold)
+        elif model == 'microcapsule':
+            # Microcapsule YOLO11n-seg — the user threshold is forwarded as the
+            # YOLO confidence cutoff (registry default 0.25). detect_holes is
+            # not meaningful: each capsule is a single closed instance polygon.
+            result = loader.predict_microcapsule(image, threshold)
         else:
             result = loader.predict(image, model, threshold, detect_holes)
         inference_time = time.time() - inference_start

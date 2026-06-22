@@ -143,6 +143,13 @@ const CanvasPolygon = React.memo(
 
     // Determine path color based on polygon type, polyline partClass, and selection status
     const pathColor = useMemo(() => {
+      // Microcapsules cut off by the image border (complete === false) render
+      // grey — they're excluded from metrics, and greying keeps them visibly
+      // distinct from the whole capsules that ARE measured (mirrors the model
+      // overlay's grey treatment).
+      if (polygon.complete === false) {
+        return isSelected ? '#737373' : '#969696';
+      }
       // Spheroid 'core' (closed polygon, dense central region from ASPP model)
       if (!isPolyline && polygon.partClass === 'core') {
         return isSelected ? '#16a34a' : '#22c55e'; // green
@@ -178,6 +185,7 @@ const CanvasPolygon = React.memo(
       polygon.partClass,
       polygon.instanceId,
       polygon.trackId,
+      polygon.complete,
       isSelected,
       isInternal,
     ]);
@@ -437,6 +445,7 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.class === nextProps.polygon.class &&
       prevProps.polygon.instanceId === nextProps.polygon.instanceId &&
       prevProps.polygon.trackId === nextProps.polygon.trackId &&
+      prevProps.polygon.complete === nextProps.polygon.complete &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&

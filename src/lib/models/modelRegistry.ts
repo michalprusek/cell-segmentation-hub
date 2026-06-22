@@ -24,13 +24,19 @@ export type ProjectTypeKey =
   | 'spheroid_invasive'
   | 'wound'
   | 'sperm'
-  | 'microtubules';
+  | 'microtubules'
+  | 'microcapsule';
 
 /** Coarse size bucket surfaced in the model picker UI. */
 export type ModelSize = 'small' | 'medium' | 'large';
 
 /** Catalogue category used to group models in settings. */
-export type ModelCategory = 'spheroid' | 'sperm' | 'wound' | 'microtubule';
+export type ModelCategory =
+  | 'spheroid'
+  | 'sperm'
+  | 'wound'
+  | 'microtubule'
+  | 'microcapsule';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds
@@ -231,6 +237,24 @@ export const MODEL_REGISTRY = {
       'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT-style fusion produces a per-pixel 32-d embedding that PySOAX uses to extract individual MT centerlines. The embedding also drives automatic cross-frame tracking for kymograph analysis. Slow (~8 s/frame) but the only model in the platform producing polyline output.',
     i18nKey: 'microtubule',
     compatibleProjectTypes: ['microtubules'],
+  },
+  microcapsule: {
+    size: 'small',
+    defaultThreshold: 0.25,
+    category: 'microcapsule',
+    performance: {
+      // YOLO11n-seg (~6 MB). Sub-second on CPU, faster on the A5000.
+      avgTimePerImage: 0.1,
+      throughput: 8.0,
+      p95Latency: 0.2,
+      batchSize: 1,
+    },
+    name: 'Microcapsule',
+    displayName: 'Microcapsule (YOLO11n-seg)',
+    description:
+      'Instance segmentation for microcapsules (round objects) in bright-field microscopy. A compact YOLO11n-seg model (~6 MB, distilled from SAM 3) returns one polygon per capsule with a confidence score; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
+    i18nKey: 'microcapsule',
+    compatibleProjectTypes: ['microcapsule'],
   },
 } as const satisfies Record<string, ModelRegistryEntry>;
 

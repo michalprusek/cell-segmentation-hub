@@ -88,6 +88,7 @@ export function useResegment({
     if (projectType === 'microtubules') return 'microtubule';
     if (projectType === 'sperm') return 'sperm';
     if (projectType === 'wound') return 'wound';
+    if (projectType === 'microcapsule') return 'microcapsule';
     if (projectType === 'spheroid_invasive') return 'unet_attention_aspp';
     return selectedModel;
   }, [projectType, selectedModel]);

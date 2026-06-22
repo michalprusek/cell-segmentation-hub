@@ -78,6 +78,18 @@ except ImportError as e:
     SegFormerModel = None
     _segformer_import_error = e
 
+# Optional microcapsule model import (requires ultralytics for YOLO11n-seg).
+_microcapsule_import_error = None
+try:
+    from models.microcapsule import MicrocapsuleModel
+except ImportError as e:
+    logger.warning(
+        f"Could not import MicrocapsuleModel: {e}. "
+        "Microcapsule segmentation will not be available."
+    )
+    MicrocapsuleModel = None
+    _microcapsule_import_error = e
+
 # Optional Mamba-UNet spheroid model import (requires mamba_ssm CUDA kernels).
 # OSError is caught alongside ImportError: an ABI-mismatched compiled .so can
 # raise OSError on load, and that must disable only this model, not the service.
@@ -228,6 +240,13 @@ class ModelLoader:
             'pretrained_path': 'weights/microtubule_v7.pt',
             'finetuned_path': 'weights/microtubule_v7.pt',
             'config_path': None
+        },
+        'microcapsule': {
+            # Will be None if ultralytics not installed
+            'class': MicrocapsuleModel,
+            'pretrained_path': 'weights/microcapsule_yolo11n.pt',
+            'finetuned_path': 'weights/microcapsule_yolo11n.pt',
+            'config_path': None
         }
     }
     
@@ -377,6 +396,20 @@ class ModelLoader:
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
                 logger.info(f"Successfully loaded microtubule v7 model from: {weights_full_path}")
+                return model
+            elif model_name == 'microcapsule':
+                # Microcapsule YOLO11n-seg — Ultralytics owns its own loader, so
+                # skip the generic torch.load path below and let the wrapper
+                # drive it end-to-end.
+                if MicrocapsuleModel is None:
+                    raise ImportError(
+                        f"Microcapsule model architecture not available: "
+                        f"{_microcapsule_import_error}"
+                    )
+                model = MicrocapsuleModel()
+                model.load_weights(str(weights_full_path), self.device)
+                self.loaded_models[model_name] = model
+                logger.info(f"Successfully loaded microcapsule YOLO model from: {weights_full_path}")
                 return model
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
@@ -1137,6 +1170,103 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('wound')
+
+    def predict_microcapsule(self, image: Image.Image, threshold: float = 0.25,
+                             timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Run the microcapsule YOLO11n-seg instance segmentation model.
+
+        Each detected capsule is one closed *external* polygon, so the response
+        matches the spheroid polygon shape — only ``class`` differs — plus two
+        per-polygon fields the rest of the stack carries through:
+
+          - ``confidence`` : YOLO detection score (0..1)
+          - ``complete``   : ``False`` if the capsule is cut off by the image
+                             border. Incomplete capsules are drawn grey and
+                             excluded from metrics downstream.
+
+        ``threshold`` is forwarded verbatim as the YOLO confidence cutoff.
+        ``timeout`` is accepted for interface symmetry with the other predict_*
+        methods; YOLO11n inference is sub-second so no executor wrapping is used.
+        """
+        import time as _time
+
+        self.get_model('microcapsule')
+        if 'microcapsule' not in self.loaded_models:
+            raise ValueError(
+                "Microcapsule model not loaded. "
+                "Load it first with load_model('microcapsule')"
+            )
+
+        capsule_model = self.loaded_models['microcapsule']
+        original_size = image.size  # (width, height)
+
+        self.is_processing = True
+        self.current_model = 'microcapsule'
+        start_time = _time.time()
+
+        try:
+            # YOLO accepts BGR ndarrays; mirror the sperm conversion convention.
+            img_rgb = np.array(image.convert('RGB'))
+            img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+
+            instances = capsule_model.predict(img_bgr, conf=threshold)
+            processing_time = _time.time() - start_time
+
+            polygons = []
+            polygon_id_counter = 1
+            for inst in instances:
+                points = [
+                    {"x": float(x), "y": float(y)}
+                    for x, y in inst["polygon_xy"]
+                ]
+                if len(points) < 3:
+                    continue
+                polygons.append({
+                    "id": f"polygon_{polygon_id_counter}",
+                    "points": points,
+                    "type": "external",
+                    "class": "microcapsule",
+                    "confidence": float(inst["confidence"]),
+                    "complete": bool(inst["complete"]),
+                    "vertices_count": len(points),
+                })
+                polygon_id_counter += 1
+
+            num_complete = sum(1 for p in polygons if p["complete"])
+            logger.info(
+                f"Microcapsule: {len(polygons)} capsules "
+                f"({num_complete} complete, "
+                f"{len(polygons) - num_complete} cut off) in {processing_time:.2f}s"
+            )
+
+            return {
+                "model_used": "microcapsule",
+                "threshold_used": threshold,
+                "image_size": {"width": original_size[0], "height": original_size[1]},
+                "polygons": polygons,
+                "processing_info": {
+                    "device": str(self.device),
+                    "num_polygons": len(polygons),
+                    "num_complete": num_complete,
+                    "confidence_scores": [p["confidence"] for p in polygons],
+                    "processing_time_s": processing_time,
+                    "batch_size": 1,
+                },
+            }
+
+        except Exception as e:
+            processing_time = _time.time() - start_time
+            logger.error(
+                f"Microcapsule inference failed after {processing_time:.2f}s: "
+                f"{type(e).__name__}: {e}",
+                exc_info=True,
+            )
+            raise
+
+        finally:
+            self.is_processing = False
+            self.current_model = None
+            self.release_model('microcapsule')
 
     def predict_microtubule(self, image: Image.Image, threshold: float = 0.5,
                             timeout: Optional[float] = None) -> Dict[str, Any]:
