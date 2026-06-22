@@ -2,7 +2,20 @@
 
 **Date:** 2026-06-22
 **Branch:** `feat-microcapsule-project-type`
-**Status:** Approved — implementing autonomously per user instruction
+**Status:** Implemented + deployed
+
+> **Update (2026-06-22, post-deploy):** the segmentation **model** changed from
+> the delivered YOLO11n-seg student to the **Meta SAM 3 teacher directly**
+> (Promptable Concept Segmentation, prompt `"circle"`). On live data the YOLO
+> student's low-resolution masks showed an 8×8-pixel block "flat edges on the
+> sides" artifact, and contour-smoothing to fix it clipped the boundary inward.
+> SAM 3 returns full-resolution masks → clean circular boundaries; nested masks
+> per capsule are merged (`merge_nested`, 0.88) and simplified with
+> `approxPolyDP(1.5)` (no inward shrink). Integrated via the standalone `sam3`
+> package (no `transformers` bump; numpy 1.24→1.26 and smp 0.3.4→0.5.0, both
+> verified safe). Everything below about the project type, metrics, exclusion of
+> border-cut capsules, export and editor still holds — only the model wrapper
+> and its dependencies differ.
 
 ---
 
