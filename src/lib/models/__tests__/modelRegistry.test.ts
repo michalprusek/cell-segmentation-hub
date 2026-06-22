@@ -238,16 +238,16 @@ describe('model registry SSOT', () => {
       microcapsule: {
         id: 'microcapsule',
         name: 'Microcapsule',
-        displayName: 'Microcapsule (YOLO11n-seg)',
+        displayName: 'Microcapsule (SAM 3)',
         description:
-          'Instance segmentation for microcapsules (round objects) in bright-field microscopy. A compact YOLO11n-seg model (~6 MB, distilled from SAM 3) returns one polygon per capsule with a confidence score; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
-        size: 'small',
-        defaultThreshold: 0.25,
+          'Instance segmentation for microcapsules (round objects) in bright-field microscopy. Meta SAM 3 with the "circle" prompt returns one clean, full-resolution boundary per capsule with a confidence score; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
+        size: 'large',
+        defaultThreshold: 0.3,
         category: 'microcapsule',
         performance: {
-          avgTimePerImage: 0.1,
-          throughput: 8.0,
-          p95Latency: 0.2,
+          avgTimePerImage: 1.0,
+          throughput: 1.0,
+          p95Latency: 1.5,
           batchSize: 1,
         },
       },

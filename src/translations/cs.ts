@@ -498,9 +498,9 @@ export default {
             'Instanční segmentace mikrotubulů pro IRM/TIRF časosběrná videa. DINOv3-L ViT-L/16 + DPT fúze dává centerline polyline per MT a 32-d embedding na pixel, který umožňuje cross-frame tracking a generování kymografu. ~8 s/frame; jediný model v platformě s nativním polyline výstupem.',
         },
         microcapsule: {
-          name: 'Microcapsule (YOLO11n-seg)',
+          name: 'Microcapsule (SAM 3)',
           description:
-            'Instanční segmentace mikrokapsulí (kulatých objektů) v mikroskopii světlého pole. Kompaktní model YOLO11n-seg (~6 MB, destilovaný z SAM 3) vrací jeden polygon na kapsuli s hodnotou spolehlivosti; kapsule přesahující okraj snímku jsou vyloučeny z metrik (plocha, obvod, kompaktnost).',
+            'Instanční segmentace mikrokapsulí (kulatých objektů) v mikroskopii světlého pole. Meta SAM 3 s promptem „circle" vrací jednu čistou hranici plného rozlišení na kapsuli s hodnotou spolehlivosti; kapsule přesahující okraj snímku jsou vyloučeny z metrik (plocha, obvod, kompaktnost).',
         },
       },
     },
@@ -534,7 +534,7 @@ export default {
       microtubule:
         'Instanční segmentace mikrotubulů pro IRM/TIRF mikroskopii. DINOv3-L + DPT enkodér, PySOAX postprocessing, nativní polyline výstup s tracking přes 32-d embedding.',
       microcapsule:
-        'Instanční segmentace mikrokapsulí metodou YOLO11n-seg — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik (~6 MB, zpracování pod jednu sekundu na snímek).',
+        'Instanční segmentace mikrokapsulí pomocí Meta SAM 3 (prompt „circle") — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:

@@ -78,7 +78,7 @@ except ImportError as e:
     SegFormerModel = None
     _segformer_import_error = e
 
-# Optional microcapsule model import (requires ultralytics for YOLO11n-seg).
+# Optional microcapsule model import (requires the sam3 package for SAM 3).
 _microcapsule_import_error = None
 try:
     from models.microcapsule import MicrocapsuleModel
@@ -242,10 +242,12 @@ class ModelLoader:
             'config_path': None
         },
         'microcapsule': {
-            # Will be None if ultralytics not installed
+            # SAM 3 ("circle" prompt). Will be None if the sam3 package isn't
+            # installed. No local weights file — sam3.pt loads from HuggingFace
+            # (facebook/sam3) in the wrapper; the path is nominal and unused.
             'class': MicrocapsuleModel,
-            'pretrained_path': 'weights/microcapsule_yolo11n.pt',
-            'finetuned_path': 'weights/microcapsule_yolo11n.pt',
+            'pretrained_path': 'weights/sam3',
+            'finetuned_path': 'weights/sam3',
             'config_path': None
         }
     }
@@ -315,7 +317,9 @@ class ModelLoader:
         
         weights_full_path = self.base_path / weights_path
         
-        if not weights_full_path.exists():
+        # Microcapsule (SAM 3) has no local weights file — it loads its
+        # checkpoint from HuggingFace (facebook/sam3) in the wrapper.
+        if model_name != 'microcapsule' and not weights_full_path.exists():
             raise FileNotFoundError(f"Model weights not found: {weights_full_path}")
         
         # Initialize model
@@ -398,9 +402,9 @@ class ModelLoader:
                 logger.info(f"Successfully loaded microtubule v7 model from: {weights_full_path}")
                 return model
             elif model_name == 'microcapsule':
-                # Microcapsule YOLO11n-seg — Ultralytics owns its own loader, so
-                # skip the generic torch.load path below and let the wrapper
-                # drive it end-to-end.
+                # Microcapsule SAM 3 — the wrapper builds the model from
+                # HuggingFace, so skip the generic torch.load path below and let
+                # it drive loading end-to-end.
                 if MicrocapsuleModel is None:
                     raise ImportError(
                         f"Microcapsule model architecture not available: "
@@ -1171,22 +1175,22 @@ class ModelLoader:
             self.current_model = None
             self.release_model('wound')
 
-    def predict_microcapsule(self, image: Image.Image, threshold: float = 0.25,
+    def predict_microcapsule(self, image: Image.Image, threshold: float = 0.3,
                              timeout: Optional[float] = None) -> Dict[str, Any]:
-        """Run the microcapsule YOLO11n-seg instance segmentation model.
+        """Run the microcapsule SAM 3 ("circle" prompt) instance segmentation model.
 
         Each detected capsule is one closed *external* polygon, so the response
         matches the spheroid polygon shape — only ``class`` differs — plus two
         per-polygon fields the rest of the stack carries through:
 
-          - ``confidence`` : YOLO detection score (0..1)
+          - ``confidence`` : SAM 3 detection score (0..1)
           - ``complete``   : ``False`` if the capsule is cut off by the image
                              border. Incomplete capsules are drawn grey and
                              excluded from metrics downstream.
 
-        ``threshold`` is forwarded verbatim as the YOLO confidence cutoff.
-        ``timeout`` is accepted for interface symmetry with the other predict_*
-        methods; YOLO11n inference is sub-second so no executor wrapping is used.
+        ``threshold`` is forwarded as the per-instance score cutoff. ``timeout``
+        is accepted for interface symmetry with the other predict_* methods;
+        SAM 3 inference is ~1 s/image so no executor wrapping is used.
         """
         import time as _time
 

@@ -121,16 +121,16 @@
     "microcapsule": {
       "optimal_batch_size": 1,
       "max_safe_batch_size": 1,
-      "expected_throughput": 8.0,
-      "memory_limit_mb": 1500,
-      "p95_latency_ms": 200.0,
-      "production_optimized": true,
+      "expected_throughput": 1.0,
+      "memory_limit_mb": 4500,
+      "p95_latency_ms": 1200.0,
+      "production_optimized": false,
       "concurrent_processing": {
-        "max_concurrent_users": 2,
-        "memory_per_user_mb": 1500,
-        "expected_concurrent_throughput": 8.0
+        "max_concurrent_users": 1,
+        "memory_per_user_mb": 4500,
+        "expected_concurrent_throughput": 1.0
       },
-      "note": "Microcapsule YOLO11n-seg (~6 MB, Ultralytics). Instance segmentation runs at imgsz=1024; sub-second on CPU and faster on the A5000. Ultralytics drives its own per-image inference, so the wrapper is called once per image (batch size 1); throughput/memory are conservative estimates for the tiny nano model."
+      "note": "Microcapsule Meta SAM 3 (Promptable Concept Segmentation, 'circle' prompt). ~3.4 GB sam3.pt loaded from HuggingFace; full-resolution instance masks at 1008px working resolution. ~1 s/image on the A5000; the wrapper runs one prompt per image (batch size 1). Nested 'circle' masks per capsule are merged to one outer boundary."
     }
   },
   "dynamic_batching": {

@@ -31,7 +31,7 @@ try:
 except ImportError:
     SegFormerModel = None
 
-# Microcapsule model: optional import (requires ultralytics for YOLO11n-seg).
+# Microcapsule model: optional import (requires the sam3 package for SAM 3).
 try:
     from .microcapsule import MicrocapsuleModel
 except ImportError:

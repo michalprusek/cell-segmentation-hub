@@ -512,9 +512,9 @@ export default {
             'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT fusion produces per-instance polyline centerlines plus a 32-d per-pixel embedding that drives cross-frame tracking and kymograph generation. ~8 s/frame; the only model in the platform with native polyline output.',
         },
         microcapsule: {
-          name: 'Microcapsule (YOLO11n-seg)',
+          name: 'Microcapsule (SAM 3)',
           description:
-            'Instance segmentation for microcapsules (round objects) in bright-field microscopy. A compact YOLO11n-seg model (~6 MB, distilled from SAM 3) returns one polygon per capsule with a confidence score; capsules cut off by the image border are excluded from the metrics (area, perimeter, compactness).',
+            'Instance segmentation for microcapsules (round objects) in bright-field microscopy. Meta SAM 3 with the "circle" prompt returns one clean, full-resolution boundary per capsule with a confidence score; capsules cut off by the image border are excluded from the metrics (area, perimeter, compactness).',
         },
       },
     },
@@ -548,7 +548,7 @@ export default {
       microtubule:
         'Microtubule instance segmentation for IRM/TIRF microscopy. DINOv3-L + DPT encoder, PySOAX postprocessing, native polyline output with embedding-based cross-frame tracking.',
       microcapsule:
-        'YOLO11n-seg instance segmentation for microcapsules — area, perimeter and compactness per capsule, with border-cut capsules excluded from metrics (~6 MB, sub-second per image).',
+        'Meta SAM 3 ("circle" prompt) instance segmentation for microcapsules — area, perimeter and compactness per capsule, with border-cut capsules excluded from metrics.',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:

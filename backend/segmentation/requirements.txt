@@ -26,15 +26,19 @@ opencv-python-headless==4.8.1.78
 # the later high-severity decoder advisories. ML code uses no removed PIL APIs
 # (only the Image.NEAREST alias + ImageDraw, both still valid in Pillow 12).
 Pillow==12.2.0
-numpy==1.24.3
+numpy==1.26.4
 scipy==1.11.4
 scikit-image==0.22.0
 # Sperm model dependencies (Mask2Former + graph assembly)
 # ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
 networkx>=3.0
 
-# Wound-healing model (U-Net++ / ResNeXt-50 via segmentation_models_pytorch)
-segmentation-models-pytorch==0.3.4
+# Wound-healing model (MiT-B5 encoder via segmentation_models_pytorch).
+# Bumped 0.3.4 -> 0.5.0: 0.3.4 hard-pinned timm==0.9.7, which conflicts with the
+# microcapsule SAM 3 model (sam3 needs timm>=1.0.17). smp 0.5.0 uses timm>=1.0
+# and loads the same wound_mitb5.ckpt with a strict state-dict match (verified:
+# the MiT-B5 encoder is architecturally unchanged).
+segmentation-models-pytorch==0.5.0
 
 # Microtubule v7 dependencies (DINOv3 ViT-L/16 backbone via HuggingFace)
 # transformers 4.57+ is required to recognise the DINOv3 model config. Pinned to
@@ -59,13 +63,15 @@ huggingface_hub>=0.20
 # builder has no nvcc) and installed from those wheels in the runtime stage.
 einops>=0.7.0
 
-# Microcapsule model (YOLO11n-seg instance segmentation via Ultralytics).
-# ultralytics only needs torch>=1.8, so the load-bearing torch==2.6.0 pin above
-# is preserved (no bump). NOTE: ultralytics declares a hard dep on the NON-headless
-# `opencv-python`, which collides with `opencv-python-headless` above over the
-# shared `cv2` package. The ML Dockerfile reconciles this to a single headless
-# build right after install (see docker/ml.optimized.Dockerfile).
-ultralytics>=8.3,<9
+# Microcapsule model: Meta SAM 3 (Promptable Concept Segmentation, "circle"
+# prompt). The standalone `sam3` package ships its own model code and the native
+# sam3.pt checkpoint — it has NO `transformers` dependency, so the load-bearing
+# transformers==4.57.6 pin (DINOv3 / SegFormer / Sperm) is untouched. It needs
+# numpy>=1.26 (bumped above, still 1.x — verified safe for the mamba CUDA
+# kernels) and einops>=0.8 (resolves within the >=0.7 range above). sam3.pt
+# (~3.4 GB) + CLIP BPE vocab download from HuggingFace on first load (HF_TOKEN)
+# and cache under HF_HOME.
+sam3==0.1.4
 
 # Prometheus metrics
 prometheus-fastapi-instrumentator==6.1.0

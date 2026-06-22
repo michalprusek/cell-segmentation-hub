@@ -463,9 +463,9 @@ export default {
             '面向 IRM/TIRF 微管延时实验的实例分割。DINOv3-L ViT-L/16 + DPT 融合生成每条微管的中线折线和每像素 32 维嵌入，可驱动跨帧跟踪和动态图（kymograph）生成。约 8 秒/帧；本平台唯一原生输出折线的模型。',
         },
         microcapsule: {
-          name: 'Microcapsule (YOLO11n-seg)',
+          name: 'Microcapsule (SAM 3)',
           description:
-            '面向明场显微镜中微胶囊（圆形对象）的实例分割。紧凑型 YOLO11n-seg 模型（~6 MB，由 SAM 3 蒸馏）为每个胶囊返回一个多边形及置信度分数；被图像边缘截断的胶囊不计入指标（面积、周长、紧实度）。',
+            '面向明场显微镜中微胶囊（圆形对象）的实例分割。Meta SAM 3 使用"circle"提示词，为每个胶囊返回一条清晰的全分辨率轮廓及置信度分数；被图像边缘截断的胶囊不计入指标（面积、周长、紧实度）。',
         },
       },
     },
@@ -495,7 +495,7 @@ export default {
       microtubule:
         '面向 IRM/TIRF 显微镜的微管实例分割。DINOv3-L + DPT 编码器，PySOAX 后处理，原生折线输出，并支持基于嵌入的跨帧跟踪。',
       microcapsule:
-        'YOLO11n-seg 微胶囊实例分割 — 输出每个胶囊的面积、周长和紧实度，被图像边缘截断的胶囊不计入指标（~6 MB，单张图像处理时间低于一秒）。',
+        'Meta SAM 3（"circle"提示词）微胶囊实例分割 — 输出每个胶囊的面积、周长和紧实度，被图像边缘截断的胶囊不计入指标。',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',

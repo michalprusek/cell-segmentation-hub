@@ -518,9 +518,9 @@ export default {
             'Instanz-Segmentierung für IRM/TIRF-Mikrotubuli-Zeitrafferaufnahmen. DINOv3-L ViT-L/16 + DPT-Fusion liefert eine Centerline-Polylinie pro MT plus ein 32-d Embedding pro Pixel, das frameübergreifendes Tracking und Kymograph-Erzeugung ermöglicht. ~8 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
         },
         microcapsule: {
-          name: 'Microcapsule (YOLO11n-seg)',
+          name: 'Microcapsule (SAM 3)',
           description:
-            'Instanz-Segmentierung für Mikrokapseln (runde Objekte) in der Hellfeld-Mikroskopie. Ein kompaktes YOLO11n-seg-Modell (~6 MB, aus SAM 3 destilliert) liefert ein Polygon pro Kapsel mit Konfidenzwert; am Bildrand abgeschnittene Kapseln werden von den Metriken (Fläche, Umfang, Kompaktheit) ausgeschlossen.',
+            'Instanz-Segmentierung für Mikrokapseln (runde Objekte) in der Hellfeld-Mikroskopie. Meta SAM 3 mit dem Prompt „circle" liefert eine saubere Kontur in voller Auflösung pro Kapsel mit Konfidenzwert; am Bildrand abgeschnittene Kapseln werden von den Metriken (Fläche, Umfang, Kompaktheit) ausgeschlossen.',
         },
       },
     },
@@ -554,7 +554,7 @@ export default {
       microtubule:
         'Instanz-Segmentierung für Mikrotubuli in der IRM/TIRF-Mikroskopie. DINOv3-L + DPT-Encoder, PySOAX-Postprocessing, native Polylinien-Ausgabe mit Embedding-basiertem Tracking.',
       microcapsule:
-        'YOLO11n-seg-Instanz-Segmentierung für Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen (~6 MB, unter einer Sekunde je Bild).',
+        'Meta SAM 3 (Prompt „circle") Instanz-Segmentierung für Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen.',
     },
     dataUsageTitle: 'Datennutzung und Datenschutz',
     dataUsageDescription:
