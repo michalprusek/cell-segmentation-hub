@@ -866,17 +866,25 @@ export class MetricsCalculator {
       { header: 'Capsule ID', key: 'polygonId', width: 12 },
       { header: `Area (${areaUnit})`, key: 'area', width: 14 },
       { header: `Perimeter (${lengthUnit})`, key: 'perimeter', width: 14 },
-      { header: 'Compactness', key: 'compactness', width: 12 },
+      { header: `Width (${lengthUnit})`, key: 'width', width: 12 },
+      { header: `Height (${lengthUnit})`, key: 'height', width: 12 },
+      { header: `Diameter (${lengthUnit})`, key: 'diameter', width: 12 },
       {
         header: `Equivalent Diameter (${lengthUnit})`,
         key: 'equivalentDiameter',
         width: 20,
       },
+      { header: 'Compactness', key: 'compactness', width: 12 },
       { header: 'Confidence', key: 'confidence', width: 12 },
     ];
 
     const safeValue = (value: number, decimals = 2): number =>
       isFinite(value) ? parseFloat(value.toFixed(decimals)) : 0;
+    // "Diameter" = mean Feret diameter (average caliper width across
+    // orientations) — rotation-invariant, distinct from the axis-aligned
+    // bounding-box Width/Height and the area-based Equivalent Diameter.
+    const meanDiameter = (m: PolygonMetrics): number =>
+      (m.feretDiameterMax + m.feretDiameterMin) / 2;
 
     // Only complete capsules reach here (excluded upstream), but guard anyway.
     const rows = metrics.filter(m => m.complete !== false);
@@ -887,8 +895,11 @@ export class MetricsCalculator {
         polygonId: m.polygonId,
         area: safeValue(m.area, 2),
         perimeter: safeValue(m.perimeter, 2),
-        compactness: safeValue(m.circularity, 4),
+        width: safeValue(m.boundingBoxWidth, 2),
+        height: safeValue(m.boundingBoxHeight, 2),
+        diameter: safeValue(meanDiameter(m), 2),
         equivalentDiameter: safeValue(m.equivalentDiameter, 2),
+        compactness: safeValue(m.circularity, 4),
         confidence:
           typeof m.confidence === 'number' ? safeValue(m.confidence, 4) : '',
       });
@@ -950,11 +961,14 @@ export class MetricsCalculator {
         { id: 'polygonId', title: 'Capsule ID' },
         { id: 'area', title: `Area (${areaUnit})` },
         { id: 'perimeter', title: `Perimeter (${lengthUnit})` },
-        { id: 'compactness', title: 'Compactness' },
+        { id: 'width', title: `Width (${lengthUnit})` },
+        { id: 'height', title: `Height (${lengthUnit})` },
+        { id: 'diameter', title: `Diameter (${lengthUnit})` },
         {
           id: 'equivalentDiameter',
           title: `Equivalent Diameter (${lengthUnit})`,
         },
+        { id: 'compactness', title: 'Compactness' },
         { id: 'confidence', title: 'Confidence' },
       ],
     });
@@ -967,9 +981,14 @@ export class MetricsCalculator {
         polygonId: m.polygonId,
         area: m.area,
         perimeter: m.perimeter,
+        width: m.boundingBoxWidth,
+        height: m.boundingBoxHeight,
+        // "Diameter" = mean Feret diameter (rotation-invariant), distinct from
+        // the axis-aligned Width/Height and the area-based Equivalent Diameter.
+        diameter: (m.feretDiameterMax + m.feretDiameterMin) / 2,
+        equivalentDiameter: m.equivalentDiameter,
         // "Compactness" column carries the circularity value by design.
         compactness: m.circularity,
-        equivalentDiameter: m.equivalentDiameter,
         confidence: typeof m.confidence === 'number' ? m.confidence : '',
       }));
 
@@ -1015,6 +1034,20 @@ export class MetricsCalculator {
       [
         `Average Perimeter (${lengthUnit})`,
         this.average(metrics.map(m => m.perimeter)).toFixed(2),
+      ],
+      [
+        `Average Width (${lengthUnit})`,
+        this.average(metrics.map(m => m.boundingBoxWidth)).toFixed(2),
+      ],
+      [
+        `Average Height (${lengthUnit})`,
+        this.average(metrics.map(m => m.boundingBoxHeight)).toFixed(2),
+      ],
+      [
+        `Average Diameter (${lengthUnit})`,
+        this.average(
+          metrics.map(m => (m.feretDiameterMax + m.feretDiameterMin) / 2)
+        ).toFixed(2),
       ],
       [
         `Average Equivalent Diameter (${lengthUnit})`,

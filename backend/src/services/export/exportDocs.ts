@@ -137,18 +137,26 @@ focused on the three shape measures requested for capsules, plus identifiers.
 - **Area (${areaUnit})** — enclosed area via the Shoelace formula.
 - **Perimeter (${lengthUnit})** — boundary length, Sum_i ||p_{i+1} - p_i||
   (ImageJ convention).
+- **Width (${lengthUnit})** — axis-aligned bounding-box width (capsule extent
+  in x).
+- **Height (${lengthUnit})** — axis-aligned bounding-box height (capsule extent
+  in y).
+- **Diameter (${lengthUnit})** — mean Feret diameter, the average caliper width
+  across orientations \`(Feret_max + Feret_min) / 2\`. Rotation-invariant, so
+  unlike Width/Height it does not depend on how the capsule sits in the frame.
+- **Equivalent Diameter (${lengthUnit})** — diameter of the circle with the
+  same area, \`d = 2*sqrt(Area/pi)\`. (For a perfect circle Diameter ≈
+  Equivalent Diameter ≈ Width ≈ Height.)
 - **Compactness** — circularity \`C = 4*pi * Area / Perimeter^2\`, in [0, 1]
   where **1.0 = a perfect circle**. For round capsules this is the most
   intuitive shape measure (a value near 1 means a clean circular capsule;
   lower values indicate an irregular or dented boundary).
-- **Equivalent Diameter (${lengthUnit})** — diameter of the circle with the
-  same area, \`d = 2*sqrt(Area/pi)\`.
 - **Confidence** — the model's detection score for the capsule, in [0, 1].
 
 ### Summary sheet
 Aggregates over the **complete** capsules only: how many were analysed, plus
-mean / min / max of area and compactness, and mean perimeter and equivalent
-diameter.
+mean / min / max of area and compactness, and mean perimeter, width, height,
+diameter and equivalent diameter.
 
 ## Visualisation
 Complete capsules are drawn and numbered in the configured external colour;

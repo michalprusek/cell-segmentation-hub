@@ -191,14 +191,39 @@ describe('MetricsCalculator — exportMicrocapsuleMetricsToExcel', () => {
       'Capsule ID',
       'Area (px^2)',
       'Perimeter (px)',
-      'Compactness',
+      'Width (px)',
+      'Height (px)',
+      'Diameter (px)',
       'Equivalent Diameter (px)',
+      'Compactness',
       'Confidence',
     ]);
     // The focused report must NOT carry the rich spheroid descriptors.
     expect(headers).not.toContain('Feret Diameter Max (px)');
     expect(headers).not.toContain('Solidity');
     expect(headers).not.toContain('Sphericity');
+  });
+
+  it('width/height = bounding box, diameter = mean Feret', async () => {
+    await calc.exportMicrocapsuleMetricsToExcel(
+      [
+        metricRow({
+          polygonId: 1,
+          boundingBoxWidth: 24,
+          boundingBoxHeight: 18,
+          feretDiameterMax: 26,
+          feretDiameterMin: 20,
+        }),
+      ],
+      '/tmp/metrics.xlsx'
+    );
+    const row = mockWorksheet.addRow.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(row.width).toBeCloseTo(24, 4);
+    expect(row.height).toBeCloseTo(18, 4);
+    expect(row.diameter).toBeCloseTo(23, 4); // (26 + 20) / 2
   });
 
   it('maps the Compactness column to the circularity value, not compactness', async () => {
