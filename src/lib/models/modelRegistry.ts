@@ -24,13 +24,19 @@ export type ProjectTypeKey =
   | 'spheroid_invasive'
   | 'wound'
   | 'sperm'
-  | 'microtubules';
+  | 'microtubules'
+  | 'microcapsule';
 
 /** Coarse size bucket surfaced in the model picker UI. */
 export type ModelSize = 'small' | 'medium' | 'large';
 
 /** Catalogue category used to group models in settings. */
-export type ModelCategory = 'spheroid' | 'sperm' | 'wound' | 'microtubule';
+export type ModelCategory =
+  | 'spheroid'
+  | 'sperm'
+  | 'wound'
+  | 'microtubule'
+  | 'microcapsule';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds
@@ -231,6 +237,24 @@ export const MODEL_REGISTRY = {
       'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT-style fusion produces a per-pixel 32-d embedding that PySOAX uses to extract individual MT centerlines. The embedding also drives automatic cross-frame tracking for kymograph analysis. Slow (~8 s/frame) but the only model in the platform producing polyline output.',
     i18nKey: 'microtubule',
     compatibleProjectTypes: ['microtubules'],
+  },
+  microcapsule: {
+    size: 'large',
+    defaultThreshold: 0.3,
+    category: 'microcapsule',
+    performance: {
+      // Meta SAM 3 (~3.4 GB). ~1 s/image on the A5000.
+      avgTimePerImage: 1.0,
+      throughput: 1.0,
+      p95Latency: 1.5,
+      batchSize: 1,
+    },
+    name: 'Microcapsule',
+    displayName: 'Microcapsule (SAM 3)',
+    description:
+      'Instance segmentation for microcapsules (round objects) in bright-field microscopy. Meta SAM 3 with the "circle" prompt returns one clean, full-resolution boundary per capsule with a confidence score; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
+    i18nKey: 'microcapsule',
+    compatibleProjectTypes: ['microcapsule'],
   },
 } as const satisfies Record<string, ModelRegistryEntry>;
 

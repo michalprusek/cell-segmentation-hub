@@ -132,10 +132,10 @@ describe('useLocalizedModels', () => {
       const models = result.current.getAllModels();
 
       // Registry: hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp,
-      // segformer, mamba_unet, sperm, wound, microtubule.
-      // Count updated from 6 → 9 after PRs #221 (Mamba-UNet) and SegFormer/MT additions.
+      // segformer, mamba_unet, sperm, wound, microtubule, microcapsule.
+      // Count updated 6 → 9 (Mamba-UNet, SegFormer, MT) → 10 (microcapsule).
       // If this count changes intentionally, update here.
-      expect(models).toHaveLength(9);
+      expect(models).toHaveLength(10);
       const ids = models.map(m => m.id);
       expect(ids).toContain('hrnet');
       expect(ids).toContain('cbam_resunet');
@@ -146,6 +146,7 @@ describe('useLocalizedModels', () => {
       expect(ids).toContain('sperm');
       expect(ids).toContain('wound');
       expect(ids).toContain('microtubule');
+      expect(ids).toContain('microcapsule');
     });
 
     it('each model has a non-empty name and description', () => {
@@ -174,8 +175,8 @@ describe('useLocalizedModels', () => {
       const { result } = renderHook(() => useLocalizedModels());
 
       // availableModels is the result of getAllModels() called during render.
-      // Count updated from 6 → 9 after model additions (Mamba-UNet, SegFormer, MT).
-      expect(result.current.availableModels).toHaveLength(9);
+      // Count updated 6 → 9 (Mamba-UNet, SegFormer, MT) → 10 (microcapsule).
+      expect(result.current.availableModels).toHaveLength(10);
     });
   });
 

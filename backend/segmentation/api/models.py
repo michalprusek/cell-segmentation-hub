@@ -13,6 +13,7 @@ class ModelType(str, Enum):
     MAMBA_UNET = "mamba_unet"
     SPERM = "sperm"
     WOUND = "wound"
+    MICROCAPSULE = "microcapsule"
 
 class SegmentationRequest(BaseModel):
     model: ModelType = Field(default=ModelType.HRNET, description="Model to use for segmentation")

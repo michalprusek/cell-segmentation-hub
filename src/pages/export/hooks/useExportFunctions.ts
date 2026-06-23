@@ -62,8 +62,11 @@ export const useExportFunctions = (
   const calculateObjectMetrics = async (polygons: PolygonData[]) => {
     if (!polygons || polygons.length === 0) return null;
 
-    // Get external polygons
-    const externalPolygons = polygons.filter(p => p.type === 'external');
+    // Get external polygons (excluding border-cut microcapsules, which carry
+    // complete === false and must not contribute to metrics).
+    const externalPolygons = polygons.filter(
+      p => p.type === 'external' && p.complete !== false
+    );
     if (externalPolygons.length === 0) return null;
 
     // Get all internal polygons

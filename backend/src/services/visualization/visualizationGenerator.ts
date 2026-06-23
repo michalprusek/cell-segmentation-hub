@@ -302,16 +302,24 @@ export class VisualizationGenerator {
       return;
     }
 
+    // Microcapsules cut off by the image border (complete === false) render
+    // grey, mirroring the model's own overlay. They are also excluded from
+    // metrics elsewhere; greying keeps them visible for QA without implying
+    // they were measured.
+    const isIncomplete = polygon.complete === false;
+
     // Polylines use part-class colors; closed polygons use type-based colors
     // except 'core' which renders green (consistent with the editor canvas).
     const isCorePolygon = !isPolyline && polygon.partClass === 'core';
-    const color = isPolyline
-      ? POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7'
-      : isCorePolygon
-        ? '#22c55e' // green — matches frontend CanvasPolygon for ASPP core
-        : polygon.type === 'external'
-          ? options.polygonColors?.external || '#00FF00'
-          : options.polygonColors?.internal || '#FF0000';
+    const color = isIncomplete
+      ? '#969696' // grey — matches the model overlay (150,150,150)
+      : isPolyline
+        ? POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7'
+        : isCorePolygon
+          ? '#22c55e' // green — matches frontend CanvasPolygon for ASPP core
+          : polygon.type === 'external'
+            ? options.polygonColors?.external || '#00FF00'
+            : options.polygonColors?.internal || '#FF0000';
 
     ctx.strokeStyle = color;
     ctx.lineWidth = isPolyline

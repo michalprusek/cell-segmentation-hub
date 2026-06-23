@@ -58,4 +58,11 @@ export interface BasePolygon extends MinimalPolygon {
   /** Human-friendly label set in the editor; mirrored across sibling
    *  frames during cross-frame save propagation. */
   name?: string;
+  /** Per-instance detection score (0..1), written by instance models
+   *  (microcapsule YOLO). Carried through render → export. */
+  confidence?: number;
+  /** Microcapsule completeness flag: `false` when the capsule's mask is cut
+   *  off by the image border. Incomplete capsules are drawn grey and EXCLUDED
+   *  from metrics + the metrics export. Absent for non-microcapsule polygons. */
+  complete?: boolean;
 }

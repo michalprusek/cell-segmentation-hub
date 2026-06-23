@@ -52,6 +52,10 @@ export interface Polygon {
    *  frames during cross-frame propagation. Must be preserved here so a
    *  rename survives subsequent reads. */
   name?: string;
+  /** Microcapsule completeness flag (instance models). `false` when the
+   *  capsule's mask is cut off by the image border. Must be preserved here so
+   *  the editor can grey it out and metrics/export can exclude it. */
+  complete?: boolean;
 }
 
 /**
@@ -104,6 +108,12 @@ export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
   { key: 'trackId', coerce: coerceNonEmptyString },
   // Preserve editor-set label so renames survive subsequent reads.
   { key: 'name', coerce: coerceNonEmptyString },
+  // Preserve microcapsule completeness so cut-off capsules can be greyed in
+  // the editor and excluded from metrics. Only a real boolean survives.
+  {
+    key: 'complete',
+    coerce: value => (typeof value === 'boolean' ? value : undefined),
+  },
 ] as const;
 
 export interface ParsedPolygonResult {

@@ -35,6 +35,11 @@ export interface Polygon {
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat with rows stored before sperm model)
   partClass?: PolygonPartClass;
   instanceId?: string;
+  /** Microcapsule completeness flag written by the instance model: `false`
+   *  when the capsule's mask is cut off by the image border. Such capsules are
+   *  drawn grey in the editor and excluded from metrics. Absent for other
+   *  project types. */
+  complete?: boolean;
   /** Cross-frame microtubule track ID; populated by the tracker after a
    *  video container's batch finishes segmentation. Equal across frames
    *  for sibling polylines representing the same MT over time. */

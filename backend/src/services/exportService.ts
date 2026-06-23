@@ -1370,6 +1370,15 @@ export class ExportService {
             options?.pixelToMicrometerScale,
             imageMetrics
           );
+        } else if (projectType === 'microcapsule') {
+          // Microcapsule: focused per-capsule report (Area, Perimeter,
+          // Compactness, Equivalent Diameter, Confidence). Border-cut capsules
+          // are already excluded from `allMetrics` upstream.
+          await this.metricsCalculator.exportMicrocapsuleMetricsToExcel(
+            allMetrics,
+            excelPath,
+            options?.pixelToMicrometerScale
+          );
         } else {
           // 'spheroid' (standard) and 'wound': emit the comprehensive
           // per-polygon metrics report (Polygon Metrics + Summary sheets).
@@ -1396,11 +1405,19 @@ export class ExportService {
           }
         }
       } else if (format === 'csv') {
-        await this.metricsCalculator.exportToCSV(
-          allMetrics,
-          path.join(metricsDir, 'metrics.csv'),
-          options?.pixelToMicrometerScale
-        );
+        if (projectType === 'microcapsule') {
+          await this.metricsCalculator.exportMicrocapsuleToCSV(
+            allMetrics,
+            path.join(metricsDir, 'metrics.csv'),
+            options?.pixelToMicrometerScale
+          );
+        } else {
+          await this.metricsCalculator.exportToCSV(
+            allMetrics,
+            path.join(metricsDir, 'metrics.csv'),
+            options?.pixelToMicrometerScale
+          );
+        }
       } else if (format === 'json') {
         await fs.writeFile(
           path.join(metricsDir, 'metrics.json'),

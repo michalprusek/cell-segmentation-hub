@@ -217,6 +217,7 @@ export default {
       wound: 'Cicatrización de heridas',
       sperm: 'Esperma',
       microtubules: 'Microtúbulos',
+      microcapsule: 'Microcápsulas',
     },
     projectNamePlaceholder: 'ej. Esferoides de células HeLa',
     projectDescPlaceholder:
@@ -433,6 +434,7 @@ export default {
         sperm: 'Modelos de espermatozoides',
         wound: 'Modelos de cicatrización',
         microtubule: 'Modelos de microtúbulos',
+        microcapsule: 'Modelos de microcápsulas',
       },
       presets: {
         fast: 'Rápido',
@@ -494,6 +496,11 @@ export default {
           description:
             'Segmentación de instancias para time-lapses de microtúbulos IRM/TIRF. DINOv3-L ViT-L/16 + fusión DPT produce polilíneas centerline por MT y embeddings de 32 dim por píxel para tracking entre cuadros y generación de kymograph. ~8 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
         },
+        microcapsule: {
+          name: 'Microcapsule (SAM 3)',
+          description:
+            'Segmentación de instancias para microcápsulas (objetos redondos) en microscopía de campo claro. Meta SAM 3 con el prompt «circle» devuelve un contorno limpio a resolución completa por cápsula con puntuación de confianza; las cápsulas cortadas por el borde de la imagen quedan excluidas de las métricas (área, perímetro, compacidad).',
+        },
       },
     },
     detectHoles: 'Detectar Agujeros',
@@ -525,6 +532,8 @@ export default {
         'Modelo U-Net + MiT-B5 (codificador SegFormer) para segmentación de heridas en microscopía de scratch-assay. Una única región de herida binaria por imagen; ideal para time-lapses de cicatrización.',
       microtubule:
         'Segmentación de instancias de microtúbulos para microscopía IRM/TIRF. Codificador DINOv3-L + DPT, postprocesado PySOAX, salida polilínea nativa con tracking basado en embeddings.',
+      microcapsule:
+        'Segmentación de instancias Meta SAM 3 (prompt «circle») para microcápsulas — área, perímetro y compacidad por cápsula, con las cápsulas cortadas por el borde excluidas de las métricas.',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
     dataUsageDescription:

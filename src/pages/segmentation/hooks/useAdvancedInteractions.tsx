@@ -1013,69 +1013,57 @@ export const useAdvancedInteractions = ({
  * Helper function to insert points between vertices using normalized path logic
  * Ensures consistent behavior regardless of click order (A→B vs B→A)
  */
-function insertPointsBetweenVertices(
+export function insertPointsBetweenVertices(
   originalPoints: Point[],
   startVertexIndex: number,
   endVertexIndex: number,
   newPoints: Point[]
 ): Point[] | null {
-  // Inserts new points between two vertices, creating two candidate polygons
-  // and selecting the one with the smaller perimeter (preserves original boundary).
+  // The two clicked vertices split the boundary into two arcs (the "inner" arc
+  // running directly between them by index, and the "outer" arc that wraps the
+  // other way). The newly drawn sequence replaces ONE arc. We build both
+  // genuinely-different candidates and KEEP whichever has the LARGER perimeter —
+  // i.e. the sequence joins the bigger portion of the outline. (Requested
+  // behavior: Add Points always grows toward the larger-perimeter result.)
 
   const numPoints = originalPoints.length;
 
-  // Normalize vertices to ensure consistent behavior
-  // Always work with the smaller index as vertex1 and larger as vertex2
+  // Normalize so vertex1 is the smaller index and vertex2 the larger.
   const vertex1 = Math.min(startVertexIndex, endVertexIndex);
   const vertex2 = Math.max(startVertexIndex, endVertexIndex);
 
-  // If adjacent vertices and no points to add, nothing to do
+  // Adjacent vertices with nothing to add: no-op.
   if (
     newPoints.length === 0 &&
-    (Math.abs(vertex1 - vertex2) === 1 ||
-      Math.abs(vertex1 - vertex2) === numPoints - 1)
+    (vertex2 - vertex1 === 1 || (vertex1 === 0 && vertex2 === numPoints - 1))
   ) {
     return originalPoints;
   }
 
-  // Determine if the new points should be reversed based on original click order
-  const shouldReverseNewPoints = startVertexIndex > endVertexIndex;
-  const finalNewPoints = shouldReverseNewPoints
-    ? [...newPoints].reverse()
-    : newPoints;
+  // Orient the drawn sequence to run vertex1 -> vertex2 (clicks may be in
+  // either order).
+  const seq =
+    startVertexIndex > endVertexIndex ? [...newPoints].reverse() : newPoints;
 
-  // Create two candidate polygons
-  const candidate1Points: Point[] = []; // Replace direct path
-  const candidate2Points: Point[] = []; // Replace wrapped path
+  // Inner arc: vertex1 -> vertex1+1 -> ... -> vertex2 (direct, by index).
+  const innerArc: Point[] = [];
+  for (let i = vertex1; i <= vertex2; i++) innerArc.push(originalPoints[i]);
 
-  // Candidate 1: Replace direct path (vertex1 to vertex2)
-  // Keep: [0...vertex1] + newPoints + [vertex2...numPoints-1]
-  for (let i = 0; i <= vertex1; i++) {
-    candidate1Points.push(originalPoints[i]);
-  }
-  candidate1Points.push(...finalNewPoints);
-  for (let i = vertex2; i < numPoints; i++) {
-    candidate1Points.push(originalPoints[i]);
-  }
+  // Outer arc: vertex2 -> ... -> numPoints-1 -> 0 -> ... -> vertex1 (wrapped).
+  const outerArc: Point[] = [];
+  for (let i = vertex2; i < numPoints; i++) outerArc.push(originalPoints[i]);
+  for (let i = 0; i <= vertex1; i++) outerArc.push(originalPoints[i]);
 
-  // Candidate 2: Replace wrapped path (vertex2 to vertex1 going around)
-  // Keep only the direct path vertices and replace wrapped path with newPoints
-  candidate2Points.push(originalPoints[vertex1]);
-  candidate2Points.push(...finalNewPoints);
-  candidate2Points.push(originalPoints[vertex2]);
+  // Candidate A — keep the inner arc; the sequence replaces the outer arc.
+  //   inner (v1..v2) then the sequence back (v2..v1).
+  const keepInner = [...innerArc, ...[...seq].reverse()];
+  // Candidate B — keep the outer arc; the sequence replaces the inner arc.
+  //   outer (v2..v1 wrapped) then the sequence forward (v1..v2).
+  const keepOuter = [...outerArc, ...seq];
 
-  // Add the remaining points (wrapped path) by going from vertex2 to vertex1
-  let idx = (vertex2 + 1) % numPoints;
-  while (idx !== vertex1) {
-    candidate2Points.push(originalPoints[idx]);
-    idx = (idx + 1) % numPoints;
-  }
+  const perimeterInner = calculatePolygonPerimeter(keepInner);
+  const perimeterOuter = calculatePolygonPerimeter(keepOuter);
 
-  // Calculate perimeters and choose the one with smaller perimeter.
-  // The candidate closer to the original polygon shape is the correct one,
-  // as adding points refines the boundary rather than replacing it.
-  const perimeter1 = calculatePolygonPerimeter(candidate1Points);
-  const perimeter2 = calculatePolygonPerimeter(candidate2Points);
-
-  return perimeter1 <= perimeter2 ? candidate1Points : candidate2Points;
+  // Keep the larger-perimeter result.
+  return perimeterInner >= perimeterOuter ? keepInner : keepOuter;
 }

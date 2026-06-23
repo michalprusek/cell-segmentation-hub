@@ -143,6 +143,13 @@ const CanvasPolygon = React.memo(
 
     // Determine path color based on polygon type, polyline partClass, and selection status
     const pathColor = useMemo(() => {
+      // Microcapsules cut off by the image border (complete === false) render
+      // grey — they're excluded from metrics, and greying keeps them visibly
+      // distinct from the whole capsules that ARE measured (mirrors the model
+      // overlay's grey treatment).
+      if (polygon.complete === false) {
+        return isSelected ? '#737373' : '#969696';
+      }
       // Spheroid 'core' (closed polygon, dense central region from ASPP model)
       if (!isPolyline && polygon.partClass === 'core') {
         return isSelected ? '#16a34a' : '#22c55e'; // green
@@ -178,6 +185,7 @@ const CanvasPolygon = React.memo(
       polygon.partClass,
       polygon.instanceId,
       polygon.trackId,
+      polygon.complete,
       isSelected,
       isInternal,
     ]);
@@ -326,11 +334,13 @@ const CanvasPolygon = React.memo(
             fill={
               isPolyline
                 ? 'none'
-                : polygon.partClass === 'core'
-                  ? 'rgba(34, 197, 94, 0.25)' // green core (#22c55e at 25%)
-                  : isInternal
-                    ? 'rgba(14, 165, 233, 0.1)'
-                    : 'rgba(239, 68, 68, 0.1)'
+                : polygon.complete === false
+                  ? 'rgba(150, 150, 150, 0.18)' // grey fill for cut-off capsules
+                  : polygon.partClass === 'core'
+                    ? 'rgba(34, 197, 94, 0.25)' // green core (#22c55e at 25%)
+                    : isInternal
+                      ? 'rgba(14, 165, 233, 0.1)'
+                      : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
             strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}
@@ -437,6 +447,7 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.class === nextProps.polygon.class &&
       prevProps.polygon.instanceId === nextProps.polygon.instanceId &&
       prevProps.polygon.trackId === nextProps.polygon.trackId &&
+      prevProps.polygon.complete === nextProps.polygon.complete &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
