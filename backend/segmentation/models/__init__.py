@@ -31,6 +31,12 @@ try:
 except ImportError:
     SegFormerModel = None
 
+# Microcapsule model: optional import (requires the sam3 package for SAM 3).
+try:
+    from .microcapsule import MicrocapsuleModel
+except ImportError:
+    MicrocapsuleModel = None
+
 # Mamba-UNet spheroid model: optional import (requires mamba_ssm CUDA kernels).
 # Catch OSError too: a present-but-ABI-mismatched .so raises OSError/ImportError
 # on load, and we want that to disable only this model (with a log), not crash
@@ -46,4 +52,5 @@ except (ImportError, OSError) as _e:
     UMamba = None
 
 __all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel',
-           'WoundModel', 'MicrotubuleModel', 'SegFormerModel', 'UMamba']
+           'WoundModel', 'MicrotubuleModel', 'SegFormerModel', 'UMamba',
+           'MicrocapsuleModel']

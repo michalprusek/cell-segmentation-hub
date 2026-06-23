@@ -27,6 +27,7 @@ const CANONICAL_IDS: ModelType[] = [
   'sperm',
   'wound',
   'microtubule',
+  'microcapsule',
 ];
 
 const MODEL_INFO_KEYS: Array<keyof ModelInfo> = [
@@ -41,13 +42,13 @@ const MODEL_INFO_KEYS: Array<keyof ModelInfo> = [
 ];
 
 describe('model registry SSOT', () => {
-  it('registry keys are exactly the canonical 9 models, in order', () => {
+  it('registry keys are exactly the canonical 10 models, in order', () => {
     expect(Object.keys(MODEL_REGISTRY)).toEqual(CANONICAL_IDS);
     expect(ALL_MODEL_IDS).toEqual(CANONICAL_IDS);
-    expect(ALL_MODEL_IDS).toHaveLength(9);
+    expect(ALL_MODEL_IDS).toHaveLength(10);
   });
 
-  it('getAllLocalizedModels() returns the 9 models in display order', () => {
+  it('getAllLocalizedModels() returns the 10 models in display order', () => {
     // Passthrough t returns the key itself; we only assert id ordering here.
     const models = getAllLocalizedModels((k: string) => k);
     expect(models.map(m => m.id)).toEqual(CANONICAL_IDS);
@@ -66,6 +67,7 @@ describe('model registry SSOT', () => {
       wound: ['wound'],
       sperm: ['sperm'],
       microtubules: ['microtubule'],
+      microcapsule: ['microcapsule'],
     });
   });
 
@@ -233,6 +235,22 @@ describe('model registry SSOT', () => {
           batchSize: 1,
         },
       },
+      microcapsule: {
+        id: 'microcapsule',
+        name: 'Microcapsule',
+        displayName: 'Microcapsule (SAM 3)',
+        description:
+          'Instance segmentation for microcapsules (round objects) in bright-field microscopy. Meta SAM 3 with the "circle" prompt returns one clean, full-resolution boundary per capsule with a confidence score; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
+        size: 'large',
+        defaultThreshold: 0.3,
+        category: 'microcapsule',
+        performance: {
+          avgTimePerImage: 1.0,
+          throughput: 1.0,
+          p95Latency: 1.5,
+          batchSize: 1,
+        },
+      },
     });
   });
 
@@ -247,6 +265,7 @@ describe('model registry SSOT', () => {
       sperm: 'sperm',
       wound: 'wound',
       microtubule: 'microtubule',
+      microcapsule: 'microcapsule',
     });
   });
 });

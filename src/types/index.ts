@@ -344,6 +344,7 @@ export const PROJECT_TYPES = [
   'wound',
   'sperm',
   'microtubules',
+  'microcapsule',
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
@@ -477,6 +478,9 @@ export interface PolygonData {
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
   partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
   instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
+  /** Microcapsule completeness flag: `false` when cut off by the image border.
+   *  Excluded from metrics; absent for other project types. */
+  complete?: boolean;
 }
 
 export interface SegmentationData {

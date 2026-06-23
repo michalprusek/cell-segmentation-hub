@@ -37,10 +37,15 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
     downloadJSON(data, baseFilename);
   };
 
-  // Get external polygons for metrics (exclude polylines)
+  // Get external polygons for metrics (exclude polylines). Also exclude
+  // border-cut microcapsules (complete === false): they are not measured, so
+  // they must not appear in the metrics panel. Other project types never set
+  // `complete`, so `!== false` leaves them untouched.
   const externalPolygons = segmentation.polygons.filter(
     polygon =>
-      polygon.type === 'external' && (polygon as any).geometry !== 'polyline'
+      polygon.type === 'external' &&
+      (polygon as any).geometry !== 'polyline' &&
+      polygon.complete !== false
   );
 
   // Get all internal polygons

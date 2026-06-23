@@ -60,6 +60,7 @@ describe('getSpheroidPreset', () => {
     'sperm',
     'wound',
     'microtubule',
+    'microcapsule',
     'unet_attention_aspp',
   ];
   for (const id of nonSpheroidModels) {
@@ -114,9 +115,10 @@ describe('BASIC_MODEL_INFO', () => {
     'sperm',
     'wound',
     'microtubule',
+    'microcapsule',
   ];
 
-  it('contains all 9 model ids', () => {
+  it('contains all 10 model ids', () => {
     for (const id of allModelIds) {
       expect(BASIC_MODEL_INFO[id]).toBeDefined();
       expect(BASIC_MODEL_INFO[id].id).toBe(id);
@@ -291,8 +293,8 @@ describe('getLocalizedModelInfo', () => {
 describe('getAllLocalizedModels', () => {
   const passthroughT = (key: string) => key;
 
-  it('returns 9 models', () => {
-    expect(getAllLocalizedModels(passthroughT)).toHaveLength(9);
+  it('returns 10 models', () => {
+    expect(getAllLocalizedModels(passthroughT)).toHaveLength(10);
   });
 
   it('contains all model ids exactly once', () => {
@@ -307,17 +309,18 @@ describe('getAllLocalizedModels', () => {
       'sperm',
       'wound',
       'microtubule',
+      'microcapsule',
     ];
     for (const id of expectedIds) {
       expect(ids).toContain(id);
     }
     // No duplicates
-    expect(new Set(ids).size).toBe(9);
+    expect(new Set(ids).size).toBe(10);
   });
 
-  it('preserves order: hrnet first, microtubule last', () => {
+  it('preserves order: hrnet first, microcapsule last', () => {
     const models = getAllLocalizedModels(passthroughT);
     expect(models[0].id).toBe('hrnet');
-    expect(models[models.length - 1].id).toBe('microtubule');
+    expect(models[models.length - 1].id).toBe('microcapsule');
   });
 });
