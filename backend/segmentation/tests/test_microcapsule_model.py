@@ -59,7 +59,8 @@ def test_touches_border_respects_margin():
 
     near = np.array([[3, 40], [60, 40], [60, 120], [3, 120]], np.float32)
     assert _touches_border(near, height=200, width=200) is True
-    clear = np.array([[4, 4], [196, 4], [196, 196], [4, 196]], np.float32)
+    # 4 px inset from every edge (pixels 0..199, so the far edge is 195 = 199-4).
+    clear = np.array([[4, 4], [195, 4], [195, 195], [4, 195]], np.float32)
     assert _touches_border(clear, height=200, width=200) is False
 
 

@@ -27,6 +27,7 @@ HuggingFace on first load (HF_TOKEN required) and cache under ``HF_HOME``.
 
 import logging
 import os
+import shutil
 import urllib.request
 
 import cv2
@@ -54,11 +55,16 @@ _BPE_URL = (
 
 def _touches_border(polygon: np.ndarray, height: int, width: int,
                     margin: int = _BORDER_MARGIN_PX) -> bool:
-    """Return True if the polygon comes within ``margin`` px of any image edge."""
+    """Return True if the polygon comes within ``margin`` px of any image edge.
+
+    Symmetric on all four edges: the last valid pixel index is ``width-1`` /
+    ``height-1``, so the right/bottom thresholds use ``-1 - margin`` to match the
+    ``<= margin`` rule on the left/top.
+    """
     xs, ys = polygon[:, 0], polygon[:, 1]
     return bool(
         xs.min() <= margin or ys.min() <= margin
-        or xs.max() >= width - margin or ys.max() >= height - margin
+        or xs.max() >= width - 1 - margin or ys.max() >= height - 1 - margin
     )
 
 
@@ -108,13 +114,27 @@ def _merge_nested(masks, containment: float = _NEST_CONTAINMENT):
 
 
 def _bpe_path() -> str:
-    """Path to the CLIP BPE vocab; download + cache under HF_HOME on first use."""
+    """Path to the CLIP BPE vocab; download + cache under HF_HOME on first use.
+
+    Downloads with a timeout and writes to a temp file that is atomically
+    renamed, so a slow/broken network can't block model loading forever and a
+    partial download can't leave a corrupt cache file that is then reused.
+    """
     cache_dir = os.environ.get("HF_HOME") or "/tmp"
     path = os.path.join(cache_dir, "sam3_bpe_simple_vocab_16e6.txt.gz")
     if not os.path.exists(path):
         os.makedirs(cache_dir, exist_ok=True)
         logger.info("Downloading CLIP BPE vocab for SAM 3 ...")
-        urllib.request.urlretrieve(_BPE_URL, path)
+        tmp = f"{path}.{os.getpid()}.tmp"
+        try:
+            with urllib.request.urlopen(_BPE_URL, timeout=30) as resp, \
+                    open(tmp, "wb") as out:
+                shutil.copyfileobj(resp, out)
+            os.replace(tmp, path)  # atomic on the same filesystem
+        except Exception:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            raise
     return path
 
 

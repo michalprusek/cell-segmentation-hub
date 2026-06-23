@@ -334,11 +334,13 @@ const CanvasPolygon = React.memo(
             fill={
               isPolyline
                 ? 'none'
-                : polygon.partClass === 'core'
-                  ? 'rgba(34, 197, 94, 0.25)' // green core (#22c55e at 25%)
-                  : isInternal
-                    ? 'rgba(14, 165, 233, 0.1)'
-                    : 'rgba(239, 68, 68, 0.1)'
+                : polygon.complete === false
+                  ? 'rgba(150, 150, 150, 0.18)' // grey fill for cut-off capsules
+                  : polygon.partClass === 'core'
+                    ? 'rgba(34, 197, 94, 0.25)' // green core (#22c55e at 25%)
+                    : isInternal
+                      ? 'rgba(14, 165, 233, 0.1)'
+                      : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
             strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}

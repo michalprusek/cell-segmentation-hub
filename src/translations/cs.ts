@@ -500,7 +500,7 @@ export default {
         microcapsule: {
           name: 'Microcapsule (SAM 3)',
           description:
-            'Instanční segmentace mikrokapsulí (kulatých objektů) v mikroskopii světlého pole. Meta SAM 3 s promptem „circle" vrací jednu čistou hranici plného rozlišení na kapsuli s hodnotou spolehlivosti; kapsule přesahující okraj snímku jsou vyloučeny z metrik (plocha, obvod, kompaktnost).',
+            'Instanční segmentace mikrokapsulí (kulatých objektů) v mikroskopii světlého pole. Meta SAM 3 s promptem „circle“ vrací jednu čistou hranici plného rozlišení na kapsuli s hodnotou spolehlivosti; kapsule přesahující okraj snímku jsou vyloučeny z metrik (plocha, obvod, kompaktnost).',
         },
       },
     },
@@ -534,7 +534,7 @@ export default {
       microtubule:
         'Instanční segmentace mikrotubulů pro IRM/TIRF mikroskopii. DINOv3-L + DPT enkodér, PySOAX postprocessing, nativní polyline výstup s tracking přes 32-d embedding.',
       microcapsule:
-        'Instanční segmentace mikrokapsulí pomocí Meta SAM 3 (prompt „circle") — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
+        'Instanční segmentace mikrokapsulí pomocí Meta SAM 3 (prompt „circle“) — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:
