@@ -18,7 +18,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Download, Loader2, Maximize, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  ArrowDown,
+  Download,
+  Loader2,
+  Maximize,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -92,6 +99,9 @@ function trackColor(netPxFrame: number): string {
   return netPxFrame > 0 ? ANTERO : RETRO;
 }
 
+/** Constrain the viewer zoom to a sane range (5 %…2000 %). */
+const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
+
 export function KymographModal({
   open,
   onClose,
@@ -124,99 +134,127 @@ export function KymographModal({
   const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<number | null>(null);
 
-  // --- Kymograph zoom / pan / scroll (native aspect ratio, no stretch) ------
+  // --- Kymograph zoom / pan (native aspect ratio, CSS-transform viewer) ------
+  // The kymograph is shown at its native lengthPx×frameCount size and moved by a
+  // single `translate(tx,ty) scale(s)` transform inside an overflow-hidden
+  // viewport. This makes centring trivial (just compute tx/ty), zoom-to-cursor
+  // exact, and pan a plain translate — none of which the old scroll model did
+  // well (a sub-viewport image pinned to the top-left, no centring).
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     x: number;
     y: number;
-    sl: number;
-    st: number;
+    tx: number;
+    ty: number;
   } | null>(null);
   const lastGeomRef = useRef<string | null>(null);
-  const [scale, setScale] = useState<number | null>(null);
+  const [view, setView] = useState<{
+    scale: number;
+    tx: number;
+    ty: number;
+  } | null>(null);
   const [dragging, setDragging] = useState(false);
-  const effScale = scale ?? 1;
+  const effScale = view?.scale ?? 1;
+  const tx = view?.tx ?? 0;
+  const ty = view?.ty ?? 0;
 
   // A kymograph needs both a spatial and a temporal extent to be displayed; a
   // degenerate result (lengthPx/frameCount ≤ 0) would otherwise divide-by-zero
-  // in fitToView and collapse the viewer to 0×0 with no feedback.
+  // in fitAndCenter and collapse the viewer to 0×0 with no feedback.
   const validKymo = !!result && result.lengthPx > 0 && result.frameCount > 0;
 
-  const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
-
-  const fitToView = useCallback(() => {
+  // Fit the whole kymograph into the viewport AND centre it (the user's ask: an
+  // explicitly centred image, not one pinned to the top-left corner).
+  const fitAndCenter = useCallback(() => {
     const vp = viewportRef.current;
     if (!vp || !result || result.lengthPx <= 0 || result.frameCount <= 0) {
       return;
     }
-    const s = Math.min(
-      vp.clientWidth / result.lengthPx,
-      vp.clientHeight / result.frameCount
-    );
-    setScale(clampScale(Number.isFinite(s) && s > 0 ? s : 1));
+    const vw = vp.clientWidth;
+    const vh = vp.clientHeight;
+    const raw = Math.min(vw / result.lengthPx, vh / result.frameCount);
+    const s = clampScale(Number.isFinite(raw) && raw > 0 ? raw : 1);
+    setView({
+      scale: s,
+      tx: (vw - result.lengthPx * s) / 2,
+      ty: (vh - result.frameCount * s) / 2,
+    });
   }, [result]);
 
-  // Fit only when the kymograph GEOMETRY changes (new polyline / different
-  // length) — this keeps the user's zoom across same-geometry refetches
-  // (channel switch, velocity toggle). useLayoutEffect fits before paint, so
-  // there is no one-frame flash at the initial native scale.
+  // Fit+centre only when the kymograph GEOMETRY changes (new polyline /
+  // different length) — this keeps the user's zoom+pan across same-geometry
+  // refetches (channel switch, velocity toggle). useLayoutEffect runs before
+  // paint, so there is no one-frame flash at the initial native scale.
   useLayoutEffect(() => {
     if (!validKymo || !result) return;
     const geom = `${result.lengthPx}x${result.frameCount}`;
     if (geom === lastGeomRef.current) return;
     lastGeomRef.current = geom;
-    fitToView();
-  }, [validKymo, result, fitToView]);
+    fitAndCenter();
+  }, [validKymo, result, fitAndCenter]);
 
-  const zoomBy = useCallback((factor: number) => {
-    const vp = viewportRef.current;
-    setScale(prev => {
-      const cur = prev ?? 1;
-      const next = clampScale(cur * factor);
-      if (vp) {
-        const ratio = next / cur;
-        const cx = vp.scrollLeft + vp.clientWidth / 2;
-        const cy = vp.scrollTop + vp.clientHeight / 2;
-        requestAnimationFrame(() => {
-          vp.scrollLeft = cx * ratio - vp.clientWidth / 2;
-          vp.scrollTop = cy * ratio - vp.clientHeight / 2;
-        });
-      }
-      return next;
+  // Zoom by `factor` keeping the viewport point (cx,cy) fixed — so the pixel
+  // under the cursor stays put. Standard zoom-to-cursor: solve tx' from
+  // cx = tx' + ((cx - tx)/s)·next.
+  const zoomAt = useCallback((factor: number, cx: number, cy: number) => {
+    setView(prev => {
+      const cur = prev ?? { scale: 1, tx: 0, ty: 0 };
+      const next = clampScale(cur.scale * factor);
+      const ratio = next / cur.scale;
+      return {
+        scale: next,
+        tx: cx - (cx - cur.tx) * ratio,
+        ty: cy - (cy - cur.ty) * ratio,
+      };
     });
   }, []);
 
-  // Ctrl/⌘ + wheel zoom — native non-passive listener so preventDefault works.
-  // Re-binds when the viewport (re)mounts, i.e. when validKymo flips true.
+  // Button zoom: keep the viewport CENTRE fixed.
+  const zoomByCentered = useCallback(
+    (factor: number) => {
+      const vp = viewportRef.current;
+      if (!vp) return;
+      zoomAt(factor, vp.clientWidth / 2, vp.clientHeight / 2);
+    },
+    [zoomAt]
+  );
+
+  // Plain mouse-wheel zoom toward the cursor — native non-passive listener so
+  // preventDefault stops the page from scrolling. Re-binds when the viewport
+  // (re)mounts, i.e. when validKymo flips true.
   useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+      const rect = vp.getBoundingClientRect();
+      zoomAt(
+        e.deltaY < 0 ? 1.1 : 1 / 1.1,
+        e.clientX - rect.left,
+        e.clientY - rect.top
+      );
     };
     vp.addEventListener('wheel', onWheel, { passive: false });
     return () => vp.removeEventListener('wheel', onWheel);
-  }, [zoomBy, validKymo]);
+  }, [zoomAt, validKymo]);
 
   const onDragStart = (e: React.MouseEvent) => {
-    const vp = viewportRef.current;
-    if (!vp || e.button !== 0) return;
-    dragRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      sl: vp.scrollLeft,
-      st: vp.scrollTop,
-    };
+    if (e.button !== 0) return;
+    dragRef.current = { x: e.clientX, y: e.clientY, tx, ty };
     setDragging(true);
   };
   const onDragMove = (e: React.MouseEvent) => {
-    const vp = viewportRef.current;
     const d = dragRef.current;
-    if (!vp || !d) return;
-    vp.scrollLeft = d.sl - (e.clientX - d.x);
-    vp.scrollTop = d.st - (e.clientY - d.y);
+    if (!d) return;
+    setView(prev =>
+      prev
+        ? {
+            ...prev,
+            tx: d.tx + (e.clientX - d.x),
+            ty: d.ty + (e.clientY - d.y),
+          }
+        : prev
+    );
   };
   const onDragEnd = useCallback(() => {
     dragRef.current = null;
@@ -394,8 +432,12 @@ export function KymographModal({
             // Rows = frames (time ↓), cols = position along the microtubule.
             <div className="w-full">
               <div className="flex">
-                {/* Y-axis name (rotated). */}
-                <div className="flex items-center justify-center text-xs text-muted-foreground pr-1">
+                {/* Y-axis name (vertical text) + a real downward arrow.
+                    The arrow is a separate icon, NOT a "↓" glyph inside the
+                    writing-mode-rotated text — the rotation would turn the glyph
+                    sideways. Time increases downward (rows = frames), so the
+                    arrow points down. */}
+                <div className="flex flex-col items-center justify-center gap-1 pr-1 text-xs text-muted-foreground">
                   <span
                     className="whitespace-nowrap"
                     style={{
@@ -404,11 +446,12 @@ export function KymographModal({
                     }}
                   >
                     {t('editor.kymograph.axisTime', {
-                      defaultValue: 'Time (frames) ↓',
+                      defaultValue: 'Time (frames)',
                     })}
                   </span>
+                  <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 </div>
-                {/* Zoom / pan / scroll viewport. */}
+                {/* Zoom / pan viewport (CSS transform, overflow hidden). */}
                 <div className="relative min-w-0 flex-1">
                   <div className="absolute right-2 top-2 z-10 flex gap-1">
                     <Button
@@ -416,7 +459,7 @@ export function KymographModal({
                       size="icon"
                       variant="secondary"
                       className="h-7 w-7"
-                      onClick={() => zoomBy(1.3)}
+                      onClick={() => zoomByCentered(1.3)}
                       title={t('editor.kymograph.zoomIn', {
                         defaultValue: 'Zoom in',
                       })}
@@ -428,7 +471,7 @@ export function KymographModal({
                       size="icon"
                       variant="secondary"
                       className="h-7 w-7"
-                      onClick={() => zoomBy(1 / 1.3)}
+                      onClick={() => zoomByCentered(1 / 1.3)}
                       title={t('editor.kymograph.zoomOut', {
                         defaultValue: 'Zoom out',
                       })}
@@ -440,7 +483,7 @@ export function KymographModal({
                       size="icon"
                       variant="secondary"
                       className="h-7 w-7"
-                      onClick={fitToView}
+                      onClick={fitAndCenter}
                       title={t('editor.kymograph.fit', {
                         defaultValue: 'Fit to view',
                       })}
@@ -450,19 +493,20 @@ export function KymographModal({
                   </div>
                   <div
                     ref={viewportRef}
-                    className="max-h-[60vh] min-h-[240px] select-none overflow-auto rounded border bg-black/20"
+                    className="relative h-[60vh] min-h-[300px] w-full select-none overflow-hidden rounded border bg-black/20"
                     style={{ cursor: dragging ? 'grabbing' : 'grab' }}
                     onMouseDown={onDragStart}
                     onMouseMove={onDragMove}
                     onMouseUp={onDragEnd}
                     onMouseLeave={onDragEnd}
                   >
-                    {/* Inner box at native aspect × zoom; image + overlay share it. */}
+                    {/* Inner box at NATIVE size; pan+zoom via one transform. */}
                     <div
-                      className="relative"
+                      className="absolute left-0 top-0 origin-top-left"
                       style={{
-                        width: result.lengthPx * effScale,
-                        height: result.frameCount * effScale,
+                        width: result.lengthPx,
+                        height: result.frameCount,
+                        transform: `translate(${tx}px, ${ty}px) scale(${effScale})`,
                       }}
                     >
                       <img
@@ -473,37 +517,61 @@ export function KymographModal({
                         draggable={false}
                       />
                       {detectVelocity && tracks.length > 0 && (
-                        // viewBox = native pixel grid; preserveAspectRatio="none"
-                        // maps it onto the (native-aspect) box ⇒ tracks stay
-                        // aligned at any zoom. non-scaling-stroke keeps lines
-                        // a constant on-screen width.
+                        // viewBox = native pixel grid mapped 1:1 onto the native
+                        // box, then CSS-scaled by the parent transform ⇒ tracks
+                        // stay aligned at any zoom. Stroke/dot sizes are divided
+                        // by the scale so they keep a constant on-screen size.
                         <svg
                           className="pointer-events-none absolute inset-0 h-full w-full"
                           viewBox={`0 0 ${result.lengthPx} ${result.frameCount}`}
                           preserveAspectRatio="none"
                         >
-                          {tracks.map((tr, i) => (
-                            <polyline
-                              key={i}
-                              points={tr.points
-                                .map(([frame, x]) => `${x},${frame}`)
-                                .join(' ')}
-                              fill="none"
-                              stroke={trackColor(tr.netVelocityPxPerFrame)}
-                              strokeWidth={activeTrack === i ? 5 : 3}
-                              strokeOpacity={
-                                activeTrack === null || activeTrack === i
-                                  ? 1
-                                  : 0.25
-                              }
-                              vectorEffect="non-scaling-stroke"
-                              className="pointer-events-auto cursor-pointer"
-                              onMouseEnter={() => setActiveTrack(i)}
-                              onMouseLeave={() => setActiveTrack(null)}
-                            >
-                              <title>{`#${i + 1}: ${fmtVelocity(tr)}`}</title>
-                            </polyline>
-                          ))}
+                          {tracks.map((tr, i) => {
+                            const col = trackColor(tr.netVelocityPxPerFrame);
+                            const focused =
+                              activeTrack === null || activeTrack === i;
+                            return (
+                              <g
+                                key={i}
+                                strokeOpacity={focused ? 1 : 0.25}
+                                fillOpacity={focused ? 1 : 0.25}
+                              >
+                                <polyline
+                                  points={tr.points
+                                    .map(([frame, x]) => `${x},${frame}`)
+                                    .join(' ')}
+                                  fill="none"
+                                  stroke={col}
+                                  strokeWidth={
+                                    (activeTrack === i ? 5 : 3) / effScale
+                                  }
+                                  className="pointer-events-auto cursor-pointer"
+                                  onMouseEnter={() => setActiveTrack(i)}
+                                  onMouseLeave={() => setActiveTrack(null)}
+                                >
+                                  <title>{`#${i + 1}: ${fmtVelocity(tr)}`}</title>
+                                </polyline>
+                                {/* Per-run dots: mark where each constant-
+                                    velocity run starts and ends along the line. */}
+                                {runMarkers(tr).map((m, j) => (
+                                  <circle
+                                    key={j}
+                                    cx={m.x}
+                                    cy={m.frame}
+                                    r={3.5 / effScale}
+                                    fill="#fff"
+                                    stroke={col}
+                                    strokeWidth={1.5 / effScale}
+                                    className="pointer-events-auto cursor-pointer"
+                                    onMouseEnter={() => setActiveTrack(i)}
+                                    onMouseLeave={() => setActiveTrack(null)}
+                                  >
+                                    <title>{runTitle(i, m.run)}</title>
+                                  </circle>
+                                ))}
+                              </g>
+                            );
+                          })}
                         </svg>
                       )}
                     </div>
@@ -519,7 +587,7 @@ export function KymographModal({
                 </span>
                 <span className="text-[10px]">
                   {t('editor.kymograph.zoomHint', {
-                    defaultValue: 'drag to pan · Ctrl+wheel to zoom',
+                    defaultValue: 'drag to pan · scroll to zoom',
                   })}
                 </span>
               </div>
@@ -627,6 +695,56 @@ export function KymographModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** A run-boundary marker: the sub-pixel x-position of a trajectory at a given
+ *  frame, plus the run it belongs to (for the tooltip). */
+interface RunMarker {
+  x: number;
+  frame: number;
+  run: KymographRun;
+}
+
+/** Linear-interpolate the sub-pixel x-position of a trajectory at `frame`.
+ *  `points` are time-ordered `[frame, x]`; run boundaries (t0/t1) need not land
+ *  exactly on a sample because the trajectory is arc-length resampled, so we
+ *  interpolate between the bracketing points. Returns null for an empty track. */
+function xAtFrame(points: KymoPoint[], frame: number): number | null {
+  if (points.length === 0) return null;
+  if (frame <= points[0][0]) return points[0][1];
+  const last = points[points.length - 1];
+  if (frame >= last[0]) return last[1];
+  for (let i = 1; i < points.length; i++) {
+    const [f1, x1] = points[i];
+    if (f1 >= frame) {
+      const [f0, x0] = points[i - 1];
+      const span = f1 - f0;
+      if (span <= 0) return x1;
+      return x0 + (x1 - x0) * ((frame - f0) / span);
+    }
+  }
+  return last[1];
+}
+
+/** One dot per run boundary (start + end), placed on the trajectory. */
+function runMarkers(track: KymographTrack): RunMarker[] {
+  const out: RunMarker[] = [];
+  for (const run of track.runs) {
+    for (const frame of [run.t0, run.t1]) {
+      const x = xAtFrame(track.points, frame);
+      if (x != null) out.push({ x, frame, run });
+    }
+  }
+  return out;
+}
+
+/** Tooltip for a run dot: its frame span and velocity (µm/s if calibrated). */
+function runTitle(trackIdx: number, run: KymographRun): string {
+  const v =
+    run.velocityUmPerSec != null
+      ? `${run.velocityUmPerSec >= 0 ? '+' : ''}${run.velocityUmPerSec.toFixed(3)} µm/s`
+      : `${run.velocityPxPerFrame.toFixed(3)} px/fr`;
+  return `#${trackIdx + 1} run [${run.t0}–${run.t1}]: ${v}`;
 }
 
 function tracksToCsv(tracks: KymographTrack[]): string {
