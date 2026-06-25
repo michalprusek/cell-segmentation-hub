@@ -510,9 +510,9 @@ export default {
             "Segmentation d'instances pour les time-lapses de microtubules IRM/TIRF. Le backbone DINOv3-L ViT-L/16 + fusion DPT produit des polylignes centerline par MT et un embedding 32-d par pixel qui alimente le tracking inter-trames et la génération de kymographe. ~8 s/image ; seul modèle de la plateforme à sortie polyligne native.",
         },
         microcapsule: {
-          name: 'Microcapsule (SAM 3)',
+          name: 'Microcapsule',
           description:
-            "Segmentation d'instances pour les microcapsules (objets ronds) en microscopie à champ clair. Meta SAM 3 avec le prompt « circle » renvoie un contour propre en pleine résolution par capsule avec un score de confiance ; les capsules coupées par le bord de l'image sont exclues des métriques (aire, périmètre, compacité).",
+            "Segmentation d'instances pour les microcapsules (objets ronds) en microscopie à champ clair. Un U-Net compact distillé de Meta SAM 3 renvoie un contour propre en pleine résolution par capsule et sépare les capsules jointives par un watershed ; les capsules coupées par le bord de l'image sont exclues des métriques (aire, périmètre, compacité).",
         },
       },
     },
@@ -546,7 +546,7 @@ export default {
       microtubule:
         "Segmentation d'instances de microtubules pour la microscopie IRM/TIRF. Encodeur DINOv3-L + DPT, post-traitement PySOAX, sortie polyligne native avec tracking basé sur embedding.",
       microcapsule:
-        "Segmentation d'instances Meta SAM 3 (prompt « circle ») pour les microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
+        "U-Net compact (distillé de Meta SAM 3) pour la segmentation d'instances de microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
     dataUsageDescription:

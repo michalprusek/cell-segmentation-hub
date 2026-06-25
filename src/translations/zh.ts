@@ -463,9 +463,9 @@ export default {
             '面向 IRM/TIRF 微管延时实验的实例分割。DINOv3-L ViT-L/16 + DPT 融合生成每条微管的中线折线和每像素 32 维嵌入，可驱动跨帧跟踪和动态图（kymograph）生成。约 8 秒/帧；本平台唯一原生输出折线的模型。',
         },
         microcapsule: {
-          name: 'Microcapsule (SAM 3)',
+          name: 'Microcapsule',
           description:
-            '面向明场显微镜中微胶囊（圆形对象）的实例分割。Meta SAM 3 使用"circle"提示词，为每个胶囊返回一条清晰的全分辨率轮廓及置信度分数；被图像边缘截断的胶囊不计入指标（面积、周长、紧实度）。',
+            '面向明场显微镜中微胶囊（圆形对象）的实例分割。基于 Meta SAM 3 蒸馏的紧凑型 U-Net 为每个胶囊返回一条清晰的全分辨率轮廓，并通过分水岭算法分离相接触的胶囊；被图像边缘截断的胶囊不计入指标（面积、周长、紧实度）。',
         },
       },
     },
@@ -495,7 +495,7 @@ export default {
       microtubule:
         '面向 IRM/TIRF 显微镜的微管实例分割。DINOv3-L + DPT 编码器，PySOAX 后处理，原生折线输出，并支持基于嵌入的跨帧跟踪。',
       microcapsule:
-        'Meta SAM 3（"circle"提示词）微胶囊实例分割 — 输出每个胶囊的面积、周长和紧实度，被图像边缘截断的胶囊不计入指标。',
+        '紧凑型 U-Net（由 Meta SAM 3 蒸馏）用于微胶囊实例分割 — 输出每个胶囊的面积、周长和紧实度，被图像边缘截断的胶囊不计入指标。',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',

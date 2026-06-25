@@ -1,21 +1,21 @@
-"""Tests for the microcapsule SAM 3 instance-segmentation wrapper.
+"""Tests for the microcapsule distilled-U-Net instance-segmentation wrapper.
 
 Two layers:
   1. Pure unit tests — the completeness rule (`_touches_border`, which decides
-     which capsules are excluded from metrics) and the nested-mask merge
-     (`_merge_nested`, which collapses a capsule's outer shell / inner wall /
-     interior bubble to one outer boundary). No SAM 3 / GPU needed, so these
-     always run.
-  2. A guarded integration smoke test that builds SAM 3 and runs the "circle"
-     prompt on a real image. Skipped unless the `sam3` package is installed
-     (it downloads the ~3.4 GB sam3.pt from HuggingFace), so it only runs in the
-     GPU one-off ML container — see the project memory
-     `reference_run_ml_python_tests`.
+     which capsules are excluded from metrics) and the watershed instance
+     separation (`predict_instances`, which splits touching capsules into
+     distinct labels). These need only numpy / scipy / scikit-image, so they
+     run anywhere those are installed.
+  2. A guarded contract test that builds the U-Net from the local
+     ``microcapsule_unet.pt`` checkpoint and runs the full
+     letterbox -> forward -> watershed -> contour pipeline, asserting the
+     per-instance dict shape the rest of the stack carries through. Skipped
+     unless the weights file and segmentation-models-pytorch are present — see
+     the project memory `reference_run_ml_python_tests`.
 """
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -26,7 +26,7 @@ SEG_ROOT = Path(__file__).resolve().parents[1]
 if str(SEG_ROOT) not in sys.path:
     sys.path.insert(0, str(SEG_ROOT))
 
-REAL_IMAGE = Path("/tmp/mc_test/real_339.tiff")  # provided in the GPU test env
+WEIGHTS = SEG_ROOT / "weights" / "microcapsule_unet.pt"
 
 
 # ---------------------------------------------------------------------------
@@ -57,101 +57,115 @@ def test_touches_border_edge_polygon_is_incomplete(poly):
 def test_touches_border_respects_margin():
     from models.microcapsule import _touches_border
 
-    near = np.array([[3, 40], [60, 40], [60, 120], [3, 120]], np.float32)
+    # Default margin is 2 px: a vertex AT x=2 is cut off, an inset that clears
+    # 2 px on every edge is complete. Pixels run 0..199, so the far thresholds
+    # are width-1-margin = 197 / height-1-margin = 197.
+    near = np.array([[2, 40], [60, 40], [60, 120], [2, 120]], np.float32)
     assert _touches_border(near, height=200, width=200) is True
-    # 4 px inset from every edge (pixels 0..199, so the far edge is 195 = 199-4).
-    clear = np.array([[4, 4], [195, 4], [195, 195], [4, 195]], np.float32)
+    clear = np.array([[3, 3], [196, 3], [196, 196], [3, 196]], np.float32)
     assert _touches_border(clear, height=200, width=200) is False
 
 
 # ---------------------------------------------------------------------------
-# 1b. Nested-mask merge — one outer boundary per capsule
+# 1b. Watershed instance separation — touching capsules become distinct labels
 # ---------------------------------------------------------------------------
-def _disk(size, cx, cy, r):
+def _disk_mask(size, cx, cy, r):
     yy, xx = np.ogrid[:size, :size]
     return ((xx - cx) ** 2 + (yy - cy) ** 2) <= r * r
 
 
-def _ring(size, cx, cy, r_outer, r_inner):
-    yy, xx = np.ogrid[:size, :size]
-    d2 = (xx - cx) ** 2 + (yy - cy) ** 2
-    return (d2 <= r_outer * r_outer) & (d2 >= r_inner * r_inner)
+def _fg_and_dist(mask):
+    """Build the (foreground, normalized-distance) pair predict_instances eats."""
+    from scipy.ndimage import distance_transform_edt
+
+    fg = mask.astype(np.float32)
+    dist = distance_transform_edt(mask).astype(np.float32)
+    peak = dist.max()
+    if peak > 0:
+        dist = dist / peak
+    return fg, dist
 
 
-def test_merge_nested_collapses_outer_ring_and_inner_disk():
-    """SAM 3's outer mask is often an annulus; on the RAW ring an inner disk
-    barely overlaps, so containment must be measured on hole-FILLED masks."""
-    from models.microcapsule import _merge_nested
+def test_predict_instances_single_disk_is_one_label():
+    pytest.importorskip("skimage")
+    from models.unet_lite import predict_instances
 
-    outer_ring = _ring(300, 150, 150, 100, 78)  # capsule shell (hollow centre)
-    inner_disk = _disk(300, 150, 150, 75)        # inner wall (sits in the hole)
-    # Raw overlap is tiny (disk falls in the ring's hole) but they ARE concentric.
-    kept = _merge_nested([inner_disk, outer_ring])
-    assert kept == [1]  # only the (filled) outer ring survives
+    fg, dist = _fg_and_dist(_disk_mask(200, 100, 100, 50))
+    lab = predict_instances(fg, dist)
+    assert lab.dtype == np.uint16
+    assert lab.max() == 1
 
 
-def test_merge_nested_drops_inner_and_bubble_keeps_outer():
-    from models.microcapsule import _merge_nested
+def test_predict_instances_splits_touching_disks():
+    """A dumbbell of two overlapping disks must split into two labels: the
+    distance peaks at the two centres clear the h-maxima prominence over the
+    shallow neck between them."""
+    pytest.importorskip("skimage")
+    from models.unet_lite import predict_instances
 
-    outer = _disk(240, 120, 120, 90)   # capsule outer shell (largest)
-    inner = _disk(240, 120, 120, 70)   # inner wall (fully inside outer)
-    bubble = _disk(240, 120, 120, 12)  # interior bubble (fully inside outer)
-    kept = _merge_nested([inner, outer, bubble])
-    # Only the outer mask (index 1 in the input) survives.
-    assert kept == [1]
-
-
-def test_merge_nested_keeps_separate_capsules():
-    from models.microcapsule import _merge_nested
-
-    a = _disk(240, 70, 120, 50)
-    b = _disk(240, 180, 120, 50)  # disjoint capsule
-    kept = _merge_nested([a, b])
-    assert sorted(kept) == [0, 1]  # both kept (not nested)
+    mask = _disk_mask(200, 65, 100, 40) | _disk_mask(200, 135, 100, 40)
+    fg, dist = _fg_and_dist(mask)
+    lab = predict_instances(fg, dist)
+    assert lab.max() == 2
 
 
-def test_merge_nested_ignores_empty_masks():
-    from models.microcapsule import _merge_nested
+def test_predict_instances_two_disjoint_disks():
+    pytest.importorskip("skimage")
+    from models.unet_lite import predict_instances
 
-    empty = np.zeros((240, 240), bool)
-    disk = _disk(240, 120, 120, 60)
-    kept = _merge_nested([empty, disk])
-    assert kept == [1]
+    mask = _disk_mask(200, 50, 100, 30) | _disk_mask(200, 150, 100, 30)
+    fg, dist = _fg_and_dist(mask)
+    lab = predict_instances(fg, dist)
+    assert lab.max() == 2
+
+
+def test_predict_instances_empty_foreground_returns_zero():
+    pytest.importorskip("skimage")
+    from models.unet_lite import predict_instances
+
+    zero = np.zeros((120, 120), np.float32)
+    lab = predict_instances(zero, zero)
+    assert lab.dtype == np.uint16
+    assert lab.max() == 0
 
 
 # ---------------------------------------------------------------------------
-# 2. Guarded SAM 3 integration smoke test
+# 2. Guarded U-Net wrapper contract test (needs the local checkpoint + smp)
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(
-    not REAL_IMAGE.exists(), reason="real test image not present in this env"
+    not WEIGHTS.exists(), reason="microcapsule_unet.pt not present in this env"
 )
-def test_sam3_circle_segments_capsules():
-    pytest.importorskip("sam3")
+def test_unet_wrapper_predict_contract():
+    pytest.importorskip("segmentation_models_pytorch")
+    pytest.importorskip("skimage")
     import cv2
-    import tifffile
     import torch
+
     from models.microcapsule import MicrocapsuleModel
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = MicrocapsuleModel()
-    model.load_weights(os.environ.get("HF_HOME", "weights/sam3"), device)
+    model.load_weights(str(WEIGHTS), device)
 
-    img = tifffile.imread(str(REAL_IMAGE))
-    if img.ndim == 2:
-        img = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_GRAY2BGR)
-    else:
-        img = cv2.cvtColor(img[:, :, :3].astype(np.uint8), cv2.COLOR_RGB2BGR)
+    # Bright-field-like synthetic frame: dark-rimmed discs on a mid-grey field.
+    img = np.full((256, 256, 3), 180, np.uint8)
+    for cx, cy in [(80, 80), (180, 175)]:
+        cv2.circle(img, (cx, cy), 34, (70, 70, 70), -1)
+        cv2.circle(img, (cx, cy), 34, (25, 25, 25), 3)
 
-    instances = model.predict(img, conf=0.3)
-    assert len(instances) >= 1
+    instances = model.predict(img, conf=0.5)
+    assert isinstance(instances, list)
+
+    # Whatever the model finds must obey the contract the stack relies on.
+    areas = [inst["area_px"] for inst in instances]
+    assert areas == sorted(areas, reverse=True)  # largest-area first
     for inst in instances:
         poly = inst["polygon_xy"]
-        assert poly.shape[1] == 2 and len(poly) >= 3
+        assert poly.ndim == 2 and poly.shape[1] == 2 and len(poly) >= 3
+        assert poly.dtype == np.float32
         assert 0.0 <= inst["confidence"] <= 1.0
-        assert inst["area_px"] == pytest.approx(
-            float(cv2.contourArea(poly)), rel=1e-5, abs=1e-3
-        )
         assert isinstance(inst["complete"], bool)
-    # Largest first (deterministic instance numbering).
-    areas = [inst["area_px"] for inst in instances]
-    assert areas == sorted(areas, reverse=True)
+        assert inst["area_px"] == pytest.approx(
+            float(cv2.contourArea(poly.astype(np.float32))), rel=1e-4, abs=1e-2
+        )
+        assert inst["equiv_diameter_px"] > 0

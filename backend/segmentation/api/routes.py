@@ -39,9 +39,6 @@ router = APIRouter()
 # threading.Lock keeps lighter models (hrnet, sperm, wound) parallel while
 # preventing the heavy model from racing itself.
 _microtubule_inference_lock = threading.Lock()
-# Microcapsule (SAM 3) is a ~3.4 GB model; serialise its inference for the same
-# reason as microtubule so two concurrent requests can't overcommit the GPU.
-_microcapsule_inference_lock = threading.Lock()
 
 from fastapi import Request
 
@@ -172,12 +169,11 @@ async def segment_image(
             with _microtubule_inference_lock:
                 result = loader.predict_microtubule(image, threshold)
         elif model == 'microcapsule':
-            # Microcapsule SAM 3 ("circle" prompt) — the user threshold is
-            # forwarded as the per-instance score cutoff. detect_holes is not
-            # meaningful: each capsule is a single closed instance polygon.
-            # Serialise like microtubule: SAM 3 is heavy and must not race itself.
-            with _microcapsule_inference_lock:
-                result = loader.predict_microcapsule(image, threshold)
+            # Microcapsule distilled U-Net — the user threshold is forwarded as
+            # the foreground cutoff. detect_holes is not meaningful: each capsule
+            # is a single closed instance polygon. The model is light (~14.5 MB),
+            # so it runs in parallel like hrnet/sperm/wound (no inference lock).
+            result = loader.predict_microcapsule(image, threshold)
         else:
             result = loader.predict(image, model, threshold, detect_holes)
         inference_time = time.time() - inference_start
