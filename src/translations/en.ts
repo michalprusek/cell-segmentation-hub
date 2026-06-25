@@ -2228,9 +2228,21 @@ export default {
       zoomHint: 'drag to pan · scroll to zoom',
       empty: 'Kymograph could not be computed.',
       velocityAnalysis: 'Velocity analysis',
+      widthLabel: 'Intensity width',
+      widthHint:
+        'Width (px) of the band sampled around each trajectory for signal vs. background intensity.',
       colVelocity: 'Net velocity',
-      colRuns: 'Runs',
+      colRunLength: 'Run length (µm)',
+      colRunTime: 'Run time (s)',
+      colIntensity: 'Intensity (signal−bg)',
+      colEdge: 'Edge',
       colSnr: 'SNR',
+      edge: {
+        left: 'Reaches the left end (continues off the microtubule)',
+        right: 'Reaches the right end (continues off the microtubule)',
+        both: 'Reaches both ends',
+        none: 'Stays within the microtubule',
+      },
       noBlobs: 'No moving particles detected',
       downloadTracks: 'Velocity CSV',
       uncalibrated:

@@ -2197,9 +2197,21 @@ export default {
       zoomHint: 'arrastra para desplazar · rueda para zoom',
       empty: 'No se pudo calcular el kimograma.',
       velocityAnalysis: 'Análisis de velocidad',
+      widthLabel: 'Ancho de intensidad',
+      widthHint:
+        'Ancho (px) de la banda muestreada alrededor de cada trayectoria para señal vs. intensidad de fondo.',
       colVelocity: 'Velocidad neta',
-      colRuns: 'Tramos',
+      colRunLength: 'Longitud de tramo (µm)',
+      colRunTime: 'Duración de tramo (s)',
+      colIntensity: 'Intensidad (señal−fondo)',
+      colEdge: 'Borde',
       colSnr: 'SNR',
+      edge: {
+        left: 'Alcanza el extremo izquierdo (continúa fuera del microtúbulo)',
+        right: 'Alcanza el extremo derecho (continúa fuera del microtúbulo)',
+        both: 'Alcanza ambos extremos',
+        none: 'Se mantiene dentro del microtúbulo',
+      },
       noBlobs: 'No se detectaron partículas en movimiento',
       downloadTracks: 'CSV de velocidad',
       uncalibrated:

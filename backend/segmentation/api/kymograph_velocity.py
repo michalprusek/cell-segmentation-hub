@@ -26,7 +26,7 @@ container's persisted ``pixelSizeUm`` / ``frameIntervalMs`` calibration.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -94,6 +94,98 @@ def _segment_runs(
     return runs
 
 
+def edge_touch(
+    points: List[List[float]], n_samples: int, tol: float = 2.0
+) -> str:
+    """Flag whether a trajectory reaches the left/right end of the kymograph.
+
+    Position is the kymograph's horizontal axis (column 0 = microtubule start,
+    ``n_samples - 1`` = microtubule end). A motor that walks to either end
+    continues onto MT that is outside the imaged segment, so its run length is
+    truncated by the field of view rather than by the motor detaching — the
+    biologist needs to know which measurements are right-censored.
+
+    Returns ``"left"``, ``"right"``, ``"both"`` or ``"none"``.
+    """
+    if not points:
+        return "none"
+    xs = [p[1] for p in points]
+    left = min(xs) <= tol
+    right = max(xs) >= (n_samples - 1) - tol
+    if left and right:
+        return "both"
+    if left:
+        return "left"
+    if right:
+        return "right"
+    return "none"
+
+
+def track_intensity(
+    kymo: np.ndarray,
+    points: List[List[float]],
+    width: int,
+    *,
+    bg_gap: int = 2,
+    bg_width: Optional[int] = None,
+) -> Dict[str, Optional[float]]:
+    """Background-subtracted signal intensity along a kymograph trajectory.
+
+    Mirrors the MT-metrics convention (mean signal − **median** background): for
+    each trajectory sample ``(t, x)`` read a ``width``-wide signal band centred
+    on the streak plus two background bands offset ``bg_gap`` px beyond it on
+    either side. Values come straight from the raw (un-normalised) kymograph
+    matrix, so the result is in the same units as the source channel's pixels —
+    directly comparable to the per-MT intensity metric.
+
+    Returns ``{intensity_signal, intensity_background, intensity_minus_bg}``;
+    any field is ``None`` when no pixels were available (e.g. a track that hugs
+    an edge has no room for a background band on that side).
+    """
+    empty = {
+        "intensity_signal": None,
+        "intensity_background": None,
+        "intensity_minus_bg": None,
+    }
+    if kymo.ndim != 2 or not points:
+        return empty
+    T, X = kymo.shape
+    half = max(0, (width - 1) // 2)
+    bw = width if bg_width is None else bg_width
+    sig_vals: List[float] = []
+    bg_vals: List[float] = []
+    for fr, x in points:
+        t = int(round(fr))
+        if t < 0 or t >= T:
+            continue
+        xc = int(round(x))
+        row = kymo[t]
+        lo, hi = max(0, xc - half), min(X, xc + half + 1)
+        if hi > lo:
+            sig_vals.extend(row[lo:hi].tolist())
+        # left background band: [xc-half-gap-bw, xc-half-gap)
+        bl1, bl2 = max(0, xc - half - bg_gap - bw), max(0, xc - half - bg_gap)
+        if bl2 > bl1:
+            bg_vals.extend(row[bl1:bl2].tolist())
+        # right background band: [xc+half+1+gap, xc+half+1+gap+bw)
+        br1 = min(X, xc + half + 1 + bg_gap)
+        br2 = min(X, xc + half + 1 + bg_gap + bw)
+        if br2 > br1:
+            bg_vals.extend(row[br1:br2].tolist())
+    signal = float(np.mean(sig_vals)) if sig_vals else None
+    background = float(np.median(bg_vals)) if bg_vals else None
+    minus_bg = (
+        signal - background
+        if (signal is not None and background is not None)
+        else None
+    )
+    return {
+        "intensity_signal": signal,
+        "intensity_background": background,
+        "intensity_minus_bg": minus_bg,
+    }
+
+
 def detect_blobs(
     kymo: np.ndarray,
     *,
@@ -117,11 +209,16 @@ def detect_blobs(
         One dict per detected track, sorted fastest-net-velocity first::
 
             {
-              "points":     [[frame, x], ...]   # sub-pixel, time-ordered
-              "net_pxframe": float              # (x_last - x_first)/(t span)
+              "points":      [[frame, x], ...]   # sub-pixel, time-ordered
+              "net_pxframe": float               # (x_last - x_first)/(t span)
               "snr":         float
-              "runs": [ {"v_pxframe","se_pxframe","t0","t1"}, ... ]
+              "total_run_time_frames":    float  # Σ processive-run durations
+              "total_run_displacement_px": float # Σ |slope|·duration over runs
             }
+
+        Per-run detail is intentionally NOT exposed — the run segmentation is an
+        internal step used only to aggregate the two processive totals above
+        (run time excludes pauses; run length is the directed distance).
     """
     from scipy.ndimage import gaussian_filter
     from scipy.optimize import linear_sum_assignment
@@ -233,12 +330,22 @@ def detect_blobs(
         t_arr = np.asarray(tr["t"], dtype=np.float64)
         x_arr = np.asarray(tr["x"], dtype=np.float64)
         net = float((x_arr[-1] - x_arr[0]) / (t_arr[-1] - t_arr[0]))
+        # Segment into directed runs (internal only), then aggregate into the
+        # two per-trajectory totals we actually report. Run TIME excludes pauses
+        # by construction (_segment_runs only emits state != 0 segments); run
+        # LENGTH is the summed directed distance (|slope| × duration per run).
+        segs = _segment_runs(t_arr, x_arr, pause_thresh)
+        total_run_time_frames = float(sum(s["t1"] - s["t0"] for s in segs))
+        total_run_displacement_px = float(
+            sum(abs(s["v_pxframe"]) * (s["t1"] - s["t0"]) for s in segs)
+        )
         out.append(
             {
                 "points": [[int(t), float(x)] for t, x in zip(tr["t"], tr["x"])],
                 "net_pxframe": net,
                 "snr": float(np.median(tr["a"]) / sig_i),
-                "runs": _segment_runs(t_arr, x_arr, pause_thresh),
+                "total_run_time_frames": total_run_time_frames,
+                "total_run_displacement_px": total_run_displacement_px,
             }
         )
     out.sort(key=lambda r: -abs(r["net_pxframe"]))

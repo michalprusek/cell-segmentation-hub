@@ -2158,9 +2158,21 @@ export default {
       zoomHint: 'ziehen zum Verschieben · Rad zum Zoomen',
       empty: 'Kymograph konnte nicht berechnet werden.',
       velocityAnalysis: 'Geschwindigkeitsanalyse',
+      widthLabel: 'Intensitätsbreite',
+      widthHint:
+        'Breite (px) des um jede Trajektorie abgetasteten Bandes für Signal vs. Hintergrundintensität.',
       colVelocity: 'Nettogeschwindigkeit',
-      colRuns: 'Läufe',
+      colRunLength: 'Lauflänge (µm)',
+      colRunTime: 'Laufzeit (s)',
+      colIntensity: 'Intensität (Signal−Hintergrund)',
+      colEdge: 'Rand',
       colSnr: 'SNR',
+      edge: {
+        left: 'Erreicht das linke Ende (läuft über den Mikrotubulus hinaus)',
+        right: 'Erreicht das rechte Ende (läuft über den Mikrotubulus hinaus)',
+        both: 'Erreicht beide Enden',
+        none: 'Bleibt innerhalb des Mikrotubulus',
+      },
       noBlobs: 'Keine bewegten Partikel erkannt',
       downloadTracks: 'Geschwindigkeits-CSV',
       uncalibrated:

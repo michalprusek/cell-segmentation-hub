@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -57,15 +58,6 @@ interface KymographModalProps {
   channels: VideoChannel[] | null | undefined;
 }
 
-interface KymographRun {
-  velocityPxPerFrame: number;
-  sePxPerFrame: number;
-  velocityUmPerSec: number | null;
-  seUmPerSec: number | null;
-  t0: number;
-  t1: number;
-}
-
 /** Sub-pixel trajectory sample `[frame, xPosition]`. Mirrors the backend
  *  `KymoPoint` (FE/BE wire types are hand-synced per repo convention). */
 type KymoPoint = [frame: number, x: number];
@@ -75,7 +67,15 @@ interface KymographTrack {
   netVelocityPxPerFrame: number;
   netVelocityUmPerSec: number | null;
   snr: number;
-  runs: KymographRun[];
+  /** Total processive distance (µm) and time in directed motion (s). */
+  totalRunLengthUm: number | null;
+  totalRunTimeS: number | null;
+  /** Background-subtracted intensity along the trajectory (raw pixel units). */
+  intensitySignal: number | null;
+  intensityBackground: number | null;
+  intensityMinusBackground: number | null;
+  /** "left" | "right" | "both" | "none" — trajectory reaches a kymograph end. */
+  edge: string;
 }
 
 interface KymographResponse {
@@ -101,6 +101,26 @@ function trackColor(netPxFrame: number): string {
 
 /** Constrain the viewer zoom to a sane range (5 %…2000 %). */
 const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
+
+/** Intensity-band width must match the ML/route bounds (1…50 columns). Falls
+ *  back to the default 3 for empty / non-numeric input. */
+const DEFAULT_INTENSITY_WIDTH = 3;
+const clampWidth = (raw: string | number): number => {
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return DEFAULT_INTENSITY_WIDTH;
+  return Math.min(Math.max(n, 1), 50);
+};
+
+/** Direction-neutral glyph for the edge-touch flag. */
+const edgeGlyph = (edge: string): string =>
+  edge === 'both' ? '↔' : edge === 'left' ? '←' : edge === 'right' ? '→' : '—';
+
+/** Compact metric formatters (em-dash when the value is unavailable, e.g.
+ *  run length / time are null on uncalibrated containers). */
+const fmtUm = (v: number | null): string => (v != null ? v.toFixed(2) : '—');
+const fmtSec = (v: number | null): string => (v != null ? v.toFixed(1) : '—');
+const fmtIntensity = (v: number | null): string =>
+  v != null ? v.toFixed(0) : '—';
 
 export function KymographModal({
   open,
@@ -129,6 +149,7 @@ export function KymographModal({
     defaultChannel
   );
   const [detectVelocity, setDetectVelocity] = useState(true);
+  const [intensityWidth, setIntensityWidth] = useState(DEFAULT_INTENSITY_WIDTH);
   const [result, setResult] = useState<KymographResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -293,6 +314,7 @@ export function KymographModal({
         sourceChannel,
         channelColor,
         detectVelocity,
+        ...(detectVelocity ? { intensityWidth } : {}),
       })
       .then(res => {
         if (cancelled) return;
@@ -317,6 +339,7 @@ export function KymographModal({
     frameIndex,
     channelColors,
     detectVelocity,
+    intensityWidth,
   ]);
 
   const handleDownload = (kind: 'png' | 'csv') => {
@@ -396,6 +419,28 @@ export function KymographModal({
               })}
             </Label>
           </div>
+          {detectVelocity && (
+            <div className="flex items-center gap-2">
+              <Label htmlFor="kymo-width" className="text-sm">
+                {t('editor.kymograph.widthLabel', {
+                  defaultValue: 'Intensity width',
+                })}
+              </Label>
+              <Input
+                id="kymo-width"
+                type="number"
+                min={1}
+                max={50}
+                value={intensityWidth}
+                onChange={e => setIntensityWidth(clampWidth(e.target.value))}
+                className="h-8 w-16"
+                title={t('editor.kymograph.widthHint', {
+                  defaultValue:
+                    'Width (px) of the band sampled around each trajectory for signal vs. background intensity.',
+                })}
+              />
+            </div>
+          )}
           {result && (
             <span className="text-xs text-muted-foreground">
               {result.tracked
@@ -551,24 +596,6 @@ export function KymographModal({
                                 >
                                   <title>{`#${i + 1}: ${fmtVelocity(tr)}`}</title>
                                 </polyline>
-                                {/* Per-run dots: mark where each constant-
-                                    velocity run starts and ends along the line. */}
-                                {runMarkers(tr).map((m, j) => (
-                                  <circle
-                                    key={j}
-                                    cx={m.x}
-                                    cy={m.frame}
-                                    r={3.5 / effScale}
-                                    fill="#fff"
-                                    stroke={col}
-                                    strokeWidth={1.5 / effScale}
-                                    className="pointer-events-auto cursor-pointer"
-                                    onMouseEnter={() => setActiveTrack(i)}
-                                    onMouseLeave={() => setActiveTrack(null)}
-                                  >
-                                    <title>{runTitle(i, m.run)}</title>
-                                  </circle>
-                                ))}
                               </g>
                             );
                           })}
@@ -615,7 +642,22 @@ export function KymographModal({
                       })}
                     </th>
                     <th className="text-right px-2 py-1">
-                      {t('editor.kymograph.colRuns', { defaultValue: 'Runs' })}
+                      {t('editor.kymograph.colRunLength', {
+                        defaultValue: 'Run length (µm)',
+                      })}
+                    </th>
+                    <th className="text-right px-2 py-1">
+                      {t('editor.kymograph.colRunTime', {
+                        defaultValue: 'Run time (s)',
+                      })}
+                    </th>
+                    <th className="text-right px-2 py-1">
+                      {t('editor.kymograph.colIntensity', {
+                        defaultValue: 'Intensity (signal−bg)',
+                      })}
+                    </th>
+                    <th className="text-center px-2 py-1">
+                      {t('editor.kymograph.colEdge', { defaultValue: 'Edge' })}
                     </th>
                     <th className="text-right px-2 py-1">
                       {t('editor.kymograph.colSnr', { defaultValue: 'SNR' })}
@@ -645,7 +687,21 @@ export function KymographModal({
                         {fmtVelocity(tr)}
                       </td>
                       <td className="px-2 py-1 text-right tabular-nums">
-                        {tr.runs.length}
+                        {fmtUm(tr.totalRunLengthUm)}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {fmtSec(tr.totalRunTimeS)}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {fmtIntensity(tr.intensityMinusBackground)}
+                      </td>
+                      <td
+                        className="px-2 py-1 text-center"
+                        title={t(`editor.kymograph.edge.${tr.edge}`, {
+                          defaultValue: tr.edge,
+                        })}
+                      >
+                        {edgeGlyph(tr.edge)}
                       </td>
                       <td className="px-2 py-1 text-right tabular-nums">
                         {tr.snr.toFixed(1)}
@@ -697,103 +753,38 @@ export function KymographModal({
   );
 }
 
-/** A run-boundary marker: the sub-pixel x-position of a trajectory at a given
- *  frame, plus the run it belongs to (for the tooltip). */
-interface RunMarker {
-  x: number;
-  frame: number;
-  run: KymographRun;
-}
-
-/** Linear-interpolate the sub-pixel x-position of a trajectory at `frame`.
- *  `points` are time-ordered `[frame, x]`; run boundaries (t0/t1) need not land
- *  exactly on a sample because the trajectory is arc-length resampled, so we
- *  interpolate between the bracketing points. Returns null for an empty track. */
-function xAtFrame(points: KymoPoint[], frame: number): number | null {
-  if (points.length === 0) return null;
-  if (frame <= points[0][0]) return points[0][1];
-  const last = points[points.length - 1];
-  if (frame >= last[0]) return last[1];
-  for (let i = 1; i < points.length; i++) {
-    const [f1, x1] = points[i];
-    if (f1 >= frame) {
-      const [f0, x0] = points[i - 1];
-      const span = f1 - f0;
-      if (span <= 0) return x1;
-      return x0 + (x1 - x0) * ((frame - f0) / span);
-    }
-  }
-  return last[1];
-}
-
-/** One dot per run boundary (start + end), placed on the trajectory. */
-function runMarkers(track: KymographTrack): RunMarker[] {
-  const out: RunMarker[] = [];
-  for (const run of track.runs) {
-    for (const frame of [run.t0, run.t1]) {
-      const x = xAtFrame(track.points, frame);
-      if (x != null) out.push({ x, frame, run });
-    }
-  }
-  return out;
-}
-
-/** Tooltip for a run dot: its frame span and velocity (µm/s if calibrated). */
-function runTitle(trackIdx: number, run: KymographRun): string {
-  const v =
-    run.velocityUmPerSec != null
-      ? `${run.velocityUmPerSec >= 0 ? '+' : ''}${run.velocityUmPerSec.toFixed(3)} µm/s`
-      : `${run.velocityPxPerFrame.toFixed(3)} px/fr`;
-  return `#${trackIdx + 1} run [${run.t0}–${run.t1}]: ${v}`;
-}
-
+/** One row per trajectory. Mirrors the metric columns of the export bundle's
+ *  ``velocity_metrics.csv`` (minus the export-only video / channel / calibration
+ *  context the modal doesn't carry) so the two CSVs agree. */
 function tracksToCsv(tracks: KymographTrack[]): string {
   const header = [
     'track',
     'net_velocity_um_s',
     'net_velocity_px_frame',
     'snr',
-    'run_index',
-    'run_velocity_um_s',
-    'run_se_um_s',
-    'run_velocity_px_frame',
-    't0',
-    't1',
+    'total_run_length_um',
+    'total_run_time_s',
+    'intensity_signal',
+    'intensity_background',
+    'intensity_minus_background',
+    'edge_touch',
   ];
   const lines = [header.join(',')];
   tracks.forEach((tr, ti) => {
-    if (tr.runs.length === 0) {
-      lines.push(
-        [
-          ti + 1,
-          tr.netVelocityUmPerSec ?? '',
-          tr.netVelocityPxPerFrame,
-          tr.snr,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-        ].join(',')
-      );
-    }
-    tr.runs.forEach((r, ri) => {
-      lines.push(
-        [
-          ti + 1,
-          tr.netVelocityUmPerSec ?? '',
-          tr.netVelocityPxPerFrame,
-          tr.snr,
-          ri + 1,
-          r.velocityUmPerSec ?? '',
-          r.seUmPerSec ?? '',
-          r.velocityPxPerFrame,
-          r.t0,
-          r.t1,
-        ].join(',')
-      );
-    });
+    lines.push(
+      [
+        ti + 1,
+        tr.netVelocityUmPerSec ?? '',
+        tr.netVelocityPxPerFrame,
+        tr.snr,
+        tr.totalRunLengthUm ?? '',
+        tr.totalRunTimeS ?? '',
+        tr.intensitySignal ?? '',
+        tr.intensityBackground ?? '',
+        tr.intensityMinusBackground ?? '',
+        tr.edge,
+      ].join(',')
+    );
   });
   return lines.join('\n');
 }

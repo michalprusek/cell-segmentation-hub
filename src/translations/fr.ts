@@ -2146,9 +2146,21 @@ export default {
       zoomHint: 'glisser pour déplacer · molette pour zoomer',
       empty: 'Impossible de calculer le kymographe.',
       velocityAnalysis: 'Analyse de vitesse',
+      widthLabel: "Largeur d'intensité",
+      widthHint:
+        "Largeur (px) de la bande échantillonnée autour de chaque trajectoire pour le signal vs. l'intensité de fond.",
       colVelocity: 'Vitesse nette',
-      colRuns: 'Segments',
+      colRunLength: 'Longueur de segment (µm)',
+      colRunTime: 'Durée de segment (s)',
+      colIntensity: 'Intensité (signal−fond)',
+      colEdge: 'Bord',
       colSnr: 'SNR',
+      edge: {
+        left: 'Atteint le bord gauche (continue au-delà du microtubule)',
+        right: 'Atteint le bord droit (continue au-delà du microtubule)',
+        both: 'Atteint les deux bords',
+        none: "Reste à l'intérieur du microtubule",
+      },
       noBlobs: 'Aucune particule en mouvement détectée',
       downloadTracks: 'CSV de vitesse',
       uncalibrated:

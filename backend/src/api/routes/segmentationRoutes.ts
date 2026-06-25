@@ -216,6 +216,9 @@ router.post(
       .withMessage('channelColor must be #RRGGBB hex'),
     // detectVelocity: opt-in blob-motion analysis (velocity table + overlay).
     body('detectVelocity').optional().isBoolean(),
+    // intensityWidth: signal-band width (kymograph columns) for the
+    // background-subtracted intensity metric along each trajectory.
+    body('intensityWidth').optional().isInt({ min: 1, max: 50 }),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
@@ -272,6 +275,10 @@ router.post(
         sourceChannel: req.body.sourceChannel,
         channelColor: req.body.channelColor,
         detectVelocity: req.body.detectVelocity === true,
+        intensityWidth:
+          req.body.intensityWidth != null
+            ? Number(req.body.intensityWidth)
+            : undefined,
       });
       ResponseHelper.success(res, result);
     } catch (err) {

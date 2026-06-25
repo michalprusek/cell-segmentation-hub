@@ -2167,9 +2167,21 @@ export default {
       zoomHint: 'táhni pro posun · kolečko pro zoom',
       empty: 'Kymograf nelze spočítat.',
       velocityAnalysis: 'Analýza rychlosti',
+      widthLabel: 'Šířka intenzity',
+      widthHint:
+        'Šířka (px) pásu vzorkovaného kolem každé trajektorie pro signál vs. intenzitu pozadí.',
       colVelocity: 'Čistá rychlost',
-      colRuns: 'Běhy',
+      colRunLength: 'Délka běhu (µm)',
+      colRunTime: 'Čas běhu (s)',
+      colIntensity: 'Intenzita (signál−pozadí)',
+      colEdge: 'Kraj',
       colSnr: 'SNR',
+      edge: {
+        left: 'Dosahuje levého konce (pokračuje za mikrotubuli)',
+        right: 'Dosahuje pravého konce (pokračuje za mikrotubuli)',
+        both: 'Dosahuje obou konců',
+        none: 'Zůstává v rámci mikrotubule',
+      },
       noBlobs: 'Nedetekovány žádné pohyblivé částice',
       downloadTracks: 'CSV rychlostí',
       uncalibrated:

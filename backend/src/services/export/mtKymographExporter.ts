@@ -195,12 +195,12 @@ export async function exportMicrotubuleKymographs(
         'net_velocity_um_s',
         'net_velocity_px_frame',
         'snr',
-        'run_index',
-        'run_velocity_um_s',
-        'run_se_um_s',
-        'run_velocity_px_frame',
-        't0',
-        't1',
+        'total_run_length_um',
+        'total_run_time_s',
+        'intensity_signal',
+        'intensity_background',
+        'intensity_minus_background',
+        'edge_touch',
         'pixel_size_um',
         'frame_interval_ms',
       ].join(','),
@@ -228,11 +228,11 @@ export async function exportMicrotubuleKymographs(
         }
 
         if (options.includeVelocityMetrics && result.tracks) {
-          // Build this job's rows locally, then splice in one push so the
-          // CSV stays row-grouped per microtubule under concurrency.
-          const rows: string[] = [];
-          result.tracks.forEach((tr, ti) => {
-            const head = [
+          // One row per trajectory (no per-run breakdown). Build this job's
+          // rows locally, then splice in one push so the CSV stays row-grouped
+          // per microtubule under concurrency.
+          const rows = result.tracks.map((tr, ti) =>
+            [
               csvField(job.videoName),
               job.polylineId,
               job.sourceChannel,
@@ -240,38 +240,16 @@ export async function exportMicrotubuleKymographs(
               csvField(tr.netVelocityUmPerSec),
               tr.netVelocityPxPerFrame,
               tr.snr,
-            ];
-            if (tr.runs.length === 0) {
-              rows.push(
-                [
-                  ...head,
-                  '',
-                  '',
-                  '',
-                  '',
-                  '',
-                  '',
-                  csvField(result.pixelSizeUm),
-                  csvField(result.frameIntervalMs),
-                ].join(',')
-              );
-            }
-            tr.runs.forEach((r, ri) => {
-              rows.push(
-                [
-                  ...head,
-                  ri + 1,
-                  csvField(r.velocityUmPerSec),
-                  csvField(r.seUmPerSec),
-                  r.velocityPxPerFrame,
-                  r.t0,
-                  r.t1,
-                  csvField(result.pixelSizeUm),
-                  csvField(result.frameIntervalMs),
-                ].join(',')
-              );
-            });
-          });
+              csvField(tr.totalRunLengthUm),
+              csvField(tr.totalRunTimeS),
+              csvField(tr.intensitySignal),
+              csvField(tr.intensityBackground),
+              csvField(tr.intensityMinusBackground),
+              tr.edge,
+              csvField(result.pixelSizeUm),
+              csvField(result.frameIntervalMs),
+            ].join(',')
+          );
           csvRows.push(...rows);
         }
       } catch (err) {

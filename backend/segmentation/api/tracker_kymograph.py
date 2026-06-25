@@ -31,7 +31,12 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.kymograph_velocity import detect_blobs, render_overlay
+from api.kymograph_velocity import (
+    detect_blobs,
+    edge_touch,
+    render_overlay,
+    track_intensity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -351,28 +356,41 @@ class KymographRequest(BaseModel):
     # the kymograph and return it as ``overlay_png_base64`` — used by the export
     # pipeline to ship "segmented kymograph" images without a browser.
     render_overlay: bool = False
-
-
-class KymographRun(BaseModel):
-    """One constant-velocity segment of a track's trajectory."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    v_pxframe: float
-    se_pxframe: float
-    t0: int
-    t1: int
+    # Width (in kymograph position columns) of the signal band sampled around
+    # each detected trajectory for the background-subtracted intensity metric.
+    intensity_width: int = Field(3, ge=1, le=50)
+    # Container calibration. When both are present the endpoint drops tracks
+    # whose |net velocity| is below ``min_net_velocity_um_s`` (non-processive /
+    # oscillatory blobs) BEFORE rendering the overlay, so overlay = table = CSV.
+    pixel_size_um: Optional[float] = Field(None, gt=0)
+    frame_interval_ms: Optional[float] = Field(None, gt=0)
+    min_net_velocity_um_s: float = Field(0.01, ge=0.0)
 
 
 class KymographTrack(BaseModel):
-    """One moving particle detected on the kymograph."""
+    """One moving particle detected on the kymograph.
+
+    Per-run detail is deliberately omitted: the run segmentation is internal to
+    ``detect_blobs`` and surfaces only as the two processive totals below.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     points: List[List[float]]  # [[frame, x_subpixel], ...], time-ordered
     net_pxframe: float
     snr: float
-    runs: List[KymographRun]
+    # Aggregated over processive runs (pauses excluded): total time in directed
+    # motion (frames) and total directed distance travelled (px). The Node
+    # backend converts these to seconds / µm with the container calibration.
+    total_run_time_frames: float = 0.0
+    total_run_displacement_px: float = 0.0
+    # "left" | "right" | "both" | "none" — does the trajectory reach a kymograph
+    # end (motor continues onto MT outside the imaged segment).
+    edge: str = "none"
+    # Background-subtracted intensity along the trajectory (raw pixel units).
+    intensity_signal: Optional[float] = None
+    intensity_background: Optional[float] = None
+    intensity_minus_bg: Optional[float] = None
 
 
 class KymographResponse(BaseModel):
@@ -583,6 +601,30 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     if req.detect_velocity:
         try:
             raw_tracks = detect_blobs(kymo)
+            n_samples = int(kymo.shape[1])
+            # Enrich each track with the edge-touch flag + background-subtracted
+            # intensity along its trajectory (both read off the same kymo).
+            for tr in raw_tracks:
+                tr["edge"] = edge_touch(tr["points"], n_samples)
+                tr.update(
+                    track_intensity(kymo, tr["points"], req.intensity_width)
+                )
+            # Drop non-processive tracks: |net velocity| below the µm/s cut-off
+            # (oscillatory / static blobs are not directed transport). Needs the
+            # calibration to convert the µm/s threshold to px/frame; without it
+            # we keep every track. Filter BEFORE render_overlay so the rendered
+            # overlay matches the returned table / exported CSV exactly.
+            if req.pixel_size_um and req.frame_interval_ms:
+                thr_pxframe = (
+                    req.min_net_velocity_um_s
+                    * (req.frame_interval_ms / 1000.0)
+                    / req.pixel_size_um
+                )
+                raw_tracks = [
+                    tr
+                    for tr in raw_tracks
+                    if abs(tr["net_pxframe"]) >= thr_pxframe
+                ]
             tracks = [KymographTrack(**tr) for tr in raw_tracks]
         except Exception as _vel_exc:
             logger.exception(
