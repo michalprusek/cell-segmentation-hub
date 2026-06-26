@@ -510,9 +510,9 @@ export default {
             "Segmentation d'instances pour les time-lapses de microtubules IRM/TIRF. Le backbone DINOv3-L ViT-L/16 + fusion DPT produit des polylignes centerline par MT et un embedding 32-d par pixel qui alimente le tracking inter-trames et la génération de kymographe. ~8 s/image ; seul modèle de la plateforme à sortie polyligne native.",
         },
         microcapsule: {
-          name: 'Microcapsule (SAM 3)',
+          name: 'Microcapsule',
           description:
-            "Segmentation d'instances pour les microcapsules (objets ronds) en microscopie à champ clair. Meta SAM 3 avec le prompt « circle » renvoie un contour propre en pleine résolution par capsule avec un score de confiance ; les capsules coupées par le bord de l'image sont exclues des métriques (aire, périmètre, compacité).",
+            "Segmentation d'instances pour les microcapsules (objets ronds) en microscopie à champ clair. Un U-Net compact distillé de Meta SAM 3 renvoie un contour propre en pleine résolution par capsule et sépare les capsules jointives par un watershed ; les capsules coupées par le bord de l'image sont exclues des métriques (aire, périmètre, compacité).",
         },
       },
     },
@@ -546,7 +546,7 @@ export default {
       microtubule:
         "Segmentation d'instances de microtubules pour la microscopie IRM/TIRF. Encodeur DINOv3-L + DPT, post-traitement PySOAX, sortie polyligne native avec tracking basé sur embedding.",
       microcapsule:
-        "Segmentation d'instances Meta SAM 3 (prompt « circle ») pour les microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
+        "U-Net compact (distillé de Meta SAM 3) pour la segmentation d'instances de microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
     dataUsageDescription:
@@ -2138,18 +2138,33 @@ export default {
       downloadPng: 'PNG',
       downloadCsv: 'CSV',
       showKymograph: 'Afficher le kymographe',
-      axisTime: 'Temps (images) ↓',
+      axisTime: 'Temps (images)',
       axisAlong: 'Le long du microtubule (px) →',
       zoomIn: 'Zoom avant',
       zoomOut: 'Zoom arrière',
       fit: 'Ajuster à la vue',
-      zoomHint: 'glisser pour déplacer · Ctrl+molette pour zoomer',
+      zoomHint: 'glisser pour déplacer · molette pour zoomer',
       empty: 'Impossible de calculer le kymographe.',
       velocityAnalysis: 'Analyse de vitesse',
+      widthLabel: "Largeur d'intensité",
+      widthHint:
+        "Largeur (px) de la bande échantillonnée autour de chaque trajectoire pour le signal vs. l'intensité de fond.",
       colVelocity: 'Vitesse nette',
-      colRuns: 'Segments',
+      colRunLength: 'Longueur de segment (µm)',
+      colRunTime: 'Durée de segment (s)',
+      colIntensity: 'Intensité (signal−fond)',
+      colEdge: 'Bord',
       colSnr: 'SNR',
+      edge: {
+        left: 'Atteint le bord gauche (continue au-delà du microtubule)',
+        right: 'Atteint le bord droit (continue au-delà du microtubule)',
+        both: 'Atteint les deux bords',
+        none: "Reste à l'intérieur du microtubule",
+      },
       noBlobs: 'Aucune particule en mouvement détectée',
+      velocityFailed: 'La détection de vitesse a échoué.',
+      filteredHidden:
+        '{{count}} trajectoire(s) non processive(s) en dessous de 0.01 µm/s masquée(s).',
       downloadTracks: 'CSV de vitesse',
       uncalibrated:
         "Pas de calibration taille de pixel / intervalle d'images — vitesses en px/image.",

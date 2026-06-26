@@ -489,6 +489,7 @@ describe('buildKymograph', () => {
         sourceChannel: 'IRM',
         pixelSizeUm: null,
         frameIntervalMs: null,
+        filteredTrackCount: 0,
       });
     });
 
@@ -613,7 +614,12 @@ describe('buildKymograph', () => {
             ],
             net_pxframe: 0.5,
             snr: 4.2,
-            runs: [{ v_pxframe: 0.5, se_pxframe: 0.02, t0: 0, t1: 1 }],
+            total_run_time_frames: 4,
+            total_run_displacement_px: 2,
+            edge: 'right',
+            intensity_signal: 800,
+            intensity_background: 100,
+            intensity_minus_bg: 700,
           },
         ],
       },
@@ -641,24 +647,33 @@ describe('buildKymograph', () => {
       );
       const res = await call(true);
 
+      // Forwards detection + intensity width + calibration + velocity cut-off
+      // so the ML service can drop non-processive tracks before rendering.
       expect(mockAxios.post.mock.calls[0][1]).toMatchObject({
         detect_velocity: true,
+        intensity_width: 3,
+        min_net_velocity_um_s: 0.01,
+        pixel_size_um: 0.07245,
+        frame_interval_ms: 400,
       });
       // 1 px/frame = pixelSizeUm / (frameIntervalMs/1000) µm/s
       const factor = 0.07245 / (400 / 1000);
       expect(res.tracks).toHaveLength(1);
       expect(res.tracks?.[0].netVelocityPxPerFrame).toBe(0.5);
       expect(res.tracks?.[0].netVelocityUmPerSec).toBeCloseTo(0.5 * factor, 9);
-      expect(res.tracks?.[0].runs[0].velocityUmPerSec).toBeCloseTo(
-        0.5 * factor,
-        9
-      );
-      expect(res.tracks?.[0].runs[0].seUmPerSec).toBeCloseTo(0.02 * factor, 9);
+      // Run length = displacement_px × pixelSizeUm; run time = frames × s/frame.
+      expect(res.tracks?.[0].totalRunLengthUm).toBeCloseTo(2 * 0.07245, 9);
+      expect(res.tracks?.[0].totalRunTimeS).toBeCloseTo(4 * (400 / 1000), 9);
+      // Intensity + edge pass through unchanged (calibration-independent).
+      expect(res.tracks?.[0].intensitySignal).toBe(800);
+      expect(res.tracks?.[0].intensityBackground).toBe(100);
+      expect(res.tracks?.[0].intensityMinusBackground).toBe(700);
+      expect(res.tracks?.[0].edge).toBe('right');
       expect(res.pixelSizeUm).toBe(0.07245);
       expect(res.frameIntervalMs).toBe(400);
     });
 
-    it('returns null µm/s but keeps px/frame when calibration is missing', async () => {
+    it('returns null µm/s + null run totals but keeps px/frame & intensity when uncalibrated', async () => {
       mockPrisma.image.findUnique.mockResolvedValue(
         makeContainer({ pixelSizeUm: null, frameIntervalMs: null })
       );
@@ -666,17 +681,83 @@ describe('buildKymograph', () => {
 
       expect(res.tracks?.[0].netVelocityUmPerSec).toBeNull();
       expect(res.tracks?.[0].netVelocityPxPerFrame).toBe(0.5);
-      expect(res.tracks?.[0].runs[0].velocityUmPerSec).toBeNull();
-      expect(res.tracks?.[0].runs[0].seUmPerSec).toBeNull();
+      expect(res.tracks?.[0].totalRunLengthUm).toBeNull();
+      expect(res.tracks?.[0].totalRunTimeS).toBeNull();
+      // Intensity + edge are still reported (they don't need calibration).
+      expect(res.tracks?.[0].intensityMinusBackground).toBe(700);
+      expect(res.tracks?.[0].edge).toBe('right');
+      // Without calibration the µm/s cut-off can't be applied → no
+      // pixel_size_um / frame_interval_ms forwarded to the ML service.
+      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty('pixel_size_um');
+      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty(
+        'frame_interval_ms'
+      );
       expect(res.pixelSizeUm).toBeNull();
     });
 
-    it('treats frameIntervalMs=0 as uncalibrated (no divide-by-zero)', async () => {
+    it('treats frameIntervalMs=0 as uncalibrated for time/velocity (no divide-by-zero)', async () => {
       mockPrisma.image.findUnique.mockResolvedValue(
         makeContainer({ pixelSizeUm: 0.07245, frameIntervalMs: 0 })
       );
       const res = await call(true);
+      // No frame interval → velocity µm/s and run time s are null...
       expect(res.tracks?.[0].netVelocityUmPerSec).toBeNull();
+      expect(res.tracks?.[0].totalRunTimeS).toBeNull();
+      // ...but pixel size is valid, so run LENGTH stays calibrated.
+      expect(res.tracks?.[0].totalRunLengthUm).toBeCloseTo(2 * 0.07245, 9);
+      // frame_interval_ms=0 must NOT be forwarded (ML field is gt=0 → 422).
+      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty(
+        'frame_interval_ms'
+      );
+    });
+
+    it('treats pixelSizeUm=0 as uncalibrated for length (consistent with the >0 forwarding guard)', async () => {
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({ pixelSizeUm: 0, frameIntervalMs: 400 })
+      );
+      const res = await call(true);
+      // pixelSizeUm=0 means no length/velocity calibration → null, NOT 0 µm.
+      expect(res.tracks?.[0].totalRunLengthUm).toBeNull();
+      expect(res.tracks?.[0].netVelocityUmPerSec).toBeNull();
+      expect(res.tracks?.[0].totalRunTimeS).toBeCloseTo(4 * (400 / 1000), 9);
+      // pixel_size_um=0 must NOT be forwarded (ML field is gt=0).
+      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty('pixel_size_um');
+    });
+
+    it('scales run length + velocity by px_per_column (long MT, compressed column axis)', async () => {
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({ pixelSizeUm: 0.07245, frameIntervalMs: 400 })
+      );
+      mockAxios.post = vi.fn().mockResolvedValue({
+        data: { ...ML_WITH_TRACKS.data, px_per_column: 2.5 },
+      });
+      const res = await call(true);
+      // 1 column now spans 2.5 px → µm-per-column = 0.07245 × 2.5.
+      const umPerCol = 0.07245 * 2.5;
+      expect(res.tracks?.[0].totalRunLengthUm).toBeCloseTo(2 * umPerCol, 9);
+      expect(res.tracks?.[0].netVelocityUmPerSec).toBeCloseTo(
+        (0.5 * umPerCol) / (400 / 1000),
+        9
+      );
+      // Run time is unaffected by px_per_column (purely temporal).
+      expect(res.tracks?.[0].totalRunTimeS).toBeCloseTo(4 * (400 / 1000), 9);
+    });
+
+    it('surfaces velocity_error and filtered_track_count from the ML response', async () => {
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({ pixelSizeUm: 0.07245, frameIntervalMs: 400 })
+      );
+      mockAxios.post = vi.fn().mockResolvedValue({
+        data: {
+          ...ML_WITH_TRACKS.data,
+          tracks: [],
+          velocity_error: 'boom',
+          filtered_track_count: 3,
+        },
+      });
+      const res = await call(true);
+      expect(res.velocityError).toBe('boom');
+      expect(res.filteredTrackCount).toBe(3);
     });
 
     it('omits tracks and the detect_velocity flag when not requested', async () => {

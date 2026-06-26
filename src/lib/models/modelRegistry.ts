@@ -239,20 +239,21 @@ export const MODEL_REGISTRY = {
     compatibleProjectTypes: ['microtubules'],
   },
   microcapsule: {
-    size: 'large',
-    defaultThreshold: 0.3,
+    size: 'small',
+    defaultThreshold: 0.5,
     category: 'microcapsule',
     performance: {
-      // Meta SAM 3 (~3.4 GB). ~1 s/image on the A5000.
-      avgTimePerImage: 1.0,
-      throughput: 1.0,
-      p95Latency: 1.5,
+      // Distilled U-Net (MobileNetV3-Small, ~14.5 MB) + watershed. ~0.3 s/image
+      // on the A5000 (measured on 1280x1024 bright-field capsule TIFFs).
+      avgTimePerImage: 0.3,
+      throughput: 3.0,
+      p95Latency: 0.6,
       batchSize: 1,
     },
     name: 'Microcapsule',
-    displayName: 'Microcapsule (SAM 3)',
+    displayName: 'Microcapsule',
     description:
-      'Instance segmentation for microcapsules (round objects) in bright-field microscopy. Meta SAM 3 with the "circle" prompt returns one clean, full-resolution boundary per capsule with a confidence score; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
+      'Instance segmentation for microcapsules (round objects) in bright-field microscopy. A compact U-Net distilled from Meta SAM 3 returns one clean, full-resolution boundary per capsule and separates touching capsules with a watershed; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
     i18nKey: 'microcapsule',
     compatibleProjectTypes: ['microcapsule'],
   },

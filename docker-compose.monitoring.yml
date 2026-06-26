@@ -110,6 +110,39 @@ services:
       timeout: 10s
       retries: 3
 
+
+  # PostgreSQL exporter - feeds Prometheus 'postgres' job (postgres-exporter:9187)
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: spheroseg-postgres-exporter
+    environment:
+      - DATA_SOURCE_URI=spheroseg-postgres:5432/spheroseg?sslmode=disable
+      - DATA_SOURCE_USER=spheroseg
+      - DATA_SOURCE_PASS=${POSTGRES_EXPORTER_PASS}
+    networks:
+      - app-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+
+  # Redis exporter - feeds Prometheus 'redis' job (redis-exporter:9121)
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: spheroseg-redis-exporter
+    environment:
+      - REDIS_ADDR=redis://spheroseg-redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    networks:
+      - app-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
 networks:
   app-network:
     external: true

@@ -33,11 +33,11 @@ scikit-image==0.22.0
 # ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
 networkx>=3.0
 
-# Wound-healing model (MiT-B5 encoder via segmentation_models_pytorch).
-# Bumped 0.3.4 -> 0.5.0: 0.3.4 hard-pinned timm==0.9.7, which conflicts with the
-# microcapsule SAM 3 model (sam3 needs timm>=1.0.17). smp 0.5.0 uses timm>=1.0
-# and loads the same wound_mitb5.ckpt with a strict state-dict match (verified:
-# the MiT-B5 encoder is architecturally unchanged).
+# segmentation_models_pytorch serves two models: the wound-healing model
+# (MiT-B5 encoder) and the microcapsule student U-Net (timm-mobilenetv3_small_100
+# encoder — smp pulls in the matching timm). Pinned 0.5.0 (uses timm>=1.0): it
+# loads wound_mitb5.ckpt with a strict state-dict match (verified — the MiT-B5
+# encoder is architecturally unchanged) and builds the microcapsule U-Net.
 segmentation-models-pytorch==0.5.0
 
 # Microtubule v7 dependencies (DINOv3 ViT-L/16 backbone via HuggingFace)
@@ -63,15 +63,10 @@ huggingface_hub>=0.20
 # builder has no nvcc) and installed from those wheels in the runtime stage.
 einops>=0.7.0
 
-# Microcapsule model: Meta SAM 3 (Promptable Concept Segmentation, "circle"
-# prompt). The standalone `sam3` package ships its own model code and the native
-# sam3.pt checkpoint — it has NO `transformers` dependency, so the load-bearing
-# transformers==4.57.6 pin (DINOv3 / SegFormer / Sperm) is untouched. It needs
-# numpy>=1.26 (bumped above, still 1.x — verified safe for the mamba CUDA
-# kernels) and einops>=0.8 (resolves within the >=0.7 range above). sam3.pt
-# (~3.4 GB) + CLIP BPE vocab download from HuggingFace on first load (HF_TOKEN)
-# and cache under HF_HOME.
-sam3==0.1.4
+# Microcapsule model: a distilled U-Net (MobileNetV3-Small encoder, ~14.5 MB)
+# built with segmentation-models-pytorch (above) and scikit-image's h-maxima
+# watershed (above). No extra dependency — and no SAM 3 / transformers / HF
+# download at runtime (SAM 3 was used only offline as a distillation teacher).
 
 # Prometheus metrics
 prometheus-fastapi-instrumentator==6.1.0
