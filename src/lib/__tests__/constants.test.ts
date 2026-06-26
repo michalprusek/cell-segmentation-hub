@@ -30,18 +30,22 @@ describe('constants', () => {
     });
 
     it('scales above the floor for large files (~1 MB/s + 1.5x headroom)', () => {
-      // 3 GB → 3072 s × 1.5 = 4608 s = 4_608_000 ms, well above the floor.
+      // 3 GB → 3072 s × 1.5 = 4608 s = 4_608_000 ms (exact, no rounding).
       const threeGb = 3 * 1024 * 1024 * 1024;
-      expect(videoUploadTimeoutMs(threeGb)).toBeCloseTo(3072 * 1000 * 1.5, -3);
-      expect(videoUploadTimeoutMs(threeGb)).toBeGreaterThan(MIN);
+      expect(videoUploadTimeoutMs(threeGb)).toBe(3072 * 1000 * 1.5);
     });
 
     it('caps at 4 hours for very large files', () => {
       expect(videoUploadTimeoutMs(50 * 1024 * 1024 * 1024)).toBe(MAX); // 50 GB
     });
 
-    it('handles negative/NaN sizes by falling back to the floor', () => {
+    it('falls back to the floor for negative, NaN, and non-finite sizes', () => {
+      // A non-finite timeout would reach axios as "no timeout" — guard it.
       expect(videoUploadTimeoutMs(-1)).toBe(MIN);
+      expect(videoUploadTimeoutMs(NaN)).toBe(MIN);
+      expect(videoUploadTimeoutMs(Infinity)).toBe(MIN);
+      // @ts-expect-error — exercise a careless non-number caller at runtime.
+      expect(videoUploadTimeoutMs(undefined)).toBe(MIN);
     });
   });
 
