@@ -61,6 +61,28 @@ export const TIMEOUTS = {
   METRICS_COLLECTION: 60000,
 } as const;
 
+/** Video-upload request timeout, scaled to file size.
+ *
+ * A single video POST carries the file transfer AND blocks on server-side
+ * ND2/TIFF frame extraction, so both must fit in one request timeout. A fixed
+ * 20-min cap timed out legitimate multi-GB microscopy ND2 uploads mid-transfer
+ * (a 2048×2048 stack is easily several GB, and uploads are limited to 100 GB).
+ * Budget a conservative effective-throughput floor (~1 MB/s) plus 1.5× headroom
+ * for extraction, with a 20-min floor for small clips and a 4-hour hard ceiling
+ * so a genuinely stuck request still fails eventually. */
+const VIDEO_UPLOAD_MIN_BYTES_PER_SEC = 1024 * 1024; // ~8 Mbps effective floor
+const VIDEO_UPLOAD_TIMEOUT_FLOOR_MS = 20 * 60 * 1000; // 20 min
+const VIDEO_UPLOAD_TIMEOUT_MAX_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+export function videoUploadTimeoutMs(fileSizeBytes: number): number {
+  const sizeBudgetMs =
+    (Math.max(0, fileSizeBytes) / VIDEO_UPLOAD_MIN_BYTES_PER_SEC) * 1000 * 1.5;
+  return Math.min(
+    VIDEO_UPLOAD_TIMEOUT_MAX_MS,
+    Math.max(VIDEO_UPLOAD_TIMEOUT_FLOOR_MS, sizeBudgetMs)
+  );
+}
+
 /**
  * Retry attempt configurations for different operation types
  */
