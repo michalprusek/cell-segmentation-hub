@@ -27,11 +27,27 @@ result-JSON object on its own line.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
+
+
+def _extract_workers() -> int:
+    """Thread count for parallel PNG encoding. PIL's PNG save releases the GIL
+    during zlib compression, so threads genuinely parallelise the CPU-bound
+    encode. Default to the box's core count (capped at 4 so a single upload
+    doesn't monopolise a shared host); override with ``ND2_EXTRACT_WORKERS``."""
+    try:
+        env = int(os.getenv("ND2_EXTRACT_WORKERS", "0"))
+    except ValueError:
+        env = 0
+    if env > 0:
+        return env
+    return min(4, os.cpu_count() or 2)
 
 
 # A 1536-well plate is the practical ceiling for microscopy; anything past
@@ -69,7 +85,10 @@ def _to_png_dtype(arr: np.ndarray) -> np.ndarray:
 
 def _save_png(arr: np.ndarray, path: Path) -> None:
     from PIL import Image
-    Image.fromarray(_to_png_dtype(arr)).save(path, format="PNG", optimize=True)
+    # Materialise any lazy (dask) slice before PIL, which needs a real ndarray.
+    Image.fromarray(_to_png_dtype(np.asarray(arr))).save(
+        path, format="PNG", optimize=True
+    )
 
 
 def _sanitize_name(name: str | None, fallback: str) -> str:
@@ -384,19 +403,39 @@ def _save_position_tiff(arr_tcyx: np.ndarray, path: Path) -> None:
     )
 
 
-def _write_frames(arr_tcyx: np.ndarray, frames_root: Path, channel_names: list[str],
+def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
                   on_frame=None) -> None:
     """Write one PNG per (frame, channel) under ``frames_root/<TTTT>/``.
-    ``on_frame()`` is called after each frame for progress accounting."""
-    T = arr_tcyx.shape[0]
-    C = arr_tcyx.shape[1]
-    for t in range(T):
+
+    ``arr_tcyx`` is a dask OR numpy ``(T, C, Y, X)`` array. Frames are streamed
+    one chunk at a time so peak memory is ~chunk frames rather than the whole
+    video (the dask path stays lazy until here), and the CPU-bound PNG encoding
+    is fanned across a thread pool (PIL releases the GIL during zlib). Each
+    chunk's frames are materialised SEQUENTIALLY — one dask compute at a time,
+    since the nd2-backed reader is not assumed thread-safe — then their PNGs are
+    encoded in parallel. ``on_frame()`` is called once per written frame for
+    progress accounting. Output bytes are identical to a sequential write.
+    """
+    T = int(arr_tcyx.shape[0])
+    C = int(arr_tcyx.shape[1])
+    workers = max(1, min(_extract_workers(), T))
+    chunk = max(workers * 2, 4)
+
+    def _write_one(item) -> None:
+        t, frame_cyx = item
         frame_dir = frames_root / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         for c in range(C):
-            _save_png(arr_tcyx[t, c], frame_dir / f"{channel_names[c]}.png")
-        if on_frame is not None:
-            on_frame()
+            _save_png(frame_cyx[c], frame_dir / f"{channel_names[c]}.png")
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for start in range(0, T, chunk):
+            stop = min(start + chunk, T)
+            # Sequential per-frame materialisation (read), parallel encode/write.
+            batch = [(t, np.asarray(arr_tcyx[t])) for t in range(start, stop)]
+            for _ in pool.map(_write_one, batch):
+                if on_frame is not None:
+                    on_frame()
 
 
 def _progress(done: int, total: int) -> None:
@@ -462,8 +501,14 @@ def main() -> int:
 
         # ---- Single-position path (historical contract, unchanged) -------
         if p_count <= 1:
-            arr = np.asarray(darr) if use_dask else f.asarray()
-            arr = normalize_to_tcyx(arr, axes)
+            # Keep the array LAZY (dask) through normalisation so _write_frames
+            # streams it frame-by-frame instead of materialising the whole
+            # T×C×Y×X stack (multi-GB for a long 2048² video). Falls back to a
+            # full in-RAM array only when dask was unavailable. normalize_to_tcyx
+            # uses only dask-supported ops (transpose / squeeze / expand_dims /
+            # max), so it stays lazy on a dask input.
+            src = darr if use_dask else f.asarray()
+            arr = normalize_to_tcyx(src, axes)
             T, C, H, W = (int(arr.shape[0]), int(arr.shape[1]),
                           int(arr.shape[2]), int(arr.shape[3]))
 
