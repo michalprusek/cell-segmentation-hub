@@ -1,9 +1,37 @@
 import cv2
 import numpy as np
+
+# Contours traced from a segmentation mask follow every pixel step, so summing
+# the raw arc length over-counts the boundary by the staircase effect (~12% for
+# a smooth object). Since Circularity/Compactness scale as 1/P², that inflation
+# deflates a genuinely round shape to ~0.80 instead of ~1.0. Measure length on a
+# Douglas-Peucker-simplified COPY of the contour: this removes sub-pixel
+# staircase noise while preserving real concavities (a truly dented object still
+# reads low). The stored/display polygon is never touched — only the length
+# measurement. eps is in pixels and applied in pixel space (metrics are scaled to
+# µm afterward in the Node layer). eps=2.0 px makes a round capsule read ~0.996.
+_PERIMETER_SIMPLIFY_EPS_PX = 2.0
+
+
+def _perimeter_contour(contour):
+    """Douglas-Peucker-simplified copy of ``contour`` for length measurement.
+
+    Returns the original contour unchanged when it is too small to simplify
+    safely (a degenerate <3-point result would measure zero length).
+    """
+    c = np.asarray(contour, dtype=np.float32)
+    if c.ndim == 2:
+        c = c.reshape(-1, 1, 2)
+    if len(c) < 3:
+        return contour
+    approx = cv2.approxPolyDP(c, _PERIMETER_SIMPLIFY_EPS_PX, True)
+    return approx if len(approx) >= 3 else contour
+
+
 def calculate_area_from_contour(contour):
     return cv2.contourArea(contour)
 def calculate_perimeter_from_contour(contour):
-    return cv2.arcLength(contour, True)
+    return cv2.arcLength(_perimeter_contour(contour), True)
 
 def calculate_equivalent_diameter_from_contour(contour):
     area = calculate_area_from_contour(contour)
@@ -126,11 +154,13 @@ def calculate_all(contour, hole_contours=None):
     area = calculate_area_from_contour(contour)
     perimeter = calculate_perimeter_from_contour(contour)
 
-    # Calculate perimeter with holes if provided
+    # Calculate perimeter with holes if provided. Holes are de-staircased the
+    # same way as the outer contour so PerimeterWithHoles / Circularity stay
+    # consistent with the simplified outer perimeter above.
     perimeter_with_holes = perimeter
     if hole_contours:
         for hole in hole_contours:
-            perimeter_with_holes += cv2.arcLength(hole, True)
+            perimeter_with_holes += cv2.arcLength(_perimeter_contour(hole), True)
 
     eq_diam = calculate_equivalent_diameter_from_contour(contour)
     # Use perimeter with holes for circularity calculation (ImageJ convention)
