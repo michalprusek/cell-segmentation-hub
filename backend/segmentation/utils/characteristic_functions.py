@@ -171,8 +171,15 @@ def calculate_all(contour, hole_contours=None):
     feret_max_orthogonal_distance = calculate_orthogonal_diameter(contour)
     major_axis_length, minor_axis_length = calculate_diameters_from_contour(contour)
 
-    # Use correct compactness formula: P²/(4πA)
-    compactness = calculate_compactness_from_contour(contour)
+    # Compactness = P²/(4πA), the reciprocal of circularity (1.0 = circle, larger
+    # = more irregular). The isoperimetric inequality guarantees P² ≥ 4πA, so the
+    # true value is ≥ 1; clamp to mirror the Circularity ≤ 1.0 clamp above. This
+    # absorbs the rare case where de-staircasing a TINY contour (area ≲ 30 px²,
+    # where the 2px tolerance is large relative to the object) shortens the
+    # perimeter just below the bound. Real-sized objects are unaffected — their
+    # value is already ≥ 1 — and Circularity already reports a clamped 1.0 for
+    # these fragments, so this keeps the two reciprocal metrics consistent.
+    compactness = max(1.0, calculate_compactness_from_contour(contour))
 
     # Convexity uses perimeter with holes for boundary smoothness measure
     hull = cv2.convexHull(contour)
