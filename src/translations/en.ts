@@ -2244,6 +2244,9 @@ export default {
         none: 'Stays within the microtubule',
       },
       noBlobs: 'No moving particles detected',
+      velocityFailed: 'Velocity detection failed.',
+      filteredHidden:
+        '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
       downloadTracks: 'Velocity CSV',
       uncalibrated:
         'No pixel-size / frame-interval calibration — velocities shown in px/frame.',

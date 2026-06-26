@@ -2183,6 +2183,9 @@ export default {
         none: 'Zůstává v rámci mikrotubule',
       },
       noBlobs: 'Nedetekovány žádné pohyblivé částice',
+      velocityFailed: 'Detekce rychlosti selhala.',
+      filteredHidden:
+        'Skryto {{count}} neprocesivních trajektorií pod 0.01 µm/s.',
       downloadTracks: 'CSV rychlostí',
       uncalibrated:
         'Bez kalibrace velikosti pixelu / intervalu snímků — rychlosti v px/snímek.',

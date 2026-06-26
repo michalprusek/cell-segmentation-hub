@@ -2162,6 +2162,9 @@ export default {
         none: "Reste à l'intérieur du microtubule",
       },
       noBlobs: 'Aucune particule en mouvement détectée',
+      velocityFailed: 'La détection de vitesse a échoué.',
+      filteredHidden:
+        '{{count}} trajectoire(s) non processive(s) en dessous de 0.01 µm/s masquée(s).',
       downloadTracks: 'CSV de vitesse',
       uncalibrated:
         "Pas de calibration taille de pixel / intervalle d'images — vitesses en px/image.",

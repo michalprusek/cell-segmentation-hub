@@ -2174,6 +2174,9 @@ export default {
         none: 'Bleibt innerhalb des Mikrotubulus',
       },
       noBlobs: 'Keine bewegten Partikel erkannt',
+      velocityFailed: 'Geschwindigkeitserkennung fehlgeschlagen.',
+      filteredHidden:
+        '{{count}} nicht-prozessive Trajektorie(n) unter 0.01 µm/s ausgeblendet.',
       downloadTracks: 'Geschwindigkeits-CSV',
       uncalibrated:
         'Keine Pixelgröße-/Bildintervall-Kalibrierung — Geschwindigkeiten in px/Frame.',

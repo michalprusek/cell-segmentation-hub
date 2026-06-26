@@ -2213,6 +2213,9 @@ export default {
         none: 'Se mantiene dentro del microtúbulo',
       },
       noBlobs: 'No se detectaron partículas en movimiento',
+      velocityFailed: 'Error en la detección de velocidad.',
+      filteredHidden:
+        '{{count}} trayectoria(s) no procesiva(s) por debajo de 0.01 µm/s oculta(s).',
       downloadTracks: 'CSV de velocidad',
       uncalibrated:
         'Sin calibración de tamaño de píxel / intervalo de fotogramas — velocidades en px/fotograma.',

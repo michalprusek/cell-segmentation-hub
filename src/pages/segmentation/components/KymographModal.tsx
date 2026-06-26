@@ -62,6 +62,10 @@ interface KymographModalProps {
  *  `KymoPoint` (FE/BE wire types are hand-synced per repo convention). */
 type KymoPoint = [frame: number, x: number];
 
+/** Which kymograph end(s) a trajectory reaches. Closed set, hand-synced with the
+ *  backend `EdgeFlag` and the ML `edge_touch` return. */
+type EdgeFlag = 'left' | 'right' | 'both' | 'none';
+
 interface KymographTrack {
   points: KymoPoint[]; // time-ordered
   netVelocityPxPerFrame: number;
@@ -74,8 +78,8 @@ interface KymographTrack {
   intensitySignal: number | null;
   intensityBackground: number | null;
   intensityMinusBackground: number | null;
-  /** "left" | "right" | "both" | "none" — trajectory reaches a kymograph end. */
-  edge: string;
+  /** Which kymograph end(s) the trajectory reaches. */
+  edge: EdgeFlag;
 }
 
 interface KymographResponse {
@@ -88,6 +92,10 @@ interface KymographResponse {
   pixelSizeUm: number | null;
   frameIntervalMs: number | null;
   tracks?: KymographTrack[];
+  /** Tracks hidden by the < 0.01 µm/s net-velocity cut-off (non-processive). */
+  filteredTrackCount?: number;
+  /** Set when ML velocity detection crashed (vs. found no particles). */
+  velocityError?: string;
 }
 
 // Direction-coded colours for the overlay + table dots.
@@ -102,8 +110,9 @@ function trackColor(netPxFrame: number): string {
 /** Constrain the viewer zoom to a sane range (5 %…2000 %). */
 const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
 
-/** Intensity-band width must match the ML/route bounds (1…50 columns). Falls
- *  back to the default 3 for empty / non-numeric input. */
+/** Intensity-band width, clamped to the ML/route bounds (1…50 columns). The `3`
+ *  default is hit only by NaN-producing (truly non-numeric) input; empty or
+ *  whitespace input parses to 0 and clamps up to 1. */
 const DEFAULT_INTENSITY_WIDTH = 3;
 const clampWidth = (raw: string | number): number => {
   const n = Math.round(Number(raw));
@@ -111,8 +120,9 @@ const clampWidth = (raw: string | number): number => {
   return Math.min(Math.max(n, 1), 50);
 };
 
-/** Direction-neutral glyph for the edge-touch flag. */
-const edgeGlyph = (edge: string): string =>
+/** Glyph marking which kymograph end(s) the trajectory reaches (position only —
+ *  the motor's antero/retro travel direction is shown by track colour). */
+const edgeGlyph = (edge: EdgeFlag): string =>
   edge === 'both' ? '↔' : edge === 'left' ? '←' : edge === 'right' ? '→' : '—';
 
 /** Compact metric formatters (em-dash when the value is unavailable, e.g.
@@ -150,6 +160,10 @@ export function KymographModal({
   );
   const [detectVelocity, setDetectVelocity] = useState(true);
   const [intensityWidth, setIntensityWidth] = useState(DEFAULT_INTENSITY_WIDTH);
+  // Debounced width drives the (expensive) kymograph refetch — each rebuild
+  // re-reads every frame PNG + re-runs blob detection, so we coalesce rapid
+  // keystrokes instead of firing a full ML round-trip per character.
+  const [debouncedWidth, setDebouncedWidth] = useState(DEFAULT_INTENSITY_WIDTH);
   const [result, setResult] = useState<KymographResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -295,6 +309,13 @@ export function KymographModal({
     }
   }, [defaultChannel, sourceChannel]);
 
+  // Coalesce width keystrokes (~400 ms) before they trigger the kymograph
+  // refetch below — only the intensity columns depend on width.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedWidth(intensityWidth), 400);
+    return () => clearTimeout(id);
+  }, [intensityWidth]);
+
   useEffect(() => {
     if (!open || !sourceChannel) return;
     let cancelled = false;
@@ -314,7 +335,7 @@ export function KymographModal({
         sourceChannel,
         channelColor,
         detectVelocity,
-        ...(detectVelocity ? { intensityWidth } : {}),
+        ...(detectVelocity ? { intensityWidth: debouncedWidth } : {}),
       })
       .then(res => {
         if (cancelled) return;
@@ -339,7 +360,7 @@ export function KymographModal({
     frameIndex,
     channelColors,
     detectVelocity,
-    intensityWidth,
+    debouncedWidth,
   ]);
 
   const handleDownload = (kind: 'png' | 'csv') => {
@@ -564,8 +585,8 @@ export function KymographModal({
                       {detectVelocity && tracks.length > 0 && (
                         // viewBox = native pixel grid mapped 1:1 onto the native
                         // box, then CSS-scaled by the parent transform ⇒ tracks
-                        // stay aligned at any zoom. Stroke/dot sizes are divided
-                        // by the scale so they keep a constant on-screen size.
+                        // stay aligned at any zoom. Stroke width is divided by the
+                        // scale so the polyline keeps a constant on-screen width.
                         <svg
                           className="pointer-events-none absolute inset-0 h-full w-full"
                           viewBox={`0 0 ${result.lengthPx} ${result.frameCount}`}
@@ -576,11 +597,7 @@ export function KymographModal({
                             const focused =
                               activeTrack === null || activeTrack === i;
                             return (
-                              <g
-                                key={i}
-                                strokeOpacity={focused ? 1 : 0.25}
-                                fillOpacity={focused ? 1 : 0.25}
-                              >
+                              <g key={i} strokeOpacity={focused ? 1 : 0.25}>
                                 <polyline
                                   points={tr.points
                                     .map(([frame, x]) => `${x},${frame}`)
@@ -625,7 +642,13 @@ export function KymographModal({
         {/* Velocity table */}
         {detectVelocity && result && !isLoading && (
           <div className="max-h-48 overflow-auto rounded border">
-            {tracks.length === 0 ? (
+            {result.velocityError ? (
+              <div className="p-3 text-sm text-destructive">
+                {t('editor.kymograph.velocityFailed', {
+                  defaultValue: 'Velocity detection failed.',
+                })}
+              </div>
+            ) : tracks.length === 0 ? (
               <div className="p-3 text-sm text-muted-foreground">
                 {t('editor.kymograph.noBlobs', {
                   defaultValue: 'No moving particles detected',
@@ -719,6 +742,15 @@ export function KymographModal({
                 })}
               </div>
             )}
+            {!result.velocityError && (result.filteredTrackCount ?? 0) > 0 && (
+              <div className="px-2 py-1 text-[10px] text-muted-foreground border-t">
+                {t('editor.kymograph.filteredHidden', {
+                  count: result.filteredTrackCount ?? 0,
+                  defaultValue:
+                    '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -754,8 +786,9 @@ export function KymographModal({
 }
 
 /** One row per trajectory. Mirrors the metric columns of the export bundle's
- *  ``velocity_metrics.csv`` (minus the export-only video / channel / calibration
- *  context the modal doesn't carry) so the two CSVs agree. */
+ *  ``velocity_metrics.csv`` (minus the export-only identifying + calibration
+ *  columns: video / microtubule / channel / pixel size / frame interval) so the
+ *  two CSVs agree on the shared columns. */
 function tracksToCsv(tracks: KymographTrack[]): string {
   const header = [
     'track',

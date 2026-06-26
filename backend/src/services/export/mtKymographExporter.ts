@@ -217,6 +217,17 @@ export async function exportMicrotubuleKymographs(
           renderOverlay: options.includeSegmentedImages,
         });
 
+        // buildKymograph degrades a velocity-detection crash to empty tracks
+        // (it does NOT throw), so the per-job catch below would never see it.
+        // Surface it explicitly so a missing/short velocity_metrics.csv isn't
+        // mistaken for "no motility".
+        if (result.velocityError) {
+          logger.warn(
+            `Velocity detection failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${result.velocityError}`,
+            CTX
+          );
+        }
+
         if (options.includeSegmentedImages && result.overlayPngBase64) {
           await fs.writeFile(
             path.join(

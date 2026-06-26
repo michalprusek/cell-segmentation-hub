@@ -23,6 +23,7 @@ if str(SEG_ROOT) not in sys.path:
 from api.kymograph_velocity import (  # noqa: E402
     detect_blobs,
     edge_touch,
+    net_velocity_threshold,
     track_intensity,
 )
 
@@ -64,6 +65,44 @@ def test_edge_touch_empty():
     assert edge_touch([], 60) == "none"
 
 
+def test_edge_touch_tol_boundary_inclusive():
+    # Default tol=2.0: a point exactly at the threshold is INSIDE the edge.
+    L = 60
+    assert edge_touch([[0, 2.0], [1, 30]], L) == "left"  # min == tol
+    assert edge_touch([[0, 2.01], [1, 30]], L) == "none"  # just outside
+    # Right boundary is n_samples-1-tol == 57.
+    assert edge_touch([[0, 30], [1, 57.0]], L) == "right"  # max == 57
+    assert edge_touch([[0, 30], [1, 56.99]], L) == "none"
+
+
+# ── net_velocity_threshold (the µm/s -> column/frame cut-off) ───────────────
+
+
+def test_net_velocity_threshold_known_conversion():
+    # 0.01 µm/s, 400 ms/frame, 0.07245 µm/px, 1 px/column.
+    thr = net_velocity_threshold(0.01, 400.0, 0.07245, 1.0)
+    # 0.01 * 0.4 / 0.07245 ≈ 0.05521 columns/frame.
+    assert abs(thr - 0.01 * 0.4 / 0.07245) < 1e-12
+    assert abs(thr - 0.055210) < 1e-5
+
+
+def test_net_velocity_threshold_is_display_inverse():
+    # The threshold must be the algebraic inverse of the column/frame -> µm/s
+    # display conversion, so a track displayed at exactly the cut-off sits on
+    # the boundary. v_um_s = v_colframe * px_per_col * px_um / (ms/1000).
+    px_um, ms, ppc, cut = 0.065, 1000.0, 2.3, 0.02
+    thr = net_velocity_threshold(cut, ms, px_um, ppc)
+    v_um_s = thr * ppc * px_um / (ms / 1000.0)
+    assert abs(v_um_s - cut) < 1e-12
+
+
+def test_net_velocity_threshold_scales_with_px_per_column():
+    # Doubling px-per-column halves the column/frame threshold (same µm/s).
+    a = net_velocity_threshold(0.01, 400.0, 0.07245, 1.0)
+    b = net_velocity_threshold(0.01, 400.0, 0.07245, 2.0)
+    assert abs(a - 2 * b) < 1e-12
+
+
 # ── track_intensity ───────────────────────────────────────────────────────
 
 
@@ -97,6 +136,18 @@ def test_track_intensity_empty_points():
         "intensity_background": None,
         "intensity_minus_bg": None,
     }
+
+
+def test_track_intensity_signal_present_but_no_background_room():
+    # A kymograph narrower than signal+gap+bg bands: every sample gets a signal
+    # band but neither background band fits -> signal present, background None,
+    # and (the load-bearing guard) minus_bg None rather than == signal.
+    kymo = np.full((10, 3), 500.0, dtype=np.float32)
+    points = [[t, 1] for t in range(10)]  # centred on the only interior column
+    out = track_intensity(kymo, points, width=3)
+    assert out["intensity_signal"] is not None
+    assert out["intensity_background"] is None
+    assert out["intensity_minus_bg"] is None
 
 
 # ── detect_blobs aggregation (no runs array) ──────────────────────────────
