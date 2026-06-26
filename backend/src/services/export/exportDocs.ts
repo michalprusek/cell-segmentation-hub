@@ -123,40 +123,53 @@ ${scaleInfo}
 ## Metrics file (\`metrics.csv\` / \`metrics.xlsx\`)
 
 The microcapsule model performs **instance segmentation**: each detected
-capsule is one closed polygon and gets **one row**. The report is intentionally
-focused on the three shape measures requested for capsules, plus identifiers.
+capsule is one closed polygon and gets **one row** of size and shape descriptors
+(below), plus identifiers.
 
-> **Completeness filter** — capsules whose mask touches the image border are
-> *cut off by the frame* and are **excluded from this report** (they are still
-> drawn, in grey, in the visualisation export, so you can see what was skipped).
-> Only whole capsules contribute to the metrics and the summary statistics.
+> **Completeness filter** — capsules whose contour comes within **20 px** of any
+> image border are treated as *cut off by the frame* and are **excluded from this
+> report** (they are still drawn, in grey, in the visualisation export, so you can
+> see what was skipped). Only whole capsules contribute to the metrics and the
+> summary statistics.
 
 ### Columns
+
+Every metric is derived from the capsule's **polygon contour** — the ordered
+boundary points \`p_0 … p_{n-1}\` (each \`p_i = (x_i, y_i)\`) that the segmentation
+produced, in ${lengthUnit}.
+
 - **Image Name / Image ID** — source image identifiers.
 - **Capsule ID** — 1-based index within the image (largest capsule first).
-- **Area (${areaUnit})** — enclosed area via the Shoelace formula.
-- **Perimeter (${lengthUnit})** — boundary length, Sum_i ||p_{i+1} - p_i||
-  (ImageJ convention).
-- **Width (${lengthUnit})** — axis-aligned bounding-box width (capsule extent
-  in x).
-- **Height (${lengthUnit})** — axis-aligned bounding-box height (capsule extent
-  in y).
+- **Area (${areaUnit})** — enclosed area via the **Shoelace formula**:
+  \`A = ½·|Σ_i (x_i·y_{i+1} − x_{i+1}·y_i)|\`.
+- **Perimeter (${lengthUnit})** — summed edge lengths around the contour:
+  \`P = Σ_i ||p_{i+1} − p_i||\` (ImageJ convention).
+- **Width (${lengthUnit})** — axis-aligned bounding box: \`max_i(x_i) − min_i(x_i)\`.
+- **Height (${lengthUnit})** — axis-aligned bounding box: \`max_i(y_i) − min_i(y_i)\`.
+  (Width/Height depend on how the capsule is oriented in the frame.)
 - **Diameter (${lengthUnit})** — mean Feret diameter, the average caliper width
-  across orientations \`(Feret_max + Feret_min) / 2\`. Rotation-invariant, so
-  unlike Width/Height it does not depend on how the capsule sits in the frame.
-- **Equivalent Diameter (${lengthUnit})** — diameter of the circle with the
-  same area, \`d = 2*sqrt(Area/pi)\`. (For a perfect circle Diameter ≈
-  Equivalent Diameter ≈ Width ≈ Height.)
-- **Compactness** — circularity \`C = 4*pi * Area / Perimeter^2\`, in [0, 1]
-  where **1.0 = a perfect circle**. For round capsules this is the most
-  intuitive shape measure (a value near 1 means a clean circular capsule;
-  lower values indicate an irregular or dented boundary).
+  across orientations \`(Feret_max + Feret_min) / 2\`. Rotation-invariant.
+- **Feret Max (${lengthUnit})** — maximum caliper / **longest** diameter (the
+  *thickest* part): the largest distance between any two contour points,
+  \`Feret_max = max_{i,j} ||p_i − p_j||\` (evaluated on the convex hull).
+- **Feret Min (${lengthUnit})** — minimum caliper / **narrowest** width (the
+  *thinnest* part): the smallest distance between two parallel lines that just
+  enclose the contour. Via rotating calipers on the convex hull — for each hull
+  edge take the farthest vertex's perpendicular distance, then
+  \`Feret_min = min over hull edges of that distance\`.
+- **Equivalent Diameter (${lengthUnit})** — diameter of the circle with the same
+  area: \`d_eq = 2·sqrt(Area / π)\`. (For a perfect circle Diameter ≈ Equivalent
+  Diameter ≈ Width ≈ Height.)
+- **Compactness** — circularity \`C = 4π·Area / Perimeter²\`, in [0, 1] where
+  **1.0 = a perfect circle**; lower values indicate an irregular/dented boundary.
+- **Ovality** — elongation \`Ovality = Feret_max / Feret_min\` (≥ 1; **1.0 = a
+  perfectly round capsule**, larger = more elongated/oval).
 - **Confidence** — the model's detection score for the capsule, in [0, 1].
 
 ### Summary sheet
 Aggregates over the **complete** capsules only: how many were analysed, plus
 mean / min / max of area and compactness, and mean perimeter, width, height,
-diameter and equivalent diameter.
+diameter, Feret max, Feret min, equivalent diameter and ovality.
 
 ## Visualisation
 Complete capsules are drawn and numbered in the configured external colour;

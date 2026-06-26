@@ -194,14 +194,31 @@ describe('MetricsCalculator — exportMicrocapsuleMetricsToExcel', () => {
       'Width (px)',
       'Height (px)',
       'Diameter (px)',
+      'Feret Max (px)',
+      'Feret Min (px)',
       'Equivalent Diameter (px)',
       'Compactness',
+      'Ovality',
       'Confidence',
     ]);
     // The focused report must NOT carry the rich spheroid descriptors.
     expect(headers).not.toContain('Feret Diameter Max (px)');
     expect(headers).not.toContain('Solidity');
     expect(headers).not.toContain('Sphericity');
+  });
+
+  it('exports Feret max/min and ovality = max/min per capsule', async () => {
+    await calc.exportMicrocapsuleMetricsToExcel(
+      [metricRow({ polygonId: 1, feretDiameterMax: 30, feretDiameterMin: 20 })],
+      '/tmp/metrics.xlsx'
+    );
+    const row = mockWorksheet.addRow.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(row.feretMax).toBeCloseTo(30, 4);
+    expect(row.feretMin).toBeCloseTo(20, 4);
+    expect(row.ovality).toBeCloseTo(1.5, 4); // 30 / 20
   });
 
   it('width/height = bounding box, diameter = mean Feret', async () => {

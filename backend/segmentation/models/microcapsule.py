@@ -47,8 +47,11 @@ _ENCODERS = ("timm-mobilenetv3_small_100", "resnet18")
 _WATERSHED_H = 0.3
 # Contours smaller than this (px^2) at native resolution are dropped as noise.
 _MIN_AREA_PX = 60
-# A contour within this many px of any edge is cut off by the frame.
-_BORDER_MARGIN_PX = 2
+# A capsule whose contour comes within this many native px of any image edge is
+# treated as cut off by the frame (``complete=False``) and excluded from the
+# metrics aggregation. 20 px (≈1.5% of the 1280-wide frame) so capsules that
+# only just reach into the border are excluded, not only those flush against it.
+_BORDER_MARGIN_PX = 20
 
 
 def _letterbox(img, size, interp):
