@@ -214,6 +214,25 @@ class TestCalculateAll:
             "PerimeterWithHoles should be larger when holes are provided"
         )
 
+    def test_compactness_never_below_one_for_tiny_contour(self):
+        """Regression: de-staircasing the perimeter with a 2px tolerance can
+        over-shorten a TINY few-point contour's boundary (approxPolyDP cuts
+        area-contributing vertices while Area stays measured on the original),
+        pushing P²/4πA below the isoperimetric bound of 1.0. This 5-point
+        fragment — taken from a real spheroid export — yields raw compactness
+        ~0.87; calculate_all must clamp it to >= 1.0, mirroring the
+        Circularity <= 1.0 clamp so the reciprocal metrics stay consistent."""
+        cnt = np.array(
+            [[[4, 1]], [[1, 3]], [[1, 6]], [[4, 7]], [[6, 4]]], dtype=np.int32
+        )
+        data = calculate_all(cnt)
+        assert data["Compactness"] >= 1.0, (
+            f"Compactness must not violate the isoperimetric bound, got {data['Compactness']:.4f}"
+        )
+        assert data["Circularity"] <= 1.0, (
+            f"Circularity must stay <= 1.0, got {data['Circularity']:.4f}"
+        )
+
 
 @pytest.mark.unit
 class TestDegenerateContourSafety:
