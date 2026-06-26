@@ -70,13 +70,17 @@ export const TIMEOUTS = {
  * Budget a conservative effective-throughput floor (~1 MB/s) plus 1.5× headroom
  * for extraction, with a 20-min floor for small clips and a 4-hour hard ceiling
  * so a genuinely stuck request still fails eventually. */
-const VIDEO_UPLOAD_MIN_BYTES_PER_SEC = 1024 * 1024; // ~8 Mbps effective floor
+const VIDEO_UPLOAD_MIN_BYTES_PER_SEC = 1024 * 1024; // 1 MiB/s ≈ 8 Mbps
 const VIDEO_UPLOAD_TIMEOUT_FLOOR_MS = 20 * 60 * 1000; // 20 min
 const VIDEO_UPLOAD_TIMEOUT_MAX_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 export function videoUploadTimeoutMs(fileSizeBytes: number): number {
-  const sizeBudgetMs =
-    (Math.max(0, fileSizeBytes) / VIDEO_UPLOAD_MIN_BYTES_PER_SEC) * 1000 * 1.5;
+  // Coerce non-finite / negative input (NaN, undefined, Infinity, <0) to 0 so the
+  // result is always a valid finite timeout. A NaN here would otherwise reach
+  // axios as `timeout: NaN` — treated as NO timeout, the exact unbounded-request
+  // failure this helper exists to prevent.
+  const bytes = Number.isFinite(fileSizeBytes) ? Math.max(0, fileSizeBytes) : 0;
+  const sizeBudgetMs = (bytes / VIDEO_UPLOAD_MIN_BYTES_PER_SEC) * 1000 * 1.5;
   return Math.min(
     VIDEO_UPLOAD_TIMEOUT_MAX_MS,
     Math.max(VIDEO_UPLOAD_TIMEOUT_FLOOR_MS, sizeBudgetMs)
