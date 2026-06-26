@@ -9,7 +9,7 @@ import {
 } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
-import { TIMEOUTS, FILE_LIMITS } from '@/lib/constants';
+import { TIMEOUTS, FILE_LIMITS, videoUploadTimeoutMs } from '@/lib/constants';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
 import {
   chunkFiles,
@@ -1222,10 +1222,11 @@ class ApiClient {
       formData,
       {
         headers: { 'Content-Type': 'multipart/form-data' },
-        // Server-side extraction can take minutes for a 1 GB ND2 stack.
-        // Bias toward the high end; for typical small videos the request
-        // returns well before this.
-        timeout: TIMEOUTS.FILE_UPLOAD_LARGE * 4,
+        // Transfer + server-side extraction must both fit in this one request.
+        // Scale the timeout to the file size (a fixed 20-min cap was timing out
+        // multi-GB ND2 uploads mid-transfer); small clips still get a 20-min
+        // floor, huge files up to a 4-hour ceiling.
+        timeout: videoUploadTimeoutMs(payload.size),
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(
