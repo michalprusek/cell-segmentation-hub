@@ -82,6 +82,21 @@ class TestPerimeterFromContour:
         perim = calculate_perimeter_from_contour(square_contour)
         assert abs(perim - 320.0) < 5.0, f"Expected ~320, got {perim}"
 
+    def test_perimeter_staircase_circle_close_to_true(self):
+        """Regression: a circle traced from a rasterized mask has a pixel
+        staircase boundary whose raw arc length over-counts the perimeter by
+        ~12%. The de-staircased measurement must approximate 2πr instead."""
+        mask = np.zeros((400, 400), np.uint8)
+        cv2.circle(mask, (200, 200), 150, 1, -1)
+        cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnt = max(cnts, key=cv2.contourArea)
+        assert len(cnt) > 200, "expected a genuine pixel-staircase boundary"
+        perim = calculate_perimeter_from_contour(cnt)
+        true_perim = 2 * np.pi * 150
+        assert abs(perim - true_perim) / true_perim < 0.05, (
+            f"Perimeter should be within 5% of 2πr={true_perim:.0f}, got {perim:.0f}"
+        )
+
 
 @pytest.mark.unit
 class TestCircularityFromContour:
@@ -107,6 +122,21 @@ class TestCircularityFromContour:
         circularity = calculate_circularity_from_contour(square_contour)
         assert 0.6 <= circularity <= 0.9, (
             f"Square circularity should be in [0.6, 0.9], got {circularity:.4f}"
+        )
+
+    def test_circularity_staircase_circle_not_deflated(self):
+        """Regression: before de-staircasing the perimeter, a round object
+        traced from a rasterized mask read circularity ~0.80 (the pixel
+        staircase inflated P, and circularity ∝ 1/P²). A genuinely round shape
+        must now read close to 1.0."""
+        mask = np.zeros((400, 400), np.uint8)
+        cv2.circle(mask, (200, 200), 150, 1, -1)
+        cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnt = max(cnts, key=cv2.contourArea)
+        assert len(cnt) > 200, "expected a genuine pixel-staircase boundary"
+        circularity = calculate_circularity_from_contour(cnt)
+        assert circularity >= 0.95, (
+            f"Staircase circle should read ~1.0 after de-staircasing, got {circularity:.4f}"
         )
 
 
