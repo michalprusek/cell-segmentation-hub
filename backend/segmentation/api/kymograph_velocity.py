@@ -26,7 +26,7 @@ container's persisted ``pixelSizeUm`` / ``frameIntervalMs`` calibration.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -55,7 +55,13 @@ def _vel_tail(track: Dict[str, Any], n: int = 5) -> float:
 def _segment_runs(
     t: np.ndarray, x: np.ndarray, pause_thresh: float
 ) -> List[Dict[str, float]]:
-    """Split a trajectory into directed runs; fit slope ± SE per run."""
+    """Split a trajectory into directed runs ≥6 frames; fit a slope per run.
+
+    A run is a contiguous span whose smoothed velocity stays above
+    ``pause_thresh`` in one direction AND lasts at least 6 grid frames. Pauses
+    *and* sub-6-frame directed flickers are excluded — so the aggregated
+    ``total_run_*`` totals undercount very short directed segments by design.
+    """
     from scipy.ndimage import gaussian_filter1d
 
     grid = np.arange(int(t[0]), int(t[-1]) + 1)
@@ -75,23 +81,131 @@ def _segment_runs(
             gx = xs[i : j + 1]
             design = np.vstack([gt, np.ones_like(gt)]).T
             coef = np.linalg.lstsq(design, gx, rcond=None)[0]
-            resid = gx - design @ coef
-            denom = np.sum((gt - gt.mean()) ** 2)
-            se = (
-                float(np.sqrt(np.sum(resid**2) / max(1, len(gt) - 2) / denom))
-                if denom > 0
-                else 0.0
-            )
             runs.append(
-                {
-                    "v_pxframe": float(coef[0]),
-                    "se_pxframe": se,
-                    "t0": int(gt[0]),
-                    "t1": int(gt[-1]),
-                }
+                {"v_pxframe": float(coef[0]), "t0": int(gt[0]), "t1": int(gt[-1])}
             )
         i = j + 1
     return runs
+
+
+def net_velocity_threshold(
+    min_net_velocity_um_s: float,
+    frame_interval_ms: float,
+    pixel_size_um: float,
+    px_per_column: float,
+) -> float:
+    """Convert a µm/s net-velocity cut-off to a kymograph-column/frame cut-off.
+
+    Track velocities are measured in kymograph **columns** per frame, and one
+    column spans ``px_per_column`` image pixels (≈1 for short MTs, >1 once the
+    arc length exceeds ``target_width`` and the column axis is compressed). The
+    exact inverse of the display conversion (column/frame → µm/s) is::
+
+        v_um_s = v_colframe · px_per_column · pixel_size_um / (frame_interval_ms/1000)
+
+    so the column/frame threshold below is its algebraic inverse — a track is
+    kept iff ``|v_colframe| >= threshold``.
+    """
+    return (
+        min_net_velocity_um_s
+        * (frame_interval_ms / 1000.0)
+        / (pixel_size_um * px_per_column)
+    )
+
+
+def edge_touch(
+    points: List[List[float]], n_samples: int, tol: float = 2.0
+) -> str:
+    """Flag whether a trajectory reaches the left/right end of the kymograph.
+
+    Position is the kymograph's horizontal axis (column 0 = microtubule start,
+    ``n_samples - 1`` = microtubule end). A motor that walks to either end
+    continues onto MT that is outside the imaged segment, so its run length is
+    truncated by the field of view rather than by the motor detaching — the
+    biologist needs to know which measurements are right-censored.
+
+    Returns ``"left"``, ``"right"``, ``"both"`` or ``"none"``.
+    """
+    if not points:
+        return "none"
+    xs = [p[1] for p in points]
+    left = min(xs) <= tol
+    right = max(xs) >= (n_samples - 1) - tol
+    if left and right:
+        return "both"
+    if left:
+        return "left"
+    if right:
+        return "right"
+    return "none"
+
+
+def track_intensity(
+    kymo: np.ndarray,
+    points: List[List[float]],
+    width: int,
+    *,
+    bg_gap: int = 2,
+    bg_width: Optional[int] = None,
+) -> Dict[str, Optional[float]]:
+    """Background-subtracted signal intensity along a kymograph trajectory.
+
+    Mirrors the MT-metrics convention (mean signal − **median** background): for
+    each trajectory sample ``(t, x)`` read a centred signal band of ``2·⌊(width-1)/2⌋+1``
+    columns (i.e. ``width`` for odd widths, ``width-1`` for even) plus two
+    background bands of ``width`` columns offset ``bg_gap`` columns beyond it on
+    either side. Values come straight from the raw (un-normalised) kymograph
+    matrix, so the result is in the same units as the source channel's pixels —
+    directly comparable to the per-MT intensity metric.
+
+    Returns ``{intensity_signal, intensity_background, intensity_minus_bg}``.
+    ``intensity_background`` (and hence ``intensity_minus_bg``) is ``None`` only
+    when *no* sample had room for a background band on *either* side — i.e. the
+    kymograph is narrower than ``signal_band + gap + bg_band`` — not merely when
+    a track hugs one edge (the opposite side still contributes).
+    """
+    empty = {
+        "intensity_signal": None,
+        "intensity_background": None,
+        "intensity_minus_bg": None,
+    }
+    if kymo.ndim != 2 or not points:
+        return empty
+    T, X = kymo.shape
+    half = max(0, (width - 1) // 2)
+    bw = width if bg_width is None else bg_width
+    sig_vals: List[float] = []
+    bg_vals: List[float] = []
+    for fr, x in points:
+        t = int(round(fr))
+        if t < 0 or t >= T:
+            continue
+        xc = int(round(x))
+        row = kymo[t]
+        lo, hi = max(0, xc - half), min(X, xc + half + 1)
+        if hi > lo:
+            sig_vals.extend(row[lo:hi].tolist())
+        # left background band: [xc-half-gap-bw, xc-half-gap)
+        bl1, bl2 = max(0, xc - half - bg_gap - bw), max(0, xc - half - bg_gap)
+        if bl2 > bl1:
+            bg_vals.extend(row[bl1:bl2].tolist())
+        # right background band: [xc+half+1+gap, xc+half+1+gap+bw)
+        br1 = min(X, xc + half + 1 + bg_gap)
+        br2 = min(X, xc + half + 1 + bg_gap + bw)
+        if br2 > br1:
+            bg_vals.extend(row[br1:br2].tolist())
+    signal = float(np.mean(sig_vals)) if sig_vals else None
+    background = float(np.median(bg_vals)) if bg_vals else None
+    minus_bg = (
+        signal - background
+        if (signal is not None and background is not None)
+        else None
+    )
+    return {
+        "intensity_signal": signal,
+        "intensity_background": background,
+        "intensity_minus_bg": minus_bg,
+    }
 
 
 def detect_blobs(
@@ -117,11 +231,22 @@ def detect_blobs(
         One dict per detected track, sorted fastest-net-velocity first::
 
             {
-              "points":     [[frame, x], ...]   # sub-pixel, time-ordered
-              "net_pxframe": float              # (x_last - x_first)/(t span)
+              "points":      [[frame, x], ...]   # sub-pixel, time-ordered; x in
+                                                 #   kymograph COLUMNS (not px)
+              "net_pxframe": float               # (x_last-x_first)/t span, col/frame
               "snr":         float
-              "runs": [ {"v_pxframe","se_pxframe","t0","t1"}, ... ]
+              "total_run_time_frames":    float  # Σ directed-run durations (≥6 fr)
+              "total_run_displacement_px": float # Σ |slope|·duration, in COLUMNS
             }
+
+        ``net_pxframe`` / ``total_run_displacement_px`` are in kymograph columns,
+        NOT image pixels — the Node backend scales by px-per-column (= arc length
+        / (n_samples-1)) before applying the µm calibration.
+
+        Per-run detail is intentionally NOT exposed — the run segmentation is an
+        internal step used only to aggregate the two totals above. ``total_run_time``
+        counts only directed runs of ≥6 frames; pauses AND sub-6-frame directed
+        flickers are excluded.
     """
     from scipy.ndimage import gaussian_filter
     from scipy.optimize import linear_sum_assignment
@@ -233,12 +358,23 @@ def detect_blobs(
         t_arr = np.asarray(tr["t"], dtype=np.float64)
         x_arr = np.asarray(tr["x"], dtype=np.float64)
         net = float((x_arr[-1] - x_arr[0]) / (t_arr[-1] - t_arr[0]))
+        # Segment into directed runs (internal only), then aggregate into the
+        # two per-trajectory totals we actually report. _segment_runs emits only
+        # directed segments of ≥6 frames, so run TIME excludes both pauses and
+        # sub-6-frame flickers; run LENGTH is the summed directed distance
+        # (|slope| × duration per run), in kymograph columns.
+        segs = _segment_runs(t_arr, x_arr, pause_thresh)
+        total_run_time_frames = float(sum(s["t1"] - s["t0"] for s in segs))
+        total_run_displacement_px = float(
+            sum(abs(s["v_pxframe"]) * (s["t1"] - s["t0"]) for s in segs)
+        )
         out.append(
             {
                 "points": [[int(t), float(x)] for t, x in zip(tr["t"], tr["x"])],
                 "net_pxframe": net,
                 "snr": float(np.median(tr["a"]) / sig_i),
-                "runs": _segment_runs(t_arr, x_arr, pause_thresh),
+                "total_run_time_frames": total_run_time_frames,
+                "total_run_displacement_px": total_run_displacement_px,
             }
         )
     out.sort(key=lambda r: -abs(r["net_pxframe"]))

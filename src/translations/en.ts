@@ -512,9 +512,9 @@ export default {
             'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT fusion produces per-instance polyline centerlines plus a 32-d per-pixel embedding that drives cross-frame tracking and kymograph generation. ~8 s/frame; the only model in the platform with native polyline output.',
         },
         microcapsule: {
-          name: 'Microcapsule (SAM 3)',
+          name: 'Microcapsule',
           description:
-            'Instance segmentation for microcapsules (round objects) in bright-field microscopy. Meta SAM 3 with the "circle" prompt returns one clean, full-resolution boundary per capsule with a confidence score; capsules cut off by the image border are excluded from the metrics (area, perimeter, compactness).',
+            'Instance segmentation for microcapsules (round objects) in bright-field microscopy. A compact U-Net distilled from Meta SAM 3 returns one clean, full-resolution boundary per capsule and separates touching capsules with a watershed; capsules cut off by the image border are excluded from the metrics (area, perimeter, compactness).',
         },
       },
     },
@@ -548,7 +548,7 @@ export default {
       microtubule:
         'Microtubule instance segmentation for IRM/TIRF microscopy. DINOv3-L + DPT encoder, PySOAX postprocessing, native polyline output with embedding-based cross-frame tracking.',
       microcapsule:
-        'Meta SAM 3 ("circle" prompt) instance segmentation for microcapsules — area, perimeter and compactness per capsule, with border-cut capsules excluded from metrics.',
+        'Compact U-Net (distilled from Meta SAM 3) for microcapsule instance segmentation — area, perimeter and compactness per capsule, with border-cut capsules excluded from metrics.',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:
@@ -2220,18 +2220,33 @@ export default {
       downloadPng: 'PNG',
       downloadCsv: 'CSV',
       showKymograph: 'Show kymograph',
-      axisTime: 'Time (frames) ↓',
+      axisTime: 'Time (frames)',
       axisAlong: 'Along microtubule (px) →',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
       fit: 'Fit to view',
-      zoomHint: 'drag to pan · Ctrl+wheel to zoom',
+      zoomHint: 'drag to pan · scroll to zoom',
       empty: 'Kymograph could not be computed.',
       velocityAnalysis: 'Velocity analysis',
+      widthLabel: 'Intensity width',
+      widthHint:
+        'Width (px) of the band sampled around each trajectory for signal vs. background intensity.',
       colVelocity: 'Net velocity',
-      colRuns: 'Runs',
+      colRunLength: 'Run length (µm)',
+      colRunTime: 'Run time (s)',
+      colIntensity: 'Intensity (signal−bg)',
+      colEdge: 'Edge',
       colSnr: 'SNR',
+      edge: {
+        left: 'Reaches the left end (continues off the microtubule)',
+        right: 'Reaches the right end (continues off the microtubule)',
+        both: 'Reaches both ends',
+        none: 'Stays within the microtubule',
+      },
       noBlobs: 'No moving particles detected',
+      velocityFailed: 'Velocity detection failed.',
+      filteredHidden:
+        '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
       downloadTracks: 'Velocity CSV',
       uncalibrated:
         'No pixel-size / frame-interval calibration — velocities shown in px/frame.',

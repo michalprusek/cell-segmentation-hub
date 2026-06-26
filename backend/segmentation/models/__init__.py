@@ -31,7 +31,8 @@ try:
 except ImportError:
     SegFormerModel = None
 
-# Microcapsule model: optional import (requires the sam3 package for SAM 3).
+# Microcapsule model: optional import (distilled U-Net — needs
+# segmentation_models_pytorch + scikit-image).
 try:
     from .microcapsule import MicrocapsuleModel
 except ImportError:

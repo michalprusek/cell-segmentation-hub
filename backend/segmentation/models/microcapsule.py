@@ -1,66 +1,80 @@
-"""Microcapsule instance-segmentation model wrapper (Meta SAM 3).
+"""Microcapsule instance-segmentation model wrapper (distilled U-Net).
 
 Segments every microcapsule (round object) in a bright-field microscopy image
-using SAM 3 Promptable Concept Segmentation with the text prompt "circle".
+with a compact U-Net (MobileNetV3-Small encoder, ~14.5 MB) distilled offline
+from Meta SAM 3: SAM 3 (3.4 GB) auto-labelled the training images and this small
+student was trained to reproduce its masks (mAP 0.977 vs the teacher on a
+held-out split). SAM 3 is NOT needed at runtime — inference is bbox-free, prompt-
+free and runs on CPU.
 
-Why SAM 3 (not a distilled YOLO student): SAM 3 produces instance masks at the
-full image resolution, so capsule boundaries are clean and circular — they do
-NOT show the low-resolution block / "flat edges on the sides" artifact of a
-small YOLO-seg mask grid, and the polygon is simplified with `approxPolyDP`
-(points stay ON the contour) rather than smoothed inward, so edges are never
-clipped.
-
-SAM 3 with the prompt "circle" returns several overlapping masks per capsule
-(the outer shell, the inner wall, an interior bubble). These are collapsed to
-one OUTER boundary per capsule with `_merge_nested` — the exact convention the
-original distillation used (`training/make_yolo_dataset.py: merge_nested`).
+The model is fully convolutional: it predicts a *solid foreground* + a
+*per-instance distance map*, then separates touching capsules with an
+h-maxima-seeded watershed. This avoids both the bounding-box edge artifacts of
+detection models (e.g. YOLO-seg) and the over-segmentation of thick translucent
+shells.
 
 Each instance carries:
-  - ``confidence`` : SAM 3 detection score (0..1)
+  - ``confidence`` : mean foreground probability inside the mask (0..1). The
+                     model is deterministic (no detection score), so this is a
+                     foreground-certainty proxy that keeps the export's
+                     confidence column and the threshold slider meaningful.
   - ``complete``   : ``False`` if the mask touches the image border (the capsule
-                     is cut off by the frame). Incomplete capsules are drawn
-                     grey and excluded from metrics downstream.
+                     is cut off by the frame). Incomplete capsules are drawn grey
+                     and excluded from metrics downstream.
 
-SAM 3 weights (~3.4 GB ``sam3.pt``) and the CLIP BPE vocab download from
-HuggingFace on first load (HF_TOKEN required) and cache under ``HF_HOME``.
+Weights load from a local ``microcapsule_unet.pt`` checkpoint (no network, no
+HuggingFace token).
 """
 
 import logging
-import os
-import shutil
-import urllib.request
 
 import cv2
 import numpy as np
+import torch
+
+from .unet_lite import SIZE, build_model, predict_instances
 
 logger = logging.getLogger(__name__)
 
-# Capsules whose mask comes within this many pixels of any image edge are cut
-# off by the frame (inherited from the reference pipeline).
-_BORDER_MARGIN_PX = 3
-# Two SAM 3 "circle" masks are the same capsule when one is >88% contained in
-# the other (its inner wall / interior bubble). Matches the original distillation.
-_NEST_CONTAINMENT = 0.88
-# Polygon simplification tolerance (px). approxPolyDP keeps points ON the
-# contour — no inward shrink — so capsule edges are never clipped.
+# ImageNet normalization (the MobileNetV3 encoder was trained with it).
+_IMEAN = np.array([0.485, 0.456, 0.406], np.float32)
+_ISTD = np.array([0.229, 0.224, 0.225], np.float32)
+# Encoders tried in order when matching the checkpoint to an architecture.
+_ENCODERS = ("timm-mobilenetv3_small_100", "resnet18")
+# Watershed seed prominence (raise if a capsule splits, lower if two touching
+# capsules merge). Not exposed per-request; the threshold slider drives the
+# foreground cutoff instead.
+_WATERSHED_H = 0.3
+# Contours smaller than this (px^2) at native resolution are dropped as noise.
+_MIN_AREA_PX = 60
+# Polygon simplification tolerance (px). approxPolyDP keeps points ON the contour
+# (no inward shrink, so capsule edges are never clipped) and collapses the dense
+# ~1000-pt raw contour to a clean ~50-pt boundary — matching the prior pipeline
+# so polygon weight, metrics and vertex-editing stay consistent.
 _APPROX_EPS_PX = 1.5
-_MIN_AREA_PX = 200
-# SAM 3 internal working resolution (logits are interpolated back to native size).
-_RESOLUTION = 1008
+# A contour within this many px of any edge is cut off by the frame.
+_BORDER_MARGIN_PX = 2
 
-_BPE_URL = (
-    "https://openaipublic.blob.core.windows.net/clip/bpe_simple_vocab_16e6.txt.gz"
-)
+
+def _letterbox(img, size, interp):
+    """Resize ``img`` to a ``size``x``size`` square, aspect preserved, zero-padded.
+
+    Returns the padded image plus the (x0, y0, nw, nh) of the real content inside
+    it, so predictions can be cropped back out and resized to native resolution.
+    """
+    h, w = img.shape[:2]
+    s = size / max(h, w)
+    nh, nw = int(round(h * s)), int(round(w * s))
+    resized = cv2.resize(img, (nw, nh), interpolation=interp)
+    pad = np.zeros((size, size, 3), img.dtype)
+    y0, x0 = (size - nh) // 2, (size - nw) // 2
+    pad[y0:y0 + nh, x0:x0 + nw] = resized
+    return pad, x0, y0, nw, nh
 
 
 def _touches_border(polygon: np.ndarray, height: int, width: int,
                     margin: int = _BORDER_MARGIN_PX) -> bool:
-    """Return True if the polygon comes within ``margin`` px of any image edge.
-
-    Symmetric on all four edges: the last valid pixel index is ``width-1`` /
-    ``height-1``, so the right/bottom thresholds use ``-1 - margin`` to match the
-    ``<= margin`` rule on the left/top.
-    """
+    """Return True if the polygon comes within ``margin`` px of any image edge."""
     xs, ys = polygon[:, 0], polygon[:, 1]
     return bool(
         xs.min() <= margin or ys.min() <= margin
@@ -68,168 +82,87 @@ def _touches_border(polygon: np.ndarray, height: int, width: int,
     )
 
 
-def _fill_holes(mask: np.ndarray) -> np.ndarray:
-    """Fill interior holes so a ring / annulus mask becomes a solid disk.
-
-    SAM 3 often segments a thick-shelled capsule's OUTER boundary as an annulus
-    (the shell, hollow in the middle). Filling it lets containment see that the
-    inner-wall disk really sits inside the outer capsule.
-    """
-    cnts, _ = cv2.findContours(
-        mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
-    if not cnts:
-        return mask
-    out = np.zeros(mask.shape, np.uint8)
-    cv2.drawContours(out, cnts, -1, 1, thickness=cv2.FILLED)
-    return out.astype(bool)
-
-
-def _merge_nested(masks, containment: float = _NEST_CONTAINMENT):
-    """Indices of masks to KEEP: largest first, drop any >``containment`` nested.
-
-    A capsule's inner wall / interior bubble is almost entirely contained in its
-    outer-shell mask, so keeping only the outer mask yields one boundary per
-    capsule. Containment is measured on HOLE-FILLED masks: SAM 3's outer mask is
-    frequently a ring, and on the raw ring an inner disk falls in the hole and
-    looks "separate" (low overlap) — filling fixes that without ever merging two
-    genuinely separate capsules (their filled disks don't overlap). Mirrors
-    `training/make_yolo_dataset.py: merge_nested`.
-    """
-    filled = [_fill_holes(m) for m in masks]
-    areas = [int(f.sum()) for f in filled]
-    order = sorted(range(len(masks)), key=lambda i: -areas[i])
-    kept: list[int] = []
-    for i in order:
-        if areas[i] == 0:
-            continue
-        nested = any(
-            np.count_nonzero(filled[i] & filled[k]) / min(areas[i], areas[k])
-            > containment
-            for k in kept
-        )
-        if not nested:
-            kept.append(i)
-    return kept
-
-
-def _bpe_path() -> str:
-    """Path to the CLIP BPE vocab; download + cache under HF_HOME on first use.
-
-    Downloads with a timeout and writes to a temp file that is atomically
-    renamed, so a slow/broken network can't block model loading forever and a
-    partial download can't leave a corrupt cache file that is then reused.
-    """
-    cache_dir = os.environ.get("HF_HOME") or "/tmp"
-    path = os.path.join(cache_dir, "sam3_bpe_simple_vocab_16e6.txt.gz")
-    if not os.path.exists(path):
-        os.makedirs(cache_dir, exist_ok=True)
-        logger.info("Downloading CLIP BPE vocab for SAM 3 ...")
-        tmp = f"{path}.{os.getpid()}.tmp"
-        try:
-            with urllib.request.urlopen(_BPE_URL, timeout=30) as resp, \
-                    open(tmp, "wb") as out:
-                shutil.copyfileobj(resp, out)
-            os.replace(tmp, path)  # atomic on the same filesystem
-        except Exception:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-            raise
-    return path
-
-
 class MicrocapsuleModel:
-    """SAM 3 'circle' instance segmenter for microcapsules.
+    """Distilled U-Net instance segmenter for microcapsules.
 
     Loaded once via ``load_weights()``; call ``predict()`` per image.
     """
 
     def __init__(self):
         """Initialize without loading — the model builds in load_weights()."""
-        self._processor = None
-        self._device = "cuda"
-        logger.info("MicrocapsuleModel (SAM 3) wrapper initialized")
+        self._model = None
+        self._device = "cpu"
+        logger.info("MicrocapsuleModel (distilled U-Net) wrapper initialized")
 
     def load_weights(self, weights_path, device):
-        """Build the SAM 3 image model (downloads sam3.pt from HF, cached).
-
-        ``weights_path`` is accepted for interface symmetry but unused — SAM 3
-        loads its checkpoint from HuggingFace (facebook/sam3).
-        """
-        import sam3
-        from sam3.model.sam3_image_processor import Sam3Processor
-
+        """Build the U-Net and load the local ``microcapsule_unet.pt`` checkpoint."""
         dev_type = getattr(device, "type", str(device))
         self._device = "cuda" if dev_type == "cuda" else "cpu"
-        model = sam3.build_sam3_image_model(
-            bpe_path=_bpe_path(),
-            device=self._device,
-            eval_mode=True,
-            checkpoint_path=None,
-            load_from_HF=True,
-            enable_segmentation=True,
-        )
-        # Keep the processor threshold low; the per-call user threshold is applied
-        # as a score filter in predict() so it can vary per request.
-        self._processor = Sam3Processor(
-            model,
-            resolution=_RESOLUTION,
-            device=self._device,
-            confidence_threshold=0.15,
-        )
-        logger.info(f"SAM 3 microcapsule model loaded (device={self._device})")
+        state = torch.load(weights_path, map_location=self._device)
+        model = None
+        for enc in _ENCODERS:
+            try:
+                m = build_model(enc)
+                m.load_state_dict(state)
+                model = m
+                logger.info(f"Microcapsule U-Net matched encoder '{enc}'")
+                break
+            except Exception:  # noqa: BLE001 - try the next candidate encoder
+                continue
+        if model is None:
+            raise RuntimeError(
+                f"Could not match {weights_path} to a known encoder {_ENCODERS}"
+            )
+        self._model = model.to(self._device).eval()
+        logger.info(f"Microcapsule U-Net loaded (device={self._device})")
 
-    def predict(self, image_bgr: np.ndarray, conf: float = 0.3):
-        """Segment every microcapsule in a BGR image with the "circle" prompt.
+    def predict(self, image_bgr: np.ndarray, conf: float = 0.5):
+        """Segment every microcapsule in a BGR image.
 
+        ``conf`` is the per-request foreground cutoff (the U-Net ``fg_thresh``).
         Returns a list of instance dicts (sorted largest-area first), each:
             polygon_xy        : (M, 2) float32 pixel coordinates (outer boundary)
-            confidence        : float 0..1 (SAM 3 score)
+            confidence        : float 0..1 (mean foreground probability in mask)
             complete          : bool  (False if cut off by the frame)
             area_px           : float (cv2.contourArea)
             equiv_diameter_px : float (2*sqrt(area/pi))
         """
-        if self._processor is None:
+        if self._model is None:
             raise RuntimeError("Model not loaded. Call load_weights() first.")
-        from PIL import Image
 
         height, width = image_bgr.shape[:2]
-        pil = Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
+        rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        lb, x0, y0, nw, nh = _letterbox(rgb, SIZE, cv2.INTER_AREA)
+        x = (lb.astype(np.float32) / 255.0 - _IMEAN) / _ISTD
+        x = torch.from_numpy(x).permute(2, 0, 1)[None].to(self._device)
+        with torch.no_grad():
+            out = self._model(x)[0].cpu().numpy()
 
-        state = self._processor.set_image(pil)
-        state = self._processor.set_text_prompt(prompt="circle", state=state)
+        fg = 1.0 / (1.0 + np.exp(-out[0]))      # foreground probability (896x896)
+        dist = 1.0 / (1.0 + np.exp(-out[1]))    # per-instance distance (896x896)
+        lab896 = predict_instances(fg, dist, fg_thresh=conf, h=_WATERSHED_H,
+                                   min_size=_MIN_AREA_PX)
 
-        masks_t = state.get("masks")
-        scores_t = state.get("scores")
-        if masks_t is None or len(masks_t) == 0:
-            return []
+        # Crop the real (un-padded) content and resize back to native resolution.
+        crop = slice(y0, y0 + nh), slice(x0, x0 + nw)
+        lab = cv2.resize(lab896[crop], (width, height),
+                         interpolation=cv2.INTER_NEAREST)
+        fg_native = cv2.resize(fg[crop], (width, height),
+                               interpolation=cv2.INTER_LINEAR)
 
-        masks = [
-            masks_t[i, 0].cpu().numpy().astype(bool) for i in range(masks_t.shape[0])
-        ]
-        scores = (
-            [float(s) for s in scores_t.cpu().numpy()]
-            if scores_t is not None
-            else [1.0] * len(masks)
-        )
-
-        # Collapse nested capsule detections to one outer mask each, then apply
-        # the per-request confidence threshold as a score filter.
         instances = []
-        for i in _merge_nested(masks):
-            if scores[i] < conf:
-                continue
-            # Fill holes first so a ring/annulus outer mask yields the solid
-            # capsule's outer boundary (not its hollow inner edge).
+        for k in (i for i in np.unique(lab) if i):
+            mask = (lab == k).astype(np.uint8)
             cnts, _ = cv2.findContours(
-                _fill_holes(masks[i]).astype(np.uint8),
-                cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE,
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
             if not cnts:
                 continue
             contour = max(cnts, key=cv2.contourArea)
             if cv2.contourArea(contour) < _MIN_AREA_PX:
                 continue
+            # Simplify the dense raw contour to a clean boundary (points stay on
+            # the contour), matching the prior pipeline's polygon weight.
             poly = (
                 cv2.approxPolyDP(contour, _APPROX_EPS_PX, True)
                 .reshape(-1, 2)
@@ -238,14 +171,15 @@ class MicrocapsuleModel:
             if len(poly) < 3:
                 continue
             area = float(cv2.contourArea(poly))
+            if area < _MIN_AREA_PX:
+                continue
+            confidence = float(fg_native[lab == k].mean())
             instances.append({
                 "polygon_xy": poly,
-                "confidence": scores[i],
+                "confidence": confidence,
                 "complete": not _touches_border(poly, height, width),
                 "area_px": area,
-                "equiv_diameter_px": (
-                    2.0 * float(np.sqrt(area / np.pi)) if area > 0 else 0.0
-                ),
+                "equiv_diameter_px": 2.0 * float(np.sqrt(area / np.pi)),
             })
 
         instances.sort(key=lambda inst: -inst["area_px"])
@@ -253,13 +187,19 @@ class MicrocapsuleModel:
 
     # ---- PyTorch-compatible stubs (for ModelLoader uniformity) ---------------
     def eval(self):
-        """No-op — SAM 3 is built in eval mode."""
+        """Put the underlying model in eval mode (already set during load)."""
+        if self._model is not None:
+            self._model.eval()
         return self
 
     def to(self, device):
-        """No-op — device is pinned during load_weights()."""
+        """Move the underlying model; device is normally pinned in load_weights()."""
+        if self._model is not None:
+            dev_type = getattr(device, "type", str(device))
+            self._device = "cuda" if dev_type == "cuda" else "cpu"
+            self._model.to(self._device)
         return self
 
     def parameters(self):
-        """No torch parameters are exposed (SAM 3 owns its modules internally)."""
-        return iter([])
+        """Expose the U-Net's parameters (used only for device introspection)."""
+        return self._model.parameters() if self._model is not None else iter([])

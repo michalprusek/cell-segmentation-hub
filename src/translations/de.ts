@@ -518,9 +518,9 @@ export default {
             'Instanz-Segmentierung für IRM/TIRF-Mikrotubuli-Zeitrafferaufnahmen. DINOv3-L ViT-L/16 + DPT-Fusion liefert eine Centerline-Polylinie pro MT plus ein 32-d Embedding pro Pixel, das frameübergreifendes Tracking und Kymograph-Erzeugung ermöglicht. ~8 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
         },
         microcapsule: {
-          name: 'Microcapsule (SAM 3)',
+          name: 'Microcapsule',
           description:
-            'Instanz-Segmentierung für Mikrokapseln (runde Objekte) in der Hellfeld-Mikroskopie. Meta SAM 3 mit dem Prompt „circle" liefert eine saubere Kontur in voller Auflösung pro Kapsel mit Konfidenzwert; am Bildrand abgeschnittene Kapseln werden von den Metriken (Fläche, Umfang, Kompaktheit) ausgeschlossen.',
+            'Instanz-Segmentierung für Mikrokapseln (runde Objekte) in der Hellfeld-Mikroskopie. Ein kompaktes U-Net, das aus Meta SAM 3 destilliert wurde, liefert eine saubere Kontur in voller Auflösung pro Kapsel und trennt sich berührende Kapseln mittels Watershed; am Bildrand abgeschnittene Kapseln werden von den Metriken (Fläche, Umfang, Kompaktheit) ausgeschlossen.',
         },
       },
     },
@@ -554,7 +554,7 @@ export default {
       microtubule:
         'Instanz-Segmentierung für Mikrotubuli in der IRM/TIRF-Mikroskopie. DINOv3-L + DPT-Encoder, PySOAX-Postprocessing, native Polylinien-Ausgabe mit Embedding-basiertem Tracking.',
       microcapsule:
-        'Meta SAM 3 (Prompt „circle") Instanz-Segmentierung für Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen.',
+        'Kompaktes U-Net (destilliert aus Meta SAM 3) zur Instanz-Segmentierung von Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen.',
     },
     dataUsageTitle: 'Datennutzung und Datenschutz',
     dataUsageDescription:
@@ -2150,18 +2150,33 @@ export default {
       downloadPng: 'PNG',
       downloadCsv: 'CSV',
       showKymograph: 'Kymograph anzeigen',
-      axisTime: 'Zeit (Frames) ↓',
+      axisTime: 'Zeit (Frames)',
       axisAlong: 'Entlang Mikrotubulus (px) →',
       zoomIn: 'Vergrößern',
       zoomOut: 'Verkleinern',
       fit: 'Einpassen',
-      zoomHint: 'ziehen zum Verschieben · Strg+Rad zum Zoomen',
+      zoomHint: 'ziehen zum Verschieben · Rad zum Zoomen',
       empty: 'Kymograph konnte nicht berechnet werden.',
       velocityAnalysis: 'Geschwindigkeitsanalyse',
+      widthLabel: 'Intensitätsbreite',
+      widthHint:
+        'Breite (px) des um jede Trajektorie abgetasteten Bandes für Signal vs. Hintergrundintensität.',
       colVelocity: 'Nettogeschwindigkeit',
-      colRuns: 'Läufe',
+      colRunLength: 'Lauflänge (µm)',
+      colRunTime: 'Laufzeit (s)',
+      colIntensity: 'Intensität (Signal−Hintergrund)',
+      colEdge: 'Rand',
       colSnr: 'SNR',
+      edge: {
+        left: 'Erreicht das linke Ende (läuft über den Mikrotubulus hinaus)',
+        right: 'Erreicht das rechte Ende (läuft über den Mikrotubulus hinaus)',
+        both: 'Erreicht beide Enden',
+        none: 'Bleibt innerhalb des Mikrotubulus',
+      },
       noBlobs: 'Keine bewegten Partikel erkannt',
+      velocityFailed: 'Geschwindigkeitserkennung fehlgeschlagen.',
+      filteredHidden:
+        '{{count}} nicht-prozessive Trajektorie(n) unter 0.01 µm/s ausgeblendet.',
       downloadTracks: 'Geschwindigkeits-CSV',
       uncalibrated:
         'Keine Pixelgröße-/Bildintervall-Kalibrierung — Geschwindigkeiten in px/Frame.',

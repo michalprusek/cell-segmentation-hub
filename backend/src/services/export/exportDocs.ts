@@ -215,6 +215,27 @@ The JSON format preserves the full microtubule structure:
 - \`trackId\` — set when tracking ran successfully; equal across frames
   for sibling polylines representing the same MT over time
 
+## Kymograph velocity metrics
+
+When "Velocity metrics" is enabled, \`kymographs/velocity_metrics.csv\` holds
+**one row per detected moving particle** (trajectory) per microtubule ×
+fluorescent channel:
+
+- \`net_velocity_um_s\` / \`net_velocity_px_frame\` — net (displacement / time)
+  velocity. Trajectories with \`|net| < 0.01 µm/s\` are dropped as
+  non-processive and never appear.
+- \`total_run_length_um\` — total directed distance over processive runs (≥6
+  frames); \`total_run_time_s\` — total time in those runs (pauses excluded).
+  Both blank when the container is uncalibrated.
+- \`intensity_signal\` / \`intensity_background\` / \`intensity_minus_background\`
+  — mean signal along the trajectory minus the median of a band beside it (raw
+  pixel units). An empty \`intensity_*\` cell means no background band fit
+  (kymograph narrower than the sampling band), distinct from an uncalibrated
+  blank.
+- \`edge_touch\` — \`left\` / \`right\` / \`both\` / \`none\`: whether the
+  trajectory reaches a kymograph end (the motor continues onto microtubule
+  outside the imaged segment, so its run length is right-censored).
+
 ## Visualisation
 
 Generated kymograph PNGs are stored alongside the metrics workbook when

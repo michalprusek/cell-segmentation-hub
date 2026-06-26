@@ -498,9 +498,9 @@ export default {
             'Instanční segmentace mikrotubulů pro IRM/TIRF časosběrná videa. DINOv3-L ViT-L/16 + DPT fúze dává centerline polyline per MT a 32-d embedding na pixel, který umožňuje cross-frame tracking a generování kymografu. ~8 s/frame; jediný model v platformě s nativním polyline výstupem.',
         },
         microcapsule: {
-          name: 'Microcapsule (SAM 3)',
+          name: 'Microcapsule',
           description:
-            'Instanční segmentace mikrokapsulí (kulatých objektů) v mikroskopii světlého pole. Meta SAM 3 s promptem „circle“ vrací jednu čistou hranici plného rozlišení na kapsuli s hodnotou spolehlivosti; kapsule přesahující okraj snímku jsou vyloučeny z metrik (plocha, obvod, kompaktnost).',
+            'Instanční segmentace mikrokapsulí (kulatých objektů) v mikroskopii světlého pole. Kompaktní U-Net destilovaný z Meta SAM 3 vrací jednu čistou hranici plného rozlišení na kapsuli a odděluje se dotýkající kapsule pomocí watershedu; kapsule přesahující okraj snímku jsou vyloučeny z metrik (plocha, obvod, kompaktnost).',
         },
       },
     },
@@ -534,7 +534,7 @@ export default {
       microtubule:
         'Instanční segmentace mikrotubulů pro IRM/TIRF mikroskopii. DINOv3-L + DPT enkodér, PySOAX postprocessing, nativní polyline výstup s tracking přes 32-d embedding.',
       microcapsule:
-        'Instanční segmentace mikrokapsulí pomocí Meta SAM 3 (prompt „circle“) — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
+        'Kompaktní U-Net (destilovaný z Meta SAM 3) pro instanční segmentaci mikrokapsulí — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:
@@ -2159,18 +2159,33 @@ export default {
       downloadPng: 'PNG',
       downloadCsv: 'CSV',
       showKymograph: 'Zobrazit kymograf',
-      axisTime: 'Čas (snímky) ↓',
+      axisTime: 'Čas (snímky)',
       axisAlong: 'Podél mikrotubule (px) →',
       zoomIn: 'Přiblížit',
       zoomOut: 'Oddálit',
       fit: 'Přizpůsobit',
-      zoomHint: 'táhni pro posun · Ctrl+kolečko pro zoom',
+      zoomHint: 'táhni pro posun · kolečko pro zoom',
       empty: 'Kymograf nelze spočítat.',
       velocityAnalysis: 'Analýza rychlosti',
+      widthLabel: 'Šířka intenzity',
+      widthHint:
+        'Šířka (px) pásu vzorkovaného kolem každé trajektorie pro signál vs. intenzitu pozadí.',
       colVelocity: 'Čistá rychlost',
-      colRuns: 'Běhy',
+      colRunLength: 'Délka běhu (µm)',
+      colRunTime: 'Čas běhu (s)',
+      colIntensity: 'Intenzita (signál−pozadí)',
+      colEdge: 'Kraj',
       colSnr: 'SNR',
+      edge: {
+        left: 'Dosahuje levého konce (pokračuje za mikrotubuli)',
+        right: 'Dosahuje pravého konce (pokračuje za mikrotubuli)',
+        both: 'Dosahuje obou konců',
+        none: 'Zůstává v rámci mikrotubule',
+      },
       noBlobs: 'Nedetekovány žádné pohyblivé částice',
+      velocityFailed: 'Detekce rychlosti selhala.',
+      filteredHidden:
+        'Skryto {{count}} neprocesivních trajektorií pod 0.01 µm/s.',
       downloadTracks: 'CSV rychlostí',
       uncalibrated:
         'Bez kalibrace velikosti pixelu / intervalu snímků — rychlosti v px/snímek.',

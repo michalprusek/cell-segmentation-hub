@@ -25,13 +25,19 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.kymograph_velocity import detect_blobs, render_overlay
+from api.kymograph_velocity import (
+    detect_blobs,
+    edge_touch,
+    net_velocity_threshold,
+    render_overlay,
+    track_intensity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -351,28 +357,42 @@ class KymographRequest(BaseModel):
     # the kymograph and return it as ``overlay_png_base64`` — used by the export
     # pipeline to ship "segmented kymograph" images without a browser.
     render_overlay: bool = False
-
-
-class KymographRun(BaseModel):
-    """One constant-velocity segment of a track's trajectory."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    v_pxframe: float
-    se_pxframe: float
-    t0: int
-    t1: int
+    # Width (in kymograph position columns) of the signal band sampled around
+    # each detected trajectory for the background-subtracted intensity metric.
+    intensity_width: int = Field(3, ge=1, le=50)
+    # Container calibration. When both are present the endpoint drops tracks
+    # whose |net velocity| is below ``min_net_velocity_um_s`` (non-processive /
+    # oscillatory blobs) BEFORE rendering the overlay, so overlay = tracks table =
+    # exported velocity CSV (this response's csv_base64 is the intensity matrix).
+    pixel_size_um: Optional[float] = Field(None, gt=0)
+    frame_interval_ms: Optional[float] = Field(None, gt=0)
+    min_net_velocity_um_s: float = Field(0.01, ge=0.0)
 
 
 class KymographTrack(BaseModel):
-    """One moving particle detected on the kymograph."""
+    """One moving particle detected on the kymograph.
+
+    Per-run detail is deliberately omitted: the run segmentation is internal to
+    ``detect_blobs`` and surfaces only as the two processive totals below.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     points: List[List[float]]  # [[frame, x_subpixel], ...], time-ordered
     net_pxframe: float
     snr: float
-    runs: List[KymographRun]
+    # Aggregated over processive runs (pauses excluded): total time in directed
+    # motion (frames) and total directed distance travelled (px). The Node
+    # backend converts these to seconds / µm with the container calibration.
+    total_run_time_frames: float = 0.0
+    total_run_displacement_px: float = 0.0
+    # Does the trajectory reach a kymograph end (motor continues onto MT outside
+    # the imaged segment). Literal both documents and enforces the closed set.
+    edge: Literal["left", "right", "both", "none"] = "none"
+    # Background-subtracted intensity along the trajectory (raw pixel units).
+    intensity_signal: Optional[float] = None
+    intensity_background: Optional[float] = None
+    intensity_minus_bg: Optional[float] = None
 
 
 class KymographResponse(BaseModel):
@@ -383,6 +403,14 @@ class KymographResponse(BaseModel):
     frame_count: int
     length_px: int
     tracked: bool
+    # Image pixels per kymograph column (= seed arc length / (length_px-1)). The
+    # Node backend multiplies column-space velocities + run displacements by this
+    # before applying µm calibration, so long MTs (column axis compressed at
+    # target_width) report correct µm/s and µm.
+    px_per_column: float = 1.0
+    # How many detected tracks were dropped by the net-velocity cut-off. Lets the
+    # caller distinguish "hidden as non-processive" from "nothing detected".
+    filtered_track_count: int = 0
     # Populated only when the request set ``detect_velocity``; otherwise None.
     tracks: Optional[List[KymographTrack]] = None
     # Populated only when ``render_overlay`` was set; base64 PNG of the
@@ -523,6 +551,11 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         )
     seed_arc = float(np.sum(np.linalg.norm(np.diff(seed_pts, axis=0), axis=1)))
     n_samples = max(2, min(int(round(seed_arc)) + 1, req.target_width))
+    # Image pixels spanned by one kymograph column. ≈1 while the arc length fits
+    # in target_width; >1 once the column axis is compressed (long MT capped at
+    # target_width). Velocities + run lengths are measured in columns, so the
+    # Node backend multiplies by this before applying the µm calibration.
+    px_per_column = seed_arc / (n_samples - 1) if n_samples > 1 else 1.0
 
     rows: List[np.ndarray] = []
     for frame in frames:
@@ -580,9 +613,50 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     raw_tracks: List[Dict[str, Any]] = []
     tracks: Optional[List[KymographTrack]] = None
     velocity_error: Optional[str] = None
+    filtered_track_count = 0
     if req.detect_velocity:
         try:
             raw_tracks = detect_blobs(kymo)
+            # Enrich each track with the edge-touch flag + background-subtracted
+            # intensity along its trajectory (both read off the same kymo). A
+            # failure on ONE track must not discard the whole batch, so isolate
+            # the enrichment per track and default its fields on error.
+            for tr in raw_tracks:
+                try:
+                    tr["edge"] = edge_touch(tr["points"], n_samples)
+                    tr.update(
+                        track_intensity(kymo, tr["points"], req.intensity_width)
+                    )
+                except Exception:
+                    logger.exception(
+                        "kymograph track enrichment failed; defaulting fields"
+                    )
+                    tr.setdefault("edge", "none")
+                    tr.setdefault("intensity_signal", None)
+                    tr.setdefault("intensity_background", None)
+                    tr.setdefault("intensity_minus_bg", None)
+            # Drop non-processive tracks: |net velocity| below the µm/s cut-off
+            # (oscillatory / static blobs are not directed transport). Needs the
+            # calibration to convert the µm/s threshold to a column/frame cut-off;
+            # without it we keep every track. Filter BEFORE render_overlay so the
+            # rendered overlay matches the returned table / exported velocity CSV.
+            if req.pixel_size_um and req.frame_interval_ms:
+                thr = net_velocity_threshold(
+                    req.min_net_velocity_um_s,
+                    req.frame_interval_ms,
+                    req.pixel_size_um,
+                    px_per_column,
+                )
+                kept = [tr for tr in raw_tracks if abs(tr["net_pxframe"]) >= thr]
+                filtered_track_count = len(raw_tracks) - len(kept)
+                if filtered_track_count:
+                    logger.info(
+                        "kymograph: dropped %d/%d track(s) below %.3g um/s",
+                        filtered_track_count,
+                        len(raw_tracks),
+                        req.min_net_velocity_um_s,
+                    )
+                raw_tracks = kept
             tracks = [KymographTrack(**tr) for tr in raw_tracks]
         except Exception as _vel_exc:
             logger.exception(
@@ -592,6 +666,7 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
             velocity_error = str(_vel_exc)
             raw_tracks = []
             tracks = []
+            filtered_track_count = 0
 
     # Per-frame normalisation could obscure intensity changes — instead we
     # normalise globally to expose dynamics. Add 1e-9 to avoid /0.
@@ -632,6 +707,8 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         frame_count=int(kymo.shape[0]),
         length_px=int(kymo.shape[1]),
         tracked=bool(req.tracked),
+        px_per_column=float(px_per_column),
+        filtered_track_count=int(filtered_track_count),
         tracks=tracks,
         overlay_png_base64=overlay_b64,
         velocity_error=velocity_error,

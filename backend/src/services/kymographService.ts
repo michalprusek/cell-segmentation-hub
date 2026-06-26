@@ -24,6 +24,12 @@ import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 
+/** Net-velocity cut-off (µm/s): trajectories slower than this are dropped as
+ *  non-processive (oscillatory / static blobs are not directed transport).
+ *  Applied in the ML service, which needs the container calibration to turn
+ *  this µm/s threshold into px/frame. */
+const MIN_NET_VELOCITY_UM_S = 0.01;
+
 /** Same whitelist used by VideoController. Channel names must be alnum +
  *  underscore + dash so they can't escape the storage root. */
 const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -39,18 +45,26 @@ interface PolylineRecord {
   instanceId?: string;
 }
 
-/** Raw track shape returned by the ML ``/kymograph`` endpoint (snake_case,
- *  velocities in px/frame). Converted to the camelCase + um/s shape below. */
+/** Which kymograph end(s) a trajectory reaches (motor continues onto MT outside
+ *  the imaged segment). Closed set — kept in sync with the ML `edge_touch`
+ *  return and the FE `KymographTrack.edge`. */
+export type EdgeFlag = 'left' | 'right' | 'both' | 'none';
+
+/** Raw track shape returned by the ML ``/kymograph`` endpoint: velocity +
+ *  displacement in kymograph columns/frame, intensity in raw pixel units, time
+ *  in frames. Converted to the calibrated (µm/s velocity, µm length, s time)
+ *  camelCase shape below. Per-run detail is not exposed — only the two
+ *  processive totals. */
 interface MlTrack {
   points: KymoPoint[];
   net_pxframe: number;
   snr: number;
-  runs: Array<{
-    v_pxframe: number;
-    se_pxframe: number;
-    t0: number;
-    t1: number;
-  }>;
+  total_run_time_frames: number;
+  total_run_displacement_px: number;
+  edge: EdgeFlag;
+  intensity_signal: number | null;
+  intensity_background: number | null;
+  intensity_minus_bg: number | null;
 }
 
 export interface KymographServiceInput {
@@ -68,29 +82,31 @@ export interface KymographServiceInput {
   /** When true (with detectVelocity), the result carries ``overlayPngBase64``
    *  — the kymograph with detected tracks composited on top. Used by export. */
   renderOverlay?: boolean;
-}
-
-/** One constant-velocity segment of a track. ``*UmPerSec`` fields are null
- *  when the container has no calibration (pixelSizeUm / frameIntervalMs). */
-export interface KymographRun {
-  velocityPxPerFrame: number;
-  sePxPerFrame: number;
-  velocityUmPerSec: number | null;
-  seUmPerSec: number | null;
-  t0: number;
-  t1: number;
+  /** Width (kymograph position columns) of the signal band sampled around each
+   *  trajectory for the background-subtracted intensity metric. Default 3. */
+  intensityWidth?: number;
 }
 
 /** A sub-pixel trajectory sample: `[frame, xPosition]` along the polyline. */
 export type KymoPoint = [frame: number, x: number];
 
-/** One moving particle detected on the kymograph. */
+/** One moving particle detected on the kymograph. `netVelocityUmPerSec`,
+ *  `totalRunLengthUm` and `totalRunTimeS` are null when the container lacks the
+ *  relevant calibration (pixel size and/or frame interval). */
 export interface KymographTrack {
   points: KymoPoint[]; // time-ordered
   netVelocityPxPerFrame: number;
   netVelocityUmPerSec: number | null;
   snr: number;
-  runs: KymographRun[];
+  /** Total processive distance (µm) and time in directed motion (s). */
+  totalRunLengthUm: number | null;
+  totalRunTimeS: number | null;
+  /** Background-subtracted intensity along the trajectory (raw pixel units). */
+  intensitySignal: number | null;
+  intensityBackground: number | null;
+  intensityMinusBackground: number | null;
+  /** Which kymograph end(s) the trajectory reaches. */
+  edge: EdgeFlag;
 }
 
 export interface KymographServiceResult {
@@ -105,6 +121,12 @@ export interface KymographServiceResult {
   frameIntervalMs: number | null;
   /** Detected moving particles; present only when ``detectVelocity`` was set. */
   tracks?: KymographTrack[];
+  /** How many tracks the net-velocity cut-off hid as non-processive. Lets the UI
+   *  distinguish "hidden below 0.01 µm/s" from "nothing detected". 0 otherwise. */
+  filteredTrackCount: number;
+  /** Set when ML velocity detection crashed (vs. legitimately finding no
+   *  particles). Lets callers surface a failure instead of a silent empty table. */
+  velocityError?: string;
   /** Base64 PNG of the kymograph + tracks; present only with ``renderOverlay``. */
   overlayPngBase64?: string;
 }
@@ -149,6 +171,7 @@ export async function buildKymograph(
     channelColor,
     detectVelocity,
     renderOverlay,
+    intensityWidth,
   } = input;
 
   // Defence in depth: reject any sourceChannel containing path separators
@@ -245,6 +268,13 @@ export async function buildKymograph(
     });
   }
 
+  // Calibration: null when the upload carried no pixel size / frame interval
+  // (older videos, non-microscopy formats). Resolved BEFORE the ML call so the
+  // calibration + velocity cut-off can be forwarded (the ML service applies the
+  // µm/s filter, since only it renders the overlay that must match the table).
+  const pixelSizeUm = container.pixelSizeUm ?? null;
+  const frameIntervalMs = container.frameIntervalMs ?? null;
+
   const mlUrl = `${config.SEGMENTATION_SERVICE_URL}/api/v1/kymograph`;
   const res = await axios.post(
     mlUrl,
@@ -252,6 +282,16 @@ export async function buildKymograph(
       frames: framesPayload,
       target_width: 200,
       tracked: trackedMode,
+      intensity_width: intensityWidth ?? 3,
+      min_net_velocity_um_s: MIN_NET_VELOCITY_UM_S,
+      // Forward calibration only when usable (> 0). The ML field is gt=0, and
+      // 0 means "uncalibrated" here — sending it would 422 the whole request.
+      ...(pixelSizeUm != null && pixelSizeUm > 0
+        ? { pixel_size_um: pixelSizeUm }
+        : {}),
+      ...(frameIntervalMs != null && frameIntervalMs > 0
+        ? { frame_interval_ms: frameIntervalMs }
+        : {}),
       ...(channelColor ? { channel_color: channelColor } : {}),
       ...(detectVelocity ? { detect_velocity: true } : {}),
       ...(detectVelocity && renderOverlay ? { render_overlay: true } : {}),
@@ -260,16 +300,45 @@ export async function buildKymograph(
   );
   const payload = res.data?.data ?? res.data ?? {};
 
-  // Calibration: px/frame -> um/s factor. Null when the upload carried no
-  // pixel size / frame interval (older videos, non-microscopy formats).
-  const pixelSizeUm = container.pixelSizeUm ?? null;
-  const frameIntervalMs = container.frameIntervalMs ?? null;
-  const umPerSecPerPxFrame =
-    pixelSizeUm != null && frameIntervalMs != null && frameIntervalMs > 0
-      ? pixelSizeUm / (frameIntervalMs / 1000)
+  // ML velocities + run displacements are in kymograph COLUMNS; one column spans
+  // `pxPerColumn` image pixels (>1 once a long MT's column axis is compressed at
+  // target_width). Scale columns -> µm via `umPerColumn`, and frames -> s via
+  // `secPerFrame`. All null when the relevant calibration is absent (treat 0 as
+  // uncalibrated, consistently with the >0 forwarding guard above).
+  const pxPerColumn =
+    typeof payload.px_per_column === 'number' && payload.px_per_column > 0
+      ? payload.px_per_column
+      : 1;
+  const umPerColumn =
+    pixelSizeUm != null && pixelSizeUm > 0 ? pixelSizeUm * pxPerColumn : null;
+  const secPerFrame =
+    frameIntervalMs != null && frameIntervalMs > 0
+      ? frameIntervalMs / 1000
       : null;
-  const toUms = (pxPerFrame: number): number | null =>
-    umPerSecPerPxFrame != null ? pxPerFrame * umPerSecPerPxFrame : null;
+  const toUms = (colPerFrame: number): number | null =>
+    umPerColumn != null && secPerFrame != null
+      ? (colPerFrame * umPerColumn) / secPerFrame
+      : null;
+  const toUmLength = (cols: number): number | null =>
+    umPerColumn != null ? cols * umPerColumn : null;
+  const toSeconds = (frames: number): number | null =>
+    secPerFrame != null ? frames * secPerFrame : null;
+
+  // Distinguish "velocity detection crashed in ML" (velocity_error set) from
+  // "no particles found" (tracks: []). The ML field was previously dropped here,
+  // making the two indistinguishable downstream.
+  const velocityError =
+    typeof payload.velocity_error === 'string' && payload.velocity_error
+      ? payload.velocity_error
+      : undefined;
+  if (velocityError) {
+    logger.error(
+      `ML kymograph velocity detection failed: ${velocityError}`,
+      undefined,
+      'KymographService',
+      { videoContainerId, polylineId }
+    );
+  }
 
   // Surface a contract violation: detection was requested but the ML service
   // returned no tracks[] array (vs. legitimately empty). Don't let it look
@@ -287,14 +356,12 @@ export async function buildKymograph(
         netVelocityPxPerFrame: tr.net_pxframe,
         netVelocityUmPerSec: toUms(tr.net_pxframe),
         snr: tr.snr,
-        runs: tr.runs.map(r => ({
-          velocityPxPerFrame: r.v_pxframe,
-          sePxPerFrame: r.se_pxframe,
-          velocityUmPerSec: toUms(r.v_pxframe),
-          seUmPerSec: toUms(r.se_pxframe),
-          t0: r.t0,
-          t1: r.t1,
-        })),
+        totalRunLengthUm: toUmLength(tr.total_run_displacement_px),
+        totalRunTimeS: toSeconds(tr.total_run_time_frames),
+        intensitySignal: tr.intensity_signal ?? null,
+        intensityBackground: tr.intensity_background ?? null,
+        intensityMinusBackground: tr.intensity_minus_bg ?? null,
+        edge: tr.edge ?? 'none',
       }))
     : undefined;
 
@@ -315,7 +382,12 @@ export async function buildKymograph(
     sourceChannel,
     pixelSizeUm,
     frameIntervalMs,
+    filteredTrackCount:
+      typeof payload.filtered_track_count === 'number'
+        ? payload.filtered_track_count
+        : 0,
     ...(tracks ? { tracks } : {}),
+    ...(velocityError ? { velocityError } : {}),
     ...(typeof payload.overlay_png_base64 === 'string'
       ? { overlayPngBase64: payload.overlay_png_base64 }
       : {}),

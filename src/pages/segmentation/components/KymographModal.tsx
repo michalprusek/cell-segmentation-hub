@@ -18,7 +18,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Download, Loader2, Maximize, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  ArrowDown,
+  Download,
+  Loader2,
+  Maximize,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -50,25 +58,28 @@ interface KymographModalProps {
   channels: VideoChannel[] | null | undefined;
 }
 
-interface KymographRun {
-  velocityPxPerFrame: number;
-  sePxPerFrame: number;
-  velocityUmPerSec: number | null;
-  seUmPerSec: number | null;
-  t0: number;
-  t1: number;
-}
-
 /** Sub-pixel trajectory sample `[frame, xPosition]`. Mirrors the backend
  *  `KymoPoint` (FE/BE wire types are hand-synced per repo convention). */
 type KymoPoint = [frame: number, x: number];
+
+/** Which kymograph end(s) a trajectory reaches. Closed set, hand-synced with the
+ *  backend `EdgeFlag` and the ML `edge_touch` return. */
+type EdgeFlag = 'left' | 'right' | 'both' | 'none';
 
 interface KymographTrack {
   points: KymoPoint[]; // time-ordered
   netVelocityPxPerFrame: number;
   netVelocityUmPerSec: number | null;
   snr: number;
-  runs: KymographRun[];
+  /** Total processive distance (µm) and time in directed motion (s). */
+  totalRunLengthUm: number | null;
+  totalRunTimeS: number | null;
+  /** Background-subtracted intensity along the trajectory (raw pixel units). */
+  intensitySignal: number | null;
+  intensityBackground: number | null;
+  intensityMinusBackground: number | null;
+  /** Which kymograph end(s) the trajectory reaches. */
+  edge: EdgeFlag;
 }
 
 interface KymographResponse {
@@ -81,6 +92,10 @@ interface KymographResponse {
   pixelSizeUm: number | null;
   frameIntervalMs: number | null;
   tracks?: KymographTrack[];
+  /** Tracks hidden by the < 0.01 µm/s net-velocity cut-off (non-processive). */
+  filteredTrackCount?: number;
+  /** Set when ML velocity detection crashed (vs. found no particles). */
+  velocityError?: string;
 }
 
 // Direction-coded colours for the overlay + table dots.
@@ -91,6 +106,31 @@ function trackColor(netPxFrame: number): string {
   if (Math.abs(netPxFrame) < 0.02) return STATIC;
   return netPxFrame > 0 ? ANTERO : RETRO;
 }
+
+/** Constrain the viewer zoom to a sane range (5 %…2000 %). */
+const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
+
+/** Intensity-band width, clamped to the ML/route bounds (1…50 columns). The `3`
+ *  default is hit only by NaN-producing (truly non-numeric) input; empty or
+ *  whitespace input parses to 0 and clamps up to 1. */
+const DEFAULT_INTENSITY_WIDTH = 3;
+const clampWidth = (raw: string | number): number => {
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return DEFAULT_INTENSITY_WIDTH;
+  return Math.min(Math.max(n, 1), 50);
+};
+
+/** Glyph marking which kymograph end(s) the trajectory reaches (position only —
+ *  the motor's antero/retro travel direction is shown by track colour). */
+const edgeGlyph = (edge: EdgeFlag): string =>
+  edge === 'both' ? '↔' : edge === 'left' ? '←' : edge === 'right' ? '→' : '—';
+
+/** Compact metric formatters (em-dash when the value is unavailable, e.g.
+ *  run length / time are null on uncalibrated containers). */
+const fmtUm = (v: number | null): string => (v != null ? v.toFixed(2) : '—');
+const fmtSec = (v: number | null): string => (v != null ? v.toFixed(1) : '—');
+const fmtIntensity = (v: number | null): string =>
+  v != null ? v.toFixed(0) : '—';
 
 export function KymographModal({
   open,
@@ -119,104 +159,137 @@ export function KymographModal({
     defaultChannel
   );
   const [detectVelocity, setDetectVelocity] = useState(true);
+  const [intensityWidth, setIntensityWidth] = useState(DEFAULT_INTENSITY_WIDTH);
+  // Debounced width drives the (expensive) kymograph refetch — each rebuild
+  // re-reads every frame PNG + re-runs blob detection, so we coalesce rapid
+  // keystrokes instead of firing a full ML round-trip per character.
+  const [debouncedWidth, setDebouncedWidth] = useState(DEFAULT_INTENSITY_WIDTH);
   const [result, setResult] = useState<KymographResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<number | null>(null);
 
-  // --- Kymograph zoom / pan / scroll (native aspect ratio, no stretch) ------
+  // --- Kymograph zoom / pan (native aspect ratio, CSS-transform viewer) ------
+  // The kymograph is shown at its native lengthPx×frameCount size and moved by a
+  // single `translate(tx,ty) scale(s)` transform inside an overflow-hidden
+  // viewport. This makes centring trivial (just compute tx/ty), zoom-to-cursor
+  // exact, and pan a plain translate — none of which the old scroll model did
+  // well (a sub-viewport image pinned to the top-left, no centring).
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     x: number;
     y: number;
-    sl: number;
-    st: number;
+    tx: number;
+    ty: number;
   } | null>(null);
   const lastGeomRef = useRef<string | null>(null);
-  const [scale, setScale] = useState<number | null>(null);
+  const [view, setView] = useState<{
+    scale: number;
+    tx: number;
+    ty: number;
+  } | null>(null);
   const [dragging, setDragging] = useState(false);
-  const effScale = scale ?? 1;
+  const effScale = view?.scale ?? 1;
+  const tx = view?.tx ?? 0;
+  const ty = view?.ty ?? 0;
 
   // A kymograph needs both a spatial and a temporal extent to be displayed; a
   // degenerate result (lengthPx/frameCount ≤ 0) would otherwise divide-by-zero
-  // in fitToView and collapse the viewer to 0×0 with no feedback.
+  // in fitAndCenter and collapse the viewer to 0×0 with no feedback.
   const validKymo = !!result && result.lengthPx > 0 && result.frameCount > 0;
 
-  const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
-
-  const fitToView = useCallback(() => {
+  // Fit the whole kymograph into the viewport AND centre it (the user's ask: an
+  // explicitly centred image, not one pinned to the top-left corner).
+  const fitAndCenter = useCallback(() => {
     const vp = viewportRef.current;
     if (!vp || !result || result.lengthPx <= 0 || result.frameCount <= 0) {
       return;
     }
-    const s = Math.min(
-      vp.clientWidth / result.lengthPx,
-      vp.clientHeight / result.frameCount
-    );
-    setScale(clampScale(Number.isFinite(s) && s > 0 ? s : 1));
+    const vw = vp.clientWidth;
+    const vh = vp.clientHeight;
+    const raw = Math.min(vw / result.lengthPx, vh / result.frameCount);
+    const s = clampScale(Number.isFinite(raw) && raw > 0 ? raw : 1);
+    setView({
+      scale: s,
+      tx: (vw - result.lengthPx * s) / 2,
+      ty: (vh - result.frameCount * s) / 2,
+    });
   }, [result]);
 
-  // Fit only when the kymograph GEOMETRY changes (new polyline / different
-  // length) — this keeps the user's zoom across same-geometry refetches
-  // (channel switch, velocity toggle). useLayoutEffect fits before paint, so
-  // there is no one-frame flash at the initial native scale.
+  // Fit+centre only when the kymograph GEOMETRY changes (new polyline /
+  // different length) — this keeps the user's zoom+pan across same-geometry
+  // refetches (channel switch, velocity toggle). useLayoutEffect runs before
+  // paint, so there is no one-frame flash at the initial native scale.
   useLayoutEffect(() => {
     if (!validKymo || !result) return;
     const geom = `${result.lengthPx}x${result.frameCount}`;
     if (geom === lastGeomRef.current) return;
     lastGeomRef.current = geom;
-    fitToView();
-  }, [validKymo, result, fitToView]);
+    fitAndCenter();
+  }, [validKymo, result, fitAndCenter]);
 
-  const zoomBy = useCallback((factor: number) => {
-    const vp = viewportRef.current;
-    setScale(prev => {
-      const cur = prev ?? 1;
-      const next = clampScale(cur * factor);
-      if (vp) {
-        const ratio = next / cur;
-        const cx = vp.scrollLeft + vp.clientWidth / 2;
-        const cy = vp.scrollTop + vp.clientHeight / 2;
-        requestAnimationFrame(() => {
-          vp.scrollLeft = cx * ratio - vp.clientWidth / 2;
-          vp.scrollTop = cy * ratio - vp.clientHeight / 2;
-        });
-      }
-      return next;
+  // Zoom by `factor` keeping the viewport point (cx,cy) fixed — so the pixel
+  // under the cursor stays put. Standard zoom-to-cursor: solve tx' from
+  // cx = tx' + ((cx - tx)/s)·next.
+  const zoomAt = useCallback((factor: number, cx: number, cy: number) => {
+    setView(prev => {
+      const cur = prev ?? { scale: 1, tx: 0, ty: 0 };
+      const next = clampScale(cur.scale * factor);
+      const ratio = next / cur.scale;
+      return {
+        scale: next,
+        tx: cx - (cx - cur.tx) * ratio,
+        ty: cy - (cy - cur.ty) * ratio,
+      };
     });
   }, []);
 
-  // Ctrl/⌘ + wheel zoom — native non-passive listener so preventDefault works.
-  // Re-binds when the viewport (re)mounts, i.e. when validKymo flips true.
+  // Button zoom: keep the viewport CENTRE fixed.
+  const zoomByCentered = useCallback(
+    (factor: number) => {
+      const vp = viewportRef.current;
+      if (!vp) return;
+      zoomAt(factor, vp.clientWidth / 2, vp.clientHeight / 2);
+    },
+    [zoomAt]
+  );
+
+  // Plain mouse-wheel zoom toward the cursor — native non-passive listener so
+  // preventDefault stops the page from scrolling. Re-binds when the viewport
+  // (re)mounts, i.e. when validKymo flips true.
   useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+      const rect = vp.getBoundingClientRect();
+      zoomAt(
+        e.deltaY < 0 ? 1.1 : 1 / 1.1,
+        e.clientX - rect.left,
+        e.clientY - rect.top
+      );
     };
     vp.addEventListener('wheel', onWheel, { passive: false });
     return () => vp.removeEventListener('wheel', onWheel);
-  }, [zoomBy, validKymo]);
+  }, [zoomAt, validKymo]);
 
   const onDragStart = (e: React.MouseEvent) => {
-    const vp = viewportRef.current;
-    if (!vp || e.button !== 0) return;
-    dragRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      sl: vp.scrollLeft,
-      st: vp.scrollTop,
-    };
+    if (e.button !== 0) return;
+    dragRef.current = { x: e.clientX, y: e.clientY, tx, ty };
     setDragging(true);
   };
   const onDragMove = (e: React.MouseEvent) => {
-    const vp = viewportRef.current;
     const d = dragRef.current;
-    if (!vp || !d) return;
-    vp.scrollLeft = d.sl - (e.clientX - d.x);
-    vp.scrollTop = d.st - (e.clientY - d.y);
+    if (!d) return;
+    setView(prev =>
+      prev
+        ? {
+            ...prev,
+            tx: d.tx + (e.clientX - d.x),
+            ty: d.ty + (e.clientY - d.y),
+          }
+        : prev
+    );
   };
   const onDragEnd = useCallback(() => {
     dragRef.current = null;
@@ -235,6 +308,13 @@ export function KymographModal({
       setSourceChannel(defaultChannel);
     }
   }, [defaultChannel, sourceChannel]);
+
+  // Coalesce width keystrokes (~400 ms) before they trigger the kymograph
+  // refetch below — only the intensity columns depend on width.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedWidth(intensityWidth), 400);
+    return () => clearTimeout(id);
+  }, [intensityWidth]);
 
   useEffect(() => {
     if (!open || !sourceChannel) return;
@@ -255,6 +335,7 @@ export function KymographModal({
         sourceChannel,
         channelColor,
         detectVelocity,
+        ...(detectVelocity ? { intensityWidth: debouncedWidth } : {}),
       })
       .then(res => {
         if (cancelled) return;
@@ -279,6 +360,7 @@ export function KymographModal({
     frameIndex,
     channelColors,
     detectVelocity,
+    debouncedWidth,
   ]);
 
   const handleDownload = (kind: 'png' | 'csv') => {
@@ -358,6 +440,28 @@ export function KymographModal({
               })}
             </Label>
           </div>
+          {detectVelocity && (
+            <div className="flex items-center gap-2">
+              <Label htmlFor="kymo-width" className="text-sm">
+                {t('editor.kymograph.widthLabel', {
+                  defaultValue: 'Intensity width',
+                })}
+              </Label>
+              <Input
+                id="kymo-width"
+                type="number"
+                min={1}
+                max={50}
+                value={intensityWidth}
+                onChange={e => setIntensityWidth(clampWidth(e.target.value))}
+                className="h-8 w-16"
+                title={t('editor.kymograph.widthHint', {
+                  defaultValue:
+                    'Width (px) of the band sampled around each trajectory for signal vs. background intensity.',
+                })}
+              />
+            </div>
+          )}
           {result && (
             <span className="text-xs text-muted-foreground">
               {result.tracked
@@ -394,8 +498,12 @@ export function KymographModal({
             // Rows = frames (time ↓), cols = position along the microtubule.
             <div className="w-full">
               <div className="flex">
-                {/* Y-axis name (rotated). */}
-                <div className="flex items-center justify-center text-xs text-muted-foreground pr-1">
+                {/* Y-axis name (vertical text) + a real downward arrow.
+                    The arrow is a separate icon, NOT a "↓" glyph inside the
+                    writing-mode-rotated text — the rotation would turn the glyph
+                    sideways. Time increases downward (rows = frames), so the
+                    arrow points down. */}
+                <div className="flex flex-col items-center justify-center gap-1 pr-1 text-xs text-muted-foreground">
                   <span
                     className="whitespace-nowrap"
                     style={{
@@ -404,11 +512,12 @@ export function KymographModal({
                     }}
                   >
                     {t('editor.kymograph.axisTime', {
-                      defaultValue: 'Time (frames) ↓',
+                      defaultValue: 'Time (frames)',
                     })}
                   </span>
+                  <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 </div>
-                {/* Zoom / pan / scroll viewport. */}
+                {/* Zoom / pan viewport (CSS transform, overflow hidden). */}
                 <div className="relative min-w-0 flex-1">
                   <div className="absolute right-2 top-2 z-10 flex gap-1">
                     <Button
@@ -416,7 +525,7 @@ export function KymographModal({
                       size="icon"
                       variant="secondary"
                       className="h-7 w-7"
-                      onClick={() => zoomBy(1.3)}
+                      onClick={() => zoomByCentered(1.3)}
                       title={t('editor.kymograph.zoomIn', {
                         defaultValue: 'Zoom in',
                       })}
@@ -428,7 +537,7 @@ export function KymographModal({
                       size="icon"
                       variant="secondary"
                       className="h-7 w-7"
-                      onClick={() => zoomBy(1 / 1.3)}
+                      onClick={() => zoomByCentered(1 / 1.3)}
                       title={t('editor.kymograph.zoomOut', {
                         defaultValue: 'Zoom out',
                       })}
@@ -440,7 +549,7 @@ export function KymographModal({
                       size="icon"
                       variant="secondary"
                       className="h-7 w-7"
-                      onClick={fitToView}
+                      onClick={fitAndCenter}
                       title={t('editor.kymograph.fit', {
                         defaultValue: 'Fit to view',
                       })}
@@ -450,19 +559,20 @@ export function KymographModal({
                   </div>
                   <div
                     ref={viewportRef}
-                    className="max-h-[60vh] min-h-[240px] select-none overflow-auto rounded border bg-black/20"
+                    className="relative h-[60vh] min-h-[300px] w-full select-none overflow-hidden rounded border bg-black/20"
                     style={{ cursor: dragging ? 'grabbing' : 'grab' }}
                     onMouseDown={onDragStart}
                     onMouseMove={onDragMove}
                     onMouseUp={onDragEnd}
                     onMouseLeave={onDragEnd}
                   >
-                    {/* Inner box at native aspect × zoom; image + overlay share it. */}
+                    {/* Inner box at NATIVE size; pan+zoom via one transform. */}
                     <div
-                      className="relative"
+                      className="absolute left-0 top-0 origin-top-left"
                       style={{
-                        width: result.lengthPx * effScale,
-                        height: result.frameCount * effScale,
+                        width: result.lengthPx,
+                        height: result.frameCount,
+                        transform: `translate(${tx}px, ${ty}px) scale(${effScale})`,
                       }}
                     >
                       <img
@@ -473,37 +583,39 @@ export function KymographModal({
                         draggable={false}
                       />
                       {detectVelocity && tracks.length > 0 && (
-                        // viewBox = native pixel grid; preserveAspectRatio="none"
-                        // maps it onto the (native-aspect) box ⇒ tracks stay
-                        // aligned at any zoom. non-scaling-stroke keeps lines
-                        // a constant on-screen width.
+                        // viewBox = native pixel grid mapped 1:1 onto the native
+                        // box, then CSS-scaled by the parent transform ⇒ tracks
+                        // stay aligned at any zoom. Stroke width is divided by the
+                        // scale so the polyline keeps a constant on-screen width.
                         <svg
                           className="pointer-events-none absolute inset-0 h-full w-full"
                           viewBox={`0 0 ${result.lengthPx} ${result.frameCount}`}
                           preserveAspectRatio="none"
                         >
-                          {tracks.map((tr, i) => (
-                            <polyline
-                              key={i}
-                              points={tr.points
-                                .map(([frame, x]) => `${x},${frame}`)
-                                .join(' ')}
-                              fill="none"
-                              stroke={trackColor(tr.netVelocityPxPerFrame)}
-                              strokeWidth={activeTrack === i ? 5 : 3}
-                              strokeOpacity={
-                                activeTrack === null || activeTrack === i
-                                  ? 1
-                                  : 0.25
-                              }
-                              vectorEffect="non-scaling-stroke"
-                              className="pointer-events-auto cursor-pointer"
-                              onMouseEnter={() => setActiveTrack(i)}
-                              onMouseLeave={() => setActiveTrack(null)}
-                            >
-                              <title>{`#${i + 1}: ${fmtVelocity(tr)}`}</title>
-                            </polyline>
-                          ))}
+                          {tracks.map((tr, i) => {
+                            const col = trackColor(tr.netVelocityPxPerFrame);
+                            const focused =
+                              activeTrack === null || activeTrack === i;
+                            return (
+                              <g key={i} strokeOpacity={focused ? 1 : 0.25}>
+                                <polyline
+                                  points={tr.points
+                                    .map(([frame, x]) => `${x},${frame}`)
+                                    .join(' ')}
+                                  fill="none"
+                                  stroke={col}
+                                  strokeWidth={
+                                    (activeTrack === i ? 5 : 3) / effScale
+                                  }
+                                  className="pointer-events-auto cursor-pointer"
+                                  onMouseEnter={() => setActiveTrack(i)}
+                                  onMouseLeave={() => setActiveTrack(null)}
+                                >
+                                  <title>{`#${i + 1}: ${fmtVelocity(tr)}`}</title>
+                                </polyline>
+                              </g>
+                            );
+                          })}
                         </svg>
                       )}
                     </div>
@@ -519,7 +631,7 @@ export function KymographModal({
                 </span>
                 <span className="text-[10px]">
                   {t('editor.kymograph.zoomHint', {
-                    defaultValue: 'drag to pan · Ctrl+wheel to zoom',
+                    defaultValue: 'drag to pan · scroll to zoom',
                   })}
                 </span>
               </div>
@@ -530,7 +642,13 @@ export function KymographModal({
         {/* Velocity table */}
         {detectVelocity && result && !isLoading && (
           <div className="max-h-48 overflow-auto rounded border">
-            {tracks.length === 0 ? (
+            {result.velocityError ? (
+              <div className="p-3 text-sm text-destructive">
+                {t('editor.kymograph.velocityFailed', {
+                  defaultValue: 'Velocity detection failed.',
+                })}
+              </div>
+            ) : tracks.length === 0 ? (
               <div className="p-3 text-sm text-muted-foreground">
                 {t('editor.kymograph.noBlobs', {
                   defaultValue: 'No moving particles detected',
@@ -547,7 +665,22 @@ export function KymographModal({
                       })}
                     </th>
                     <th className="text-right px-2 py-1">
-                      {t('editor.kymograph.colRuns', { defaultValue: 'Runs' })}
+                      {t('editor.kymograph.colRunLength', {
+                        defaultValue: 'Run length (µm)',
+                      })}
+                    </th>
+                    <th className="text-right px-2 py-1">
+                      {t('editor.kymograph.colRunTime', {
+                        defaultValue: 'Run time (s)',
+                      })}
+                    </th>
+                    <th className="text-right px-2 py-1">
+                      {t('editor.kymograph.colIntensity', {
+                        defaultValue: 'Intensity (signal−bg)',
+                      })}
+                    </th>
+                    <th className="text-center px-2 py-1">
+                      {t('editor.kymograph.colEdge', { defaultValue: 'Edge' })}
                     </th>
                     <th className="text-right px-2 py-1">
                       {t('editor.kymograph.colSnr', { defaultValue: 'SNR' })}
@@ -577,7 +710,21 @@ export function KymographModal({
                         {fmtVelocity(tr)}
                       </td>
                       <td className="px-2 py-1 text-right tabular-nums">
-                        {tr.runs.length}
+                        {fmtUm(tr.totalRunLengthUm)}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {fmtSec(tr.totalRunTimeS)}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {fmtIntensity(tr.intensityMinusBackground)}
+                      </td>
+                      <td
+                        className="px-2 py-1 text-center"
+                        title={t(`editor.kymograph.edge.${tr.edge}`, {
+                          defaultValue: tr.edge,
+                        })}
+                      >
+                        {edgeGlyph(tr.edge)}
                       </td>
                       <td className="px-2 py-1 text-right tabular-nums">
                         {tr.snr.toFixed(1)}
@@ -592,6 +739,15 @@ export function KymographModal({
                 {t('editor.kymograph.uncalibrated', {
                   defaultValue:
                     'No pixel-size / frame-interval calibration — velocities shown in px/frame.',
+                })}
+              </div>
+            )}
+            {!result.velocityError && (result.filteredTrackCount ?? 0) > 0 && (
+              <div className="px-2 py-1 text-[10px] text-muted-foreground border-t">
+                {t('editor.kymograph.filteredHidden', {
+                  count: result.filteredTrackCount ?? 0,
+                  defaultValue:
+                    '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
                 })}
               </div>
             )}
@@ -629,53 +785,39 @@ export function KymographModal({
   );
 }
 
+/** One row per trajectory. Mirrors the metric columns of the export bundle's
+ *  ``velocity_metrics.csv`` (minus the export-only identifying + calibration
+ *  columns: video / microtubule / channel / pixel size / frame interval) so the
+ *  two CSVs agree on the shared columns. */
 function tracksToCsv(tracks: KymographTrack[]): string {
   const header = [
     'track',
     'net_velocity_um_s',
     'net_velocity_px_frame',
     'snr',
-    'run_index',
-    'run_velocity_um_s',
-    'run_se_um_s',
-    'run_velocity_px_frame',
-    't0',
-    't1',
+    'total_run_length_um',
+    'total_run_time_s',
+    'intensity_signal',
+    'intensity_background',
+    'intensity_minus_background',
+    'edge_touch',
   ];
   const lines = [header.join(',')];
   tracks.forEach((tr, ti) => {
-    if (tr.runs.length === 0) {
-      lines.push(
-        [
-          ti + 1,
-          tr.netVelocityUmPerSec ?? '',
-          tr.netVelocityPxPerFrame,
-          tr.snr,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
-        ].join(',')
-      );
-    }
-    tr.runs.forEach((r, ri) => {
-      lines.push(
-        [
-          ti + 1,
-          tr.netVelocityUmPerSec ?? '',
-          tr.netVelocityPxPerFrame,
-          tr.snr,
-          ri + 1,
-          r.velocityUmPerSec ?? '',
-          r.seUmPerSec ?? '',
-          r.velocityPxPerFrame,
-          r.t0,
-          r.t1,
-        ].join(',')
-      );
-    });
+    lines.push(
+      [
+        ti + 1,
+        tr.netVelocityUmPerSec ?? '',
+        tr.netVelocityPxPerFrame,
+        tr.snr,
+        tr.totalRunLengthUm ?? '',
+        tr.totalRunTimeS ?? '',
+        tr.intensitySignal ?? '',
+        tr.intensityBackground ?? '',
+        tr.intensityMinusBackground ?? '',
+        tr.edge,
+      ].join(',')
+    );
   });
   return lines.join('\n');
 }
