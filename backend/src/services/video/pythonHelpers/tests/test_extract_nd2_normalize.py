@@ -35,7 +35,9 @@ HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
 from extract_nd2 import (  # noqa: E402
+    _extract_workers,
     _position_interval_ms,
+    _write_frames,
     normalize_to_tcyx,
     position_axis,
     select_position,
@@ -188,6 +190,79 @@ def test_missing_yx_rejected():
 def test_axes_ndim_mismatch_rejected():
     # 3-D array described by a 4-char axes string.
     _expect_unsupported("TCYX", (2, 4, 5))
+
+
+# ── streaming + parallel _write_frames (perf optimisation) ─────────────────
+# The extractor streams frames one chunk at a time and encodes PNGs across a
+# thread pool. These pin the load-bearing invariant: the optimisation must not
+# change a single output byte vs a naive sequential write.
+
+import hashlib  # noqa: E402
+import tempfile  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+
+def _seq_write(arr_tcyx, root, names):
+    """Reference sequential writer matching the pre-optimisation behaviour."""
+    from PIL import Image
+
+    from extract_nd2 import _to_png_dtype
+
+    T, C = arr_tcyx.shape[0], arr_tcyx.shape[1]
+    for t in range(T):
+        fd = root / f"{t:04d}"
+        fd.mkdir(parents=True, exist_ok=True)
+        for c in range(C):
+            Image.fromarray(_to_png_dtype(np.asarray(arr_tcyx[t, c]))).save(
+                fd / f"{names[c]}.png", format="PNG", optimize=True
+            )
+
+
+def _digest(root):
+    h = hashlib.md5()
+    for p in sorted(Path(root).rglob("*.png")):
+        h.update(p.read_bytes())
+    return h.hexdigest()
+
+
+def test_write_frames_byte_identical_to_sequential():
+    rng = np.random.RandomState(3)
+    arr = (rng.rand(11, 2, 24, 32) * 4000 + 100).astype(np.uint16)  # T=11,C=2
+    names = ["chA", "chB"]
+    par = Path(tempfile.mkdtemp())
+    seq = Path(tempfile.mkdtemp())
+    _write_frames(arr, par, names)
+    _seq_write(arr, seq, names)
+    assert sorted(p.name for p in par.rglob("*.png")) == sorted(
+        p.name for p in seq.rglob("*.png")
+    )
+    assert _digest(par) == _digest(seq), "parallel write changed the PNG bytes"
+
+
+def test_write_frames_streams_dask_input_identically():
+    # The single-position path now hands _write_frames a LAZY dask array; it must
+    # produce the same bytes as the equivalent numpy array. Skip if dask absent.
+    try:
+        import dask.array as da
+    except ImportError:
+        return
+    rng = np.random.RandomState(5)
+    arr = (rng.rand(9, 1, 20, 20) * 5000).astype(np.uint16)
+    darr = da.from_array(arr, chunks=(1, 1, 20, 20))
+    a = Path(tempfile.mkdtemp())
+    b = Path(tempfile.mkdtemp())
+    _write_frames(darr, a, ["c0"])  # dask (streamed)
+    _write_frames(arr, b, ["c0"])  # numpy
+    assert _digest(a) == _digest(b)
+
+
+def test_write_frames_single_frame_and_workers():
+    # T=1 (the single-frame IRM case) must not divide-by-zero on worker sizing.
+    arr = np.full((1, 1, 16, 16), 300, np.uint16)
+    d = Path(tempfile.mkdtemp())
+    _write_frames(arr, d, ["IRM"])
+    assert (d / "0000" / "IRM.png").exists()
+    assert _extract_workers() >= 1
 
 
 if __name__ == "__main__":
