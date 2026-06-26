@@ -126,6 +126,25 @@ export interface ImageWithSegmentation {
 
 export type SummaryStatisticsRow = (string | number)[];
 
+/** Mean of the max and min Feret diameters — the microcapsule export's
+ *  "Diameter" column. Rotation-invariant, distinct from the axis-aligned
+ *  Width/Height and the area-based Equivalent Diameter. */
+function meanFeretDiameter(m: PolygonMetrics): number {
+  return (m.feretDiameterMax + m.feretDiameterMin) / 2;
+}
+
+/** Ovality = Feret Max / Feret Min elongation ratio (≥ 1; 1.0 = round). Shared
+ *  by the CSV, Excel and summary exports so the value + degenerate handling stay
+ *  identical. ``feretDiameterMin`` is always > 0 for a real capsule (the shorter
+ *  side of a ≥ _MIN_AREA_PX min-area rectangle), so the guard returns the neutral
+ *  in-range 1.0 only for a degenerate zero-width polygon that can't reach export
+ *  — never the out-of-range 0 that would drag the summary average below 1. */
+function microcapsuleOvality(m: PolygonMetrics): number {
+  return m.feretDiameterMin > 0
+    ? m.feretDiameterMax / m.feretDiameterMin
+    : 1;
+}
+
 export class MetricsCalculator {
   private pythonApiUrl: string;
   private http: AxiosInstance;
@@ -883,17 +902,6 @@ export class MetricsCalculator {
 
     const safeValue = (value: number, decimals = 2): number =>
       isFinite(value) ? parseFloat(value.toFixed(decimals)) : 0;
-    // "Diameter" = mean Feret diameter (average caliper width across
-    // orientations) — rotation-invariant, distinct from the axis-aligned
-    // bounding-box Width/Height and the area-based Equivalent Diameter.
-    const meanDiameter = (m: PolygonMetrics): number =>
-      (m.feretDiameterMax + m.feretDiameterMin) / 2;
-    // Ovality = max-caliper / min-caliper Feret ratio (≥ 1; 1.0 = circular,
-    // larger = more elongated). NaN/Inf guarded to 0 by safeValue.
-    const ovality = (m: PolygonMetrics): number =>
-      m.feretDiameterMin > 0
-        ? m.feretDiameterMax / m.feretDiameterMin
-        : 0;
 
     // Only complete capsules reach here (excluded upstream), but guard anyway.
     const rows = metrics.filter(m => m.complete !== false);
@@ -906,12 +914,12 @@ export class MetricsCalculator {
         perimeter: safeValue(m.perimeter, 2),
         width: safeValue(m.boundingBoxWidth, 2),
         height: safeValue(m.boundingBoxHeight, 2),
-        diameter: safeValue(meanDiameter(m), 2),
+        diameter: safeValue(meanFeretDiameter(m), 2),
         feretMax: safeValue(m.feretDiameterMax, 2),
         feretMin: safeValue(m.feretDiameterMin, 2),
         equivalentDiameter: safeValue(m.equivalentDiameter, 2),
         compactness: safeValue(m.circularity, 4),
-        ovality: safeValue(ovality(m), 4),
+        ovality: safeValue(microcapsuleOvality(m), 4),
         confidence:
           typeof m.confidence === 'number' ? safeValue(m.confidence, 4) : '',
       });
@@ -1000,19 +1008,15 @@ export class MetricsCalculator {
         height: m.boundingBoxHeight,
         // "Diameter" = mean Feret diameter (rotation-invariant), distinct from
         // the axis-aligned Width/Height and the area-based Equivalent Diameter.
-        diameter: (m.feretDiameterMax + m.feretDiameterMin) / 2,
-        // Feret Max/Min = longest / shortest caliper width (thickest / narrowest
-        // part of the capsule).
+        diameter: meanFeretDiameter(m),
+        // Feret Max/Min = longer / shorter side of the min-area bounding rect
+        // (the capsule's long axis / narrowest width).
         feretMax: m.feretDiameterMax,
         feretMin: m.feretDiameterMin,
         equivalentDiameter: m.equivalentDiameter,
         // "Compactness" column carries the circularity value by design.
         compactness: m.circularity,
-        // Ovality = Feret Max / Feret Min (≥ 1; 1.0 = circular).
-        ovality:
-          m.feretDiameterMin > 0
-            ? m.feretDiameterMax / m.feretDiameterMin
-            : 0,
+        ovality: microcapsuleOvality(m),
         confidence: typeof m.confidence === 'number' ? m.confidence : '',
       }));
 
@@ -1069,9 +1073,7 @@ export class MetricsCalculator {
       ],
       [
         `Average Diameter (${lengthUnit})`,
-        this.average(
-          metrics.map(m => (m.feretDiameterMax + m.feretDiameterMin) / 2)
-        ).toFixed(2),
+        this.average(metrics.map(meanFeretDiameter)).toFixed(2),
       ],
       [
         `Average Feret Max (${lengthUnit})`,
@@ -1090,13 +1092,7 @@ export class MetricsCalculator {
       ['Maximum Compactness', Math.max(...compactness).toFixed(4)],
       [
         'Average Ovality',
-        this.average(
-          metrics.map(m =>
-            m.feretDiameterMin > 0
-              ? m.feretDiameterMax / m.feretDiameterMin
-              : 0
-          )
-        ).toFixed(4),
+        this.average(metrics.map(microcapsuleOvality)).toFixed(4),
       ],
     ];
   }

@@ -55,15 +55,21 @@ def test_touches_border_edge_polygon_is_incomplete(poly):
 
 
 def test_touches_border_respects_margin():
-    from models.microcapsule import _touches_border
+    from models.microcapsule import _touches_border, _BORDER_MARGIN_PX
 
-    # Default margin is 2 px: a vertex AT x=2 is cut off, an inset that clears
-    # 2 px on every edge is complete. Pixels run 0..199, so the far thresholds
-    # are width-1-margin = 197 / height-1-margin = 197.
-    near = np.array([[2, 40], [60, 40], [60, 120], [2, 120]], np.float32)
+    # Default margin is 20 px: a capsule reaching within 20 px of any edge is cut
+    # off; an inset that clears 20 px on every edge is complete. Pixels run
+    # 0..199, so the far thresholds are width-1-margin = 179 / height-1 = 179.
+    assert _BORDER_MARGIN_PX == 20
+    near = np.array([[18, 40], [60, 40], [60, 120], [18, 120]], np.float32)
     assert _touches_border(near, height=200, width=200) is True
-    clear = np.array([[3, 3], [196, 3], [196, 196], [3, 196]], np.float32)
+    clear = np.array([[25, 25], [174, 25], [174, 174], [25, 174]], np.float32)
     assert _touches_border(clear, height=200, width=200) is False
+    # Boundary: exactly at the margin is cut off; one px further in is complete.
+    at_margin = np.array([[20, 40], [174, 40], [174, 174], [20, 174]], np.float32)
+    assert _touches_border(at_margin, height=200, width=200) is True
+    just_clear = np.array([[21, 40], [174, 40], [174, 174], [21, 174]], np.float32)
+    assert _touches_border(just_clear, height=200, width=200) is False
 
 
 # ---------------------------------------------------------------------------

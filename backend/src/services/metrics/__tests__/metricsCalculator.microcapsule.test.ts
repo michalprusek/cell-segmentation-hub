@@ -221,6 +221,36 @@ describe('MetricsCalculator — exportMicrocapsuleMetricsToExcel', () => {
     expect(row.ovality).toBeCloseTo(1.5, 4); // 30 / 20
   });
 
+  it('ovality falls back to the neutral 1 (not 0) when feretMin <= 0', async () => {
+    await calc.exportMicrocapsuleMetricsToExcel(
+      [metricRow({ polygonId: 1, feretDiameterMax: 30, feretDiameterMin: 0 })],
+      '/tmp/metrics.xlsx'
+    );
+    const row = mockWorksheet.addRow.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    // Degenerate (unreachable for a real capsule) → 1.0, in-range [1,∞); a 0
+    // would be out-of-range and drag the summary Average Ovality below 1.
+    expect(row.ovality).toBe(1);
+  });
+
+  it('summary Average Ovality is the mean of per-capsule ratios', async () => {
+    await calc.exportMicrocapsuleMetricsToExcel(
+      [
+        metricRow({ polygonId: 1, feretDiameterMax: 30, feretDiameterMin: 20 }), // 1.5
+        metricRow({ polygonId: 2, feretDiameterMax: 50, feretDiameterMin: 20 }), // 2.5
+      ],
+      '/tmp/metrics.xlsx'
+    );
+    // Summary rows are arrays pushed to the shared mock after the data rows.
+    const ovalityRow = mockWorksheet.addRow.mock.calls
+      .map(c => c[0])
+      .find(r => Array.isArray(r) && r[0] === 'Average Ovality') as unknown[];
+    expect(ovalityRow).toBeDefined();
+    expect(parseFloat(String(ovalityRow[1]))).toBeCloseTo(2.0, 4); // mean(1.5, 2.5)
+  });
+
   it('width/height = bounding box, diameter = mean Feret', async () => {
     await calc.exportMicrocapsuleMetricsToExcel(
       [
@@ -294,5 +324,29 @@ describe('MetricsCalculator — exportMicrocapsuleToCSV', () => {
     // Two metric rows in, one excluded → one data line + the header.
     const lines = content.trim().split('\n');
     expect(lines).toHaveLength(2);
+  });
+
+  it('emits Feret Max / Feret Min / Ovality columns with correct values', async () => {
+    await calc.exportMicrocapsuleToCSV(
+      [
+        metricRow({
+          polygonId: 1,
+          feretDiameterMax: 30,
+          feretDiameterMin: 20,
+          complete: true,
+        }),
+      ],
+      '/tmp/metrics.csv'
+    );
+    const content = String(fsWriteFile.mock.calls[0]![1]);
+    const [headerLine, dataLine] = content.trim().split('\n');
+    const headers = headerLine.split(',');
+    const vals = dataLine.split(',');
+    const valOf = (prefix: string): number =>
+      parseFloat(vals[headers.findIndex(h => h.startsWith(prefix))]);
+    expect(valOf('Feret Max')).toBeCloseTo(30, 4);
+    expect(valOf('Feret Min')).toBeCloseTo(20, 4);
+    expect(valOf('Ovality')).toBeCloseTo(1.5, 4); // 30 / 20 — guards the CSV
+    // copy of the ovality logic against drifting from the Excel path.
   });
 });
