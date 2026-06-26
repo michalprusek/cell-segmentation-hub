@@ -47,11 +47,6 @@ _ENCODERS = ("timm-mobilenetv3_small_100", "resnet18")
 _WATERSHED_H = 0.3
 # Contours smaller than this (px^2) at native resolution are dropped as noise.
 _MIN_AREA_PX = 60
-# Polygon simplification tolerance (px). approxPolyDP keeps points ON the contour
-# (no inward shrink, so capsule edges are never clipped) and collapses the dense
-# ~1000-pt raw contour to a clean ~50-pt boundary — matching the prior pipeline
-# so polygon weight, metrics and vertex-editing stay consistent.
-_APPROX_EPS_PX = 1.5
 # A contour within this many px of any edge is cut off by the frame.
 _BORDER_MARGIN_PX = 2
 
@@ -161,13 +156,12 @@ class MicrocapsuleModel:
             contour = max(cnts, key=cv2.contourArea)
             if cv2.contourArea(contour) < _MIN_AREA_PX:
                 continue
-            # Simplify the dense raw contour to a clean boundary (points stay on
-            # the contour), matching the prior pipeline's polygon weight.
-            poly = (
-                cv2.approxPolyDP(contour, _APPROX_EPS_PX, True)
-                .reshape(-1, 2)
-                .astype(np.float32)
-            )
+            # Use the full CHAIN_APPROX_SIMPLE boundary directly — NO
+            # Douglas-Peucker (approxPolyDP) simplification — so the polygon
+            # follows the capsule edge faithfully. CHAIN_APPROX_SIMPLE already
+            # collapses only exactly-collinear runs, so this is the most faithful
+            # boundary the segmentation mask carries.
+            poly = contour.reshape(-1, 2).astype(np.float32)
             if len(poly) < 3:
                 continue
             area = float(cv2.contourArea(poly))
