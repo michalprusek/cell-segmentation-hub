@@ -135,33 +135,34 @@ capsule is one closed polygon and gets **one row** of size and shape descriptors
 ### Columns
 
 Every metric is derived from the capsule's **polygon contour** — the ordered
-boundary points \`p_0 … p_{n-1}\` (each \`p_i = (x_i, y_i)\`) that the segmentation
-produced, in ${lengthUnit}.
+boundary points \`p_0 … p_{n-1}\` (each \`p_i = (x_i, y_i)\`), in ${lengthUnit}.
+Values are computed by the metrics service with OpenCV directly on that contour
+(a pure-JS convex-hull fallback is used only if that service is unavailable).
 
 - **Image Name / Image ID** — source image identifiers.
 - **Capsule ID** — 1-based index within the image (largest capsule first).
-- **Area (${areaUnit})** — enclosed area via the **Shoelace formula**:
-  \`A = ½·|Σ_i (x_i·y_{i+1} − x_{i+1}·y_i)|\`.
-- **Perimeter (${lengthUnit})** — summed edge lengths around the contour:
-  \`P = Σ_i ||p_{i+1} − p_i||\` (ImageJ convention).
-- **Width (${lengthUnit})** — axis-aligned bounding box: \`max_i(x_i) − min_i(x_i)\`.
-- **Height (${lengthUnit})** — axis-aligned bounding box: \`max_i(y_i) − min_i(y_i)\`.
-  (Width/Height depend on how the capsule is oriented in the frame.)
-- **Diameter (${lengthUnit})** — mean Feret diameter, the average caliper width
-  across orientations \`(Feret_max + Feret_min) / 2\`. Rotation-invariant.
-- **Feret Max (${lengthUnit})** — maximum caliper / **longest** diameter (the
-  *thickest* part): the largest distance between any two contour points,
-  \`Feret_max = max_{i,j} ||p_i − p_j||\` (evaluated on the convex hull).
-- **Feret Min (${lengthUnit})** — minimum caliper / **narrowest** width (the
-  *thinnest* part): the smallest distance between two parallel lines that just
-  enclose the contour. Via rotating calipers on the convex hull — for each hull
-  edge take the farthest vertex's perpendicular distance, then
-  \`Feret_min = min over hull edges of that distance\`.
+- **Area (${areaUnit})** — enclosed contour area (\`cv2.contourArea\`), equivalent
+  to the **Shoelace formula** \`A = ½·|Σ_i (x_i·y_{i+1} − x_{i+1}·y_i)|\`.
+- **Perimeter (${lengthUnit})** — closed-contour length (\`cv2.arcLength\`),
+  \`P = Σ_i ||p_{i+1} − p_i||\` (Euclidean sum over the boundary edges).
+- **Width / Height (${lengthUnit})** — axis-aligned bounding box
+  (\`cv2.boundingRect\`): the pixel-inclusive \`max(x)−min(x)+1\` and
+  \`max(y)−min(y)+1\`. Depend on how the capsule is oriented in the frame.
+- **Diameter (${lengthUnit})** — mean of the max and min Feret diameters (below),
+  \`(Feret_max + Feret_min) / 2\`. Rotation-invariant.
+- **Feret Max (${lengthUnit})** — **longest** diameter (the capsule's long axis):
+  the **longer side of the minimum-area bounding rectangle** of the contour
+  (\`cv2.minAreaRect\`), \`Feret_max = max(w_rect, h_rect)\`.
+- **Feret Min (${lengthUnit})** — **narrowest** width (the short axis): the
+  **shorter side of that same minimum-area rectangle**, \`Feret_min = min(w_rect,
+  h_rect)\`. (It is the min-*area* rectangle — a close approximation of the true
+  minimum caliper width, not the exact min-width rectangle.)
 - **Equivalent Diameter (${lengthUnit})** — diameter of the circle with the same
-  area: \`d_eq = 2·sqrt(Area / π)\`. (For a perfect circle Diameter ≈ Equivalent
+  area, \`d_eq = 2·sqrt(Area / π)\`. (For a round capsule Diameter ≈ Equivalent
   Diameter ≈ Width ≈ Height.)
-- **Compactness** — circularity \`C = 4π·Area / Perimeter²\`, in [0, 1] where
-  **1.0 = a perfect circle**; lower values indicate an irregular/dented boundary.
+- **Compactness** — circularity \`C = 4π·Area / Perimeter²\`, clamped to [0, 1]
+  where **1.0 = a perfect circle**; lower values indicate an irregular/dented
+  boundary.
 - **Ovality** — elongation \`Ovality = Feret_max / Feret_min\` (≥ 1; **1.0 = a
   perfectly round capsule**, larger = more elongated/oval).
 - **Confidence** — the model's detection score for the capsule, in [0, 1].
