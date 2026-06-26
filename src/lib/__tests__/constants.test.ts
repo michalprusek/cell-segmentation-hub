@@ -16,9 +16,35 @@ import {
   VALIDATION,
   getTimeout,
   getRetryAttempts,
+  videoUploadTimeoutMs,
 } from '../constants';
 
 describe('constants', () => {
+  describe('videoUploadTimeoutMs', () => {
+    const MIN = 20 * 60 * 1000; // 20 min floor
+    const MAX = 4 * 60 * 60 * 1000; // 4 h ceiling
+
+    it('applies the 20-min floor to small clips', () => {
+      expect(videoUploadTimeoutMs(5 * 1024 * 1024)).toBe(MIN); // 5 MB
+      expect(videoUploadTimeoutMs(0)).toBe(MIN);
+    });
+
+    it('scales above the floor for large files (~1 MB/s + 1.5x headroom)', () => {
+      // 3 GB → 3072 s × 1.5 = 4608 s = 4_608_000 ms, well above the floor.
+      const threeGb = 3 * 1024 * 1024 * 1024;
+      expect(videoUploadTimeoutMs(threeGb)).toBeCloseTo(3072 * 1000 * 1.5, -3);
+      expect(videoUploadTimeoutMs(threeGb)).toBeGreaterThan(MIN);
+    });
+
+    it('caps at 4 hours for very large files', () => {
+      expect(videoUploadTimeoutMs(50 * 1024 * 1024 * 1024)).toBe(MAX); // 50 GB
+    });
+
+    it('handles negative/NaN sizes by falling back to the floor', () => {
+      expect(videoUploadTimeoutMs(-1)).toBe(MIN);
+    });
+  });
+
   describe('Constants Export Integrity', () => {
     it('should export all timeout configurations', () => {
       expect(TIMEOUTS).toBeDefined();
