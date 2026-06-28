@@ -2154,6 +2154,9 @@ export default {
       colRunTime: 'Durée de segment (s)',
       colIntensity: 'Intensité (signal−fond)',
       colEdge: 'Bord',
+      colBright: 'Luminosité',
+      brightHint:
+        'Intensité aberrante — probablement un agrégat de plusieurs moteurs, pas un seul moteur.',
       colSnr: 'SNR',
       edge: {
         left: 'Atteint le bord gauche (continue au-delà du microtubule)',

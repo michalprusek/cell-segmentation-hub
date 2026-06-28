@@ -208,6 +208,52 @@ def track_intensity(
     }
 
 
+# Robust-outlier factor for the "too bright" flag: a trajectory whose mean
+# signal exceeds ``median + BRIGHT_K · MAD`` of the per-track signals on the same
+# kymograph is flagged as an intensity outlier (typically a multi-motor
+# aggregate, not a single motor). 3.5·MAD ≈ a 99.9% robust cut-off for a normal
+# spread, and unlike mean+std it can't be inflated by the very aggregate it is
+# meant to catch.
+BRIGHT_K = 3.5
+
+
+def flag_bright_outliers(
+    tracks: List[Dict[str, Any]], k: float = BRIGHT_K
+) -> None:
+    """Mark intensity-outlier trajectories in place via ``tr["bright"]``.
+
+    "Too bright" is defined *relative to the other trajectories on the same
+    kymograph*: a track is flagged when its ``intensity_signal`` exceeds
+    ``median + k · MAD`` of all tracks' signals (MAD scaled by 1.4826 to a
+    std-equivalent). Robust to a few aggregates skewing the spread and free of
+    any absolute brightness constant — it answers "abnormally bright for a motor
+    in THIS movie", which is what flags likely multi-motor aggregates.
+
+    Every track is assigned ``bright`` (default ``False``). With fewer than 3
+    tracks, or a degenerate (zero) MAD, nothing is flagged — there is no
+    population to define an outlier against.
+    """
+    for tr in tracks:
+        tr["bright"] = False
+    sigs = [
+        tr["intensity_signal"]
+        for tr in tracks
+        if tr.get("intensity_signal") is not None
+    ]
+    if len(sigs) < 3:
+        return
+    arr = np.asarray(sigs, dtype=np.float64)
+    med = float(np.median(arr))
+    mad = 1.4826 * float(np.median(np.abs(arr - med)))
+    if mad <= 0:
+        return
+    thr = med + k * mad
+    for tr in tracks:
+        s = tr.get("intensity_signal")
+        if s is not None and s > thr:
+            tr["bright"] = True
+
+
 def detect_blobs(
     kymo: np.ndarray,
     *,

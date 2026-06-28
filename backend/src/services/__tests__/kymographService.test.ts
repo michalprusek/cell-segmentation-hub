@@ -669,8 +669,24 @@ describe('buildKymograph', () => {
       expect(res.tracks?.[0].intensityBackground).toBe(100);
       expect(res.tracks?.[0].intensityMinusBackground).toBe(700);
       expect(res.tracks?.[0].edge).toBe('right');
+      // Bright flag defaults to false when the ML track omits it.
+      expect(res.tracks?.[0].bright).toBe(false);
       expect(res.pixelSizeUm).toBe(0.07245);
       expect(res.frameIntervalMs).toBe(400);
+    });
+
+    it('passes the bright outlier flag through from the ML response', async () => {
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({ pixelSizeUm: 0.07245, frameIntervalMs: 400 })
+      );
+      mockAxios.post = vi.fn().mockResolvedValue({
+        data: {
+          ...ML_WITH_TRACKS.data,
+          tracks: [{ ...ML_WITH_TRACKS.data.tracks[0], bright: true }],
+        },
+      });
+      const res = await call(true);
+      expect(res.tracks?.[0].bright).toBe(true);
     });
 
     it('returns null µm/s + null run totals but keeps px/frame & intensity when uncalibrated', async () => {
