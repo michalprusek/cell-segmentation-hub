@@ -199,10 +199,12 @@ export async function exportMicrotubuleKymographs(
         continue;
       }
 
-      // Seed = first frame with a segmentation record. The container is
-      // skipped if that frame carries no usable polylines (we do not scan
-      // later frames for a better seed).
-      const seedFrame = await prisma.image.findFirst({
+      // Seed = the EARLIEST frame whose segmentation actually carries a usable
+      // polyline. Frame 0 is frequently an empty / unsegmented record while the
+      // tracked polylines only appear from frame 1 on, so picking merely "the
+      // first frame that has a segmentation record" would skip the whole
+      // container. Scan in frameIndex order and take the first non-empty one.
+      const segmentedFrames = await prisma.image.findMany({
         where: { parentVideoId: container.id, segmentation: { isNot: null } },
         orderBy: { frameIndex: 'asc' },
         select: {
@@ -210,13 +212,22 @@ export async function exportMicrotubuleKymographs(
           segmentation: { select: { polygons: true } },
         },
       });
-      if (!seedFrame || seedFrame.frameIndex == null) continue;
 
-      const polylines = parsePolylines(
-        seedFrame.segmentation?.polygons ?? null,
-        container.id
-      ).filter(p => Array.isArray(p.points) && p.points.length >= 2);
-      if (polylines.length === 0) continue;
+      let seedFrameIndex: number | null = null;
+      let polylines: PolylineRecord[] = [];
+      for (const f of segmentedFrames) {
+        if (f.frameIndex == null) continue;
+        const usable = parsePolylines(
+          f.segmentation?.polygons ?? null,
+          container.id
+        ).filter(p => Array.isArray(p.points) && p.points.length >= 2);
+        if (usable.length > 0) {
+          seedFrameIndex = f.frameIndex;
+          polylines = usable;
+          break;
+        }
+      }
+      if (seedFrameIndex == null || polylines.length === 0) continue;
 
       const safeVideo = container.name.replace(/[^A-Za-z0-9_-]+/g, '_');
       const selected = polylines.slice(0, MAX_MT_PER_CONTAINER);
@@ -235,7 +246,7 @@ export async function exportMicrotubuleKymographs(
             videoName: container.name,
             safeVideo,
             polylineId: poly.id,
-            frameIndex: seedFrame.frameIndex,
+            frameIndex: seedFrameIndex,
             sourceChannel,
           });
         }
