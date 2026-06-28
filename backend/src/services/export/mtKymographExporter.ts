@@ -8,8 +8,9 @@
  *
  *   - ``kymographs/<video>__<polyline>__<channel>.png`` — the kymograph with the
  *     detected tracks drawn on top (when ``includeSegmentedImages``).
- *   - ``kymographs/velocity_metrics.csv`` — one long-format row per run across
- *     all microtubules (when ``includeVelocityMetrics``).
+ *   - ``kymographs/velocity_metrics.xlsx`` — one worksheet per fluorescent
+ *     channel (channel = motor/protein, e.g. one sheet for kinesin), one row
+ *     per detected trajectory (when ``includeVelocityMetrics``).
  *
  * Reuses ``buildKymograph`` so the export and the editor modal share the exact
  * same sampling, detection and calibration path — no drift between what the
@@ -96,12 +97,68 @@ export function pickSourceChannels(channels: ChannelMeta[]): string[] {
   return [source?.name ?? channels[0].name];
 }
 
-/** RFC-4180 minimal escaping: quote fields containing comma / quote / newline.
- *  Video names are user-controlled and can legally contain commas. */
-function csvField(v: number | string | null | undefined): string {
-  if (v == null) return '';
-  const s = String(v);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+/** One velocity row, in the exact column order of ``VELOCITY_HEADER``. Cells are
+ *  written to Excel as their native type — numbers stay numeric, ``null`` is an
+ *  empty cell (uncalibrated / no background band), ``bright`` is a boolean. */
+type VelocityRow = Array<string | number | boolean | null>;
+
+const VELOCITY_HEADER = [
+  'video',
+  'microtubule',
+  'track',
+  'net_velocity_um_s',
+  'net_velocity_px_frame',
+  'snr',
+  'total_run_length_um',
+  'total_run_time_s',
+  'intensity_signal',
+  'intensity_background',
+  'intensity_minus_background',
+  'bright',
+  'edge_touch',
+  'pixel_size_um',
+  'frame_interval_ms',
+];
+
+/** Excel worksheet names must be ≤31 chars, non-blank, unique, and free of
+ *  ``* ? : \ / [ ]``. Sanitise the channel name and de-duplicate against the
+ *  names already used so two channels that collide after truncation stay
+ *  distinct (the suffix is kept inside the 31-char budget). */
+function safeSheetName(channel: string, used: Set<string>): string {
+  const cleaned =
+    channel.replace(/[*?:\\/[\]]/g, '_').slice(0, 31) || 'channel';
+  let name = cleaned;
+  let i = 2;
+  while (used.has(name)) {
+    const suffix = `_${i++}`;
+    name = `${cleaned.slice(0, 31 - suffix.length)}${suffix}`;
+  }
+  used.add(name);
+  return name;
+}
+
+/** Write ``velocity_metrics.xlsx`` with one worksheet per source channel.
+ *  exceljs is loaded lazily (CJS interop via ``.default``) so it is only pulled
+ *  in when MT velocity metrics are actually exported. Sheets are emitted in
+ *  sorted channel order for deterministic, reproducible workbooks. */
+async function writeVelocityWorkbook(
+  filePath: string,
+  rowsByChannel: Map<string, VelocityRow[]>
+): Promise<void> {
+  type ExcelJsDefault = typeof import('exceljs');
+  const excelMod = (await import('exceljs')) as unknown as {
+    default: ExcelJsDefault;
+  };
+  const ExcelJS = excelMod.default;
+
+  const workbook = new ExcelJS.Workbook();
+  const used = new Set<string>();
+  for (const channel of [...rowsByChannel.keys()].sort()) {
+    const sheet = workbook.addWorksheet(safeSheetName(channel, used));
+    sheet.addRow(VELOCITY_HEADER);
+    for (const row of rowsByChannel.get(channel) ?? []) sheet.addRow(row);
+  }
+  await workbook.xlsx.writeFile(filePath);
 }
 
 export async function exportMicrotubuleKymographs(
@@ -186,25 +243,9 @@ export async function exportMicrotubuleKymographs(
     }
 
     // --- Phase 2: build kymographs with bounded concurrency. -------------
-    const csvRows: string[] = [
-      [
-        'video',
-        'microtubule',
-        'source_channel',
-        'track',
-        'net_velocity_um_s',
-        'net_velocity_px_frame',
-        'snr',
-        'total_run_length_um',
-        'total_run_time_s',
-        'intensity_signal',
-        'intensity_background',
-        'intensity_minus_background',
-        'edge_touch',
-        'pixel_size_um',
-        'frame_interval_ms',
-      ].join(','),
-    ];
+    // Velocity rows grouped by source channel — each channel becomes one
+    // worksheet (channel = motor/protein) in velocity_metrics.xlsx.
+    const rowsByChannel = new Map<string, VelocityRow[]>();
 
     await mapWithConcurrency(jobs, KYMOGRAPH_CONCURRENCY, async job => {
       try {
@@ -219,7 +260,7 @@ export async function exportMicrotubuleKymographs(
 
         // buildKymograph degrades a velocity-detection crash to empty tracks
         // (it does NOT throw), so the per-job catch below would never see it.
-        // Surface it explicitly so a missing/short velocity_metrics.csv isn't
+        // Surface it explicitly so a missing/short velocity_metrics.xlsx isn't
         // mistaken for "no motility".
         if (result.velocityError) {
           logger.warn(
@@ -240,28 +281,28 @@ export async function exportMicrotubuleKymographs(
 
         if (options.includeVelocityMetrics && result.tracks) {
           // One row per trajectory (no per-run breakdown). Build this job's
-          // rows locally, then splice in one push so the CSV stays row-grouped
-          // per microtubule under concurrency.
-          const rows = result.tracks.map((tr, ti) =>
-            [
-              csvField(job.videoName),
-              job.polylineId,
-              job.sourceChannel,
-              ti + 1,
-              csvField(tr.netVelocityUmPerSec),
-              tr.netVelocityPxPerFrame,
-              tr.snr,
-              csvField(tr.totalRunLengthUm),
-              csvField(tr.totalRunTimeS),
-              csvField(tr.intensitySignal),
-              csvField(tr.intensityBackground),
-              csvField(tr.intensityMinusBackground),
-              tr.edge,
-              csvField(result.pixelSizeUm),
-              csvField(result.frameIntervalMs),
-            ].join(',')
-          );
-          csvRows.push(...rows);
+          // rows locally, then splice in one push so rows stay grouped per
+          // microtubule under concurrent job completion.
+          const rows: VelocityRow[] = result.tracks.map((tr, ti) => [
+            job.videoName,
+            job.polylineId,
+            ti + 1,
+            tr.netVelocityUmPerSec,
+            tr.netVelocityPxPerFrame,
+            tr.snr,
+            tr.totalRunLengthUm,
+            tr.totalRunTimeS,
+            tr.intensitySignal,
+            tr.intensityBackground,
+            tr.intensityMinusBackground,
+            tr.bright,
+            tr.edge,
+            result.pixelSizeUm,
+            result.frameIntervalMs,
+          ]);
+          const existing = rowsByChannel.get(job.sourceChannel);
+          if (existing) existing.push(...rows);
+          else rowsByChannel.set(job.sourceChannel, rows);
         }
       } catch (err) {
         // One bad microtubule/channel must not abort the whole export.
@@ -272,11 +313,14 @@ export async function exportMicrotubuleKymographs(
       }
     });
 
-    if (options.includeVelocityMetrics && csvRows.length > 1) {
-      await fs.writeFile(
-        path.join(outDir, 'velocity_metrics.csv'),
-        csvRows.join('\n'),
-        'utf-8'
+    const velocityRowCount = [...rowsByChannel.values()].reduce(
+      (n, rows) => n + rows.length,
+      0
+    );
+    if (options.includeVelocityMetrics && velocityRowCount > 0) {
+      await writeVelocityWorkbook(
+        path.join(outDir, 'velocity_metrics.xlsx'),
+        rowsByChannel
       );
     }
 
@@ -284,7 +328,8 @@ export async function exportMicrotubuleKymographs(
       projectId,
       containers: containers.length,
       kymographs: jobs.length,
-      velocityRows: csvRows.length - 1,
+      velocityRows: velocityRowCount,
+      channels: rowsByChannel.size,
     });
   } catch (err) {
     // Orchestration-level failure (DB / mkdir / final write): degrade to "no

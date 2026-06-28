@@ -2236,6 +2236,9 @@ export default {
       colRunTime: 'Run time (s)',
       colIntensity: 'Intensity (signal−bg)',
       colEdge: 'Edge',
+      colBright: 'Bright',
+      brightHint:
+        'Intensity outlier — likely a multi-motor aggregate, not a single motor.',
       colSnr: 'SNR',
       edge: {
         left: 'Reaches the left end (continues off the microtubule)',

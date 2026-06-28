@@ -231,9 +231,10 @@ The JSON format preserves the full microtubule structure:
 
 ## Kymograph velocity metrics
 
-When "Velocity metrics" is enabled, \`kymographs/velocity_metrics.csv\` holds
-**one row per detected moving particle** (trajectory) per microtubule ×
-fluorescent channel:
+When "Velocity metrics" is enabled, \`kymographs/velocity_metrics.xlsx\` holds
+**one worksheet per fluorescent channel** (channel = motor/protein, e.g. a
+separate sheet for kinesin) with **one row per detected moving particle**
+(trajectory) per microtubule:
 
 - \`net_velocity_um_s\` / \`net_velocity_px_frame\` — net (displacement / time)
   velocity. Trajectories with \`|net| < 0.01 µm/s\` are dropped as
@@ -246,6 +247,9 @@ fluorescent channel:
   pixel units). An empty \`intensity_*\` cell means no background band fit
   (kymograph narrower than the sampling band), distinct from an uncalibrated
   blank.
+- \`bright\` — \`TRUE\` when the trajectory's signal is an intensity outlier
+  (\`> median + 3.5·MAD\` of the other trajectories on the same kymograph),
+  typically a multi-motor aggregate rather than a single motor.
 - \`edge_touch\` — \`left\` / \`right\` / \`both\` / \`none\`: whether the
   trajectory reaches a kymograph end (the motor continues onto microtubule
   outside the imaged segment, so its run length is right-censored).
