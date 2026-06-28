@@ -23,6 +23,7 @@ if str(SEG_ROOT) not in sys.path:
 from api.kymograph_velocity import (  # noqa: E402
     detect_blobs,
     edge_touch,
+    flag_bright_outliers,
     net_velocity_threshold,
     track_intensity,
 )
@@ -148,6 +149,55 @@ def test_track_intensity_signal_present_but_no_background_room():
     assert out["intensity_signal"] is not None
     assert out["intensity_background"] is None
     assert out["intensity_minus_bg"] is None
+
+
+# ── flag_bright_outliers ──────────────────────────────────────────────────
+
+
+def _tracks_with_signals(signals):
+    return [{"intensity_signal": s} for s in signals]
+
+
+def test_flag_bright_outliers_marks_high_outlier():
+    # A tight cluster around 100 plus one bright aggregate at 1000.
+    tracks = _tracks_with_signals([95, 100, 102, 98, 105, 1000])
+    flag_bright_outliers(tracks)
+    assert [tr["bright"] for tr in tracks] == [
+        False,
+        False,
+        False,
+        False,
+        False,
+        True,
+    ]
+
+
+def test_flag_bright_outliers_none_when_uniform():
+    # No spread (MAD == 0) → no outlier can be defined → nothing flagged.
+    tracks = _tracks_with_signals([100, 100, 100, 100])
+    flag_bright_outliers(tracks)
+    assert all(tr["bright"] is False for tr in tracks)
+
+
+def test_flag_bright_outliers_too_few_tracks():
+    # Fewer than 3 signals → no population to judge an outlier against.
+    tracks = _tracks_with_signals([100, 5000])
+    flag_bright_outliers(tracks)
+    assert all(tr["bright"] is False for tr in tracks)
+
+
+def test_flag_bright_outliers_assigns_default_to_all():
+    # Every track gets a `bright` key even when its signal is None.
+    tracks = [
+        {"intensity_signal": 100},
+        {"intensity_signal": None},
+        {"intensity_signal": 102},
+        {"intensity_signal": 99},
+    ]
+    flag_bright_outliers(tracks)
+    assert all("bright" in tr for tr in tracks)
+    # The None-signal track is never flagged.
+    assert tracks[1]["bright"] is False
 
 
 # ── detect_blobs aggregation (no runs array) ──────────────────────────────

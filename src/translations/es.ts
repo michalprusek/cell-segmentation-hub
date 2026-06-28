@@ -2205,6 +2205,9 @@ export default {
       colRunTime: 'Duración de tramo (s)',
       colIntensity: 'Intensidad (señal−fondo)',
       colEdge: 'Borde',
+      colBright: 'Brillo',
+      brightHint:
+        'Intensidad atípica — probablemente un agregado de varios motores, no un solo motor.',
       colSnr: 'SNR',
       edge: {
         left: 'Alcanza el extremo izquierdo (continúa fuera del microtúbulo)',

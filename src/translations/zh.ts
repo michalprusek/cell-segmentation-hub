@@ -2024,6 +2024,8 @@ export default {
       colRunTime: '运动时长 (s)',
       colIntensity: '强度 (信号−背景)',
       colEdge: '边缘',
+      colBright: '亮度',
+      brightHint: '强度异常值——可能是多马达聚集体，而非单个马达。',
       colSnr: '信噪比',
       edge: {
         left: '到达左端（越过微管末端继续延伸）',

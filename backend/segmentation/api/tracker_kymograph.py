@@ -34,6 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from api.kymograph_velocity import (
     detect_blobs,
     edge_touch,
+    flag_bright_outliers,
     net_velocity_threshold,
     render_overlay,
     track_intensity,
@@ -393,6 +394,10 @@ class KymographTrack(BaseModel):
     intensity_signal: Optional[float] = None
     intensity_background: Optional[float] = None
     intensity_minus_bg: Optional[float] = None
+    # Intensity outlier: ``intensity_signal`` is abnormally high relative to the
+    # other trajectories on this kymograph (median + k·MAD) — typically a
+    # multi-motor aggregate rather than a single motor.
+    bright: bool = False
 
 
 class KymographResponse(BaseModel):
@@ -657,6 +662,10 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
                         req.min_net_velocity_um_s,
                     )
                 raw_tracks = kept
+            # Flag intensity outliers among the FINAL (post-filter) tracks, so
+            # the "bright" flag matches the trajectories that actually appear in
+            # the table / overlay / exported sheet.
+            flag_bright_outliers(raw_tracks)
             tracks = [KymographTrack(**tr) for tr in raw_tracks]
         except Exception as _vel_exc:
             logger.exception(

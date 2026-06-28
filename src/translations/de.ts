@@ -2166,6 +2166,9 @@ export default {
       colRunTime: 'Laufzeit (s)',
       colIntensity: 'Intensität (Signal−Hintergrund)',
       colEdge: 'Rand',
+      colBright: 'Helligkeit',
+      brightHint:
+        'Intensitäts-Ausreißer — wahrscheinlich ein Multi-Motor-Aggregat, kein einzelner Motor.',
       colSnr: 'SNR',
       edge: {
         left: 'Erreicht das linke Ende (läuft über den Mikrotubulus hinaus)',

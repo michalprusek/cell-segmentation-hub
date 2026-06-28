@@ -65,6 +65,7 @@ interface MlTrack {
   intensity_signal: number | null;
   intensity_background: number | null;
   intensity_minus_bg: number | null;
+  bright: boolean;
 }
 
 export interface KymographServiceInput {
@@ -107,6 +108,10 @@ export interface KymographTrack {
   intensityMinusBackground: number | null;
   /** Which kymograph end(s) the trajectory reaches. */
   edge: EdgeFlag;
+  /** True when this trajectory's signal is an intensity outlier (median + k·MAD)
+   *  relative to the other tracks on the same kymograph — likely a multi-motor
+   *  aggregate rather than a single motor. */
+  bright: boolean;
 }
 
 export interface KymographServiceResult {
@@ -362,6 +367,7 @@ export async function buildKymograph(
         intensityBackground: tr.intensity_background ?? null,
         intensityMinusBackground: tr.intensity_minus_bg ?? null,
         edge: tr.edge ?? 'none',
+        bright: tr.bright ?? false,
       }))
     : undefined;
 

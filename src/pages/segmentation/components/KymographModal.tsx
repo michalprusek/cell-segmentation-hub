@@ -80,6 +80,9 @@ interface KymographTrack {
   intensityMinusBackground: number | null;
   /** Which kymograph end(s) the trajectory reaches. */
   edge: EdgeFlag;
+  /** Intensity outlier (signal > median + k·MAD of the other tracks on this
+   *  kymograph) — likely a multi-motor aggregate, not a single motor. */
+  bright: boolean;
 }
 
 interface KymographResponse {
@@ -680,6 +683,11 @@ export function KymographModal({
                       })}
                     </th>
                     <th className="text-center px-2 py-1">
+                      {t('editor.kymograph.colBright', {
+                        defaultValue: 'Bright',
+                      })}
+                    </th>
+                    <th className="text-center px-2 py-1">
                       {t('editor.kymograph.colEdge', { defaultValue: 'Edge' })}
                     </th>
                     <th className="text-right px-2 py-1">
@@ -717,6 +725,25 @@ export function KymographModal({
                       </td>
                       <td className="px-2 py-1 text-right tabular-nums">
                         {fmtIntensity(tr.intensityMinusBackground)}
+                      </td>
+                      <td
+                        className="px-2 py-1 text-center"
+                        title={
+                          tr.bright
+                            ? t('editor.kymograph.brightHint', {
+                                defaultValue:
+                                  'Intensity outlier — likely a multi-motor aggregate, not a single motor.',
+                              })
+                            : undefined
+                        }
+                      >
+                        {tr.bright ? (
+                          <span className="text-amber-500" aria-hidden>
+                            ⚠
+                          </span>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td
                         className="px-2 py-1 text-center"
@@ -786,9 +813,10 @@ export function KymographModal({
 }
 
 /** One row per trajectory. Mirrors the metric columns of the export bundle's
- *  ``velocity_metrics.csv`` (minus the export-only identifying + calibration
- *  columns: video / microtubule / channel / pixel size / frame interval) so the
- *  two CSVs agree on the shared columns. */
+ *  ``velocity_metrics.xlsx`` (minus the export-only identifying + calibration
+ *  columns: video / microtubule / pixel size / frame interval, and the channel
+ *  which the workbook encodes as the worksheet name) so the modal CSV and the
+ *  export workbook agree on the shared per-trajectory columns. */
 function tracksToCsv(tracks: KymographTrack[]): string {
   const header = [
     'track',
@@ -800,6 +828,7 @@ function tracksToCsv(tracks: KymographTrack[]): string {
     'intensity_signal',
     'intensity_background',
     'intensity_minus_background',
+    'bright',
     'edge_touch',
   ];
   const lines = [header.join(',')];
@@ -815,6 +844,7 @@ function tracksToCsv(tracks: KymographTrack[]): string {
         tr.intensitySignal ?? '',
         tr.intensityBackground ?? '',
         tr.intensityMinusBackground ?? '',
+        tr.bright,
         tr.edge,
       ].join(',')
     );

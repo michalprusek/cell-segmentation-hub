@@ -2175,6 +2175,9 @@ export default {
       colRunTime: 'Čas běhu (s)',
       colIntensity: 'Intenzita (signál−pozadí)',
       colEdge: 'Kraj',
+      colBright: 'Jas',
+      brightHint:
+        'Odlehlá intenzita — pravděpodobně shluk více motorů, ne jeden motor.',
       colSnr: 'SNR',
       edge: {
         left: 'Dosahuje levého konce (pokračuje za mikrotubuli)',
