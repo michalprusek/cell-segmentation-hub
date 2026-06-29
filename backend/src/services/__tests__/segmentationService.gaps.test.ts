@@ -75,6 +75,48 @@ const makeSegResult = (
   ...extra,
 });
 
+// getProjectSegmentationStats now uses server-side aggregation
+// (segmentation.aggregate + segmentation.groupBy + a $queryRaw polygon count)
+// instead of loading all rows into Node. Derive those mock returns from a flat
+// array of segmentation rows so the per-test data stays readable.
+const mockSegStatsFromRows = (
+  prisma: any,
+  rows: Array<{
+    polygons?: string;
+    confidence?: number | null;
+    model?: string | null;
+  }>
+) => {
+  const count = rows.length;
+  const avgConfidence = count
+    ? rows.reduce((s, r) => s + (r.confidence ?? 0), 0) / count
+    : null;
+  prisma.segmentation.aggregate.mockResolvedValue({
+    _avg: { confidence: avgConfidence },
+    _count: { _all: count },
+  });
+
+  const modelCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (r.model) {
+      modelCounts.set(r.model, (modelCounts.get(r.model) ?? 0) + 1);
+    }
+  }
+  prisma.segmentation.groupBy.mockResolvedValue(
+    [...modelCounts].map(([model, c]) => ({ model, _count: { _all: c } }))
+  );
+
+  const totalPolygons = rows.reduce((s, r) => {
+    try {
+      const parsed = JSON.parse(r.polygons ?? '[]');
+      return s + (Array.isArray(parsed) ? parsed.length : 0);
+    } catch {
+      return s;
+    }
+  }, 0);
+  prisma.$queryRaw.mockResolvedValue([{ total: BigInt(totalPolygons) }]);
+};
+
 // ─── test suite ──────────────────────────────────────────────────────────────
 
 describe('SegmentationService — uncovered paths', () => {
@@ -92,6 +134,8 @@ describe('SegmentationService — uncovered paths', () => {
         update: vi.fn(),
         delete: vi.fn(),
         deleteMany: vi.fn(),
+        aggregate: vi.fn(),
+        groupBy: vi.fn(),
       },
       image: {
         findMany: vi.fn(),
@@ -103,6 +147,7 @@ describe('SegmentationService — uncovered paths', () => {
         findUnique: vi.fn(),
       },
       $transaction: vi.fn(),
+      $queryRaw: vi.fn(),
     };
 
     imageServiceMock = {
@@ -780,24 +825,21 @@ describe('SegmentationService — uncovered paths', () => {
     it('tallies model usage counts correctly', async () => {
       prismaMock.project.findFirst.mockResolvedValue({ id: 'proj-1' });
       prismaMock.image.count.mockResolvedValue(5);
-      prismaMock.segmentation.findMany.mockResolvedValue([
+      mockSegStatsFromRows(prismaMock, [
         {
           polygons: JSON.stringify([makePolygon(), makePolygon()]),
           confidence: 0.9,
           model: 'hrnet',
-          image: { name: 'a.jpg', segmentationStatus: 'segmented' },
         },
         {
           polygons: JSON.stringify([makePolygon()]),
           confidence: 0.8,
           model: 'hrnet',
-          image: { name: 'b.jpg', segmentationStatus: 'segmented' },
         },
         {
           polygons: JSON.stringify([makePolygon()]),
           confidence: 0.7,
           model: 'cbam_resunet',
-          image: { name: 'c.jpg', segmentationStatus: 'segmented' },
         },
       ]);
 
@@ -817,7 +859,7 @@ describe('SegmentationService — uncovered paths', () => {
     it('returns zeros when no segmentation data exists', async () => {
       prismaMock.project.findFirst.mockResolvedValue({ id: 'proj-empty' });
       prismaMock.image.count.mockResolvedValue(3);
-      prismaMock.segmentation.findMany.mockResolvedValue([]);
+      mockSegStatsFromRows(prismaMock, []);
 
       const stats = await service.getProjectSegmentationStats(
         'proj-empty',

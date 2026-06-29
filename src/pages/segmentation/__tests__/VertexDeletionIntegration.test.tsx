@@ -150,6 +150,33 @@ describe('Vertex Deletion Integration Tests', () => {
     type: 'external',
   };
 
+  /**
+   * Click a target while capturing errors thrown by React event handlers.
+   *
+   * An error thrown inside React's synthetic event dispatch does NOT propagate
+   * to the `fireEvent` caller in JSDOM — React's guarded-callback machinery
+   * re-dispatches it as a `window` 'error' event, which Vitest otherwise
+   * reports as an "unhandled error" (failing the whole run even though the
+   * individual test passes). Wrapping `fireEvent.click` in `expect(...).toThrow`
+   * cannot intercept it. Instead we listen for the window 'error' event,
+   * `preventDefault()` it so it isn't reported as unhandled, and return the
+   * captured errors so the test can assert the failure path actually fired.
+   */
+  function clickCapturingHandlerErrors(target: Element): Error[] {
+    const captured: Error[] = [];
+    const listener = (event: ErrorEvent) => {
+      captured.push(event.error ?? new Error(event.message));
+      event.preventDefault();
+    };
+    window.addEventListener('error', listener);
+    try {
+      fireEvent.click(target);
+    } finally {
+      window.removeEventListener('error', listener);
+    }
+    return captured;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockSegmentationContext.polygons = [testPolygon];
@@ -369,10 +396,13 @@ describe('Vertex Deletion Integration Tests', () => {
 
       const deleteItem = screen.getByTestId('context-menu-item');
 
-      // Should not crash even if deletion fails
-      expect(() => {
-        fireEvent.click(deleteItem);
-      }).not.toThrow();
+      // Deletion is rejected for a 3-vertex polygon: the handler throws the
+      // validation error. Capture it (so it doesn't leak as an unhandled error)
+      // and assert the guard fired and the polygon was left untouched.
+      const errors = clickCapturingHandlerErrors(deleteItem);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].message).toContain('minimum 3 vertices required');
+      expect(mockSetPolygons).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
     });
@@ -632,10 +662,11 @@ describe('Vertex Deletion Integration Tests', () => {
 
       const deleteItem = screen.getByTestId('context-menu-item');
 
-      // Should not crash the application
-      expect(() => {
-        fireEvent.click(deleteItem);
-      }).not.toThrow();
+      // The faulty handler throws a network error. Capture it so it doesn't
+      // leak as an unhandled error, and assert the failure path fired.
+      const errors = clickCapturingHandlerErrors(deleteItem);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].message).toContain('Network error during deletion');
 
       await waitFor(() => {
         expect(faultyDeleteHandler).toHaveBeenCalledTimes(1);
@@ -684,7 +715,13 @@ describe('Vertex Deletion Integration Tests', () => {
       });
 
       const deleteItem = screen.getByTestId('context-menu-item');
-      fireEvent.click(deleteItem);
+
+      // The faulty handler throws before mutating anything. Capture the error
+      // so it doesn't leak as an unhandled error, then verify it fired and the
+      // polygon is untouched.
+      const errors = clickCapturingHandlerErrors(deleteItem);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].message).toContain('Deletion failed');
 
       // Polygon should remain unchanged
       expect(mockSegmentationContext.polygons[0]).toEqual(originalPolygon);

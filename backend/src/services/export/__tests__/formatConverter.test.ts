@@ -94,7 +94,7 @@ describe('FormatConverter', () => {
       const converter = new FormatConverter();
       const data = buildImageData([closedPolygon]);
 
-      const coco = await converter.convertToCOCO([data]);
+      const { data: coco } = await converter.convertToCOCO([data]);
 
       expect(coco.categories).toEqual([
         expect.objectContaining({ id: 1, name: 'cell' }),
@@ -106,7 +106,7 @@ describe('FormatConverter', () => {
       const converter = new FormatConverter();
       const data = buildImageData([closedPolygon, spermHead]);
 
-      const coco = await converter.convertToCOCO([data]);
+      const { data: coco } = await converter.convertToCOCO([data]);
 
       expect(coco.categories).toEqual([
         expect.objectContaining({ id: 1, name: 'cell' }),
@@ -118,7 +118,7 @@ describe('FormatConverter', () => {
       const converter = new FormatConverter();
       const data = buildImageData([closedPolygon]);
 
-      const coco = await converter.convertToCOCO([data]);
+      const { data: coco } = await converter.convertToCOCO([data]);
 
       expect(coco.annotations).toHaveLength(1);
       const ann = coco.annotations[0];
@@ -136,7 +136,7 @@ describe('FormatConverter', () => {
         spermTail,
       ]);
 
-      const coco = await converter.convertToCOCO([data]);
+      const { data: coco } = await converter.convertToCOCO([data]);
 
       const polylineAnns = coco.annotations.filter(a => a.category_id === 2);
       expect(polylineAnns).toHaveLength(3);
@@ -167,7 +167,7 @@ describe('FormatConverter', () => {
       };
       const data = buildImageData([closedPolygon, orphan]);
 
-      const coco = await converter.convertToCOCO([data]);
+      const { data: coco } = await converter.convertToCOCO([data]);
 
       const spermAnns = coco.annotations.filter(a => a.category_id === 2);
       expect(spermAnns).toHaveLength(0);
@@ -191,7 +191,7 @@ describe('FormatConverter', () => {
       };
       const data = buildImageData([typo]);
 
-      const coco = await converter.convertToCOCO([data]);
+      const { data: coco } = await converter.convertToCOCO([data]);
 
       expect(coco.annotations.filter(a => a.category_id === 2)).toHaveLength(0);
       expect(mockedLogger.warn).toHaveBeenCalledWith(
@@ -212,7 +212,7 @@ describe('FormatConverter', () => {
         filename: 'b.png',
       });
 
-      const coco = await converter.convertToCOCO([data1, data2]);
+      const { data: coco } = await converter.convertToCOCO([data1, data2]);
 
       const ids = coco.annotations.map(a => a.id);
       expect(new Set(ids).size).toBe(ids.length);
@@ -278,7 +278,7 @@ describe('FormatConverter', () => {
       const converter = new FormatConverter();
       const data = buildImageData([closedPolygon]);
 
-      const out = await converter.convertToJSON([data]);
+      const { data: out } = await converter.convertToJSON([data]);
       const seg = out.images[0]?.segmentation;
 
       expect(seg?.polygons.external).toHaveLength(1);
@@ -297,7 +297,7 @@ describe('FormatConverter', () => {
         spermTail,
       ]);
 
-      const out = await converter.convertToJSON([data]);
+      const { data: out } = await converter.convertToJSON([data]);
       const seg = out.images[0]?.segmentation;
 
       expect(seg?.polygons.external).toHaveLength(1);
@@ -325,7 +325,7 @@ describe('FormatConverter', () => {
       };
       const data = buildImageData([orphan]);
 
-      const out = await converter.convertToJSON([data]);
+      const { data: out } = await converter.convertToJSON([data]);
       const seg = out.images[0]?.segmentation;
 
       expect(seg?.polylines).toHaveLength(1);
@@ -358,7 +358,7 @@ describe('FormatConverter', () => {
         sperm2Mid,
       ]);
 
-      const out = await converter.convertToJSON([data]);
+      const { data: out } = await converter.convertToJSON([data]);
       const seg = out.images[0]?.segmentation;
 
       expect(seg?.spermInstances).toHaveLength(2);
@@ -376,7 +376,7 @@ describe('FormatConverter', () => {
       const converter = new FormatConverter();
       const data = buildImageData([spermHead, spermMidpiece, spermTail]);
 
-      const out = await converter.convertToJSON([data]);
+      const { data: out } = await converter.convertToJSON([data]);
       const seg = out.images[0]?.segmentation;
 
       expect(seg?.polygons.external).toHaveLength(0);
@@ -394,7 +394,7 @@ describe('FormatConverter', () => {
       };
       const data = buildImageData([typo]);
 
-      const out = await converter.convertToJSON([data]);
+      const { data: out } = await converter.convertToJSON([data]);
       const polylines = out.images[0]?.segmentation?.polylines;
 
       expect(polylines).toHaveLength(1);
@@ -411,7 +411,7 @@ describe('FormatConverter', () => {
         spermTail,
       ]);
 
-      const coco = await new FormatConverter().convertToCOCO([data]);
+      const { data: coco } = await new FormatConverter().convertToCOCO([data]);
       const ids = coco.annotations.map(a => a.id);
       expect(new Set(ids).size).toBe(ids.length);
       expect(ids).toEqual([1, 2, 3, 4]);
@@ -438,7 +438,7 @@ describe('FormatConverter', () => {
     it('COCO infers header dimensions from polygon extents when width/height are 0', async () => {
       const data = buildImageData([largePolygon], { width: 0, height: 0 });
 
-      const coco = await new FormatConverter().convertToCOCO([data]);
+      const { data: coco } = await new FormatConverter().convertToCOCO([data]);
 
       expect(coco.images).toHaveLength(1);
       expect(coco.images[0].width).toBeGreaterThanOrEqual(1286);
@@ -454,7 +454,7 @@ describe('FormatConverter', () => {
     it('JSON infers header dimensions from polygon extents when width/height are 0', async () => {
       const data = buildImageData([largePolygon], { width: 0, height: 0 });
 
-      const json = await new FormatConverter().convertToJSON([data]);
+      const { data: json } = await new FormatConverter().convertToJSON([data]);
 
       expect(json.images[0].dimensions.width).toBeGreaterThanOrEqual(1286);
       expect(json.images[0].dimensions.height).toBeGreaterThanOrEqual(1293);
@@ -468,7 +468,7 @@ describe('FormatConverter', () => {
         height: 1536,
       });
 
-      const coco = await new FormatConverter().convertToCOCO([data]);
+      const { data: coco } = await new FormatConverter().convertToCOCO([data]);
 
       expect(coco.images[0].width).toBe(2048);
       expect(coco.images[0].height).toBe(1536);
@@ -477,7 +477,7 @@ describe('FormatConverter', () => {
     it('preserves a known axis when only the other is missing', async () => {
       const data = buildImageData([largePolygon], { width: 1286, height: 0 });
 
-      const coco = await new FormatConverter().convertToCOCO([data]);
+      const { data: coco } = await new FormatConverter().convertToCOCO([data]);
 
       // Known width is kept verbatim; only height is inferred from extents.
       expect(coco.images[0].width).toBe(1286);
@@ -487,7 +487,7 @@ describe('FormatConverter', () => {
     it('logs error (not warn) when no polygons and dims are missing', async () => {
       const data = buildImageData([], { width: 0, height: 0 });
 
-      const coco = await new FormatConverter().convertToCOCO([data]);
+      const { data: coco } = await new FormatConverter().convertToCOCO([data]);
 
       expect(coco.images[0].width).toBe(0);
       expect(coco.images[0].height).toBe(0);
@@ -528,7 +528,7 @@ describe('FormatConverter', () => {
       };
       const data = buildImageData([external, hole], { width: 0, height: 0 });
 
-      const coco = await new FormatConverter().convertToCOCO([data]);
+      const { data: coco } = await new FormatConverter().convertToCOCO([data]);
 
       const ann = coco.annotations[0];
       expect(ann.iscrowd).toBe(1);

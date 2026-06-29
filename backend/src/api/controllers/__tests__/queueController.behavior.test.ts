@@ -615,44 +615,10 @@ describe('QueueController — behavioral', () => {
     });
   });
 
-  // ── cancelBatch ─────────────────────────────────────────────────────────
-
-  describe('cancelBatch', () => {
-    it('returns 401 when unauthenticated', async () => {
-      const app = buildUnauthApp(queueController.cancelBatch, 'batchId');
-      await request(app).post(`/${BATCH_ID}`).expect(401);
-    });
-
-    it('returns 200 with batchId and cancelledCount (stub implementation)', async () => {
-      const app = buildApp(queueController.cancelBatch, 'batchId');
-      const res = await request(app).post(`/${BATCH_ID}`).expect(200);
-
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.batchId).toBe(BATCH_ID);
-      expect(res.body.data.cancelledCount).toBe(0);
-    });
-  });
-
-  // ── cancelAllSegmentation ───────────────────────────────────────────────
-
-  describe('cancelAllSegmentation', () => {
-    it('returns 401 when unauthenticated', async () => {
-      const app = buildUnauthApp(
-        queueController.cancelAllSegmentation,
-        'projectId'
-      );
-      await request(app).post(`/${PROJECT_ID}`).expect(401);
-    });
-
-    it('returns 200 with projectId and cancelledCount', async () => {
-      const app = buildApp(queueController.cancelAllSegmentation, 'projectId');
-      const res = await request(app).post(`/${PROJECT_ID}`).expect(200);
-
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.projectId).toBe(PROJECT_ID);
-      expect(res.body.data.cancelledCount).toBe(0);
-    });
-  });
+  // NOTE: the `cancelBatch` and `cancelAllSegmentation` controller handlers
+  // were removed as dead stubs (commit a6dd828 — "remove dead cancel stubs";
+  // they returned a hardcoded cancelledCount=0 and were mounted by no route).
+  // The live cancel path is `cancelAllUserSegmentations` below.
 
   // ── cancelAllUserSegmentations ──────────────────────────────────────────
 

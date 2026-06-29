@@ -282,21 +282,22 @@ describe('LocalStorageProvider', () => {
   // -------------------------------------------------------------------------
 
   describe('exists()', () => {
-    it('returns true when existsSync says file is present', async () => {
-      existsSyncMock.mockReturnValue(true);
+    it('returns true when fs.stat resolves (file present)', async () => {
+      fsMock.stat.mockResolvedValue({ size: 10, mtime: new Date() });
       expect(await provider.exists('some/key.png')).toBe(true);
     });
 
-    it('returns false when existsSync says file is absent', async () => {
-      existsSyncMock.mockReturnValue(false);
+    it('returns false when fs.stat rejects with ENOENT (file absent)', async () => {
+      fsMock.stat.mockRejectedValue(
+        Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      );
       expect(await provider.exists('some/key.png')).toBe(false);
     });
 
     it('constructs the absolute path from uploadDir + key', async () => {
-      existsSyncMock.mockReturnValue(false);
       await provider.exists('user/proj/originals/x.jpg');
 
-      expect(existsSyncMock).toHaveBeenCalledWith(
+      expect(fsMock.stat).toHaveBeenCalledWith(
         '/app/uploads/user/proj/originals/x.jpg'
       );
     });

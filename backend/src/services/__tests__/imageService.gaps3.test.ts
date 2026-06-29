@@ -52,6 +52,8 @@ const prismaMock = {
     delete: vi.fn() as ReturnType<typeof vi.fn>,
     update: vi.fn() as ReturnType<typeof vi.fn>,
     updateMany: vi.fn() as ReturnType<typeof vi.fn>,
+    aggregate: vi.fn() as ReturnType<typeof vi.fn>,
+    groupBy: vi.fn() as ReturnType<typeof vi.fn>,
   },
   user: { findUnique: vi.fn() as ReturnType<typeof vi.fn> },
   $transaction: vi.fn() as ReturnType<typeof vi.fn>,
@@ -168,6 +170,46 @@ function makeImage(
     displayOrder: 0,
     ...overrides,
   };
+}
+
+// getImageStats now uses server-side aggregation (image.aggregate + two
+// image.groupBy calls). Derive those mock returns from a flat array of rows.
+function mockImageStatsRows(rows: Array<Record<string, unknown>>) {
+  prismaMock.image.aggregate.mockResolvedValueOnce({
+    _count: { _all: rows.length },
+    _sum: {
+      fileSize: BigInt(
+        rows.reduce((s, r) => s + Number(r.fileSize ?? 0), 0)
+      ),
+    },
+  });
+
+  const groupCount = (
+    values: Array<string | null | undefined>,
+    field: string
+  ) => {
+    const counts = new Map<string, number>();
+    for (const v of values) {
+      if (v != null) {
+        counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+    }
+    return [...counts].map(([k, c]) => ({ [field]: k, _count: { _all: c } }));
+  };
+
+  prismaMock.image.groupBy
+    .mockResolvedValueOnce(
+      groupCount(
+        rows.map(r => r.segmentationStatus as string | undefined),
+        'segmentationStatus'
+      )
+    )
+    .mockResolvedValueOnce(
+      groupCount(
+        rows.map(r => r.mimeType as string | null | undefined),
+        'mimeType'
+      )
+    );
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -548,7 +590,7 @@ describe('ImageService — getImageStats', () => {
 
   it('ignores unknown segmentationStatus values (does not count them)', async () => {
     prismaMock.project.findFirst.mockResolvedValueOnce({ id: 'proj-1' });
-    prismaMock.image.findMany.mockResolvedValueOnce([
+    mockImageStatsRows([
       makeImage({
         segmentationStatus: 'unknown_status',
         fileSize: BigInt(100),
@@ -564,7 +606,7 @@ describe('ImageService — getImageStats', () => {
 
   it('returns all-zero stats for a project with no images', async () => {
     prismaMock.project.findFirst.mockResolvedValueOnce({ id: 'proj-1' });
-    prismaMock.image.findMany.mockResolvedValueOnce([]);
+    mockImageStatsRows([]);
 
     const stats = await service.getImageStats('proj-1', 'user-1');
     expect(stats.totalImages).toBe(0);
@@ -575,9 +617,7 @@ describe('ImageService — getImageStats', () => {
 
   it('images with null mimeType are not counted in byMimeType', async () => {
     prismaMock.project.findFirst.mockResolvedValueOnce({ id: 'proj-1' });
-    prismaMock.image.findMany.mockResolvedValueOnce([
-      makeImage({ mimeType: null, fileSize: BigInt(500) }),
-    ]);
+    mockImageStatsRows([makeImage({ mimeType: null, fileSize: BigInt(500) })]);
 
     const stats = await service.getImageStats('proj-1', 'user-1');
     expect(Object.keys(stats.byMimeType)).toHaveLength(0);

@@ -621,17 +621,25 @@ describe('LocalStorageProvider – behavior gaps', () => {
 
   describe('exists()', () => {
     it('constructs the absolute path correctly', async () => {
-      existsSyncMock.mockReturnValue(true);
       await provider.exists('sub/key.png');
-      expect(existsSyncMock).toHaveBeenCalledWith('/app/uploads/sub/key.png');
+      expect(fsMock.stat).toHaveBeenCalledWith('/app/uploads/sub/key.png');
     });
 
-    it('returns false when existsSync throws (catch branch)', async () => {
-      existsSyncMock.mockImplementationOnce(() => {
-        throw new Error('unexpected fs error');
-      });
+    it('returns false when fs.stat rejects with ENOENT (catch branch)', async () => {
+      fsMock.stat.mockRejectedValueOnce(
+        Object.assign(new Error('no such file'), { code: 'ENOENT' })
+      );
       const result = await provider.exists('sub/key.png');
       expect(result).toBe(false);
+    });
+
+    it('re-throws non-ENOENT fs.stat errors instead of masking them', async () => {
+      fsMock.stat.mockRejectedValueOnce(
+        Object.assign(new Error('permission denied'), { code: 'EACCES' })
+      );
+      await expect(provider.exists('sub/key.png')).rejects.toMatchObject({
+        code: 'EACCES',
+      });
     });
   });
 });

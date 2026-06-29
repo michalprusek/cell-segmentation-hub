@@ -12,6 +12,8 @@ const prismaMock = {
     count: vi.fn() as any,
     delete: vi.fn() as any,
     update: vi.fn() as any,
+    aggregate: vi.fn() as any,
+    groupBy: vi.fn() as any,
   },
   user: {
     findUnique: vi.fn() as any,
@@ -69,6 +71,52 @@ import { getStorageProvider, LocalStorageProvider } from '../../storage/index';
 import { getBaseUrl } from '../../utils/getBaseUrl';
 
 const makeImageService = () => new ImageService(prismaMock as any);
+
+// getImageStats now uses server-side aggregation (image.aggregate + two
+// image.groupBy calls) instead of loading all rows. This helper derives the
+// aggregate/groupBy mock returns from a flat array of image rows so the test
+// data stays readable.
+function mockImageStatsRows(
+  rows: Array<{
+    fileSize?: number | bigint | null;
+    segmentationStatus?: string;
+    mimeType?: string | null;
+  }>
+) {
+  prismaMock.image.aggregate.mockResolvedValueOnce({
+    _count: { _all: rows.length },
+    _sum: {
+      fileSize: BigInt(rows.reduce((s, r) => s + Number(r.fileSize ?? 0), 0)),
+    },
+  });
+
+  const groupCount = (
+    values: Array<string | null | undefined>,
+    field: string
+  ) => {
+    const counts = new Map<string, number>();
+    for (const v of values) {
+      if (v != null) {
+        counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+    }
+    return [...counts].map(([k, c]) => ({ [field]: k, _count: { _all: c } }));
+  };
+
+  prismaMock.image.groupBy
+    .mockResolvedValueOnce(
+      groupCount(
+        rows.map(r => r.segmentationStatus),
+        'segmentationStatus'
+      )
+    )
+    .mockResolvedValueOnce(
+      groupCount(
+        rows.map(r => r.mimeType),
+        'mimeType'
+      )
+    );
+}
 
 const mockProject = { id: 'project-id', userId: 'user-id' };
 const mockImage = {
@@ -347,7 +395,7 @@ describe('ImageService', () => {
   describe('getImageStats', () => {
     it('computes totalImages, totalSize, and byStatus correctly', async () => {
       prismaMock.project.findFirst.mockResolvedValueOnce(mockProject as any);
-      prismaMock.image.findMany.mockResolvedValueOnce([
+      mockImageStatsRows([
         {
           fileSize: 500,
           segmentationStatus: 'segmented',
@@ -359,7 +407,7 @@ describe('ImageService', () => {
           mimeType: 'image/png',
         },
         { fileSize: 200, segmentationStatus: 'failed', mimeType: 'image/jpeg' },
-      ] as any);
+      ]);
 
       const stats = await service.getImageStats('project-id', 'user-id');
 

@@ -283,7 +283,8 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
       ...BASE_OPTIONS,
       channels: [],
     });
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.skipped).toEqual([]);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 
@@ -313,7 +314,8 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
       'proj-1',
       BASE_OPTIONS
     );
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.skipped).toEqual([]);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 
@@ -323,7 +325,8 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
       'proj-1',
       BASE_OPTIONS
     );
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.skipped).toEqual([]);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 
@@ -334,7 +337,8 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
       'proj-1',
       BASE_OPTIONS
     );
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.skipped).toHaveLength(1);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 
@@ -352,7 +356,8 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
       'proj-1',
       BASE_OPTIONS
     );
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.skipped).toHaveLength(1);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 
@@ -370,7 +375,8 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
       'proj-1',
       BASE_OPTIONS
     );
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.skipped).toHaveLength(1);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 
@@ -389,7 +395,8 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
       'proj-1',
       BASE_OPTIONS
     );
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.skipped).toHaveLength(1);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 
@@ -418,7 +425,8 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
       'proj-1',
       BASE_OPTIONS
     );
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
+    expect(result.skipped).toEqual([]);
     expect(axiosPostMock).not.toHaveBeenCalled();
   });
 });
@@ -501,7 +509,7 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     axiosPostMock.mockResolvedValueOnce(mlResponse);
 
     const scale = 0.1;
-    const rows = await computeMTMetrics(
+    const { rows } = await computeMTMetrics(
       [makeFrame({ segmentation: { polygons: frameSeg } })],
       'proj-1',
       { ...BASE_OPTIONS, pixelToMicrometerScale: scale, channels: ['DAPI'] }
@@ -531,7 +539,7 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
     axiosPostMock.mockResolvedValueOnce(mlResponse);
 
-    const rows = await computeMTMetrics(
+    const { rows } = await computeMTMetrics(
       [makeFrame({ segmentation: { polygons: frameSeg } })],
       'proj-1',
       { ...BASE_OPTIONS, pixelToMicrometerScale: null, channels: ['DAPI'] }
@@ -684,7 +692,7 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
       .mockResolvedValueOnce(singleRow('frame-a'))
       .mockResolvedValueOnce(singleRow('frame-b'));
 
-    const rows = await computeMTMetrics(
+    const { rows } = await computeMTMetrics(
       [
         makeFrame({
           id: 'frame-a',
