@@ -175,13 +175,11 @@ describe('DashboardHeader', () => {
     });
     vi.mocked(fetchWithRetry).mockImplementation(mockFetchWithRetry);
 
-    // Mock setInterval and clearInterval
-    vi.spyOn(global, 'setInterval').mockImplementation(
-      (fn: any, _delay: number) => {
-        return setTimeout(fn, 0) as any; // Execute immediately for tests
-      }
-    );
-    vi.spyOn(global, 'clearInterval').mockImplementation(vi.fn());
+    // The header polls ML status via a self-rescheduling setTimeout (5s while
+    // errored, 30s when healthy), cleaned up with clearTimeout on unmount.
+    // Spy on clearTimeout (keeping real behavior) so the unmount test can
+    // assert the timer is torn down.
+    vi.spyOn(global, 'clearTimeout');
   });
 
   afterEach(() => {
@@ -435,11 +433,11 @@ describe('DashboardHeader', () => {
     });
   });
 
-  it('cleans up interval on unmount', () => {
+  it('cleans up its poll timer on unmount', () => {
     const { unmount } = render(<DashboardHeader />);
     unmount();
 
-    expect(global.clearInterval).toHaveBeenCalled();
+    expect(global.clearTimeout).toHaveBeenCalled();
   });
 
   it('handles user without email gracefully', async () => {
