@@ -1,0 +1,27 @@
+# Microtubule v7 standalone inference — pinned to the versions the
+# cell-segmentation-hub ML service runs in production (Python 3.10).
+# All have macOS arm64 (Apple Silicon) wheels, so this installs on a MacBook.
+#
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# torch / transformers pins are LOAD-BEARING: transformers >= 4.57 is
+# required for the DINOv3 backbone; 4.57.0 was yanked from PyPI, so 4.57.6.
+# Do not bump torch/transformers casually.
+
+# --- Deep learning core ---
+torch==2.6.0
+torchvision==0.21.0
+transformers==4.57.6
+huggingface_hub>=0.20
+
+# --- Numerics / classical CV (PySOAX postprocessing) ---
+numpy==1.26.4
+scipy==1.11.4
+scikit-image==0.22.0
+opencv-python-headless==4.8.1.78
+
+# --- Image I/O ---
+Pillow==12.2.0
+tifffile>=2024.1.30   # multi-page TIFF microscopy stacks
+nd2>=0.10.0           # Nikon NIS-Elements .nd2 (optional input format)
