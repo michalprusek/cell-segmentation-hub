@@ -18,6 +18,30 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+
+class _NoCRLFLogFilter(logging.Filter):
+    """Neutralize CR/LF in log records to prevent log forging (CWE-117).
+
+    User-controlled strings (upload filenames, model names, cancel reasons)
+    reach logger calls in the API modules; a newline in them could forge extra
+    log lines. We render the final message and escape CR/LF once here.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if "\r" in message or "\n" in message:
+            record.msg = message.replace("\r", "\\r").replace("\n", "\\n")
+            record.args = ()
+        return True
+
+
+# Attach to the root *handler(s)*, not the root logger: records propagated up
+# from child module loggers (routes/cancel/mt_metrics/...) bypass the root
+# logger's own filters but still pass through its handlers.
+for _root_handler in logging.getLogger().handlers:
+    _root_handler.addFilter(_NoCRLFLogFilter())
+
 logger = logging.getLogger(__name__)
 
 # Configure GPU memory limit BEFORE any CUDA operations

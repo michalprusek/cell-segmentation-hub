@@ -136,3 +136,32 @@ describe('createRequestLogger', () => {
     consoleSpy.mockRestore();
   });
 });
+
+// ─── D. Log-injection sanitization (CWE-117 regression) ──────────────────────
+
+describe('Logger log-injection sanitization', () => {
+  it('strips CR/LF from the user message and context so a value cannot forge a new log line', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    logger.error('upload evil.png\nFAKE: admin granted', undefined, 'Ctx\ninj');
+
+    const out = spy.mock.calls[0][0] as string;
+    // The whole entry must be a single line (no injected newline survives).
+    expect(out).not.toContain('\nFAKE');
+    expect(out.split('\n')).toHaveLength(1);
+    // The neutralized content is still present (replaced with a space).
+    expect(out).toContain('upload evil.png FAKE: admin granted');
+    expect(out).toContain('[Ctx inj]');
+    spy.mockRestore();
+  });
+
+  it('preserves the intentional newline before the structured Data section', () => {
+    const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    logger.info('clean message', 'Ctx', { a: 1 });
+
+    const out = spy.mock.calls[0][0] as string;
+    expect(out).toContain('\nData:');
+    spy.mockRestore();
+  });
+});

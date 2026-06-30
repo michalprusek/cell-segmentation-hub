@@ -30,12 +30,24 @@ class Logger {
     return level <= this.currentLevel;
   }
 
+  /** Strip CR/LF and control chars from user-controlled log fields so an
+   *  attacker-set value (e.g. an uploaded filename or image name) can't forge
+   *  extra log lines (CWE-117). The intentional `\nData:`/`\nError:`/`\nStack:`
+   *  separators below are added after this and are preserved. */
+  private sanitize(value: string): string {
+    return value.replace(/[\r\n]/g, ' ');
+  }
+
   private formatMessage(entry: LogEntry): string {
     const timestamp = entry.timestamp.toISOString();
     const level = LogLevel[entry.level].padEnd(5);
-    const context = entry.context ? `[${entry.context}] ` : '';
+    const context = entry.context
+      ? `[${this.sanitize(entry.context)}] `
+      : '';
 
-    let message = `${timestamp} ${level} ${context}${entry.message}`;
+    let message = `${timestamp} ${level} ${context}${this.sanitize(
+      entry.message
+    )}`;
 
     if (entry.data) {
       message += `\nData: ${JSON.stringify(entry.data, null, 2)}`;
@@ -58,7 +70,8 @@ class Logger {
 
     const message = this.formatMessage(entry);
 
-    // Console output is the core functionality of a logger
+    // Console output is the core functionality of a logger.
+    /* eslint-disable no-console -- console is the logger's intended sink */
     switch (entry.level) {
       case LogLevel.ERROR:
         // Error logging to console
@@ -81,6 +94,7 @@ class Logger {
         console.debug(message);
         break;
     }
+    /* eslint-enable no-console */
   }
 
   error(

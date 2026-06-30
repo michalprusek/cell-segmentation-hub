@@ -135,8 +135,11 @@ export async function getUserProjects(
 
     const orderBy: Prisma.ProjectOrderByWithRelationInput = {};
     if (allowedSortFields.includes(sortBy as AllowedSortField)) {
-      orderBy[sortBy as keyof Prisma.ProjectOrderByWithRelationInput] =
-        sortOrder as Prisma.SortOrder;
+      // Narrow to the allow-listed union before using it as a key so the
+      // property write can only ever target a known-safe field (no
+      // prototype-pollution / arbitrary-property surface).
+      const field: AllowedSortField = sortBy as AllowedSortField;
+      orderBy[field] = sortOrder as Prisma.SortOrder;
     } else {
       // Default to createdAt if invalid field provided
       orderBy.createdAt = sortOrder as Prisma.SortOrder;

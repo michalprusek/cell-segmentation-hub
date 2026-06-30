@@ -86,11 +86,19 @@ interface StoredAttachment {
  *  path traversal and odd characters from the reporter's OS. */
 function sanitizeFilename(name: string): string {
   const base = path.basename(name);
-  const safe = base.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  // Strip leading/trailing underscores with two separately-anchored replaces.
+  // The combined /^_+|_+$/ form has an ambiguous trailing-run match that trips
+  // ReDoS scanners; anchoring each side keeps every pass strictly linear.
+  const safe = base
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^_+/, '')
+    .replace(/_+$/, '');
   // A name that survives as "." or ".." would make path.join resolve to the
   // dir itself / its parent (rename onto a directory → EISDIR, attachment
   // silently lost), so collapse any all-dots result to the fallback.
-  if (!safe || /^\.+$/.test(safe)) return 'attachment';
+  if (!safe || /^\.+$/.test(safe)) {
+    return 'attachment';
+  }
   return safe;
 }
 
@@ -110,7 +118,9 @@ async function persistAttachment(
     await fs.rename(attachment.stagedPath, destPath);
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
-    if (e.code !== 'EXDEV') throw err;
+    if (e.code !== 'EXDEV') {
+      throw err;
+    }
     await fs.copyFile(attachment.stagedPath, destPath);
     await fs.unlink(attachment.stagedPath).catch(() => undefined);
   }
