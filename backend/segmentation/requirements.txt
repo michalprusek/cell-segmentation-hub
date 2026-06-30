@@ -8,8 +8,10 @@ pydantic==2.5.0
 requests==2.33.0
 # python-multipart 0.0.30 fixes CVE-2024-24762 (Content-Type header ReDoS),
 # CVE-2024-53981 (multipart boundary DoS), CVE-2026-24486 (arbitrary file
-# write), and the later high-severity multipart-parsing advisory.
-python-multipart==0.0.30
+# write), and the later high-severity multipart-parsing advisory. 0.0.31 adds
+# the negative Content-Length parse_form buffer fix (GHSA, low). In-range
+# patch; FastAPI 0.104.1 only requires python-multipart>=0.0.5.
+python-multipart==0.0.31
 psutil==5.9.5
 
 # ML dependencies (CUDA variant specified in Dockerfiles)
