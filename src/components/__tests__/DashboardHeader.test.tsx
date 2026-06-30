@@ -175,13 +175,11 @@ describe('DashboardHeader', () => {
     });
     vi.mocked(fetchWithRetry).mockImplementation(mockFetchWithRetry);
 
-    // Mock setInterval and clearInterval
-    vi.spyOn(global, 'setInterval').mockImplementation(
-      (fn: any, _delay: number) => {
-        return setTimeout(fn, 0) as any; // Execute immediately for tests
-      }
-    );
-    vi.spyOn(global, 'clearInterval').mockImplementation(vi.fn());
+    // The header polls ML status via a self-rescheduling setTimeout (5s while
+    // errored, 30s when healthy), cleaned up with clearTimeout on unmount.
+    // Spy on clearTimeout (keeping real behavior) so the unmount test can
+    // assert the timer is torn down.
+    vi.spyOn(global, 'clearTimeout');
   });
 
   afterEach(() => {
@@ -435,11 +433,29 @@ describe('DashboardHeader', () => {
     });
   });
 
-  it('cleans up interval on unmount', () => {
+  it('cleans up its poll timer on unmount', async () => {
+    const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
     const { unmount } = render(<DashboardHeader />);
+
+    // The poll schedules its timer only AFTER the first health check resolves
+    // (checkMlServiceStatus().finally(scheduleNext)), with a 5s (error) or 30s
+    // (healthy) delay. Unmounting before that would clearTimeout(undefined) — a
+    // no-op the assertion couldn't tell apart from a real teardown — so wait
+    // for the actual scheduled timer first.
+    let pollTimerId: ReturnType<typeof setTimeout> | undefined;
+    await waitFor(() => {
+      const idx = setTimeoutSpy.mock.calls.findIndex(
+        ([, delay]) => delay === 5000 || delay === 30000
+      );
+      expect(idx).toBeGreaterThanOrEqual(0);
+      pollTimerId = setTimeoutSpy.mock.results[idx]?.value;
+    });
+    expect(pollTimerId).toBeDefined();
+
     unmount();
 
-    expect(global.clearInterval).toHaveBeenCalled();
+    // Cleanup must clear the real scheduled handle, not undefined.
+    expect(global.clearTimeout).toHaveBeenCalledWith(pollTimerId);
   });
 
   it('handles user without email gracefully', async () => {

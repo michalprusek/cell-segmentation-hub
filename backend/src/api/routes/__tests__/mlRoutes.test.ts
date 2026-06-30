@@ -1,19 +1,28 @@
 import request from 'supertest';
 import express from 'express';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import mlRoutes from '../mlRoutes';
 import { authenticate } from '../../../middleware/auth';
 import { apiLimiter } from '../../../middleware/rateLimiter';
 import { logger } from '../../../utils/logger';
-import { verifyAccessToken } from '../../../auth/jwt';
-import { prisma } from '../../../db';
 import axios from 'axios';
 
-// Mock axios to prevent real HTTP calls to ML service
+/**
+ * Tests for the public ML routes that actually exist in mlRoutes.ts:
+ *   GET /api/ml/health and GET /api/ml/status — both public (no auth).
+ *
+ * The former /api/ml/models catalog and the protected /api/ml/queue and
+ * /api/ml/models/:modelId/warm-up handlers were removed as dead stubs that
+ * returned hardcoded fake data and were called by no client (commit 85fb78c).
+ * Their tests — and the authentication-boundary tests that depended on them —
+ * were removed with them.
+ */
+
+// Mock axios to prevent real HTTP calls to the ML service
 vi.mock('axios');
 const mockedAxios = axios as Mocked<typeof axios>;
 
-// Mock dependencies
+// Mock config so importing the route graph never trips process.exit in non-test
 vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
@@ -33,730 +42,172 @@ vi.mock('../../../utils/config', () => ({
 vi.mock('../../../middleware/auth');
 vi.mock('../../../middleware/rateLimiter');
 vi.mock('../../../utils/logger');
-vi.mock('../../../auth/jwt');
-vi.mock('../../../db');
 
-// Create mocked functions with proper typing
 const mockedAuthenticate = authenticate as any;
 const mockedApiLimiter = apiLimiter as any;
 const mockedLogger = logger as Mocked<typeof logger>;
-const _mockedVerifyAccessToken = verifyAccessToken as MockedFunction<
-  typeof verifyAccessToken
->;
-const mockedPrisma = prisma as Mocked<typeof prisma>;
 
-// Mock user data
-const mockUser = {
-  id: 'test-user-id',
-  email: 'test@example.com',
-  emailVerified: true,
-  profile: {
-    id: 'profile-id',
-    userId: 'test-user-id',
-    username: 'testuser',
-    avatarUrl: null,
-    avatarPath: null,
-    avatarMimeType: null,
-    avatarSize: null,
-    bio: null,
-    organization: null,
-    location: null,
-    title: null,
-    publicProfile: false,
-    preferredModel: 'hrnet',
-    modelThreshold: 0.5,
-    preferredLang: 'en',
-    preferredTheme: 'light',
-    emailNotifications: true,
-    consentToMLTraining: true,
-    consentToAlgorithmImprovement: true,
-    consentToFeatureDevelopment: true,
-    consentUpdatedAt: new Date(),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-};
-
-describe('ML Routes Authentication Tests', () => {
+describe('ML Routes (public endpoints)', () => {
   let app: express.Application;
 
   beforeEach(() => {
-    // Create fresh Express app for each test
+    // Fresh Express app per test
     app = express();
     app.use(express.json());
 
-    // Reset all mocks
     vi.clearAllMocks();
 
-    // Mock rate limiter to pass through
+    // Rate limiter passes through by default
     mockedApiLimiter.mockImplementation((req: any, res: any, next: any) =>
       next()
     );
 
-    // Mock logger methods
     mockedLogger.info = vi.fn();
     mockedLogger.error = vi.fn();
 
-    // Mock Prisma user findUnique
-    (mockedPrisma as any).user = {
-      findUnique: vi.fn(),
-    };
-
-    // Default axios mock: ML service returns healthy response
+    // Default axios mock: ML service returns a healthy response
     mockedAxios.get = vi.fn(() =>
       Promise.resolve({ data: { status: 'healthy', gpu_available: false } })
     ) as any;
-  });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('Public ML Endpoints (No Authentication Required)', () => {
-    beforeEach(() => {
-      // Setup app with ML routes
-      app.use('/api/ml', mlRoutes);
-      // JSON error handler for tests (catches next(error) calls)
-      app.use((err: any, req: any, res: any, _next: any) => {
-        res.status(500).json({ success: false, error: err.message });
-      });
-    });
-
-    describe('GET /api/ml/health', () => {
-      it('should return health status without authentication', async () => {
-        const response = await request(app).get('/api/ml/health').expect(200);
-
-        expect(response.body).toEqual({
-          success: true,
-          data: {
-            status: 'healthy',
-            uptime: expect.any(Number),
-            models: {
-              loaded: 3,
-              failed: 0,
-            },
-            memory: {
-              used: '256MB',
-              available: '1.2GB',
-            },
-            gpu: {
-              available: false,
-              utilization: '0%',
-            },
-          },
-          message: 'ML service health check completed',
-        });
-
-        expect(mockedLogger.info).toHaveBeenCalledWith(
-          '🏥 ML: Health check requested'
-        );
-        expect(mockedAuthenticate).not.toHaveBeenCalled();
-      });
-
-      it('should handle health check errors gracefully', async () => {
-        // Override axios to simulate ML service being unavailable
-        mockedAxios.get = vi.fn(() =>
-          Promise.reject(new Error('connect ECONNREFUSED'))
-        ) as any;
-
-        const response = await request(app).get('/api/ml/health');
-
-        // Route returns 503 when ML service is unavailable
-        expect(response.status).toBe(503);
-        expect(response.body.success).toBe(false);
-      });
-
-      it('should work without Authorization header', async () => {
-        const response = await request(app).get('/api/ml/health').expect(200);
-
-        expect(response.body.success).toBe(true);
-      });
-
-      it('should work with invalid Authorization header', async () => {
-        const response = await request(app)
-          .get('/api/ml/health')
-          .set('Authorization', 'Invalid token format')
-          .expect(200);
-
-        expect(response.body.success).toBe(true);
-      });
-    });
-
-    describe('GET /api/ml/status', () => {
-      it('should return service status without authentication', async () => {
-        const response = await request(app).get('/api/ml/status').expect(200);
-
-        expect(response.body).toEqual({
-          success: true,
-          data: {
-            service: 'online',
-            version: '1.0.0',
-            modelsLoaded: 3,
-            queueSize: 0,
-            lastHealthCheck: expect.any(String),
-            performance: {
-              averageInferenceTime: '8.5s',
-              successRate: '99.2%',
-              errorRate: '0.8%',
-            },
-          },
-          message: 'ML service status retrieved successfully',
-        });
-
-        expect(mockedLogger.info).toHaveBeenCalledWith(
-          '🔍 ML: Checking service status'
-        );
-        expect(mockedAuthenticate).not.toHaveBeenCalled();
-      });
-
-      it('should handle status check errors', async () => {
-        // Override axios to simulate ML service being unavailable
-        mockedAxios.get = vi.fn(() =>
-          Promise.reject(new Error('connect ECONNREFUSED'))
-        ) as any;
-
-        const response = await request(app).get('/api/ml/status');
-
-        // Route returns 503 when ML service is unavailable
-        expect(response.status).toBe(503);
-        expect(response.body.success).toBe(false);
-      });
-    });
-
-    describe('GET /api/ml/models', () => {
-      it('should return every registered model without authentication', async () => {
-        const response = await request(app).get('/api/ml/models').expect(200);
-
-        // The route is the hardcoded catalog of models surfaced to the UI.
-        // Current lineup: 4 spheroid models + sperm + wound. If you add
-        // or remove a model from mlRoutes.ts, update this list.
-        expect(response.body.success).toBe(true);
-        expect(response.body.message).toBe(
-          'Available ML models retrieved successfully'
-        );
-        const ids = response.body.data.map((m: { id: string }) => m.id);
-        expect(ids).toEqual([
-          'hrnetv2',
-          'cbam-resunet',
-          'unet_spherohq',
-          'unet_attention_aspp',
-          'sperm',
-          'wound',
-        ]);
-        // Spot-check the two newest entries' metadata so renames don't slip.
-        const sperm = response.body.data.find(
-          (m: { id: string }) => m.id === 'sperm'
-        );
-        expect(sperm.name).toBe('Sperm Morphology');
-        const wound = response.body.data.find(
-          (m: { id: string }) => m.id === 'wound'
-        );
-        expect(wound.name).toBe('Wound Healing');
-        expect(wound.description).toMatch(/U-Net\+\+/);
-
-        expect(mockedLogger.info).toHaveBeenCalledWith(
-          '📊 ML: Fetching available models'
-        );
-        expect(mockedAuthenticate).not.toHaveBeenCalled();
-      });
-
-      it('should handle models fetch errors', async () => {
-        // Mock logger to throw an error
-        mockedLogger.info.mockImplementation(() => {
-          throw new Error('Logger error');
-        });
-
-        const response = await request(app).get('/api/ml/models').expect(500);
-
-        expect(response.body.success).toBe(false);
-        expect(mockedLogger.error).toHaveBeenCalledWith(
-          '❌ ML: Error fetching models:',
-          expect.any(Error)
-        );
-      });
+    app.use('/api/ml', mlRoutes);
+    // JSON error handler (catches next(error) and thrown middleware errors)
+    app.use((err: any, req: any, res: any, _next: any) => {
+      res.status(500).json({ success: false, error: err.message });
     });
   });
 
-  describe('Protected ML Endpoints (Authentication Required)', () => {
-    beforeEach(() => {
-      // Setup successful authentication mock by default
-      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
-        req.user = mockUser;
-        next();
-      });
+  describe('GET /api/ml/health', () => {
+    it('should return health status without authentication', async () => {
+      const response = await request(app).get('/api/ml/health').expect(200);
 
-      // Setup app with ML routes
-      app.use('/api/ml', mlRoutes);
-      // JSON error handler for tests (catches next(error) calls)
-      app.use((err: any, req: any, res: any, _next: any) => {
-        res.status(500).json({ success: false, error: err.message });
-      });
-    });
-
-    describe('GET /api/ml/queue', () => {
-      it('should return queue status with valid authentication', async () => {
-        const response = await request(app)
-          .get('/api/ml/queue')
-          .set('Authorization', 'Bearer valid-token')
-          .expect(200);
-
-        expect(response.body).toEqual({
-          success: true,
-          data: {
-            totalItems: 0,
-            processing: 0,
-            pending: 0,
-            completed: 0,
+      expect(response.body).toEqual({
+        success: true,
+        data: {
+          status: 'healthy',
+          uptime: expect.any(Number),
+          models: {
+            loaded: 3,
             failed: 0,
-            averageWaitTime: '2.3s',
-            estimatedProcessingTime: '0s',
           },
-          message: 'ML queue status retrieved successfully',
-        });
-
-        expect(mockedLogger.info).toHaveBeenCalledWith(
-          '📋 ML: Fetching queue status'
-        );
-        expect(mockedAuthenticate).toHaveBeenCalled();
+          memory: {
+            used: '256MB',
+            available: '1.2GB',
+          },
+          gpu: {
+            available: false,
+            utilization: '0%',
+          },
+        },
+        message: 'ML service health check completed',
       });
 
-      it('should return 401 without authentication', async () => {
-        // Mock authentication to fail
-        mockedAuthenticate.mockImplementation((req: any, res: any) => {
-          res.status(401).json({
-            success: false,
-            message: 'Chybí autentizační token',
-            source: 'Auth',
-          });
-        });
-
-        const response = await request(app).get('/api/ml/queue').expect(401);
-
-        expect(response.body).toEqual({
-          success: false,
-          message: 'Chybí autentizační token',
-          source: 'Auth',
-        });
-
-        expect(mockedAuthenticate).toHaveBeenCalled();
-      });
-
-      it('should return 401 with invalid token', async () => {
-        // Mock authentication to fail with invalid token
-        mockedAuthenticate.mockImplementation((req: any, res: any) => {
-          res.status(401).json({
-            success: false,
-            message: 'Neplatný token',
-            source: 'Auth',
-          });
-        });
-
-        const response = await request(app)
-          .get('/api/ml/queue')
-          .set('Authorization', 'Bearer invalid-token')
-          .expect(401);
-
-        expect(response.body).toEqual({
-          success: false,
-          message: 'Neplatný token',
-          source: 'Auth',
-        });
-
-        expect(mockedAuthenticate).toHaveBeenCalled();
-      });
-
-      it('should return 401 with expired token', async () => {
-        // Mock authentication to fail with expired token
-        mockedAuthenticate.mockImplementation((req: any, res: any) => {
-          res.status(401).json({
-            success: false,
-            message: 'Token vypršel',
-            source: 'Auth',
-          });
-        });
-
-        const response = await request(app)
-          .get('/api/ml/queue')
-          .set('Authorization', 'Bearer expired-token')
-          .expect(401);
-
-        expect(response.body).toEqual({
-          success: false,
-          message: 'Token vypršel',
-          source: 'Auth',
-        });
-
-        expect(mockedAuthenticate).toHaveBeenCalled();
-      });
-
-      it('should handle queue fetch errors after authentication', async () => {
-        // Mock logger to throw an error after authentication passes
-        mockedLogger.info.mockImplementation(message => {
-          if (message.includes('Fetching queue status')) {
-            throw new Error('Queue service unavailable');
-          }
-        });
-
-        const response = await request(app)
-          .get('/api/ml/queue')
-          .set('Authorization', 'Bearer valid-token')
-          .expect(500);
-
-        expect(response.body.success).toBe(false);
-        expect(mockedLogger.error).toHaveBeenCalledWith(
-          '❌ ML: Error fetching queue status:',
-          expect.any(Error)
-        );
-      });
+      expect(mockedLogger.info).toHaveBeenCalledWith(
+        '🏥 ML: Health check requested'
+      );
+      expect(mockedAuthenticate).not.toHaveBeenCalled();
     });
 
-    describe('POST /api/ml/models/:modelId/warm-up', () => {
-      it('should warm up model with valid authentication', async () => {
-        const modelId = 'hrnetv2';
+    it('should handle health check errors gracefully', async () => {
+      // Override axios to simulate ML service being unavailable
+      mockedAxios.get = vi.fn(() =>
+        Promise.reject(new Error('connect ECONNREFUSED'))
+      ) as any;
 
-        const response = await request(app)
-          .post(`/api/ml/models/${modelId}/warm-up`)
-          .set('Authorization', 'Bearer valid-token')
-          .expect(200);
+      const response = await request(app).get('/api/ml/health');
 
-        expect(response.body).toEqual({
-          success: true,
-          data: { modelId, status: 'warming-up' },
-          message: `Model ${modelId} warm-up initiated`,
-        });
+      // Route returns 503 when ML service is unavailable
+      expect(response.status).toBe(503);
+      expect(response.body.success).toBe(false);
+    });
 
-        expect(mockedLogger.info).toHaveBeenCalledWith(
-          `🔥 ML: Warming up model: ${modelId}`
-        );
-        expect(mockedAuthenticate).toHaveBeenCalled();
-      });
+    it('should work without Authorization header', async () => {
+      const response = await request(app).get('/api/ml/health').expect(200);
 
-      it('should return 401 without authentication', async () => {
-        // Mock authentication to fail
-        mockedAuthenticate.mockImplementation((req: any, res: any) => {
-          res.status(401).json({
-            success: false,
-            message: 'Chybí autentizační token',
-            source: 'Auth',
-          });
-        });
+      expect(response.body.success).toBe(true);
+    });
 
-        const response = await request(app)
-          .post('/api/ml/models/hrnetv2/warm-up')
-          .expect(401);
+    it('should work with invalid Authorization header', async () => {
+      const response = await request(app)
+        .get('/api/ml/health')
+        .set('Authorization', 'Invalid token format')
+        .expect(200);
 
-        expect(response.body).toEqual({
-          success: false,
-          message: 'Chybí autentizační token',
-          source: 'Auth',
-        });
-
-        expect(mockedAuthenticate).toHaveBeenCalled();
-      });
-
-      it('should handle warm-up errors after authentication', async () => {
-        // Mock logger to throw an error after authentication passes
-        mockedLogger.info.mockImplementation(message => {
-          if (message.includes('Warming up model')) {
-            throw new Error('Model warm-up failed');
-          }
-        });
-
-        const response = await request(app)
-          .post('/api/ml/models/hrnetv2/warm-up')
-          .set('Authorization', 'Bearer valid-token')
-          .expect(500);
-
-        expect(response.body.success).toBe(false);
-        expect(mockedLogger.error).toHaveBeenCalledWith(
-          '❌ ML: Error warming up model:',
-          expect.any(Error)
-        );
-      });
-
-      it('should handle special characters in model ID', async () => {
-        const modelId = 'model-with-special-chars_123';
-
-        const response = await request(app)
-          .post(`/api/ml/models/${modelId}/warm-up`)
-          .set('Authorization', 'Bearer valid-token')
-          .expect(200);
-
-        expect(response.body.data.modelId).toBe(modelId);
-        expect(mockedLogger.info).toHaveBeenCalledWith(
-          `🔥 ML: Warming up model: ${modelId}`
-        );
-      });
+      expect(response.body.success).toBe(true);
     });
   });
 
-  describe('Authentication Boundary Tests', () => {
-    beforeEach(() => {
-      app.use('/api/ml', mlRoutes);
-      app.use((err: any, req: any, res: any, _next: any) => {
-        res.status(500).json({ success: false, error: err.message });
+  describe('GET /api/ml/status', () => {
+    it('should return service status without authentication', async () => {
+      const response = await request(app).get('/api/ml/status').expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        data: {
+          service: 'online',
+          version: '1.0.0',
+          modelsLoaded: 3,
+          queueSize: 0,
+          lastHealthCheck: expect.any(String),
+          performance: {
+            averageInferenceTime: '8.5s',
+            successRate: '99.2%',
+            errorRate: '0.8%',
+          },
+        },
+        message: 'ML service status retrieved successfully',
       });
+
+      expect(mockedLogger.info).toHaveBeenCalledWith(
+        '🔍 ML: Checking service status'
+      );
+      expect(mockedAuthenticate).not.toHaveBeenCalled();
     });
 
-    it('should verify middleware execution order - public endpoints before auth', async () => {
+    it('should handle status check errors', async () => {
+      // Override axios to simulate ML service being unavailable
+      mockedAxios.get = vi.fn(() =>
+        Promise.reject(new Error('connect ECONNREFUSED'))
+      ) as any;
+
+      const response = await request(app).get('/api/ml/status');
+
+      // Route returns 503 when ML service is unavailable
+      expect(response.status).toBe(503);
+      expect(response.body.success).toBe(false);
+    });
+  });
+
+  describe('Public endpoints stay public', () => {
+    it('should run the rate limiter but never invoke authenticate', async () => {
       const middlewareOrder: string[] = [];
 
-      // Mock rate limiter to track execution
       mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => {
         middlewareOrder.push('rateLimiter');
         next();
       });
 
-      // Mock authentication to track execution
       mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         middlewareOrder.push('authenticate');
         next();
       });
 
-      // Test public endpoint
       await request(app).get('/api/ml/health').expect(200);
 
-      // Should only have rate limiter, not authentication
       expect(middlewareOrder).toEqual(['rateLimiter']);
       expect(middlewareOrder).not.toContain('authenticate');
     });
-
-    it('should verify middleware execution order - protected endpoints after auth', async () => {
-      const middlewareOrder: string[] = [];
-
-      // Mock rate limiter to track execution
-      mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => {
-        middlewareOrder.push('rateLimiter');
-        next();
-      });
-
-      // Mock authentication to track execution and set user
-      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
-        middlewareOrder.push('authenticate');
-        req.user = mockUser;
-        next();
-      });
-
-      // Test protected endpoint
-      await request(app)
-        .get('/api/ml/queue')
-        .set('Authorization', 'Bearer valid-token')
-        .expect(200);
-
-      // Should have both authenticate and rate limiter
-      // authenticate runs first (router.use(authenticate)), then apiLimiter inline on route
-      expect(middlewareOrder).toEqual(['authenticate', 'rateLimiter']);
-    });
-
-    it('should handle authentication failures gracefully', async () => {
-      // Mock authentication to throw an error
-      mockedAuthenticate.mockImplementation((req: any, res: any) => {
-        res.status(500).json({
-          success: false,
-          message: 'Chyba autentizace',
-          source: 'Auth',
-        });
-      });
-
-      const response = await request(app)
-        .get('/api/ml/queue')
-        .set('Authorization', 'Bearer problematic-token')
-        .expect(500);
-
-      expect(response.body).toEqual({
-        success: false,
-        message: 'Chyba autentizace',
-        source: 'Auth',
-      });
-    });
-
-    it('should ensure public endpoints remain accessible during auth service outages', async () => {
-      // Mock authentication to fail completely
-      mockedAuthenticate.mockImplementation((req: any, res: any) => {
-        res.status(503).json({
-          success: false,
-          message: 'Authentication service unavailable',
-          source: 'Auth',
-        });
-      });
-
-      // Public endpoints should still work
-      const healthResponse = await request(app)
-        .get('/api/ml/health')
-        .expect(200);
-
-      const statusResponse = await request(app)
-        .get('/api/ml/status')
-        .expect(200);
-
-      const modelsResponse = await request(app)
-        .get('/api/ml/models')
-        .expect(200);
-
-      expect(healthResponse.body.success).toBe(true);
-      expect(statusResponse.body.success).toBe(true);
-      expect(modelsResponse.body.success).toBe(true);
-
-      // Protected endpoints should fail
-      await request(app).get('/api/ml/queue').expect(503);
-    });
   });
 
-  describe('Security Edge Cases', () => {
-    beforeEach(() => {
-      app.use('/api/ml', mlRoutes);
-      app.use((err: any, req: any, res: any, _next: any) => {
-        res.status(500).json({ success: false, error: err.message });
-      });
-    });
-
-    it('should handle malformed Authorization headers', async () => {
-      mockedAuthenticate.mockImplementation((req: any, res: any) => {
-        res.status(401).json({
-          success: false,
-          message: 'Neplatný token',
-          source: 'Auth',
-        });
-      });
-
-      const malformedHeaders = [
-        'Bearer',
-        'Bearer ',
-        'InvalidFormat token',
-        'Bearer token-with-spaces token',
-        // Note: headers with newlines cannot be set in HTTP (RFC 7230 violation)
-        'Bearer <script>alert("xss")</script>',
-      ];
-
-      for (const header of malformedHeaders) {
-        const response = await request(app)
-          .get('/api/ml/queue')
-          .set('Authorization', header)
-          .expect(401);
-
-        expect(response.body.success).toBe(false);
-      }
-    });
-
-    it('should handle concurrent requests to protected endpoints', async () => {
-      // Mock authentication to succeed
-      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
-        req.user = mockUser;
-        next();
-      });
-
-      // Send multiple concurrent requests
-      const promises = Array.from({ length: 10 }, () =>
-        request(app)
-          .get('/api/ml/queue')
-          .set('Authorization', 'Bearer valid-token')
-      );
-
-      const responses = await Promise.all(promises);
-
-      // All should succeed
-      responses.forEach(response => {
-        expect(response.status).toBe(200);
-        expect(response.body.success).toBe(true);
-      });
-
-      // Authentication should have been called for each request
-      expect(mockedAuthenticate).toHaveBeenCalledTimes(10);
-    });
-
-    it('should handle user context injection attempts', async () => {
-      // Mock authentication to set malicious user data
-      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
-        req.user = {
-          ...mockUser,
-          id: '<script>alert("xss")</script>',
-          email: 'malicious@<script>alert("xss")</script>.com',
-        };
-        next();
-      });
-
-      const response = await request(app)
-        .get('/api/ml/queue')
-        .set('Authorization', 'Bearer valid-token')
-        .expect(200);
-
-      // Response should be successful but data should be handled safely
-      expect(response.body.success).toBe(true);
-      // The actual validation would be in the specific endpoint handlers
-    });
-
-    it('should ensure rate limiting applies to all endpoints', async () => {
-      let rateLimiterCallCount = 0;
-
-      mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => {
-        rateLimiterCallCount++;
-        next();
-      });
-
-      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
-        req.user = mockUser;
-        next();
-      });
-
-      // Test all endpoints
-      await request(app).get('/api/ml/health').expect(200);
-      await request(app).get('/api/ml/status').expect(200);
-      await request(app).get('/api/ml/models').expect(200);
-      await request(app)
-        .get('/api/ml/queue')
-        .set('Authorization', 'Bearer valid-token')
-        .expect(200);
-      await request(app)
-        .post('/api/ml/models/hrnetv2/warm-up')
-        .set('Authorization', 'Bearer valid-token')
-        .expect(200);
-
-      // Rate limiter should be called for all endpoints
-      expect(rateLimiterCallCount).toBe(5);
-    });
-  });
-
-  describe('Error Handling', () => {
-    beforeEach(() => {
-      app.use('/api/ml', mlRoutes);
-      app.use((err: any, req: any, res: any, _next: any) => {
-        res.status(500).json({ success: false, error: err.message });
-      });
-    });
-
-    it('should handle database connectivity issues during authentication', async () => {
-      // Mock authentication to simulate database error
-      mockedAuthenticate.mockImplementation((req: any, res: any) => {
-        res.status(500).json({
-          success: false,
-          message: 'Database connection failed',
-          source: 'Auth',
-        });
-      });
-
-      const response = await request(app)
-        .get('/api/ml/queue')
-        .set('Authorization', 'Bearer valid-token')
-        .expect(500);
-
-      expect(response.body).toEqual({
-        success: false,
-        message: 'Database connection failed',
-        source: 'Auth',
-      });
-    });
-
-    it('should handle unexpected errors in middleware chain', async () => {
-      // Mock rate limiter to throw an unexpected error
+  describe('Error handling', () => {
+    it('should surface unexpected middleware errors as 500', async () => {
+      // Rate limiter throws synchronously → Express forwards to error handler
       mockedApiLimiter.mockImplementation(() => {
         throw new Error('Unexpected middleware error');
       });
 
-      // Error handling would depend on Express error middleware configuration
-      // This test ensures our routes don't break the middleware chain
       const response = await request(app).get('/api/ml/health').expect(500);
 
-      // The exact response depends on Express error handling middleware
       expect(response.status).toBe(500);
     });
   });

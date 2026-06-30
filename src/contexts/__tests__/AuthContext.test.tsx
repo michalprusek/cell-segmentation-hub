@@ -492,7 +492,7 @@ describe('AuthContext', () => {
           await result.current.deleteAccount('wrong-email');
         })
       ).rejects.toThrow(
-        'Confirmation text is required and must match your email address.'
+        'Confirmation text is required and must match your email address'
       );
 
       expect(result.current.isAuthenticated).toBe(true); // Should still be authenticated
