@@ -73,6 +73,53 @@ function makePolygon(
   };
 }
 
+// getProjectSegmentationStats now uses server-side aggregation
+// (segmentation.aggregate + segmentation.groupBy + a $queryRaw polygon count).
+// Derive those mock returns from a flat array of segmentation rows.
+function mockSegStatsFromRows(
+  prisma: any,
+  rows: Array<{
+    polygons?: string;
+    confidence?: number | null;
+    model?: string | null;
+  }>
+) {
+  const count = rows.length;
+  // Prisma's _avg ignores NULLs: average only the non-null confidences (and
+  // return null when there are none). Dividing by all rows would diverge from
+  // the real nullable-field aggregate and could hide bugs.
+  const confidences = rows
+    .map(r => r.confidence)
+    .filter((c): c is number => c != null);
+  const avgConfidence = confidences.length
+    ? confidences.reduce((s, c) => s + c, 0) / confidences.length
+    : null;
+  prisma.segmentation.aggregate.mockResolvedValue({
+    _avg: { confidence: avgConfidence },
+    _count: { _all: count },
+  });
+
+  const modelCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (r.model) {
+      modelCounts.set(r.model, (modelCounts.get(r.model) ?? 0) + 1);
+    }
+  }
+  prisma.segmentation.groupBy.mockResolvedValue(
+    [...modelCounts].map(([model, c]) => ({ model, _count: { _all: c } }))
+  );
+
+  const totalPolygons = rows.reduce((s, r) => {
+    try {
+      const parsed = JSON.parse(r.polygons ?? '[]');
+      return s + (Array.isArray(parsed) ? parsed.length : 0);
+    } catch {
+      return s;
+    }
+  }, 0);
+  prisma.$queryRaw.mockResolvedValue([{ total: BigInt(totalPolygons) }]);
+}
+
 // ─── suite ───────────────────────────────────────────────────────────────────
 
 describe('SegmentationService — gaps3 (additional uncovered branches)', () => {
@@ -90,6 +137,8 @@ describe('SegmentationService — gaps3 (additional uncovered branches)', () => 
         update: vi.fn(),
         delete: vi.fn(),
         deleteMany: vi.fn(),
+        aggregate: vi.fn(),
+        groupBy: vi.fn(),
       },
       image: {
         findMany: vi.fn(),
@@ -101,6 +150,7 @@ describe('SegmentationService — gaps3 (additional uncovered branches)', () => 
         findUnique: vi.fn(),
       },
       $transaction: vi.fn(),
+      $queryRaw: vi.fn(),
     };
 
     imageServiceMock = {
@@ -692,18 +742,16 @@ describe('SegmentationService — gaps3 (additional uncovered branches)', () => 
     it('returns averageConfidence=0 when all segmentation rows have confidence=0', async () => {
       prismaMock.project.findFirst.mockResolvedValue({ id: 'proj-zero' });
       prismaMock.image.count.mockResolvedValue(2);
-      prismaMock.segmentation.findMany.mockResolvedValue([
+      mockSegStatsFromRows(prismaMock, [
         {
           polygons: JSON.stringify([makePolygon()]),
           confidence: 0,
           model: 'hrnet',
-          image: { name: 'a.png', segmentationStatus: 'segmented' },
         },
         {
           polygons: JSON.stringify([makePolygon()]),
           confidence: 0,
           model: 'hrnet',
-          image: { name: 'b.png', segmentationStatus: 'segmented' },
         },
       ]);
 

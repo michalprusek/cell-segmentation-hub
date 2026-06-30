@@ -141,7 +141,7 @@ vi.mock('../export/formatConverter', () => ({
 vi.mock('../export/mtMetricsExporter', () => ({
   computeMTMetrics: vi
     .fn()
-    .mockResolvedValue([{ frameIndex: 0, lengthPx: 20 }]),
+    .mockResolvedValue({ rows: [{ frameIndex: 0, lengthPx: 20 }], skipped: [] }),
   computeMTGeometry: vi.fn().mockReturnValue([]),
   writeMTMetrics: vi.fn().mockResolvedValue(undefined),
 }));
@@ -718,25 +718,28 @@ describe('ExportService — generateMicrotubuleMetrics channel intensity path', 
     ).generateMicrotubuleMetrics(images, '/tmp/mt', options, jobId);
 
   it('calls computeMTMetrics when channels are provided and mtMetrics.enabled=true', async () => {
-    vi.mocked(computeMTMetrics).mockResolvedValueOnce([
-      {
-        frameIndex: 0,
-        imageId: 'img-g3',
-        instanceId: 'inst-1',
-        trackId: null,
-        channel: 'DAPI',
-        lengthPx: 50,
-        lengthUm: 3.25,
-        areaPx: null,
-        areaUm2: null,
-        pixelCount: null,
-        sumIntensity: null,
-        meanIntensity: null,
-        stdIntensity: null,
-        medianBackground: null,
-        signalMinusBackground: null,
-      },
-    ]);
+    vi.mocked(computeMTMetrics).mockResolvedValueOnce({
+      rows: [
+        {
+          frameIndex: 0,
+          imageId: 'img-g3',
+          instanceId: 'inst-1',
+          trackId: null,
+          channel: 'DAPI',
+          lengthPx: 50,
+          lengthUm: 3.25,
+          areaPx: null,
+          areaUm2: null,
+          pixelCount: null,
+          sumIntensity: null,
+          meanIntensity: null,
+          stdIntensity: null,
+          medianBackground: null,
+          signalMinusBackground: null,
+        },
+      ],
+      skipped: [],
+    });
 
     await callGenerateMT(service, [makeImage()], {
       metricsFormats: ['csv'],

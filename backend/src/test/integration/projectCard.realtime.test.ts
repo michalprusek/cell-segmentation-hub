@@ -12,6 +12,7 @@ type MockPrismaClient = {
   project: {
     findMany: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
     groupBy: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
@@ -35,13 +36,17 @@ type MockPrismaClient = {
   };
 };
 
-const prismaMock: MockPrismaClient = {
+// `vi.hoisted` so the object exists before the hoisted `vi.mock('../../db')`
+// factory runs (projectService imports `../db` at module top).
+const prismaMock: MockPrismaClient = vi.hoisted(() => ({
   user: {
     findUnique: vi.fn(),
   },
   project: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    // isValidProjectAccess() (gating join-project) queries findFirst.
+    findFirst: vi.fn(),
     count: vi.fn(),
     groupBy: vi.fn(),
     create: vi.fn(),
@@ -63,13 +68,15 @@ const prismaMock: MockPrismaClient = {
   shares: {
     findMany: vi.fn(),
   },
-};
+}));
 
 // Mock authentication middleware
-const mockAuthMiddleware = vi.fn((req: any, res: any, next: any) => {
-  req.user = { id: 'test-user-id', email: 'test@example.com' };
-  next();
-});
+const mockAuthMiddleware = vi.hoisted(() =>
+  vi.fn((req: any, res: any, next: any) => {
+    req.user = { id: 'test-user-id', email: 'test@example.com' };
+    next();
+  })
+);
 
 // Mock dependencies
 vi.mock('../../db', () => ({
@@ -99,16 +106,73 @@ vi.mock('jsonwebtoken', () => ({
 vi.mock('../../services/sharingService', () => ({
   hasProjectAccess: vi.fn().mockResolvedValue({ hasAccess: true } as never),
 }));
+// websocketService imports authCookies → config, whose real parser
+// process.exit's on a missing test env. Stub it.
+vi.mock('../../utils/config', () => ({
+  config: { UPLOAD_DIR: '/tmp/test-uploads', NODE_ENV: 'test' },
+}));
+
+/**
+ * Adapts a jest-style `done` callback test/hook to vitest v4 (which dropped the
+ * `done` parameter). The body is unchanged: it still calls `done()` on success
+ * or `done(err)` on failure. A timeout backstop rejects fast instead of hanging
+ * for the full test timeout if an awaited event never fires.
+ */
+function wsTest(
+  fn: (done: (err?: unknown) => void) => void,
+  timeoutMs = 10000
+): () => Promise<void> {
+  return () =>
+    new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`wsTest timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      );
+      let settled = false;
+      const done = (err?: unknown): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (err) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        } else {
+          resolve();
+        }
+      };
+      try {
+        fn(done);
+      } catch (err) {
+        done(err);
+      }
+    });
+}
+
+/**
+ * Resolve once `socket` has actually joined the project room. The service emits
+ * no join ack, but socket.io processes a socket's events FIFO, so a follow-up
+ * `request-queue-stats` — which the server answers with `queue-stats-error`
+ * because no QueueService is attached in these tests — confirms the earlier
+ * `join-project` has been processed. This removes the race where an
+ * HTTP-triggered project broadcast outruns the async room join.
+ */
+function joinProject(socket: any, projectId: string): Promise<void> {
+  return new Promise(resolve => {
+    socket.once('queue-stats-error', () => resolve());
+    socket.emit('join-project', projectId);
+    socket.emit('request-queue-stats', projectId);
+  });
+}
 
 // Import after mocking
 import { WebSocketService } from '../../services/websocketService';
 import { getUserProjects } from '../../services/projectService';
+import * as sharingService from '../../services/sharingService';
 import {
   WebSocketEvent,
   ProjectUpdateData,
   SegmentationUpdateData,
-  // getProjectRoom,
-  // getUserRoom
 } from '../../types/websocket';
 import jwt from 'jsonwebtoken';
 
@@ -124,7 +188,51 @@ describe('Project Card Real-time Updates', () => {
   const testImageId = 'test-image-id';
   const mockToken = 'valid-jwt-token';
 
-  beforeEach(done => {
+  // Mutable project-card state shared by the stub endpoints, so that a GET
+  // after an upload/segmentation/deletion reflects the same numbers the
+  // WebSocket broadcast carried (the original stub returned static data, which
+  // made the "card was updated" GET assertions meaningless).
+  let cardState: any;
+
+  beforeEach(wsTest(done => {
+    // Clear leftover mock state (clearMocks/restoreMocks don't drain the
+    // mockResolvedValueOnce queue) and re-establish the standing mocks.
+    vi.resetAllMocks();
+    mockAuthMiddleware.mockImplementation((req: any, res: any, next: any) => {
+      req.user = { id: testUserId, email: 'test@example.com' };
+      next();
+    });
+    (sharingService.hasProjectAccess as Mock).mockResolvedValue({
+      hasAccess: true,
+    } as never);
+    // Grant project-room access so `join-project` succeeds.
+    prismaMock.project.findFirst.mockResolvedValue({
+      id: testProjectId,
+      userId: testUserId,
+    } as never);
+
+    cardState = {
+      id: testProjectId,
+      title: 'Test Project',
+      description: 'Test Description',
+      userId: testUserId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      imageCount: 15,
+      segmentedCount: 12,
+      processingCount: 2,
+      pendingCount: 1,
+      failedCount: 0,
+      completionPercentage: 80,
+      // The card always surfaces the display-endpoint thumbnail URL; uploads
+      // carry their raw thumbnail path only in the broadcast payload.
+      thumbnailUrl: `/api/images/${testImageId}/display`,
+      lastActivity: new Date(),
+      isOwned: true,
+      isShared: false,
+      owner: { id: testUserId, email: 'test@example.com' },
+    };
+
     // Create Express app with project card endpoints
     app = express();
     app.use(express.json());
@@ -160,36 +268,9 @@ describe('Project Card Real-time Updates', () => {
       mockAuthMiddleware,
       async (req: any, res: any) => {
         try {
-          const projectId = req.params.projectId;
-          const userId = req.user.id;
-
-          // Mock project with enhanced project card data
-          const project = {
-            id: projectId,
-            title: 'Test Project',
-            description: 'Test Description',
-            userId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            imageCount: 15,
-            segmentedCount: 12,
-            processingCount: 2,
-            pendingCount: 1,
-            failedCount: 0,
-            completionPercentage: 80,
-            thumbnailUrl: `/api/images/${testImageId}/display`,
-            lastActivity: new Date(),
-            isOwned: true,
-            isShared: false,
-            owner: {
-              id: userId,
-              email: 'test@example.com',
-            },
-          };
-
           res.json({
             success: true,
-            data: project,
+            data: { ...cardState, id: req.params.projectId },
           });
         } catch (_error) {
           res.status(500).json({
@@ -229,6 +310,12 @@ describe('Project Card Real-time Updates', () => {
             newImageCount > 0
               ? Math.round((newSegmentedCount / newImageCount) * 100)
               : 0;
+
+          // Persist into the card state so a follow-up GET reflects it.
+          cardState.imageCount = newImageCount;
+          cardState.segmentedCount = newSegmentedCount;
+          cardState.completionPercentage = newCompletionPercentage;
+          cardState.lastActivity = new Date();
 
           // Emit project update with enhanced metadata
           const updateData: ProjectUpdateData = {
@@ -307,6 +394,11 @@ describe('Project Card Real-time Updates', () => {
             (newSegmentedCount / totalImages) * 100
           );
 
+          // Persist into the card state so a follow-up GET reflects it.
+          cardState.segmentedCount = newSegmentedCount;
+          cardState.completionPercentage = newCompletionPercentage;
+          cardState.lastActivity = new Date();
+
           // Emit project update
           const projectUpdate: ProjectUpdateData = {
             projectId,
@@ -355,6 +447,12 @@ describe('Project Card Real-time Updates', () => {
               ? Math.round((newSegmentedCount / newImageCount) * 100)
               : 0;
 
+          // Persist into the card state so a follow-up GET reflects it.
+          cardState.imageCount = newImageCount;
+          cardState.segmentedCount = newSegmentedCount;
+          cardState.completionPercentage = newCompletionPercentage;
+          cardState.lastActivity = new Date();
+
           // Emit project update
           const updateData: ProjectUpdateData = {
             projectId,
@@ -397,17 +495,17 @@ describe('Project Card Real-time Updates', () => {
       }
       done();
     });
-  });
+  }));
 
-  afterEach(done => {
+  afterEach(wsTest(done => {
     if (clientSocket) {
       clientSocket.disconnect();
     }
     httpServer.close(done);
-  });
+  }));
 
   describe('Project Card Real-time Statistics Updates', () => {
-    it('should update project card statistics when image is uploaded', done => {
+    it('should update project card statistics when image is uploaded', wsTest(done => {
       // Mock initial project data
       const _initialProject = {
         id: testProjectId,
@@ -430,12 +528,12 @@ describe('Project Card Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      clientSocket.on('connect', () => {
+      clientSocket.on('connect', async () => {
         // Join project room for updates
-        clientSocket.emit('join-project', testProjectId);
+        await joinProject(clientSocket, testProjectId);
 
         let projectUpdateReceived = false;
 
@@ -479,9 +577,9 @@ describe('Project Card Real-time Updates', () => {
           .expect(200)
           .catch(done);
       });
-    });
+    }));
 
-    it('should update completion percentage when segmentation completes', done => {
+    it('should update completion percentage when segmentation completes', wsTest(done => {
       // Mock JWT
       (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
@@ -494,11 +592,11 @@ describe('Project Card Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      clientSocket.on('connect', () => {
-        clientSocket.emit('join-project', testProjectId);
+      clientSocket.on('connect', async () => {
+        await joinProject(clientSocket, testProjectId);
 
         let segmentationEventReceived = false;
         let projectUpdateReceived = false;
@@ -557,9 +655,9 @@ describe('Project Card Real-time Updates', () => {
           .expect(200)
           .catch(done);
       });
-    });
+    }));
 
-    it('should update project card after image deletion', done => {
+    it('should update project card after image deletion', wsTest(done => {
       // Mock JWT
       (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
@@ -572,11 +670,11 @@ describe('Project Card Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      clientSocket.on('connect', () => {
-        clientSocket.emit('join-project', testProjectId);
+      clientSocket.on('connect', async () => {
+        await joinProject(clientSocket, testProjectId);
 
         clientSocket.on(
           WebSocketEvent.PROJECT_UPDATE,
@@ -614,11 +712,11 @@ describe('Project Card Real-time Updates', () => {
           .expect(200)
           .catch(done);
       });
-    });
+    }));
   });
 
   describe('Project Card Thumbnail URL Generation', () => {
-    it('should update thumbnail URL when new image is uploaded', done => {
+    it('should update thumbnail URL when new image is uploaded', wsTest(done => {
       // Mock JWT
       (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
@@ -631,11 +729,11 @@ describe('Project Card Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      clientSocket.on('connect', () => {
-        clientSocket.emit('join-project', testProjectId);
+      clientSocket.on('connect', async () => {
+        await joinProject(clientSocket, testProjectId);
 
         clientSocket.on(
           WebSocketEvent.PROJECT_UPDATE,
@@ -672,9 +770,9 @@ describe('Project Card Real-time Updates', () => {
           .expect(200)
           .catch(done);
       });
-    });
+    }));
 
-    it('should generate fallback thumbnail URL when needed', done => {
+    it('should generate fallback thumbnail URL when needed', wsTest(done => {
       // Test project card thumbnail URL generation
       request(app)
         .get(`/api/projects/${testProjectId}`)
@@ -691,11 +789,11 @@ describe('Project Card Real-time Updates', () => {
           done();
         })
         .catch(done);
-    });
+    }));
   });
 
   describe('Project Card Last Activity Tracking', () => {
-    it('should update lastActivity timestamp on operations', done => {
+    it('should update lastActivity timestamp on operations', wsTest(done => {
       // Mock JWT
       (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
@@ -708,11 +806,11 @@ describe('Project Card Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      clientSocket.on('connect', () => {
-        clientSocket.emit('join-project', testProjectId);
+      clientSocket.on('connect', async () => {
+        await joinProject(clientSocket, testProjectId);
 
         const beforeTime = new Date();
 
@@ -744,11 +842,11 @@ describe('Project Card Real-time Updates', () => {
             .catch(done);
         }, 10); // Small delay to ensure timestamp difference
       });
-    });
+    }));
   });
 
   describe('Shared Project Card Updates', () => {
-    it('should broadcast updates to shared project collaborators', done => {
+    it('should broadcast updates to shared project collaborators', wsTest(done => {
       const ownerId = 'project-owner-id';
       const sharedUserId = 'shared-user-id';
 
@@ -770,12 +868,12 @@ describe('Project Card Real-time Updates', () => {
       });
 
       const ownerSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      ownerSocket.on('connect', () => {
+      ownerSocket.on('connect', async () => {
+        await joinProject(ownerSocket, testProjectId);
         ownerSocketConnected = true;
-        ownerSocket.emit('join-project', testProjectId);
 
         ownerSocket.on(
           WebSocketEvent.PROJECT_UPDATE,
@@ -802,12 +900,12 @@ describe('Project Card Real-time Updates', () => {
       });
 
       const sharedUserSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      sharedUserSocket.on('connect', () => {
+      sharedUserSocket.on('connect', async () => {
+        await joinProject(sharedUserSocket, testProjectId);
         sharedUserSocketConnected = true;
-        sharedUserSocket.emit('join-project', testProjectId);
 
         sharedUserSocket.on(
           WebSocketEvent.PROJECT_UPDATE,
@@ -852,11 +950,11 @@ describe('Project Card Real-time Updates', () => {
           done();
         }
       }
-    });
+    }));
   });
 
   describe('Project Card Performance with Multiple Updates', () => {
-    it('should handle rapid successive project updates efficiently', done => {
+    it('should handle rapid successive project updates efficiently', wsTest(done => {
       // Mock JWT
       (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
@@ -869,11 +967,11 @@ describe('Project Card Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      clientSocket.on('connect', () => {
-        clientSocket.emit('join-project', testProjectId);
+      clientSocket.on('connect', async () => {
+        await joinProject(clientSocket, testProjectId);
 
         let updateCount = 0;
         const expectedUpdates = 5;
@@ -918,9 +1016,9 @@ describe('Project Card Real-time Updates', () => {
           }, i * 100); // Stagger requests by 100ms
         }
       });
-    });
+    }));
 
-    it('should maintain data consistency across multiple concurrent updates', done => {
+    it('should maintain data consistency across multiple concurrent updates', wsTest(done => {
       // Mock JWT
       (jwt.verify as Mock).mockReturnValue({
         userId: testUserId,
@@ -933,11 +1031,11 @@ describe('Project Card Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
-      clientSocket.on('connect', () => {
-        clientSocket.emit('join-project', testProjectId);
+      clientSocket.on('connect', async () => {
+        await joinProject(clientSocket, testProjectId);
 
         let _finalUpdate = false;
 
@@ -991,6 +1089,6 @@ describe('Project Card Real-time Updates', () => {
           }),
         ]).catch(done);
       });
-    });
+    }));
   });
 });

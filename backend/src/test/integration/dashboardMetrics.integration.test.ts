@@ -15,6 +15,7 @@ type MockPrismaClient = {
     create: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
     groupBy: ReturnType<typeof vi.fn>;
   };
@@ -35,7 +36,9 @@ type MockPrismaClient = {
   $transaction: ReturnType<typeof vi.fn>;
 };
 
-const prismaMock: MockPrismaClient = {
+// `vi.hoisted` so the object exists before the hoisted `vi.mock('../../db')`
+// factory runs (userService imports `../db` at module top).
+const prismaMock: MockPrismaClient = vi.hoisted(() => ({
   user: {
     findUnique: vi.fn(),
     create: vi.fn(),
@@ -44,6 +47,8 @@ const prismaMock: MockPrismaClient = {
     create: vi.fn(),
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    // isValidProjectAccess() (gating join-project) queries findFirst.
+    findFirst: vi.fn(),
     count: vi.fn(),
     groupBy: vi.fn(),
   },
@@ -62,13 +67,15 @@ const prismaMock: MockPrismaClient = {
     findMany: vi.fn(),
   },
   $transaction: vi.fn(),
-};
+}));
 
 // Mock authentication middleware
-const mockAuthMiddleware = vi.fn((req: any, res: any, next: any) => {
-  req.user = { id: 'test-user-id', email: 'test@example.com' };
-  next();
-});
+const mockAuthMiddleware = vi.hoisted(() =>
+  vi.fn((req: any, res: any, next: any) => {
+    req.user = { id: 'test-user-id', email: 'test@example.com' };
+    next();
+  })
+);
 
 // Mock dependencies
 vi.mock('../../db', () => ({
@@ -92,16 +99,78 @@ vi.mock('jsonwebtoken', () => ({
     sign: vi.fn(),
   },
 }));
+// websocketService imports authCookies → config, whose real parser
+// process.exit's on a missing test env. Stub it.
+vi.mock('../../utils/config', () => ({
+  config: { UPLOAD_DIR: '/tmp/test-uploads', NODE_ENV: 'test' },
+}));
+// getProjectStats() gates on SharingService.hasProjectAccess(); grant access.
+vi.mock('../../services/sharingService', () => ({
+  hasProjectAccess: vi.fn().mockResolvedValue({ hasAccess: true }),
+}));
+
+/**
+ * Adapts a jest-style `done` callback test/hook to vitest v4 (which dropped the
+ * `done` parameter). The body is unchanged: it still calls `done()` on success
+ * or `done(err)` on failure. A timeout backstop rejects fast instead of hanging
+ * for the full test timeout if an awaited event never fires.
+ */
+function wsTest(
+  fn: (done: (err?: unknown) => void) => void,
+  timeoutMs = 10000
+): () => Promise<void> {
+  return () =>
+    new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`wsTest timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      );
+      let settled = false;
+      const done = (err?: unknown): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (err) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        } else {
+          resolve();
+        }
+      };
+      try {
+        fn(done);
+      } catch (err) {
+        done(err);
+      }
+    });
+}
+
+/**
+ * Resolve once `socket` has actually joined the project room. The service emits
+ * no join ack, but socket.io processes a socket's events FIFO, so a follow-up
+ * `request-queue-stats` — which the server answers with `queue-stats-error`
+ * because no QueueService is attached in these tests — confirms the earlier
+ * `join-project` has been processed. This removes the race where an
+ * HTTP-triggered project broadcast outruns the async room join.
+ */
+function joinProject(socket: any, projectId: string): Promise<void> {
+  return new Promise(resolve => {
+    socket.once('queue-stats-error', () => resolve());
+    socket.emit('join-project', projectId);
+    socket.emit('request-queue-stats', projectId);
+  });
+}
 
 // Import after mocking
 import { WebSocketService } from '../../services/websocketService';
 import { getUserStats } from '../../services/userService';
 import { getProjectStats } from '../../services/projectService';
+import * as sharingService from '../../services/sharingService';
 import {
   WebSocketEvent,
   ProjectUpdateData,
   SegmentationUpdateData,
-  getProjectRoom,
 } from '../../types/websocket';
 import jwt from 'jsonwebtoken';
 
@@ -117,7 +186,26 @@ describe('Dashboard Metrics Integration Tests', () => {
   const testImageId = 'test-image-id';
   const mockToken = 'valid-jwt-token';
 
-  beforeEach(done => {
+  beforeEach(wsTest(done => {
+    // Clear any leftover mockResolvedValueOnce queues from a prior test
+    // (clearMocks/restoreMocks do not drain the "once" queue, so a leftover
+    // value would bleed into the next test's getUserStats() call sequence).
+    vi.resetAllMocks();
+    mockAuthMiddleware.mockImplementation((req: any, res: any, next: any) => {
+      req.user = { id: testUserId, email: 'test@example.com' };
+      next();
+    });
+    (sharingService.hasProjectAccess as Mock).mockResolvedValue({
+      hasAccess: true,
+    } as never);
+
+    // Grant project-room access so `join-project` succeeds (isValidProjectAccess
+    // queries findFirst). Returning a truthy row = access granted.
+    prismaMock.project.findFirst.mockResolvedValue({
+      id: testProjectId,
+      userId: testUserId,
+    } as never);
+
     // Create Express app with routes
     app = express();
     app.use(express.json());
@@ -336,17 +424,17 @@ describe('Dashboard Metrics Integration Tests', () => {
       }
       done();
     });
-  });
+  }));
 
-  afterEach(done => {
+  afterEach(wsTest(done => {
     if (clientSocket) {
       clientSocket.disconnect();
     }
     httpServer.close(done);
-  });
+  }));
 
   describe('Complete Image Upload → Statistics Update → WebSocket Event Flow', () => {
-    it('should update metrics and emit events when image is uploaded', done => {
+    it('should update metrics and emit events when image is uploaded', wsTest(done => {
       // Mock initial state
       prismaMock.project.count.mockResolvedValue(2);
       prismaMock.image.count
@@ -373,12 +461,12 @@ describe('Dashboard Metrics Integration Tests', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', async () => {
         // Join project room
-        clientSocket.emit('join', getProjectRoom(testProjectId));
+        await joinProject(clientSocket, testProjectId);
 
         let projectUpdateReceived = false;
         let metricsBeforeUpload: any;
@@ -434,21 +522,21 @@ describe('Dashboard Metrics Integration Tests', () => {
           })
           .catch(done);
       });
-    });
+    }));
 
-    it('should handle segmentation completion flow with accurate statistics', done => {
+    it('should handle segmentation completion flow with accurate statistics', wsTest(done => {
       // Mock state with one image pending segmentation
       prismaMock.project.count.mockResolvedValue(1);
+      // The flow fetches dashboard metrics (getUserStats) then project stats
+      // (getProjectStats) exactly once each, in that order.
       prismaMock.image.count
-        .mockResolvedValueOnce(1) // Total images
-        .mockResolvedValueOnce(0) // Initially 0 processed
-        .mockResolvedValueOnce(0) // Today images
-        .mockResolvedValueOnce(1) // After segmentation total
-        .mockResolvedValueOnce(1) // After segmentation processed
-        .mockResolvedValueOnce(0); // Today images unchanged
+        .mockResolvedValueOnce(1) // getUserStats: total images
+        .mockResolvedValueOnce(1) // getUserStats: processed images
+        .mockResolvedValueOnce(0) // getUserStats: images uploaded today
+        .mockResolvedValueOnce(1); // getProjectStats: project total images
       prismaMock.segmentation.count
-        .mockResolvedValueOnce(0) // Initially 0 segmentations
-        .mockResolvedValueOnce(1); // After completion 1 segmentation
+        .mockResolvedValueOnce(1) // getUserStats: total segmentations
+        .mockResolvedValueOnce(1); // getProjectStats: project segmentations
       prismaMock.image.aggregate.mockResolvedValue({
         _sum: { fileSize: 2 * 1024 * 1024 }, // 2MB
       });
@@ -477,18 +565,18 @@ describe('Dashboard Metrics Integration Tests', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', async () => {
-        clientSocket.emit('join', getProjectRoom(testProjectId));
+        await joinProject(clientSocket, testProjectId);
 
         let segmentationEventReceived = false;
         let projectUpdateReceived = false;
 
         // Listen for segmentation completion
         clientSocket.on(
-          WebSocketEvent.SEGMENTATION_STATUS,
+          WebSocketEvent.SEGMENTATION_UPDATE,
           (data: SegmentationUpdateData) => {
             expect(data.imageId).toBe(testImageId);
             expect(data.status).toBe('completed');
@@ -550,21 +638,18 @@ describe('Dashboard Metrics Integration Tests', () => {
           .expect(200)
           .catch(done);
       });
-    });
+    }));
 
-    it('should handle image deletion with accurate count updates', done => {
+    it('should handle image deletion with accurate count updates', wsTest(done => {
       // Mock state with images to delete
       prismaMock.project.count.mockResolvedValue(1);
       prismaMock.image.count
-        .mockResolvedValueOnce(3) // Initially 3 images
-        .mockResolvedValueOnce(2) // 2 processed
-        .mockResolvedValueOnce(1) // 1 today
-        .mockResolvedValueOnce(2) // After deletion 2 images
-        .mockResolvedValueOnce(1) // After deletion 1 processed
-        .mockResolvedValueOnce(1); // Today unchanged
-      prismaMock.segmentation.count
-        .mockResolvedValueOnce(2) // Initially 2 segmentations
-        .mockResolvedValueOnce(1); // After deletion 1 segmentation
+        // Only dashboard metrics are fetched (getUserStats once): total,
+        // processed, today.
+        .mockResolvedValueOnce(2) // total images (after deletion)
+        .mockResolvedValueOnce(1) // processed images
+        .mockResolvedValueOnce(1); // images uploaded today
+      prismaMock.segmentation.count.mockResolvedValueOnce(1); // total segmentations
       prismaMock.image.aggregate.mockResolvedValue({
         _sum: { fileSize: 1.5 * 1024 * 1024 }, // 1.5MB after deletion
       });
@@ -581,11 +666,11 @@ describe('Dashboard Metrics Integration Tests', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken },
+        extraHeaders: { cookie: `access_token=${mockToken}` },
       });
 
       clientSocket.on('connect', async () => {
-        clientSocket.emit('join', getProjectRoom(testProjectId));
+        await joinProject(clientSocket, testProjectId);
 
         let projectUpdateReceived = false;
 
@@ -624,11 +709,11 @@ describe('Dashboard Metrics Integration Tests', () => {
           .expect(200)
           .catch(done);
       });
-    });
+    }));
   });
 
   describe('Dashboard Metrics Accuracy with Real Database Data', () => {
-    it('should provide accurate metrics with complex project scenarios', done => {
+    it('should provide accurate metrics with complex project scenarios', wsTest(done => {
       // Mock complex scenario: 3 projects, mixed segmentation statuses
       const mockComplexData = {
         projects: 3,
@@ -684,9 +769,9 @@ describe('Dashboard Metrics Integration Tests', () => {
           done();
         })
         .catch(done);
-    });
+    }));
 
-    it('should handle edge cases in metrics calculation', done => {
+    it('should handle edge cases in metrics calculation', wsTest(done => {
       // Test edge case: no data
       prismaMock.project.count.mockResolvedValue(0);
       prismaMock.image.count
@@ -716,11 +801,11 @@ describe('Dashboard Metrics Integration Tests', () => {
           done();
         })
         .catch(done);
-    });
+    }));
   });
 
   describe('Project Card Data Consistency', () => {
-    it('should ensure project card statistics match dashboard metrics', done => {
+    it('should ensure project card statistics match dashboard metrics', wsTest(done => {
       // Mock consistent data across endpoints
       const _consistentData = {
         projectCount: 2,
@@ -771,11 +856,11 @@ describe('Dashboard Metrics Integration Tests', () => {
           done();
         })
         .catch(done);
-    });
+    }));
   });
 
   describe('Performance Tests', () => {
-    it('should handle concurrent requests efficiently', done => {
+    it('should handle concurrent requests efficiently', wsTest(done => {
       // Mock data for performance test
       prismaMock.project.count.mockResolvedValue(10);
       prismaMock.image.count.mockResolvedValue(100);
@@ -808,6 +893,6 @@ describe('Dashboard Metrics Integration Tests', () => {
           done();
         })
         .catch(done);
-    });
+    }));
   });
 });

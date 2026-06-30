@@ -111,6 +111,8 @@ function makePrisma() {
       update: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
+      aggregate: vi.fn(),
+      groupBy: vi.fn(),
     },
     image: {
       findMany: vi.fn(),
@@ -122,7 +124,55 @@ function makePrisma() {
       findFirst: vi.fn(),
     },
     $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
+    $queryRaw: vi.fn(),
   };
+}
+
+// getProjectSegmentationStats now uses server-side aggregation
+// (segmentation.aggregate + segmentation.groupBy + a $queryRaw polygon count).
+// Derive those mock returns from a flat array of segmentation rows.
+function mockSegStatsFromRows(
+  prisma: ReturnType<typeof makePrisma>,
+  rows: Array<{
+    polygons?: string;
+    confidence?: number | null;
+    model?: string | null;
+  }>
+) {
+  const count = rows.length;
+  // Prisma's _avg ignores NULLs: average only the non-null confidences (and
+  // return null when there are none). Dividing by all rows would diverge from
+  // the real nullable-field aggregate and could hide bugs.
+  const confidences = rows
+    .map(r => r.confidence)
+    .filter((c): c is number => c != null);
+  const avgConfidence = confidences.length
+    ? confidences.reduce((s, c) => s + c, 0) / confidences.length
+    : null;
+  prisma.segmentation.aggregate.mockResolvedValue({
+    _avg: { confidence: avgConfidence },
+    _count: { _all: count },
+  });
+
+  const modelCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (r.model) {
+      modelCounts.set(r.model, (modelCounts.get(r.model) ?? 0) + 1);
+    }
+  }
+  prisma.segmentation.groupBy.mockResolvedValue(
+    [...modelCounts].map(([model, c]) => ({ model, _count: { _all: c } }))
+  );
+
+  const totalPolygons = rows.reduce((s, r) => {
+    try {
+      const parsed = JSON.parse(r.polygons ?? '[]');
+      return s + (Array.isArray(parsed) ? parsed.length : 0);
+    } catch {
+      return s;
+    }
+  }, 0);
+  prisma.$queryRaw.mockResolvedValue([{ total: BigInt(totalPolygons) }]);
 }
 
 function makeImageService() {
@@ -460,7 +510,7 @@ describe('SegmentationService — getProjectSegmentationStats', () => {
     const { svc, prisma } = makeService();
     prisma.project.findFirst.mockResolvedValueOnce({ id: 'proj-1' });
     prisma.image.count.mockResolvedValueOnce(5);
-    prisma.segmentation.findMany.mockResolvedValueOnce([]);
+    mockSegStatsFromRows(prisma, []);
 
     const stats = await svc.getProjectSegmentationStats('proj-1', 'user-1');
     expect(stats.averageConfidence).toBe(0);
@@ -472,28 +522,10 @@ describe('SegmentationService — getProjectSegmentationStats', () => {
     const { svc, prisma } = makeService();
     prisma.project.findFirst.mockResolvedValueOnce({ id: 'proj-1' });
     prisma.image.count.mockResolvedValueOnce(3);
-    prisma.segmentation.findMany.mockResolvedValueOnce([
-      {
-        id: 's1',
-        polygons: '[]',
-        confidence: 0.8,
-        model: 'hrnet',
-        image: { name: 'a.jpg', segmentationStatus: 'segmented' },
-      },
-      {
-        id: 's2',
-        polygons: '[]',
-        confidence: 0.9,
-        model: 'hrnet',
-        image: { name: 'b.jpg', segmentationStatus: 'segmented' },
-      },
-      {
-        id: 's3',
-        polygons: '[]',
-        confidence: 0.7,
-        model: 'resunet_advanced',
-        image: { name: 'c.jpg', segmentationStatus: 'segmented' },
-      },
+    mockSegStatsFromRows(prisma, [
+      { polygons: '[]', confidence: 0.8, model: 'hrnet' },
+      { polygons: '[]', confidence: 0.9, model: 'hrnet' },
+      { polygons: '[]', confidence: 0.7, model: 'resunet_advanced' },
     ]);
 
     const stats = await svc.getProjectSegmentationStats('proj-1', 'user-1');
