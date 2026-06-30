@@ -134,8 +134,14 @@ function mockSegStatsFromRows(
   }>
 ) {
   const count = rows.length;
-  const avgConfidence = count
-    ? rows.reduce((s, r) => s + (r.confidence ?? 0), 0) / count
+  // Prisma's _avg ignores NULLs: average only the non-null confidences (and
+  // return null when there are none). Dividing by all rows would diverge from
+  // the real nullable-field aggregate and could hide bugs.
+  const confidences = rows
+    .map(r => r.confidence)
+    .filter((c): c is number => c != null);
+  const avgConfidence = confidences.length
+    ? confidences.reduce((s, c) => s + c, 0) / confidences.length
     : null;
   prisma.segmentation.aggregate.mockResolvedValue({
     _avg: { confidence: avgConfidence },

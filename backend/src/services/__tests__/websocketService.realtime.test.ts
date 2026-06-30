@@ -85,10 +85,11 @@ describe('WebSocket Real-time Updates', () => {
 
   // ---- helpers -------------------------------------------------------------
 
-  /** Create an authenticated socket.io client (cookie auth). */
-  function makeClient(): ReturnType<typeof Client> {
+  /** Create an authenticated socket.io client (cookie auth). Pass a distinct
+   * token to model a second identity (e.g. an unauthorized user). */
+  function makeClient(token: string = mockToken): ReturnType<typeof Client> {
     return Client(`http://localhost:${port}`, {
-      extraHeaders: { cookie: `access_token=${mockToken}` },
+      extraHeaders: { cookie: `access_token=${token}` },
     });
   }
 
@@ -503,27 +504,111 @@ describe('WebSocket Real-time Updates', () => {
       });
     });
 
-    it('should only send PROJECT_UPDATE events to authorized users', () => {
+    it('only sends PROJECT_UPDATE to authorized room members, not denied users', () => {
       const authorizedUserId = 'authorized-user-id';
+      const unauthorizedUserId = 'unauthorized-user-id';
       const testProjectId = 'private-project-id';
-      authAs(authorizedUserId, 'authorized@example.com');
+      const authorizedToken = 'authorized-token';
+      const unauthorizedToken = 'unauthorized-token';
 
-      // Receiving the broadcast confirms the authorized client is in the
-      // project room (an unauthorized client never joins it).
-      return runBroadcastTest<ProjectUpdateData>({
-        projectId: testProjectId,
-        event: WebSocketEvent.PROJECT_UPDATE,
-        broadcast: () =>
+      // Two identities resolved from their cookie token.
+      (jwt.verify as Mock).mockImplementation((token: string) =>
+        token === authorizedToken
+          ? { userId: authorizedUserId, email: 'authorized@example.com' }
+          : { userId: unauthorizedUserId, email: 'denied@example.com' }
+      );
+      prismaMock.user.findUnique.mockImplementation(
+        async ({ where }: { where: { id: string } }) => ({
+          id: where.id,
+          email: `${where.id}@example.com`,
+        })
+      );
+      // isValidProjectAccess() gates join-project via project.findFirst: grant
+      // the owner, deny everyone else. The denied client must therefore never
+      // enter the project room, so the broadcast must not reach it.
+      prismaMock.project.findFirst.mockImplementation(
+        async ({ where }: { where: { OR?: Array<{ userId?: string }> } }) =>
+          where?.OR?.[0]?.userId === authorizedUserId
+            ? { id: testProjectId, userId: authorizedUserId }
+            : null
+      );
+
+      return new Promise<void>((resolve, reject) => {
+        const authorized = makeClient(authorizedToken);
+        const unauthorized = makeClient(unauthorizedToken);
+        let settled = false;
+        let joined = 0;
+        let interval: ReturnType<typeof setInterval> | undefined;
+        let graceTimer: ReturnType<typeof setTimeout> | undefined;
+
+        const broadcast = (): void =>
           wsService.broadcastProjectUpdate(testProjectId, {
             projectId: testProjectId,
             userId: authorizedUserId,
             operation: 'updated',
             updates: { imageCount: 10, segmentedCount: 8 },
             timestamp: new Date(),
-          }),
-        assert: data => {
-          expect(data.projectId).toBe(testProjectId);
-        },
+          });
+
+        const timer = setTimeout(
+          () =>
+            finish(new Error('Authorized socket never received PROJECT_UPDATE')),
+          8000
+        );
+        const finish = (err?: unknown): void => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
+          if (graceTimer) {
+            clearTimeout(graceTimer);
+          }
+          if (interval) {
+            clearInterval(interval);
+          }
+          authorized.disconnect();
+          unauthorized.disconnect();
+          if (err) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+          } else {
+            resolve();
+          }
+        };
+
+        authorized.on('connect_error', (e: Error) => finish(e));
+        unauthorized.on('connect_error', (e: Error) => finish(e));
+
+        // The denied socket receiving the room broadcast is the failure we
+        // guard against.
+        unauthorized.on(WebSocketEvent.PROJECT_UPDATE, () =>
+          finish(new Error('Unauthorized socket received PROJECT_UPDATE'))
+        );
+        authorized.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
+          try {
+            expect(data.projectId).toBe(testProjectId);
+          } catch (e) {
+            finish(e);
+            return;
+          }
+          // Authorized delivery works. Keep broadcasting through a short grace
+          // window; pass only if the denied socket stays silent the whole time.
+          if (!graceTimer) {
+            graceTimer = setTimeout(() => finish(), 300);
+          }
+        });
+
+        for (const socket of [authorized, unauthorized]) {
+          socket.on('connect', () => {
+            socket.emit('join-project', testProjectId);
+            joined++;
+            // Re-broadcast on an interval to defeat the async-join race.
+            if (joined === 2 && !interval) {
+              broadcast();
+              interval = setInterval(broadcast, 25);
+            }
+          });
+        }
       });
     });
   });
@@ -610,14 +695,23 @@ describe('WebSocket Real-time Updates', () => {
       });
     });
 
-    it('should handle WebSocket connection drops gracefully', () => {
+    it('releases a dropped socket from server state', () => {
       const testUserId = 'test-user-id';
       authAs(testUserId, 'test@example.com');
 
       return new Promise<void>((resolve, reject) => {
         let settled = false;
+        let trackPoll: ReturnType<typeof setInterval> | undefined;
+        let cleanupPoll: ReturnType<typeof setInterval> | undefined;
         const timer = setTimeout(
-          () => finish(new Error('Expected a disconnect')),
+          () =>
+            finish(
+              new Error(
+                `Dropped socket not released: getUserSocketsCount=${wsService.getUserSocketsCount(
+                  testUserId
+                )}`
+              )
+            ),
           8000
         );
         const finish = (err?: unknown): void => {
@@ -626,6 +720,12 @@ describe('WebSocket Real-time Updates', () => {
           }
           settled = true;
           clearTimeout(timer);
+          if (trackPoll) {
+            clearInterval(trackPoll);
+          }
+          if (cleanupPoll) {
+            clearInterval(cleanupPoll);
+          }
           if (err) {
             reject(err instanceof Error ? err : new Error(String(err)));
           } else {
@@ -636,15 +736,20 @@ describe('WebSocket Real-time Updates', () => {
         clientSocket = makeClient();
         clientSocket.on('connect_error', (e: Error) => finish(e));
         clientSocket.on('connect', () => {
-          clientSocket.on('disconnect', () => {
-            try {
-              expect(wsService).toBeDefined();
-              finish();
-            } catch (e) {
-              finish(e);
+          // Wait until the server has registered this socket, then drop it and
+          // assert the server releases it (the tracked count returns to 0). A
+          // shallow toBeDefined() would pass even if cleanup never ran.
+          trackPoll = setInterval(() => {
+            if (wsService.getUserSocketsCount(testUserId) === 1) {
+              clearInterval(trackPoll);
+              clientSocket.disconnect();
+              cleanupPoll = setInterval(() => {
+                if (wsService.getUserSocketsCount(testUserId) === 0) {
+                  finish();
+                }
+              }, 25);
             }
-          });
-          clientSocket.disconnect();
+          }, 25);
         });
       });
     });

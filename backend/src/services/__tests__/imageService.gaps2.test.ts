@@ -165,7 +165,9 @@ function mockImageStatsRows(
   prismaMock.image.aggregate.mockResolvedValueOnce({
     _count: { _all: rows.length },
     _sum: {
-      fileSize: BigInt(rows.reduce((s, r) => s + Number(r.fileSize ?? 0), 0)),
+      // Sum in bigint space so the mock matches Prisma's BigInt aggregate and
+      // can't silently lose precision (hiding fileSize overflow regressions).
+      fileSize: rows.reduce((s, r) => s + BigInt(r.fileSize ?? 0), 0n),
     },
   });
 

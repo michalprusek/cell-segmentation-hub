@@ -433,11 +433,29 @@ describe('DashboardHeader', () => {
     });
   });
 
-  it('cleans up its poll timer on unmount', () => {
+  it('cleans up its poll timer on unmount', async () => {
+    const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
     const { unmount } = render(<DashboardHeader />);
+
+    // The poll schedules its timer only AFTER the first health check resolves
+    // (checkMlServiceStatus().finally(scheduleNext)), with a 5s (error) or 30s
+    // (healthy) delay. Unmounting before that would clearTimeout(undefined) — a
+    // no-op the assertion couldn't tell apart from a real teardown — so wait
+    // for the actual scheduled timer first.
+    let pollTimerId: ReturnType<typeof setTimeout> | undefined;
+    await waitFor(() => {
+      const idx = setTimeoutSpy.mock.calls.findIndex(
+        ([, delay]) => delay === 5000 || delay === 30000
+      );
+      expect(idx).toBeGreaterThanOrEqual(0);
+      pollTimerId = setTimeoutSpy.mock.results[idx]?.value;
+    });
+    expect(pollTimerId).toBeDefined();
+
     unmount();
 
-    expect(global.clearTimeout).toHaveBeenCalled();
+    // Cleanup must clear the real scheduled handle, not undefined.
+    expect(global.clearTimeout).toHaveBeenCalledWith(pollTimerId);
   });
 
   it('handles user without email gracefully', async () => {
