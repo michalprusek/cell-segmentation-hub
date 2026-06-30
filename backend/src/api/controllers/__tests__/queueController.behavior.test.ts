@@ -616,9 +616,9 @@ describe('QueueController — behavioral', () => {
   });
 
   // NOTE: the `cancelBatch` and `cancelAllSegmentation` controller handlers
-  // were removed as dead stubs (commit a6dd828 — "remove dead cancel stubs";
-  // they returned a hardcoded cancelledCount=0 and were mounted by no route).
-  // The live cancel path is `cancelAllUserSegmentations` below.
+  // were removed as dead stubs (commit a6dd828); they returned a hardcoded
+  // cancelledCount=0 and were mounted by no route. The live cancel path is
+  // `cancelAllUserSegmentations` below.
 
   // ── cancelAllUserSegmentations ──────────────────────────────────────────
 

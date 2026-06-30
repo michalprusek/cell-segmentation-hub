@@ -11,10 +11,10 @@ import { apiLimiter } from '../../middleware/rateLimiter';
  *
  * The ML router now exposes only public endpoints (GET /health, GET /status).
  * The authenticated endpoints (/queue, /models/:modelId/warm-up) and the
- * /models catalog were removed as dead stubs (commit 85fb78c — "no client
- * called them"). The OWASP authentication-boundary tests that targeted those
- * protected routes were removed with them, since there is no longer any
- * authenticated surface on this router to enforce.
+ * /models catalog were removed as dead stubs that returned hardcoded data and
+ * were called by no client (commit 85fb78c). The OWASP authentication-boundary
+ * tests that targeted those protected routes were removed with them, since
+ * there is no longer any authenticated surface on this router to enforce.
  *
  * What remains are the response-hardening checks that still apply to the
  * surviving public endpoints:

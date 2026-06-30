@@ -51,10 +51,11 @@ jobs:
       - name: i18n completeness
         run: node scripts/check-i18n.cjs
 
-      # Vitest now runs as a required check on every PR (ci.yml). This nightly
-      # job stays type/lint/i18n/audit-only to keep the daily drift signal
-      # lightweight; the full green suite (BE + FE, 90%+ coverage) gates merges
-      # in CI, not here.
+      # Vitest now runs on every PR via ci.yml (and is the intended merge gate
+      # once added as a required status check in branch protection). This
+      # nightly job stays type/lint/i18n/audit-only to keep the daily drift
+      # signal lightweight; the green BE + FE suites (enforced coverage floors
+      # 80%/75%) run in ci.yml, not here.
 
       - name: npm audit (high+critical only)
         run: npm audit --audit-level=high

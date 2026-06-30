@@ -1,16 +1,23 @@
 name: CI
 
 # Merge gate for pull requests into main (and a post-merge check on main).
-# Runs the full type/lint/i18n checks PLUS the now-green Vitest suites with
-# coverage enforcement, so a PR that breaks tests or drops coverage below the
-# configured threshold (vitest.config.ts / backend, 80% floor) fails the check.
+# Runs the type/lint/i18n checks PLUS the green Vitest suites with coverage
+# enforcement, so a PR that breaks tests or drops coverage below the configured
+# floor (frontend vitest.config.ts: 80%; backend/vitest.config.ts: 75%) fails
+# the check.
 #
-# To make this BLOCK merges, add "CI / frontend" and "CI / backend" as required
-# status checks in the repo's branch-protection rules for main.
+# NOTE: the frontend "TypeScript" step (`tsc --noEmit` on the root tsconfig,
+# which is `files: []` + project references) currently type-checks nothing —
+# it mirrors `make ci`. Making it real (`tsc -b`) first needs a batch of
+# pre-existing test-infra type errors fixed; tracked as follow-up.
+#
+# This check is NOT yet a required status check — to make it BLOCK merges, add
+# "CI / frontend" and "CI / backend" as required status checks in the repo's
+# branch-protection rules for main.
 #
 # ML/Python tests are intentionally omitted — they require a CUDA GPU (mamba/
 # Triton initialise at import) that GitHub-hosted runners do not provide. Run
-# them in the documented GPU one-off container instead.
+# them in a GPU-enabled one-off container instead.
 
 on:
   pull_request:
