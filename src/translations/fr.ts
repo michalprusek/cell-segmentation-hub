@@ -1881,8 +1881,6 @@ export default {
   websocket: {
     reconnecting: 'Reconnexion au serveur...',
     reconnected: 'Connexion au serveur rétablie',
-    reconnectFailed: 'Échec du rétablissement de la connexion au serveur',
-    connectionLost: 'Connexion au serveur perdue',
     connected: 'Connecté aux mises à jour en temps réel',
     disconnected: 'Déconnecté des mises à jour en temps réel',
   },

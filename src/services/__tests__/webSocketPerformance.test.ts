@@ -12,6 +12,12 @@ vi.mock('socket.io-client', () => ({
 }));
 
 // Mock logger to prevent console spam
+vi.mock('@/lib/api', () => ({
+  apiClient: {
+    refreshAccessToken: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
