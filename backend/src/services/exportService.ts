@@ -31,6 +31,7 @@ import { coerceProjectType } from '../types/validation';
 import {
   MICROTUBULE_LABEL_PREFIX,
   SPERM_LABEL_PREFIX,
+  type InstanceLabelPrefix,
 } from '../utils/instanceLabels';
 import {
   sanitizeFilename,
@@ -844,7 +845,7 @@ export class ExportService {
     options?: VisualizationOptions,
     jobId?: string,
     onProgress?: (current: number, total: number) => void,
-    labelPrefix: string = SPERM_LABEL_PREFIX
+    labelPrefix: InstanceLabelPrefix = SPERM_LABEL_PREFIX
   ): Promise<void> {
     const vizDir = path.join(exportDir, 'visualizations');
 

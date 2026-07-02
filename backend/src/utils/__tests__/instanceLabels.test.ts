@@ -79,6 +79,21 @@ describe('buildInstanceLabelMap', () => {
     expect(labels.get('b')).toBe('MT1');
   });
 
+  it('numbers by FIRST-APPEARANCE, not first-drawable, order', () => {
+    // 'a' appears first (via a <2-point, non-drawable polyline), then 'b'
+    // becomes drawable first, then 'a' becomes drawable later. Numbering must
+    // follow first appearance ('a' before 'b'), matching the visualization's
+    // insertion order — NOT the order in which instances first became drawable.
+    const polygons: LabelablePolyline[] = [
+      { geometry: 'polyline', instanceId: 'a', points: [{ x: 0, y: 0 }] },
+      { geometry: 'polyline', instanceId: 'b', points: pts },
+      { geometry: 'polyline', instanceId: 'a', points: pts },
+    ];
+    const labels = buildInstanceLabelMap(polygons, MICROTUBULE_LABEL_PREFIX);
+    expect(labels.get('a')).toBe('MT1');
+    expect(labels.get('b')).toBe('MT2');
+  });
+
   it('labels a mixed instance as drawable if any of its polylines has >=2 points', () => {
     const polygons: LabelablePolyline[] = [
       { geometry: 'polyline', instanceId: 'a', points: [{ x: 0, y: 0 }] },

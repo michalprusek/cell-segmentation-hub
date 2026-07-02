@@ -4,15 +4,22 @@
  * The export visualization draws a per-instance badge ("S1", "MT1", …) on
  * each image, and the microtubule metrics table carries the SAME label so a
  * spreadsheet row can be matched back to the badge on the image. Both call
- * sites feed this helper the *same* parsed polygon array for a given image
- * (order preserved by `JSON.parse`), so the ordinal assignment is identical
- * on both sides — the single source of truth for the numbering rule.
+ * sites each parse the same stored `Segmentation.polygons` JSON for a given
+ * image (array order preserved by `JSON.parse`, both reads seeing one export
+ * job's DB snapshot), so the ordinal assignment is identical on both sides —
+ * the single source of truth for the numbering rule.
  */
 
 /** Prefix drawn for sperm instances (S = sperm). */
 export const SPERM_LABEL_PREFIX = 'S';
 /** Prefix drawn for microtubule instances. */
 export const MICROTUBULE_LABEL_PREFIX = 'MT';
+
+/** The two valid badge prefixes. Derived from the consts so the set can't
+ *  drift; a stray value (e.g. `'X'`) is rejected at compile time. */
+export type InstanceLabelPrefix =
+  | typeof SPERM_LABEL_PREFIX
+  | typeof MICROTUBULE_LABEL_PREFIX;
 
 /** Minimal polyline shape the labeller needs — a subset of both the
  *  visualization `Polygon` and the exporter's `RawPolyline`. */
@@ -38,11 +45,11 @@ export interface LabelablePolyline {
  */
 export function buildInstanceLabelMap(
   polygons: readonly LabelablePolyline[],
-  prefix: string
-): Map<string, string> {
+  prefix: InstanceLabelPrefix
+): ReadonlyMap<string, string> {
   // First pass: remember first-appearance order and whether each instance has
-  // at least one drawable (≥ 2-point) polyline. Insertion order into the Map
-  // matches the visualization's `spermInstances` Map insertion order.
+  // at least one drawable (≥ 2-point) polyline. First-appearance order is the
+  // same order the visualization uses when it groups polylines by `instanceId`.
   const drawableByInstance = new Map<string, boolean>();
   for (const p of polygons) {
     if (p.geometry !== 'polyline') continue;

@@ -8,6 +8,7 @@ import type { BasePolygon } from '../../types/polygon';
 import {
   buildInstanceLabelMap,
   SPERM_LABEL_PREFIX,
+  type InstanceLabelPrefix,
 } from '../../utils/instanceLabels';
 
 export interface VisualizationOptions {
@@ -22,7 +23,7 @@ export interface VisualizationOptions {
   /** Prefix for per-instance polyline badges ("S1", "MT1", …). Defaults to
    *  the sperm prefix; the MT export passes `MICROTUBULE_LABEL_PREFIX`. The
    *  metrics table is labelled with the same prefix so rows match the image. */
-  labelPrefix?: string;
+  labelPrefix?: InstanceLabelPrefix;
 }
 
 /** Visualization polygon — `BasePolygon` plus the wider `PolygonPartClass`
