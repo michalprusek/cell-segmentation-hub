@@ -1762,8 +1762,6 @@ export default {
   websocket: {
     reconnecting: '正在重新连接服务器...',
     reconnected: '服务器连接已恢复',
-    reconnectFailed: '恢复服务器连接失败',
-    connectionLost: '与服务器的连接丢失',
     connected: '已连接到实时更新',
     disconnected: '已断开实时更新',
   },

@@ -1929,8 +1929,6 @@ export default {
   websocket: {
     reconnecting: 'Reconnecting to server...',
     reconnected: 'Connection to server restored',
-    reconnectFailed: 'Failed to restore connection to server',
-    connectionLost: 'Connection to server lost',
     connected: 'Connected to real-time updates',
     disconnected: 'Disconnected from real-time updates',
   },

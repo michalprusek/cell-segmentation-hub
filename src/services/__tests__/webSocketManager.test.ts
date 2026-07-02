@@ -5,10 +5,18 @@ import WebSocketManager, {
 } from '@/services/webSocketManager';
 import { io } from 'socket.io-client';
 import { webSocketEventEmitter } from '@/lib/websocketEvents';
+import { apiClient } from '@/lib/api';
 
 // Mock socket.io-client
 vi.mock('socket.io-client', () => ({
   io: vi.fn(),
+}));
+
+// Mock api client (used for auth-cookie refresh on handshake auth failures)
+vi.mock('@/lib/api', () => ({
+  apiClient: {
+    refreshAccessToken: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 // Mock logger to prevent console spam in tests
@@ -137,9 +145,9 @@ describe('WebSocketManager', () => {
         withCredentials: true,
         transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionAttempts: 10,
+        reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
+        reconnectionDelayMax: 15000,
         timeout: 10000,
         autoConnect: true,
       });
@@ -545,21 +553,144 @@ describe('WebSocketManager', () => {
       });
     });
 
-    it('should emit reconnect_failed event on failure', async () => {
+    it('should not register a reconnect_failed handler (retries never stop)', async () => {
       const connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
       mockSocket._trigger('connect');
       await connectPromise;
 
-      // Simulate reconnection failure
+      // With reconnectionAttempts: Infinity the engine never emits
+      // reconnect_failed, so no terminal give-up handler exists.
       const reconnectFailedHandler = mockSocket.io.on.mock.calls.find(
         call => call[0] === 'reconnect_failed'
-      )?.[1];
-      reconnectFailedHandler?.();
+      );
+      expect(reconnectFailedHandler).toBeUndefined();
+    });
+  });
 
-      expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
-        type: 'reconnect_failed',
+  describe('automatic recovery (regression: permanent "Connecting to server..." banner)', () => {
+    const mockUser = { id: 'user-123', token: 'test-token' };
+
+    const connectManager = async () => {
+      const connectPromise = wsManager.connect(mockUser);
+      mockSocket.connected = true;
+      mockSocket._trigger('connect');
+      await connectPromise;
+    };
+
+    it('configures socket.io to never stop reconnecting', async () => {
+      await connectManager();
+
+      expect(io).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+        })
+      );
+    });
+
+    it('refreshes the auth cookie and reconnects on an auth handshake failure', async () => {
+      await connectManager();
+      mockSocket.connected = false;
+      mockSocket.connect.mockClear();
+
+      mockSocket._trigger('connect_error', new Error('Authentication failed'));
+
+      await vi.waitFor(() => {
+        expect(apiClient.refreshAccessToken).toHaveBeenCalledTimes(1);
+        expect(mockSocket.connect).toHaveBeenCalledTimes(1);
       });
+    });
+
+    it('does not refresh the auth cookie for non-auth connection errors', async () => {
+      await connectManager();
+      mockSocket.connected = false;
+
+      mockSocket._trigger('connect_error', new Error('websocket error'));
+
+      // Flush microtasks; no refresh should have been scheduled
+      await Promise.resolve();
+      expect(apiClient.refreshAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('survives a failing auth refresh and does not force a reconnect', async () => {
+      vi.mocked(apiClient.refreshAccessToken).mockRejectedValueOnce(
+        new Error('offline')
+      );
+      await connectManager();
+      mockSocket.connected = false;
+      mockSocket.connect.mockClear();
+
+      mockSocket._trigger('connect_error', new Error('Authentication failed'));
+
+      await vi.waitFor(() => {
+        expect(apiClient.refreshAccessToken).toHaveBeenCalledTimes(1);
+      });
+      expect(mockSocket.connect).not.toHaveBeenCalled();
+    });
+
+    it('reconnects when the browser regains network connectivity', async () => {
+      await connectManager();
+      mockSocket.connected = false;
+      mockSocket.connect.mockClear();
+
+      window.dispatchEvent(new Event('online'));
+
+      expect(mockSocket.connect).toHaveBeenCalledTimes(1);
+    });
+
+    it('reconnects when the tab becomes visible again', async () => {
+      await connectManager();
+      mockSocket.connected = false;
+      mockSocket.connect.mockClear();
+
+      const originalVisibility = Object.getOwnPropertyDescriptor(
+        Document.prototype,
+        'visibilityState'
+      );
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+        expect(mockSocket.connect).toHaveBeenCalledTimes(1);
+      } finally {
+        delete (document as any).visibilityState;
+        if (originalVisibility) {
+          Object.defineProperty(
+            Document.prototype,
+            'visibilityState',
+            originalVisibility
+          );
+        }
+      }
+    });
+
+    it('does not reconnect on online/visibility events while already connected', async () => {
+      await connectManager();
+      mockSocket.connected = true;
+      mockSocket.connect.mockClear();
+
+      window.dispatchEvent(new Event('online'));
+
+      expect(mockSocket.connect).not.toHaveBeenCalled();
+    });
+
+    it('tears down the previous socket before creating a new connection', async () => {
+      await connectManager();
+
+      const oldSocket = mockSocket;
+      // Simulate a re-initialization for the same user while disconnected
+      oldSocket.connected = false;
+      const secondConnect = wsManager.connect(mockUser);
+      mockSocket.connected = true;
+      mockSocket._trigger('connect');
+      await secondConnect;
+
+      expect(oldSocket.removeAllListeners).toHaveBeenCalled();
+      expect(oldSocket.disconnect).toHaveBeenCalled();
     });
   });
 
@@ -852,29 +983,22 @@ describe('WebSocketManager', () => {
 
         vi.clearAllMocks();
 
-        // Mock createConnection to track reconnection attempts
-        const createConnectionSpy = vi
-          .spyOn(wsManager as any, 'createConnection')
-          .mockImplementation(() => {
-            throw new Error('Reconnection failed');
-          });
-
         // First attempt fires after 1000ms (reconnectAttempts=1, delay=1000*2^0=1000)
+        // and reconnects the EXISTING socket (no new socket is created).
         vi.advanceTimersByTime(1000);
-        expect(createConnectionSpy).toHaveBeenCalledTimes(1);
+        expect(mockSocket.connect).toHaveBeenCalledTimes(1);
+        expect(io).not.toHaveBeenCalled();
 
         // No further automatic attempts (Socket.io handles reconnect; handleReconnect only queues one)
         vi.advanceTimersByTime(5000);
-        expect(createConnectionSpy).toHaveBeenCalledTimes(1); // Still 1
-
-        createConnectionSpy.mockRestore();
+        expect(mockSocket.connect).toHaveBeenCalledTimes(1); // Still 1
       } finally {
         vi.clearAllTimers();
         vi.useRealTimers();
       }
     });
 
-    it('should emit connection_lost after max reconnect attempts', async () => {
+    it('should keep retrying server disconnects indefinitely (no give-up)', async () => {
       vi.useFakeTimers();
 
       try {
@@ -888,30 +1012,23 @@ describe('WebSocketManager', () => {
           call => call[0] === 'disconnect'
         )?.[1];
 
-        // Mock createConnection to always fail immediately
-        const createConnectionSpy = vi
-          .spyOn(wsManager as any, 'createConnection')
-          .mockImplementation(() => {
-            throw new Error('Reconnection failed');
-          });
+        vi.clearAllMocks();
 
-        // Simulate maxReconnectAttempts+1 server disconnects to exhaust attempts
-        // Each 'io server disconnect' calls handleReconnect() once.
-        // After maxReconnectAttempts (10) calls, the next one emits connection_lost.
-        const maxAttempts = 10;
-        for (let i = 0; i <= maxAttempts; i++) {
+        // Well past the former 10-attempt budget: every server disconnect
+        // must still schedule a reconnect of the existing socket.
+        const attempts = 15;
+        for (let i = 0; i < attempts; i++) {
           mockSocket.connected = false;
           disconnectHandler?.('io server disconnect');
-          // Advance past the reconnect delay to process the queued attempt
+          // Advance past the (capped) backoff delay to process the attempt
           vi.advanceTimersByTime(30000);
         }
 
-        // Should emit connection_lost after max attempts exhausted
-        expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
-          type: 'connection_lost',
-        });
-
-        createConnectionSpy.mockRestore();
+        expect(mockSocket.connect).toHaveBeenCalledTimes(attempts);
+        // No terminal give-up event exists any more
+        expect(webSocketEventEmitter.emit).not.toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'connection_lost' })
+        );
       } finally {
         vi.clearAllTimers();
         vi.useRealTimers();
@@ -945,17 +1062,11 @@ describe('WebSocketManager', () => {
         mockSocket.connected = false;
         disconnectHandler?.('io server disconnect');
 
-        const createConnectionSpy = vi
-          .spyOn(wsManager as any, 'createConnection')
-          .mockImplementation(() => {
-            throw new Error('Reconnection failed');
-          });
+        mockSocket.connect.mockClear();
 
         // Should start with 1000ms delay again (not 2000ms)
         vi.advanceTimersByTime(1000);
-        expect(createConnectionSpy).toHaveBeenCalledTimes(1);
-
-        createConnectionSpy.mockRestore();
+        expect(mockSocket.connect).toHaveBeenCalledTimes(1);
       } finally {
         vi.clearAllTimers();
         vi.useRealTimers();
@@ -1032,9 +1143,6 @@ describe('WebSocketManager', () => {
       const reconnectErrorHandler = mockSocket.io.on.mock.calls.find(
         call => call[0] === 'reconnect_error'
       )?.[1];
-      const reconnectFailedHandler = mockSocket.io.on.mock.calls.find(
-        call => call[0] === 'reconnect_failed'
-      )?.[1];
 
       // Test reconnect success
       reconnectHandler?.(3);
@@ -1049,12 +1157,6 @@ describe('WebSocketManager', () => {
       expect(() =>
         reconnectErrorHandler?.(new Error('Reconnect failed'))
       ).not.toThrow();
-
-      // Test reconnect failed
-      reconnectFailedHandler?.();
-      expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
-        type: 'reconnect_failed',
-      });
     });
 
     it('should handle edge case with empty project ID', async () => {
