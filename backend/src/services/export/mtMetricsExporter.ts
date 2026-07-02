@@ -25,6 +25,10 @@ import axios from 'axios';
 import { prisma } from '../../db/prismaClient';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
+import {
+  buildInstanceLabelMap,
+  MICROTUBULE_LABEL_PREFIX,
+} from '../../utils/instanceLabels';
 
 // ----------------------------------------------------------------------------
 //  Types (mirror the Python Pydantic models — keep in sync if either changes)
@@ -46,6 +50,10 @@ export interface MTMetricsOptions {
 export interface MTMetricsRow {
   frameIndex: number;
   imageId: string;
+  /** Per-frame instance badge drawn on the visualization image ("MT1",
+   *  "MT2", …), matching {@link buildInstanceLabelMap}. Empty string when the
+   *  polyline has no `instanceId` (no badge is drawn for it either). */
+  label: string;
   instanceId: string;
   trackId: string | null;
   /** Channel machine name, or '' for geometry-only rows (no channel picked). */
@@ -322,9 +330,18 @@ export async function computeMTMetrics(
     }
 
     // Build the frames payload — only frames that actually have polylines.
+    // Also build a per-frame instance→label map ("MT1", …) from the full
+    // parsed polygon list so each emitted row carries the same badge the
+    // visualization draws on the image.
     const framesPayload: FramePayload[] = [];
+    const labelMapsByImage = new Map<string, Map<string, string>>();
     for (const fr of frames) {
-      const polylines = safeParsePolygons(fr.segmentation?.polygons)
+      const parsed = safeParsePolygons(fr.segmentation?.polygons);
+      labelMapsByImage.set(
+        fr.id,
+        buildInstanceLabelMap(parsed, MICROTUBULE_LABEL_PREFIX)
+      );
+      const polylines = parsed
         .filter(p => (p.geometry ?? 'polygon') === 'polyline')
         .filter(p => Array.isArray(p.points) && p.points.length >= 2)
         .map<PolylinePayload>(p => ({
@@ -403,6 +420,7 @@ export async function computeMTMetrics(
       allRows.push({
         frameIndex: row.frame_index,
         imageId: row.image_id,
+        label: labelMapsByImage.get(row.image_id)?.get(row.instance_id) ?? '',
         instanceId: row.instance_id,
         trackId: row.track_id,
         channel: row.channel,
@@ -457,7 +475,11 @@ export function computeMTGeometry(
     if (fr.isVideoContainer || !fr.parentVideoId || fr.frameIndex == null) {
       continue;
     }
-    const polylines = safeParsePolygons(fr.segmentation?.polygons)
+    const parsed = safeParsePolygons(fr.segmentation?.polygons);
+    // Same instance→label map the visualization uses, so geometry-only rows
+    // still carry the "MT1" badge shown on the image.
+    const labelMap = buildInstanceLabelMap(parsed, MICROTUBULE_LABEL_PREFIX);
+    const polylines = parsed
       .filter(p => (p.geometry ?? 'polygon') === 'polyline')
       .filter(p => Array.isArray(p.points) && p.points!.length >= 2);
     for (const p of polylines) {
@@ -465,6 +487,7 @@ export function computeMTGeometry(
       rows.push({
         frameIndex: fr.frameIndex,
         imageId: fr.id,
+        label: p.instanceId ? (labelMap.get(p.instanceId) ?? '') : '',
         instanceId:
           p.instanceId ?? `mt_${fr.id.slice(0, 8)}_${p.points!.length}`,
         trackId: p.trackId ?? null,
@@ -497,6 +520,7 @@ export function computeMTGeometry(
 const CSV_HEADERS: readonly (keyof MTMetricsRow)[] = [
   'frameIndex',
   'imageId',
+  'label',
   'instanceId',
   'trackId',
   'channel',

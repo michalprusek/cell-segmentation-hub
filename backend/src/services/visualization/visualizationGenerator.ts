@@ -5,6 +5,10 @@ import path from 'path';
 import { logger } from '../../utils/logger';
 import type { PolygonPartClass } from '../../utils/polygonValidation';
 import type { BasePolygon } from '../../types/polygon';
+import {
+  buildInstanceLabelMap,
+  SPERM_LABEL_PREFIX,
+} from '../../utils/instanceLabels';
 
 export interface VisualizationOptions {
   showNumbers?: boolean;
@@ -15,6 +19,10 @@ export interface VisualizationOptions {
   strokeWidth?: number;
   fontSize?: number;
   transparency?: number;
+  /** Prefix for per-instance polyline badges ("S1", "MT1", …). Defaults to
+   *  the sperm prefix; the MT export passes `MICROTUBULE_LABEL_PREFIX`. The
+   *  metrics table is labelled with the same prefix so rows match the image. */
+  labelPrefix?: string;
 }
 
 /** Visualization polygon — `BasePolygon` plus the wider `PolygonPartClass`
@@ -174,15 +182,21 @@ export class VisualizationGenerator {
         }
       }
 
-      // Draw sperm instance labels (S1, S2, ...) at the centroid of each sperm's part midpoints
+      // Draw per-instance labels (S1/MT1, …) at the centroid of each
+      // instance's polyline midpoints. Labels come from the shared
+      // `buildInstanceLabelMap` so the exported metrics table can reproduce
+      // the exact same numbering (see mtMetricsExporter).
       if (mergedOptions.showNumbers) {
-        let spermIdx = 1;
-        for (const [, data] of spermInstances) {
-          if (data.midpoints.length > 0) {
-            // Average of midpoints = center of the sperm group
+        const instanceLabels = buildInstanceLabelMap(
+          polygons,
+          mergedOptions.labelPrefix ?? SPERM_LABEL_PREFIX
+        );
+        for (const [instanceId, data] of spermInstances) {
+          const label = instanceLabels.get(instanceId);
+          if (label && data.midpoints.length > 0) {
+            // Average of midpoints = center of the instance's polylines
             const cx = data.midpoints.reduce((s, p) => s + p.x, 0) / data.midpoints.length;
             const cy = data.midpoints.reduce((s, p) => s + p.y, 0) / data.midpoints.length;
-            const label = `S${spermIdx}`;
             const fontSize = Math.max(14, Math.min(24, Math.round(image.width / 60)));
             ctx.font = `bold ${fontSize}px Arial`;
             ctx.textAlign = 'center';
@@ -201,7 +215,6 @@ export class VisualizationGenerator {
             // Text
             ctx.fillStyle = '#FFFFFF';
             ctx.fillText(label, cx, cy);
-            spermIdx++;
           }
         }
       }

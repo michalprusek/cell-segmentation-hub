@@ -253,6 +253,46 @@ describe('computeMTGeometry', () => {
     expect(r2.trackId).toBeNull();
   });
 
+  it('labels instances MT1, MT2, … in first-appearance order', () => {
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ];
+    // Two distinct instances plus a polyline with no instanceId.
+    const seg = JSON.stringify([
+      { geometry: 'polyline', points: pts, instanceId: 'inst-a' },
+      { geometry: 'polyline', points: pts, instanceId: 'inst-b' },
+      { geometry: 'polyline', points: pts },
+    ]);
+    const rows = computeMTGeometry(
+      [makeFrame({ segmentation: { polygons: seg } })],
+      null
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows[0].label).toBe('MT1');
+    expect(rows[1].label).toBe('MT2');
+    // No instanceId → no badge on the image → empty label in metrics.
+    expect(rows[2].label).toBe('');
+  });
+
+  it('reuses the same MT label for repeated segments of one instance', () => {
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ];
+    // Instance "inst-a" appears in two rows (e.g. head + tail); both share MT1.
+    const seg = JSON.stringify([
+      { geometry: 'polyline', points: pts, instanceId: 'inst-a' },
+      { geometry: 'polyline', points: pts, instanceId: 'inst-b' },
+      { geometry: 'polyline', points: pts, instanceId: 'inst-a' },
+    ]);
+    const rows = computeMTGeometry(
+      [makeFrame({ segmentation: { polygons: seg } })],
+      null
+    );
+    expect(rows.map(r => r.label)).toEqual(['MT1', 'MT2', 'MT1']);
+  });
+
   it('emits one row per polyline across multiple frames', () => {
     const pts = [
       { x: 0, y: 0 },
@@ -520,6 +560,8 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
 
     expect(r.frameIndex).toBe(0);
     expect(r.imageId).toBe('frame-1');
+    // Label matches the "MT1" badge the visualization draws for this instance.
+    expect(r.label).toBe('MT1');
     expect(r.instanceId).toBe('inst-1');
     expect(r.trackId).toBe('track-7');
     expect(r.channel).toBe('DAPI');

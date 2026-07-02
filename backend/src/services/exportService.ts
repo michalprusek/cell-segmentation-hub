@@ -29,6 +29,10 @@ import {
 } from './export/exportDocs';
 import { coerceProjectType } from '../types/validation';
 import {
+  MICROTUBULE_LABEL_PREFIX,
+  SPERM_LABEL_PREFIX,
+} from '../utils/instanceLabels';
+import {
   sanitizeFilename,
   getProgressMessage,
   createZipArchive,
@@ -501,6 +505,13 @@ export class ExportService {
       // Generate visualizations (can run in parallel)
       if (options.includeVisualizations && project.images) {
         const visualizationProgressBase = 5 + progressStep * progressIncrement;
+        // Microtubule polylines reuse the sperm labeller, so badge them "MT1"
+        // instead of the sperm "S1". The MT metrics table is labelled with the
+        // same prefix so rows can be matched to badges on the image.
+        const labelPrefix =
+          (project.type ?? '') === 'microtubules'
+            ? MICROTUBULE_LABEL_PREFIX
+            : SPERM_LABEL_PREFIX;
         exportTasks.push(
           this.generateVisualizations(
             project.images as ImageWithSegmentation[],
@@ -516,7 +527,8 @@ export class ExportService {
                 current,
                 total,
               });
-            }
+            },
+            labelPrefix
           ).then(() => {
             progressStep++;
             this.updateJobProgress(
@@ -831,7 +843,8 @@ export class ExportService {
     exportDir: string,
     options?: VisualizationOptions,
     jobId?: string,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    labelPrefix: string = SPERM_LABEL_PREFIX
   ): Promise<void> {
     const vizDir = path.join(exportDir, 'visualizations');
 
@@ -929,7 +942,7 @@ export class ExportService {
           fullImagePath,
           polygons,
           vizPath,
-          options
+          { ...options, labelPrefix }
         );
 
         if (result === 'success') {
