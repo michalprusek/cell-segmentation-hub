@@ -35,11 +35,11 @@ describe('WebSocketEventEmitter', () => {
       const listener1 = vi.fn();
       const listener2 = vi.fn();
       const listener3 = vi.fn();
-      const event: WebSocketEvent = { type: 'connection_lost' };
+      const event: WebSocketEvent = { type: 'reconnected' };
 
-      webSocketEventEmitter.on('connection_lost', listener1);
-      webSocketEventEmitter.on('connection_lost', listener2);
-      webSocketEventEmitter.on('connection_lost', listener3);
+      webSocketEventEmitter.on('reconnected', listener1);
+      webSocketEventEmitter.on('reconnected', listener2);
+      webSocketEventEmitter.on('reconnected', listener3);
 
       webSocketEventEmitter.emit(event);
 
@@ -51,18 +51,15 @@ describe('WebSocketEventEmitter', () => {
     it('should not affect listeners of different event types', () => {
       const reconnectingListener = vi.fn();
       const reconnectedListener = vi.fn();
-      const reconnectFailedListener = vi.fn();
 
       webSocketEventEmitter.on('reconnecting', reconnectingListener);
       webSocketEventEmitter.on('reconnected', reconnectedListener);
-      webSocketEventEmitter.on('reconnect_failed', reconnectFailedListener);
 
       const event: WebSocketEvent = { type: 'reconnecting' };
       webSocketEventEmitter.emit(event);
 
       expect(reconnectingListener).toHaveBeenCalledWith(event);
       expect(reconnectedListener).not.toHaveBeenCalled();
-      expect(reconnectFailedListener).not.toHaveBeenCalled();
     });
 
     it('should handle emission when no listeners are registered', () => {
@@ -117,8 +114,6 @@ describe('WebSocketEventEmitter', () => {
       const listeners = {
         reconnecting: vi.fn(),
         reconnected: vi.fn(),
-        reconnect_failed: vi.fn(),
-        connection_lost: vi.fn(),
       };
 
       // Register all listeners
@@ -240,40 +235,11 @@ describe('WebSocketEventEmitter', () => {
       expect(listener).toHaveBeenCalledWith(event);
     });
 
-    it('should handle reconnect_failed events', () => {
-      const listener = vi.fn();
-      webSocketEventEmitter.on('reconnect_failed', listener);
-
-      const event: WebSocketEvent = {
-        type: 'reconnect_failed',
-        data: {
-          attempts: 10,
-          message: 'Max reconnection attempts reached',
-        },
-      };
-
-      webSocketEventEmitter.emit(event);
-      expect(listener).toHaveBeenCalledWith(event);
-    });
-
-    it('should handle connection_lost events', () => {
-      const listener = vi.fn();
-      webSocketEventEmitter.on('connection_lost', listener);
-
-      const event: WebSocketEvent = {
-        type: 'connection_lost',
-        data: { message: 'Connection lost due to network error' },
-      };
-
-      webSocketEventEmitter.emit(event);
-      expect(listener).toHaveBeenCalledWith(event);
-    });
-
     it('should handle events without data payload', () => {
       const listener = vi.fn();
-      webSocketEventEmitter.on('reconnect_failed', listener);
+      webSocketEventEmitter.on('reconnecting', listener);
 
-      const event: WebSocketEvent = { type: 'reconnect_failed' };
+      const event: WebSocketEvent = { type: 'reconnecting' };
 
       webSocketEventEmitter.emit(event);
       expect(listener).toHaveBeenCalledWith(event);
@@ -313,7 +279,7 @@ describe('WebSocketEventEmitter', () => {
     });
 
     it('should handle empty listener arrays without issues', () => {
-      const event: WebSocketEvent = { type: 'reconnect_failed' };
+      const event: WebSocketEvent = { type: 'reconnected' };
 
       // Should not throw when no listeners are registered
       expect(() => webSocketEventEmitter.emit(event)).not.toThrow();
@@ -411,15 +377,11 @@ describe('WebSocketEventEmitter', () => {
       // These should be valid event types
       webSocketEventEmitter.on('reconnecting', listener);
       webSocketEventEmitter.on('reconnected', listener);
-      webSocketEventEmitter.on('reconnect_failed', listener);
-      webSocketEventEmitter.on('connection_lost', listener);
 
       // These events should match the interface
       const validEvents: WebSocketEvent[] = [
         { type: 'reconnecting' },
         { type: 'reconnected', data: { attempts: 1 } },
-        { type: 'reconnect_failed', data: { message: 'Failed' } },
-        { type: 'connection_lost' },
       ];
 
       validEvents.forEach(event => {

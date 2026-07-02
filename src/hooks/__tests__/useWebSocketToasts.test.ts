@@ -63,16 +63,8 @@ describe('useWebSocketToasts', () => {
         'reconnected',
         expect.any(Function)
       );
-      expect(webSocketEventEmitter.on).toHaveBeenCalledWith(
-        'reconnect_failed',
-        expect.any(Function)
-      );
-      expect(webSocketEventEmitter.on).toHaveBeenCalledWith(
-        'connection_lost',
-        expect.any(Function)
-      );
 
-      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(4);
+      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(2);
     });
 
     it('should unregister event listeners on unmount', () => {
@@ -82,7 +74,7 @@ describe('useWebSocketToasts', () => {
       const onCalls = vi.mocked(webSocketEventEmitter.on).mock.calls;
       const handlers = onCalls.map(call => call[1]);
 
-      expect(handlers).toHaveLength(4);
+      expect(handlers).toHaveLength(2);
 
       unmount();
 
@@ -95,16 +87,8 @@ describe('useWebSocketToasts', () => {
         'reconnected',
         expect.any(Function)
       );
-      expect(webSocketEventEmitter.off).toHaveBeenCalledWith(
-        'reconnect_failed',
-        expect.any(Function)
-      );
-      expect(webSocketEventEmitter.off).toHaveBeenCalledWith(
-        'connection_lost',
-        expect.any(Function)
-      );
 
-      expect(webSocketEventEmitter.off).toHaveBeenCalledTimes(4);
+      expect(webSocketEventEmitter.off).toHaveBeenCalledTimes(2);
     });
 
     it('should re-register listeners when translation function changes', () => {
@@ -175,28 +159,6 @@ describe('useWebSocketToasts', () => {
       );
     });
 
-    it('should show error toast for reconnect_failed event', () => {
-      const event: WebSocketEvent = { type: 'reconnect_failed' };
-
-      eventHandler(event);
-
-      expect(mockT).toHaveBeenCalledWith('websocket.reconnectFailed');
-      expect(toast.error).toHaveBeenCalledWith(
-        'translated.websocket.reconnectFailed'
-      );
-    });
-
-    it('should show error toast for connection_lost event', () => {
-      const event: WebSocketEvent = { type: 'connection_lost' };
-
-      eventHandler(event);
-
-      expect(mockT).toHaveBeenCalledWith('websocket.connectionLost');
-      expect(toast.error).toHaveBeenCalledWith(
-        'translated.websocket.connectionLost'
-      );
-    });
-
     it('should handle unknown event types gracefully', () => {
       const event = { type: 'unknown_event' } as any;
 
@@ -236,14 +198,13 @@ describe('useWebSocketToasts', () => {
 
       const events: WebSocketEvent[] = [
         { type: 'reconnecting' },
-        { type: 'reconnect_failed' },
         { type: 'reconnecting' },
         { type: 'reconnected' },
       ];
 
       events.forEach(event => eventHandler(event));
 
-      expect(toast.error).toHaveBeenCalledTimes(3); // 2 reconnecting + 1 failed
+      expect(toast.error).toHaveBeenCalledTimes(2); // 2 reconnecting
       expect(toast.success).toHaveBeenCalledTimes(1); // 1 reconnected
     });
 
@@ -272,17 +233,17 @@ describe('useWebSocketToasts', () => {
       const { unmount } = renderHook(() => useWebSocketToasts());
 
       // Initial mount
-      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(4);
+      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(2);
 
       // Unmount
       unmount();
-      expect(webSocketEventEmitter.off).toHaveBeenCalledTimes(4);
+      expect(webSocketEventEmitter.off).toHaveBeenCalledTimes(2);
 
       vi.clearAllMocks();
 
       // Re-mount with new hook instance
       const { unmount: unmount2 } = renderHook(() => useWebSocketToasts());
-      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(4);
+      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(2);
 
       unmount2();
     });
@@ -321,14 +282,14 @@ describe('useWebSocketToasts', () => {
         instances.push(renderHook(() => useWebSocketToasts()));
       }
 
-      // Should register 4 listeners per instance
-      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(40);
+      // Should register 2 listeners per instance
+      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(20);
 
       // Unmount all instances
       instances.forEach(instance => instance.unmount());
 
       // Should clean up all listeners
-      expect(webSocketEventEmitter.off).toHaveBeenCalledTimes(40);
+      expect(webSocketEventEmitter.off).toHaveBeenCalledTimes(20);
     });
 
     it('should handle high-frequency events without performance issues', () => {

@@ -4,7 +4,9 @@
 import { logger } from './logger';
 
 export interface WebSocketEvent {
-  type: 'reconnecting' | 'reconnected' | 'reconnect_failed' | 'connection_lost';
+  // Reconnection never gives up (see webSocketManager), so there is no
+  // terminal "failed"/"lost" event — only the retrying/recovered pair.
+  type: 'reconnecting' | 'reconnected';
   data?: {
     message?: string;
     attempts?: number;
