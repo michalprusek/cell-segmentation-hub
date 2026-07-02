@@ -1892,8 +1892,6 @@ export default {
   websocket: {
     reconnecting: 'Znovu se připojuji k serveru...',
     reconnected: 'Připojení k serveru obnoveno',
-    reconnectFailed: 'Nepodařilo se obnovit připojení k serveru',
-    connectionLost: 'Spojení se serverem ztraceno',
     connected: 'Připojeno k aktualizacím v reálném čase',
     disconnected: 'Odpojeno od aktualizací v reálném čase',
   },

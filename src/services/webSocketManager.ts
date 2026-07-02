@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
+import { apiClient } from '@/lib/api';
 import { TIMEOUTS } from '@/lib/constants';
 import { webSocketEventEmitter } from '@/lib/websocketEvents';
 import type {
@@ -46,12 +47,11 @@ class WebSocketManager {
   private static instance: WebSocketManager | null = null;
   private socket: Socket | null = null;
   private isConnecting = false;
-  private isInitialized = false;
+  private isRefreshingAuth = false;
   private currentUser: { id: string } | null = null;
   private eventListeners: EventListenerRegistry = {};
   private messageQueue: Array<{ event: string; data: unknown }> = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
   private reconnectDelay = 1000;
   private maxReconnectDelay = 30000;
   private lastToastTime = 0;
@@ -68,6 +68,45 @@ class WebSocketManager {
       disconnect: new Set(),
       connect_error: new Set(),
     };
+
+    // Recover instantly when the network returns or a slept/backgrounded tab
+    // wakes up — the reconnection engine's next scheduled attempt may be
+    // seconds away, and a laptop resume can leave the socket dead until then.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this.ensureConnected);
+      document.addEventListener(
+        'visibilitychange',
+        this.handleVisibilityChange
+      );
+    }
+  }
+
+  private ensureConnected = (): void => {
+    if (
+      this.currentUser &&
+      this.socket &&
+      !this.socket.connected &&
+      !this.isConnecting
+    ) {
+      logger.info('WebSocket down while session active - forcing reconnect');
+      this.socket.connect();
+    }
+  };
+
+  private handleVisibilityChange = (): void => {
+    if (document.visibilityState === 'visible') {
+      this.ensureConnected();
+    }
+  };
+
+  private removeLifecycleListeners(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.ensureConnected);
+      document.removeEventListener(
+        'visibilitychange',
+        this.handleVisibilityChange
+      );
+    }
   }
 
   static getInstance(): WebSocketManager {
@@ -155,6 +194,13 @@ class WebSocketManager {
 
     logger.info('Creating WebSocket connection to:', serverUrl);
 
+    // Replace any previous socket wholesale — leaving the old one alive would
+    // duplicate every event and keep a second reconnection engine running.
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+    }
+
     this.socket = io(serverUrl, {
       // Auth travels in the httpOnly access_token cookie, which the browser
       // attaches to the same-origin handshake automatically. withCredentials
@@ -162,15 +208,17 @@ class WebSocketManager {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true, // Enable automatic reconnection
-      reconnectionAttempts: 10,
+      // Never stop retrying: a finite attempt budget leaves the tab
+      // permanently disconnected ("Connecting to server..." banner) after any
+      // outage longer than the budget, and only a manual reload recovers.
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 15000,
       timeout: 10000,
       autoConnect: true,
     });
 
     this.setupEventHandlers();
-    this.isInitialized = true;
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -224,13 +272,19 @@ class WebSocketManager {
       logger.error('WebSocket CONNECTION ERROR:', error.message);
       this.emitToListeners('connect_error', error);
 
+      // The handshake authenticates via the httpOnly access_token cookie
+      // (15 min TTL). Reconnects after the cookie expired fail here forever —
+      // socket handshakes never pass through the axios 401→refresh
+      // interceptor — so re-mint the cookie explicitly and retry.
+      const isAuthError = /auth/i.test(error.message);
+      if (isAuthError) {
+        void this.refreshAuthAndReconnect();
+      }
+
       // Show toast only occasionally to avoid spam and not during auto-reconnect
       const now = Date.now();
       if (now - this.lastToastTime > this.toastCooldown) {
-        if (
-          !error.message.includes('Authentication') &&
-          this.reconnectAttempts > 2
-        ) {
+        if (!isAuthError && this.reconnectAttempts > 2) {
           // Only show toast after a few failed attempts
           // Emit event for localized toast (handled by useWebSocketToasts hook)
           webSocketEventEmitter.emit({ type: 'reconnecting' });
@@ -259,12 +313,6 @@ class WebSocketManager {
 
     this.socket.io.on('reconnect_error', (error: Error) => {
       logger.error('WebSocket reconnection error:', error.message);
-    });
-
-    this.socket.io.on('reconnect_failed', () => {
-      logger.error('WebSocket reconnection failed after all attempts');
-      // Emit event for localized toast (handled by useWebSocketToasts hook)
-      webSocketEventEmitter.emit({ type: 'reconnect_failed' });
     });
 
     // Data events
@@ -343,14 +391,13 @@ class WebSocketManager {
     });
   }
 
+  /**
+   * Manual reconnect for 'io server disconnect' — the one disconnect reason
+   * socket.io's own engine does not retry. Retries forever with capped
+   * exponential backoff; giving up would strand the tab (permanent
+   * "Connecting to server..." banner) until a manual reload.
+   */
   private handleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error('Max reconnection attempts reached');
-      // Emit event for localized toast (handled by useWebSocketToasts hook)
-      webSocketEventEmitter.emit({ type: 'connection_lost' });
-      return;
-    }
-
     this.reconnectAttempts++;
     const delay = Math.min(
       this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
@@ -361,15 +408,38 @@ class WebSocketManager {
       `Attempting reconnect #${this.reconnectAttempts} in ${delay}ms`
     );
 
-    setTimeout(async () => {
-      if (this.currentUser && !this.socket?.connected) {
-        try {
-          await this.createConnection();
-        } catch (error) {
-          logger.error('Reconnection failed:', error);
-        }
+    setTimeout(() => {
+      if (this.currentUser && this.socket && !this.socket.connected) {
+        // Reconnecting the existing socket re-enters the automatic
+        // reconnection engine; creating a new socket here would orphan the
+        // old one and duplicate every event.
+        this.socket.connect();
       }
     }, delay);
+  }
+
+  /**
+   * Re-mint the expired access_token cookie so the next handshake can
+   * authenticate. Refresh failures are non-fatal: offline refreshes get
+   * retried on the next auth connect_error, and a dead refresh token gets
+   * handled by the HTTP layer (forced sign-out tears this connection down).
+   */
+  private async refreshAuthAndReconnect(): Promise<void> {
+    if (this.isRefreshingAuth) {
+      return;
+    }
+    this.isRefreshingAuth = true;
+    try {
+      await apiClient.refreshAccessToken();
+      if (this.currentUser && this.socket && !this.socket.connected) {
+        logger.info('Auth cookie refreshed - reconnecting WebSocket');
+        this.socket.connect();
+      }
+    } catch (error) {
+      logger.warn('WebSocket auth refresh failed:', error);
+    } finally {
+      this.isRefreshingAuth = false;
+    }
   }
 
   private emitToListeners(event: string, ...args: unknown[]): void {
@@ -511,7 +581,6 @@ class WebSocketManager {
     }
 
     this.currentUser = null;
-    this.isInitialized = false;
     this.isConnecting = false;
     this.messageQueue = [];
     this.reconnectAttempts = 0;
@@ -528,6 +597,7 @@ class WebSocketManager {
   static cleanup(): void {
     if (WebSocketManager.instance) {
       WebSocketManager.instance.disconnect();
+      WebSocketManager.instance.removeLifecycleListeners();
       WebSocketManager.instance = null;
     }
 

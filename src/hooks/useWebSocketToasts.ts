@@ -21,14 +21,6 @@ export function useWebSocketToasts() {
           toast.success(t('websocket.reconnected'));
           break;
 
-        case 'reconnect_failed':
-          toast.error(t('websocket.reconnectFailed'));
-          break;
-
-        case 'connection_lost':
-          toast.error(t('websocket.connectionLost'));
-          break;
-
         default:
           break;
       }
@@ -37,15 +29,11 @@ export function useWebSocketToasts() {
     // Subscribe to all websocket events
     webSocketEventEmitter.on('reconnecting', handleWebSocketEvent);
     webSocketEventEmitter.on('reconnected', handleWebSocketEvent);
-    webSocketEventEmitter.on('reconnect_failed', handleWebSocketEvent);
-    webSocketEventEmitter.on('connection_lost', handleWebSocketEvent);
 
     return () => {
       // Cleanup
       webSocketEventEmitter.off('reconnecting', handleWebSocketEvent);
       webSocketEventEmitter.off('reconnected', handleWebSocketEvent);
-      webSocketEventEmitter.off('reconnect_failed', handleWebSocketEvent);
-      webSocketEventEmitter.off('connection_lost', handleWebSocketEvent);
     };
   }, [t]);
 }

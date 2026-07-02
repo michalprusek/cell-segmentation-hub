@@ -15,6 +15,12 @@ vi.mock('socket.io-client', () => ({
 }));
 
 // Mock dependencies
+vi.mock('@/lib/api', () => ({
+  apiClient: {
+    refreshAccessToken: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
