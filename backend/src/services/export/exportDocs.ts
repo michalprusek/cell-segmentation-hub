@@ -51,7 +51,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 * json/ - Custom JSON format
 ${
   project.type === 'microtubules'
-    ? '* imagej/ - ImageJ/Fiji .roi files (one file per microtubule, grouped as <video>/frame_NNNN/, named by cross-frame trackId)\n'
+    ? '* imagej/ - ImageJ/Fiji .roi files (one file per microtubule, grouped as <video>/frame_NNNN/, named by cross-frame trackId when tracking ran)\n'
     : ''
 }* metrics/ - Calculated metrics
 * documentation/ - This folder
@@ -239,13 +239,15 @@ Every microtubule export also bundles the polyline centerlines as native
 ImageJ \`.roi\` files, so you can re-open them in ImageJ / Fiji for manual
 re-measurement or line-based plugins. Files are loose (one \`.roi\` per
 microtubule), grouped as \`annotations/imagej/<video>/frame_NNNN/\`, and named
-by the cross-frame **trackId** — so the same microtubule keeps the same ROI
+by the cross-frame **trackId** when tracking ran (falling back to the
+polyline's name/id otherwise) — so a tracked microtubule keeps the same ROI
 name in every frame.
 
 - Geometry is stored with sub-pixel (float) precision, in image-pixel space.
-- To load a frame's ROIs: open the frame image in ImageJ, then
-  **Analyze ▸ Tools ▸ ROI Manager ▸ More ▸ Open…** and multi-select the
-  frame's \`.roi\` files (or drag the files onto the ImageJ window).
+- To load a frame's ROIs: open the frame image in ImageJ and **drag the
+  frame's \`.roi\` files onto the ImageJ window** — this accepts multiple files
+  at once and adds them to the ROI Manager. (ImageJ's *ROI Manager ▸ More ▸
+  Open…* loads only a single \`.roi\`, or a single RoiSet \`.zip\`, at a time.)
 
 ## Kymograph velocity metrics
 

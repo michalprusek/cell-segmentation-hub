@@ -617,9 +617,11 @@ export class ExportService {
       // ImageJ ROI files — ALWAYS bundled for MT projects (no toggle) so
       // biologists can re-open microtubule polylines in ImageJ / Fiji
       // (RoiManager, kymograph plugins). Written as loose `.roi` files grouped
-      // per frame under `annotations/imagej/<frame>/`, each named by its
-      // cross-frame trackId so the same microtubule keeps one name across
-      // frames. Independent of the selected annotation formats.
+      // per frame under `annotations/imagej/<video>/frame_NNNN/`, named by
+      // cross-frame trackId when tracking ran. Independent of the selected
+      // annotation formats. Because this is always-on (the user did not opt in),
+      // a failure must NOT sink the whole export they did request: it degrades
+      // to a warning. Only a genuine cancellation stays fatal.
       if ((project.type ?? '') === 'microtubules' && project.images?.length) {
         exportTasks.push(
           exportImageJRois(
@@ -627,14 +629,34 @@ export class ExportService {
             exportDir,
             project.id,
             { shouldAbort: () => this.isJobCancelled(jobId) }
-          ).then(result => {
-            if (result.warnings.length) {
+          )
+            .then(result => {
+              if (result.warnings.length) {
+                const job = this.exportJobs.get(jobId);
+                if (job) {
+                  job.warnings = [...(job.warnings ?? []), ...result.warnings];
+                }
+              }
+            })
+            .catch(error => {
+              // A real user cancellation should still fail the job.
+              if (this.isJobCancelled(jobId)) {
+                throw error;
+              }
+              logger.error(
+                'ImageJ ROI export failed (non-fatal; rest of export continues)',
+                error instanceof Error ? error : new Error(String(error)),
+                'ExportService',
+                { jobId, projectId: project.id }
+              );
               const job = this.exportJobs.get(jobId);
               if (job) {
-                job.warnings = [...(job.warnings ?? []), ...result.warnings];
+                job.warnings = [
+                  ...(job.warnings ?? []),
+                  'ImageJ ROI export could not be completed; the rest of the export is unaffected.',
+                ];
               }
-            }
-          })
+            })
         );
       }
 

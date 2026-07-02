@@ -10,13 +10,13 @@
  * File layout produced here (offsets in bytes, all big-endian):
  *   0    "Iout" magic
  *   4    version (int16, 227)
- *   6    ROI type (uint8): 0 = polygon, 5 = polyline
+ *   6    ROI type (uint8): 0 = polygon, 5 = polyline  (on-disk codes)
  *   8    top / 10 left / 12 bottom / 14 right  (int16 integer bounding box)
  *   16   nCoordinates (int16)
  *   50   options (int16): SUB_PIXEL_RESOLUTION (128) is always set here
- *   56   position (int32, slice — 0 = not slice-associated)
+ *   56   position (int32): left 0 — loose per-frame files aren't slice-associated
  *   60   header2 offset (int32)
- *   64   integer x[n] (int16, relative to left), then integer y[n]
+ *   64   integer coords: x[n] then y[n] (int16; x relative to left, y to top)
  *   64+4n  float32 x[n] (absolute), then float32 y[n]  ← authoritative geometry
  *   +HEADER2  header2 block (name offset/length live here)
  *   +name   ROI name as UTF-16BE code units
@@ -28,6 +28,7 @@
 
 import * as path from 'path';
 import { promises as fs } from 'fs';
+import type { PolygonPoint } from '../../types/polygon';
 import { logger } from '../../utils/logger';
 import { mapWithConcurrency } from '../../utils/concurrency';
 import { sanitizeFilename } from './exportFileOperations';
@@ -38,17 +39,17 @@ import { sanitizeFilename } from './exportFileOperations';
 
 export type RoiGeometry = 'polyline' | 'polygon';
 
-export interface RoiPoint {
-  x: number;
-  y: number;
-}
+/** Alias of the canonical polygon point — kept for local readability. */
+export type RoiPoint = PolygonPoint;
 
 const MAGIC = 'Iout';
 const VERSION = 227; // supports sub-pixel floats + header2 name; universally read
 const HEADER_SIZE = 64;
 const HEADER2_SIZE = 64;
 
-// ROI type bytes (ij.gui.Roi constants)
+// On-disk ROI type codes from ij.io.RoiEncoder / RoiDecoder — NOT the
+// ij.gui.Roi runtime constants (whose POLYGON=2 / POLYLINE=6 differ). Changing
+// these to the gui values would silently corrupt every exported file.
 const ROI_TYPE_POLYGON = 0;
 const ROI_TYPE_POLYLINE = 5;
 
@@ -73,21 +74,23 @@ function putShort(buf: Buffer, offset: number, value: number): void {
  * Encode a single polyline/polygon into an ImageJ ``.roi`` byte buffer.
  *
  * @param points   Vertices in image-pixel space (sub-pixel floats preserved).
- * @param geometry ``'polyline'`` (open) or ``'polygon'`` (closed).
+ *                 Coordinates must be finite; callers filter beforehand.
+ * @param geometry ``'polyline'`` (open, ≥2 points) or ``'polygon'`` (closed,
+ *                 ≥3 points).
  * @param name     ROI name embedded in header2 (shown in RoiManager). Empty
  *                 string / undefined omits the name block.
- * @param position 1-based stack slice to associate the ROI with, or 0/undefined
- *                 for no association (ROI shows on any slice).
  */
 export function encodeImageJRoi(
   points: RoiPoint[],
   geometry: RoiGeometry,
-  name?: string,
-  position?: number
+  name?: string
 ): Buffer {
   const n = points.length;
-  if (n < 2) {
-    throw new Error(`ImageJ ROI requires at least 2 points, got ${n}`);
+  const minPoints = geometry === 'polygon' ? 3 : 2;
+  if (n < minPoints) {
+    throw new Error(
+      `ImageJ ${geometry} ROI requires at least ${minPoints} points, got ${n}`
+    );
   }
 
   // Integer bounding box from rounded coordinates (matches Roi.getBounds()).
@@ -112,7 +115,7 @@ export function encodeImageJRoi(
 
   const buf = Buffer.alloc(totalSize); // zero-filled: unset fields stay 0
 
-  // ---- Header (0..63) ----
+  // ---- Header (0..63) ----  (position @56 intentionally left 0)
   buf.write(MAGIC, 0, 'ascii');
   putShort(buf, 4, VERSION);
   buf.writeUInt8(roiType, 6);
@@ -122,7 +125,6 @@ export function encodeImageJRoi(
   putShort(buf, 14, right);
   putShort(buf, 16, n);
   putShort(buf, 50, SUB_PIXEL_RESOLUTION);
-  buf.writeInt32BE(position && position > 0 ? position : 0, 56);
   buf.writeInt32BE(header2Offset, 60);
 
   // ---- Coordinates (64..) ----
@@ -163,40 +165,90 @@ export interface RoiFrameInput {
   segmentation?: { polygons?: string | null } | null;
 }
 
+export interface ImageJRoiExportResult {
+  /** Frames that produced at least one .roi file. */
+  frames: number;
+  /** Total .roi files written. */
+  rois: number;
+  /** User-facing, non-fatal warnings (e.g. corrupt frames skipped). */
+  warnings: string[];
+}
+
 interface RawPolygon {
   id?: string;
   name?: string;
   geometry?: string;
-  points?: Array<{ x: number; y: number }>;
+  points?: PolygonPoint[];
   instanceId?: string;
   trackId?: string | null;
 }
 
 const FRAME_WRITE_CONCURRENCY = 8;
 
-function safeParsePolygons(json: string | null | undefined): RawPolygon[] {
+/**
+ * Parse a frame's polygons JSON, distinguishing "no polygons" from "corrupt".
+ * The `corrupt` flag lets the caller surface a warning instead of silently
+ * dropping a frame's microtubules (matching the COCO/JSON parse-failure path).
+ */
+function parseFramePolygons(json: string | null | undefined): {
+  polygons: RawPolygon[];
+  corrupt: boolean;
+} {
   if (!json) {
-    return [];
+    return { polygons: [], corrupt: false };
   }
   try {
-    const parsed = JSON.parse(json) as RawPolygon[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(json) as unknown;
+    return Array.isArray(parsed)
+      ? { polygons: parsed as RawPolygon[], corrupt: false }
+      : { polygons: [], corrupt: false };
   } catch {
+    return { polygons: [], corrupt: true };
+  }
+}
+
+function isFinitePoint(p: unknown): p is PolygonPoint {
+  return (
+    typeof p === 'object' &&
+    p !== null &&
+    Number.isFinite((p as PolygonPoint).x) &&
+    Number.isFinite((p as PolygonPoint).y)
+  );
+}
+
+/**
+ * Sanitised copy of a polygon's points, or `[]` if ANY point is missing/
+ * non-finite — a polyline with a hole is meaningless, so the whole polygon is
+ * dropped (and counted) rather than emitting a NaN-coordinate ROI ImageJ can't
+ * read.
+ */
+function validPoints(points: PolygonPoint[] | undefined): PolygonPoint[] {
+  if (!Array.isArray(points)) {
     return [];
   }
+  const out: PolygonPoint[] = [];
+  for (const p of points) {
+    if (!isFinitePoint(p)) {
+      return [];
+    }
+    out.push({ x: p.x, y: p.y });
+  }
+  return out;
 }
 
 /**
  * Cross-frame-stable ROI label. trackId keeps the same microtubule identically
- * named across every frame (the user-requested behaviour); the remaining
- * fallbacks only kick in for untracked polygons so a name is never empty.
+ * named across every frame (when cross-frame tracking ran); the remaining
+ * fallbacks kick in for untracked polygons so a name is never empty. Uses `||`
+ * (not `??`) so an empty-string trackId/name also falls through — an empty
+ * label would collapse distinct microtubules to the same file.
  */
 function roiLabel(p: RawPolygon, index: number): string {
   return (
-    p.trackId ??
-    p.name ??
-    p.instanceId ??
-    p.id ??
+    p.trackId ||
+    p.name ||
+    p.instanceId ||
+    p.id ||
     `roi_${String(index + 1).padStart(4, '0')}`
   );
 }
@@ -245,21 +297,25 @@ function frameFolderName(
  * Write ImageJ ``.roi`` files for every segmented frame of a microtubule
  * export. Output layout (loose files, grouped per frame):
  *
- *   annotations/imagej/<frameName>/<roiLabel>.roi
+ *   annotations/imagej/<video>/frame_NNNN/<roiLabel>.roi
  *
  * Both open polylines (→ ImageJ POLYLINE) and any closed polygons (→ POLYGON)
  * are emitted; MT projects are polyline-only in practice.
  *
- * @returns Counts for logging + a human-readable warning list (currently only
- *          "nothing to export", surfaced so a silently empty folder isn't
- *          mistaken for a bug).
+ * Degradation: corrupt-JSON frames are skipped and reported via the returned
+ * `warnings` (never silently dropped); polygons with too few / non-finite
+ * points are dropped and logged. This function must NOT reject on routine bad
+ * data — its caller treats a rejection as non-fatal, but keeping it total makes
+ * that contract obvious.
+ *
+ * @returns Counts + non-fatal warnings for the caller to fold into job.warnings.
  */
 export async function exportImageJRois(
   frameImages: RoiFrameInput[],
   exportDir: string,
   projectId: string,
   options: { shouldAbort?: () => boolean } = {}
-): Promise<{ frames: number; rois: number; warnings: string[] }> {
+): Promise<ImageJRoiExportResult> {
   const baseDir = path.join(exportDir, 'annotations', 'imagej');
 
   // Container rows (carried in the same images array) supply a clean, human
@@ -277,51 +333,69 @@ export async function exportImageJRois(
     f => !f.isVideoContainer && !!f.segmentation?.polygons
   );
 
+  // Counters mutated by concurrent workers — safe because every increment is a
+  // synchronous statement with no interleaving await (single-threaded JS).
   let framesWritten = 0;
   let roisWritten = 0;
+  let corruptFrames = 0;
+  let droppedPolygons = 0;
 
   await mapWithConcurrency(
     frames,
     FRAME_WRITE_CONCURRENCY,
     async frame => {
-      // Normalise to concrete {geometry, points, label} items and drop
-      // degenerate geometry (polyline < 2 pts / polygon < 3 pts).
-      const items = safeParsePolygons(frame.segmentation?.polygons)
+      const parsed = parseFramePolygons(frame.segmentation?.polygons);
+      if (parsed.corrupt) {
+        corruptFrames++;
+        return;
+      }
+
+      // Normalise to concrete {geometry, points, label} items, dropping
+      // degenerate geometry (polyline < 2 / polygon < 3) and any polygon with
+      // non-finite coordinates. Default missing geometry to 'polyline' — this
+      // is the MT-only path and MT annotations are always open polylines.
+      const items = parsed.polygons
         .map((p, index) => {
-          const geometry = (p.geometry ?? 'polygon') as RoiGeometry;
-          const points = Array.isArray(p.points) ? p.points : [];
-          return { geometry, points, label: roiLabel(p, index) };
+          const geometry: RoiGeometry =
+            p.geometry === 'polygon' ? 'polygon' : 'polyline';
+          return { geometry, points: validPoints(p.points), label: roiLabel(p, index) };
         })
         .filter(
           it => it.points.length >= (it.geometry === 'polyline' ? 2 : 3)
         );
 
+      droppedPolygons += parsed.polygons.length - items.length;
+
       if (items.length === 0) {
         return;
       }
 
-      const frameDir = path.join(baseDir, frameFolderName(frame, containerNames));
+      const frameDir = path.join(
+        baseDir,
+        frameFolderName(frame, containerNames)
+      );
       await fs.mkdir(frameDir, { recursive: true });
 
       const usedNames = new Set<string>();
       let frameRois = 0;
 
-      await Promise.all(
-        items.map(async ({ geometry, points, label }) => {
-          // Ensure a unique on-disk filename within the frame folder.
-          const fileBase = sanitizeFilename(label);
-          let candidate = fileBase;
-          let dupe = 2;
-          while (usedNames.has(candidate.toLowerCase())) {
-            candidate = `${fileBase}_${dupe++}`;
-          }
-          usedNames.add(candidate.toLowerCase());
+      // Sequential within a frame so the max concurrent open file handles stays
+      // at FRAME_WRITE_CONCURRENCY — a frame can hold 100+ microtubules, and a
+      // parallel write per ROI × 8 frames would risk EMFILE.
+      for (const { geometry, points, label } of items) {
+        // Ensure a unique on-disk filename within the frame folder.
+        const fileBase = sanitizeFilename(label);
+        let candidate = fileBase;
+        let dupe = 2;
+        while (usedNames.has(candidate.toLowerCase())) {
+          candidate = `${fileBase}_${dupe++}`;
+        }
+        usedNames.add(candidate.toLowerCase());
 
-          const buf = encodeImageJRoi(points, geometry, label);
-          await fs.writeFile(path.join(frameDir, `${candidate}.roi`), buf);
-          frameRois++;
-        })
-      );
+        const buf = encodeImageJRoi(points, geometry, label);
+        await fs.writeFile(path.join(frameDir, `${candidate}.roi`), buf);
+        frameRois++;
+      }
 
       if (frameRois > 0) {
         framesWritten++;
@@ -334,7 +408,20 @@ export async function exportImageJRois(
     }
   );
 
+  if (droppedPolygons > 0) {
+    logger.warn(
+      `ImageJ ROI export: dropped ${droppedPolygons} polygon(s) with too few or non-finite points`,
+      'imagejRoiEncoder',
+      { projectId }
+    );
+  }
+
   const warnings: string[] = [];
+  if (corruptFrames > 0) {
+    warnings.push(
+      `ImageJ ROI export: ${corruptFrames} frame(s) had corrupt polygon data and were skipped.`
+    );
+  }
   if (roisWritten === 0) {
     warnings.push(
       'ImageJ ROI export: no microtubule polylines were found to export.'
@@ -345,6 +432,8 @@ export async function exportImageJRois(
     projectId,
     frames: framesWritten,
     rois: roisWritten,
+    corruptFrames,
+    droppedPolygons,
   });
 
   return { frames: framesWritten, rois: roisWritten, warnings };
