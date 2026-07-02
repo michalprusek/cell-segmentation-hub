@@ -49,7 +49,11 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 * coco/ - COCO format annotations
 * yolo/ - YOLO format annotations
 * json/ - Custom JSON format
-* metrics/ - Calculated metrics
+${
+  project.type === 'microtubules'
+    ? '* imagej/ - ImageJ/Fiji .roi files (one file per microtubule, grouped as <video>/frame_NNNN/, named by cross-frame trackId when tracking ran)\n'
+    : ''
+}* metrics/ - Calculated metrics
 * documentation/ - This folder
 
 ## Usage Instructions
@@ -78,7 +82,7 @@ function buildUnitContext(options?: ExportOptions): UnitContext {
   const areaUnit: UnitContext['areaUnit'] = isScaled ? 'um^2' : 'px^2';
   const lengthUnit: UnitContext['lengthUnit'] = isScaled ? 'um' : 'px';
   const scaleInfo = isScaled
-    ? `\n## Scale Conversion\n\n- **Scale**: ${options!.pixelToMicrometerScale} um/pixel\n- **Linear measurements**: Converted from pixels to micrometers (um)\n- **Area measurements**: Converted from pixels^2 to square micrometers (um^2)\n- **Dimensionless ratios**: Remain unchanged (scale-invariant)\n`
+    ? `\n## Scale Conversion\n\n- **Scale**: ${options?.pixelToMicrometerScale} um/pixel\n- **Linear measurements**: Converted from pixels to micrometers (um)\n- **Area measurements**: Converted from pixels^2 to square micrometers (um^2)\n- **Dimensionless ratios**: Remain unchanged (scale-invariant)\n`
     : '\n## Units\n\n- **All measurements are in pixel units**\n- **Linear measurements**: pixels (px)\n- **Area measurements**: square pixels (px^2)\n';
   return { areaUnit, lengthUnit, scaleInfo };
 }
@@ -228,6 +232,22 @@ The JSON format preserves the full microtubule structure:
 - \`instanceId\` — unique per polyline (one MT = one instance)
 - \`trackId\` — set when tracking ran successfully; equal across frames
   for sibling polylines representing the same MT over time
+
+## ImageJ / Fiji ROIs (\`annotations/imagej/\`)
+
+Every microtubule export also bundles the polyline centerlines as native
+ImageJ \`.roi\` files, so you can re-open them in ImageJ / Fiji for manual
+re-measurement or line-based plugins. Files are loose (one \`.roi\` per
+microtubule), grouped as \`annotations/imagej/<video>/frame_NNNN/\`, and named
+by the cross-frame **trackId** when tracking ran (falling back to the
+polyline's name/id otherwise) — so a tracked microtubule keeps the same ROI
+name in every frame.
+
+- Geometry is stored with sub-pixel (float) precision, in image-pixel space.
+- To load a frame's ROIs: open the frame image in ImageJ and **drag the
+  frame's \`.roi\` files onto the ImageJ window** — this accepts multiple files
+  at once and adds them to the ROI Manager. (ImageJ's *ROI Manager ▸ More ▸
+  Open…* loads only a single \`.roi\`, or a single RoiSet \`.zip\`, at a time.)
 
 ## Kymograph velocity metrics
 
