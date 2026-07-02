@@ -12,6 +12,12 @@ vi.mock('socket.io-client', () => ({
 }));
 
 // Mock logger
+vi.mock('@/lib/api', () => ({
+  apiClient: {
+    refreshAccessToken: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -649,12 +655,9 @@ describe('WebSocket Integration Tests', () => {
       // Server forcefully disconnects
       mockSocket.__triggerDisconnect('io server disconnect');
 
-      // On first server disconnect, manager starts manual reconnect (not connection_lost).
-      // connection_lost is only emitted after maxReconnectAttempts (10) are exhausted.
-      // Verify that the disconnect was processed (disconnect listener fired)
-      expect(webSocketEventEmitter.emit).not.toHaveBeenCalledWith({
-        type: 'connection_lost',
-      });
+      // The manager retries forever — there is no terminal give-up event,
+      // so nothing may be emitted on a server disconnect.
+      expect(webSocketEventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('should handle listener exceptions during event processing', async () => {
