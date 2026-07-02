@@ -53,6 +53,7 @@ import {
   type MTMetricsOptions,
   type MTMetricsRow,
 } from '../mtMetricsExporter';
+import { logger } from '../../../utils/logger';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -251,6 +252,46 @@ describe('computeMTGeometry', () => {
     );
     expect(r2.instanceId).toMatch(/^mt_abcd1234/);
     expect(r2.trackId).toBeNull();
+  });
+
+  it('labels instances MT1, MT2, … in first-appearance order', () => {
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ];
+    // Two distinct instances plus a polyline with no instanceId.
+    const seg = JSON.stringify([
+      { geometry: 'polyline', points: pts, instanceId: 'inst-a' },
+      { geometry: 'polyline', points: pts, instanceId: 'inst-b' },
+      { geometry: 'polyline', points: pts },
+    ]);
+    const rows = computeMTGeometry(
+      [makeFrame({ segmentation: { polygons: seg } })],
+      null
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows[0].label).toBe('MT1');
+    expect(rows[1].label).toBe('MT2');
+    // No instanceId → no badge on the image → empty label in metrics.
+    expect(rows[2].label).toBe('');
+  });
+
+  it('reuses the same MT label for repeated segments of one instance', () => {
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ];
+    // Instance "inst-a" appears in two rows (e.g. head + tail); both share MT1.
+    const seg = JSON.stringify([
+      { geometry: 'polyline', points: pts, instanceId: 'inst-a' },
+      { geometry: 'polyline', points: pts, instanceId: 'inst-b' },
+      { geometry: 'polyline', points: pts, instanceId: 'inst-a' },
+    ]);
+    const rows = computeMTGeometry(
+      [makeFrame({ segmentation: { polygons: seg } })],
+      null
+    );
+    expect(rows.map(r => r.label)).toEqual(['MT1', 'MT2', 'MT1']);
   });
 
   it('emits one row per polyline across multiple frames', () => {
@@ -520,6 +561,8 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
 
     expect(r.frameIndex).toBe(0);
     expect(r.imageId).toBe('frame-1');
+    // Label matches the "MT1" badge the visualization draws for this instance.
+    expect(r.label).toBe('MT1');
     expect(r.instanceId).toBe('inst-1');
     expect(r.trackId).toBe('track-7');
     expect(r.channel).toBe('DAPI');
@@ -533,6 +576,132 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     expect(r.stdIntensity).toBe(5);
     expect(r.medianBackground).toBe(10);
     expect(r.signalMinusBackground).toBe(40);
+  });
+
+  // Faithfully mirrors the real ML contract: /mt-metrics echoes each polyline's
+  // image_id + instance_id back unchanged (mt_metrics.py:415).
+  const echoMlResponse = async (
+    _url: string,
+    body: { frames: Array<{ frame_index: number; polylines: Array<{ image_id: string; instance_id: string }> }> }
+  ) => ({
+    data: {
+      rows: body.frames.flatMap(f =>
+        f.polylines.map(pl => ({
+          ...mlResponse.data.rows[0],
+          frame_index: f.frame_index,
+          image_id: pl.image_id,
+          instance_id: pl.instance_id,
+        }))
+      ),
+      frames_processed: body.frames.length,
+      frame_height: 512,
+      frame_width: 512,
+    },
+  });
+
+  it('leaves the label empty for a polyline with no instanceId (intensity path)', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
+    // One polyline WITHOUT an instanceId → sent to ML with a synthetic id that
+    // is absent from the label map, so the row must come back with label ''.
+    const seg = JSON.stringify([
+      {
+        geometry: 'polyline',
+        points: [
+          { x: 10, y: 20 },
+          { x: 30, y: 40 },
+        ],
+      },
+    ]);
+    axiosPostMock.mockImplementationOnce(echoMlResponse);
+
+    const { rows } = await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: seg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: ['DAPI'] }
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].label).toBe('');
+    expect(rows[0].instanceId).toMatch(/^mt_/);
+    // A legitimate empty label must NOT be reported as join drift.
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('label join drift'),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('joins labels by instance_id regardless of ML row order', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
+    const seg = JSON.stringify([
+      {
+        geometry: 'polyline',
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+        instanceId: 'inst-a',
+        trackId: 't-a',
+      },
+      {
+        geometry: 'polyline',
+        points: [
+          { x: 2, y: 2 },
+          { x: 3, y: 3 },
+        ],
+        instanceId: 'inst-b',
+        trackId: 't-b',
+      },
+    ]);
+    // ML returns the rows REVERSED — labels must still resolve by id, proving
+    // the join is id-based (not positional).
+    axiosPostMock.mockImplementationOnce(async (url: string, body) => {
+      const res = await echoMlResponse(url, body);
+      res.data.rows.reverse();
+      return res;
+    });
+
+    const { rows } = await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: seg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: ['DAPI'] }
+    );
+
+    const labelById = Object.fromEntries(rows.map(r => [r.instanceId, r.label]));
+    expect(labelById['inst-a']).toBe('MT1');
+    expect(labelById['inst-b']).toBe('MT2');
+  });
+
+  it('warns and blanks the label when ML returns an unsent instance_id', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
+    // ML returns an instance_id we never sent → genuine join drift.
+    axiosPostMock.mockResolvedValueOnce({
+      data: {
+        rows: [
+          {
+            ...mlResponse.data.rows[0],
+            image_id: 'frame-1',
+            instance_id: 'ghost-id',
+          },
+        ],
+        frames_processed: 1,
+        frame_height: 512,
+        frame_width: 512,
+      },
+    });
+
+    const { rows } = await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: frameSeg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: ['DAPI'] }
+    );
+
+    expect(rows[0].label).toBe('');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('label join drift'),
+      'mtMetricsExporter',
+      expect.objectContaining({ instanceId: 'ghost-id' })
+    );
   });
 
   it('sets lengthUm and areaUm2 to null when scale is null', async () => {

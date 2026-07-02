@@ -869,6 +869,23 @@ describe('VisualizationGenerator', () => {
       expect(labels).not.toContain('S2');
     });
 
+    it('uses the MT prefix when labelPrefix is set (microtubule export)', async () => {
+      const polys: Polygon[] = [
+        makePolyline({ instanceId: 'mt-a' }),
+        makePolyline({ instanceId: 'mt-b' }),
+      ];
+      await gen.generateVisualization('/img/test.png', polys, '/out/out.png', {
+        showNumbers: true,
+        labelPrefix: 'MT',
+      });
+
+      const fillTextCalls = ctxCalls.filter(c => c.method === 'fillText');
+      const labels = fillTextCalls.map(c => c.args[0]);
+      expect(labels).toContain('MT1');
+      expect(labels).toContain('MT2');
+      expect(labels.some(l => String(l).startsWith('S'))).toBe(false);
+    });
+
     it('does NOT draw sperm labels when showNumbers=false', async () => {
       const poly = makePolyline({ instanceId: 'sperm-a' });
       await gen.generateVisualization('/img/test.png', [poly], '/out/out.png', {

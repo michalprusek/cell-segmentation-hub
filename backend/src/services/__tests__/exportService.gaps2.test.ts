@@ -1036,6 +1036,39 @@ describe('ExportService — generateVisualizations skip paths', () => {
     expect(vizPath).toMatch(/_frame_0007_viz\.png$/);
   });
 
+  it('forwards labelPrefix into each generateVisualization options arg', async () => {
+    mockVizGenerate.mockResolvedValue('success');
+    // Call generateVisualizations directly with an explicit MT prefix (6th arg).
+    await (
+      service as unknown as {
+        generateVisualizations: (
+          images: unknown[],
+          exportDir: string,
+          options: unknown,
+          jobId: string | undefined,
+          onProgress: undefined,
+          labelPrefix: string
+        ) => Promise<void>;
+      }
+    ).generateVisualizations(
+      [makeMinimalImage()],
+      '/tmp/viz',
+      undefined,
+      undefined,
+      undefined,
+      'MT'
+    );
+    const optionsArg = mockVizGenerate.mock.calls[0][3] as { labelPrefix?: string };
+    expect(optionsArg.labelPrefix).toBe('MT');
+  });
+
+  it('defaults labelPrefix to the sperm prefix when not supplied', async () => {
+    mockVizGenerate.mockResolvedValue('success');
+    await callGenerateViz(service, [makeMinimalImage()]);
+    const optionsArg = mockVizGenerate.mock.calls[0][3] as { labelPrefix?: string };
+    expect(optionsArg.labelPrefix).toBe('S');
+  });
+
   it('throws "Export cancelled by user" when job is cancelled', async () => {
     getJobs(service).set('viz-cancel', {
       id: 'viz-cancel',

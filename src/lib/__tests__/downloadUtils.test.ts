@@ -105,6 +105,10 @@ describe('downloadBlob', () => {
 
 describe('downloadFromResponse', () => {
   beforeEach(() => {
+    // Fake timers so downloadBlob's 100ms cleanup setTimeout is discarded on
+    // teardown instead of firing later with a stale mock link (which throws in
+    // jsdom's removeChild → an unhandled error that fails the whole CI run).
+    vi.useFakeTimers();
     URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/mock');
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(document.body, 'appendChild').mockImplementation(vi.fn());
@@ -116,7 +120,10 @@ describe('downloadFromResponse', () => {
     } as unknown as HTMLElement);
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it('uses response.data directly when it is already a Blob', async () => {
     const blob = new Blob(['content'], { type: 'application/octet-stream' });
@@ -133,6 +140,7 @@ describe('downloadFromResponse', () => {
 
 describe('downloadJSON', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/mock');
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(document.body, 'appendChild').mockImplementation(vi.fn());
@@ -144,7 +152,10 @@ describe('downloadJSON', () => {
     } as unknown as HTMLElement);
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it('appends .json extension when missing', () => {
     let capturedLink: any;
@@ -177,6 +188,7 @@ describe('downloadJSON', () => {
 
 describe('downloadExcel', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/mock');
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(document.body, 'appendChild').mockImplementation(vi.fn());
@@ -188,7 +200,10 @@ describe('downloadExcel', () => {
     } as unknown as HTMLElement);
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it('appends .xlsx extension when missing', () => {
     let capturedLink: any;
@@ -208,6 +223,7 @@ describe('downloadExcel', () => {
 
 describe('downloadCSV', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/mock');
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(document.body, 'appendChild').mockImplementation(vi.fn());
@@ -219,7 +235,10 @@ describe('downloadCSV', () => {
     } as unknown as HTMLElement);
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it('appends .csv extension when missing', () => {
     let capturedLink: any;
