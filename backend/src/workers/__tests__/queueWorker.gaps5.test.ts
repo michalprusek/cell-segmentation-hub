@@ -28,7 +28,12 @@ vi.mock('../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/queueService');
+// NOTE: queueService is mocked with an explicit factory further down (its
+// getInstance() must return a stub exposing setQueueWorker, which the
+// QueueWorker constructor calls). A *second* bare `vi.mock('...queueService')`
+// used to sit here — two registrations for the same module race, and when the
+// bare auto-mock won, getInstance() returned undefined and the constructor
+// crashed on `queueService.setQueueWorker` (flaky in CI). Keep only the factory.
 vi.mock('../../services/segmentationService');
 vi.mock('../../services/imageService');
 vi.mock('@prisma/client', () => {
