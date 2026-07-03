@@ -109,6 +109,20 @@ const QueueStatsPanel: React.FC<QueueStatsProps> = ({
     jobIds: [],
   });
 
+  // simulateBatchProcessing below is a fire-and-forget async loop driven by a
+  // real setTimeout. If the component unmounts (test teardown) while it is
+  // mid-flight, its next tick calls setBatchState after jsdom is gone and
+  // throws "window is not defined" — a flaky unhandled error that fails CI.
+  // Track mount status and bail before any post-unmount state write (a ref read
+  // is safe even after teardown; setBatchState is not).
+  const mountedRef = React.useRef(true);
+  React.useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    []
+  );
+
   const startBatchSegmentation = async () => {
     const batchId = `batch-seg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const jobIds = Array.from(
@@ -142,6 +156,11 @@ const QueueStatsPanel: React.FC<QueueStatsProps> = ({
     const totalJobs = jobIds.length;
 
     for (let i = 0; i < totalJobs; i++) {
+      // Stop if the component unmounted while we were awaiting the timer.
+      if (!mountedRef.current) {
+        return;
+      }
+
       // Check if cancelled
       const operation = mockOperationManager.getOperation(batchId);
       if (operation?.status === 'cancelled') {
@@ -160,6 +179,11 @@ const QueueStatsPanel: React.FC<QueueStatsProps> = ({
 
       // Simulate processing time
       await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Stop if the component unmounted during the final await.
+    if (!mountedRef.current) {
+      return;
     }
 
     // Complete if not cancelled

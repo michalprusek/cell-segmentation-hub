@@ -116,6 +116,20 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
   >(new Map());
   const [isUploading, setIsUploading] = React.useState(false);
 
+  // simulateChunkedUpload below is a fire-and-forget async loop driven by a
+  // real setTimeout. If the component unmounts (test teardown) mid-upload, its
+  // next tick calls setUploadStates after jsdom is gone and throws
+  // "window is not defined" — a flaky unhandled CI error. Track mount status
+  // and bail before any post-unmount state write (a ref read is safe after
+  // teardown; setUploadStates is not).
+  const mountedRef = React.useRef(true);
+  React.useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    []
+  );
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     // Support both standard FileList (files) and test-injected _files array
     const selectedFiles = Array.from(
@@ -169,6 +183,10 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     try {
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        // Stop touching state once the component has unmounted (test teardown).
+        if (!mountedRef.current) {
+          return;
+        }
         if (abortController.signal.aborted) {
           throw new DOMException('Upload cancelled', 'AbortError');
         }
@@ -190,6 +208,9 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
         // Simulate chunk upload delay; check abort after the wait too
         await new Promise(resolve => setTimeout(resolve, 50));
+        if (!mountedRef.current) {
+          return;
+        }
         if (abortController.signal.aborted) {
           throw new DOMException('Upload cancelled', 'AbortError');
         }
