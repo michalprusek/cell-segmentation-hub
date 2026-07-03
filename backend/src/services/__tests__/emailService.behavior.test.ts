@@ -265,6 +265,17 @@ describe('EmailService – behavior gaps', () => {
       expect(mockSendEmailWithRetry).not.toHaveBeenCalled();
     });
 
+    it('no-ops (no send, no queue, no throw) when EMAIL_SERVICE=none', async () => {
+      // Email disabled: init() creates no transporter, and sendEmail must
+      // short-circuit rather than hit the "not initialized" guard.
+      setEnv({ EMAIL_SERVICE: 'none' });
+      await expect(
+        emailService.sendEmail({ to: 'a@b.com', subject: 'X' })
+      ).resolves.toBeUndefined();
+      expect(mockSendEmailWithRetry).not.toHaveBeenCalled();
+      expect(mockQueueEmailForRetry).not.toHaveBeenCalled();
+    });
+
     it('queues email when UTIA SMTP + allowQueue=true (default)', async () => {
       mockIsUTIA.mockReturnValue(true);
       await emailService.sendEmail({

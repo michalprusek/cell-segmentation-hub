@@ -21,8 +21,8 @@ export default defineConfig({
       'src/test/integration/**',
     ],
 
-    // Bring up env vars + global setup (mirrors jest.env.js + jest.setup.js
-    // + src/test/setup.ts).
+    // Bring up env vars + global setup. vitest.env.ts is the single source of
+    // truth for test env vars (loaded first, before any module evaluates).
     setupFiles: ['./vitest.env.ts', './vitest.setup.ts', './src/test/setup.ts'],
 
     testTimeout: 30000,

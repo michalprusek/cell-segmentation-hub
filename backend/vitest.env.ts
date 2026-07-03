@@ -1,6 +1,6 @@
-// Test environment variables — mirrors jest.env.js. Loaded by Vitest
-// before any source module evaluates, so config.ts gets the right values
-// during initialization.
+// Single source of truth for test environment variables. Loaded by Vitest
+// (setupFiles) before any source module evaluates, so config.ts gets the right
+// values during its module-load Zod validation.
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET =

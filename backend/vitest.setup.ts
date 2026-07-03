@@ -1,6 +1,6 @@
-// Vitest setup — mirrors jest.setup.js. Sets a few additional env vars and
-// silences console output during tests to keep output focused on test
-// results rather than incidental log spew.
+// Vitest global setup (setupFiles, runs after vitest.env.ts). Sets a few
+// additional env vars and silences console output during tests to keep output
+// focused on test results rather than incidental log spew.
 
 import { vi } from 'vitest';
 
