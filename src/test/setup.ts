@@ -322,11 +322,25 @@ afterAll(() => {
 });
 
 // Global cleanup to prevent memory leaks
-afterEach(() => {
+afterEach(async () => {
+  // Drain the microtask queue so any fire-and-forget async work still pending
+  // when a test ends runs its `.catch`/`.then` tail NOW, while jsdom's `window`
+  // still exists. Example: ThemeSwitcher's onClick calls an async
+  // handleThemeChange that awaits a rejected setTheme and logs in `catch`; a
+  // thumbnail fetch that rejects behaves the same. If that continuation instead
+  // runs after the file's jsdom environment is torn down, it throws
+  // "ReferenceError: window is not defined", which Vitest reports as an
+  // unhandled error and fails the whole run (the "Errors N" merge gate) even
+  // though every test passed. Microtask-based (not setTimeout) so it stays safe
+  // if a test left fake timers installed.
+  for (let i = 0; i < 5; i++) {
+    await Promise.resolve();
+  }
+
   // Clear all timers to prevent accumulation
   vi.clearAllTimers();
 
-  // Clean up any pending promises
+  // Reset mock call history between tests
   vi.clearAllMocks();
 
   // Force garbage collection hint by clearing large objects

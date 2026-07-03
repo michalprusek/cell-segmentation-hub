@@ -296,14 +296,22 @@ describe('LanguageContext', () => {
       // setUser → LanguageContext userId-effect → getUserProfile →
       // setLanguage('de'). Under full-suite CPU contention this can exceed
       // waitFor's default 1000ms, so give it a load-tolerant deadline.
+      //
+      // Persistence (localStorage.setItem) happens in a SEPARATE effect keyed on
+      // `language`, one commit AFTER `result.current.language` flips to 'de'.
+      // Asserting setItem synchronously right after the language waitFor raced
+      // that effect (flaky "Number of calls: 0" under load), so wait for the
+      // side-effect itself inside the same polling window.
       await waitFor(
         () => {
           expect(result.current.language).toBe('de');
+          expect(localStorageMock.setItem).toHaveBeenCalledWith(
+            'language',
+            'de'
+          );
         },
         { timeout: 5000 }
       );
-
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('language', 'de');
     });
   });
 });
