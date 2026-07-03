@@ -229,6 +229,83 @@ describe('encodeImageJRoi', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Golden-file test — external reference validation
+// ---------------------------------------------------------------------------
+//
+// The `encodeImageJRoi` tests above pair the encoder with our own `decodeRoi`,
+// so a *shared* wrong offset would round-trip cleanly and pass. This test pins
+// the on-disk bytes to a reference `.roi` produced by an INDEPENDENT
+// implementation — Christoph Gohlke's `roifile` (Python) — closing that gap.
+//
+// fixtures/golden_polyline.roi was generated once with roifile 2026.2.10:
+//
+//   import roifile, numpy as np
+//   roi = roifile.ImagejRoi.frompoints(
+//       np.array([(12.5, 8.25), (40.0, 33.75), (88.5, 20.0), (150.25, 95.5)],
+//                dtype=np.float32))
+//   roi.roitype = roifile.ROI_TYPE.POLYLINE
+//   roi.name = 'MT7'
+//   open('golden_polyline.roi', 'wb').write(roi.tobytes())
+//
+// Both encoders agree byte-for-byte on everything that carries geometry: the
+// "Iout" magic, the ROI type, the coordinate count, the absolute float32
+// x[]/y[] block, the UTF-16BE name, and the total file size. They differ on
+// exactly 7 bytes — header version (@4-5: 227 vs 229), the options flag (@50-
+// 51), the integer bbox (@11/13/15) and the int16 relative-coord fallback
+// (@67/71) — because those depend on rounding convention: our encoder uses JS
+// Math.round (half-up, matching ImageJ's Java Math.round), while roifile uses
+// NumPy banker's rounding. For sub-pixel ROIs ImageJ reads the float block and
+// ignores the int fallback, so the geometry ImageJ actually loads is identical.
+// ---------------------------------------------------------------------------
+
+describe('encodeImageJRoi — golden file (roifile reference)', () => {
+  const GOLDEN_POINTS = [
+    { x: 12.5, y: 8.25 },
+    { x: 40.0, y: 33.75 },
+    { x: 88.5, y: 20.0 },
+    { x: 150.25, y: 95.5 },
+  ];
+
+  it('matches roifile bytes on magic, type, count, float geometry, name and size', async () => {
+    const golden = await fs.readFile(
+      path.join(__dirname, 'fixtures', 'golden_polyline.roi')
+    );
+    const ours = encodeImageJRoi(GOLDEN_POINTS, 'polyline', 'MT7');
+
+    // Same total file size (header + int16 pairs + float32 pairs + header2 + name).
+    expect(ours.length).toBe(golden.length);
+
+    // Header fields both implementations (and ImageJ) must agree on.
+    expect(ours.subarray(0, 4)).toEqual(golden.subarray(0, 4)); // "Iout"
+    expect(ours[6]).toBe(golden[6]); // ROI type byte (polyline = 5)
+    expect(ours.readInt16BE(16)).toBe(golden.readInt16BE(16)); // nCoords = 4
+
+    // The authoritative sub-pixel geometry: float32 x[n] then y[n] at 64 + 4n.
+    const n = GOLDEN_POINTS.length;
+    const floatStart = 64 + n * 4;
+    const floatEnd = floatStart + n * 8;
+    expect(ours.subarray(floatStart, floatEnd)).toEqual(
+      golden.subarray(floatStart, floatEnd)
+    );
+
+    // Name is stored as UTF-16BE at the tail of the file ("MT7").
+    const nameBE = Buffer.from('MT7', 'utf16le').swap16();
+    expect(ours.subarray(ours.length - nameBE.length)).toEqual(nameBE);
+    expect(golden.subarray(golden.length - nameBE.length)).toEqual(nameBE);
+
+    // Lock the full byte layout against the reference: the ONLY allowed
+    // divergences are the 7 rounding/metadata bytes documented above. A drift
+    // in any geometry byte would add an offset here and fail loudly rather than
+    // being silently absorbed by a self-consistent round-trip.
+    const diffs: number[] = [];
+    for (let i = 0; i < golden.length; i++) {
+      if (ours[i] !== golden[i]) diffs.push(i);
+    }
+    expect(diffs).toEqual([5, 11, 13, 15, 51, 67, 71]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // exportImageJRois (real temp-dir filesystem)
 // ---------------------------------------------------------------------------
 
@@ -316,15 +393,30 @@ describe('exportImageJRois', () => {
   it('separates frames from different videos that share a frameIndex (multi-position ND2)', async () => {
     const out = await mkTmp();
     const frames: RoiFrameInput[] = [
-      { id: 'cA', name: 'D03_0000.nd2', isVideoContainer: true, segmentation: null },
-      { id: 'cB', name: 'D05_0000.nd2', isVideoContainer: true, segmentation: null },
+      {
+        id: 'cA',
+        name: 'D03_0000.nd2',
+        isVideoContainer: true,
+        segmentation: null,
+      },
+      {
+        id: 'cB',
+        name: 'D05_0000.nd2',
+        isVideoContainer: true,
+        segmentation: null,
+      },
       {
         id: 'a0',
         name: 'D03_0000.nd2 (frame 1)',
         parentVideoId: 'cA',
         frameIndex: 0,
         segmentation: {
-          polygons: JSON.stringify([line('1', [[1, 1], [2, 2]])]),
+          polygons: JSON.stringify([
+            line('1', [
+              [1, 1],
+              [2, 2],
+            ]),
+          ]),
         },
       },
       {
@@ -333,7 +425,12 @@ describe('exportImageJRois', () => {
         parentVideoId: 'cB',
         frameIndex: 0, // SAME frameIndex as a0, different video
         segmentation: {
-          polygons: JSON.stringify([line('1', [[3, 3], [4, 4]])]),
+          polygons: JSON.stringify([
+            line('1', [
+              [3, 3],
+              [4, 4],
+            ]),
+          ]),
         },
       },
     ];
@@ -343,12 +440,12 @@ describe('exportImageJRois', () => {
 
     const base = path.join(out, 'annotations', 'imagej');
     expect((await fs.readdir(base)).sort()).toEqual(['D03_0000', 'D05_0000']);
-    expect(await fs.readdir(path.join(base, 'D03_0000', 'frame_0000'))).toEqual([
-      '1.roi',
-    ]);
-    expect(await fs.readdir(path.join(base, 'D05_0000', 'frame_0000'))).toEqual([
-      '1.roi',
-    ]);
+    expect(await fs.readdir(path.join(base, 'D03_0000', 'frame_0000'))).toEqual(
+      ['1.roi']
+    );
+    expect(await fs.readdir(path.join(base, 'D05_0000', 'frame_0000'))).toEqual(
+      ['1.roi']
+    );
   });
 
   it('keeps the same trackId name across frames and suffixes collisions', async () => {
@@ -384,11 +481,15 @@ describe('exportImageJRois', () => {
               [99, 99],
               [88, 88],
             ]), // duplicate trackId in the same frame
-            line(null, [
-              [1, 1],
-              [2, 2],
-              [3, 3],
-            ], 'polygon'), // untracked → generated fallback name
+            line(
+              null,
+              [
+                [1, 1],
+                [2, 2],
+                [3, 3],
+              ],
+              'polygon'
+            ), // untracked → generated fallback name
           ]),
         },
       },
@@ -440,8 +541,14 @@ describe('exportImageJRois', () => {
         frameIndex: 0,
         segmentation: {
           polygons: JSON.stringify([
-            line('', [[10, 10], [20, 25]]), // empty trackId
-            line('', [[30, 30], [40, 45]]), // empty trackId again
+            line('', [
+              [10, 10],
+              [20, 25],
+            ]), // empty trackId
+            line('', [
+              [30, 30],
+              [40, 45],
+            ]), // empty trackId again
           ]),
         },
       },
@@ -469,8 +576,14 @@ describe('exportImageJRois', () => {
         frameIndex: 0,
         segmentation: {
           polygons: JSON.stringify([
-            line('a/b', [[10, 10], [20, 25]]), // sanitizes to a_b
-            line('a:b', [[30, 30], [40, 45]]), // also sanitizes to a_b
+            line('a/b', [
+              [10, 10],
+              [20, 25],
+            ]), // sanitizes to a_b
+            line('a:b', [
+              [30, 30],
+              [40, 45],
+            ]), // also sanitizes to a_b
           ]),
         },
       },
@@ -491,7 +604,14 @@ describe('exportImageJRois', () => {
         name: 'v.nd2 (frame 1)',
         parentVideoId: 'c1',
         frameIndex: 0,
-        segmentation: { polygons: JSON.stringify([line('1', [[1, 1], [2, 2]])]) },
+        segmentation: {
+          polygons: JSON.stringify([
+            line('1', [
+              [1, 1],
+              [2, 2],
+            ]),
+          ]),
+        },
       },
       {
         id: 'bad',
@@ -519,8 +639,14 @@ describe('exportImageJRois', () => {
         frameIndex: 0,
         segmentation: {
           polygons: JSON.stringify([
-            line('ok', [[1, 1], [2, 2]]),
-            line('nan', [[Number.NaN, 5], [1, 2]]), // dropped
+            line('ok', [
+              [1, 1],
+              [2, 2],
+            ]),
+            line('nan', [
+              [Number.NaN, 5],
+              [1, 2],
+            ]), // dropped
           ]),
         },
       },
@@ -540,7 +666,14 @@ describe('exportImageJRois', () => {
         name: 'v.nd2 (frame 1)',
         parentVideoId: 'c1',
         frameIndex: 0,
-        segmentation: { polygons: JSON.stringify([line('1', [[1, 1], [2, 2]])]) },
+        segmentation: {
+          polygons: JSON.stringify([
+            line('1', [
+              [1, 1],
+              [2, 2],
+            ]),
+          ]),
+        },
       },
     ];
     await expect(
