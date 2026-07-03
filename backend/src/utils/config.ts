@@ -56,7 +56,9 @@ const configSchema = z
     JWT_REFRESH_EXPIRY_REMEMBER: z.string().default('30d'),
 
     // Email
-    EMAIL_SERVICE: z.enum(['sendgrid', 'smtp']).default('sendgrid'),
+    // 'none' disables outbound email entirely (sends become logged no-ops).
+    // Used by tests and any deployment that intentionally runs without mail.
+    EMAIL_SERVICE: z.enum(['sendgrid', 'smtp', 'none']).default('sendgrid'),
     SENDGRID_API_KEY: z.string().optional(),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.string().transform(Number).optional(),

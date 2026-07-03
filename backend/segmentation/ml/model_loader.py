@@ -107,7 +107,6 @@ except (ImportError, OSError) as e:
 
 # Import the new inference executor
 from .inference_executor import (
-    InferenceExecutor,
     InferenceTimeoutError,
     InferenceResourceError,
     InferenceError,
@@ -1567,7 +1566,6 @@ class ModelLoader:
                     
                     # If detect_holes is False, fill all holes
                     if not detect_holes:
-                        h, w = mask.shape
                         filled_mask = mask.copy()
                         temp_contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                         for contour in temp_contours:
@@ -1676,7 +1674,6 @@ class ModelLoader:
                     drop_masks = self.postprocess_mask_batch(drop_output, [dropped_size], threshold)
                     for drop_mask in drop_masks:
                         if not detect_holes:
-                            h, w = drop_mask.shape
                             filled = drop_mask.copy()
                             tc, _ = cv2.findContours(drop_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                             for c in tc:

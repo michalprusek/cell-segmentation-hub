@@ -7,10 +7,7 @@ import { Agent as HttpsAgent } from 'https';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import type { JobStatus } from '../types';
-import {
-  SEGMENTATION_MODELS,
-  type KnownModelId,
-} from '../constants/modelRegistry';
+import { type KnownModelId } from '../constants/modelRegistry';
 import {
   PolygonValidator,
   type PolygonPartClass,

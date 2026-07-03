@@ -143,7 +143,6 @@ export default [
       '**/*.test.ts',
       '*.config.js',
       'jest.*.js',
-      'jest.setup.js',
     ],
   },
 ];
