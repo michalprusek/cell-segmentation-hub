@@ -18,7 +18,7 @@ import { escapeHtml, sanitizeUrl } from '../utils/escapeHtml';
 import { isUTIASmtpServer, SMTP_HOSTS } from '../constants/email';
 
 export interface EmailConfig {
-  service: 'smtp' | 'sendgrid';
+  service: 'smtp' | 'sendgrid' | 'none';
   smtp?: {
     host: string;
     port: number;
@@ -65,7 +65,8 @@ export { _config };
 export function init(): void {
   try {
     const config: EmailConfig = {
-      service: (process.env.EMAIL_SERVICE as 'smtp' | 'sendgrid') || 'smtp',
+      service:
+        (process.env.EMAIL_SERVICE as 'smtp' | 'sendgrid' | 'none') || 'smtp',
       from: {
         email: process.env.FROM_EMAIL || 'noreply@localhost',
         name: process.env.FROM_NAME || 'Cell Segmentation Platform',
@@ -231,6 +232,15 @@ export async function sendEmail(
           subject: options.subject,
         }
       );
+      return;
+    }
+
+    // Email disabled entirely (no transporter is created during init()).
+    if (process.env.EMAIL_SERVICE === 'none') {
+      logger.info('Email sending skipped (EMAIL_SERVICE=none)', 'EmailService', {
+        to: options.to,
+        subject: options.subject,
+      });
       return;
     }
 
