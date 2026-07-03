@@ -190,6 +190,18 @@ describe('usePagination', () => {
 
       expect(result.current.currentPage).toBe(1);
     });
+
+    it('clamps to page 1 on first render when initialPage exceeds totalPages', () => {
+      // Distinct entry point from the shrink case above: here the out-of-range
+      // page is the *initial* state, so the guard effect must correct it on the
+      // very first commit rather than on a later rerender (issue #77).
+      const { result } = renderHook(() =>
+        usePagination({ totalItems: 100, itemsPerPage: 30, initialPage: 42 })
+      );
+
+      // totalPages = 4; the effect resets the overshoot to page 1.
+      expect(result.current.currentPage).toBe(1);
+    });
   });
 
   describe('pageNumbers generation', () => {
