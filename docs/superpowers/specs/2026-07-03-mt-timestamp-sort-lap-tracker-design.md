@@ -176,3 +176,13 @@ Per-frame Δt persistence; kymograph velocity from non-uniform Δt; re-sorting e
 ## 8. Rollout
 
 Part A and Part B are independent; Part A can land first as a safe quick win. ML-only + backend-tiny. **No production deploy without explicit go-ahead**; deploy rebuilds ML (must include the transformers pin) + recreate ml, then verify tracking on the test video.
+
+---
+
+## 9. Implementation outcome (2026-07-04)
+
+- **Part A: NOT implemented** (see §2 — decision: leave frame order as-is).
+- **Part B: implemented + committed** as designed (two-step LAP + gap closing, filament-aware cost, defaults as specified). ML: `tracker_kymograph.py` (18 unit tests). Backend: `trackerService.ts` sends `cost_threshold: 0.6`.
+- **Critical bug found + fixed during validation — tracking was ORDINAL, not geometric.** Segmentation polygon ids (`polyline_N`) restart per frame, so they collide across frames; `asTrackerPolylines` sent the raw id and the tracker/write-back key by it, so every frame's `polyline_N` shared one trackId — the geometric match was discarded (confirmed in DB: all frames' `polyline_1` → the same `track_…`). Fixed by scoping the id `` `${frameIndex}::${id}` `` in `asTrackerPolylines` + the write-back (5 backend tests). This applies to the OLD tracker too and was likely a root cause of MT color drift.
+- **Real-data validation** (3-frame MT test video, 428 filaments, no embeddings in DB → geometry-only path): with the id fix, OLD greedy = 148 tracks for 144 MTs (4 identity flips on a 1-frame dropout); NEW LAP + gap-closing = 144 (re-links the 4 dropped MTs). Embedding path covered by unit tests (no DB embeddings available to exercise it on real data).
+- **Not deployed.** ML rebuild for the tracker must pin `transformers==4.57.1` (else it reverts the live segmentation hotfix). Awaiting go-ahead.
