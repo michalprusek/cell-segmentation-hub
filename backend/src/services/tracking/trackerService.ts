@@ -63,7 +63,14 @@ function asTrackerPolylines(
   const polylines = polygons
     .filter(p => p.geometry === 'polyline' && Array.isArray(p.points))
     .map(p => ({
-      id: p.id,
+      // Segmentation polygon ids ("polyline_1", "polyline_2", …) restart per
+      // frame, so they COLLIDE across frames. The tracker keys its
+      // assignments by this id and the write-back looks trackIds up by it —
+      // a raw id would make every frame's "polyline_1" share one trackId
+      // (ordinal tracking, the geometric match discarded). Scope it by
+      // frameIndex so each frame's polyline is globally unique; the
+      // write-back rebuilds the same `${frameIndex}::${id}` key.
+      id: `${frameIndex}::${p.id}`,
       // points are stored as {x: col, y: row}; tracker uses (row, col).
       points_rc: (p.points as Array<{ x: number; y: number }>).map(
         pt => [pt.y, pt.x] as [number, number]
@@ -218,7 +225,7 @@ async function _runTrackingForContainerInner(
 
   const updates: Array<{ segmentationId: string; polygonsJson: string }> = [];
   for (const f of frames) {
-    if (!f.segmentation) continue;
+    if (!f.segmentation || f.frameIndex == null) continue;
     const seg = f.segmentation as SegmentationRecord;
     let polygons: PolygonRecord[];
     try {
@@ -237,7 +244,10 @@ async function _runTrackingForContainerInner(
     }
     let mutated = false;
     for (const poly of polygons) {
-      const tid = assignments[poly.id];
+      // Rebuild the same frame-scoped key asTrackerPolylines sent, so each
+      // frame's polyline gets ITS geometric trackId (not a collision-collapsed
+      // ordinal one).
+      const tid = assignments[`${f.frameIndex}::${poly.id}`];
       if (tid && poly.trackId !== tid) {
         poly.trackId = tid;
         mutated = true;
