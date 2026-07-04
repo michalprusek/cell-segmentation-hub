@@ -240,8 +240,6 @@ export default {
       '{{count}} imágenes añadidas a la cola de segmentación',
     imageQueuedForResegmentation:
       'Imagen añadida a la cola para re-segmentación',
-    allImagesAlreadySegmented:
-      'Todas las imágenes ya están segmentadas o en cola',
     errorAddingToQueue: 'Error al añadir imágenes a la cola',
     imageAlreadyProcessing: 'La imagen ya está siendo procesada',
     processImageFailed: 'Error al procesar la imagen',
@@ -1015,9 +1013,10 @@ export default {
     disconnected: 'Desconectado',
     waiting: 'esperando',
     processing: 'procesando',
-    segmentAll: 'Segmentar Todo',
-    segmentAllWithCount: 'Segmentar Todo ({{count}})',
     resegmentSelected: 'Re-segmentar Seleccionadas ({{count}})',
+    segmentSelected: 'Segmentar Seleccionadas',
+    segmentSelectedWithCount: 'Segmentar Seleccionadas ({{count}})',
+    selectNothingTooltip: 'Seleccione imágenes para segmentar',
     segmentMixed:
       'Segmentar {{new}} + Re-segmentar {{resegment}} ({{total}} total)',
     segmentTooltip:

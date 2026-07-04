@@ -15,7 +15,6 @@ const mockT = vi.fn((key: string, params?: Record<string, unknown>) => {
     'export.cancelExport': 'Cancel Export',
     'common.cancelling': 'Cancelling...',
     'common.upload': 'Upload',
-    'queue.segmentAll': 'Segment All',
     'export.startExport': 'Start Export',
   };
 
