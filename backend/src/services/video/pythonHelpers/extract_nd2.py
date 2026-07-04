@@ -360,6 +360,26 @@ def _time_is_outer(f) -> bool | None:
     return t_idx < p_idx
 
 
+def _position_timestamps_s(
+    timestamps_s: list[float],
+    position: int,
+    t_count: int,
+    p_count: int,
+    time_outer: bool | None,
+) -> list[float]:
+    """This position's per-frame timestamps, picked out of the flat per-frame
+    event list using the loop nesting order. Empty list when the nesting is
+    unknown (``time_outer is None``) or the event count is not exactly ``T*P``
+    (a partial / unexpected list is not worth guessing from)."""
+    if time_outer is None or len(timestamps_s) != t_count * p_count:
+        return []
+    if time_outer:
+        idx = [t * p_count + position for t in range(t_count)]
+    else:
+        idx = [position * t_count + t for t in range(t_count)]
+    return [timestamps_s[i] for i in idx]
+
+
 def _position_interval_ms(
     timestamps_s: list[float],
     position: int,
@@ -367,19 +387,16 @@ def _position_interval_ms(
     p_count: int,
     time_outer: bool | None,
 ) -> float | None:
-    """Median frame interval (ms) for one position, picking that position's
-    timestamps out of the flat per-frame event list using the loop nesting
-    order. Returns None unless the event count exactly matches ``T*P`` (a
-    partial / unexpected list is not worth guessing from)."""
-    if t_count < 2 or time_outer is None:
+    """Median frame interval (ms) for one position (see
+    ``_position_timestamps_s`` for how the per-position subset is picked).
+    Returns None unless at least two aligned timestamps exist."""
+    if t_count < 2:
         return None
-    if len(timestamps_s) != t_count * p_count:
-        return None
-    if time_outer:
-        idx = [t * p_count + position for t in range(t_count)]
-    else:
-        idx = [position * t_count + t for t in range(t_count)]
-    return _median_interval_ms([timestamps_s[i] for i in idx])
+    return _median_interval_ms(
+        _position_timestamps_s(
+            timestamps_s, position, t_count, p_count, time_outer
+        )
+    )
 
 
 def _save_position_tiff(arr_tcyx: np.ndarray, path: Path) -> None:
@@ -404,7 +421,7 @@ def _save_position_tiff(arr_tcyx: np.ndarray, path: Path) -> None:
 
 
 def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
-                  on_frame=None) -> None:
+                  on_frame=None, order=None) -> None:
     """Write one PNG per (frame, channel) under ``frames_root/<TTTT>/``.
 
     ``arr_tcyx`` is a dask OR numpy ``(T, C, Y, X)`` array. Frames are streamed
@@ -414,16 +431,25 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
     chunk's frames are materialised SEQUENTIALLY — one dask compute at a time,
     since the nd2-backed reader is not assumed thread-safe — then their PNGs are
     encoded in parallel. ``on_frame()`` is called once per written frame for
-    progress accounting. Output bytes are identical to a sequential write.
+    progress accounting.
+
+    ``order`` is a permutation where ``order[rank]`` is the SOURCE frame index
+    to write into output slot ``frames/<rank>/`` — used to lay frames down in
+    acquisition-time order (see ``frame_time_order``). It is applied via
+    single-frame indexing (``arr_tcyx[order[rank]]``), which stays lazy for
+    dask, so no full-array copy is made. ``None`` is the identity permutation:
+    output bytes are then identical to a sequential write.
     """
     T = int(arr_tcyx.shape[0])
     C = int(arr_tcyx.shape[1])
+    if order is None:
+        order = list(range(T))
     workers = max(1, min(_extract_workers(), T))
     chunk = max(workers * 2, 4)
 
     def _write_one(item) -> None:
-        t, frame_cyx = item
-        frame_dir = frames_root / f"{t:04d}"
+        rank, frame_cyx = item
+        frame_dir = frames_root / f"{rank:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         for c in range(C):
             _save_png(frame_cyx[c], frame_dir / f"{channel_names[c]}.png")
@@ -432,7 +458,11 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
         for start in range(0, T, chunk):
             stop = min(start + chunk, T)
             # Sequential per-frame materialisation (read), parallel encode/write.
-            batch = [(t, np.asarray(arr_tcyx[t])) for t in range(start, stop)]
+            # rank -> output slot; order[rank] -> source frame in the array.
+            batch = [
+                (rank, np.asarray(arr_tcyx[order[rank]]))
+                for rank in range(start, stop)
+            ]
             for _ in pool.map(_write_one, batch):
                 if on_frame is not None:
                     on_frame()

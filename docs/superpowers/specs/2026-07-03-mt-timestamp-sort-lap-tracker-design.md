@@ -46,14 +46,16 @@ The rich per-pixel `(M,32)` embeddings sampled along each centerline (`wrapper.p
 
 ## 2. Part A — Timestamp frame-sort (robustness guarantee)
 
-**Goal:** guarantee frames are ordered by embedded acquisition timestamp so `frameIndex = true time rank`, with zero backend/DB/wire change. New uploads only.
+**Goal:** guarantee frames are processed/displayed in embedded acquisition-time order. New uploads only.
 
-**Design:** in `extract_nd2.py` and `extract_tiff_stack.py`, after the frame array and per-frame timestamps are available and **before** frame directories are written:
+> **⚠️ Coupling discovered during implementation (invalidates the original "zero backend change" plan):** `backend/segmentation/api/mt_metrics.py` re-reads the **original ND2/TIFF POSITIONALLY** — `t = fr.frame_index; arr[t]` (mt*metrics.py:350-354) — "matching the extractor's convention". So `frameIndex` is used two ways: (1) the extracted `frames/<i>/` PNG index (editor/tracker/kymograph all use the extracted frames), and (2) a positional index into the \_original* file (mt_metrics only). Naively reordering the extracted frames to make `frameIndex = time rank` desyncs (2): for a single-position upload the original is the user's file and cannot be rewritten. So a correct sort needs one of:
+>
+> - **Option A — reorder extracted frames + persist `sourceFrameIndex`.** `frameIndex = time rank` everywhere (all current consumers auto-correct); add a nullable `Image.sourceFrameIndex` the mt-metrics exporter passes so `mt_metrics.py` reads `arr[sourceFrameIndex ?? frame_index]`. Cost: a **DB migration** (nullable column, apply to prod via direct idempotent SQL per memory) + `finalizeContainer` + `mtMetricsExporter` + `mt_metrics.py`. Only mt-metrics changes; the invariant "frameIndex = time" is clean.
+> - **Option B — set `displayOrder = time rank`, keep `frameIndex = source order`.** No migration (`displayOrder` already exists and is documented for time-series ordering) and mt-metrics is untouched (still reads the original by source-order `frameIndex`). Cost: the time-order consumers (`trackerService`, `kymographService`, `mtKymographExporter`, editor frame list, MT-export row order) switch `orderBy frameIndex` → `orderBy [displayOrder, frameIndex]`. Larger consumer surface, but each is a no-op in the common (already-monotonic) case.
+>
+> **Recommendation: Option B** — avoids a production schema migration and uses the purpose-built `displayOrder` field. Both are no-ops for the common case (T-axis already equals acquisition order). **Pending user decision before wiring.**
 
-1. Compute a **stable** ordering permutation `order = argsort(timestamps, kind='stable')`.
-2. Iterate frames in `order` when writing `frames/<rank>/` so `frames/0000/` holds the earliest-timestamp frame. Reorder the per-frame timestamp list (and any per-frame arrays used for interval calc) consistently.
-
-Because the extractor's on-disk rank becomes the time rank and the backend derives `frameIndex` from that rank, **no backend/DB/wire/consumer change is required** — tracker, kymograph, editor already sort by `frameIndex`.
+**Groundwork already landed (behaviour-neutral, both options reuse it):** a pure, tested `frame_ordering.frame_time_order(timestamps, n)` permutation helper (identity on absent/partial/non-finite timestamps); an extracted `_position_timestamps_s` (per-position subset, refactored out of `_position_interval_ms`); and a no-op `order=` param on `_write_frames`. Extraction behaviour is unchanged until a wiring option is chosen.
 
 **Applies to:** ND2 and TIFF (they carry timestamps). Video is untouched (no acquisition timestamps).
 
