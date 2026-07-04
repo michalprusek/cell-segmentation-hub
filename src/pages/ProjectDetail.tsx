@@ -388,17 +388,6 @@ const ProjectDetail = () => {
     [filteredImages, paginatedIndices]
   );
 
-  // Memoized calculations for heavy operations
-  const imagesToSegmentCount = useMemo(
-    () =>
-      images.filter(img =>
-        ['pending', 'failed', 'no_segmentation'].includes(
-          img.segmentationStatus
-        )
-      ).length,
-    [images]
-  );
-
   // Check if queue has any items (processing or queued)
   const hasActiveQueue = useMemo(
     () => queueStats && (queueStats.processing > 0 || queueStats.queued > 0),
@@ -1545,7 +1534,6 @@ const ProjectDetail = () => {
               onCancelSegmentation={handleCancelSegmentation}
               batchSubmitted={batchSubmitted || hasActiveQueue}
               isCancelling={isCancelling}
-              imagesToSegmentCount={imagesToSegmentCount}
               selectedImageIds={selectedImageIds}
               images={images}
               parallelStats={parallelStats}
