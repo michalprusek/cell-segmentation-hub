@@ -176,8 +176,12 @@ async function _runTrackingForContainerInner(
           f.segmentation as SegmentationRecord
         )
       ),
-    cost_threshold: 0.5,
-    spatial_weight: 0.3,
+    // Max accepted filament-match cost for the two-step LAP tracker. The ML
+    // side's filament-aware cost is a weighted sum of four [0,1] terms
+    // (embedding + endpoint + orientation + length), so 0.6 accepts
+    // moderately-confident links. The remaining tracker params (max_gap=2,
+    // gap_penalty, term weights, image_hw fallback) use the ML defaults.
+    cost_threshold: 0.6,
   };
 
   if (trackPayload.frames.every(f => f.polylines.length === 0)) {
