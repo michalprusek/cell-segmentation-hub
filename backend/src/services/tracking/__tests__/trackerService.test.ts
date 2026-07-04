@@ -134,8 +134,9 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
       ];
     });
 
+    // Assignments are keyed by the frame-scoped id (frameIndex::polygonId).
     axiosPostMock.mockResolvedValue({
-      data: { assignments: { p0: 'track-A', p2: 'track-A' } },
+      data: { assignments: { '0::p0': 'track-A', '2::p2': 'track-A' } },
     });
 
     await runTrackingForContainer('vid-1');
@@ -227,8 +228,9 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
       ];
     });
 
+    // Assignments are keyed by the frame-scoped id (frameIndex::polygonId).
     axiosPostMock.mockResolvedValue({
-      data: { assignments: { p0: 'track-X', p3: 'track-X' } },
+      data: { assignments: { '0::p0': 'track-X', '3::p3': 'track-X' } },
     });
 
     await runTrackingForContainer('vid-mixed');
@@ -301,5 +303,93 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
 
     releaseFirstBatchCheck?.();
     await first;
+  });
+
+  it('scopes each polyline id by frameIndex so cross-frame id collisions do not collapse to ordinal tracking', async () => {
+    // Real MT segmentations reuse per-frame ids ("polyline_1" in EVERY
+    // frame). The ML tracker keys its assignments by polyline id, and the
+    // write-back looks trackIds up by id — so a RAW id collides across
+    // frames and every frame's "polyline_1" inherits ONE trackId (ordinal
+    // position, NOT the geometric match). Scoping the id by frameIndex keeps
+    // the two frames' same-named polylines distinct end to end.
+    prismaImageFindMany.mockImplementation(async ({ select }) => {
+      if (select?.segmentationStatus) {
+        return [
+          { segmentationStatus: 'segmented' },
+          { segmentationStatus: 'segmented' },
+        ];
+      }
+      return [
+        {
+          id: 'img-0',
+          frameIndex: 0,
+          segmentation: {
+            id: 'seg-0',
+            imageId: 'img-0',
+            polygons: JSON.stringify([
+              {
+                id: 'polyline_1',
+                geometry: 'polyline',
+                points: [
+                  { x: 1, y: 1 },
+                  { x: 2, y: 2 },
+                ],
+              },
+            ]),
+          },
+        },
+        {
+          id: 'img-1',
+          frameIndex: 1,
+          segmentation: {
+            id: 'seg-1',
+            imageId: 'img-1',
+            polygons: JSON.stringify([
+              {
+                id: 'polyline_1',
+                geometry: 'polyline',
+                points: [
+                  { x: 9, y: 9 },
+                  { x: 10, y: 10 },
+                ],
+              },
+            ]),
+          },
+        },
+      ];
+    });
+
+    // ML returns DISTINCT trackIds for the two frames' same-named polylines,
+    // keyed by the frame-scoped id.
+    axiosPostMock.mockResolvedValue({
+      data: {
+        assignments: { '0::polyline_1': 'track-A', '1::polyline_1': 'track-B' },
+      },
+    });
+
+    await runTrackingForContainer('vid-collide');
+
+    // 1) The payload must send frame-scoped, non-colliding ids.
+    const postBody = axiosPostMock.mock.calls[0]?.[1] as {
+      frames: Array<{ frame: number; polylines: Array<{ id: string }> }>;
+    };
+    const sentIds = postBody.frames.flatMap(f => f.polylines.map(p => p.id));
+    expect(sentIds).toEqual(['0::polyline_1', '1::polyline_1']);
+
+    // 2) Write-back applies DISTINCT trackIds per frame (not one collapsed id).
+    const byId = new Map(
+      prismaSegmentationUpdate.mock.calls.map(c => {
+        const arg = c[0] as {
+          where: { id: string };
+          data: { polygons: string };
+        };
+        return [
+          arg.where.id,
+          (JSON.parse(arg.data.polygons)[0] as { trackId: string }).trackId,
+        ];
+      })
+    );
+    expect(byId.get('seg-0')).toBe('track-A');
+    expect(byId.get('seg-1')).toBe('track-B');
   });
 });
