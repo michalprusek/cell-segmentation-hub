@@ -68,8 +68,10 @@ export interface MTMetricsRow {
   pixelCount: number | null;
   sumIntensity: number | null;
   meanIntensity: number | null;
+  medianIntensity: number | null;
   stdIntensity: number | null;
   medianBackground: number | null;
+  meanBackground: number | null;
   signalMinusBackground: number | null;
 }
 
@@ -112,8 +114,10 @@ interface MLMTMetricsResponseRow {
   pixel_count: number;
   sum_intensity: number;
   mean_intensity: number;
+  median_intensity: number;
   std_intensity: number;
   median_background: number | null;
+  mean_background: number | null;
   signal_minus_background: number | null;
 }
 
@@ -457,8 +461,10 @@ export async function computeMTMetrics(
         pixelCount: row.pixel_count,
         sumIntensity: row.sum_intensity,
         meanIntensity: row.mean_intensity,
+        medianIntensity: row.median_intensity,
         stdIntensity: row.std_intensity,
         medianBackground: row.median_background,
+        meanBackground: row.mean_background,
         signalMinusBackground: row.signal_minus_background,
       });
     }
@@ -528,8 +534,10 @@ export function computeMTGeometry(
         pixelCount: null,
         sumIntensity: null,
         meanIntensity: null,
+        medianIntensity: null,
         stdIntensity: null,
         medianBackground: null,
+        meanBackground: null,
         signalMinusBackground: null,
       });
     }
@@ -557,8 +565,10 @@ const CSV_HEADERS: readonly (keyof MTMetricsRow)[] = [
   'pixelCount',
   'sumIntensity',
   'meanIntensity',
+  'medianIntensity',
   'stdIntensity',
   'medianBackground',
+  'meanBackground',
   'signalMinusBackground',
 ] as const;
 
