@@ -31,6 +31,7 @@ if str(SEG_ROOT) not in sys.path:
 from api.tracker_kymograph import router as tracker_kymograph_router  # noqa: E402
 from api.tracker_kymograph import (  # noqa: E402
     PolylineInput,
+    _build_link_cost,
     _emb_distance,
     _filament_cost,
     _filament_features,
@@ -389,6 +390,67 @@ def test_emb_distance_identical_is_zero_missing_is_none():
     assert _emb_distance(fa, fb) == pytest.approx(0.0, abs=1e-3)
     fc = _feat([(0, 0), (0, 8)], emb=None)
     assert _emb_distance(fa, fc) is None
+
+
+def test_build_link_cost_matches_per_cell_reference():
+    """The vectorized _build_link_cost must equal, cell-for-cell, the per-cell
+    _filament_cost with the documented median-neutral fallback for missing
+    embeddings. Locks the fast matrix build to the scalar contract so a future
+    refactor can't silently drift the tracking cost."""
+    weights = (0.5, 0.3, 0.1, 0.1)
+    img_diag = 250.0
+    prev = [
+        _feat([(0, 0), (0, 20)], emb=_embed_b64(2, seed=1)),
+        _feat([(30, 5), (30, 25)], emb=_embed_b64(2, seed=2)),
+        _feat([(60, 10), (70, 40)], emb=None),  # legitimately missing embedding
+    ]
+    nxt = [
+        _feat([(1, 0), (1, 21)], emb=_embed_b64(2, seed=3)),
+        _feat([(31, 5), (31, 24)], emb=None),  # legitimately missing embedding
+        _feat([(90, 0), (95, 30)], emb=_embed_b64(2, seed=4)),
+        _feat([(200, 200), (210, 230)], emb=_embed_b64(2, seed=5)),
+    ]
+
+    got = _build_link_cost(prev, nxt, img_diag, weights)
+
+    P, Q = len(prev), len(nxt)
+    demb = np.full((P, Q), np.nan)
+    for i in range(P):
+        for j in range(Q):
+            d = _emb_distance(prev[i], nxt[j])
+            if d is not None:
+                demb[i, j] = d
+    neutral = float(np.median(demb[~np.isnan(demb)]))
+    ref = np.array(
+        [
+            [_filament_cost(prev[i], nxt[j], img_diag, neutral, *weights) for j in range(Q)]
+            for i in range(P)
+        ]
+    )
+
+    assert got.shape == (P, Q)
+    assert not np.isnan(got).any()
+    np.testing.assert_allclose(got, ref, rtol=0, atol=1e-12)
+
+
+def test_build_link_cost_all_missing_embeddings_falls_back_to_geometry():
+    """With no embeddings anywhere, every d_emb collapses to the 0.5 neutral
+    and the matrix is finite (no NaN leak from the vectorized cosine path)."""
+    weights = (0.5, 0.3, 0.1, 0.1)
+    prev = [_feat([(0, 0), (0, 10)]), _feat([(50, 0), (50, 10)])]
+    nxt = [_feat([(1, 0), (1, 10)]), _feat([(51, 0), (51, 10)])]
+    got = _build_link_cost(prev, nxt, 100.0, weights)
+    assert not np.isnan(got).any()
+    # Aligned near-identical filament is cheaper than the far one.
+    assert got[0, 0] < got[0, 1]
+
+
+def test_build_link_cost_empty_side_returns_empty_matrix():
+    """A birth-only or death-only frame pair yields a correctly-shaped empty
+    cost matrix rather than raising in the vectorized stacking."""
+    weights = (0.5, 0.3, 0.1, 0.1)
+    assert _build_link_cost([], [_feat([(0, 0), (0, 5)])], 10.0, weights).shape == (0, 1)
+    assert _build_link_cost([_feat([(0, 0), (0, 5)])], [], 10.0, weights).shape == (1, 0)
 
 
 def test_solve_link_lap_handles_birth_and_death():

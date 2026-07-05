@@ -205,7 +205,10 @@ def _safe_mean_embedding(p: PolylineInput) -> tuple[Optional[np.ndarray], bool]:
         return None, True
     if emb is None:
         return None, False
-    return emb.mean(axis=0), False
+    # Upcast the float16-stored embedding mean to float64: cosine distances are
+    # otherwise computed in lossy float16 precision, and it lets the scalar
+    # (gap-closing) and vectorized (frame-to-frame) cost paths agree bit-for-bit.
+    return emb.mean(axis=0).astype(np.float64), False
 
 
 class _Filament(NamedTuple):
@@ -429,30 +432,75 @@ def _build_link_cost(
     if P == 0 or Q == 0:
         return np.zeros((P, Q), dtype=np.float64)
 
-    demb = np.full((P, Q), np.nan, dtype=np.float64)
-    for i in range(P):
-        for j in range(Q):
-            d = _emb_distance(prev_feats[i], nxt_feats[j])
-            if d is not None:
-                demb[i, j] = d
+    # Build the whole P×Q matrix with broadcasted numpy ops rather than a
+    # scalar double loop. The old loop called np.linalg.norm/np.clip O(P·Q)
+    # times per frame pair — ~13M norm calls on a dense 200-filament frame —
+    # and dominated tracking wall-clock (55s on a 41-frame video, tripping the
+    # caller's 60s timeout so tracking silently produced no trackIds). This is
+    # ~140× faster and numerically identical to the per-cell _filament_cost.
+    w_emb, w_end, w_orient, w_len = weights
+    diag = max(float(img_diag), 1.0)
+
+    EA_p = np.array([f.end_a for f in prev_feats], dtype=np.float64)
+    EB_p = np.array([f.end_b for f in prev_feats], dtype=np.float64)
+    EA_n = np.array([f.end_a for f in nxt_feats], dtype=np.float64)
+    EB_n = np.array([f.end_b for f in nxt_feats], dtype=np.float64)
+
+    def _pdist(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        d = a[:, None, :] - b[None, :, :]
+        return np.sqrt((d * d).sum(axis=2))
+
+    # d_end: MIN over the two head/tail endpoint pairings (direction-invariant),
+    # normalised by the image diagonal — matches _geom_terms.
+    p1 = _pdist(EA_p, EA_n) + _pdist(EB_p, EB_n)
+    p2 = _pdist(EA_p, EB_n) + _pdist(EB_p, EA_n)
+    d_end = np.clip(np.minimum(p1, p2) / (2.0 * diag), 0.0, 1.0)
+
+    # d_orient: 1 - |cos Δθ| (undirected; reversed centerline scores equally).
+    th_p = np.array([f.theta for f in prev_feats], dtype=np.float64)
+    th_n = np.array([f.theta for f in nxt_feats], dtype=np.float64)
+    d_orient = np.clip(
+        1.0 - np.abs(np.cos(th_p[:, None] - th_n[None, :])), 0.0, 1.0
+    )
+
+    # d_len: relative centerline-length mismatch.
+    L_p = np.array([f.length for f in prev_feats], dtype=np.float64)
+    L_n = np.array([f.length for f in nxt_feats], dtype=np.float64)
+    denom_len = np.maximum(np.maximum(L_p[:, None], L_n[None, :]), 1e-6)
+    d_len = np.clip(np.abs(L_p[:, None] - L_n[None, :]) / denom_len, 0.0, 1.0)
+
+    # d_emb: cosine distance between mean embeddings. A missing embedding on
+    # either side leaves a NaN row/col; those cells fall back to the median of
+    # the valid pairs (neutral), exactly as the per-cell path did.
+    emb_dim = next(
+        (
+            f.mean_emb.shape[0]
+            for f in (*prev_feats, *nxt_feats)
+            if f.mean_emb is not None
+        ),
+        0,
+    )
+    if emb_dim:
+        E_p = np.full((P, emb_dim), np.nan, dtype=np.float64)
+        E_n = np.full((Q, emb_dim), np.nan, dtype=np.float64)
+        for i, f in enumerate(prev_feats):
+            if f.mean_emb is not None:
+                E_p[i] = f.mean_emb
+        for j, f in enumerate(nxt_feats):
+            if f.mean_emb is not None:
+                E_n[j] = f.mean_emb
+        norm_p = np.linalg.norm(E_p, axis=1)
+        norm_n = np.linalg.norm(E_n, axis=1)
+        cos = (E_p @ E_n.T) / (np.outer(norm_p, norm_n) + 1e-9)
+        demb = np.clip((1.0 - cos) / 2.0, 0.0, 1.0)
+    else:
+        demb = np.full((P, Q), np.nan, dtype=np.float64)
+
     valid = ~np.isnan(demb)
     neutral = float(np.median(demb[valid])) if valid.any() else 0.5
+    d_emb = np.where(valid, demb, neutral)
 
-    w_emb, w_end, w_orient, w_len = weights
-    base = np.zeros((P, Q), dtype=np.float64)
-    for i in range(P):
-        for j in range(Q):
-            base[i, j] = _filament_cost(
-                prev_feats[i],
-                nxt_feats[j],
-                img_diag,
-                neutral,
-                w_emb,
-                w_end,
-                w_orient,
-                w_len,
-            )
-    return base
+    return w_emb * d_emb + w_end * d_end + w_orient * d_orient + w_len * d_len
 
 
 def _solve_link_lap(

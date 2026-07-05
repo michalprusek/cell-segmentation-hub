@@ -203,7 +203,12 @@ async function _runTrackingForContainerInner(
   const mlUrl = `${config.SEGMENTATION_SERVICE_URL}/api/v1/track`;
   let assignments: Record<string, string> = {};
   try {
-    const res = await axios.post(mlUrl, trackPayload, { timeout: 60_000 });
+    // Defense-in-depth: the vectorized tracker handles a dense 41-frame video
+    // in ~3s, but a very long or unusually dense container can still take
+    // longer. The old 60s ceiling silently dropped a legitimately-slow track
+    // pass (leaving the container with zero trackIds and no retry), so give it
+    // a generous margin — this call is fire-and-forget, nothing waits on it.
+    const res = await axios.post(mlUrl, trackPayload, { timeout: 300_000 });
     const payload = res.data?.data ?? res.data ?? {};
     assignments = payload.assignments ?? {};
   } catch (err) {
