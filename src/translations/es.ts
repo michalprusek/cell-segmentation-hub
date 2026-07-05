@@ -240,8 +240,6 @@ export default {
       '{{count}} imágenes añadidas a la cola de segmentación',
     imageQueuedForResegmentation:
       'Imagen añadida a la cola para re-segmentación',
-    allImagesAlreadySegmented:
-      'Todas las imágenes ya están segmentadas o en cola',
     errorAddingToQueue: 'Error al añadir imágenes a la cola',
     imageAlreadyProcessing: 'La imagen ya está siendo procesada',
     processImageFailed: 'Error al procesar la imagen',
@@ -1015,9 +1013,10 @@ export default {
     disconnected: 'Desconectado',
     waiting: 'esperando',
     processing: 'procesando',
-    segmentAll: 'Segmentar Todo',
-    segmentAllWithCount: 'Segmentar Todo ({{count}})',
     resegmentSelected: 'Re-segmentar Seleccionadas ({{count}})',
+    segmentSelected: 'Segmentar Seleccionadas',
+    segmentSelectedWithCount: 'Segmentar Seleccionadas ({{count}})',
+    selectNothingTooltip: 'Seleccione imágenes para segmentar',
     segmentMixed:
       'Segmentar {{new}} + Re-segmentar {{resegment}} ({{total}} total)',
     segmentTooltip:
@@ -2281,5 +2280,37 @@ export default {
     duplicateName: 'Ya existe una carpeta con este nombre aquí',
     cannotMoveIntoSelf:
       'Una carpeta no se puede mover dentro de sí misma o de su propia subcarpeta',
+  },
+  automatedEssays: {
+    navLabel: 'Ensayos automatizados',
+    title: 'Ensayos automatizados',
+    subtitle:
+      'Sube una carpeta de grabaciones de pocillos .nd2 para medir la longitud y la intensidad de los microtúbulos en cada pocillo.',
+    dragFolder: 'Arrastra aquí una carpeta de pocillos .nd2',
+    dropHere: 'Suelta la carpeta para añadirla',
+    selectFolder: 'Seleccionar carpeta',
+    onlyNd2: 'Solo se procesan grabaciones de pocillos .nd2.',
+    filesSelected: '{{count}} archivo(s) .nd2 seleccionados',
+    clear: 'Limpiar',
+    uploadAndProcess: 'Subir y procesar',
+    uploading: 'Subiendo… {{percent}} %',
+    jobStarted: 'Subida completa: procesamiento iniciado',
+    uploadFailed: 'Error al subir',
+    downloadFailed: 'No se pudo iniciar la descarga',
+    yourRuns: 'Tus ejecuciones',
+    noRuns: 'Aún no hay ejecuciones. Sube una carpeta para empezar.',
+    fileCount: '{{count}} archivo(s)',
+    mtCount: '{{count}} microtúbulos',
+    download: 'Descargar',
+    delete: 'Eliminar',
+    deleteFailed: 'No se pudo eliminar la ejecución',
+    noNd2Found: 'No se encontraron grabaciones .nd2 en esa carpeta',
+    someIgnored: 'Usando {{kept}} de {{total}} archivos (solo se procesa .nd2)',
+    status: {
+      queued: 'En cola',
+      running: 'Procesando',
+      completed: 'Completado',
+      failed: 'Fallido',
+    },
   },
 };

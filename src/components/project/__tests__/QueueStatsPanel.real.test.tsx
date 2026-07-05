@@ -12,7 +12,8 @@
  *  - "Connecting to server..." warning when disconnected
  *  - Settings button rendered only when onOpenSettings provided
  *  - Segment button disabled when: not connected, totalToProcess === 0, batchSubmitted
- *  - Segment button label variants (segmentAll / segmentAllWithCount / resegmentSelected / segmentMixed)
+ *  - Segment button label variants, all driven by the SELECTION:
+ *      segmentSelected / segmentSelectedWithCount / resegmentSelected / segmentMixed
  *  - "Adding to queue..." shown when batchSubmitted
  *  - onSegmentAll callback fires on click
  *  - onOpenSettings callback fires on click
@@ -73,11 +74,17 @@ function makeStats(overrides: Partial<QueueStats> = {}): QueueStats {
   };
 }
 
+// Default: one selected, unsegmented image → button enabled, "Segment Selected (1)".
+const oneSelectedPending = [
+  { id: 'img-1', segmentationStatus: 'pending' },
+] as any[];
+
 const DEFAULT_PROPS = {
   stats: makeStats(),
   isConnected: true,
   onSegmentAll: vi.fn(),
-  imagesToSegmentCount: 1,
+  images: oneSelectedPending,
+  selectedImageIds: new Set(['img-1']),
 };
 
 describe('QueueStatsPanel (real component)', () => {
@@ -157,38 +164,46 @@ describe('QueueStatsPanel (real component)', () => {
     });
   });
 
-  // ── button label variants ──────────────────────────────────────────────────
+  // ── button label variants (all driven by the selection) ──────────────────────
 
   describe('button label', () => {
-    it('shows "Segment All" when imagesToSegmentCount is 0 and no selection', () => {
+    it('shows static "Segment Selected" when nothing is selected', () => {
       render(
         <QueueStatsPanel
           {...DEFAULT_PROPS}
-          imagesToSegmentCount={0}
           images={[]}
           selectedImageIds={new Set()}
         />
       );
-      expect(screen.getByText('Segment All')).toBeInTheDocument();
+      expect(screen.getByText('Segment Selected')).toBeInTheDocument();
     });
 
-    it('shows count label when imagesToSegmentCount > 0', () => {
-      render(<QueueStatsPanel {...DEFAULT_PROPS} imagesToSegmentCount={5} />);
-      // translation: 'Segment All ({{count}})' → 'Segment All (5)'
-      expect(screen.getByText(/segment all \(5\)/i)).toBeInTheDocument();
-    });
-
-    it('shows re-segment label when selected images already have segmentation', () => {
+    it('shows count label when unsegmented images are selected', () => {
       const images = [
-        {
-          id: 'img-1',
-          segmentationStatus: 'segmented' as const,
-        },
+        { id: 'a', segmentationStatus: 'pending' },
+        { id: 'b', segmentationStatus: 'pending' },
+        { id: 'c', segmentationStatus: 'no_segmentation' },
+        { id: 'd', segmentationStatus: 'failed' },
+        { id: 'e', segmentationStatus: 'pending' },
       ] as any[];
       render(
         <QueueStatsPanel
           {...DEFAULT_PROPS}
-          imagesToSegmentCount={0}
+          images={images}
+          selectedImageIds={new Set(['a', 'b', 'c', 'd', 'e'])}
+        />
+      );
+      // translation: 'Segment Selected ({{count}})' → 'Segment Selected (5)'
+      expect(screen.getByText(/segment selected \(5\)/i)).toBeInTheDocument();
+    });
+
+    it('shows re-segment label when selected images already have segmentation', () => {
+      const images = [
+        { id: 'img-1', segmentationStatus: 'segmented' },
+      ] as any[];
+      render(
+        <QueueStatsPanel
+          {...DEFAULT_PROPS}
           images={images}
           selectedImageIds={new Set(['img-1'])}
         />
@@ -196,29 +211,25 @@ describe('QueueStatsPanel (real component)', () => {
       expect(screen.getByText(/re-segment selected/i)).toBeInTheDocument();
     });
 
-    it('shows mixed label when there are both new and re-segment items', () => {
+    it('shows mixed label when both new and re-segment items are selected', () => {
       const images = [
-        { id: 'img-1', segmentationStatus: 'segmented' as const },
+        { id: 'a', segmentationStatus: 'pending' },
+        { id: 'b', segmentationStatus: 'pending' },
+        { id: 'c', segmentationStatus: 'pending' },
+        { id: 'd', segmentationStatus: 'segmented' },
       ] as any[];
       render(
         <QueueStatsPanel
           {...DEFAULT_PROPS}
-          imagesToSegmentCount={3}
           images={images}
-          selectedImageIds={new Set(['img-1'])}
+          selectedImageIds={new Set(['a', 'b', 'c', 'd'])}
         />
       );
       expect(screen.getByText(/segment 3.*re-segment 1/i)).toBeInTheDocument();
     });
 
     it('shows "Adding to queue..." when batchSubmitted is true', () => {
-      render(
-        <QueueStatsPanel
-          {...DEFAULT_PROPS}
-          batchSubmitted={true}
-          imagesToSegmentCount={2}
-        />
-      );
+      render(<QueueStatsPanel {...DEFAULT_PROPS} batchSubmitted={true} />);
       expect(screen.getByText(/adding to queue/i)).toBeInTheDocument();
     });
   });
@@ -227,23 +238,16 @@ describe('QueueStatsPanel (real component)', () => {
 
   describe('segment button disabled states', () => {
     it('is disabled when not connected', () => {
-      render(
-        <QueueStatsPanel
-          {...DEFAULT_PROPS}
-          isConnected={false}
-          imagesToSegmentCount={3}
-        />
-      );
+      render(<QueueStatsPanel {...DEFAULT_PROPS} isConnected={false} />);
       // Without onCancelSegmentation the plain Button is rendered
       const btn = screen.getByRole('button', { name: /segment/i });
       expect(btn).toBeDisabled();
     });
 
-    it('is disabled when totalToProcess is 0', () => {
+    it('is disabled when nothing processable is selected', () => {
       render(
         <QueueStatsPanel
           {...DEFAULT_PROPS}
-          imagesToSegmentCount={0}
           images={[]}
           selectedImageIds={new Set()}
         />
@@ -253,25 +257,13 @@ describe('QueueStatsPanel (real component)', () => {
     });
 
     it('is disabled when batchSubmitted is true', () => {
-      render(
-        <QueueStatsPanel
-          {...DEFAULT_PROPS}
-          batchSubmitted={true}
-          imagesToSegmentCount={2}
-        />
-      );
+      render(<QueueStatsPanel {...DEFAULT_PROPS} batchSubmitted={true} />);
       const btn = screen.getByRole('button', { name: /adding to queue/i });
       expect(btn).toBeDisabled();
     });
 
-    it('is enabled when connected and there are images to process', () => {
-      render(
-        <QueueStatsPanel
-          {...DEFAULT_PROPS}
-          isConnected={true}
-          imagesToSegmentCount={2}
-        />
-      );
+    it('is enabled when connected and images are selected', () => {
+      render(<QueueStatsPanel {...DEFAULT_PROPS} isConnected={true} />);
       const btn = screen.getByRole('button', { name: /segment/i });
       expect(btn).not.toBeDisabled();
     });
@@ -284,11 +276,7 @@ describe('QueueStatsPanel (real component)', () => {
       const onSegmentAll = vi.fn();
       const user = userEvent.setup();
       render(
-        <QueueStatsPanel
-          {...DEFAULT_PROPS}
-          onSegmentAll={onSegmentAll}
-          imagesToSegmentCount={1}
-        />
+        <QueueStatsPanel {...DEFAULT_PROPS} onSegmentAll={onSegmentAll} />
       );
       await user.click(screen.getByRole('button', { name: /segment/i }));
       expect(onSegmentAll).toHaveBeenCalledOnce();
@@ -303,7 +291,6 @@ describe('QueueStatsPanel (real component)', () => {
           {...DEFAULT_PROPS}
           onSegmentAll={onSegmentAll}
           onCancelSegmentation={onCancelSegmentation}
-          imagesToSegmentCount={1}
         />
       );
       await user.click(screen.getByTestId('universal-cancel-btn'));
