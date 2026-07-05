@@ -16,6 +16,8 @@ interface UniversalCancelButtonProps {
   cancelText?: string;
   disabled?: boolean;
   className?: string;
+  /** Native tooltip for the primary action button (e.g. why it is disabled). */
+  title?: string;
   size?: 'sm' | 'default' | 'lg';
   variant?:
     | 'default'
@@ -40,6 +42,7 @@ export const UniversalCancelButton: React.FC<UniversalCancelButtonProps> = ({
   cancelText,
   disabled = false,
   className,
+  title,
   size = 'default',
   variant = 'default',
 }) => {
@@ -110,6 +113,7 @@ export const UniversalCancelButton: React.FC<UniversalCancelButtonProps> = ({
     <Button
       onClick={onPrimaryAction}
       disabled={disabled}
+      title={title}
       className={cn(
         'gap-2 transition-all',
         // Primary button styling based on operation type

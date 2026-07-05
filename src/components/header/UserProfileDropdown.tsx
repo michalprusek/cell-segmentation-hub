@@ -5,6 +5,7 @@ import {
   Settings as SettingsIcon,
   LogOut,
   LayoutDashboard,
+  FlaskConical,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -83,6 +84,13 @@ const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
         >
           <LayoutDashboard className="mr-2 h-4 w-4" />
           <span>{t('common.dashboard')}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => navigate('/automated-essays')}
+          className="dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          <FlaskConical className="mr-2 h-4 w-4" />
+          <span>{t('automatedEssays.navLabel')}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator className="dark:bg-gray-700" />
         <DropdownMenuItem

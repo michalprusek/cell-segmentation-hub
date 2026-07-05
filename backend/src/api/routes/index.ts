@@ -19,6 +19,7 @@ import userRoutes from './userRoutes';
 import healthRoutes from './healthRoutes';
 import feedbackRoutes from './feedbackRoutes';
 import projectFolderRoutes from './projectFolderRoutes';
+import { essaysRoutes } from './essaysRoutes';
 
 interface RouteInfo {
   path: string;
@@ -73,6 +74,10 @@ export function setupRoutes(app: Express): void {
   // project router's blanket auth.
   app.use('/api', exportRoutes); // Export routes
   app.use('/api', sharingRoutes); // Sharing routes
+  // Automated Essays (batch MT assay). Registered here (before the blanket-auth
+  // project routers) so its download route's optionalJwtAuth ?token= path is
+  // reached first, matching the export-download precedent above.
+  app.use('/api', essaysRoutes);
   app.use('/api/projects', projectRoutes);
   app.use('/api/projects', imageRoutes);
   app.use('/api/images', imageRoutes); // Direct image routes
@@ -389,6 +394,26 @@ function registerKnownRoutes(): void {
     path: '/api-docs/postman.json',
     method: 'GET',
     description: 'Postman kolekce',
+    authenticated: false,
+  });
+
+  // Automated Essays (batch microtubule assay)
+  registerRoute({
+    path: '/api/essays/upload',
+    method: 'POST',
+    description: 'Nahrání složky .nd2 a spuštění analýzy mikrotubulů',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/essays/jobs',
+    method: 'GET',
+    description: 'Historie úloh Automated Essays',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/essays/jobs/:jobId/download',
+    method: 'GET',
+    description: 'Stažení výsledků analýzy (token nebo cookie)',
     authenticated: false,
   });
 }

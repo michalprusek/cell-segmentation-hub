@@ -240,8 +240,6 @@ export default {
     imagesQueuedForSegmentation:
       '{{count}} obrázků přidáno do fronty pro segmentaci',
     imageQueuedForResegmentation: 'Obrázek přidán do fronty pro re-segmentaci',
-    allImagesAlreadySegmented:
-      'Všechny obrázky jsou již segmentovány nebo ve frontě',
     errorAddingToQueue: 'Chyba při přidávání obrázků do fronty',
     imageAlreadyProcessing: 'Obrázek je již zpracováván',
     processImageFailed: 'Nepodařilo se zpracovat obrázek',
@@ -1007,9 +1005,10 @@ export default {
     disconnected: 'Odpojeno',
     waiting: 'čeká',
     processing: 'zpracovává se',
-    segmentAll: 'Segmentovat vše',
-    segmentAllWithCount: 'Segmentovat vše ({{count}})',
     resegmentSelected: 'Znovu segmentovat vybrané ({{count}})',
+    segmentSelected: 'Segmentovat vybrané',
+    segmentSelectedWithCount: 'Segmentovat vybrané ({{count}})',
+    selectNothingTooltip: 'Vyberte obrázky k segmentaci',
     segmentMixed:
       'Segmentovat {{new}} + Znovu {{resegment}} (celkem {{total}})',
     segmentTooltip:
@@ -1126,6 +1125,7 @@ export default {
     // Multi-channel canvas actions
     multiChannel: {
       allChannelsFailed: 'Nepodařilo se načíst kanály obrázku',
+      someChannelsFailed: 'Některé kanály obrázku se nepodařilo načíst',
     },
     upload: {
       failed: 'Nepodařilo se obnovit obrázky po nahrání',
@@ -2249,5 +2249,38 @@ export default {
       'Smazáno {{deleted}} projektů; {{failed}} selhalo. Složka zůstala; zkuste znovu.',
     duplicateName: 'Složka se stejným názvem zde už existuje',
     cannotMoveIntoSelf: 'Složku nelze přesunout do sebe nebo do své podsložky',
+  },
+  automatedEssays: {
+    navLabel: 'Automatické eseje',
+    title: 'Automatické eseje',
+    subtitle:
+      'Nahrajte složku se záznamy jamek ve formátu .nd2 pro měření délky a intenzity mikrotubulů v každé jamce.',
+    dragFolder: 'Přetáhněte sem složku se soubory .nd2',
+    dropHere: 'Pusťte složku pro přidání',
+    selectFolder: 'Vybrat složku',
+    onlyNd2: 'Zpracovávají se pouze záznamy jamek .nd2.',
+    filesSelected: 'Vybráno {{count}} souborů .nd2',
+    clear: 'Vymazat',
+    uploadAndProcess: 'Nahrát a zpracovat',
+    uploading: 'Nahrávání… {{percent}} %',
+    jobStarted: 'Nahrávání dokončeno — zpracování zahájeno',
+    uploadFailed: 'Nahrávání selhalo',
+    downloadFailed: 'Stahování se nepodařilo spustit',
+    yourRuns: 'Vaše úlohy',
+    noRuns: 'Zatím žádné úlohy. Začněte nahráním složky.',
+    fileCount: '{{count}} souborů',
+    mtCount: '{{count}} mikrotubulů',
+    download: 'Stáhnout',
+    delete: 'Smazat',
+    deleteFailed: 'Úlohu se nepodařilo smazat',
+    noNd2Found: 'V dané složce nebyly nalezeny žádné záznamy .nd2',
+    someIgnored:
+      'Použije se {{kept}} z {{total}} souborů (zpracují se jen .nd2)',
+    status: {
+      queued: 'Ve frontě',
+      running: 'Zpracovává se',
+      completed: 'Dokončeno',
+      failed: 'Selhalo',
+    },
   },
 };

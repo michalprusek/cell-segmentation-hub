@@ -4,10 +4,11 @@
  * Holds the currently-selected channel, the active video frame index,
  * the min/max window-level cutoffs (ImageJ-style LUT remap), and the
  * brightness/contrast values applied via a CSS filter on the rendered
- * canvas. None of it is persisted across reloads — but within one
- * session all four display sliders **persist across frame and channel
- * changes** so the user can scrub a 300-frame video without losing
- * their adjustments every frame.
+ * canvas. None of it is persisted across reloads. Brightness/Contrast
+ * persist across both frame and channel changes; the Min/Max window
+ * persists across frame scrubs (so scrubbing a 300-frame video keeps the
+ * user's adjustment) but auto-refits to the new data range whenever the
+ * visible-channel set or video changes, ImageJ-style.
  */
 
 import {
@@ -17,8 +18,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
+import { logger } from '@/lib/logger';
 
 interface ImageDisplayState {
   /** Active video frame (0-based). Undefined for non-video images. */
@@ -38,10 +41,21 @@ interface ImageDisplayState {
   /** Per-channel opacity 0..100 (% of channel intensity contributed to
    *  the additive overlay). Missing entry = 100 (full intensity). */
   channelOpacities: Record<string, number>;
-  /** Lower window cutoff (0..255) — pixels below this are mapped to 0. */
+  /** Lower window cutoff (0..windowRangeMax) — pixels at/below this map to
+   *  black. Same units as the source samples: 0..255 for 8-bit, 0..65535
+   *  for 16-bit microscopy frames. */
   windowMin: number;
-  /** Upper window cutoff (0..255) — pixels above this are mapped to 255. */
+  /** Upper window cutoff (0..windowRangeMax) — pixels at/above this map to
+   *  white. */
   windowMax: number;
+  /** Slider/clamp upper bound = the brightest sample value of the current
+   *  channel set. 255 until a frame reports its true range (8-bit default,
+   *  and standalone <img> images that never decode). ImageJ-style: opening
+   *  a 16-bit frame rescales this to the data's max. */
+  windowRangeMax: number;
+  /** Dimmest sample value of the current channel set — the auto-scaled
+   *  window floor and the Reset target. */
+  dataMin: number;
   /** Brightness as a percentage (0..200, 100 = unchanged). Applied via
    *  CSS `filter: brightness(b/100)` on the rendered image. */
   brightness: number;
@@ -59,16 +73,29 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   /** Replace the full visible-channel list (used when initialising from
    *  container metadata). */
   setVisibleChannels: (channels: string[]) => void;
-  /** Set the display colour (hex `#RRGGBB`) for a single channel. */
+  /** Set the display colour (hex `#RRGGBB`) for a single channel. Marks the
+   *  channel as user-edited so a persisted pref cannot later overwrite it. */
   setChannelColor: (channel: string, color: string) => void;
+  /** Seed default colours (from container metadata) for channels that have no
+   *  colour yet. Unlike {@link setChannelColor} this does NOT mark the channel
+   *  as a user edit, so a saved custom colour still wins during the userId
+   *  re-hydrate merge even when seeding raced ahead of auth resolving. */
+  seedChannelColors: (defaults: Record<string, string>) => void;
   /** Set per-channel opacity (0..100). Clamped at write. */
   setChannelOpacity: (channel: string, opacity: number) => void;
   setWindow: (min: number, max: number) => void;
   setWindowMin: (min: number) => void;
   setWindowMax: (max: number) => void;
+  /** Called by the canvas once it has decoded a frame's true sample range.
+   *  `key` fingerprints the video container + channel set; a new key auto-fits
+   *  the window to [min, max] (ImageJ default), while frame scrubs within the
+   *  same key keep the user's window but still widen the clamp ceiling/floor so
+   *  a brighter/dimmer later frame stays reachable. */
+  reportDataRange: (min: number, max: number, key: string) => void;
   setBrightness: (brightness: number) => void;
   setContrast: (contrast: number) => void;
-  /** Reset window/level back to identity (0..255). */
+  /** Reset window/level back to the auto-scaled data range (ImageJ-style
+   *  full-data view), or 0..255 before any frame has reported a range. */
   resetWindow: () => void;
   /** Reset brightness/contrast back to 100/100. */
   resetBrightnessContrast: () => void;
@@ -84,6 +111,8 @@ const DEFAULT_STATE: ImageDisplayState = {
   channelOpacities: {},
   windowMin: 0,
   windowMax: 255,
+  windowRangeMax: 255,
+  dataMin: 0,
   brightness: 100,
   contrast: 100,
 };
@@ -99,7 +128,8 @@ const DEFAULT_STATE: ImageDisplayState = {
 export const ImageDisplayContext =
   createContext<ImageDisplayContextValue | null>(null);
 
-const clampWindow = (n: number) => Math.max(0, Math.min(255, n));
+const clampWindow = (n: number, maxv: number) =>
+  Math.max(0, Math.min(maxv, Math.round(n)));
 const clampPercent = (n: number) => Math.max(0, Math.min(200, n));
 const clampOpacity = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
@@ -117,8 +147,15 @@ function loadColorPrefs(userId: string | undefined): Record<string, string> {
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return {};
-    return parsed as Record<string, string>;
-  } catch {
+    // Validate values are strings (mirrors loadOpacityPrefs), so corrupt
+    // entries can't reach hexToRgb and silently degrade to white.
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'string') clean[k] = v;
+    }
+    return clean;
+  } catch (err) {
+    logger.debug('loadColorPrefs: dropping corrupt channelColors prefs', err);
     return {};
   }
 }
@@ -136,7 +173,11 @@ function loadOpacityPrefs(userId: string | undefined): Record<string, number> {
         clean[k] = clampOpacity(v);
     }
     return clean;
-  } catch {
+  } catch (err) {
+    logger.debug(
+      'loadOpacityPrefs: dropping corrupt channelOpacities prefs',
+      err
+    );
     return {};
   }
 }
@@ -162,16 +203,27 @@ export function ImageDisplayProvider({
     channelOpacities: loadOpacityPrefs(userId),
   }));
 
-  // Re-hydrate when userId becomes available (auth init races the
-  // first ImageDisplayProvider mount on cold loads). Keep any session
-  // edits made before auth landed — they take precedence over the
-  // persisted value.
+  // Channels whose colour the user explicitly changed this session (via the
+  // colour picker → setChannelColor). Only these override a persisted pref in
+  // the re-hydrate merge below — a metadata-seeded default must NOT, or it
+  // would clobber a saved custom colour whenever the seed effect wins the race
+  // against auth resolving `userId`.
+  const userEditedColorsRef = useRef<Set<string>>(new Set());
+
+  // Re-hydrate when userId becomes available (auth init races the first
+  // ImageDisplayProvider mount on cold loads). Precedence: a genuine session
+  // user-edit > the persisted pref > a metadata-seeded default. Starting from
+  // the current colours and overlaying persisted only for channels the user
+  // has NOT edited gives that ordering regardless of whether the seed effect
+  // or auth resolved first.
   useEffect(() => {
     if (!userId) return;
     setState(s => {
       const persistedColors = loadColorPrefs(userId);
-      const mergedColors: Record<string, string> = { ...persistedColors };
-      for (const [k, v] of Object.entries(s.channelColors)) mergedColors[k] = v;
+      const mergedColors: Record<string, string> = { ...s.channelColors };
+      for (const [k, v] of Object.entries(persistedColors)) {
+        if (!userEditedColorsRef.current.has(k)) mergedColors[k] = v;
+      }
       const persistedOpacities = loadOpacityPrefs(userId);
       const mergedOpacities: Record<string, number> = { ...persistedOpacities };
       for (const [k, v] of Object.entries(s.channelOpacities))
@@ -193,8 +245,10 @@ export function ImageDisplayProvider({
         COLOR_PREFS_KEY_PREFIX + userId,
         JSON.stringify(state.channelColors)
       );
-    } catch {
-      /* storage unavailable — silently degrade */
+    } catch (err) {
+      // Best-effort UX pref (Safari private mode / quota); log for the
+      // "my colours keep resetting" case but don't disrupt rendering.
+      logger.debug('Persisting channelColors failed', err);
     }
   }, [userId, state.channelColors]);
 
@@ -205,8 +259,8 @@ export function ImageDisplayProvider({
         OPACITY_PREFS_KEY_PREFIX + userId,
         JSON.stringify(state.channelOpacities)
       );
-    } catch {
-      /* storage unavailable — silently degrade */
+    } catch (err) {
+      logger.debug('Persisting channelOpacities failed', err);
     }
   }, [userId, state.channelOpacities]);
 
@@ -238,10 +292,25 @@ export function ImageDisplayProvider({
   }, []);
 
   const setChannelColor = useCallback((channel: string, color: string) => {
+    userEditedColorsRef.current.add(channel);
     setState(s => ({
       ...s,
       channelColors: { ...s.channelColors, [channel]: color },
     }));
+  }, []);
+
+  const seedChannelColors = useCallback((defaults: Record<string, string>) => {
+    setState(s => {
+      const next = { ...s.channelColors };
+      let changed = false;
+      for (const [channel, color] of Object.entries(defaults)) {
+        if (next[channel] == null) {
+          next[channel] = color;
+          changed = true;
+        }
+      }
+      return changed ? { ...s, channelColors: next } : s;
+    });
   }, []);
 
   const setChannelOpacity = useCallback((channel: string, opacity: number) => {
@@ -257,24 +326,62 @@ export function ImageDisplayProvider({
   const setWindow = useCallback((min: number, max: number) => {
     setState(s => ({
       ...s,
-      windowMin: clampWindow(min),
-      windowMax: clampWindow(max),
+      windowMin: clampWindow(min, s.windowRangeMax),
+      windowMax: clampWindow(max, s.windowRangeMax),
     }));
   }, []);
 
   const setWindowMin = useCallback((min: number) => {
     setState(s => ({
       ...s,
-      windowMin: clampWindow(Math.min(min, s.windowMax)),
+      windowMin: clampWindow(Math.min(min, s.windowMax), s.windowRangeMax),
     }));
   }, []);
 
   const setWindowMax = useCallback((max: number) => {
     setState(s => ({
       ...s,
-      windowMax: clampWindow(Math.max(max, s.windowMin)),
+      windowMax: clampWindow(Math.max(max, s.windowMin), s.windowRangeMax),
     }));
   }, []);
+
+  // Called by the multi-channel canvas after it decodes a frame's true
+  // 16-bit samples. `key` fingerprints the video container + channel set
+  // (`<containerId>::<channelsKey>`), so:
+  //   - a NEW key (different video or channel mix) auto-fits the window to
+  //     the data, ImageJ's "open a 16-bit image" behaviour;
+  //   - the SAME key (scrubbing frames within one video+channel set) keeps
+  //     the user's window position, but still WIDENS the clamp ceiling/floor
+  //     to encompass a brighter/dimmer later frame — otherwise a stale LUT
+  //     would clip a later frame's bright signal to white and the Max slider
+  //     couldn't reach it.
+  const lastRangeKeyRef = useRef<string | null>(null);
+  const reportDataRange = useCallback(
+    (min: number, max: number, key: string) => {
+      const hi = Math.max(1, Math.round(max));
+      const lo = Math.max(0, Math.min(Math.round(min), hi));
+      const isNewKey = lastRangeKeyRef.current !== key;
+      lastRangeKeyRef.current = key;
+      setState(s => {
+        if (isNewKey) {
+          return {
+            ...s,
+            dataMin: lo,
+            windowRangeMax: hi,
+            windowMin: lo,
+            windowMax: hi,
+          };
+        }
+        const nextRangeMax = Math.max(s.windowRangeMax, hi);
+        const nextDataMin = Math.min(s.dataMin, lo);
+        if (nextRangeMax === s.windowRangeMax && nextDataMin === s.dataMin) {
+          return s;
+        }
+        return { ...s, dataMin: nextDataMin, windowRangeMax: nextRangeMax };
+      });
+    },
+    []
+  );
 
   const setBrightness = useCallback((brightness: number) => {
     setState(s => ({ ...s, brightness: clampPercent(brightness) }));
@@ -285,7 +392,11 @@ export function ImageDisplayProvider({
   }, []);
 
   const resetWindow = useCallback(() => {
-    setState(s => ({ ...s, windowMin: 0, windowMax: 255 }));
+    setState(s => ({
+      ...s,
+      windowMin: s.dataMin,
+      windowMax: s.windowRangeMax,
+    }));
   }, []);
 
   const resetBrightnessContrast = useCallback(() => {
@@ -295,8 +406,8 @@ export function ImageDisplayProvider({
   const resetDisplay = useCallback(() => {
     setState(s => ({
       ...s,
-      windowMin: 0,
-      windowMax: 255,
+      windowMin: s.dataMin,
+      windowMax: s.windowRangeMax,
       brightness: 100,
       contrast: 100,
     }));
@@ -310,10 +421,12 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelColor,
+      seedChannelColors,
       setChannelOpacity,
       setWindow,
       setWindowMin,
       setWindowMax,
+      reportDataRange,
       setBrightness,
       setContrast,
       resetWindow,
@@ -327,10 +440,12 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelColor,
+      seedChannelColors,
       setChannelOpacity,
       setWindow,
       setWindowMin,
       setWindowMax,
+      reportDataRange,
       setBrightness,
       setContrast,
       resetWindow,
@@ -355,43 +470,4 @@ export function useImageDisplay(): ImageDisplayContextValue {
     );
   }
   return ctx;
-}
-
-/** Apply a min/max window-level LUT to a source HTMLImageElement and
- *  draw it into the supplied canvas. ``min === 0 && max === 255`` is a
- *  no-op identity transform — callers may shortcut on that. */
-// eslint-disable-next-line react-refresh/only-export-components
-export function applyWindowLevel(
-  canvas: HTMLCanvasElement,
-  src: HTMLImageElement | HTMLCanvasElement,
-  min: number,
-  max: number
-): void {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  // Cover the case where ``src`` has not finished decoding yet.
-  const width = (src as HTMLImageElement).naturalWidth ?? src.width;
-  const height = (src as HTMLImageElement).naturalHeight ?? src.height;
-  if (width === 0 || height === 0) return;
-  canvas.width = width;
-  canvas.height = height;
-  ctx.drawImage(src, 0, 0, width, height);
-  if (min <= 0 && max >= 255) return; // identity — skip the pixel loop
-  const data = ctx.getImageData(0, 0, width, height);
-  const lut = new Uint8ClampedArray(256);
-  const safeMin = Math.min(min, max);
-  const safeMax = Math.max(min, max);
-  const range = Math.max(1, safeMax - safeMin);
-  for (let i = 0; i < 256; i++) {
-    if (i < safeMin) lut[i] = 0;
-    else if (i > safeMax) lut[i] = 255;
-    else lut[i] = Math.round(((i - safeMin) * 255) / range);
-  }
-  const buf = data.data;
-  for (let p = 0; p < buf.length; p += 4) {
-    buf[p] = lut[buf[p]];
-    buf[p + 1] = lut[buf[p + 1]];
-    buf[p + 2] = lut[buf[p + 2]];
-  }
-  ctx.putImageData(data, 0, 0);
 }

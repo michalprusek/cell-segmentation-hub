@@ -44,16 +44,21 @@ segmentation-models-pytorch==0.5.0
 
 # Microtubule v7 dependencies (DINOv3 ViT-L/16 backbone via HuggingFace)
 # transformers 4.57+ is required to recognise the DINOv3 model config. Pinned to
-# 4.57.6 (not 4.57.0, which PyPI YANKED for a setup/install defect) — a bugfix
-# patch within the same 4.57 line that introduced DINOv3, so DINOv3 support is
-# preserved. Note: the arbitrary-code-exec advisory is only fixed in the 5.0
-# pre-release; staying on 4.57.x is a deliberate tradeoff (5.0 risks DINOv3
-# loading across SegFormer/Microtubule/Sperm — see the deferred ML-stack scope).
-# DINOv3 is gated — HF_TOKEN must be set before first load. tifffile is used
-# by both the model's percentile normalisation reference and the video
-# extractor (multi-page TIFF microscopy stacks). nd2 reads Nikon NIS-Elements
-# proprietary files (Apache-2.0, pure Python).
-transformers==4.57.6
+# 4.57.1 — the LAST version whose DINOv3-ViT-L forward output matches the v7
+# checkpoint. 4.57.2 silently changed the DINOv3 forward (no error, no failed
+# load): the ViT features degrade into low-frequency blobs, so the seed map
+# fills ~50% of the frame and PySOAX emits random microtubules. Verified by
+# bisection on a reference frame (4.57.0/.1 → 303 MTs tracing real filaments;
+# 4.57.2–4.57.6 → 76 scattered). 4.57.0 also worked but PyPI YANKED it for a
+# setup/install defect, so 4.57.1 is the safe floor. DO NOT bump into 4.57.2+
+# or 5.x without re-verifying MT output against a known-good frame — a green
+# build proves nothing here. The arbitrary-code-exec advisory is unfixed across
+# all of 4.57.x (only patched in the 5.0 pre-release), so this pin forfeits no
+# security fix that 4.57.6 had. DINOv3 is gated — HF_TOKEN must be set before
+# first load. tifffile is used by both the model's percentile normalisation
+# reference and the video extractor (multi-page TIFF microscopy stacks). nd2
+# reads Nikon NIS-Elements proprietary files (Apache-2.0, pure Python).
+transformers==4.57.1
 tifffile>=2024.1.30
 nd2>=0.10.0
 huggingface_hub>=0.20

@@ -241,8 +241,6 @@ export default {
       '{{count}} images ajoutées à la file de segmentation',
     imageQueuedForResegmentation:
       'Image ajoutée à la file pour re-segmentation',
-    allImagesAlreadySegmented:
-      'Toutes les images sont déjà segmentées ou en file',
     errorAddingToQueue: "Erreur lors de l'ajout à la file",
     imageAlreadyProcessing: "L'image est déjà en cours de traitement",
     processImageFailed: "Échec du traitement de l'image",
@@ -1018,8 +1016,6 @@ export default {
     disconnected: 'Déconnecté',
     waiting: 'en attente',
     processing: 'traitement en cours',
-    segmentAll: 'Segmenter Tout',
-    segmentAllWithCount: 'Segmenter Tout ({{count}})',
     totalProgress: 'Progression Totale',
     images: 'images',
     loadingStats: 'Chargement des statistiques...',
@@ -1029,6 +1025,9 @@ export default {
       'Aucune image dans la file. Téléchargez des images et ajoutez-les à la file pour la segmentation.',
     addingToQueue: 'Ajout à la file...',
     resegmentSelected: 'Re-segmenter Sélectionnées ({{count}})',
+    segmentSelected: 'Segmenter Sélectionnées',
+    segmentSelectedWithCount: 'Segmenter Sélectionnées ({{count}})',
+    selectNothingTooltip: 'Sélectionnez des images à segmenter',
     segmentMixed:
       'Segmenter {{new}} + Re-segmenter {{resegment}} ({{total}} total)',
     segmentTooltip:
@@ -1150,6 +1149,7 @@ export default {
     // Multi-channel canvas actions
     multiChannel: {
       allChannelsFailed: "Échec du chargement des canaux d'image",
+      someChannelsFailed: "Certains canaux d'image n'ont pas pu être chargés",
     },
   },
   project: {
@@ -2229,5 +2229,39 @@ export default {
     duplicateName: 'Un dossier portant ce nom existe déjà ici',
     cannotMoveIntoSelf:
       'Un dossier ne peut pas être déplacé dans lui-même ou dans son propre sous-dossier',
+  },
+  automatedEssays: {
+    navLabel: 'Essais automatisés',
+    title: 'Essais automatisés',
+    subtitle:
+      'Téléversez un dossier d’enregistrements de puits .nd2 pour mesurer la longueur et l’intensité des microtubules de chaque puits.',
+    dragFolder: 'Glissez ici un dossier de puits .nd2',
+    dropHere: 'Déposez le dossier pour l’ajouter',
+    selectFolder: 'Sélectionner un dossier',
+    onlyNd2: 'Seuls les enregistrements de puits .nd2 sont traités.',
+    filesSelected: '{{count}} fichier(s) .nd2 sélectionné(s)',
+    clear: 'Effacer',
+    uploadAndProcess: 'Téléverser et traiter',
+    uploading: 'Téléversement… {{percent}} %',
+    jobStarted: 'Téléversement terminé — traitement démarré',
+    uploadFailed: 'Échec du téléversement',
+    downloadFailed: 'Impossible de démarrer le téléchargement',
+    yourRuns: 'Vos exécutions',
+    noRuns:
+      'Aucune exécution pour l’instant. Téléversez un dossier pour commencer.',
+    fileCount: '{{count}} fichier(s)',
+    mtCount: '{{count}} microtubules',
+    download: 'Télécharger',
+    delete: 'Supprimer',
+    deleteFailed: 'Impossible de supprimer l’exécution',
+    noNd2Found: 'Aucun enregistrement .nd2 trouvé dans ce dossier',
+    someIgnored:
+      'Utilisation de {{kept}} fichiers sur {{total}} (seul .nd2 est traité)',
+    status: {
+      queued: 'En file d’attente',
+      running: 'Traitement',
+      completed: 'Terminé',
+      failed: 'Échec',
+    },
   },
 };

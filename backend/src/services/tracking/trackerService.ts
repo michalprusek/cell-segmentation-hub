@@ -186,8 +186,9 @@ async function _runTrackingForContainerInner(
     // Max accepted filament-match cost for the two-step LAP tracker. The ML
     // side's filament-aware cost is a weighted sum of four [0,1] terms
     // (embedding + endpoint + orientation + length), so 0.6 accepts
-    // moderately-confident links. The remaining tracker params (max_gap=2,
-    // gap_penalty, term weights, image_hw fallback) use the ML defaults.
+    // moderately-confident links. The remaining tracker params (motion_model,
+    // emb_template_alpha, max_gap=3, gap_penalty, term weights, image_hw
+    // fallback) use the ML defaults.
     cost_threshold: 0.6,
   };
 

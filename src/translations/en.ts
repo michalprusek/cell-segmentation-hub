@@ -249,7 +249,6 @@ export default {
     deleteImageFailed: 'Image deletion failed',
     imagesQueuedForSegmentation: '{{count}} images added to segmentation queue',
     imageQueuedForResegmentation: 'Image added to queue for re-segmentation',
-    allImagesAlreadySegmented: 'All images are already segmented or queued',
     errorAddingToQueue: 'Error adding images to queue',
     imageAlreadyProcessing: 'Image is already being processed',
     processImageFailed: 'Failed to process image',
@@ -1000,9 +999,10 @@ export default {
     disconnected: 'Disconnected',
     waiting: 'waiting',
     processing: 'processing',
-    segmentAll: 'Segment All',
-    segmentAllWithCount: 'Segment All ({{count}})',
     resegmentSelected: 'Re-segment Selected ({{count}})',
+    segmentSelected: 'Segment Selected',
+    segmentSelectedWithCount: 'Segment Selected ({{count}})',
+    selectNothingTooltip: 'Select images to segment',
     segmentMixed:
       'Segment {{new}} + Re-segment {{resegment}} ({{total}} total)',
     segmentTooltip:
@@ -1122,6 +1122,7 @@ export default {
     // Multi-channel canvas actions
     multiChannel: {
       allChannelsFailed: 'Failed to load image channels',
+      someChannelsFailed: 'Some image channels failed to load',
     },
     // Success messages
     operationCompleted: 'Operation completed successfully',
@@ -2311,5 +2312,37 @@ export default {
     duplicateName: 'A folder with this name already exists here',
     cannotMoveIntoSelf:
       'A folder cannot be moved into itself or its own subfolder',
+  },
+  automatedEssays: {
+    navLabel: 'Automated Essays',
+    title: 'Automated Essays',
+    subtitle:
+      'Upload a folder of .nd2 well recordings to measure microtubule length and intensity for every well.',
+    dragFolder: 'Drag a folder of .nd2 wells here',
+    dropHere: 'Drop the folder to add it',
+    selectFolder: 'Select folder',
+    onlyNd2: 'Only .nd2 well recordings are processed.',
+    filesSelected: '{{count}} .nd2 file(s) selected',
+    clear: 'Clear',
+    uploadAndProcess: 'Upload & process',
+    uploading: 'Uploading… {{percent}}%',
+    jobStarted: 'Upload complete — processing started',
+    uploadFailed: 'Upload failed',
+    downloadFailed: 'Could not start the download',
+    yourRuns: 'Your runs',
+    noRuns: 'No runs yet. Upload a folder to get started.',
+    fileCount: '{{count}} file(s)',
+    mtCount: '{{count}} microtubules',
+    download: 'Download',
+    delete: 'Delete',
+    deleteFailed: 'Could not delete the run',
+    noNd2Found: 'No .nd2 well recordings found in that folder',
+    someIgnored: 'Using {{kept}} of {{total}} files (only .nd2 is processed)',
+    status: {
+      queued: 'Queued',
+      running: 'Processing',
+      completed: 'Completed',
+      failed: 'Failed',
+    },
   },
 };
