@@ -30,6 +30,9 @@ interface VideoFrameImageProps {
   /** Frame id from useVideoFrames.currentFrame.id — drives playback,
    *  scrubber, prev/next. */
   currentFrameId: string | null;
+  /** Video container id — forwarded to MultiChannelCanvas so the auto-scale
+   *  range key is scoped per video (see MultiChannelCanvas). */
+  containerId?: string | null;
   /** Static image URL used when not in video mode (standalone image). */
   fallbackSrc: string;
   /** Forwarded to <CanvasImage>. */
@@ -46,6 +49,7 @@ interface VideoFrameImageProps {
 export default function VideoFrameImage({
   isVideoMode,
   currentFrameId,
+  containerId,
   fallbackSrc,
   width,
   height,
@@ -74,6 +78,7 @@ export default function VideoFrameImage({
     return (
       <MultiChannelCanvas
         frameId={currentFrameId}
+        containerId={containerId ?? undefined}
         visibleChannels={visibleChannels}
         channelColors={channelColors}
         width={width}
