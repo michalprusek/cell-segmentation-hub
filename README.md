@@ -98,7 +98,7 @@ pip install -r requirements.txt
 
 All dependencies are version-pinned (`requirements.txt`) to exactly the
 versions the model was trained/validated against — `torch 2.6.0`,
-`transformers 4.57.6`, `numpy 1.26.4`, etc. — and ship as prebuilt wheels for
+`transformers 4.57.1`, `numpy 1.26.4`, etc. — and ship as prebuilt wheels for
 macOS arm64 and Linux x86-64, so nothing is compiled. **Use a virtual
 environment**; installing these pins globally may clash with other projects.
 
