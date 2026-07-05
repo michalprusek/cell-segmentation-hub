@@ -31,11 +31,10 @@ function useDisplayFilter(): { filter: string } {
  * Komponenta pro zobrazení podkladového obrázku na plátně.
  *
  * When wrapped in an ImageDisplayProvider (video-mode editor) the
- * canvas image picks up brightness + contrast as a CSS filter. The
- * filter is applied by the browser compositor *after* applyWindowLevel
- * has written its LUT-remapped pixels into the source PNG, so the two
- * effects compose: pixel-level min/max remap → composite-time
- * brightness/contrast adjustment.
+ * canvas image picks up brightness + contrast as a CSS filter. Min/max
+ * window/level is handled only in the multi-channel canvas path (which
+ * has pixel-level access); this standalone <img> path applies just the
+ * brightness/contrast CSS filter.
  */
 const CanvasImage = ({
   src,

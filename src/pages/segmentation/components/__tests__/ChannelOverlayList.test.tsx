@@ -73,6 +73,7 @@ vi.mock('@/pages/segmentation/components/ChannelColorDialog', () => ({
 const mockToggle = vi.fn();
 const mockSetVisible = vi.fn();
 const mockSetColor = vi.fn();
+const mockSeedColors = vi.fn();
 const mockSetOpacity = vi.fn();
 const mockSetChannel = vi.fn();
 
@@ -88,6 +89,7 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     toggleChannelVisibility: mockToggle,
     setVisibleChannels: mockSetVisible,
     setChannelColor: mockSetColor,
+    seedChannelColors: mockSeedColors,
     setChannelOpacity: mockSetOpacity,
     setChannel: mockSetChannel,
   }),
@@ -144,6 +146,27 @@ describe('ChannelOverlayList', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  // ── colour seeding (mount effect) ─────────────────────────────────────────
+  describe('colour seeding (mount effect)', () => {
+    it('seeds channel colours once from metadata, with #FFFFFF fallback', () => {
+      const channels = [
+        makeChannel({ name: 'ch1', displayColor: '#123456' }),
+        makeChannel({ name: 'ch2', displayColor: undefined }),
+      ];
+      setup(channels, 'vid-1');
+
+      expect(mockSeedColors).toHaveBeenCalledTimes(1);
+      expect(mockSeedColors).toHaveBeenCalledWith({
+        ch1: '#123456',
+        ch2: '#FFFFFF',
+      });
+      // Seeds via seedChannelColors, NOT the per-channel setChannelColor
+      // (which would falsely flag the defaults as user edits and reintroduce
+      // the colour-reset race).
+      expect(mockSetColor).not.toHaveBeenCalled();
+    });
   });
 
   // ── null / empty rendering ────────────────────────────────────────────────
@@ -256,7 +279,8 @@ describe('ChannelOverlayList', () => {
 
     it('closes the dialog without calling setChannelColor on close', async () => {
       const { user } = setup(TWO_CHANNELS, 'vid-1');
-      // Clear the seed calls from the mount effect
+      // Mount effect seeds colours via seedChannelColors, not setChannelColor;
+      // reset all mocks so the before/after count on setChannelColor is clean.
       vi.clearAllMocks();
 
       await user.click(getSwatchButtons()[0] as HTMLElement);

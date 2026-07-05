@@ -5,31 +5,36 @@
  * that composites N visible channels onto a shared image plane. For each
  * visible channel:
  *
- *   1. Fetch the per-channel PNG via /api/images/<frameId>/frame-data
- *      (single-byte grayscale).
- *   2. Apply the user's min/max window-level LUT remap — the same
- *      ImageJ-style brightness floor/ceiling the sliders in DisplaySection
- *      have always promised but never delivered (the old `<img>` pipeline
- *      had no pixel-level access).
- *   3. Tint the grayscale by the channel's display colour: each pixel
- *      becomes `gray × colour / 255` per RGB component.
- *   4. Additive composite onto the destination canvas (canvas
- *      `globalCompositeOperation = 'lighter'`) — overlapping channel
- *      signal sums, mimicking how a fluorescence microscope sees
- *      multi-channel emission.
+ *   1. Fetch the per-channel PNG via /api/images/<frameId>/frame-data.
+ *   2. Decode it to its NATIVE sample depth via `decodeGrayPng` — 16-bit
+ *      microscopy frames keep all 16 bits (the browser's native
+ *      createImageBitmap path would silently crush them to 8-bit). Non-
+ *      grayscale PNGs fall back to an 8-bit createImageBitmap decode.
+ *   3. Apply the user's min/max window-level LUT remap on the true sample
+ *      values — ImageJ-style. The window range auto-scales to each channel
+ *      set's real min/max (reported to ImageDisplayContext) so a 16-bit
+ *      frame opens with a sensible contrast and the sliders span the data.
+ *   4. Tint the grayscale by the channel's display colour and additively
+ *      composite (canvas `globalCompositeOperation = 'lighter'`), mimicking
+ *      multi-channel fluorescence emission.
  *
- * Brightness / contrast are applied via CSS `filter` on the canvas
- * element, so they compose after all per-channel processing (matches the
- * old behaviour for the two CSS sliders).
+ * Decoding is split from windowing: we fetch+decode once per frame/channel
+ * set (cached in a ref) and re-run the cheap windowing+composite pass on any
+ * Min/Max, colour, or opacity change (never a refetch), so dragging is
+ * real-time even on 16-bit frames.
  *
- * When the editor has no channel concept (standalone images,
- * non-video-mode) the caller renders the legacy `<img>` instead — this
- * component only spins up when the visible-channel list is non-empty.
+ * Brightness / contrast are applied via CSS `filter` on the canvas element,
+ * composing after all per-channel processing.
+ *
+ * When the editor has no channel concept (standalone images) the caller
+ * renders the legacy `<img>` instead — this component only spins up when
+ * the visible-channel list is non-empty.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { decodeGrayPng } from '@/lib/png16';
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
 import { useLanguage } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
@@ -37,33 +42,39 @@ import { logger } from '@/lib/logger';
 interface MultiChannelCanvasProps {
   /** Frame Image row id — used to build `/api/images/<id>/frame-data`. */
   frameId: string;
-  /** Channels (and order) currently composited. Order matters because
-   *  the destination canvas is additively blended in that order; for
-   *  pure-additive 'lighter' compositing the order does not affect the
-   *  pixel result, but it does set the visual layering of any failed
-   *  loads. Driven by ImageDisplayContext.visibleChannels. */
+  /** Video container id. Scopes the auto-scale range key together with the
+   *  channel set, so navigating to a DIFFERENT video that happens to share
+   *  channel names still re-fits the window to the new data. */
+  containerId?: string;
+  /** Channels currently composited. Order is irrelevant to the composite
+   *  (additive `'lighter'`); the list is just
+   *  ImageDisplayContext.visibleChannels. */
   visibleChannels: string[];
-  /** Per-channel RGB tint colours. Falls back to white for missing
-   *  entries (grayscale). */
+  /** Per-channel RGB tint colours. Falls back to white (grayscale) for
+   *  missing entries. */
   channelColors: Record<string, string>;
-  /** Initial dimensions (used for the <canvas> width/height attrs while
-   *  the first frame is loading; later overwritten from the first
-   *  successful image load). */
+  /** Initial dimensions (used for the <canvas> width/height attrs while the
+   *  first frame loads; later overwritten from the decoded image). */
   width?: number;
   height?: number;
   loading?: boolean;
   /** Notified once the first channel image has loaded with its natural
-   *  dimensions + the channelsKey that produced this load. The
-   *  channelsKey lets the editor distinguish "same frame, different
-   *  channel mix" — without it, a channel toggle on the current frame
-   *  would never re-arm the loading overlay. */
+   *  dimensions + the channelsKey that produced this load. */
   onLoad?: (width: number, height: number, channelsKey: string) => void;
 }
 
-/** Parse `#RRGGBB` (or `#rgb`) into a 3-element [r, g, b] tuple. White
- *  is the identity for grayscale display — invalid inputs degrade to it
- *  rather than throwing so a typo in localStorage doesn't crash the
- *  canvas. */
+/** One decoded channel's grayscale samples at native depth. */
+interface ChannelSamples {
+  channel: string;
+  width: number;
+  height: number;
+  bitDepth: number;
+  /** length = width*height, one grayscale sample per pixel. */
+  data: Uint16Array | Uint8Array;
+}
+
+/** Parse `#RRGGBB` (or `#rgb`) into [r, g, b]. White is the grayscale
+ *  identity — invalid inputs degrade to it rather than throwing. */
 function hexToRgb(hex: string): [number, number, number] {
   if (!hex || hex[0] !== '#') return [255, 255, 255];
   if (hex.length === 4) {
@@ -83,23 +94,54 @@ function hexToRgb(hex: string): [number, number, number] {
   return [255, 255, 255];
 }
 
-/** Lookup table for min/max remap. Computed once per render of the
- *  hook's `windowMin`/`windowMax` rather than per-pixel arithmetic. */
-function buildLut(windowMin: number, windowMax: number): Uint8ClampedArray {
-  const lut = new Uint8ClampedArray(256);
-  const safeMin = Math.min(windowMin, windowMax);
-  const safeMax = Math.max(windowMin, windowMax);
-  const range = Math.max(1, safeMax - safeMin);
-  for (let i = 0; i < 256; i++) {
-    if (i < safeMin) lut[i] = 0;
-    else if (i > safeMax) lut[i] = 255;
-    else lut[i] = Math.round(((i - safeMin) * 255) / range);
+/** Window/level LUT over the sample domain [0, rangeMax] → 8-bit display.
+ *  Sized to the current channel set's brightest value, so a 16-bit frame
+ *  gets up to a 65536-entry table (64 KB, rebuilt on each windowing pass —
+ *  Min/Max/colour/opacity change). Values ≤ windowMin map to black,
+ *  ≥ windowMax to white. */
+function buildLut(
+  windowMin: number,
+  windowMax: number,
+  rangeMax: number
+): Uint8ClampedArray {
+  const size = Math.min(65535, Math.max(1, Math.round(rangeMax))) + 1;
+  const lut = new Uint8ClampedArray(size);
+  const lo = Math.min(windowMin, windowMax);
+  const hi = Math.max(windowMin, windowMax);
+  const range = Math.max(1, hi - lo);
+  for (let i = 0; i < size; i++) {
+    if (i <= lo) lut[i] = 0;
+    else if (i >= hi) lut[i] = 255;
+    else lut[i] = Math.round(((i - lo) * 255) / range);
   }
   return lut;
 }
 
+/** Fallback for non-grayscale PNGs: decode 8-bit via createImageBitmap. */
+async function decode8Bit(blob: Blob): Promise<ChannelSamples | null> {
+  const bitmap = await createImageBitmap(blob);
+  const w = bitmap.width;
+  const h = bitmap.height;
+  const off = document.createElement('canvas');
+  off.width = w;
+  off.height = h;
+  const octx = off.getContext('2d', { willReadFrequently: true });
+  if (!octx) {
+    logger.warn('MultiChannelCanvas: 2D context unavailable for 8-bit decode');
+    bitmap.close?.();
+    return null;
+  }
+  octx.drawImage(bitmap, 0, 0);
+  bitmap.close?.();
+  const id = octx.getImageData(0, 0, w, h);
+  const data = new Uint8Array(w * h);
+  for (let p = 0, i = 0; p < id.data.length; p += 4, i++) data[i] = id.data[p];
+  return { channel: '', width: w, height: h, bitDepth: 8, data };
+}
+
 export default function MultiChannelCanvas({
   frameId,
+  containerId,
   visibleChannels,
   channelColors,
   width,
@@ -107,45 +149,71 @@ export default function MultiChannelCanvas({
   loading = true,
   onLoad,
 }: MultiChannelCanvasProps) {
-  const { windowMin, windowMax, brightness, contrast, channelOpacities } =
-    useImageDisplay();
+  const {
+    windowMin,
+    windowMax,
+    windowRangeMax,
+    brightness,
+    contrast,
+    channelOpacities,
+    reportDataRange,
+  } = useImageDisplay();
   const { t } = useLanguage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Tracks the last frameId+channelsKey for which we already fired an
-  // all-channels-failed toast so we don't spam on every re-render.
+  // Decoded samples for the current frame/channel set, reused across
+  // window-slider re-renders so dragging never refetches.
+  const decodedRef = useRef<ChannelSamples[]>([]);
+  const dimsRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  // Bumped after a successful decode to trigger the windowing/composite
+  // effect (which reads decodedRef).
+  const [decodeVersion, setDecodeVersion] = useState(0);
   const lastFailedKeyRef = useRef<string | null>(null);
-  // Stable key to bust the effect when any visible-channel order, colour,
-  // or opacity changes. Serialising keeps the dep array primitive and
-  // avoids identity-based re-renders.
+  const lastPartialFailKeyRef = useRef<string | null>(null);
+
   const channelsKey = visibleChannels.join('|');
   const colorsKey = visibleChannels.map(c => channelColors[c] ?? '').join('|');
   const opacitiesKey = visibleChannels
     .map(c => channelOpacities[c] ?? 100)
     .join('|');
 
+  // --- Decode pass: fetch + decode all visible channels once per
+  // frame/channel set. Deliberately does NOT depend on window/colour state
+  // so slider drags re-window from the cache instead of refetching. ---
   useEffect(() => {
     if (!visibleChannels.length || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d', { willReadFrequently: false });
-    if (!ctx) return;
-
     let cancelled = false;
     const controller = new AbortController();
 
     (async () => {
-      const lut = buildLut(windowMin, windowMax);
-      // Load all channel PNGs in parallel. Failures are swallowed
-      // individually so one missing channel can't blank the canvas;
-      // the destination canvas just composites whatever succeeded.
-      const images = await Promise.all(
+      const results = await Promise.all(
         visibleChannels.map(async channel => {
           try {
             const url = `/api/images/${frameId}/frame-data?channel=${encodeURIComponent(channel)}`;
             const res = await fetch(url, { signal: controller.signal });
-            if (!res.ok) return null;
+            if (!res.ok) {
+              logger.warn(
+                `MultiChannelCanvas: channel '${channel}' frame ${frameId} HTTP ${res.status} ${res.statusText}`
+              );
+              return null;
+            }
             const blob = await res.blob();
-            const bitmap = await createImageBitmap(blob);
-            return { channel, bitmap };
+            const decoded = await decodeGrayPng(blob);
+            if (decoded) {
+              return {
+                channel,
+                width: decoded.width,
+                height: decoded.height,
+                bitDepth: decoded.bitDepth,
+                data: decoded.data,
+              } as ChannelSamples;
+            }
+            const fallback = await decode8Bit(blob);
+            if (!fallback) {
+              logger.warn(
+                `MultiChannelCanvas: channel '${channel}' frame ${frameId} decoded to null (both 16-bit and 8-bit paths)`
+              );
+            }
+            return fallback ? { ...fallback, channel } : null;
           } catch (err) {
             if (controller.signal.aborted) return null;
             logger.warn(
@@ -159,16 +227,14 @@ export default function MultiChannelCanvas({
       );
 
       if (cancelled) return;
-      const loaded = images.filter(
-        (i): i is { channel: string; bitmap: ImageBitmap } => i != null
-      );
+      const loaded = results.filter((r): r is ChannelSamples => r != null);
       if (loaded.length === 0) {
-        // All channels failed (expired auth, nginx 502, storage break).
-        // Fire a single toast per failure event — deduped by frameId+channelsKey
-        // so a re-render storm doesn't spam the user.
         const failedKey = `${frameId}:${channelsKey}`;
         if (lastFailedKeyRef.current !== failedKey) {
           lastFailedKeyRef.current = failedKey;
+          logger.error(
+            `MultiChannelCanvas: all ${visibleChannels.length} channel(s) failed to load for frame ${frameId} [${channelsKey}]`
+          );
           toast.error(
             t('toast.multiChannel.allChannelsFailed') ||
               'Failed to load image channels'
@@ -176,69 +242,64 @@ export default function MultiChannelCanvas({
         }
         return;
       }
-      // A successful load clears the dedupe key so a later retry that
-      // fails again will correctly fire a new toast.
       lastFailedKeyRef.current = null;
 
-      // First successful image dictates canvas dimensions — all
-      // channels of a video share the same shape, so picking the
-      // first is safe and avoids a second pass.
-      const { bitmap: firstBmp } = loaded[0];
-      const w = firstBmp.width;
-      const h = firstBmp.height;
-      canvas.width = w;
-      canvas.height = h;
-      onLoad?.(w, h, channelsKey);
-
-      // Per-channel tint pipeline. We could colour-mix natively via
-      // canvas blend modes (multiply→lighter), but the manual pixel
-      // path gives us LUT remap "for free" in the same pass.
-      ctx.clearRect(0, 0, w, h);
-      ctx.globalCompositeOperation = 'lighter';
-
-      // Reuse one offscreen canvas across channels — avoids 8N
-      // memory thrash on a 5-channel ND2.
-      const off = document.createElement('canvas');
-      off.width = w;
-      off.height = h;
-      const offCtx = off.getContext('2d', { willReadFrequently: true });
-      if (!offCtx) return;
-
-      for (const { channel, bitmap } of loaded) {
-        if (cancelled) return;
-        const [cR, cG, cB] = hexToRgb(channelColors[channel] ?? '#FFFFFF');
-        // Per-channel opacity 0..100 — scales the channel's contribution
-        // to the additive composite. Skip the pixel multiply for full
-        // opacity (the common case) so the hot loop stays cheap.
-        const opacity = (channelOpacities[channel] ?? 100) / 100;
-        offCtx.clearRect(0, 0, w, h);
-        offCtx.drawImage(bitmap, 0, 0);
-        const img = offCtx.getImageData(0, 0, w, h);
-        const data = img.data;
-        if (opacity >= 1) {
-          for (let p = 0; p < data.length; p += 4) {
-            // Source PNG is grayscale → R, G, B are all the same value.
-            // LUT-remap first, then tint by channel colour.
-            const v = lut[data[p]];
-            data[p] = (v * cR) >> 8;
-            data[p + 1] = (v * cG) >> 8;
-            data[p + 2] = (v * cB) >> 8;
-          }
-        } else {
-          for (let p = 0; p < data.length; p += 4) {
-            const v = lut[data[p]];
-            data[p] = ((v * cR) >> 8) * opacity;
-            data[p + 1] = ((v * cG) >> 8) * opacity;
-            data[p + 2] = ((v * cB) >> 8) * opacity;
-          }
+      // Partial failure: some (not all) channels loaded. The composite still
+      // renders, but a missing channel is visually indistinguishable from a
+      // genuinely dark one, so surface it (deduped) rather than silently
+      // dropping it.
+      if (loaded.length < visibleChannels.length) {
+        const partialKey = `${frameId}:${channelsKey}:${loaded.length}`;
+        if (lastPartialFailKeyRef.current !== partialKey) {
+          lastPartialFailKeyRef.current = partialKey;
+          logger.warn(
+            `MultiChannelCanvas: ${visibleChannels.length - loaded.length}/${visibleChannels.length} channel(s) failed to load for frame ${frameId} [${channelsKey}]`
+          );
+          toast.error(
+            t('toast.multiChannel.someChannelsFailed') ||
+              'Some image channels failed to load'
+          );
         }
-        offCtx.putImageData(img, 0, 0);
-        ctx.drawImage(off, 0, 0);
-        bitmap.close?.();
+      } else {
+        lastPartialFailKeyRef.current = null;
+      }
+
+      // Combined sample range across visible channels → drives the ImageJ-
+      // style auto-scale + slider bounds in ImageDisplayContext.
+      let cmin = Infinity;
+      let cmax = -Infinity;
+      for (const cs of loaded) {
+        const src = cs.data;
+        for (let i = 0; i < src.length; i++) {
+          const v = src[i];
+          if (v < cmin) cmin = v;
+          if (v > cmax) cmax = v;
+        }
+      }
+
+      decodedRef.current = loaded;
+      dimsRef.current = { w: loaded[0].width, h: loaded[0].height };
+      // Trigger the composite BEFORE invoking external callbacks, so a throw
+      // from the parent-supplied reportDataRange/onLoad can't leave the canvas
+      // blank. The range key is scoped to the container so navigating to a
+      // different video with the same channel names still re-fits the window.
+      setDecodeVersion(v => v + 1);
+      try {
+        reportDataRange(
+          Number.isFinite(cmin) ? cmin : 0,
+          Number.isFinite(cmax) ? cmax : 255,
+          `${containerId ?? ''}::${channelsKey}`
+        );
+        onLoad?.(loaded[0].width, loaded[0].height, channelsKey);
+      } catch (err) {
+        logger.error(
+          'MultiChannelCanvas: onLoad/reportDataRange callback threw',
+          err
+        );
       }
     })().catch(err => {
       if (!controller.signal.aborted) {
-        logger.error('MultiChannelCanvas composite failed', err);
+        logger.error('MultiChannelCanvas decode-effect failed', err);
       }
     });
 
@@ -246,23 +307,80 @@ export default function MultiChannelCanvas({
       cancelled = true;
       controller.abort();
     };
-    // `channelOpacities` is intentionally absent — `opacitiesKey` is
-    // its primitive fingerprint; listing the object would re-fire on
-    // every parent render because Context spreads a fresh reference.
-    // Same trick already applies to visibleChannels (channelsKey) and
-    // channelColors (colorsKey).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     frameId,
+    containerId,
     channelsKey,
-    colorsKey,
-    opacitiesKey,
-    windowMin,
-    windowMax,
+    reportDataRange,
     onLoad,
     t,
     visibleChannels,
+  ]);
+
+  // --- Windowing + composite pass: cheap, re-runs on any Min/Max, colour or
+  // opacity change (never a refetch) using the cached decoded samples.
+  // Brightness/Contrast are a CSS filter and don't touch this pass. ---
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const loaded = decodedRef.current;
+    if (!canvas || loaded.length === 0) return;
+    const ctx = canvas.getContext('2d', { willReadFrequently: false });
+    if (!ctx) {
+      logger.warn(
+        'MultiChannelCanvas: 2D context unavailable — cannot composite'
+      );
+      return;
+    }
+    const { w, h } = dimsRef.current;
+    if (w === 0 || h === 0) return;
+    // Setting canvas.width/height resets the bitmap; only do it when the size
+    // actually changes so a slider tick doesn't pay a full-canvas reset every
+    // frame (clearRect below handles the per-pass clear).
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+
+    const lut = buildLut(windowMin, windowMax, windowRangeMax);
+    const maxIdx = lut.length - 1;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+
+    const off = document.createElement('canvas');
+    off.width = w;
+    off.height = h;
+    const offCtx = off.getContext('2d', { willReadFrequently: true });
+    if (!offCtx) {
+      logger.warn('MultiChannelCanvas: offscreen 2D context unavailable');
+      return;
+    }
+    const outImg = offCtx.createImageData(w, h);
+    const out = outImg.data;
+
+    for (const cs of loaded) {
+      const [cR, cG, cB] = hexToRgb(channelColors[cs.channel] ?? '#FFFFFF');
+      const opacity = (channelOpacities[cs.channel] ?? 100) / 100;
+      const scale = opacity >= 1 ? 1 : opacity;
+      const src = cs.data;
+      for (let i = 0, p = 0; i < src.length; i++, p += 4) {
+        const s = src[i];
+        const v = lut[s > maxIdx ? maxIdx : s];
+        out[p] = ((v * cR) >> 8) * scale;
+        out[p + 1] = ((v * cG) >> 8) * scale;
+        out[p + 2] = ((v * cB) >> 8) * scale;
+        out[p + 3] = 255;
+      }
+      offCtx.putImageData(outImg, 0, 0);
+      ctx.drawImage(off, 0, 0);
+    }
+  }, [
+    decodeVersion,
+    windowMin,
+    windowMax,
+    windowRangeMax,
+    colorsKey,
+    opacitiesKey,
     channelColors,
+    channelOpacities,
   ]);
 
   return (

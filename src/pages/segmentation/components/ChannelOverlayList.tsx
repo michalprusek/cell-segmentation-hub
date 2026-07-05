@@ -50,6 +50,7 @@ export function ChannelOverlayList({
     toggleChannelVisibility,
     setVisibleChannels,
     setChannelColor,
+    seedChannelColors,
     setChannelOpacity,
     setChannel,
   } = useImageDisplay();
@@ -65,12 +66,14 @@ export function ChannelOverlayList({
     if (visibleChannels.length === 0) {
       setVisibleChannels(channels.map(c => c.name));
     }
-    // Seed colours from container metadata only when the slot is empty.
-    for (const ch of channels) {
-      if (channelColors[ch.name] == null) {
-        setChannelColor(ch.name, ch.displayColor ?? DEFAULT_CHANNEL_COLOR);
-      }
-    }
+    // Seed colours from container metadata. seedChannelColors fills only empty
+    // slots and does NOT flag them as user edits, so a saved custom colour
+    // survives even when this seed races ahead of the userId re-hydrate.
+    seedChannelColors(
+      Object.fromEntries(
+        channels.map(c => [c.name, c.displayColor ?? DEFAULT_CHANNEL_COLOR])
+      )
+    );
     const seg = channels.find(c => c.isSegmentationSource)?.name;
     if (seg) setChannel(seg);
     // eslint-disable-next-line react-hooks/exhaustive-deps

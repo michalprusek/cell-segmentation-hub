@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import apiClient, { type SegmentationPolygon } from '@/lib/api';
 import { logger } from '@/lib/logger';
@@ -331,39 +331,41 @@ export function useSegmentationLoader({
   ]);
 
   // Handle image load to get dimensions (only if not already set from segmentation data)
-  const handleImageLoad = (
-    width: number,
-    height: number,
-    channelsKey: string
-  ) => {
-    // Mark this `(imageId, channels)` pair as visible so the Skeleton
-    // overlay can step aside. The channelsKey comes from the canvas
-    // that just finished compositing — see `MultiChannelCanvas.onLoad`.
-    if (imageId) setLoadedFrameKey(`${imageId}::${channelsKey}`);
-    setImageDimensions(current => {
-      // Only update if dimensions are not already set from segmentation data
-      if (!current) {
-        logger.debug('📐 Setting image dimensions from image load:', {
-          width,
-          height,
-        });
-        return { width, height };
-      }
+  // Stable identity: MultiChannelCanvas's decode effect depends on `onLoad`,
+  // so a new function every render would re-fetch + re-decode all channels on
+  // any unrelated editor re-render. Only `imageId` affects its behaviour.
+  const handleImageLoad = useCallback(
+    (width: number, height: number, channelsKey: string) => {
+      // Mark this `(imageId, channels)` pair as visible so the Skeleton
+      // overlay can step aside. The channelsKey comes from the canvas
+      // that just finished compositing — see `MultiChannelCanvas.onLoad`.
+      if (imageId) setLoadedFrameKey(`${imageId}::${channelsKey}`);
+      setImageDimensions(current => {
+        // Only update if dimensions are not already set from segmentation data
+        if (!current) {
+          logger.debug('📐 Setting image dimensions from image load:', {
+            width,
+            height,
+          });
+          return { width, height };
+        }
 
-      // Log if dimensions differ between image and segmentation data
-      if (current.width !== width || current.height !== height) {
-        logger.warn('⚠️ Image dimensions mismatch:', {
-          fromSegmentation: current,
-          fromImage: { width, height },
-          imageId,
-        });
-        // Keep segmentation data dimensions (they're more reliable)
+        // Log if dimensions differ between image and segmentation data
+        if (current.width !== width || current.height !== height) {
+          logger.warn('⚠️ Image dimensions mismatch:', {
+            fromSegmentation: current,
+            fromImage: { width, height },
+            imageId,
+          });
+          // Keep segmentation data dimensions (they're more reliable)
+          return current;
+        }
+
         return current;
-      }
-
-      return current;
-    });
-  };
+      });
+    },
+    [imageId]
+  );
 
   return {
     segmentationPolygons,

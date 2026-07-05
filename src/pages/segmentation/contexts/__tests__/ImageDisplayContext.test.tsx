@@ -6,9 +6,9 @@
  * - The provider is self-contained (no external context deps).
  * - localStorage is already mocked by src/test/setup.ts. We wire the mock
  *   to an in-memory store so persistence tests work reliably.
- * - applyWindowLevel is a pure pixel-manipulation function operating on a
- *   canvas element; it is skipped here because jsdom has no real 2-D
- *   rendering pipeline (getImageData returns zeros).
+ * - Pixel-level window/level remapping lives in MultiChannelCanvas (which
+ *   needs a real 2-D pipeline jsdom lacks); here we only cover the state
+ *   machine, including reportDataRange's ImageJ-style auto-scale.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -74,6 +74,8 @@ describe('ImageDisplayProvider + useImageDisplay', () => {
       expect(result.current.channelOpacities).toEqual({});
       expect(result.current.windowMin).toBe(0);
       expect(result.current.windowMax).toBe(255);
+      expect(result.current.windowRangeMax).toBe(255);
+      expect(result.current.dataMin).toBe(0);
       expect(result.current.brightness).toBe(100);
       expect(result.current.contrast).toBe(100);
     });
@@ -257,6 +259,145 @@ describe('ImageDisplayProvider + useImageDisplay', () => {
 
       expect(result.current.channelColors['ch0']).toBe('#FF0000');
       expect(result.current.channelColors['ch1']).toBe('#00FF00');
+    });
+  });
+
+  // ---- seedChannelColors + re-hydrate precedence (colour-reset race fix) ---
+
+  describe('seedChannelColors', () => {
+    it('fills only empty colour slots and never overwrites an existing colour', () => {
+      const { result } = renderHook(() => useImageDisplay(), {
+        wrapper: makeWrapper(),
+      });
+
+      act(() => {
+        result.current.setChannelColor('ch0', '#FF0000'); // user picks red
+        result.current.seedChannelColors({ ch0: '#111111', ch1: '#00FF00' });
+      });
+
+      // ch0 already set → seed leaves it; ch1 empty → seed fills it.
+      expect(result.current.channelColors['ch0']).toBe('#FF0000');
+      expect(result.current.channelColors['ch1']).toBe('#00FF00');
+    });
+
+    it('a persisted colour beats a metadata seed that raced ahead of auth', () => {
+      // User's saved pref for ch0 from a prior session.
+      store['spheroseg.channelColors.race-user'] = JSON.stringify({
+        ch0: '#AA0000',
+      });
+
+      let raceUserId: string | undefined;
+      const RaceWrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(
+          ImageDisplayProvider,
+          { userId: raceUserId },
+          children
+        );
+
+      const { result, rerender } = renderHook(() => useImageDisplay(), {
+        wrapper: RaceWrapper,
+      });
+
+      // Race: channel metadata seeds a default BEFORE auth resolves userId.
+      act(() => {
+        result.current.seedChannelColors({ ch0: '#00FF00' });
+      });
+      expect(result.current.channelColors['ch0']).toBe('#00FF00');
+
+      // Auth lands → re-hydrate merge runs. The persisted red must win over
+      // the seeded green (the bug was the seed clobbering the saved colour).
+      act(() => {
+        raceUserId = 'race-user';
+        rerender();
+      });
+      expect(result.current.channelColors['ch0']).toBe('#AA0000');
+    });
+
+    it('a genuine session edit still beats the persisted colour on re-hydrate', () => {
+      store['spheroseg.channelColors.race-user'] = JSON.stringify({
+        ch0: '#AA0000',
+      });
+
+      let raceUserId: string | undefined;
+      const RaceWrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(
+          ImageDisplayProvider,
+          { userId: raceUserId },
+          children
+        );
+
+      const { result, rerender } = renderHook(() => useImageDisplay(), {
+        wrapper: RaceWrapper,
+      });
+
+      // User explicitly picks blue before auth resolves.
+      act(() => {
+        result.current.setChannelColor('ch0', '#0000FF');
+      });
+
+      act(() => {
+        raceUserId = 'race-user';
+        rerender();
+      });
+      // The session edit wins over the persisted red.
+      expect(result.current.channelColors['ch0']).toBe('#0000FF');
+    });
+
+    it('a session edit after a seed still beats the persisted colour on re-hydrate', () => {
+      store['spheroseg.channelColors.race-user'] = JSON.stringify({
+        ch0: '#AA0000',
+      });
+
+      let raceUserId: string | undefined;
+      const RaceWrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(
+          ImageDisplayProvider,
+          { userId: raceUserId },
+          children
+        );
+
+      const { result, rerender } = renderHook(() => useImageDisplay(), {
+        wrapper: RaceWrapper,
+      });
+
+      // Seed a default first, THEN the user recolours the same channel.
+      act(() => {
+        result.current.seedChannelColors({ ch0: '#00FF00' });
+        result.current.setChannelColor('ch0', '#0000FF');
+      });
+
+      act(() => {
+        raceUserId = 'race-user';
+        rerender();
+      });
+      // A genuine edit (even after a prior seed) still outranks persisted.
+      expect(result.current.channelColors['ch0']).toBe('#0000FF');
+    });
+
+    it('a seeded colour survives re-hydrate when the user has no saved pref', () => {
+      // No persisted pref for ch0 — the closest analogue to the original
+      // "colours reset" bug; a naive reset-to-persisted would blank it.
+      let raceUserId: string | undefined;
+      const RaceWrapper = ({ children }: { children: React.ReactNode }) =>
+        React.createElement(
+          ImageDisplayProvider,
+          { userId: raceUserId },
+          children
+        );
+
+      const { result, rerender } = renderHook(() => useImageDisplay(), {
+        wrapper: RaceWrapper,
+      });
+
+      act(() => {
+        result.current.seedChannelColors({ ch0: '#00FF00' });
+      });
+
+      act(() => {
+        raceUserId = 'race-user';
+        rerender();
+      });
+      expect(result.current.channelColors['ch0']).toBe('#00FF00');
     });
   });
 
@@ -500,6 +641,120 @@ describe('ImageDisplayProvider + useImageDisplay', () => {
 
       expect(result.current.channel).toBe('DAPI');
       expect(result.current.visibleChannels).toEqual(['DAPI', 'GFP']);
+    });
+  });
+
+  // ---- reportDataRange (ImageJ-style 16-bit auto-scale) --------------------
+
+  describe('reportDataRange', () => {
+    it('rescales the slider bound and auto-fits the window to the data', () => {
+      const { result } = renderHook(() => useImageDisplay(), {
+        wrapper: makeWrapper(),
+      });
+
+      act(() => {
+        result.current.reportDataRange(640, 23480, 'irm|tirf');
+      });
+
+      expect(result.current.windowRangeMax).toBe(23480);
+      expect(result.current.dataMin).toBe(640);
+      expect(result.current.windowMin).toBe(640);
+      expect(result.current.windowMax).toBe(23480);
+    });
+
+    it('lets the window reach 16-bit values after a range report', () => {
+      const { result } = renderHook(() => useImageDisplay(), {
+        wrapper: makeWrapper(),
+      });
+
+      act(() => {
+        result.current.reportDataRange(0, 23480, 'tirf');
+      });
+      act(() => {
+        // Would clamp to 255 under the old 8-bit cap; must survive now.
+        result.current.setWindowMax(12000);
+      });
+
+      expect(result.current.windowMax).toBe(12000);
+    });
+
+    it('keeps the window on a same-key frame scrub but widens the clamp ceiling/floor', () => {
+      const { result } = renderHook(() => useImageDisplay(), {
+        wrapper: makeWrapper(),
+      });
+
+      act(() => {
+        result.current.reportDataRange(640, 23480, 'tirf');
+      });
+      act(() => {
+        result.current.setWindow(1000, 5000); // user narrows the window
+      });
+      act(() => {
+        // Next frame, same set, but brighter (max 24000) and dimmer floor (600).
+        result.current.reportDataRange(600, 24000, 'tirf');
+      });
+
+      // Window position preserved (not re-auto-fitted)...
+      expect(result.current.windowMin).toBe(1000);
+      expect(result.current.windowMax).toBe(5000);
+      // ...but the clamp ceiling/floor widen so the brighter/dimmer frame
+      // stays reachable and isn't clipped to white by a stale LUT.
+      expect(result.current.windowRangeMax).toBe(24000);
+      expect(result.current.dataMin).toBe(600);
+    });
+
+    it('does not shrink the clamp ceiling/floor when a same-key frame is dimmer', () => {
+      const { result } = renderHook(() => useImageDisplay(), {
+        wrapper: makeWrapper(),
+      });
+
+      act(() => {
+        result.current.reportDataRange(640, 23480, 'tirf');
+      });
+      act(() => {
+        result.current.reportDataRange(700, 10000, 'tirf'); // dimmer frame, same set
+      });
+
+      // Ceiling/floor are monotonic within a key — a dimmer frame must not
+      // narrow the reachable range the user already had.
+      expect(result.current.windowRangeMax).toBe(23480);
+      expect(result.current.dataMin).toBe(640);
+    });
+
+    it('re-auto-scales when the channel set changes', () => {
+      const { result } = renderHook(() => useImageDisplay(), {
+        wrapper: makeWrapper(),
+      });
+
+      act(() => {
+        result.current.reportDataRange(640, 23480, 'tirf');
+      });
+      act(() => {
+        result.current.reportDataRange(1826, 6017, 'irm');
+      });
+
+      expect(result.current.windowRangeMax).toBe(6017);
+      expect(result.current.windowMin).toBe(1826);
+      expect(result.current.windowMax).toBe(6017);
+    });
+
+    it('resetWindow returns to the auto-scaled data range', () => {
+      const { result } = renderHook(() => useImageDisplay(), {
+        wrapper: makeWrapper(),
+      });
+
+      act(() => {
+        result.current.reportDataRange(640, 23480, 'tirf');
+      });
+      act(() => {
+        result.current.setWindow(2000, 9000);
+      });
+      act(() => {
+        result.current.resetWindow();
+      });
+
+      expect(result.current.windowMin).toBe(640);
+      expect(result.current.windowMax).toBe(23480);
     });
   });
 

@@ -1159,6 +1159,7 @@ export default {
     // Multi-channel canvas actions
     multiChannel: {
       allChannelsFailed: 'Bildkanäle konnten nicht geladen werden',
+      someChannelsFailed: 'Einige Bildkanäle konnten nicht geladen werden',
     },
   },
   project: {

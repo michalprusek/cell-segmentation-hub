@@ -1058,6 +1058,7 @@ export default {
     // Multi-channel canvas actions
     multiChannel: {
       allChannelsFailed: '加载图像通道失败',
+      someChannelsFailed: '部分图像通道加载失败',
     },
   },
   project: {

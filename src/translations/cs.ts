@@ -1125,6 +1125,7 @@ export default {
     // Multi-channel canvas actions
     multiChannel: {
       allChannelsFailed: 'Nepodařilo se načíst kanály obrázku',
+      someChannelsFailed: 'Některé kanály obrázku se nepodařilo načíst',
     },
     upload: {
       failed: 'Nepodařilo se obnovit obrázky po nahrání',
