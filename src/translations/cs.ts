@@ -240,8 +240,6 @@ export default {
     imagesQueuedForSegmentation:
       '{{count}} obrázků přidáno do fronty pro segmentaci',
     imageQueuedForResegmentation: 'Obrázek přidán do fronty pro re-segmentaci',
-    allImagesAlreadySegmented:
-      'Všechny obrázky jsou již segmentovány nebo ve frontě',
     errorAddingToQueue: 'Chyba při přidávání obrázků do fronty',
     imageAlreadyProcessing: 'Obrázek je již zpracováván',
     processImageFailed: 'Nepodařilo se zpracovat obrázek',
@@ -1007,9 +1005,10 @@ export default {
     disconnected: 'Odpojeno',
     waiting: 'čeká',
     processing: 'zpracovává se',
-    segmentAll: 'Segmentovat vše',
-    segmentAllWithCount: 'Segmentovat vše ({{count}})',
     resegmentSelected: 'Znovu segmentovat vybrané ({{count}})',
+    segmentSelected: 'Segmentovat vybrané',
+    segmentSelectedWithCount: 'Segmentovat vybrané ({{count}})',
+    selectNothingTooltip: 'Vyberte obrázky k segmentaci',
     segmentMixed:
       'Segmentovat {{new}} + Znovu {{resegment}} (celkem {{total}})',
     segmentTooltip:

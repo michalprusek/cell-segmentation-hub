@@ -15,7 +15,6 @@ const mockT = vi.fn((key: string, params?: Record<string, unknown>) => {
     'export.cancelExport': 'Cancel Export',
     'common.cancelling': 'Cancelling...',
     'common.upload': 'Upload',
-    'queue.segmentAll': 'Segment All',
     'export.startExport': 'Start Export',
   };
 
@@ -97,6 +96,18 @@ describe('UniversalCancelButton', () => {
 
       const button = screen.getByRole('button');
       expect(button).toBeDisabled();
+    });
+
+    it('forwards the title prop to the primary action button', () => {
+      render(
+        <UniversalCancelButton
+          {...defaultProps}
+          title="Select images to segment"
+        />
+      );
+
+      const button = screen.getByRole('button');
+      expect(button).toHaveAttribute('title', 'Select images to segment');
     });
   });
 

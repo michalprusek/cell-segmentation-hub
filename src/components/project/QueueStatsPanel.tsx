@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { QueueStats } from '@/hooks/useSegmentationQueue';
 import { useLanguage } from '@/contexts/useLanguage';
 import { ProjectImage } from '@/types';
+import { partitionSelectedForSegmentation } from '@/lib/segmentationSelection';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 
 export interface ParallelProcessingStats {
@@ -27,7 +28,6 @@ interface QueueStatsPanelProps {
   className?: string;
   batchSubmitted?: boolean;
   isCancelling?: boolean;
-  imagesToSegmentCount?: number;
   selectedImageIds?: Set<string>;
   images?: ProjectImage[];
   parallelStats?: ParallelProcessingStats;
@@ -44,7 +44,6 @@ export const QueueStatsPanel = ({
   className,
   batchSubmitted = false,
   isCancelling = false,
-  imagesToSegmentCount = 0,
   selectedImageIds = new Set(),
   images = [],
   parallelStats,
@@ -60,49 +59,47 @@ export const QueueStatsPanel = ({
   const _totalSlots = parallelStats?.totalSlots || 4;
   const _concurrentUsers = parallelStats?.concurrentUsers || 0;
 
-  // Calculate counts for button label
-  const { selectedWithSegmentationCount, totalToProcess, buttonLabel } =
-    useMemo(() => {
-      // Count selected images that have segmentation
-      const selectedWithSegmentation = images.filter(
-        img =>
-          selectedImageIds.has(img.id) &&
-          (img.segmentationStatus === 'completed' ||
-            img.segmentationStatus === 'segmented')
-      ).length;
+  // Counts + button label derived from the SELECTION (single source of truth
+  // shared with handleSegmentAll via partitionSelectedForSegmentation).
+  const {
+    selectedToSegmentCount,
+    selectedToResegmentCount,
+    totalToProcess,
+    buttonLabel,
+  } = useMemo(() => {
+    const { toSegment, toResegment } = partitionSelectedForSegmentation(
+      images,
+      selectedImageIds
+    );
+    const segCount = toSegment.length;
+    const reCount = toResegment.length;
+    const total = segCount + reCount;
 
-      // Total images to process
-      const total = imagesToSegmentCount + selectedWithSegmentation;
-
-      // Determine button label
-      let label = t('queue.segmentAll');
-      if (total > 0) {
-        if (selectedWithSegmentation > 0 && imagesToSegmentCount > 0) {
-          // Both new and re-segmentation
-          label = t('queue.segmentMixed', {
-            new: imagesToSegmentCount,
-            resegment: selectedWithSegmentation,
-            total: total,
-          });
-        } else if (selectedWithSegmentation > 0) {
-          // Only re-segmentation
-          label = t('queue.resegmentSelected', {
-            count: selectedWithSegmentation,
-          });
-        } else {
-          // Only new segmentation
-          label = t('queue.segmentAllWithCount', {
-            count: imagesToSegmentCount,
-          });
-        }
+    let label = t('queue.segmentSelected');
+    if (total > 0) {
+      if (segCount > 0 && reCount > 0) {
+        // Both new segmentation and re-segmentation
+        label = t('queue.segmentMixed', {
+          new: segCount,
+          resegment: reCount,
+          total,
+        });
+      } else if (reCount > 0) {
+        // Only re-segmentation
+        label = t('queue.resegmentSelected', { count: reCount });
+      } else {
+        // Only new segmentation
+        label = t('queue.segmentSelectedWithCount', { count: segCount });
       }
+    }
 
-      return {
-        selectedWithSegmentationCount: selectedWithSegmentation,
-        totalToProcess: total,
-        buttonLabel: label,
-      };
-    }, [selectedImageIds, images, imagesToSegmentCount, t]);
+    return {
+      selectedToSegmentCount: segCount,
+      selectedToResegmentCount: reCount,
+      totalToProcess: total,
+      buttonLabel: label,
+    };
+  }, [selectedImageIds, images, t]);
 
   return (
     <motion.div
@@ -190,12 +187,14 @@ export const QueueStatsPanel = ({
                   }
                   disabled={!isConnected || totalToProcess === 0}
                   title={
-                    selectedWithSegmentationCount > 0
-                      ? t('queue.segmentTooltip', {
-                          new: imagesToSegmentCount,
-                          resegment: selectedWithSegmentationCount,
-                        })
-                      : undefined
+                    totalToProcess === 0
+                      ? t('queue.selectNothingTooltip')
+                      : selectedToResegmentCount > 0
+                        ? t('queue.segmentTooltip', {
+                            new: selectedToSegmentCount,
+                            resegment: selectedToResegmentCount,
+                          })
+                        : undefined
                   }
                   className="flex-1 sm:flex-none h-10 sm:h-9 min-w-[44px]"
                 />
@@ -211,12 +210,14 @@ export const QueueStatsPanel = ({
                       'bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed'
                   )}
                   title={
-                    selectedWithSegmentationCount > 0
-                      ? t('queue.segmentTooltip', {
-                          new: imagesToSegmentCount,
-                          resegment: selectedWithSegmentationCount,
-                        })
-                      : undefined
+                    totalToProcess === 0
+                      ? t('queue.selectNothingTooltip')
+                      : selectedToResegmentCount > 0
+                        ? t('queue.segmentTooltip', {
+                            new: selectedToSegmentCount,
+                            resegment: selectedToResegmentCount,
+                          })
+                        : undefined
                   }
                 >
                   <Play className="h-4 w-4" />
