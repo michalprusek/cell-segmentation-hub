@@ -20,7 +20,7 @@ const toErr = (e: unknown): Error =>
   e instanceof Error ? e : new Error(String(e));
 
 /** Parse and whitelist evaluate.py options sent as a JSON string form field. */
-function parseOptions(raw: unknown): EssayJobOptions {
+export function parseOptions(raw: unknown): EssayJobOptions {
   if (typeof raw !== 'string' || raw.trim() === '') return {};
   let parsed: Record<string, unknown>;
   try {
