@@ -1,13 +1,15 @@
 /**
  * Sidebar card with four image-display sliders: Min, Max, Brightness,
  * Contrast. Each row is a Radix Slider paired with a numeric Input
- * (Input ↔ Slider sync follows the FrameSlider pattern). All four
- * values persist across frame and channel changes for the same video,
- * fixing the previous min/max-resets-per-frame annoyance.
+ * (Input ↔ Slider sync follows the FrameSlider pattern). Brightness/
+ * Contrast persist across frame and channel changes; Min/Max persist
+ * across frame scrubs (fixing the old min/max-resets-per-frame annoyance)
+ * but auto-refit to the new data range when the channel set changes.
  *
- * Min/Max apply via the existing applyWindowLevel LUT (pixel-level
- * remap on the source canvas); Brightness/Contrast apply via CSS
- * `filter` on <CanvasImage>. The two compose at draw time.
+ * Min/Max are the ImageJ-style window/level cutoffs: MultiChannelCanvas
+ * remaps the true (16-bit-aware) sample values through a LUT, and the
+ * slider range auto-scales to each channel set's data range. Brightness/
+ * Contrast apply via CSS `filter`. The two compose at draw time.
  */
 
 import { RotateCcw } from 'lucide-react';
@@ -37,8 +39,10 @@ function DisplaySliderRow({
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-gray-700 dark:text-gray-300">{label}</span>
-        <div className="flex items-center gap-1">
+        <span className="min-w-0 truncate text-gray-700 dark:text-gray-300">
+          {label}
+        </span>
+        <div className="flex items-center gap-1 shrink-0">
           <Input
             type="number"
             min={min}
@@ -49,7 +53,7 @@ function DisplaySliderRow({
               if (!Number.isFinite(next)) return;
               onChange(Math.max(min, Math.min(max, next)));
             }}
-            className="w-16 h-7 text-center text-xs"
+            className="w-28 shrink-0 h-7 px-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
           {suffix && (
             <span className="text-gray-500 dark:text-gray-400 text-xs">
@@ -75,6 +79,7 @@ export default function DisplaySection() {
   const {
     windowMin,
     windowMax,
+    windowRangeMax,
     brightness,
     contrast,
     setWindowMin,
@@ -106,14 +111,14 @@ export default function DisplaySection() {
           label={t('editor.windowLevel.min')}
           value={windowMin}
           min={0}
-          max={255}
+          max={windowRangeMax}
           onChange={setWindowMin}
         />
         <DisplaySliderRow
           label={t('editor.windowLevel.max')}
           value={windowMax}
           min={0}
-          max={255}
+          max={windowRangeMax}
           onChange={setWindowMax}
         />
         <DisplaySliderRow

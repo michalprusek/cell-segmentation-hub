@@ -324,6 +324,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                       <VideoFrameImage
                         isVideoMode={isVideoMode}
                         currentFrameId={video.currentFrame?.id ?? null}
+                        containerId={videoContainerId}
                         fallbackSrc={ensureBrowserCompatibleUrl(
                           selectedImage.id,
                           selectedImage.url,

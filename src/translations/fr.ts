@@ -1150,6 +1150,7 @@ export default {
     // Multi-channel canvas actions
     multiChannel: {
       allChannelsFailed: "Échec du chargement des canaux d'image",
+      someChannelsFailed: "Certains canaux d'image n'ont pas pu être chargés",
     },
   },
   project: {

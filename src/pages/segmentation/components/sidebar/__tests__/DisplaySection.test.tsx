@@ -49,6 +49,7 @@ function makeCtx(
     channelOpacities: {},
     windowMin: 0,
     windowMax: 255,
+    windowRangeMax: 255,
     brightness: 100,
     contrast: 100,
     setFrameIndex: vi.fn(),
@@ -56,6 +57,7 @@ function makeCtx(
     toggleChannelVisibility: vi.fn(),
     setVisibleChannels: vi.fn(),
     setChannelColor: vi.fn(),
+    seedChannelColors: vi.fn(),
     setChannelOpacity: vi.fn(),
     setWindow: vi.fn(),
     setWindowMin: vi.fn(),
@@ -247,6 +249,25 @@ describe('DisplaySection', () => {
       const inputs = screen.getAllByRole('spinbutton');
       fireEvent.change(inputs[2], { target: { value: '500' } });
       expect(setBrightness).toHaveBeenCalledWith(200);
+    });
+
+    // The 16-bit ceiling wiring: Min/Max clamp to windowRangeMax, not a
+    // hard-coded 255. These would pass even with `max={255}` at the default
+    // windowRangeMax=255, so they run with a real 16-bit range.
+    it('Max input clamps to windowRangeMax (16-bit ceiling), not 255', () => {
+      const setWindowMax = vi.fn();
+      renderWithCtx(makeCtx({ windowRangeMax: 23480, setWindowMax }));
+      const inputs = screen.getAllByRole('spinbutton');
+      fireEvent.change(inputs[1], { target: { value: '99999' } });
+      expect(setWindowMax).toHaveBeenCalledWith(23480);
+    });
+
+    it('Min input accepts a 16-bit value below windowRangeMax (not clamped to 255)', () => {
+      const setWindowMin = vi.fn();
+      renderWithCtx(makeCtx({ windowRangeMax: 23480, setWindowMin }));
+      const inputs = screen.getAllByRole('spinbutton');
+      fireEvent.change(inputs[0], { target: { value: '12000' } });
+      expect(setWindowMin).toHaveBeenCalledWith(12000);
     });
   });
 
