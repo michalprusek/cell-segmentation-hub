@@ -249,7 +249,6 @@ export default {
     deleteImageFailed: 'Image deletion failed',
     imagesQueuedForSegmentation: '{{count}} images added to segmentation queue',
     imageQueuedForResegmentation: 'Image added to queue for re-segmentation',
-    allImagesAlreadySegmented: 'All images are already segmented or queued',
     errorAddingToQueue: 'Error adding images to queue',
     imageAlreadyProcessing: 'Image is already being processed',
     processImageFailed: 'Failed to process image',
@@ -1000,9 +999,10 @@ export default {
     disconnected: 'Disconnected',
     waiting: 'waiting',
     processing: 'processing',
-    segmentAll: 'Segment All',
-    segmentAllWithCount: 'Segment All ({{count}})',
     resegmentSelected: 'Re-segment Selected ({{count}})',
+    segmentSelected: 'Segment Selected',
+    segmentSelectedWithCount: 'Segment Selected ({{count}})',
+    selectNothingTooltip: 'Select images to segment',
     segmentMixed:
       'Segment {{new}} + Re-segment {{resegment}} ({{total}} total)',
     segmentTooltip:
