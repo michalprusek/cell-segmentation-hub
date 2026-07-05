@@ -59,7 +59,7 @@ const clampProgress = (n: number): number =>
  * The extension is forced lowercase so the module's `*.nd2` glob never silently
  * skips an uppercase-extension well.
  */
-function sanitizeNd2Name(original: string): string {
+export function sanitizeNd2Name(original: string): string {
   const safe = path.basename(original).replace(/[^A-Za-z0-9._-]/g, '_');
   return safe.toLowerCase().endsWith('.nd2')
     ? `${safe.slice(0, -4)}.nd2`
