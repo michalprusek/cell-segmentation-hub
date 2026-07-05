@@ -38,7 +38,9 @@ const mockT = vi.fn((key: string, params?: Record<string, any>) => {
     'queue.processing': 'processing',
     'queue.parallel': 'parallel',
     'queue.users': 'users',
-    'queue.segmentAll': 'Segment All',
+    'queue.segmentSelected': 'Segment Selected',
+    'queue.segmentSelectedWithCount': 'Segment Selected ({{count}})',
+    'queue.selectNothingTooltip': 'Select images to segment',
     'queue.loadingStats': 'Loading statistics...',
     'queue.connectingMessage': 'Connecting to server...',
     'queue.allSlotsActive': 'All processing slots are active',
@@ -68,7 +70,6 @@ describe('QueueStatsPanel with Parallel Processing', () => {
     onSegmentAll: mockOnSegmentAll,
     onCancelSegmentation: mockOnCancelSegmentation,
     onOpenSettings: mockOnOpenSettings,
-    imagesToSegmentCount: 0,
     selectedImageIds: new Set<string>(),
     images: [],
   };
@@ -246,7 +247,8 @@ describe('QueueStatsPanel with Parallel Processing', () => {
         parallelStats={parallelStats}
         currentUserId="user1"
         isConnected={true}
-        imagesToSegmentCount={5}
+        images={[{ id: 'x', segmentationStatus: 'pending' }] as any}
+        selectedImageIds={new Set(['x'])}
       />
     );
 

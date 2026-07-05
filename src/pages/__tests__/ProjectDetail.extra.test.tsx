@@ -14,7 +14,7 @@
  *  8.  handleSelectAllToggle — when none selected: selects all filteredImages
  *  9.  handleOpenImage — delegates to handleOpenSegmentationEditor(imageId)
  * 10.  handleSegmentAll — addBatchToQueue throws: toast.error + batchSubmitted=false
- * 11.  handleSegmentAll — all images already segmented: toast.info('allImagesAlreadySegmented')
+ * 11.  handleSegmentAll — nothing selected: toast.info('queue.selectNothingTooltip')
  * 12.  handleBatchDeleteConfirm — isBatchDeleting guard prevents re-entry (duplicate call ignored)
  * 13.  handleBatchDelete — opens AlertDialog (showDeleteDialog becomes true)
  * 14.  toggleUploader — hides ProjectUploaderSection on second click
@@ -412,19 +412,16 @@ vi.mock('@/components/project/ProjectUploaderSection', () => ({
 vi.mock('@/components/project/QueueStatsPanel', () => ({
   QueueStatsPanel: ({
     batchSubmitted,
-    imagesToSegmentCount,
     onSegmentAll,
     onCancelSegmentation,
   }: {
     batchSubmitted: boolean;
-    imagesToSegmentCount: number;
     onSegmentAll: () => void;
     onCancelSegmentation: () => void;
     [key: string]: unknown;
   }) => (
     <div data-testid="queue-stats-panel">
       <span data-testid="batch-submitted">{String(batchSubmitted)}</span>
-      <span data-testid="images-to-segment">{imagesToSegmentCount}</span>
       <button data-testid="segment-all-btn" onClick={onSegmentAll}>
         Segment All
       </button>
@@ -714,6 +711,8 @@ describe('ProjectDetail — extra behavioral coverage', () => {
       wireDefaultHooks([img]);
       renderPage();
 
+      // Segmentation acts only on the selection — select the image first.
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
 
       await waitFor(() => {
@@ -726,10 +725,10 @@ describe('ProjectDetail — extra behavioral coverage', () => {
     });
   });
 
-  // ── 11. handleSegmentAll — all images already segmented ───────────────────
+  // ── 11. handleSegmentAll — nothing selected ───────────────────────────────
 
-  describe('handleSegmentAll — all images already segmented', () => {
-    it('shows toast.info("projects.allImagesAlreadySegmented") when nothing to segment', async () => {
+  describe('handleSegmentAll — nothing selected', () => {
+    it('shows toast.info("queue.selectNothingTooltip") when nothing is selected', async () => {
       const images = [
         makeImage({ segmentationStatus: 'completed' }, 'img-1'),
         makeImage({ segmentationStatus: 'completed' }, 'img-2'),
@@ -737,11 +736,12 @@ describe('ProjectDetail — extra behavioral coverage', () => {
       wireDefaultHooks(images);
       renderPage();
 
+      // No image selected → nothing to process.
       await userEvent.click(screen.getByTestId('segment-all-btn'));
 
       await waitFor(() => {
         expect(vi.mocked(toast.info)).toHaveBeenCalledWith(
-          'projects.allImagesAlreadySegmented'
+          'queue.selectNothingTooltip'
         );
       });
       expect(mockAddBatchToQueue).not.toHaveBeenCalled();

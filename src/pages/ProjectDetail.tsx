@@ -29,6 +29,7 @@ import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { usePagination } from '@/hooks/usePagination';
 import { motion } from 'framer-motion';
 import apiClient from '@/lib/api';
+import { partitionSelectedForSegmentation } from '@/lib/segmentationSelection';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -385,17 +386,6 @@ const ProjectDetail = () => {
   const paginatedImages = useMemo(
     () => filteredImages.slice(paginatedIndices.start, paginatedIndices.end),
     [filteredImages, paginatedIndices]
-  );
-
-  // Memoized calculations for heavy operations
-  const imagesToSegmentCount = useMemo(
-    () =>
-      images.filter(img =>
-        ['pending', 'failed', 'no_segmentation'].includes(
-          img.segmentationStatus
-        )
-      ).length,
-    [images]
   );
 
   // Check if queue has any items (processing or queued)
@@ -1302,32 +1292,19 @@ const ProjectDetail = () => {
     }
 
     try {
-      // Get images that don't have segmentation or have failed
-      const imagesWithoutSegmentation = images.filter(
-        img =>
-          img.segmentationStatus === 'pending' ||
-          img.segmentationStatus === 'failed' ||
-          img.segmentationStatus === 'no_segmentation' ||
-          !img.segmentationStatus
+      // Segment ONLY the current selection. Unselected images are never
+      // enqueued; selected images already queued/processing are skipped.
+      const { toSegment, toResegment } = partitionSelectedForSegmentation(
+        images,
+        selectedImageIds
       );
 
-      // Get selected images that have segmentation (will be re-segmented)
-      const selectedImagesWithSegmentation = images.filter(
-        img =>
-          selectedImageIds.has(img.id) &&
-          (img.segmentationStatus === 'completed' ||
-            img.segmentationStatus === 'segmented')
-      );
-
-      // Combine both groups
-      const allImagesToProcess = [
-        ...imagesWithoutSegmentation,
-        ...selectedImagesWithSegmentation,
-      ];
+      const allImagesToProcess = [...toSegment, ...toResegment];
 
       if (allImagesToProcess.length === 0) {
-        toast.info(t('projects.allImagesAlreadySegmented'));
-        // Reset batchSubmitted state since we're not actually processing anything
+        // Defence-in-depth: the button is disabled when nothing processable is
+        // selected, so this is only reachable via a stale click.
+        toast.info(t('queue.selectNothingTooltip'));
         setBatchSubmitted(false);
         return;
       }
@@ -1354,18 +1331,14 @@ const ProjectDetail = () => {
       }, 60000); // 60 second safety timeout (increased from 30s for large batches)
 
       // Prepare image IDs for batch processing
-      const imageIdsWithoutSegmentation = imagesWithoutSegmentation.map(
-        img => img.id
-      );
-      const imageIdsToResegment = selectedImagesWithSegmentation.map(
-        img => img.id
-      );
+      const imageIdsToSegment = toSegment.map(img => img.id);
+      const imageIdsToResegment = toResegment.map(img => img.id);
 
       // Update UI immediately for better UX
       updateImages(prevImages =>
         prevImages.map(img => {
           if (
-            imageIdsWithoutSegmentation.includes(img.id) ||
+            imageIdsToSegment.includes(img.id) ||
             imageIdsToResegment.includes(img.id)
           ) {
             return {
@@ -1429,12 +1402,9 @@ const ProjectDetail = () => {
         return processedCount;
       };
 
-      // Process images without segmentation (normal segmentation)
-      if (imageIdsWithoutSegmentation.length > 0) {
-        const queuedCount = await processImageChunks(
-          imageIdsWithoutSegmentation,
-          false
-        );
+      // Process selected images without segmentation (normal segmentation)
+      if (imageIdsToSegment.length > 0) {
+        const queuedCount = await processImageChunks(imageIdsToSegment, false);
         _totalQueued += queuedCount;
       }
 
@@ -1564,7 +1534,6 @@ const ProjectDetail = () => {
               onCancelSegmentation={handleCancelSegmentation}
               batchSubmitted={batchSubmitted || hasActiveQueue}
               isCancelling={isCancelling}
-              imagesToSegmentCount={imagesToSegmentCount}
               selectedImageIds={selectedImageIds}
               images={images}
               parallelStats={parallelStats}

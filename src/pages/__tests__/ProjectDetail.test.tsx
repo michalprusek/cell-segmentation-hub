@@ -20,7 +20,7 @@
  * - Cancel segmentation: calls apiClient.cancelAllUserSegmentations
  * - handleOpenImage: delegates to handleOpenSegmentationEditor (navigate to editor)
  * - handleProjectTypeChange: calls apiClient.updateProject with new type
- * - QueueStatsPanel receives correct props (stats, batchSubmitted, imagesToSegmentCount)
+ * - QueueStatsPanel receives correct props (stats, batchSubmitted)
  * - Pagination info line shown when images present
  *
  * NOT tested (legitimately):
@@ -442,19 +442,16 @@ vi.mock('@/components/project/ProjectUploaderSection', () => ({
 vi.mock('@/components/project/QueueStatsPanel', () => ({
   QueueStatsPanel: ({
     batchSubmitted,
-    imagesToSegmentCount,
     onSegmentAll,
     onCancelSegmentation,
   }: {
     batchSubmitted: boolean;
-    imagesToSegmentCount: number;
     onSegmentAll: () => void;
     onCancelSegmentation: () => void;
     [key: string]: unknown;
   }) => (
     <div data-testid="queue-stats-panel">
       <span data-testid="batch-submitted">{String(batchSubmitted)}</span>
-      <span data-testid="images-to-segment">{imagesToSegmentCount}</span>
       <button data-testid="segment-all-btn" onClick={onSegmentAll}>
         Segment All
       </button>
@@ -902,11 +899,13 @@ describe('ProjectDetail page', () => {
       mockAddBatchToQueue.mockResolvedValue({ queuedCount: 1 });
     });
 
-    it('calls apiClient.addBatchToQueue when images need segmentation', async () => {
+    it('calls apiClient.addBatchToQueue when the selected image needs segmentation', async () => {
       const img = makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1');
       wireDefaultHooks([img]);
       renderPage();
 
+      // Segmentation acts only on the selection — select the image first.
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
 
       await waitFor(() => {
@@ -923,16 +922,17 @@ describe('ProjectDetail page', () => {
       });
     });
 
-    it('does not call addBatchToQueue when all images are already segmented', async () => {
+    it('does not call addBatchToQueue and shows the select hint when nothing is selected', async () => {
       const img = makeImage({ segmentationStatus: 'completed' }, 'img-1');
       wireDefaultHooks([img]);
       renderPage();
 
+      // No image selected → nothing to process.
       await userEvent.click(screen.getByTestId('segment-all-btn'));
 
       await waitFor(() => {
         expect(vi.mocked(toast.info)).toHaveBeenCalledWith(
-          'projects.allImagesAlreadySegmented'
+          'queue.selectNothingTooltip'
         );
       });
       expect(mockAddBatchToQueue).not.toHaveBeenCalled();
@@ -1040,6 +1040,8 @@ describe('ProjectDetail page', () => {
       });
       renderPage();
 
+      // Segmentation acts only on the selection — select the image first.
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
       await waitFor(() => screen.getByTestId('segment-channel-dialog'));
 
@@ -1214,19 +1216,6 @@ describe('ProjectDetail page', () => {
   // -------------------------------------------------------------------------
 
   describe('QueueStatsPanel props', () => {
-    it('imagesToSegmentCount equals count of images with pending/failed/no_segmentation', () => {
-      const images = [
-        makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1'),
-        makeImage({ segmentationStatus: 'pending' }, 'img-2'),
-        makeImage({ segmentationStatus: 'completed' }, 'img-3'),
-      ];
-      wireDefaultHooks(images);
-      renderPage();
-
-      // 2 images need segmentation (no_segmentation + pending), 1 is completed
-      expect(screen.getByTestId('images-to-segment').textContent).toBe('2');
-    });
-
     it('batchSubmitted is false initially', () => {
       wireDefaultHooks([makeImage()]);
       renderPage();
@@ -1241,6 +1230,7 @@ describe('ProjectDetail page', () => {
       wireDefaultHooks([img]);
       renderPage();
 
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
 
       await waitFor(() => {

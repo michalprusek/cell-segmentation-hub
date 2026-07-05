@@ -241,8 +241,6 @@ export default {
       '{{count}} images ajoutées à la file de segmentation',
     imageQueuedForResegmentation:
       'Image ajoutée à la file pour re-segmentation',
-    allImagesAlreadySegmented:
-      'Toutes les images sont déjà segmentées ou en file',
     errorAddingToQueue: "Erreur lors de l'ajout à la file",
     imageAlreadyProcessing: "L'image est déjà en cours de traitement",
     processImageFailed: "Échec du traitement de l'image",
@@ -1018,8 +1016,6 @@ export default {
     disconnected: 'Déconnecté',
     waiting: 'en attente',
     processing: 'traitement en cours',
-    segmentAll: 'Segmenter Tout',
-    segmentAllWithCount: 'Segmenter Tout ({{count}})',
     totalProgress: 'Progression Totale',
     images: 'images',
     loadingStats: 'Chargement des statistiques...',
@@ -1029,6 +1025,9 @@ export default {
       'Aucune image dans la file. Téléchargez des images et ajoutez-les à la file pour la segmentation.',
     addingToQueue: 'Ajout à la file...',
     resegmentSelected: 'Re-segmenter Sélectionnées ({{count}})',
+    segmentSelected: 'Segmenter Sélectionnées',
+    segmentSelectedWithCount: 'Segmenter Sélectionnées ({{count}})',
+    selectNothingTooltip: 'Sélectionnez des images à segmenter',
     segmentMixed:
       'Segmenter {{new}} + Re-segmenter {{resegment}} ({{total}} total)',
     segmentTooltip:

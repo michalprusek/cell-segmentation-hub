@@ -8,7 +8,7 @@
  *  4. Segment-all skips all images message when 'failed' images ALSO count as
  *     needing segmentation (failed images ARE included in the "to segment" set)
  *  5. Segment-all double-submission prevention: second click is no-op (batchSubmitted=true)
- *  6. imagesToSegmentCount includes 'failed' status images
+ *  6. Segment-all re-segments selected completed images (two addBatchToQueue calls)
  *  7. Empty state + search-term: hasSearchTerm=true shown to EmptyState when
  *     images exist but searchTerm filters all out
  *  8. useStatusReconciliation called with correct projectId
@@ -422,19 +422,16 @@ vi.mock('@/components/project/ProjectUploaderSection', () => ({
 vi.mock('@/components/project/QueueStatsPanel', () => ({
   QueueStatsPanel: ({
     batchSubmitted,
-    imagesToSegmentCount,
     onSegmentAll,
     onCancelSegmentation,
   }: {
     batchSubmitted: boolean;
-    imagesToSegmentCount: number;
     onSegmentAll: () => void;
     onCancelSegmentation: () => void;
     [key: string]: unknown;
   }) => (
     <div data-testid="queue-stats-panel">
       <span data-testid="batch-submitted">{String(batchSubmitted)}</span>
-      <span data-testid="images-to-segment">{imagesToSegmentCount}</span>
       <button data-testid="segment-all-btn" onClick={onSegmentAll}>
         Segment All
       </button>
@@ -619,26 +616,6 @@ describe('ProjectDetail — additional gap coverage', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 3. imagesToSegmentCount counts 'failed' images
-  // -------------------------------------------------------------------------
-
-  describe('imagesToSegmentCount includes failed status', () => {
-    it('counts failed + pending + no_segmentation images', () => {
-      const images = [
-        makeImage({ segmentationStatus: 'failed' }, 'img-1'),
-        makeImage({ segmentationStatus: 'pending' }, 'img-2'),
-        makeImage({ segmentationStatus: 'completed' }, 'img-3'),
-        makeImage({ segmentationStatus: 'no_segmentation' }, 'img-4'),
-      ];
-      wireDefaultHooks(images);
-      renderPage();
-
-      // failed(1) + pending(1) + no_segmentation(1) = 3
-      expect(screen.getByTestId('images-to-segment').textContent).toBe('3');
-    });
-  });
-
-  // -------------------------------------------------------------------------
   // 4. Segment-all double-submission prevention
   // -------------------------------------------------------------------------
 
@@ -650,6 +627,8 @@ describe('ProjectDetail — additional gap coverage', () => {
       wireDefaultHooks([img]);
       renderPage();
 
+      // Segmentation acts only on the selection — select the image first.
+      await userEvent.click(screen.getByTestId('select-img-1'));
       // First click — resolves and sets batchSubmitted=true
       await userEvent.click(screen.getByTestId('segment-all-btn'));
       await waitFor(() => {
@@ -675,6 +654,8 @@ describe('ProjectDetail — additional gap coverage', () => {
       wireDefaultHooks([img]);
       renderPage();
 
+      // Segmentation acts only on the selection — select the image first.
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
 
       await waitFor(() => {
@@ -807,10 +788,12 @@ describe('ProjectDetail — additional gap coverage', () => {
       wireDefaultHooks([imgCompleted, imgNoSeg]);
       renderPage();
 
-      // Select completed image for re-segmentation
+      // Segmentation acts only on the selection: select both the completed
+      // image (→ re-segment) and the no_segmentation image (→ segment).
       await userEvent.click(screen.getByTestId('select-img-1'));
+      await userEvent.click(screen.getByTestId('select-img-2'));
       await waitFor(() =>
-        expect(screen.getByTestId('selected-count').textContent).toBe('1')
+        expect(screen.getByTestId('selected-count').textContent).toBe('2')
       );
 
       await userEvent.click(screen.getByTestId('segment-all-btn'));

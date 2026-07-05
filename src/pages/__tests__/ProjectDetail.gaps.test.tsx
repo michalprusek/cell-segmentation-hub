@@ -429,19 +429,16 @@ vi.mock('@/components/project/ProjectUploaderSection', () => ({
 vi.mock('@/components/project/QueueStatsPanel', () => ({
   QueueStatsPanel: ({
     batchSubmitted,
-    imagesToSegmentCount,
     onSegmentAll,
     onCancelSegmentation,
   }: {
     batchSubmitted: boolean;
-    imagesToSegmentCount: number;
     onSegmentAll: () => void;
     onCancelSegmentation: () => void;
     [key: string]: unknown;
   }) => (
     <div data-testid="queue-stats-panel">
       <span data-testid="batch-submitted">{String(batchSubmitted)}</span>
-      <span data-testid="images-to-segment">{imagesToSegmentCount}</span>
       <button data-testid="segment-all-btn" onClick={onSegmentAll}>
         Segment All
       </button>
@@ -1175,6 +1172,8 @@ describe('ProjectDetail — gap coverage', () => {
 
       renderPage();
 
+      // Segmentation acts only on the selection — select the image first.
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
 
       await waitFor(() => {

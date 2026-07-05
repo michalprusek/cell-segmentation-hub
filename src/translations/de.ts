@@ -241,8 +241,6 @@ export default {
       '{{count}} Bilder zur Segmentierungswarteschlange hinzugefügt',
     imageQueuedForResegmentation:
       'Bild zur Re-Segmentierung in die Warteschlange eingereiht',
-    allImagesAlreadySegmented:
-      'Alle Bilder sind bereits segmentiert oder in der Warteschlange',
     errorAddingToQueue: 'Fehler beim Hinzufügen zur Warteschlange',
     imageAlreadyProcessing: 'Bild wird bereits verarbeitet',
     processImageFailed: 'Bildverarbeitung fehlgeschlagen',
@@ -1026,8 +1024,6 @@ export default {
     disconnected: 'Getrennt',
     waiting: 'wartend',
     processing: 'verarbeitend',
-    segmentAll: 'Alle Segmentieren',
-    segmentAllWithCount: 'Alle Segmentieren ({{count}})',
     totalProgress: 'Gesamtfortschritt',
     images: 'Bilder',
     loadingStats: 'Statistiken werden geladen...',
@@ -1037,6 +1033,9 @@ export default {
       'Keine Bilder in der Warteschlange. Laden Sie Bilder hoch und fügen Sie sie zur Segmentierung hinzu.',
     addingToQueue: 'Zur Warteschlange hinzufügen...',
     resegmentSelected: 'Ausgewählte re-segmentieren ({{count}})',
+    segmentSelected: 'Ausgewählte segmentieren',
+    segmentSelectedWithCount: 'Ausgewählte segmentieren ({{count}})',
+    selectNothingTooltip: 'Bilder zum Segmentieren auswählen',
     segmentMixed:
       'Segmentiere {{new}} + Re-segmentiere {{resegment}} ({{total}} gesamt)',
     segmentTooltip:
