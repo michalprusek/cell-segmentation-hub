@@ -10,9 +10,10 @@ unsuitable for absolute fluorescence quantification).
 
 For each (frame, polyline, channel) it emits a long-format row with:
 - length_px, area_px (band area at the supplied thickness)
-- pixel_count, sum/mean/std of pixel intensities inside the band
-- median_background (median of pixels OUTSIDE all bands dilated by
-  ``thickness * margin_multiplier``, per channel)
+- pixel_count, sum/mean/median/std of pixel intensities inside the band
+- median_background / mean_background (median resp. mean of pixels
+  OUTSIDE all bands dilated by ``thickness * margin_multiplier``, per
+  channel)
 - signal_minus_background = mean_intensity - median_background
 
 Unit conversion (px -> um) is intentionally done on the Node side so
@@ -110,10 +111,12 @@ class MTMetricsRow(BaseModel):
     pixel_count: int
     sum_intensity: float
     mean_intensity: float
+    median_intensity: float
     std_intensity: float
     # null when the background mask is empty (every pixel in the dilated
     # signal union) or when the band mask is empty.
     median_background: Optional[float] = None
+    mean_background: Optional[float] = None
     signal_minus_background: Optional[float] = None
 
 
@@ -309,9 +312,10 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
          ``thickness * margin_multiplier`` for the background exclusion.
       3. background_mask = NOT dilated_union.
       4. For each requested channel:
-           - median_background = median of pixels under background_mask.
-           - For each polyline: pixel_count / sum / mean / std under
-             that polyline's band; emit one row.
+           - median_background / mean_background = median resp. mean of
+             pixels under background_mask.
+           - For each polyline: pixel_count / sum / mean / median / std
+             under that polyline's band; emit one row.
     """
     if len(req.channel_indices) != len(req.channel_names):
         raise HTTPException(
@@ -386,22 +390,21 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             frame_arr = volume[t, ci].astype(np.float64)
 
             bg_pixels = frame_arr[background_mask]
-            median_bg = (
-                float(np.median(bg_pixels))
-                if bg_pixels.size > 0
-                else None
-            )
+            has_bg = bg_pixels.size > 0
+            median_bg = float(np.median(bg_pixels)) if has_bg else None
+            mean_bg = float(bg_pixels.mean()) if has_bg else None
 
             for pl_idx, pl in enumerate(fr.polylines):
                 band = band_masks[pl_idx]
                 pixels = frame_arr[band > 0]
                 pixel_count = int(pixels.size)
                 if pixel_count == 0:
-                    sum_v = mean_v = std_v = 0.0
+                    sum_v = mean_v = median_v = std_v = 0.0
                     signal_minus_bg: Optional[float] = None
                 else:
                     sum_v = float(pixels.sum())
                     mean_v = float(pixels.mean())
+                    median_v = float(np.median(pixels))
                     std_v = float(pixels.std())
                     signal_minus_bg = (
                         (mean_v - median_bg)
@@ -420,8 +423,10 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
                     pixel_count=pixel_count,
                     sum_intensity=sum_v,
                     mean_intensity=mean_v,
+                    median_intensity=median_v,
                     std_intensity=std_v,
                     median_background=median_bg,
+                    mean_background=mean_bg,
                     signal_minus_background=signal_minus_bg,
                 ))
 

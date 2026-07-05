@@ -510,8 +510,10 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
           pixel_count: 100,
           sum_intensity: 5000,
           mean_intensity: 50,
+          median_intensity: 48,
           std_intensity: 5,
           median_background: 10,
+          mean_background: 12,
           signal_minus_background: 40,
         },
       ],
@@ -573,8 +575,10 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     expect(r.pixelCount).toBe(100);
     expect(r.sumIntensity).toBe(5000);
     expect(r.meanIntensity).toBe(50);
+    expect(r.medianIntensity).toBe(48);
     expect(r.stdIntensity).toBe(5);
     expect(r.medianBackground).toBe(10);
+    expect(r.meanBackground).toBe(12);
     expect(r.signalMinusBackground).toBe(40);
   });
 
