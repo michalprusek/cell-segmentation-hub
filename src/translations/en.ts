@@ -2312,4 +2312,33 @@ export default {
     cannotMoveIntoSelf:
       'A folder cannot be moved into itself or its own subfolder',
   },
+  automatedEssays: {
+    navLabel: 'Automated Essays',
+    title: 'Automated Essays',
+    subtitle:
+      'Upload a folder of .nd2 well recordings to measure microtubule length and intensity for every well.',
+    dragFolder: 'Drag a folder of .nd2 wells here',
+    dropHere: 'Drop the folder to add it',
+    selectFolder: 'Select folder',
+    onlyNd2: 'Only .nd2 well recordings are processed.',
+    filesSelected: '{{count}} .nd2 file(s) selected',
+    clear: 'Clear',
+    uploadAndProcess: 'Upload & process',
+    uploading: 'Uploading… {{percent}}%',
+    jobStarted: 'Upload complete — processing started',
+    uploadFailed: 'Upload failed',
+    downloadFailed: 'Could not start the download',
+    yourRuns: 'Your runs',
+    noRuns: 'No runs yet. Upload a folder to get started.',
+    fileCount: '{{count}} file(s)',
+    mtCount: '{{count}} microtubules',
+    download: 'Download',
+    delete: 'Delete',
+    status: {
+      queued: 'Queued',
+      running: 'Processing',
+      completed: 'Completed',
+      failed: 'Failed',
+    },
+  },
 };

@@ -2230,4 +2230,34 @@ export default {
     cannotMoveIntoSelf:
       'Un dossier ne peut pas être déplacé dans lui-même ou dans son propre sous-dossier',
   },
+  automatedEssays: {
+    navLabel: 'Essais automatisés',
+    title: 'Essais automatisés',
+    subtitle:
+      'Téléversez un dossier d’enregistrements de puits .nd2 pour mesurer la longueur et l’intensité des microtubules de chaque puits.',
+    dragFolder: 'Glissez ici un dossier de puits .nd2',
+    dropHere: 'Déposez le dossier pour l’ajouter',
+    selectFolder: 'Sélectionner un dossier',
+    onlyNd2: 'Seuls les enregistrements de puits .nd2 sont traités.',
+    filesSelected: '{{count}} fichier(s) .nd2 sélectionné(s)',
+    clear: 'Effacer',
+    uploadAndProcess: 'Téléverser et traiter',
+    uploading: 'Téléversement… {{percent}} %',
+    jobStarted: 'Téléversement terminé — traitement démarré',
+    uploadFailed: 'Échec du téléversement',
+    downloadFailed: 'Impossible de démarrer le téléchargement',
+    yourRuns: 'Vos exécutions',
+    noRuns:
+      'Aucune exécution pour l’instant. Téléversez un dossier pour commencer.',
+    fileCount: '{{count}} fichier(s)',
+    mtCount: '{{count}} microtubules',
+    download: 'Télécharger',
+    delete: 'Supprimer',
+    status: {
+      queued: 'En file d’attente',
+      running: 'Traitement',
+      completed: 'Terminé',
+      failed: 'Échec',
+    },
+  },
 };

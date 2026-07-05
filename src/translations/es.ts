@@ -2281,4 +2281,33 @@ export default {
     cannotMoveIntoSelf:
       'Una carpeta no se puede mover dentro de sí misma o de su propia subcarpeta',
   },
+  automatedEssays: {
+    navLabel: 'Ensayos automatizados',
+    title: 'Ensayos automatizados',
+    subtitle:
+      'Sube una carpeta de grabaciones de pocillos .nd2 para medir la longitud y la intensidad de los microtúbulos en cada pocillo.',
+    dragFolder: 'Arrastra aquí una carpeta de pocillos .nd2',
+    dropHere: 'Suelta la carpeta para añadirla',
+    selectFolder: 'Seleccionar carpeta',
+    onlyNd2: 'Solo se procesan grabaciones de pocillos .nd2.',
+    filesSelected: '{{count}} archivo(s) .nd2 seleccionados',
+    clear: 'Limpiar',
+    uploadAndProcess: 'Subir y procesar',
+    uploading: 'Subiendo… {{percent}} %',
+    jobStarted: 'Subida completa: procesamiento iniciado',
+    uploadFailed: 'Error al subir',
+    downloadFailed: 'No se pudo iniciar la descarga',
+    yourRuns: 'Tus ejecuciones',
+    noRuns: 'Aún no hay ejecuciones. Sube una carpeta para empezar.',
+    fileCount: '{{count}} archivo(s)',
+    mtCount: '{{count}} microtúbulos',
+    download: 'Descargar',
+    delete: 'Eliminar',
+    status: {
+      queued: 'En cola',
+      running: 'Procesando',
+      completed: 'Completado',
+      failed: 'Fallido',
+    },
+  },
 };
