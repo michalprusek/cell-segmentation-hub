@@ -108,7 +108,9 @@ class MicrotubuleModel:
     # adding prior foreground next to a detected filament bridges the two in
     # the skeleton graph, so the path tracer merges them and an instance is
     # LOST. The guard confines recovery to regions the current frame detected
-    # nothing, making warm start strictly additive (never destructive).
+    # nothing, so warm start is additive at the seed-mask level and, for
+    # guard > 0, non-bridging in the skeleton graph (recovered pixels stay
+    # >= guard px from any detection, forming their own components).
     PRIOR_MERGE_GUARD_PX: int = 3
 
     def predict(self, image_np, seed_threshold: Optional[float] = None,
@@ -139,6 +141,10 @@ class MicrotubuleModel:
                 prior. Defaults to ``PRIOR_SEED_THRESHOLD`` (0.30).
             prior_dilate_px: Half-width (px) of the rasterised prior band.
                 Defaults to ``PRIOR_DILATE_PX`` (2).
+            prior_merge_guard_px: Recovered prior pixels within this many px of
+                an already-detected MT are discarded, so warm start never
+                bridges two detected filaments. Defaults to
+                ``PRIOR_MERGE_GUARD_PX`` (3); 0 disables the guard.
 
         Returns:
             ``{
@@ -209,7 +215,25 @@ class MicrotubuleModel:
             if guard > 0 and recover.any():
                 near_existing = binary_dilation(seed_fg, iterations=int(guard))
                 recover = recover & ~near_existing
+            elif guard <= 0 and recover.any():
+                # Guard disabled: recovery may bridge two detected MTs and the
+                # tracer can then LOSE an instance. Left as an explicit escape
+                # hatch, but never silent.
+                logger.warning(
+                    "microtubule warm-start: merge guard disabled (guard=%d); "
+                    "recovered pixels may bridge detected filaments", guard,
+                )
+            n_recovered = int(recover.sum())
             seed_fg = seed_fg | recover
+            # Observability: a coordinate/size mismatch in prev_centerlines
+            # rasterises the prior off the real filaments and silently recovers
+            # nothing. Logging the count turns that into an explicit
+            # "recovered 0 px from N priors" instead of a no-op that looks like
+            # success.
+            logger.debug(
+                "microtubule warm-start: recovered %d seed px from %d prior "
+                "centerlines", n_recovered, len(prev_centerlines),
+            )
         binary = seed_fg.astype(np.uint8) * 255
 
         from pysoax import extract_soax_instances  # absolute import via sys.path
@@ -293,14 +317,28 @@ class MicrotubuleModel:
 
         mask = np.zeros((H, W), dtype=np.uint8)
         thickness = max(1, 2 * int(dilate_px) + 1)
+        drawn = 0
         for cl in centerlines:
             arr = np.asarray(cl, dtype=np.float64)
             if arr.ndim != 2 or arr.shape[0] < 2 or arr.shape[1] != 2:
+                continue
+            if not np.isfinite(arr).all():
+                # A NaN/Inf coord rounds to INT32_MIN and cv2 would paint a
+                # stray band across the frame → spurious recovery. Skip it.
                 continue
             # (row, col) -> (x=col, y=row) integer pixels for cv2.
             pts = np.round(arr[:, ::-1]).astype(np.int32)
             cv2.polylines(mask, [pts], isClosed=False, color=1,
                           thickness=thickness)
+            drawn += 1
+        if centerlines and drawn == 0:
+            # Nothing rasterised despite being given priors: usually a wrong
+            # shape/coordinate convention. Surface it rather than return an
+            # empty prior that silently recovers nothing.
+            logger.warning(
+                "microtubule warm-start: rasterised 0 of %d prior centerlines "
+                "(wrong shape/space?); prior is empty", len(centerlines),
+            )
         return mask.astype(bool)
 
     def predict_sequence(self, frames, seed_threshold: Optional[float] = None,
@@ -340,5 +378,11 @@ class MicrotubuleModel:
                 prior_merge_guard_px=prior_merge_guard_px,
             )
             results.append(res)
-            prev_cl = res["centerlines_rc"] if propagate else None
+            # Carry the last NON-EMPTY prior forward: a frame that detects
+            # nothing must not blank the prior, or a multi-frame dropout — the
+            # very case warm-start targets — would run cold on the next frame.
+            if propagate:
+                prev_cl = res["centerlines_rc"] or prev_cl
+            else:
+                prev_cl = None
         return results

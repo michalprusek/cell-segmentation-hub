@@ -267,9 +267,13 @@ def _align_endpoints(feat: _Filament, ref: _Filament) -> _Filament:
     *ref*'s endpoint labelling (minimises head-head + tail-tail distance).
 
     PySOAX centerline direction is arbitrary and can flip frame to frame;
-    without this the per-endpoint velocity would be garbage. The matching
-    cost itself is direction-invariant, so this only affects the velocity
-    bookkeeping, never the accepted/rejected decision.
+    without this the per-endpoint velocity would be garbage. A single
+    filament-vs-filament cost is direction-invariant (min-pairing endpoints,
+    ``|cos Δθ|``, order-independent mean embedding), so aligning a stored
+    observation never *retroactively* changes the cost of the link just
+    accepted. Its effect is confined to the per-endpoint velocity — which
+    does feed the next frame's predicted endpoints and therefore its costs;
+    that downstream influence is the whole point.
     """
     straight = float(np.linalg.norm(feat.end_a - ref.end_a)) + float(
         np.linalg.norm(feat.end_b - ref.end_b)
@@ -295,7 +299,16 @@ def _predict_filament(state: _TrackState, target_frame: int) -> _Filament:
     """
     last = state.last_feat
     emb = state.emb_template if state.emb_template is not None else last.mean_emb
-    if state.prev_feat is None or state.prev_frame is None:
+    # Fall back to a zero-velocity (identity) prediction with < 2 observations
+    # OR when either observation is degenerate (empty / single-point centerline
+    # → zero-vector endpoints, length 0): extrapolating from a [0, 0] endpoint
+    # would inject a spurious ~origin-directed velocity into the next frame.
+    if (
+        state.prev_feat is None
+        or state.prev_frame is None
+        or last.length <= 0.0
+        or state.prev_feat.length <= 0.0
+    ):
         return last._replace(mean_emb=emb)
     dt_prev = max(state.last_frame - state.prev_frame, 1)
     step = float(target_frame - state.last_frame)
