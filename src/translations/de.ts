@@ -2264,6 +2264,10 @@ export default {
     mtCount: '{{count}} Mikrotubuli',
     download: 'Herunterladen',
     delete: 'Löschen',
+    deleteFailed: 'Der Lauf konnte nicht gelöscht werden',
+    noNd2Found: 'In diesem Ordner wurden keine .nd2-Aufnahmen gefunden',
+    someIgnored:
+      'Verwende {{kept}} von {{total}} Dateien (nur .nd2 wird verarbeitet)',
     status: {
       queued: 'In Warteschlange',
       running: 'Verarbeitung',

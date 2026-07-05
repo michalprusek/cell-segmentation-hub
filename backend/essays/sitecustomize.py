@@ -2,8 +2,9 @@
 
 CPython auto-imports ``sitecustomize`` from ``sys.path`` at interpreter startup
 (before any user code runs). We use that hook to cap this process's share of the
-shared A5000 *before* torch initialises CUDA — the only moment
-``set_per_process_memory_fraction`` takes effect.
+shared A5000 *before* ``evaluate.py`` performs its first GPU allocation —
+``set_per_process_memory_fraction`` only limits allocations made *after* it is
+called, so it must run before the model loads and allocates.
 
 The cap is applied ONLY when ``ESSAYS_APPLY_GPU_CAP=1`` so the long-lived FastAPI
 server and the build-time import smoke don't pay the torch-import cost or hold

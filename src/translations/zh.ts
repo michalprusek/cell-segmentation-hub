@@ -2115,6 +2115,9 @@ export default {
     mtCount: '{{count}} 条微管',
     download: '下载',
     delete: '删除',
+    deleteFailed: '无法删除该任务',
+    noNd2Found: '该文件夹中未找到 .nd2 记录',
+    someIgnored: '使用 {{total}} 个文件中的 {{kept}} 个（仅处理 .nd2）',
     status: {
       queued: '排队中',
       running: '处理中',

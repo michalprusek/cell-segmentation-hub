@@ -2334,6 +2334,9 @@ export default {
     mtCount: '{{count}} microtubules',
     download: 'Download',
     delete: 'Delete',
+    deleteFailed: 'Could not delete the run',
+    noNd2Found: 'No .nd2 well recordings found in that folder',
+    someIgnored: 'Using {{kept}} of {{total}} files (only .nd2 is processed)',
     status: {
       queued: 'Queued',
       running: 'Processing',

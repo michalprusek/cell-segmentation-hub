@@ -2253,6 +2253,10 @@ export default {
     mtCount: '{{count}} microtubules',
     download: 'Télécharger',
     delete: 'Supprimer',
+    deleteFailed: 'Impossible de supprimer l’exécution',
+    noNd2Found: 'Aucun enregistrement .nd2 trouvé dans ce dossier',
+    someIgnored:
+      'Utilisation de {{kept}} fichiers sur {{total}} (seul .nd2 est traité)',
     status: {
       queued: 'En file d’attente',
       running: 'Traitement',

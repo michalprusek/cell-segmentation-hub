@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FolderUp } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
 
@@ -36,7 +37,21 @@ const EssaysDropzone: React.FC<EssaysDropzoneProps> = ({
 
   const emit = (files: File[]) => {
     const nd2 = keepNd2(files);
-    if (nd2.length > 0) onFiles(nd2);
+    if (nd2.length === 0) {
+      // Never leave the picker/drop with no feedback — the user picked
+      // something, so tell them nothing usable was found rather than no-op.
+      toast.error(t('automatedEssays.noNd2Found'));
+      return;
+    }
+    if (nd2.length < files.length) {
+      toast.info(
+        t('automatedEssays.someIgnored', {
+          kept: nd2.length,
+          total: files.length,
+        })
+      );
+    }
+    onFiles(nd2);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

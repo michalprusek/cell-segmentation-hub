@@ -97,6 +97,7 @@ const AutomatedEssays: React.FC = () => {
     mutationFn: (jobId: string) => apiClient.deleteEssayJob(jobId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['essay-jobs'] }),
+    onError: () => toast.error(t('automatedEssays.deleteFailed')),
   });
 
   const handleDownload = async (job: EssayJob) => {

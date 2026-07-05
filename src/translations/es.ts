@@ -2303,6 +2303,9 @@ export default {
     mtCount: '{{count}} microtúbulos',
     download: 'Descargar',
     delete: 'Eliminar',
+    deleteFailed: 'No se pudo eliminar la ejecución',
+    noNd2Found: 'No se encontraron grabaciones .nd2 en esa carpeta',
+    someIgnored: 'Usando {{kept}} de {{total}} archivos (solo se procesa .nd2)',
     status: {
       queued: 'En cola',
       running: 'Procesando',

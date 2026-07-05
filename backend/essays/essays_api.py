@@ -51,7 +51,6 @@ _BOOL_FLAGS = {"noOverlays": "--no-overlays", "noJson": "--no-json"}
 
 _INFO_TOTAL = re.compile(r"\[info\]\s+(\d+)\s+well file")
 _OK_LINE = re.compile(r"\[ok\]\s+\((\d+)/(\d+)\)\s+(\S+):\s+(\d+)\s+MT")
-_DONE_LINE = re.compile(r"\[done\]\s+(\d+)\s+positions,\s+(\d+)\s+microtubules")
 
 app = FastAPI(title="Automated Essays Worker", version="1.0")
 
@@ -81,11 +80,17 @@ def _set_status(job_id: str, out_dir: str, **fields) -> None:
     try:
         sp = _status_path(out_dir)
         sp.parent.mkdir(parents=True, exist_ok=True)
-        sp.write_text(json.dumps(snapshot))
+        # Write to a temp file then os.replace() so the backend reconciler can
+        # never read a torn/partial status.json (the write is otherwise not
+        # atomic and a mid-write read would fail JSON.parse).
+        tmp = sp.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(snapshot))
+        os.replace(tmp, sp)
     except Exception as e:
         # In-memory status is still served, but the backend reconciles from the
         # file — surface the failure loudly (a silent miss here looks like a
         # permanently "queued" job). Most likely a shared-volume uid mismatch.
+        # The backend's staleness watchdog is the safety net if this persists.
         print(f"[essays] WARN: cannot write {out_dir}/../status.json: {e}",
               file=sys.stderr, flush=True)
 
@@ -143,26 +148,32 @@ def _build_cmd(req: ProcessRequest, device: str) -> list[str]:
 
 def _run_job(req: ProcessRequest) -> None:
     job_id, out_dir = req.jobId, req.outDir
-    if not Path(req.inputDir).is_dir() and not Path(req.inputDir).exists():
-        _set_status(job_id, out_dir, state="failed",
-                    error=f"input path not found: {req.inputDir}")
-        return
-
-    device = _await_gpu(job_id, out_dir)
-    Path(out_dir).mkdir(parents=True, exist_ok=True)
-    _set_status(job_id, out_dir, state="running", device=device, progress=0,
-                wellsTotal=0, wellsDone=0, positionsDone=0, mtCount=0, error=None)
-
-    env = dict(os.environ)
-    if device == "cuda":
-        env["ESSAYS_APPLY_GPU_CAP"] = "1"
-        env["ESSAYS_GPU_MEM_FRACTION"] = GPU_MEM_FRACTION
-        # expandable_segments cuts fragmentation on the shared card, which the
-        # module's large TIRF frames are prone to; set before torch inits CUDA.
-        env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-
-    wells_total = 0
+    # Everything runs inside the try so ANY failure (a bad input dir, an mkdir on
+    # a full/read-only volume, a GPU-query error, the subprocess) marks the job
+    # failed instead of escaping — an escape would kill the single worker thread
+    # (see _worker) and silently deadlock the whole queue.
     try:
+        if not Path(req.inputDir).is_dir():
+            _set_status(job_id, out_dir, state="failed",
+                        error=f"input directory not found: {req.inputDir}")
+            return
+
+        device = _await_gpu(job_id, out_dir)
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
+        _set_status(job_id, out_dir, state="running", device=device, progress=0,
+                    wellsTotal=0, wellsDone=0, positionsDone=0, mtCount=0,
+                    error=None)
+
+        env = dict(os.environ)
+        if device == "cuda":
+            env["ESSAYS_APPLY_GPU_CAP"] = "1"
+            env["ESSAYS_GPU_MEM_FRACTION"] = GPU_MEM_FRACTION
+            # expandable_segments cuts fragmentation on the shared card, which
+            # the module's large TIRF frames are prone to; set before torch
+            # inits CUDA.
+            env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+        wells_total = 0
         proc = subprocess.Popen(
             _build_cmd(req, device), cwd=str(MODULE_DIR), env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
@@ -197,10 +208,22 @@ def _run_job(req: ProcessRequest) -> None:
 
 
 def _worker() -> None:
+    # This is the SINGLE consumer of _work. If an exception ever escaped this
+    # loop the thread would die and every future job would sit unqueued forever
+    # (a silent deadlock). _run_job already catches its own failures; this is the
+    # last-resort guard so nothing — not even a _set_status raise — can kill it.
     while True:
         req = _work.get()
         try:
             _run_job(req)
+        except Exception as e:  # noqa: BLE001
+            print(f"[essays] worker error on {getattr(req, 'jobId', '?')}: {e}",
+                  file=sys.stderr, flush=True)
+            try:
+                _set_status(req.jobId, req.outDir, state="failed",
+                            error=f"worker error: {e}")
+            except Exception:
+                pass
         finally:
             _work.task_done()
 

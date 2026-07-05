@@ -2272,6 +2272,10 @@ export default {
     mtCount: '{{count}} mikrotubulů',
     download: 'Stáhnout',
     delete: 'Smazat',
+    deleteFailed: 'Úlohu se nepodařilo smazat',
+    noNd2Found: 'V dané složce nebyly nalezeny žádné záznamy .nd2',
+    someIgnored:
+      'Použije se {{kept}} z {{total}} souborů (zpracují se jen .nd2)',
     status: {
       queued: 'Ve frontě',
       running: 'Zpracovává se',

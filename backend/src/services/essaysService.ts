@@ -14,6 +14,14 @@ import {
 
 const CTX = 'EssaysService';
 const RECONCILE_INTERVAL_MS = 5000;
+// A job whose row has not advanced for this long (worker crashed / redeployed /
+// status.json unreadable) is declared dead by the watchdog. Comfortably above
+// the worker's 30-min GPU-wait ceiling so a legitimately-waiting job is safe.
+const STALE_JOB_MS = 60 * 60 * 1000;
+// Orphaned upload temp files (rejected filter, size trip, client abort) are
+// swept on this cadence once older than the max age.
+const STAGING_SWEEP_INTERVAL_MS = 30 * 60 * 1000;
+const STAGING_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 /** Options the frontend may pass through to the module's evaluate.py. */
 export interface EssayJobOptions {
@@ -42,10 +50,20 @@ interface WorkerStatus {
 
 const exportDir = (): string => path.resolve(process.env.EXPORT_DIR || './exports');
 
-/** Strip path components and unsafe chars; guarantee a .nd2 suffix. */
+/** Coerce a worker-reported progress into the 0-100 invariant. */
+const clampProgress = (n: number): number =>
+  Math.min(100, Math.max(0, Math.round(Number.isFinite(n) ? n : 0)));
+
+/**
+ * Strip path components and unsafe chars; guarantee a lowercase `.nd2` suffix.
+ * The extension is forced lowercase so the module's `*.nd2` glob never silently
+ * skips an uppercase-extension well.
+ */
 function sanitizeNd2Name(original: string): string {
   const safe = path.basename(original).replace(/[^A-Za-z0-9._-]/g, '_');
-  return safe.toLowerCase().endsWith('.nd2') ? safe : `${safe}.nd2`;
+  return safe.toLowerCase().endsWith('.nd2')
+    ? `${safe.slice(0, -4)}.nd2`
+    : `${safe}.nd2`;
 }
 
 /**
@@ -77,6 +95,15 @@ export class EssaysService {
       );
     }, RECONCILE_INTERVAL_MS);
     if (typeof timer.unref === 'function') timer.unref();
+
+    // Sweep orphaned upload temp files (aborted/rejected uploads never reach
+    // submitJob's rename) so the shared volume can't fill up unbounded.
+    const sweep = setInterval(() => {
+      this.sweepStaging().catch((e) =>
+        logger.warn(`essays staging sweep failed: ${String(e)}`, CTX)
+      );
+    }, STAGING_SWEEP_INTERVAL_MS);
+    if (typeof sweep.unref === 'function') sweep.unref();
   }
 
   static getInstance(): EssaysService {
@@ -117,8 +144,11 @@ export class EssaysService {
       const dest = path.join(inputDir, base);
       try {
         await fs.rename(f.path, dest);
-      } catch {
-        // Cross-device fallback — staging is same-fs by design, but be safe.
+      } catch (e) {
+        // Only fall back to copy on a genuine cross-device move (EXDEV) —
+        // staging is same-fs by design. Any other error (EACCES/ENOSPC) is real
+        // and must not be masked by a second, more confusing copyFile error.
+        if ((e as { code?: string }).code !== 'EXDEV') throw e;
         await fs.copyFile(f.path, dest);
         await fs.unlink(f.path).catch(() => {});
       }
@@ -151,7 +181,22 @@ export class EssaysService {
         options,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const err = e as { code?: string; message?: string };
+      const isTimeout =
+        err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '');
+      if (isTimeout) {
+        // The worker writes status.json and enqueues BEFORE responding 202, so a
+        // lost/slow response does NOT mean the job was dropped. Leave it queued
+        // and let the reconciler adjudicate from status.json — marking it failed
+        // here would abandon a job the worker is actually running. If the worker
+        // never received it, the staleness watchdog fails it after STALE_JOB_MS.
+        logger.warn(
+          `essays /process POST timed out for ${jobId}; leaving queued for the reconciler`,
+          CTX
+        );
+        return { jobId };
+      }
+      const msg = err.message || String(e);
       await prisma.essayJob.update({
         where: { id: jobId },
         data: { status: 'failed', error: `worker unreachable: ${msg}` },
@@ -176,7 +221,9 @@ export class EssaysService {
     // Opportunistic reconcile so a direct GET reflects the latest worker state
     // even between background ticks.
     if (job.status === 'queued' || job.status === 'running') {
-      await this.reconcileJob(job).catch(() => {});
+      await this.reconcileJob(job).catch((e) =>
+        logger.warn(`getJob reconcile ${jobId}: ${String(e)}`, CTX)
+      );
       return prisma.essayJob.findFirst({ where: { id: jobId, userId } });
     }
     return job;
@@ -233,21 +280,43 @@ export class EssaysService {
   private async reconcile(): Promise<void> {
     const active = await prisma.essayJob.findMany({
       where: { status: { in: ['queued', 'running'] } },
+      take: 200, // bound the per-tick work; a backlog can't unbound the loop
     });
+    const now = Date.now();
     for (const job of active) {
-      await this.reconcileJob(job).catch((e) =>
-        logger.warn(`reconcile job ${job.id}: ${String(e)}`, CTX)
-      );
+      try {
+        const changed = await this.reconcileJob(job);
+        // Watchdog: a job whose row has not advanced past the deadline means the
+        // worker crashed / was redeployed / its status.json is unreadable —
+        // fail it so it leaves the active set instead of spinning forever.
+        if (!changed && now - job.updatedAt.getTime() > STALE_JOB_MS) {
+          await prisma.essayJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'failed',
+              error: 'Worker stopped reporting (job timed out).',
+            },
+          });
+          logger.error(
+            `essays job ${job.id} timed out (idle > ${STALE_JOB_MS}ms) — marked failed`,
+            undefined,
+            CTX
+          );
+        }
+      } catch (e) {
+        logger.warn(`reconcile job ${job.id}: ${String(e)}`, CTX);
+      }
     }
   }
 
-  private async reconcileJob(job: EssayJob): Promise<void> {
+  /** Returns true iff it advanced the row (used by the staleness watchdog). */
+  private async reconcileJob(job: EssayJob): Promise<boolean> {
     const ws = await this.readWorkerStatus(job.userId, job.id);
-    if (!ws || !ws.state) return;
+    if (!ws || typeof ws.state !== 'string') return false;
 
     if (ws.state === 'completed') {
       await this.finalize(job, ws);
-      return;
+      return true;
     }
     if (ws.state === 'failed') {
       await prisma.essayJob.update({
@@ -255,28 +324,52 @@ export class EssaysService {
         data: {
           status: 'failed',
           error: ws.error || 'processing failed',
-          progress: ws.progress ?? job.progress,
+          progress: clampProgress(ws.progress ?? job.progress),
         },
       });
-      return;
+      logger.error(
+        `essays job ${job.id} failed: ${ws.error || 'processing failed'}`,
+        undefined,
+        CTX
+      );
+      return true;
     }
-    // queued | waiting_gpu | running
+    // queued | waiting_gpu | running. Update ONLY when something changed, so the
+    // row's updatedAt tracks real progress and the watchdog can detect a frozen
+    // (but still readable) status.json from a dead worker.
+    const nextStatus = ws.state === 'queued' ? 'queued' : 'running';
+    const nextProgress = clampProgress(ws.progress ?? job.progress);
+    const nextMt = ws.mtCount ?? job.mtCount;
+    const nextDevice = ws.device ?? job.device;
+    if (
+      job.status === nextStatus &&
+      job.progress === nextProgress &&
+      job.mtCount === nextMt &&
+      job.device === nextDevice
+    ) {
+      return false;
+    }
     await prisma.essayJob.update({
       where: { id: job.id },
       data: {
-        status: ws.state === 'queued' ? 'queued' : 'running',
-        progress: ws.progress ?? job.progress,
-        mtCount: ws.mtCount ?? job.mtCount,
-        device: ws.device ?? job.device,
+        status: nextStatus,
+        progress: nextProgress,
+        mtCount: nextMt,
+        device: nextDevice,
       },
     });
+    return true;
   }
 
   private async finalize(job: EssayJob, ws: WorkerStatus): Promise<void> {
     if (this.zipping.has(job.id)) return;
-    if (job.status === 'completed' && job.resultZipKey) return;
     this.zipping.add(job.id);
     try {
+      // Re-read inside the guard — the captured `job` is a snapshot and both the
+      // timer and getJob can reach finalize; bail if another path already zipped.
+      const fresh = await prisma.essayJob.findUnique({ where: { id: job.id } });
+      if (!fresh || (fresh.status === 'completed' && fresh.resultZipKey)) return;
+
       const outputDir = path.join(this.jobDir(job.userId, job.id), 'output');
       const zipBase = `${sanitizeFilename(job.name)}_${job.id.slice(0, 8)}`;
       // createZipArchive opens the zip without creating EXPORT_DIR — ensure it
@@ -298,8 +391,60 @@ export class EssaysService {
         `essays job ${job.id} completed -> ${path.basename(zipPath)}`,
         CTX
       );
+      // Free the (potentially tens-of-GB) input .nd2 files + raw output now that
+      // the zip in EXPORT_DIR is the sole download artifact — the job dir is no
+      // longer needed. Best-effort; a leftover is swept later regardless.
+      await fs
+        .rm(this.jobDir(job.userId, job.id), { recursive: true, force: true })
+        .catch((e) =>
+          logger.warn(
+            `essays job ${job.id}: post-zip cleanup failed: ${String(e)}`,
+            CTX
+          )
+        );
+    } catch (e) {
+      // A zip failure must NOT loop forever (the job would stay 'running' and be
+      // re-attempted every tick). Mark it failed so it reaches a terminal state
+      // and the user sees the truth; the raw output survives on disk.
+      logger.error(
+        `essays finalize (zip) failed for ${job.id}: ${String(e)}`,
+        undefined,
+        CTX
+      );
+      await prisma.essayJob
+        .update({
+          where: { id: job.id },
+          data: {
+            status: 'failed',
+            error: 'Results could not be packaged for download.',
+          },
+        })
+        .catch(() => {});
     } finally {
       this.zipping.delete(job.id);
+    }
+  }
+
+  /** Remove orphaned upload temp files older than STAGING_MAX_AGE_MS. */
+  private async sweepStaging(): Promise<void> {
+    const stagingDir = path.join(this.uploadDir, 'essays', '_staging');
+    let entries: string[];
+    try {
+      entries = await fs.readdir(stagingDir);
+    } catch {
+      return; // no staging dir yet
+    }
+    const cutoff = Date.now() - STAGING_MAX_AGE_MS;
+    for (const name of entries) {
+      const p = path.join(stagingDir, name);
+      try {
+        const st = await fs.stat(p);
+        if (st.isFile() && st.mtimeMs < cutoff) {
+          await fs.rm(p, { force: true });
+        }
+      } catch {
+        /* ignore per-file errors */
+      }
     }
   }
 }
