@@ -94,8 +94,29 @@ class MicrotubuleModel:
         logger.info(f"Microtubule v7 loaded from {ckpt_path} on {device_str}")
         return self
 
+    # Warm-start defaults. When a previous frame's centerlines are supplied,
+    # the seed threshold is lowered to ``PRIOR_SEED_THRESHOLD`` *only* along
+    # those centerlines (dilated by ``PRIOR_DILATE_PX``). A microtubule that
+    # was solid last frame but faded just under the 0.5 seed cut this frame is
+    # then still skeletonised, so a temporary detection dropout — the single
+    # biggest cause of a broken track — is recovered at the source instead of
+    # relying on the tracker to bridge a gap that may exceed max_gap.
+    PRIOR_SEED_THRESHOLD: float = 0.30
+    PRIOR_DILATE_PX: int = 2
+    # Recovered prior pixels within this many px of an already-detected MT are
+    # discarded. Warm start must ONLY fill genuine dropouts in empty regions:
+    # adding prior foreground next to a detected filament bridges the two in
+    # the skeleton graph, so the path tracer merges them and an instance is
+    # LOST. The guard confines recovery to regions the current frame detected
+    # nothing, making warm start strictly additive (never destructive).
+    PRIOR_MERGE_GUARD_PX: int = 3
+
     def predict(self, image_np, seed_threshold: Optional[float] = None,
-                pysoax_params: Optional[dict] = None) -> dict:
+                pysoax_params: Optional[dict] = None,
+                prev_centerlines: Optional[list] = None,
+                prior_seed_threshold: Optional[float] = None,
+                prior_dilate_px: Optional[int] = None,
+                prior_merge_guard_px: Optional[int] = None) -> dict:
         """Run v7 + PySOAX on a single 2D grayscale frame.
 
         Args:
@@ -106,6 +127,18 @@ class MicrotubuleModel:
                 PySOAX snakes are initialised. Defaults to 0.5.
             pysoax_params: Override of the production
                 ``PYSOAX_PARAMS_DEFAULT`` hyperparameters (Optuna-tuned).
+            prev_centerlines: Optional list of ``(M_i, 2)`` row,col centerlines
+                from the temporally-previous frame, in this frame's pixel
+                space (same H, W). When given, they seed a temporal prior:
+                the seed threshold is lowered to ``prior_seed_threshold`` along
+                the dilated previous centerlines so a faded continuation of a
+                known MT survives binarisation. ``None`` (the default, and
+                always the case for the first frame) reproduces the exact
+                stateless behaviour — so a cold start never regresses.
+            prior_seed_threshold: Lowered seed cut applied only under the
+                prior. Defaults to ``PRIOR_SEED_THRESHOLD`` (0.30).
+            prior_dilate_px: Half-width (px) of the rasterised prior band.
+                Defaults to ``PRIOR_DILATE_PX`` (2).
 
         Returns:
             ``{
@@ -148,7 +181,36 @@ class MicrotubuleModel:
             if seed_threshold is not None
             else self.DEFAULT_SEED_THRESHOLD
         )
-        binary = (seed_prob > thresh).astype(np.uint8) * 255
+        seed_fg = seed_prob > thresh
+        # Temporal seed prior: admit sub-threshold pixels that sit on last
+        # frame's filaments, so a briefly-faded MT is not dropped. Confined
+        # both spatially (only along the dilated previous centerlines) and to
+        # EMPTY regions (a merge guard drops recovery pixels adjacent to an
+        # already-detected MT), so warm start fills true dropouts without
+        # bridging two detected filaments at a crossing.
+        if prev_centerlines:
+            from scipy.ndimage import binary_dilation
+
+            H0, W0 = seed_prob.shape
+            prior = self._rasterize_centerlines(
+                prev_centerlines, H0, W0,
+                prior_dilate_px if prior_dilate_px is not None
+                else self.PRIOR_DILATE_PX,
+            )
+            low = (
+                prior_seed_threshold if prior_seed_threshold is not None
+                else self.PRIOR_SEED_THRESHOLD
+            )
+            guard = (
+                prior_merge_guard_px if prior_merge_guard_px is not None
+                else self.PRIOR_MERGE_GUARD_PX
+            )
+            recover = prior & (seed_prob > low) & ~seed_fg
+            if guard > 0 and recover.any():
+                near_existing = binary_dilation(seed_fg, iterations=int(guard))
+                recover = recover & ~near_existing
+            seed_fg = seed_fg | recover
+        binary = seed_fg.astype(np.uint8) * 255
 
         from pysoax import extract_soax_instances  # absolute import via sys.path
 
@@ -216,3 +278,67 @@ class MicrotubuleModel:
             "seed_prob": seed_prob,
             "embedding_samples": embedding_samples,
         }
+
+    @staticmethod
+    def _rasterize_centerlines(centerlines, H: int, W: int,
+                              dilate_px: int):
+        """Rasterise a list of (M, 2) row,col centerlines into a bool mask,
+        each drawn as a polyline of half-width ``dilate_px``.
+
+        Used to build the temporal seed prior. cv2 works in (x, y) = (col,
+        row), so the row/col columns are swapped before drawing.
+        """
+        import cv2
+        import numpy as np
+
+        mask = np.zeros((H, W), dtype=np.uint8)
+        thickness = max(1, 2 * int(dilate_px) + 1)
+        for cl in centerlines:
+            arr = np.asarray(cl, dtype=np.float64)
+            if arr.ndim != 2 or arr.shape[0] < 2 or arr.shape[1] != 2:
+                continue
+            # (row, col) -> (x=col, y=row) integer pixels for cv2.
+            pts = np.round(arr[:, ::-1]).astype(np.int32)
+            cv2.polylines(mask, [pts], isClosed=False, color=1,
+                          thickness=thickness)
+        return mask.astype(bool)
+
+    def predict_sequence(self, frames, seed_threshold: Optional[float] = None,
+                         pysoax_params: Optional[dict] = None,
+                         propagate: bool = True,
+                         prior_seed_threshold: Optional[float] = None,
+                         prior_dilate_px: Optional[int] = None,
+                         prior_merge_guard_px: Optional[int] = None) -> list:
+        """Segment an ordered list of frames, propagating each frame's
+        centerlines forward as the next frame's temporal seed prior.
+
+        This is the warm-start path: because the per-frame segmentation queue
+        processes frames independently (and out of order), a frame can only
+        see its predecessor's result when the whole video is walked in
+        sequence here. The first frame runs cold (``prev_centerlines=None``),
+        every subsequent frame is seed-primed by the one before it.
+
+        Args:
+            frames: ordered list of 2D grayscale ndarrays (all same H, W).
+            propagate: when False, every frame runs cold — identical to
+                looping :meth:`predict` — so callers can A/B the warm start.
+
+        Returns:
+            list of per-frame result dicts (same shape as :meth:`predict`),
+            in input order.
+        """
+        results: list = []
+        prev_cl = None
+        for img in frames:
+            res = self.predict(
+                img,
+                seed_threshold=seed_threshold,
+                pysoax_params=pysoax_params,
+                prev_centerlines=prev_cl if propagate else None,
+                prior_seed_threshold=prior_seed_threshold,
+                prior_dilate_px=prior_dilate_px,
+                prior_merge_guard_px=prior_merge_guard_px,
+            )
+            results.append(res)
+            prev_cl = res["centerlines_rc"] if propagate else None
+        return results
