@@ -106,11 +106,27 @@ class TrackRequest(BaseModel):
     spatial_weight: float = Field(0.3, ge=0.0, le=1.0)
     # Gap closing (second LAP): a filament may vanish for up to max_gap
     # frames and still be re-linked to its original track. 0 disables gap
-    # closing entirely.
-    max_gap: int = Field(2, ge=0)
+    # closing entirely. Default raised 2 -> 3: with gap_penalty=0.5 a 3-frame
+    # bridge costs base*2.0, so it is only accepted when base < ~0.3 (well
+    # inside the threshold), making the extra recall of short dropouts safe
+    # against spurious merges.
+    max_gap: int = Field(3, ge=0)
     # Multiplies the gap-close cost by (1 + gap_penalty * (gap - 1)) so that
     # longer gaps are progressively less attractive to bridge.
     gap_penalty: float = Field(0.5, ge=0.0)
+    # Constant-velocity motion compensation for the frame-to-frame LAP: each
+    # active track's endpoints are extrapolated to the next frame before the
+    # cost is measured, so legitimate MT motion no longer inflates the
+    # endpoint/orientation terms and pushes a true link past the threshold.
+    # A track needs >= 2 observations to have a velocity; its first step
+    # degrades to a zero-velocity (identity) prediction, i.e. the old
+    # behaviour. Disable to A/B against the memoryless tracker.
+    motion_model: bool = True
+    # EMA weight of the newest frame's mean embedding when maintaining the
+    # per-track embedding template used for re-identification. 0.5 = equal
+    # weight to the newest frame and the running history; 1.0 reproduces the
+    # old "match against the single previous frame" behaviour.
+    emb_template_alpha: float = Field(0.5, ge=0.0, le=1.0)
     # Weights of the four filament-cost terms (embedding, endpoint distance,
     # orientation, length). Each in [0, 1]; defaults sum to 1.
     w_emb: float = Field(0.5, ge=0.0, le=1.0)
@@ -221,6 +237,104 @@ def _filament_features(p: PolylineInput) -> _Filament:
     else:
         length = 0.0
     return _Filament(mean_emb, was_corrupt, end_a, end_b, theta, length)
+
+
+class _TrackState:
+    """Online per-track state accumulated during the frame-to-frame pass.
+
+    Holds the last two *endpoint-aligned* observations (so a constant-
+    velocity endpoint prediction can be computed despite arbitrary
+    centerline direction) plus an EMA embedding template. Matching a new
+    frame against the predicted endpoints + the running template — rather
+    than the raw previous frame — is what makes the LAP robust to the
+    per-frame geometry/embedding jitter of independently re-detected MTs.
+    """
+
+    __slots__ = ("last_frame", "last_feat", "prev_frame", "prev_feat", "emb_template")
+
+    def __init__(self, frame: int, feat: _Filament) -> None:
+        self.last_frame = frame
+        self.last_feat = feat
+        self.prev_frame: Optional[int] = None
+        self.prev_feat: Optional[_Filament] = None
+        self.emb_template: Optional[np.ndarray] = (
+            None if feat.mean_emb is None else feat.mean_emb.astype(np.float64).copy()
+        )
+
+
+def _align_endpoints(feat: _Filament, ref: _Filament) -> _Filament:
+    """Return *feat* with (end_a, end_b) swapped iff that better matches
+    *ref*'s endpoint labelling (minimises head-head + tail-tail distance).
+
+    PySOAX centerline direction is arbitrary and can flip frame to frame;
+    without this the per-endpoint velocity would be garbage. The matching
+    cost itself is direction-invariant, so this only affects the velocity
+    bookkeeping, never the accepted/rejected decision.
+    """
+    straight = float(np.linalg.norm(feat.end_a - ref.end_a)) + float(
+        np.linalg.norm(feat.end_b - ref.end_b)
+    )
+    swapped = float(np.linalg.norm(feat.end_b - ref.end_a)) + float(
+        np.linalg.norm(feat.end_a - ref.end_b)
+    )
+    if swapped < straight:
+        vec = feat.end_a - feat.end_b
+        theta = float(np.arctan2(float(vec[0]), float(vec[1])))
+        return feat._replace(end_a=feat.end_b, end_b=feat.end_a, theta=theta)
+    return feat
+
+
+def _predict_filament(state: _TrackState, target_frame: int) -> _Filament:
+    """Constant-velocity prediction of a track's filament at *target_frame*.
+
+    Endpoints are extrapolated from the last two observations; the mean
+    embedding is replaced by the track's EMA template. With < 2 observations
+    the velocity is unknown and this returns a zero-velocity (identity)
+    prediction — i.e. the old memoryless behaviour, so the first step of a
+    freshly-born track is never worse than before.
+    """
+    last = state.last_feat
+    emb = state.emb_template if state.emb_template is not None else last.mean_emb
+    if state.prev_feat is None or state.prev_frame is None:
+        return last._replace(mean_emb=emb)
+    dt_prev = max(state.last_frame - state.prev_frame, 1)
+    step = float(target_frame - state.last_frame)
+    # Cap per-endpoint extrapolation to the filament's own length (fallback
+    # 20 px): an MT does not translate more than its length between adjacent
+    # frames, so this bounds the damage from a single noisy velocity estimate.
+    cap = max(float(last.length), 20.0)
+
+    def _extrapolate(p_now: np.ndarray, p_then: np.ndarray) -> np.ndarray:
+        disp = (p_now - p_then) / dt_prev * step
+        n = float(np.linalg.norm(disp))
+        if n > cap:
+            disp = disp * (cap / n)
+        return p_now + disp
+
+    pred_a = _extrapolate(last.end_a, state.prev_feat.end_a)
+    pred_b = _extrapolate(last.end_b, state.prev_feat.end_b)
+    vec = pred_b - pred_a
+    theta = float(np.arctan2(float(vec[0]), float(vec[1])))
+    return last._replace(mean_emb=emb, end_a=pred_a, end_b=pred_b, theta=theta)
+
+
+def _update_track_state(
+    state: _TrackState, feat: _Filament, frame: int, alpha: float
+) -> None:
+    """Extend a track with a new observation: align its endpoints to the
+    previous frame, shift history, and blend the embedding into the EMA
+    template."""
+    aligned = _align_endpoints(feat, state.last_feat)
+    state.prev_feat = state.last_feat
+    state.prev_frame = state.last_frame
+    state.last_feat = aligned
+    state.last_frame = frame
+    if aligned.mean_emb is not None:
+        m = aligned.mean_emb.astype(np.float64)
+        if state.emb_template is None:
+            state.emb_template = m.copy()
+        else:
+            state.emb_template = alpha * m + (1.0 - alpha) * state.emb_template
 
 
 def _emb_distance(fa: _Filament, fb: _Filament) -> Optional[float]:
@@ -501,25 +615,46 @@ async def track(req: TrackRequest) -> TrackResponse:
         )
 
     # --- Step 1: frame-to-frame linking with birth/death -> tracklets ---
+    # An online per-track state (last two endpoint-aligned observations + EMA
+    # embedding template) lets each frame be matched against a constant-
+    # velocity *prediction* of where the track's filament should be, rather
+    # than the raw previous frame — the core of the propagation-aware upgrade.
     assignments: Dict[str, str] = {}
+    track_state: Dict[str, _TrackState] = {}
+
+    def _birth(pid: str, frame: int) -> str:
+        tid = _new_track_id()
+        assignments[pid] = tid
+        track_state[tid] = _TrackState(frame, feats[pid])
+        return tid
+
     for p in frames[0].polylines:
-        assignments[p.id] = _new_track_id()
+        _birth(p.id, frames[0].frame)
 
     for prev_f, next_f in zip(frames, frames[1:]):
         prev_pl, next_pl = prev_f.polylines, next_f.polylines
         # Defensive: any prev polyline without an id (e.g. after an empty
         # frame) is a fresh birth in its own frame.
         for p in prev_pl:
-            assignments.setdefault(p.id, _new_track_id())
+            if p.id not in assignments:
+                _birth(p.id, prev_f.frame)
         if not next_pl:
             continue
         if not prev_pl:
             for p in next_pl:
-                assignments[p.id] = _new_track_id()
+                _birth(p.id, next_f.frame)
             continue
 
+        if req.motion_model:
+            prev_feats = [
+                _predict_filament(track_state[assignments[p.id]], next_f.frame)
+                for p in prev_pl
+            ]
+        else:
+            prev_feats = [feats[p.id] for p in prev_pl]
+
         base = _build_link_cost(
-            [feats[p.id] for p in prev_pl],
+            prev_feats,
             [feats[p.id] for p in next_pl],
             img_diag,
             weights,
@@ -527,10 +662,15 @@ async def track(req: TrackRequest) -> TrackResponse:
         links = _solve_link_lap(base, req.cost_threshold)
         linked_cols = set(links.values())
         for pi, nj in links.items():
-            assignments[next_pl[nj].id] = assignments[prev_pl[pi].id]
+            tid = assignments[prev_pl[pi].id]
+            assignments[next_pl[nj].id] = tid
+            _update_track_state(
+                track_state[tid], feats[next_pl[nj].id], next_f.frame,
+                req.emb_template_alpha,
+            )
         for c, p in enumerate(next_pl):
             if c not in linked_cols:
-                assignments[p.id] = _new_track_id()
+                _birth(p.id, next_f.frame)
 
     # --- Step 2: gap closing over tracklet segments (second LAP) ---
     members: Dict[str, List[Tuple[int, str]]] = defaultdict(list)
