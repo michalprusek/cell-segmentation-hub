@@ -2241,4 +2241,37 @@ export default {
     cannotMoveIntoSelf:
       'Ein Ordner kann nicht in sich selbst oder einen eigenen Unterordner verschoben werden',
   },
+  automatedEssays: {
+    navLabel: 'Automatisierte Assays',
+    title: 'Automatisierte Assays',
+    subtitle:
+      'Laden Sie einen Ordner mit .nd2-Well-Aufnahmen hoch, um Länge und Intensität der Mikrotubuli für jedes Well zu messen.',
+    dragFolder: 'Ziehen Sie einen Ordner mit .nd2-Wells hierher',
+    dropHere: 'Ordner ablegen, um ihn hinzuzufügen',
+    selectFolder: 'Ordner auswählen',
+    onlyNd2: 'Es werden nur .nd2-Well-Aufnahmen verarbeitet.',
+    filesSelected: '{{count}} .nd2-Datei(en) ausgewählt',
+    clear: 'Leeren',
+    uploadAndProcess: 'Hochladen & verarbeiten',
+    uploading: 'Hochladen… {{percent}} %',
+    jobStarted: 'Upload abgeschlossen – Verarbeitung gestartet',
+    uploadFailed: 'Upload fehlgeschlagen',
+    downloadFailed: 'Download konnte nicht gestartet werden',
+    yourRuns: 'Ihre Läufe',
+    noRuns: 'Noch keine Läufe. Laden Sie einen Ordner hoch, um zu beginnen.',
+    fileCount: '{{count}} Datei(en)',
+    mtCount: '{{count}} Mikrotubuli',
+    download: 'Herunterladen',
+    delete: 'Löschen',
+    deleteFailed: 'Der Lauf konnte nicht gelöscht werden',
+    noNd2Found: 'In diesem Ordner wurden keine .nd2-Aufnahmen gefunden',
+    someIgnored:
+      'Verwende {{kept}} von {{total}} Dateien (nur .nd2 wird verarbeitet)',
+    status: {
+      queued: 'In Warteschlange',
+      running: 'Verarbeitung',
+      completed: 'Abgeschlossen',
+      failed: 'Fehlgeschlagen',
+    },
+  },
 };

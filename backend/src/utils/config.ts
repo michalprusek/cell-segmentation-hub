@@ -102,6 +102,10 @@ const configSchema = z
         ? z.string().url()
         : z.string().url().default('http://localhost:8000'),
 
+    // Automated Essays worker (batch MT assay of ND2 wells). Always has a
+    // default so a missing var degrades the essays feature only, never the boot.
+    ESSAYS_SERVICE_URL: z.string().url().default('http://essays:8000'),
+
     // CORS
     ALLOWED_ORIGINS: z
       .string()

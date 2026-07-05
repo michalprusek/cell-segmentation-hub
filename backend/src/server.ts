@@ -377,6 +377,15 @@ const startServer = async (): Promise<void> => {
     // Create HTTP server
     const server = createServer(app);
 
+    // Node's default requestTimeout (300s) aborts the ENTIRE request — including
+    // a slow body — after 5 minutes, which killed large uploads (a folder of
+    // .nd2 wells or a multi-GB video) with a bare "Request aborted"/408 even
+    // though nginx allows up to 4h. Raise the ceiling to match the nginx
+    // video/essays upload timeout so long uploads can finish; keep headersTimeout
+    // short so slowloris on the header phase is still bounded.
+    server.requestTimeout = 4 * 60 * 60 * 1000; // 4h — matches nginx upload cap
+    server.headersTimeout = 70 * 1000;
+
     // Initialize WebSocket service
     const websocketService = WebSocketService.getInstance(server, prisma);
 

@@ -94,6 +94,7 @@ export interface SegmentationRequest {
 }
 
 import type { SpermPartClass } from '@/lib/segmentation';
+import type { EssayJob, EssayJobOptions } from '@/types/essays';
 
 export interface SegmentationPolygon {
   id: string;
@@ -2020,6 +2021,82 @@ class ApiClient {
    * ZIP can stream straight to disk — bypassing the axios blob path that
    * fails for very large exports (memory + 5-min timeout).
    */
+  // ---- Automated Essays (batch microtubule assay of .nd2 wells) ----
+
+  /**
+   * Upload a folder of .nd2 well recordings and start a batch job. The session
+   * cookie rides along automatically (withCredentials). No client timeout — a
+   * folder can be tens of GB; nginx owns the ceiling.
+   */
+  async uploadEssays(
+    files: File[],
+    opts?: {
+      folderName?: string;
+      options?: EssayJobOptions;
+      onUploadProgress?: (percent: number) => void;
+    }
+  ): Promise<{ jobId: string }> {
+    const formData = new FormData();
+    for (const f of files) {
+      // NFC-normalize the name so accented well ids survive the round-trip.
+      formData.append('files', f, f.name.normalize('NFC'));
+    }
+    if (opts?.folderName) {
+      formData.append('folderName', opts.folderName);
+    }
+    if (opts?.options) {
+      formData.append('options', JSON.stringify(opts.options));
+    }
+    const response = await this.instance.post('/essays/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+      onUploadProgress: e => {
+        if (opts?.onUploadProgress && e.total) {
+          opts.onUploadProgress(Math.round((e.loaded * 100) / e.total));
+        }
+      },
+    });
+    return response.data as { jobId: string };
+  }
+
+  async listEssayJobs(): Promise<EssayJob[]> {
+    const response = await this.instance.get('/essays/jobs');
+    return (response.data?.jobs ?? []) as EssayJob[];
+  }
+
+  async getEssayJob(jobId: string): Promise<EssayJob> {
+    const response = await this.instance.get(`/essays/jobs/${jobId}`);
+    return response.data.job as EssayJob;
+  }
+
+  async deleteEssayJob(jobId: string): Promise<void> {
+    await this.instance.delete(`/essays/jobs/${jobId}`);
+  }
+
+  async getEssayDownloadToken(
+    jobId: string
+  ): Promise<{ token: string; expiresAt: number }> {
+    const response = await this.instance.post<{
+      token: string;
+      expiresAt: number;
+    }>(`/essays/jobs/${jobId}/download-token`);
+    return response.data;
+  }
+
+  /** Absolute URL for a native browser download of the result zip. */
+  buildEssayDownloadUrl(jobId: string, token: string): string {
+    const params = new URLSearchParams({ token });
+    const path = `${this.baseURL}/essays/jobs/${jobId}/download?${params.toString()}`;
+    if (typeof window !== 'undefined') {
+      try {
+        return new URL(path, window.location.origin).toString();
+      } catch {
+        return path;
+      }
+    }
+    return path;
+  }
+
   async getExportDownloadToken(
     projectId: string,
     jobId: string

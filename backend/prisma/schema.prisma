@@ -27,6 +27,7 @@ model User {
   feedbacks         Feedback[]
   folders           ProjectFolder[]
   folderItems       ProjectFolderItem[]
+  essayJobs         EssayJob[]
 
   @@map("users")
 }
@@ -297,4 +298,32 @@ model ProjectFolderItem {
   @@unique([userId, projectId], map: "uq_folder_item_user_project")
   @@index([folderId], map: "idx_folder_item_folder")
   @@map("project_folder_items")
+}
+
+// Automated Essays: a user uploads a folder of .nd2 well recordings that the
+// essays worker (AutomatedEssaysModule) processes into a downloadable result
+// bundle (results.csv + overlays + annotation JSON). One row per run; the
+// backend reconciles status/progress from the worker's status.json and zips the
+// output on completion. status: queued | running | completed | failed.
+model EssayJob {
+  id           String    @id @default(uuid())
+  userId       String
+  name         String // display name (uploaded folder name)
+  status       String    @default("queued")
+  progress     Int       @default(0)
+  fileCount    Int       @default(0)
+  mtCount      Int       @default(0)
+  device       String? // "cuda" | "cpu" — what the worker actually used
+  inputKey     String // storage key: essays/<userId>/<jobId>/input
+  outputKey    String // storage key: essays/<userId>/<jobId>/output
+  resultZipKey String? // zip basename in EXPORT_DIR, set once completed
+  error        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  completedAt  DateTime?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "idx_essayjob_user_created")
+  @@index([status], map: "idx_essayjob_status")
+  @@map("essay_jobs")
 }

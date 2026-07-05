@@ -65,6 +65,10 @@ const ShareAccept = lazyWithRetry(
   () => import('./pages/ShareAccept'),
   'ShareAccept'
 );
+const AutomatedEssays = lazyWithRetry(
+  () => import('./pages/AutomatedEssays'),
+  'AutomatedEssays'
+);
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -280,6 +284,19 @@ const App = () => (
                                       }
                                     >
                                       <Profile />
+                                    </Suspense>
+                                  </ProtectedRoute>
+                                }
+                              />
+
+                              <Route
+                                path="/automated-essays"
+                                element={
+                                  <ProtectedRoute>
+                                    <Suspense
+                                      fallback={<PageLoadingFallback />}
+                                    >
+                                      <AutomatedEssays />
                                     </Suspense>
                                   </ProtectedRoute>
                                 }
