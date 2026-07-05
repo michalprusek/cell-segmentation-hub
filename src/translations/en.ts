@@ -1122,6 +1122,7 @@ export default {
     // Multi-channel canvas actions
     multiChannel: {
       allChannelsFailed: 'Failed to load image channels',
+      someChannelsFailed: 'Some image channels failed to load',
     },
     // Success messages
     operationCompleted: 'Operation completed successfully',
