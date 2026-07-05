@@ -57,6 +57,8 @@ services:
       - QUEUE_PARALLEL_PROCESSING_ENABLED=true
       - DATABASE_CONNECTION_POOL_SIZE=50
       - WS_PARALLEL_PROCESSING_ENABLED=true
+      # Automated Essays worker (batch MT assay). Reached over the docker network.
+      - ESSAYS_SERVICE_URL=${ESSAYS_SERVICE_URL:-http://essays:8000}
     volumes:
       - ./backend/uploads/blue:/app/uploads
       - ./backend/data:/app/data
@@ -204,6 +206,77 @@ services:
       retries: 5
       start_period: 120s
 
+  # Automated Essays worker — batch microtubule assay of ND2 wells via
+  # AutomatedEssaysModule (cloned at image build). Shares the GPU with `ml` but
+  # is guarded (start-gate on free VRAM + per-process memory cap) so a batch
+  # never OOMs interactive segmentation. Loopback-only + NO auth layer — only the
+  # backend reaches it over the docker network (essays:8000). Build with
+  # `make build-essays` (supplies the gh token as a BuildKit secret + re-clones
+  # the module so upstream changes propagate).
+  essays:
+    build:
+      context: .
+      dockerfile: docker/essays.Dockerfile
+      args:
+        ML_IMAGE: cell-segmentation-hub-ml:latest
+        MODULE_REF: ${ESSAYS_MODULE_REF:-main}
+        MODULE_CACHE_BUST: ${ESSAYS_MODULE_CACHE_BUST:-0}
+      secrets:
+        - ghtoken
+    image: cell-segmentation-hub-essays:latest
+    container_name: spheroseg-essays
+    runtime: nvidia
+    # Run as the backend's uid:gid (nodejs 1001) so the worker can write into the
+    # job dirs the backend creates on the shared uploads volume (status.json +
+    # output/). HOME=/tmp keeps any home-dir writes (matplotlib/torch cache) off
+    # the image's 1000-owned home when running under a different uid.
+    user: '1001:1001'
+    command: ['uvicorn', 'essays_api:app', '--host', '0.0.0.0', '--port', '8000', '--workers', '1']
+    ports:
+      # Loopback only — no auth on the worker; the backend calls it over the
+      # docker network (essays:8000). A public port would let anyone drive the
+      # shared GPU unauthenticated.
+      - '127.0.0.1:4009:8000'
+    networks:
+      - spheroseg-network
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HOME=/tmp
+      - MPLCONFIGDIR=/tmp/mpl
+      # GPU guard: only start a batch when >=13 GB is free (a v7 forward peaks
+      # ~12.5 GB); cap this process at 0.6 of the 24 GB card so it can never grab
+      # the whole GPU. Tuned against a real well recording.
+      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-13}
+      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.6}
+      - ESSAYS_GPU_WAIT_TIMEOUT_S=${ESSAYS_GPU_WAIT_TIMEOUT_S:-1800}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      # Reuse the byte-identical microtubule_v7.pt already on disk (no download).
+      - ./backend/segmentation/weights:/app/mt_weights:ro
+      # Same host uploads dir the backend writes to — the FS handoff for job I/O.
+      - ./backend/uploads/blue:/app/uploads
+    restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import requests; requests.get('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   nginx:
     image: nginx:alpine
     container_name: spheroseg-nginx
@@ -246,3 +319,10 @@ volumes:
     name: spheroseg_postgres_blue
   redis_blue_data:
     name: spheroseg_redis_blue
+
+secrets:
+  # gh token for cloning the private AutomatedEssaysModule at build time. Written
+  # by `make build-essays` (gitignored) and only read during the essays image
+  # build — never used at runtime, never baked into a layer.
+  ghtoken:
+    file: ${ESSAYS_GH_TOKEN_FILE:-./.essays_ghtoken}

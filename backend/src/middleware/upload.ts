@@ -215,6 +215,64 @@ const feedbackUpload = multer({
  */
 export const uploadFeedbackAttachment = feedbackUpload.single('attachment');
 
+// Automated Essays: the user uploads a folder of .nd2 well recordings. The
+// files stream to disk (never buffered — a folder can reach tens of GB), staged
+// on the uploads volume so the essaysService's move into
+// essays/<userId>/<jobId>/input/ is a same-filesystem rename. Only .nd2 is
+// accepted; the module's evaluate.py reads nothing else.
+const ESSAYS_UPLOAD_MAX_BYTES = 100 * 1024 * 1024 * 1024;
+const ESSAYS_MAX_FILES = 512; // a full plate is <= 384 wells; 512 is headroom
+
+const ESSAYS_UPLOAD_TMP_DIR =
+  process.env.ESSAYS_TMP_DIR ??
+  path.join(process.env.UPLOAD_DIR || os.tmpdir(), 'essays', '_staging');
+
+try {
+  mkdirSync(ESSAYS_UPLOAD_TMP_DIR, { recursive: true });
+} catch (err) {
+  logger.warn(
+    `Failed to ensure essays tmp dir ${ESSAYS_UPLOAD_TMP_DIR}: ${(err as Error).message}`,
+    'UploadMiddleware'
+  );
+}
+
+const nd2OnlyFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  if (path.extname(file.originalname).toLowerCase() === '.nd2') {
+    cb(null, true);
+    return;
+  }
+  cb(
+    new Error(
+      `Only .nd2 well recordings are accepted (got "${file.originalname}")`
+    )
+  );
+};
+
+const essaysUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, ESSAYS_UPLOAD_TMP_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      const token =
+        Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+      cb(null, `${token}${ext}`);
+    },
+  }),
+  limits: {
+    fileSize: ESSAYS_UPLOAD_MAX_BYTES,
+    files: ESSAYS_MAX_FILES,
+    fields: uploadLimits.MAX_FIELDS,
+    fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024,
+  },
+  fileFilter: nd2OnlyFilter,
+});
+
+/**
+ * Multer middleware for the Automated Essays folder upload. Form field name:
+ * "files" (repeated). Each file is streamed to disk; only .nd2 is accepted.
+ */
+export const uploadEssaysFiles = essaysUpload.array('files', ESSAYS_MAX_FILES);
+
 /**
  * Error handler for multer upload errors
  */
