@@ -133,6 +133,10 @@ router.post(
       .optional({ nullable: true })
       .isString()
       .withMessage('trackId musí být řetězec'),
+    body('polyline.instanceId')
+      .optional({ nullable: true })
+      .isString()
+      .withMessage('instanceId musí být řetězec'),
     body('polyline.name')
       .optional({ nullable: true })
       .isString()

@@ -200,6 +200,10 @@ export function parsePolygonsJsonForDiff(
 /** Geometry the editor sends when propagating a microtubule forward. */
 export interface PropagatedPolyline {
   trackId?: string | null;
+  /** Carried onto the propagated copy so the export visualization + metrics can
+   *  draw/label it — buildInstanceLabelMap keys on instanceId, so a copy without
+   *  one gets no "MT{n}" badge on the propagated frames. */
+  instanceId?: string | null;
   name?: string | null;
   geometry?: 'polygon' | 'polyline';
   points: Array<{ x: number; y: number }>;
@@ -294,6 +298,9 @@ export function upsertTrackPolyline(
     confidence: 1,
   };
   if (polyline.name) copy.name = polyline.name;
+  // Carry the source instanceId so the export viz/metrics label the copy
+  // (buildInstanceLabelMap keys on instanceId — a copy without one has no badge).
+  if (polyline.instanceId) copy.instanceId = polyline.instanceId;
   polygons.push(copy);
   return polygons;
 }
