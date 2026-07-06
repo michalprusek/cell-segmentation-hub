@@ -59,6 +59,7 @@ describe('removePolygonsWithTrackId', () => {
 describe('upsertTrackPolyline', () => {
   const source: PropagatedPolyline = {
     trackId: 't1',
+    instanceId: 'mt_abc',
     name: 'MT-A',
     geometry: 'polyline',
     points: [
@@ -81,6 +82,8 @@ describe('upsertTrackPolyline', () => {
     expect(added.name).toBe('MT-A');
     expect(added.geometry).toBe('polyline');
     expect(added.type).toBe('external');
+    // instanceId carried so the export viz/metrics can label the copy.
+    expect(added.instanceId).toBe('mt_abc');
   });
 
   it('adds the polyline when the frame does not have that track yet', () => {

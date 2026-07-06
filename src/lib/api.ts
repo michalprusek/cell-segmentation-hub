@@ -1696,6 +1696,9 @@ class ApiClient {
       // can carry null); an untracked source sends no trackId and the backend
       // generates one.
       trackId?: string | null;
+      // Carried so the propagated copies keep their "MT{n}" badge in the export
+      // visualization + metrics (which key on instanceId).
+      instanceId?: string | null;
       name?: string | null;
       geometry?: 'polygon' | 'polyline';
       points: Array<{ x: number; y: number }>;

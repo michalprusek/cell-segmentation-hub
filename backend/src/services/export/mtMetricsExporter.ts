@@ -435,6 +435,7 @@ export async function computeMTMetrics(
     }
 
     const scale = options.pixelToMicrometerScale;
+    const videoRows: MTMetricsRow[] = [];
     for (const row of mlResponse.rows) {
       // Every polyline we sent has an entry (badge or ''); `undefined` means
       // ML returned an (image_id, instance_id) we never sent — a contract
@@ -447,7 +448,7 @@ export async function computeMTMetrics(
           { projectId, videoId, imageId: row.image_id, instanceId: row.instance_id }
         );
       }
-      allRows.push({
+      videoRows.push({
         frameIndex: row.frame_index,
         imageId: row.image_id,
         label: label ?? '',
@@ -468,6 +469,12 @@ export async function computeMTMetrics(
         signalMinusBackground: row.signal_minus_background,
       });
     }
+    // Order this video's rows by frame (stable sort preserves the ML row order
+    // within a frame — polyline then channel) so the sheet reads frame 0, 1, 2…
+    // instead of the ML response's grouping. Videos stay grouped (each block is
+    // appended whole) since rows carry no video id to sort across.
+    videoRows.sort((a, b) => a.frameIndex - b.frameIndex);
+    for (const r of videoRows) allRows.push(r);
   }
 
   logger.info(
@@ -503,7 +510,15 @@ export function computeMTGeometry(
   pixelToMicrometerScale: number | null
 ): MTMetricsRow[] {
   const rows: MTMetricsRow[] = [];
-  for (const fr of frameImages) {
+  // Emit rows grouped by video, frame-ascending, so the sheet reads frame 0,
+  // 1, 2… regardless of the order the frames were passed in.
+  const ordered = [...frameImages].sort((a, b) => {
+    const va = a.parentVideoId ?? '';
+    const vb = b.parentVideoId ?? '';
+    if (va !== vb) return va < vb ? -1 : 1;
+    return (a.frameIndex ?? 0) - (b.frameIndex ?? 0);
+  });
+  for (const fr of ordered) {
     if (fr.isVideoContainer || !fr.parentVideoId || fr.frameIndex == null) {
       continue;
     }
