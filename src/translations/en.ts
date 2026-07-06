@@ -614,6 +614,9 @@ export default {
   },
   segmentation: {
     trackOps: {
+      propagateSelectedSuccess:
+        'Propagated {{count}} microtubules to the following frames',
+      propagateSelectedPartial: '{{done}} of {{total}} microtubules propagated',
       propagateSuccess:
         'Microtubule propagated to {{count}} following frame(s)',
       propagateFailed: 'Failed to propagate the microtubule',
@@ -1953,6 +1956,10 @@ export default {
 
   // Context menu
   contextMenu: {
+    propagateSelectedTracks: 'Propagate selected microtubules ({{count}})',
+    confirmPropagateSelected: 'Propagate {{count}} selected microtubules?',
+    propagateSelectedDescription:
+      'This overwrites the shape of {{count}} selected microtubules in all following frames of the video. This cannot be undone.',
     propagateTrack: 'Propagate to following frames',
     confirmPropagateTrack: 'Propagate to following frames?',
     propagateTrackDescription:

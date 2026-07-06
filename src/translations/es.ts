@@ -766,6 +766,9 @@ export default {
   },
   segmentation: {
     trackOps: {
+      propagateSelectedSuccess:
+        '{{count}} microtúbulos propagados a los fotogramas siguientes',
+      propagateSelectedPartial: '{{done}} de {{total}} microtúbulos propagados',
       propagateSuccess:
         'Microtúbulo propagado a {{count}} fotogramas siguientes',
       propagateFailed: 'No se pudo propagar el microtúbulo',
@@ -1934,6 +1937,10 @@ export default {
     },
   },
   contextMenu: {
+    propagateSelectedTracks: 'Propagar microtúbulos seleccionados ({{count}})',
+    confirmPropagateSelected: '¿Propagar {{count}} microtúbulos seleccionados?',
+    propagateSelectedDescription:
+      'Esto sobrescribe la forma de {{count}} microtúbulos seleccionados en todos los fotogramas siguientes del vídeo. Esta acción no se puede deshacer.',
     propagateTrack: 'Propagar a los fotogramas siguientes',
     confirmPropagateTrack: '¿Propagar a los fotogramas siguientes?',
     propagateTrackDescription:

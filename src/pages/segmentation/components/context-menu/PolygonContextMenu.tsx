@@ -51,6 +51,10 @@ interface PolygonContextMenuProps {
   trackId?: string;
   /** Total frames in the video, shown in the "delete whole track" dialog. */
   videoFrameCount?: number;
+  /** Propagate ALL Shift-selected microtubules to the following frames. */
+  onPropagateSelected?: () => void;
+  /** Size of the Shift+click multi-selection (gates the bulk-propagate item). */
+  multiSelectCount?: number;
 }
 
 const PolygonContextMenu = ({
@@ -68,6 +72,8 @@ const PolygonContextMenu = ({
   onPropagate,
   trackId,
   videoFrameCount,
+  onPropagateSelected,
+  multiSelectCount = 0,
 }: PolygonContextMenuProps) => {
   const isSperm = projectType === 'sperm';
   const isMicrotubules = projectType === 'microtubules';
@@ -88,6 +94,11 @@ const PolygonContextMenu = ({
   }, [polygonId]);
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [showPropagateDialog, setShowPropagateDialog] = React.useState(false);
+  const [showPropagateSelectedDialog, setShowPropagateSelectedDialog] =
+    React.useState(false);
+  // Bulk-propagate the Shift+click multi-selection — only meaningful with ≥2.
+  const canPropagateSelected =
+    isMicrotubules && !!onPropagateSelected && multiSelectCount >= 2;
   const { t } = useLanguage();
 
   return (
@@ -130,6 +141,19 @@ const PolygonContextMenu = ({
                 >
                   <ChevronsRight className="mr-2 h-4 w-4" />
                   <span>{t('contextMenu.propagateTrack')}</span>
+                </ContextMenuItem>
+              )}
+              {canPropagateSelected && (
+                <ContextMenuItem
+                  onClick={() => setShowPropagateSelectedDialog(true)}
+                  className="cursor-pointer"
+                >
+                  <ChevronsRight className="mr-2 h-4 w-4" />
+                  <span>
+                    {t('contextMenu.propagateSelectedTracks', {
+                      count: multiSelectCount,
+                    })}
+                  </span>
                 </ContextMenuItem>
               )}
             </>
@@ -277,6 +301,39 @@ const PolygonContextMenu = ({
               }}
             >
               {t('contextMenu.propagateTrack')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={showPropagateSelectedDialog}
+        onOpenChange={setShowPropagateSelectedDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('contextMenu.confirmPropagateSelected', {
+                count: multiSelectCount,
+              })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('contextMenu.propagateSelectedDescription', {
+                count: multiSelectCount,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onPropagateSelected?.();
+                setShowPropagateSelectedDialog(false);
+              }}
+            >
+              {t('contextMenu.propagateSelectedTracks', {
+                count: multiSelectCount,
+              })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
