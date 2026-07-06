@@ -339,6 +339,7 @@ export default {
       deleteProject: 'Nepodařilo se smazat projekt',
     },
     deleteImages: 'Nepodařilo se smazat vybrané obrázky',
+    deleteAnnotations: 'Nepodařilo se smazat anotace',
     contexts: {
       dashboard: 'Chyba dashboardu',
       project: 'Chyba projektu',
@@ -1162,6 +1163,14 @@ export default {
     selected: '{{count}} obrázek vybrán',
     selected_other: '{{count}} obrázky vybrány',
     deleteSelected: 'Smazat vybrané',
+    deleteAnnotations: 'Smazat anotace',
+    annotationsDeleted: 'Anotace smazány u {{count}} obrázků',
+    annotationsDeleteFailed: 'Nepodařilo se smazat anotace u {{count}} obrázků',
+    deleteAnnotationsDialog: {
+      title: 'Smazat anotace?',
+      description:
+        'Smaže segmentační anotace u {{count}} vybraných obrázků. Obrázky zůstanou, ale jejich výsledky segmentace se odstraní. Tuto akci nelze vrátit.',
+    },
     imagesDeleted: '{{count}} obrázek smazán',
     imagesDeleted_other: '{{count}} obrázky smazány',
   },

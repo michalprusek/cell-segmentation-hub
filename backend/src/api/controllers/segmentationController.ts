@@ -223,6 +223,46 @@ class SegmentationController {
   };
 
   /**
+   * Delete segmentation annotations for many images at once (bulk action from
+   * the project page; the images themselves are kept).
+   */
+  deleteSegmentationBatch = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { imageIds } = req.body;
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+      if (!Array.isArray(imageIds) || imageIds.length === 0) {
+        ResponseHelper.validationError(res, 'imageIds musí být neprázdné pole');
+        return;
+      }
+
+      const result = await this.segmentationService.deleteSegmentationBatch(
+        imageIds,
+        userId
+      );
+
+      ResponseHelper.success(res, result, 'Anotace smazány');
+    } catch (error) {
+      logger.error(
+        'Failed to batch-delete segmentation annotations',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        { userId: req.user?.id }
+      );
+      ResponseHelper.internalError(
+        res,
+        error as Error,
+        'Chyba při mazání anotací'
+      );
+    }
+  };
+
+  /**
    * Map a track-operation error to the right HTTP status: ownership failures are
    * 404 and geometry-shape failures are validation errors, so they don't leak as
    * generic 500s.

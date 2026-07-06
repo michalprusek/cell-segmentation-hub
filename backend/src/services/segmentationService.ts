@@ -17,6 +17,7 @@ import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
 import { safeMlFilename } from '../utils/mlFilename';
+import { mapWithConcurrency } from '../utils/concurrency';
 
 export interface SegmentationPoint {
   x: number;
@@ -1796,6 +1797,47 @@ export class SegmentationService {
       imageId,
       userId,
     });
+  }
+
+  /**
+   * Delete segmentation annotations for many images at once (the images
+   * themselves are kept). Reuses the single-image path per image (ownership
+   * check + deleteMany + status reset back to 'no_segmentation') with bounded
+   * concurrency. Failures are collected, not thrown, so one inaccessible /
+   * absent image doesn't sink the whole batch.
+   */
+  async deleteSegmentationBatch(
+    imageIds: string[],
+    userId: string
+  ): Promise<{ deletedCount: number; failedIds: string[] }> {
+    const failedIds: string[] = [];
+    let deletedCount = 0;
+    // Increments run synchronously with no interleaving await, so they're safe
+    // under mapWithConcurrency (single-threaded JS).
+    await mapWithConcurrency(imageIds, 8, async imageId => {
+      try {
+        await this.deleteSegmentationResults(imageId, userId);
+        deletedCount++;
+      } catch (error) {
+        failedIds.push(imageId);
+        logger.warn(
+          'Batch annotation delete: skipped an image',
+          'SegmentationService',
+          {
+            imageId,
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
+      }
+    });
+
+    logger.info('Batch annotation delete complete', 'SegmentationService', {
+      userId,
+      requested: imageIds.length,
+      deletedCount,
+      failed: failedIds.length,
+    });
+    return { deletedCount, failedIds };
   }
 
   /**

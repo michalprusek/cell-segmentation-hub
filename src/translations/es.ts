@@ -337,6 +337,7 @@ export default {
         'No se pudo quitar el proyecto de los proyectos compartidos',
       deleteProject: 'No se pudo eliminar el proyecto',
     },
+    deleteAnnotations: 'No se pudieron eliminar las anotaciones',
     deleteImages: 'Error al eliminar las imágenes seleccionadas',
     contexts: {
       dashboard: 'Error del dashboard',
@@ -1158,6 +1159,15 @@ export default {
     selected: '{{count}} imagen seleccionada',
     selected_other: '{{count}} imágenes seleccionadas',
     deleteSelected: 'Eliminar Seleccionadas',
+    deleteAnnotations: 'Eliminar anotaciones',
+    annotationsDeleted: 'Anotaciones eliminadas de {{count}} imagen(es)',
+    annotationsDeleteFailed:
+      'No se pudieron eliminar las anotaciones de {{count}} imagen(es)',
+    deleteAnnotationsDialog: {
+      title: '¿Eliminar anotaciones?',
+      description:
+        'Esto elimina las anotaciones de segmentación de {{count}} imagen(es) seleccionada(s). Las imágenes se conservan, pero se eliminan sus resultados de segmentación. Esta acción no se puede deshacer.',
+    },
     imagesDeleted: '{{count}} imagen eliminada',
     imagesDeleted_other: '{{count}} imágenes eliminadas',
   },

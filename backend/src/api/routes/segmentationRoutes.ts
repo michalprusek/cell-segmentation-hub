@@ -167,6 +167,25 @@ router.delete(
 );
 
 /**
+ * @route POST /api/segmentation/batch/delete
+ * @description Delete segmentation annotations for many images at once
+ * @access Private
+ */
+router.post(
+  '/batch/delete',
+  [
+    body('imageIds')
+      .isArray({ min: 1, max: 10000 })
+      .withMessage('Musíte zadat 1-10000 obrázků'),
+    body('imageIds.*')
+      .isUUID()
+      .withMessage('ID obrázku musí být platné UUID'),
+  ],
+  handleValidation,
+  segmentationController.deleteSegmentationBatch
+);
+
+/**
  * @route POST /api/segmentation/batch
  * @description Process multiple images in batch
  * @access Private

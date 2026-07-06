@@ -336,6 +336,7 @@ export default {
       deleteProject:
         "Impossible de supprimer le projet. Assurez-vous d'avoir les permissions nécessaires.",
     },
+    deleteAnnotations: 'Échec de la suppression des annotations',
     deleteImages: 'Erreur lors de la suppression des images sélectionnées',
     contexts: {
       dashboard: 'Erreur du tableau de bord',
@@ -1162,6 +1163,15 @@ export default {
     selected: '{{count}} image sélectionnée',
     selected_other: '{{count}} images sélectionnées',
     deleteSelected: 'Supprimer la sélection',
+    deleteAnnotations: 'Supprimer les annotations',
+    annotationsDeleted: 'Annotations supprimées pour {{count}} image(s)',
+    annotationsDeleteFailed:
+      'Échec de la suppression des annotations pour {{count}} image(s)',
+    deleteAnnotationsDialog: {
+      title: 'Supprimer les annotations ?',
+      description:
+        'Cela supprime les annotations de segmentation de {{count}} image(s) sélectionnée(s). Les images sont conservées mais leurs résultats de segmentation sont supprimés. Cette action est irréversible.',
+    },
     imagesDeleted: '{{count}} image supprimée',
     imagesDeleted_other: '{{count}} images supprimées',
   },

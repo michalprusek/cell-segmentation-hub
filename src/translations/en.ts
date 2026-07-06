@@ -349,6 +349,7 @@ export default {
       settings: 'Settings error',
     },
     deleteImages: 'Failed to delete selected images',
+    deleteAnnotations: 'Failed to delete annotations',
   },
   images: {
     uploadImages: 'Upload Images or Videos',
@@ -1153,6 +1154,15 @@ export default {
     selected: '{{count}} image selected',
     selected_other: '{{count}} images selected',
     deleteSelected: 'Delete Selected',
+    deleteAnnotations: 'Delete Annotations',
+    annotationsDeleted: 'Annotations deleted for {{count}} image(s)',
+    annotationsDeleteFailed:
+      'Failed to delete annotations for {{count}} image(s)',
+    deleteAnnotationsDialog: {
+      title: 'Delete annotations?',
+      description:
+        'This deletes the segmentation annotations for {{count}} selected image(s). The images are kept but their segmentation results are removed. This cannot be undone.',
+    },
     imagesDeleted: '{{count}} image deleted',
     imagesDeleted_other: '{{count}} images deleted',
   },

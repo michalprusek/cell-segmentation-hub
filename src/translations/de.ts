@@ -341,6 +341,7 @@ export default {
       deleteProject:
         'Das Projekt kann nicht gelöscht werden. Stellen Sie sicher, dass Sie die erforderlichen Berechtigungen haben.',
     },
+    deleteAnnotations: 'Anmerkungen konnten nicht gelöscht werden',
     deleteImages: 'Fehler beim Löschen der ausgewählten Bilder',
     contexts: {
       dashboard: 'Dashboard-Fehler',
@@ -1172,6 +1173,15 @@ export default {
     selected: '{{count}} Bild ausgewählt',
     selected_other: '{{count}} Bilder ausgewählt',
     deleteSelected: 'Ausgewählte löschen',
+    deleteAnnotations: 'Anmerkungen löschen',
+    annotationsDeleted: 'Anmerkungen für {{count}} Bild(er) gelöscht',
+    annotationsDeleteFailed:
+      'Anmerkungen für {{count}} Bild(er) konnten nicht gelöscht werden',
+    deleteAnnotationsDialog: {
+      title: 'Anmerkungen löschen?',
+      description:
+        'Dies löscht die Segmentierungsanmerkungen für {{count}} ausgewählte Bild(er). Die Bilder bleiben erhalten, ihre Segmentierungsergebnisse werden jedoch entfernt. Dies kann nicht rückgängig gemacht werden.',
+    },
     imagesDeleted: '{{count}} Bild gelöscht',
     imagesDeleted_other: '{{count}} Bilder gelöscht',
   },

@@ -1666,6 +1666,23 @@ class ApiClient {
   }
 
   /**
+   * Delete segmentation annotations for many images at once (project-page bulk
+   * action). The images are kept; their status resets to no-segmentation.
+   */
+  async deleteSegmentationBatch(
+    imageIds: string[]
+  ): Promise<{ deletedCount: number; failedIds: string[] }> {
+    const response = await this.instance.post('/segmentation/batch/delete', {
+      imageIds,
+    });
+    const data = this.extractData(response);
+    return {
+      deletedCount: Number(data?.deletedCount ?? 0),
+      failedIds: Array.isArray(data?.failedIds) ? data.failedIds : [],
+    };
+  }
+
+  /**
    * Propagate a microtubule polyline into every frame of the video after
    * `fromFrameIndex`, overwriting the same track where present and adding it
    * where missing. The backend returns the (possibly newly-generated) trackId
