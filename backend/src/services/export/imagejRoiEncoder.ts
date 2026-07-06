@@ -13,8 +13,10 @@
  *   6    ROI type (uint8): 0 = polygon, 5 = polyline  (on-disk codes)
  *   8    top / 10 left / 12 bottom / 14 right  (int16 integer bounding box)
  *   16   nCoordinates (int16)
+ *   40   stroke colour (uint32 ARGB): 0 = unset; set for per-track colouring
  *   50   options (int16): SUB_PIXEL_RESOLUTION (128) is always set here
- *   56   position (int32): left 0 — loose per-frame files aren't slice-associated
+ *   56   position (int32): 0 = unset; the 1-based stack slice for RoiSet.zip
+ *        exports so each ROI lands on its own video frame
  *   60   header2 offset (int32)
  *   64   integer coords: x[n] then y[n] (int16; x relative to left, y to top)
  *   64+4n  float32 x[n] (absolute), then float32 y[n]  ← authoritative geometry
@@ -27,11 +29,12 @@
  */
 
 import * as path from 'path';
-import { promises as fs } from 'fs';
+import { promises as fs, createWriteStream } from 'fs';
+import archiver from 'archiver';
 import type { PolygonPoint } from '../../types/polygon';
 import { logger } from '../../utils/logger';
-import { mapWithConcurrency } from '../../utils/concurrency';
 import { sanitizeFilename } from './exportFileOperations';
+import { colorKeyForRoi, imageJStrokeColor } from './imagejColor';
 
 // ---------------------------------------------------------------------------
 //  Low-level encoder
@@ -53,6 +56,10 @@ const HEADER2_SIZE = 64;
 const ROI_TYPE_POLYGON = 0;
 const ROI_TYPE_POLYLINE = 5;
 
+// header field offsets used for the optional stroke colour + slice position.
+const STROKE_COLOR_OFFSET = 40;
+const POSITION_OFFSET = 56;
+
 // options flags (RoiDecoder)
 const SUB_PIXEL_RESOLUTION = 128;
 
@@ -70,6 +77,21 @@ function putShort(buf: Buffer, offset: number, value: number): void {
   buf.writeUInt16BE(value & 0xffff, offset);
 }
 
+/** Optional ImageJ header fields for slice-aware, colour-coded ROIs. */
+export interface RoiEncodeOptions {
+  /**
+   * 1-based stack slice this ROI belongs to (ImageJ POSITION @56). Lets a
+   * RoiSet.zip place each ROI on its own video frame. Omit / 0 leaves it unset.
+   */
+  position?: number;
+  /**
+   * ARGB stroke colour (alpha in the high byte, `0xFF` = opaque). ImageJ reads
+   * an all-zero value as "no colour set", so pass a value with alpha. Omit to
+   * leave the ROI at ImageJ's default colour.
+   */
+  strokeColor?: number;
+}
+
 /**
  * Encode a single polyline/polygon into an ImageJ ``.roi`` byte buffer.
  *
@@ -79,11 +101,13 @@ function putShort(buf: Buffer, offset: number, value: number): void {
  *                 ≥3 points).
  * @param name     ROI name embedded in header2 (shown in RoiManager). Empty
  *                 string / undefined omits the name block.
+ * @param options  Optional slice position + stroke colour (see RoiEncodeOptions).
  */
 export function encodeImageJRoi(
   points: RoiPoint[],
   geometry: RoiGeometry,
-  name?: string
+  name?: string,
+  options?: RoiEncodeOptions
 ): Buffer {
   const n = points.length;
   const minPoints = geometry === 'polygon' ? 3 : 2;
@@ -115,7 +139,7 @@ export function encodeImageJRoi(
 
   const buf = Buffer.alloc(totalSize); // zero-filled: unset fields stay 0
 
-  // ---- Header (0..63) ----  (position @56 intentionally left 0)
+  // ---- Header (0..63) ----
   buf.write(MAGIC, 0, 'ascii');
   putShort(buf, 4, VERSION);
   buf.writeUInt8(roiType, 6);
@@ -126,6 +150,16 @@ export function encodeImageJRoi(
   putShort(buf, 16, n);
   putShort(buf, 50, SUB_PIXEL_RESOLUTION);
   buf.writeInt32BE(header2Offset, 60);
+
+  // Optional stroke colour (ARGB, unsigned) + 1-based slice position. Left 0
+  // (already zero-filled) when the caller omits them, preserving the exact
+  // byte layout the golden-file test pins for the no-options path.
+  if (options?.strokeColor) {
+    buf.writeUInt32BE(options.strokeColor >>> 0, STROKE_COLOR_OFFSET);
+  }
+  if (options?.position && options.position > 0) {
+    buf.writeInt32BE(options.position, POSITION_OFFSET);
+  }
 
   // ---- Coordinates (64..) ----
   const intXBase = HEADER_SIZE;
@@ -166,9 +200,9 @@ export interface RoiFrameInput {
 }
 
 export interface ImageJRoiExportResult {
-  /** Frames that produced at least one .roi file. */
+  /** Frames that contributed at least one ROI to a zip. */
   frames: number;
-  /** Total .roi files written. */
+  /** Total ROI entries written across all RoiSet.zip files. */
   rois: number;
   /** User-facing, non-fatal warnings (e.g. corrupt frames skipped). */
   warnings: string[];
@@ -182,8 +216,6 @@ interface RawPolygon {
   instanceId?: string;
   trackId?: string | null;
 }
-
-const FRAME_WRITE_CONCURRENCY = 8;
 
 /**
  * Parse a frame's polygons JSON, distinguishing "no polygons" from "corrupt".
@@ -254,63 +286,197 @@ function roiLabel(p: RawPolygon, index: number): string {
 }
 
 /**
- * Per-frame output folder: ``<videoLabel>/frame_<NNNN>``.
- *
- * The frame's own display name is unusable as a key — real MT frames are named
- * ``"<original>.nd2 (frame 1)"``, on which ``path.parse().name`` amputates the
- * ``.nd2 (frame 1)`` "extension" and collapses every frame to one folder. So we
- * key on the structured ``(parentVideoId, frameIndex)`` instead:
- *  - videoLabel comes from the container row's name (a clean filename), which
- *    also disambiguates multi-position ND2 splits (one container per position);
- *  - frameIndex gives a guaranteed-unique numeric suffix within a video.
- *
- * @param containerNames  parentVideoId → container display name.
+ * Frame slice label ``frame_NNNN`` from the structured frameIndex — NOT the
+ * display name, which for real MT frames is ``"<original>.nd2 (frame 1)"`` and
+ * would collapse under ``path.parse``. Falls back to the sanitised id.
  */
-function frameFolderName(
-  frame: RoiFrameInput,
-  containerNames: Map<string, string>
-): string {
-  const containerName = frame.parentVideoId
-    ? containerNames.get(frame.parentVideoId)
-    : undefined;
-
-  let videoLabel: string;
-  if (containerName) {
-    // Container names are real filenames (no "(frame N)" suffix), so stripping
-    // the extension here is safe and yields a readable video folder.
-    videoLabel = sanitizeFilename(path.parse(containerName).name);
-  } else if (frame.parentVideoId) {
-    videoLabel = `video_${frame.parentVideoId.slice(0, 8)}`;
-  } else {
-    videoLabel = 'video';
-  }
-
-  const frameLabel =
-    typeof frame.frameIndex === 'number'
-      ? `frame_${String(frame.frameIndex).padStart(4, '0')}`
-      : sanitizeFilename(frame.id);
-
-  return path.join(videoLabel, frameLabel);
+function frameLabelFor(frame: RoiFrameInput): string {
+  return typeof frame.frameIndex === 'number'
+    ? `frame_${String(frame.frameIndex).padStart(4, '0')}`
+    : sanitizeFilename(frame.id);
 }
 
 /**
- * Write ImageJ ``.roi`` files for every segmented frame of a microtubule
- * export. Output layout (loose files, grouped per frame):
+ * Clean, human-readable label for a video's RoiSet.zip. The container row's
+ * name is a real filename (no "(frame N)" suffix), so stripping the extension
+ * is safe; multi-position ND2 splits already yield one container per position,
+ * so the label also disambiguates them.
+ */
+function videoZipLabel(
+  videoKey: string,
+  containerNames: Map<string, string>
+): string {
+  if (videoKey === NO_VIDEO_KEY) return 'video';
+  const name = containerNames.get(videoKey);
+  if (name) return sanitizeFilename(path.parse(name).name);
+  return `video_${videoKey.slice(0, 8)}`;
+}
+
+/** Sentinel bucket for the rare MT frame with no parentVideoId. */
+const NO_VIDEO_KEY = '__novideo__';
+
+/** A single entry in a RoiSet.zip: the on-disk name + the encoded ROI bytes. */
+export interface RoiZipEntry {
+  /** Entry name including the ``.roi`` extension (becomes the ROI-Manager name). */
+  name: string;
+  buffer: Buffer;
+}
+
+export interface VideoRoiBuild {
+  entries: RoiZipEntry[];
+  framesWithRois: number;
+  corruptFrames: number;
+  droppedPolygons: number;
+}
+
+/**
+ * Build the ImageJ ``.roi`` zip entries for ONE video's frames. Pure (no IO)
+ * so the exact bytes — slice position, per-track stroke colour, geometry, and
+ * entry names — are unit-testable with the inline decoder.
  *
- *   annotations/imagej/<video>/frame_NNNN/<roiLabel>.roi
+ * Frames are processed in frameIndex order. Each ROI carries ``position =
+ * frameIndex + 1`` (1-based ImageJ slice) and a stroke colour derived from its
+ * track (identical hue to the editor). Entry names are ``<label>__frame_NNNN``
+ * (MT-first) so the same microtubule's ROIs sort together in the ROI Manager
+ * and every name is unique within the zip.
  *
- * Both open polylines (→ ImageJ POLYLINE) and any closed polygons (→ POLYGON)
- * are emitted; MT projects are polyline-only in practice.
+ * Degradation matches the rest of the export: corrupt-JSON frames are counted
+ * (surfaced as a warning by the caller), and polygons with too few / non-finite
+ * points are dropped and counted.
+ */
+export function buildVideoRoiEntries(frames: RoiFrameInput[]): VideoRoiBuild {
+  const ordered = [...frames].sort(
+    (a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0)
+  );
+
+  const entries: RoiZipEntry[] = [];
+  let framesWithRois = 0;
+  let corruptFrames = 0;
+  let droppedPolygons = 0;
+  const usedEntryNames = new Set<string>();
+
+  for (const frame of ordered) {
+    const parsed = parseFramePolygons(frame.segmentation?.polygons);
+    if (parsed.corrupt) {
+      corruptFrames++;
+      continue;
+    }
+
+    const frameLabel = frameLabelFor(frame);
+    const position =
+      typeof frame.frameIndex === 'number' ? frame.frameIndex + 1 : undefined;
+
+    // Normalise to concrete items, dropping degenerate geometry (polyline < 2 /
+    // polygon < 3) and any polygon with non-finite coordinates. Missing geometry
+    // defaults to 'polyline' — MT annotations are always open polylines.
+    const items = parsed.polygons
+      .map((p, index) => {
+        const geometry: RoiGeometry =
+          p.geometry === 'polygon' ? 'polygon' : 'polyline';
+        return {
+          geometry,
+          points: validPoints(p.points),
+          label: roiLabel(p, index),
+          strokeColor: imageJStrokeColor(colorKeyForRoi(p)),
+        };
+      })
+      .filter(it => it.points.length >= (it.geometry === 'polyline' ? 2 : 3));
+
+    droppedPolygons += parsed.polygons.length - items.length;
+    if (items.length === 0) continue;
+
+    // Dedup labels within the frame first (distinct MTs that sanitise to the
+    // same base must not collide), then suffix the unique frame label.
+    const usedInFrame = new Set<string>();
+    let frameRois = 0;
+    for (const { geometry, points, label, strokeColor } of items) {
+      const base = sanitizeFilename(label);
+      let labelCandidate = base;
+      let dupe = 2;
+      while (usedInFrame.has(labelCandidate.toLowerCase())) {
+        labelCandidate = `${base}_${dupe++}`;
+      }
+      usedInFrame.add(labelCandidate.toLowerCase());
+
+      // frameLabel is unique per frame, so cross-frame collisions cannot occur;
+      // this guard only defends against a pathological repeat.
+      let entryStem = `${labelCandidate}__${frameLabel}`;
+      let extra = 2;
+      while (usedEntryNames.has(entryStem.toLowerCase())) {
+        entryStem = `${labelCandidate}__${frameLabel}_${extra++}`;
+      }
+      usedEntryNames.add(entryStem.toLowerCase());
+
+      const buffer = encodeImageJRoi(points, geometry, label, {
+        position,
+        strokeColor,
+      });
+      entries.push({ name: `${entryStem}.roi`, buffer });
+      frameRois++;
+    }
+    if (frameRois > 0) framesWithRois++;
+  }
+
+  return { entries, framesWithRois, corruptFrames, droppedPolygons };
+}
+
+/**
+ * Stream a video's ROI entries into a single deflated RoiSet.zip. Kept separate
+ * from `buildVideoRoiEntries` so the byte generation stays pure/testable and
+ * only this thin wrapper touches the filesystem.
+ */
+async function writeRoiSetZip(
+  zipPath: string,
+  entries: RoiZipEntry[]
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const output = createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    let settled = false;
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+    output.on('close', () => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    });
+    output.on('error', fail);
+    // A zip 'warning' (e.g. a stat failure) would silently truncate the archive,
+    // so treat it as fatal for correctness.
+    archive.on('warning', fail);
+    archive.on('error', fail);
+    archive.pipe(output);
+    for (const entry of entries) {
+      archive.append(entry.buffer, { name: entry.name });
+    }
+    archive.finalize().catch(fail);
+  });
+}
+
+/**
+ * Export one ImageJ **RoiSet.zip per video** for a microtubule project:
+ *
+ *   annotations/imagej/<video>_RoiSet.zip
+ *
+ * Biologists drag the single zip into ImageJ / Fiji; the ROI Manager loads
+ * every microtubule polyline, each placed on its own stack slice (via the ROI
+ * position) and coloured per track (matching the editor). Both open polylines
+ * (→ ImageJ POLYLINE) and any closed polygons (→ POLYGON) are emitted; MT
+ * projects are polyline-only in practice.
  *
  * Degradation: corrupt-JSON frames are skipped and reported via the returned
  * `warnings` (never silently dropped); polygons with too few / non-finite
  * points are dropped and logged. This function must NOT reject on routine bad
- * data — its caller treats a rejection as non-fatal, but keeping it total makes
- * that contract obvious.
+ * data — its caller treats a rejection as non-fatal — but a genuine
+ * cancellation stays fatal.
  *
  * @returns Counts + non-fatal warnings for the caller to fold into job.warnings.
  */
-export async function exportImageJRois(
+export async function exportImageJRoiSets(
   frameImages: RoiFrameInput[],
   exportDir: string,
   projectId: string,
@@ -319,7 +485,7 @@ export async function exportImageJRois(
   const baseDir = path.join(exportDir, 'annotations', 'imagej');
 
   // Container rows (carried in the same images array) supply a clean, human
-  // readable video-folder label — build the lookup before filtering them out.
+  // readable video label — build the lookup before filtering them out.
   const containerNames = new Map<string, string>();
   for (const f of frameImages) {
     if (f.isVideoContainer && f.name) {
@@ -327,86 +493,48 @@ export async function exportImageJRois(
     }
   }
 
-  // Frames that actually carry segmentation geometry. Video container rows
-  // never hold polygons, so skip them.
-  const frames = frameImages.filter(
-    f => !f.isVideoContainer && !!f.segmentation?.polygons
-  );
+  // Segmented frames grouped by their video container (one zip each). Container
+  // rows never hold polygons, so skip them.
+  const byVideo = new Map<string, RoiFrameInput[]>();
+  for (const f of frameImages) {
+    if (f.isVideoContainer || !f.segmentation?.polygons) continue;
+    const key = f.parentVideoId ?? NO_VIDEO_KEY;
+    const arr = byVideo.get(key);
+    if (arr) arr.push(f);
+    else byVideo.set(key, [f]);
+  }
 
-  // Counters mutated by concurrent workers — safe because every increment is a
-  // synchronous statement with no interleaving await (single-threaded JS).
   let framesWritten = 0;
   let roisWritten = 0;
   let corruptFrames = 0;
   let droppedPolygons = 0;
+  const usedZipNames = new Set<string>();
 
-  await mapWithConcurrency(
-    frames,
-    FRAME_WRITE_CONCURRENCY,
-    async frame => {
-      const parsed = parseFramePolygons(frame.segmentation?.polygons);
-      if (parsed.corrupt) {
-        corruptFrames++;
-        return;
-      }
-
-      // Normalise to concrete {geometry, points, label} items, dropping
-      // degenerate geometry (polyline < 2 / polygon < 3) and any polygon with
-      // non-finite coordinates. Default missing geometry to 'polyline' — this
-      // is the MT-only path and MT annotations are always open polylines.
-      const items = parsed.polygons
-        .map((p, index) => {
-          const geometry: RoiGeometry =
-            p.geometry === 'polygon' ? 'polygon' : 'polyline';
-          return { geometry, points: validPoints(p.points), label: roiLabel(p, index) };
-        })
-        .filter(
-          it => it.points.length >= (it.geometry === 'polyline' ? 2 : 3)
-        );
-
-      droppedPolygons += parsed.polygons.length - items.length;
-
-      if (items.length === 0) {
-        return;
-      }
-
-      const frameDir = path.join(
-        baseDir,
-        frameFolderName(frame, containerNames)
-      );
-      await fs.mkdir(frameDir, { recursive: true });
-
-      const usedNames = new Set<string>();
-      let frameRois = 0;
-
-      // Sequential within a frame so the max concurrent open file handles stays
-      // at FRAME_WRITE_CONCURRENCY — a frame can hold 100+ microtubules, and a
-      // parallel write per ROI × 8 frames would risk EMFILE.
-      for (const { geometry, points, label } of items) {
-        // Ensure a unique on-disk filename within the frame folder.
-        const fileBase = sanitizeFilename(label);
-        let candidate = fileBase;
-        let dupe = 2;
-        while (usedNames.has(candidate.toLowerCase())) {
-          candidate = `${fileBase}_${dupe++}`;
-        }
-        usedNames.add(candidate.toLowerCase());
-
-        const buf = encodeImageJRoi(points, geometry, label);
-        await fs.writeFile(path.join(frameDir, `${candidate}.roi`), buf);
-        frameRois++;
-      }
-
-      if (frameRois > 0) {
-        framesWritten++;
-        roisWritten += frameRois;
-      }
-    },
-    {
-      shouldAbort: options.shouldAbort,
-      abortMessage: 'Export cancelled by user',
+  // One zip per video, written sequentially to cap concurrent write streams.
+  for (const [videoKey, videoFrames] of byVideo) {
+    if (options.shouldAbort?.()) {
+      throw new Error('Export cancelled by user');
     }
-  );
+
+    const build = buildVideoRoiEntries(videoFrames);
+    corruptFrames += build.corruptFrames;
+    droppedPolygons += build.droppedPolygons;
+    if (build.entries.length === 0) continue;
+
+    const label = videoZipLabel(videoKey, containerNames);
+    let zipName = `${label}_RoiSet.zip`;
+    let dupe = 2;
+    while (usedZipNames.has(zipName.toLowerCase())) {
+      zipName = `${label}_RoiSet_${dupe++}.zip`;
+    }
+    usedZipNames.add(zipName.toLowerCase());
+
+    await fs.mkdir(baseDir, { recursive: true });
+    await writeRoiSetZip(path.join(baseDir, zipName), build.entries);
+
+    framesWritten += build.framesWithRois;
+    roisWritten += build.entries.length;
+  }
 
   if (droppedPolygons > 0) {
     logger.warn(
@@ -428,8 +556,9 @@ export async function exportImageJRois(
     );
   }
 
-  logger.info('ImageJ ROI export complete', 'imagejRoiEncoder', {
+  logger.info('ImageJ RoiSet.zip export complete', 'imagejRoiEncoder', {
     projectId,
+    videos: usedZipNames.size,
     frames: framesWritten,
     rois: roisWritten,
     corruptFrames,
