@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
-import { SegmentationService } from '../../services/segmentationService';
+import {
+  SegmentationService,
+  VideoAccessError,
+} from '../../services/segmentationService';
 import { ImageService } from '../../services/imageService';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
@@ -216,6 +219,143 @@ class SegmentationController {
       const errorMessage =
         error instanceof Error ? error.message : 'Chyba při mazání výsledků';
       ResponseHelper.internalError(res, error as Error, errorMessage);
+    }
+  };
+
+  /**
+   * Delete segmentation annotations for many images at once (bulk action from
+   * the project page; the images themselves are kept).
+   */
+  deleteSegmentationBatch = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const { imageIds } = req.body;
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+      if (!Array.isArray(imageIds) || imageIds.length === 0) {
+        ResponseHelper.validationError(res, 'imageIds musí být neprázdné pole');
+        return;
+      }
+
+      const result = await this.segmentationService.deleteSegmentationBatch(
+        imageIds,
+        userId
+      );
+
+      ResponseHelper.success(res, result, 'Anotace smazány');
+    } catch (error) {
+      logger.error(
+        'Failed to batch-delete segmentation annotations',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        { userId: req.user?.id }
+      );
+      ResponseHelper.internalError(
+        res,
+        error as Error,
+        'Chyba při mazání anotací'
+      );
+    }
+  };
+
+  /**
+   * Map a track-operation error to the right HTTP status: ownership failures are
+   * 404 and geometry-shape failures are validation errors, so they don't leak as
+   * generic 500s.
+   */
+  private handleTrackOpError(
+    error: unknown,
+    res: Response,
+    fallbackMessage: string
+  ): void {
+    // Ownership failures are a typed error (not a substring match, which would
+    // silently drift-break if the message is reworded).
+    if (error instanceof VideoAccessError) {
+      ResponseHelper.notFound(res, 'Video nenalezeno nebo bez přístupu');
+      return;
+    }
+    // Geometry-shape failure (also gated at the route, so this is defensive).
+    if (error instanceof Error && /at least 2( finite)? points/i.test(error.message)) {
+      ResponseHelper.validationError(res, error.message);
+      return;
+    }
+    ResponseHelper.internalError(res, error as Error, fallbackMessage);
+  }
+
+  /**
+   * Propagate a microtubule polyline into all following frames of a video.
+   */
+  propagateTrack = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { videoId } = req.params;
+      const { fromFrameIndex, polyline } = req.body;
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+      if (!this.validateParams(req.params, ['videoId'], res)) {
+        return;
+      }
+
+      const result =
+        await this.segmentationService.propagateTrackGeometryForward(
+          videoId as string,
+          Number(fromFrameIndex),
+          polyline,
+          userId
+        );
+
+      ResponseHelper.success(
+        res,
+        result,
+        'Mikrotubulus propagován do dalších snímků'
+      );
+    } catch (error) {
+      logger.error(
+        'Failed to propagate microtubule track',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        { videoId: req.params.videoId, userId: req.user?.id }
+      );
+      this.handleTrackOpError(error, res, 'Chyba při propagaci mikrotubulu');
+    }
+  };
+
+  /**
+   * Delete a whole microtubule track (every frame of the video).
+   */
+  deleteTrack = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { videoId, trackId } = req.params;
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+      if (!this.validateParams(req.params, ['videoId', 'trackId'], res)) {
+        return;
+      }
+
+      const result = await this.segmentationService.deleteTrackAcrossVideo(
+        videoId as string,
+        trackId as string,
+        userId
+      );
+
+      ResponseHelper.success(res, result, 'Track mikrotubulu smazán');
+    } catch (error) {
+      logger.error(
+        'Failed to delete microtubule track',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        { videoId: req.params.videoId, userId: req.user?.id }
+      );
+      this.handleTrackOpError(error, res, 'Chyba při mazání tracku');
     }
   };
 

@@ -349,6 +349,7 @@ export default {
       settings: 'Settings error',
     },
     deleteImages: 'Failed to delete selected images',
+    deleteAnnotations: 'Failed to delete annotations',
   },
   images: {
     uploadImages: 'Upload Images or Videos',
@@ -612,6 +613,13 @@ export default {
     system: 'System',
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess:
+        'Microtubule propagated to {{count}} following frame(s)',
+      propagateFailed: 'Failed to propagate the microtubule',
+      deleteTrackSuccess: 'Track removed from {{count}} frame(s)',
+      deleteTrackFailed: 'Failed to delete the track',
+    },
     modelNotCompatible:
       'Model "{{model}}" is not compatible with project type "{{type}}". Allowed: {{allowed}}.',
     incompatibleModelTitle: 'Cannot segment with this model',
@@ -1146,6 +1154,15 @@ export default {
     selected: '{{count}} image selected',
     selected_other: '{{count}} images selected',
     deleteSelected: 'Delete Selected',
+    deleteAnnotations: 'Delete Annotations',
+    annotationsDeleted: 'Annotations deleted for {{count}} image(s)',
+    annotationsDeleteFailed:
+      'Failed to delete annotations for {{count}} image(s)',
+    deleteAnnotationsDialog: {
+      title: 'Delete annotations?',
+      description:
+        'This deletes the segmentation annotations for {{count}} selected image(s). The images are kept but their segmentation results are removed. This cannot be undone.',
+    },
     imagesDeleted: '{{count}} image deleted',
     imagesDeleted_other: '{{count}} images deleted',
   },
@@ -1936,6 +1953,14 @@ export default {
 
   // Context menu
   contextMenu: {
+    propagateTrack: 'Propagate to following frames',
+    confirmPropagateTrack: 'Propagate to following frames?',
+    propagateTrackDescription:
+      "This overwrites this microtubule's shape in all following frames of the video. This cannot be undone.",
+    deleteTrack: 'Delete whole track',
+    confirmDeleteTrack: 'Delete the whole microtubule track?',
+    deleteTrackDescription:
+      'This removes this microtubule from all {{count}} frames of the video. This cannot be undone.',
     editPolygon: 'Edit polygon',
     splitPolygon: 'Split polygon',
     deletePolygon: 'Delete polygon',

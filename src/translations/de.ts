@@ -341,6 +341,7 @@ export default {
       deleteProject:
         'Das Projekt kann nicht gelöscht werden. Stellen Sie sicher, dass Sie die erforderlichen Berechtigungen haben.',
     },
+    deleteAnnotations: 'Anmerkungen konnten nicht gelöscht werden',
     deleteImages: 'Fehler beim Löschen der ausgewählten Bilder',
     contexts: {
       dashboard: 'Dashboard-Fehler',
@@ -771,6 +772,12 @@ export default {
     },
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess: 'Mikrotubulus in {{count}} folgende Frames übertragen',
+      propagateFailed: 'Übertragung des Mikrotubulus fehlgeschlagen',
+      deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
+      deleteTrackFailed: 'Löschen des Tracks fehlgeschlagen',
+    },
     modelNotCompatible:
       'Modell "{{model}}" ist nicht mit dem Projekttyp "{{type}}" kompatibel. Erlaubt: {{allowed}}.',
     incompatibleModelTitle: 'Mit diesem Modell kann nicht segmentiert werden',
@@ -1166,6 +1173,15 @@ export default {
     selected: '{{count}} Bild ausgewählt',
     selected_other: '{{count}} Bilder ausgewählt',
     deleteSelected: 'Ausgewählte löschen',
+    deleteAnnotations: 'Anmerkungen löschen',
+    annotationsDeleted: 'Anmerkungen für {{count}} Bild(er) gelöscht',
+    annotationsDeleteFailed:
+      'Anmerkungen für {{count}} Bild(er) konnten nicht gelöscht werden',
+    deleteAnnotationsDialog: {
+      title: 'Anmerkungen löschen?',
+      description:
+        'Dies löscht die Segmentierungsanmerkungen für {{count}} ausgewählte Bild(er). Die Bilder bleiben erhalten, ihre Segmentierungsergebnisse werden jedoch entfernt. Dies kann nicht rückgängig gemacht werden.',
+    },
     imagesDeleted: '{{count}} Bild gelöscht',
     imagesDeleted_other: '{{count}} Bilder gelöscht',
   },
@@ -1878,6 +1894,14 @@ export default {
     },
   },
   contextMenu: {
+    propagateTrack: 'In folgende Frames übertragen',
+    confirmPropagateTrack: 'In folgende Frames übertragen?',
+    propagateTrackDescription:
+      'Dies überschreibt die Form dieses Mikrotubulus in allen folgenden Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
+    deleteTrack: 'Ganzen Track löschen',
+    confirmDeleteTrack: 'Den gesamten Mikrotubulus-Track löschen?',
+    deleteTrackDescription:
+      'Dies entfernt diesen Mikrotubulus aus allen {{count}} Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
     editPolygon: 'Polygon bearbeiten',
     splitPolygon: 'Polygon teilen',
     deletePolygon: 'Polygon löschen',

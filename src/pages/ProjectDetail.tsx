@@ -64,6 +64,10 @@ const ProjectDetail = () => {
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
+  const [showDeleteAnnotationsDialog, setShowDeleteAnnotationsDialog] =
+    useState<boolean>(false);
+  const [isDeletingAnnotations, setIsDeletingAnnotations] =
+    useState<boolean>(false);
   // Channel-picker state for Segment All on multi-channel video projects.
   // `pendingChannelChoice` is non-null while the dialog is open; resolving it
   // triggers the actual dispatch with the picked channel.
@@ -1200,6 +1204,68 @@ const ProjectDetail = () => {
     setShowDeleteDialog(true);
   };
 
+  const handleDeleteAnnotations = () => {
+    setShowDeleteAnnotationsDialog(true);
+  };
+
+  const handleDeleteAnnotationsConfirm = async () => {
+    if (!user?.id || selectedImageIds.size === 0) {
+      toast.error(t('errors.noProjectOrUser'));
+      return;
+    }
+    if (isDeletingAnnotations) {
+      return;
+    }
+    setIsDeletingAnnotations(true);
+
+    try {
+      const imageIds = Array.from(selectedImageIds);
+      const result = await apiClient.deleteSegmentationBatch(imageIds);
+
+      if (result.deletedCount > 0) {
+        toast.success(
+          t('project.annotationsDeleted', { count: result.deletedCount })
+        );
+        // Reset only the images whose annotations were actually deleted back to
+        // no-segmentation (mirror the WS-cancel reset shape) so the gallery
+        // reflects the change without a full refresh.
+        const clearedIds = new Set(
+          imageIds.filter(imageId => !result.failedIds.includes(imageId))
+        );
+        updateImages(prevImages =>
+          prevImages.map(img =>
+            clearedIds.has(img.id)
+              ? {
+                  ...img,
+                  segmentationStatus: 'no_segmentation',
+                  segmentationResult: undefined,
+                  segmentationData: undefined,
+                  segmentationThumbnailPath: undefined,
+                  segmentationThumbnailUrl: undefined,
+                  thumbnail_url: img.url,
+                  updatedAt: new Date(),
+                }
+              : img
+          )
+        );
+        setSelectedImageIds(new Set());
+      }
+
+      if (result.failedIds.length > 0) {
+        toast.warning(
+          t('project.annotationsDeleteFailed', {
+            count: result.failedIds.length,
+          })
+        );
+      }
+    } catch {
+      toast.error(t('errors.deleteAnnotations'));
+    } finally {
+      setShowDeleteAnnotationsDialog(false);
+      setIsDeletingAnnotations(false);
+    }
+  };
+
   // Calculate selection state
   const selectedCount = selectedImageIds.size;
   const isAllSelected =
@@ -1521,6 +1587,7 @@ const ProjectDetail = () => {
               isPartiallySelected={isPartiallySelected}
               onSelectAllToggle={handleSelectAllToggle}
               onBatchDelete={handleBatchDelete}
+              onDeleteAnnotations={handleDeleteAnnotations}
               showSelectAll={true}
               onExportingChange={() => {}} // No longer needed - hook handles state
               onDownloadingChange={() => {}} // No longer needed - hook handles state
@@ -1623,6 +1690,34 @@ const ProjectDetail = () => {
             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleBatchDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete annotations (segmentation results) confirmation dialog */}
+      <AlertDialog
+        open={showDeleteAnnotationsDialog}
+        onOpenChange={setShowDeleteAnnotationsDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('project.deleteAnnotationsDialog.title')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('project.deleteAnnotationsDialog.description', {
+                count: selectedCount,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAnnotationsConfirm}
               className="bg-red-600 hover:bg-red-700"
             >
               {t('common.delete')}

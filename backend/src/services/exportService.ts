@@ -48,7 +48,7 @@ import {
   exportMicrotubuleKymographs,
   type MTKymographOptions,
 } from './export/mtKymographExporter';
-import { exportImageJRois } from './export/imagejRoiEncoder';
+import { exportImageJRoiSets } from './export/imagejRoiEncoder';
 
 const YOLO_WRITE_CONCURRENCY = 16;
 
@@ -627,17 +627,18 @@ export class ExportService {
         );
       }
 
-      // ImageJ ROI files — ALWAYS bundled for MT projects (no toggle) so
+      // ImageJ ROI export — ALWAYS bundled for MT projects (no toggle) so
       // biologists can re-open microtubule polylines in ImageJ / Fiji
-      // (RoiManager, kymograph plugins). Written as loose `.roi` files grouped
-      // per frame under `annotations/imagej/<video>/frame_NNNN/`, named by
-      // cross-frame trackId when tracking ran. Independent of the selected
-      // annotation formats. Because this is always-on (the user did not opt in),
-      // a failure must NOT sink the whole export they did request: it degrades
-      // to a warning. Only a genuine cancellation stays fatal.
+      // (RoiManager, kymograph plugins). Written as one `RoiSet.zip` per video
+      // under `annotations/imagej/<video>_RoiSet.zip`; each ROI is placed on its
+      // own stack slice and coloured per cross-frame trackId (matching the
+      // editor). Independent of the selected annotation formats. Because this is
+      // always-on (the user did not opt in), a failure must NOT sink the whole
+      // export they did request: it degrades to a warning. Only a genuine
+      // cancellation stays fatal.
       if ((project.type ?? '') === 'microtubules' && project.images?.length) {
         exportTasks.push(
-          exportImageJRois(
+          exportImageJRoiSets(
             project.images as ImageWithSegmentation[],
             exportDir,
             project.id,
