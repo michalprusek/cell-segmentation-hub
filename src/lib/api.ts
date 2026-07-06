@@ -1675,8 +1675,11 @@ class ApiClient {
     videoId: string,
     fromFrameIndex: number,
     polyline: {
-      trackId?: string;
-      name?: string;
+      // Nullable to match the backend `PropagatedPolyline` contract (the wire
+      // can carry null); an untracked source sends no trackId and the backend
+      // generates one.
+      trackId?: string | null;
+      name?: string | null;
       geometry?: 'polygon' | 'polyline';
       points: Array<{ x: number; y: number }>;
     }

@@ -806,6 +806,15 @@ const SegmentationEditor = () => {
   // Placed AFTER `const video = useVideoFrames(...)` so they can read
   // video.container without a TDZ (CLAUDE.md production bug #11).
 
+  // `editor` is a fresh object literal every render of
+  // useEnhancedSegmentationEditor. Mirror it into a ref so the track-op handlers
+  // below stay identity-stable (they read the latest polygons via the ref) —
+  // they're compared in the CanvasPolygon React.memo comparator, so closing over
+  // `editor` directly would break the comparator and re-render every polyline on
+  // each cursor/hover/zoom tick (CLAUDE.md failure pattern #5).
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+
   // Invalidate the cached segmentation of the video's frames so a scrub after a
   // track op refetches the mutated data. The sliding-window prefetch caches
   // sibling frames for 60 s, which would otherwise paint stale geometry.
@@ -824,13 +833,30 @@ const SegmentationEditor = () => {
   const handlePropagateTrack = useCallback(
     async (polygonId: string) => {
       const videoId = video.container?.id;
-      const source = editor.getPolygons().find(p => p.id === polygonId);
+      const source = editorRef.current
+        .getPolygons()
+        .find(p => p.id === polygonId);
       const fromFrameIndex = video.container?.frames.find(
         f => f.id === imageId
       )?.frameIndex;
-      if (!videoId || !source || typeof fromFrameIndex !== 'number') return;
-      const points = (source.points ?? []).map(p => ({ x: p.x, y: p.y }));
-      if (points.length < 2) return;
+      const points = (source?.points ?? []).map(p => ({ x: p.x, y: p.y }));
+      // Guard failures are unexpected (missing video/source) or a degenerate
+      // polyline; always give feedback rather than a silent no-op.
+      if (
+        !videoId ||
+        !source ||
+        typeof fromFrameIndex !== 'number' ||
+        points.length < 2
+      ) {
+        logger.warn('Cannot propagate microtubule track', {
+          hasVideo: !!videoId,
+          hasSource: !!source,
+          fromFrameIndex,
+          points: points.length,
+        });
+        toast.error(t('segmentation.trackOps.propagateFailed'));
+        return;
+      }
 
       try {
         const result = await apiClient.propagateTrackForward(
@@ -863,7 +889,6 @@ const SegmentationEditor = () => {
     [
       video.container,
       imageId,
-      editor,
       handleUpdatePolygonField,
       invalidateVideoFrameSegmentationCaches,
       t,
@@ -875,7 +900,9 @@ const SegmentationEditor = () => {
   const handleDeletePolygonOrTrack = useCallback(
     async (polygonId: string) => {
       const videoId = video.container?.id;
-      const target = editor.getPolygons().find(p => p.id === polygonId);
+      const target = editorRef.current
+        .getPolygons()
+        .find(p => p.id === polygonId);
       const trackId = target?.trackId;
       if (projectType === 'microtubules' && videoId && trackId) {
         try {
@@ -899,7 +926,6 @@ const SegmentationEditor = () => {
     },
     [
       video.container,
-      editor,
       projectType,
       handleDeletePolygonFromContextMenu,
       invalidateVideoFrameSegmentationCaches,

@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
-import { SegmentationService } from '../../services/segmentationService';
+import {
+  SegmentationService,
+  VideoAccessError,
+} from '../../services/segmentationService';
 import { ImageService } from '../../services/imageService';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
@@ -229,13 +232,15 @@ class SegmentationController {
     res: Response,
     fallbackMessage: string
   ): void {
-    const message = error instanceof Error ? error.message : '';
-    if (/no access|not found/i.test(message)) {
+    // Ownership failures are a typed error (not a substring match, which would
+    // silently drift-break if the message is reworded).
+    if (error instanceof VideoAccessError) {
       ResponseHelper.notFound(res, 'Video nenalezeno nebo bez přístupu');
       return;
     }
-    if (/at least 2 points/i.test(message)) {
-      ResponseHelper.validationError(res, message);
+    // Geometry-shape failure (also gated at the route, so this is defensive).
+    if (error instanceof Error && /at least 2( finite)? points/i.test(error.message)) {
+      ResponseHelper.validationError(res, error.message);
       return;
     }
     ResponseHelper.internalError(res, error as Error, fallbackMessage);

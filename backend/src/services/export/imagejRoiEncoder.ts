@@ -158,7 +158,9 @@ export function encodeImageJRoi(
     buf.writeUInt32BE(options.strokeColor >>> 0, STROKE_COLOR_OFFSET);
   }
   if (options?.position && options.position > 0) {
-    buf.writeInt32BE(options.position, POSITION_OFFSET);
+    // POSITION is an int32 slice index; truncate defensively so a fractional
+    // value never reaches writeInt32BE (which would throw).
+    buf.writeInt32BE(Math.trunc(options.position), POSITION_OFFSET);
   }
 
   // ---- Coordinates (64..) ----
@@ -508,6 +510,7 @@ export async function exportImageJRoiSets(
   let roisWritten = 0;
   let corruptFrames = 0;
   let droppedPolygons = 0;
+  let failedVideos = 0;
   const usedZipNames = new Set<string>();
 
   // One zip per video, written sequentially to cap concurrent write streams.
@@ -529,11 +532,25 @@ export async function exportImageJRoiSets(
     }
     usedZipNames.add(zipName.toLowerCase());
 
-    await fs.mkdir(baseDir, { recursive: true });
-    await writeRoiSetZip(path.join(baseDir, zipName), build.entries);
-
-    framesWritten += build.framesWithRois;
-    roisWritten += build.entries.length;
+    const zipPath = path.join(baseDir, zipName);
+    try {
+      await fs.mkdir(baseDir, { recursive: true });
+      await writeRoiSetZip(zipPath, build.entries);
+      framesWritten += build.framesWithRois;
+      roisWritten += build.entries.length;
+    } catch (error) {
+      // One video's zip failing must not drop the rest. Remove the partial
+      // (possibly truncated) file so a corrupt zip is never shipped, record a
+      // per-video warning, and continue with the remaining videos.
+      failedVideos++;
+      await fs.rm(zipPath, { force: true }).catch(() => {});
+      logger.error(
+        `ImageJ RoiSet export failed for video "${label}"`,
+        error instanceof Error ? error : new Error(String(error)),
+        'imagejRoiEncoder',
+        { projectId, videoKey }
+      );
+    }
   }
 
   if (droppedPolygons > 0) {
@@ -545,6 +562,11 @@ export async function exportImageJRoiSets(
   }
 
   const warnings: string[] = [];
+  if (failedVideos > 0) {
+    warnings.push(
+      `ImageJ ROI export: ${failedVideos} video(s) could not be packaged into a RoiSet.zip and were skipped.`
+    );
+  }
   if (corruptFrames > 0) {
     warnings.push(
       `ImageJ ROI export: ${corruptFrames} frame(s) had corrupt polygon data and were skipped.`

@@ -46,8 +46,9 @@ interface PolygonContextMenuProps {
   /** Propagate this microtubule into all following frames (MT only). */
   onPropagate?: () => void;
   /** Cross-frame track id — when set on a microtubule, delete removes the whole
-   *  track (all frames) rather than just this polyline. */
-  trackId?: string | null;
+   *  track (all frames) rather than just this polyline. Matches the source
+   *  `polygon.trackId` (string | undefined). */
+  trackId?: string;
   /** Total frames in the video, shown in the "delete whole track" dialog. */
   videoFrameCount?: number;
 }
