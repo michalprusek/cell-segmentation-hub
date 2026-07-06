@@ -773,6 +773,9 @@ export default {
   },
   segmentation: {
     trackOps: {
+      propagateSelectedSuccess:
+        '{{count}} Mikrotubuli in die folgenden Frames übertragen',
+      propagateSelectedPartial: '{{done}} von {{total}} Mikrotubuli übertragen',
       propagateSuccess: 'Mikrotubulus in {{count}} folgende Frames übertragen',
       propagateFailed: 'Übertragung des Mikrotubulus fehlgeschlagen',
       deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
@@ -1894,6 +1897,10 @@ export default {
     },
   },
   contextMenu: {
+    propagateSelectedTracks: 'Ausgewählte Mikrotubuli übertragen ({{count}})',
+    confirmPropagateSelected: '{{count}} ausgewählte Mikrotubuli übertragen?',
+    propagateSelectedDescription:
+      'Dies überschreibt die Form von {{count}} ausgewählten Mikrotubuli in allen folgenden Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
     propagateTrack: 'In folgende Frames übertragen',
     confirmPropagateTrack: 'In folgende Frames übertragen?',
     propagateTrackDescription:

@@ -339,4 +339,35 @@ describe('usePolygonHandlers', () => {
       expect.objectContaining({ id: 'p1', partClass: 'tail' }),
     ]);
   });
+
+  // ─── Shift+click multi-selection ───────────────────────────────────────────
+
+  it('toggles polygons in and out of the multi-selection', () => {
+    const { result } = renderHook(() =>
+      usePolygonHandlers({ editor, imageId: 'img-1' })
+    );
+    expect(result.current.selectedPolygonIds.size).toBe(0);
+
+    act(() => result.current.toggleMultiSelect('a'));
+    act(() => result.current.toggleMultiSelect('b'));
+    expect([...result.current.selectedPolygonIds].sort()).toEqual(['a', 'b']);
+
+    act(() => result.current.toggleMultiSelect('a')); // toggle off
+    expect([...result.current.selectedPolygonIds]).toEqual(['b']);
+
+    act(() => result.current.clearMultiSelect());
+    expect(result.current.selectedPolygonIds.size).toBe(0);
+  });
+
+  it('clears the multi-selection when the edited image changes', () => {
+    const { result, rerender } = renderHook(
+      ({ imageId }) => usePolygonHandlers({ editor, imageId }),
+      { initialProps: { imageId: 'img-1' } }
+    );
+    act(() => result.current.toggleMultiSelect('a'));
+    expect(result.current.selectedPolygonIds.size).toBe(1);
+
+    rerender({ imageId: 'img-2' }); // scrub to another frame
+    expect(result.current.selectedPolygonIds.size).toBe(0);
+  });
 });

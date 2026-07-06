@@ -767,6 +767,9 @@ export default {
   },
   segmentation: {
     trackOps: {
+      propagateSelectedSuccess:
+        '{{count}} microtubules propagés vers les images suivantes',
+      propagateSelectedPartial: '{{done}} sur {{total}} microtubules propagés',
       propagateSuccess: 'Microtubule propagé vers {{count}} images suivantes',
       propagateFailed: 'Échec de la propagation du microtubule',
       deleteTrackSuccess: 'Trace supprimée de {{count}} images',
@@ -1883,6 +1886,11 @@ export default {
     },
   },
   contextMenu: {
+    propagateSelectedTracks:
+      'Propager les microtubules sélectionnés ({{count}})',
+    confirmPropagateSelected: 'Propager {{count}} microtubules sélectionnés ?',
+    propagateSelectedDescription:
+      'Cela remplace la forme de {{count}} microtubules sélectionnés dans toutes les images suivantes de la vidéo. Cette action est irréversible.',
     propagateTrack: 'Propager aux images suivantes',
     confirmPropagateTrack: 'Propager aux images suivantes ?',
     propagateTrackDescription:
