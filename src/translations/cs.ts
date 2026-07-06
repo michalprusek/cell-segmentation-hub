@@ -612,6 +612,9 @@ export default {
   },
   segmentation: {
     trackOps: {
+      propagateSelectedSuccess:
+        '{{count}} mikrotubulů propagováno do dalších snímků',
+      propagateSelectedPartial: 'Propagováno {{done}} z {{total}} mikrotubulů',
       propagateSuccess:
         'Mikrotubulus propagován do {{count}} následujících snímků',
       propagateFailed: 'Propagace mikrotubulu selhala',
@@ -1912,6 +1915,10 @@ export default {
     disconnected: 'Odpojeno od aktualizací v reálném čase',
   },
   contextMenu: {
+    propagateSelectedTracks: 'Propagovat vybrané mikrotubuly ({{count}})',
+    confirmPropagateSelected: 'Propagovat {{count}} vybraných mikrotubulů?',
+    propagateSelectedDescription:
+      'Přepíše tvar {{count}} vybraných mikrotubulů ve všech následujících snímcích videa. Tuto akci nelze vrátit.',
     propagateTrack: 'Propagovat do dalších snímků',
     confirmPropagateTrack: 'Propagovat do dalších snímků?',
     propagateTrackDescription:

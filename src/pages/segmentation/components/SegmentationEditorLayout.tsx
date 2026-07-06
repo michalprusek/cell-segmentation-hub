@@ -120,6 +120,12 @@ export interface SegmentationEditorLayoutProps {
   handleDeletePolygonOrTrack: (polygonId: string) => void;
   /** Canvas right-click: propagate this MT into all following frames. */
   handlePropagateTrack: (polygonId: string) => void;
+  /** Canvas click: Shift+click multi-selects; plain click single-selects. */
+  handleCanvasSelect: (polygonId: string | null, additive?: boolean) => void;
+  /** Propagate all Shift-selected microtubules to the following frames. */
+  handlePropagateSelected: () => void;
+  /** Current Shift+click multi-selection (per-frame polygon ids). */
+  selectedPolygonIds: Set<string>;
   handleSlicePolygonFromContextMenu: PolygonHandlers['handleSlicePolygonFromContextMenu'];
   handleEditPolygonFromContextMenu: PolygonHandlers['handleEditPolygonFromContextMenu'];
   handleDeleteVertexFromContextMenu: PolygonHandlers['handleDeleteVertexFromContextMenu'];
@@ -195,6 +201,9 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   handleSelectPolygon,
   handleDeletePolygonOrTrack,
   handlePropagateTrack,
+  handleCanvasSelect,
+  handlePropagateSelected,
+  selectedPolygonIds,
   handleSlicePolygonFromContextMenu,
   handleEditPolygonFromContextMenu,
   handleDeleteVertexFromContextMenu,
@@ -390,7 +399,10 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           isUndoRedoInProgress={editor.isUndoRedoInProgress}
                           isHovered={polygon.id === hoveredPolygonId}
                           editMode={editor.editMode}
-                          onSelectPolygon={editor.handlePolygonClick}
+                          onSelectPolygon={handleCanvasSelect}
+                          isMultiSelected={selectedPolygonIds.has(polygon.id)}
+                          multiSelectCount={selectedPolygonIds.size}
+                          onPropagateSelected={handlePropagateSelected}
                           onDeletePolygon={handleDeletePolygonOrTrack}
                           onPropagateTrack={handlePropagateTrack}
                           videoFrameCount={video.container?.frameCount}

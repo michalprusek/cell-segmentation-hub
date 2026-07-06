@@ -652,6 +652,9 @@ const SegmentationEditor = () => {
     handleChangeInstanceId,
     handleChangePartClass,
     handleUpdatePolygonField,
+    selectedPolygonIds,
+    toggleMultiSelect,
+    clearMultiSelect,
   } = usePolygonHandlers({ editor, imageId });
 
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
@@ -936,6 +939,93 @@ const SegmentationEditor = () => {
       t,
     ]
   );
+
+  // Read the multi-selection through a ref so the canvas callbacks below stay
+  // identity-stable (they're compared in the CanvasPolygon memo comparator).
+  const selectedPolygonIdsRef = useRef(selectedPolygonIds);
+  selectedPolygonIdsRef.current = selectedPolygonIds;
+
+  // Canvas click: Shift+click toggles the polygon in the multi-selection; a
+  // plain click clears the multi-selection and runs the normal single select.
+  const handleCanvasSelect = useCallback(
+    (polygonId: string | null, additive?: boolean) => {
+      if (additive && polygonId) {
+        toggleMultiSelect(polygonId);
+        return;
+      }
+      clearMultiSelect();
+      editorRef.current.handlePolygonClick(polygonId);
+    },
+    [toggleMultiSelect, clearMultiSelect]
+  );
+
+  // Right-click "Propagate selected MTs (N)": propagate every Shift-selected
+  // microtubule forward. Loops the single-track endpoint so each keeps its own
+  // trackId + colour; ids read via ref to keep this handler stable.
+  const handlePropagateSelected = useCallback(async () => {
+    const videoId = video.container?.id;
+    const fromFrameIndex = video.container?.frames.find(
+      f => f.id === imageId
+    )?.frameIndex;
+    if (!videoId || typeof fromFrameIndex !== 'number') return;
+
+    const polys = editorRef.current.getPolygons();
+    const sources = Array.from(selectedPolygonIdsRef.current)
+      .map(pid => polys.find(p => p.id === pid))
+      .filter(
+        (p): p is NonNullable<typeof p> => !!p && (p.points?.length ?? 0) >= 2
+      );
+    if (sources.length === 0) {
+      toast.error(t('segmentation.trackOps.propagateFailed'));
+      return;
+    }
+
+    let failed = 0;
+    for (const src of sources) {
+      try {
+        const result = await apiClient.propagateTrackForward(
+          videoId,
+          fromFrameIndex,
+          {
+            trackId: src.trackId,
+            name: src.name,
+            geometry: 'polyline',
+            points: src.points.map(p => ({ x: p.x, y: p.y })),
+          }
+        );
+        if (result.trackId && result.trackId !== src.trackId) {
+          handleUpdatePolygonField(src.id, { trackId: result.trackId });
+        }
+      } catch (error) {
+        logger.error('Failed to propagate a selected microtubule', error);
+        failed++;
+      }
+    }
+
+    evictVideoFrameSegmentationCaches();
+    clearMultiSelect();
+    if (failed === 0) {
+      toast.success(
+        t('segmentation.trackOps.propagateSelectedSuccess', {
+          count: sources.length,
+        })
+      );
+    } else {
+      toast.warning(
+        t('segmentation.trackOps.propagateSelectedPartial', {
+          done: sources.length - failed,
+          total: sources.length,
+        })
+      );
+    }
+  }, [
+    video.container,
+    imageId,
+    handleUpdatePolygonField,
+    evictVideoFrameSegmentationCaches,
+    clearMultiSelect,
+    t,
+  ]);
   // ─────────────── End cross-frame track operations ───────────────
 
   // The overlay debounce moved into `FrameLoadingGate` — it needs
@@ -1075,6 +1165,9 @@ const SegmentationEditor = () => {
         handleSelectPolygon={handleSelectPolygon}
         handleDeletePolygonOrTrack={handleDeletePolygonOrTrack}
         handlePropagateTrack={handlePropagateTrack}
+        handleCanvasSelect={handleCanvasSelect}
+        handlePropagateSelected={handlePropagateSelected}
+        selectedPolygonIds={selectedPolygonIds}
         handleSlicePolygonFromContextMenu={handleSlicePolygonFromContextMenu}
         handleEditPolygonFromContextMenu={handleEditPolygonFromContextMenu}
         handleDeleteVertexFromContextMenu={handleDeleteVertexFromContextMenu}

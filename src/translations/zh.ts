@@ -706,6 +706,8 @@ export default {
   },
   segmentation: {
     trackOps: {
+      propagateSelectedSuccess: '已将 {{count}} 个微管传播到后续帧',
+      propagateSelectedPartial: '已传播 {{done}}/{{total}} 个微管',
       propagateSuccess: '微管已传播到 {{count}} 个后续帧',
       propagateFailed: '微管传播失败',
       deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
@@ -1765,6 +1767,10 @@ export default {
     },
   },
   contextMenu: {
+    propagateSelectedTracks: '传播选中的微管（{{count}}）',
+    confirmPropagateSelected: '传播 {{count}} 个选中的微管？',
+    propagateSelectedDescription:
+      '这将覆盖 {{count}} 个选中微管在视频所有后续帧中的形状。此操作无法撤销。',
     propagateTrack: '传播到后续帧',
     confirmPropagateTrack: '传播到后续帧？',
     propagateTrackDescription:

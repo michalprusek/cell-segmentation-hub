@@ -20,7 +20,16 @@ interface CanvasPolygonProps {
   hideVertices?: boolean;
   isHovered?: boolean;
   isUndoRedoInProgress?: boolean;
-  onSelectPolygon?: (id: string) => void;
+  /** `additive` (Shift+click) toggles this polygon in the multi-selection
+   *  instead of replacing the single selection. */
+  onSelectPolygon?: (id: string, additive?: boolean) => void;
+  /** True when this polygon is in the Shift+click multi-selection. */
+  isMultiSelected?: boolean;
+  /** Size of the current multi-selection (drives the "Propagate selected N"
+   *  context-menu item). */
+  multiSelectCount?: number;
+  /** Propagate all multi-selected microtubules to the following frames. */
+  onPropagateSelected?: () => void;
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
@@ -56,6 +65,9 @@ const CanvasPolygon = React.memo(
     isHovered = false,
     isUndoRedoInProgress = false,
     onSelectPolygon,
+    isMultiSelected = false,
+    multiSelectCount = 0,
+    onPropagateSelected,
     onDeletePolygon,
     onSlicePolygon,
     onEditPolygon,
@@ -220,7 +232,13 @@ const CanvasPolygon = React.memo(
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (onSelectPolygon) {
+        if (!onSelectPolygon) return;
+        // Only pass the `additive` arg on a Shift+click so a plain click stays a
+        // single-argument call (keeps the single-selection call sites + their
+        // tests unchanged).
+        if (e.shiftKey) {
+          onSelectPolygon(id, true);
+        } else {
           onSelectPolygon(id);
         }
       },
@@ -290,6 +308,8 @@ const CanvasPolygon = React.memo(
         onPropagate={
           isPolyline && onPropagateTrack ? handlePropagate : undefined
         }
+        onPropagateSelected={isPolyline ? onPropagateSelected : undefined}
+        multiSelectCount={multiSelectCount}
         trackId={polygon.trackId}
         videoFrameCount={videoFrameCount}
       >
@@ -358,7 +378,11 @@ const CanvasPolygon = React.memo(
                       : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
-            strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}
+            strokeWidth={Math.max(
+              strokeWidth * hoverStrokeMultiplier * (isMultiSelected ? 2.2 : 1),
+              0.5
+            )}
+            strokeDasharray={isMultiSelected ? '6 3' : undefined}
             strokeOpacity={pathString ? 1 : 0}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -487,6 +511,9 @@ const CanvasPolygon = React.memo(
       prevProps.availableInstanceIds === nextProps.availableInstanceIds &&
       prevProps.onPropagateTrack === nextProps.onPropagateTrack &&
       prevProps.videoFrameCount === nextProps.videoFrameCount &&
+      prevProps.isMultiSelected === nextProps.isMultiSelected &&
+      prevProps.multiSelectCount === nextProps.multiSelectCount &&
+      prevProps.onPropagateSelected === nextProps.onPropagateSelected &&
       // Drives context-menu gating; must be in comparator.
       prevProps.projectType === nextProps.projectType &&
       // Context-menu / vertex callbacks. These are identity-stable

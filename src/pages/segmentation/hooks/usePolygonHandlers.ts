@@ -65,6 +65,33 @@ export function usePolygonHandlers({
     string | null
   >(null);
   const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
+  // Multi-selection (Shift+click) — a parallel set of current-frame polygon ids
+  // used for bulk actions (e.g. propagate several microtubules at once). Kept
+  // separate from the single `selectedPolygonId` so it doesn't disturb the
+  // vertex-edit / cross-frame single-selection flow.
+  const [selectedPolygonIds, setSelectedPolygonIds] = useState<Set<string>>(
+    new Set()
+  );
+  const toggleMultiSelect = useCallback((polygonId: string) => {
+    setSelectedPolygonIds(prev => {
+      const next = new Set(prev);
+      if (next.has(polygonId)) {
+        next.delete(polygonId);
+      } else {
+        next.add(polygonId);
+      }
+      return next;
+    });
+  }, []);
+  const clearMultiSelect = useCallback(() => {
+    setSelectedPolygonIds(prev => (prev.size === 0 ? prev : new Set()));
+  }, []);
+
+  // Polygon ids are per-frame, so a multi-selection is meaningless after a frame
+  // change — clear it when the edited image changes.
+  useEffect(() => {
+    setSelectedPolygonIds(prev => (prev.size === 0 ? prev : new Set()));
+  }, [imageId]);
 
   // Legacy compatibility handlers
   const handleTogglePolygonVisibility = useCallback((polygonId: string) => {
@@ -221,6 +248,9 @@ export function usePolygonHandlers({
     hoveredPolygonId,
     setHoveredPolygonId,
     persistedSelectionTrackId,
+    selectedPolygonIds,
+    toggleMultiSelect,
+    clearMultiSelect,
     handleTogglePolygonVisibility,
     handleDeletePolygonFromPanel,
     handleSelectPolygon,

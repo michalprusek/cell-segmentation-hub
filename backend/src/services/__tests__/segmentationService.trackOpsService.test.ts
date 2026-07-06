@@ -72,8 +72,8 @@ describe('SegmentationService track ops (orchestration)', () => {
 
   beforeEach(() => {
     prismaMock = {
-      segmentation: { update: vi.fn(x => x) },
-      image: { findMany: vi.fn() },
+      segmentation: { update: vi.fn(x => x), create: vi.fn(x => x) },
+      image: { findMany: vi.fn(), update: vi.fn(x => x) },
       $transaction: vi.fn().mockResolvedValue([]),
     };
     imageServiceMock = { getImageById: vi.fn() };
@@ -164,13 +164,38 @@ describe('SegmentationService track ops (orchestration)', () => {
       );
     });
 
-    it('skips frames with no segmentation row and does not open a transaction when nothing is written', async () => {
+    it('creates a segmentation row (+ marks segmented) for a frame that has none', async () => {
       prismaMock.image.findMany.mockResolvedValue([
-        { id: 'f1', segmentation: null },
+        { id: 'f1', width: 512, height: 512, segmentation: null },
       ]);
       const res = await service.propagateTrackGeometryForward(
         'vid',
         0,
+        { ...srcPolyline, trackId: 't' },
+        'user'
+      );
+      // The microtubule now appears in the previously-empty frame.
+      expect(res.framesUpdated).toBe(1);
+      expect(prismaMock.segmentation.update).not.toHaveBeenCalled();
+      // A new segmentation row was created carrying just the propagated line...
+      expect(prismaMock.segmentation.create).toHaveBeenCalledTimes(1);
+      const created = prismaMock.segmentation.create.mock.calls[0][0].data;
+      const polys = JSON.parse(created.polygons);
+      expect(polys).toHaveLength(1);
+      expect(polys[0].trackId).toBe('t');
+      expect(created.imageWidth).toBe(512);
+      // ...and the frame was marked segmented, all in one transaction.
+      expect(prismaMock.image.update.mock.calls[0][0].data.segmentationStatus).toBe(
+        'segmented'
+      );
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not open a transaction when there are no following frames', async () => {
+      prismaMock.image.findMany.mockResolvedValue([]);
+      const res = await service.propagateTrackGeometryForward(
+        'vid',
+        99,
         { ...srcPolyline, trackId: 't' },
         'user'
       );
