@@ -815,14 +815,18 @@ const SegmentationEditor = () => {
   const editorRef = useRef(editor);
   editorRef.current = editor;
 
-  // Invalidate the cached segmentation of the video's frames so a scrub after a
-  // track op refetches the mutated data. The sliding-window prefetch caches
-  // sibling frames for 60 s, which would otherwise paint stale geometry.
-  const invalidateVideoFrameSegmentationCaches = useCallback(() => {
+  // Evict the cached segmentation of the video's frames after a track op so a
+  // scrub refetches the mutated data. MUST be removeQueries, not
+  // invalidateQueries: the editor's frame loader reads the cache imperatively
+  // (`getCachedSegmentationPolygons` → getQueryData) and paints any entry that
+  // exists regardless of staleness, so merely marking it stale would keep
+  // showing the pre-op geometry until a full page reload. Removing the entry
+  // forces the loader's cache-miss path to re-fetch from the server.
+  const evictVideoFrameSegmentationCaches = useCallback(() => {
     const frames = video.container?.frames;
     if (!frames) return;
     for (const frame of frames) {
-      queryClient.invalidateQueries({
+      queryClient.removeQueries({
         queryKey: segmentationPolygonsQueryKey(frame.id),
       });
     }
@@ -875,7 +879,7 @@ const SegmentationEditor = () => {
         if (result.trackId && result.trackId !== source.trackId) {
           handleUpdatePolygonField(polygonId, { trackId: result.trackId });
         }
-        invalidateVideoFrameSegmentationCaches();
+        evictVideoFrameSegmentationCaches();
         toast.success(
           t('segmentation.trackOps.propagateSuccess', {
             count: result.framesUpdated,
@@ -890,7 +894,7 @@ const SegmentationEditor = () => {
       video.container,
       imageId,
       handleUpdatePolygonField,
-      invalidateVideoFrameSegmentationCaches,
+      evictVideoFrameSegmentationCaches,
       t,
     ]
   );
@@ -910,7 +914,7 @@ const SegmentationEditor = () => {
           // Remove it from the current frame + hidden-set locally for instant
           // feedback; the backend already purged every sibling frame.
           handleDeletePolygonFromContextMenu(polygonId);
-          invalidateVideoFrameSegmentationCaches();
+          evictVideoFrameSegmentationCaches();
           toast.success(
             t('segmentation.trackOps.deleteTrackSuccess', {
               count: result.framesAffected,
@@ -928,7 +932,7 @@ const SegmentationEditor = () => {
       video.container,
       projectType,
       handleDeletePolygonFromContextMenu,
-      invalidateVideoFrameSegmentationCaches,
+      evictVideoFrameSegmentationCaches,
       t,
     ]
   );
