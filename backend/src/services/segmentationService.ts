@@ -17,6 +17,7 @@ import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
 import { safeMlFilename } from '../utils/mlFilename';
+import { mapWithConcurrency } from '../utils/concurrency';
 
 export interface SegmentationPoint {
   x: number;
@@ -194,6 +195,107 @@ export function parsePolygonsJsonForDiff(
     );
     return [];
   }
+}
+
+/** Geometry the editor sends when propagating a microtubule forward. */
+export interface PropagatedPolyline {
+  trackId?: string | null;
+  name?: string | null;
+  geometry?: 'polygon' | 'polyline';
+  points: Array<{ x: number; y: number }>;
+}
+
+/**
+ * Thrown when a track operation targets a video the user does not own / that
+ * does not exist. The controller maps this to a 404 by `instanceof` rather than
+ * matching a free-text message (which drift-breaks silently).
+ */
+export class VideoAccessError extends Error {
+  constructor(message = 'Video not found or no access') {
+    super(message);
+    this.name = 'VideoAccessError';
+  }
+}
+
+/**
+ * Parse a frame's polygons for a WRITE path. Unlike `parsePolygonsJsonForDiff`
+ * (lenient — returns `[]` on corrupt/non-array, which is safe only for a
+ * read-only diff), this reports `corrupt` so a writer can SKIP a frame it cannot
+ * read instead of overwriting the frame's real polygons with new geometry
+ * (silent data loss).
+ */
+export function parsePolygonsForWrite(json: string): {
+  polygons: unknown[];
+  corrupt: boolean;
+} {
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed)
+      ? { polygons: parsed, corrupt: false }
+      : { polygons: [], corrupt: true };
+  } catch {
+    return { polygons: [], corrupt: true };
+  }
+}
+
+/**
+ * Remove every polygon carrying `trackId`. Returns the survivors plus the count
+ * removed. Used by `deleteTrackAcrossVideo` and `upsertTrackPolyline`. The
+ * save-time delete propagation (`computeCrossFrameTrackPropagation`) defines a
+ * track by the same `trackId`-equality rule but via its own inline filter, so
+ * the three agree conceptually on what "a track" is without sharing this code.
+ */
+export function removePolygonsWithTrackId(
+  polys: unknown[],
+  trackId: string
+): { polygons: unknown[]; removed: number } {
+  let removed = 0;
+  const polygons = polys.filter(p => {
+    if ((p as Record<string, unknown>).trackId === trackId) {
+      removed++;
+      return false;
+    }
+    return true;
+  });
+  return { polygons, removed };
+}
+
+/**
+ * Overwrite-or-insert a propagated polyline into one frame's polygon list: drop
+ * any existing polyline already carrying `trackId` (overwrite), then append a
+ * fresh copy that shares the trackId (add where missing). `makeId` supplies a
+ * unique per-polygon id so the frame's ids stay distinct.
+ */
+export function upsertTrackPolyline(
+  polys: unknown[],
+  trackId: string,
+  polyline: PropagatedPolyline,
+  makeId: () => string
+): unknown[] {
+  // Enforce the "valid polyline" invariant here so it travels with the value —
+  // the helper is exported and a direct caller must not be able to persist a
+  // degenerate (< 2 points) or NaN-coordinate polyline.
+  const pts = polyline.points;
+  if (
+    !Array.isArray(pts) ||
+    pts.length < 2 ||
+    !pts.every(p => Number.isFinite(p?.x) && Number.isFinite(p?.y))
+  ) {
+    throw new Error('Propagated polyline needs at least 2 finite points');
+  }
+  const { polygons } = removePolygonsWithTrackId(polys, trackId);
+  const copy: Record<string, unknown> = {
+    id: makeId(),
+    trackId,
+    type: 'external',
+    geometry: polyline.geometry === 'polygon' ? 'polygon' : 'polyline',
+    points: polyline.points.map(pt => ({ x: pt.x, y: pt.y })),
+    area: 0,
+    confidence: 1,
+  };
+  if (polyline.name) copy.name = polyline.name;
+  polygons.push(copy);
+  return polygons;
 }
 
 export interface SegmentationRequest {
@@ -1698,6 +1800,47 @@ export class SegmentationService {
   }
 
   /**
+   * Delete segmentation annotations for many images at once (the images
+   * themselves are kept). Reuses the single-image path per image (ownership
+   * check + deleteMany + status reset back to 'no_segmentation') with bounded
+   * concurrency. Failures are collected, not thrown, so one inaccessible /
+   * absent image doesn't sink the whole batch.
+   */
+  async deleteSegmentationBatch(
+    imageIds: string[],
+    userId: string
+  ): Promise<{ deletedCount: number; failedIds: string[] }> {
+    const failedIds: string[] = [];
+    let deletedCount = 0;
+    // Increments run synchronously with no interleaving await, so they're safe
+    // under mapWithConcurrency (single-threaded JS).
+    await mapWithConcurrency(imageIds, 8, async imageId => {
+      try {
+        await this.deleteSegmentationResults(imageId, userId);
+        deletedCount++;
+      } catch (error) {
+        failedIds.push(imageId);
+        logger.warn(
+          'Batch annotation delete: skipped an image',
+          'SegmentationService',
+          {
+            imageId,
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
+      }
+    });
+
+    logger.info('Batch annotation delete complete', 'SegmentationService', {
+      userId,
+      requested: imageIds.length,
+      deletedCount,
+      failed: failedIds.length,
+    });
+    return { deletedCount, failedIds };
+  }
+
+  /**
    * Get segmentation statistics for a project
    */
   async getProjectSegmentationStats(
@@ -2061,6 +2204,154 @@ export class SegmentationService {
       }
     }
     return ops;
+  }
+
+  /**
+   * Delete a whole microtubule track: remove every polyline carrying `trackId`
+   * from ALL frames of the video in a single transaction. This is the explicit,
+   * immediate counterpart to the save-time delete propagation
+   * (`computeCrossFrameTrackPropagation`); both define a track by the same
+   * `trackId`-equality rule (this one via `removePolygonsWithTrackId`, the other
+   * via its own inline filter), so they stay consistent conceptually.
+   *
+   * @throws {VideoAccessError} if the video is not found / not owned by the user.
+   */
+  async deleteTrackAcrossVideo(
+    videoId: string,
+    trackId: string,
+    userId: string
+  ): Promise<{ framesAffected: number }> {
+    // Ownership: the video container is an Image row the user must be able to access.
+    const container = await this.imageService.getImageById(videoId, userId);
+    if (!container) {
+      throw new VideoAccessError();
+    }
+
+    const frames = await this.prisma.image.findMany({
+      where: { parentVideoId: videoId },
+      select: {
+        id: true,
+        segmentation: { select: { id: true, polygons: true } },
+      },
+    });
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    let framesAffected = 0;
+    for (const frame of frames) {
+      if (!frame.segmentation) continue;
+      const parsed = parsePolygonsJsonForDiff(frame.segmentation.polygons, {
+        currentImageId: frame.id,
+        parentVideoId: videoId,
+      });
+      const { polygons, removed } = removePolygonsWithTrackId(parsed, trackId);
+      if (removed > 0) {
+        framesAffected++;
+        ops.push(
+          this.prisma.segmentation.update({
+            where: { id: frame.segmentation.id },
+            data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
+          })
+        );
+      }
+    }
+
+    if (ops.length > 0) {
+      await this.prisma.$transaction(ops);
+    }
+
+    logger.info('Deleted microtubule track across video', 'SegmentationService', {
+      videoId,
+      trackId,
+      framesAffected,
+    });
+    return { framesAffected };
+  }
+
+  /**
+   * Propagate a microtubule polyline forward: stamp `polyline`'s geometry into
+   * every frame of the video with `frameIndex > fromFrameIndex`, overwriting any
+   * existing polyline that already carries the track's id and adding it where
+   * missing. Runs in a single transaction so the video stays consistent.
+   *
+   * A trackId is generated (`mt_<hex>`) when the source polyline has none, so
+   * the propagated set forms one coherent, stably-coloured track; the generated
+   * id is returned for the editor to patch onto the source polyline. Frames with
+   * no segmentation row yet — or whose polygons JSON is unreadable — are skipped
+   * (a corrupt frame must never be overwritten with just the propagated line).
+   *
+   * @throws {VideoAccessError} if the video is not owned.
+   * @throws if the polyline has fewer than 2 points.
+   */
+  async propagateTrackGeometryForward(
+    videoId: string,
+    fromFrameIndex: number,
+    polyline: PropagatedPolyline,
+    userId: string
+  ): Promise<{ trackId: string; framesUpdated: number }> {
+    const container = await this.imageService.getImageById(videoId, userId);
+    if (!container) {
+      throw new VideoAccessError();
+    }
+    if (!Array.isArray(polyline.points) || polyline.points.length < 2) {
+      throw new Error('Propagated polyline needs at least 2 points');
+    }
+
+    const trackId =
+      typeof polyline.trackId === 'string' && polyline.trackId.length > 0
+        ? polyline.trackId
+        : `mt_${uuidv4().replace(/-/g, '').slice(0, 8)}`;
+
+    const frames = await this.prisma.image.findMany({
+      where: { parentVideoId: videoId, frameIndex: { gt: fromFrameIndex } },
+      select: {
+        id: true,
+        segmentation: { select: { id: true, polygons: true } },
+      },
+    });
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    let framesUpdated = 0;
+    let corruptFrames = 0;
+    for (const frame of frames) {
+      // A frame that never segmented has no row to attach the polyline to; skip
+      // it rather than fabricate a partial segmentation record.
+      if (!frame.segmentation) continue;
+      // Use the corrupt-aware parse: overwriting an unreadable frame with only
+      // the propagated polyline would silently destroy its other microtubules.
+      const { polygons: parsed, corrupt } = parsePolygonsForWrite(
+        frame.segmentation.polygons
+      );
+      if (corrupt) {
+        corruptFrames++;
+        logger.warn(
+          'Skipping frame with unreadable polygons during propagate',
+          'SegmentationService',
+          { imageId: frame.id, parentVideoId: videoId }
+        );
+        continue;
+      }
+      const updated = upsertTrackPolyline(parsed, trackId, polyline, uuidv4);
+      ops.push(
+        this.prisma.segmentation.update({
+          where: { id: frame.segmentation.id },
+          data: { polygons: JSON.stringify(updated), updatedAt: new Date() },
+        })
+      );
+      framesUpdated++;
+    }
+
+    if (ops.length > 0) {
+      await this.prisma.$transaction(ops);
+    }
+
+    logger.info('Propagated microtubule track forward', 'SegmentationService', {
+      videoId,
+      trackId,
+      fromFrameIndex,
+      framesUpdated,
+      corruptFramesSkipped: corruptFrames,
+    });
+    return { trackId, framesUpdated };
   }
 }
 

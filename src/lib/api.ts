@@ -1665,6 +1665,68 @@ class ApiClient {
     await this.instance.delete(`/segmentation/images/${imageId}/results`);
   }
 
+  /**
+   * Delete segmentation annotations for many images at once (project-page bulk
+   * action). The images are kept; their status resets to no-segmentation.
+   */
+  async deleteSegmentationBatch(
+    imageIds: string[]
+  ): Promise<{ deletedCount: number; failedIds: string[] }> {
+    const response = await this.instance.post('/segmentation/batch/delete', {
+      imageIds,
+    });
+    const data = this.extractData(response);
+    return {
+      deletedCount: Number(data?.deletedCount ?? 0),
+      failedIds: Array.isArray(data?.failedIds) ? data.failedIds : [],
+    };
+  }
+
+  /**
+   * Propagate a microtubule polyline into every frame of the video after
+   * `fromFrameIndex`, overwriting the same track where present and adding it
+   * where missing. The backend returns the (possibly newly-generated) trackId
+   * so the editor can patch it onto the source polyline for stable colour.
+   */
+  async propagateTrackForward(
+    videoId: string,
+    fromFrameIndex: number,
+    polyline: {
+      // Nullable to match the backend `PropagatedPolyline` contract (the wire
+      // can carry null); an untracked source sends no trackId and the backend
+      // generates one.
+      trackId?: string | null;
+      name?: string | null;
+      geometry?: 'polygon' | 'polyline';
+      points: Array<{ x: number; y: number }>;
+    }
+  ): Promise<{ trackId: string; framesUpdated: number }> {
+    const response = await this.instance.post(
+      `/segmentation/videos/${videoId}/tracks/propagate`,
+      { fromFrameIndex, polyline }
+    );
+    const data = this.extractData(response);
+    return {
+      trackId: String(data?.trackId ?? polyline.trackId ?? ''),
+      framesUpdated: Number(data?.framesUpdated ?? 0),
+    };
+  }
+
+  /**
+   * Delete a whole microtubule track: remove every polyline carrying `trackId`
+   * from all frames of the video. Returns how many frames were affected.
+   */
+  async deleteTrack(
+    videoId: string,
+    trackId: string
+  ): Promise<{ framesAffected: number }> {
+    const response = await this.instance.delete(
+      `/segmentation/videos/${videoId}/tracks/${encodeURIComponent(trackId)}`
+    );
+    const data = this.extractData(response);
+    return { framesAffected: Number(data?.framesAffected ?? 0) };
+  }
+
   async getImageWithSegmentation(
     imageId: string
   ): Promise<ProjectImageDTO & { segmentation?: SegmentationResult }> {

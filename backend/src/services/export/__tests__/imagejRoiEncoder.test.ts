@@ -9,19 +9,23 @@
  *   - round-trips sub-pixel float coordinates (absolute) exactly
  *   - writes the integer bbox + relative int16 block; float stays exact on wrap
  *   - round-trips the ROI name via UTF-16BE (incl. non-ASCII)
+ *   - writes the optional slice position (@56) and ARGB stroke colour (@40)
+ *   - leaves position/stroke at 0 when options are omitted (byte back-compat)
  *   - throws below the geometry minimum (polyline < 2 / polygon < 3)
  *
- *  exportImageJRois (per-frame writer, real temp-dir FS)
- *   - skips video container rows + frames without polygons
- *   - drops polylines with < 2 points / polygons with < 3 points
+ *  buildVideoRoiEntries (pure zip-entry builder)
+ *   - places each ROI on its 1-based slice position + per-track stroke colour
+ *   - names entries <label>__frame_NNNN, MT-first + globally unique
+ *   - keeps the same trackId's colour identical across frames
+ *   - dedups colliding labels within a frame; drops degenerate / non-finite
+ *   - counts corrupt-JSON frames + dropped polygons
+ *
+ *  exportImageJRoiSets (real temp-dir FS)
+ *   - writes one <video>_RoiSet.zip per video container (valid PK zip)
  *   - separates videos that share a frameIndex (multi-position ND2)
- *   - names files by trackId and keeps the SAME name across frames
- *   - suffixes colliding filenames within a frame (no overwrite), incl.
- *     distinct labels that sanitize to the same name
- *   - falls back to a generated name for untracked / empty-trackId polygons
- *   - skips corrupt-JSON frames with a warning; drops non-finite polygons
+ *   - the zip round-trips real ROI bytes (position + stroke survive deflate)
+ *   - skips corrupt frames with a warning; warns when nothing was exported
  *   - rejects when the job is cancelled
- *   - returns a warning (not an error) when nothing was exported
  *
  * The inline decoder mirrors ImageJ's RoiDecoder layout so the test needs no
  * external tool. It was cross-checked against Christoph Gohlke's reference
@@ -32,10 +36,13 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as zlib from 'zlib';
 import {
   encodeImageJRoi,
-  exportImageJRois,
+  buildVideoRoiEntries,
+  exportImageJRoiSets,
   type RoiFrameInput,
+  type RoiZipEntry,
 } from '../imagejRoiEncoder';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +59,10 @@ interface DecodedRoi {
   intCoords: Array<[number, number]>;
   /** Sub-pixel float coordinate block (absolute). */
   coords: Array<[number, number]>;
+  /** 1-based stack slice (@56); 0 when unset. */
+  position: number;
+  /** ARGB stroke colour (@40, unsigned); 0 when unset. */
+  strokeColor: number;
   name: string;
 }
 
@@ -70,8 +81,10 @@ function decodeRoi(buf: Buffer): DecodedRoi {
     right: readShort(buf, 14),
   };
   const n = buf.readUInt16BE(16);
+  const strokeColor = buf.readUInt32BE(40);
   const options = buf.readUInt16BE(50);
   const subPixel = (options & 128) !== 0;
+  const position = buf.readInt32BE(56);
 
   const intCoords: Array<[number, number]> = [];
   const ix = 64;
@@ -99,11 +112,81 @@ function decodeRoi(buf: Buffer): DecodedRoi {
     }
   }
 
-  return { magic, type, nCoords: n, subPixel, bbox, intCoords, coords, name };
+  return {
+    magic,
+    type,
+    nCoords: n,
+    subPixel,
+    bbox,
+    intCoords,
+    coords,
+    position,
+    strokeColor,
+    name,
+  };
 }
 
 const ROI_TYPE_POLYGON = 0;
 const ROI_TYPE_POLYLINE = 5;
+
+// ---------------------------------------------------------------------------
+// Minimal ZIP reader (central directory + local headers; deflate/stored)
+// ---------------------------------------------------------------------------
+
+/** Total entry count from the End Of Central Directory record. */
+function zipEntryCount(buf: Buffer): number {
+  for (let i = buf.length - 22; i >= 0; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      return buf.readUInt16LE(i + 10);
+    }
+  }
+  throw new Error('EOCD not found');
+}
+
+/** All entry names, read from the central directory (no inflation needed). */
+function zipEntryNames(buf: Buffer): string[] {
+  const names: string[] = [];
+  let i = 0;
+  while (i <= buf.length - 4) {
+    if (buf.readUInt32LE(i) === 0x02014b50) {
+      const nameLen = buf.readUInt16LE(i + 28);
+      const extraLen = buf.readUInt16LE(i + 30);
+      const commentLen = buf.readUInt16LE(i + 32);
+      names.push(buf.toString('utf8', i + 46, i + 46 + nameLen));
+      i += 46 + nameLen + extraLen + commentLen;
+    } else {
+      i++;
+    }
+  }
+  return names;
+}
+
+/** Extract one entry's bytes by name (handles stored + deflate). */
+function zipExtract(buf: Buffer, name: string): Buffer {
+  let i = 0;
+  while (i <= buf.length - 4) {
+    if (buf.readUInt32LE(i) === 0x02014b50) {
+      const nameLen = buf.readUInt16LE(i + 28);
+      const extraLen = buf.readUInt16LE(i + 30);
+      const commentLen = buf.readUInt16LE(i + 32);
+      const entryName = buf.toString('utf8', i + 46, i + 46 + nameLen);
+      if (entryName === name) {
+        const method = buf.readUInt16LE(i + 10);
+        const compSize = buf.readUInt32LE(i + 20);
+        const localOff = buf.readUInt32LE(i + 42);
+        const lNameLen = buf.readUInt16LE(localOff + 26);
+        const lExtraLen = buf.readUInt16LE(localOff + 28);
+        const dataStart = localOff + 30 + lNameLen + lExtraLen;
+        const data = buf.subarray(dataStart, dataStart + compSize);
+        return method === 0 ? Buffer.from(data) : zlib.inflateRawSync(data);
+      }
+      i += 46 + nameLen + extraLen + commentLen;
+    } else {
+      i++;
+    }
+  }
+  throw new Error(`entry not found: ${name}`);
+}
 
 // ---------------------------------------------------------------------------
 // encodeImageJRoi
@@ -212,6 +295,53 @@ describe('encodeImageJRoi', () => {
     expect(d.coords).toEqual(pts.map(p => [p.x, p.y]));
   });
 
+  it('writes the optional slice position and ARGB stroke colour', () => {
+    const argb = 0xff00ff00; // opaque green
+    const d = decodeRoi(
+      encodeImageJRoi(
+        [
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+        ],
+        'polyline',
+        'mt',
+        { position: 7, strokeColor: argb }
+      )
+    );
+    expect(d.position).toBe(7);
+    expect(d.strokeColor).toBe(argb);
+  });
+
+  it('leaves position + stroke at 0 when options are omitted (byte back-compat)', () => {
+    const d = decodeRoi(
+      encodeImageJRoi(
+        [
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+        ],
+        'polyline',
+        'mt'
+      )
+    );
+    expect(d.position).toBe(0);
+    expect(d.strokeColor).toBe(0);
+  });
+
+  it('ignores a zero / non-positive position (stays unset)', () => {
+    const d = decodeRoi(
+      encodeImageJRoi(
+        [
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+        ],
+        'polyline',
+        'mt',
+        { position: 0 }
+      )
+    );
+    expect(d.position).toBe(0);
+  });
+
   it('throws when given fewer than the geometry minimum points', () => {
     expect(() => encodeImageJRoi([{ x: 1, y: 1 }], 'polyline')).toThrow();
     expect(() => encodeImageJRoi([], 'polygon')).toThrow();
@@ -236,6 +366,8 @@ describe('encodeImageJRoi', () => {
 // so a *shared* wrong offset would round-trip cleanly and pass. This test pins
 // the on-disk bytes to a reference `.roi` produced by an INDEPENDENT
 // implementation — Christoph Gohlke's `roifile` (Python) — closing that gap.
+// It passes NO options, so position/stroke stay 0 and the layout is unchanged
+// from before this feature (guarding the back-compat path).
 //
 // fixtures/golden_polyline.roi was generated once with roifile 2026.2.10:
 //
@@ -306,10 +438,234 @@ describe('encodeImageJRoi — golden file (roifile reference)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// exportImageJRois (real temp-dir filesystem)
+// buildVideoRoiEntries (pure zip-entry builder)
 // ---------------------------------------------------------------------------
 
-describe('exportImageJRois', () => {
+function line(
+  trackId: string | null,
+  pts: Array<[number, number]>,
+  geometry: 'polyline' | 'polygon' = 'polyline'
+) {
+  return {
+    trackId,
+    geometry,
+    points: pts.map(([x, y]) => ({ x, y })),
+  };
+}
+
+/** Index built entries by name for convenient assertions. */
+function byName(entries: RoiZipEntry[]): Map<string, RoiZipEntry> {
+  return new Map(entries.map(e => [e.name, e]));
+}
+
+describe('buildVideoRoiEntries', () => {
+  it('places each ROI on its 1-based slice with a per-track stroke colour', () => {
+    const frames: RoiFrameInput[] = [
+      {
+        id: 'f0',
+        name: 'v.nd2 (frame 1)',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('7', [
+              [10, 10],
+              [20, 25],
+            ]),
+          ]),
+        },
+      },
+      {
+        id: 'f2',
+        name: 'v.nd2 (frame 3)',
+        parentVideoId: 'c1',
+        frameIndex: 2,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('7', [
+              [12, 12],
+              [22, 27],
+            ]),
+          ]),
+        },
+      },
+    ];
+
+    const build = buildVideoRoiEntries(frames);
+    expect(build.entries.map(e => e.name)).toEqual([
+      '7__frame_0000.roi',
+      '7__frame_0002.roi',
+    ]);
+
+    const map = byName(build.entries);
+    const f0 = decodeRoi(map.get('7__frame_0000.roi')!.buffer);
+    const f2 = decodeRoi(map.get('7__frame_0002.roi')!.buffer);
+    expect(f0.position).toBe(1); // frameIndex 0 → slice 1
+    expect(f2.position).toBe(3); // frameIndex 2 → slice 3
+    // Same track ⇒ identical colour across frames, and it must be a real
+    // opaque colour (alpha 0xFF), not the unset 0.
+    expect(f0.strokeColor).toBe(f2.strokeColor);
+    expect((f0.strokeColor >>> 24) & 0xff).toBe(0xff);
+  });
+
+  it('gives distinct tracks distinct colours', () => {
+    const build = buildVideoRoiEntries([
+      {
+        id: 'f0',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('a', [
+              [1, 1],
+              [2, 2],
+            ]),
+            line('b', [
+              [3, 3],
+              [4, 4],
+            ]),
+          ]),
+        },
+      },
+    ]);
+    const [a, b] = build.entries.map(e => decodeRoi(e.buffer));
+    expect(a.strokeColor).not.toBe(b.strokeColor);
+  });
+
+  it('processes frames in frameIndex order regardless of input order', () => {
+    const build = buildVideoRoiEntries([
+      {
+        id: 'f2',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 2,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('7', [
+              [1, 1],
+              [2, 2],
+            ]),
+          ]),
+        },
+      },
+      {
+        id: 'f0',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('7', [
+              [1, 1],
+              [2, 2],
+            ]),
+          ]),
+        },
+      },
+    ]);
+    expect(build.entries.map(e => e.name)).toEqual([
+      '7__frame_0000.roi',
+      '7__frame_0002.roi',
+    ]);
+  });
+
+  it('dedups colliding labels within a frame and drops degenerate geometry', () => {
+    const build = buildVideoRoiEntries([
+      {
+        id: 'f0',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('7', [
+              [1, 1],
+              [2, 2],
+            ]),
+            line('7', [
+              [9, 9],
+              [8, 8],
+            ]), // duplicate trackId same frame → suffixed
+            line('bad', [[5, 5]]), // < 2 points → dropped
+          ]),
+        },
+      },
+    ]);
+    const names = build.entries.map(e => e.name).sort();
+    // Sorted: '2' (0x32) < '_' (0x5F), so '7_2__' precedes '7__'.
+    expect(names).toEqual(['7_2__frame_0000.roi', '7__frame_0000.roi']);
+    expect(build.droppedPolygons).toBe(1);
+    expect(build.framesWithRois).toBe(1);
+  });
+
+  it('counts corrupt-JSON frames and drops non-finite polygons', () => {
+    const build = buildVideoRoiEntries([
+      {
+        id: 'bad',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: { polygons: '{not json' },
+      },
+      {
+        id: 'f1',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 1,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('ok', [
+              [1, 1],
+              [2, 2],
+            ]),
+            line('nan', [
+              [Number.NaN, 5],
+              [1, 2],
+            ]),
+          ]),
+        },
+      },
+    ]);
+    expect(build.corruptFrames).toBe(1);
+    expect(build.droppedPolygons).toBe(1);
+    expect(build.entries.map(e => e.name)).toEqual(['ok__frame_0001.roi']);
+  });
+
+  it('falls back to a generated label for untracked / empty-trackId polylines', () => {
+    const build = buildVideoRoiEntries([
+      {
+        id: 'f0',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('', [
+              [1, 1],
+              [2, 2],
+            ]),
+            line('', [
+              [3, 3],
+              [4, 4],
+            ]),
+          ]),
+        },
+      },
+    ]);
+    const names = build.entries.map(e => e.name).sort();
+    expect(names).toEqual([
+      'roi_0001__frame_0000.roi',
+      'roi_0002__frame_0000.roi',
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// exportImageJRoiSets (real temp-dir filesystem)
+// ---------------------------------------------------------------------------
+
+describe('exportImageJRoiSets', () => {
   const tmpDirs: string[] = [];
 
   afterAll(async () => {
@@ -319,27 +675,13 @@ describe('exportImageJRois', () => {
   });
 
   async function mkTmp(): Promise<string> {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'roi-test-'));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'roizip-test-'));
     tmpDirs.push(dir);
     return dir;
   }
 
-  function line(
-    trackId: string | null,
-    pts: Array<[number, number]>,
-    geometry: 'polyline' | 'polygon' = 'polyline'
-  ) {
-    return {
-      trackId,
-      geometry,
-      points: pts.map(([x, y]) => ({ x, y })),
-    };
-  }
-
-  it('writes loose per-frame files named by trackId, skipping containers and empty frames', async () => {
+  it('writes one <video>_RoiSet.zip per container, skipping empty frames', async () => {
     const out = await mkTmp();
-    // Real MT frame names look like "<original>.nd2 (frame N)" — path.parse
-    // would mangle them, so folders must key on (container, frameIndex).
     const frames: RoiFrameInput[] = [
       {
         id: 'c1',
@@ -362,7 +704,6 @@ describe('exportImageJRois', () => {
               [50, 60],
               [70, 80],
             ]),
-            line('bad', [[5, 5]]), // < 2 points → dropped
           ]),
         },
       },
@@ -371,26 +712,26 @@ describe('exportImageJRois', () => {
         name: 'sample_60x.nd2 (frame 2)',
         parentVideoId: 'c1',
         frameIndex: 1,
-        segmentation: { polygons: JSON.stringify([]) }, // no folder
+        segmentation: { polygons: JSON.stringify([]) }, // no ROIs
       },
     ];
 
-    const result = await exportImageJRois(frames, out, 'proj');
+    const result = await exportImageJRoiSets(frames, out, 'proj');
     expect(result).toEqual({ frames: 1, rois: 2, warnings: [] });
 
     const base = path.join(out, 'annotations', 'imagej');
-    // Grouped under the clean container name, then numeric frame index.
-    expect(await fs.readdir(base)).toEqual(['sample_60x']);
-    expect(await fs.readdir(path.join(base, 'sample_60x'))).toEqual([
-      'frame_0000',
-    ]); // empty frame 1 produced no folder
-    const frame0 = await fs.readdir(
-      path.join(base, 'sample_60x', 'frame_0000')
-    );
-    expect(frame0.sort()).toEqual(['1.roi', '2.roi']);
+    expect(await fs.readdir(base)).toEqual(['sample_60x_RoiSet.zip']);
+
+    const zip = await fs.readFile(path.join(base, 'sample_60x_RoiSet.zip'));
+    expect(zip.subarray(0, 2).toString('ascii')).toBe('PK'); // local file header
+    expect(zipEntryCount(zip)).toBe(2);
+    expect(zipEntryNames(zip).sort()).toEqual([
+      '1__frame_0000.roi',
+      '2__frame_0000.roi',
+    ]);
   });
 
-  it('separates frames from different videos that share a frameIndex (multi-position ND2)', async () => {
+  it('separates videos that share a frameIndex (multi-position ND2)', async () => {
     const out = await mkTmp();
     const frames: RoiFrameInput[] = [
       {
@@ -435,167 +776,55 @@ describe('exportImageJRois', () => {
       },
     ];
 
-    const result = await exportImageJRois(frames, out, 'proj');
+    const result = await exportImageJRoiSets(frames, out, 'proj');
     expect(result.rois).toBe(2);
-
     const base = path.join(out, 'annotations', 'imagej');
-    expect((await fs.readdir(base)).sort()).toEqual(['D03_0000', 'D05_0000']);
-    expect(await fs.readdir(path.join(base, 'D03_0000', 'frame_0000'))).toEqual(
-      ['1.roi']
-    );
-    expect(await fs.readdir(path.join(base, 'D05_0000', 'frame_0000'))).toEqual(
-      ['1.roi']
-    );
+    expect((await fs.readdir(base)).sort()).toEqual([
+      'D03_0000_RoiSet.zip',
+      'D05_0000_RoiSet.zip',
+    ]);
   });
 
-  it('keeps the same trackId name across frames and suffixes collisions', async () => {
+  it('the zip round-trips real ROI bytes (position + colour survive deflate)', async () => {
     const out = await mkTmp();
     const frames: RoiFrameInput[] = [
       { id: 'c1', name: 'v.nd2', isVideoContainer: true, segmentation: null },
       {
-        id: 'f0',
-        name: 'v.nd2 (frame 1)',
+        id: 'f4',
+        name: 'v.nd2 (frame 5)',
         parentVideoId: 'c1',
-        frameIndex: 0,
+        frameIndex: 4,
         segmentation: {
           polygons: JSON.stringify([
-            line('7', [
-              [10, 10],
-              [20, 25],
+            line('mt_42', [
+              [10.5, 20.25],
+              [30.75, 40],
+              [55.5, 12.5],
             ]),
           ]),
         },
       },
-      {
-        id: 'f1',
-        name: 'v.nd2 (frame 2)',
-        parentVideoId: 'c1',
-        frameIndex: 1,
-        segmentation: {
-          polygons: JSON.stringify([
-            line('7', [
-              [12, 12],
-              [22, 27],
-            ]),
-            line('7', [
-              [99, 99],
-              [88, 88],
-            ]), // duplicate trackId in the same frame
-            line(
-              null,
-              [
-                [1, 1],
-                [2, 2],
-                [3, 3],
-              ],
-              'polygon'
-            ), // untracked → generated fallback name
-          ]),
-        },
-      },
     ];
-
-    const result = await exportImageJRois(frames, out, 'proj');
-    expect(result.rois).toBe(4);
-
-    const base = path.join(out, 'annotations', 'imagej', 'v');
-    // trackId 7 present in both frames under the identical filename
-    const f0 = await fs.readdir(path.join(base, 'frame_0000'));
-    expect(f0).toEqual(['7.roi']);
-    const f1 = (await fs.readdir(path.join(base, 'frame_0001'))).sort();
-    expect(f1).toContain('7.roi');
-    expect(f1).toContain('7_2.roi'); // collision-suffixed, no overwrite
-    expect(f1.some(n => n.startsWith('roi_'))).toBe(true); // untracked fallback
-
-    // internal ROI name is stable across frames
-    const roiF0 = decodeRoi(
-      await fs.readFile(path.join(base, 'frame_0000', '7.roi'))
+    await exportImageJRoiSets(frames, out, 'proj');
+    const zip = await fs.readFile(
+      path.join(out, 'annotations', 'imagej', 'v_RoiSet.zip')
     );
-    const roiF1 = decodeRoi(
-      await fs.readFile(path.join(base, 'frame_0001', '7.roi'))
+    const roi = decodeRoi(zipExtract(zip, 'mt_42__frame_0004.roi'));
+    expect(roi.type).toBe(ROI_TYPE_POLYLINE);
+    expect(roi.position).toBe(5); // frameIndex 4 → slice 5
+    expect(roi.coords).toEqual([
+      [10.5, 20.25],
+      [30.75, 40],
+      [55.5, 12.5],
+    ]);
+    // mt_42 → hsl(62,70%,55%) → rgb(215,221,60), opaque.
+    expect(roi.strokeColor).toBe(
+      ((0xff << 24) | (215 << 16) | (221 << 8) | 60) >>> 0
     );
-    expect(roiF0.name).toBe('7');
-    expect(roiF1.name).toBe('7');
+    expect(roi.name).toBe('mt_42');
   });
 
-  it('returns a warning (not an error) when there is nothing to export', async () => {
-    const out = await mkTmp();
-    const result = await exportImageJRois(
-      [{ id: 'c1', name: 'v.nd2', isVideoContainer: true, segmentation: null }],
-      out,
-      'proj'
-    );
-    expect(result.rois).toBe(0);
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toMatch(/no microtubule polylines/i);
-  });
-
-  it('falls through empty-string trackId to a generated name (no identity collapse)', async () => {
-    const out = await mkTmp();
-    const frames: RoiFrameInput[] = [
-      { id: 'c1', name: 'v.nd2', isVideoContainer: true, segmentation: null },
-      {
-        id: 'f0',
-        name: 'v.nd2 (frame 1)',
-        parentVideoId: 'c1',
-        frameIndex: 0,
-        segmentation: {
-          polygons: JSON.stringify([
-            line('', [
-              [10, 10],
-              [20, 25],
-            ]), // empty trackId
-            line('', [
-              [30, 30],
-              [40, 45],
-            ]), // empty trackId again
-          ]),
-        },
-      },
-    ];
-    const result = await exportImageJRois(frames, out, 'proj');
-    expect(result.rois).toBe(2);
-    const dir = path.join(out, 'annotations', 'imagej', 'v', 'frame_0000');
-    const files = (await fs.readdir(dir)).sort();
-    // Distinct generated names, NOT a collapsed "export.roi"/"export_2.roi".
-    expect(files).toEqual(['roi_0001.roi', 'roi_0002.roi']);
-    const names = await Promise.all(
-      files.map(async f => decodeRoi(await fs.readFile(path.join(dir, f))).name)
-    );
-    expect(new Set(names).size).toBe(2); // distinct internal names
-  });
-
-  it('suffixes distinct labels that sanitize to the same filename (no overwrite)', async () => {
-    const out = await mkTmp();
-    const frames: RoiFrameInput[] = [
-      { id: 'c1', name: 'v.nd2', isVideoContainer: true, segmentation: null },
-      {
-        id: 'f0',
-        name: 'v.nd2 (frame 1)',
-        parentVideoId: 'c1',
-        frameIndex: 0,
-        segmentation: {
-          polygons: JSON.stringify([
-            line('a/b', [
-              [10, 10],
-              [20, 25],
-            ]), // sanitizes to a_b
-            line('a:b', [
-              [30, 30],
-              [40, 45],
-            ]), // also sanitizes to a_b
-          ]),
-        },
-      },
-    ];
-    const result = await exportImageJRois(frames, out, 'proj');
-    expect(result.rois).toBe(2); // both written, neither overwritten
-    const dir = path.join(out, 'annotations', 'imagej', 'v', 'frame_0000');
-    const files = (await fs.readdir(dir)).sort();
-    expect(files).toEqual(['a_b.roi', 'a_b_2.roi']);
-  });
-
-  it('skips a corrupt-JSON frame with a user-facing warning while exporting valid frames', async () => {
+  it('skips a corrupt-JSON frame with a warning while exporting valid frames', async () => {
     const out = await mkTmp();
     const frames: RoiFrameInput[] = [
       { id: 'c1', name: 'v.nd2', isVideoContainer: true, segmentation: null },
@@ -621,40 +850,25 @@ describe('exportImageJRois', () => {
         segmentation: { polygons: '{not valid json' },
       },
     ];
-    const result = await exportImageJRois(frames, out, 'proj');
-    expect(result.rois).toBe(1); // valid frame still exported
+    const result = await exportImageJRoiSets(frames, out, 'proj');
+    expect(result.rois).toBe(1);
     expect(result.warnings.some(w => /corrupt/i.test(w))).toBe(true);
-    const base = path.join(out, 'annotations', 'imagej', 'v');
-    expect(await fs.readdir(base)).toEqual(['frame_0000']); // no folder for bad
   });
 
-  it('drops polygons with non-finite coordinates instead of emitting NaN ROIs', async () => {
+  it('returns a warning (not an error) when there is nothing to export', async () => {
     const out = await mkTmp();
-    const frames: RoiFrameInput[] = [
-      { id: 'c1', name: 'v.nd2', isVideoContainer: true, segmentation: null },
-      {
-        id: 'f0',
-        name: 'v.nd2 (frame 1)',
-        parentVideoId: 'c1',
-        frameIndex: 0,
-        segmentation: {
-          polygons: JSON.stringify([
-            line('ok', [
-              [1, 1],
-              [2, 2],
-            ]),
-            line('nan', [
-              [Number.NaN, 5],
-              [1, 2],
-            ]), // dropped
-          ]),
-        },
-      },
-    ];
-    const result = await exportImageJRois(frames, out, 'proj');
-    expect(result.rois).toBe(1);
-    const dir = path.join(out, 'annotations', 'imagej', 'v', 'frame_0000');
-    expect(await fs.readdir(dir)).toEqual(['ok.roi']);
+    const result = await exportImageJRoiSets(
+      [{ id: 'c1', name: 'v.nd2', isVideoContainer: true, segmentation: null }],
+      out,
+      'proj'
+    );
+    expect(result.rois).toBe(0);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toMatch(/no microtubule polylines/i);
+    // No zip written for an empty export.
+    await expect(
+      fs.readdir(path.join(out, 'annotations', 'imagej'))
+    ).rejects.toThrow();
   });
 
   it('rejects when the job is cancelled mid-export', async () => {
@@ -677,7 +891,7 @@ describe('exportImageJRois', () => {
       },
     ];
     await expect(
-      exportImageJRois(frames, out, 'proj', { shouldAbort: () => true })
+      exportImageJRoiSets(frames, out, 'proj', { shouldAbort: () => true })
     ).rejects.toThrow(/cancel/i);
   });
 });

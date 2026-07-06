@@ -6,6 +6,7 @@ import {
   Loader2,
   FolderPlus,
   Plus,
+  Eraser,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -50,6 +51,8 @@ interface ProjectToolbarProps {
   isPartiallySelected?: boolean;
   onSelectAllToggle?: () => void;
   onBatchDelete?: () => void;
+  /** Delete segmentation annotations for the selected images (keeps images). */
+  onDeleteAnnotations?: () => void;
   showSelectAll?: boolean;
   // Export state callbacks
   onExportingChange?: (isExporting: boolean) => void;
@@ -85,6 +88,7 @@ const ProjectToolbar = ({
   isPartiallySelected = false,
   onSelectAllToggle,
   onBatchDelete,
+  onDeleteAnnotations,
   showSelectAll = false,
   onExportingChange,
   onDownloadingChange,
@@ -176,6 +180,17 @@ const ProjectToolbar = ({
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('project.selected', { count: selectedCount })}
             </span>
+            {onDeleteAnnotations && (
+              <Button
+                onClick={onDeleteAnnotations}
+                size="sm"
+                variant="outline"
+                className="ml-2"
+              >
+                <Eraser className="h-4 w-4 mr-1" />
+                {t('project.deleteAnnotations')}
+              </Button>
+            )}
             <Button
               onClick={onBatchDelete}
               size="sm"

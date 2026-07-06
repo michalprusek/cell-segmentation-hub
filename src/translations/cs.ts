@@ -339,6 +339,7 @@ export default {
       deleteProject: 'Nepodařilo se smazat projekt',
     },
     deleteImages: 'Nepodařilo se smazat vybrané obrázky',
+    deleteAnnotations: 'Nepodařilo se smazat anotace',
     contexts: {
       dashboard: 'Chyba dashboardu',
       project: 'Chyba projektu',
@@ -610,6 +611,13 @@ export default {
     system: 'Systémový',
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess:
+        'Mikrotubulus propagován do {{count}} následujících snímků',
+      propagateFailed: 'Propagace mikrotubulu selhala',
+      deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
+      deleteTrackFailed: 'Smazání tracku selhalo',
+    },
     modelNotCompatible:
       'Model "{{model}}" není kompatibilní s typem projektu "{{type}}". Povolené: {{allowed}}.',
     incompatibleModelTitle: 'Tímto modelem nelze segmentovat',
@@ -1155,6 +1163,14 @@ export default {
     selected: '{{count}} obrázek vybrán',
     selected_other: '{{count}} obrázky vybrány',
     deleteSelected: 'Smazat vybrané',
+    deleteAnnotations: 'Smazat anotace',
+    annotationsDeleted: 'Anotace smazány u {{count}} obrázků',
+    annotationsDeleteFailed: 'Nepodařilo se smazat anotace u {{count}} obrázků',
+    deleteAnnotationsDialog: {
+      title: 'Smazat anotace?',
+      description:
+        'Smaže segmentační anotace u {{count}} vybraných obrázků. Obrázky zůstanou, ale jejich výsledky segmentace se odstraní. Tuto akci nelze vrátit.',
+    },
     imagesDeleted: '{{count}} obrázek smazán',
     imagesDeleted_other: '{{count}} obrázky smazány',
   },
@@ -1896,6 +1912,14 @@ export default {
     disconnected: 'Odpojeno od aktualizací v reálném čase',
   },
   contextMenu: {
+    propagateTrack: 'Propagovat do dalších snímků',
+    confirmPropagateTrack: 'Propagovat do dalších snímků?',
+    propagateTrackDescription:
+      'Přepíše tvar tohoto mikrotubulu ve všech následujících snímcích videa. Tuto akci nelze vrátit.',
+    deleteTrack: 'Smazat celý track',
+    confirmDeleteTrack: 'Smazat celý track mikrotubulu?',
+    deleteTrackDescription:
+      'Odstraní tento mikrotubulus ze všech {{count}} snímků videa. Tuto akci nelze vrátit.',
     editPolygon: 'Upravit polygon',
     splitPolygon: 'Rozdělit polygon',
     deletePolygon: 'Smazat polygon',

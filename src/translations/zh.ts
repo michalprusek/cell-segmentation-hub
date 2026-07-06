@@ -297,6 +297,7 @@ export default {
       unshareProject: '无法从共享项目中移除项目',
       deleteProject: '无法删除项目。请确保您有必要的权限。',
     },
+    deleteAnnotations: '删除标注失败',
     deleteImages: '删除所选图像失败',
     contexts: {
       dashboard: '仪表板错误',
@@ -704,6 +705,12 @@ export default {
     },
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess: '微管已传播到 {{count}} 个后续帧',
+      propagateFailed: '微管传播失败',
+      deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
+      deleteTrackFailed: '删除轨迹失败',
+    },
     modelNotCompatible:
       '模型 "{{model}}" 与项目类型 "{{type}}" 不兼容。允许的: {{allowed}}。',
     incompatibleModelTitle: '无法使用此模型进行分割',
@@ -1065,6 +1072,14 @@ export default {
     selected: '已选择{{count}}张图片',
     selected_other: '已选择{{count}}张图片',
     deleteSelected: '删除选中项',
+    deleteAnnotations: '删除标注',
+    annotationsDeleted: '已删除 {{count}} 张图像的标注',
+    annotationsDeleteFailed: '删除 {{count}} 张图像的标注失败',
+    deleteAnnotationsDialog: {
+      title: '删除标注？',
+      description:
+        '这将删除 {{count}} 张所选图像的分割标注。图像会保留，但其分割结果将被移除。此操作无法撤销。',
+    },
     imagesDeleted: '已删除 {{count}} 张图片',
     imagesDeleted_other: '已删除 {{count}} 张图片',
   },
@@ -1750,6 +1765,14 @@ export default {
     },
   },
   contextMenu: {
+    propagateTrack: '传播到后续帧',
+    confirmPropagateTrack: '传播到后续帧？',
+    propagateTrackDescription:
+      '这将覆盖该微管在视频所有后续帧中的形状。此操作无法撤销。',
+    deleteTrack: '删除整条轨迹',
+    confirmDeleteTrack: '删除整条微管轨迹？',
+    deleteTrackDescription:
+      '这将从视频的全部 {{count}} 帧中删除该微管。此操作无法撤销。',
     editPolygon: '编辑多边形',
     splitPolygon: '分割多边形',
     deletePolygon: '删除多边形',

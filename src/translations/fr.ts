@@ -336,6 +336,7 @@ export default {
       deleteProject:
         "Impossible de supprimer le projet. Assurez-vous d'avoir les permissions nécessaires.",
     },
+    deleteAnnotations: 'Échec de la suppression des annotations',
     deleteImages: 'Erreur lors de la suppression des images sélectionnées',
     contexts: {
       dashboard: 'Erreur du tableau de bord',
@@ -765,6 +766,12 @@ export default {
     },
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess: 'Microtubule propagé vers {{count}} images suivantes',
+      propagateFailed: 'Échec de la propagation du microtubule',
+      deleteTrackSuccess: 'Trace supprimée de {{count}} images',
+      deleteTrackFailed: 'Échec de la suppression de la trace',
+    },
     modelNotCompatible:
       'Le modèle "{{model}}" n\'est pas compatible avec le type de projet "{{type}}". Autorisés : {{allowed}}.',
     incompatibleModelTitle: 'Impossible de segmenter avec ce modèle',
@@ -1156,6 +1163,15 @@ export default {
     selected: '{{count}} image sélectionnée',
     selected_other: '{{count}} images sélectionnées',
     deleteSelected: 'Supprimer la sélection',
+    deleteAnnotations: 'Supprimer les annotations',
+    annotationsDeleted: 'Annotations supprimées pour {{count}} image(s)',
+    annotationsDeleteFailed:
+      'Échec de la suppression des annotations pour {{count}} image(s)',
+    deleteAnnotationsDialog: {
+      title: 'Supprimer les annotations ?',
+      description:
+        'Cela supprime les annotations de segmentation de {{count}} image(s) sélectionnée(s). Les images sont conservées mais leurs résultats de segmentation sont supprimés. Cette action est irréversible.',
+    },
     imagesDeleted: '{{count}} image supprimée',
     imagesDeleted_other: '{{count}} images supprimées',
   },
@@ -1867,6 +1883,14 @@ export default {
     },
   },
   contextMenu: {
+    propagateTrack: 'Propager aux images suivantes',
+    confirmPropagateTrack: 'Propager aux images suivantes ?',
+    propagateTrackDescription:
+      'Cela remplace la forme de ce microtubule dans toutes les images suivantes de la vidéo. Cette action est irréversible.',
+    deleteTrack: 'Supprimer toute la trace',
+    confirmDeleteTrack: 'Supprimer toute la trace du microtubule ?',
+    deleteTrackDescription:
+      'Cela supprime ce microtubule de toutes les {{count}} images de la vidéo. Cette action est irréversible.',
     editPolygon: 'Modifier le polygone',
     splitPolygon: 'Diviser le polygone',
     deletePolygon: 'Supprimer le polygone',
