@@ -109,6 +109,25 @@ describe('computeMTGeometry', () => {
     expect(computeMTGeometry([], null)).toEqual([]);
   });
 
+  it('emits rows grouped by video, frame-ascending, regardless of input order', () => {
+    const rows = computeMTGeometry(
+      [
+        makeFrame({ id: 'b2', parentVideoId: 'vidB', frameIndex: 2, segmentation: { polygons: polylineJson([{ x: 0, y: 0 }, { x: 5, y: 0 }]) } }),
+        makeFrame({ id: 'a1', parentVideoId: 'vidA', frameIndex: 1, segmentation: { polygons: polylineJson([{ x: 0, y: 0 }, { x: 5, y: 0 }]) } }),
+        makeFrame({ id: 'b0', parentVideoId: 'vidB', frameIndex: 0, segmentation: { polygons: polylineJson([{ x: 0, y: 0 }, { x: 5, y: 0 }]) } }),
+        makeFrame({ id: 'a0', parentVideoId: 'vidA', frameIndex: 0, segmentation: { polygons: polylineJson([{ x: 0, y: 0 }, { x: 5, y: 0 }]) } }),
+      ],
+      null
+    );
+    // vidA (frame 0, 1) then vidB (frame 0, 2).
+    expect(rows.map(r => `${r.imageId}@${r.frameIndex}`)).toEqual([
+      'a0@0',
+      'a1@1',
+      'b0@0',
+      'b2@2',
+    ]);
+  });
+
   it('skips video containers and frames without parentVideoId / frameIndex', () => {
     const rows = computeMTGeometry(
       [

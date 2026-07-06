@@ -896,6 +896,7 @@ const SegmentationEditor = () => {
           fromFrameIndex,
           {
             trackId: source.trackId,
+            instanceId: source.instanceId,
             name: source.name,
             geometry: 'polyline',
             points,
@@ -1015,6 +1016,7 @@ const SegmentationEditor = () => {
           fromFrameIndex,
           {
             trackId: src.trackId,
+            instanceId: src.instanceId,
             name: src.name,
             geometry: 'polyline',
             points: src.points.map(p => ({ x: p.x, y: p.y })),
