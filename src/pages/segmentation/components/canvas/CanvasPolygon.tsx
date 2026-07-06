@@ -437,6 +437,7 @@ const CanvasPolygon = React.memo(
               points={points}
               polygonType={type}
               isSelected={isSelected}
+              isMultiSelected={isMultiSelected}
               isHovered={isHovered}
               hoveredVertex={hoveredVertex}
               vertexDragState={vertexDragState}
