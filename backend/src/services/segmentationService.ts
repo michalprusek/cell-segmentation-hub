@@ -2275,9 +2275,11 @@ export class SegmentationService {
    *
    * A trackId is generated (`mt_<hex>`) when the source polyline has none, so
    * the propagated set forms one coherent, stably-coloured track; the generated
-   * id is returned for the editor to patch onto the source polyline. Frames with
-   * no segmentation row yet — or whose polygons JSON is unreadable — are skipped
-   * (a corrupt frame must never be overwritten with just the propagated line).
+   * id is returned for the editor to patch onto the source polyline. Frames that
+   * have no segmentation row yet (never segmented, or annotations deleted) get a
+   * fresh row carrying just the propagated polyline, so the microtubule appears
+   * in every following frame. Only a frame whose polygons JSON is unreadable is
+   * skipped (it must never be overwritten with just the propagated line).
    *
    * @throws {VideoAccessError} if the video is not owned.
    * @throws if the polyline has fewer than 2 points.
@@ -2305,39 +2307,67 @@ export class SegmentationService {
       where: { parentVideoId: videoId, frameIndex: { gt: fromFrameIndex } },
       select: {
         id: true,
+        width: true,
+        height: true,
         segmentation: { select: { id: true, polygons: true } },
       },
     });
 
     const ops: Prisma.PrismaPromise<unknown>[] = [];
     let framesUpdated = 0;
+    let framesCreated = 0;
     let corruptFrames = 0;
     for (const frame of frames) {
-      // A frame that never segmented has no row to attach the polyline to; skip
-      // it rather than fabricate a partial segmentation record.
-      if (!frame.segmentation) continue;
-      // Use the corrupt-aware parse: overwriting an unreadable frame with only
-      // the propagated polyline would silently destroy its other microtubules.
-      const { polygons: parsed, corrupt } = parsePolygonsForWrite(
-        frame.segmentation.polygons
-      );
-      if (corrupt) {
-        corruptFrames++;
-        logger.warn(
-          'Skipping frame with unreadable polygons during propagate',
-          'SegmentationService',
-          { imageId: frame.id, parentVideoId: videoId }
+      if (frame.segmentation) {
+        // Existing row: overwrite the same track / add it, preserving other MTs.
+        // Use the corrupt-aware parse — overwriting an unreadable frame with only
+        // the propagated polyline would silently destroy its other microtubules.
+        const { polygons: parsed, corrupt } = parsePolygonsForWrite(
+          frame.segmentation.polygons
         );
-        continue;
+        if (corrupt) {
+          corruptFrames++;
+          logger.warn(
+            'Skipping frame with unreadable polygons during propagate',
+            'SegmentationService',
+            { imageId: frame.id, parentVideoId: videoId }
+          );
+          continue;
+        }
+        const updated = upsertTrackPolyline(parsed, trackId, polyline, uuidv4);
+        ops.push(
+          this.prisma.segmentation.update({
+            where: { id: frame.segmentation.id },
+            data: { polygons: JSON.stringify(updated), updatedAt: new Date() },
+          })
+        );
+        framesUpdated++;
+      } else {
+        // No segmentation row yet — the frame was never segmented or its
+        // annotations were deleted. Create a row carrying just the propagated
+        // polyline so the microtubule still appears in EVERY following frame
+        // (the whole point of "propagate to following frames"), and mark the
+        // frame segmented.
+        const created = upsertTrackPolyline([], trackId, polyline, uuidv4);
+        const createData: Prisma.SegmentationCreateInput = {
+          image: { connect: { id: frame.id } },
+          polygons: JSON.stringify(created),
+          model: 'manual',
+          threshold: 0.5,
+        };
+        if (frame.width && frame.height) {
+          createData.imageWidth = frame.width;
+          createData.imageHeight = frame.height;
+        }
+        ops.push(this.prisma.segmentation.create({ data: createData }));
+        ops.push(
+          this.prisma.image.update({
+            where: { id: frame.id },
+            data: { segmentationStatus: 'segmented' },
+          })
+        );
+        framesCreated++;
       }
-      const updated = upsertTrackPolyline(parsed, trackId, polyline, uuidv4);
-      ops.push(
-        this.prisma.segmentation.update({
-          where: { id: frame.segmentation.id },
-          data: { polygons: JSON.stringify(updated), updatedAt: new Date() },
-        })
-      );
-      framesUpdated++;
     }
 
     if (ops.length > 0) {
@@ -2349,9 +2379,12 @@ export class SegmentationService {
       trackId,
       fromFrameIndex,
       framesUpdated,
+      framesCreated,
       corruptFramesSkipped: corruptFrames,
     });
-    return { trackId, framesUpdated };
+    // Total frames the microtubule now appears in (existing rows updated + new
+    // rows created) — this is what the editor toast reports.
+    return { trackId, framesUpdated: framesUpdated + framesCreated };
   }
 }
 
