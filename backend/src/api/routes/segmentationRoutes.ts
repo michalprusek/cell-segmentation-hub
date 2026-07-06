@@ -108,6 +108,65 @@ router.delete(
 );
 
 /**
+ * @route POST /api/segmentation/videos/:videoId/tracks/propagate
+ * @description Propagate a microtubule polyline into all following frames
+ * @access Private
+ */
+router.post(
+  '/videos/:videoId/tracks/propagate',
+  [
+    param('videoId').isUUID().withMessage('ID videa musí být platné UUID'),
+    body('fromFrameIndex')
+      .isInt({ min: 0 })
+      .withMessage('fromFrameIndex musí být nezáporné číslo'),
+    body('polyline').isObject().withMessage('polyline musí být objekt'),
+    body('polyline.points')
+      .isArray({ min: 2 })
+      .withMessage('polyline musí mít alespoň 2 body'),
+    body('polyline.points.*.x')
+      .isNumeric()
+      .withMessage('Souřadnice x musí být číslo'),
+    body('polyline.points.*.y')
+      .isNumeric()
+      .withMessage('Souřadnice y musí být číslo'),
+    body('polyline.trackId')
+      .optional({ nullable: true })
+      .isString()
+      .withMessage('trackId musí být řetězec'),
+    body('polyline.name')
+      .optional({ nullable: true })
+      .isString()
+      .withMessage('name musí být řetězec'),
+    body('polyline.geometry')
+      .optional()
+      .isIn(['polygon', 'polyline'])
+      .withMessage('geometry musí být polygon nebo polyline'),
+  ],
+  handleValidation,
+  segmentationController.propagateTrack
+);
+
+/**
+ * @route DELETE /api/segmentation/videos/:videoId/tracks/:trackId
+ * @description Delete a whole microtubule track across every frame of the video
+ * @access Private
+ */
+router.delete(
+  '/videos/:videoId/tracks/:trackId',
+  [
+    param('videoId').isUUID().withMessage('ID videa musí být platné UUID'),
+    param('trackId')
+      .isString()
+      .trim()
+      .notEmpty()
+      .isLength({ max: 200 })
+      .withMessage('trackId musí být neprázdný řetězec'),
+  ],
+  handleValidation,
+  segmentationController.deleteTrack
+);
+
+/**
  * @route POST /api/segmentation/batch
  * @description Process multiple images in batch
  * @access Private

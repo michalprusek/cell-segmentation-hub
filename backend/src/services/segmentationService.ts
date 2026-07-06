@@ -196,6 +196,62 @@ export function parsePolygonsJsonForDiff(
   }
 }
 
+/** Geometry the editor sends when propagating a microtubule forward. */
+export interface PropagatedPolyline {
+  trackId?: string | null;
+  name?: string | null;
+  geometry?: 'polygon' | 'polyline';
+  points: Array<{ x: number; y: number }>;
+}
+
+/**
+ * Remove every polygon carrying `trackId`. Returns the survivors plus the count
+ * removed. Shared by the explicit "delete whole track" endpoint and kept in
+ * lockstep with the save-time delete propagation so both paths agree on what
+ * "a track" is (all polylines with that trackId).
+ */
+export function removePolygonsWithTrackId(
+  polys: unknown[],
+  trackId: string
+): { polygons: unknown[]; removed: number } {
+  let removed = 0;
+  const polygons = polys.filter(p => {
+    if ((p as Record<string, unknown>).trackId === trackId) {
+      removed++;
+      return false;
+    }
+    return true;
+  });
+  return { polygons, removed };
+}
+
+/**
+ * Overwrite-or-insert a propagated polyline into one frame's polygon list: drop
+ * any existing polyline already carrying `trackId` (overwrite), then append a
+ * fresh copy that shares the trackId (add where missing). `makeId` supplies a
+ * unique per-polygon id so the frame's ids stay distinct.
+ */
+export function upsertTrackPolyline(
+  polys: unknown[],
+  trackId: string,
+  polyline: PropagatedPolyline,
+  makeId: () => string
+): unknown[] {
+  const { polygons } = removePolygonsWithTrackId(polys, trackId);
+  const copy: Record<string, unknown> = {
+    id: makeId(),
+    trackId,
+    type: 'external',
+    geometry: polyline.geometry === 'polygon' ? 'polygon' : 'polyline',
+    points: polyline.points.map(pt => ({ x: pt.x, y: pt.y })),
+    area: 0,
+    confidence: 1,
+  };
+  if (polyline.name) copy.name = polyline.name;
+  polygons.push(copy);
+  return polygons;
+}
+
 export interface SegmentationRequest {
   imageId: string;
   model?: KnownModelId;
@@ -2061,6 +2117,139 @@ export class SegmentationService {
       }
     }
     return ops;
+  }
+
+  /**
+   * Delete a whole microtubule track: remove every polyline carrying `trackId`
+   * from ALL frames of the video in a single transaction. This is the explicit,
+   * immediate counterpart to the save-time delete propagation
+   * (`computeCrossFrameTrackPropagation`) and shares `removePolygonsWithTrackId`
+   * so both paths agree on what a track is.
+   *
+   * @throws if the video is not found / not owned by the user.
+   */
+  async deleteTrackAcrossVideo(
+    videoId: string,
+    trackId: string,
+    userId: string
+  ): Promise<{ framesAffected: number }> {
+    // Ownership: the video container is an Image row the user must be able to access.
+    const container = await this.imageService.getImageById(videoId, userId);
+    if (!container) {
+      throw new Error('Video not found or no access');
+    }
+
+    const frames = await this.prisma.image.findMany({
+      where: { parentVideoId: videoId },
+      select: {
+        id: true,
+        segmentation: { select: { id: true, polygons: true } },
+      },
+    });
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    let framesAffected = 0;
+    for (const frame of frames) {
+      if (!frame.segmentation) continue;
+      const parsed = parsePolygonsJsonForDiff(frame.segmentation.polygons, {
+        currentImageId: frame.id,
+        parentVideoId: videoId,
+      });
+      const { polygons, removed } = removePolygonsWithTrackId(parsed, trackId);
+      if (removed > 0) {
+        framesAffected++;
+        ops.push(
+          this.prisma.segmentation.update({
+            where: { id: frame.segmentation.id },
+            data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
+          })
+        );
+      }
+    }
+
+    if (ops.length > 0) {
+      await this.prisma.$transaction(ops);
+    }
+
+    logger.info('Deleted microtubule track across video', 'SegmentationService', {
+      videoId,
+      trackId,
+      framesAffected,
+    });
+    return { framesAffected };
+  }
+
+  /**
+   * Propagate a microtubule polyline forward: stamp `polyline`'s geometry into
+   * every frame of the video with `frameIndex > fromFrameIndex`, overwriting any
+   * existing polyline that already carries the track's id and adding it where
+   * missing. Runs in a single transaction so the video stays consistent.
+   *
+   * A trackId is generated (`mt_<hex>`) when the source polyline has none, so
+   * the propagated set forms one coherent, stably-coloured track; the generated
+   * id is returned for the editor to patch onto the source polyline. Frames with
+   * no segmentation row yet are skipped (there is nothing to attach to).
+   *
+   * @throws if the video is not owned or the polyline has fewer than 2 points.
+   */
+  async propagateTrackGeometryForward(
+    videoId: string,
+    fromFrameIndex: number,
+    polyline: PropagatedPolyline,
+    userId: string
+  ): Promise<{ trackId: string; framesUpdated: number }> {
+    const container = await this.imageService.getImageById(videoId, userId);
+    if (!container) {
+      throw new Error('Video not found or no access');
+    }
+    if (!Array.isArray(polyline.points) || polyline.points.length < 2) {
+      throw new Error('Propagated polyline needs at least 2 points');
+    }
+
+    const trackId =
+      typeof polyline.trackId === 'string' && polyline.trackId.length > 0
+        ? polyline.trackId
+        : `mt_${uuidv4().replace(/-/g, '').slice(0, 8)}`;
+
+    const frames = await this.prisma.image.findMany({
+      where: { parentVideoId: videoId, frameIndex: { gt: fromFrameIndex } },
+      select: {
+        id: true,
+        segmentation: { select: { id: true, polygons: true } },
+      },
+    });
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    let framesUpdated = 0;
+    for (const frame of frames) {
+      // A frame that never segmented has no row to attach the polyline to; skip
+      // it rather than fabricate a partial segmentation record.
+      if (!frame.segmentation) continue;
+      const parsed = parsePolygonsJsonForDiff(frame.segmentation.polygons, {
+        currentImageId: frame.id,
+        parentVideoId: videoId,
+      });
+      const updated = upsertTrackPolyline(parsed, trackId, polyline, uuidv4);
+      ops.push(
+        this.prisma.segmentation.update({
+          where: { id: frame.segmentation.id },
+          data: { polygons: JSON.stringify(updated), updatedAt: new Date() },
+        })
+      );
+      framesUpdated++;
+    }
+
+    if (ops.length > 0) {
+      await this.prisma.$transaction(ops);
+    }
+
+    logger.info('Propagated microtubule track forward', 'SegmentationService', {
+      videoId,
+      trackId,
+      fromFrameIndex,
+      framesUpdated,
+    });
+    return { trackId, framesUpdated };
   }
 }
 
