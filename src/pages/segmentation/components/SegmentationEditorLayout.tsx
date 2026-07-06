@@ -115,7 +115,11 @@ export interface SegmentationEditorLayoutProps {
   handleTogglePolygonVisibility: PolygonHandlers['handleTogglePolygonVisibility'];
   handleDeletePolygonFromPanel: PolygonHandlers['handleDeletePolygonFromPanel'];
   handleSelectPolygon: PolygonHandlers['handleSelectPolygon'];
-  handleDeletePolygonFromContextMenu: PolygonHandlers['handleDeletePolygonFromContextMenu'];
+  /** Canvas right-click delete: removes the whole MT track (all frames) when
+   *  the polyline has a trackId, else a single-frame delete. */
+  handleDeletePolygonOrTrack: (polygonId: string) => void;
+  /** Canvas right-click: propagate this MT into all following frames. */
+  handlePropagateTrack: (polygonId: string) => void;
   handleSlicePolygonFromContextMenu: PolygonHandlers['handleSlicePolygonFromContextMenu'];
   handleEditPolygonFromContextMenu: PolygonHandlers['handleEditPolygonFromContextMenu'];
   handleDeleteVertexFromContextMenu: PolygonHandlers['handleDeleteVertexFromContextMenu'];
@@ -189,7 +193,8 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   handleTogglePolygonVisibility,
   handleDeletePolygonFromPanel,
   handleSelectPolygon,
-  handleDeletePolygonFromContextMenu,
+  handleDeletePolygonOrTrack,
+  handlePropagateTrack,
   handleSlicePolygonFromContextMenu,
   handleEditPolygonFromContextMenu,
   handleDeleteVertexFromContextMenu,
@@ -386,7 +391,9 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           isHovered={polygon.id === hoveredPolygonId}
                           editMode={editor.editMode}
                           onSelectPolygon={editor.handlePolygonClick}
-                          onDeletePolygon={handleDeletePolygonFromContextMenu}
+                          onDeletePolygon={handleDeletePolygonOrTrack}
+                          onPropagateTrack={handlePropagateTrack}
+                          videoFrameCount={video.container?.frameCount}
                           onSlicePolygon={handleSlicePolygonFromContextMenu}
                           onEditPolygon={handleEditPolygonFromContextMenu}
                           // Sperm-specific context-menu actions

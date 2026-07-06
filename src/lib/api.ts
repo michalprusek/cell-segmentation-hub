@@ -1665,6 +1665,48 @@ class ApiClient {
     await this.instance.delete(`/segmentation/images/${imageId}/results`);
   }
 
+  /**
+   * Propagate a microtubule polyline into every frame of the video after
+   * `fromFrameIndex`, overwriting the same track where present and adding it
+   * where missing. The backend returns the (possibly newly-generated) trackId
+   * so the editor can patch it onto the source polyline for stable colour.
+   */
+  async propagateTrackForward(
+    videoId: string,
+    fromFrameIndex: number,
+    polyline: {
+      trackId?: string;
+      name?: string;
+      geometry?: 'polygon' | 'polyline';
+      points: Array<{ x: number; y: number }>;
+    }
+  ): Promise<{ trackId: string; framesUpdated: number }> {
+    const response = await this.instance.post(
+      `/segmentation/videos/${videoId}/tracks/propagate`,
+      { fromFrameIndex, polyline }
+    );
+    const data = this.extractData(response);
+    return {
+      trackId: String(data?.trackId ?? polyline.trackId ?? ''),
+      framesUpdated: Number(data?.framesUpdated ?? 0),
+    };
+  }
+
+  /**
+   * Delete a whole microtubule track: remove every polyline carrying `trackId`
+   * from all frames of the video. Returns how many frames were affected.
+   */
+  async deleteTrack(
+    videoId: string,
+    trackId: string
+  ): Promise<{ framesAffected: number }> {
+    const response = await this.instance.delete(
+      `/segmentation/videos/${videoId}/tracks/${encodeURIComponent(trackId)}`
+    );
+    const data = this.extractData(response);
+    return { framesAffected: Number(data?.framesAffected ?? 0) };
+  }
+
   async getImageWithSegmentation(
     imageId: string
   ): Promise<ProjectImageDTO & { segmentation?: SegmentationResult }> {

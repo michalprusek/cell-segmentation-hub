@@ -764,6 +764,13 @@ export default {
     },
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess:
+        'Microtúbulo propagado a {{count}} fotogramas siguientes',
+      propagateFailed: 'No se pudo propagar el microtúbulo',
+      deleteTrackSuccess: 'Traza eliminada de {{count}} fotogramas',
+      deleteTrackFailed: 'No se pudo eliminar la traza',
+    },
     modelNotCompatible:
       'El modelo "{{model}}" no es compatible con el tipo de proyecto "{{type}}". Permitidos: {{allowed}}.',
     incompatibleModelTitle: 'No se puede segmentar con este modelo',
@@ -1917,6 +1924,14 @@ export default {
     },
   },
   contextMenu: {
+    propagateTrack: 'Propagar a los fotogramas siguientes',
+    confirmPropagateTrack: '¿Propagar a los fotogramas siguientes?',
+    propagateTrackDescription:
+      'Esto sobrescribe la forma de este microtúbulo en todos los fotogramas siguientes del vídeo. Esta acción no se puede deshacer.',
+    deleteTrack: 'Eliminar toda la traza',
+    confirmDeleteTrack: '¿Eliminar toda la traza del microtúbulo?',
+    deleteTrackDescription:
+      'Esto elimina este microtúbulo de los {{count}} fotogramas del vídeo. Esta acción no se puede deshacer.',
     editPolygon: 'Editar polígono',
     splitPolygon: 'Dividir polígono',
     deletePolygon: 'Eliminar polígono',

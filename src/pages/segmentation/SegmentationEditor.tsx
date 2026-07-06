@@ -32,7 +32,10 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 import SegmentationEditorLayout from './components/SegmentationEditorLayout';
 
 import { useVideoFrames } from './hooks/useVideoFrames';
-import { setCachedSegmentationPolygons } from './hooks/segmentationPolygonCache';
+import {
+  setCachedSegmentationPolygons,
+  segmentationPolygonsQueryKey,
+} from './hooks/segmentationPolygonCache';
 
 const SegmentationEditor = () => {
   const { projectId, imageId } = useParams<{
@@ -648,6 +651,7 @@ const SegmentationEditor = () => {
     handleRenamePolygon,
     handleChangeInstanceId,
     handleChangePartClass,
+    handleUpdatePolygonField,
   } = usePolygonHandlers({ editor, imageId });
 
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
@@ -798,6 +802,112 @@ const SegmentationEditor = () => {
   });
   // ─────────────── End resegment chain ───────────────
 
+  // ───────────────── Cross-frame track operations ─────────────────
+  // Placed AFTER `const video = useVideoFrames(...)` so they can read
+  // video.container without a TDZ (CLAUDE.md production bug #11).
+
+  // Invalidate the cached segmentation of the video's frames so a scrub after a
+  // track op refetches the mutated data. The sliding-window prefetch caches
+  // sibling frames for 60 s, which would otherwise paint stale geometry.
+  const invalidateVideoFrameSegmentationCaches = useCallback(() => {
+    const frames = video.container?.frames;
+    if (!frames) return;
+    for (const frame of frames) {
+      queryClient.invalidateQueries({
+        queryKey: segmentationPolygonsQueryKey(frame.id),
+      });
+    }
+  }, [video.container, queryClient]);
+
+  // Right-click "Propagate to following frames": stamp this microtubule's
+  // current shape into every later frame of the video.
+  const handlePropagateTrack = useCallback(
+    async (polygonId: string) => {
+      const videoId = video.container?.id;
+      const source = editor.getPolygons().find(p => p.id === polygonId);
+      const fromFrameIndex = video.container?.frames.find(
+        f => f.id === imageId
+      )?.frameIndex;
+      if (!videoId || !source || typeof fromFrameIndex !== 'number') return;
+      const points = (source.points ?? []).map(p => ({ x: p.x, y: p.y }));
+      if (points.length < 2) return;
+
+      try {
+        const result = await apiClient.propagateTrackForward(
+          videoId,
+          fromFrameIndex,
+          {
+            trackId: source.trackId,
+            name: source.name,
+            geometry: 'polyline',
+            points,
+          }
+        );
+        // When the backend generated a trackId (source had none), patch it onto
+        // the source polyline so its colour + a later save stay consistent with
+        // the propagated copies.
+        if (result.trackId && result.trackId !== source.trackId) {
+          handleUpdatePolygonField(polygonId, { trackId: result.trackId });
+        }
+        invalidateVideoFrameSegmentationCaches();
+        toast.success(
+          t('segmentation.trackOps.propagateSuccess', {
+            count: result.framesUpdated,
+          })
+        );
+      } catch (error) {
+        logger.error('Failed to propagate microtubule track', error);
+        toast.error(t('segmentation.trackOps.propagateFailed'));
+      }
+    },
+    [
+      video.container,
+      imageId,
+      editor,
+      handleUpdatePolygonField,
+      invalidateVideoFrameSegmentationCaches,
+      t,
+    ]
+  );
+
+  // Right-click delete: whole track for a tracked microtubule, else the single
+  // polyline (untracked MT or non-MT project).
+  const handleDeletePolygonOrTrack = useCallback(
+    async (polygonId: string) => {
+      const videoId = video.container?.id;
+      const target = editor.getPolygons().find(p => p.id === polygonId);
+      const trackId = target?.trackId;
+      if (projectType === 'microtubules' && videoId && trackId) {
+        try {
+          const result = await apiClient.deleteTrack(videoId, trackId);
+          // Remove it from the current frame + hidden-set locally for instant
+          // feedback; the backend already purged every sibling frame.
+          handleDeletePolygonFromContextMenu(polygonId);
+          invalidateVideoFrameSegmentationCaches();
+          toast.success(
+            t('segmentation.trackOps.deleteTrackSuccess', {
+              count: result.framesAffected,
+            })
+          );
+        } catch (error) {
+          logger.error('Failed to delete microtubule track', error);
+          toast.error(t('segmentation.trackOps.deleteTrackFailed'));
+        }
+        return;
+      }
+      handleDeletePolygonFromContextMenu(polygonId);
+    },
+    [
+      video.container,
+      editor,
+      projectType,
+      handleDeletePolygonFromContextMenu,
+      invalidateVideoFrameSegmentationCaches,
+      t,
+    ]
+  );
+  // ─────────────── End cross-frame track operations ───────────────
+
   // The overlay debounce moved into `FrameLoadingGate` — it needs
   // `visibleChannels` from ImageDisplayContext which is only mounted
   // inside the provider subtree below.
@@ -933,7 +1043,8 @@ const SegmentationEditor = () => {
         handleTogglePolygonVisibility={handleTogglePolygonVisibility}
         handleDeletePolygonFromPanel={handleDeletePolygonFromPanel}
         handleSelectPolygon={handleSelectPolygon}
-        handleDeletePolygonFromContextMenu={handleDeletePolygonFromContextMenu}
+        handleDeletePolygonOrTrack={handleDeletePolygonOrTrack}
+        handlePropagateTrack={handlePropagateTrack}
         handleSlicePolygonFromContextMenu={handleSlicePolygonFromContextMenu}
         handleEditPolygonFromContextMenu={handleEditPolygonFromContextMenu}
         handleDeleteVertexFromContextMenu={handleDeleteVertexFromContextMenu}

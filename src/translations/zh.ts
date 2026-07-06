@@ -704,6 +704,12 @@ export default {
     },
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess: '微管已传播到 {{count}} 个后续帧',
+      propagateFailed: '微管传播失败',
+      deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
+      deleteTrackFailed: '删除轨迹失败',
+    },
     modelNotCompatible:
       '模型 "{{model}}" 与项目类型 "{{type}}" 不兼容。允许的: {{allowed}}。',
     incompatibleModelTitle: '无法使用此模型进行分割',
@@ -1750,6 +1756,14 @@ export default {
     },
   },
   contextMenu: {
+    propagateTrack: '传播到后续帧',
+    confirmPropagateTrack: '传播到后续帧？',
+    propagateTrackDescription:
+      '这将覆盖该微管在视频所有后续帧中的形状。此操作无法撤销。',
+    deleteTrack: '删除整条轨迹',
+    confirmDeleteTrack: '删除整条微管轨迹？',
+    deleteTrackDescription:
+      '这将从视频的全部 {{count}} 帧中删除该微管。此操作无法撤销。',
     editPolygon: '编辑多边形',
     splitPolygon: '分割多边形',
     deletePolygon: '删除多边形',

@@ -610,6 +610,13 @@ export default {
     system: 'Systémový',
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess:
+        'Mikrotubulus propagován do {{count}} následujících snímků',
+      propagateFailed: 'Propagace mikrotubulu selhala',
+      deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
+      deleteTrackFailed: 'Smazání tracku selhalo',
+    },
     modelNotCompatible:
       'Model "{{model}}" není kompatibilní s typem projektu "{{type}}". Povolené: {{allowed}}.',
     incompatibleModelTitle: 'Tímto modelem nelze segmentovat',
@@ -1896,6 +1903,14 @@ export default {
     disconnected: 'Odpojeno od aktualizací v reálném čase',
   },
   contextMenu: {
+    propagateTrack: 'Propagovat do dalších snímků',
+    confirmPropagateTrack: 'Propagovat do dalších snímků?',
+    propagateTrackDescription:
+      'Přepíše tvar tohoto mikrotubulu ve všech následujících snímcích videa. Tuto akci nelze vrátit.',
+    deleteTrack: 'Smazat celý track',
+    confirmDeleteTrack: 'Smazat celý track mikrotubulu?',
+    deleteTrackDescription:
+      'Odstraní tento mikrotubulus ze všech {{count}} snímků videa. Tuto akci nelze vrátit.',
     editPolygon: 'Upravit polygon',
     splitPolygon: 'Rozdělit polygon',
     deletePolygon: 'Smazat polygon',

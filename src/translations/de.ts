@@ -771,6 +771,12 @@ export default {
     },
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess: 'Mikrotubulus in {{count}} folgende Frames übertragen',
+      propagateFailed: 'Übertragung des Mikrotubulus fehlgeschlagen',
+      deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
+      deleteTrackFailed: 'Löschen des Tracks fehlgeschlagen',
+    },
     modelNotCompatible:
       'Modell "{{model}}" ist nicht mit dem Projekttyp "{{type}}" kompatibel. Erlaubt: {{allowed}}.',
     incompatibleModelTitle: 'Mit diesem Modell kann nicht segmentiert werden',
@@ -1878,6 +1884,14 @@ export default {
     },
   },
   contextMenu: {
+    propagateTrack: 'In folgende Frames übertragen',
+    confirmPropagateTrack: 'In folgende Frames übertragen?',
+    propagateTrackDescription:
+      'Dies überschreibt die Form dieses Mikrotubulus in allen folgenden Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
+    deleteTrack: 'Ganzen Track löschen',
+    confirmDeleteTrack: 'Den gesamten Mikrotubulus-Track löschen?',
+    deleteTrackDescription:
+      'Dies entfernt diesen Mikrotubulus aus allen {{count}} Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
     editPolygon: 'Polygon bearbeiten',
     splitPolygon: 'Polygon teilen',
     deletePolygon: 'Polygon löschen',

@@ -30,6 +30,10 @@ interface CanvasPolygonProps {
   ) => void;
   onChangeInstanceId?: (polygonId: string, instanceId: string) => void;
   availableInstanceIds?: string[];
+  /** Propagate this microtubule into all following frames (MT only). */
+  onPropagateTrack?: (polygonId: string) => void;
+  /** Total frames in the video — shown in the "delete whole track" dialog. */
+  videoFrameCount?: number;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
   onHover?: (polygonId: string | null) => void;
@@ -58,6 +62,8 @@ const CanvasPolygon = React.memo(
     onChangePartClass,
     onChangeInstanceId,
     availableInstanceIds,
+    onPropagateTrack,
+    videoFrameCount,
     onDeleteVertex,
     onDuplicateVertex,
     onHover,
@@ -242,6 +248,10 @@ const CanvasPolygon = React.memo(
       (instanceId: string) => onChangeInstanceId?.(id, instanceId),
       [onChangeInstanceId, id]
     );
+    const handlePropagate = useCallback(
+      () => onPropagateTrack?.(id),
+      [onPropagateTrack, id]
+    );
     const handleMouseEnter = useCallback(() => onHover?.(id), [onHover, id]);
     const handleMouseLeave = useCallback(() => onHover?.(null), [onHover]);
 
@@ -277,6 +287,11 @@ const CanvasPolygon = React.memo(
         onChangeInstanceId={isPolyline ? handleChangeInstanceId : undefined}
         currentInstanceId={isPolyline ? polygon.instanceId : undefined}
         availableInstanceIds={isPolyline ? availableInstanceIds : undefined}
+        onPropagate={
+          isPolyline && onPropagateTrack ? handlePropagate : undefined
+        }
+        trackId={polygon.trackId}
+        videoFrameCount={videoFrameCount}
       >
         <g
           data-testid={id}
@@ -470,6 +485,8 @@ const CanvasPolygon = React.memo(
       prevProps.onChangePartClass === nextProps.onChangePartClass &&
       prevProps.onChangeInstanceId === nextProps.onChangeInstanceId &&
       prevProps.availableInstanceIds === nextProps.availableInstanceIds &&
+      prevProps.onPropagateTrack === nextProps.onPropagateTrack &&
+      prevProps.videoFrameCount === nextProps.videoFrameCount &&
       // Drives context-menu gating; must be in comparator.
       prevProps.projectType === nextProps.projectType &&
       // Context-menu / vertex callbacks. These are identity-stable

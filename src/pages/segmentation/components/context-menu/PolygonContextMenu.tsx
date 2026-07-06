@@ -6,7 +6,14 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
-import { Trash, Scissors, Edit, Link, BarChart3 } from 'lucide-react';
+import {
+  Trash,
+  Scissors,
+  Edit,
+  Link,
+  BarChart3,
+  ChevronsRight,
+} from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import type { ProjectType } from '@/types';
 import {
@@ -36,6 +43,13 @@ interface PolygonContextMenuProps {
   onChangeInstanceId?: (instanceId: string) => void;
   currentInstanceId?: string;
   availableInstanceIds?: string[];
+  /** Propagate this microtubule into all following frames (MT only). */
+  onPropagate?: () => void;
+  /** Cross-frame track id — when set on a microtubule, delete removes the whole
+   *  track (all frames) rather than just this polyline. */
+  trackId?: string | null;
+  /** Total frames in the video, shown in the "delete whole track" dialog. */
+  videoFrameCount?: number;
 }
 
 const PolygonContextMenu = ({
@@ -50,9 +64,15 @@ const PolygonContextMenu = ({
   onChangeInstanceId,
   currentInstanceId,
   availableInstanceIds,
+  onPropagate,
+  trackId,
+  videoFrameCount,
 }: PolygonContextMenuProps) => {
   const isSperm = projectType === 'sperm';
   const isMicrotubules = projectType === 'microtubules';
+  // A microtubule with a cross-frame trackId: deleting it removes the whole
+  // track, and it can be propagated forward.
+  const hasTrack = isMicrotubules && !!trackId;
 
   // Fire the global "open kymograph" event that VideoModeOverlay
   // already listens for — no new prop plumbing needed. The overlay
@@ -66,6 +86,7 @@ const PolygonContextMenu = ({
     );
   }, [polygonId]);
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const [showPropagateDialog, setShowPropagateDialog] = React.useState(false);
   const { t } = useLanguage();
 
   return (
@@ -101,6 +122,15 @@ const PolygonContextMenu = ({
                   })}
                 </span>
               </ContextMenuItem>
+              {onPropagate && (
+                <ContextMenuItem
+                  onClick={() => setShowPropagateDialog(true)}
+                  className="cursor-pointer"
+                >
+                  <ChevronsRight className="mr-2 h-4 w-4" />
+                  <span>{t('contextMenu.propagateTrack')}</span>
+                </ContextMenuItem>
+              )}
             </>
           )}
           {isPolyline && isSperm && onChangePartClass && (
@@ -183,9 +213,11 @@ const PolygonContextMenu = ({
           >
             <Trash className="mr-2 h-4 w-4" />
             <span>
-              {isPolyline
-                ? t('contextMenu.deletePolyline')
-                : t('contextMenu.deletePolygon')}
+              {hasTrack
+                ? t('contextMenu.deleteTrack')
+                : isPolyline
+                  ? t('contextMenu.deletePolyline')
+                  : t('contextMenu.deletePolygon')}
             </span>
           </ContextMenuItem>
         </ContextMenuContent>
@@ -195,10 +227,16 @@ const PolygonContextMenu = ({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {t('contextMenu.confirmDeletePolygon')}
+              {hasTrack
+                ? t('contextMenu.confirmDeleteTrack')
+                : t('contextMenu.confirmDeletePolygon')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('contextMenu.deletePolygonDescription')}
+              {hasTrack
+                ? t('contextMenu.deleteTrackDescription', {
+                    count: videoFrameCount ?? 0,
+                  })
+                : t('contextMenu.deletePolygonDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -211,6 +249,33 @@ const PolygonContextMenu = ({
               className="bg-red-600 hover:bg-red-700"
             >
               {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={showPropagateDialog}
+        onOpenChange={setShowPropagateDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('contextMenu.confirmPropagateTrack')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('contextMenu.propagateTrackDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onPropagate?.();
+                setShowPropagateDialog(false);
+              }}
+            >
+              {t('contextMenu.propagateTrack')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

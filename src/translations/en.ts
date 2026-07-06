@@ -612,6 +612,13 @@ export default {
     system: 'System',
   },
   segmentation: {
+    trackOps: {
+      propagateSuccess:
+        'Microtubule propagated to {{count}} following frame(s)',
+      propagateFailed: 'Failed to propagate the microtubule',
+      deleteTrackSuccess: 'Track removed from {{count}} frame(s)',
+      deleteTrackFailed: 'Failed to delete the track',
+    },
     modelNotCompatible:
       'Model "{{model}}" is not compatible with project type "{{type}}". Allowed: {{allowed}}.',
     incompatibleModelTitle: 'Cannot segment with this model',
@@ -1936,6 +1943,14 @@ export default {
 
   // Context menu
   contextMenu: {
+    propagateTrack: 'Propagate to following frames',
+    confirmPropagateTrack: 'Propagate to following frames?',
+    propagateTrackDescription:
+      "This overwrites this microtubule's shape in all following frames of the video. This cannot be undone.",
+    deleteTrack: 'Delete whole track',
+    confirmDeleteTrack: 'Delete the whole microtubule track?',
+    deleteTrackDescription:
+      'This removes this microtubule from all {{count}} frames of the video. This cannot be undone.',
     editPolygon: 'Edit polygon',
     splitPolygon: 'Split polygon',
     deletePolygon: 'Delete polygon',
