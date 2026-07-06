@@ -9,6 +9,9 @@ interface PolygonVerticesProps {
   points: Point[];
   polygonType: 'external' | 'internal';
   isSelected: boolean;
+  /** Shift+click multi-selection: show the same vertex dots as a single
+   *  selection so the user can see every point of each selected microtubule. */
+  isMultiSelected?: boolean;
   isHovered: boolean;
   hoveredVertex: { polygonId: string | null; vertexIndex: number | null };
   vertexDragState: VertexDragState;
@@ -28,6 +31,7 @@ const PolygonVertices = React.memo(
     points,
     polygonType,
     isSelected,
+    isMultiSelected = false,
     isHovered: _isHovered,
     hoveredVertex,
     vertexDragState,
@@ -37,8 +41,10 @@ const PolygonVertices = React.memo(
     onDeleteVertex,
     editMode,
   }: PolygonVerticesProps) => {
-    // Always show vertices for selected polygons to enable dragging
-    const shouldShowVertices = isSelected;
+    // Show vertices for the single-selected polygon (to enable dragging) and
+    // for every Shift+click multi-selected microtubule (so all selected MTs
+    // display their individual points, like a single selection).
+    const shouldShowVertices = isSelected || isMultiSelected;
 
     // Get all vertices without decimation or approximation
     const visibleVertices = React.useMemo(() => {
@@ -103,7 +109,7 @@ const PolygonVertices = React.memo(
                   point={point}
                   polygonId={polygonId}
                   vertexIndex={originalIndex}
-                  isSelected={isSelected}
+                  isSelected={isSelected || isMultiSelected}
                   isHovered={isVertexHovered}
                   isDragging={isDragging}
                   dragOffset={dragOffset}
@@ -129,6 +135,7 @@ const PolygonVertices = React.memo(
       prevProps.polygonId !== nextProps.polygonId ||
       prevProps.polygonType !== nextProps.polygonType ||
       prevProps.isSelected !== nextProps.isSelected ||
+      prevProps.isMultiSelected !== nextProps.isMultiSelected ||
       prevProps.isHovered !== nextProps.isHovered ||
       prevProps.isUndoRedoInProgress !== nextProps.isUndoRedoInProgress ||
       // onDeleteVertex backs the per-vertex context menu and editMode gates

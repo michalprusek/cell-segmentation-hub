@@ -73,6 +73,7 @@ const SegmentationEditor = () => {
     images,
     loading: projectLoading,
     refreshImageSegmentation,
+    updateImages,
     // useProjectData always fetches metadata only (lod: 'low') and loads
     // segmentation geometry on demand — there is no fetch-all path to disable,
     // so no options arg is passed. Adjacent-frame prefetch is handled separately.
@@ -835,6 +836,30 @@ const SegmentationEditor = () => {
     }
   }, [video.container, queryClient]);
 
+  // After a propagate, the following frames now have segmentation (created or
+  // updated). Bump their status in the in-memory project images so the frame
+  // loader's `hasSegmentation` gate passes on a scrub — otherwise a frame whose
+  // cached status is still `no_segmentation` (e.g. its annotations were just
+  // deleted) never re-fetches and stays blank until a full page reload.
+  const markFollowingFramesSegmented = useCallback(
+    (fromFrameIndex: number) => {
+      const frames = video.container?.frames;
+      if (!frames) return;
+      const followingIds = new Set(
+        frames.filter(f => f.frameIndex > fromFrameIndex).map(f => f.id)
+      );
+      if (followingIds.size === 0) return;
+      updateImages(prev =>
+        prev.map(img =>
+          followingIds.has(img.id) && img.segmentationStatus !== 'segmented'
+            ? { ...img, segmentationStatus: 'segmented' }
+            : img
+        )
+      );
+    },
+    [video.container, updateImages]
+  );
+
   // Right-click "Propagate to following frames": stamp this microtubule's
   // current shape into every later frame of the video.
   const handlePropagateTrack = useCallback(
@@ -883,6 +908,7 @@ const SegmentationEditor = () => {
           handleUpdatePolygonField(polygonId, { trackId: result.trackId });
         }
         evictVideoFrameSegmentationCaches();
+        markFollowingFramesSegmented(fromFrameIndex);
         toast.success(
           t('segmentation.trackOps.propagateSuccess', {
             count: result.framesUpdated,
@@ -898,6 +924,7 @@ const SegmentationEditor = () => {
       imageId,
       handleUpdatePolygonField,
       evictVideoFrameSegmentationCaches,
+      markFollowingFramesSegmented,
       t,
     ]
   );
@@ -1003,6 +1030,7 @@ const SegmentationEditor = () => {
     }
 
     evictVideoFrameSegmentationCaches();
+    markFollowingFramesSegmented(fromFrameIndex);
     clearMultiSelect();
     if (failed === 0) {
       toast.success(
@@ -1023,6 +1051,7 @@ const SegmentationEditor = () => {
     imageId,
     handleUpdatePolygonField,
     evictVideoFrameSegmentationCaches,
+    markFollowingFramesSegmented,
     clearMultiSelect,
     t,
   ]);
