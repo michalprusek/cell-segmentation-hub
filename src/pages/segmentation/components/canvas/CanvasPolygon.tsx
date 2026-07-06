@@ -232,8 +232,14 @@ const CanvasPolygon = React.memo(
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (onSelectPolygon) {
-          onSelectPolygon(id, e.shiftKey);
+        if (!onSelectPolygon) return;
+        // Only pass the `additive` arg on a Shift+click so a plain click stays a
+        // single-argument call (keeps the single-selection call sites + their
+        // tests unchanged).
+        if (e.shiftKey) {
+          onSelectPolygon(id, true);
+        } else {
+          onSelectPolygon(id);
         }
       },
       [onSelectPolygon, id]
