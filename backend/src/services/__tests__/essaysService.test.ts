@@ -136,18 +136,20 @@ describe('EssaysService.resolveDownload (path-traversal + ownership guard)', () 
     expect(await svc.resolveDownload(USER, JOB)).toBeNull();
   });
 
-  it('resolves a completed job to a path inside EXPORT_DIR with a sanitized name', async () => {
+  it('resolves a completed job to a path inside the uploads volume with a sanitized name', async () => {
     prismaMock.essayJob.findFirst.mockResolvedValue({
       id: JOB,
       userId: USER,
       status: 'completed',
-      resultZipKey: 'good.zip',
+      // resultZipKey is relative to the (persistent) uploads volume.
+      resultZipKey: 'essays-results/job-1.zip',
       name: 'My Run/2026',
     });
     const dl = await svc.resolveDownload(USER, JOB);
     expect(dl).not.toBeNull();
+    // config mock sets UPLOAD_DIR = '/app/uploads'
     expect(dl!.filePath).toBe(
-      path.resolve('/tmp/essays-exports-test', 'good.zip')
+      path.resolve('/app/uploads', 'essays-results/job-1.zip')
     );
     // sanitized (no slash/space) and suffixed
     expect(dl!.downloadName).toBe('My_Run_2026_results.zip');

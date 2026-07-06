@@ -232,12 +232,16 @@ export class EssaysService {
   async deleteJob(userId: string, jobId: string): Promise<boolean> {
     const job = await prisma.essayJob.findFirst({ where: { id: jobId, userId } });
     if (!job) return false;
+    // Raw job dir is usually already gone (freed on completion); remove it if a
+    // failed/in-progress job still has it.
     await fs
       .rm(this.jobDir(userId, jobId), { recursive: true, force: true })
       .catch(() => {});
+    // Remove the persisted result zip (dismiss = delete the deliverable too).
     if (job.resultZipKey) {
-      const zp = path.resolve(exportDir(), job.resultZipKey);
-      if (zp.startsWith(exportDir() + path.sep)) {
+      const base = path.resolve(this.uploadDir);
+      const zp = path.resolve(base, job.resultZipKey);
+      if (zp.startsWith(base + path.sep)) {
         await fs.rm(zp, { force: true }).catch(() => {});
       }
     }
@@ -252,8 +256,12 @@ export class EssaysService {
   ): Promise<{ filePath: string; downloadName: string } | null> {
     const job = await prisma.essayJob.findFirst({ where: { id: jobId, userId } });
     if (!job || job.status !== 'completed' || !job.resultZipKey) return null;
-    const filePath = path.resolve(exportDir(), job.resultZipKey);
-    if (!filePath.startsWith(exportDir() + path.sep)) return null;
+    // resultZipKey is relative to the persistent uploads volume (essays-results/
+    // <jobId>.zip) so the download survives a backend restart and is available
+    // until the user dismisses the job.
+    const base = path.resolve(this.uploadDir);
+    const filePath = path.resolve(base, job.resultZipKey);
+    if (!filePath.startsWith(base + path.sep)) return null;
     try {
       await fs.access(filePath);
     } catch {
@@ -372,10 +380,26 @@ export class EssaysService {
 
       const outputDir = path.join(this.jobDir(job.userId, job.id), 'output');
       const zipBase = `${sanitizeFilename(job.name)}_${job.id.slice(0, 8)}`;
-      // createZipArchive opens the zip without creating EXPORT_DIR — ensure it
-      // exists (a fresh container has no ./exports).
+      // Zip the raw output. createZipArchive writes into EXPORT_DIR (the
+      // container-ephemeral ./exports) — ensure it exists, then MOVE the archive
+      // onto the persistent uploads volume so it survives a backend restart and
+      // stays downloadable until the user dismisses the job.
       await fs.mkdir(exportDir(), { recursive: true });
-      const zipPath = await createZipArchive(outputDir, zipBase);
+      const stagedZip = await createZipArchive(outputDir, zipBase);
+
+      const resultsDir = path.join(this.uploadDir, 'essays-results');
+      await fs.mkdir(resultsDir, { recursive: true });
+      const persistentZip = path.join(resultsDir, `${job.id}.zip`);
+      try {
+        await fs.rename(stagedZip, persistentZip);
+      } catch {
+        // EXPORT_DIR and the uploads volume are usually different devices —
+        // fall back to copy + unlink on EXDEV.
+        await fs.copyFile(stagedZip, persistentZip);
+        await fs.rm(stagedZip, { force: true }).catch(() => {});
+      }
+      const resultZipKey = path.posix.join('essays-results', `${job.id}.zip`);
+
       await prisma.essayJob.update({
         where: { id: job.id },
         data: {
@@ -383,17 +407,16 @@ export class EssaysService {
           progress: 100,
           mtCount: ws.mtCount ?? job.mtCount,
           device: ws.device ?? job.device,
-          resultZipKey: path.basename(zipPath),
+          resultZipKey,
           completedAt: new Date(),
         },
       });
-      logger.info(
-        `essays job ${job.id} completed -> ${path.basename(zipPath)}`,
-        CTX
-      );
+      logger.info(`essays job ${job.id} completed -> ${resultZipKey}`, CTX);
+
       // Free the (potentially tens-of-GB) input .nd2 files + raw output now that
-      // the zip in EXPORT_DIR is the sole download artifact — the job dir is no
-      // longer needed. Best-effort; a leftover is swept later regardless.
+      // the persisted zip is the sole download artifact — the raw job dir is no
+      // longer needed. The result zip lives outside it (essays-results/) and
+      // stays until the user dismisses the job.
       await fs
         .rm(this.jobDir(job.userId, job.id), { recursive: true, force: true })
         .catch((e) =>
