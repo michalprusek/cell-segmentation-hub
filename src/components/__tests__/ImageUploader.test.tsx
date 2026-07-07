@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import ImageUploader from '@/components/ImageUploader';
 
@@ -86,8 +87,18 @@ vi.mock('@/contexts/useLanguage', () => ({
   }),
 }));
 
-// Minimal wrapper — no Router, no heavy providers
-const render = (ui: React.ReactElement) => rtlRender(ui);
+// Minimal wrapper — no Router, but a QueryClientProvider is required because
+// ImageUploader uses `useQuery` (to read the project type for the MT-only
+// channel-registration checkbox). The query is disabled here (useParams()→{},
+// so projectId is null) but `useQuery` still calls `useQueryClient()`.
+const render = (ui: React.ReactElement) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return rtlRender(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+  );
+};
 
 describe('ImageUploader', () => {
   const defaultProps = {
