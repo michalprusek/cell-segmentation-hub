@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 import {
   ChunkProgress,
   DEFAULT_CHUNKING_CONFIG,
-  isVideoLikeUpload,
+  shouldRouteAsVideo,
 } from '@/lib/uploadUtils';
 
 export interface UploadSession {
@@ -295,21 +295,24 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       onCompleteRef.current = onComplete ?? null;
       activeSessionIdRef.current = sessionId;
 
-      // Split files into video / single-image groups. Videos take a
-      // different round-trip (one-at-a-time POST /videos with server-side
-      // ffmpeg/nd2/tifffile extraction); throwing them through the bulk
-      // /images endpoint would either be rejected by the smaller multer
-      // budget or trigger a broken Sharp thumbnail pass on opaque bytes.
-      // Shared with DropZone via isVideoLikeUpload — keeps DropZone's
-      // size-budget decision and this routing decision in lockstep, so a
-      // file accepted at drop time always reaches a matching endpoint.
-      const videoFiles = files.filter(isVideoLikeUpload);
-      const imageFiles = files.filter(f => !isVideoLikeUpload(f));
-
       // Run the actual upload asynchronously
       const doUpload = async () => {
         try {
           const signal = abortControllerRef.current?.signal;
+
+          // Split files into video / single-image groups. Videos take a
+          // different round-trip (one-at-a-time POST /videos with
+          // server-side ffmpeg/nd2/tifffile extraction); throwing them
+          // through the bulk /images endpoint would either be rejected by
+          // the smaller multer budget or trigger a broken Sharp thumbnail
+          // pass on opaque bytes (a multi-page 16-bit TIFF renders
+          // near-black there). `shouldRouteAsVideo` is async because it
+          // sniffs the TIFF IFD chain — a small multi-channel stack that
+          // slips under the size cap must still reach the extractor, not
+          // the single-image path.
+          const routeAsVideo = await Promise.all(files.map(shouldRouteAsVideo));
+          const videoFiles = files.filter((_, i) => routeAsVideo[i]);
+          const imageFiles = files.filter((_, i) => !routeAsVideo[i]);
 
           // Videos first — sequential, single endpoint per file. We
           // accumulate counts so the session card reports a single

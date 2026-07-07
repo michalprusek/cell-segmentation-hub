@@ -33,6 +33,73 @@ export function isVideoLikeUpload(file: File): boolean {
   return false;
 }
 
+function hasTiffExtension(file: File): boolean {
+  const lower = file.name.toLowerCase();
+  return MULTI_PAGE_TIFF_EXTENSIONS.some(ext => lower.endsWith(ext));
+}
+
+/**
+ * Detect a multi-page (stack / multi-channel) TIFF by walking its IFD
+ * chain directly from the file bytes. ImageJ / MetaMorph store every
+ * channel *and* every timepoint as its own IFD ("page"), so page-count
+ * > 1 ⇔ the file is a microscopy stack that must go through the frame
+ * extractor — even when it's small. A 2-channel 512×512 IRM+TIRF frame
+ * is only ~1 MB, well under the image cap, so the size heuristic in
+ * `isVideoLikeUpload` alone would misroute it to the single-image Sharp
+ * path (which reads only page 0 and renders 16-bit data near-black).
+ *
+ * Reads only a few bytes per IFD via `Blob.slice`, so it stays cheap
+ * even for the largest classic TIFF. Ambiguity resolves conservatively:
+ *  - BigTIFF (magic 43): always a stack in practice → multi-page.
+ *  - non-TIFF / unreadable header / no Blob API → `false` (fall back to
+ *    the size heuristic).
+ */
+export async function isMultiPageTiff(file: File): Promise<boolean> {
+  try {
+    if (typeof file.slice !== 'function') return false;
+    const head = new DataView(await file.slice(0, 8).arrayBuffer());
+    if (head.byteLength < 8) return false;
+    const le = head.getUint8(0) === 0x49 && head.getUint8(1) === 0x49; // 'II'
+    const be = head.getUint8(0) === 0x4d && head.getUint8(1) === 0x4d; // 'MM'
+    if (!le && !be) return false;
+    const magic = head.getUint16(2, le);
+    if (magic === 43) return true; // BigTIFF → always a stack
+    if (magic !== 42) return false; // not a classic TIFF
+    let ifdOffset = head.getUint32(4, le);
+    // Walk the IFD chain; the existence of a 2nd IFD is all we need.
+    // Cap the walk to guard against a malformed self-referential chain.
+    for (let seen = 0; ifdOffset !== 0 && seen < 4; seen++) {
+      if (seen >= 1) return true; // reached a 2nd IFD → multi-page
+      const cntBuf = await file.slice(ifdOffset, ifdOffset + 2).arrayBuffer();
+      if (cntBuf.byteLength < 2) break;
+      const entryCount = new DataView(cntBuf).getUint16(0, le);
+      // Next-IFD offset sits right after the entry block (12 bytes each).
+      const nextPos = ifdOffset + 2 + entryCount * 12;
+      const nextBuf = await file.slice(nextPos, nextPos + 4).arrayBuffer();
+      if (nextBuf.byteLength < 4) break;
+      ifdOffset = new DataView(nextBuf).getUint32(0, le);
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Async routing decision for the upload pipeline: is this file a video /
+ * microscopy stack that must go through the `/videos` extractor endpoint?
+ *
+ * Superset of `isVideoLikeUpload` — adds an IFD-chain sniff so a *small*
+ * multi-page TIFF (which the size heuristic would leave on the image
+ * route) is routed to the extractor. Single-page TIFF stills stay on the
+ * bulk image route unchanged.
+ */
+export async function shouldRouteAsVideo(file: File): Promise<boolean> {
+  if (isVideoLikeUpload(file)) return true;
+  if (hasTiffExtension(file)) return isMultiPageTiff(file);
+  return false;
+}
+
 export interface ChunkingConfig {
   chunkSize: number;
   maxConcurrentChunks: number;

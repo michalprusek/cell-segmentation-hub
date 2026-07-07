@@ -7,6 +7,9 @@ import {
   validateFiles,
   formatFileSize,
   formatUploadSpeed,
+  isVideoLikeUpload,
+  isMultiPageTiff,
+  shouldRouteAsVideo,
   DEFAULT_CHUNKING_CONFIG,
   type ChunkingConfig,
 } from '@/lib/uploadUtils';
@@ -253,6 +256,119 @@ describe('formatFileSize', () => {
 
   it('formats gigabytes', () => {
     expect(formatFileSize(2 * 1024 * 1024 * 1024)).toBe('2.0 GB');
+  });
+});
+
+// Build a minimal but structurally-valid classic TIFF with `pages` IFDs.
+// Each IFD here has zero entries: 2 bytes count (0) + 4 bytes next-IFD
+// offset — enough for the IFD-chain walk in isMultiPageTiff. Bytes are
+// real, so File.slice(...).arrayBuffer() reads them like a browser would.
+const makeTiff = (
+  pages: number,
+  endian: 'II' | 'MM' = 'II',
+  bigTiff = false
+): File => {
+  const le = endian === 'II';
+  const IFD_SIZE = 6; // 2 (count=0) + 4 (next offset)
+  const buf = new ArrayBuffer(8 + pages * IFD_SIZE);
+  const dv = new DataView(buf);
+  dv.setUint8(0, endian.charCodeAt(0));
+  dv.setUint8(1, endian.charCodeAt(1));
+  dv.setUint16(2, bigTiff ? 43 : 42, le);
+  dv.setUint32(4, 8, le); // first IFD immediately after the header
+  for (let p = 0; p < pages; p++) {
+    const off = 8 + p * IFD_SIZE;
+    dv.setUint16(off, 0, le); // entry count = 0
+    dv.setUint32(off + 2, p < pages - 1 ? off + IFD_SIZE : 0, le); // next IFD
+  }
+  const bytes = new Uint8Array(buf);
+  const f = new File([bytes], 'stack.tif', { type: 'image/tiff' });
+  // jsdom's Blob polyfill omits `arrayBuffer()`, so back slice()/arrayBuffer()
+  // with the known bytes. This exercises the sniff LOGIC (IFD walk / endian /
+  // BigTIFF); the native byte transport is covered by the Playwright pass.
+  Object.defineProperty(f, 'arrayBuffer', {
+    value: async () => bytes.buffer.slice(0),
+    configurable: true,
+  });
+  Object.defineProperty(f, 'slice', {
+    value: (start = 0, end = bytes.length) => {
+      const sub = bytes.slice(start, end);
+      return {
+        byteLength: sub.length,
+        arrayBuffer: async () => sub.buffer.slice(0),
+      };
+    },
+    configurable: true,
+  });
+  return f;
+};
+
+describe('isMultiPageTiff', () => {
+  it('returns true for a multi-page TIFF (2 IFDs)', async () => {
+    await expect(isMultiPageTiff(makeTiff(2))).resolves.toBe(true);
+  });
+
+  it('returns true for a big-endian multi-page TIFF', async () => {
+    await expect(isMultiPageTiff(makeTiff(3, 'MM'))).resolves.toBe(true);
+  });
+
+  it('returns false for a single-page TIFF', async () => {
+    await expect(isMultiPageTiff(makeTiff(1))).resolves.toBe(false);
+  });
+
+  it('treats BigTIFF as a stack (conservative)', async () => {
+    await expect(isMultiPageTiff(makeTiff(1, 'II', true))).resolves.toBe(true);
+  });
+
+  it('returns false for non-TIFF bytes', async () => {
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]); // JPEG magic
+    const jpeg = new File([bytes], 'x.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(jpeg, 'slice', {
+      value: (start = 0, end = bytes.length) => {
+        const sub = bytes.slice(start, end);
+        return {
+          byteLength: sub.length,
+          arrayBuffer: async () => sub.buffer.slice(0),
+        };
+      },
+      configurable: true,
+    });
+    await expect(isMultiPageTiff(jpeg)).resolves.toBe(false);
+  });
+});
+
+describe('shouldRouteAsVideo', () => {
+  it('routes a small multi-page TIFF to the video pipeline', async () => {
+    // The exact Marika bug: a ~1 MB 2-channel frame slips under the size
+    // cap, so isVideoLikeUpload is false, but the IFD sniff catches it.
+    const frame = makeTiff(2);
+    expect(isVideoLikeUpload(frame)).toBe(false);
+    await expect(shouldRouteAsVideo(frame)).resolves.toBe(true);
+  });
+
+  it('keeps a single-page TIFF on the image route', async () => {
+    await expect(shouldRouteAsVideo(makeTiff(1))).resolves.toBe(false);
+  });
+
+  it('routes an ND2 by extension without sniffing', async () => {
+    const nd2 = new File(['x'], 'movie.nd2', {
+      type: 'application/octet-stream',
+    });
+    await expect(shouldRouteAsVideo(nd2)).resolves.toBe(true);
+  });
+
+  it('routes a large TIFF via the size heuristic', async () => {
+    const big = new File(['x'], 'big.tif', { type: 'image/tiff' });
+    Object.defineProperty(big, 'size', {
+      value: 21 * 1024 * 1024,
+      configurable: true,
+    });
+    await expect(shouldRouteAsVideo(big)).resolves.toBe(true);
+  });
+
+  it('leaves a plain image on the image route', async () => {
+    const jpg = new File(['x'], 'photo.jpg', { type: 'image/jpeg' });
+    await expect(shouldRouteAsVideo(jpg)).resolves.toBe(false);
   });
 });
 
