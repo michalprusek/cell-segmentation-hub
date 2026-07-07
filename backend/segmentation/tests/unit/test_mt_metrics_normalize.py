@@ -27,11 +27,36 @@ sys.path.insert(0, ROOT)
 from api.mt_metrics import (  # noqa: E402
     _normalize_axes_nd2,
     _normalize_axes_tiff,
+    _shift_frame,
 )
 
 
 def _mk(shape):
     return np.arange(int(np.prod(shape)), dtype=np.uint16).reshape(shape)
+
+
+def test_shift_frame_lossless_integer_translation():
+    # Channel-registration offsets are applied here at sampling time; the shift
+    # must be a lossless integer translation (retained pixels keep exact values,
+    # vacated border zero-filled) matching the extractor's shift_frame.
+    a = np.arange(40 * 40, dtype=np.uint16).reshape(40, 40)
+    assert np.array_equal(_shift_frame(a, 0, 0), a)  # identity
+    out = _shift_frame(a, 3, -2)  # down 3, left 2
+    assert np.array_equal(out[3:40, 0:38], a[0:37, 2:40])
+    assert (out[0:3, :] == 0).all()
+    assert (out[:, 38:40] == 0).all()
+
+
+def test_shift_frame_registration_offset_relocates_feature():
+    # A channel physically shifted by (sy, sx) carries a sidecar offset of
+    # (-sy, -sx); applying it must put the feature back where channel 0 has it,
+    # so metrics sample the microtubule (not the shifted-away background).
+    a = np.zeros((30, 30), np.uint16)
+    a[10, 5:25] = 5000  # feature (MT) at row 10
+    sy, sx = 4, -3
+    shifted = _shift_frame(a, sy, sx)  # feature displaced (as a raw channel is)
+    registered = _shift_frame(shifted, -sy, -sx)  # apply the sidecar offset
+    assert np.array_equal(registered[10, 5:25], a[10, 5:25])
 
 
 def test_tiff_cyx_is_single_timepoint_multichannel():
