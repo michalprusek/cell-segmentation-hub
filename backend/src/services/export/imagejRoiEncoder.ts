@@ -13,6 +13,8 @@
  *   6    ROI type (uint8): 0 = polygon, 5 = polyline  (on-disk codes)
  *   8    top / 10 left / 12 bottom / 14 right  (int16 integer bounding box)
  *   16   nCoordinates (int16)
+ *   34   stroke width (int16): 0 = unset; the line thickness (MT thickness in
+ *        px) so a re-opened polyline draws + measures as a band of that width
  *   40   stroke colour (uint32 ARGB): 0 = unset; set for per-track colouring
  *   50   options (int16): SUB_PIXEL_RESOLUTION (128) is always set here
  *   56   position (int32): 0 = unset; the 1-based stack slice for RoiSet.zip
@@ -20,8 +22,12 @@
  *   60   header2 offset (int32)
  *   64   integer coords: x[n] then y[n] (int16; x relative to left, y to top)
  *   64+4n  float32 x[n] (absolute), then float32 y[n]  ← authoritative geometry
- *   +HEADER2  header2 block (name offset/length live here)
+ *   +HEADER2  header2 block (name offset/length; +36 float32 stroke width)
  *   +name   ROI name as UTF-16BE code units
+ *
+ * Stroke width is stored twice, matching ImageJ's own RoiEncoder: an int16 at
+ * @34 for legacy readers and a float32 in header2 (+36) that modern ImageJ
+ * prefers when > 0. Both are written together so every reader version agrees.
  *
  * The sub-pixel float block preserves the true polyline geometry (tracking
  * works in float space); the legacy integer block is required by the format
@@ -56,7 +62,8 @@ const HEADER2_SIZE = 64;
 const ROI_TYPE_POLYGON = 0;
 const ROI_TYPE_POLYLINE = 5;
 
-// header field offsets used for the optional stroke colour + slice position.
+// header field offsets used for the optional stroke width, colour + position.
+const STROKE_WIDTH_OFFSET = 34;
 const STROKE_COLOR_OFFSET = 40;
 const POSITION_OFFSET = 56;
 
@@ -66,6 +73,7 @@ const SUB_PIXEL_RESOLUTION = 128;
 // header2 field offsets (relative to the header2 block start)
 const H2_NAME_OFFSET = 16;
 const H2_NAME_LENGTH = 20;
+const H2_FLOAT_STROKE_WIDTH = 36;
 
 /**
  * Write the low 16 bits of ``value`` as a big-endian short. Mirrors ImageJ's
@@ -90,6 +98,14 @@ export interface RoiEncodeOptions {
    * leave the ROI at ImageJ's default colour.
    */
   strokeColor?: number;
+  /**
+   * Line thickness in pixels (the microtubule "thickness" — the same band width
+   * used for intensity sampling). Written to both the int16 @34 and the header2
+   * float32 fields so ImageJ draws + measures the polyline as a band of this
+   * width. Omit / ≤0 / non-finite leaves both fields at 0 (ImageJ's default
+   * hairline), keeping the no-thickness byte layout unchanged.
+   */
+  strokeWidth?: number;
 }
 
 /**
@@ -161,6 +177,18 @@ export function encodeImageJRoi(
     // POSITION is an int32 slice index; truncate defensively so a fractional
     // value never reaches writeInt32BE (which would throw).
     buf.writeInt32BE(Math.trunc(options.position), POSITION_OFFSET);
+  }
+  // Optional stroke width (MT thickness). Written only for a finite positive
+  // value so the omitted / non-positive case leaves both fields 0 (golden-file
+  // safe). int16 for legacy readers, header2 float32 for modern ImageJ.
+  const strokeWidth = options?.strokeWidth;
+  if (
+    typeof strokeWidth === 'number' &&
+    Number.isFinite(strokeWidth) &&
+    strokeWidth > 0
+  ) {
+    putShort(buf, STROKE_WIDTH_OFFSET, Math.round(strokeWidth));
+    buf.writeFloatBE(strokeWidth, header2Offset + H2_FLOAT_STROKE_WIDTH);
   }
 
   // ---- Coordinates (64..) ----
@@ -345,8 +373,15 @@ export interface VideoRoiBuild {
  * Degradation matches the rest of the export: corrupt-JSON frames are counted
  * (surfaced as a warning by the caller), and polygons with too few / non-finite
  * points are dropped and counted.
+ *
+ * @param strokeWidth Optional line thickness (px) stamped as every ROI's stroke
+ *                    width — the microtubule thickness, uniform across the export
+ *                    (see `encodeImageJRoi`). Omit / ≤0 leaves ImageJ's default.
  */
-export function buildVideoRoiEntries(frames: RoiFrameInput[]): VideoRoiBuild {
+export function buildVideoRoiEntries(
+  frames: RoiFrameInput[],
+  strokeWidth?: number
+): VideoRoiBuild {
   const ordered = [...frames].sort(
     (a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0)
   );
@@ -412,6 +447,7 @@ export function buildVideoRoiEntries(frames: RoiFrameInput[]): VideoRoiBuild {
       const buffer = encodeImageJRoi(points, geometry, label, {
         position,
         strokeColor,
+        strokeWidth,
       });
       entries.push({ name: `${entryStem}.roi`, buffer });
       frameRois++;
@@ -476,13 +512,16 @@ async function writeRoiSetZip(
  * data — its caller treats a rejection as non-fatal — but a genuine
  * cancellation stays fatal.
  *
+ * @param options.strokeWidth Uniform microtubule thickness (px) stamped as each
+ *        ROI's stroke width, so re-opened polylines render/measure as a band of
+ *        that width. Omit / ≤0 leaves ImageJ's default hairline.
  * @returns Counts + non-fatal warnings for the caller to fold into job.warnings.
  */
 export async function exportImageJRoiSets(
   frameImages: RoiFrameInput[],
   exportDir: string,
   projectId: string,
-  options: { shouldAbort?: () => boolean } = {}
+  options: { shouldAbort?: () => boolean; strokeWidth?: number } = {}
 ): Promise<ImageJRoiExportResult> {
   const baseDir = path.join(exportDir, 'annotations', 'imagej');
 
@@ -519,7 +558,7 @@ export async function exportImageJRoiSets(
       throw new Error('Export cancelled by user');
     }
 
-    const build = buildVideoRoiEntries(videoFrames);
+    const build = buildVideoRoiEntries(videoFrames, options.strokeWidth);
     corruptFrames += build.corruptFrames;
     droppedPolygons += build.droppedPolygons;
     if (build.entries.length === 0) continue;

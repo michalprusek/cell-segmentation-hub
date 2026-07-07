@@ -51,7 +51,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 * json/ - Custom JSON format
 ${
   project.type === 'microtubules'
-    ? '* imagej/ - ImageJ/Fiji .roi files (one file per microtubule, grouped as <video>/frame_NNNN/, named by cross-frame trackId when tracking ran)\n'
+    ? '* imagej/ - ImageJ/Fiji ROIs, one <video>_RoiSet.zip per video (each microtubule polyline on its own stack slice, named by cross-frame trackId, coloured per track, drawn at the MT thickness)\n'
     : ''
 }* metrics/ - Calculated metrics
 * documentation/ - This folder
@@ -236,18 +236,22 @@ The JSON format preserves the full microtubule structure:
 ## ImageJ / Fiji ROIs (\`annotations/imagej/\`)
 
 Every microtubule export also bundles the polyline centerlines as native
-ImageJ \`.roi\` files, so you can re-open them in ImageJ / Fiji for manual
-re-measurement or line-based plugins. Files are loose (one \`.roi\` per
-microtubule), grouped as \`annotations/imagej/<video>/frame_NNNN/\`, and named
-by the cross-frame **trackId** when tracking ran (falling back to the
+ImageJ ROIs, so you can re-open them in ImageJ / Fiji for manual
+re-measurement or line-based plugins. They are packaged as **one
+\`<video>_RoiSet.zip\` per video** under \`annotations/imagej/\`, with each ROI
+named by the cross-frame **trackId** when tracking ran (falling back to the
 polyline's name/id otherwise) — so a tracked microtubule keeps the same ROI
 name in every frame.
 
+- Each ROI is placed on its own 1-based **stack slice** (its video frame) and
+  coloured per track, matching the editor.
+- Each polyline is drawn at the configured **MT thickness** (the "MT thickness
+  (px)" export setting, default 5) as its stroke width — so ImageJ renders and
+  measures each microtubule as a band of that width, not a hairline.
 - Geometry is stored with sub-pixel (float) precision, in image-pixel space.
-- To load a frame's ROIs: open the frame image in ImageJ and **drag the
-  frame's \`.roi\` files onto the ImageJ window** — this accepts multiple files
-  at once and adds them to the ROI Manager. (ImageJ's *ROI Manager ▸ More ▸
-  Open…* loads only a single \`.roi\`, or a single RoiSet \`.zip\`, at a time.)
+- To load a video's ROIs: **drag its \`<video>_RoiSet.zip\` onto the ImageJ
+  window**, or use *ROI Manager ▸ More ▸ Open…* and pick the \`.zip\` — either
+  loads every microtubule across all frames into the ROI Manager at once.
 
 ## Kymograph velocity metrics
 

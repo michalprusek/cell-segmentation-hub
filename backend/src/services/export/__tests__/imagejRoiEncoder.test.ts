@@ -63,6 +63,10 @@ interface DecodedRoi {
   position: number;
   /** ARGB stroke colour (@40, unsigned); 0 when unset. */
   strokeColor: number;
+  /** int16 stroke width (@34); 0 when unset. */
+  strokeWidth: number;
+  /** float32 stroke width from header2 (+36); 0 when unset. */
+  floatStrokeWidth: number;
   name: string;
 }
 
@@ -81,6 +85,7 @@ function decodeRoi(buf: Buffer): DecodedRoi {
     right: readShort(buf, 14),
   };
   const n = buf.readUInt16BE(16);
+  const strokeWidth = readShort(buf, 34);
   const strokeColor = buf.readUInt32BE(40);
   const options = buf.readUInt16BE(50);
   const subPixel = (options & 128) !== 0;
@@ -103,6 +108,7 @@ function decodeRoi(buf: Buffer): DecodedRoi {
   }
 
   const header2Offset = buf.readInt32BE(60);
+  const floatStrokeWidth = buf.readFloatBE(header2Offset + 36);
   const nameOffset = buf.readInt32BE(header2Offset + 16);
   const nameLength = buf.readInt32BE(header2Offset + 20);
   let name = '';
@@ -122,6 +128,8 @@ function decodeRoi(buf: Buffer): DecodedRoi {
     coords,
     position,
     strokeColor,
+    strokeWidth,
+    floatStrokeWidth,
     name,
   };
 }
@@ -340,6 +348,75 @@ describe('encodeImageJRoi', () => {
       )
     );
     expect(d.position).toBe(0);
+  });
+
+  it('writes the MT thickness to BOTH the int16 (@34) and header2 float32 fields', () => {
+    // ImageJ stores stroke width twice for reader compatibility; both must
+    // carry the thickness so the polyline draws as a band, not a hairline.
+    const d = decodeRoi(
+      encodeImageJRoi(
+        [
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+        ],
+        'polyline',
+        'mt',
+        { strokeWidth: 7 }
+      )
+    );
+    expect(d.strokeWidth).toBe(7);
+    expect(d.floatStrokeWidth).toBeCloseTo(7, 5);
+  });
+
+  it('leaves both stroke-width fields at 0 when thickness is omitted (byte back-compat)', () => {
+    const d = decodeRoi(
+      encodeImageJRoi(
+        [
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+        ],
+        'polyline',
+        'mt'
+      )
+    );
+    expect(d.strokeWidth).toBe(0);
+    expect(d.floatStrokeWidth).toBe(0);
+  });
+
+  it('rounds a fractional thickness for the int16 field but keeps the float exact', () => {
+    // thicknessPx is an integer in practice; this guards the rounding path so
+    // the legacy int16 and the authoritative float never disagree by surprise.
+    const d = decodeRoi(
+      encodeImageJRoi(
+        [
+          { x: 1, y: 1 },
+          { x: 2, y: 2 },
+        ],
+        'polyline',
+        'mt',
+        { strokeWidth: 3.6 }
+      )
+    );
+    expect(d.strokeWidth).toBe(4); // Math.round(3.6)
+    expect(d.floatStrokeWidth).toBeCloseTo(3.6, 5);
+  });
+
+  it('ignores a non-positive / non-finite thickness (stays unset)', () => {
+    for (const bad of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const d = decodeRoi(
+        encodeImageJRoi(
+          [
+            { x: 1, y: 1 },
+            { x: 2, y: 2 },
+          ],
+          'polyline',
+          'mt',
+          { strokeWidth: bad }
+        )
+      );
+      expect(d.strokeWidth).toBe(0);
+      expect(d.floatStrokeWidth).toBe(0);
+    }
   });
 
   it('throws when given fewer than the geometry minimum points', () => {
@@ -659,6 +736,58 @@ describe('buildVideoRoiEntries', () => {
       'roi_0002__frame_0000.roi',
     ]);
   });
+
+  it('stamps the given thickness as EVERY ROI stroke width', () => {
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              line('a', [
+                [1, 1],
+                [2, 2],
+              ]),
+              line('b', [
+                [3, 3],
+                [4, 4],
+              ]),
+            ]),
+          },
+        },
+      ],
+      6
+    );
+    expect(build.entries).toHaveLength(2);
+    for (const e of build.entries) {
+      const d = decodeRoi(e.buffer);
+      expect(d.strokeWidth).toBe(6);
+      expect(d.floatStrokeWidth).toBeCloseTo(6, 5);
+    }
+  });
+
+  it('leaves stroke width unset when no thickness is passed', () => {
+    const build = buildVideoRoiEntries([
+      {
+        id: 'f0',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('a', [
+              [1, 1],
+              [2, 2],
+            ]),
+          ]),
+        },
+      },
+    ]);
+    expect(decodeRoi(build.entries[0].buffer).strokeWidth).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -822,6 +951,34 @@ describe('exportImageJRoiSets', () => {
       ((0xff << 24) | (215 << 16) | (221 << 8) | 60) >>> 0
     );
     expect(roi.name).toBe('mt_42');
+  });
+
+  it('threads the MT thickness through to the zipped ROIs (stroke width survives deflate)', async () => {
+    const out = await mkTmp();
+    const frames: RoiFrameInput[] = [
+      { id: 'c1', name: 'v.nd2', isVideoContainer: true, segmentation: null },
+      {
+        id: 'f0',
+        name: 'v.nd2 (frame 1)',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('mt_1', [
+              [1, 1],
+              [2, 2],
+            ]),
+          ]),
+        },
+      },
+    ];
+    await exportImageJRoiSets(frames, out, 'proj', { strokeWidth: 8 });
+    const zip = await fs.readFile(
+      path.join(out, 'annotations', 'imagej', 'v_RoiSet.zip')
+    );
+    const roi = decodeRoi(zipExtract(zip, 'mt_1__frame_0000.roi'));
+    expect(roi.strokeWidth).toBe(8);
+    expect(roi.floatStrokeWidth).toBeCloseTo(8, 5);
   });
 
   it('skips a corrupt-JSON frame with a warning while exporting valid frames', async () => {
