@@ -205,9 +205,24 @@ async function readRegistrationOffsets(
   try {
     const raw = await fs.readFile(sidecarPath, 'utf-8');
     const parsed = JSON.parse(raw) as RegistrationSidecar;
-    return parsed.frames && typeof parsed.frames === 'object'
-      ? parsed.frames
-      : undefined;
+    if (!parsed?.frames || typeof parsed.frames !== 'object') {
+      return undefined;
+    }
+    // Reconstruct as validated integer offsets rather than forwarding the raw
+    // parsed file object into the outbound ML request. This (a) guards against a
+    // malformed / hand-edited sidecar (a bad entry degrades to [0, 0] = no
+    // shift) and (b) coerces every value through Number/Math.trunc so only
+    // sanitised integers — never raw file data — reach the network request.
+    const clean: Record<string, number[][]> = {};
+    for (const [frame, rows] of Object.entries(parsed.frames)) {
+      if (!/^\d+$/.test(frame) || !Array.isArray(rows)) continue;
+      clean[frame] = rows.map(o => {
+        const dy = Array.isArray(o) ? Math.trunc(Number(o[0])) : NaN;
+        const dx = Array.isArray(o) ? Math.trunc(Number(o[1])) : NaN;
+        return [Number.isFinite(dy) ? dy : 0, Number.isFinite(dx) ? dx : 0];
+      });
+    }
+    return Object.keys(clean).length > 0 ? clean : undefined;
   } catch {
     return undefined;
   }
