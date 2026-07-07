@@ -1195,7 +1195,8 @@ class ApiClient {
   async uploadVideo(
     projectId: string,
     file: File,
-    onProgress?: (progressPercent: number) => void
+    onProgress?: (progressPercent: number) => void,
+    registerChannels?: boolean
   ): Promise<{
     videoContainerId: string;
     frameCount: number;
@@ -1217,6 +1218,11 @@ class ApiClient {
           })
         : file;
     formData.append('video', payload);
+    // Opt-in multimodal channel registration (translation-only). The backend
+    // re-gates this to MT projects; sending the field is harmless otherwise.
+    if (registerChannels) {
+      formData.append('registerChannels', 'true');
+    }
 
     const response = await this.instance.post(
       `/projects/${projectId}/videos`,

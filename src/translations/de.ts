@@ -375,6 +375,10 @@ export default {
     viewResults: 'Ergebnisse anzeigen',
     dropImagesHere: 'Dateien hier ablegen...',
     selectProjectFirst: 'Bitte wählen Sie zuerst ein Projekt aus',
+    registerChannels: {
+      label: 'Kanäle registrieren (per Translation ausrichten)',
+      help: 'Korrigiert beim Hochladen kleine Verschiebungen zwischen Kanälen, indem jeder am ersten ausgerichtet wird (nur Translation).',
+    },
     projectRequired:
       'Sie müssen ein Projekt auswählen, bevor Sie Bilder hochladen können',
     pending: 'Ausstehend',

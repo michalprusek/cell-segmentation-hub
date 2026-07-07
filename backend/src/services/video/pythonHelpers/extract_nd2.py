@@ -35,6 +35,12 @@ from pathlib import Path
 
 import numpy as np
 
+from channel_registration import (
+    estimate_translation,
+    shift_frame,
+    write_registration_sidecar,
+)
+
 
 def _extract_workers() -> int:
     """Thread count for parallel PNG encoding. PIL's PNG save releases the GIL
@@ -404,7 +410,7 @@ def _save_position_tiff(arr_tcyx: np.ndarray, path: Path) -> None:
 
 
 def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
-                  on_frame=None) -> None:
+                  on_frame=None, register: bool = False) -> dict[int, list]:
     """Write one PNG per (frame, channel) under ``frames_root/<TTTT>/``.
 
     ``arr_tcyx`` is a dask OR numpy ``(T, C, Y, X)`` array. Frames are streamed
@@ -414,28 +420,50 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
     chunk's frames are materialised SEQUENTIALLY — one dask compute at a time,
     since the nd2-backed reader is not assumed thread-safe — then their PNGs are
     encoded in parallel. ``on_frame()`` is called once per written frame for
-    progress accounting. Output bytes are identical to a sequential write.
+    progress accounting.
+
+    When ``register`` is set and there is more than one channel, each channel
+    is aligned to **channel 0** of the same frame by an integer translation
+    (multimodal, per-frame — see ``channel_registration``) BEFORE the PNG is
+    written, so the stored frames overlay correctly. The shift is applied to a
+    fresh array (the source ``arr_tcyx`` is never mutated — a later
+    ``_save_position_tiff`` still archives the raw original). Returns
+    ``{frameIndex: [[dy, dx] per channel]}`` (all-zero when ``register`` is off)
+    for the caller to persist as a registration sidecar.
     """
     T = int(arr_tcyx.shape[0])
     C = int(arr_tcyx.shape[1])
+    do_register = register and C > 1
     workers = max(1, min(_extract_workers(), T))
     chunk = max(workers * 2, 4)
 
-    def _write_one(item) -> None:
+    def _write_one(item):
         t, frame_cyx = item
         frame_dir = frames_root / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
+        offset_row = [[0, 0] for _ in range(C)]
+        ref = frame_cyx[0] if do_register else None
         for c in range(C):
-            _save_png(frame_cyx[c], frame_dir / f"{channel_names[c]}.png")
+            plane = frame_cyx[c]
+            if do_register and c > 0:
+                dy, dx, _conf = estimate_translation(ref, plane)
+                if dy or dx:
+                    plane = shift_frame(plane, dy, dx)  # new array — no mutation
+                offset_row[c] = [dy, dx]
+            _save_png(plane, frame_dir / f"{channel_names[c]}.png")
+        return t, offset_row
 
+    offsets: dict[int, list] = {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for start in range(0, T, chunk):
             stop = min(start + chunk, T)
             # Sequential per-frame materialisation (read), parallel encode/write.
             batch = [(t, np.asarray(arr_tcyx[t])) for t in range(start, stop)]
-            for _ in pool.map(_write_one, batch):
+            for t, offset_row in pool.map(_write_one, batch):
+                offsets[t] = offset_row
                 if on_frame is not None:
                     on_frame()
+    return offsets
 
 
 def _progress(done: int, total: int) -> None:
@@ -445,11 +473,19 @@ def _progress(done: int, total: int) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) < 3:
-        print("usage: extract_nd2.py <src.nd2> <dest_dir>", file=sys.stderr)
+    argv = sys.argv[1:]
+    # Opt-in multimodal channel registration (translation-only); the backend
+    # passes this only when the user ticked it at upload for an MT project.
+    register = "--register-channels" in argv
+    positional = [a for a in argv if not a.startswith("--")]
+    if len(positional) < 2:
+        print(
+            "usage: extract_nd2.py <src.nd2> <dest_dir> [--register-channels]",
+            file=sys.stderr,
+        )
         return 2
-    src = Path(sys.argv[1])
-    dest = Path(sys.argv[2])
+    src = Path(positional[0])
+    dest = Path(positional[1])
     dest.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -517,7 +553,12 @@ def main() -> int:
                 nonlocal done
                 done += 1
                 _progress(done, T)
-            _write_frames(arr, dest / "frames", channel_names, on_frame=_tick)
+            offsets = _write_frames(
+                arr, dest / "frames", channel_names, on_frame=_tick,
+                register=register,
+            )
+            if register:
+                write_registration_sidecar(dest, channel_names, offsets)
 
             duration_ms = None
             frame_interval_ms = _median_interval_ms(timestamps)
@@ -579,11 +620,18 @@ def main() -> int:
                 nonlocal done
                 done += 1
                 _progress(done, total_writes)
-            _write_frames(norm, dest / subdir / "frames", channel_names,
-                          on_frame=_tick)
+            offsets = _write_frames(norm, dest / subdir / "frames",
+                                    channel_names, on_frame=_tick,
+                                    register=register)
+            if register:
+                write_registration_sidecar(
+                    dest / subdir, channel_names, offsets
+                )
 
             # Per-position single-position original the metrics reader can load
             # (the multi-position source ND2 can't be indexed by position).
+            # Saved from the RAW `norm` (registration never mutated it), so the
+            # archived original stays un-registered; sampling applies the offset.
             _save_position_tiff(norm, dest / subdir / "original.tif")
 
             frame_interval_ms = _position_interval_ms(

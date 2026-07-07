@@ -265,6 +265,43 @@ def test_write_frames_single_frame_and_workers():
     assert _extract_workers() >= 1
 
 
+def test_write_frames_registers_channels_to_first():
+    # register=True aligns each channel to channel 0. Build a 2-channel frame
+    # where channel 1 is channel 0 shifted by a known amount; registration must
+    # undo it, report the offset, and still write both PNGs.
+    from channel_registration import shift_frame
+
+    rng = np.random.RandomState(0)
+    ref = (rng.rand(96, 96) * 400).astype(np.uint16)
+    for k in range(5):  # bright streaks give phase correlation edges to lock on
+        ref[10 + k * 16, 8:88] = 9000
+    ch1 = shift_frame(ref, 5, -3)
+    arr = np.stack([np.stack([ref, ch1])])  # (T=1, C=2, Y, X)
+    d = Path(tempfile.mkdtemp())
+    offsets = _write_frames(arr, d, ["c0", "c1"], register=True)
+    assert offsets[0][0] == [0, 0]  # reference never moves
+    assert offsets[0][1] == [-5, 3]  # inverse of the injected shift
+    assert (d / "0000" / "c0.png").exists()
+    assert (d / "0000" / "c1.png").exists()
+
+
+def test_write_frames_register_off_is_untouched():
+    # register=False (default) must leave frames byte-for-byte raw — the
+    # feature is strictly opt-in, no accidental shift for existing uploads.
+    from PIL import Image
+
+    ref = np.full((32, 32), 500, np.uint16)
+    ref[10, 5:25] = 9000
+    ch1 = np.full((32, 32), 500, np.uint16)
+    ch1[10, 8:28] = 9000
+    arr = np.stack([np.stack([ref, ch1])])
+    d = Path(tempfile.mkdtemp())
+    offsets = _write_frames(arr, d, ["c0", "c1"], register=False)
+    assert offsets[0] == [[0, 0], [0, 0]]
+    got = np.asarray(Image.open(d / "0000" / "c1.png"))
+    assert np.array_equal(got, ch1)  # written unchanged
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
