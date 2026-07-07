@@ -4,22 +4,24 @@
 
 import UPLOAD_CONFIG from './uploadConfig';
 import { sleep } from './retryUtils';
+import { logger } from './logger';
 
 const TRUE_VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.nd2'];
 
 const MULTI_PAGE_TIFF_EXTENSIONS = ['.tif', '.tiff'];
 
-// SSOT for "is this upload a video / microscopy stack". A bare extension
-// check was duplicated in DropZone + UploadContext; both must agree on
-// the routing (image multer caps at 20 MB, video multer at 100 GB), so
-// any drift between the two manifests as "small TIFF fails to upload"
-// or "large TIFF silently rejected client-side".
+// Synchronous "is this obviously a video / microscopy stack" check, used
+// by DropZone for its size-budget decision (image multer caps at 20 MB,
+// video multer at 100 GB). Multi-page TIFFs share the .tif extension with
+// single-page stills, so the only cheap sync signal is size: a .tif over
+// the image cap is assumed to be a stack.
 //
-// Multi-page TIFFs are extension-ambiguous with single-page TIFFs (same
-// .tif extension), so the heuristic is size-based: anything over the
-// image cap is assumed to be a multi-page stack and routed through the
-// video pipeline (`tifffile`-driven extractor on the backend). This
-// keeps single-image TIFF uploads (< 20 MB) on the bulk image route.
+// This is NOT the full routing decision — UploadContext routes via the
+// async `shouldRouteAsVideo` below, which additionally sniffs the IFD
+// chain so a *small* multi-page TIFF still reaches the extractor. The two
+// intentionally differ: a small multi-page TIFF is under the image budget
+// (so DropZone accepts it) yet is routed to /videos by UploadContext, so
+// the divergence never rejects a file that should upload.
 export function isVideoLikeUpload(file: File): boolean {
   if (file.type.startsWith('video/')) return true;
   const lower = file.name.toLowerCase();
@@ -48,11 +50,14 @@ function hasTiffExtension(file: File): boolean {
  * `isVideoLikeUpload` alone would misroute it to the single-image Sharp
  * path (which reads only page 0 and renders 16-bit data near-black).
  *
- * Reads only a few bytes per IFD via `Blob.slice`, so it stays cheap
- * even for the largest classic TIFF. Ambiguity resolves conservatively:
+ * Only needs to confirm a 2nd IFD exists, so it returns as soon as the
+ * chain advances once — reading just the 8-byte header plus the first
+ * IFD's count + next-offset field (~14 bytes) via `Blob.slice`, cheap
+ * regardless of file size. Ambiguity resolves conservatively:
  *  - BigTIFF (magic 43): always a stack in practice → multi-page.
  *  - non-TIFF / unreadable header / no Blob API → `false` (fall back to
- *    the size heuristic).
+ *    the size heuristic). Note a corrupt/truncated stack can also land
+ *    here; the log below makes a systematic misroute diagnosable.
  */
 export async function isMultiPageTiff(file: File): Promise<boolean> {
   try {
@@ -66,8 +71,10 @@ export async function isMultiPageTiff(file: File): Promise<boolean> {
     if (magic === 43) return true; // BigTIFF → always a stack
     if (magic !== 42) return false; // not a classic TIFF
     let ifdOffset = head.getUint32(4, le);
-    // Walk the IFD chain; the existence of a 2nd IFD is all we need.
-    // Cap the walk to guard against a malformed self-referential chain.
+    // We only need the existence of a 2nd IFD, so we return the moment the
+    // chain advances once (`seen >= 1`). That early return also neutralises
+    // a malformed self-referential chain; the `seen < 4` bound is a
+    // belt-and-suspenders stop that the early return makes unreachable.
     for (let seen = 0; ifdOffset !== 0 && seen < 4; seen++) {
       if (seen >= 1) return true; // reached a 2nd IFD → multi-page
       const cntBuf = await file.slice(ifdOffset, ifdOffset + 2).arrayBuffer();
@@ -80,7 +87,15 @@ export async function isMultiPageTiff(file: File): Promise<boolean> {
       ifdOffset = new DataView(nextBuf).getUint32(0, le);
     }
     return false;
-  } catch {
+  } catch (err) {
+    // A read error / offset throw falls back to the single-image route.
+    // Log it so a systematic misroute (a real stack silently rendering
+    // near-black — the exact bug this sniff fixes) is diagnosable rather
+    // than invisible.
+    logger.debug(
+      `[uploadUtils] TIFF IFD sniff failed for "${file.name}"; treating as single-page`,
+      err
+    );
     return false;
   }
 }

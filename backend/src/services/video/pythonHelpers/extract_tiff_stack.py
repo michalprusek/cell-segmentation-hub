@@ -58,7 +58,11 @@ def _imagej_channel_labels(tf, count: int) -> list[str | None]:
         # ImageJ often writes per-slice labels (one per T×C); the first
         # C entries are the channel names for the first time-point.
         return [labels[i] if isinstance(labels[i], str) else None for i in range(count)]
-    except Exception:
+    except Exception as exc:
+        # Match the file's convention: every metadata parser emits a one-line
+        # stderr diagnostic before degrading, so a genuine parse bug isn't
+        # indistinguishable from "no labels present".
+        sys.stderr.write(f"ImageJ channel-label parse failed: {exc}\n")
         return [None] * count
 
 
@@ -137,8 +141,12 @@ def _resolve_channel_names(tf, count: int) -> list[str | None]:
             return split
         if _all_distinct(labels):
             return labels
-    except Exception:
-        pass
+    except Exception as exc:
+        # A regex/type/index bug in the helpers above would otherwise be
+        # indistinguishable from "no metadata" and silently collapse every
+        # channel to wavelengthNm=null → all typed IRM (wrong segmentation
+        # source). Surface it like the other parsers in this file.
+        sys.stderr.write(f"channel-name resolution failed: {exc}\n")
     return [None] * count
 
 
@@ -152,10 +160,17 @@ def _wavelength_from_name(name: str | None) -> int | None:
     ``"WD_LED_IRM"`` that carry no wavelength token."""
     if not isinstance(name, str):
         return None
-    for tok in re.findall(r"\d{3,4}", name):
-        v = int(tok)
-        if 350 <= v <= 900:
-            return v
+    for m in re.finditer(r"\d{3,4}", name):
+        v = int(m.group())
+        if not (350 <= v <= 900):
+            continue
+        # Reject an exposure-time token like ``"IRM_500ms"`` — a digit run
+        # immediately followed by ``ms`` is a duration, not an emission λ,
+        # and would otherwise mis-type a label-free channel as fluorescent.
+        # ``"491nm"`` (n) and a bare ``"491"`` still count.
+        if name[m.end() : m.end() + 2].lower() == "ms":
+            continue
+        return v
     return None
 
 

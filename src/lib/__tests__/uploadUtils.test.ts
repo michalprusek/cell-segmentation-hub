@@ -266,10 +266,14 @@ describe('formatFileSize', () => {
 const makeTiff = (
   pages: number,
   endian: 'II' | 'MM' = 'II',
-  bigTiff = false
+  bigTiff = false,
+  entries = 0
 ): File => {
   const le = endian === 'II';
-  const IFD_SIZE = 6; // 2 (count=0) + 4 (next offset)
+  // Each IFD: 2-byte count + entries*12-byte entry block + 4-byte next offset.
+  // A real TIFF page always has entries (8–15 tags); the `entries` param
+  // exercises the `ifdOffset + 2 + entryCount*12` arithmetic in the sniff.
+  const IFD_SIZE = 2 + entries * 12 + 4;
   const buf = new ArrayBuffer(8 + pages * IFD_SIZE);
   const dv = new DataView(buf);
   dv.setUint8(0, endian.charCodeAt(0));
@@ -278,8 +282,14 @@ const makeTiff = (
   dv.setUint32(4, 8, le); // first IFD immediately after the header
   for (let p = 0; p < pages; p++) {
     const off = 8 + p * IFD_SIZE;
-    dv.setUint16(off, 0, le); // entry count = 0
-    dv.setUint32(off + 2, p < pages - 1 ? off + IFD_SIZE : 0, le); // next IFD
+    dv.setUint16(off, entries, le); // entry count
+    // Fill the entry block with non-zero bytes: if the sniff's `*12` offset
+    // math were wrong it would read HERE (a non-zero "next offset") instead
+    // of the real next-IFD field after the block, so a single page would be
+    // misreported as multi-page. The real next-IFD field follows the block.
+    for (let b = 0; b < entries * 12; b++) dv.setUint8(off + 2 + b, 0xab);
+    const nextOff = off + 2 + entries * 12;
+    dv.setUint32(nextOff, p < pages - 1 ? off + IFD_SIZE : 0, le); // next IFD
   }
   const bytes = new Uint8Array(buf);
   const f = new File([bytes], 'stack.tif', { type: 'image/tiff' });
@@ -314,6 +324,27 @@ describe('isMultiPageTiff', () => {
 
   it('returns false for a single-page TIFF', async () => {
     await expect(isMultiPageTiff(makeTiff(1))).resolves.toBe(false);
+  });
+
+  it('returns false for a single-page TIFF with real IFD entries', async () => {
+    // A real still has 8+ tags; this exercises the entryCount*12 offset math.
+    // If that arithmetic were wrong, the sniff would read the 0xab entry
+    // bytes as a non-zero next-IFD offset and wrongly report multi-page.
+    await expect(isMultiPageTiff(makeTiff(1, 'II', false, 8))).resolves.toBe(
+      false
+    );
+    await expect(isMultiPageTiff(makeTiff(1, 'MM', false, 12))).resolves.toBe(
+      false
+    );
+  });
+
+  it('returns true for a multi-page TIFF with real IFD entries', async () => {
+    await expect(isMultiPageTiff(makeTiff(2, 'II', false, 10))).resolves.toBe(
+      true
+    );
+    await expect(isMultiPageTiff(makeTiff(3, 'MM', false, 10))).resolves.toBe(
+      true
+    );
   });
 
   it('treats BigTIFF as a stack (conservative)', async () => {
