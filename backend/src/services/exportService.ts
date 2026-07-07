@@ -52,6 +52,14 @@ import { exportImageJRoiSets } from './export/imagejRoiEncoder';
 
 const YOLO_WRITE_CONCURRENCY = 16;
 
+/**
+ * Default microtubule thickness (px) written as the ImageJ ROI stroke width when
+ * the export request carries no `mtMetrics.thicknessPx` (the ROI export is
+ * always-on for MT projects, but the MT-metrics block is optional). Matches the
+ * export dialog's own thickness-slider default so the two never disagree.
+ */
+const DEFAULT_MT_ROI_THICKNESS_PX = 5;
+
 export interface ExportOptions {
   includeOriginalImages?: boolean;
   includeVisualizations?: boolean;
@@ -642,7 +650,18 @@ export class ExportService {
             project.images as ImageWithSegmentation[],
             exportDir,
             project.id,
-            { shouldAbort: () => this.isJobCancelled(jobId) }
+            {
+              shouldAbort: () => this.isJobCancelled(jobId),
+              // MT thickness (px) → ImageJ ROI stroke width, so re-opened
+              // polylines draw + measure as a band of the sampled width. The
+              // ROI export is always-on but `mtMetrics` is optional, so fall
+              // back to the same default the metrics thickness slider uses (5).
+              strokeWidth:
+                options.mtMetrics?.thicknessPx &&
+                options.mtMetrics.thicknessPx > 0
+                  ? options.mtMetrics.thicknessPx
+                  : DEFAULT_MT_ROI_THICKNESS_PX,
+            }
           )
             .then(result => {
               if (result.warnings.length) {
