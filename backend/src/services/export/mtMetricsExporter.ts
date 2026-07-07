@@ -101,6 +101,17 @@ interface MLMTMetricsRequest {
   frames: FramePayload[];
   thickness_px: number;
   margin_multiplier: number;
+  /** Per-frame per-channel translation applied at extraction (channel
+   *  registration). Keyed by frame index; each value is `[dy, dx]` per C-axis
+   *  channel index. Omitted for unregistered uploads. */
+  channel_offsets?: Record<string, number[][]>;
+}
+
+/** On-disk shape of the `registration.json` sidecar written by the extractors
+ *  when channel registration ran. */
+interface RegistrationSidecar {
+  channels: string[];
+  frames: Record<string, number[][]>;
 }
 
 interface MLMTMetricsResponseRow {
@@ -173,6 +184,48 @@ function detectFileKind(mimeType: string | null, originalPath: string): 'nd2' | 
   if (mimeType?.toLowerCase().includes('nd2')) return 'nd2';
   if (mimeType?.toLowerCase().includes('tiff')) return 'tiff';
   return null;
+}
+
+/**
+ * Read the per-frame channel-registration offsets that sit next to the original
+ * file (``registration.json``), written by the extractor when the user enabled
+ * channel registration at upload. Returns the ``frameIndex -> [[dy, dx], ...]``
+ * map (offsets indexed by C-axis channel index), or ``undefined`` when the
+ * sidecar is absent/unreadable — in which case the ML endpoint samples the raw
+ * file unchanged (legacy / unregistered uploads). The sidecar lives in the same
+ * directory as the original (both the single- and per-position ND2 layouts).
+ */
+async function readRegistrationOffsets(
+  originalAbsPath: string
+): Promise<Record<string, number[][]> | undefined> {
+  const sidecarPath = path.join(
+    path.dirname(originalAbsPath),
+    'registration.json'
+  );
+  try {
+    const raw = await fs.readFile(sidecarPath, 'utf-8');
+    const parsed = JSON.parse(raw) as RegistrationSidecar;
+    if (!parsed?.frames || typeof parsed.frames !== 'object') {
+      return undefined;
+    }
+    // Reconstruct as validated integer offsets rather than forwarding the raw
+    // parsed file object into the outbound ML request. This (a) guards against a
+    // malformed / hand-edited sidecar (a bad entry degrades to [0, 0] = no
+    // shift) and (b) coerces every value through Number/Math.trunc so only
+    // sanitised integers — never raw file data — reach the network request.
+    const clean: Record<string, number[][]> = {};
+    for (const [frame, rows] of Object.entries(parsed.frames)) {
+      if (!/^\d+$/.test(frame) || !Array.isArray(rows)) continue;
+      clean[frame] = rows.map(o => {
+        const dy = Array.isArray(o) ? Math.trunc(Number(o[0])) : NaN;
+        const dx = Array.isArray(o) ? Math.trunc(Number(o[1])) : NaN;
+        return [Number.isFinite(dy) ? dy : 0, Number.isFinite(dx) ? dx : 0];
+      });
+    }
+    return Object.keys(clean).length > 0 ? clean : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function resolveChannelIndices(
@@ -393,6 +446,11 @@ export async function computeMTMetrics(
       container.originalPath
     );
 
+    // If channel registration ran at upload, sample each channel in the
+    // registered (channel-0) space the polylines live in — otherwise a shifted
+    // channel's intensity would be read at the wrong pixels.
+    const channelOffsets = await readRegistrationOffsets(absoluteOriginalPath);
+
     const body: MLMTMetricsRequest = {
       original_path: absoluteOriginalPath,
       file_kind: fileKind,
@@ -401,6 +459,7 @@ export async function computeMTMetrics(
       frames: framesPayload,
       thickness_px: options.thicknessPx,
       margin_multiplier: options.marginMultiplier,
+      channel_offsets: channelOffsets,
     };
 
     logger.info(

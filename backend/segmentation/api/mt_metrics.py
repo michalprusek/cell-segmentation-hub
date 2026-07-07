@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
@@ -96,6 +96,14 @@ class MTMetricsRequest(BaseModel):
     frames: List[MTFrameInput]
     thickness_px: int = Field(5, ge=1, le=100)
     margin_multiplier: float = Field(2.0, ge=0.0, le=10.0)
+    # Per-frame per-channel translation applied at extraction (channel
+    # registration). Keyed by frame_index (string) -> [[dy, dx], ...] aligned to
+    # the FULL C-axis channel order (so index by C-axis channel index). Present
+    # only for registered uploads; when set, each channel's frame is shifted by
+    # its offset before sampling so intensity is read in the registered
+    # (channel-0) space that the polylines live in. None = sample the raw file
+    # unchanged (legacy / unregistered uploads).
+    channel_offsets: Optional[Dict[str, List[List[int]]]] = None
 
 
 class MTMetricsRow(BaseModel):
@@ -297,6 +305,27 @@ def _load_volume(path: Path, file_kind: str) -> np.ndarray:
     )
 
 
+def _shift_frame(arr: np.ndarray, dy: int, dx: int) -> np.ndarray:
+    """Integer translation with a zero-filled border (lossless — no interp).
+
+    Mirrors ``channel_registration.shift_frame`` in the backend extractor so a
+    sampled channel lands in the exact same registered space as the stored
+    frames. ``dy > 0`` moves content down, ``dx > 0`` right — the same shift the
+    extractor applied when it wrote the registered PNGs.
+    """
+    if dy == 0 and dx == 0:
+        return arr
+    out = np.zeros_like(arr)
+    h, w = arr.shape[:2]
+    src_y0, src_y1 = max(0, -dy), h - max(0, dy)
+    dst_y0, dst_y1 = max(0, dy), h - max(0, -dy)
+    src_x0, src_x1 = max(0, -dx), w - max(0, dx)
+    dst_x0, dst_x1 = max(0, dx), w - max(0, -dx)
+    if src_y1 > src_y0 and src_x1 > src_x0:
+        out[dst_y0:dst_y1, dst_x0:dst_x1] = arr[src_y0:src_y1, src_x0:src_x1]
+    return out
+
+
 # ----------------------------------------------------------------------------
 #  Endpoint
 # ----------------------------------------------------------------------------
@@ -383,11 +412,23 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
         background_mask = signal_dilated == 0
 
         # 4. Per-channel computations.
+        # Per-frame registration offsets (channel-registration at upload), one
+        # [dy, dx] per C-axis channel index. None when the upload wasn't
+        # registered — then channels are sampled from the raw file unchanged.
+        frame_offsets = (req.channel_offsets or {}).get(str(t))
         for ci_idx, ci in enumerate(req.channel_indices):
             channel_name = req.channel_names[ci_idx]
+            raw = volume[t, ci]
+            # Shift the raw channel into the registered (channel-0) space the
+            # polylines live in, so intensity is sampled where the microtubule
+            # actually is in this channel. Channel 0 / no-offset is a no-op.
+            if frame_offsets is not None and ci < len(frame_offsets):
+                off_dy, off_dx = frame_offsets[ci]
+                if off_dy or off_dx:
+                    raw = _shift_frame(raw, int(off_dy), int(off_dx))
             # Cast to float64 once per channel so all reductions are in
             # consistent precision without upcasting every pixel slice.
-            frame_arr = volume[t, ci].astype(np.float64)
+            frame_arr = raw.astype(np.float64)
 
             bg_pixels = frame_arr[background_mask]
             has_bg = bg_pixels.size > 0
