@@ -777,8 +777,19 @@ const SegmentationEditor = () => {
   // (kymograph modal + key bindings) read from the same source.
   // useVideoFrames(null) short-circuits internally via `enabled: !!id`.
   const video = useVideoFrames(videoContainerId);
+  // A container is in video / multi-channel mode when it has more than one
+  // frame (the classic time-lapse) OR any channels to composite. The
+  // channel clause is load-bearing for SINGLE-FRAME multi-channel stacks
+  // (e.g. a 2-channel IRM+TIRF frame extracted from a 1-timepoint TIFF):
+  // without it, frameCount === 1 fell through to the plain <img> path,
+  // which naively 8-bit-downcasts the 16-bit frame PNG and renders
+  // low-signal channels near-black — the "frame not showing any image"
+  // report. Any video container has ≥1 channel, so this also routes a
+  // single-channel single frame through the auto-scaling canvas.
   const isVideoMode =
-    !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
+    !!videoContainerId &&
+    ((video.container?.frameCount ?? 0) > 1 ||
+      (video.container?.channels?.length ?? 0) > 0);
 
   // ───────────────── Resegment chain ─────────────────
   // Lives HERE (after `const video = useVideoFrames`) to avoid the TDZ that

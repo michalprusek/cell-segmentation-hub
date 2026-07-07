@@ -159,6 +159,65 @@ describe('PolygonListPanel', () => {
     });
   });
 
+  describe('Bulk visibility toggle', () => {
+    const three = () => [
+      makePolygon({ id: 'p1' }),
+      makePolygon({ id: 'p2' }),
+      makePolygon({ id: 'p3' }),
+    ];
+
+    it('hides every polygon when none is hidden ("Hide all")', () => {
+      const onToggle = vi.fn();
+      render(
+        <PolygonListPanel
+          {...DEFAULT_PROPS}
+          polygons={three()}
+          onTogglePolygonVisibility={onToggle}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /hide all/i }));
+      expect(onToggle.mock.calls.map(c => c[0]).sort()).toEqual([
+        'p1',
+        'p2',
+        'p3',
+      ]);
+    });
+
+    it('toggles only the still-visible polygons from a mixed state', () => {
+      const onToggle = vi.fn();
+      render(
+        <PolygonListPanel
+          {...DEFAULT_PROPS}
+          polygons={three()}
+          hiddenPolygonIds={new Set(['p2'])}
+          onTogglePolygonVisibility={onToggle}
+        />
+      );
+      // Not all hidden → "Hide all"; the already-hidden p2 must NOT flip back.
+      fireEvent.click(screen.getByRole('button', { name: /hide all/i }));
+      expect(onToggle.mock.calls.map(c => c[0]).sort()).toEqual(['p1', 'p3']);
+      expect(onToggle).not.toHaveBeenCalledWith('p2');
+    });
+
+    it('un-hides everything when all are hidden ("Show all")', () => {
+      const onToggle = vi.fn();
+      render(
+        <PolygonListPanel
+          {...DEFAULT_PROPS}
+          polygons={three()}
+          hiddenPolygonIds={new Set(['p1', 'p2', 'p3'])}
+          onTogglePolygonVisibility={onToggle}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /show all/i }));
+      expect(onToggle.mock.calls.map(c => c[0]).sort()).toEqual([
+        'p1',
+        'p2',
+        'p3',
+      ]);
+    });
+  });
+
   describe('Delete callback', () => {
     it('calls onDeletePolygon when delete menu item is clicked', async () => {
       const user = userEvent.setup();

@@ -26,7 +26,7 @@ export default function ChannelsSection({
   if (!channels || channels.length === 0) return null;
 
   return (
-    <div className="w-full bg-white dark:bg-gray-800 border-l border-b border-gray-200 dark:border-gray-700">
+    <div className="w-full shrink-0 bg-white dark:bg-gray-800 border-l border-b border-gray-200 dark:border-gray-700">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
           {t('editor.channelSwitcher.title')}
