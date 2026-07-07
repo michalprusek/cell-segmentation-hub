@@ -291,9 +291,19 @@ export async function uploadVideoFromFile(options: {
   mimeType: string;
   tempFilePath: string;
   onProgress?: VideoProgressCallback;
+  /** Opt-in multimodal channel registration at extraction (MT projects only —
+   *  the controller only sets this when the user ticked it and the project is
+   *  a microtubule project). Passed through to the extractor. */
+  registerChannels?: boolean;
 }): Promise<VideoUploadResult> {
-  const { projectId, originalName, mimeType, tempFilePath, onProgress } =
-    options;
+  const {
+    projectId,
+    originalName,
+    mimeType,
+    tempFilePath,
+    onProgress,
+    registerChannels,
+  } = options;
 
   // 1. Create container DB row up front so the worker has a stable ID.
   const fileStat = await fs.stat(tempFilePath);
@@ -379,6 +389,7 @@ export async function uploadVideoFromFile(options: {
           0.1 + p.progress * 0.7,
           p.message ?? `Frame ${p.currentFrame ?? '?'}`
         ),
+      registerChannels,
     });
 
     // 4a. Single-position / ordinary video: finalize the pre-created row.

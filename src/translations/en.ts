@@ -372,6 +372,10 @@ export default {
     viewResults: 'View Results',
     dropImagesHere: 'Drop the files here...',
     selectProjectFirst: 'Please select a project first',
+    registerChannels: {
+      label: 'Register channels (align by translation)',
+      help: 'Correct small shifts between channels at upload by aligning each to the first (translation only).',
+    },
     projectRequired: 'You must select a project before you can upload images',
     pending: 'Pending',
     uploading: 'Uploading',

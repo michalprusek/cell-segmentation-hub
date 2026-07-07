@@ -168,11 +168,14 @@ function buildChannelMeta(
 export async function extractTiffStack(
   sourcePath: string,
   destDir: string,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  registerChannels = false
 ): Promise<ExtractionResult> {
   const result = await runHelper(
     'extract_tiff_stack.py',
-    [sourcePath, destDir],
+    registerChannels
+      ? [sourcePath, destDir, '--register-channels']
+      : [sourcePath, destDir],
     onProgress
   );
   const channels = buildChannelMeta(result.channels, true);
@@ -210,11 +213,14 @@ function toExtractionResult(r: PythonResult): ExtractionResult {
 export async function extractNd2(
   sourcePath: string,
   destDir: string,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  registerChannels = false
 ): Promise<ExtractionOutcome> {
   const raw = await runHelper<PythonNd2Result>(
     'extract_nd2.py',
-    [sourcePath, destDir],
+    registerChannels
+      ? [sourcePath, destDir, '--register-channels']
+      : [sourcePath, destDir],
     onProgress
   );
 

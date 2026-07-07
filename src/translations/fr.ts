@@ -370,6 +370,10 @@ export default {
     viewResults: 'Voir les résultats',
     dropImagesHere: 'Déposez les fichiers ici...',
     selectProjectFirst: "Veuillez d'abord sélectionner un projet",
+    registerChannels: {
+      label: 'Recaler les canaux (alignement par translation)',
+      help: 'Corrige les petits décalages entre canaux au téléversement en alignant chacun sur le premier (translation uniquement).',
+    },
     projectRequired:
       'Vous devez sélectionner un projet avant de pouvoir télécharger des images',
     pending: 'En attente',

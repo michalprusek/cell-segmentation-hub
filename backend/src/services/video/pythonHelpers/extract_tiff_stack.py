@@ -26,6 +26,12 @@ from pathlib import Path
 
 import numpy as np
 
+from channel_registration import (
+    estimate_translation,
+    shift_frame,
+    write_registration_sidecar,
+)
+
 
 def _sanitize_name(raw: str | None, fallback: str) -> str:
     """Reduce to alnum + underscore + dash so the name is filesystem-safe
@@ -545,11 +551,20 @@ def _detect_frame_interval_ms(tf) -> float | None:
 
 
 def main() -> int:
-    if len(sys.argv) < 3:
-        print("usage: extract_tiff_stack.py <src.tif> <dest_dir>", file=sys.stderr)
+    argv = sys.argv[1:]
+    # Opt-in multimodal channel registration (translation-only); the backend
+    # passes this only when the user ticked it at upload for an MT project.
+    register = "--register-channels" in argv
+    positional = [a for a in argv if not a.startswith("--")]
+    if len(positional) < 2:
+        print(
+            "usage: extract_tiff_stack.py <src.tif> <dest_dir> "
+            "[--register-channels]",
+            file=sys.stderr,
+        )
         return 2
-    src = Path(sys.argv[1])
-    dest = Path(sys.argv[2])
+    src = Path(positional[0])
+    dest = Path(positional[1])
     dest.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -648,14 +663,31 @@ def main() -> int:
         channel_names.append(_sanitize_name(raw, f"Channel_{i + 1}"))
         wavelengths.append(_wavelength_from_name(raw))
 
+    # Opt-in: align each channel to channel 0 per frame (multimodal, integer
+    # translation — see channel_registration). Applied to a fresh array so the
+    # source ``arr`` is never mutated; offsets are recorded for the sidecar.
+    do_register = register and C > 1
+    offsets: dict[int, list] = {}
     for t in range(T):
         frame_dir = dest / "frames" / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
+        offset_row = [[0, 0] for _ in range(C)]
+        ref = arr[t, 0] if do_register else None
         for c in range(C):
-            _save_png(arr[t, c], frame_dir / f"{channel_names[c]}.png")
+            plane = arr[t, c]
+            if do_register and c > 0:
+                dy, dx, _conf = estimate_translation(ref, plane)
+                if dy or dx:
+                    plane = shift_frame(plane, dy, dx)  # new array — no mutation
+                offset_row[c] = [dy, dx]
+            _save_png(plane, frame_dir / f"{channel_names[c]}.png")
+        offsets[t] = offset_row
         if t % 5 == 0 or t == T - 1:
             sys.stdout.write(f"PROGRESS {(t + 1) / T:.4f}\n")
             sys.stdout.flush()
+
+    if register:
+        write_registration_sidecar(dest, channel_names, offsets)
 
     # Approximate duration from the (constant) frame interval when we
     # have it. TIFFs don't carry per-frame timestamps, so this is an
