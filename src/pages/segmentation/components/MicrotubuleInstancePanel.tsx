@@ -79,7 +79,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
+    <div className="shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
       <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
           <Spline className="h-4 w-4" />

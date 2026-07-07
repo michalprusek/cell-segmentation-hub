@@ -33,9 +33,14 @@ sys.path.insert(0, HELPERS_DIR)
 sys.modules.setdefault("tifffile", MagicMock())
 
 from extract_tiff_stack import (  # noqa: E402
+    _all_distinct,
     _detect_frame_interval_ms,
     _imagej_label_to_seconds,
     _median_interval_ms,
+    _metamorph_wave_names,
+    _resolve_channel_names,
+    _split_shared_label,
+    _wavelength_from_name,
 )
 
 
@@ -224,3 +229,129 @@ def test_malformed_ome_does_not_raise(capsys):
 def test_empty_metadata_returns_none():
     assert _detect_frame_interval_ms(_tf()) is None
     assert _detect_frame_interval_ms(_tf(ij={})) is None
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Channel-name resolution — _wavelength_from_name / _split_shared_label /
+# _metamorph_wave_names / _all_distinct / _resolve_channel_names.
+# These feed wavelengthNm → isIrmChannel (channel typing + segmentation
+# source). A regression silently reverts the "every channel looks the
+# same" fix. See memory project_tiff_channel_naming_bug. Order-sensitive:
+# _resolve_channel_names tries WaveNameN → shared-label split → distinct
+# Labels → all-None; the priority test below pins that contract.
+# ─────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("TIRF_491", 491),
+        ("w2-561", 561),
+        ("GFP488", 488),
+        ("Cy5_670", 670),
+        ("491nm", 491),
+        ("WD_LED_IRM", None),  # label-free, no wavelength token
+        ("DAPI", None),
+        ("IRM_500ms", None),  # exposure time — not an emission wavelength
+        ("channel_1200", None),  # out of the 350–900 nm band
+        ("ch_12", None),  # too few digits
+        (None, None),
+        (123, None),  # non-string
+    ],
+)
+def test_wavelength_from_name(name, expected):
+    assert _wavelength_from_name(name) == expected
+
+
+@pytest.mark.parametrize(
+    "names, expected",
+    [
+        (["a", "b"], True),
+        (["a", "a"], False),  # duplicate
+        (["a", None], False),  # None present
+        (["a", ""], False),  # empty
+        (["a", "  "], False),  # whitespace-only
+        ([], False),
+        (["only"], True),
+    ],
+)
+def test_all_distinct(names, expected):
+    assert _all_distinct(names) is expected
+
+
+def test_split_shared_label_metamorph():
+    labels = [
+        "c:1/2 t:1/61 - WD_LED_IRM/TIRF_491",
+        "c:2/2 t:1/61 - WD_LED_IRM/TIRF_491",
+    ]
+    assert _split_shared_label(labels, 2) == ["WD_LED_IRM", "TIRF_491"]
+
+
+@pytest.mark.parametrize(
+    "labels, count",
+    [
+        (["no dash separator here"], 1),  # no " - "
+        (["a - one/two/three"], 2),  # wrong token count
+        (["a - dup/dup"], 2),  # non-distinct tokens
+        ([None], 1),  # not a string
+        ([], 1),  # empty
+    ],
+)
+def test_split_shared_label_rejects(labels, count):
+    assert _split_shared_label(labels, count) is None
+
+
+def test_metamorph_wave_names():
+    info = 'WaveName1 = "WD_LED_IRM"\nWaveName2 = "TIRF_491"\n'
+    assert _metamorph_wave_names(info, 2) == ["WD_LED_IRM", "TIRF_491"]
+
+
+@pytest.mark.parametrize(
+    "info, count",
+    [
+        ("", 2),  # empty
+        ('WaveName1 = "A"\n', 2),  # missing WaveName2
+        ('WaveName1 = "same"\nWaveName2 = "same"\n', 2),  # not distinct
+    ],
+)
+def test_metamorph_wave_names_rejects(info, count):
+    assert _metamorph_wave_names(info, count) is None
+
+
+def test_resolve_channel_names_prefers_wavename_over_label():
+    # Both a MetaMorph Info block AND a shared label are present; WaveNameN
+    # must win (more reliable per-wavelength source). Pins the docstring's
+    # "Order matters" contract — the thing a refactor is most likely to flip.
+    tf = _tf(
+        ij={
+            "Info": 'WaveName1 = "IRM_A"\nWaveName2 = "FLUOR_B"\n',
+            "Labels": [
+                "c:1/2 - WD_LED_IRM/TIRF_491",
+                "c:2/2 - WD_LED_IRM/TIRF_491",
+            ],
+        }
+    )
+    assert _resolve_channel_names(tf, 2) == ["IRM_A", "FLUOR_B"]
+
+
+def test_resolve_channel_names_splits_shared_label():
+    tf = _tf(
+        ij={
+            "Labels": [
+                "c:1/2 t:1/61 - WD_LED_IRM/TIRF_491",
+                "c:2/2 t:1/61 - WD_LED_IRM/TIRF_491",
+            ]
+        }
+    )
+    assert _resolve_channel_names(tf, 2) == ["WD_LED_IRM", "TIRF_491"]
+
+
+def test_resolve_channel_names_identical_labels_fall_back_to_none():
+    # ImageJ-registered stack: the only label is the filename, repeated per
+    # channel → no distinct source → all-None so the caller uses "Channel N".
+    tf = _tf(ij={"Labels": ["stack.tif", "stack.tif"]})
+    assert _resolve_channel_names(tf, 2) == [None, None]
+
+
+def test_resolve_channel_names_no_metadata():
+    assert _resolve_channel_names(_tf(), 2) == [None, None]

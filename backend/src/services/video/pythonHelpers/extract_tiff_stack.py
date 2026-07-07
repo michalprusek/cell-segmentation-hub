@@ -37,7 +37,7 @@ def _sanitize_name(raw: str | None, fallback: str) -> str:
 
 
 def _imagej_channel_labels(tf, count: int) -> list[str | None]:
-    """Best-effort ImageJ channel name extraction.
+    """Best-effort ImageJ per-slice channel label extraction.
 
     `tifffile` exposes ImageJ's tagged metadata as ``tf.imagej_metadata``.
     The conventional location for per-channel labels is ``'Labels'`` —
@@ -58,8 +58,120 @@ def _imagej_channel_labels(tf, count: int) -> list[str | None]:
         # ImageJ often writes per-slice labels (one per T×C); the first
         # C entries are the channel names for the first time-point.
         return [labels[i] if isinstance(labels[i], str) else None for i in range(count)]
-    except Exception:
+    except Exception as exc:
+        # Match the file's convention: every metadata parser emits a one-line
+        # stderr diagnostic before degrading, so a genuine parse bug isn't
+        # indistinguishable from "no labels present".
+        sys.stderr.write(f"ImageJ channel-label parse failed: {exc}\n")
         return [None] * count
+
+
+def _all_distinct(names: list[str | None]) -> bool:
+    """True only when every entry is a non-empty string AND all are unique.
+    Used to reject the two failure modes that made every channel look the
+    same: a shared concatenated label ("… - a/b") and a per-slice label
+    that is just the source filename repeated for each channel."""
+    if not names or any(not (isinstance(n, str) and n.strip()) for n in names):
+        return False
+    return len({n.strip() for n in names}) == len(names)
+
+
+def _metamorph_wave_names(info: str, count: int) -> list[str] | None:
+    """Parse per-channel names from a MetaMorph ImageJ ``Info`` block.
+
+    MetaMorph stores the real per-wavelength names as
+      ``WaveName1 = "WD_LED_IRM"``
+      ``WaveName2 = "TIRF_491"``
+    which — unlike the per-slice ``Labels`` — are genuinely distinct per
+    channel. Returns ``None`` unless all ``count`` names are present and
+    distinct (so the caller keeps looking for another source)."""
+    if not isinstance(info, str) or not info:
+        return None
+    names: list[str | None] = []
+    for i in range(1, count + 1):
+        m = re.search(
+            rf'^\s*WaveName{i}\s*=\s*"?([^"\r\n]+?)"?\s*$', info, re.MULTILINE
+        )
+        names.append(m.group(1).strip() if m else None)
+    return names if _all_distinct(names) else None
+
+
+def _split_shared_label(labels: list[str | None], count: int) -> list[str] | None:
+    """Recover per-channel names from ImageJ's shared concatenated label.
+
+    Bio-Formats / MetaMorph hyperstacks write the SAME label to every
+    slice, concatenating all wavelength names after the last `` - ``:
+      ``"c:1/2 t:1/61 - WD_LED_IRM/TIRF_491"``
+    The channel names are the ``"/"``-separated tokens of that suffix, in
+    channel order. Returns ``None`` unless the split yields exactly
+    ``count`` distinct, non-empty tokens."""
+    if not labels or not isinstance(labels[0], str) or " - " not in labels[0]:
+        return None
+    suffix = labels[0].rsplit(" - ", 1)[1]
+    parts = [p.strip() for p in suffix.split("/")]
+    return parts if len(parts) == count and _all_distinct(parts) else None
+
+
+def _resolve_channel_names(tf, count: int) -> list[str | None]:
+    """Best-effort DISTINCT per-channel names, tried most-reliable first.
+
+    Order matters — the earlier sources carry the true per-wavelength
+    identity, the later ones are progressively more degenerate:
+      1. MetaMorph ``WaveNameN`` from the ImageJ ``Info`` block.
+      2. The shared ``"… - a/b"`` per-slice label split by ``"/"``.
+      3. Genuinely distinct per-slice ``Labels`` used verbatim.
+    When none yields ``count`` distinct names (e.g. an ImageJ-registered
+    stack whose only label is the source filename, repeated per channel)
+    we return all-``None`` so the caller falls back to ``"Channel N"`` —
+    two channels named ``"Channel 1"``/``"Channel 2"`` are far more useful
+    than two identical names the user can't tell apart."""
+    try:
+        meta = getattr(tf, "imagej_metadata", None)
+        info = ""
+        if isinstance(meta, dict):
+            info = meta.get("Info") or meta.get("info") or ""
+
+        wave = _metamorph_wave_names(info, count)
+        if wave:
+            return wave
+
+        labels = _imagej_channel_labels(tf, count)
+        split = _split_shared_label(labels, count)
+        if split:
+            return split
+        if _all_distinct(labels):
+            return labels
+    except Exception as exc:
+        # A regex/type/index bug in the helpers above would otherwise be
+        # indistinguishable from "no metadata" and silently collapse every
+        # channel to wavelengthNm=null → all typed IRM (wrong segmentation
+        # source). Surface it like the other parsers in this file.
+        sys.stderr.write(f"channel-name resolution failed: {exc}\n")
+    return [None] * count
+
+
+def _wavelength_from_name(name: str | None) -> int | None:
+    """Parse an emission wavelength (nm) embedded in a channel name, e.g.
+    ``"TIRF_491"`` → 491, ``"w2-561"`` → 561. Only 3–4 digit tokens inside
+    the visible/NIR band (350–900 nm) count — this both distinguishes
+    fluorescence channels (which carry a λ) from label-free IRM/BF ones
+    (which don't) downstream in ``isIrmChannel``, and derives a default
+    display color. Returns ``None`` for label-free names like
+    ``"WD_LED_IRM"`` that carry no wavelength token."""
+    if not isinstance(name, str):
+        return None
+    for m in re.finditer(r"\d{3,4}", name):
+        v = int(m.group())
+        if not (350 <= v <= 900):
+            continue
+        # Reject an exposure-time token like ``"IRM_500ms"`` — a digit run
+        # immediately followed by ``ms`` is a duration, not an emission λ,
+        # and would otherwise mis-type a label-free channel as fluorescent.
+        # ``"491nm"`` (n) and a bare ``"491"`` still count.
+        if name[m.end() : m.end() + 2].lower() == "ms":
+            continue
+        return v
+    return None
 
 
 def _to_png_dtype(arr: np.ndarray) -> np.ndarray:
@@ -457,7 +569,7 @@ def main() -> int:
             if "C" in axes
             else (arr.shape[0] if axes.startswith("C") else 1)
         )
-        raw_channel_labels = _imagej_channel_labels(tf, _C_for_meta)
+        raw_channel_labels = _resolve_channel_names(tf, _C_for_meta)
         # Pixel calibration + frame interval. Priority chain:
         #   1. OME-XML (most precise when present)
         #   2. ImageJ metadata (most common in microscopy)
@@ -480,6 +592,15 @@ def main() -> int:
         T, H, W = arr.shape
         C = 1
         arr = arr[:, None, :, :]
+    elif axes == "CYX" and arr.ndim == 3:
+        # Single time-point, multi-channel (e.g. a 2-channel IRM+TIRF frame
+        # exported as one ImageJ slice per channel). Without this explicit
+        # case the leading-axis heuristic below misreads the C channels as
+        # C separate time frames — destroying the channel split and turning
+        # a still into a bogus "video" the browser can't display.
+        C, H, W = arr.shape
+        T = 1
+        arr = arr[None, :, :, :]
     elif arr.ndim == 3 and arr.shape[0] > 1 and arr.shape[-1] not in (3, 4):
         # Heuristic: leading axis is time, single channel.
         T, H, W = arr.shape
@@ -501,19 +622,31 @@ def main() -> int:
     if len(raw_channel_labels) != C:
         raw_channel_labels = (raw_channel_labels + [None] * C)[:C]
 
+    # Final safety net: guarantee the channels are DISTINGUISHABLE. If the
+    # resolver couldn't produce distinct names (collision after realignment,
+    # or a degenerate source), drop to all-``None`` so every channel gets a
+    # unique ``"Channel N"`` below — never two identical names.
+    if not _all_distinct(raw_channel_labels):
+        raw_channel_labels = [None] * C
+
     # Two parallel names per channel:
     #  - `name`        : path-safe, used in URLs + PNG filenames
     #  - `display_name`: human-readable, shown in the UI
     # When metadata gives us a label, use it for both (sanitised in `name`).
     # When no metadata is present, fall back to "Channel N" (1-based) so
     # the UI doesn't surface implementation-y identifiers like "ch0".
+    # `wavelengthNm` is parsed from the resolved name (e.g. "TIRF_491"→491)
+    # so fluorescence channels type correctly downstream; label-free names
+    # (IRM/BF) yield None and stay IRM.
     channel_names: list[str] = []
     display_names: list[str] = []
+    wavelengths: list[int | None] = []
     for i in range(C):
         raw = raw_channel_labels[i]
         display = raw if (isinstance(raw, str) and raw.strip()) else f"Channel {i + 1}"
         display_names.append(display)
         channel_names.append(_sanitize_name(raw, f"Channel_{i + 1}"))
+        wavelengths.append(_wavelength_from_name(raw))
 
     for t in range(T):
         frame_dir = dest / "frames" / f"{t:04d}"
@@ -544,7 +677,7 @@ def main() -> int:
             {
                 "name": channel_names[i],
                 "displayName": display_names[i],
-                "wavelengthNm": None,
+                "wavelengthNm": wavelengths[i],
             }
             for i in range(C)
         ],
