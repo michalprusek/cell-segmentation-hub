@@ -372,6 +372,10 @@ export default {
     viewResults: 'Zobrazit výsledky',
     dropImagesHere: 'Přetáhněte soubory sem...',
     selectProjectFirst: 'Nejprve vyberte projekt',
+    registerChannels: {
+      label: 'Registrovat kanály (zarovnat translací)',
+      help: 'Při nahrání opraví malé posuny mezi kanály zarovnáním každého k prvnímu (pouze translace).',
+    },
     projectRequired: 'Před nahráním obrázků musíte vybrat projekt',
     pending: 'Čekající',
     uploading: 'Nahrávání',

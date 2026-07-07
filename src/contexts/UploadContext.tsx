@@ -41,7 +41,10 @@ interface UploadContextType {
     projectId: string,
     files: File[],
     projectName?: string,
-    onComplete?: () => void
+    onComplete?: () => void,
+    /** Opt-in multimodal channel registration at extraction (MT projects only;
+     *  the backend re-gates by project type). */
+    registerChannels?: boolean
   ) => string;
   cancelUpload: (sessionId?: string) => void;
   clearSession: (sessionId: string) => void;
@@ -249,7 +252,8 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       projectId: string,
       files: File[],
       projectName?: string,
-      onComplete?: () => void
+      onComplete?: () => void,
+      registerChannels?: boolean
     ): string => {
       const sessionId = `upload_${Date.now()}`;
 
@@ -346,24 +350,29 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
               };
             });
             try {
-              await apiClient.uploadVideo(projectId, vfile, percent => {
-                // Treat each video as 1 / videoFiles.length share of overall
-                const segment = 100 / Math.max(1, files.length);
-                const overall = Math.round(
-                  i * segment + (percent * segment) / 100
-                );
-                setSessions(prev => {
-                  const s = prev[sessionId];
-                  if (!s || s.status !== 'uploading') return prev;
-                  return {
-                    ...prev,
-                    [sessionId]: {
-                      ...s,
-                      overallProgress: Math.max(s.overallProgress, overall),
-                    },
-                  };
-                });
-              });
+              await apiClient.uploadVideo(
+                projectId,
+                vfile,
+                percent => {
+                  // Treat each video as 1 / videoFiles.length share of overall
+                  const segment = 100 / Math.max(1, files.length);
+                  const overall = Math.round(
+                    i * segment + (percent * segment) / 100
+                  );
+                  setSessions(prev => {
+                    const s = prev[sessionId];
+                    if (!s || s.status !== 'uploading') return prev;
+                    return {
+                      ...prev,
+                      [sessionId]: {
+                        ...s,
+                        overallProgress: Math.max(s.overallProgress, overall),
+                      },
+                    };
+                  });
+                },
+                registerChannels
+              );
               videoSuccess++;
             } catch (err) {
               // axios cancellation isn't a real failure — abort

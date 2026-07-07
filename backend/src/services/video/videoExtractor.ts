@@ -45,7 +45,13 @@ export function isVideoFilename(filename: string): boolean {
 export async function extractVideo(
   sourcePath: string,
   destDir: string,
-  options: { onProgress?: ProgressCallback } = {}
+  options: {
+    onProgress?: ProgressCallback;
+    /** Opt-in multimodal channel registration (translation-only), applied at
+     *  extraction. Only meaningful for multi-channel TIFF / ND2 — ignored by
+     *  the single-channel ffmpeg path. */
+    registerChannels?: boolean;
+  } = {}
 ): Promise<ExtractionOutcome> {
   const kind = detectVideoKind(sourcePath);
   if (kind === null) {
@@ -65,10 +71,20 @@ export async function extractVideo(
     case 'tiff-stack':
       return {
         kind: 'single',
-        result: await extractTiffStack(sourcePath, destDir, options.onProgress),
+        result: await extractTiffStack(
+          sourcePath,
+          destDir,
+          options.onProgress,
+          options.registerChannels
+        ),
       };
     case 'nd2':
-      return extractNd2(sourcePath, destDir, options.onProgress);
+      return extractNd2(
+        sourcePath,
+        destDir,
+        options.onProgress,
+        options.registerChannels
+      );
     default: {
       const exhaustive: never = kind;
       throw new Error(`unhandled video kind ${exhaustive}`);
@@ -82,7 +98,10 @@ export async function extractVideo(
 export async function extractVideoSafe(
   sourcePath: string,
   destDir: string,
-  options: { onProgress?: ProgressCallback } = {}
+  options: {
+    onProgress?: ProgressCallback;
+    registerChannels?: boolean;
+  } = {}
 ): Promise<ExtractionOutcome> {
   try {
     return await extractVideo(sourcePath, destDir, options);
