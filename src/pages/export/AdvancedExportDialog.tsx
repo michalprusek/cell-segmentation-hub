@@ -42,6 +42,7 @@ import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
 import { MicrotubuleMetricsSection } from './components/MicrotubuleMetricsSection';
 import { MicrotubuleKymographsSection } from './components/MicrotubuleKymographsSection';
+import { projectCanBuildKymograph } from './utils/kymographGating';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 
 interface AdvancedExportDialogProps {
@@ -90,15 +91,15 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       // them silently hides the MT section on every MT project.
       const isMTProject = projectType === 'microtubules';
 
-      // A kymograph needs a time axis (≥ 2 frames). Force profile-only ONLY on
-      // positive evidence that every video container is single-frame; a missing
-      // frameCount or an empty container list must never hide a working option
-      // (worst case there, the backend just yields a 1-row kymograph).
-      const canBuildKymograph = React.useMemo(() => {
-        const containers = images.filter(img => img.isVideoContainer);
-        if (containers.length === 0) return true;
-        return containers.some(c => c.frameCount == null || c.frameCount > 1);
-      }, [images]);
+      // A kymograph needs a time axis (≥ 2 frames). The images listing returns
+      // per-frame rows, not container rows, so this counts frames per container
+      // (see projectCanBuildKymograph). When no multi-frame video exists — a
+      // single-frame container or only standalone images — the section forces
+      // profile-only.
+      const canBuildKymograph = React.useMemo(
+        () => projectCanBuildKymograph(images),
+        [images]
+      );
 
       // Local snapshot of MT options. We always merge into the shared
       // exportOptions state when the user toggles or edits inputs so the
