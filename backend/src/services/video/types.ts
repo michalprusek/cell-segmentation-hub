@@ -31,6 +31,16 @@ export interface ChannelMeta {
    *  segmentation source. The extractor auto-detects IRM and flips this
    *  on for that channel; users can override via the channels dialog. */
   isSegmentationSource: boolean;
+  /** True for channels ADDED after upload via "Add channel" — their pixel
+   *  data lives ONLY in the per-frame PNGs (``frames/<TTTT>/<name>.png``),
+   *  not in the container's original ND2/TIFF volume. Consumers that sample
+   *  the original volume by C-axis index (``mt_metrics.py``) must instead
+   *  read the per-frame PNG for these. Added channels are always appended to
+   *  the ``channels`` array so volume-backed channels keep array-index ==
+   *  C-axis-index. Absent/false = the original volume-backed default. Such
+   *  channels may be present on only SOME frames (coverage = the frames the
+   *  user selected when adding), so a missing per-frame PNG is expected. */
+  pngBacked?: boolean;
 }
 
 export interface ExtractionResult {

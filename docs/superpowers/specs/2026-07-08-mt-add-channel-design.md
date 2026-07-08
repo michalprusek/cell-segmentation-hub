@@ -94,11 +94,39 @@ manifest of `{moving, reference, out}` triples → for each, load both PNGs (ima
 `estimate_translation(ref, mov)`, `shift_frame(mov, dy, dx)`, save `out` preserving
 dtype. No new deps (numpy + imageio already used).
 
-**Partial-coverage tolerance:** `mt_metrics.py` (and any per-frame channel raster
-read) must treat a missing frame PNG for a channel as "no sample" (null / skip),
-never crash. Verify + patch. Kymograph already samples the container's first
-segmented frame per polyline; a channel absent there simply yields no kymograph for
-that (mt × channel) — acceptable, but must not throw.
+### PNG-backed vs volume-backed channels (pivotal)
+
+Traced from code:
+
+- **Editor** composites channels from per-frame PNGs (`MultiChannelCanvas`) → an
+  added channel works automatically.
+- **Kymograph** also reads per-frame PNGs (`kymographService.ts` builds
+  `frames/<TTTT>/<name>.png`, ML `PILImage.open`) → works automatically.
+- **MT intensity metrics** (`mt_metrics.py`) reads the **original ND2/TIFF volume**
+  and indexes channels by their **position in the `channels` JSON array**
+  (`resolveChannelIndices` → `findIndex`). An added channel has no slot in the
+  original file, so this path must sample it from the per-frame PNGs instead.
+
+Per-frame PNGs are **lossless** for uint8/uint16/int16 (`_to_png_dtype` — no
+percentile clip; only float rescales), so PNG sampling is accurate. Added channels
+are written losslessly (extractor output is already 16-bit; the single-image path
+uses `sharp` with bit-depth preserved).
+
+**Mechanism:** mark added channels with `pngBacked: true` on their `ChannelMeta`.
+Added channels are always **appended** to `channels` JSON, so volume-backed channels
+keep their array-index == C-axis-index (existing metrics unaffected).
+
+- `mtMetricsExporter.ts`: partition selected channels into volume-backed (send
+  `channel_indices`/`channel_names` as today) and `pngBacked` (send names only in a
+  new `png_channels: string[]`). Registration `channel_offsets` apply only to
+  volume-backed channels.
+- `mt_metrics.py`: for `png_channels`, load `dirname(original_path)/frames/<t:04d>/<name>.png`
+  per frame; emit rows + channel-summary only for frames whose PNG exists (partial
+  coverage → simply fewer rows, never a crash). No `channel_offsets` applied.
+
+**Partial-coverage tolerance:** a frame missing a channel PNG is normal (coverage =
+exactly the selected frames). Editor drops it (404→null); metrics/kymograph skip it.
+Nothing throws.
 
 ## Frontend
 
