@@ -1127,7 +1127,8 @@ class ApiClient {
   async uploadImages(
     projectId: string,
     files: File[],
-    onProgress?: (progressPercent: number) => void
+    onProgress?: (progressPercent: number) => void,
+    signal?: AbortSignal
   ): Promise<ProjectImageDTO[]> {
     const formData = new FormData();
     files.forEach(file => {
@@ -1156,6 +1157,9 @@ class ApiClient {
           'Content-Type': 'multipart/form-data',
         },
         timeout: TIMEOUTS.FILE_UPLOAD_LARGE,
+        // Wire the abort signal so Cancel aborts the in-flight image batch too
+        // (the chunked path already does this; the plain path didn't).
+        signal,
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(
@@ -1196,7 +1200,8 @@ class ApiClient {
     projectId: string,
     file: File,
     onProgress?: (progressPercent: number) => void,
-    registerChannels?: boolean
+    registerChannels?: boolean,
+    signal?: AbortSignal
   ): Promise<{
     videoContainerId: string;
     frameCount: number;
@@ -1234,6 +1239,10 @@ class ApiClient {
         // multi-GB ND2 uploads mid-transfer); small clips still get a 20-min
         // floor, huge files up to a 4-hour ceiling.
         timeout: videoUploadTimeoutMs(payload.size),
+        // Lets the "Cancel" button actually abort the in-flight upload. Without
+        // this the video POST is a single blocking request the loop can't
+        // interrupt (it only guards BETWEEN files), so Cancel was a no-op.
+        signal,
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(

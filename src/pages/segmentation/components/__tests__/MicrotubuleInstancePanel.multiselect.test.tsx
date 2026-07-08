@@ -136,4 +136,35 @@ describe('MicrotubuleInstancePanel — multi-select checkboxes', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /deselect all/i }));
     expect(onClearSelection).toHaveBeenCalledTimes(1);
   });
+
+  // Delete lives in this panel now that the generic Polygon List is hidden for
+  // MT projects.
+  it('renders a delete button per row and calls onDeletePolygon with the MT id', () => {
+    const onDeletePolygon = vi.fn();
+    renderWithProviders(
+      <MicrotubuleInstancePanel
+        polygons={MTS}
+        selectedPolygonId={null}
+        onSelectPolygon={vi.fn()}
+        onDeletePolygon={onDeletePolygon}
+      />
+    );
+    const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+    expect(deleteButtons).toHaveLength(MTS.length);
+    fireEvent.click(deleteButtons[0]);
+    expect(onDeletePolygon).toHaveBeenCalledWith('mtA');
+  });
+
+  it('hides the delete button when onDeletePolygon is omitted', () => {
+    renderWithProviders(
+      <MicrotubuleInstancePanel
+        polygons={MTS}
+        selectedPolygonId={null}
+        onSelectPolygon={vi.fn()}
+      />
+    );
+    expect(screen.queryAllByRole('button', { name: /delete/i })).toHaveLength(
+      0
+    );
+  });
 });

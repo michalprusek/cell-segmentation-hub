@@ -332,8 +332,10 @@ export default {
     dropImagesHere: '将文件放在这里...',
     selectProjectFirst: '请先选择项目',
     registerChannels: {
-      label: '通道配准（平移对齐）',
+      promptTitle: '配准通道？',
       help: '上传时通过将每个通道对齐到第一个通道来校正通道间的微小偏移（仅平移）。',
+      confirm: '配准并上传',
+      decline: '不配准直接上传',
     },
     projectRequired: '您必须先选择项目才能上传图像',
     pending: '等待中',

@@ -203,14 +203,12 @@ describe('FloatingUploadProgress', () => {
   });
 
   describe('Expand / collapse', () => {
-    it('chevron button is shown during uploading', () => {
+    it('shows only the chevron toggle during uploading (no close X)', () => {
       setActive(baseSession({ status: 'uploading' }));
       render(<FloatingUploadProgress />);
-      // ChevronUp is the initial icon (collapsed state shows "expand" arrow)
-      // Both chevron variants are Lucide SVGs; assert the toggle button exists
-      const buttons = screen.getAllByRole('button');
-      // There should be at least the chevron + close buttons
-      expect(buttons.length).toBeGreaterThanOrEqual(2);
+      // During upload the close (X) is hidden — only the expand/collapse
+      // chevron remains (use "Cancel" to stop an in-flight upload).
+      expect(screen.getAllByRole('button')).toHaveLength(1);
     });
 
     it('chevron button is NOT shown for completed status', () => {
@@ -231,10 +229,9 @@ describe('FloatingUploadProgress', () => {
       // Project name not visible before expanding
       expect(screen.queryByText('Test Project')).not.toBeInTheDocument();
 
-      // Find the chevron toggle button (not the X close button)
-      const buttons = screen.getAllByRole('button');
-      // The chevron button is the second-to-last button (before X)
-      const chevronBtn = buttons[buttons.length - 2];
+      // During upload the chevron is the only header button (the close X is
+      // hidden while uploading).
+      const chevronBtn = screen.getAllByRole('button')[0];
       fireEvent.click(chevronBtn);
 
       expect(screen.getByText('Test Project')).toBeInTheDocument();
@@ -247,9 +244,8 @@ describe('FloatingUploadProgress', () => {
       setActive(baseSession({ status: 'uploading', id: 'sess-abc' }));
       render(<FloatingUploadProgress />);
 
-      // Expand first
-      const buttons = screen.getAllByRole('button');
-      const chevronBtn = buttons[buttons.length - 2];
+      // Expand first (chevron is the only header button during upload)
+      const chevronBtn = screen.getAllByRole('button')[0];
       fireEvent.click(chevronBtn);
 
       fireEvent.click(screen.getByRole('button', { name: /Cancel Upload/i }));
@@ -258,14 +254,15 @@ describe('FloatingUploadProgress', () => {
   });
 
   describe('Close button', () => {
-    it('during uploading, close hides card but does NOT call clearSession', () => {
+    it('during uploading, there is NO close (X) button — only the chevron', () => {
       setActive(baseSession({ status: 'uploading' }));
       render(<FloatingUploadProgress />);
 
-      // X is the last button
+      // The X was unresponsive during upload, so it is hidden there now. Only
+      // the chevron toggle remains; clicking it expands and never clears.
       const buttons = screen.getAllByRole('button');
-      fireEvent.click(buttons[buttons.length - 1]);
-
+      expect(buttons).toHaveLength(1);
+      fireEvent.click(buttons[0]);
       expect(mockClearSession).not.toHaveBeenCalled();
     });
 
