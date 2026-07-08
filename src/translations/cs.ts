@@ -373,8 +373,10 @@ export default {
     dropImagesHere: 'Přetáhněte soubory sem...',
     selectProjectFirst: 'Nejprve vyberte projekt',
     registerChannels: {
-      label: 'Registrovat kanály (zarovnat translací)',
+      promptTitle: 'Registrovat kanály?',
       help: 'Při nahrání opraví malé posuny mezi kanály zarovnáním každého k prvnímu (pouze translace).',
+      confirm: 'Registrovat a nahrát',
+      decline: 'Nahrát bez registrace',
     },
     projectRequired: 'Před nahráním obrázků musíte vybrat projekt',
     pending: 'Čekající',

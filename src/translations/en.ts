@@ -373,8 +373,10 @@ export default {
     dropImagesHere: 'Drop the files here...',
     selectProjectFirst: 'Please select a project first',
     registerChannels: {
-      label: 'Register channels (align by translation)',
+      promptTitle: 'Register channels?',
       help: 'Correct small shifts between channels at upload by aligning each to the first (translation only).',
+      confirm: 'Register & upload',
+      decline: 'Upload without registering',
     },
     projectRequired: 'You must select a project before you can upload images',
     pending: 'Pending',
