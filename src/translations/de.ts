@@ -1188,6 +1188,30 @@ export default {
     selected_other: '{{count}} Bilder ausgewählt',
     deleteSelected: 'Ausgewählte löschen',
     deleteAnnotations: 'Anmerkungen löschen',
+    addChannel: 'Kanal hinzufügen',
+    addChannelSuccess: 'Kanal {{channels}} zu {{frames}} Bild(ern) hinzugefügt',
+    addChannelFailed: 'Kanal konnte nicht hinzugefügt werden',
+    addChannelDialog: {
+      title: 'Kanal hinzufügen',
+      description:
+        'Fügen Sie den ausgewählten Bildern einen zusätzlichen Kanal hinzu, indem Sie ein Video/Stapel mit gleicher Bildanzahl oder ein einzelnes Bild hochladen, das auf jedes ausgewählte Bild angewendet wird.',
+      selectionSummary:
+        '{{frames}} Bild(er) in {{videos}} Video(s) ausgewählt.',
+      sourceLabel: 'Quelldatei (Video / Stapel / Bild)',
+      imageHint: 'Einzelnes Bild → wird auf jedes ausgewählte Bild angewendet.',
+      videoHint:
+        'Video/Stapel → muss genau {{frames}} Bild(er) haben und zu einem einzigen Video gehören.',
+      nameLabel: 'Kanalname',
+      namePlaceholder: 'z. B. GFP',
+      alignLabel: 'Am Segmentierungskanal ausrichten',
+      alignHint:
+        'Phasenkorrelations-Registrierung, die eine kleine Tischdrift korrigiert.',
+      multiVideoError:
+        'Ein Video/Stapel kann nur zu Bildern eines einzigen Videos hinzugefügt werden. Wählen Sie Bilder aus einem Video oder laden Sie ein einzelnes Bild hoch.',
+      uploading: 'Wird hochgeladen… {{percent}} %',
+      adding: 'Wird hinzugefügt…',
+      confirm: 'Kanal hinzufügen',
+    },
     annotationsDeleted: 'Anmerkungen für {{count}} Bild(er) gelöscht',
     annotationsDeleteFailed:
       'Anmerkungen für {{count}} Bild(er) konnten nicht gelöscht werden',

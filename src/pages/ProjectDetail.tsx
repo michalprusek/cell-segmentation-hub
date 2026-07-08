@@ -19,6 +19,7 @@ import {
   SegmentChannelDialog,
   extractChannelsFromPaths,
 } from '@/components/project/SegmentChannelDialog';
+import { AddChannelDialog } from '@/components/project/AddChannelDialog';
 import { useSharedAdvancedExport } from '@/pages/export/hooks/useSharedAdvancedExport';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
@@ -75,6 +76,13 @@ const ProjectDetail = () => {
     channels: string[];
     defaultChannel: string;
   } | null>(null);
+  // "Add channel" dialog state (microtubule projects only).
+  const [showAddChannelDialog, setShowAddChannelDialog] =
+    useState<boolean>(false);
+  const [isAddingChannel, setIsAddingChannel] = useState<boolean>(false);
+  const [addChannelProgress, setAddChannelProgress] = useState<number | null>(
+    null
+  );
 
   const lastStatusRef = useRef<{ [imageId: string]: string }>({});
 
@@ -1266,6 +1274,56 @@ const ProjectDetail = () => {
     }
   };
 
+  // Distinct parent videos among the selected frames — a multi-frame (video)
+  // source can only target a single video, so the dialog uses this to guide
+  // the user.
+  const selectedVideoCount = useMemo(() => {
+    const videos = new Set<string>();
+    for (const img of images) {
+      if (selectedImageIds.has(img.id) && img.parentVideoId) {
+        videos.add(img.parentVideoId);
+      }
+    }
+    return videos.size;
+  }, [images, selectedImageIds]);
+
+  const handleAddChannelConfirm = useCallback(
+    async (params: { file: File; channelName: string; align: boolean }) => {
+      if (!id || selectedImageIds.size === 0 || isAddingChannel) {
+        return;
+      }
+      setIsAddingChannel(true);
+      setAddChannelProgress(0);
+      try {
+        const result = await apiClient.addChannel(
+          id,
+          {
+            file: params.file,
+            channelName: params.channelName,
+            align: params.align,
+            imageIds: Array.from(selectedImageIds),
+          },
+          percent => setAddChannelProgress(percent)
+        );
+        toast.success(
+          t('project.addChannelSuccess', {
+            channels: result.addedChannels.join(', '),
+            frames: result.framesWritten,
+          })
+        );
+        setShowAddChannelDialog(false);
+      } catch (err) {
+        // Surface the backend's validation detail (frame-count mismatch,
+        // dimension mismatch, single-video rule, …) so the user can correct it.
+        toast.error(getErrorMessage(err, t) || t('project.addChannelFailed'));
+      } finally {
+        setIsAddingChannel(false);
+        setAddChannelProgress(null);
+      }
+    },
+    [id, selectedImageIds, isAddingChannel, t]
+  );
+
   // Calculate selection state
   const selectedCount = selectedImageIds.size;
   const isAllSelected =
@@ -1587,6 +1645,8 @@ const ProjectDetail = () => {
               onSelectAllToggle={handleSelectAllToggle}
               onBatchDelete={handleBatchDelete}
               onDeleteAnnotations={handleDeleteAnnotations}
+              onAddChannel={() => setShowAddChannelDialog(true)}
+              canAddChannel={projectType === 'microtubules'}
               showSelectAll={true}
               onExportingChange={() => {}} // No longer needed - hook handles state
               onDownloadingChange={() => {}} // No longer needed - hook handles state
@@ -1770,6 +1830,18 @@ const ProjectDetail = () => {
           setTimeout(() => handleSegmentAll(ch), 0);
         }}
         onCancel={() => setPendingChannelChoice(null)}
+      />
+
+      {/* Add-channel dialog — appends an extra channel to the selected frames
+          (microtubule projects only; gated by the toolbar button). */}
+      <AddChannelDialog
+        open={showAddChannelDialog}
+        selectedCount={selectedCount}
+        videoCount={selectedVideoCount}
+        isSubmitting={isAddingChannel}
+        progress={addChannelProgress}
+        onConfirm={handleAddChannelConfirm}
+        onCancel={() => setShowAddChannelDialog(false)}
       />
     </motion.div>
   );

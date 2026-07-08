@@ -72,6 +72,7 @@ vi.mock('@/pages/segmentation/components/ChannelColorDialog', () => ({
 // Mock ImageDisplayContext — control the state delivered to the component
 const mockToggle = vi.fn();
 const mockSetVisible = vi.fn();
+const mockSetCoverage = vi.fn();
 const mockSetColor = vi.fn();
 const mockSeedColors = vi.fn();
 const mockSetOpacity = vi.fn();
@@ -88,6 +89,7 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     channelOpacities: mockChannelOpacities,
     toggleChannelVisibility: mockToggle,
     setVisibleChannels: mockSetVisible,
+    setChannelCoverage: mockSetCoverage,
     setChannelColor: mockSetColor,
     seedChannelColors: mockSeedColors,
     setChannelOpacity: mockSetOpacity,

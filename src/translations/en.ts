@@ -1169,6 +1169,30 @@ export default {
     selected_other: '{{count}} images selected',
     deleteSelected: 'Delete Selected',
     deleteAnnotations: 'Delete Annotations',
+    addChannel: 'Add channel',
+    addChannelSuccess: 'Added channel {{channels}} to {{frames}} frame(s)',
+    addChannelFailed: 'Failed to add channel',
+    addChannelDialog: {
+      title: 'Add channel',
+      description:
+        'Add an extra channel to the selected frames by uploading a video/stack with the same number of frames, or a single image stamped onto every selected frame.',
+      selectionSummary:
+        '{{frames}} frame(s) across {{videos}} video(s) selected.',
+      sourceLabel: 'Source file (video / stack / image)',
+      imageHint: 'Single image → stamped onto every selected frame.',
+      videoHint:
+        'Video/stack → must have exactly {{frames}} frame(s) and belong to a single video.',
+      nameLabel: 'Channel name',
+      namePlaceholder: 'e.g. GFP',
+      alignLabel: 'Align to segmentation channel',
+      alignHint:
+        'Phase-correlation registration that corrects small stage drift.',
+      multiVideoError:
+        'A video/stack can only be added to frames of a single video. Select frames from one video, or upload a single image.',
+      uploading: 'Uploading… {{percent}}%',
+      adding: 'Adding…',
+      confirm: 'Add channel',
+    },
     annotationsDeleted: 'Annotations deleted for {{count}} image(s)',
     annotationsDeleteFailed:
       'Failed to delete annotations for {{count}} image(s)',

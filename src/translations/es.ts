@@ -1174,6 +1174,30 @@ export default {
     selected_other: '{{count}} imágenes seleccionadas',
     deleteSelected: 'Eliminar Seleccionadas',
     deleteAnnotations: 'Eliminar anotaciones',
+    addChannel: 'Añadir canal',
+    addChannelSuccess: 'Canal {{channels}} añadido a {{frames}} fotograma(s)',
+    addChannelFailed: 'No se pudo añadir el canal',
+    addChannelDialog: {
+      title: 'Añadir canal',
+      description:
+        'Añade un canal extra a los fotogramas seleccionados subiendo un vídeo/pila con el mismo número de fotogramas, o una sola imagen que se aplicará a cada fotograma seleccionado.',
+      selectionSummary:
+        '{{frames}} fotograma(s) en {{videos}} vídeo(s) seleccionados.',
+      sourceLabel: 'Archivo de origen (vídeo / pila / imagen)',
+      imageHint: 'Una sola imagen → se aplica a cada fotograma seleccionado.',
+      videoHint:
+        'Vídeo/pila → debe tener exactamente {{frames}} fotograma(s) y pertenecer a un solo vídeo.',
+      nameLabel: 'Nombre del canal',
+      namePlaceholder: 'p. ej. GFP',
+      alignLabel: 'Alinear con el canal de segmentación',
+      alignHint:
+        'Registro por correlación de fase que corrige una pequeña deriva de la platina.',
+      multiVideoError:
+        'Un vídeo/pila solo puede añadirse a fotogramas de un único vídeo. Selecciona fotogramas de un solo vídeo o sube una sola imagen.',
+      uploading: 'Subiendo… {{percent}} %',
+      adding: 'Añadiendo…',
+      confirm: 'Añadir canal',
+    },
     annotationsDeleted: 'Anotaciones eliminadas de {{count}} imagen(es)',
     annotationsDeleteFailed:
       'No se pudieron eliminar las anotaciones de {{count}} imagen(es)',

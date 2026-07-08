@@ -56,7 +56,8 @@ export default function VideoFrameImage({
   alt,
   onLoad,
 }: VideoFrameImageProps) {
-  const { channel, visibleChannels, channelColors } = useImageDisplay();
+  const { channel, visibleChannels, channelColors, channelCoverage } =
+    useImageDisplay();
 
   // Compute the legacy single-channel URL. We still use it when there
   // is no multi-channel overlay configured (visibleChannels is empty)
@@ -81,6 +82,7 @@ export default function VideoFrameImage({
         containerId={containerId ?? undefined}
         visibleChannels={visibleChannels}
         channelColors={channelColors}
+        channelCoverage={channelCoverage}
         width={width}
         height={height}
         onLoad={onLoad}

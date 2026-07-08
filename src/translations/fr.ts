@@ -1178,6 +1178,30 @@ export default {
     selected_other: '{{count}} images sélectionnées',
     deleteSelected: 'Supprimer la sélection',
     deleteAnnotations: 'Supprimer les annotations',
+    addChannel: 'Ajouter un canal',
+    addChannelSuccess: 'Canal {{channels}} ajouté à {{frames}} image(s)',
+    addChannelFailed: "Échec de l'ajout du canal",
+    addChannelDialog: {
+      title: 'Ajouter un canal',
+      description:
+        'Ajoutez un canal supplémentaire aux images sélectionnées en téléversant une vidéo/pile ayant le même nombre d’images, ou une seule image appliquée à chaque image sélectionnée.',
+      selectionSummary:
+        '{{frames}} image(s) dans {{videos}} vidéo(s) sélectionnées.',
+      sourceLabel: 'Fichier source (vidéo / pile / image)',
+      imageHint: 'Image unique → appliquée à chaque image sélectionnée.',
+      videoHint:
+        'Vidéo/pile → doit comporter exactement {{frames}} image(s) et appartenir à une seule vidéo.',
+      nameLabel: 'Nom du canal',
+      namePlaceholder: 'p. ex. GFP',
+      alignLabel: 'Aligner sur le canal de segmentation',
+      alignHint:
+        'Recalage par corrélation de phase qui corrige une légère dérive de la platine.',
+      multiVideoError:
+        'Une vidéo/pile ne peut être ajoutée qu’aux images d’une seule vidéo. Sélectionnez des images d’une seule vidéo ou téléversez une seule image.',
+      uploading: 'Téléversement… {{percent}} %',
+      adding: 'Ajout…',
+      confirm: 'Ajouter un canal',
+    },
     annotationsDeleted: 'Annotations supprimées pour {{count}} image(s)',
     annotationsDeleteFailed:
       'Échec de la suppression des annotations pour {{count}} image(s)',

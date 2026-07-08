@@ -579,6 +579,13 @@ export interface VideoChannel {
   wavelengthNm?: number;
   displayColor?: string;
   isSegmentationSource: boolean;
+  /** True for channels ADDED after upload ("Add channel"): pixels live only
+   *  in the per-frame PNGs, and the channel may cover only some frames. */
+  pngBacked?: boolean;
+  /** Frame Image ids this channel actually covers, when it covers only SOME
+   *  frames. Omitted => full coverage. The editor uses this to skip requesting
+   *  the channel for frames it doesn't cover (avoids 404 noise). */
+  frameIds?: string[];
 }
 
 // Metric types for XLSX export

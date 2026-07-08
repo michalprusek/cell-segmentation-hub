@@ -39,6 +39,10 @@ export const FRAME_PREFETCH_WINDOW = {
   ahead: 10,
 } as const;
 
+/** Stable empty default so the coverage param keeps a constant reference
+ *  across renders (a fresh `{}` literal would defeat memo dependencies). */
+const EMPTY_COVERAGE: Record<string, string[]> = {};
+
 export interface FrameMinimal {
   id: string;
   /** Segmentation status drives whether we waste a prefetch slot on a
@@ -58,6 +62,12 @@ export interface UseFrameWindowPrefetchOptions {
   /** Only run when we're in video mode — for standalone images the
    *  prefetch concept doesn't apply. */
   enabled: boolean;
+  /** Per-channel frame coverage for PNG-backed partial channels (channel
+   *  name → covered frame ids). A channel absent here covers every frame.
+   *  The window loop skips a (frame, channel) pair the channel doesn't
+   *  cover, so a partial channel is never prefetched for a frame it lacks
+   *  (no 404 noise). */
+  channelCoverage?: Record<string, string[]>;
   /** Override window. Default is 5 back / 10 ahead. */
   windowBack?: number;
   windowAhead?: number;
@@ -78,6 +88,7 @@ export function useFrameWindowPrefetch({
   currentIndex,
   channels,
   enabled,
+  channelCoverage = EMPTY_COVERAGE,
   windowBack = FRAME_PREFETCH_WINDOW.back,
   windowAhead = FRAME_PREFETCH_WINDOW.ahead,
 }: UseFrameWindowPrefetchOptions): UseFrameWindowPrefetchResult {
@@ -87,6 +98,20 @@ export function useFrameWindowPrefetch({
   // effect a primitive dependency so a fresh `channels` array from the
   // parent doesn't re-fire the work.
   const channelsKey = channels.join('|');
+  // Coverage is seeded once from immutable container metadata, so a
+  // names+lengths fingerprint is a sufficient (and cheap) memo dependency.
+  const coverageKey = Object.entries(channelCoverage)
+    .map(([k, v]) => `${k}:${v.length}`)
+    .join('|');
+
+  // A (frame, channel) pair is prefetchable when the channel covers the
+  // frame. The single-channel fallback (`null`) and full-coverage channels
+  // (absent from the map) always qualify.
+  const covers = (channel: string | null, frameId: string): boolean => {
+    if (channel == null) return true;
+    const cov = channelCoverage[channel];
+    return !cov || cov.includes(frameId);
+  };
 
   const windowFrames = useMemo(() => {
     if (!enabled || frames.length === 0) return [];
@@ -111,12 +136,13 @@ export function useFrameWindowPrefetch({
     const urls: string[] = [];
     for (const frame of windowFrames) {
       for (const channel of channelList) {
+        if (!covers(channel, frame.id)) continue;
         urls.push(buildFrameImageUrl(frame.id, channel));
       }
     }
     return urls;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowFrames, channelsKey]);
+  }, [windowFrames, channelsKey, coverageKey]);
 
   // Track the set of URLs we've already kicked off so a window
   // shift fires `prefetch()` only for the NEW URLs at the leading
@@ -158,6 +184,7 @@ export function useFrameWindowPrefetch({
     const channelList = channels.length > 0 ? channels : [null];
     for (const frame of windowFrames) {
       for (const channel of channelList) {
+        if (!covers(channel, frame.id)) continue;
         const url = buildFrameImageUrl(frame.id, channel);
         if (prefetchedRef.current.has(url)) continue;
         prefetchedRef.current.add(url);
@@ -218,7 +245,7 @@ export function useFrameWindowPrefetch({
     // the primitive prevents re-fires on parent-provided fresh
     // arrays with identical content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, windowFrames, channelsKey, queryClient]);
+  }, [enabled, windowFrames, channelsKey, coverageKey, queryClient]);
 
   const readyCount = frameImageCache.readyCount(windowImageUrls);
   const isWindowReady =

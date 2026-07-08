@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Dict, List, Literal, Optional
 
@@ -104,6 +105,13 @@ class MTMetricsRequest(BaseModel):
     # (channel-0) space that the polylines live in. None = sample the raw file
     # unchanged (legacy / unregistered uploads).
     channel_offsets: Optional[Dict[str, List[List[int]]]] = None
+    # PNG-backed channels ADDED after upload ("Add channel"). Their pixels live
+    # only in the per-frame PNGs (``<dir of original_path>/frames/<TTTT>/<name>.png``),
+    # not in the original volume, so they are sampled from those PNGs by name.
+    # A frame whose PNG is absent is skipped (an added channel may cover only
+    # some frames). No channel_offsets apply — the PNGs are already stored in the
+    # registered/aligned space.
+    png_channels: List[str] = Field(default_factory=list)
 
 
 class MTMetricsRow(BaseModel):
@@ -345,6 +353,97 @@ def _shift_frame(arr: np.ndarray, dy: int, dx: int) -> np.ndarray:
     return out
 
 
+_CHANNEL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _load_png_frame(
+    frames_dir: Path, t: int, name: str, height: int, width: int
+) -> Optional[np.ndarray]:
+    """Load a PNG-backed channel's raster for frame ``t`` as a 2-D float64
+    array, or None when the PNG is absent (partial coverage — an added channel
+    may cover only some frames) or its shape doesn't match (height, width).
+
+    ``name`` is validated against the channel-name whitelist and the resolved
+    path is asserted to stay under the storage root before any read.
+    """
+    if not _CHANNEL_NAME_RE.match(name):
+        raise HTTPException(
+            status_code=400, detail=f"Invalid png channel name: {name}"
+        )
+    p = frames_dir / f"{t:04d}" / f"{name}.png"
+    _assert_safe_path(p, "png channel frame")
+    if not p.exists():
+        return None
+    from PIL import Image
+
+    arr = np.asarray(Image.open(p))
+    if arr.ndim == 3:
+        arr = arr.mean(axis=2)
+    if arr.shape != (height, width):
+        logger.warning(
+            "mt-metrics: png channel %s frame %d shape %s != (%d, %d); skipping",
+            name, t, arr.shape, height, width,
+        )
+        return None
+    return arr.astype(np.float64)
+
+
+def _emit_channel_rows(
+    frame_arr: np.ndarray,
+    band_masks: List[np.ndarray],
+    polyline_lengths: List[float],
+    background_mask: np.ndarray,
+    fr: "MTFrameInput",
+    channel_name: str,
+    rows: List["MTMetricsRow"],
+) -> None:
+    """Append one row per polyline for ``channel_name`` on frame ``fr``.
+
+    Shared by the volume-backed and PNG-backed channel paths so both compute
+    background + per-band statistics identically. ``frame_arr`` is the channel's
+    raster already cast to float64 and (for volume channels) shifted into the
+    registered space.
+    """
+    bg_pixels = frame_arr[background_mask]
+    has_bg = bg_pixels.size > 0
+    median_bg = float(np.median(bg_pixels)) if has_bg else None
+    mean_bg = float(bg_pixels.mean()) if has_bg else None
+
+    for pl_idx, pl in enumerate(fr.polylines):
+        band = band_masks[pl_idx]
+        pixels = frame_arr[band > 0]
+        pixel_count = int(pixels.size)
+        if pixel_count == 0:
+            sum_v = mean_v = median_v = std_v = 0.0
+            signal_minus_bg: Optional[float] = None
+        else:
+            sum_v = float(pixels.sum())
+            mean_v = float(pixels.mean())
+            median_v = float(np.median(pixels))
+            std_v = float(pixels.std())
+            signal_minus_bg = (
+                (mean_v - median_bg) if median_bg is not None else None
+            )
+
+        rows.append(MTMetricsRow(
+            frame_index=fr.frame_index,
+            image_id=pl.image_id,
+            instance_id=pl.instance_id,
+            track_id=pl.track_id,
+            channel=channel_name,
+            length_px=polyline_lengths[pl_idx],
+            area_px=pixel_count,
+            pixel_count=pixel_count,
+            sum_intensity=sum_v,
+            mean_intensity=mean_v,
+            median_intensity=median_v,
+            std_intensity=std_v,
+            median_background=median_bg,
+            mean_background=mean_bg,
+            signal_minus_background=signal_minus_bg,
+        ))
+
+
 # ----------------------------------------------------------------------------
 #  Endpoint
 # ----------------------------------------------------------------------------
@@ -396,6 +495,9 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
                 detail=f"channel_index {ci} out of bounds [0, {C - 1}]",
             )
 
+    # PNG-backed (added) channels live next to the original as per-frame PNGs.
+    frames_dir = path.parent / "frames"
+
     # Whole-image per-channel totals over the whole video: sum of EVERY pixel of
     # the channel across ALL frames (not just the MT bands). Uses the RAW file
     # (no registration offset) — this is a global channel measure and the
@@ -411,6 +513,27 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             mean_intensity=(total / pix) if pix else 0.0,
             pixel_count=pix,
             frames=int(T),
+        ))
+    # Whole-image totals for PNG-backed (added) channels: stream over every
+    # frame that actually has a PNG (partial coverage → fewer frames). One PIL
+    # open per covered frame keeps memory bounded (no full-video buffer).
+    for name in req.png_channels:
+        total = 0.0
+        pix = 0
+        frames_present = 0
+        for t in range(T):
+            arr = _load_png_frame(frames_dir, t, name, H, W)
+            if arr is None:
+                continue
+            total += float(arr.sum())
+            pix += int(arr.size)
+            frames_present += 1
+        channel_summaries.append(MTChannelSummary(
+            channel=name,
+            total_intensity=total,
+            mean_intensity=(total / pix) if pix else 0.0,
+            pixel_count=pix,
+            frames=frames_present,
         ))
 
     margin_radius = int(round(req.thickness_px * req.margin_multiplier))
@@ -465,47 +588,22 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             # Cast to float64 once per channel so all reductions are in
             # consistent precision without upcasting every pixel slice.
             frame_arr = raw.astype(np.float64)
+            _emit_channel_rows(
+                frame_arr, band_masks, polyline_lengths,
+                background_mask, fr, channel_name, rows,
+            )
 
-            bg_pixels = frame_arr[background_mask]
-            has_bg = bg_pixels.size > 0
-            median_bg = float(np.median(bg_pixels)) if has_bg else None
-            mean_bg = float(bg_pixels.mean()) if has_bg else None
-
-            for pl_idx, pl in enumerate(fr.polylines):
-                band = band_masks[pl_idx]
-                pixels = frame_arr[band > 0]
-                pixel_count = int(pixels.size)
-                if pixel_count == 0:
-                    sum_v = mean_v = median_v = std_v = 0.0
-                    signal_minus_bg: Optional[float] = None
-                else:
-                    sum_v = float(pixels.sum())
-                    mean_v = float(pixels.mean())
-                    median_v = float(np.median(pixels))
-                    std_v = float(pixels.std())
-                    signal_minus_bg = (
-                        (mean_v - median_bg)
-                        if median_bg is not None
-                        else None
-                    )
-
-                rows.append(MTMetricsRow(
-                    frame_index=t,
-                    image_id=pl.image_id,
-                    instance_id=pl.instance_id,
-                    track_id=pl.track_id,
-                    channel=channel_name,
-                    length_px=polyline_lengths[pl_idx],
-                    area_px=pixel_count,
-                    pixel_count=pixel_count,
-                    sum_intensity=sum_v,
-                    mean_intensity=mean_v,
-                    median_intensity=median_v,
-                    std_intensity=std_v,
-                    median_background=median_bg,
-                    mean_background=mean_bg,
-                    signal_minus_background=signal_minus_bg,
-                ))
+        # PNG-backed (added) channels: sampled from the per-frame PNG, already
+        # in the stored/aligned space, so no registration offset is applied. A
+        # frame whose PNG is absent (partial coverage) yields no rows.
+        for name in req.png_channels:
+            frame_arr = _load_png_frame(frames_dir, t, name, H, W)
+            if frame_arr is None:
+                continue
+            _emit_channel_rows(
+                frame_arr, band_masks, polyline_lengths,
+                background_mask, fr, name, rows,
+            )
 
     logger.info(
         "mt-metrics: produced %d rows from %d frames",

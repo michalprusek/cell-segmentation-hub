@@ -255,3 +255,33 @@ export async function extractNd2(
   });
   return { kind: 'single', result };
 }
+
+/** One (moving → reference → out) alignment job for {@link alignChannelFrames}. */
+export interface ChannelAlignJob {
+  /** Absolute path of the added channel's raster for one frame (moved). */
+  moving: string;
+  /** Absolute path of that frame's segmentation-source PNG (reference). */
+  reference: string;
+  /** Absolute destination path for the aligned raster. */
+  out: string;
+}
+
+/** Result of a batch alignment run: per-job integer shift + confidence. */
+export interface ChannelAlignResult {
+  aligned: number;
+  shifts: Array<[number, number, number]>;
+}
+
+/**
+ * Phase-correlate each added-channel frame onto its reference (the target
+ * frame's segmentation-source PNG) and write the losslessly-shifted result to
+ * ``out``. Reuses the same registration math as upload-time channel
+ * registration (``channel_registration.py``). The manifest is written to a
+ * temp file and its path passed to the helper (avoids CLI-length limits for
+ * hundreds of frames).
+ */
+export async function alignChannelFrames(
+  manifestPath: string
+): Promise<ChannelAlignResult> {
+  return runHelper<ChannelAlignResult>('add_channel_align.py', [manifestPath]);
+}

@@ -1257,6 +1257,68 @@ class ApiClient {
   }
 
   /**
+   * Adds an extra (PNG-backed) channel to the SELECTED video frames of a
+   * microtubule project.
+   *
+   * The source (`file`) may be a video / stack / ND2 whose frame count equals
+   * the number of selected frames (which must all belong to a single video), or
+   * a single image that is stamped onto every selected frame. When `align` is
+   * set, each added frame is phase-correlation aligned to that frame's
+   * segmentation-source channel. Routes to POST
+   * /projects/:id/images/add-channel.
+   */
+  async addChannel(
+    projectId: string,
+    params: {
+      file: File;
+      channelName: string;
+      align: boolean;
+      imageIds: string[];
+    },
+    onProgress?: (progressPercent: number) => void,
+    signal?: AbortSignal
+  ): Promise<{
+    addedChannels: string[];
+    affectedContainerIds: string[];
+    framesWritten: number;
+  }> {
+    const { file, channelName, align, imageIds } = params;
+    const formData = new FormData();
+    const normalizedName = file.name.normalize('NFC');
+    const payload =
+      normalizedName !== file.name
+        ? new File([file], normalizedName, {
+            type: file.type,
+            lastModified: file.lastModified,
+          })
+        : file;
+    formData.append('file', payload);
+    formData.append('channelName', channelName);
+    formData.append('align', align ? 'true' : 'false');
+    formData.append('imageIds', JSON.stringify(imageIds));
+
+    const response = await this.instance.post(
+      `/projects/${projectId}/images/add-channel`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        // Transfer + synchronous server-side extraction/alignment share one
+        // request, so scale the timeout to the source size like uploadVideo.
+        timeout: videoUploadTimeoutMs(payload.size),
+        signal,
+        onUploadProgress: progressEvent => {
+          if (onProgress && progressEvent.total) {
+            onProgress(
+              Math.round((progressEvent.loaded * 100) / progressEvent.total)
+            );
+          }
+        },
+      }
+    );
+    return this.extractData(response) as never;
+  }
+
+  /**
    * Uploads multiple images to a project using chunking for large batches
    * @param {string} projectId - The project ID to upload images to
    * @param {File[]} files - Array of image files to upload
@@ -1912,6 +1974,10 @@ class ApiClient {
       wavelengthNm?: number;
       displayColor?: string;
       isSegmentationSource: boolean;
+      // Preserved verbatim through a rename so an added channel's PNG-backed
+      // flag + partial-frame coverage survive (see addChannelService).
+      pngBacked?: boolean;
+      frameIds?: string[];
     }>
   ): Promise<void> {
     await this.instance.patch(`/images/${imageId}/channels`, { channels });
