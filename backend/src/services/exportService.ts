@@ -43,6 +43,7 @@ import {
   computeMTGeometry,
   writeMTMetrics,
   type MTMetricsRow,
+  type MTChannelSummaryRow,
 } from './export/mtMetricsExporter';
 import {
   exportMicrotubuleKymographs,
@@ -1573,6 +1574,9 @@ export class ExportService {
     };
 
     let rows: MTMetricsRow[] = [];
+    // Whole-video per-channel totals (independent of the MTs) → second sheet /
+    // companion file. Empty on the geometry-only fallback.
+    let channelSummaries: MTChannelSummaryRow[] = [];
     let intensityIncluded = false;
 
     try {
@@ -1583,6 +1587,7 @@ export class ExportService {
         pixelToMicrometerScale: scale,
       });
       rows = mtResult.rows;
+      channelSummaries = mtResult.channelSummaries ?? [];
       for (const reason of mtResult.skipped) {
         addWarning(`MT intensity metrics skipped: ${reason}`);
       }
@@ -1620,11 +1625,18 @@ export class ExportService {
     }
 
     const metricsDir = path.join(exportDir, 'metrics');
-    await writeMTMetrics(rows, metricsDir, formats);
+    await writeMTMetrics(rows, metricsDir, formats, channelSummaries);
     logger.info(
       'MT metrics: wrote files',
       'ExportService',
-      { jobId, projectId, rows: rows.length, intensityIncluded, formats }
+      {
+        jobId,
+        projectId,
+        rows: rows.length,
+        channelSummaries: channelSummaries.length,
+        intensityIncluded,
+        formats,
+      }
     );
   }
 

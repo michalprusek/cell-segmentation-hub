@@ -128,10 +128,29 @@ class MTMetricsRow(BaseModel):
     signal_minus_background: Optional[float] = None
 
 
+class MTChannelSummary(BaseModel):
+    """Whole-video, whole-image total for one channel.
+
+    Sum / mean over EVERY pixel of the channel across ALL frames of the video —
+    independent of the microtubules. A global "how bright is this channel over
+    the whole recording" measure, distinct from the per-MT band sums.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    channel: str
+    total_intensity: float
+    mean_intensity: float
+    pixel_count: int
+    frames: int
+
+
 class MTMetricsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rows: List[MTMetricsRow]
+    # Per-channel whole-image totals over the whole video (one per requested
+    # channel). Empty only when no channels were requested.
+    channel_summaries: List[MTChannelSummary]
     frames_processed: int
     frame_height: int
     frame_width: int
@@ -377,6 +396,23 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
                 detail=f"channel_index {ci} out of bounds [0, {C - 1}]",
             )
 
+    # Whole-image per-channel totals over the whole video: sum of EVERY pixel of
+    # the channel across ALL frames (not just the MT bands). Uses the RAW file
+    # (no registration offset) — this is a global channel measure and the
+    # zero-filled borders of a shifted channel would understate its true total.
+    channel_summaries: List[MTChannelSummary] = []
+    for ci_idx, ci in enumerate(req.channel_indices):
+        chan = volume[:, ci].astype(np.float64)
+        pix = int(chan.size)
+        total = float(chan.sum())
+        channel_summaries.append(MTChannelSummary(
+            channel=req.channel_names[ci_idx],
+            total_intensity=total,
+            mean_intensity=(total / pix) if pix else 0.0,
+            pixel_count=pix,
+            frames=int(T),
+        ))
+
     margin_radius = int(round(req.thickness_px * req.margin_multiplier))
     rows: List[MTMetricsRow] = []
 
@@ -477,6 +513,7 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
     )
     return MTMetricsResponse(
         rows=rows,
+        channel_summaries=channel_summaries,
         frames_processed=len(req.frames),
         frame_height=int(H),
         frame_width=int(W),

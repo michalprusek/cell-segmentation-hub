@@ -216,7 +216,12 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   }
 
   return (
-    <div className="w-full flex-1 min-h-[8rem] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col dark:bg-gray-900">
+    // min-h-[20rem]: when the sidebar also stacks Channels + Display + the MT
+    // instance panel (video/MT projects), this panel's flex-1 gets squeezed and
+    // the header (title + select-all row) ate almost all of the old 8rem, leaving
+    // ~1 visible row. A 20rem floor keeps ~6-7 rows scrollable; the whole sidebar
+    // column scrolls to reach the sections below.
+    <div className="w-full flex-1 min-h-[20rem] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col dark:bg-gray-900">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2 lg:mb-0">
