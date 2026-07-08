@@ -59,7 +59,7 @@ interface TargetFrame {
 }
 
 /** Slugify a user label into a path-safe channel machine name. */
-function slugifyChannelName(label: string): string {
+export function slugifyChannelName(label: string): string {
   const slug = label
     .trim()
     .replace(/[^A-Za-z0-9_-]+/g, '_')
@@ -74,7 +74,7 @@ function slugifyChannelName(label: string): string {
 }
 
 /** First unique ``base``/``base_2``/``base_3`` … not already in ``used``. */
-function uniqueName(base: string, used: Set<string>): string {
+export function uniqueName(base: string, used: Set<string>): string {
   if (!used.has(base)) return base;
   for (let i = 2; i < 1000; i++) {
     const candidate = `${base}_${i}`.slice(0, 64);
