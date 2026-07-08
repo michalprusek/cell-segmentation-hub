@@ -769,6 +769,11 @@ export default {
     },
   },
   segmentation: {
+    selection: {
+      selectAll: 'Seleccionar todo',
+      deselectAll: 'Deseleccionar todo',
+      selected: '{{count}} seleccionados',
+    },
     trackOps: {
       propagateSelectedSuccess:
         '{{count}} microtúbulos propagados a los fotogramas siguientes',
@@ -1191,22 +1196,14 @@ export default {
       sectionTitle: 'Métricas de microtúbulos',
       sectionDescription:
         'Longitud, área e intensidad por canal de cada MT desde el archivo ND2/TIFF original. Corregido con la mediana del fondo (fuera de la máscara MT dilatada).',
-      enable: 'Calcular métricas de intensidad por canal',
+      intensityNote:
+        'La intensidad de señal por canal —incluida la intensidad sumada (integrada)— se calcula siempre para cada canal y se escribe en la hoja de métricas. No es necesario seleccionar nada.',
       thicknessLabel: 'Grosor del MT (px)',
       thicknessHelp:
         'Ancho de la banda de muestreo a lo largo de cada polilínea. 5 px corresponde al diámetro típico del microtúbulo a 100× campo amplio.',
       marginLabel: 'Margen del fondo (× grosor)',
       marginHelp:
         'Excluye píxeles dentro de este radio (grosor × multiplicador) de cualquier MT del fondo. Mayor = más conservador.',
-      channelsLabel: 'Canales a muestrear',
-      noChannels:
-        'Este proyecto no tiene metadatos de canales. Vuelva a subir el vídeo para obtener métricas por canal.',
-      selectChannelRequired:
-        'Seleccione al menos un canal para exportar las métricas de intensidad por canal.',
-      incompleteTitle: 'Cálculo de intensidad no seleccionado',
-      incompleteBody:
-        'No ha activado el cálculo de intensidad de señal por canal, por lo que las métricas exportadas estarán incompletas: solo se incluirá la longitud de los microtúbulos, sin las columnas de intensidad por canal. ¿Exportar de todos modos?',
-      incompleteConfirm: 'Exportar de todos modos',
     },
     advancedExport: 'Exportación Avanzada',
     advancedOptions: 'Opciones Avanzadas de Exportación',

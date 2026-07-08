@@ -83,15 +83,21 @@ export interface ExportOptions {
   /**
    * Microtubule-only metrics. Sent to the backend on POST /export and
    * consumed by the export pipeline only when the project type is
-   * ``microtubule``. Re-reads the original ND2/TIFF to compute raw
-   * intensity per band.
+   * ``microtubule``. Per-channel intensity (incl. the integrated sum) is
+   * ALWAYS computed for every channel — there is no opt-in; ``thicknessPx`` /
+   * ``marginMultiplier`` only tune the sampling band. Re-reads the original
+   * ND2/TIFF to compute raw intensity per band.
    */
   mtMetrics?: {
-    enabled: boolean;
-    thicknessPx: number;
-    marginMultiplier: number;
-    /** Channel names (machine-safe ``name`` field from container.channels). */
-    channels: string[];
+    /** @deprecated Ignored by the backend — intensity is always computed. */
+    enabled?: boolean;
+    thicknessPx?: number;
+    marginMultiplier?: number;
+    /**
+     * Optional channel subset (machine-safe ``name`` field from
+     * container.channels). Empty / absent => all channels are sampled.
+     */
+    channels?: string[];
   };
   /**
    * Microtubule-only kymograph export. When enabled (MT projects only), the

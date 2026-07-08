@@ -615,6 +615,11 @@ export default {
     system: 'Systémový',
   },
   segmentation: {
+    selection: {
+      selectAll: 'Vybrat vše',
+      deselectAll: 'Zrušit výběr',
+      selected: 'Vybráno: {{count}}',
+    },
     trackOps: {
       propagateSelectedSuccess:
         '{{count}} mikrotubulů propagováno do dalších snímků',
@@ -1194,22 +1199,14 @@ export default {
       sectionTitle: 'Metriky mikrotubulů',
       sectionDescription:
         'Délka, plocha a intenzita signálu pro každý MT z původního ND2/TIFF souboru. Odečteno median pozadí (mimo dilatovanou masku MT).',
-      enable: 'Spočítat intenzitu signálu pro každý kanál',
+      intensityNote:
+        'Intenzita signálu podle kanálu — včetně součtové (integrované) intenzity — se vždy vypočítá pro každý kanál a zapíše do tabulky metrik. Není třeba nic vybírat.',
       thicknessLabel: 'Tloušťka MT (px)',
       thicknessHelp:
         'Šířka pásu podél polyline, ze kterého se sbírá signál. 5 px odpovídá běžnému průměru mikrotubulu při 100× widefield.',
       marginLabel: 'Okraj pozadí (× tloušťka)',
       marginHelp:
         'Pixely v tomto poloměru (tloušťka × násobek) od libovolného MT se z pozadí vyloučí. Vyšší = konzervativnější.',
-      channelsLabel: 'Kanály ke zpracování',
-      noChannels:
-        'Tento projekt nemá metadata o kanálech. Pro získání metrik podle kanálů znovu nahrajte video.',
-      selectChannelRequired:
-        'Pro export metrik intenzity podle kanálů vyberte alespoň jeden kanál.',
-      incompleteTitle: 'Výpočet intenzit nezvolen',
-      incompleteBody:
-        'Nemáte zapnutý výpočet intenzity signálu podle kanálů, takže exportované metriky budou neúplné: zahrnuta bude pouze délka mikrotubulů, bez sloupců s intenzitou podle kanálů. Přesto exportovat?',
-      incompleteConfirm: 'Přesto exportovat',
     },
     advancedExport: 'Pokročilý export',
     advancedOptions: 'Pokročilé možnosti exportu',

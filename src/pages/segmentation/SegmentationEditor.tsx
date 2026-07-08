@@ -656,6 +656,7 @@ const SegmentationEditor = () => {
     selectedPolygonIds,
     toggleMultiSelect,
     clearMultiSelect,
+    selectAllMultiSelect,
   } = usePolygonHandlers({ editor, imageId });
 
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
@@ -998,6 +999,44 @@ const SegmentationEditor = () => {
     [toggleMultiSelect, clearMultiSelect]
   );
 
+  // Sidebar list checkbox toggle. A row is "checked" when it is the single
+  // selection OR a member of the multi-select set, so a plain left-click on the
+  // canvas also lights up its checkbox. Toggling a checkbox mirrors Shift+click:
+  // it adds/removes the row from the bulk multi-select set. When there is a lone
+  // single (vertex-edit) selection, we fold it into the bulk set first so the
+  // checked rows and the "propagate selected (N)" count always agree.
+  const handleToggleSelectedInList = useCallback(
+    (id: string) => {
+      const single = editorRef.current.selectedPolygonId;
+      if (single === id) {
+        editorRef.current.setSelectedPolygonId(null);
+        return;
+      }
+      if (single) {
+        editorRef.current.setSelectedPolygonId(null);
+        toggleMultiSelect(single);
+      }
+      toggleMultiSelect(id);
+    },
+    [toggleMultiSelect]
+  );
+
+  // Sidebar "select all": put every listed current-frame polygon id into the
+  // bulk set and drop the single selection so the whole list reads as checked.
+  const handleSelectAllInList = useCallback(
+    (ids: string[]) => {
+      editorRef.current.setSelectedPolygonId(null);
+      selectAllMultiSelect(ids);
+    },
+    [selectAllMultiSelect]
+  );
+
+  // Sidebar "deselect all": clear both selection sets.
+  const handleClearSelectionInList = useCallback(() => {
+    editorRef.current.setSelectedPolygonId(null);
+    clearMultiSelect();
+  }, [clearMultiSelect]);
+
   // Right-click "Propagate selected MTs (N)": propagate every Shift-selected
   // microtubule forward. Loops the single-track endpoint so each keeps its own
   // trackId + colour; ids read via ref to keep this handler stable.
@@ -1210,6 +1249,9 @@ const SegmentationEditor = () => {
         handleCanvasSelect={handleCanvasSelect}
         handlePropagateSelected={handlePropagateSelected}
         selectedPolygonIds={selectedPolygonIds}
+        handleToggleSelectedInList={handleToggleSelectedInList}
+        handleSelectAllInList={handleSelectAllInList}
+        handleClearSelectionInList={handleClearSelectionInList}
         handleSlicePolygonFromContextMenu={handleSlicePolygonFromContextMenu}
         handleEditPolygonFromContextMenu={handleEditPolygonFromContextMenu}
         handleDeleteVertexFromContextMenu={handleDeleteVertexFromContextMenu}

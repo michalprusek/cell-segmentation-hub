@@ -121,7 +121,9 @@ vi.mock('../export/formatConverter', () => ({
 }));
 
 vi.mock('../export/mtMetricsExporter', () => ({
-  computeMTMetrics: vi.fn().mockResolvedValue([]),
+  // Real shape is { rows, skipped }; intensity is now always attempted for MT
+  // exports, so the mock must match or the always-on call path throws.
+  computeMTMetrics: vi.fn().mockResolvedValue({ rows: [], skipped: [] }),
   computeMTGeometry: vi.fn().mockReturnValue([]),
   writeMTMetrics: vi.fn().mockResolvedValue(undefined),
 }));
@@ -173,7 +175,11 @@ import {
   sanitizeFilename,
   getProgressMessage,
 } from '../export/exportFileOperations';
-import { computeMTGeometry, writeMTMetrics } from '../export/mtMetricsExporter';
+import {
+  computeMTMetrics,
+  computeMTGeometry,
+  writeMTMetrics,
+} from '../export/mtMetricsExporter';
 import { MetricsCalculator } from '../metrics/metricsCalculator';
 import {
   FormatConverter,
@@ -785,8 +791,10 @@ describe('ExportService — generateMicrotubuleMetrics dispatch', () => {
       }
     ).generateMicrotubuleMetrics(images, '/tmp/mt-export', options, jobId);
 
-  it('uses geometry-only path when no channels selected and writes metrics', async () => {
-    // Return a non-empty row list so writeMTMetrics is called
+  it('falls back to geometry-only (and still writes metrics) when intensity yields no rows', async () => {
+    // Intensity is always attempted now, but the mocked computeMTMetrics
+    // returns no rows, so the exporter falls back to microtubule length only.
+    // Return a non-empty geometry row list so writeMTMetrics is called.
     vi.mocked(computeMTGeometry).mockReturnValueOnce([
       {
         frameIndex: 0,
@@ -813,26 +821,36 @@ describe('ExportService — generateMicrotubuleMetrics dispatch', () => {
     expect(writeMTMetrics).toHaveBeenCalledOnce();
   });
 
-  it('adds warning when no channel is selected', async () => {
-    vi.mocked(computeMTGeometry).mockReturnValueOnce([
-      {
-        frameIndex: 0,
-        imageId: 'img-1',
-        instanceId: 'inst-1',
-        trackId: null,
-        channel: '',
-        lengthPx: 10,
-        lengthUm: null,
-        areaPx: null,
-        areaUm2: null,
-        pixelCount: null,
-        sumIntensity: null,
-        meanIntensity: null,
-        stdIntensity: null,
-        medianBackground: null,
-        signalMinusBackground: null,
-      },
-    ]);
+  it('always attempts per-channel intensity (no opt-in) and adds NO "no channel" warning', async () => {
+    // Intensity is always computed for MT exports now — an empty channel list
+    // means "all channels" (resolved inside computeMTMetrics), so there is no
+    // longer a "no channel was selected" warning. Here computeMTMetrics returns
+    // one intensity row, so geometry fallback is not used.
+    vi.mocked(computeMTMetrics).mockResolvedValueOnce({
+      rows: [
+        {
+          frameIndex: 0,
+          imageId: 'img-1',
+          instanceId: 'inst-1',
+          label: 'MT1',
+          trackId: null,
+          channel: 'ch0',
+          lengthPx: 10,
+          lengthUm: null,
+          areaPx: 20,
+          areaUm2: null,
+          pixelCount: 20,
+          sumIntensity: 1000,
+          meanIntensity: 50,
+          medianIntensity: 48,
+          stdIntensity: 5,
+          medianBackground: 10,
+          meanBackground: 12,
+          signalMinusBackground: 40,
+        },
+      ],
+      skipped: [],
+    });
 
     const jobs = (service as unknown as { exportJobs: Map<string, ExportJob> })
       .exportJobs;
@@ -846,6 +864,7 @@ describe('ExportService — generateMicrotubuleMetrics dispatch', () => {
       options: {},
     });
 
+    // No mtMetrics options at all → intensity is still attempted for every channel.
     await callGenerateMT(
       service,
       [makeImage({})],
@@ -853,10 +872,18 @@ describe('ExportService — generateMicrotubuleMetrics dispatch', () => {
       'mt-job'
     );
 
+    expect(computeMTMetrics).toHaveBeenCalledOnce();
+    // Called with an empty channel list => "all channels".
+    const mtOpts = vi.mocked(computeMTMetrics).mock.calls[0][2];
+    expect(mtOpts.channels).toEqual([]);
+
     const job = jobs.get('mt-job');
     expect(
-      job?.warnings?.some(w => w.includes('no channel was selected'))
-    ).toBe(true);
+      (job?.warnings ?? []).some(w => w.includes('no channel was selected'))
+    ).toBe(false);
+    // Geometry fallback not used when intensity produced rows.
+    expect(computeMTGeometry).not.toHaveBeenCalled();
+    expect(writeMTMetrics).toHaveBeenCalledOnce();
   });
 
   it('does not write metrics file and adds warning when no polylines exist', async () => {

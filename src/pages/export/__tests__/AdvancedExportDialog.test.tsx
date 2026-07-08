@@ -18,17 +18,11 @@
  *  12. Summary card on Formats tab shows selected image count.
  *  13. MicrotubuleMetricsSection is NOT rendered for non-MT project types.
  *  14. MicrotubuleMetricsSection IS rendered for projectType === 'microtubules'.
- *  15. availableChannels derivation: channels are de-duped and passed down.
- *  16. Non-MT project with empty projectChannels: availableChannels = [].
+ *      (Per-channel intensity incl. the sum is always on — no channel picker
+ *       and no incomplete-metrics warning any more.)
  *  17. Start Export button calls startExport(projectName) on success and
  *      calls toast.success + onClose.
  *  18. Start Export failure calls toast.error.
- *  19. On MT project with metricsFormats selected but no MT channels:
- *      clicking Export shows the incomplete-metrics AlertDialog.
- *  20. Confirming the incomplete-metrics dialog calls startExport.
- *  21. Cancelling the incomplete-metrics dialog does NOT call startExport.
- *  22. On MT project with mtMetrics enabled + channel selected: Export goes
- *      directly to startExport without the warning dialog.
  *  23. WebSocket-disconnected banner appears when wsConnected=false.
  *  24. WebSocket banner is absent when wsConnected=true.
  *  25. Export progress bar appears when isExporting=true.
@@ -174,19 +168,9 @@ vi.mock('../hooks/useSharedAdvancedExport', () => ({
 
 // Stub child sections that have their own test suites
 vi.mock('../components/MicrotubuleMetricsSection', () => ({
-  MicrotubuleMetricsSection: ({
-    availableChannels,
-  }: {
-    availableChannels: Array<{ name: string; displayName?: string }>;
-  }) => (
-    <div data-testid="mt-metrics-section">
-      {availableChannels.map(ch => (
-        <span key={ch.name} data-testid={`mt-channel-${ch.name}`}>
-          {ch.displayName ?? ch.name}
-        </span>
-      ))}
-    </div>
-  ),
+  // Per-channel intensity (incl. the sum) is always on now — the section takes
+  // no channel/enable props, so the mock is just a presence marker.
+  MicrotubuleMetricsSection: () => <div data-testid="mt-metrics-section" />,
 }));
 
 vi.mock('../components/ImageSelectionGrid', () => ({
@@ -296,7 +280,6 @@ const BASE_PROPS = {
       segmentationResults: [],
     },
   ],
-  projectChannels: undefined as string[] | undefined,
   selectedImageIds: undefined as string[] | undefined,
   onExportingChange: vi.fn(),
   onDownloadingChange: vi.fn(),
@@ -604,43 +587,6 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 8. channel picker wiring ──────────────────────────────────────────────
-
-  describe('channel picker wiring to MicrotubuleMetricsSection', () => {
-    it('passes de-duplicated channels from projectChannels to MT section', () => {
-      renderDialog({
-        projectType: 'microtubules',
-        projectChannels: ['DAPI', 'GFP', 'DAPI', 'mCherry'],
-      });
-      // DAPI appears only once (de-duplicated)
-      expect(screen.getAllByTestId(/^mt-channel-/)).toHaveLength(3);
-      expect(screen.getByTestId('mt-channel-DAPI')).toBeInTheDocument();
-      expect(screen.getByTestId('mt-channel-GFP')).toBeInTheDocument();
-      expect(screen.getByTestId('mt-channel-mCherry')).toBeInTheDocument();
-    });
-
-    it('passes empty availableChannels for MT project without projectChannels', () => {
-      renderDialog({
-        projectType: 'microtubules',
-        projectChannels: undefined,
-      });
-      expect(screen.getByTestId('mt-metrics-section')).toBeInTheDocument();
-      // No channel spans rendered
-      expect(screen.queryByTestId(/^mt-channel-/)).not.toBeInTheDocument();
-    });
-
-    it('passes empty availableChannels for non-MT project even with projectChannels', () => {
-      renderDialog({
-        projectType: 'spheroid',
-        projectChannels: ['DAPI', 'GFP'],
-      });
-      // Section is absent entirely
-      expect(
-        screen.queryByTestId('mt-metrics-section')
-      ).not.toBeInTheDocument();
-    });
-  });
-
   // ── 9. start export action ────────────────────────────────────────────────
 
   describe('Start Export action', () => {
@@ -674,164 +620,6 @@ describe('AdvancedExportDialog', () => {
       await waitFor(() => {
         expect(_mockToastError).toHaveBeenCalled();
       });
-    });
-  });
-
-  // ── 10. MT incomplete-metrics warning dialog ──────────────────────────────
-
-  describe('MT incomplete-metrics warning dialog', () => {
-    /**
-     * Condition that triggers the warning:
-     *   isMTProject=true AND metricsFormats.length > 0 AND
-     *   NOT (mtMetrics.enabled && mtMetrics.channels.length > 0)
-     */
-
-    it('shows AlertDialog when MT project has metricsFormats but no channel selected', async () => {
-      overrideHookState({
-        exportOptions: {
-          metricsFormats: ['excel'],
-          mtMetrics: {
-            enabled: false,
-            thicknessPx: 5,
-            marginMultiplier: 2,
-            channels: [],
-          },
-        },
-      });
-      const user = userEvent.setup();
-      renderDialog({ projectType: 'microtubules' });
-      await user.click(screen.getByRole('button', { name: /start export/i }));
-      await waitFor(() => {
-        expect(
-          screen.getByText('Intensity calculation not selected')
-        ).toBeInTheDocument();
-      });
-      // startExport must NOT have been called yet
-      expect(_mockStartExport).not.toHaveBeenCalled();
-    });
-
-    it('shows AlertDialog when MT project has metricsFormats and mtMetrics enabled but no channels', async () => {
-      overrideHookState({
-        exportOptions: {
-          metricsFormats: ['csv'],
-          mtMetrics: {
-            enabled: true,
-            thicknessPx: 5,
-            marginMultiplier: 2,
-            channels: [],
-          },
-        },
-      });
-      const user = userEvent.setup();
-      renderDialog({ projectType: 'microtubules' });
-      await user.click(screen.getByRole('button', { name: /start export/i }));
-      await waitFor(() => {
-        expect(
-          screen.getByText('Intensity calculation not selected')
-        ).toBeInTheDocument();
-      });
-    });
-
-    it('confirming incomplete-metrics dialog calls startExport', async () => {
-      _mockStartExport.mockResolvedValueOnce('job-999');
-      overrideHookState({
-        exportOptions: {
-          metricsFormats: ['excel'],
-          mtMetrics: {
-            enabled: false,
-            thicknessPx: 5,
-            marginMultiplier: 2,
-            channels: [],
-          },
-        },
-      });
-      const user = userEvent.setup();
-      renderDialog({ projectType: 'microtubules' });
-      await user.click(screen.getByRole('button', { name: /start export/i }));
-      // Wait for the AlertDialog to appear
-      await waitFor(() =>
-        expect(
-          screen.getByText('Intensity calculation not selected')
-        ).toBeInTheDocument()
-      );
-      // Click "Export anyway" confirmation
-      await user.click(screen.getByRole('button', { name: /export anyway/i }));
-      await waitFor(() => {
-        expect(_mockStartExport).toHaveBeenCalled();
-      });
-    });
-
-    it('cancelling the AlertDialog does NOT call startExport', async () => {
-      overrideHookState({
-        exportOptions: {
-          metricsFormats: ['excel'],
-          mtMetrics: {
-            enabled: false,
-            thicknessPx: 5,
-            marginMultiplier: 2,
-            channels: [],
-          },
-        },
-      });
-      const user = userEvent.setup();
-      renderDialog({ projectType: 'microtubules' });
-      await user.click(screen.getByRole('button', { name: /start export/i }));
-      await waitFor(() =>
-        expect(
-          screen.getByText('Intensity calculation not selected')
-        ).toBeInTheDocument()
-      );
-      await user.click(screen.getByRole('button', { name: /^cancel$/i }));
-      await waitFor(() => {
-        expect(
-          screen.queryByText('Intensity calculation not selected')
-        ).not.toBeInTheDocument();
-      });
-      expect(_mockStartExport).not.toHaveBeenCalled();
-    });
-
-    it('does NOT show warning when MT project has mtMetrics enabled with a selected channel', async () => {
-      _mockStartExport.mockResolvedValueOnce('job-ok');
-      overrideHookState({
-        exportOptions: {
-          metricsFormats: ['excel'],
-          mtMetrics: {
-            enabled: true,
-            thicknessPx: 5,
-            marginMultiplier: 2,
-            channels: ['DAPI'],
-          },
-        },
-      });
-      const user = userEvent.setup();
-      renderDialog({ projectType: 'microtubules' });
-      await user.click(screen.getByRole('button', { name: /start export/i }));
-      // Warning dialog should NOT appear — startExport should be called directly
-      await waitFor(() => {
-        expect(_mockStartExport).toHaveBeenCalled();
-      });
-      expect(
-        screen.queryByText('Intensity calculation not selected')
-      ).not.toBeInTheDocument();
-    });
-
-    it('does NOT show warning for non-MT projects even with metrics formats set', async () => {
-      _mockStartExport.mockResolvedValueOnce('job-ok');
-      overrideHookState({
-        exportOptions: {
-          metricsFormats: ['excel'],
-          mtMetrics: undefined,
-        },
-      });
-      const user = userEvent.setup();
-      renderDialog({ projectType: 'spheroid' });
-      await user.click(screen.getByRole('button', { name: /start export/i }));
-      await waitFor(() => {
-        expect(_mockStartExport).toHaveBeenCalled();
-      });
-      expect(
-        screen.queryByText('Intensity calculation not selected')
-      ).not.toBeInTheDocument();
     });
   });
 

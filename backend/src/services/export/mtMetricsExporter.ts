@@ -37,7 +37,8 @@ import {
 export interface MTMetricsOptions {
   thicknessPx: number;
   marginMultiplier: number;
-  /** Channel display names the user picked. Empty => exporter is a no-op. */
+  /** Channel display names to sample. Empty => ALL channels of each container
+   *  (per-channel intensity is always exported for MT projects). */
   channels: string[];
   /** From `ExportOptions.pixelToMicrometerScale`. ``null`` => no µm cols. */
   pixelToMicrometerScale: number | null;
@@ -276,20 +277,21 @@ export async function computeMTMetrics(
 ): Promise<{ rows: MTMetricsRow[]; skipped: string[] }> {
   const skipped: string[] = [];
 
-  if (!options.channels.length) {
-    logger.info(
-      'MT metrics: no channels selected; skipping',
-      'mtMetricsExporter',
-      { projectId }
-    );
-    return { rows: [], skipped };
-  }
+  // Per-channel intensity (incl. the integrated sum) is ALWAYS included for MT
+  // exports — there is no opt-in. An empty `channels` list therefore means
+  // "all channels of each container", NOT "skip". A specific subset can still
+  // be requested via the API by naming channels explicitly.
+  const requestAllChannels = options.channels.length === 0;
 
-  // Validate channel names defensively (the FE should have done this,
-  // but the export options can be POSTed directly).
-  for (const ch of options.channels) {
-    if (!CHANNEL_NAME_RE.test(ch)) {
-      throw new Error(`Invalid channel name in MT metrics options: ${ch}`);
+  // Validate any explicitly-requested channel names defensively (the FE
+  // validates too, but export options can be POSTed directly). The
+  // all-channels path derives names from stored container metadata (validated
+  // at upload), so it needs no re-check.
+  if (!requestAllChannels) {
+    for (const ch of options.channels) {
+      if (!CHANNEL_NAME_RE.test(ch)) {
+        throw new Error(`Invalid channel name in MT metrics options: ${ch}`);
+      }
     }
   }
 
@@ -365,9 +367,15 @@ export async function computeMTMetrics(
       continue;
     }
 
+    // Empty request => sample every channel this container has. A named subset
+    // is resolved against the container's own channels (a video may lack a
+    // channel that another video in the project has).
+    const selectedChannelNames = requestAllChannels
+      ? containerChannels.map(c => c.name)
+      : options.channels;
     const { indices, names, skipped: channelSkipped } = resolveChannelIndices(
       containerChannels,
-      options.channels
+      selectedChannelNames
     );
     if (channelSkipped.length) {
       logger.warn(
@@ -378,11 +386,16 @@ export async function computeMTMetrics(
     }
     if (!indices.length) {
       logger.warn(
-        'MT metrics: no overlap between selected channels and this video; skipping',
+        'MT metrics: no channels resolved for this video; skipping',
         'mtMetricsExporter',
         { projectId, videoId }
       );
-      skipped.push(`Video ${videoId}: none of the selected channels (${options.channels.join(', ')}) were found on this video — intensity metrics omitted.`);
+      const which = requestAllChannels
+        ? 'stored channels'
+        : `selected channels (${options.channels.join(', ')})`;
+      skipped.push(
+        `Video ${videoId}: none of the ${which} were found on this video — intensity metrics omitted.`
+      );
       continue;
     }
 

@@ -126,6 +126,12 @@ export interface SegmentationEditorLayoutProps {
   handlePropagateSelected: () => void;
   /** Current Shift+click multi-selection (per-frame polygon ids). */
   selectedPolygonIds: Set<string>;
+  /** Sidebar checkbox toggle — mirrors Shift+click on the canvas. */
+  handleToggleSelectedInList: (id: string) => void;
+  /** Sidebar "select all" — pass the listed current-frame polygon ids. */
+  handleSelectAllInList: (ids: string[]) => void;
+  /** Sidebar "deselect all" — clear both selection sets. */
+  handleClearSelectionInList: () => void;
   handleSlicePolygonFromContextMenu: PolygonHandlers['handleSlicePolygonFromContextMenu'];
   handleEditPolygonFromContextMenu: PolygonHandlers['handleEditPolygonFromContextMenu'];
   handleDeleteVertexFromContextMenu: PolygonHandlers['handleDeleteVertexFromContextMenu'];
@@ -204,6 +210,9 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   handleCanvasSelect,
   handlePropagateSelected,
   selectedPolygonIds,
+  handleToggleSelectedInList,
+  handleSelectAllInList,
+  handleClearSelectionInList,
   handleSlicePolygonFromContextMenu,
   handleEditPolygonFromContextMenu,
   handleDeleteVertexFromContextMenu,
@@ -499,6 +508,10 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                   onTogglePolygonVisibility={handleTogglePolygonVisibility}
                   onRenamePolygon={handleRenamePolygon}
                   onDeletePolygon={handleDeletePolygonFromPanel}
+                  selectedPolygonIds={selectedPolygonIds}
+                  onToggleSelected={handleToggleSelectedInList}
+                  onSelectAll={handleSelectAllInList}
+                  onClearSelection={handleClearSelectionInList}
                 />
                 {hasPolylines && polylineKind === 'sperm' && (
                   <SpermInstancePanel
@@ -518,6 +531,10 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     onSelectPolygon={handleSelectPolygon}
                     hiddenPolygonIds={frameHiddenIds}
                     onToggleVisibility={handleTogglePolygonVisibility}
+                    selectedPolygonIds={selectedPolygonIds}
+                    onToggleSelected={handleToggleSelectedInList}
+                    onSelectAll={handleSelectAllInList}
+                    onClearSelection={handleClearSelectionInList}
                   />
                 )}
               </div>
