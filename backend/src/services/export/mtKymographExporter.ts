@@ -44,6 +44,13 @@ const KYMOGRAPH_CONCURRENCY = 3;
  *  logged, never silent. */
 const MAX_PROFILE_FRAMES_PER_MT = 300;
 
+/** Sanitise an untrusted path segment (polyline id, channel name) before it goes
+ *  into an export filename — strips anything outside ``[A-Za-z0-9_-]`` so a
+ *  crafted polyline id (e.g. ``../../evil``) can't inject a path separator or
+ *  ``..`` traversal into the write target. ``safeVideo`` is already sanitised at
+ *  the call site with the same character class. */
+const safeSegment = (s: string): string => s.replace(/[^A-Za-z0-9_-]+/g, '_');
+
 /** Which artefact the MT kymograph export produces. ``kymograph`` = the stacked
  *  heatmap + velocity metrics (default); ``profiles`` = one matplotlib
  *  intensity-vs-position plot per frame (+ the intensity CSV). */
@@ -295,7 +302,7 @@ export async function exportMicrotubuleKymographs(
             renderProfiles: true,
           });
 
-          const stem = `${job.safeVideo}__${job.polylineId}__${job.sourceChannel}`;
+          const stem = `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}`;
 
           // Intensity matrix CSV (rows = frames, cols = position) — the raw
           // numbers behind the plots. ML returns it on every kymograph build.
@@ -375,7 +382,7 @@ export async function exportMicrotubuleKymographs(
           await fs.writeFile(
             path.join(
               outDir,
-              `${job.safeVideo}__${job.polylineId}__${job.sourceChannel}.png`
+              `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}.png`
             ),
             Buffer.from(result.overlayPngBase64, 'base64')
           );
