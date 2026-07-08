@@ -86,6 +86,17 @@ export interface KymographServiceInput {
   /** Width (kymograph position columns) of the signal band sampled around each
    *  trajectory for the background-subtracted intensity metric. Default 3. */
   intensityWidth?: number;
+  /** When true, the ML service also renders one matplotlib line plot per frame
+   *  (intensity vs. position along the microtubule) and the result carries
+   *  ``profiles``. Used by the "intensity profiles" export mode. */
+  renderProfiles?: boolean;
+}
+
+/** One per-frame intensity profile rendered as a matplotlib PNG. Mirrors the ML
+ *  ``ProfilePng`` (frame index + base64 PNG). */
+export interface KymographProfile {
+  frame: number;
+  pngBase64: string;
 }
 
 /** A sub-pixel trajectory sample: `[frame, xPosition]` along the polyline. */
@@ -134,6 +145,8 @@ export interface KymographServiceResult {
   velocityError?: string;
   /** Base64 PNG of the kymograph + tracks; present only with ``renderOverlay``. */
   overlayPngBase64?: string;
+  /** Per-frame intensity-profile plots; present only with ``renderProfiles``. */
+  profiles?: KymographProfile[];
 }
 
 /** Resolves the on-disk PNG path for a given frame + channel. */
@@ -177,6 +190,7 @@ export async function buildKymograph(
     detectVelocity,
     renderOverlay,
     intensityWidth,
+    renderProfiles,
   } = input;
 
   // Defence in depth: reject any sourceChannel containing path separators
@@ -300,6 +314,7 @@ export async function buildKymograph(
       ...(channelColor ? { channel_color: channelColor } : {}),
       ...(detectVelocity ? { detect_velocity: true } : {}),
       ...(detectVelocity && renderOverlay ? { render_overlay: true } : {}),
+      ...(renderProfiles ? { render_profiles: true } : {}),
     },
     { timeout: 120_000 }
   );
@@ -371,12 +386,24 @@ export async function buildKymograph(
       }))
     : undefined;
 
+  // Map per-frame intensity profiles (present only when renderProfiles was set).
+  // ML shape: [{ frame, png_base64 }]. Anything malformed degrades to undefined
+  // rather than throwing — profiles are an optional add-on.
+  const profiles: KymographProfile[] | undefined = Array.isArray(
+    payload.profiles
+  )
+    ? (payload.profiles as Array<{ frame: number; png_base64: string }>)
+        .filter(p => typeof p?.png_base64 === 'string')
+        .map(p => ({ frame: Number(p.frame), pngBase64: p.png_base64 }))
+    : undefined;
+
   logger.info('Kymograph generated', 'KymographService', {
     videoContainerId,
     polylineId,
     tracked: trackedMode,
     frames: framesPayload.length,
     velocityTracks: tracks?.length,
+    profiles: profiles?.length,
   });
 
   return {
@@ -397,5 +424,6 @@ export async function buildKymograph(
     ...(typeof payload.overlay_png_base64 === 'string'
       ? { overlayPngBase64: payload.overlay_png_base64 }
       : {}),
+    ...(profiles ? { profiles } : {}),
   };
 }

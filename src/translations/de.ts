@@ -1207,6 +1207,12 @@ export default {
       enable: 'Kymograph-Analyse einbeziehen',
       velocityMetrics: 'Geschwindigkeitsmetriken (CSV)',
       segmentedImages: 'Segmentierte Kymograph-Bilder (PNG)',
+      modeKymograph: 'Kymograph (Raum × Zeit)',
+      modeProfiles: 'Intensitätsprofile (pro Bild)',
+      singleFrameHint:
+        'Einzelbild — ein Kymograph benötigt eine Zeitreihe, daher wird nur das Intensitätsprofil exportiert.',
+      profilesHint:
+        'Exportiert pro Bild ein matplotlib-Diagramm der Intensität gegen die Position sowie die Intensitäts-CSV.',
     },
     mt: {
       sectionTitle: 'Mikrotubuli-Metriken',

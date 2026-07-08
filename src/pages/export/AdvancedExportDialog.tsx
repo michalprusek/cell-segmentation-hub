@@ -66,6 +66,7 @@ const MT_METRICS_DEFAULTS = {
 
 const MT_KYMOGRAPHS_DEFAULTS = {
   enabled: false,
+  mode: 'kymograph' as const,
   includeVelocityMetrics: true,
   includeSegmentedImages: true,
 };
@@ -88,6 +89,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       // (singular) is the model id, not the project type. Mis-comparing
       // them silently hides the MT section on every MT project.
       const isMTProject = projectType === 'microtubules';
+
+      // A kymograph needs a time axis (≥ 2 frames). Force profile-only ONLY on
+      // positive evidence that every video container is single-frame; a missing
+      // frameCount or an empty container list must never hide a working option
+      // (worst case there, the backend just yields a 1-row kymograph).
+      const canBuildKymograph = React.useMemo(() => {
+        const containers = images.filter(img => img.isVideoContainer);
+        if (containers.length === 0) return true;
+        return containers.some(c => c.frameCount == null || c.frameCount > 1);
+      }, [images]);
 
       // Local snapshot of MT options. We always merge into the shared
       // exportOptions state when the user toggles or edits inputs so the
@@ -366,6 +377,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                       value={
                         exportOptions.mtKymographs ?? MT_KYMOGRAPHS_DEFAULTS
                       }
+                      canBuildKymograph={canBuildKymograph}
                       onChange={next =>
                         updateExportOptions({ mtKymographs: next })
                       }
