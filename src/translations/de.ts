@@ -776,6 +776,11 @@ export default {
     },
   },
   segmentation: {
+    selection: {
+      selectAll: 'Alle auswählen',
+      deselectAll: 'Auswahl aufheben',
+      selected: '{{count}} ausgewählt',
+    },
     trackOps: {
       propagateSelectedSuccess:
         '{{count}} Mikrotubuli in die folgenden Frames übertragen',
@@ -1205,22 +1210,14 @@ export default {
       sectionTitle: 'Mikrotubuli-Metriken',
       sectionDescription:
         'Pro-MT-Länge, -Fläche und kanalweise Intensität aus der rohen ND2/TIFF-Datei. Hintergrundkorrektur über den Median außerhalb der dilatierten MT-Maske.',
-      enable: 'Kanalweise Intensitätsmetriken berechnen',
+      intensityNote:
+        'Die kanalweise Signalintensität — einschließlich der summierten (integrierten) Intensität — wird immer für jeden Kanal berechnet und in die Metriktabelle geschrieben. Keine Auswahl erforderlich.',
       thicknessLabel: 'MT-Dicke (px)',
       thicknessHelp:
         'Breite des Abtastbands entlang jeder Polyline. 5 px entspricht dem typischen Mikrotubulus-Durchmesser bei 100× Widefield.',
       marginLabel: 'Hintergrundrand (× Dicke)',
       marginHelp:
         'Pixel innerhalb dieses Radius (Dicke × Multiplikator) von einem MT werden vom Hintergrund ausgeschlossen. Höher = konservativer.',
-      channelsLabel: 'Zu abtastende Kanäle',
-      noChannels:
-        'Dieses Projekt hat keine Kanal-Metadaten. Laden Sie das Video erneut hoch, um kanalspezifische Metriken zu erhalten.',
-      selectChannelRequired:
-        'Wählen Sie mindestens einen Kanal, um kanalspezifische Intensitätsmetriken zu exportieren.',
-      incompleteTitle: 'Intensitätsberechnung nicht ausgewählt',
-      incompleteBody:
-        'Sie haben die kanalweise Signalintensitätsberechnung nicht aktiviert, daher sind die exportierten Metriken unvollständig: Es wird nur die Mikrotubuli-Länge einbezogen, ohne die kanalspezifischen Intensitätsspalten. Trotzdem exportieren?',
-      incompleteConfirm: 'Trotzdem exportieren',
     },
     advancedExport: 'Erweiterter Export',
     advancedOptions: 'Erweiterte Export-Optionen',

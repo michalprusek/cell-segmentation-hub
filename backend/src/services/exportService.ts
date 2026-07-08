@@ -81,17 +81,26 @@ export interface ExportOptions {
   /**
    * Microtubule-only export options. For ``microtubules`` projects the MT
    * metrics exporter owns the standard ``metrics.{csv,xlsx,json}`` files:
-   * microtubule length is always written (geometry, no channel needed), and
-   * when ``enabled`` with one or more ``channels`` selected, the pipeline
-   * re-reads the original ND2/TIFF to add per-channel intensity + band-area
-   * columns derived from raw 16-bit signal (NOT the 8-bit display-normalised
-   * per-channel PNGs).
+   * microtubule length is always written (geometry, no channel needed), and the
+   * pipeline ALWAYS re-reads the original ND2/TIFF to add per-channel intensity
+   * + band-area columns (incl. the integrated ``sumIntensity``) for every
+   * channel, derived from raw 16-bit signal (NOT the 8-bit display-normalised
+   * per-channel PNGs). There is no opt-in — ``thicknessPx`` / ``marginMultiplier``
+   * only tune the band. All fields are optional for direct API callers.
    */
   mtMetrics?: {
-    enabled: boolean;
-    thicknessPx: number;
-    marginMultiplier: number;
-    channels: string[];
+    /**
+     * @deprecated Ignored — per-channel intensity is always computed for MT
+     * projects. Retained only for wire-compat with older clients.
+     */
+    enabled?: boolean;
+    thicknessPx?: number;
+    marginMultiplier?: number;
+    /**
+     * Optional channel subset (machine names). Empty or absent => ALL channels
+     * of each video container are sampled.
+     */
+    channels?: string[];
   };
   /**
    * Microtubule-only kymograph export. For ``microtubules`` projects, builds a
@@ -1514,12 +1523,13 @@ export class ExportService {
    * because MT annotations are open polylines with no area).
    *
    * Always writes microtubule LENGTH per (frame, polyline) — geometry only,
-   * computed Node-side from the stored polylines, no channel needed. When the
-   * user selected one or more channels it additionally re-reads the original
-   * ND2/TIFF via the ML `/mt-metrics` route to add per-channel intensity +
-   * band-area columns. If intensity can't be produced (no channel chosen, ML
-   * error, or original file missing) it falls back to length-only and records
-   * a user-facing warning rather than silently emitting nothing.
+   * computed Node-side from the stored polylines, no channel needed. It ALSO
+   * always re-reads the original ND2/TIFF via the ML `/mt-metrics` route to add
+   * per-channel intensity + band-area columns (incl. the integrated
+   * `sumIntensity`) for every channel — there is no opt-in. If intensity can't
+   * be produced (ML error, or the original file is missing / has no channel
+   * metadata) it falls back to length-only and records a user-facing warning
+   * rather than silently emitting nothing.
    */
   private async generateMicrotubuleMetrics(
     images: ImageWithSegmentation[],
@@ -1545,9 +1555,16 @@ export class ExportService {
         ? { polygons: i.segmentation.polygons }
         : null,
     }));
-    const channels = options.mtMetrics?.enabled
-      ? options.mtMetrics.channels ?? []
-      : [];
+    // Per-channel intensity (incl. the integrated sum) is ALWAYS computed for
+    // MT exports — there is no opt-in. An empty channel list means "all
+    // channels of each container" (see computeMTMetrics); the modal no longer
+    // asks the user to enable this or pick channels. Band thickness / margin
+    // still come from the modal, falling back to sensible defaults for direct
+    // API callers.
+    const channels = options.mtMetrics?.channels ?? [];
+    const thicknessPx =
+      options.mtMetrics?.thicknessPx ?? DEFAULT_MT_ROI_THICKNESS_PX;
+    const marginMultiplier = options.mtMetrics?.marginMultiplier ?? 2;
 
     const addWarning = (msg: string) => {
       if (!jobId) return;
@@ -1558,41 +1575,36 @@ export class ExportService {
     let rows: MTMetricsRow[] = [];
     let intensityIncluded = false;
 
-    if (channels.length > 0) {
-      try {
-        const mtResult = await computeMTMetrics(frameInputs, projectId, {
-          thicknessPx: options.mtMetrics!.thicknessPx,
-          marginMultiplier: options.mtMetrics!.marginMultiplier,
-          channels,
-          pixelToMicrometerScale: scale,
-        });
-        rows = mtResult.rows;
-        for (const reason of mtResult.skipped) {
-          addWarning(`MT intensity metrics skipped: ${reason}`);
-        }
-        intensityIncluded = rows.length > 0;
-      } catch (err) {
-        logger.error(
-          'MT intensity metrics failed; falling back to length-only',
-          err instanceof Error ? err : new Error(String(err)),
-          'ExportService',
-          { jobId, projectId }
-        );
-        addWarning(
-          'Per-channel signal-intensity metrics could not be computed (the original ND2/TIFF was unreadable or the ML service failed). The metrics file contains microtubule length only.'
-        );
-        rows = [];
+    try {
+      const mtResult = await computeMTMetrics(frameInputs, projectId, {
+        thicknessPx,
+        marginMultiplier,
+        channels,
+        pixelToMicrometerScale: scale,
+      });
+      rows = mtResult.rows;
+      for (const reason of mtResult.skipped) {
+        addWarning(`MT intensity metrics skipped: ${reason}`);
       }
+      intensityIncluded = rows.length > 0;
+    } catch (err) {
+      logger.error(
+        'MT intensity metrics failed; falling back to length-only',
+        err instanceof Error ? err : new Error(String(err)),
+        'ExportService',
+        { jobId, projectId }
+      );
+      addWarning(
+        'Per-channel signal-intensity metrics could not be computed (the original ND2/TIFF was unreadable or the ML service failed). The metrics file contains microtubule length only.'
+      );
+      rows = [];
     }
 
-    // Geometry-only fallback: no channel chosen, or intensity failed / empty.
+    // Geometry-only fallback: intensity failed or produced nothing (e.g. no
+    // channel metadata stored, or the ML service was unavailable). Microtubule
+    // LENGTH needs no channel, so it is always exportable.
     if (!intensityIncluded) {
       rows = computeMTGeometry(frameInputs, scale);
-      if (channels.length === 0) {
-        addWarning(
-          'Per-channel signal-intensity metrics were not exported because no channel was selected. The metrics file contains microtubule length only — enable "Calculate signal intensity for each channel" and pick a channel to include intensity.'
-        );
-      }
     }
 
     if (!rows.length) {

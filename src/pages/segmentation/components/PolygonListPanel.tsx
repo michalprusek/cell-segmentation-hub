@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Polygon } from '@/lib/segmentation';
 import { motion } from 'framer-motion';
 import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
@@ -30,6 +31,17 @@ interface PolygonListPanelProps {
   onTogglePolygonVisibility?: (id: string) => void;
   onRenamePolygon?: (id: string, name: string) => void;
   onDeletePolygon?: (id: string) => void;
+  /**
+   * Multi-selection (per-row checkbox column). This mirrors the canvas
+   * selection set: a row is checked when it is the single selection
+   * (`selectedPolygonId`) OR a member of the Shift+left-click multi-select set
+   * (`selectedPolygonIds`). Toggling a checkbox drives the same bulk set that
+   * Shift+left-click on the canvas drives. Omit these props to hide the column.
+   */
+  selectedPolygonIds?: Set<string>;
+  onToggleSelected?: (id: string) => void;
+  onSelectAll?: (ids: string[]) => void;
+  onClearSelection?: () => void;
 }
 
 /**
@@ -44,6 +56,10 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   onTogglePolygonVisibility,
   onRenamePolygon,
   onDeletePolygon,
+  selectedPolygonIds = new Set<string>(),
+  onToggleSelected,
+  onSelectAll,
+  onClearSelection,
 }) => {
   const { t } = useLanguage();
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
@@ -71,6 +87,26 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
       if (allHidden && isHidden) onTogglePolygonVisibility(p.id);
       else if (!allHidden && !isHidden) onTogglePolygonVisibility(p.id);
     }
+  };
+
+  // Multi-selection checkbox column. A row is "checked" when it is the single
+  // selection OR a member of the Shift+click multi-select set, so a plain
+  // left-click on the canvas also lights up its checkbox. The column is only
+  // shown when the parent wires the toggle handler.
+  const multiSelectEnabled = !!onToggleSelected;
+  const isRowSelected = (id: string) =>
+    id === selectedPolygonId || selectedPolygonIds.has(id);
+  const selectableIds = polygons.map(p => p.id);
+  const selectedCount = selectableIds.filter(isRowSelected).length;
+  const allSelected = polygons.length > 0 && selectedCount === polygons.length;
+  const headerCheckboxState: boolean | 'indeterminate' = allSelected
+    ? true
+    : selectedCount > 0
+      ? 'indeterminate'
+      : false;
+  const handleHeaderToggle = () => {
+    if (allSelected) onClearSelection?.();
+    else onSelectAll?.(selectableIds);
   };
 
   const handleStartRename = (polygon: Polygon) => {
@@ -268,6 +304,26 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
             )}
           </div>
         </div>
+
+        {/* Select-all row — toggles the whole visible list into the multi-select
+            set that Shift+left-click on the canvas also drives. */}
+        {multiSelectEnabled && polygons.length > 0 && (
+          <div className="flex items-center gap-2 mt-2">
+            <Checkbox
+              id="polygon-list-select-all"
+              checked={headerCheckboxState}
+              onCheckedChange={handleHeaderToggle}
+            />
+            <label
+              htmlFor="polygon-list-select-all"
+              className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none"
+            >
+              {selectedCount > 0
+                ? t('segmentation.selection.selected', { count: selectedCount })
+                : t('segmentation.selection.selectAll')}
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Polygon List */}
@@ -279,6 +335,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
         <div className="p-2 space-y-1">
           {deferredPolygons.map((polygon, index) => {
             const isSelected = selectedPolygonId === polygon.id;
+            const isChecked = isSelected || selectedPolygonIds.has(polygon.id);
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;
             const isPolyline = polygon.geometry === 'polyline';
@@ -309,6 +366,18 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
               >
                 <div className="p-3">
                   <div className="flex items-center gap-3">
+                    {/* Multi-select checkbox — stops propagation so it doesn't
+                        also trigger the row's single-select onClick. */}
+                    {multiSelectEnabled && (
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => onToggleSelected?.(polygon.id)}
+                        onClick={e => e.stopPropagation()}
+                        aria-label={polygonName}
+                        className="flex-shrink-0"
+                      />
+                    )}
+
                     {/* Color indicator */}
                     <div
                       className={`w-3 h-3 rounded-full ${getPolygonColor(polygon)}`}

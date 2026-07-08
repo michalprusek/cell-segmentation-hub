@@ -1,6 +1,7 @@
 import React, { useDeferredValue, useMemo } from 'react';
 import { Spline, Eye, EyeOff } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Polygon } from '@/lib/segmentation';
 import { calculatePolylineLength } from '../utils/metricCalculations';
 import {
@@ -17,6 +18,15 @@ interface MicrotubuleInstancePanelProps {
   // polyline on the canvas (not just the list row).
   hiddenPolygonIds?: Set<string>;
   onToggleVisibility?: (polygonId: string) => void;
+  /**
+   * Multi-selection (per-row checkbox), synced with the canvas selection: a row
+   * is checked when it is the single selection OR a member of the
+   * Shift+left-click multi-select set. Omit to hide the checkboxes.
+   */
+  selectedPolygonIds?: Set<string>;
+  onToggleSelected?: (id: string) => void;
+  onSelectAll?: (ids: string[]) => void;
+  onClearSelection?: () => void;
 }
 
 const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
@@ -25,6 +35,10 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   onSelectPolygon,
   hiddenPolygonIds,
   onToggleVisibility,
+  selectedPolygonIds = new Set<string>(),
+  onToggleSelected,
+  onSelectAll,
+  onClearSelection,
 }) => {
   const { t } = useLanguage();
 
@@ -78,16 +92,54 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
     }
   };
 
+  // Multi-selection checkbox column (mirrors PolygonListPanel). Checked when a
+  // row is the single selection OR in the Shift+click multi-select set.
+  const multiSelectEnabled = !!onToggleSelected;
+  const isRowSelected = (id: string) =>
+    id === selectedPolygonId || selectedPolygonIds.has(id);
+  const selectableIds = sorted.map(mt => mt.id);
+  const selectedCount = selectableIds.filter(isRowSelected).length;
+  const allSelected = sorted.length > 0 && selectedCount === sorted.length;
+  const headerCheckboxState: boolean | 'indeterminate' = allSelected
+    ? true
+    : selectedCount > 0
+      ? 'indeterminate'
+      : false;
+  const handleHeaderToggle = () => {
+    if (allSelected) onClearSelection?.();
+    else onSelectAll?.(selectableIds);
+  };
+
   return (
     <div className="shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
       <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <Spline className="h-4 w-4" />
-          {t('microtubule.instancePanel')}{' '}
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            ({sorted.length})
-          </span>
-        </h4>
+        <div className="flex items-center gap-2">
+          {/* Select-all: toggles every MT into the multi-select set (also
+              driven by Shift+left-click on the canvas). */}
+          {multiSelectEnabled && sorted.length > 0 && (
+            <Checkbox
+              checked={headerCheckboxState}
+              onCheckedChange={handleHeaderToggle}
+              aria-label={
+                allSelected
+                  ? t('segmentation.selection.deselectAll')
+                  : t('segmentation.selection.selectAll')
+              }
+              title={
+                allSelected
+                  ? t('segmentation.selection.deselectAll')
+                  : t('segmentation.selection.selectAll')
+              }
+            />
+          )}
+          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <Spline className="h-4 w-4" />
+            {t('microtubule.instancePanel')}{' '}
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              ({sorted.length})
+            </span>
+          </h4>
+        </div>
         {onToggleVisibility && (
           <button
             type="button"
@@ -116,6 +168,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
           const colorKey = mt.trackId ?? mt.instanceId ?? '';
           const color = colorFromInstanceId(colorKey);
           const isSelected = selectedPolygonId === mt.id;
+          const isChecked = isSelected || selectedPolygonIds.has(mt.id);
           const isHidden = hiddenPolygonIds?.has(mt.id) ?? false;
           return (
             <div
@@ -126,6 +179,14 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                   : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
               }`}
             >
+              {multiSelectEnabled && (
+                <Checkbox
+                  checked={isChecked}
+                  onCheckedChange={() => onToggleSelected?.(mt.id)}
+                  aria-label={`${t('microtubule.instance')} ${idx + 1}`}
+                  className="flex-shrink-0"
+                />
+              )}
               <button
                 type="button"
                 className={`flex flex-1 items-center gap-2 text-left ${isHidden ? 'opacity-50' : ''}`}

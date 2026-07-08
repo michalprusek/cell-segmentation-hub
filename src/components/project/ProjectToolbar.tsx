@@ -38,12 +38,6 @@ interface ProjectToolbarProps {
   projectName?: string;
   projectType?: string | null;
   images?: unknown[];
-  /** Distinct channel names across the project's video containers
-   *  (BE-aggregated `metadata.projectChannels`). Drives the microtubule
-   *  per-channel intensity picker in the export dialog — the container rows
-   *  that carry `channels` are hidden from the gallery image list, so this
-   *  is the only path that list to the dialog. */
-  projectChannels?: string[];
   selectedImageIds?: string[];
   // Selection props
   selectedCount?: number;
@@ -81,7 +75,6 @@ const ProjectToolbar = ({
   projectName = 'Project',
   projectType,
   images = [],
-  projectChannels,
   selectedImageIds,
   selectedCount = 0,
   isAllSelected = false,
@@ -424,7 +417,6 @@ const ProjectToolbar = ({
           projectName={projectName}
           projectType={projectType ?? null}
           images={images}
-          projectChannels={projectChannels}
           selectedImageIds={selectedImageIds}
           onExportingChange={onExportingChange || setIsExporting}
           onDownloadingChange={onDownloadingChange || setIsDownloading}

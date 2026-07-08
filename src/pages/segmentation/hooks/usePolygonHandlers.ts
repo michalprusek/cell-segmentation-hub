@@ -86,6 +86,11 @@ export function usePolygonHandlers({
   const clearMultiSelect = useCallback(() => {
     setSelectedPolygonIds(prev => (prev.size === 0 ? prev : new Set()));
   }, []);
+  // Replace the whole multi-select set (used by the sidebar "select all"
+  // control — the panel passes its full list of current-frame polygon ids).
+  const selectAllMultiSelect = useCallback((ids: string[]) => {
+    setSelectedPolygonIds(new Set(ids));
+  }, []);
 
   // Polygon ids are per-frame, so a multi-selection is meaningless after a frame
   // change — clear it when the edited image changes.
@@ -251,6 +256,7 @@ export function usePolygonHandlers({
     selectedPolygonIds,
     toggleMultiSelect,
     clearMultiSelect,
+    selectAllMultiSelect,
     handleTogglePolygonVisibility,
     handleDeletePolygonFromPanel,
     handleSelectPolygon,

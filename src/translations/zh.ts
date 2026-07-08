@@ -709,6 +709,11 @@ export default {
     },
   },
   segmentation: {
+    selection: {
+      selectAll: '全选',
+      deselectAll: '取消全选',
+      selected: '已选择 {{count}} 个',
+    },
     trackOps: {
       propagateSelectedSuccess: '已将 {{count}} 个微管传播到后续帧',
       propagateSelectedPartial: '已传播 {{done}}/{{total}} 个微管',
@@ -1101,20 +1106,14 @@ export default {
       sectionTitle: '微管指标',
       sectionDescription:
         '从原始 ND2/TIFF 文件计算每条微管的长度、面积及每通道强度。使用扩张 MT 掩码外的中位数进行背景校正。',
-      enable: '计算每通道强度指标',
+      intensityNote:
+        '每通道信号强度——包括总和（积分）强度——始终会为每个通道计算并写入指标表格，无需进行任何选择。',
       thicknessLabel: '微管厚度 (px)',
       thicknessHelp:
         '沿每条多边折线采样的带宽。100× 宽场下典型微管直径约为 5 px。',
       marginLabel: '背景余量 (× 厚度)',
       marginHelp:
         '将距任意 MT 此半径范围内的像素 (厚度 × 倍率) 排除出背景。越大越保守。',
-      channelsLabel: '要采样的通道',
-      noChannels: '该项目没有通道元数据。请重新上传视频以获取按通道的指标。',
-      selectChannelRequired: '请至少选择一个通道以导出按通道的强度指标。',
-      incompleteTitle: '未选择强度计算',
-      incompleteBody:
-        '您尚未启用按通道的信号强度计算，因此导出的指标将不完整：仅包含微管长度，而不含按通道的强度列。仍要导出吗？',
-      incompleteConfirm: '仍要导出',
     },
     advancedExport: '高级导出',
     advancedOptions: '高级导出选项',

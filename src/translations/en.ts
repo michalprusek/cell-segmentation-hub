@@ -617,6 +617,11 @@ export default {
     system: 'System',
   },
   segmentation: {
+    selection: {
+      selectAll: 'Select all',
+      deselectAll: 'Deselect all',
+      selected: '{{count}} selected',
+    },
     trackOps: {
       propagateSelectedSuccess:
         'Propagated {{count}} microtubules to the following frames',
@@ -1187,22 +1192,14 @@ export default {
       sectionTitle: 'Microtubule metrics',
       sectionDescription:
         'Per-MT length, area, and per-channel intensity from the raw ND2/TIFF file. Background-corrected using the median of pixels outside the dilated MT mask.',
-      enable: 'Compute per-channel intensity metrics',
+      intensityNote:
+        'Per-channel signal intensity — including the summed (integrated) intensity — is always computed for every channel and written to the metrics spreadsheet. No selection needed.',
       thicknessLabel: 'MT thickness (px)',
       thicknessHelp:
         'Width of the sampling band along each polyline. 5 px matches typical microtubule diameter in 100x widefield.',
       marginLabel: 'Background margin (× thickness)',
       marginHelp:
         'Excludes pixels within this radius (thickness × multiplier) of any MT from the background. Higher = more conservative.',
-      channelsLabel: 'Channels to sample',
-      noChannels:
-        'This project has no per-channel metadata. Re-upload the video to get channel-specific metrics.',
-      selectChannelRequired:
-        'Select at least one channel to export per-channel intensity metrics.',
-      incompleteTitle: 'Intensity calculation not selected',
-      incompleteBody:
-        'You have not enabled per-channel signal-intensity calculation, so the exported metrics will be incomplete: only microtubule length will be included, without the per-channel intensity columns. Export anyway?',
-      incompleteConfirm: 'Export anyway',
     },
     // Dialog headers
     advancedExport: 'Advanced Export',

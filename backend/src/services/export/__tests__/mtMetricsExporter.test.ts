@@ -338,7 +338,9 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
     vi.clearAllMocks();
   });
 
-  it('returns empty array immediately when channels is empty', async () => {
+  it('returns empty array when there are no frame images (all-channels default still needs frames)', async () => {
+    // Empty `channels` no longer short-circuits (it now means "all channels");
+    // an empty FRAME list is what makes this a no-op with no ML call.
     const result = await computeMTMetrics([], 'proj-1', {
       ...BASE_OPTIONS,
       channels: [],
@@ -564,6 +566,23 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     expect(body.original_path).toContain('projects/p1/video.nd2');
     expect(body.thickness_px).toBe(3);
     expect(body.margin_multiplier).toBe(1.5);
+  });
+
+  it('empty channels => samples ALL container channels (always-on, no opt-in)', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
+    axiosPostMock.mockResolvedValueOnce(mlResponse);
+
+    await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: frameSeg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: [] }
+    );
+
+    expect(axiosPostMock).toHaveBeenCalledOnce();
+    const [, body] = axiosPostMock.mock.calls[0];
+    // Container has [BF, DAPI]; an empty request must sample BOTH, in order.
+    expect(body.channel_indices).toEqual([0, 1]);
+    expect(body.channel_names).toEqual(['BF', 'DAPI']);
   });
 
   it('maps ML response rows to MTMetricsRow with px→µm conversion', async () => {

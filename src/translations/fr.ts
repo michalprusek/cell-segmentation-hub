@@ -770,6 +770,11 @@ export default {
     },
   },
   segmentation: {
+    selection: {
+      selectAll: 'Tout sélectionner',
+      deselectAll: 'Tout désélectionner',
+      selected: '{{count}} sélectionné(s)',
+    },
     trackOps: {
       propagateSelectedSuccess:
         '{{count}} microtubules propagés vers les images suivantes',
@@ -1195,22 +1200,14 @@ export default {
       sectionTitle: 'Métriques des microtubules',
       sectionDescription:
         "Longueur, aire et intensité par canal de chaque MT à partir du fichier ND2/TIFF d'origine. Corrigé par la médiane du fond (en dehors du masque MT dilaté).",
-      enable: 'Calculer les métriques d’intensité par canal',
+      intensityNote:
+        "L'intensité du signal par canal — y compris l'intensité sommée (intégrée) — est toujours calculée pour chaque canal et écrite dans la feuille de métriques. Aucune sélection n'est nécessaire.",
       thicknessLabel: 'Épaisseur du MT (px)',
       thicknessHelp:
         "Largeur de la bande d'échantillonnage le long de chaque polyligne. 5 px correspond au diamètre typique des microtubules en grand champ 100×.",
       marginLabel: 'Marge du fond (× épaisseur)',
       marginHelp:
         "Exclut du fond les pixels situés dans ce rayon (épaisseur × multiplicateur) d'un MT. Plus élevé = plus conservateur.",
-      channelsLabel: 'Canaux à échantillonner',
-      noChannels:
-        'Ce projet ne contient pas de métadonnées de canaux. Téléversez à nouveau la vidéo pour obtenir des métriques par canal.',
-      selectChannelRequired:
-        "Sélectionnez au moins un canal pour exporter les métriques d'intensité par canal.",
-      incompleteTitle: "Calcul d'intensité non sélectionné",
-      incompleteBody:
-        "Vous n'avez pas activé le calcul de l'intensité du signal par canal ; les métriques exportées seront donc incomplètes : seule la longueur des microtubules sera incluse, sans les colonnes d'intensité par canal. Exporter quand même ?",
-      incompleteConfirm: 'Exporter quand même',
     },
     advancedExport: 'Export Avancé',
     advancedOptions: "Options d'Exportation Avancées",
