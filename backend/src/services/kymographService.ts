@@ -90,6 +90,12 @@ export interface KymographServiceInput {
    *  (intensity vs. position along the microtubule) and the result carries
    *  ``profiles``. Used by the "intensity profiles" export mode. */
   renderProfiles?: boolean;
+  /** Restrict the kymograph/profiles to these frame indices (the export image
+   *  selection). When omitted, every frame of the container is used (the editor
+   *  modal's full-kymograph behaviour). Frames not in the set are excluded from
+   *  the sampled matrix, so both the ML render cost and the output scope shrink
+   *  to the selection. */
+  frameFilter?: number[];
 }
 
 /** One per-frame intensity profile rendered as a matplotlib PNG. Mirrors the ML
@@ -191,7 +197,13 @@ export async function buildKymograph(
     renderOverlay,
     intensityWidth,
     renderProfiles,
+    frameFilter,
   } = input;
+
+  // Selected-frame scope (export image selection). A Set for O(1) membership;
+  // null means "all frames" (editor modal / unfiltered export).
+  const frameFilterSet =
+    frameFilter && frameFilter.length > 0 ? new Set(frameFilter) : null;
 
   // Defence in depth: reject any sourceChannel containing path separators
   // or other unsafe characters. The route layer also validates, but this
@@ -263,6 +275,8 @@ export async function buildKymograph(
 
   for (const f of allFrames) {
     if (f.frameIndex == null) continue;
+    // Restrict to the selected frames when the export passed a filter.
+    if (frameFilterSet && !frameFilterSet.has(f.frameIndex)) continue;
     let geometry: Array<{ x: number; y: number }> | null = null;
     if (trackedMode) {
       const polygons = parsePolygons(f.segmentation?.polygons ?? null);
