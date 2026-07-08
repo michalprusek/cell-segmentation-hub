@@ -585,6 +585,55 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     expect(body.channel_names).toEqual(['BF', 'DAPI']);
   });
 
+  it('maps channel_summaries (whole-image per-channel totals) from ML', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([
+      { ...containerRow, name: 'video.nd2' },
+    ]);
+    axiosPostMock.mockResolvedValueOnce({
+      data: {
+        ...mlResponse.data,
+        channel_summaries: [
+          {
+            channel: 'DAPI',
+            total_intensity: 123456,
+            mean_intensity: 6.7,
+            pixel_count: 18432,
+            frames: 3,
+          },
+        ],
+      },
+    });
+
+    const { channelSummaries } = await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: frameSeg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: ['DAPI'] }
+    );
+
+    expect(channelSummaries).toHaveLength(1);
+    expect(channelSummaries[0]).toEqual({
+      video: 'video.nd2',
+      channel: 'DAPI',
+      totalIntensity: 123456,
+      meanIntensity: 6.7,
+      pixelCount: 18432,
+      frames: 3,
+    });
+  });
+
+  it('tolerates an ML response without channel_summaries (stale ML build)', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
+    axiosPostMock.mockResolvedValueOnce(mlResponse); // no channel_summaries field
+
+    const { channelSummaries } = await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: frameSeg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: ['DAPI'] }
+    );
+
+    expect(channelSummaries).toEqual([]);
+  });
+
   it('maps ML response rows to MTMetricsRow with px→µm conversion', async () => {
     prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
     axiosPostMock.mockResolvedValueOnce(mlResponse);

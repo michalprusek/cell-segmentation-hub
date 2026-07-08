@@ -840,11 +840,13 @@ describe('ExportService — generateMicrotubuleMetrics channel intensity path', 
 
     await callGenerateMT(service, [makeImage()], {});
 
-    // writeMTMetrics should have been called with ['csv'] default
+    // writeMTMetrics should have been called with ['csv'] default + the
+    // per-channel totals summary (4th arg).
     expect(writeMTMetrics).toHaveBeenCalledWith(
       expect.any(Array),
       expect.any(String),
-      expect.arrayContaining(['csv'])
+      expect.arrayContaining(['csv']),
+      expect.any(Array)
     );
   });
 

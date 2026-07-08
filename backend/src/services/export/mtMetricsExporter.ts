@@ -76,6 +76,22 @@ export interface MTMetricsRow {
   signalMinusBackground: number | null;
 }
 
+/**
+ * One row of the whole-video, whole-image per-channel total (the "channel
+ * totals" summary sheet). Distinct from the per-MT band sums: this is the sum
+ * of EVERY pixel of the channel across all frames of the video, independent of
+ * the microtubules — a global "how bright is this channel overall" measure.
+ */
+export interface MTChannelSummaryRow {
+  /** Source video container's file name (or id fallback) for readability. */
+  video: string;
+  channel: string;
+  totalIntensity: number;
+  meanIntensity: number;
+  pixelCount: number;
+  frames: number;
+}
+
 interface VideoChannelMeta {
   name: string;
   displayName?: string;
@@ -133,8 +149,19 @@ interface MLMTMetricsResponseRow {
   signal_minus_background: number | null;
 }
 
+interface MLMTMetricsResponseChannelSummary {
+  channel: string;
+  total_intensity: number;
+  mean_intensity: number;
+  pixel_count: number;
+  frames: number;
+}
+
 interface MLMTMetricsResponse {
   rows: MLMTMetricsResponseRow[];
+  /** Whole-image per-channel totals over the whole video. Optional so a stale
+   *  ML build (pre-channel-summary) doesn't break the export. */
+  channel_summaries?: MLMTMetricsResponseChannelSummary[];
   frames_processed: number;
   frame_height: number;
   frame_width: number;
@@ -274,7 +301,11 @@ export async function computeMTMetrics(
   frameImages: FrameImageInput[],
   projectId: string,
   options: MTMetricsOptions
-): Promise<{ rows: MTMetricsRow[]; skipped: string[] }> {
+): Promise<{
+  rows: MTMetricsRow[];
+  skipped: string[];
+  channelSummaries: MTChannelSummaryRow[];
+}> {
   const skipped: string[] = [];
 
   // Per-channel intensity (incl. the integrated sum) is ALWAYS included for MT
@@ -313,7 +344,7 @@ export async function computeMTMetrics(
       'mtMetricsExporter',
       { projectId }
     );
-    return { rows: [], skipped };
+    return { rows: [], skipped, channelSummaries: [] };
   }
 
   // Fetch all video container rows in a single query.
@@ -322,6 +353,7 @@ export async function computeMTMetrics(
     where: { id: { in: containerIds } },
     select: {
       id: true,
+      name: true,
       originalPath: true,
       mimeType: true,
       channels: true,
@@ -332,6 +364,7 @@ export async function computeMTMetrics(
   const mlBaseUrl = config.SEGMENTATION_SERVICE_URL;
   const mlUrl = `${mlBaseUrl}/api/v1/mt-metrics`;
   const allRows: MTMetricsRow[] = [];
+  const allChannelSummaries: MTChannelSummaryRow[] = [];
 
   for (const [videoId, frames] of framesByVideo.entries()) {
     const container = containerMap.get(videoId);
@@ -547,14 +580,33 @@ export async function computeMTMetrics(
     // appended whole) since rows carry no video id to sort across.
     videoRows.sort((a, b) => a.frameIndex - b.frameIndex);
     for (const r of videoRows) allRows.push(r);
+
+    // Whole-image per-channel totals for this video (sum of every pixel of the
+    // channel across all frames — independent of the microtubules). `?? []`
+    // keeps a stale pre-summary ML build from breaking the export.
+    for (const cs of mlResponse.channel_summaries ?? []) {
+      allChannelSummaries.push({
+        video: container.name ?? videoId,
+        channel: cs.channel,
+        totalIntensity: cs.total_intensity,
+        meanIntensity: cs.mean_intensity,
+        pixelCount: cs.pixel_count,
+        frames: cs.frames,
+      });
+    }
   }
 
   logger.info(
     'MT metrics: total rows produced',
     'mtMetricsExporter',
-    { projectId, rows: allRows.length, skippedVideos: skipped.length }
+    {
+      projectId,
+      rows: allRows.length,
+      channelSummaries: allChannelSummaries.length,
+      skippedVideos: skipped.length,
+    }
   );
-  return { rows: allRows, skipped };
+  return { rows: allRows, skipped, channelSummaries: allChannelSummaries };
 }
 
 /** Arc length in pixels = sum of consecutive segment lengths. */
@@ -682,7 +734,29 @@ function rowsToCSV(rows: MTMetricsRow[]): string {
   return lines.join('\n') + '\n';
 }
 
-async function writeXLSX(rows: MTMetricsRow[], filePath: string): Promise<void> {
+/** Column order for the whole-video per-channel totals summary. */
+const CHANNEL_SUMMARY_HEADERS: readonly (keyof MTChannelSummaryRow)[] = [
+  'video',
+  'channel',
+  'totalIntensity',
+  'meanIntensity',
+  'pixelCount',
+  'frames',
+] as const;
+
+function channelSummariesToCSV(rows: MTChannelSummaryRow[]): string {
+  const lines: string[] = [CHANNEL_SUMMARY_HEADERS.join(',')];
+  for (const row of rows) {
+    lines.push(CHANNEL_SUMMARY_HEADERS.map(h => csvCell(row[h])).join(','));
+  }
+  return lines.join('\n') + '\n';
+}
+
+async function writeXLSX(
+  rows: MTMetricsRow[],
+  channelSummaries: MTChannelSummaryRow[],
+  filePath: string
+): Promise<void> {
   // exceljs is CJS; mirror the dynamic-import idiom used by exportService.
   const excelMod = (await import('exceljs')) as unknown as {
     default?: typeof import('exceljs');
@@ -697,20 +771,39 @@ async function writeXLSX(rows: MTMetricsRow[], filePath: string): Promise<void> 
   }
   // Bold header row.
   sheet.getRow(1).font = { bold: true };
+
+  // Second sheet: whole-video per-channel totals (independent of the MTs).
+  if (channelSummaries.length) {
+    const summary = workbook.addWorksheet('Channel Totals');
+    summary.columns = CHANNEL_SUMMARY_HEADERS.map(h => ({
+      header: h,
+      key: h,
+      width: 22,
+    }));
+    for (const row of channelSummaries) {
+      summary.addRow(row);
+    }
+    summary.getRow(1).font = { bold: true };
+  }
+
   await workbook.xlsx.writeFile(filePath);
 }
 
 /**
  * Persist the metric rows to disk in any subset of {excel, csv, json}.
  *
- * @param rows     Output from {@link computeMTMetrics}.
- * @param destDir  Target directory (created if absent).
- * @param formats  Same formats list the user picked for general metrics.
+ * @param rows              Output from {@link computeMTMetrics}.
+ * @param destDir           Target directory (created if absent).
+ * @param formats           Same formats list the user picked for general metrics.
+ * @param channelSummaries  Whole-video per-channel totals. In Excel these go on
+ *                          a second "Channel Totals" sheet; in CSV/JSON they get
+ *                          a companion `metrics_channel_totals.*` file.
  */
 export async function writeMTMetrics(
   rows: MTMetricsRow[],
   destDir: string,
-  formats: ReadonlyArray<'excel' | 'csv' | 'json'>
+  formats: ReadonlyArray<'excel' | 'csv' | 'json'>,
+  channelSummaries: MTChannelSummaryRow[] = []
 ): Promise<void> {
   if (!rows.length || !formats.length) return;
   await fs.mkdir(destDir, { recursive: true });
@@ -726,14 +819,28 @@ export async function writeMTMetrics(
         rowsToCSV(rows),
         'utf8'
       );
+      if (channelSummaries.length) {
+        await fs.writeFile(
+          path.join(destDir, 'metrics_channel_totals.csv'),
+          channelSummariesToCSV(channelSummaries),
+          'utf8'
+        );
+      }
     } else if (fmt === 'json') {
       await fs.writeFile(
         path.join(destDir, 'metrics.json'),
         JSON.stringify(rows, null, 2),
         'utf8'
       );
+      if (channelSummaries.length) {
+        await fs.writeFile(
+          path.join(destDir, 'metrics_channel_totals.json'),
+          JSON.stringify(channelSummaries, null, 2),
+          'utf8'
+        );
+      }
     } else if (fmt === 'excel') {
-      await writeXLSX(rows, path.join(destDir, 'metrics.xlsx'));
+      await writeXLSX(rows, channelSummaries, path.join(destDir, 'metrics.xlsx'));
     }
   }
 }
