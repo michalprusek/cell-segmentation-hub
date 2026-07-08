@@ -640,7 +640,10 @@ export class ExportService {
           exportMicrotubuleKymographs(
             project.id,
             exportDir,
-            options.mtKymographs
+            options.mtKymographs,
+            // Scope kymographs/profiles to the selected frames, like the other
+            // MT exporters (which already scope via the filtered project.images).
+            options.selectedImageIds
           )
         );
       }
