@@ -1196,6 +1196,12 @@ export default {
       enable: 'Zahrnout analýzu kymografů',
       velocityMetrics: 'Metriky rychlosti (CSV)',
       segmentedImages: 'Segmentované kymografy (PNG)',
+      modeKymograph: 'Kymograf (prostor × čas)',
+      modeProfiles: 'Profily intenzity (na obrázek)',
+      singleFrameHint:
+        'Jen jeden snímek — kymograf potřebuje časovou řadu, proto se exportuje pouze profil intenzity.',
+      profilesHint:
+        'Exportuje jeden matplotlib graf intenzity v závislosti na pozici pro každý snímek a k tomu CSV s intenzitami.',
     },
     mt: {
       sectionTitle: 'Metriky mikrotubulů',

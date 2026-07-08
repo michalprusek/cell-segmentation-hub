@@ -806,6 +806,13 @@ class KymographRequest(BaseModel):
     pixel_size_um: Optional[float] = Field(None, gt=0)
     frame_interval_ms: Optional[float] = Field(None, gt=0)
     min_net_velocity_um_s: float = Field(0.01, ge=0.0)
+    # When True, also render one matplotlib line plot per frame (intensity vs.
+    # position along the microtubule) and return them as ``profiles``. A
+    # kymograph IS a stack of these per-frame rows, so this reuses the exact
+    # same sampled ``kymo`` matrix — the profiles are just each row drawn as a
+    # 1-D plot instead of a 2-D heatmap. Used by the "intensity profiles" export
+    # mode. Independent of ``detect_velocity``.
+    render_profiles: bool = False
 
 
 class KymographTrack(BaseModel):
@@ -838,6 +845,15 @@ class KymographTrack(BaseModel):
     bright: bool = False
 
 
+class ProfilePng(BaseModel):
+    """One per-frame intensity profile rendered as a matplotlib line plot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    frame: int
+    png_base64: str
+
+
 class KymographResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -863,6 +879,10 @@ class KymographResponse(BaseModel):
     # An empty/absent field means detection either succeeded or was not requested.
     # Distinguishes "no motility detected" (tracks=[]) from "detection crashed".
     velocity_error: Optional[str] = None
+    # Populated only when ``render_profiles`` was set: one matplotlib line plot
+    # (intensity vs. position) per frame, in frame order. None otherwise, or if
+    # the (optional) profile render failed — the base kymograph is never blocked.
+    profiles: Optional[List[ProfilePng]] = None
 
 
 def _arc_length_resample_polyline(
@@ -966,6 +986,54 @@ def _linear_gradient(values: np.ndarray, hex_color: str) -> np.ndarray:
     # Broadcast (F, W) × (3,) → (F, W, 3); each pixel is intensity × color.
     rgb = clipped[..., None] * color
     return (rgb * 255.0).astype(np.uint8)
+
+
+def _render_profiles(
+    kymo: np.ndarray,
+    frames: List[KymographFrameInput],
+    px_per_column: float,
+) -> List[ProfilePng]:
+    """Render each frame's intensity profile (one row of ``kymo``) as a
+    matplotlib line plot of intensity vs. position along the microtubule.
+
+    matplotlib is imported lazily with the headless ``Agg`` backend (the ML
+    container has no display), mirroring the codebase's lazy-heavy-dep pattern
+    so process startup is unaffected. The object-oriented ``Figure`` API is
+    used instead of ``pyplot`` to avoid pyplot's non-thread-safe global state
+    (this runs inside the async request handler) and the per-figure cleanup it
+    would otherwise require.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.figure import Figure
+
+    n_samples = int(kymo.shape[1])
+    # Column index → position in image pixels along the MT (matches the
+    # kymograph's "Along microtubule (px)" x-axis; px_per_column ≈ 1 unless a
+    # long MT was compressed to target_width).
+    x_px = np.arange(n_samples, dtype=np.float64) * float(px_per_column)
+
+    profiles: List[ProfilePng] = []
+    for i, row in enumerate(kymo):
+        fig = Figure(figsize=(6, 3), dpi=100)
+        ax = fig.subplots()
+        ax.plot(x_px, np.asarray(row, dtype=np.float64), color="#2563eb", linewidth=1.0)
+        ax.set_xlabel("Position along microtubule (px)")
+        ax.set_ylabel("Intensity")
+        ax.set_title(f"Frame {int(frames[i].frame)}")
+        ax.margins(x=0)
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        profiles.append(
+            ProfilePng(
+                frame=int(frames[i].frame),
+                png_base64=base64.b64encode(buf.getvalue()).decode("ascii"),
+            )
+        )
+    return profiles
 
 
 @router.post("/kymograph", response_model=KymographResponse)
@@ -1141,6 +1209,16 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         except Exception:
             logger.exception("kymograph overlay render failed; omitting overlay")
 
+    # OPTIONAL per-frame intensity profiles (one matplotlib plot per kymograph
+    # row). A render failure must never break the base kymograph, so degrade to
+    # ``profiles=None`` — same discipline as the overlay above.
+    profiles: Optional[List[ProfilePng]] = None
+    if req.render_profiles:
+        try:
+            profiles = _render_profiles(kymo, frames, px_per_column)
+        except Exception:
+            logger.exception("kymograph profile render failed; omitting profiles")
+
     csv_buf = io.StringIO()
     writer = csv.writer(csv_buf)
     writer.writerow(["frame", *[f"x{i}" for i in range(n_samples)]])
@@ -1159,4 +1237,5 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         tracks=tracks,
         overlay_png_base64=overlay_b64,
         velocity_error=velocity_error,
+        profiles=profiles,
     )

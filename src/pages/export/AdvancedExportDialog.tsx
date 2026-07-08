@@ -42,6 +42,7 @@ import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
 import { MicrotubuleMetricsSection } from './components/MicrotubuleMetricsSection';
 import { MicrotubuleKymographsSection } from './components/MicrotubuleKymographsSection';
+import { projectCanBuildKymograph } from './utils/kymographGating';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 
 interface AdvancedExportDialogProps {
@@ -66,6 +67,7 @@ const MT_METRICS_DEFAULTS = {
 
 const MT_KYMOGRAPHS_DEFAULTS = {
   enabled: false,
+  mode: 'kymograph' as const,
   includeVelocityMetrics: true,
   includeSegmentedImages: true,
 };
@@ -88,6 +90,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       // (singular) is the model id, not the project type. Mis-comparing
       // them silently hides the MT section on every MT project.
       const isMTProject = projectType === 'microtubules';
+
+      // A kymograph needs a time axis (≥ 2 frames). The images listing returns
+      // per-frame rows, not container rows, so this counts frames per container
+      // (see projectCanBuildKymograph). When no multi-frame video exists — a
+      // single-frame container or only standalone images — the section forces
+      // profile-only.
+      const canBuildKymograph = React.useMemo(
+        () => projectCanBuildKymograph(images),
+        [images]
+      );
 
       // Local snapshot of MT options. We always merge into the shared
       // exportOptions state when the user toggles or edits inputs so the
@@ -366,6 +378,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                       value={
                         exportOptions.mtKymographs ?? MT_KYMOGRAPHS_DEFAULTS
                       }
+                      canBuildKymograph={canBuildKymograph}
                       onChange={next =>
                         updateExportOptions({ mtKymographs: next })
                       }

@@ -37,8 +37,28 @@ const MAX_MT_PER_CONTAINER = 60;
  *  this small — it bounds export wall-clock without overrunning inference. */
 const KYMOGRAPH_CONCURRENCY = 3;
 
+/** Per (microtubule × channel) cap on the number of frame profiles written in
+ *  ``profiles`` mode. Profiles are intended for small stacks (the single-frame
+ *  case forces this mode); a long time-lapse would otherwise emit thousands of
+ *  PNGs. Deterministic per job (every MT treated identically); truncation is
+ *  logged, never silent. */
+const MAX_PROFILE_FRAMES_PER_MT = 300;
+
+/** Sanitise an untrusted path segment (polyline id, channel name) before it goes
+ *  into an export filename — strips anything outside ``[A-Za-z0-9_-]`` so a
+ *  crafted polyline id (e.g. ``../../evil``) can't inject a path separator or
+ *  ``..`` traversal into the write target. ``safeVideo`` is already sanitised at
+ *  the call site with the same character class. */
+const safeSegment = (s: string): string => s.replace(/[^A-Za-z0-9_-]+/g, '_');
+
+/** Which artefact the MT kymograph export produces. ``kymograph`` = the stacked
+ *  heatmap + velocity metrics (default); ``profiles`` = one matplotlib
+ *  intensity-vs-position plot per frame (+ the intensity CSV). */
+export type MTKymographMode = 'kymograph' | 'profiles';
+
 export interface MTKymographOptions {
   enabled: boolean;
+  mode: MTKymographMode;
   includeVelocityMetrics: boolean;
   includeSegmentedImages: boolean;
 }
@@ -166,10 +186,20 @@ export async function exportMicrotubuleKymographs(
   exportDir: string,
   options: MTKymographOptions
 ): Promise<void> {
-  // Nothing to produce → skip the (expensive) kymograph builds entirely.
+  // Normalise the mode: the controller casts req.body without validation, so an
+  // older cached FE bundle (or a direct API caller) may omit it. Default to the
+  // prior behaviour (kymograph) rather than trusting the raw wire value.
+  const mode: MTKymographMode =
+    options.mode === 'profiles' ? 'profiles' : 'kymograph';
+
+  // Nothing to produce → skip the (expensive) builds entirely. In kymograph
+  // mode, both sub-options off = no output. Profiles mode always writes plots +
+  // CSV, so it has no such short-circuit.
+  if (!options.enabled) return;
   if (
-    !options.enabled ||
-    (!options.includeVelocityMetrics && !options.includeSegmentedImages)
+    mode === 'kymograph' &&
+    !options.includeVelocityMetrics &&
+    !options.includeSegmentedImages
   ) {
     return;
   }
@@ -181,7 +211,10 @@ export async function exportMicrotubuleKymographs(
     });
     if (containers.length === 0) return;
 
-    const outDir = path.join(exportDir, 'kymographs');
+    const outDir = path.join(
+      exportDir,
+      mode === 'profiles' ? 'profiles' : 'kymographs'
+    );
     await fs.mkdir(outDir, { recursive: true });
 
     // --- Phase 1: resolve the (microtubule × channel) job list. ----------
@@ -253,6 +286,71 @@ export async function exportMicrotubuleKymographs(
       }
     }
 
+    // --- Phase 2 (profiles mode): one matplotlib intensity-vs-position plot
+    // per frame, plus the intensity CSV, for each (microtubule × channel).
+    // Capped per MT so a long time-lapse can't emit thousands of PNGs. --------
+    if (mode === 'profiles') {
+      let profileCount = 0;
+      await mapWithConcurrency(jobs, KYMOGRAPH_CONCURRENCY, async job => {
+        try {
+          const result = await buildKymograph({
+            videoContainerId: job.containerId,
+            polylineId: job.polylineId,
+            frameIndex: job.frameIndex,
+            sourceChannel: job.sourceChannel,
+            detectVelocity: false,
+            renderProfiles: true,
+          });
+
+          const stem = `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}`;
+
+          // Intensity matrix CSV (rows = frames, cols = position) — the raw
+          // numbers behind the plots. ML returns it on every kymograph build.
+          if (result.csvBase64) {
+            await fs.writeFile(
+              path.join(outDir, `${stem}.csv`),
+              Buffer.from(result.csvBase64, 'base64')
+            );
+          }
+
+          const profiles = result.profiles ?? [];
+          const toWrite = Math.min(profiles.length, MAX_PROFILE_FRAMES_PER_MT);
+          if (profiles.length > toWrite) {
+            logger.warn(
+              `${job.videoName}/${job.polylineId}/${job.sourceChannel}: ` +
+                `${profiles.length} frame profiles, capping at ${MAX_PROFILE_FRAMES_PER_MT}`,
+              CTX
+            );
+          }
+          for (let i = 0; i < toWrite; i++) {
+            const p = profiles[i];
+            await fs.writeFile(
+              path.join(
+                outDir,
+                `${stem}__f${String(p.frame).padStart(4, '0')}.png`
+              ),
+              Buffer.from(p.pngBase64, 'base64')
+            );
+            profileCount++;
+          }
+        } catch (err) {
+          // One bad microtubule/channel must not abort the whole export.
+          logger.warn(
+            `Profile export failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${(err as Error).message}`,
+            CTX
+          );
+        }
+      });
+
+      logger.info('Microtubule intensity profiles exported', CTX, {
+        projectId,
+        containers: containers.length,
+        jobs: jobs.length,
+        profiles: profileCount,
+      });
+      return;
+    }
+
     // --- Phase 2: build kymographs with bounded concurrency. -------------
     // Velocity rows grouped by source channel — each channel becomes one
     // worksheet (channel = motor/protein) in velocity_metrics.xlsx.
@@ -284,7 +382,7 @@ export async function exportMicrotubuleKymographs(
           await fs.writeFile(
             path.join(
               outDir,
-              `${job.safeVideo}__${job.polylineId}__${job.sourceChannel}.png`
+              `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}.png`
             ),
             Buffer.from(result.overlayPngBase64, 'base64')
           );
