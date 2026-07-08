@@ -1189,6 +1189,12 @@ export default {
       enable: 'Include kymograph analysis',
       velocityMetrics: 'Velocity metrics (CSV)',
       segmentedImages: 'Segmented kymograph images (PNG)',
+      modeKymograph: 'Kymograph (space × time)',
+      modeProfiles: 'Intensity profiles (per image)',
+      singleFrameHint:
+        'Single frame — a kymograph needs a time series, so only the intensity profile is exported.',
+      profilesHint:
+        'Exports one matplotlib plot of intensity vs. position per frame, plus the intensity CSV.',
     },
     mt: {
       sectionTitle: 'Microtubule metrics',

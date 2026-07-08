@@ -1197,6 +1197,12 @@ export default {
       enable: 'Inclure l’analyse de kymographie',
       velocityMetrics: 'Métriques de vitesse (CSV)',
       segmentedImages: 'Images de kymographe segmentées (PNG)',
+      modeKymograph: 'Kymographe (espace × temps)',
+      modeProfiles: 'Profils d’intensité (par image)',
+      singleFrameHint:
+        'Image unique — un kymographe nécessite une série temporelle, seul le profil d’intensité est donc exporté.',
+      profilesHint:
+        'Exporte un tracé matplotlib de l’intensité en fonction de la position par image, ainsi que le CSV d’intensité.',
     },
     mt: {
       sectionTitle: 'Métriques des microtubules',

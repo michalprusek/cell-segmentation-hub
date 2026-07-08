@@ -31,6 +31,10 @@ Pillow==12.2.0
 numpy==1.26.4
 scipy==1.11.4
 scikit-image==0.22.0
+# matplotlib renders the per-frame intensity-profile plots for the "intensity
+# profiles" export mode (/kymograph render_profiles). 3.9.x supports Python 3.10
+# + numpy 1.26. Imported lazily with the Agg backend — no runtime display needed.
+matplotlib==3.9.2
 # Sperm model dependencies (Mask2Former + graph assembly)
 # ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
 networkx>=3.0

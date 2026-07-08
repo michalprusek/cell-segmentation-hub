@@ -1193,6 +1193,12 @@ export default {
       enable: 'Incluir análisis de kimografía',
       velocityMetrics: 'Métricas de velocidad (CSV)',
       segmentedImages: 'Imágenes de kimograma segmentadas (PNG)',
+      modeKymograph: 'Kimograma (espacio × tiempo)',
+      modeProfiles: 'Perfiles de intensidad (por imagen)',
+      singleFrameHint:
+        'Un solo fotograma: un kimograma necesita una serie temporal, por lo que solo se exporta el perfil de intensidad.',
+      profilesHint:
+        'Exporta un gráfico de matplotlib de intensidad frente a posición por fotograma, además del CSV de intensidad.',
     },
     mt: {
       sectionTitle: 'Métricas de microtúbulos',
