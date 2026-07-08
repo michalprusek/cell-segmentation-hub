@@ -82,6 +82,9 @@ interface KymographJob {
   polylineId: string;
   frameIndex: number;
   sourceChannel: string;
+  /** Selected frame indices for this container (export image selection), or
+   *  undefined when the whole video is in scope. */
+  frameFilter?: number[];
 }
 
 function parsePolylines(
@@ -184,13 +187,21 @@ async function writeVelocityWorkbook(
 export async function exportMicrotubuleKymographs(
   projectId: string,
   exportDir: string,
-  options: MTKymographOptions
+  options: MTKymographOptions,
+  selectedImageIds?: string[] | null
 ): Promise<void> {
   // Normalise the mode: the controller casts req.body without validation, so an
   // older cached FE bundle (or a direct API caller) may omit it. Default to the
   // prior behaviour (kymograph) rather than trusting the raw wire value.
   const mode: MTKymographMode =
     options.mode === 'profiles' ? 'profiles' : 'kymograph';
+
+  // Honour the export image selection: kymographs/profiles are built only from
+  // the selected frames (mirrors the other MT exporters, which already scope via
+  // the filtered project.images). null = whole video (no selection). When active
+  // it scopes the seed enumeration, the rendered frames AND the ML render cost.
+  const hasSelection =
+    Array.isArray(selectedImageIds) && selectedImageIds.length > 0;
 
   // Nothing to produce → skip the (expensive) builds entirely. In kymograph
   // mode, both sub-options off = no output. Profiles mode always writes plots +
@@ -238,13 +249,29 @@ export async function exportMicrotubuleKymographs(
       // first frame that has a segmentation record" would skip the whole
       // container. Scan in frameIndex order and take the first non-empty one.
       const segmentedFrames = await prisma.image.findMany({
-        where: { parentVideoId: container.id, segmentation: { isNot: null } },
+        where: {
+          parentVideoId: container.id,
+          segmentation: { isNot: null },
+          // Restrict to the selected frames when the export carried a selection.
+          ...(hasSelection ? { id: { in: selectedImageIds! } } : {}),
+        },
         orderBy: { frameIndex: 'asc' },
         select: {
           frameIndex: true,
           segmentation: { select: { polygons: true } },
         },
       });
+
+      // Frames to render: the selected (+segmented) frames when a selection is
+      // active, else undefined = every frame (buildKymograph's full-video path).
+      const frameFilter = hasSelection
+        ? segmentedFrames
+            .map(f => f.frameIndex)
+            .filter((i): i is number => i != null)
+        : undefined;
+      // A selection that excludes every segmented frame of this container ⇒
+      // nothing to export for it.
+      if (hasSelection && (!frameFilter || frameFilter.length === 0)) continue;
 
       let seedFrameIndex: number | null = null;
       let polylines: PolylineRecord[] = [];
@@ -281,6 +308,7 @@ export async function exportMicrotubuleKymographs(
             polylineId: poly.id,
             frameIndex: seedFrameIndex,
             sourceChannel,
+            frameFilter,
           });
         }
       }
@@ -300,6 +328,7 @@ export async function exportMicrotubuleKymographs(
             sourceChannel: job.sourceChannel,
             detectVelocity: false,
             renderProfiles: true,
+            frameFilter: job.frameFilter,
           });
 
           const stem = `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}`;
@@ -365,6 +394,7 @@ export async function exportMicrotubuleKymographs(
           sourceChannel: job.sourceChannel,
           detectVelocity: true,
           renderOverlay: options.includeSegmentedImages,
+          frameFilter: job.frameFilter,
         });
 
         // buildKymograph degrades a velocity-detection crash to empty tracks
