@@ -41,6 +41,13 @@ export interface ChannelMeta {
    *  channels may be present on only SOME frames (coverage = the frames the
    *  user selected when adding), so a missing per-frame PNG is expected. */
   pngBacked?: boolean;
+  /** For a PNG-backed channel that covers only SOME frames: the child frame
+   *  Image ids that actually have this channel's PNG. Lets the editor skip
+   *  requesting the channel for frames it doesn't cover (no 404 noise).
+   *  OMITTED when the channel covers every frame of the container (full
+   *  coverage → always request it). Frame ids (not indices) so the FE can
+   *  filter directly against the canvas / prefetch frame id. */
+  frameIds?: string[];
 }
 
 export interface ExtractionResult {

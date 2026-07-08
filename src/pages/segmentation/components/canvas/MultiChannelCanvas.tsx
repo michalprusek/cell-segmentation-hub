@@ -31,13 +31,17 @@
  * the visible-channel list is non-empty.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { decodeGrayPng } from '@/lib/png16';
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
 import { useLanguage } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
+
+/** Stable empty default so the optional coverage prop keeps a constant
+ *  reference across renders (a fresh `{}` would churn the memo below). */
+const EMPTY_COVERAGE: Record<string, string[]> = {};
 
 interface MultiChannelCanvasProps {
   /** Frame Image row id — used to build `/api/images/<id>/frame-data`. */
@@ -53,6 +57,11 @@ interface MultiChannelCanvasProps {
   /** Per-channel RGB tint colours. Falls back to white (grayscale) for
    *  missing entries. */
   channelColors: Record<string, string>;
+  /** Per-channel frame coverage for PNG-backed partial channels (channel name
+   *  → covered frame ids). A channel absent here covers every frame. Channels
+   *  that don't cover `frameId` are NOT fetched (no 404 noise) — but they
+   *  remain in the channelsKey so the loading-gate key stays stable. */
+  channelCoverage?: Record<string, string[]>;
   /** Initial dimensions (used for the <canvas> width/height attrs while the
    *  first frame loads; later overwritten from the decoded image). */
   width?: number;
@@ -144,6 +153,7 @@ export default function MultiChannelCanvas({
   containerId,
   visibleChannels,
   channelColors,
+  channelCoverage = EMPTY_COVERAGE,
   width,
   height,
   loading = true,
@@ -176,17 +186,52 @@ export default function MultiChannelCanvas({
     .map(c => channelOpacities[c] ?? 100)
     .join('|');
 
+  // Channels we actually FETCH for this frame: drop any PNG-backed partial
+  // channel that doesn't cover `frameId` (a channel absent from the coverage
+  // map covers every frame). Skipping the fetch — rather than letting it 404 —
+  // keeps the console clean while a sparse channel is composited only where it
+  // exists. `channelsKey` (the full set) still drives the loading-gate key, so
+  // dropping an uncovered channel here never leaves the frame overlay stuck.
+  const coverageKey = Object.entries(channelCoverage)
+    .map(([k, v]) => `${k}:${v.length}`)
+    .join('|');
+  const fetchChannels = useMemo(
+    () =>
+      visibleChannels.filter(c => {
+        const cov = channelCoverage[c];
+        return !cov || cov.includes(frameId);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [channelsKey, frameId, coverageKey]
+  );
+  const fetchChannelsKey = fetchChannels.join('|');
+
   // --- Decode pass: fetch + decode all visible channels once per
   // frame/channel set. Deliberately does NOT depend on window/colour state
   // so slider drags re-window from the cache instead of refetching. ---
   useEffect(() => {
     if (!visibleChannels.length || !canvasRef.current) return;
+    // Every visible channel is a partial one that doesn't cover this frame —
+    // nothing to fetch. Blank the composite and still emit onLoad with the
+    // full channelsKey so the frame loading-gate clears (it keys on the full
+    // set). Rare: the segmentation-source channel is full-coverage + visible
+    // by default, so it normally stays in fetchChannels.
+    if (!fetchChannels.length) {
+      decodedRef.current = [];
+      setDecodeVersion(v => v + 1);
+      try {
+        onLoad?.(width ?? 0, height ?? 0, channelsKey);
+      } catch (err) {
+        logger.error('MultiChannelCanvas: onLoad callback threw', err);
+      }
+      return;
+    }
     let cancelled = false;
     const controller = new AbortController();
 
     (async () => {
       const results = await Promise.all(
-        visibleChannels.map(async channel => {
+        fetchChannels.map(async channel => {
           try {
             const url = `/api/images/${frameId}/frame-data?channel=${encodeURIComponent(channel)}`;
             const res = await fetch(url, { signal: controller.signal });
@@ -229,11 +274,11 @@ export default function MultiChannelCanvas({
       if (cancelled) return;
       const loaded = results.filter((r): r is ChannelSamples => r != null);
       if (loaded.length === 0) {
-        const failedKey = `${frameId}:${channelsKey}`;
+        const failedKey = `${frameId}:${fetchChannelsKey}`;
         if (lastFailedKeyRef.current !== failedKey) {
           lastFailedKeyRef.current = failedKey;
           logger.error(
-            `MultiChannelCanvas: all ${visibleChannels.length} channel(s) failed to load for frame ${frameId} [${channelsKey}]`
+            `MultiChannelCanvas: all ${fetchChannels.length} channel(s) failed to load for frame ${frameId} [${fetchChannelsKey}]`
           );
           toast.error(
             t('toast.multiChannel.allChannelsFailed') ||
@@ -244,16 +289,16 @@ export default function MultiChannelCanvas({
       }
       lastFailedKeyRef.current = null;
 
-      // Partial failure: some (not all) channels loaded. The composite still
-      // renders, but a missing channel is visually indistinguishable from a
-      // genuinely dark one, so surface it (deduped) rather than silently
-      // dropping it.
-      if (loaded.length < visibleChannels.length) {
-        const partialKey = `${frameId}:${channelsKey}:${loaded.length}`;
+      // Partial failure: some (not all) FETCHED channels loaded. Compared
+      // against fetchChannels (the covered set we actually requested), NOT the
+      // full visible set — an uncovered partial channel was intentionally
+      // skipped, so it must not count as a failure here.
+      if (loaded.length < fetchChannels.length) {
+        const partialKey = `${frameId}:${fetchChannelsKey}:${loaded.length}`;
         if (lastPartialFailKeyRef.current !== partialKey) {
           lastPartialFailKeyRef.current = partialKey;
           logger.warn(
-            `MultiChannelCanvas: ${visibleChannels.length - loaded.length}/${visibleChannels.length} channel(s) failed to load for frame ${frameId} [${channelsKey}]`
+            `MultiChannelCanvas: ${fetchChannels.length - loaded.length}/${fetchChannels.length} channel(s) failed to load for frame ${frameId} [${fetchChannelsKey}]`
           );
           toast.error(
             t('toast.multiChannel.someChannelsFailed') ||
@@ -311,10 +356,14 @@ export default function MultiChannelCanvas({
     frameId,
     containerId,
     channelsKey,
+    fetchChannels,
+    fetchChannelsKey,
     reportDataRange,
     onLoad,
     t,
     visibleChannels,
+    width,
+    height,
   ]);
 
   // --- Windowing + composite pass: cheap, re-runs on any Min/Max, colour or

@@ -1974,6 +1974,10 @@ class ApiClient {
       wavelengthNm?: number;
       displayColor?: string;
       isSegmentationSource: boolean;
+      // Preserved verbatim through a rename so an added channel's PNG-backed
+      // flag + partial-frame coverage survive (see addChannelService).
+      pngBacked?: boolean;
+      frameIds?: string[];
     }>
   ): Promise<void> {
     await this.instance.patch(`/images/${imageId}/channels`, { channels });

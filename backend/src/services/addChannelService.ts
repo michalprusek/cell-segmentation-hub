@@ -245,7 +245,13 @@ export async function addChannelToFrames(
     // 5. Load affected containers (channels + dimensions + seg source).
     const containers = await prisma.image.findMany({
       where: { id: { in: [...byContainer.keys()] }, projectId },
-      select: { id: true, channels: true, width: true, height: true },
+      select: {
+        id: true,
+        channels: true,
+        width: true,
+        height: true,
+        frameCount: true,
+      },
     });
     const containerById = new Map(containers.map(c => [c.id, c]));
 
@@ -286,6 +292,15 @@ export async function addChannelToFrames(
         );
       }
 
+      // Coverage: the selected frame ids for THIS container. Omitted (=> full
+      // coverage) when the selection is every frame of the container, keeping
+      // the channels JSON compact for the common "add to the whole video" case.
+      const targetFrameIds = frames.map(f => f.id);
+      const fullCoverage =
+        container.frameCount != null &&
+        targetFrameIds.length >= container.frameCount;
+      const coverageIds = fullCoverage ? undefined : targetFrameIds;
+
       const finalMeta: ChannelMeta[] = [];
       source.channelMeta.forEach((srcMeta, ci) => {
         const multi = source.channelMeta.length > 1;
@@ -305,6 +320,7 @@ export async function addChannelToFrames(
           type: 'fluorescent',
           isSegmentationSource: false,
           pngBacked: true,
+          ...(coverageIds ? { frameIds: coverageIds } : {}),
           wavelengthNm: srcMeta.wavelengthNm,
           displayColor:
             srcMeta.displayColor ??
