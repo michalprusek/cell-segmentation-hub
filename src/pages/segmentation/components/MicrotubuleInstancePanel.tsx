@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useMemo } from 'react';
-import { Spline, Eye, EyeOff } from 'lucide-react';
+import { Spline, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Polygon } from '@/lib/segmentation';
@@ -27,6 +27,9 @@ interface MicrotubuleInstancePanelProps {
   onToggleSelected?: (id: string) => void;
   onSelectAll?: (ids: string[]) => void;
   onClearSelection?: () => void;
+  /** Delete a single microtubule polyline (the generic Polygon List is hidden
+   *  for MT projects, so delete lives here). Omit to hide the delete button. */
+  onDeletePolygon?: (id: string) => void;
 }
 
 const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
@@ -39,6 +42,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   onToggleSelected,
   onSelectAll,
   onClearSelection,
+  onDeletePolygon,
 }) => {
   const { t } = useLanguage();
 
@@ -228,6 +232,20 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                   ) : (
                     <Eye className="h-3.5 w-3.5" />
                   )}
+                </button>
+              )}
+              {onDeletePolygon && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    onDeletePolygon(mt.id);
+                  }}
+                  className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0"
+                  aria-label={t('common.delete')}
+                  title={t('common.delete')}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>

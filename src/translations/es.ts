@@ -372,8 +372,10 @@ export default {
     dropImagesHere: 'Suelta los archivos aquí...',
     selectProjectFirst: 'Por favor selecciona un proyecto primero',
     registerChannels: {
-      label: 'Registrar canales (alinear por traslación)',
+      promptTitle: '¿Registrar canales?',
       help: 'Corrige pequeños desplazamientos entre canales al subir, alineando cada uno al primero (solo traslación).',
+      confirm: 'Registrar y subir',
+      decline: 'Subir sin registrar',
     },
     projectRequired:
       'Debes seleccionar un proyecto antes de poder subir imágenes',

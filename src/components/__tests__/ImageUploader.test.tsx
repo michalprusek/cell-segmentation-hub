@@ -88,9 +88,10 @@ vi.mock('@/contexts/useLanguage', () => ({
 }));
 
 // Minimal wrapper — no Router, but a QueryClientProvider is required because
-// ImageUploader uses `useQuery` (to read the project type for the MT-only
-// channel-registration checkbox). The query is disabled here (useParams()→{},
-// so projectId is null) but `useQuery` still calls `useQueryClient()`.
+// ImageUploader uses `useQuery` (to read the project type, which decides
+// whether to show the MT-only "register channels?" prompt after a drop). The
+// query is disabled here (useParams()→{}, so projectId is null) but `useQuery`
+// still calls `useQueryClient()`.
 const render = (ui: React.ReactElement) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },

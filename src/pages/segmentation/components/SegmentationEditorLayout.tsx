@@ -499,20 +499,26 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     <DisplaySection />
                   </>
                 )}
-                <PolygonListPanel
-                  loading={projectLoading}
-                  polygons={editor.polygons}
-                  selectedPolygonId={editor.selectedPolygonId}
-                  onSelectPolygon={handleSelectPolygon}
-                  hiddenPolygonIds={frameHiddenIds}
-                  onTogglePolygonVisibility={handleTogglePolygonVisibility}
-                  onRenamePolygon={handleRenamePolygon}
-                  onDeletePolygon={handleDeletePolygonFromPanel}
-                  selectedPolygonIds={selectedPolygonIds}
-                  onToggleSelected={handleToggleSelectedInList}
-                  onSelectAll={handleSelectAllInList}
-                  onClearSelection={handleClearSelectionInList}
-                />
+                {/* Microtubule projects use the purpose-built Microtubule
+                    Instances panel below (trackId order, per-instance colour,
+                    length, delete) — the generic Polygon List would just
+                    duplicate it, so it's hidden for MT projects. */}
+                {projectType !== 'microtubules' && (
+                  <PolygonListPanel
+                    loading={projectLoading}
+                    polygons={editor.polygons}
+                    selectedPolygonId={editor.selectedPolygonId}
+                    onSelectPolygon={handleSelectPolygon}
+                    hiddenPolygonIds={frameHiddenIds}
+                    onTogglePolygonVisibility={handleTogglePolygonVisibility}
+                    onRenamePolygon={handleRenamePolygon}
+                    onDeletePolygon={handleDeletePolygonFromPanel}
+                    selectedPolygonIds={selectedPolygonIds}
+                    onToggleSelected={handleToggleSelectedInList}
+                    onSelectAll={handleSelectAllInList}
+                    onClearSelection={handleClearSelectionInList}
+                  />
+                )}
                 {hasPolylines && polylineKind === 'sperm' && (
                   <SpermInstancePanel
                     polygons={editor.polygons}
@@ -535,6 +541,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     onToggleSelected={handleToggleSelectedInList}
                     onSelectAll={handleSelectAllInList}
                     onClearSelection={handleClearSelectionInList}
+                    onDeletePolygon={handleDeletePolygonFromPanel}
                   />
                 )}
               </div>

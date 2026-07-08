@@ -208,15 +208,21 @@ const FloatingUploadProgress: React.FC = () => {
             </button>
           )}
 
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              handleClose();
-            }}
-            className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {/* The close (X) only dismisses a FINISHED card. While uploading it
+              did nothing useful (it just hid the card, which the active-session
+              logic re-showed) — so it read as unresponsive. Hide it during
+              upload; use "Cancel" to stop an in-flight upload instead. */}
+          {status !== 'uploading' && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                handleClose();
+              }}
+              className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Progress bar — shown when uploading */}

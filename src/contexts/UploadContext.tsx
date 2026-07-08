@@ -371,7 +371,8 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                     };
                   });
                 },
-                registerChannels
+                registerChannels,
+                signal
               );
               videoSuccess++;
             } catch (err) {
@@ -580,7 +581,8 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                     },
                   };
                 });
-              }
+              },
+              signal
             );
 
             setSessions(prev => ({

@@ -376,8 +376,10 @@ export default {
     dropImagesHere: 'Dateien hier ablegen...',
     selectProjectFirst: 'Bitte wählen Sie zuerst ein Projekt aus',
     registerChannels: {
-      label: 'Kanäle registrieren (per Translation ausrichten)',
+      promptTitle: 'Kanäle registrieren?',
       help: 'Korrigiert beim Hochladen kleine Verschiebungen zwischen Kanälen, indem jeder am ersten ausgerichtet wird (nur Translation).',
+      confirm: 'Registrieren & hochladen',
+      decline: 'Ohne Registrierung hochladen',
     },
     projectRequired:
       'Sie müssen ein Projekt auswählen, bevor Sie Bilder hochladen können',

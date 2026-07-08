@@ -6,7 +6,17 @@ import { useLanguage } from '@/contexts/useLanguage';
 import { useUpload } from '@/contexts/useUpload';
 import DropZone from '@/components/upload/DropZone';
 import UploaderOptions from '@/components/upload/UploaderOptions';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { apiClient } from '@/lib/api';
 import { logger } from '@/lib/logger';
 
@@ -33,9 +43,10 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   });
   const isMicrotubuleProject = project?.type === 'microtubules';
 
-  // Opt-in (default off): the user is prompted per the requirement rather than
-  // silently registering every upload.
-  const [registerChannels, setRegisterChannels] = useState(false);
+  // For MT projects we ask the user — right after they drop files — whether to
+  // register the channels, instead of a persistent checkbox. The dropped files
+  // wait here until they answer. `null` = no pending prompt.
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
 
   useEffect(() => {
     if (currentProjectId) {
@@ -53,27 +64,33 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         toast.error(t('images.selectProjectFirst'));
         return;
       }
+      // MT projects: ask explicitly whether to register channels before the
+      // upload starts (backend re-gates to MT + multi-channel anyway). Other
+      // project types have no channel registration, so upload straight away.
+      if (isMicrotubuleProject) {
+        setPendingFiles(acceptedFiles);
+        return;
+      }
+      startUpload(projectId, acceptedFiles, undefined, onUploadComplete, false);
+    },
+    [projectId, t, startUpload, onUploadComplete, isMicrotubuleProject]
+  );
 
-      // Pass raw File objects directly to context — no staging needed.
-      // The FloatingUploadProgress component shows upload status globally.
-      // registerChannels only takes effect for MT projects (and the backend
-      // re-gates by project type), so a stale toggle can't leak to others.
+  // Answer to the register-channels prompt → kick off the upload with the
+  // chosen flag and clear the pending files.
+  const beginUpload = useCallback(
+    (registerChannels: boolean) => {
+      if (!projectId || !pendingFiles) return;
       startUpload(
         projectId,
-        acceptedFiles,
+        pendingFiles,
         undefined,
         onUploadComplete,
-        isMicrotubuleProject && registerChannels
+        registerChannels
       );
+      setPendingFiles(null);
     },
-    [
-      projectId,
-      t,
-      startUpload,
-      onUploadComplete,
-      isMicrotubuleProject,
-      registerChannels,
-    ]
+    [projectId, pendingFiles, startUpload, onUploadComplete]
   );
 
   const handleProjectChange = useCallback((value: string) => {
@@ -88,26 +105,10 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         onProjectChange={handleProjectChange}
       />
 
-      {isMicrotubuleProject && (
-        <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 cursor-pointer">
-          <Checkbox
-            checked={registerChannels}
-            onCheckedChange={v => setRegisterChannels(v === true)}
-            disabled={isUploading}
-            className="mt-0.5"
-          />
-          <span className="text-sm">
-            <span className="font-medium text-gray-900 dark:text-gray-100">
-              {t('images.registerChannels.label')}
-            </span>
-            <span className="block text-xs text-gray-500 dark:text-gray-400">
-              {t('images.registerChannels.help')}
-            </span>
-          </span>
-        </label>
-      )}
-
-      <DropZone disabled={!projectId || isUploading} onDrop={onDrop} />
+      <DropZone
+        disabled={!projectId || isUploading || pendingFiles !== null}
+        onDrop={onDrop}
+      />
 
       {isUploading && (
         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -118,6 +119,36 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
           </p>
         </div>
       )}
+
+      {/* MT-only: after a drop, ask whether to register channels. */}
+      <AlertDialog
+        open={pendingFiles !== null}
+        onOpenChange={open => {
+          if (!open) setPendingFiles(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('images.registerChannels.promptTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('images.registerChannels.help')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel onClick={() => setPendingFiles(null)}>
+              {t('common.cancel')}
+            </AlertDialogCancel>
+            <Button variant="outline" onClick={() => beginUpload(false)}>
+              {t('images.registerChannels.decline')}
+            </Button>
+            <AlertDialogAction onClick={() => beginUpload(true)}>
+              {t('images.registerChannels.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

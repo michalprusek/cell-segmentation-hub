@@ -371,8 +371,10 @@ export default {
     dropImagesHere: 'Déposez les fichiers ici...',
     selectProjectFirst: "Veuillez d'abord sélectionner un projet",
     registerChannels: {
-      label: 'Recaler les canaux (alignement par translation)',
+      promptTitle: 'Recaler les canaux ?',
       help: 'Corrige les petits décalages entre canaux au téléversement en alignant chacun sur le premier (translation uniquement).',
+      confirm: 'Recaler et téléverser',
+      decline: 'Téléverser sans recalage',
     },
     projectRequired:
       'Vous devez sélectionner un projet avant de pouvoir télécharger des images',
