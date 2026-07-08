@@ -27,7 +27,7 @@ export default function FrameWindowPrefetcher({
   currentIndex,
   enabled,
 }: FrameWindowPrefetcherProps) {
-  const { visibleChannels, channel } = useImageDisplay();
+  const { visibleChannels, channel, channelCoverage } = useImageDisplay();
 
   // The single-channel fallback uses `/display` (encoded as `null`
   // channel in `buildFrameImageUrl`). Multi-channel mode prefetches
@@ -41,6 +41,7 @@ export default function FrameWindowPrefetcher({
     currentIndex,
     channels,
     enabled,
+    channelCoverage,
   });
 
   return null;

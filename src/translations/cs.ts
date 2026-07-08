@@ -1178,6 +1178,28 @@ export default {
     selected_other: '{{count}} obrázky vybrány',
     deleteSelected: 'Smazat vybrané',
     deleteAnnotations: 'Smazat anotace',
+    addChannel: 'Přidat kanál',
+    addChannelSuccess: 'Kanál {{channels}} přidán k {{frames}} snímkům',
+    addChannelFailed: 'Nepodařilo se přidat kanál',
+    addChannelDialog: {
+      title: 'Přidat kanál',
+      description:
+        'Přidejte k vybraným snímkům další kanál nahráním videa/stacku se stejným počtem snímků, nebo jednoho obrázku, který se otiskne na každý vybraný snímek.',
+      selectionSummary: 'Vybráno {{frames}} snímků napříč {{videos}} videi.',
+      sourceLabel: 'Zdrojový soubor (video / stack / obrázek)',
+      imageHint: 'Jeden obrázek → otiskne se na každý vybraný snímek.',
+      videoHint:
+        'Video/stack → musí mít přesně {{frames}} snímků a patřit jednomu videu.',
+      nameLabel: 'Název kanálu',
+      namePlaceholder: 'např. GFP',
+      alignLabel: 'Zarovnat k segmentačnímu kanálu',
+      alignHint: 'Registrace fázovou korelací, která opraví malý drift stolku.',
+      multiVideoError:
+        'Video/stack lze přidat jen ke snímkům jednoho videa. Vyberte snímky z jednoho videa, nebo nahrajte jeden obrázek.',
+      uploading: 'Nahrávání… {{percent}} %',
+      adding: 'Přidávání…',
+      confirm: 'Přidat kanál',
+    },
     annotationsDeleted: 'Anotace smazány u {{count}} obrázků',
     annotationsDeleteFailed: 'Nepodařilo se smazat anotace u {{count}} obrázků',
     deleteAnnotationsDialog: {

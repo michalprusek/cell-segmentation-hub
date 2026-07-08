@@ -1086,6 +1086,27 @@ export default {
     selected_other: '已选择{{count}}张图片',
     deleteSelected: '删除选中项',
     deleteAnnotations: '删除标注',
+    addChannel: '添加通道',
+    addChannelSuccess: '已将通道 {{channels}} 添加到 {{frames}} 帧',
+    addChannelFailed: '添加通道失败',
+    addChannelDialog: {
+      title: '添加通道',
+      description:
+        '通过上传帧数相同的视频/堆栈，或上传一张应用到每个所选帧的单张图像，为所选帧添加额外通道。',
+      selectionSummary: '已选择 {{videos}} 个视频中的 {{frames}} 帧。',
+      sourceLabel: '源文件（视频 / 堆栈 / 图像）',
+      imageHint: '单张图像 → 应用到每个所选帧。',
+      videoHint: '视频/堆栈 → 必须正好有 {{frames}} 帧，且属于同一个视频。',
+      nameLabel: '通道名称',
+      namePlaceholder: '例如 GFP',
+      alignLabel: '对齐到分割通道',
+      alignHint: '相位相关配准，用于校正轻微的载物台漂移。',
+      multiVideoError:
+        '视频/堆栈只能添加到单个视频的帧。请选择同一视频的帧，或上传单张图像。',
+      uploading: '上传中… {{percent}}%',
+      adding: '添加中…',
+      confirm: '添加通道',
+    },
     annotationsDeleted: '已删除 {{count}} 张图像的标注',
     annotationsDeleteFailed: '删除 {{count}} 张图像的标注失败',
     deleteAnnotationsDialog: {

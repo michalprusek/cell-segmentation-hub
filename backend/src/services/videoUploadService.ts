@@ -101,7 +101,7 @@ function videoContainerDir(projectId: string, containerId: string): string {
  *  ``originalPath``. Points at the segmentation source channel for now;
  *  consumers that need a different channel build their own URL via the
  *  /frame-data?channel=X route. */
-function frameStorageKey(
+export function frameStorageKey(
   projectId: string,
   containerId: string,
   frameIndex: number,

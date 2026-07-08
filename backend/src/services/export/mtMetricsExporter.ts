@@ -95,6 +95,10 @@ export interface MTChannelSummaryRow {
 interface VideoChannelMeta {
   name: string;
   displayName?: string;
+  /** True for channels ADDED after upload (see addChannelService). Their
+   *  pixels live only in the per-frame PNGs, not the original volume, so they
+   *  are sampled via ``png_channels`` rather than a C-axis index. */
+  pngBacked?: boolean;
 }
 
 interface PolylinePayload {
@@ -122,6 +126,11 @@ interface MLMTMetricsRequest {
    *  registration). Keyed by frame index; each value is `[dy, dx]` per C-axis
    *  channel index. Omitted for unregistered uploads. */
   channel_offsets?: Record<string, number[][]>;
+  /** Machine names of PNG-backed channels (added post-upload). The ML side
+   *  samples these from ``dirname(original_path)/frames/<t>/<name>.png`` rather
+   *  than the original volume, skipping any frame whose PNG is absent (an added
+   *  channel may cover only some frames). No channel_offsets are applied. */
+  png_channels?: string[];
 }
 
 /** On-disk shape of the `registration.json` sidecar written by the extractors
@@ -406,9 +415,36 @@ export async function computeMTMetrics(
     const selectedChannelNames = requestAllChannels
       ? containerChannels.map(c => c.name)
       : options.channels;
+
+    // Partition into volume-backed (sampled from the original ND2/TIFF by
+    // C-axis index) and PNG-backed (added post-upload; sampled from per-frame
+    // PNGs). A selected name may reference a channel by machine name OR
+    // displayName — resolve both. PNG-backed channels are always appended to
+    // the channels array, so volume channels keep array-index == C-axis-index
+    // and resolveChannelIndices stays correct after this split.
+    const isPngChannel = (sel: string): boolean => {
+      const c = containerChannels.find(
+        cc => cc.name === sel || cc.displayName === sel
+      );
+      return !!c?.pngBacked;
+    };
+    const volumeSelected = selectedChannelNames.filter(sel => !isPngChannel(sel));
+    const pngChannelNames = Array.from(
+      new Set(
+        selectedChannelNames
+          .filter(isPngChannel)
+          .map(
+            sel =>
+              containerChannels.find(
+                cc => cc.name === sel || cc.displayName === sel
+              )!.name
+          )
+      )
+    );
+
     const { indices, names, skipped: channelSkipped } = resolveChannelIndices(
       containerChannels,
-      selectedChannelNames
+      volumeSelected
     );
     if (channelSkipped.length) {
       logger.warn(
@@ -417,7 +453,7 @@ export async function computeMTMetrics(
         { projectId, videoId, skipped: channelSkipped }
       );
     }
-    if (!indices.length) {
+    if (!indices.length && !pngChannelNames.length) {
       logger.warn(
         'MT metrics: no channels resolved for this video; skipping',
         'mtMetricsExporter',
@@ -506,6 +542,7 @@ export async function computeMTMetrics(
       thickness_px: options.thicknessPx,
       margin_multiplier: options.marginMultiplier,
       channel_offsets: channelOffsets,
+      png_channels: pngChannelNames.length ? pngChannelNames : undefined,
     };
 
     logger.info(
@@ -517,6 +554,7 @@ export async function computeMTMetrics(
         fileKind,
         frames: framesPayload.length,
         channels: indices.length,
+        pngChannels: pngChannelNames.length,
       }
     );
 
