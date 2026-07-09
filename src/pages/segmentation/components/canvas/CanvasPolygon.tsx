@@ -5,6 +5,7 @@ import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
 import type { ProjectType } from '@/types';
+import type { MTTypeLabel } from '@/lib/api';
 import {
   colorFromInstanceId,
   isMicrotubuleInstance,
@@ -51,6 +52,23 @@ interface CanvasPolygonProps {
   projectType?: ProjectType;
   /** Wheel-zoom in progress. Skips per-vertex 1/zoom re-compute. */
   isZooming?: boolean;
+  /** Microtubule canvas colour mode: 'instance' = per-trackId hash colour,
+   *  'semantic' = the assigned type-label's colour. Non-MT projects pass
+   *  'instance' (the default). */
+  colorMode?: 'instance' | 'semantic';
+  /** Resolved by-label colour for this polyline; used only in semantic mode. */
+  semanticColor?: string;
+  /** Microtubule type-label palette — drives the "Set type" context submenu. */
+  mtTypeLabels?: MTTypeLabel[];
+  /** This polyline's current type-label id (check-marks the active label). */
+  currentMtType?: string;
+  /** Assign (or clear, with null) the microtubule type for this polyline. */
+  onChangeMtType?: (polygonId: string, mtType: string | null) => void;
+  /** Create a new type label (name + colour) and return it for immediate assign. */
+  onCreateMtLabel?: (
+    name: string,
+    color: string
+  ) => Promise<MTTypeLabel | null>;
 }
 
 const CanvasPolygon = React.memo(
@@ -82,6 +100,12 @@ const CanvasPolygon = React.memo(
     editMode,
     projectType,
     isZooming,
+    colorMode = 'instance',
+    semanticColor,
+    mtTypeLabels,
+    currentMtType,
+    onChangeMtType,
+    onCreateMtLabel,
   }: CanvasPolygonProps) => {
     const { id, points, type = 'external', parent_id } = polygon;
 
@@ -181,8 +205,14 @@ const CanvasPolygon = React.memo(
           case 'tail':
             return isSelected ? '#0891b2' : '#06b6d4'; // cyan
         }
-        // Seed priority: cross-frame trackId, then MT-prefixed instanceId,
-        // then per-polygon UUID — guarantees a distinct colour per
+        // Semantic (by-label) mode: colour the microtubule by its assigned type
+        // label. `semanticColor` is pre-resolved by the parent (label colour, or
+        // neutral gray when untyped), so this branch just returns it.
+        if (colorMode === 'semantic') {
+          return semanticColor ?? 'hsl(0, 0%, 60%)';
+        }
+        // Instance mode — seed priority: cross-frame trackId, then MT-prefixed
+        // instanceId, then per-polygon UUID — guarantees a distinct colour per
         // polyline even when ML identity is absent.
         const colorKey =
           polygon.trackId ||
@@ -206,6 +236,8 @@ const CanvasPolygon = React.memo(
       polygon.complete,
       isSelected,
       isInternal,
+      colorMode,
+      semanticColor,
     ]);
 
     // Compute hover-dependent stroke width multiplier
@@ -256,6 +288,10 @@ const CanvasPolygon = React.memo(
     const handleEdit = useCallback(
       () => onEditPolygon?.(id),
       [onEditPolygon, id]
+    );
+    const handleChangeMtType = useCallback(
+      (mtType: string | null) => onChangeMtType?.(id, mtType),
+      [onChangeMtType, id]
     );
     const handleChangePartClass = useCallback(
       (partClass: 'head' | 'midpiece' | 'tail') =>
@@ -312,6 +348,12 @@ const CanvasPolygon = React.memo(
         multiSelectCount={multiSelectCount}
         trackId={polygon.trackId}
         videoFrameCount={videoFrameCount}
+        mtTypeLabels={isPolyline ? mtTypeLabels : undefined}
+        currentMtType={isPolyline ? currentMtType : undefined}
+        onChangeMtType={
+          isPolyline && onChangeMtType ? handleChangeMtType : undefined
+        }
+        onCreateMtLabel={isPolyline ? onCreateMtLabel : undefined}
       >
         <g
           data-testid={id}
@@ -488,6 +530,16 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.instanceId === nextProps.polygon.instanceId &&
       prevProps.polygon.trackId === nextProps.polygon.trackId &&
       prevProps.polygon.complete === nextProps.polygon.complete &&
+      // Type-label id + resolved semantic colour + colour mode drive the
+      // by-label recolour; omitting these means an MT wouldn't re-colour when
+      // its type or the palette colour changes (repo bug #5: incomplete memo).
+      prevProps.polygon.mtType === nextProps.polygon.mtType &&
+      prevProps.colorMode === nextProps.colorMode &&
+      prevProps.semanticColor === nextProps.semanticColor &&
+      prevProps.currentMtType === nextProps.currentMtType &&
+      prevProps.mtTypeLabels === nextProps.mtTypeLabels &&
+      prevProps.onChangeMtType === nextProps.onChangeMtType &&
+      prevProps.onCreateMtLabel === nextProps.onCreateMtLabel &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&

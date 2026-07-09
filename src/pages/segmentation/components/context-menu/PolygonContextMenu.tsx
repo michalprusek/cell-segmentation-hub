@@ -5,6 +5,9 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
 } from '@/components/ui/context-menu';
 import {
   Trash,
@@ -13,9 +16,13 @@ import {
   Link,
   BarChart3,
   ChevronsRight,
+  Tag,
+  Plus,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import type { ProjectType } from '@/types';
+import type { MTTypeLabel } from '@/lib/api';
+import MtTypeLabelDialog from './MtTypeLabelDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,6 +62,18 @@ interface PolygonContextMenuProps {
   onPropagateSelected?: () => void;
   /** Size of the Shift+click multi-selection (gates the bulk-propagate item). */
   multiSelectCount?: number;
+  /** Microtubule type-label palette (drives the "Set type" submenu, MT only). */
+  mtTypeLabels?: MTTypeLabel[];
+  /** This polyline's current type-label id (check-marks the active label). */
+  currentMtType?: string;
+  /** Assign (or clear, with null) the microtubule type. Applies to the whole
+   *  multi-selection when ≥2 MTs are selected. */
+  onChangeMtType?: (mtType: string | null) => void;
+  /** Create a new type label (name + colour); the returned label is assigned. */
+  onCreateMtLabel?: (
+    name: string,
+    color: string
+  ) => Promise<MTTypeLabel | null>;
 }
 
 const PolygonContextMenu = ({
@@ -74,6 +93,10 @@ const PolygonContextMenu = ({
   videoFrameCount,
   onPropagateSelected,
   multiSelectCount = 0,
+  mtTypeLabels,
+  currentMtType,
+  onChangeMtType,
+  onCreateMtLabel,
 }: PolygonContextMenuProps) => {
   const isSperm = projectType === 'sperm';
   const isMicrotubules = projectType === 'microtubules';
@@ -96,6 +119,17 @@ const PolygonContextMenu = ({
   const [showPropagateDialog, setShowPropagateDialog] = React.useState(false);
   const [showPropagateSelectedDialog, setShowPropagateSelectedDialog] =
     React.useState(false);
+  const [showNewLabelDialog, setShowNewLabelDialog] = React.useState(false);
+  // Create a label from the "+ New label…" dialog, then immediately assign it
+  // to this microtubule (and the rest of the multi-selection).
+  const handleCreateAndAssign = React.useCallback(
+    async (name: string, color: string) => {
+      if (!onCreateMtLabel) return;
+      const created = await onCreateMtLabel(name, color);
+      if (created) onChangeMtType?.(created.id);
+    },
+    [onCreateMtLabel, onChangeMtType]
+  );
   // Bulk-propagate the Shift+click multi-selection — only meaningful with ≥2.
   const canPropagateSelected =
     isMicrotubules && !!onPropagateSelected && multiSelectCount >= 2;
@@ -155,6 +189,74 @@ const PolygonContextMenu = ({
                     })}
                   </span>
                 </ContextMenuItem>
+              )}
+              {onChangeMtType && (
+                <ContextMenuSub>
+                  <ContextMenuSubTrigger className="cursor-pointer">
+                    <Tag className="mr-2 h-4 w-4" />
+                    <span>
+                      {multiSelectCount >= 2
+                        ? t('microtubule.type.setForSelected', {
+                            count: multiSelectCount,
+                          })
+                        : t('microtubule.type.set')}
+                    </span>
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-56">
+                    <ContextMenuItem
+                      onClick={() => onChangeMtType(null)}
+                      className="cursor-pointer"
+                    >
+                      <span
+                        className="mr-2 inline-block rounded-full border border-gray-400"
+                        style={{ width: 12, height: 12 }}
+                      />
+                      <span>{t('microtubule.type.none')}</span>
+                      {!currentMtType && (
+                        <span className="ml-auto text-xs text-violet-500">
+                          ✓
+                        </span>
+                      )}
+                    </ContextMenuItem>
+                    {(mtTypeLabels ?? []).length > 0 && (
+                      <ContextMenuSeparator />
+                    )}
+                    {(mtTypeLabels ?? []).map(label => (
+                      <ContextMenuItem
+                        key={label.id}
+                        onClick={() => onChangeMtType(label.id)}
+                        className="cursor-pointer"
+                      >
+                        <span
+                          className="mr-2 inline-block rounded-full"
+                          style={{
+                            width: 12,
+                            height: 12,
+                            backgroundColor: label.color,
+                          }}
+                        />
+                        <span className="truncate">{label.name}</span>
+                        {currentMtType === label.id && (
+                          <span className="ml-auto text-xs text-violet-500">
+                            ✓
+                          </span>
+                        )}
+                      </ContextMenuItem>
+                    ))}
+                    {onCreateMtLabel && (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                          onClick={() => setShowNewLabelDialog(true)}
+                          className="cursor-pointer"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          <span>{t('microtubule.type.newLabel')}</span>
+                        </ContextMenuItem>
+                      </>
+                    )}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
               )}
             </>
           )}
@@ -338,6 +440,13 @@ const PolygonContextMenu = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <MtTypeLabelDialog
+        open={showNewLabelDialog}
+        onOpenChange={setShowNewLabelDialog}
+        mode="create"
+        onConfirm={handleCreateAndAssign}
+      />
     </>
   );
 };

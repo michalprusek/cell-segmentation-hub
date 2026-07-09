@@ -30,6 +30,7 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 
 // Presentational render tree — pure component, all values threaded via props.
 import SegmentationEditorLayout from './components/SegmentationEditorLayout';
+import { useMtTypeLabels } from './hooks/useMtTypeLabels';
 
 import { useVideoFrames } from './hooks/useVideoFrames';
 import {
@@ -659,6 +660,33 @@ const SegmentationEditor = () => {
     selectAllMultiSelect,
   } = usePolygonHandlers({ editor, imageId });
 
+  // Microtubule type-label palette (SSOT for the tubulin class name + colour)
+  // and the canvas colour mode (instance hash vs semantic/by-label). Both are
+  // gated to microtubule projects; the hook no-ops its fetch otherwise.
+  const isMicrotubuleProject = projectType === 'microtubules';
+  const {
+    labels: mtTypeLabels,
+    labelById: mtLabelById,
+    colorById: mtColorById,
+    createLabel: handleCreateMtLabel,
+    renameLabel: handleRenameMtLabel,
+    deleteLabel: deleteMtLabelRaw,
+  } = useMtTypeLabels(projectId, isMicrotubuleProject);
+  const [mtColorMode, setMtColorMode] = useState<'instance' | 'semantic'>(
+    () => {
+      if (typeof localStorage === 'undefined') return 'instance';
+      return localStorage.getItem('mtColorMode') === 'semantic'
+        ? 'semantic'
+        : 'instance';
+    }
+  );
+  const handleSetMtColorMode = useCallback((mode: 'instance' | 'semantic') => {
+    setMtColorMode(mode);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('mtColorMode', mode);
+    }
+  }, []);
+
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
   // edit-mode booleans, hidden/degenerate polygon filter — no viewport culling).
   // Extracted to usePolygonRenderProps for isolated unit testing.
@@ -999,6 +1027,56 @@ const SegmentationEditor = () => {
     [toggleMultiSelect, clearMultiSelect]
   );
 
+  // Assign (or clear) a microtubule type label. Whole-track semantics: resolves
+  // the target polygons' trackIds and sets `mtType` on every frame via the
+  // backend, then reloads so the current frame recolours. When ≥2 MTs are
+  // multi-selected the label applies to all of them; otherwise just the
+  // right-clicked polyline's track. Reads the selection through the ref so this
+  // callback stays identity-stable for the CanvasPolygon memo comparator.
+  const handleChangeMtType = useCallback(
+    async (polygonId: string, mtType: string | null) => {
+      const videoId = video.container?.id;
+      if (!videoId) return;
+      const polys = editorRef.current.getPolygons();
+      const selected = selectedPolygonIdsRef.current;
+      const targetIds = selected.size >= 2 ? [...selected] : [polygonId];
+      const trackIds = Array.from(
+        new Set(
+          targetIds
+            .map(id => polys.find(p => p.id === id)?.trackId)
+            .filter(
+              (tid): tid is string => typeof tid === 'string' && tid.length > 0
+            )
+        )
+      );
+      if (trackIds.length === 0) {
+        toast.error(t('microtubule.type.noTrack'));
+        return;
+      }
+      try {
+        await apiClient.setTrackType(videoId, trackIds, mtType);
+        evictVideoFrameSegmentationCaches();
+        await reloadSegmentation();
+        toast.success(t('microtubule.type.updated'));
+      } catch (error) {
+        logger.error('Failed to set microtubule type', error);
+        toast.error(t('microtubule.type.updateFailed'));
+      }
+    },
+    [video.container, reloadSegmentation, evictVideoFrameSegmentationCaches, t]
+  );
+
+  // Delete a label: the backend nulls every `mtType` reference to it, so evict
+  // sibling caches + reload the current frame so cleared MTs revert to neutral.
+  const handleDeleteMtLabel = useCallback(
+    async (labelId: string) => {
+      await deleteMtLabelRaw(labelId);
+      evictVideoFrameSegmentationCaches();
+      await reloadSegmentation();
+    },
+    [deleteMtLabelRaw, evictVideoFrameSegmentationCaches, reloadSegmentation]
+  );
+
   // Sidebar list checkbox toggle. A row is "checked" when it is the single
   // selection OR a member of the multi-select set, so a plain left-click on the
   // canvas also lights up its checkbox. Toggling a checkbox mirrors Shift+click:
@@ -1009,33 +1087,42 @@ const SegmentationEditor = () => {
     (id: string) => {
       const single = editorRef.current.selectedPolygonId;
       if (single === id) {
-        editorRef.current.setSelectedPolygonId(null);
+        // Clear the single selection via handleSelectPolygon(null) — NOT a bare
+        // setSelectedPolygonId(null). The latter leaves persistedSelectionTrackId
+        // set, so the cross-frame re-select effect (usePolygonHandlers) instantly
+        // re-selects this MT and the checkbox can never be unchecked.
+        handleSelectPolygon(null);
         return;
       }
       if (single) {
-        editorRef.current.setSelectedPolygonId(null);
+        handleSelectPolygon(null);
         toggleMultiSelect(single);
       }
       toggleMultiSelect(id);
     },
-    [toggleMultiSelect]
+    [toggleMultiSelect, handleSelectPolygon]
   );
 
   // Sidebar "select all": put every listed current-frame polygon id into the
   // bulk set and drop the single selection so the whole list reads as checked.
   const handleSelectAllInList = useCallback(
     (ids: string[]) => {
-      editorRef.current.setSelectedPolygonId(null);
+      // Clear via handleSelectPolygon(null) so persistedSelectionTrackId is
+      // dropped too (see handleToggleSelectedInList) — otherwise a lingering
+      // single selection is re-applied by the cross-frame re-select effect.
+      handleSelectPolygon(null);
       selectAllMultiSelect(ids);
     },
-    [selectAllMultiSelect]
+    [selectAllMultiSelect, handleSelectPolygon]
   );
 
-  // Sidebar "deselect all": clear both selection sets.
+  // Sidebar "deselect all": clear both selection sets. Route the single-selection
+  // clear through handleSelectPolygon(null) so persistedSelectionTrackId is
+  // cleared and the re-select effect can't re-check a row.
   const handleClearSelectionInList = useCallback(() => {
-    editorRef.current.setSelectedPolygonId(null);
+    handleSelectPolygon(null);
     clearMultiSelect();
-  }, [clearMultiSelect]);
+  }, [clearMultiSelect, handleSelectPolygon]);
 
   // Right-click "Propagate selected MTs (N)": propagate every Shift-selected
   // microtubule forward. Loops the single-track endpoint so each keeps its own
@@ -1258,6 +1345,15 @@ const SegmentationEditor = () => {
         handleRenamePolygon={handleRenamePolygon}
         handleChangeInstanceId={handleChangeInstanceId}
         handleChangePartClass={handleChangePartClass}
+        mtTypeLabels={mtTypeLabels}
+        mtLabelById={mtLabelById}
+        mtColorById={mtColorById}
+        mtColorMode={mtColorMode}
+        onSetMtColorMode={handleSetMtColorMode}
+        onChangeMtType={handleChangeMtType}
+        onCreateMtLabel={handleCreateMtLabel}
+        onRenameMtLabel={handleRenameMtLabel}
+        onDeleteMtLabel={handleDeleteMtLabel}
         activePartClass={activePartClass}
         setActivePartClass={setActivePartClass}
         activeInstanceId={activeInstanceId}

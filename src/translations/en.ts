@@ -820,8 +820,16 @@ export default {
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
       },
+      createPolyline: {
+        start: 'Click to place the first point of the microtubule',
+        finish: 'Press Enter or double-click to finish the microtubule',
+        holdShift: 'Hold SHIFT to add points automatically',
+        cancel: 'Press ESC to cancel',
+      },
       addPoints: {
         clickVertex: 'Click on any vertex to start adding points',
+        clickVertexMt: 'Click a microtubule endpoint to start extending it',
+        addPointsMt: 'Click to add points, then press Enter to finish',
         addPoints:
           'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
@@ -843,6 +851,7 @@ export default {
       modes: {
         slice: 'Slice Mode',
         create: 'Create Polygon Mode',
+        createPolyline: 'Create Microtubule Mode',
         addPoints: 'Add Points Mode',
         editVertices: 'Edit Vertices Mode',
         deletePolygon: 'Delete Polygon Mode',
@@ -1295,6 +1304,8 @@ export default {
     generateExcel: 'Generate Excel metrics',
     includeCocoFormat: 'Include COCO format annotations',
     includeJsonMetadata: 'Include JSON metadata',
+    microtubuleAnnotationsNote:
+      'Microtubule projects export annotations as ImageJ RoiSet + CVAT 1.1 (always included), each carrying the tubulin type class. COCO/YOLO/JSON are not used for microtubules.',
     // Progress and status
     preparing: 'Preparing export...',
     processing: 'Processing {{current}} of {{total}}',
@@ -2218,6 +2229,27 @@ export default {
     showInstance: 'Show microtubule',
     hideAll: 'Hide all',
     showAll: 'Show all',
+    type: {
+      set: 'Set type',
+      setForSelected: 'Set type for {{count}} selected',
+      none: 'None',
+      newLabel: 'New label…',
+      renameLabel: 'Rename label',
+      deleteLabel: 'Delete label',
+      manageLabels: 'Type labels',
+      labelName: 'Name',
+      labelNamePlaceholder: 'e.g. alpha-tubulin',
+      labelColor: 'Colour',
+      labelDialogDescription: 'Name the tubulin type and pick a colour.',
+      updated: 'Microtubule type updated',
+      updateFailed: 'Failed to update microtubule type',
+      noTrack: 'This microtubule has no track yet — run tracking first.',
+    },
+    color: {
+      label: 'Colour:',
+      byInstance: 'Instance',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Sperm Instances',

@@ -828,8 +828,16 @@ export default {
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
       },
+      createPolyline: {
+        start: 'Kliknutím umístíte první bod mikrotubulu',
+        finish: 'Tvorbu ukončíte stiskem Enter nebo dvojklikem',
+        holdShift: 'Podržte SHIFT pro automatické přidávání bodů',
+        cancel: 'Stiskněte ESC pro zrušení',
+      },
       addPoints: {
         clickVertex: 'Klikněte na jakýkoli vrchol pro zahájení přidávání bodů',
+        clickVertexMt: 'Klikněte na konec mikrotubulu pro jeho prodloužení',
+        addPointsMt: 'Klikáním přidávejte body, poté ukončete stiskem Enter',
         addPoints:
           'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení. Klikněte přímo na jiný vrchol bez přidávání bodů pro odstranění všech bodů mezi nimi.',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
@@ -851,6 +859,7 @@ export default {
       modes: {
         slice: 'Režim řezání',
         create: 'Režim vytváření polygonu',
+        createPolyline: 'Režim tvorby mikrotubulu',
         addPoints: 'Režim přidávání bodů',
         editVertices: 'Režim úpravy vrcholů',
         deletePolygon: 'Režim mazání polygonu',
@@ -1303,6 +1312,8 @@ export default {
     generateExcel: 'Generovat Excel metriky',
     includeCocoFormat: 'Zahrnout anotace ve formátu COCO',
     includeJsonMetadata: 'Zahrnout JSON metadata',
+    microtubuleAnnotationsNote:
+      'Mikrotubulární projekty exportují anotace jako ImageJ RoiSet + CVAT 1.1 (vždy zahrnuto), každá nese třídu tubulin typu. COCO/YOLO/JSON se pro mikrotubuly nepoužívají.',
     preparing: 'Příprava exportu...',
     processing: 'Zpracování {{current}} z {{total}}',
     processingExport: 'Zpracování...',
@@ -2151,6 +2162,28 @@ export default {
     showInstance: 'Zobrazit mikrotubulus',
     hideAll: 'Skrýt vše',
     showAll: 'Zobrazit vše',
+    type: {
+      set: 'Nastavit typ',
+      setForSelected: 'Nastavit typ pro {{count}} vybraných',
+      none: 'Žádný',
+      newLabel: 'Nový label…',
+      renameLabel: 'Přejmenovat label',
+      deleteLabel: 'Smazat label',
+      manageLabels: 'Typové labely',
+      labelName: 'Název',
+      labelNamePlaceholder: 'např. alfa-tubulin',
+      labelColor: 'Barva',
+      labelDialogDescription: 'Pojmenujte typ tubulinu a vyberte barvu.',
+      updated: 'Typ mikrotubulu upraven',
+      updateFailed: 'Nepodařilo se upravit typ mikrotubulu',
+      noTrack:
+        'Tento mikrotubulus zatím nemá track — nejprve spusťte trackování.',
+    },
+    color: {
+      label: 'Barva:',
+      byInstance: 'Instance',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Instance spermií',

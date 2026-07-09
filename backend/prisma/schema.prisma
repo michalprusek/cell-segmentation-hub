@@ -73,6 +73,9 @@ model Project {
   userId            String
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
+  // Per-project microtubule type-label palette (SSOT for name + colour):
+  // [{ id: string, name: string, color: string }]. Microtubule projects only.
+  mtTypeLabels      Json?
   images            Image[]
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   segmentationQueue SegmentationQueue[]

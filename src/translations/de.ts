@@ -992,9 +992,19 @@ export default {
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
       },
+      createPolyline: {
+        start: 'Klicken Sie, um den ersten Punkt des Mikrotubulus zu setzen',
+        finish: 'Mit Enter oder Doppelklick abschließen',
+        holdShift: 'SHIFT halten, um Punkte automatisch hinzuzufügen',
+        cancel: 'ESC zum Abbrechen drücken',
+      },
       addPoints: {
         clickVertex:
           'Klicken Sie auf einen beliebigen Eckpunkt, um mit dem Hinzufügen von Punkten zu beginnen',
+        clickVertexMt:
+          'Klicken Sie auf ein Mikrotubulus-Ende, um es zu verlängern',
+        addPointsMt:
+          'Klicken zum Hinzufügen von Punkten, dann Enter zum Abschließen',
         addPoints:
           'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen. Klicken Sie direkt auf einen anderen Eckpunkt ohne Punkte hinzuzufügen, um alle Punkte dazwischen zu entfernen.',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
@@ -1018,6 +1028,7 @@ export default {
       modes: {
         slice: 'Schnitt-Modus',
         create: 'Polygon-Erstellungs-Modus',
+        createPolyline: 'Mikrotubulus-Erstellmodus',
         addPoints: 'Punkte-Hinzufüge-Modus',
         editVertices: 'Eckpunkt-Bearbeitungs-Modus',
         deletePolygon: 'Polygon-Lösch-Modus',
@@ -1318,6 +1329,8 @@ export default {
     generateExcel: 'Excel-Metriken generieren',
     includeCocoFormat: 'COCO-Format-Annotationen einschließen',
     includeJsonMetadata: 'JSON-Metadaten einschließen',
+    microtubuleAnnotationsNote:
+      'Mikrotubuli-Projekte exportieren Annotationen als ImageJ RoiSet + CVAT 1.1 (immer enthalten), jeweils mit der Tubulin-Typklasse. COCO/YOLO/JSON werden für Mikrotubuli nicht verwendet.',
     preparing: 'Export wird vorbereitet...',
     processing: 'Verarbeitung {{current}} von {{total}}',
     processingExport: 'Verarbeitung...',
@@ -2144,6 +2157,29 @@ export default {
     showInstance: 'Mikrotubulus einblenden',
     hideAll: 'Alle ausblenden',
     showAll: 'Alle einblenden',
+    type: {
+      set: 'Typ festlegen',
+      setForSelected: 'Typ für {{count}} ausgewählte festlegen',
+      none: 'Keiner',
+      newLabel: 'Neues Label…',
+      renameLabel: 'Label umbenennen',
+      deleteLabel: 'Label löschen',
+      manageLabels: 'Typ-Labels',
+      labelName: 'Name',
+      labelNamePlaceholder: 'z. B. Alpha-Tubulin',
+      labelColor: 'Farbe',
+      labelDialogDescription:
+        'Benennen Sie den Tubulin-Typ und wählen Sie eine Farbe.',
+      updated: 'Mikrotubulus-Typ aktualisiert',
+      updateFailed: 'Mikrotubulus-Typ konnte nicht aktualisiert werden',
+      noTrack:
+        'Dieser Mikrotubulus hat noch keinen Track — führen Sie zuerst das Tracking aus.',
+    },
+    color: {
+      label: 'Farbe:',
+      byInstance: 'Instanz',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Spermien-Instanzen',

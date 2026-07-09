@@ -984,9 +984,19 @@ export default {
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
         cancel: 'Presiona ESC para cancelar',
       },
+      createPolyline: {
+        start: 'Haga clic para colocar el primer punto del microtúbulo',
+        finish: 'Pulse Enter o haga doble clic para finalizar el microtúbulo',
+        holdShift: 'Mantenga SHIFT para añadir puntos automáticamente',
+        cancel: 'Pulse ESC para cancelar',
+      },
       addPoints: {
         clickVertex:
           'Haz clic en cualquier vértice para comenzar a agregar puntos',
+        clickVertexMt:
+          'Haga clic en un extremo del microtúbulo para extenderlo',
+        addPointsMt:
+          'Haga clic para añadir puntos y pulse Enter para finalizar',
         addPoints:
           'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
@@ -1008,6 +1018,7 @@ export default {
       modes: {
         slice: 'Modo cortar',
         create: 'Modo crear polígono',
+        createPolyline: 'Modo crear microtúbulo',
         addPoints: 'Modo agregar puntos',
         editVertices: 'Modo editar vértices',
         deletePolygon: 'Modo eliminar polígono',
@@ -1302,6 +1313,8 @@ export default {
     generateExcel: 'Generar métricas de Excel',
     includeCocoFormat: 'Incluir anotaciones en formato COCO',
     includeJsonMetadata: 'Incluir metadatos JSON',
+    microtubuleAnnotationsNote:
+      'Los proyectos de microtúbulos exportan anotaciones como ImageJ RoiSet + CVAT 1.1 (siempre incluidas), cada una con la clase de tipo de tubulina. COCO/YOLO/JSON no se usan para microtúbulos.',
     preparing: 'Preparando exportación...',
     processing: 'Procesando {{current}} de {{total}}',
     processingExport: 'Procesando...',
@@ -2184,6 +2197,28 @@ export default {
     showInstance: 'Mostrar microtúbulo',
     hideAll: 'Ocultar todo',
     showAll: 'Mostrar todo',
+    type: {
+      set: 'Establecer tipo',
+      setForSelected: 'Establecer tipo para {{count}} seleccionados',
+      none: 'Ninguno',
+      newLabel: 'Nueva etiqueta…',
+      renameLabel: 'Renombrar etiqueta',
+      deleteLabel: 'Eliminar etiqueta',
+      manageLabels: 'Etiquetas de tipo',
+      labelName: 'Nombre',
+      labelNamePlaceholder: 'p. ej. alfa-tubulina',
+      labelColor: 'Color',
+      labelDialogDescription: 'Nombre el tipo de tubulina y elija un color.',
+      updated: 'Tipo de microtúbulo actualizado',
+      updateFailed: 'No se pudo actualizar el tipo de microtúbulo',
+      noTrack:
+        'Este microtúbulo aún no tiene seguimiento — ejecute primero el seguimiento.',
+    },
+    color: {
+      label: 'Color:',
+      byInstance: 'Instancia',
+      byLabel: 'Etiqueta',
+    },
   },
   sperm: {
     instancePanel: 'Instancias de espermatozoides',

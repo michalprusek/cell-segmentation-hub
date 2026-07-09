@@ -13,6 +13,7 @@ import {
   colorKeyForRoi,
   hueFromColorKey,
   imageJStrokeColor,
+  imageJColorFromHex,
 } from '../imagejColor';
 
 /** Independent re-implementation of the FE hue hash for cross-checking. */
@@ -99,5 +100,42 @@ describe('imageJStrokeColor', () => {
     expect((argb >>> 16) & 0xff).toBe(153);
     expect((argb >>> 8) & 0xff).toBe(153);
     expect(argb & 0xff).toBe(153);
+  });
+});
+
+describe('imageJStrokeColor hue coverage', () => {
+  it('produces a valid opaque ARGB across every hslToRgb hue sextant', () => {
+    // Many keys hash to hues spanning all six 60°-sextants, exercising each
+    // branch of the HSL→RGB conversion.
+    const hues = new Set<number>();
+    for (let i = 0; i < 200; i++) {
+      const key = `mt_${i}`;
+      const argb = imageJStrokeColor(key);
+      expect((argb >>> 24) & 0xff).toBe(0xff); // opaque
+      hues.add(Math.floor(hueFromColorKey(key) / 60)); // 0..5
+    }
+    // All six sextants observed → every hslToRgb branch was taken.
+    expect(hues.size).toBe(6);
+  });
+});
+
+describe('imageJColorFromHex', () => {
+  it('packs a #RRGGBB label colour into an opaque ARGB int', () => {
+    const argb = imageJColorFromHex('#ff8040');
+    expect((argb >>> 24) & 0xff).toBe(0xff); // opaque alpha
+    expect((argb >>> 16) & 0xff).toBe(0xff);
+    expect((argb >>> 8) & 0xff).toBe(0x80);
+    expect(argb & 0xff).toBe(0x40);
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(imageJColorFromHex('  #ff8040  ')).toBe(imageJColorFromHex('#ff8040'));
+  });
+
+  it('falls back to the neutral "no key" colour for a malformed hex', () => {
+    const neutral = imageJStrokeColor('');
+    expect(imageJColorFromHex('nothex')).toBe(neutral);
+    expect(imageJColorFromHex('#fff')).toBe(neutral); // 3-digit not accepted
+    expect(imageJColorFromHex('')).toBe(neutral);
   });
 });

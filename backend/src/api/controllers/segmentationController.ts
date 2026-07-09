@@ -360,6 +360,49 @@ class SegmentationController {
   };
 
   /**
+   * Set (or clear) the microtubule type-label id on one or more tracks across a
+   * whole video. body: `{ trackIds: string[]; mtType: string | null }`.
+   */
+  setTrackType = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { videoId } = req.params;
+      const { trackIds, mtType } = req.body as {
+        trackIds?: unknown;
+        mtType?: unknown;
+      };
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+      if (!this.validateParams(req.params, ['videoId'], res)) {
+        return;
+      }
+
+      const result = await this.segmentationService.setTrackTypeAcrossVideo(
+        videoId as string,
+        Array.isArray(trackIds) ? (trackIds as string[]) : [],
+        typeof mtType === 'string' && mtType.length > 0 ? mtType : null,
+        userId
+      );
+
+      ResponseHelper.success(res, result, 'Typ mikrotubulu nastaven');
+    } catch (error) {
+      logger.error(
+        'Failed to set microtubule track type',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        { videoId: req.params.videoId, userId: req.user?.id }
+      );
+      this.handleTrackOpError(
+        error,
+        res,
+        'Chyba při nastavení typu mikrotubulu'
+      );
+    }
+  };
+
+  /**
    * Batch process multiple images
    */
   batchSegment = async (req: Request, res: Response): Promise<void> => {
