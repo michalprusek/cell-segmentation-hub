@@ -6,6 +6,9 @@ import {
   updateProject,
   deleteProject,
   getProjectStats,
+  getMtTypeLabels,
+  putMtTypeLabels,
+  deleteMtTypeLabel,
 } from '../controllers/projectController';
 import { authenticate } from '../../middleware/auth';
 import {
@@ -101,6 +104,27 @@ router.delete(
  * Get project statistics
  */
 router.get('/:id/stats', validateParams(projectIdSchema), getProjectStats);
+
+/**
+ * Microtubule type-label palette (SSOT for user-defined tubulin "type" labels).
+ * GET reads the palette; PUT replaces it (create/rename/reorder); DELETE removes
+ * one label and nulls its references across the project's frames.
+ */
+router.get(
+  '/:id/mt-type-labels',
+  validateParams(projectIdSchema),
+  getMtTypeLabels
+);
+router.put(
+  '/:id/mt-type-labels',
+  validateParams(projectIdSchema),
+  putMtTypeLabels
+);
+router.delete(
+  '/:id/mt-type-labels/:labelId',
+  validateParams(projectIdSchema),
+  deleteMtTypeLabel
+);
 
 // Mount image routes
 router.use('/', imageRoutes);
