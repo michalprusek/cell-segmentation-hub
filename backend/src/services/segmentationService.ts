@@ -54,6 +54,10 @@ export interface SegmentationPolygon {
    *  Editor state (hide/select) keys on this; cross-frame mutation
    *  propagation finds sibling polylines by matching trackId. */
   trackId?: string;
+  /** User-assigned microtubule type-label id (see Project.mtTypeLabels).
+   *  Set/cleared via the tracks/type endpoint; resolved to a class
+   *  name/colour for the editor and exports. */
+  mtType?: string;
 }
 
 /**

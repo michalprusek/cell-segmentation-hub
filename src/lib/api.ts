@@ -121,6 +121,9 @@ export interface SegmentationPolygon {
    *  the image border. Drives grey rendering in the editor and exclusion from
    *  metrics. Absent for other project types. */
   complete?: boolean;
+  /** User-assigned microtubule type-label id (references the project's
+   *  `mtTypeLabels` palette). Set/cleared via the tracks/type endpoint. */
+  mtType?: string;
 }
 
 export interface SegmentationResultData {
