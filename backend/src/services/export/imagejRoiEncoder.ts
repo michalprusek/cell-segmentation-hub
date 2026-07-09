@@ -357,6 +357,49 @@ function videoZipLabel(
   return `video_${videoKey.slice(0, 8)}`;
 }
 
+/**
+ * Per-video microtubule display names following `<type>_<counter>` — a per-type
+ * running counter (HeLa_1, HeLa_2, brain_1, …) assigned in first-appearance
+ * order across the ordered frames and keyed on the cross-frame-stable trackId so
+ * the SAME microtubule keeps ONE name on every slice. Rules per MT:
+ *   1. a manual rename (`polygon.name`) wins and is used verbatim;
+ *   2. otherwise `<typeName>_<n>` where n counts that type from 1;
+ *   3. an untyped MT falls into the `untyped_<n>` bucket.
+ * Keyless or degenerate polygons are absent (the caller falls back to roiLabel).
+ */
+function buildMtNameByKey(
+  orderedFrames: RoiFrameInput[],
+  labelById?: Map<string, RoiTypeLabel>
+): Map<string, string> {
+  const nameByKey = new Map<string, string>();
+  const perTypeCount = new Map<string, number>();
+  for (const frame of orderedFrames) {
+    const parsed = parseFramePolygons(frame.segmentation?.polygons);
+    if (parsed.corrupt) continue;
+    for (const p of parsed.polygons) {
+      const geometry = p.geometry === 'polygon' ? 'polygon' : 'polyline';
+      const pts = validPoints(p.points);
+      if (pts.length < (geometry === 'polyline' ? 2 : 3)) continue;
+      const key = p.trackId || p.instanceId || p.id;
+      if (!key || nameByKey.has(key)) continue;
+      // A manual rename overrides the automatic scheme.
+      const renamed = p.name?.trim();
+      if (renamed) {
+        nameByKey.set(key, renamed);
+        continue;
+      }
+      const typeName = p.mtType
+        ? labelById?.get(p.mtType)?.name?.trim()
+        : undefined;
+      const bucket = typeName || 'untyped';
+      const n = (perTypeCount.get(bucket) ?? 0) + 1;
+      perTypeCount.set(bucket, n);
+      nameByKey.set(key, `${bucket}_${n}`);
+    }
+  }
+  return nameByKey;
+}
+
 /** Sentinel bucket for the rare MT frame with no parentVideoId. */
 const NO_VIDEO_KEY = '__novideo__';
 
@@ -381,9 +424,11 @@ export interface VideoRoiBuild {
  *
  * Frames are processed in frameIndex order. Each ROI carries ``position =
  * frameIndex + 1`` (1-based ImageJ slice) and a stroke colour derived from its
- * track (identical hue to the editor). Entry names are ``<label>__frame_NNNN``
- * (MT-first) so the same microtubule's ROIs sort together in the ROI Manager
- * and every name is unique within the zip.
+ * track (identical hue to the editor). The ROI label is the per-video
+ * ``<type>_<counter>`` name (e.g. ``HeLa_1``; a manual rename overrides it, an
+ * untyped MT reads ``untyped_N``), and entry names are ``<label>__frame_NNNN``
+ * so the same microtubule's ROIs sort together in the ROI Manager and every
+ * name is unique within the zip.
  *
  * Degradation matches the rest of the export: corrupt-JSON frames are counted
  * (surfaced as a warning by the caller), and polygons with too few / non-finite
@@ -406,6 +451,11 @@ export function buildVideoRoiEntries(
   const ordered = [...frames].sort(
     (a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0)
   );
+
+  // Per-video `<type>_<counter>` names (rename-override), keyed on the
+  // cross-frame-stable trackId so one microtubule reads identically on every
+  // slice. Computed once over all frames before per-frame ROI encoding.
+  const mtNameByKey = buildMtNameByKey(ordered, labelById);
 
   const entries: RoiZipEntry[] = [];
   let framesWithRois = 0;
@@ -431,15 +481,18 @@ export function buildVideoRoiEntries(
       .map((p, index) => {
         const geometry: RoiGeometry =
           p.geometry === 'polygon' ? 'polygon' : 'polyline';
-        // Resolve the assigned tubulin type label (if any). When present, the
-        // class name prefixes the ROI name and the label colour drives the
-        // stroke — so the ROI's identity in ImageJ reflects its class.
+        // Resolve the assigned tubulin type label (if any). Its COLOUR drives
+        // the stroke so the ROI reads as its class; its NAME feeds the
+        // `<type>_<counter>` scheme via buildMtNameByKey.
         const typeLabel = p.mtType ? labelById?.get(p.mtType) : undefined;
-        const baseLabel = roiLabel(p, index);
+        // ROI name: the per-video `<type>_<counter>` (or manual rename) when a
+        // stable key resolved, else the legacy trackId/id label as a fallback.
+        const key = p.trackId || p.instanceId || p.id;
+        const label = (key && mtNameByKey.get(key)) || roiLabel(p, index);
         return {
           geometry,
           points: validPoints(p.points),
-          label: typeLabel ? `${typeLabel.name}__${baseLabel}` : baseLabel,
+          label,
           strokeColor: typeLabel
             ? imageJColorFromHex(typeLabel.color)
             : imageJStrokeColor(colorKeyForRoi(p)),

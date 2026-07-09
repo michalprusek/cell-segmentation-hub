@@ -54,7 +54,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 * json/ - Custom JSON format
 ${
   isMicrotubuleProject(project.type)
-    ? '* imagej/ - ImageJ/Fiji ROIs, one <video>_RoiSet.zip per video (each microtubule polyline on its own stack slice, named by cross-frame trackId, coloured per track, drawn at the MT thickness)\n'
+    ? '* imagej/ - ImageJ/Fiji ROIs, one <video>_RoiSet.zip per video (each microtubule polyline on its own stack slice, named <type>_<n> per tubulin class (rename overrides; untyped_<n> otherwise), coloured per class/track, drawn at the MT thickness)\n'
     : ''
 }* metrics/ - Calculated metrics
 * documentation/ - This folder
@@ -242,9 +242,11 @@ Every microtubule export also bundles the polyline centerlines as native
 ImageJ ROIs, so you can re-open them in ImageJ / Fiji for manual
 re-measurement or line-based plugins. They are packaged as **one
 \`<video>_RoiSet.zip\` per video** under \`annotations/imagej/\`, with each ROI
-named by the cross-frame **trackId** when tracking ran (falling back to the
-polyline's name/id otherwise) — so a tracked microtubule keeps the same ROI
-name in every frame.
+named **\`<type>_<n>\`** — the microtubule's tubulin type class plus a per-type
+counter numbered from 1 (e.g. \`HeLa_1\`, \`HeLa_2\`, \`brain_1\`). A manually
+renamed microtubule uses that name verbatim, and an untyped one reads
+\`untyped_<n>\`. The name is keyed on the cross-frame trackId, so the same
+microtubule keeps one name in every frame.
 
 - Each ROI is placed on its own 1-based **stack slice** (its video frame) and
   coloured per track, matching the editor.
