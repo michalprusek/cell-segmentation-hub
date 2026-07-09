@@ -129,8 +129,10 @@ class MTMetricsRow(BaseModel):
     mean_intensity: float
     median_intensity: float
     std_intensity: float
-    # null when the background mask is empty (every pixel in the dilated
-    # signal union) or when the band mask is empty.
+    # Per-MT LOCAL background: median/mean of the pixels in THIS microtubule's
+    # own vicinity ring (out to thickness*margin_multiplier around its band,
+    # excluding every MT's signal band). null when that ring is empty or the
+    # band mask is empty.
     median_background: Optional[float] = None
     mean_background: Optional[float] = None
     signal_minus_background: Optional[float] = None
@@ -392,7 +394,7 @@ def _emit_channel_rows(
     frame_arr: np.ndarray,
     band_masks: List[np.ndarray],
     polyline_lengths: List[float],
-    background_mask: np.ndarray,
+    vicinity_masks: List[np.ndarray],
     fr: "MTFrameInput",
     channel_name: str,
     rows: List["MTMetricsRow"],
@@ -402,17 +404,20 @@ def _emit_channel_rows(
     Shared by the volume-backed and PNG-backed channel paths so both compute
     background + per-band statistics identically. ``frame_arr`` is the channel's
     raster already cast to float64 and (for volume channels) shifted into the
-    registered space.
+    registered space. Each microtubule's background is sampled from its OWN
+    local vicinity ring (``vicinity_masks[pl_idx]``), not a frame-global region.
     """
-    bg_pixels = frame_arr[background_mask]
-    has_bg = bg_pixels.size > 0
-    median_bg = float(np.median(bg_pixels)) if has_bg else None
-    mean_bg = float(bg_pixels.mean()) if has_bg else None
-
     for pl_idx, pl in enumerate(fr.polylines):
         band = band_masks[pl_idx]
         pixels = frame_arr[band > 0]
         pixel_count = int(pixels.size)
+
+        # Per-MT LOCAL background: pixels in this microtubule's vicinity ring.
+        bg_pixels = frame_arr[vicinity_masks[pl_idx]]
+        has_bg = bg_pixels.size > 0
+        median_bg = float(np.median(bg_pixels)) if has_bg else None
+        mean_bg = float(bg_pixels.mean()) if has_bg else None
+
         if pixel_count == 0:
             sum_v = mean_v = median_v = std_v = 0.0
             signal_minus_bg: Optional[float] = None
@@ -455,14 +460,15 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
 
     Algorithm per frame:
       1. Rasterise each polyline into a thickness-wide binary mask.
-      2. Union all band masks; dilate the union by
-         ``thickness * margin_multiplier`` for the background exclusion.
-      3. background_mask = NOT dilated_union.
-      4. For each requested channel:
-           - median_background / mean_background = median resp. mean of
-             pixels under background_mask.
-           - For each polyline: pixel_count / sum / mean / median / std
-             under that polyline's band; emit one row.
+      2. Union all band masks (the "signal" all MTs occupy).
+      3. Per MT: vicinity = dilate(its band, thickness*margin_multiplier) minus
+         the signal union — a local ring hugging that MT, excluding every MT's
+         band.
+      4. For each requested channel, for each polyline:
+           - median/mean_background = median resp. mean of the pixels in THAT
+             microtubule's own vicinity ring (local, not frame-global).
+           - pixel_count / sum / mean / median / std under its band.
+           - emit one row.
     """
     if len(req.channel_indices) != len(req.channel_names):
         raise HTTPException(
@@ -563,12 +569,19 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             band_masks.append(_rasterize_band(pts, H, W, req.thickness_px))
             polyline_lengths.append(_polyline_length(pts))
 
-        # 2 + 3. Background mask = NOT (dilated union of bands).
+        # 2 + 3. Per-MT LOCAL background. Each microtubule's background is the
+        # ring within `margin_radius` of ITS OWN band (dilate(band)), minus the
+        # union of every MT's signal band — so a neighbouring microtubule never
+        # counts as background. Computed once per frame (geometry is
+        # channel-independent) and reused across channels.
         signal_union = np.zeros((H, W), dtype=np.uint8)
         for m in band_masks:
             signal_union |= m
-        signal_dilated = _dilate(signal_union, margin_radius)
-        background_mask = signal_dilated == 0
+        not_signal = signal_union == 0
+        vicinity_masks: List[np.ndarray] = []
+        for band in band_masks:
+            capsule = _dilate(band, margin_radius)
+            vicinity_masks.append((capsule > 0) & not_signal)
 
         # 4. Per-channel computations.
         # Per-frame registration offsets (channel-registration at upload), one
@@ -590,7 +603,7 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             frame_arr = raw.astype(np.float64)
             _emit_channel_rows(
                 frame_arr, band_masks, polyline_lengths,
-                background_mask, fr, channel_name, rows,
+                vicinity_masks, fr, channel_name, rows,
             )
 
         # PNG-backed (added) channels: sampled from the per-frame PNG, already
@@ -602,7 +615,7 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
                 continue
             _emit_channel_rows(
                 frame_arr, band_masks, polyline_lengths,
-                background_mask, fr, name, rows,
+                vicinity_masks, fr, name, rows,
             )
 
     logger.info(

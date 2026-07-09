@@ -957,6 +957,77 @@ describe('buildVideoRoiEntries', () => {
     ]);
   });
 
+  it('emits a wider <name>_bg background band ROI when backgroundStrokeWidth is set', () => {
+    const palette = new Map([['h', { name: 'HeLa', color: '#ff0000' }]]);
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              {
+                trackId: 't1',
+                geometry: 'polyline',
+                mtType: 'h',
+                points: [
+                  { x: 0, y: 0 },
+                  { x: 10, y: 0 },
+                ],
+              },
+            ]),
+          },
+        },
+      ],
+      5, // signal thickness
+      palette,
+      13 // background band width = thickness(5) + 2*margin(4)
+    );
+    expect(build.entries.map(e => e.name).sort()).toEqual([
+      'HeLa_1__frame_0000.roi',
+      'HeLa_1_bg__frame_0000.roi',
+    ]);
+    const map = byName(build.entries);
+    const sig = decodeRoi(map.get('HeLa_1__frame_0000.roi')!.buffer);
+    const bg = decodeRoi(map.get('HeLa_1_bg__frame_0000.roi')!.buffer);
+    // Signal band is the thickness; the background band is the wider vicinity.
+    expect(sig.strokeWidth).toBe(5);
+    expect(bg.strokeWidth).toBe(13);
+    // Same geometry (a wide-stroke polyline), same slice + colour.
+    expect(bg.type).toBe(ROI_TYPE_POLYLINE);
+    expect(bg.strokeColor).toBe(sig.strokeColor);
+    expect(bg.position).toBe(sig.position);
+  });
+
+  it('skips the background band when it is not wider than the signal (margin 0)', () => {
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              line('t1', [
+                [0, 0],
+                [10, 0],
+              ]),
+            ]),
+          },
+        },
+      ],
+      5,
+      undefined,
+      5 // background width == signal width → no bg ROI
+    );
+    expect(build.entries.map(e => e.name)).toEqual([
+      'untyped_1__frame_0000.roi',
+    ]);
+  });
+
   it('stamps the given thickness as EVERY ROI stroke width', () => {
     const build = buildVideoRoiEntries(
       [

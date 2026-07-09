@@ -671,6 +671,19 @@ export class ExportService {
       // export they did request: it degrades to a warning. Only a genuine
       // cancellation stays fatal.
       if (isMicrotubuleProject && project.images?.length) {
+        // MT thickness (px) → ImageJ ROI stroke width (the signal band). The
+        // background band ROI is drawn at the vicinity width
+        // (thickness + 2*margin) — the same region the metrics step samples the
+        // per-MT background from. `mtMetrics` is optional (ROI export is
+        // always-on), so fall back to the slider defaults (thickness 5,
+        // margin 2).
+        const mtThicknessPx =
+          options.mtMetrics?.thicknessPx && options.mtMetrics.thicknessPx > 0
+            ? options.mtMetrics.thicknessPx
+            : DEFAULT_MT_ROI_THICKNESS_PX;
+        const mtMarginMultiplier = options.mtMetrics?.marginMultiplier ?? 2;
+        const mtBackgroundStrokeWidth =
+          mtThicknessPx + 2 * Math.round(mtThicknessPx * mtMarginMultiplier);
         exportTasks.push(
           exportImageJRoiSets(
             project.images as ImageWithSegmentation[],
@@ -678,15 +691,8 @@ export class ExportService {
             project.id,
             {
               shouldAbort: () => this.isJobCancelled(jobId),
-              // MT thickness (px) → ImageJ ROI stroke width, so re-opened
-              // polylines draw + measure as a band of the sampled width. The
-              // ROI export is always-on but `mtMetrics` is optional, so fall
-              // back to the same default the metrics thickness slider uses (5).
-              strokeWidth:
-                options.mtMetrics?.thicknessPx &&
-                options.mtMetrics.thicknessPx > 0
-                  ? options.mtMetrics.thicknessPx
-                  : DEFAULT_MT_ROI_THICKNESS_PX,
+              strokeWidth: mtThicknessPx,
+              backgroundStrokeWidth: mtBackgroundStrokeWidth,
             }
           )
             .then(result => {

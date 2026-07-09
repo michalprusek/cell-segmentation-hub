@@ -218,8 +218,12 @@ columns are filled only when a channel was selected in the export dialog
   only).
 - **sumIntensity / meanIntensity / stdIntensity** — raw 16-bit signal
   statistics inside the band for this channel (intensity exports only).
-- **medianBackground** — median signal outside the dilated band union, used
-  as the per-frame background for this channel.
+- **medianBackground / meanBackground** — median resp. mean signal in THIS
+  microtubule's own LOCAL vicinity ring: the band within
+  \`thickness * margin\` of its centerline, excluding every microtubule's signal
+  band. Each MT therefore gets a background appropriate to where it sits — a
+  bright neighbourhood no longer averages away a dim one (this changed from a
+  single frame-global background; older exports are not directly comparable).
 - **signalMinusBackground** — meanIntensity − medianBackground
   (background-corrected mean).
 
@@ -253,6 +257,10 @@ microtubule keeps one name in every frame.
 - Each polyline is drawn at the configured **MT thickness** (the "MT thickness
   (px)" export setting, default 5) as its stroke width — so ImageJ renders and
   measures each microtubule as a band of that width, not a hairline.
+- Each microtubule also gets a companion **\`<name>_bg\`** ROI — the same
+  polyline drawn at the wider **vicinity width** (\`thickness + 2*margin\`), so
+  you can see the band its LOCAL background is sampled from (the ring between
+  the signal band and this wider band). Omitted when the margin is 0.
 - Geometry is stored with sub-pixel (float) precision, in image-pixel space.
 - To load a video's ROIs: **drag its \`<video>_RoiSet.zip\` onto the ImageJ
   window**, or use *ROI Manager ▸ More ▸ Open…* and pick the \`.zip\` — either

@@ -446,7 +446,13 @@ export function buildVideoRoiEntries(
    *  label's COLOUR becomes the ROI stroke colour — so in ImageJ the ROI's name
    *  and colour both reflect its class. Untyped polylines keep the per-track
    *  hue. Omit for non-MT exports. */
-  labelById?: Map<string, RoiTypeLabel>
+  labelById?: Map<string, RoiTypeLabel>,
+  /** Vicinity band width (px) for the per-MT background ROI — the full width of
+   *  the region background stats are sampled from (`thickness + 2*margin`). When
+   *  set and wider than the signal thickness, each polyline also gets a
+   *  `<name>_bg` polyline drawn at this width, so ImageJ shows the background
+   *  band around the (narrower) signal band. Omit to skip background ROIs. */
+  backgroundStrokeWidth?: number
 ): VideoRoiBuild {
   const ordered = [...frames].sort(
     (a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0)
@@ -507,24 +513,24 @@ export function buildVideoRoiEntries(
     // same base must not collide), then suffix the unique frame label.
     const usedInFrame = new Set<string>();
     let frameRois = 0;
-    for (const { geometry, points, label, strokeColor } of items) {
-      const base = sanitizeFilename(label);
-      let labelCandidate = base;
+    // Reserve a unique `<base>__<frameLabel>` entry name within the zip.
+    const reserveEntry = (base: string): string => {
+      let candidate = base;
       let dupe = 2;
-      while (usedInFrame.has(labelCandidate.toLowerCase())) {
-        labelCandidate = `${base}_${dupe++}`;
+      while (usedInFrame.has(candidate.toLowerCase())) {
+        candidate = `${base}_${dupe++}`;
       }
-      usedInFrame.add(labelCandidate.toLowerCase());
-
-      // frameLabel is unique per frame, so cross-frame collisions cannot occur;
-      // this guard only defends against a pathological repeat.
-      let entryStem = `${labelCandidate}__${frameLabel}`;
+      usedInFrame.add(candidate.toLowerCase());
+      let stem = `${candidate}__${frameLabel}`;
       let extra = 2;
-      while (usedEntryNames.has(entryStem.toLowerCase())) {
-        entryStem = `${labelCandidate}__${frameLabel}_${extra++}`;
+      while (usedEntryNames.has(stem.toLowerCase())) {
+        stem = `${candidate}__${frameLabel}_${extra++}`;
       }
-      usedEntryNames.add(entryStem.toLowerCase());
-
+      usedEntryNames.add(stem.toLowerCase());
+      return stem;
+    };
+    for (const { geometry, points, label, strokeColor } of items) {
+      const entryStem = reserveEntry(sanitizeFilename(label));
       const buffer = encodeImageJRoi(points, geometry, label, {
         position,
         strokeColor,
@@ -532,6 +538,27 @@ export function buildVideoRoiEntries(
       });
       entries.push({ name: `${entryStem}.roi`, buffer });
       frameRois++;
+
+      // Second ROI: the per-MT background band. It's the SAME polyline drawn at
+      // the vicinity width (thickness + 2*margin), so ImageJ renders the
+      // background band around the (narrower) signal band — the ring between
+      // them is where background stats come from. Only for polylines, and only
+      // when the vicinity is actually wider than the signal (margin > 0).
+      if (
+        geometry === 'polyline' &&
+        typeof backgroundStrokeWidth === 'number' &&
+        backgroundStrokeWidth > (strokeWidth ?? 0)
+      ) {
+        const bgLabel = `${label}_bg`;
+        const bgStem = reserveEntry(sanitizeFilename(bgLabel));
+        const bgBuffer = encodeImageJRoi(points, 'polyline', bgLabel, {
+          position,
+          strokeColor,
+          strokeWidth: backgroundStrokeWidth,
+        });
+        entries.push({ name: `${bgStem}.roi`, buffer: bgBuffer });
+        frameRois++;
+      }
     }
     if (frameRois > 0) framesWithRois++;
   }
@@ -602,7 +629,14 @@ export async function exportImageJRoiSets(
   frameImages: RoiFrameInput[],
   exportDir: string,
   projectId: string,
-  options: { shouldAbort?: () => boolean; strokeWidth?: number } = {}
+  options: {
+    shouldAbort?: () => boolean;
+    strokeWidth?: number;
+    /** Vicinity band width (px) for the per-MT background ROI
+     *  (`thickness + 2*margin`). When wider than `strokeWidth`, each MT also
+     *  gets a `<name>_bg` band ROI. Omit to skip background ROIs. */
+    backgroundStrokeWidth?: number;
+  } = {}
 ): Promise<ImageJRoiExportResult> {
   const baseDir = path.join(exportDir, 'annotations', 'imagej');
 
@@ -650,7 +684,8 @@ export async function exportImageJRoiSets(
     const build = buildVideoRoiEntries(
       videoFrames,
       options.strokeWidth,
-      labelById
+      labelById,
+      options.backgroundStrokeWidth
     );
     corruptFrames += build.corruptFrames;
     droppedPolygons += build.droppedPolygons;
