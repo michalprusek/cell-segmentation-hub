@@ -269,6 +269,35 @@ export function removePolygonsWithTrackId(
 }
 
 /**
+ * Set (or clear, when `mtType` is null) the microtubule type-label id on every
+ * polyline whose `trackId` is in `trackIds`. Returns the new array plus how many
+ * polygons actually changed — a no-op assignment (already that value) is not
+ * counted, so callers can skip a DB write for an unchanged frame. Pure: never
+ * mutates its input (changed polygons are shallow-copied).
+ */
+export function setPolygonsTrackType(
+  polys: unknown[],
+  trackIds: Set<string>,
+  mtType: string | null
+): { polygons: unknown[]; changed: number } {
+  let changed = 0;
+  const polygons = polys.map(p => {
+    const rec = p as Record<string, unknown>;
+    const tid = rec.trackId;
+    if (typeof tid !== 'string' || !trackIds.has(tid)) return p;
+    const current = typeof rec.mtType === 'string' ? rec.mtType : undefined;
+    const next = mtType ?? undefined;
+    if (current === next) return p; // no-op
+    changed++;
+    const copy = { ...rec };
+    if (next === undefined) delete copy.mtType;
+    else copy.mtType = next;
+    return copy;
+  });
+  return { polygons, changed };
+}
+
+/**
  * Overwrite-or-insert a propagated polyline into one frame's polygon list: drop
  * any existing polyline already carrying `trackId` (overwrite), then append a
  * fresh copy that shares the trackId (add where missing). `makeId` supplies a
@@ -2275,6 +2304,77 @@ export class SegmentationService {
       trackId,
       framesAffected,
     });
+    return { framesAffected };
+  }
+
+  /**
+   * Set (or clear) the microtubule type-label id on every polyline carrying one
+   * of `trackIds`, across ALL frames of the video. Mirrors
+   * {@link deleteTrackAcrossVideo}: frame-scan + a single `$transaction` of only
+   * the frames that actually changed. Passing `mtType: null` clears the label.
+   * Returns the number of frames written.
+   *
+   * @throws {VideoAccessError} if the video is not owned by the user.
+   */
+  async setTrackTypeAcrossVideo(
+    videoId: string,
+    trackIds: string[],
+    mtType: string | null,
+    userId: string
+  ): Promise<{ framesAffected: number }> {
+    // Ownership: the video container is an Image row the user must be able to access.
+    const container = await this.imageService.getImageById(videoId, userId);
+    if (!container) {
+      throw new VideoAccessError();
+    }
+    const trackSet = new Set(
+      trackIds.filter(t => typeof t === 'string' && t.length > 0)
+    );
+    if (trackSet.size === 0) {
+      return { framesAffected: 0 };
+    }
+
+    const frames = await this.prisma.image.findMany({
+      where: { parentVideoId: videoId },
+      select: {
+        id: true,
+        segmentation: { select: { id: true, polygons: true } },
+      },
+    });
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    let framesAffected = 0;
+    for (const frame of frames) {
+      if (!frame.segmentation) continue;
+      const parsed = parsePolygonsJsonForDiff(frame.segmentation.polygons, {
+        currentImageId: frame.id,
+        parentVideoId: videoId,
+      });
+      const { polygons, changed } = setPolygonsTrackType(
+        parsed,
+        trackSet,
+        mtType
+      );
+      if (changed > 0) {
+        framesAffected++;
+        ops.push(
+          this.prisma.segmentation.update({
+            where: { id: frame.segmentation.id },
+            data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
+          })
+        );
+      }
+    }
+
+    if (ops.length > 0) {
+      await this.prisma.$transaction(ops);
+    }
+
+    logger.info(
+      'Set microtubule track type across video',
+      'SegmentationService',
+      { videoId, trackCount: trackSet.size, mtType, framesAffected }
+    );
     return { framesAffected };
   }
 
