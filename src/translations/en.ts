@@ -2243,6 +2243,11 @@ export default {
       labelDialogDescription: 'Name the tubulin type and pick a colour.',
       updated: 'Microtubule type updated',
       updateFailed: 'Failed to update microtubule type',
+      createFailed: 'Failed to create label',
+      renameFailed: 'Failed to rename label',
+      deleteFailed: 'Failed to delete label',
+      loadFailed: 'Failed to load type labels',
+      duplicateName: 'A label with this name already exists',
       noTrack: 'This microtubule has no track yet — run tracking first.',
     },
     color: {

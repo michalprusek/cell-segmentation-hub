@@ -167,6 +167,7 @@ vi.mock('../../utils/concurrency', () => ({
 
 vi.mock('../../types/validation', () => ({
   coerceProjectType: vi.fn((t: string) => t ?? 'spheroid'),
+  isMicrotubuleProject: (t: string | undefined | null) => t === 'microtubules',
 }));
 
 // ---- Imports (after mocks) ----

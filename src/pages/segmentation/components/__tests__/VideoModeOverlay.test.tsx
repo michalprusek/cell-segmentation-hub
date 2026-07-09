@@ -10,17 +10,12 @@
  *  - Arrow keys are ignored when the event target is an INPUT element
  *  - Arrow keys are ignored when the event target is a TEXTAREA element
  *  - Arrow keys are ignored when the event target is contentEditable
- *  - On mount, calls onActiveFrameChange with the currentFrame value
- *  - On frameIndex change, calls onActiveFrameChange again with new frame
  *  - On mount, calls setFrameIndex (ImageDisplayContext) with frameIndex
  *  - Kymograph modal is NOT rendered for non-microtubule projectType even
  *    if 'segmentation:open-kymograph' event is dispatched
  *  - Kymograph modal IS rendered for projectType='microtubules' after
  *    'segmentation:open-kymograph' CustomEvent
  *  - KymographModal receives correct polylineId from CustomEvent detail
- *  - useVideoModeProps returns null when isVideoContainer=false
- *  - useVideoModeProps returns null when imageId is null
- *  - useVideoModeProps returns correct props when both args are truthy
  *
  * NOT tested:
  *  - Actual keyboard trusted events on canvas (jsdom limitation — covered by E2E)
@@ -29,8 +24,8 @@
 
 import React, { act } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, renderHook } from '@testing-library/react';
-import { VideoModeOverlay, useVideoModeProps } from '../VideoModeOverlay';
+import { render, screen } from '@testing-library/react';
+import { VideoModeOverlay } from '../VideoModeOverlay';
 
 // ---------------------------------------------------------------------------
 // Mock heavy internal dependencies
@@ -256,30 +251,10 @@ describe('VideoModeOverlay', () => {
   });
 
   // -------------------------------------------------------------------------
-  // onActiveFrameChange / setDisplayFrame sync
+  // setDisplayFrame sync
   // -------------------------------------------------------------------------
 
   describe('frame change propagation', () => {
-    it('calls onActiveFrameChange with currentFrame on mount', () => {
-      const frame = {
-        id: 'frame-0',
-        frameIndex: 0,
-        segmentationStatus: 'not_started' as const,
-      };
-      videoFramesMock.container = makeContainer();
-      videoFramesMock.currentFrame = frame;
-      videoFramesMock.frameIndex = 0;
-
-      const onActiveFrameChange = vi.fn();
-      render(
-        <VideoModeOverlay
-          videoContainerId="vid-1"
-          onActiveFrameChange={onActiveFrameChange}
-        />
-      );
-      expect(onActiveFrameChange).toHaveBeenCalledWith(frame);
-    });
-
     it('calls setFrameIndex (display context) with frameIndex on mount', () => {
       videoFramesMock.container = makeContainer();
       videoFramesMock.frameIndex = 2;
@@ -378,51 +353,6 @@ describe('VideoModeOverlay', () => {
           })
         );
       }).not.toThrow();
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// useVideoModeProps helper
-// ---------------------------------------------------------------------------
-
-describe('useVideoModeProps', () => {
-  it('returns null when imageId is null', () => {
-    const { result } = renderHook(() =>
-      useVideoModeProps(null, true, 'microtubules')
-    );
-    expect(result.current).toBeNull();
-  });
-
-  it('returns null when imageId is undefined', () => {
-    const { result } = renderHook(() =>
-      useVideoModeProps(undefined, true, 'microtubules')
-    );
-    expect(result.current).toBeNull();
-  });
-
-  it('returns null when isVideoContainer=false', () => {
-    const { result } = renderHook(() =>
-      useVideoModeProps('img-1', false, 'microtubules')
-    );
-    expect(result.current).toBeNull();
-  });
-
-  it('returns correct props when imageId and isVideoContainer are truthy', () => {
-    const { result } = renderHook(() =>
-      useVideoModeProps('img-1', true, 'microtubules')
-    );
-    expect(result.current).toEqual({
-      videoContainerId: 'img-1',
-      projectType: 'microtubules',
-    });
-  });
-
-  it('returns props without projectType when projectType is undefined', () => {
-    const { result } = renderHook(() => useVideoModeProps('img-2', true));
-    expect(result.current).toEqual({
-      videoContainerId: 'img-2',
-      projectType: undefined,
     });
   });
 });

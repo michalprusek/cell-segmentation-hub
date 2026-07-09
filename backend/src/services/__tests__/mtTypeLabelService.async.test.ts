@@ -55,12 +55,58 @@ describe('putLabels', () => {
         { id: 'b', name: 'beta', color: '#00ff00' },
       ],
     });
+    prismaMock.image.findMany.mockResolvedValue([]); // no frames to clean
     const res = await putLabels('p1', [
       { id: 'a', name: 'alpha', color: '#ff0000' },
     ]);
     expect(res.labels).toEqual([{ id: 'a', name: 'alpha', color: '#ff0000' }]);
     expect(res.removedIds).toEqual(['b']);
     expect(prismaMock.project.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans mtType references for labels dropped by a PUT (not just DELETE)', async () => {
+    prismaMock.project.findUnique.mockResolvedValue({
+      mtTypeLabels: [
+        { id: 'a', name: 'alpha', color: '#ff0000' },
+        { id: 'b', name: 'beta', color: '#00ff00' },
+      ],
+    });
+    // Two frames reference the dropped label 'b'.
+    prismaMock.image.findMany.mockResolvedValue([
+      {
+        id: 'f1',
+        segmentation: {
+          id: 's1',
+          polygons: JSON.stringify([{ id: 'p', mtType: 'b', trackId: 't' }]),
+        },
+      },
+      {
+        id: 'f2',
+        segmentation: {
+          id: 's2',
+          polygons: JSON.stringify([{ id: 'q', mtType: 'a' }]), // survivor, untouched
+        },
+      },
+    ]);
+    const res = await putLabels('p1', [
+      { id: 'a', name: 'alpha', color: '#ff0000' },
+    ]);
+    expect(res.removedIds).toEqual(['b']);
+    expect(res.framesCleaned).toBe(1); // only f1 carried 'b'
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not scan when a PUT removes nothing', async () => {
+    prismaMock.project.findUnique.mockResolvedValue({
+      mtTypeLabels: [{ id: 'a', name: 'alpha', color: '#ff0000' }],
+    });
+    const res = await putLabels('p1', [
+      { id: 'a', name: 'alpha', color: '#ff0000' },
+      { id: 'b', name: 'beta', color: '#00ff00' }, // added, none removed
+    ]);
+    expect(res.removedIds).toEqual([]);
+    expect(res.framesCleaned).toBe(0);
+    expect(prismaMock.image.findMany).not.toHaveBeenCalled();
   });
 });
 

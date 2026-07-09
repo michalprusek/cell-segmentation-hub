@@ -28,6 +28,7 @@ import {
   projectQuerySchema,
   projectIdSchema,
   projectLabelParamsSchema,
+  mtTypeLabelsPutSchema,
 } from '../../types/validation';
 import imageRoutes from './imageRoutes';
 
@@ -119,6 +120,7 @@ router.get(
 router.put(
   '/:id/mt-type-labels',
   validateParams(projectIdSchema),
+  validateBody(mtTypeLabelsPutSchema),
   putMtTypeLabels
 );
 router.delete(

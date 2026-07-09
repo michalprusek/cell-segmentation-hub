@@ -153,6 +153,13 @@ export const isProjectType = (v: unknown): v is ProjectType =>
 export const coerceProjectType = (v: unknown): ProjectType =>
   isProjectType(v) ? v : 'spheroid';
 
+/** True for microtubule projects. Prefer over a bare `t === 'microtubules'`:
+ *  the project type is PLURAL `microtubules` while the model id is SINGULAR
+ *  `microtubule`, and mixing them has shipped a bug before. Accepts a raw
+ *  `project.type` (`string | undefined | null`) — no `?? ''` needed. */
+export const isMicrotubuleProject = (v: string | undefined | null): boolean =>
+  v === 'microtubules';
+
 /** Model identifiers and the model↔project-type compatibility map now derive
  *  from the single source of truth in `../constants/modelRegistry`. Adding or
  *  removing a model there updates this automatically — no more hand-synced
@@ -266,6 +273,14 @@ export const projectIdSchema = z.object({
 export const projectLabelParamsSchema = z.object({
   id: z.string().uuid('Neplatné ID projektu'),
   labelId: z.string().min(1, 'ID labelu je povinné').max(100),
+});
+
+// PUT …/mt-type-labels body. Loose on purpose: `labels` must be an array (gross
+// error → 400), but per-entry validation/sanitization (id/name/#RRGGBB, dedupe)
+// lives in mtTypeLabelService.sanitizeLabels so a partially-malformed palette is
+// cleaned rather than wholesale rejected. Cap the count to bound the payload.
+export const mtTypeLabelsPutSchema = z.object({
+  labels: z.array(z.unknown()).max(500),
 });
 
 // Image validation schemas
