@@ -1203,6 +1203,8 @@ export default {
     generateExcel: '生成Excel指标',
     includeCocoFormat: '包含COCO格式注释',
     includeJsonMetadata: '包含JSON元数据',
+    microtubuleAnnotationsNote:
+      '微管项目将注释导出为 ImageJ RoiSet + CVAT 1.1（始终包含），每个都带有微管蛋白类型类别。微管不使用 COCO/YOLO/JSON。',
     preparing: '准备导出中...',
     processing: '处理 {{current}} / {{total}}',
     processingExport: '处理中...',

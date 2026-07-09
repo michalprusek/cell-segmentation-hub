@@ -652,77 +652,90 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 sm:space-y-4 p-0">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="coco-format"
-                          checked={exportOptions.annotationFormats?.includes(
-                            'coco'
-                          )}
-                          onCheckedChange={checked => {
-                            const formats =
-                              exportOptions.annotationFormats || [];
-                            updateExportOptions({
-                              annotationFormats: checked
-                                ? [...formats, 'coco']
-                                : formats.filter(f => f !== 'coco'),
-                            });
-                          }}
-                        />
-                        <Label
-                          htmlFor="coco-format"
-                          className="text-sm sm:text-base"
-                        >
-                          {t('export.includeCocoFormat')}
-                        </Label>
-                      </div>
+                      {isMTProject ? (
+                        // Microtubule projects don't emit COCO/YOLO/JSON (those
+                        // express class only as a flat category, unsuited to
+                        // per-instance polyline tracks). MT annotations are
+                        // always exported as ImageJ RoiSet + CVAT 1.1, each
+                        // carrying the tubulin type class.
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                          {t('export.microtubuleAnnotationsNote')}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="coco-format"
+                              checked={exportOptions.annotationFormats?.includes(
+                                'coco'
+                              )}
+                              onCheckedChange={checked => {
+                                const formats =
+                                  exportOptions.annotationFormats || [];
+                                updateExportOptions({
+                                  annotationFormats: checked
+                                    ? [...formats, 'coco']
+                                    : formats.filter(f => f !== 'coco'),
+                                });
+                              }}
+                            />
+                            <Label
+                              htmlFor="coco-format"
+                              className="text-sm sm:text-base"
+                            >
+                              {t('export.includeCocoFormat')}
+                            </Label>
+                          </div>
 
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="yolo-format"
-                          checked={exportOptions.annotationFormats?.includes(
-                            'yolo'
-                          )}
-                          onCheckedChange={checked => {
-                            const formats =
-                              exportOptions.annotationFormats || [];
-                            updateExportOptions({
-                              annotationFormats: checked
-                                ? [...formats, 'yolo']
-                                : formats.filter(f => f !== 'yolo'),
-                            });
-                          }}
-                        />
-                        <Label
-                          htmlFor="yolo-format"
-                          className="text-sm sm:text-base"
-                        >
-                          {t('export.exportFormats.yolo')}
-                        </Label>
-                      </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="yolo-format"
+                              checked={exportOptions.annotationFormats?.includes(
+                                'yolo'
+                              )}
+                              onCheckedChange={checked => {
+                                const formats =
+                                  exportOptions.annotationFormats || [];
+                                updateExportOptions({
+                                  annotationFormats: checked
+                                    ? [...formats, 'yolo']
+                                    : formats.filter(f => f !== 'yolo'),
+                                });
+                              }}
+                            />
+                            <Label
+                              htmlFor="yolo-format"
+                              className="text-sm sm:text-base"
+                            >
+                              {t('export.exportFormats.yolo')}
+                            </Label>
+                          </div>
 
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="json-format"
-                          checked={exportOptions.annotationFormats?.includes(
-                            'json'
-                          )}
-                          onCheckedChange={checked => {
-                            const formats =
-                              exportOptions.annotationFormats || [];
-                            updateExportOptions({
-                              annotationFormats: checked
-                                ? [...formats, 'json']
-                                : formats.filter(f => f !== 'json'),
-                            });
-                          }}
-                        />
-                        <Label
-                          htmlFor="json-format"
-                          className="text-sm sm:text-base"
-                        >
-                          {t('export.includeJsonMetadata')}
-                        </Label>
-                      </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="json-format"
+                              checked={exportOptions.annotationFormats?.includes(
+                                'json'
+                              )}
+                              onCheckedChange={checked => {
+                                const formats =
+                                  exportOptions.annotationFormats || [];
+                                updateExportOptions({
+                                  annotationFormats: checked
+                                    ? [...formats, 'json']
+                                    : formats.filter(f => f !== 'json'),
+                                });
+                              }}
+                            />
+                            <Label
+                              htmlFor="json-format"
+                              className="text-sm sm:text-base"
+                            >
+                              {t('export.includeJsonMetadata')}
+                            </Label>
+                          </div>
+                        </>
+                      )}
                     </CardContent>
                   </Card>
 

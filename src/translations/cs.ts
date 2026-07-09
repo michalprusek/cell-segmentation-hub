@@ -1303,6 +1303,8 @@ export default {
     generateExcel: 'Generovat Excel metriky',
     includeCocoFormat: 'Zahrnout anotace ve formátu COCO',
     includeJsonMetadata: 'Zahrnout JSON metadata',
+    microtubuleAnnotationsNote:
+      'Mikrotubulární projekty exportují anotace jako ImageJ RoiSet + CVAT 1.1 (vždy zahrnuto), každá nese třídu tubulin typu. COCO/YOLO/JSON se pro mikrotubuly nepoužívají.',
     preparing: 'Příprava exportu...',
     processing: 'Zpracování {{current}} z {{total}}',
     processingExport: 'Zpracování...',

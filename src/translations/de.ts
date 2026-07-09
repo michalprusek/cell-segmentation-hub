@@ -1318,6 +1318,8 @@ export default {
     generateExcel: 'Excel-Metriken generieren',
     includeCocoFormat: 'COCO-Format-Annotationen einschließen',
     includeJsonMetadata: 'JSON-Metadaten einschließen',
+    microtubuleAnnotationsNote:
+      'Mikrotubuli-Projekte exportieren Annotationen als ImageJ RoiSet + CVAT 1.1 (immer enthalten), jeweils mit der Tubulin-Typklasse. COCO/YOLO/JSON werden für Mikrotubuli nicht verwendet.',
     preparing: 'Export wird vorbereitet...',
     processing: 'Verarbeitung {{current}} von {{total}}',
     processingExport: 'Verarbeitung...',

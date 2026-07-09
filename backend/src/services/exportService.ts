@@ -51,6 +51,7 @@ import {
   type MTKymographOptions,
 } from './export/mtKymographExporter';
 import { exportImageJRoiSets } from './export/imagejRoiEncoder';
+import { exportCvatAnnotations } from './export/cvatExporter';
 
 const YOLO_WRITE_CONCURRENCY = 16;
 
@@ -561,8 +562,17 @@ export class ExportService {
         );
       }
 
-      // Generate annotations (can run in parallel)
-      if (options.annotationFormats?.length && project.images) {
+      // Generate annotations (can run in parallel). COCO/YOLO/JSON express
+      // class only as a flat category and do not suit per-instance polyline
+      // tracks, so they are NOT emitted for microtubule projects — MT annotation
+      // export is ImageJ RoiSet + CVAT (both always-on, below), each of which
+      // carries the tubulin type class natively.
+      const isMicrotubuleProject = (project.type ?? '') === 'microtubules';
+      if (
+        !isMicrotubuleProject &&
+        options.annotationFormats?.length &&
+        project.images
+      ) {
         const annotationProgressBase = 5 + progressStep * progressIncrement;
         exportTasks.push(
           this.generateAnnotations(
@@ -701,6 +711,46 @@ export class ExportService {
                 job.warnings = [
                   ...(job.warnings ?? []),
                   'ImageJ ROI export could not be completed; the rest of the export is unaffected.',
+                ];
+              }
+            })
+        );
+      }
+
+      // CVAT-for-images 1.1 export — ALWAYS bundled for MT projects (like the
+      // ImageJ RoiSet). One `annotations/cvat/<video>.xml` per video, each
+      // polyline labelled with its tubulin type class. Non-fatal on failure.
+      if (isMicrotubuleProject && project.images?.length) {
+        exportTasks.push(
+          exportCvatAnnotations(
+            project.images as ImageWithSegmentation[],
+            exportDir,
+            project.id,
+            { shouldAbort: () => this.isJobCancelled(jobId) }
+          )
+            .then(result => {
+              if (result.warnings.length) {
+                const job = this.exportJobs.get(jobId);
+                if (job) {
+                  job.warnings = [...(job.warnings ?? []), ...result.warnings];
+                }
+              }
+            })
+            .catch(error => {
+              if (this.isJobCancelled(jobId)) {
+                throw error;
+              }
+              logger.error(
+                'CVAT export failed (non-fatal; rest of export continues)',
+                error instanceof Error ? error : new Error(String(error)),
+                'ExportService',
+                { jobId, projectId: project.id }
+              );
+              const job = this.exportJobs.get(jobId);
+              if (job) {
+                job.warnings = [
+                  ...(job.warnings ?? []),
+                  'CVAT export could not be completed; the rest of the export is unaffected.',
                 ];
               }
             })
