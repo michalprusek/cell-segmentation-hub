@@ -27,6 +27,7 @@ import {
   updateProjectSchema,
   projectQuerySchema,
   projectIdSchema,
+  projectLabelParamsSchema,
 } from '../../types/validation';
 import imageRoutes from './imageRoutes';
 
@@ -122,7 +123,9 @@ router.put(
 );
 router.delete(
   '/:id/mt-type-labels/:labelId',
-  validateParams(projectIdSchema),
+  // Must validate BOTH params — projectIdSchema alone would strip `labelId`
+  // off req.params (validateParams replaces params with the parsed object).
+  validateParams(projectLabelParamsSchema),
   deleteMtTypeLabel
 );
 

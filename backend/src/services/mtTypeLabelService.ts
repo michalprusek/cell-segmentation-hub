@@ -119,6 +119,12 @@ export async function deleteLabel(
   projectId: string,
   labelId: string
 ): Promise<{ labels: MTTypeLabel[]; framesCleaned: number }> {
+  // Guard: an empty labelId must never reach clearMtTypeById, whose
+  // `mtType !== labelId` test would otherwise spuriously "clear" untyped
+  // polygons (mtType === undefined). Route validation enforces this too.
+  if (!labelId) {
+    return { labels: await getLabels(projectId), framesCleaned: 0 };
+  }
   const prev = await getLabels(projectId);
   const next = prev.filter(l => l.id !== labelId);
   await prisma.project.update({
