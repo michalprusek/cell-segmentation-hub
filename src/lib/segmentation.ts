@@ -51,6 +51,10 @@ export interface Polygon {
    *  blob with no UI consumer). Field name starts with ``_`` to signal
    *  "internal" in JSON dumps. */
   _embedding?: string;
+  /** User-assigned microtubule type-label id. Resolved to a class
+   *  name/colour via the project's `mtTypeLabels` palette. Microtubule
+   *  projects only; set/cleared via the tracks/type endpoint. */
+  mtType?: string;
 }
 
 export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';

@@ -247,4 +247,71 @@ describe('SegmentationService track ops (orchestration)', () => {
       ).rejects.toBeInstanceOf(VideoAccessError);
     });
   });
+
+  describe('setTrackTypeAcrossVideo', () => {
+    it('sets mtType on exactly the frames carrying a selected track', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'f1', segmentation: seg('1', [line('t1'), line('t2')]) },
+        { id: 'f2', segmentation: seg('2', [line('t2')]) }, // no t1 → untouched
+        { id: 'f3', segmentation: seg('3', [line('t1')]) },
+        { id: 'f4', segmentation: null },
+      ]);
+      const res = await service.setTrackTypeAcrossVideo(
+        'vid',
+        ['t1'],
+        'mt_type_x',
+        'user'
+      );
+      expect(res.framesAffected).toBe(2); // f1 + f3
+      expect(prismaMock.segmentation.update).toHaveBeenCalledTimes(2);
+      for (const call of prismaMock.segmentation.update.mock.calls) {
+        const polys = writtenPolys(call);
+        expect(
+          polys
+            .filter(p => p.trackId === 't1')
+            .every(p => p.mtType === 'mt_type_x')
+        ).toBe(true);
+        // A different track on the same frame keeps no mtType.
+        expect(
+          polys.filter(p => p.trackId === 't2').every(p => !p.mtType)
+        ).toBe(true);
+      }
+    });
+
+    it('returns 0 and does not scan for an empty trackIds list', async () => {
+      const res = await service.setTrackTypeAcrossVideo(
+        'vid',
+        [],
+        'mt_type_x',
+        'user'
+      );
+      expect(res.framesAffected).toBe(0);
+      expect(prismaMock.image.findMany).not.toHaveBeenCalled();
+    });
+
+    it('clears mtType when passed null', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        {
+          id: 'f1',
+          segmentation: seg('1', [{ ...line('t1'), mtType: 'mt_type_x' }]),
+        },
+      ]);
+      const res = await service.setTrackTypeAcrossVideo(
+        'vid',
+        ['t1'],
+        null,
+        'user'
+      );
+      expect(res.framesAffected).toBe(1);
+      const polys = writtenPolys(prismaMock.segmentation.update.mock.calls[0]);
+      expect(polys[0].mtType).toBeUndefined();
+    });
+
+    it('throws VideoAccessError when the video is not owned', async () => {
+      imageServiceMock.getImageById.mockResolvedValue(null);
+      await expect(
+        service.setTrackTypeAcrossVideo('vid', ['t1'], 'mt_type_x', 'user')
+      ).rejects.toBeInstanceOf(VideoAccessError);
+    });
+  });
 });

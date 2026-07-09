@@ -171,6 +171,34 @@ router.delete(
 );
 
 /**
+ * @route PATCH /api/segmentation/videos/:videoId/tracks/type
+ * @description Set/clear the microtubule type-label id on one or more tracks
+ * @access Private
+ */
+router.patch(
+  '/videos/:videoId/tracks/type',
+  [
+    param('videoId').isUUID().withMessage('ID videa musí být platné UUID'),
+    body('trackIds')
+      .isArray({ min: 1 })
+      .withMessage('trackIds musí být neprázdné pole'),
+    body('trackIds.*')
+      .isString()
+      .trim()
+      .notEmpty()
+      .isLength({ max: 200 })
+      .withMessage('trackId musí být neprázdný řetězec'),
+    body('mtType')
+      .optional({ nullable: true })
+      .isString()
+      .isLength({ max: 100 })
+      .withMessage('mtType musí být řetězec'),
+  ],
+  handleValidation,
+  segmentationController.setTrackType
+);
+
+/**
  * @route POST /api/segmentation/batch/delete
  * @description Delete segmentation annotations for many images at once
  * @access Private

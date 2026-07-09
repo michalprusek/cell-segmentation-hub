@@ -95,3 +95,17 @@ export function imageJStrokeColor(colorKey: string): number {
   const [r, g, b] = hslToRgb(hue, SAT, LIGHT);
   return ((0xff << 24) | (r << 16) | (g << 8) | b) >>> 0;
 }
+
+/**
+ * ImageJ ARGB stroke colour (opaque) from a `#RRGGBB` type-label colour. Used
+ * when a microtubule carries a user-assigned type label so the exported ROI is
+ * drawn in the label's colour — the ROI's colour then IS its class. Falls back
+ * to the neutral-gray "no key" colour when the hex is malformed. Alpha is forced
+ * `0xFF` so ImageJ treats it as "colour set" (an all-zero value reads as unset).
+ */
+export function imageJColorFromHex(hex: string): number {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return imageJStrokeColor('');
+  const n = parseInt(m[1], 16);
+  return ((0xff << 24) | n) >>> 0;
+}

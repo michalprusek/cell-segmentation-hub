@@ -259,6 +259,15 @@ export const projectIdSchema = z.object({
   id: z.string().uuid('Neplatné ID projektu'),
 });
 
+// Project id + a microtubule type-label id (DELETE …/mt-type-labels/:labelId).
+// MUST include labelId or `validateParams` (which replaces req.params with the
+// Zod-parsed object, stripping unknown keys) would drop it and the handler
+// would receive `labelId === undefined`.
+export const projectLabelParamsSchema = z.object({
+  id: z.string().uuid('Neplatné ID projektu'),
+  labelId: z.string().min(1, 'ID labelu je povinné').max(100),
+});
+
 // Image validation schemas
 
 /**

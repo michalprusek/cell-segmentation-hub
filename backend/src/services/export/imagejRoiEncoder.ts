@@ -40,7 +40,12 @@ import archiver from 'archiver';
 import type { PolygonPoint } from '../../types/polygon';
 import { logger } from '../../utils/logger';
 import { sanitizeFilename } from './exportFileOperations';
-import { colorKeyForRoi, imageJStrokeColor } from './imagejColor';
+import { getLabels as getMtTypeLabels } from '../mtTypeLabelService';
+import {
+  colorKeyForRoi,
+  imageJStrokeColor,
+  imageJColorFromHex,
+} from './imagejColor';
 
 // ---------------------------------------------------------------------------
 //  Low-level encoder
@@ -245,6 +250,16 @@ interface RawPolygon {
   points?: PolygonPoint[];
   instanceId?: string;
   trackId?: string | null;
+  /** User-assigned microtubule type-label id (resolved to name+colour via the
+   *  project palette passed to buildVideoRoiEntries). */
+  mtType?: string;
+}
+
+/** Minimal palette entry the ROI builder needs: the class name (for the ROI
+ *  name prefix) + the colour (for the stroke colour). */
+export interface RoiTypeLabel {
+  name: string;
+  color: string;
 }
 
 /**
@@ -380,7 +395,13 @@ export interface VideoRoiBuild {
  */
 export function buildVideoRoiEntries(
   frames: RoiFrameInput[],
-  strokeWidth?: number
+  strokeWidth?: number,
+  /** Project type-label palette (id → {name,color}). When a polyline carries an
+   *  `mtType` present here, its class NAME is prepended to the ROI name and the
+   *  label's COLOUR becomes the ROI stroke colour — so in ImageJ the ROI's name
+   *  and colour both reflect its class. Untyped polylines keep the per-track
+   *  hue. Omit for non-MT exports. */
+  labelById?: Map<string, RoiTypeLabel>
 ): VideoRoiBuild {
   const ordered = [...frames].sort(
     (a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0)
@@ -410,11 +431,18 @@ export function buildVideoRoiEntries(
       .map((p, index) => {
         const geometry: RoiGeometry =
           p.geometry === 'polygon' ? 'polygon' : 'polyline';
+        // Resolve the assigned tubulin type label (if any). When present, the
+        // class name prefixes the ROI name and the label colour drives the
+        // stroke — so the ROI's identity in ImageJ reflects its class.
+        const typeLabel = p.mtType ? labelById?.get(p.mtType) : undefined;
+        const baseLabel = roiLabel(p, index);
         return {
           geometry,
           points: validPoints(p.points),
-          label: roiLabel(p, index),
-          strokeColor: imageJStrokeColor(colorKeyForRoi(p)),
+          label: typeLabel ? `${typeLabel.name}__${baseLabel}` : baseLabel,
+          strokeColor: typeLabel
+            ? imageJColorFromHex(typeLabel.color)
+            : imageJStrokeColor(colorKeyForRoi(p)),
         };
       })
       .filter(it => it.points.length >= (it.geometry === 'polyline' ? 2 : 3));
@@ -525,6 +553,14 @@ export async function exportImageJRoiSets(
 ): Promise<ImageJRoiExportResult> {
   const baseDir = path.join(exportDir, 'annotations', 'imagej');
 
+  // Resolve the project's microtubule type-label palette (id → {name,color}) so
+  // each typed polyline's ROI carries its class name + colour. Empty for
+  // untyped projects, which then keep the per-track hue.
+  const labelById = new Map<string, RoiTypeLabel>();
+  for (const label of await getMtTypeLabels(projectId)) {
+    labelById.set(label.id, { name: label.name, color: label.color });
+  }
+
   // Container rows (carried in the same images array) supply a clean, human
   // readable video label — build the lookup before filtering them out.
   const containerNames = new Map<string, string>();
@@ -558,7 +594,11 @@ export async function exportImageJRoiSets(
       throw new Error('Export cancelled by user');
     }
 
-    const build = buildVideoRoiEntries(videoFrames, options.strokeWidth);
+    const build = buildVideoRoiEntries(
+      videoFrames,
+      options.strokeWidth,
+      labelById
+    );
     corruptFrames += build.corruptFrames;
     droppedPolygons += build.droppedPolygons;
     if (build.entries.length === 0) continue;

@@ -23,6 +23,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import axios from 'axios';
 import { prisma } from '../../db/prismaClient';
+import { getLabels as getMtTypeLabels } from '../mtTypeLabelService';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
 import {
@@ -55,6 +56,10 @@ export interface MTMetricsRow {
    *  "MT2", …), matching {@link buildInstanceLabelMap}. Empty string when the
    *  polyline has no `instanceId` (no badge is drawn for it either). */
   label: string;
+  /** User-assigned tubulin type class (the label NAME resolved from the
+   *  project's mtTypeLabels palette). Empty string when the polyline is
+   *  untyped or its label id is unknown. */
+  mtType: string;
   instanceId: string;
   trackId: string | null;
   /** Channel machine name, or '' for geometry-only rows (no channel picked). */
@@ -317,6 +322,16 @@ export async function computeMTMetrics(
 }> {
   const skipped: string[] = [];
 
+  // Resolve the project's microtubule type-label palette once (id → class
+  // NAME) so each row can carry the human-readable class. Untyped polylines or
+  // unknown ids resolve to '' via the lookup below.
+  const mtTypeNameById = new Map<string, string>();
+  for (const label of await getMtTypeLabels(projectId)) {
+    mtTypeNameById.set(label.id, label.name);
+  }
+  const resolveMtTypeName = (id: string | undefined | null): string =>
+    (id && mtTypeNameById.get(id)) || '';
+
   // Per-channel intensity (incl. the integrated sum) is ALWAYS included for MT
   // exports — there is no opt-in. An empty `channels` list therefore means
   // "all channels of each container", NOT "skip". A specific subset can still
@@ -478,6 +493,10 @@ export async function computeMTMetrics(
     // silently blanking the label.
     const framesPayload: FramePayload[] = [];
     const labelBySentId = new Map<string, Map<string, string>>();
+    // Parallel to labelBySentId: the polyline's assigned tubulin type-label id,
+    // keyed by the same sent instance_id so the row join below can resolve the
+    // class name from the palette.
+    const mtTypeBySentId = new Map<string, Map<string, string>>();
     for (const fr of frames) {
       const parsed = safeParsePolygons(fr.segmentation?.polygons);
       const labelByInstanceId = buildInstanceLabelMap(
@@ -485,6 +504,7 @@ export async function computeMTMetrics(
         MICROTUBULE_LABEL_PREFIX
       );
       const sentIdToLabel = new Map<string, string>();
+      const sentIdToMtType = new Map<string, string>();
       const polylines = parsed
         .filter(p => (p.geometry ?? 'polygon') === 'polyline')
         .filter(p => Array.isArray(p.points) && p.points.length >= 2)
@@ -496,6 +516,8 @@ export async function computeMTMetrics(
             sentId,
             p.instanceId ? labelByInstanceId.get(p.instanceId) ?? '' : ''
           );
+          const mtTypeId = (p as { mtType?: string }).mtType;
+          if (mtTypeId) sentIdToMtType.set(sentId, mtTypeId);
           return {
             image_id: fr.id,
             instance_id: sentId,
@@ -504,6 +526,7 @@ export async function computeMTMetrics(
           };
         });
       labelBySentId.set(fr.id, sentIdToLabel);
+      mtTypeBySentId.set(fr.id, sentIdToMtType);
       if (!polylines.length) continue;
       framesPayload.push({
         image_id: fr.id,
@@ -595,6 +618,9 @@ export async function computeMTMetrics(
         frameIndex: row.frame_index,
         imageId: row.image_id,
         label: label ?? '',
+        mtType: resolveMtTypeName(
+          mtTypeBySentId.get(row.image_id)?.get(row.instance_id)
+        ),
         instanceId: row.instance_id,
         trackId: row.track_id,
         channel: row.channel,
@@ -669,7 +695,10 @@ function polylineLengthPx(points: Array<{ x: number; y: number }>): number {
  */
 export function computeMTGeometry(
   frameImages: FrameImageInput[],
-  pixelToMicrometerScale: number | null
+  pixelToMicrometerScale: number | null,
+  /** id → class NAME from the project's mtTypeLabels palette. Untyped / unknown
+   *  ids resolve to '' (the default empty map). */
+  mtTypeNameById: Map<string, string> = new Map()
 ): MTMetricsRow[] {
   const rows: MTMetricsRow[] = [];
   // Emit rows grouped by video, frame-ascending, so the sheet reads frame 0,
@@ -693,10 +722,12 @@ export function computeMTGeometry(
       .filter(p => Array.isArray(p.points) && p.points!.length >= 2);
     for (const p of polylines) {
       const lengthPx = polylineLengthPx(p.points!);
+      const mtTypeId = (p as { mtType?: string }).mtType;
       rows.push({
         frameIndex: fr.frameIndex,
         imageId: fr.id,
         label: p.instanceId ? (labelMap.get(p.instanceId) ?? '') : '',
+        mtType: (mtTypeId && mtTypeNameById.get(mtTypeId)) || '',
         instanceId:
           p.instanceId ?? `mt_${fr.id.slice(0, 8)}_${p.points!.length}`,
         trackId: p.trackId ?? null,
@@ -732,6 +763,7 @@ const CSV_HEADERS: readonly (keyof MTMetricsRow)[] = [
   'frameIndex',
   'imageId',
   'label',
+  'mtType',
   'instanceId',
   'trackId',
   'channel',

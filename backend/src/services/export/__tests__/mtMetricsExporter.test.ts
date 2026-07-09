@@ -145,6 +145,65 @@ describe('computeMTGeometry', () => {
     expect(rows).toHaveLength(0);
   });
 
+  it('resolves the mtType label id to the class name via the palette', () => {
+    const rows = computeMTGeometry(
+      [
+        makeFrame({
+          segmentation: {
+            polygons: polylineJson(
+              [
+                { x: 0, y: 0 },
+                { x: 5, y: 0 },
+              ],
+              { mtType: 'mt_type_a' }
+            ),
+          },
+        }),
+      ],
+      null,
+      new Map([['mt_type_a', 'alpha-tubulin']])
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].mtType).toBe('alpha-tubulin');
+  });
+
+  it('leaves mtType blank for an untyped polyline or unknown label id', () => {
+    const untyped = computeMTGeometry(
+      [
+        makeFrame({
+          segmentation: {
+            polygons: polylineJson([
+              { x: 0, y: 0 },
+              { x: 5, y: 0 },
+            ]),
+          },
+        }),
+      ],
+      null,
+      new Map([['mt_type_a', 'alpha-tubulin']])
+    );
+    expect(untyped[0].mtType).toBe('');
+
+    const unknownId = computeMTGeometry(
+      [
+        makeFrame({
+          segmentation: {
+            polygons: polylineJson(
+              [
+                { x: 0, y: 0 },
+                { x: 5, y: 0 },
+              ],
+              { mtType: 'mt_type_missing' }
+            ),
+          },
+        }),
+      ],
+      null,
+      new Map([['mt_type_a', 'alpha-tubulin']])
+    );
+    expect(unknownId[0].mtType).toBe('');
+  });
+
   it('skips polygons (closed geometry) and only emits polylines', () => {
     const polygons = JSON.stringify([
       {

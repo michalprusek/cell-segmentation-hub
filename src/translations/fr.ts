@@ -984,9 +984,19 @@ export default {
         holdShift: 'Maintenez SHIFT pour ajouter automatiquement des points',
         cancel: 'Appuyez sur ESC pour annuler',
       },
+      createPolyline: {
+        start: 'Cliquez pour placer le premier point du microtubule',
+        finish: 'Appuyez sur Entrée ou double-cliquez pour terminer',
+        holdShift: 'Maintenez MAJ pour ajouter des points automatiquement',
+        cancel: 'Appuyez sur ÉCHAP pour annuler',
+      },
       addPoints: {
         clickVertex:
           "Cliquez sur n'importe quel sommet pour commencer à ajouter des points",
+        clickVertexMt:
+          'Cliquez sur une extrémité du microtubule pour l’étendre',
+        addPointsMt:
+          'Cliquez pour ajouter des points, puis appuyez sur Entrée pour terminer',
         addPoints:
           'Cliquez pour ajouter des points, puis cliquez sur un autre sommet pour terminer. Cliquez directement sur un autre sommet sans ajouter de points pour supprimer tous les points entre eux.',
         holdShift: 'Maintenez SHIFT pour ajouter automatiquement des points',
@@ -1010,6 +1020,7 @@ export default {
       modes: {
         slice: 'Mode découpe',
         create: 'Mode création de polygone',
+        createPolyline: 'Mode création de microtubule',
         addPoints: 'Mode ajout de points',
         editVertices: 'Mode édition des sommets',
         deletePolygon: 'Mode suppression de polygone',
@@ -1307,6 +1318,8 @@ export default {
     generateExcel: 'Générer les métriques Excel',
     includeCocoFormat: 'Inclure les annotations au format COCO',
     includeJsonMetadata: 'Inclure les métadonnées JSON',
+    microtubuleAnnotationsNote:
+      'Les projets de microtubules exportent les annotations au format ImageJ RoiSet + CVAT 1.1 (toujours inclus), chacune portant la classe de type de tubuline. COCO/YOLO/JSON ne sont pas utilisés pour les microtubules.',
     preparing: "Préparation de l'exportation...",
     processing: 'Traitement {{current}} sur {{total}}',
     processingExport: 'Traitement...',
@@ -2133,6 +2146,29 @@ export default {
     showInstance: 'Afficher le microtubule',
     hideAll: 'Tout masquer',
     showAll: 'Tout afficher',
+    type: {
+      set: 'Définir le type',
+      setForSelected: 'Définir le type pour {{count}} sélectionnés',
+      none: 'Aucun',
+      newLabel: 'Nouveau label…',
+      renameLabel: 'Renommer le label',
+      deleteLabel: 'Supprimer le label',
+      manageLabels: 'Labels de type',
+      labelName: 'Nom',
+      labelNamePlaceholder: 'ex. alpha-tubuline',
+      labelColor: 'Couleur',
+      labelDialogDescription:
+        'Nommez le type de tubuline et choisissez une couleur.',
+      updated: 'Type de microtubule mis à jour',
+      updateFailed: 'Échec de la mise à jour du type de microtubule',
+      noTrack:
+        'Ce microtubule n’a pas encore de piste — lancez d’abord le suivi.',
+    },
+    color: {
+      label: 'Couleur :',
+      byInstance: 'Instance',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Instances de spermatozoïdes',

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as ProjectService from '../../services/projectService';
+import * as MtTypeLabelService from '../../services/mtTypeLabelService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import {
   CreateProjectData,
@@ -211,6 +212,85 @@ export const getProject = asyncHandler(
         'ProjectController'
       );
     }
+  }
+);
+
+/**
+ * Assert the caller owns (or can access) the project. Returns true when the
+ * request may proceed; otherwise writes the proper error response and returns
+ * false. Shared by the microtubule type-label palette endpoints below.
+ */
+async function ensureProjectAccess(
+  req: Request,
+  res: Response,
+  projectId: string | undefined
+): Promise<boolean> {
+  if (!req.user) {
+    ResponseHelper.unauthorized(
+      res,
+      'Uživatel není autentizován',
+      'ProjectController'
+    );
+    return false;
+  }
+  if (!projectId) {
+    ResponseHelper.badRequest(res, 'Project ID is required');
+    return false;
+  }
+  const project = await ProjectService.getProjectById(projectId, req.user.id);
+  if (!project) {
+    ResponseHelper.notFound(
+      res,
+      'Projekt nebyl nalezen nebo k němu nemáte oprávnění',
+      'ProjectController'
+    );
+    return false;
+  }
+  return true;
+}
+
+/**
+ * GET /api/projects/:id/mt-type-labels — the project's microtubule type-label
+ * palette.
+ */
+export const getMtTypeLabels = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const projectId = req.params.id;
+    if (!(await ensureProjectAccess(req, res, projectId))) return;
+    const labels = await MtTypeLabelService.getLabels(projectId);
+    ResponseHelper.success(res, { labels }, 'Palette načtena');
+  }
+);
+
+/**
+ * PUT /api/projects/:id/mt-type-labels — replace the palette (create / rename /
+ * reorder). body: `{ labels: MTTypeLabel[] }`.
+ */
+export const putMtTypeLabels = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const projectId = req.params.id;
+    if (!(await ensureProjectAccess(req, res, projectId))) return;
+    const { labels } = await MtTypeLabelService.putLabels(
+      projectId,
+      (req.body as { labels?: unknown })?.labels
+    );
+    ResponseHelper.success(res, { labels }, 'Palette uložena');
+  }
+);
+
+/**
+ * DELETE /api/projects/:id/mt-type-labels/:labelId — remove one label and null
+ * every `mtType` reference to it across the project's frames.
+ */
+export const deleteMtTypeLabel = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const projectId = req.params.id;
+    if (!(await ensureProjectAccess(req, res, projectId))) return;
+    const { labels, framesCleaned } = await MtTypeLabelService.deleteLabel(
+      projectId,
+      req.params.labelId
+    );
+    ResponseHelper.success(res, { labels, framesCleaned }, 'Label smazán');
   }
 );
 

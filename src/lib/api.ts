@@ -96,6 +96,14 @@ export interface SegmentationRequest {
 import type { SpermPartClass } from '@/lib/segmentation';
 import type { EssayJob, EssayJobOptions } from '@/types/essays';
 
+/** One microtubule type-label in a project's palette (SSOT for name + colour).
+ *  A polyline references it by `id` via its `mtType` field. */
+export interface MTTypeLabel {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface SegmentationPolygon {
   id: string;
   points: Array<{ x: number; y: number }>;
@@ -121,6 +129,9 @@ export interface SegmentationPolygon {
    *  the image border. Drives grey rendering in the editor and exclusion from
    *  metrics. Absent for other project types. */
   complete?: boolean;
+  /** User-assigned microtubule type-label id (references the project's
+   *  `mtTypeLabels` palette). Set/cleared via the tracks/type endpoint. */
+  mtType?: string;
 }
 
 export interface SegmentationResultData {
@@ -1805,6 +1816,57 @@ class ApiClient {
     );
     const data = this.extractData(response);
     return { framesAffected: Number(data?.framesAffected ?? 0) };
+  }
+
+  /**
+   * Set (or clear, with `mtType: null`) the microtubule type-label id on one or
+   * more whole tracks across a video. Returns how many frames were written.
+   */
+  async setTrackType(
+    videoId: string,
+    trackIds: string[],
+    mtType: string | null
+  ): Promise<{ framesAffected: number }> {
+    const response = await this.instance.patch(
+      `/segmentation/videos/${videoId}/tracks/type`,
+      { trackIds, mtType }
+    );
+    const data = this.extractData(response);
+    return { framesAffected: Number(data?.framesAffected ?? 0) };
+  }
+
+  /** Read the project's microtubule type-label palette. */
+  async getMtTypeLabels(projectId: string): Promise<MTTypeLabel[]> {
+    const response = await this.instance.get(
+      `/projects/${projectId}/mt-type-labels`
+    );
+    const data = this.extractData(response);
+    return Array.isArray(data?.labels) ? (data.labels as MTTypeLabel[]) : [];
+  }
+
+  /** Replace the palette (create / rename / reorder). Returns the stored set. */
+  async putMtTypeLabels(
+    projectId: string,
+    labels: MTTypeLabel[]
+  ): Promise<MTTypeLabel[]> {
+    const response = await this.instance.put(
+      `/projects/${projectId}/mt-type-labels`,
+      { labels }
+    );
+    const data = this.extractData(response);
+    return Array.isArray(data?.labels) ? (data.labels as MTTypeLabel[]) : [];
+  }
+
+  /** Delete a label and null its references; returns the surviving palette. */
+  async deleteMtTypeLabel(
+    projectId: string,
+    labelId: string
+  ): Promise<MTTypeLabel[]> {
+    const response = await this.instance.delete(
+      `/projects/${projectId}/mt-type-labels/${encodeURIComponent(labelId)}`
+    );
+    const data = this.extractData(response);
+    return Array.isArray(data?.labels) ? (data.labels as MTTypeLabel[]) : [];
   }
 
   async getImageWithSegmentation(
