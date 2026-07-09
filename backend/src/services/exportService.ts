@@ -5,6 +5,7 @@ import archiver from 'archiver';
 import sharp from 'sharp';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import { getLabels as getMtTypeLabels } from './mtTypeLabelService';
 import { logger } from '../utils/logger';
 import { VisualizationGenerator } from './visualization/visualizationGenerator';
 import {
@@ -1612,7 +1613,13 @@ export class ExportService {
     // channel metadata stored, or the ML service was unavailable). Microtubule
     // LENGTH needs no channel, so it is always exportable.
     if (!intensityIncluded) {
-      rows = computeMTGeometry(frameInputs, scale);
+      // Resolve the project's type-label palette (id → class name) so the
+      // geometry-only rows still carry the tubulin class column.
+      const mtTypeNameById = new Map<string, string>();
+      for (const label of await getMtTypeLabels(projectId)) {
+        mtTypeNameById.set(label.id, label.name);
+      }
+      rows = computeMTGeometry(frameInputs, scale, mtTypeNameById);
     }
 
     if (!rows.length) {
