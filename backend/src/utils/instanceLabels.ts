@@ -14,12 +14,17 @@
 export const SPERM_LABEL_PREFIX = 'S';
 /** Prefix drawn for microtubule instances. */
 export const MICROTUBULE_LABEL_PREFIX = 'MT';
+/** Prefix for polylines in a generic (non-sperm, non-MT) project. No project
+ *  type currently draws these badges, but it keeps the primitive honest — the
+ *  labeller never assumes sperm for an unrecognised polyline project. */
+export const GENERIC_LABEL_PREFIX = 'P';
 
-/** The two valid badge prefixes. Derived from the consts so the set can't
+/** The valid badge prefixes. Derived from the consts so the set can't
  *  drift; a stray value (e.g. `'X'`) is rejected at compile time. */
 export type InstanceLabelPrefix =
   | typeof SPERM_LABEL_PREFIX
-  | typeof MICROTUBULE_LABEL_PREFIX;
+  | typeof MICROTUBULE_LABEL_PREFIX
+  | typeof GENERIC_LABEL_PREFIX;
 
 /** Minimal polyline shape the labeller needs — a subset of both the
  *  visualization `Polygon` and the exporter's `RawPolyline`. */

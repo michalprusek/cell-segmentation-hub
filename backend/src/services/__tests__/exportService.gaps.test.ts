@@ -618,7 +618,8 @@ describe('ExportService — generateAnnotations dispatch', () => {
           width: 640,
           height: 480,
         }),
-      ])
+      ]),
+      undefined // projectType (the test helper passes none)
     );
     const writeCalls = vi.mocked(fs.writeFile).mock.calls;
     expect(
@@ -641,7 +642,8 @@ describe('ExportService — generateAnnotations dispatch', () => {
     expect(mockConvertToCOCO).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ width: 320, height: 240 }),
-      ])
+      ]),
+      undefined
     );
   });
 
@@ -655,7 +657,8 @@ describe('ExportService — generateAnnotations dispatch', () => {
     expect(mockConvertToCOCO).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ segmentationResults: [] }),
-      ])
+      ]),
+      undefined
     );
   });
 

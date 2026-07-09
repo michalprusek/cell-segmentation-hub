@@ -21,6 +21,7 @@ const run = (params: {
   hidden?: Set<PolygonKey>;
   editMode?: EditMode;
   activeInstanceId?: string;
+  projectType?: string | null;
 }) =>
   renderHook(() =>
     usePolygonRenderProps({
@@ -30,6 +31,7 @@ const run = (params: {
       },
       hiddenPolygonIds: params.hidden ?? new Set<PolygonKey>(),
       activeInstanceId: params.activeInstanceId ?? 'sperm_1',
+      projectType: params.projectType,
     })
   ).result.current;
 
@@ -39,31 +41,57 @@ describe('usePolygonRenderProps', () => {
       expect(run({ polygons: [poly()] }).hasPolylines).toBe(false);
     });
 
-    it('detects a polyline and classifies sperm via class', () => {
+    it('detects a polyline (hasPolylines) independent of the panel kind', () => {
       const r = run({
-        polygons: [poly({ geometry: 'polyline', class: 'sperm' })],
+        polygons: [poly({ geometry: 'polyline' })],
+        projectType: 'sperm',
       });
       expect(r.hasPolylines).toBe(true);
-      expect(r.polylineKind).toBe('sperm');
     });
 
-    it('classifies microtubule via class', () => {
+    it('classifies the panel kind from the SPERM project type', () => {
       expect(
         run({
-          polygons: [poly({ geometry: 'polyline', class: 'microtubule' })],
-        }).polylineKind
-      ).toBe('microtubule');
-    });
-
-    it('falls back to partClass → sperm', () => {
-      expect(
-        run({
-          polygons: [poly({ geometry: 'polyline', partClass: 'head' })],
+          polygons: [poly({ geometry: 'polyline' })],
+          projectType: 'sperm',
         }).polylineKind
       ).toBe('sperm');
     });
 
-    it('returns null when there are no polylines', () => {
+    it('classifies the panel kind from the MICROTUBULES project type', () => {
+      expect(
+        run({
+          polygons: [poly({ geometry: 'polyline' })],
+          projectType: 'microtubules',
+        }).polylineKind
+      ).toBe('microtubule');
+    });
+
+    it('keys on project type, NOT per-polygon class/partClass', () => {
+      // A polyline stamped microtubule-ish but in a SPERM project is sperm —
+      // the project type is the single source of truth, so one mis-stamped
+      // polyline can no longer flip the panel.
+      expect(
+        run({
+          polygons: [
+            poly({
+              geometry: 'polyline',
+              class: 'microtubule',
+              partClass: 'head',
+            }),
+          ],
+          projectType: 'sperm',
+        }).polylineKind
+      ).toBe('sperm');
+    });
+
+    it('returns null for a generic / undefined project type', () => {
+      expect(
+        run({
+          polygons: [poly({ geometry: 'polyline' })],
+          projectType: 'spheroid',
+        }).polylineKind
+      ).toBeNull();
       expect(run({ polygons: [poly()] }).polylineKind).toBeNull();
     });
   });

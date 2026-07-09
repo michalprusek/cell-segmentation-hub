@@ -14,6 +14,7 @@ import {
   createPolygon,
 } from '@/lib/polygonGeometry';
 import { vertexSpatialIndex } from '@/lib/rendering/VertexSpatialIndex';
+import { polylineSemanticsForProjectType } from '@/lib/polylineSemantics';
 import type { ProjectType } from '@/types';
 
 /**
@@ -72,6 +73,7 @@ export const useAdvancedInteractions = ({
   isSpacePressed: isSpacePressedCallback,
   activePartClassRef,
   activeInstanceIdRef,
+  projectType,
   onPolygonSelection,
   setEditMode,
   setInteractionState,
@@ -411,12 +413,24 @@ export const useAdvancedInteractions = ({
     // No duplicate point: React 18 batching means both click setState calls share the same base snapshot
     if (tempPoints.length >= 2) {
       const newPolyline = createPolygon(tempPoints);
-      // Override with polyline-specific fields, including active part class and instance
+      // A polyline is a generic labeling primitive; its identity fields follow
+      // the PROJECT type, not a sperm default. Sperm carries head/midpiece/tail
+      // part classes and the panel-managed `sperm_N` id; microtubule / generic
+      // projects get a fresh unique kind-prefixed id and NO part class (part
+      // classes are sperm-only). This stops a hand-drawn polyline in a
+      // microtubule project from being stamped `partClass:'head'` + `sperm_1`
+      // (which used to flip the whole sidebar to the sperm panel).
+      const semantics = polylineSemanticsForProjectType(projectType);
       const polyline: Polygon = {
         ...newPolyline,
         geometry: 'polyline',
-        partClass: activePartClassRef?.current || undefined,
-        instanceId: activeInstanceIdRef?.current || undefined,
+        partClass: semantics.supportsPartClass
+          ? activePartClassRef?.current || undefined
+          : undefined,
+        instanceId:
+          semantics.kind === 'sperm'
+            ? activeInstanceIdRef?.current || undefined
+            : `${semantics.idPrefix}${newPolyline.id.replace(/^polygon_/, '')}`,
       };
       const currentPolygons = getPolygons();
       updatePolygons([...currentPolygons, polyline]);
@@ -433,6 +447,7 @@ export const useAdvancedInteractions = ({
     setEditMode,
     activePartClassRef,
     activeInstanceIdRef,
+    projectType,
   ]);
 
   /**

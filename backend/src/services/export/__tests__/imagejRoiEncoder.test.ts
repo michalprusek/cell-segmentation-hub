@@ -570,14 +570,15 @@ describe('buildVideoRoiEntries', () => {
     ];
 
     const build = buildVideoRoiEntries(frames);
+    // Untyped MT (trackId '7') → `untyped_1`, stable across its frames.
     expect(build.entries.map(e => e.name)).toEqual([
-      '7__frame_0000.roi',
-      '7__frame_0002.roi',
+      'untyped_1__frame_0000.roi',
+      'untyped_1__frame_0002.roi',
     ]);
 
     const map = byName(build.entries);
-    const f0 = decodeRoi(map.get('7__frame_0000.roi')!.buffer);
-    const f2 = decodeRoi(map.get('7__frame_0002.roi')!.buffer);
+    const f0 = decodeRoi(map.get('untyped_1__frame_0000.roi')!.buffer);
+    const f2 = decodeRoi(map.get('untyped_1__frame_0002.roi')!.buffer);
     expect(f0.position).toBe(1); // frameIndex 0 → slice 1
     expect(f2.position).toBe(3); // frameIndex 2 → slice 3
     // Same track ⇒ identical colour across frames, and it must be a real
@@ -639,12 +640,12 @@ describe('buildVideoRoiEntries', () => {
     );
     expect(build.entries).toHaveLength(1);
     const d = decodeRoi(build.entries[0].buffer);
-    // Class name prefixes the ROI name…
-    expect(d.name.startsWith('alpha__')).toBe(true);
+    // Class name + per-type counter is the ROI name (first alpha ⇒ alpha_1)…
+    expect(d.name).toBe('alpha_1');
     // …and the stroke colour is the label's colour (not the per-track hue).
     expect(d.strokeColor).toBe(imageJColorFromHex('#ff0000'));
-    // The zip entry filename also carries the class prefix.
-    expect(build.entries[0].name.startsWith('alpha__')).toBe(true);
+    // The zip entry filename also carries the class name.
+    expect(build.entries[0].name.startsWith('alpha_1__')).toBe(true);
   });
 
   it('keeps the per-track hue for an untyped polyline (no palette match)', () => {
@@ -703,8 +704,9 @@ describe('buildVideoRoiEntries', () => {
       },
     ]);
     const d = decodeRoi(build.entries[0].buffer);
-    expect(d.name.startsWith('alpha__')).toBe(false);
-    expect(d.name.startsWith('t1')).toBe(true);
+    // No palette ⇒ the class can't resolve, so the MT is named as untyped.
+    expect(d.name.startsWith('alpha')).toBe(false);
+    expect(d.name).toBe('untyped_1');
   });
 
   it('processes frames in frameIndex order regardless of input order', () => {
@@ -739,8 +741,8 @@ describe('buildVideoRoiEntries', () => {
       },
     ]);
     expect(build.entries.map(e => e.name)).toEqual([
-      '7__frame_0000.roi',
-      '7__frame_0002.roi',
+      'untyped_1__frame_0000.roi',
+      'untyped_1__frame_0002.roi',
     ]);
   });
 
@@ -767,8 +769,12 @@ describe('buildVideoRoiEntries', () => {
       },
     ]);
     const names = build.entries.map(e => e.name).sort();
-    // Sorted: '2' (0x32) < '_' (0x5F), so '7_2__' precedes '7__'.
-    expect(names).toEqual(['7_2__frame_0000.roi', '7__frame_0000.roi']);
+    // Both share trackId '7' ⇒ both resolve to 'untyped_1'; the in-frame dedup
+    // suffixes the second. Sorted: '2' (0x32) < '_' (0x5F), so the _2 precedes.
+    expect(names).toEqual([
+      'untyped_1_2__frame_0000.roi',
+      'untyped_1__frame_0000.roi',
+    ]);
     expect(build.droppedPolygons).toBe(1);
     expect(build.framesWithRois).toBe(1);
   });
@@ -803,7 +809,9 @@ describe('buildVideoRoiEntries', () => {
     ]);
     expect(build.corruptFrames).toBe(1);
     expect(build.droppedPolygons).toBe(1);
-    expect(build.entries.map(e => e.name)).toEqual(['ok__frame_0001.roi']);
+    expect(build.entries.map(e => e.name)).toEqual([
+      'untyped_1__frame_0001.roi',
+    ]);
   });
 
   it('falls back to a generated label for untracked / empty-trackId polylines', () => {
@@ -831,6 +839,192 @@ describe('buildVideoRoiEntries', () => {
     expect(names).toEqual([
       'roi_0001__frame_0000.roi',
       'roi_0002__frame_0000.roi',
+    ]);
+  });
+
+  it('numbers each tubulin type from 1 (HeLa_1, HeLa_2, brain_1, brain_2)', () => {
+    const palette = new Map([
+      ['h', { name: 'HeLa', color: '#ff0000' }],
+      ['b', { name: 'brain', color: '#00ff00' }],
+    ]);
+    const mt = (trackId: string, type: string, x: number) => ({
+      trackId,
+      geometry: 'polyline' as const,
+      mtType: type,
+      points: [
+        { x: 0, y: 0 },
+        { x, y: x },
+      ],
+    });
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              mt('t1', 'h', 1),
+              mt('t2', 'b', 2),
+              mt('t3', 'h', 3),
+              mt('t4', 'b', 4),
+            ]),
+          },
+        },
+      ],
+      undefined,
+      palette
+    );
+    expect(build.entries.map(e => decodeRoi(e.buffer).name)).toEqual([
+      'HeLa_1',
+      'brain_1',
+      'HeLa_2',
+      'brain_2',
+    ]);
+  });
+
+  it('keeps one microtubule identically named across frames (trackId-keyed)', () => {
+    const palette = new Map([['h', { name: 'HeLa', color: '#ff0000' }]]);
+    const mk = (idx: number) => ({
+      id: `f${idx}`,
+      name: 'v',
+      parentVideoId: 'c1',
+      frameIndex: idx,
+      segmentation: {
+        polygons: JSON.stringify([
+          {
+            trackId: 't9',
+            geometry: 'polyline',
+            mtType: 'h',
+            points: [
+              { x: 0, y: idx },
+              { x: 5, y: idx },
+            ],
+          },
+        ]),
+      },
+    });
+    const build = buildVideoRoiEntries([mk(0), mk(1)], undefined, palette);
+    expect(build.entries.map(e => decodeRoi(e.buffer).name)).toEqual([
+      'HeLa_1',
+      'HeLa_1',
+    ]);
+  });
+
+  it('lets a manual rename override the <type>_<counter> scheme', () => {
+    const palette = new Map([['h', { name: 'HeLa', color: '#ff0000' }]]);
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              {
+                trackId: 't1',
+                geometry: 'polyline',
+                mtType: 'h',
+                name: 'spindle-pole',
+                points: [
+                  { x: 0, y: 0 },
+                  { x: 1, y: 1 },
+                ],
+              },
+              {
+                trackId: 't2',
+                geometry: 'polyline',
+                mtType: 'h',
+                points: [
+                  { x: 0, y: 0 },
+                  { x: 2, y: 2 },
+                ],
+              },
+            ]),
+          },
+        },
+      ],
+      undefined,
+      palette
+    );
+    // The renamed MT uses its name verbatim and does NOT consume a HeLa counter,
+    // so the next HeLa is HeLa_1.
+    expect(build.entries.map(e => decodeRoi(e.buffer).name)).toEqual([
+      'spindle-pole',
+      'HeLa_1',
+    ]);
+  });
+
+  it('emits a wider <name>_bg background band ROI when backgroundStrokeWidth is set', () => {
+    const palette = new Map([['h', { name: 'HeLa', color: '#ff0000' }]]);
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              {
+                trackId: 't1',
+                geometry: 'polyline',
+                mtType: 'h',
+                points: [
+                  { x: 0, y: 0 },
+                  { x: 10, y: 0 },
+                ],
+              },
+            ]),
+          },
+        },
+      ],
+      5, // signal thickness
+      palette,
+      13 // background band width = thickness(5) + 2*margin(4)
+    );
+    expect(build.entries.map(e => e.name).sort()).toEqual([
+      'HeLa_1__frame_0000.roi',
+      'HeLa_1_bg__frame_0000.roi',
+    ]);
+    const map = byName(build.entries);
+    const sig = decodeRoi(map.get('HeLa_1__frame_0000.roi')!.buffer);
+    const bg = decodeRoi(map.get('HeLa_1_bg__frame_0000.roi')!.buffer);
+    // Signal band is the thickness; the background band is the wider vicinity.
+    expect(sig.strokeWidth).toBe(5);
+    expect(bg.strokeWidth).toBe(13);
+    // Same geometry (a wide-stroke polyline), same slice + colour.
+    expect(bg.type).toBe(ROI_TYPE_POLYLINE);
+    expect(bg.strokeColor).toBe(sig.strokeColor);
+    expect(bg.position).toBe(sig.position);
+  });
+
+  it('skips the background band when it is not wider than the signal (margin 0)', () => {
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              line('t1', [
+                [0, 0],
+                [10, 0],
+              ]),
+            ]),
+          },
+        },
+      ],
+      5,
+      undefined,
+      5 // background width == signal width → no bg ROI
+    );
+    expect(build.entries.map(e => e.name)).toEqual([
+      'untyped_1__frame_0000.roi',
     ]);
   });
 
@@ -952,8 +1146,8 @@ describe('exportImageJRoiSets', () => {
     expect(zip.subarray(0, 2).toString('ascii')).toBe('PK'); // local file header
     expect(zipEntryCount(zip)).toBe(2);
     expect(zipEntryNames(zip).sort()).toEqual([
-      '1__frame_0000.roi',
-      '2__frame_0000.roi',
+      'untyped_1__frame_0000.roi',
+      'untyped_2__frame_0000.roi',
     ]);
   });
 
@@ -1035,7 +1229,7 @@ describe('exportImageJRoiSets', () => {
     const zip = await fs.readFile(
       path.join(out, 'annotations', 'imagej', 'v_RoiSet.zip')
     );
-    const roi = decodeRoi(zipExtract(zip, 'mt_42__frame_0004.roi'));
+    const roi = decodeRoi(zipExtract(zip, 'untyped_1__frame_0004.roi'));
     expect(roi.type).toBe(ROI_TYPE_POLYLINE);
     expect(roi.position).toBe(5); // frameIndex 4 → slice 5
     expect(roi.coords).toEqual([
@@ -1043,11 +1237,12 @@ describe('exportImageJRoiSets', () => {
       [30.75, 40],
       [55.5, 12.5],
     ]);
-    // mt_42 → hsl(62,70%,55%) → rgb(215,221,60), opaque.
+    // Colour is still keyed on trackId: mt_42 → hsl(62,70%,55%) → rgb(215,221,60).
     expect(roi.strokeColor).toBe(
       ((0xff << 24) | (215 << 16) | (221 << 8) | 60) >>> 0
     );
-    expect(roi.name).toBe('mt_42');
+    // Untyped MT (no palette) is named untyped_1, not its raw trackId.
+    expect(roi.name).toBe('untyped_1');
   });
 
   it('threads the MT thickness through to the zipped ROIs (stroke width survives deflate)', async () => {
@@ -1073,7 +1268,7 @@ describe('exportImageJRoiSets', () => {
     const zip = await fs.readFile(
       path.join(out, 'annotations', 'imagej', 'v_RoiSet.zip')
     );
-    const roi = decodeRoi(zipExtract(zip, 'mt_1__frame_0000.roi'));
+    const roi = decodeRoi(zipExtract(zip, 'untyped_1__frame_0000.roi'));
     expect(roi.strokeWidth).toBe(8);
     expect(roi.floatStrokeWidth).toBeCloseTo(8, 5);
   });
