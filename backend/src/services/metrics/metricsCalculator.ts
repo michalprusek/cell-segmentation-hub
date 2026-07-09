@@ -802,7 +802,8 @@ export class MetricsCalculator {
       isFinite(value) ? parseFloat(value.toFixed(decimals)) : 0;
     metrics.forEach(m => {
       worksheet.addRow({
-        imageName: m.imageName,        polygonId: m.polygonId,
+        imageName: m.imageName,
+        polygonId: m.polygonId,
         type: m.type,
         area: safeValue(m.area, 2),
         perimeter: safeValue(m.perimeter, 2),
@@ -903,7 +904,8 @@ export class MetricsCalculator {
     const rows = metrics.filter(m => m.complete !== false);
     rows.forEach(m => {
       worksheet.addRow({
-        imageName: m.imageName,        polygonId: m.polygonId,
+        imageName: m.imageName,
+        polygonId: m.polygonId,
         area: safeValue(m.area, 2),
         perimeter: safeValue(m.perimeter, 2),
         width: safeValue(m.boundingBoxWidth, 2),
@@ -992,7 +994,8 @@ export class MetricsCalculator {
     const records = metrics
       .filter(m => m.complete !== false)
       .map(m => ({
-        imageName: m.imageName,        polygonId: m.polygonId,
+        imageName: m.imageName,
+        polygonId: m.polygonId,
         area: m.area,
         perimeter: m.perimeter,
         width: m.boundingBoxWidth,
@@ -1130,7 +1133,8 @@ export class MetricsCalculator {
     if (imageMetrics) {
       imageMetrics.forEach(m => {
         sheet.addRow({
-          imageName: m.imageName,          totalSpheroidArea: safe(m.totalSpheroidArea, 2),
+          imageName: m.imageName,
+          totalSpheroidArea: safe(m.totalSpheroidArea, 2),
           coreArea: safe(m.coreArea, 2),
           invasionArea: safe(m.invasionArea, 2),
           disintegrationIndex: safe(m.disintegrationIndex, 4),

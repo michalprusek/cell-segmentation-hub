@@ -295,6 +295,7 @@ export class FormatConverter {
     let annotationId = 1;
     let hasPolylines = false;
     let totalInvalidPartClass = 0;
+    let totalDegeneratePolylines = 0;
     const sampleAffectedImages: string[] = [];
     let parseFailures = 0;
 
@@ -364,6 +365,10 @@ export class FormatConverter {
               }
             } else if (p.points && p.points.length >= 2) {
               validPolylines.push(p);
+            } else {
+              // Non-sperm polyline with too few points — count it (rather than
+              // dropping it silently) so it surfaces alongside the sperm skips.
+              totalDegeneratePolylines += 1;
             }
           } else if (p.type === 'internal') {
             internalPolygons.push(p);
@@ -468,6 +473,14 @@ export class FormatConverter {
           totalSkipped: totalInvalidPartClass,
           sampleImageIds: sampleAffectedImages,
         }
+      );
+    }
+
+    if (totalDegeneratePolylines > 0) {
+      logger.warn(
+        `COCO export skipped ${totalDegeneratePolylines} degenerate polyline(s) (fewer than 2 points)`,
+        'FormatConverter',
+        { totalSkipped: totalDegeneratePolylines }
       );
     }
 

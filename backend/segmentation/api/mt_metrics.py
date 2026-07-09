@@ -220,6 +220,33 @@ def _dilate(mask: np.ndarray, radius: int) -> np.ndarray:
     return cv2.dilate(mask, kernel)
 
 
+def _vicinity_mask(
+    band: np.ndarray, not_signal: np.ndarray, margin_radius: int
+) -> np.ndarray:
+    """One microtubule's background ring: ``dilate(band, margin_radius)`` minus
+    every signal band (``not_signal`` = the complement of the union of all
+    bands).
+
+    The dilation runs only within the band's bounding box expanded by
+    ``margin_radius`` — a band is tiny relative to the frame, so this is O(bbox)
+    instead of O(H*W). Since the band's pixels sit at least ``margin_radius``
+    inside the sub-window (or at a real frame edge), the windowed dilation is
+    bit-identical to a full-frame dilate. Empty band → empty ring.
+    """
+    ys, xs = np.nonzero(band)
+    vicinity = np.zeros(band.shape, dtype=bool)
+    if ys.size == 0:
+        return vicinity
+    h, w = band.shape
+    y0 = max(0, int(ys.min()) - margin_radius)
+    y1 = min(h, int(ys.max()) + margin_radius + 1)
+    x0 = max(0, int(xs.min()) - margin_radius)
+    x1 = min(w, int(xs.max()) + margin_radius + 1)
+    capsule = _dilate(band[y0:y1, x0:x1], margin_radius)
+    vicinity[y0:y1, x0:x1] = (capsule > 0) & not_signal[y0:y1, x0:x1]
+    return vicinity
+
+
 def _normalize_axes_nd2(arr: np.ndarray, axes: str) -> np.ndarray:
     """Permute / expand an ND2 array to canonical (T, C, Y, X)."""
     if "Z" in axes and arr.ndim >= 3:
@@ -578,10 +605,10 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
         for m in band_masks:
             signal_union |= m
         not_signal = signal_union == 0
-        vicinity_masks: List[np.ndarray] = []
-        for band in band_masks:
-            capsule = _dilate(band, margin_radius)
-            vicinity_masks.append((capsule > 0) & not_signal)
+        vicinity_masks: List[np.ndarray] = [
+            _vicinity_mask(band, not_signal, margin_radius)
+            for band in band_masks
+        ]
 
         # 4. Per-channel computations.
         # Per-frame registration offsets (channel-registration at upload), one
@@ -618,9 +645,16 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
                 vicinity_masks, fr, name, rows,
             )
 
+    # Count rows whose per-MT vicinity ring came out empty (background nulled).
+    # With the local ring this is more common than the old frame-global mask
+    # (an MT hugged by neighbours or clipped at the frame edge can have no
+    # ring), so surface it — otherwise scattered blank background cells look
+    # like a bug rather than "no local background available".
+    null_bg = sum(1 for r in rows if r.median_background is None)
     logger.info(
-        "mt-metrics: produced %d rows from %d frames",
-        len(rows), len(req.frames),
+        "mt-metrics: produced %d rows from %d frames (%d with empty local "
+        "background ring → null background)",
+        len(rows), len(req.frames), null_bg,
     )
     return MTMetricsResponse(
         rows=rows,

@@ -146,35 +146,33 @@ instance IDs), never the source of it.
   vicinity_i = dilate(band_i, margin_radius) AND NOT signal_union
   ```
   Background stats (`median_background`, `mean_background`, `signal_minus_background`)
-  are sampled per-MT from `frame_arr[vicinity_i]` instead of once per frame.
-- **Return the drawn region** for the annotation: the outer contour of
-  `dilate(band_i, margin_radius)` via `cv2.findContours` (a simple "capsule" polygon
-  for an open polyline — no holes), simplified with `approxPolyDP` to bound payload
-  size. Emitted once per `(frame_index, instance_id)` as a new
-  `background_regions: [{frame_index, instance_id, contour: [[x,y],…]}]` list on the
-  response (not per-channel, to avoid redundancy).
+  are sampled per-MT from `frame_arr[vicinity_i]` instead of once per frame. The
+  dilation runs within each band's bounding box (`_vicinity_mask`) — O(bbox), not
+  O(frame) — bit-identical to a full-frame dilate but fast enough for many-MT videos.
 
-**Wire — `mtMetricsExporter.ts`**
-
-- Extend `MLMTMetricsResponseRow` / response parsing to read `background_regions`.
-  Build a `Map<`frameId + '|' + instanceId`, Point[]>` and hand it to the ImageJ step.
+> **Implementation note (as shipped):** an earlier draft had Python return the vicinity
+> _contour_ (`background_regions` list) for the ImageJ ROI, threaded from the metrics
+> step. That was dropped: the metrics and ImageJ export steps run in **parallel**
+> (`Promise.all`), so threading a contour between them would force serialization. The
+> ImageJ background ROI is instead drawn **decoupled**, as a wide-stroke polyline (see
+> below) — no ML contour, no cross-step coupling. Python returns only the (per-MT)
+> statistics.
 
 **ImageJ — `exportService.ts` + `imagejRoiEncoder.ts`**
 
-- Thread the vicinity-contour map from the (earlier) metrics step into
-  `exportImageJRoiSets`. Per MT polyline, if a contour exists, emit a **second ROI**:
-  a closed polygon (`geometry: 'polygon'`) = the vicinity outline, named
-  `<signal-roi-name>_bg` (the Workstream D-resolved name with a `_bg` suffix, so signal
-  and its background sort together). In ImageJ the user then sees the thin
-  thickness-stroked signal polyline _inside_ the background capsule.
-- If the metrics step did not run (no contours available), skip the bg ROI and log a
-  debug note — the signal ROIs are unaffected.
+- Each MT gets a **second ROI**: the SAME polyline drawn at the vicinity band width
+  `backgroundStrokeWidth = thickness + 2·round(thickness·margin_multiplier)` (equal to
+  the diameter of `dilate(band, margin)`), named `<signal-roi-name>_bg` (the Workstream
+  D name with a `_bg` suffix, so signal and background sort together). In ImageJ the
+  user sees the thin signal band _inside_ the wider background band — the ring between
+  them is where the background is sampled. Emitted only for polylines and only when the
+  vicinity is wider than the signal (margin > 0). Fully decoupled from the metrics step.
 
-**Transparency note (documented, not hidden):** the _drawn_ capsule is
-`dilate(MT, margin)`; the _measured_ background additionally subtracts neighboring
-MTs' signal bands, so where MTs are close the measured pixel set is slightly smaller
-than the drawn ring. The drawn ROI is deliberately the simple capsule (encoder cannot
-represent holed/multi-part regions).
+**Transparency note (documented, not hidden):** the _drawn_ band is `dilate(MT, margin)`
+(the wide stroke); the _measured_ background additionally subtracts neighboring MTs'
+signal bands, so where MTs are close the measured pixel set is slightly smaller than the
+drawn band. The `_bg` ROI is a "roughly where background comes from" visual aid, not a
+metric-bearing ROI.
 
 ## 9. Implementation sequence (each an independently-verified PR)
 
