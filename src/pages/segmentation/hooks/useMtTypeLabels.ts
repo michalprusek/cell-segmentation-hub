@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiClient, type MTTypeLabel } from '@/lib/api';
+// Default import matches the app-wide convention (SegmentationEditor et al.);
+// the named `{ apiClient }` import broke test mocks that only expose `default`.
+import apiClient, { type MTTypeLabel } from '@/lib/api';
 import { logger } from '@/lib/logger';
 
 /** Short unique id for a new label. Prefers crypto.randomUUID (secure context),

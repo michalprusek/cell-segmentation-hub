@@ -94,6 +94,12 @@ const mockApiClient = vi.hoisted(() => ({
     failed: 0,
     results: [],
   }),
+  // Microtubule type-label palette (useMtTypeLabels loads it on mount for MT
+  // projects). Resolve empty so the hook's effect doesn't throw.
+  getMtTypeLabels: vi.fn().mockResolvedValue([]),
+  putMtTypeLabels: vi.fn().mockResolvedValue([]),
+  deleteMtTypeLabel: vi.fn().mockResolvedValue([]),
+  setTrackType: vi.fn().mockResolvedValue({ framesAffected: 0 }),
 }));
 
 // ─── vi.mock declarations ─────────────────────────────────────────────────────
