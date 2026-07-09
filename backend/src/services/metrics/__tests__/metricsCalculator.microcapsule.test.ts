@@ -187,7 +187,6 @@ describe('MetricsCalculator — exportMicrocapsuleMetricsToExcel', () => {
     const headers = mockWorksheet.columns.map(c => c.header);
     expect(headers).toEqual([
       'Image Name',
-      'Image ID',
       'Capsule ID',
       'Area (px^2)',
       'Perimeter (px)',

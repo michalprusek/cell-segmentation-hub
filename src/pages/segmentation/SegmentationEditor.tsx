@@ -702,6 +702,7 @@ const SegmentationEditor = () => {
     editor,
     hiddenPolygonIds,
     activeInstanceId,
+    projectType,
   });
 
   // Development-only debug logger: logs polygon rendering state.

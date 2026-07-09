@@ -2014,6 +2014,7 @@ export default {
     instance: '微管',
     hideInstance: '隐藏微管',
     showInstance: '显示微管',
+    renameInstance: '重命名微管',
     hideAll: '全部隐藏',
     showAll: '全部显示',
     type: {

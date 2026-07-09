@@ -2160,6 +2160,7 @@ export default {
     instance: 'Mikrotubulus',
     hideInstance: 'Skrýt mikrotubulus',
     showInstance: 'Zobrazit mikrotubulus',
+    renameInstance: 'Přejmenovat mikrotubulus',
     hideAll: 'Skrýt vše',
     showAll: 'Zobrazit vše',
     type: {

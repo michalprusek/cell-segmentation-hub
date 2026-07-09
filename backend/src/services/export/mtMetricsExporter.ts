@@ -51,7 +51,9 @@ export interface MTMetricsOptions {
  */
 export interface MTMetricsRow {
   frameIndex: number;
-  imageId: string;
+  /** Human-readable image (frame) name — the frame's `Image.name`, not its DB
+   *  UUID. Combined with `frameIndex` it identifies the source frame. */
+  imageName: string;
   /** Per-frame instance badge drawn on the visualization image ("MT1",
    *  "MT2", …), matching {@link buildInstanceLabelMap}. Empty string when the
    *  polyline has no `instanceId` (no badge is drawn for it either). */
@@ -189,6 +191,9 @@ interface MLMTMetricsResponse {
 
 interface FrameImageInput {
   id: string;
+  /** The frame's human-readable `Image.name`, surfaced in the export as the
+   *  `imageName` column (replacing the old UUID `imageId`). */
+  name?: string | null;
   parentVideoId: string | null;
   frameIndex: number | null;
   isVideoContainer?: boolean;
@@ -369,6 +374,14 @@ export async function computeMTMetrics(
       { projectId }
     );
     return { rows: [], skipped, channelSummaries: [] };
+  }
+
+  // DB frame id → human-readable frame name, for the `imageName` output column.
+  // The ML response echoes `image_id` (the id we sent = fr.id), so we join the
+  // name back through this map.
+  const frameNameById = new Map<string, string>();
+  for (const img of frameImages) {
+    if (img.name) frameNameById.set(img.id, img.name);
   }
 
   // Fetch all video container rows in a single query.
@@ -616,7 +629,7 @@ export async function computeMTMetrics(
       }
       videoRows.push({
         frameIndex: row.frame_index,
-        imageId: row.image_id,
+        imageName: frameNameById.get(row.image_id) ?? '',
         label: label ?? '',
         mtType: resolveMtTypeName(
           mtTypeBySentId.get(row.image_id)?.get(row.instance_id)
@@ -725,7 +738,7 @@ export function computeMTGeometry(
       const mtTypeId = (p as { mtType?: string }).mtType;
       rows.push({
         frameIndex: fr.frameIndex,
-        imageId: fr.id,
+        imageName: fr.name ?? '',
         label: p.instanceId ? (labelMap.get(p.instanceId) ?? '') : '',
         mtType: (mtTypeId && mtTypeNameById.get(mtTypeId)) || '',
         instanceId:
@@ -761,7 +774,7 @@ export function computeMTGeometry(
  *  field names from MTMetricsRow directly. */
 const CSV_HEADERS: readonly (keyof MTMetricsRow)[] = [
   'frameIndex',
-  'imageId',
+  'imageName',
   'label',
   'mtType',
   'instanceId',

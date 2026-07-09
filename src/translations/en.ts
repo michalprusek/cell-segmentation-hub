@@ -2227,6 +2227,7 @@ export default {
     instance: 'Microtubule',
     hideInstance: 'Hide microtubule',
     showInstance: 'Show microtubule',
+    renameInstance: 'Rename microtubule',
     hideAll: 'Hide all',
     showAll: 'Show all',
     type: {

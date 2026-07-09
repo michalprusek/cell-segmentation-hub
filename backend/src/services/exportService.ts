@@ -33,10 +33,10 @@ import {
   isMicrotubuleProject as isMicrotubuleProjectType,
 } from '../types/validation';
 import {
-  MICROTUBULE_LABEL_PREFIX,
   SPERM_LABEL_PREFIX,
   type InstanceLabelPrefix,
 } from '../utils/instanceLabels';
+import { polylineSemanticsForProjectType } from '../utils/polylineSemantics';
 import {
   sanitizeFilename,
   getProgressMessage,
@@ -534,12 +534,12 @@ export class ExportService {
       // Generate visualizations (can run in parallel)
       if (options.includeVisualizations && project.images) {
         const visualizationProgressBase = 5 + progressStep * progressIncrement;
-        // Microtubule polylines reuse the sperm labeller, so badge them "MT1"
-        // instead of the sperm "S1". The MT metrics table is labelled with the
-        // same prefix so rows can be matched to badges on the image.
-        const labelPrefix = isMicrotubuleProject
-          ? MICROTUBULE_LABEL_PREFIX
-          : SPERM_LABEL_PREFIX;
+        // The per-instance badge prefix follows the PROJECT type (S=sperm,
+        // MT=microtubule, P=generic) — a polyline is a generic primitive, not a
+        // sperm one. The MT metrics table uses the same prefix so spreadsheet
+        // rows match the badges drawn on the image.
+        const labelPrefix =
+          polylineSemanticsForProjectType(project.type).labelPrefix;
         exportTasks.push(
           this.generateVisualizations(
             project.images as ImageWithSegmentation[],
@@ -594,7 +594,8 @@ export class ExportService {
                 current,
                 total,
               });
-            }
+            },
+            project.type
           ).then(() => {
             progressStep++;
             this.updateJobProgress(
@@ -670,6 +671,19 @@ export class ExportService {
       // export they did request: it degrades to a warning. Only a genuine
       // cancellation stays fatal.
       if (isMicrotubuleProject && project.images?.length) {
+        // MT thickness (px) → ImageJ ROI stroke width (the signal band). The
+        // background band ROI is drawn at the vicinity width
+        // (thickness + 2*margin) — the same region the metrics step samples the
+        // per-MT background from. `mtMetrics` is optional (ROI export is
+        // always-on), so fall back to the slider defaults (thickness 5,
+        // margin 2).
+        const mtThicknessPx =
+          options.mtMetrics?.thicknessPx && options.mtMetrics.thicknessPx > 0
+            ? options.mtMetrics.thicknessPx
+            : DEFAULT_MT_ROI_THICKNESS_PX;
+        const mtMarginMultiplier = options.mtMetrics?.marginMultiplier ?? 2;
+        const mtBackgroundStrokeWidth =
+          mtThicknessPx + 2 * Math.round(mtThicknessPx * mtMarginMultiplier);
         exportTasks.push(
           exportImageJRoiSets(
             project.images as ImageWithSegmentation[],
@@ -677,15 +691,8 @@ export class ExportService {
             project.id,
             {
               shouldAbort: () => this.isJobCancelled(jobId),
-              // MT thickness (px) → ImageJ ROI stroke width, so re-opened
-              // polylines draw + measure as a band of the sampled width. The
-              // ROI export is always-on but `mtMetrics` is optional, so fall
-              // back to the same default the metrics thickness slider uses (5).
-              strokeWidth:
-                options.mtMetrics?.thicknessPx &&
-                options.mtMetrics.thicknessPx > 0
-                  ? options.mtMetrics.thicknessPx
-                  : DEFAULT_MT_ROI_THICKNESS_PX,
+              strokeWidth: mtThicknessPx,
+              backgroundStrokeWidth: mtBackgroundStrokeWidth,
             }
           )
             .then(result => {
@@ -1171,7 +1178,8 @@ export class ExportService {
     exportDir: string,
     formats: string[],
     jobId?: string,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    projectType?: string | null
   ): Promise<void> {
     for (const format of formats) {
       // Check if job was cancelled before processing each format
@@ -1202,7 +1210,7 @@ export class ExportService {
         }));
 
         const { data: cocoData, parseFailures: cocoFailures } =
-          await this.formatConverter.convertToCOCO(imageDataArray);
+          await this.formatConverter.convertToCOCO(imageDataArray, projectType);
         await fs.writeFile(
           path.join(formatDir, 'annotations.json'),
           JSON.stringify(cocoData, null, 2)
@@ -1298,7 +1306,7 @@ export class ExportService {
         }));
 
         const { data: jsonData, parseFailures: jsonFailures } =
-          await this.formatConverter.convertToJSON(imageDataArray);
+          await this.formatConverter.convertToJSON(imageDataArray, projectType);
         await fs.writeFile(
           path.join(formatDir, 'segmentation_data.json'),
           JSON.stringify(jsonData, null, 2)
@@ -1604,6 +1612,7 @@ export class ExportService {
     const scale = options.pixelToMicrometerScale ?? null;
     const frameInputs = images.map(i => ({
       id: i.id,
+      name: i.name,
       parentVideoId: i.parentVideoId ?? null,
       frameIndex: i.frameIndex ?? null,
       isVideoContainer: i.isVideoContainer,

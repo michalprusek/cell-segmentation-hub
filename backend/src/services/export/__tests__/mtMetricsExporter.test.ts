@@ -62,14 +62,19 @@ import { logger } from '../../../utils/logger';
 function makeFrame(
   overrides: Partial<{
     id: string;
+    name: string | null;
     parentVideoId: string | null;
     frameIndex: number | null;
     isVideoContainer: boolean;
     segmentation: { polygons: string | null } | null;
   }> = {}
 ) {
+  const id = overrides.id ?? 'frame-1';
   return {
-    id: 'frame-1',
+    id,
+    // Default the human-readable name to the id so `imageName`-based
+    // assertions read the same token the tests pass as `id`.
+    name: id,
     parentVideoId: 'video-1',
     frameIndex: 0,
     isVideoContainer: false,
@@ -120,7 +125,7 @@ describe('computeMTGeometry', () => {
       null
     );
     // vidA (frame 0, 1) then vidB (frame 0, 2).
-    expect(rows.map(r => `${r.imageId}@${r.frameIndex}`)).toEqual([
+    expect(rows.map(r => `${r.imageName}@${r.frameIndex}`)).toEqual([
       'a0@0',
       'a1@1',
       'b0@0',
@@ -708,7 +713,7 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     const r = rows[0];
 
     expect(r.frameIndex).toBe(0);
-    expect(r.imageId).toBe('frame-1');
+    expect(r.imageName).toBe('frame-1');
     // Label matches the "MT1" badge the visualization draws for this instance.
     expect(r.label).toBe('MT1');
     expect(r.instanceId).toBe('inst-1');
@@ -1029,7 +1034,7 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     );
 
     expect(rows).toHaveLength(2);
-    expect(rows.map(r => r.imageId)).toEqual(['frame-a', 'frame-b']);
+    expect(rows.map(r => r.imageName)).toEqual(['frame-a', 'frame-b']);
   });
 });
 
