@@ -2184,6 +2184,28 @@ export default {
     showInstance: 'Mostrar microtúbulo',
     hideAll: 'Ocultar todo',
     showAll: 'Mostrar todo',
+    type: {
+      set: 'Establecer tipo',
+      setForSelected: 'Establecer tipo para {{count}} seleccionados',
+      none: 'Ninguno',
+      newLabel: 'Nueva etiqueta…',
+      renameLabel: 'Renombrar etiqueta',
+      deleteLabel: 'Eliminar etiqueta',
+      manageLabels: 'Etiquetas de tipo',
+      labelName: 'Nombre',
+      labelNamePlaceholder: 'p. ej. alfa-tubulina',
+      labelColor: 'Color',
+      labelDialogDescription: 'Nombre el tipo de tubulina y elija un color.',
+      updated: 'Tipo de microtúbulo actualizado',
+      updateFailed: 'No se pudo actualizar el tipo de microtúbulo',
+      noTrack:
+        'Este microtúbulo aún no tiene seguimiento — ejecute primero el seguimiento.',
+    },
+    color: {
+      label: 'Color:',
+      byInstance: 'Instancia',
+      byLabel: 'Etiqueta',
+    },
   },
   sperm: {
     instancePanel: 'Instancias de espermatozoides',

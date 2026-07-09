@@ -2,6 +2,7 @@ import React from 'react';
 import { shouldPreventCanvasDeselection } from '../config/modeConfig';
 import { generateSafePolygonKey } from '@/lib/polygonIdUtils';
 import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
+import { resolveMtColor } from '../utils/instanceColors';
 
 import VerticalToolbar from './VerticalToolbar';
 import TopToolbar from './TopToolbar';
@@ -33,6 +34,7 @@ import { ImageDisplayProvider } from '../contexts/ImageDisplayContext';
 // Type-only: the orchestrator owns these hooks; the layout only needs their
 // return shapes. `import type` keeps the hook modules out of the layout's
 // runtime import graph (relevant to the editor-test OOM import-graph issue).
+import type { MTTypeLabel } from '@/lib/api';
 import type { useEnhancedSegmentationEditor } from '../hooks/useEnhancedSegmentationEditor';
 import type { useVideoFrames } from '../hooks/useVideoFrames';
 import type { usePolygonRenderProps } from '../hooks/usePolygonRenderProps';
@@ -139,6 +141,17 @@ export interface SegmentationEditorLayoutProps {
   handleChangeInstanceId: PolygonHandlers['handleChangeInstanceId'];
   handleChangePartClass: PolygonHandlers['handleChangePartClass'];
 
+  // Microtubule type-label palette + canvas colour mode (MT projects only).
+  mtTypeLabels: MTTypeLabel[];
+  mtLabelById: Map<string, MTTypeLabel>;
+  mtColorById: Map<string, string>;
+  mtColorMode: 'instance' | 'semantic';
+  onSetMtColorMode: (mode: 'instance' | 'semantic') => void;
+  onChangeMtType: (polygonId: string, mtType: string | null) => void;
+  onCreateMtLabel: (name: string, color: string) => Promise<MTTypeLabel | null>;
+  onRenameMtLabel: (id: string, name: string, color: string) => Promise<void>;
+  onDeleteMtLabel: (id: string) => Promise<void>;
+
   // Sperm instance-panel state
   activePartClass: React.ComponentProps<
     typeof SpermInstancePanel
@@ -219,6 +232,15 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   handleRenamePolygon,
   handleChangeInstanceId,
   handleChangePartClass,
+  mtTypeLabels,
+  mtLabelById,
+  mtColorById,
+  mtColorMode,
+  onSetMtColorMode,
+  onChangeMtType,
+  onCreateMtLabel,
+  onRenameMtLabel,
+  onDeleteMtLabel,
   activePartClass,
   setActivePartClass,
   activeInstanceId,
@@ -438,6 +460,40 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                               ? availableInstanceIds
                               : undefined
                           }
+                          // Microtubule type-label context-menu items + canvas
+                          // colour mode. Gated to MT polylines (mirrors the
+                          // sperm gating above). `semanticColor` is the resolved
+                          // by-label colour; CanvasPolygon uses it only when
+                          // colorMode === 'semantic'.
+                          colorMode={
+                            projectType === 'microtubules'
+                              ? mtColorMode
+                              : 'instance'
+                          }
+                          semanticColor={
+                            projectType === 'microtubules'
+                              ? resolveMtColor(polygon.mtType, mtColorById, {
+                                  selected:
+                                    polygon.id === editor.selectedPolygonId,
+                                })
+                              : undefined
+                          }
+                          mtTypeLabels={
+                            polylineKind === 'microtubule'
+                              ? mtTypeLabels
+                              : undefined
+                          }
+                          currentMtType={polygon.mtType}
+                          onChangeMtType={
+                            polylineKind === 'microtubule'
+                              ? onChangeMtType
+                              : undefined
+                          }
+                          onCreateMtLabel={
+                            polylineKind === 'microtubule'
+                              ? onCreateMtLabel
+                              : undefined
+                          }
                           onDeleteVertex={handleDeleteVertexFromContextMenu}
                           onHover={setHoveredPolygonId}
                           // Drives sperm-vs-microtubule context-menu
@@ -542,6 +598,13 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     onSelectAll={handleSelectAllInList}
                     onClearSelection={handleClearSelectionInList}
                     onDeletePolygon={handleDeletePolygonFromPanel}
+                    mtTypeLabels={mtTypeLabels}
+                    mtLabelById={mtLabelById}
+                    colorMode={mtColorMode}
+                    onSetColorMode={onSetMtColorMode}
+                    onCreateLabel={onCreateMtLabel}
+                    onRenameLabel={onRenameMtLabel}
+                    onDeleteLabel={onDeleteMtLabel}
                   />
                 )}
               </div>

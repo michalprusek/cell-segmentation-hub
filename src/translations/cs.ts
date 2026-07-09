@@ -2151,6 +2151,28 @@ export default {
     showInstance: 'Zobrazit mikrotubulus',
     hideAll: 'Skrýt vše',
     showAll: 'Zobrazit vše',
+    type: {
+      set: 'Nastavit typ',
+      setForSelected: 'Nastavit typ pro {{count}} vybraných',
+      none: 'Žádný',
+      newLabel: 'Nový label…',
+      renameLabel: 'Přejmenovat label',
+      deleteLabel: 'Smazat label',
+      manageLabels: 'Typové labely',
+      labelName: 'Název',
+      labelNamePlaceholder: 'např. alfa-tubulin',
+      labelColor: 'Barva',
+      labelDialogDescription: 'Pojmenujte typ tubulinu a vyberte barvu.',
+      updated: 'Typ mikrotubulu upraven',
+      updateFailed: 'Nepodařilo se upravit typ mikrotubulu',
+      noTrack:
+        'Tento mikrotubulus zatím nemá track — nejprve spusťte trackování.',
+    },
+    color: {
+      label: 'Barva:',
+      byInstance: 'Instance',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Instance spermií',

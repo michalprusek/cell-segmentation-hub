@@ -2133,6 +2133,29 @@ export default {
     showInstance: 'Afficher le microtubule',
     hideAll: 'Tout masquer',
     showAll: 'Tout afficher',
+    type: {
+      set: 'Définir le type',
+      setForSelected: 'Définir le type pour {{count}} sélectionnés',
+      none: 'Aucun',
+      newLabel: 'Nouveau label…',
+      renameLabel: 'Renommer le label',
+      deleteLabel: 'Supprimer le label',
+      manageLabels: 'Labels de type',
+      labelName: 'Nom',
+      labelNamePlaceholder: 'ex. alpha-tubuline',
+      labelColor: 'Couleur',
+      labelDialogDescription:
+        'Nommez le type de tubuline et choisissez une couleur.',
+      updated: 'Type de microtubule mis à jour',
+      updateFailed: 'Échec de la mise à jour du type de microtubule',
+      noTrack:
+        'Ce microtubule n’a pas encore de piste — lancez d’abord le suivi.',
+    },
+    color: {
+      label: 'Couleur :',
+      byInstance: 'Instance',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Instances de spermatozoïdes',

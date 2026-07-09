@@ -2144,6 +2144,29 @@ export default {
     showInstance: 'Mikrotubulus einblenden',
     hideAll: 'Alle ausblenden',
     showAll: 'Alle einblenden',
+    type: {
+      set: 'Typ festlegen',
+      setForSelected: 'Typ für {{count}} ausgewählte festlegen',
+      none: 'Keiner',
+      newLabel: 'Neues Label…',
+      renameLabel: 'Label umbenennen',
+      deleteLabel: 'Label löschen',
+      manageLabels: 'Typ-Labels',
+      labelName: 'Name',
+      labelNamePlaceholder: 'z. B. Alpha-Tubulin',
+      labelColor: 'Farbe',
+      labelDialogDescription:
+        'Benennen Sie den Tubulin-Typ und wählen Sie eine Farbe.',
+      updated: 'Mikrotubulus-Typ aktualisiert',
+      updateFailed: 'Mikrotubulus-Typ konnte nicht aktualisiert werden',
+      noTrack:
+        'Dieser Mikrotubulus hat noch keinen Track — führen Sie zuerst das Tracking aus.',
+    },
+    color: {
+      label: 'Farbe:',
+      byInstance: 'Instanz',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Spermien-Instanzen',
