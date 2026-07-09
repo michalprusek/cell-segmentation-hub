@@ -38,6 +38,16 @@ describe('sanitizeLabels', () => {
     expect(sanitizeLabels(null)).toEqual([]);
     expect(sanitizeLabels({ id: 'a' })).toEqual([]);
   });
+
+  it('drops entries whose id/name/color are not strings', () => {
+    expect(
+      sanitizeLabels([
+        { id: 42, name: 'x', color: '#000000' }, // non-string id
+        { id: 'a', name: 5, color: '#000000' }, // non-string name
+        { id: 'b', name: 'y', color: 999 }, // non-string colour
+      ])
+    ).toEqual([]);
+  });
 });
 
 describe('diffRemovedIds', () => {

@@ -677,6 +677,36 @@ describe('buildVideoRoiEntries', () => {
     expect(d.strokeColor).not.toBe(imageJColorFromHex('#ff0000'));
   });
 
+  it('ignores mtType when no palette is supplied (uses per-track hue)', () => {
+    // A polyline carrying mtType but buildVideoRoiEntries called WITHOUT a
+    // palette (labelById undefined) — the class cannot resolve, so the ROI
+    // keeps the trackId-hash name/colour.
+    const build = buildVideoRoiEntries([
+      {
+        id: 'f0',
+        name: 'v',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: {
+          polygons: JSON.stringify([
+            {
+              trackId: 't1',
+              geometry: 'polyline',
+              mtType: 'lbl',
+              points: [
+                { x: 1, y: 1 },
+                { x: 2, y: 2 },
+              ],
+            },
+          ]),
+        },
+      },
+    ]);
+    const d = decodeRoi(build.entries[0].buffer);
+    expect(d.name.startsWith('alpha__')).toBe(false);
+    expect(d.name.startsWith('t1')).toBe(true);
+  });
+
   it('processes frames in frameIndex order regardless of input order', () => {
     const build = buildVideoRoiEntries([
       {

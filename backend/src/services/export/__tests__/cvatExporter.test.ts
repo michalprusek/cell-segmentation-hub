@@ -64,14 +64,141 @@ describe('buildCvatXml', () => {
     expect(xml).toContain(`<polyline label="${DEFAULT_CVAT_LABEL}"`);
   });
 
-  it('escapes XML metacharacters in a label name', () => {
+  it('escapes XML metacharacters (incl. apostrophe) in a label name', () => {
     const { xml } = buildCvatXml(
       [frame({ segmentation: { polygons: polylineJson({ mtType: 'x' }) } })],
       'task-1',
-      new Map([['x', { name: 'a<b>&"', color: '#00ff00' }]])
+      new Map([['x', { name: `a<b>&"'`, color: '#00ff00' }]])
     );
-    expect(xml).toContain('label="a&lt;b&gt;&amp;&quot;"');
+    expect(xml).toContain('label="a&lt;b&gt;&amp;&quot;&apos;"');
     expect(xml).not.toContain('label="a<b>');
+  });
+
+  it('covers geometry/points/JSON edge branches without emitting bad rows', () => {
+    // null polygons JSON, non-array JSON, container frame, non-array points,
+    // default (missing) geometry treated as polyline, decimal coordinates.
+    const withDecimals = JSON.stringify([
+      {
+        geometry: undefined, // missing geometry → defaults to polyline
+        points: [
+          { x: 1.5, y: 2.25 },
+          { x: 3, y: 4 },
+        ],
+      },
+      { geometry: 'polyline', points: 'not-an-array' }, // dropped
+    ]);
+    const { xml, images, polylines } = buildCvatXml(
+      [
+        frame({ id: 'ct', isVideoContainer: true }), // container → skipped
+        frame({ id: 'n', segmentation: { polygons: null } }), // null json → []
+        frame({
+          id: 'o',
+          frameIndex: 1,
+          segmentation: { polygons: '{"not":"array"}' },
+        }), // non-array → []
+        frame({
+          id: 'd',
+          frameIndex: 2,
+          segmentation: { polygons: withDecimals },
+        }),
+      ],
+      'task-1',
+      palette
+    );
+    expect(images).toBe(1); // only frame 'd' has a valid polyline
+    expect(polylines).toBe(1);
+    expect(xml).toContain('points="1.5,2.25;3,4"'); // decimal formatting
+  });
+
+  it('omits the track_id attribute for a polyline without a trackId', () => {
+    const { xml, polylines } = buildCvatXml(
+      [frame({ segmentation: { polygons: polylineJson({ trackId: null }) } })],
+      'task-1',
+      palette
+    );
+    expect(polylines).toBe(1);
+    // The <meta> label schema always declares a track_id attribute; assert only
+    // that the polyline element itself carries no track_id attribute.
+    expect(xml).not.toContain('<attribute name="track_id">');
+  });
+
+  it('falls back to the image index + id when frameIndex is null', () => {
+    const { xml } = buildCvatXml(
+      [
+        frame({
+          id: 'imgABC',
+          frameIndex: null,
+          segmentation: { polygons: polylineJson({}) },
+        }),
+      ],
+      'task-1',
+      palette
+    );
+    expect(xml).toContain('<image id="0"');
+    expect(xml).toContain('name="imgABC"');
+  });
+
+  it('emits width/height 0 when the frame has no dimensions', () => {
+    const { xml } = buildCvatXml(
+      [
+        frame({
+          width: null,
+          height: null,
+          segmentation: { polygons: polylineJson({}) },
+        }),
+      ],
+      'task-1',
+      palette
+    );
+    expect(xml).toContain('width="0" height="0"');
+  });
+
+  it('drops polylines with fewer than 2 finite points', () => {
+    const json = JSON.stringify([
+      { geometry: 'polyline', points: [{ x: 1, y: 1 }] }, // 1 point
+      {
+        geometry: 'polyline',
+        points: [
+          { x: Number.NaN, y: 0 },
+          { x: 1, y: 1 },
+        ],
+      }, // 1 finite
+    ]);
+    const { images, polylines } = buildCvatXml(
+      [frame({ segmentation: { polygons: json } })],
+      'task-1',
+      palette
+    );
+    expect(images).toBe(0);
+    expect(polylines).toBe(0);
+  });
+
+  it('declares every distinct used label in <meta>', () => {
+    const json = JSON.stringify([
+      {
+        geometry: 'polyline',
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+        mtType: 'mt_type_a',
+      },
+      {
+        geometry: 'polyline',
+        points: [
+          { x: 0, y: 0 },
+          { x: 2, y: 2 },
+        ],
+      }, // untyped → default label
+    ]);
+    const { xml, polylines } = buildCvatXml(
+      [frame({ segmentation: { polygons: json } })],
+      'task-1',
+      palette
+    );
+    expect(polylines).toBe(2);
+    expect(xml).toContain('<name>alpha-tubulin</name>');
+    expect(xml).toContain(`<name>${DEFAULT_CVAT_LABEL}</name>`);
   });
 
   it('skips corrupt frames and closed polygons without throwing', () => {
