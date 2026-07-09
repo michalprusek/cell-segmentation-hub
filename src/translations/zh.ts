@@ -2030,6 +2030,11 @@ export default {
       labelDialogDescription: '为微管蛋白类型命名并选择颜色。',
       updated: '微管类型已更新',
       updateFailed: '更新微管类型失败',
+      createFailed: '创建标签失败',
+      renameFailed: '重命名标签失败',
+      deleteFailed: '删除标签失败',
+      loadFailed: '加载类型标签失败',
+      duplicateName: '已存在同名标签',
       noTrack: '该微管尚无轨迹 — 请先运行追踪。',
     },
     color: {

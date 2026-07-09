@@ -2,6 +2,7 @@ import React from 'react';
 import { shouldPreventCanvasDeselection } from '../config/modeConfig';
 import { generateSafePolygonKey } from '@/lib/polygonIdUtils';
 import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
+import { isMicrotubuleProject } from '@/types';
 import { resolveMtColor } from '../utils/instanceColors';
 
 import VerticalToolbar from './VerticalToolbar';
@@ -466,12 +467,16 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           // by-label colour; CanvasPolygon uses it only when
                           // colorMode === 'semantic'.
                           colorMode={
-                            projectType === 'microtubules'
+                            isMicrotubuleProject(projectType)
                               ? mtColorMode
                               : 'instance'
                           }
                           semanticColor={
-                            projectType === 'microtubules'
+                            // Only resolve the by-label colour when it will be
+                            // used (semantic mode); in the default instance mode
+                            // CanvasPolygon ignores it, so skip the Map lookup.
+                            isMicrotubuleProject(projectType) &&
+                            mtColorMode === 'semantic'
                               ? resolveMtColor(polygon.mtType, mtColorById, {
                                   selected:
                                     polygon.id === editor.selectedPolygonId,
@@ -560,7 +565,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     Instances panel below (trackId order, per-instance colour,
                     length, delete) — the generic Polygon List would just
                     duplicate it, so it's hidden for MT projects. */}
-                {projectType !== 'microtubules' && (
+                {!isMicrotubuleProject(projectType) && (
                   <PolygonListPanel
                     loading={projectLoading}
                     polygons={editor.polygons}

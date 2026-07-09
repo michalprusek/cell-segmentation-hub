@@ -264,17 +264,18 @@ export const getMtTypeLabels = asyncHandler(
 
 /**
  * PUT /api/projects/:id/mt-type-labels — replace the palette (create / rename /
- * reorder). body: `{ labels: MTTypeLabel[] }`.
+ * reorder / remove). body: `{ labels: MTTypeLabel[] }`. A label dropped by the
+ * new set has its references cleaned (framesCleaned reported).
  */
 export const putMtTypeLabels = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const projectId = req.params.id;
     if (!(await ensureProjectAccess(req, res, projectId))) return;
-    const { labels } = await MtTypeLabelService.putLabels(
+    const { labels, framesCleaned } = await MtTypeLabelService.putLabels(
       projectId,
       (req.body as { labels?: unknown })?.labels
     );
-    ResponseHelper.success(res, { labels }, 'Palette uložena');
+    ResponseHelper.success(res, { labels, framesCleaned }, 'Palette uložena');
   }
 );
 

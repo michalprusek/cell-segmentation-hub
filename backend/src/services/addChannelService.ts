@@ -26,6 +26,7 @@ import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { ChannelMeta, defaultColorForWavelength } from './video/types';
+import { isMicrotubuleProject } from '../types/validation';
 import { detectVideoKind, extractVideoSafe } from './video/videoExtractor';
 import { alignChannelFrames, ChannelAlignJob } from './video/pythonExtractor';
 import { frameStorageKey } from './videoUploadService';
@@ -184,7 +185,7 @@ export async function addChannelToFrames(
       where: { id: projectId },
       select: { type: true },
     });
-    if ((project?.type ?? '') !== 'microtubules') {
+    if (!isMicrotubuleProject(project?.type)) {
       throw new Error('Add channel is only available for microtubule projects');
     }
 

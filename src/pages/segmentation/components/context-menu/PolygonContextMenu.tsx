@@ -20,7 +20,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
-import type { ProjectType } from '@/types';
+import { isMicrotubuleProject, type ProjectType } from '@/types';
 import type { MTTypeLabel } from '@/lib/api';
 import MtTypeLabelDialog from './MtTypeLabelDialog';
 import {
@@ -99,7 +99,7 @@ const PolygonContextMenu = ({
   onCreateMtLabel,
 }: PolygonContextMenuProps) => {
   const isSperm = projectType === 'sperm';
-  const isMicrotubules = projectType === 'microtubules';
+  const isMicrotubules = isMicrotubuleProject(projectType);
   // A microtubule with a cross-frame trackId: deleting it removes the whole
   // track, and it can be propagated forward.
   const hasTrack = isMicrotubules && !!trackId;

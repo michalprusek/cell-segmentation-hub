@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import { useSharedAdvancedExport } from './hooks/useSharedAdvancedExport';
 import { useLanguage } from '@/contexts/useLanguage';
-import { ProjectImage } from '@/types';
+import { ProjectImage, isMicrotubuleProject } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
 import { MicrotubuleMetricsSection } from './components/MicrotubuleMetricsSection';
@@ -86,10 +86,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       onDownloadingChange,
     }) => {
       const { t } = useLanguage();
-      // ProjectType is `'microtubules'` (plural) — `'microtubule'`
-      // (singular) is the model id, not the project type. Mis-comparing
-      // them silently hides the MT section on every MT project.
-      const isMTProject = projectType === 'microtubules';
+      // Shared predicate guards the plural-`microtubules`-vs-singular-
+      // `microtubule`-model-id footgun that once silently hid this section.
+      const isMTProject = isMicrotubuleProject(projectType);
 
       // A kymograph needs a time axis (≥ 2 frames). The images listing returns
       // per-frame rows, not container rows, so this counts frames per container

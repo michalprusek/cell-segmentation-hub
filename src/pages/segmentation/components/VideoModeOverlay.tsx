@@ -22,15 +22,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { KymographModal } from './KymographModal';
 import { useImageDisplay } from '../contexts/ImageDisplayContext';
-import { useVideoFrames, VideoFrame } from '../hooks/useVideoFrames';
-import type { ProjectType } from '@/types';
+import { useVideoFrames } from '../hooks/useVideoFrames';
+import { isMicrotubuleProject, type ProjectType } from '@/types';
 
 interface VideoModeOverlayProps {
   videoContainerId: string;
   projectType?: ProjectType;
-  /** Called whenever the editor should reload its polygons for a different
-   *  frame imageId. */
-  onActiveFrameChange?: (frame: VideoFrame | null) => void;
 }
 
 /** Keyboard handler: ←/→ step frames, Space toggle playback. Mounted on
@@ -66,23 +63,19 @@ function useFrameNavigationKeys(
 export function VideoModeOverlay({
   videoContainerId,
   projectType,
-  onActiveFrameChange,
 }: VideoModeOverlayProps) {
-  const { container, frameIndex, currentFrame, step, toggle } =
+  const { container, frameIndex, step, toggle } =
     useVideoFrames(videoContainerId);
   const { setFrameIndex: setDisplayFrame } = useImageDisplay();
 
   useFrameNavigationKeys(step, toggle);
 
-  // Propagate frame changes outward: tell the editor "load polygons for
-  // this image id" and update the display context. The editor itself
-  // also calls useVideoFrames (lifted in commit 3) — both calls share
-  // React Query cache via the queryKey, but each has its own local
-  // frameIndex state. We only sync the *displayed* index here.
+  // Sync the displayed frameIndex into ImageDisplayContext so the canvas +
+  // sidebar consume one source of truth. (The editor calls useVideoFrames too;
+  // both share the React Query cache but keep their own local frameIndex.)
   useEffect(() => {
     setDisplayFrame(frameIndex);
-    onActiveFrameChange?.(currentFrame);
-  }, [frameIndex, currentFrame, setDisplayFrame, onActiveFrameChange]);
+  }, [frameIndex, setDisplayFrame]);
 
   // Kymograph modal state — selected polyline + open flag. The editor
   // wires PolygonContextMenu around its polyline-body hit area and calls
@@ -108,7 +101,7 @@ export function VideoModeOverlay({
   }, [openKymograph]);
 
   if (!container) return null;
-  if (!kymographFor || projectType !== 'microtubules') return null;
+  if (!kymographFor || !isMicrotubuleProject(projectType)) return null;
 
   return (
     <KymographModal
@@ -120,17 +113,4 @@ export function VideoModeOverlay({
       channels={container.channels}
     />
   );
-}
-
-/** Convenience helper for the editor: returns the overlay props bundle
- *  if the given image is a video container, null otherwise. The editor
- *  can early-return without any video pieces when null. */
-// eslint-disable-next-line react-refresh/only-export-components
-export function useVideoModeProps(
-  imageId: string | null | undefined,
-  isVideoContainer: boolean | undefined,
-  projectType?: ProjectType
-): VideoModeOverlayProps | null {
-  if (!imageId || !isVideoContainer) return null;
-  return { videoContainerId: imageId, projectType };
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { EditMode, InteractionState } from '../../types';
 import { Point } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/useLanguage';
-import type { ProjectType } from '@/types';
+import { isMicrotubuleProject, type ProjectType } from '@/types';
 
 interface ModeInstructionsProps {
   editMode: EditMode;
@@ -31,7 +31,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
   // Microtubule annotations are open polylines: creation/extension is committed
   // with Enter (or double-click), not by closing back onto the first point. The
   // hints branch on this so MT users aren't told to "close the polygon".
-  const isMicrotubule = projectType === 'microtubules';
+  const isMicrotubule = isMicrotubuleProject(projectType);
   const [isVisible, setIsVisible] = useState(true);
 
   // Auto-hide instructions after 5 seconds in View mode

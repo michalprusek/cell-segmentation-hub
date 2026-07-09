@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 // the named `{ apiClient }` import broke test mocks that only expose `default`.
 import apiClient, { type MTTypeLabel } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/useLanguage';
 
 /** Short unique id for a new label. Prefers crypto.randomUUID (secure context),
  *  falls back to a timestamp+random string for older/non-secure runtimes. */
@@ -33,6 +35,7 @@ export function useMtTypeLabels(
   projectId: string | undefined,
   enabled: boolean
 ): UseMtTypeLabelsResult {
+  const { t } = useLanguage();
   const [labels, setLabels] = useState<MTTypeLabel[]>([]);
 
   useEffect(() => {
@@ -43,13 +46,17 @@ export function useMtTypeLabels(
       .then(l => {
         if (alive) setLabels(l);
       })
-      .catch(err =>
-        logger.error('Failed to load MT type labels', err as Error)
-      );
+      .catch(err => {
+        logger.error('Failed to load MT type labels', err as Error);
+        // Surface the failure — otherwise the panel shows an empty label list
+        // for a project that HAS labels, and typed MTs render neutral, which
+        // reads as "labels were wiped".
+        if (alive) toast.error(t('microtubule.type.loadFailed'));
+      });
     return () => {
       alive = false;
     };
-  }, [projectId, enabled]);
+  }, [projectId, enabled, t]);
 
   const colorById = useMemo(
     () => new Map(labels.map(l => [l.id, l.color])),
@@ -80,28 +87,55 @@ export function useMtTypeLabels(
       );
       if (existing) return existing;
       const label: MTTypeLabel = { id: newLabelId(), name: trimmed, color };
-      await persist([...labels, label]);
-      return label;
+      try {
+        await persist([...labels, label]);
+        return label;
+      } catch (err) {
+        logger.error('Failed to create MT type label', err as Error);
+        toast.error(t('microtubule.type.createFailed'));
+        return null;
+      }
     },
-    [labels, persist]
+    [labels, persist, t]
   );
 
   const renameLabel = useCallback(
     async (id: string, name: string, color: string) => {
-      await persist(
-        labels.map(l => (l.id === id ? { ...l, name: name.trim(), color } : l))
+      const trimmed = name.trim();
+      // Guard against renaming onto ANOTHER label's name: the server dedupes by
+      // case-insensitive name (first wins), which would silently drop this label
+      // and dangle every MT pointing at its id.
+      const clash = labels.some(
+        l => l.id !== id && l.name.toLowerCase() === trimmed.toLowerCase()
       );
+      if (clash) {
+        toast.error(t('microtubule.type.duplicateName'));
+        return;
+      }
+      try {
+        await persist(
+          labels.map(l => (l.id === id ? { ...l, name: trimmed, color } : l))
+        );
+      } catch (err) {
+        logger.error('Failed to rename MT type label', err as Error);
+        toast.error(t('microtubule.type.renameFailed'));
+      }
     },
-    [labels, persist]
+    [labels, persist, t]
   );
 
   const deleteLabel = useCallback(
     async (id: string) => {
       if (!projectId) return;
-      const saved = await apiClient.deleteMtTypeLabel(projectId, id);
-      setLabels(saved);
+      try {
+        const saved = await apiClient.deleteMtTypeLabel(projectId, id);
+        setLabels(saved);
+      } catch (err) {
+        logger.error('Failed to delete MT type label', err as Error);
+        toast.error(t('microtubule.type.deleteFailed'));
+      }
     },
-    [projectId]
+    [projectId, t]
   );
 
   return {

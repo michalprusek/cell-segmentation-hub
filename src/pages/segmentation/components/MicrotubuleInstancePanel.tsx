@@ -63,7 +63,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   onDeleteLabel,
 }) => {
   const { t } = useLanguage();
-  // Label-management dialog state: null = closed, {} = create, {id,…} = rename.
+  // Label-management dialog state: null = closed, 'new' = create, MTTypeLabel = rename.
   const [editingLabel, setEditingLabel] = useState<MTTypeLabel | null | 'new'>(
     null
   );

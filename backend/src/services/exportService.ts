@@ -28,7 +28,10 @@ import {
   generateMetricsGuide,
   generateAnnotationGuides,
 } from './export/exportDocs';
-import { coerceProjectType } from '../types/validation';
+import {
+  coerceProjectType,
+  isMicrotubuleProject as isMicrotubuleProjectType,
+} from '../types/validation';
 import {
   MICROTUBULE_LABEL_PREFIX,
   SPERM_LABEL_PREFIX,
@@ -524,16 +527,19 @@ export class ExportService {
         );
       }
 
+      // Whether this is a microtubule project — drives which exporters run
+      // (skip standard annotations/metrics, add MT-metrics/kymograph/ImageJ/CVAT).
+      const isMicrotubuleProject = isMicrotubuleProjectType(project.type);
+
       // Generate visualizations (can run in parallel)
       if (options.includeVisualizations && project.images) {
         const visualizationProgressBase = 5 + progressStep * progressIncrement;
         // Microtubule polylines reuse the sperm labeller, so badge them "MT1"
         // instead of the sperm "S1". The MT metrics table is labelled with the
         // same prefix so rows can be matched to badges on the image.
-        const labelPrefix =
-          (project.type ?? '') === 'microtubules'
-            ? MICROTUBULE_LABEL_PREFIX
-            : SPERM_LABEL_PREFIX;
+        const labelPrefix = isMicrotubuleProject
+          ? MICROTUBULE_LABEL_PREFIX
+          : SPERM_LABEL_PREFIX;
         exportTasks.push(
           this.generateVisualizations(
             project.images as ImageWithSegmentation[],
@@ -567,7 +573,6 @@ export class ExportService {
       // tracks, so they are NOT emitted for microtubule projects — MT annotation
       // export is ImageJ RoiSet + CVAT (both always-on, below), each of which
       // carries the tubulin type class natively.
-      const isMicrotubuleProject = (project.type ?? '') === 'microtubules';
       if (
         !isMicrotubuleProject &&
         options.annotationFormats?.length &&
@@ -625,10 +630,9 @@ export class ExportService {
       // no area). Runs whenever metrics are requested for an MT project, not
       // just when the intensity section is on: it always writes microtubule
       // LENGTH (geometry, no channel needed) and adds per-channel intensity
-      // columns only when a channel was selected. ProjectType is
-      // `'microtubules'` (plural) — `'microtubule'` is the model id.
+      // columns only when a channel was selected.
       if (
-        (project.type ?? '') === 'microtubules' &&
+        isMicrotubuleProject &&
         options.metricsFormats?.length &&
         project.images?.length
       ) {
@@ -643,10 +647,7 @@ export class ExportService {
       }
 
       // MT kymographs (segmented images + velocity metrics) — MT projects only.
-      if (
-        (project.type ?? '') === 'microtubules' &&
-        options.mtKymographs?.enabled
-      ) {
+      if (isMicrotubuleProject && options.mtKymographs?.enabled) {
         exportTasks.push(
           exportMicrotubuleKymographs(
             project.id,
@@ -668,7 +669,7 @@ export class ExportService {
       // always-on (the user did not opt in), a failure must NOT sink the whole
       // export they did request: it degrades to a warning. Only a genuine
       // cancellation stays fatal.
-      if ((project.type ?? '') === 'microtubules' && project.images?.length) {
+      if (isMicrotubuleProject && project.images?.length) {
         exportTasks.push(
           exportImageJRoiSets(
             project.images as ImageWithSegmentation[],
@@ -1335,7 +1336,7 @@ export class ExportService {
     // intensity exporter (`generateMTIntensityMetrics`) writes the
     // metrics.{csv,xlsx,json} files for MT projects instead. Skip here to
     // avoid emitting empty files and racing the MT writer on the same paths.
-    if (projectType === 'microtubules') {
+    if (isMicrotubuleProjectType(projectType)) {
       logger.info(
         'Microtubule project: standard polygon metrics skipped; the MT intensity exporter owns the metrics files',
         'ExportService',

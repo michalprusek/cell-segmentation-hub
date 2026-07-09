@@ -2172,6 +2172,11 @@ export default {
         'Benennen Sie den Tubulin-Typ und wählen Sie eine Farbe.',
       updated: 'Mikrotubulus-Typ aktualisiert',
       updateFailed: 'Mikrotubulus-Typ konnte nicht aktualisiert werden',
+      createFailed: 'Label konnte nicht erstellt werden',
+      renameFailed: 'Label konnte nicht umbenannt werden',
+      deleteFailed: 'Label konnte nicht gelöscht werden',
+      loadFailed: 'Typ-Labels konnten nicht geladen werden',
+      duplicateName: 'Ein Label mit diesem Namen existiert bereits',
       noTrack:
         'Dieser Mikrotubulus hat noch keinen Track — führen Sie zuerst das Tracking aus.',
     },

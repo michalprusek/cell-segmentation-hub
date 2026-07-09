@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
+import { MODEL_TYPE_COMPATIBILITY, isProjectType } from '@/types';
 import apiClient, { type SegmentationPolygon } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
@@ -79,18 +80,17 @@ export function useResegment({
   // resegment (or image switch) invalidates a still-running poll.
   const resegPollSeqRef = useRef(0);
 
-  // The backend enforces a per-project-type model whitelist. The
-  // user-chosen `selectedModel` is meaningful only for the generic
-  // spheroid project — typed projects must use their matching model
-  // (`spheroid_invasive` → `unet_attention_aspp` per backend's
-  // MODEL_TYPE_COMPATIBILITY) or the request gets rejected.
+  // The backend enforces a per-project-type model whitelist
+  // (MODEL_TYPE_COMPATIBILITY). The user-chosen `selectedModel` is meaningful
+  // only where a type has >1 compatible model (the generic spheroid project);
+  // every other type has exactly one whitelisted model and must use it or the
+  // request is rejected. Read the SSOT registry directly rather than duplicating
+  // the type→model map, so it can never drift when a model is added/renamed.
   const effectiveResegmentModel = useMemo(() => {
-    if (projectType === 'microtubules') return 'microtubule';
-    if (projectType === 'sperm') return 'sperm';
-    if (projectType === 'wound') return 'wound';
-    if (projectType === 'microcapsule') return 'microcapsule';
-    if (projectType === 'spheroid_invasive') return 'unet_attention_aspp';
-    return selectedModel;
+    const compat = isProjectType(projectType)
+      ? MODEL_TYPE_COMPATIBILITY[projectType]
+      : undefined;
+    return compat && compat.length === 1 ? compat[0] : selectedModel;
   }, [projectType, selectedModel]);
 
   // Background poll that refreshes the editor when a resegment completes.

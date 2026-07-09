@@ -46,6 +46,7 @@ import {
   isModelCompatibleWithType,
   MODEL_TYPE_COMPATIBILITY,
   getErrorMessage,
+  isMicrotubuleProject,
 } from '@/types';
 
 const ProjectDetail = () => {
@@ -1646,7 +1647,7 @@ const ProjectDetail = () => {
               onBatchDelete={handleBatchDelete}
               onDeleteAnnotations={handleDeleteAnnotations}
               onAddChannel={() => setShowAddChannelDialog(true)}
-              canAddChannel={projectType === 'microtubules'}
+              canAddChannel={isMicrotubuleProject(projectType)}
               showSelectAll={true}
               onExportingChange={() => {}} // No longer needed - hook handles state
               onDownloadingChange={() => {}} // No longer needed - hook handles state

@@ -11,7 +11,10 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import type { ExportOptions, ProjectWithImages } from '../exportService';
-import type { ProjectType } from '../../types/validation';
+import {
+  isMicrotubuleProject,
+  type ProjectType,
+} from '../../types/validation';
 
 export function generateReadme(
   project: ProjectWithImages,
@@ -50,7 +53,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 * yolo/ - YOLO format annotations
 * json/ - Custom JSON format
 ${
-  project.type === 'microtubules'
+  isMicrotubuleProject(project.type)
     ? '* imagej/ - ImageJ/Fiji ROIs, one <video>_RoiSet.zip per video (each microtubule polyline on its own stack slice, named by cross-frame trackId, coloured per track, drawn at the MT thickness)\n'
     : ''
 }* metrics/ - Calculated metrics

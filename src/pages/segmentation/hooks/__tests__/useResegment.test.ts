@@ -92,16 +92,22 @@ describe('useResegment', () => {
   // ─── effectiveResegmentModel gating ────────────────────────────────────────
 
   it.each([
-    ['microtubules', 'microtubule'],
-    ['sperm', 'sperm'],
-    ['wound', 'wound'],
-    ['spheroid_invasive', 'unet_attention_aspp'],
-    ['spheroid', 'hrnet'],
+    // [projectType, selectedModel, expected] — single-model types force their
+    // whitelisted model regardless of selectedModel.
+    ['microtubules', 'hrnet', 'microtubule'],
+    ['sperm', 'hrnet', 'sperm'],
+    ['wound', 'hrnet', 'wound'],
+    ['microcapsule', 'hrnet', 'microcapsule'],
+    ['spheroid_invasive', 'hrnet', 'unet_attention_aspp'],
+    // spheroid has >1 compatible model → the user's pick is honored. Use a model
+    // distinct from compat[0] ('hrnet') so this proves selectedModel wins,
+    // rather than coincidentally matching the first registry entry.
+    ['spheroid', 'cbam_resunet', 'cbam_resunet'],
   ])(
-    'maps projectType=%s → effectiveResegmentModel=%s',
-    (projectType, expected) => {
+    'maps projectType=%s (selectedModel=%s) → effectiveResegmentModel=%s',
+    (projectType, selectedModel, expected) => {
       const { result } = renderHook(() =>
-        useResegment(makeParams({ projectType, selectedModel: 'hrnet' }))
+        useResegment(makeParams({ projectType, selectedModel }))
       );
       expect(result.current.effectiveResegmentModel).toBe(expected);
     }

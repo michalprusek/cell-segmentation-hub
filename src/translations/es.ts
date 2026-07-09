@@ -2211,6 +2211,11 @@ export default {
       labelDialogDescription: 'Nombre el tipo de tubulina y elija un color.',
       updated: 'Tipo de microtúbulo actualizado',
       updateFailed: 'No se pudo actualizar el tipo de microtúbulo',
+      createFailed: 'No se pudo crear la etiqueta',
+      renameFailed: 'No se pudo renombrar la etiqueta',
+      deleteFailed: 'No se pudo eliminar la etiqueta',
+      loadFailed: 'No se pudieron cargar las etiquetas de tipo',
+      duplicateName: 'Ya existe una etiqueta con este nombre',
       noTrack:
         'Este microtúbulo aún no tiene seguimiento — ejecute primero el seguimiento.',
     },
