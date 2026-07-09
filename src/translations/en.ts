@@ -820,8 +820,16 @@ export default {
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
       },
+      createPolyline: {
+        start: 'Click to place the first point of the microtubule',
+        finish: 'Press Enter or double-click to finish the microtubule',
+        holdShift: 'Hold SHIFT to add points automatically',
+        cancel: 'Press ESC to cancel',
+      },
       addPoints: {
         clickVertex: 'Click on any vertex to start adding points',
+        clickVertexMt: 'Click a microtubule endpoint to start extending it',
+        addPointsMt: 'Click to add points, then press Enter to finish',
         addPoints:
           'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
@@ -843,6 +851,7 @@ export default {
       modes: {
         slice: 'Slice Mode',
         create: 'Create Polygon Mode',
+        createPolyline: 'Create Microtubule Mode',
         addPoints: 'Add Points Mode',
         editVertices: 'Edit Vertices Mode',
         deletePolygon: 'Delete Polygon Mode',

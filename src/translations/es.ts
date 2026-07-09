@@ -984,9 +984,19 @@ export default {
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
         cancel: 'Presiona ESC para cancelar',
       },
+      createPolyline: {
+        start: 'Haga clic para colocar el primer punto del microtúbulo',
+        finish: 'Pulse Enter o haga doble clic para finalizar el microtúbulo',
+        holdShift: 'Mantenga SHIFT para añadir puntos automáticamente',
+        cancel: 'Pulse ESC para cancelar',
+      },
       addPoints: {
         clickVertex:
           'Haz clic en cualquier vértice para comenzar a agregar puntos',
+        clickVertexMt:
+          'Haga clic en un extremo del microtúbulo para extenderlo',
+        addPointsMt:
+          'Haga clic para añadir puntos y pulse Enter para finalizar',
         addPoints:
           'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
@@ -1008,6 +1018,7 @@ export default {
       modes: {
         slice: 'Modo cortar',
         create: 'Modo crear polígono',
+        createPolyline: 'Modo crear microtúbulo',
         addPoints: 'Modo agregar puntos',
         editVertices: 'Modo editar vértices',
         deletePolygon: 'Modo eliminar polígono',

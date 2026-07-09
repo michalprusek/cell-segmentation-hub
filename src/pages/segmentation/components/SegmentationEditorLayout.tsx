@@ -540,6 +540,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     selectedPolygonId={editor.selectedPolygonId}
                     tempPoints={editor.tempPoints}
                     isShiftPressed={editor.keyboardState.isShiftPressed()}
+                    projectType={projectType}
                   />
                 </CanvasContainer>
               </div>

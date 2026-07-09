@@ -992,9 +992,19 @@ export default {
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
       },
+      createPolyline: {
+        start: 'Klicken Sie, um den ersten Punkt des Mikrotubulus zu setzen',
+        finish: 'Mit Enter oder Doppelklick abschließen',
+        holdShift: 'SHIFT halten, um Punkte automatisch hinzuzufügen',
+        cancel: 'ESC zum Abbrechen drücken',
+      },
       addPoints: {
         clickVertex:
           'Klicken Sie auf einen beliebigen Eckpunkt, um mit dem Hinzufügen von Punkten zu beginnen',
+        clickVertexMt:
+          'Klicken Sie auf ein Mikrotubulus-Ende, um es zu verlängern',
+        addPointsMt:
+          'Klicken zum Hinzufügen von Punkten, dann Enter zum Abschließen',
         addPoints:
           'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen. Klicken Sie direkt auf einen anderen Eckpunkt ohne Punkte hinzuzufügen, um alle Punkte dazwischen zu entfernen.',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
@@ -1018,6 +1028,7 @@ export default {
       modes: {
         slice: 'Schnitt-Modus',
         create: 'Polygon-Erstellungs-Modus',
+        createPolyline: 'Mikrotubulus-Erstellmodus',
         addPoints: 'Punkte-Hinzufüge-Modus',
         editVertices: 'Eckpunkt-Bearbeitungs-Modus',
         deletePolygon: 'Polygon-Lösch-Modus',

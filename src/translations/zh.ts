@@ -910,8 +910,16 @@ export default {
         holdShift: '按住SHIFT自动添加点',
         cancel: '按ESC取消',
       },
+      createPolyline: {
+        start: '点击放置微管的第一个点',
+        finish: '按 Enter 或双击以完成微管',
+        holdShift: '按住 SHIFT 自动添加点',
+        cancel: '按 ESC 取消',
+      },
       addPoints: {
         clickVertex: '点击任意顶点开始添加点',
+        clickVertexMt: '点击微管端点以开始延伸',
+        addPointsMt: '点击添加点，然后按 Enter 完成',
         addPoints:
           '点击添加点，然后点击另一个顶点完成。直接点击另一个顶点而不添加点，可删除它们之间的所有点。',
         holdShift: '按住SHIFT自动添加点',
@@ -933,6 +941,7 @@ export default {
       modes: {
         slice: '切割模式',
         create: '多边形创建模式',
+        createPolyline: '创建微管模式',
         addPoints: '点添加模式',
         editVertices: '顶点编辑模式',
         deletePolygon: '多边形删除模式',
