@@ -44,6 +44,7 @@ import {
   type RoiFrameInput,
   type RoiZipEntry,
 } from '../imagejRoiEncoder';
+import { imageJColorFromHex } from '../imagejColor';
 
 // ---------------------------------------------------------------------------
 // Minimal ImageJ .roi decoder (subset: poly types with sub-pixel + name)
@@ -608,6 +609,72 @@ describe('buildVideoRoiEntries', () => {
     ]);
     const [a, b] = build.entries.map(e => decodeRoi(e.buffer));
     expect(a.strokeColor).not.toBe(b.strokeColor);
+  });
+
+  it('encodes the tubulin class into the ROI name + stroke colour when typed', () => {
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              {
+                trackId: 't1',
+                geometry: 'polyline',
+                mtType: 'lbl',
+                points: [
+                  { x: 1, y: 1 },
+                  { x: 2, y: 2 },
+                ],
+              },
+            ]),
+          },
+        },
+      ],
+      undefined,
+      new Map([['lbl', { name: 'alpha', color: '#ff0000' }]])
+    );
+    expect(build.entries).toHaveLength(1);
+    const d = decodeRoi(build.entries[0].buffer);
+    // Class name prefixes the ROI name…
+    expect(d.name.startsWith('alpha__')).toBe(true);
+    // …and the stroke colour is the label's colour (not the per-track hue).
+    expect(d.strokeColor).toBe(imageJColorFromHex('#ff0000'));
+    // The zip entry filename also carries the class prefix.
+    expect(build.entries[0].name.startsWith('alpha__')).toBe(true);
+  });
+
+  it('keeps the per-track hue for an untyped polyline (no palette match)', () => {
+    const build = buildVideoRoiEntries(
+      [
+        {
+          id: 'f0',
+          name: 'v',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          segmentation: {
+            polygons: JSON.stringify([
+              {
+                trackId: 't1',
+                geometry: 'polyline',
+                points: [
+                  { x: 1, y: 1 },
+                  { x: 2, y: 2 },
+                ],
+              },
+            ]),
+          },
+        },
+      ],
+      undefined,
+      new Map([['lbl', { name: 'alpha', color: '#ff0000' }]])
+    );
+    const d = decodeRoi(build.entries[0].buffer);
+    expect(d.name.startsWith('alpha__')).toBe(false);
+    expect(d.strokeColor).not.toBe(imageJColorFromHex('#ff0000'));
   });
 
   it('processes frames in frameIndex order regardless of input order', () => {
