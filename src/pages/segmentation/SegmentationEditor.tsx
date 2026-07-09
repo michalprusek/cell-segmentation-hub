@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
 import { transformSegmentationPolygons } from './utils/transformSegmentationPolygons';
+import { resolveTargetTrackIds } from './utils/mtTypeTargets';
 import { usePolygonHandlers } from './hooks/usePolygonHandlers';
 import { useSegmentationLoader } from './hooks/useSegmentationLoader';
 import { useResegment } from './hooks/useResegment';
@@ -1038,16 +1039,10 @@ const SegmentationEditor = () => {
       const videoId = video.container?.id;
       if (!videoId) return;
       const polys = editorRef.current.getPolygons();
-      const selected = selectedPolygonIdsRef.current;
-      const targetIds = selected.size >= 2 ? [...selected] : [polygonId];
-      const trackIds = Array.from(
-        new Set(
-          targetIds
-            .map(id => polys.find(p => p.id === id)?.trackId)
-            .filter(
-              (tid): tid is string => typeof tid === 'string' && tid.length > 0
-            )
-        )
+      const trackIds = resolveTargetTrackIds(
+        polygonId,
+        selectedPolygonIdsRef.current,
+        polys
       );
       if (trackIds.length === 0) {
         toast.error(t('microtubule.type.noTrack'));

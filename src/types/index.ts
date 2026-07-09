@@ -354,6 +354,13 @@ export type ProjectType = (typeof PROJECT_TYPES)[number];
 export const isProjectType = (v: unknown): v is ProjectType =>
   typeof v === 'string' && (PROJECT_TYPES as readonly string[]).includes(v);
 
+/** True for microtubule projects. Prefer this shared predicate over a bare
+ *  `t === 'microtubules'` literal: the project type is the PLURAL `microtubules`
+ *  while the model id is the SINGULAR `microtubule`, and mixing them up has
+ *  already shipped a bug (silently hiding the MT export section). */
+export const isMicrotubuleProject = (t: string | undefined | null): boolean =>
+  t === 'microtubules';
+
 /** All known model identifiers, derived from the frontend model registry
  *  SSOT (`@/lib/models/modelRegistry`), which mirrors the backend SSOT.
  *  Re-exported as `KnownModelId` so existing `@/types` consumers are

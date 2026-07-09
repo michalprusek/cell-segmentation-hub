@@ -4,11 +4,12 @@ import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
-import type { ProjectType } from '@/types';
+import { isMicrotubuleProject, type ProjectType } from '@/types';
 import type { MTTypeLabel } from '@/lib/api';
 import {
   colorFromInstanceId,
   isMicrotubuleInstance,
+  NEUTRAL_COLOR,
 } from '@/pages/segmentation/utils/instanceColors';
 
 interface CanvasPolygonProps {
@@ -209,7 +210,9 @@ const CanvasPolygon = React.memo(
         // label. `semanticColor` is pre-resolved by the parent (label colour, or
         // neutral gray when untyped), so this branch just returns it.
         if (colorMode === 'semantic') {
-          return semanticColor ?? 'hsl(0, 0%, 60%)';
+          // Shared NEUTRAL_COLOR (not a literal) so the untyped-MT gray here
+          // can't drift from resolveMtColor's untyped fallback.
+          return semanticColor ?? NEUTRAL_COLOR;
         }
         // Instance mode — seed priority: cross-frame trackId, then MT-prefixed
         // instanceId, then per-polygon UUID — guarantees a distinct colour per
@@ -446,7 +449,7 @@ const CanvasPolygon = React.memo(
           {isPolyline &&
             !isSelected &&
             validPoints.length >= 2 &&
-            projectType !== 'microtubules' && (
+            !isMicrotubuleProject(projectType) && (
               <>
                 <circle
                   cx={validPoints[0].x}

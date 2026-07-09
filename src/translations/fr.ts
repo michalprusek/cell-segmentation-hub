@@ -2161,6 +2161,11 @@ export default {
         'Nommez le type de tubuline et choisissez une couleur.',
       updated: 'Type de microtubule mis à jour',
       updateFailed: 'Échec de la mise à jour du type de microtubule',
+      createFailed: 'Échec de la création du label',
+      renameFailed: 'Échec du renommage du label',
+      deleteFailed: 'Échec de la suppression du label',
+      loadFailed: 'Échec du chargement des labels de type',
+      duplicateName: 'Un label portant ce nom existe déjà',
       noTrack:
         'Ce microtubule n’a pas encore de piste — lancez d’abord le suivi.',
     },

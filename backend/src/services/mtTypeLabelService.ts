@@ -59,35 +59,96 @@ export function diffRemovedIds(
 }
 
 /** Lenient parse of a frame's polygons JSON to an array (empty on null/corrupt).
- *  Cleanup must never throw on one bad frame. */
-function parseFramePolygons(json: string | null | undefined): unknown[] {
+ *  Cleanup must never throw on one bad frame, but a parse failure is logged so
+ *  a frame silently skipped during cleanup is diagnosable. */
+function parseFramePolygons(
+  json: string | null | undefined,
+  ctx?: { segmentationId?: string; projectId?: string }
+): unknown[] {
   if (!json) return [];
   try {
     const parsed = JSON.parse(json);
     return Array.isArray(parsed) ? parsed : [];
-  } catch {
+  } catch (err) {
+    logger.warn(
+      'MT label cleanup: unreadable polygons JSON on a frame; left unchanged',
+      'MtTypeLabelService',
+      { ...ctx, error: err instanceof Error ? err.message : String(err) }
+    );
     return [];
   }
 }
 
 /**
- * Clear `mtType` on every polygon whose `mtType` equals `labelId`. Pure — changed
- * polygons are shallow-copied. Returns the new array + how many changed.
+ * Clear `mtType` on every polygon whose `mtType` is in `idSet`. Pure — changed
+ * polygons are shallow-copied. The `typeof === 'string'` guard means an empty
+ * `idSet` (or one containing '') never touches untyped polygons. Returns the new
+ * array + how many changed.
  */
-export function clearMtTypeById(
+export function clearMtTypesByIds(
   polys: unknown[],
-  labelId: string
+  idSet: Set<string>
 ): { polygons: unknown[]; changed: number } {
   let changed = 0;
   const polygons = polys.map(p => {
     const rec = p as Record<string, unknown>;
-    if (rec.mtType !== labelId) return p;
+    if (typeof rec.mtType !== 'string' || !idSet.has(rec.mtType)) return p;
     changed++;
     const copy = { ...rec };
     delete copy.mtType;
     return copy;
   });
   return { polygons, changed };
+}
+
+/** Single-id convenience wrapper over {@link clearMtTypesByIds}. */
+export function clearMtTypeById(
+  polys: unknown[],
+  labelId: string
+): { polygons: unknown[]; changed: number } {
+  return clearMtTypesByIds(polys, new Set(labelId ? [labelId] : []));
+}
+
+/**
+ * Null every `mtType` reference to any id in `labelIds` across the project's
+ * frames, in a single transaction. Shared by DELETE and the PUT-removal path so
+ * a label removed by EITHER endpoint can never leave dangling references.
+ * Returns the number of frames written.
+ */
+async function clearLabelReferences(
+  projectId: string,
+  labelIds: string[]
+): Promise<number> {
+  const idSet = new Set(labelIds.filter(Boolean));
+  if (idSet.size === 0) return 0;
+  const frames = await prisma.image.findMany({
+    where: { projectId },
+    select: {
+      id: true,
+      segmentation: { select: { id: true, polygons: true } },
+    },
+  });
+  const ops: Prisma.PrismaPromise<unknown>[] = [];
+  let framesCleaned = 0;
+  for (const frame of frames) {
+    if (!frame.segmentation) continue;
+    const parsed = parseFramePolygons(frame.segmentation.polygons, {
+      segmentationId: frame.segmentation.id,
+      projectId,
+    });
+    const { polygons, changed } = clearMtTypesByIds(parsed, idSet);
+    if (changed > 0) {
+      framesCleaned++;
+      ops.push(
+        prisma.segmentation.update({
+          where: { id: frame.segmentation.id },
+          data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
+        })
+      );
+    }
+  }
+  if (ops.length > 0) await prisma.$transaction(ops);
+  return framesCleaned;
 }
 
 export async function getLabels(projectId: string): Promise<MTTypeLabel[]> {
@@ -98,19 +159,35 @@ export async function getLabels(projectId: string): Promise<MTTypeLabel[]> {
   return sanitizeLabels(project?.mtTypeLabels ?? []);
 }
 
-/** Replace the whole palette (create / rename / reorder). Ids are stable, so no
- *  polyline rewrite is needed. Returns the sanitized set stored + ids removed. */
+/** Replace the whole palette (create / rename / reorder / remove). Ids are
+ *  stable, so a rename/reorder needs no polyline rewrite — but a label DROPPED
+ *  by the new set has its `mtType` references nulled across the project's frames
+ *  (same cleanup as DELETE), so a PUT-removal can never leave dangling ids.
+ *  Returns the stored set + removed ids + frames cleaned. */
 export async function putLabels(
   projectId: string,
   labels: unknown
-): Promise<{ labels: MTTypeLabel[]; removedIds: string[] }> {
+): Promise<{
+  labels: MTTypeLabel[];
+  removedIds: string[];
+  framesCleaned: number;
+}> {
   const prev = await getLabels(projectId);
   const next = sanitizeLabels(labels);
   await prisma.project.update({
     where: { id: projectId },
     data: { mtTypeLabels: next as unknown as Prisma.InputJsonValue },
   });
-  return { labels: next, removedIds: diffRemovedIds(prev, next) };
+  const removedIds = diffRemovedIds(prev, next);
+  const framesCleaned = await clearLabelReferences(projectId, removedIds);
+  if (removedIds.length > 0) {
+    logger.info('Cleaned references for PUT-removed MT labels', 'MtTypeLabelService', {
+      projectId,
+      removedIds,
+      framesCleaned,
+    });
+  }
+  return { labels: next, removedIds, framesCleaned };
 }
 
 /** Delete one label and null its `mtType` references on every frame of the
@@ -132,30 +209,7 @@ export async function deleteLabel(
     data: { mtTypeLabels: next as unknown as Prisma.InputJsonValue },
   });
 
-  const frames = await prisma.image.findMany({
-    where: { projectId },
-    select: {
-      id: true,
-      segmentation: { select: { id: true, polygons: true } },
-    },
-  });
-  const ops: Prisma.PrismaPromise<unknown>[] = [];
-  let framesCleaned = 0;
-  for (const frame of frames) {
-    if (!frame.segmentation) continue;
-    const parsed = parseFramePolygons(frame.segmentation.polygons);
-    const { polygons, changed } = clearMtTypeById(parsed, labelId);
-    if (changed > 0) {
-      framesCleaned++;
-      ops.push(
-        prisma.segmentation.update({
-          where: { id: frame.segmentation.id },
-          data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
-        })
-      );
-    }
-  }
-  if (ops.length > 0) await prisma.$transaction(ops);
+  const framesCleaned = await clearLabelReferences(projectId, [labelId]);
 
   logger.info('Deleted MT type label', 'MtTypeLabelService', {
     projectId,

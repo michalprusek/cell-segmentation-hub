@@ -2176,6 +2176,11 @@ export default {
       labelDialogDescription: 'Pojmenujte typ tubulinu a vyberte barvu.',
       updated: 'Typ mikrotubulu upraven',
       updateFailed: 'Nepodařilo se upravit typ mikrotubulu',
+      createFailed: 'Nepodařilo se vytvořit label',
+      renameFailed: 'Nepodařilo se přejmenovat label',
+      deleteFailed: 'Nepodařilo se smazat label',
+      loadFailed: 'Nepodařilo se načíst typové labely',
+      duplicateName: 'Label s tímto názvem už existuje',
       noTrack:
         'Tento mikrotubulus zatím nemá track — nejprve spusťte trackování.',
     },
