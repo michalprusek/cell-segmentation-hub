@@ -1087,33 +1087,42 @@ const SegmentationEditor = () => {
     (id: string) => {
       const single = editorRef.current.selectedPolygonId;
       if (single === id) {
-        editorRef.current.setSelectedPolygonId(null);
+        // Clear the single selection via handleSelectPolygon(null) — NOT a bare
+        // setSelectedPolygonId(null). The latter leaves persistedSelectionTrackId
+        // set, so the cross-frame re-select effect (usePolygonHandlers) instantly
+        // re-selects this MT and the checkbox can never be unchecked.
+        handleSelectPolygon(null);
         return;
       }
       if (single) {
-        editorRef.current.setSelectedPolygonId(null);
+        handleSelectPolygon(null);
         toggleMultiSelect(single);
       }
       toggleMultiSelect(id);
     },
-    [toggleMultiSelect]
+    [toggleMultiSelect, handleSelectPolygon]
   );
 
   // Sidebar "select all": put every listed current-frame polygon id into the
   // bulk set and drop the single selection so the whole list reads as checked.
   const handleSelectAllInList = useCallback(
     (ids: string[]) => {
-      editorRef.current.setSelectedPolygonId(null);
+      // Clear via handleSelectPolygon(null) so persistedSelectionTrackId is
+      // dropped too (see handleToggleSelectedInList) — otherwise a lingering
+      // single selection is re-applied by the cross-frame re-select effect.
+      handleSelectPolygon(null);
       selectAllMultiSelect(ids);
     },
-    [selectAllMultiSelect]
+    [selectAllMultiSelect, handleSelectPolygon]
   );
 
-  // Sidebar "deselect all": clear both selection sets.
+  // Sidebar "deselect all": clear both selection sets. Route the single-selection
+  // clear through handleSelectPolygon(null) so persistedSelectionTrackId is
+  // cleared and the re-select effect can't re-check a row.
   const handleClearSelectionInList = useCallback(() => {
-    editorRef.current.setSelectedPolygonId(null);
+    handleSelectPolygon(null);
     clearMultiSelect();
-  }, [clearMultiSelect]);
+  }, [clearMultiSelect, handleSelectPolygon]);
 
   // Right-click "Propagate selected MTs (N)": propagate every Shift-selected
   // microtubule forward. Loops the single-track endpoint so each keeps its own
