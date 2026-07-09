@@ -1606,6 +1606,7 @@ export class ExportService {
     const scale = options.pixelToMicrometerScale ?? null;
     const frameInputs = images.map(i => ({
       id: i.id,
+      name: i.name,
       parentVideoId: i.parentVideoId ?? null,
       frameIndex: i.frameIndex ?? null,
       isVideoContainer: i.isVideoContainer,

@@ -776,7 +776,6 @@ export class MetricsCalculator {
 
     worksheet.columns = [
       { header: 'Image Name', key: 'imageName', width: 20 },
-      { header: 'Image ID', key: 'imageId', width: 15 },
       { header: 'Polygon ID', key: 'polygonId', width: 10 },
       { header: 'Type', key: 'type', width: 10 },
       { header: `Area (${areaUnit})`, key: 'area', width: 12 },
@@ -803,9 +802,7 @@ export class MetricsCalculator {
       isFinite(value) ? parseFloat(value.toFixed(decimals)) : 0;
     metrics.forEach(m => {
       worksheet.addRow({
-        imageName: m.imageName,
-        imageId: m.imageId,
-        polygonId: m.polygonId,
+        imageName: m.imageName,        polygonId: m.polygonId,
         type: m.type,
         area: safeValue(m.area, 2),
         perimeter: safeValue(m.perimeter, 2),
@@ -881,7 +878,6 @@ export class MetricsCalculator {
 
     worksheet.columns = [
       { header: 'Image Name', key: 'imageName', width: 20 },
-      { header: 'Image ID', key: 'imageId', width: 15 },
       { header: 'Capsule ID', key: 'polygonId', width: 12 },
       { header: `Area (${areaUnit})`, key: 'area', width: 14 },
       { header: `Perimeter (${lengthUnit})`, key: 'perimeter', width: 14 },
@@ -907,9 +903,7 @@ export class MetricsCalculator {
     const rows = metrics.filter(m => m.complete !== false);
     rows.forEach(m => {
       worksheet.addRow({
-        imageName: m.imageName,
-        imageId: m.imageId,
-        polygonId: m.polygonId,
+        imageName: m.imageName,        polygonId: m.polygonId,
         area: safeValue(m.area, 2),
         perimeter: safeValue(m.perimeter, 2),
         width: safeValue(m.boundingBoxWidth, 2),
@@ -977,7 +971,6 @@ export class MetricsCalculator {
     const csvStringifier = createObjectCsvStringifier({
       header: [
         { id: 'imageName', title: 'Image Name' },
-        { id: 'imageId', title: 'Image ID' },
         { id: 'polygonId', title: 'Capsule ID' },
         { id: 'area', title: `Area (${areaUnit})` },
         { id: 'perimeter', title: `Perimeter (${lengthUnit})` },
@@ -999,9 +992,7 @@ export class MetricsCalculator {
     const records = metrics
       .filter(m => m.complete !== false)
       .map(m => ({
-        imageName: m.imageName,
-        imageId: m.imageId,
-        polygonId: m.polygonId,
+        imageName: m.imageName,        polygonId: m.polygonId,
         area: m.area,
         perimeter: m.perimeter,
         width: m.boundingBoxWidth,
@@ -1115,7 +1106,6 @@ export class MetricsCalculator {
     const sheet = workbook.addWorksheet('Image Metrics');
     sheet.columns = [
       { header: 'Image Name', key: 'imageName', width: 32 },
-      { header: 'Image ID', key: 'imageId', width: 22 },
       {
         header: `Total Spheroid Area (${areaUnit})`,
         key: 'totalSpheroidArea',
@@ -1140,9 +1130,7 @@ export class MetricsCalculator {
     if (imageMetrics) {
       imageMetrics.forEach(m => {
         sheet.addRow({
-          imageName: m.imageName,
-          imageId: m.imageId,
-          totalSpheroidArea: safe(m.totalSpheroidArea, 2),
+          imageName: m.imageName,          totalSpheroidArea: safe(m.totalSpheroidArea, 2),
           coreArea: safe(m.coreArea, 2),
           invasionArea: safe(m.invasionArea, 2),
           disintegrationIndex: safe(m.disintegrationIndex, 4),
@@ -1289,7 +1277,6 @@ export class MetricsCalculator {
     const csvStringifier = createObjectCsvStringifier({
       header: [
         { id: 'imageName', title: 'Image Name' },
-        { id: 'imageId', title: 'Image ID' },
         { id: 'polygonId', title: 'Polygon ID' },
         { id: 'type', title: 'Type' },
         { id: 'area', title: `Area (${areaUnit})` },
