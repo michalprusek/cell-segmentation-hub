@@ -2195,6 +2195,7 @@ export default {
     instance: 'Microtúbulo',
     hideInstance: 'Ocultar microtúbulo',
     showInstance: 'Mostrar microtúbulo',
+    renameInstance: 'Renombrar microtúbulo',
     hideAll: 'Ocultar todo',
     showAll: 'Mostrar todo',
     type: {
