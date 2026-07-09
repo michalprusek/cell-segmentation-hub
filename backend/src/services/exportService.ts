@@ -33,10 +33,10 @@ import {
   isMicrotubuleProject as isMicrotubuleProjectType,
 } from '../types/validation';
 import {
-  MICROTUBULE_LABEL_PREFIX,
   SPERM_LABEL_PREFIX,
   type InstanceLabelPrefix,
 } from '../utils/instanceLabels';
+import { polylineSemanticsForProjectType } from '../utils/polylineSemantics';
 import {
   sanitizeFilename,
   getProgressMessage,
@@ -534,12 +534,12 @@ export class ExportService {
       // Generate visualizations (can run in parallel)
       if (options.includeVisualizations && project.images) {
         const visualizationProgressBase = 5 + progressStep * progressIncrement;
-        // Microtubule polylines reuse the sperm labeller, so badge them "MT1"
-        // instead of the sperm "S1". The MT metrics table is labelled with the
-        // same prefix so rows can be matched to badges on the image.
-        const labelPrefix = isMicrotubuleProject
-          ? MICROTUBULE_LABEL_PREFIX
-          : SPERM_LABEL_PREFIX;
+        // The per-instance badge prefix follows the PROJECT type (S=sperm,
+        // MT=microtubule, P=generic) — a polyline is a generic primitive, not a
+        // sperm one. The MT metrics table uses the same prefix so spreadsheet
+        // rows match the badges drawn on the image.
+        const labelPrefix =
+          polylineSemanticsForProjectType(project.type).labelPrefix;
         exportTasks.push(
           this.generateVisualizations(
             project.images as ImageWithSegmentation[],
@@ -594,7 +594,8 @@ export class ExportService {
                 current,
                 total,
               });
-            }
+            },
+            project.type
           ).then(() => {
             progressStep++;
             this.updateJobProgress(
@@ -1171,7 +1172,8 @@ export class ExportService {
     exportDir: string,
     formats: string[],
     jobId?: string,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    projectType?: string | null
   ): Promise<void> {
     for (const format of formats) {
       // Check if job was cancelled before processing each format
@@ -1202,7 +1204,7 @@ export class ExportService {
         }));
 
         const { data: cocoData, parseFailures: cocoFailures } =
-          await this.formatConverter.convertToCOCO(imageDataArray);
+          await this.formatConverter.convertToCOCO(imageDataArray, projectType);
         await fs.writeFile(
           path.join(formatDir, 'annotations.json'),
           JSON.stringify(cocoData, null, 2)
@@ -1298,7 +1300,7 @@ export class ExportService {
         }));
 
         const { data: jsonData, parseFailures: jsonFailures } =
-          await this.formatConverter.convertToJSON(imageDataArray);
+          await this.formatConverter.convertToJSON(imageDataArray, projectType);
         await fs.writeFile(
           path.join(formatDir, 'segmentation_data.json'),
           JSON.stringify(jsonData, null, 2)
