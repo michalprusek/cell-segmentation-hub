@@ -42,6 +42,18 @@ const SegmentationEditor = lazyWithRetry(
   () => import('./pages/segmentation/SegmentationEditor'),
   'SegmentationEditor'
 );
+const SegmenterDashboard = lazyWithRetry(
+  () => import('./pages/segmenter/SegmenterDashboard'),
+  'SegmenterDashboard'
+);
+const SegmenterDatasetDetail = lazyWithRetry(
+  () => import('./pages/segmenter/SegmenterDatasetDetail'),
+  'SegmenterDatasetDetail'
+);
+const SegmenterEditor = lazyWithRetry(
+  () => import('./pages/segmenter/editor/SegmenterEditor'),
+  'SegmenterEditor'
+);
 const NotFound = lazyWithRetry(() => import('./pages/NotFound'), 'NotFound');
 const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
 const Profile = lazyWithRetry(() => import('./pages/Profile'), 'Profile');
@@ -216,6 +228,48 @@ const App = () => (
                                       }
                                     >
                                       <Dashboard />
+                                    </Suspense>
+                                  </ProtectedRoute>
+                                }
+                              />
+                              <Route
+                                path="/segmenter"
+                                element={
+                                  <ProtectedRoute>
+                                    <Suspense
+                                      fallback={
+                                        <PageLoadingFallback type="dashboard" />
+                                      }
+                                    >
+                                      <SegmenterDashboard />
+                                    </Suspense>
+                                  </ProtectedRoute>
+                                }
+                              />
+                              <Route
+                                path="/segmenter/:datasetId"
+                                element={
+                                  <ProtectedRoute>
+                                    <Suspense
+                                      fallback={
+                                        <PageLoadingFallback type="dashboard" />
+                                      }
+                                    >
+                                      <SegmenterDatasetDetail />
+                                    </Suspense>
+                                  </ProtectedRoute>
+                                }
+                              />
+                              <Route
+                                path="/segmenter/:datasetId/image/:imageId"
+                                element={
+                                  <ProtectedRoute>
+                                    <Suspense
+                                      fallback={
+                                        <PageLoadingFallback type="editor" />
+                                      }
+                                    >
+                                      <SegmenterEditor />
                                     </Suspense>
                                   </ProtectedRoute>
                                 }
