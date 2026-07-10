@@ -1196,6 +1196,9 @@ export default {
         'Přidejte k vybraným snímkům další kanál nahráním videa/stacku se stejným počtem snímků, nebo jednoho obrázku, který se otiskne na každý vybraný snímek.',
       selectionSummary: 'Vybráno {{frames}} snímků napříč {{videos}} videi.',
       sourceLabel: 'Zdrojový soubor (video / stack / obrázek)',
+      dropPrompt: 'Přetáhněte soubor sem, nebo klikněte pro výběr',
+      dropInvalidType: 'Nepodporovaný typ souboru.',
+      removeFile: 'Odebrat soubor',
       imageHint: 'Jeden obrázek → otiskne se na každý vybraný snímek.',
       videoHint:
         'Video/stack → musí mít přesně {{frames}} snímků a patřit jednomu videu.',

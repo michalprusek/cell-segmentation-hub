@@ -1195,6 +1195,10 @@ export default {
       selectionSummary:
         '{{frames}} fotograma(s) en {{videos}} vídeo(s) seleccionados.',
       sourceLabel: 'Archivo de origen (vídeo / pila / imagen)',
+      dropPrompt:
+        'Arrastre y suelte un archivo aquí, o haga clic para seleccionar',
+      dropInvalidType: 'Tipo de archivo no compatible.',
+      removeFile: 'Quitar archivo',
       imageHint: 'Una sola imagen → se aplica a cada fotograma seleccionado.',
       videoHint:
         'Vídeo/pila → debe tener exactamente {{frames}} fotograma(s) y pertenecer a un solo vídeo.',

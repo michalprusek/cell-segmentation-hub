@@ -1209,6 +1209,9 @@ export default {
       selectionSummary:
         '{{frames}} Bild(er) in {{videos}} Video(s) ausgewählt.',
       sourceLabel: 'Quelldatei (Video / Stapel / Bild)',
+      dropPrompt: 'Datei hierher ziehen und ablegen oder klicken zum Auswählen',
+      dropInvalidType: 'Nicht unterstützter Dateityp.',
+      removeFile: 'Datei entfernen',
       imageHint: 'Einzelnes Bild → wird auf jedes ausgewählte Bild angewendet.',
       videoHint:
         'Video/Stapel → muss genau {{frames}} Bild(er) haben und zu einem einzigen Video gehören.',
