@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type FileRejection } from 'react-dropzone';
 import { FileUp, Paperclip, X } from 'lucide-react';
 
 import {
@@ -80,6 +80,12 @@ export function AddChannelDialog({
   const [file, setFile] = React.useState<File | null>(null);
   const [channelName, setChannelName] = React.useState('');
   const [align, setAlign] = React.useState(false);
+  // Code of the last rejected drop (e.g. 'file-invalid-type',
+  // 'too-many-files'), or null. Kept in local state — not read from the
+  // dropzone hook's own `fileRejections` — because this dialog is always
+  // mounted (only `open` toggles), so the hook's internal rejection state
+  // would otherwise survive a close/re-open and show a stale error.
+  const [rejectionCode, setRejectionCode] = React.useState<string | null>(null);
 
   // Reset the form each time the dialog re-opens for a fresh selection.
   React.useEffect(() => {
@@ -87,24 +93,41 @@ export function AddChannelDialog({
       setFile(null);
       setChannelName('');
       setAlign(false);
+      setRejectionCode(null);
     }
   }, [open]);
 
   const onDrop = React.useCallback((acceptedFiles: File[]) => {
     const next = acceptedFiles[0];
-    if (next) setFile(next);
+    if (next) {
+      setFile(next);
+      setRejectionCode(null);
+    }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive, fileRejections } =
-    useDropzone({
-      onDrop,
-      accept: DROPZONE_ACCEPT,
-      maxFiles: 1,
-      multiple: false,
-      disabled: isSubmitting,
-    });
+  const onDropRejected = React.useCallback((rejections: FileRejection[]) => {
+    setRejectionCode(rejections[0]?.errors[0]?.code ?? 'file-invalid-type');
+  }, []);
 
-  const dropRejected = fileRejections.length > 0;
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    onDropRejected,
+    accept: DROPZONE_ACCEPT,
+    maxFiles: 1,
+    multiple: false,
+    disabled: isSubmitting,
+  });
+
+  // Distinguish the two reachable rejection reasons so the user isn't told
+  // "wrong type" when they actually dropped several valid files at once.
+  const rejectionMessage =
+    rejectionCode === 'too-many-files'
+      ? (t('project.addChannelDialog.dropTooManyFiles') ??
+        'Only one file can be added at a time.')
+      : rejectionCode
+        ? (t('project.addChannelDialog.dropInvalidType') ??
+          'Unsupported file type.')
+        : null;
 
   const fileIsImage = file ? isImageFile(file.name) : false;
   // A multi-frame (video/stack) source can only target a single video.
@@ -189,11 +212,8 @@ export function AddChannelDialog({
                 </p>
               </div>
             )}
-            {!file && dropRejected && (
-              <p className="text-xs text-destructive">
-                {t('project.addChannelDialog.dropInvalidType') ??
-                  'Unsupported file type.'}
-              </p>
+            {!file && rejectionMessage && (
+              <p className="text-xs text-destructive">{rejectionMessage}</p>
             )}
             {file && (
               <p className="text-xs text-muted-foreground">

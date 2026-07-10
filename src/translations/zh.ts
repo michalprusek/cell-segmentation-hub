@@ -1106,6 +1106,7 @@ export default {
       sourceLabel: '源文件（视频 / 堆栈 / 图像）',
       dropPrompt: '将文件拖放到此处，或点击选择',
       dropInvalidType: '不支持的文件类型。',
+      dropTooManyFiles: '一次只能添加一个文件。',
       removeFile: '移除文件',
       imageHint: '单张图像 → 应用到每个所选帧。',
       videoHint: '视频/堆栈 → 必须正好有 {{frames}} 帧，且属于同一个视频。',

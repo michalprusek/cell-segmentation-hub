@@ -1198,6 +1198,7 @@ export default {
       sourceLabel: 'Zdrojový soubor (video / stack / obrázek)',
       dropPrompt: 'Přetáhněte soubor sem, nebo klikněte pro výběr',
       dropInvalidType: 'Nepodporovaný typ souboru.',
+      dropTooManyFiles: 'Najednou lze přidat pouze jeden soubor.',
       removeFile: 'Odebrat soubor',
       imageHint: 'Jeden obrázek → otiskne se na každý vybraný snímek.',
       videoHint:

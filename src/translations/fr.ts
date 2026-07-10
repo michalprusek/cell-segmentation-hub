@@ -1202,6 +1202,7 @@ export default {
       dropPrompt:
         'Glissez-déposez un fichier ici, ou cliquez pour sélectionner',
       dropInvalidType: 'Type de fichier non pris en charge.',
+      dropTooManyFiles: 'Un seul fichier peut être ajouté à la fois.',
       removeFile: 'Retirer le fichier',
       imageHint: 'Image unique → appliquée à chaque image sélectionnée.',
       videoHint:

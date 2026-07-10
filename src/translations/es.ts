@@ -1198,6 +1198,7 @@ export default {
       dropPrompt:
         'Arrastre y suelte un archivo aquí, o haga clic para seleccionar',
       dropInvalidType: 'Tipo de archivo no compatible.',
+      dropTooManyFiles: 'Solo se puede añadir un archivo a la vez.',
       removeFile: 'Quitar archivo',
       imageHint: 'Una sola imagen → se aplica a cada fotograma seleccionado.',
       videoHint:

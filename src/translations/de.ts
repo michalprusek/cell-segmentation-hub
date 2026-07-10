@@ -1211,6 +1211,7 @@ export default {
       sourceLabel: 'Quelldatei (Video / Stapel / Bild)',
       dropPrompt: 'Datei hierher ziehen und ablegen oder klicken zum Auswählen',
       dropInvalidType: 'Nicht unterstützter Dateityp.',
+      dropTooManyFiles: 'Es kann nur eine Datei auf einmal hinzugefügt werden.',
       removeFile: 'Datei entfernen',
       imageHint: 'Einzelnes Bild → wird auf jedes ausgewählte Bild angewendet.',
       videoHint:
