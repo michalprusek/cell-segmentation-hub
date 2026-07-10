@@ -1188,6 +1188,10 @@ export default {
       selectionSummary:
         '{{frames}} frame(s) across {{videos}} video(s) selected.',
       sourceLabel: 'Source file (video / stack / image)',
+      dropPrompt: 'Drag & drop a file here, or click to select',
+      dropInvalidType: 'Unsupported file type.',
+      dropTooManyFiles: 'Only one file can be added at a time.',
+      removeFile: 'Remove file',
       imageHint: 'Single image → stamped onto every selected frame.',
       videoHint:
         'Video/stack → must have exactly {{frames}} frame(s) and belong to a single video.',
