@@ -76,6 +76,7 @@ import {
   deleteClass,
   getAnnotation,
   upsertAnnotation,
+  getImageFile,
   sanitizeAnnotationPolygons,
   SegmenterError,
 } from '../segmenterService';
@@ -702,5 +703,166 @@ describe('deletion storage cleanup', () => {
     });
     expect(storageMock.delete).toHaveBeenCalledWith('p1');
     expect(storageMock.delete).toHaveBeenCalledWith('p2');
+  });
+});
+
+// ===========================================================================
+// getImageFile — owner scoping, MIME inference, and the storage-miss → 404 map
+// ===========================================================================
+
+describe('getImageFile', () => {
+  it('404s when the image row is not found (owner join / missing) without touching storage', async () => {
+    prismaMock.segmenterImage.findFirst.mockResolvedValue(null);
+    await expect(getImageFile(OTHER_USER_ID, IMAGE_ID)).rejects.toMatchObject({
+      name: 'SegmenterError',
+      code: 'NOT_FOUND',
+    });
+    expect(storageMock.getBuffer).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a.png', 'image/png'],
+    ['a.jpg', 'image/jpeg'],
+    ['a.jpeg', 'image/jpeg'],
+    ['a.gif', 'image/gif'],
+    ['a.webp', 'image/webp'],
+    ['a.bmp', 'image/bmp'],
+    ['a.tif', 'image/tiff'],
+    ['a.tiff', 'image/tiff'],
+    ['a.dat', 'application/octet-stream'],
+    ['noext', 'application/octet-stream'],
+  ])('serves %s with inferred content-type %s', async (name, mime) => {
+    prismaMock.segmenterImage.findFirst.mockResolvedValue({
+      storagePath: 'p',
+      name,
+    });
+    storageMock.getBuffer.mockResolvedValue(Buffer.from('img-bytes'));
+
+    const res = await getImageFile(USER_ID, IMAGE_ID);
+
+    expect(res.mimeType).toBe(mime);
+    expect(res.filename).toBe(name);
+    expect(res.buffer).toEqual(Buffer.from('img-bytes'));
+    expect(storageMock.getBuffer).toHaveBeenCalledWith('p');
+  });
+
+  it('falls back to the storage path for MIME and "image" for filename when name is null', async () => {
+    prismaMock.segmenterImage.findFirst.mockResolvedValue({
+      storagePath: 'x/y/z.bmp',
+      name: null,
+    });
+    storageMock.getBuffer.mockResolvedValue(Buffer.from('x'));
+
+    const res = await getImageFile(USER_ID, IMAGE_ID);
+
+    expect(res.mimeType).toBe('image/bmp');
+    expect(res.filename).toBe('image');
+  });
+
+  it('maps a storage FILE_NOT_FOUND into a 404 NOT_FOUND (never a 500)', async () => {
+    prismaMock.segmenterImage.findFirst.mockResolvedValue({
+      storagePath: 'p',
+      name: 'a.png',
+    });
+    storageMock.getBuffer.mockRejectedValue(
+      Object.assign(new Error('missing on disk'), { code: 'FILE_NOT_FOUND' })
+    );
+    await expect(getImageFile(USER_ID, IMAGE_ID)).rejects.toMatchObject({
+      name: 'SegmenterError',
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('rethrows a non-FILE_NOT_FOUND storage error unchanged', async () => {
+    prismaMock.segmenterImage.findFirst.mockResolvedValue({
+      storagePath: 'p',
+      name: 'a.png',
+    });
+    const boom = Object.assign(new Error('disk exploded'), { code: 'IO_ERROR' });
+    storageMock.getBuffer.mockRejectedValue(boom);
+    await expect(getImageFile(USER_ID, IMAGE_ID)).rejects.toBe(boom);
+  });
+});
+
+// ===========================================================================
+// sanitizeAnnotationPolygons — untrusted-input coercion (overlap-preserving)
+// ===========================================================================
+
+describe('sanitizeAnnotationPolygons', () => {
+  const tri = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 5, y: 10 },
+  ];
+
+  it('returns [] for anything that is not an array', () => {
+    expect(sanitizeAnnotationPolygons(null)).toEqual([]);
+    expect(sanitizeAnnotationPolygons('nope')).toEqual([]);
+    expect(sanitizeAnnotationPolygons({})).toEqual([]);
+  });
+
+  it('skips non-object / empty entries', () => {
+    expect(
+      sanitizeAnnotationPolygons([null, 'x', 42, undefined, { points: tri }])
+    ).toHaveLength(1);
+  });
+
+  it('drops entries whose points are missing, non-array, or fewer than 3', () => {
+    expect(sanitizeAnnotationPolygons([{ id: 'a' }])).toEqual([]);
+    expect(sanitizeAnnotationPolygons([{ points: 'notarray' }])).toEqual([]);
+    expect(
+      sanitizeAnnotationPolygons([
+        {
+          points: [
+            { x: 0, y: 0 },
+            { x: 1, y: 1 },
+          ],
+        },
+      ])
+    ).toEqual([]);
+  });
+
+  it('discards non-finite / malformed coordinates and drops the polygon if <3 valid remain', () => {
+    const mostlyBad = [
+      { x: 0, y: 0 },
+      { x: NaN, y: 0 },
+      { x: 1, y: Infinity },
+      { x: 'z', y: 3 },
+    ];
+    expect(sanitizeAnnotationPolygons([{ points: mostlyBad }])).toEqual([]);
+
+    const mixed = [
+      { x: 0, y: 0 },
+      { x: 1 }, // missing y → skipped
+      { x: 10, y: 0 },
+      { x: 5, y: 10 },
+    ];
+    const res = sanitizeAnnotationPolygons([{ points: mixed }]);
+    expect(res[0].points).toHaveLength(3);
+  });
+
+  it('keeps a valid id, generates one otherwise, and drops empty class/instance ids', () => {
+    const res = sanitizeAnnotationPolygons([
+      { id: 'keep-me', points: tri, classId: 'c1', instanceId: 'i1' },
+      { points: tri },
+      { id: '', points: tri, classId: '', instanceId: '' },
+    ]);
+    expect(res).toHaveLength(3);
+    expect(res[0]).toMatchObject({
+      id: 'keep-me',
+      classId: 'c1',
+      instanceId: 'i1',
+    });
+    expect(res[1].id).toMatch(/[0-9a-f-]{36}/);
+    expect(res[2].classId).toBeUndefined();
+    expect(res[2].instanceId).toBeUndefined();
+  });
+
+  it('preserves overlapping / same-class polygons without deduping (overlap is a requirement)', () => {
+    const res = sanitizeAnnotationPolygons([
+      { points: tri, classId: 'c1' },
+      { points: tri, classId: 'c1' },
+    ]);
+    expect(res).toHaveLength(2);
   });
 });
