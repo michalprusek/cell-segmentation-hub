@@ -1199,6 +1199,11 @@ export default {
       selectionSummary:
         '{{frames}} image(s) dans {{videos}} vidéo(s) sélectionnées.',
       sourceLabel: 'Fichier source (vidéo / pile / image)',
+      dropPrompt:
+        'Glissez-déposez un fichier ici, ou cliquez pour sélectionner',
+      dropInvalidType: 'Type de fichier non pris en charge.',
+      dropTooManyFiles: 'Un seul fichier peut être ajouté à la fois.',
+      removeFile: 'Retirer le fichier',
       imageHint: 'Image unique → appliquée à chaque image sélectionnée.',
       videoHint:
         'Vidéo/pile → doit comporter exactement {{frames}} image(s) et appartenir à une seule vidéo.',
