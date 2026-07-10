@@ -54,7 +54,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 * json/ - Custom JSON format
 ${
   isMicrotubuleProject(project.type)
-    ? '* imagej/ - ImageJ/Fiji ROIs, one <video>_RoiSet.zip per video (each microtubule polyline on its own stack slice, named by cross-frame trackId, coloured per track, drawn at the MT thickness)\n'
+    ? '* imagej/ - ImageJ/Fiji ROIs, one <video>_RoiSet.zip per video (each microtubule polyline on its own stack slice, named <type>_<n> per tubulin class (rename overrides; untyped_<n> otherwise), coloured per class/track, drawn at the MT thickness)\n'
     : ''
 }* metrics/ - Calculated metrics
 * documentation/ - This folder
@@ -218,8 +218,12 @@ columns are filled only when a channel was selected in the export dialog
   only).
 - **sumIntensity / meanIntensity / stdIntensity** — raw 16-bit signal
   statistics inside the band for this channel (intensity exports only).
-- **medianBackground** — median signal outside the dilated band union, used
-  as the per-frame background for this channel.
+- **medianBackground / meanBackground** — median resp. mean signal in THIS
+  microtubule's own LOCAL vicinity ring: the band within
+  \`thickness * margin\` of its centerline, excluding every microtubule's signal
+  band. Each MT therefore gets a background appropriate to where it sits — a
+  bright neighbourhood no longer averages away a dim one (this changed from a
+  single frame-global background; older exports are not directly comparable).
 - **signalMinusBackground** — meanIntensity − medianBackground
   (background-corrected mean).
 
@@ -242,15 +246,21 @@ Every microtubule export also bundles the polyline centerlines as native
 ImageJ ROIs, so you can re-open them in ImageJ / Fiji for manual
 re-measurement or line-based plugins. They are packaged as **one
 \`<video>_RoiSet.zip\` per video** under \`annotations/imagej/\`, with each ROI
-named by the cross-frame **trackId** when tracking ran (falling back to the
-polyline's name/id otherwise) — so a tracked microtubule keeps the same ROI
-name in every frame.
+named **\`<type>_<n>\`** — the microtubule's tubulin type class plus a per-type
+counter numbered from 1 (e.g. \`HeLa_1\`, \`HeLa_2\`, \`brain_1\`). A manually
+renamed microtubule uses that name verbatim, and an untyped one reads
+\`untyped_<n>\`. The name is keyed on the cross-frame trackId, so the same
+microtubule keeps one name in every frame.
 
 - Each ROI is placed on its own 1-based **stack slice** (its video frame) and
   coloured per track, matching the editor.
 - Each polyline is drawn at the configured **MT thickness** (the "MT thickness
   (px)" export setting, default 5) as its stroke width — so ImageJ renders and
   measures each microtubule as a band of that width, not a hairline.
+- Each microtubule also gets a companion **\`<name>_bg\`** ROI — the same
+  polyline drawn at the wider **vicinity width** (\`thickness + 2*margin\`), so
+  you can see the band its LOCAL background is sampled from (the ring between
+  the signal band and this wider band). Omitted when the margin is 0.
 - Geometry is stored with sub-pixel (float) precision, in image-pixel space.
 - To load a video's ROIs: **drag its \`<video>_RoiSet.zip\` onto the ImageJ
   window**, or use *ROI Manager ▸ More ▸ Open…* and pick the \`.zip\` — either

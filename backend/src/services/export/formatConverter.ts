@@ -13,6 +13,10 @@ import {
   groupPolylinesByInstanceId,
   findPart,
 } from '../../utils/spermGrouping';
+import {
+  polylineSemanticsForProjectType,
+  type PolylineSemantics,
+} from '../../utils/polylineSemantics';
 import type { BasePolygon, PolygonPoint } from '../../types/polygon';
 
 /** Local alias kept for the many call sites in this file that already
@@ -104,15 +108,26 @@ const CELL_CATEGORY: COCOCategory = {
   color: [0, 255, 0],
 };
 
-const SPERM_CATEGORY: COCOCategory = {
-  id: 2,
-  name: 'sperm',
-  supercategory: 'biological',
-  color: [255, 128, 0],
-};
+// Category #2 holds every polyline annotation. Its NAME follows the project's
+// polyline kind (`sperm`, `microtubule`, `polyline`) — a polyline is a generic
+// primitive, so the category is not hardcoded to sperm. Id + colour are stable
+// across kinds so downstream tooling keyed on id 2 keeps working.
+const POLYLINE_CATEGORY_COLOR: [number, number, number] = [255, 128, 0];
 
-const buildCocoCategories = (hasSperm: boolean): COCOCategory[] =>
-  hasSperm ? [CELL_CATEGORY, SPERM_CATEGORY] : [CELL_CATEGORY];
+const buildPolylineCategory = (name: string): COCOCategory => ({
+  id: 2,
+  name,
+  supercategory: 'biological',
+  color: POLYLINE_CATEGORY_COLOR,
+});
+
+const buildCocoCategories = (
+  hasPolylines: boolean,
+  polylineCategoryName: string
+): COCOCategory[] =>
+  hasPolylines
+    ? [CELL_CATEGORY, buildPolylineCategory(polylineCategoryName)]
+    : [CELL_CATEGORY];
 
 export interface SegmentationResult {
   polygons: string; // JSON string of Polygon[]
@@ -270,12 +285,17 @@ export class FormatConverter {
    * not be parsed — the caller should surface this as a job warning so the
    * user knows those images were emitted with zero annotations.
    */
-  async convertToCOCO(images: ImageData[]): Promise<{ data: COCOFormat; parseFailures: number }> {
+  async convertToCOCO(
+    images: ImageData[],
+    projectType?: string | null
+  ): Promise<{ data: COCOFormat; parseFailures: number }> {
+    const semantics = polylineSemanticsForProjectType(projectType);
     const annotations: COCOAnnotation[] = [];
     const imagesList: COCOImage[] = [];
     let annotationId = 1;
-    let hasSperm = false;
+    let hasPolylines = false;
     let totalInvalidPartClass = 0;
+    let totalDegeneratePolylines = 0;
     const sampleAffectedImages: string[] = [];
     let parseFailures = 0;
 
@@ -333,10 +353,22 @@ export class FormatConverter {
         let invalidPartClassCount = 0;
         for (const p of polygons as Polygon[]) {
           if (isPolyline(p)) {
-            if (isValidSpermPartClass(p.partClass)) {
+            // Sperm projects require a valid head/midpiece/tail part class —
+            // a polyline without one is malformed sperm data and is skipped.
+            // Non-sperm (microtubule/generic) polylines have no part class, so
+            // every ≥2-point polyline is a valid annotation.
+            if (semantics.supportsPartClass) {
+              if (isValidSpermPartClass(p.partClass)) {
+                validPolylines.push(p);
+              } else {
+                invalidPartClassCount += 1;
+              }
+            } else if (p.points && p.points.length >= 2) {
               validPolylines.push(p);
             } else {
-              invalidPartClassCount += 1;
+              // Non-sperm polyline with too few points — count it (rather than
+              // dropping it silently) so it surfaces alongside the sperm skips.
+              totalDegeneratePolylines += 1;
             }
           } else if (p.type === 'internal') {
             internalPolygons.push(p);
@@ -351,7 +383,7 @@ export class FormatConverter {
           }
         }
         if (validPolylines.length > 0) {
-          hasSperm = true;
+          hasPolylines = true;
         }
 
         for (const polygon of closedExternalPolygons) {
@@ -420,7 +452,10 @@ export class FormatConverter {
             attributes: {
               type: 'external',
               geometry: 'polyline',
-              partClass: polyline.partClass,
+              // Part class is sperm-only; microtubule/generic polylines omit it.
+              ...(semantics.supportsPartClass && {
+                partClass: polyline.partClass,
+              }),
               ...(polyline.instanceId && { instanceId: polyline.instanceId }),
               length: polylineLength(polyline.points),
             },
@@ -441,6 +476,14 @@ export class FormatConverter {
       );
     }
 
+    if (totalDegeneratePolylines > 0) {
+      logger.warn(
+        `COCO export skipped ${totalDegeneratePolylines} degenerate polyline(s) (fewer than 2 points)`,
+        'FormatConverter',
+        { totalSkipped: totalDegeneratePolylines }
+      );
+    }
+
     const cocoData: COCOFormat = {
       info: {
         description: 'Cell Segmentation Dataset',
@@ -451,7 +494,7 @@ export class FormatConverter {
       },
       images: imagesList,
       annotations,
-      categories: buildCocoCategories(hasSperm),
+      categories: buildCocoCategories(hasPolylines, semantics.exportCategory),
       licenses: [
         {
           id: 1,
@@ -497,7 +540,7 @@ export class FormatConverter {
     const polylines = polygons.filter((p: Polygon) => isPolyline(p));
     if (polylines.length > 0) {
       warnings.push(
-        `YOLO format does not support open polylines — skipped ${polylines.length} polyline(s). Use COCO or JSON for sperm data.`
+        `YOLO format does not support open polylines — skipped ${polylines.length} polyline(s). Use COCO or JSON for polyline data.`
       );
     }
 
@@ -541,7 +584,11 @@ export class FormatConverter {
    * Returns the export data plus a count of images whose polygon JSON could
    * not be parsed — the caller should surface this as a job warning.
    */
-  async convertToJSON(images: ImageData[]): Promise<{ data: JSONExportFormat; parseFailures: number }> {
+  async convertToJSON(
+    images: ImageData[],
+    projectType?: string | null
+  ): Promise<{ data: JSONExportFormat; parseFailures: number }> {
+    const semantics = polylineSemanticsForProjectType(projectType);
     const exportData: JSONExportFormat = {
       metadata: {
         version: '1.0',
@@ -629,8 +676,13 @@ export class FormatConverter {
           })
         );
 
+        // Head/midpiece/tail instance grouping is sperm-only. Microtubule and
+        // generic polylines are emitted flat under `polylines` above; grouping
+        // them into "spermInstances" would mislabel them as sperm.
         const { instances: spermInstances, orphanCount } =
-          this.buildSpermInstances(polylines);
+          semantics.supportsPartClass
+            ? this.buildSpermInstances(polylines)
+            : { instances: [] as JSONSpermInstance[], orphanCount: 0 };
         if (orphanCount > 0) {
           totalOrphans += orphanCount;
           if (orphanSampleImages.length < 10) {

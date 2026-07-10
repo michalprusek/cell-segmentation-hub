@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { EditMode } from '../types';
 import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
-import { isMicrotubuleInstance } from '../utils/instanceColors';
+import { polylinePanelKind } from '@/lib/polylineSemantics';
 
 /**
  * Minimal structural slice of the editor that the render pipeline reads.
@@ -18,6 +18,10 @@ interface UsePolygonRenderPropsParams {
   editor: RenderEditor;
   hiddenPolygonIds: Set<PolygonKey>;
   activeInstanceId: string;
+  /** Raw `project.type`. Drives which polyline panel (sperm vs microtubule)
+   *  the sidebar shows — the single authoritative signal, replacing the old
+   *  per-polygon `class`/`partClass`/`mt_`-prefix guess. */
+  projectType: string | undefined | null;
 }
 
 /**
@@ -38,29 +42,24 @@ export function usePolygonRenderProps({
   editor,
   hiddenPolygonIds,
   activeInstanceId,
+  projectType,
 }: UsePolygonRenderPropsParams) {
   const hasPolylines = useMemo(
     () => editor.polygons.some(p => p.geometry === 'polyline'),
     [editor.polygons]
   );
 
-  // Discriminate sperm vs microtubule projects so the sidebar shows the
-  // right panel. Authoritative signal: `polygon.class` ('sperm' or
-  // 'microtubule') is stamped by the ML model when it produces the
-  // polygon. Each project uses one model, so the first polyline whose
-  // class we recognise is sufficient — no majority-counting needed.
-  // Legacy/manually-drawn polylines without `class` fall back to
-  // `partClass` (sperm head/midpiece/tail) or `mt_` instanceId prefix.
-  const polylineKind = useMemo<'sperm' | 'microtubule' | null>(() => {
-    for (const p of editor.polygons) {
-      if (p.geometry !== 'polyline') continue;
-      if (p.class === 'microtubule') return 'microtubule';
-      if (p.class === 'sperm') return 'sperm';
-      if (p.partClass) return 'sperm';
-      if (isMicrotubuleInstance(p.instanceId)) return 'microtubule';
-    }
-    return null;
-  }, [editor.polygons]);
+  // Which polyline panel the sidebar shows is a property of the PROJECT type,
+  // not of any individual polyline. Every polyline in a sperm project is a
+  // sperm annotation; every one in a microtubule project is a microtubule.
+  // Deriving the kind from `project.type` (the same signal the layout already
+  // uses via `isMicrotubuleProject`) removes the old per-polygon guess, which
+  // sniffed `class`/`partClass`/`mt_` and let one mis-stamped hand-drawn
+  // polyline flip the whole project to the sperm panel.
+  const polylineKind = useMemo(
+    () => polylinePanelKind(projectType),
+    [projectType]
+  );
 
   // Compute available sperm instance IDs for context menu (from existing polylines + active).
   // Two-stage memo: first derive a stable string key, then split into array only when key changes.

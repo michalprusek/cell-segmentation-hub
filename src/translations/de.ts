@@ -2155,6 +2155,7 @@ export default {
     instance: 'Mikrotubulus',
     hideInstance: 'Mikrotubulus ausblenden',
     showInstance: 'Mikrotubulus einblenden',
+    renameInstance: 'Mikrotubulus umbenennen',
     hideAll: 'Alle ausblenden',
     showAll: 'Alle einblenden',
     type: {

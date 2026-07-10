@@ -604,6 +604,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     onSelectAll={handleSelectAllInList}
                     onClearSelection={handleClearSelectionInList}
                     onDeletePolygon={handleDeletePolygonFromPanel}
+                    onRenamePolygon={handleRenamePolygon}
                     mtTypeLabels={mtTypeLabels}
                     mtLabelById={mtLabelById}
                     colorMode={mtColorMode}

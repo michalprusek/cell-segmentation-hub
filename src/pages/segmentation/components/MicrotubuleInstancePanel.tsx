@@ -32,6 +32,10 @@ interface MicrotubuleInstancePanelProps {
   /** Delete a single microtubule polyline (the generic Polygon List is hidden
    *  for MT projects, so delete lives here). Omit to hide the delete button. */
   onDeletePolygon?: (id: string) => void;
+  /** Rename a single microtubule (writes `polygon.name`). The backend mirrors
+   *  the new name onto every frame of the same trackId, so a rename survives
+   *  frame scrubbing. Omit to hide the rename affordance. */
+  onRenamePolygon?: (id: string, name: string) => void;
   // ── Type-label palette (SSOT for tubulin class name+colour) ──
   mtTypeLabels?: MTTypeLabel[];
   mtLabelById?: Map<string, MTTypeLabel>;
@@ -54,6 +58,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   onSelectAll,
   onClearSelection,
   onDeletePolygon,
+  onRenamePolygon,
   mtTypeLabels = [],
   mtLabelById,
   colorMode = 'instance',
@@ -67,6 +72,16 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   const [editingLabel, setEditingLabel] = useState<MTTypeLabel | null | 'new'>(
     null
   );
+  // Inline per-instance rename: id of the MT being renamed (null = none) + the
+  // in-progress text. Commit on Enter/blur, cancel on Escape.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  const commitRename = () => {
+    if (renamingId) onRenamePolygon?.(renamingId, renameValue.trim());
+    setRenamingId(null);
+    setRenameValue('');
+  };
 
   // Defer the (filter + sort) re-derivation when polygons update
   // rapidly (e.g. during playback ticking at 10 FPS). The canvas
@@ -248,33 +263,79 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                   className="flex-shrink-0"
                 />
               )}
-              <button
-                type="button"
-                className={`flex flex-1 items-center gap-2 text-left ${isHidden ? 'opacity-50' : ''}`}
-                onClick={() => onSelectPolygon(isSelected ? null : mt.id)}
-              >
-                <span
-                  className="inline-block w-3 h-3 rounded-sm border border-black/10 dark:border-white/10 flex-shrink-0"
-                  style={{ backgroundColor: color }}
-                  aria-hidden
-                />
-                <span className="font-mono truncate">
-                  {t('microtubule.instance')} {idx + 1}
-                </span>
-                {typeLabel && (
+              {renamingId === mt.id ? (
+                <div className="flex flex-1 items-center gap-2">
                   <span
-                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-white truncate max-w-[90px]"
-                    style={{ backgroundColor: typeLabel.color }}
-                    title={typeLabel.name}
-                  >
-                    {typeLabel.name}
+                    className="inline-block w-3 h-3 rounded-sm border border-black/10 dark:border-white/10 flex-shrink-0"
+                    style={{ backgroundColor: color }}
+                    aria-hidden
+                  />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitRename();
+                      } else if (e.key === 'Escape') {
+                        setRenamingId(null);
+                        setRenameValue('');
+                      }
+                    }}
+                    placeholder={`${t('microtubule.instance')} ${idx + 1}`}
+                    className="flex-1 min-w-0 px-1 py-0.5 text-xs bg-white dark:bg-gray-900 border border-violet-400 rounded focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    aria-label={t('microtubule.renameInstance')}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={`flex flex-1 items-center gap-2 text-left ${isHidden ? 'opacity-50' : ''}`}
+                  onClick={() => onSelectPolygon(isSelected ? null : mt.id)}
+                >
+                  <span
+                    className="inline-block w-3 h-3 rounded-sm border border-black/10 dark:border-white/10 flex-shrink-0"
+                    style={{ backgroundColor: color }}
+                    aria-hidden
+                  />
+                  <span className="font-mono truncate">
+                    {mt.name && mt.name.trim()
+                      ? mt.name
+                      : `${t('microtubule.instance')} ${idx + 1}`}
                   </span>
-                )}
-                <span className="flex-1" />
-                <span className="text-gray-400 whitespace-nowrap">
-                  {Math.round(calculatePolylineLength(mt.points))} px
-                </span>
-              </button>
+                  {typeLabel && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-white truncate max-w-[90px]"
+                      style={{ backgroundColor: typeLabel.color }}
+                      title={typeLabel.name}
+                    >
+                      {typeLabel.name}
+                    </span>
+                  )}
+                  <span className="flex-1" />
+                  <span className="text-gray-400 whitespace-nowrap">
+                    {Math.round(calculatePolylineLength(mt.points))} px
+                  </span>
+                </button>
+              )}
+              {onRenamePolygon && renamingId !== mt.id && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setRenamingId(mt.id);
+                    setRenameValue(mt.name ?? '');
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex-shrink-0"
+                  aria-label={t('microtubule.renameInstance')}
+                  title={t('microtubule.renameInstance')}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
               {onToggleVisibility && (
                 <button
                   type="button"
