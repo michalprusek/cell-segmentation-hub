@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import segmenterApi, { type SegmenterPolygon } from '@/lib/segmenterApi';
 import { logger } from '@/lib/logger';
+import { useLanguage } from '@/contexts/exports';
 
 export interface UseSegmenterAnnotationResult {
   /** Polygons loaded from the backend for this image (empty until loaded,
@@ -11,7 +12,14 @@ export interface UseSegmenterAnnotationResult {
   initialImageHeight: number;
   loading: boolean;
   saving: boolean;
+  /** Non-null ONLY when the GET request itself failed (network/5xx/etc — NOT
+   *  the legitimate 404 "no annotation yet" case, which resolves to `null`
+   *  data and leaves this `null`). Callers MUST treat a truthy `loadError`
+   *  as "unknown state, do not let Save run" — see `SegmenterEditor`. */
   loadError: string | null;
+  /** Re-runs the GET for the current `imageId`. Exposed so the editor can
+   *  offer a Retry affordance on the load-error banner. */
+  retry: () => void;
   save: (
     polygons: SegmenterPolygon[],
     imageWidth: number,
@@ -29,6 +37,7 @@ export interface UseSegmenterAnnotationResult {
 export function useSegmenterAnnotation(
   imageId: string | undefined
 ): UseSegmenterAnnotationResult {
+  const { t } = useLanguage();
   const [initialPolygons, setInitialPolygons] = useState<SegmenterPolygon[]>(
     []
   );
@@ -37,6 +46,9 @@ export function useSegmenterAnnotation(
   const [loading, setLoading] = useState<boolean>(!!imageId);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped by `retry()` to force the load effect below to re-run without
+  // requiring `imageId` itself to change.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!imageId) return undefined;
@@ -63,7 +75,10 @@ export function useSegmenterAnnotation(
       })
       .catch(err => {
         logger.error('Failed to load segmenter annotation', err as Error);
-        if (alive) setLoadError('Failed to load annotation');
+        if (!alive) return;
+        const message = t('segmenter.editor.loadFailed') as string;
+        setLoadError(message);
+        toast.error(message);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -72,7 +87,11 @@ export function useSegmenterAnnotation(
     return () => {
       alive = false;
     };
-  }, [imageId]);
+  }, [imageId, reloadKey, t]);
+
+  const retry = useCallback(() => {
+    setReloadKey(k => k + 1);
+  }, []);
 
   const save = useCallback(
     async (
@@ -91,13 +110,13 @@ export function useSegmenterAnnotation(
         return true;
       } catch (err) {
         logger.error('Failed to save segmenter annotation', err as Error);
-        toast.error('Failed to save annotation');
+        toast.error(t('segmenter.editor.saveFailed') as string);
         return false;
       } finally {
         setSaving(false);
       }
     },
-    [imageId]
+    [imageId, t]
   );
 
   return {
@@ -107,6 +126,7 @@ export function useSegmenterAnnotation(
     loading,
     saving,
     loadError,
+    retry,
     save,
   };
 }

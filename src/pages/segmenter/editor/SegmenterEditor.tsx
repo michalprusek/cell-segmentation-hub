@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  AlertTriangle,
   ArrowLeft,
   Loader2,
   Maximize,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/contexts/exports';
 import { useSegmenterClasses } from '../hooks/useSegmenterClasses';
 import { useSegmenterAnnotation } from './hooks/useSegmenterAnnotation';
 import { useContainerSize } from './hooks/useContainerSize';
@@ -29,8 +31,8 @@ import SegmenterPolygonListPanel from './components/SegmenterPolygonListPanel';
  * (`useEditorState`). Byte-serving for the image itself uses
  * `GET /api/segmenter/images/:imageId/file` (root-relative, same-origin —
  * consistent with `segmenterImageUrl`/`segmenterThumbnailUrl` in
- * `@/lib/segmenterApi`, which target sibling `/display` and `/thumbnail`
- * routes on the same controller).
+ * `@/lib/segmenterApi`, which both point at that same `/file` route — there
+ * is no separate `/display` or `/thumbnail` route on this controller).
  */
 function segmenterImageFileUrl(imageId: string): string {
   return `/api/segmenter/images/${imageId}/file`;
@@ -42,6 +44,7 @@ const SegmenterEditor: React.FC = () => {
     imageId: string;
   }>();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const {
     classes,
@@ -57,6 +60,8 @@ const SegmenterEditor: React.FC = () => {
     initialImageHeight,
     loading: annotationLoading,
     saving,
+    loadError,
+    retry: retryLoadAnnotation,
     save,
   } = useSegmenterAnnotation(imageId);
 
@@ -98,13 +103,18 @@ const SegmenterEditor: React.FC = () => {
   }, []);
 
   const handleSave = useCallback(async () => {
+    // A failed annotation LOAD (non-404 — see `useSegmenterAnnotation`)
+    // must never be silently overwritable: the canvas would be showing
+    // ZERO polygons that were never actually confirmed empty, and Save
+    // would overwrite the real saved annotation with that empty state.
+    if (loadError) return;
     if (!imageWidth || !imageHeight) return;
     const ok = await save(editor.polygons, imageWidth, imageHeight);
     if (ok) {
       editor.markSaved();
-      toast.success('Annotation saved');
+      toast.success(t('segmenter.editor.saved') as string);
     }
-  }, [save, editor, imageWidth, imageHeight]);
+  }, [loadError, save, editor, imageWidth, imageHeight, t]);
 
   // Keyboard shortcuts: Escape cancels the in-progress draw, Enter closes
   // it, Delete/Backspace removes the selected polygon, Ctrl/Cmd+Z(+Shift)
@@ -135,12 +145,14 @@ const SegmenterEditor: React.FC = () => {
         editor.redo();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
+        // Disabled while a load error is in effect — see `handleSave`.
+        if (loadError) return;
         void handleSave();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editor, handleSave]);
+  }, [editor, handleSave, loadError]);
 
   // Warn before an accidental tab close/navigate-away with unsaved edits.
   useEffect(() => {
@@ -159,7 +171,7 @@ const SegmenterEditor: React.FC = () => {
   if (!datasetId || !imageId) {
     return (
       <div className="p-6 text-sm text-red-600">
-        Missing dataset or image id in the route.
+        {t('segmenter.editor.missingRouteParams')}
       </div>
     );
   }
@@ -172,7 +184,7 @@ const SegmenterEditor: React.FC = () => {
           size="sm"
           onClick={() => navigate(`/segmenter/${datasetId}`)}
         >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+          <ArrowLeft className="h-4 w-4 mr-1" /> {t('segmenter.editor.back')}
         </Button>
 
         <div className="flex-1" />
@@ -183,7 +195,7 @@ const SegmenterEditor: React.FC = () => {
             size="sm"
             onClick={() => editor.setEditMode(EditMode.View)}
           >
-            Select
+            {t('segmenter.editor.selectMode')}
           </Button>
           <Button
             variant={
@@ -192,7 +204,7 @@ const SegmenterEditor: React.FC = () => {
             size="sm"
             onClick={() => editor.setEditMode(EditMode.CreatePolygon)}
           >
-            Draw polygon
+            {t('segmenter.editor.drawPolygon')}
           </Button>
           <Button
             variant={
@@ -202,7 +214,7 @@ const SegmenterEditor: React.FC = () => {
             disabled={!editor.selectedPolygonId}
             onClick={() => editor.setEditMode(EditMode.EditVertices)}
           >
-            Edit vertices
+            {t('segmenter.editor.editVertices')}
           </Button>
           <Button
             variant={
@@ -211,7 +223,7 @@ const SegmenterEditor: React.FC = () => {
             size="sm"
             onClick={() => editor.setEditMode(EditMode.DeletePolygon)}
           >
-            Delete polygon
+            {t('segmenter.editor.deletePolygon')}
           </Button>
         </div>
 
@@ -221,8 +233,8 @@ const SegmenterEditor: React.FC = () => {
             size="icon"
             onClick={editor.undo}
             disabled={!editor.canUndo}
-            aria-label="Undo"
-            title="Undo"
+            aria-label={t('segmenter.editor.undo') as string}
+            title={t('segmenter.editor.undo') as string}
           >
             <Undo2 className="h-4 w-4" />
           </Button>
@@ -231,8 +243,8 @@ const SegmenterEditor: React.FC = () => {
             size="icon"
             onClick={editor.redo}
             disabled={!editor.canRedo}
-            aria-label="Redo"
-            title="Redo"
+            aria-label={t('segmenter.editor.redo') as string}
+            title={t('segmenter.editor.redo') as string}
           >
             <Redo2 className="h-4 w-4" />
           </Button>
@@ -240,8 +252,8 @@ const SegmenterEditor: React.FC = () => {
             variant="outline"
             size="icon"
             onClick={editor.zoomOut}
-            aria-label="Zoom out"
-            title="Zoom out"
+            aria-label={t('segmenter.editor.zoomOut') as string}
+            title={t('segmenter.editor.zoomOut') as string}
           >
             <ZoomOut className="h-4 w-4" />
           </Button>
@@ -249,8 +261,8 @@ const SegmenterEditor: React.FC = () => {
             variant="outline"
             size="icon"
             onClick={editor.zoomIn}
-            aria-label="Zoom in"
-            title="Zoom in"
+            aria-label={t('segmenter.editor.zoomIn') as string}
+            title={t('segmenter.editor.zoomIn') as string}
           >
             <ZoomIn className="h-4 w-4" />
           </Button>
@@ -258,8 +270,8 @@ const SegmenterEditor: React.FC = () => {
             variant="outline"
             size="icon"
             onClick={editor.resetView}
-            aria-label="Reset view"
-            title="Reset view"
+            aria-label={t('segmenter.editor.resetView') as string}
+            title={t('segmenter.editor.resetView') as string}
           >
             <Maximize className="h-4 w-4" />
           </Button>
@@ -269,14 +281,21 @@ const SegmenterEditor: React.FC = () => {
           size="sm"
           className="ml-2"
           onClick={() => void handleSave()}
-          disabled={saving || !imageWidth || !imageHeight}
+          disabled={saving || !imageWidth || !imageHeight || !!loadError}
+          title={
+            loadError
+              ? (t('segmenter.editor.saveDisabledLoadError') as string)
+              : undefined
+          }
         >
           {saving ? (
             <Loader2 className="h-4 w-4 mr-1 animate-spin" />
           ) : (
             <Save className="h-4 w-4 mr-1" />
           )}
-          {editor.hasUnsavedChanges ? 'Save*' : 'Save'}
+          {editor.hasUnsavedChanges
+            ? (t('segmenter.editor.saveUnsaved') as string)
+            : (t('segmenter.editor.save') as string)}
         </Button>
       </header>
 
@@ -288,6 +307,25 @@ const SegmenterEditor: React.FC = () => {
           {isLoading ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            </div>
+          ) : loadError ? (
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <div className="max-w-md rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-4 text-center space-y-3">
+                <AlertTriangle className="mx-auto h-8 w-8 text-red-600 dark:text-red-400" />
+                <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                  {loadError}
+                </p>
+                <p className="text-xs text-red-600/80 dark:text-red-400/80">
+                  {t('segmenter.editor.saveDisabledLoadError')}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={retryLoadAnnotation}
+                >
+                  {t('segmenter.editor.retry')}
+                </Button>
+              </div>
             </div>
           ) : (
             <SegmenterCanvas

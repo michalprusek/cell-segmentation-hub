@@ -1,6 +1,7 @@
 import React from 'react';
 import type { SegmenterClass } from '@/lib/segmenterApi';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/exports';
 import ClassManagerPanel from '../../components/ClassManagerPanel';
 
 interface ActiveClassPickerProps {
@@ -31,15 +32,16 @@ const ActiveClassPicker: React.FC<ActiveClassPickerProps> = ({
   onRenameClass,
   onDeleteClass,
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="space-y-2">
       <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
         <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Active class
+          {t('segmenter.classes.activeClass')}
         </div>
         {classes.length === 0 ? (
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            No classes yet — create one below before drawing.
+            {t('segmenter.classes.pickerEmpty')}
           </p>
         ) : (
           <div className="flex flex-wrap gap-1.5">

@@ -28,6 +28,7 @@ import segmenterApi, {
   type SegmenterImage,
   segmenterThumbnailUrl,
 } from '@/lib/segmenterApi';
+import { useLanguage } from '@/contexts/exports';
 import { useSegmenterClasses } from './hooks/useSegmenterClasses';
 import ClassManagerPanel from './components/ClassManagerPanel';
 import { getErrorMessage } from '@/types';
@@ -37,13 +38,11 @@ import { logger } from '@/lib/logger';
  * `/segmenter/:datasetId` — a dataset's image grid + upload dropzone + class
  * manager. Per-image annotation happens in the polygon editor, mounted (by
  * the orchestrator) at `/segmenter/:datasetId/image/:imageId`.
- *
- * NOTE: UI strings below are plain English literals pending i18n wiring by
- * the orchestrator (see the file-level list of `segmenter.*` strings used).
  */
 const SegmenterDatasetDetail: React.FC = () => {
   const { datasetId } = useParams<{ datasetId: string }>();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [datasetName, setDatasetName] = useState<string>('');
   const [images, setImages] = useState<SegmenterImage[]>([]);
@@ -52,6 +51,12 @@ const SegmenterDatasetDetail: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SegmenterImage | null>(null);
   const [isDeletingImage, setIsDeletingImage] = useState(false);
+  // Thumbnails that failed to load (broken/missing file) — rendered as a
+  // placeholder instead of retrying a nonexistent `/display` route (that
+  // route was removed; see `segmenterApi.ts`).
+  const [thumbnailErrors, setThumbnailErrors] = useState<Set<string>>(
+    new Set()
+  );
 
   const {
     classes,
@@ -70,11 +75,14 @@ const SegmenterDatasetDetail: React.FC = () => {
       setImages(detail.images);
     } catch (err) {
       logger.error('Failed to load segmenter dataset', err as Error);
-      toast.error(getErrorMessage(err) || 'Failed to load dataset');
+      toast.error(
+        getErrorMessage(err) ||
+          (t('segmenter.datasetDetail.loadFailed') as string)
+      );
     } finally {
       setLoading(false);
     }
-  }, [datasetId]);
+  }, [datasetId, t]);
 
   useEffect(() => {
     fetchDataset();
@@ -92,7 +100,7 @@ const SegmenterDatasetDetail: React.FC = () => {
       const skipped = acceptedFiles.length - imageFiles.length;
       if (skipped > 0) {
         toast.warning(
-          `${skipped} file(s) skipped — the segmenter accepts static images only`
+          t('segmenter.upload.skippedVideo', { count: skipped }) as string
         );
       }
       if (imageFiles.length === 0) return;
@@ -100,24 +108,41 @@ const SegmenterDatasetDetail: React.FC = () => {
       setIsUploading(true);
       setUploadProgress(0);
       try {
-        const uploaded = await segmenterApi.uploadImages(
+        const result = await segmenterApi.uploadImages(
           datasetId,
           imageFiles,
           percent => setUploadProgress(percent)
         );
-        setImages(prev => [...prev, ...uploaded]);
-        toast.success(
-          `${uploaded.length} image${uploaded.length === 1 ? '' : 's'} uploaded`
-        );
+        setImages(prev => [...prev, ...result.images]);
+        // A partial failure is never swallowed behind a bare success toast —
+        // report both the uploaded count AND the failed count so the user
+        // knows to check the skipped files' format/size.
+        if (result.images.length > 0) {
+          toast.success(
+            t('segmenter.upload.success', {
+              count: result.images.length,
+            }) as string
+          );
+        }
+        if (result.failedCount > 0) {
+          toast.warning(
+            t('segmenter.upload.partialFail', {
+              uploaded: result.images.length,
+              failed: result.failedCount,
+            }) as string
+          );
+        }
       } catch (err) {
         logger.error('Failed to upload segmenter images', err as Error);
-        toast.error(getErrorMessage(err) || 'Upload failed');
+        toast.error(
+          getErrorMessage(err) || (t('segmenter.upload.failed') as string)
+        );
       } finally {
         setIsUploading(false);
         setUploadProgress(null);
       }
     },
-    [datasetId, isUploading]
+    [datasetId, isUploading, t]
   );
 
   const handleDeleteImageConfirm = async () => {
@@ -128,7 +153,10 @@ const SegmenterDatasetDetail: React.FC = () => {
       setImages(prev => prev.filter(img => img.id !== deleteTarget.id));
     } catch (err) {
       logger.error('Failed to delete segmenter image', err as Error);
-      toast.error(getErrorMessage(err) || 'Failed to delete image');
+      toast.error(
+        getErrorMessage(err) ||
+          (t('segmenter.datasetDetail.deleteFailed') as string)
+      );
     } finally {
       setIsDeletingImage(false);
       setDeleteTarget(null);
@@ -136,8 +164,8 @@ const SegmenterDatasetDetail: React.FC = () => {
   };
 
   const imageCountLabel = useMemo(
-    () => `${images.length} image${images.length === 1 ? '' : 's'}`,
-    [images.length]
+    () => t('segmenter.datasetDetail.imageCount', { count: images.length }),
+    [images.length, t]
   );
 
   return (
@@ -151,7 +179,7 @@ const SegmenterDatasetDetail: React.FC = () => {
               variant="ghost"
               size="icon"
               onClick={() => navigate('/segmenter')}
-              aria-label="Back to datasets"
+              aria-label={t('segmenter.datasetDetail.backLabel') as string}
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -160,7 +188,7 @@ const SegmenterDatasetDetail: React.FC = () => {
                 className="text-xl font-semibold truncate"
                 title={datasetName}
               >
-                {loading ? 'Loading…' : datasetName}
+                {loading ? t('segmenter.datasetDetail.loading') : datasetName}
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {imageCountLabel}
@@ -192,7 +220,7 @@ const SegmenterDatasetDetail: React.FC = () => {
             ) : images.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 gap-3 text-center text-gray-500 dark:text-gray-400">
                 <ImageOff className="h-10 w-10 text-gray-300 dark:text-gray-600" />
-                <p>No images yet. Drop some above to get started.</p>
+                <p>{t('segmenter.datasetDetail.noImages')}</p>
               </div>
             ) : (
               <div
@@ -217,25 +245,39 @@ const SegmenterDatasetDetail: React.FC = () => {
                     }}
                     className="group relative overflow-hidden rounded-lg cursor-pointer bg-gray-100 dark:bg-gray-800 aspect-square transition-all hover:shadow-lg hover:scale-[1.02]"
                   >
-                    <img
-                      src={segmenterThumbnailUrl(image.id)}
-                      alt={image.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      onError={e => {
-                        // Thumbnail may not exist yet — fall back to the
-                        // full display endpoint.
-                        const el = e.currentTarget;
-                        if (!el.dataset.fallbackApplied) {
-                          el.dataset.fallbackApplied = 'true';
-                          el.src = `/api/segmenter/images/${image.id}/display`;
-                        }
-                      }}
-                    />
+                    {thumbnailErrors.has(image.id) ? (
+                      <div
+                        className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 p-2"
+                        title={image.name}
+                      >
+                        <ImageOff className="h-6 w-6" />
+                        <span className="text-[11px] text-center truncate max-w-full">
+                          {image.name}
+                        </span>
+                      </div>
+                    ) : (
+                      <img
+                        src={segmenterThumbnailUrl(image.id)}
+                        alt={image.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={() => {
+                          // The `/display` route this used to fall back to
+                          // does not exist on the backend (only `/file`) —
+                          // render a placeholder instead of retrying a 404.
+                          setThumbnailErrors(prev => {
+                            if (prev.has(image.id)) return prev;
+                            const next = new Set(prev);
+                            next.add(image.id);
+                            return next;
+                          });
+                        }}
+                      />
+                    )}
                     {image.hasAnnotation && (
                       <div
                         className="absolute top-2 left-2 z-10 rounded-full bg-black/60 text-emerald-400 p-1 backdrop-blur-sm"
-                        title="Annotated"
+                        title={t('segmenter.datasetDetail.annotated') as string}
                       >
                         <CheckCircle2 className="h-4 w-4" />
                       </div>
@@ -247,8 +289,10 @@ const SegmenterDatasetDetail: React.FC = () => {
                         setDeleteTarget(image);
                       }}
                       className="absolute top-2 right-2 z-10 p-1.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 hover:bg-red-600/90 transition-all"
-                      aria-label="Delete image"
-                      title="Delete image"
+                      aria-label={
+                        t('segmenter.datasetDetail.deleteImage') as string
+                      }
+                      title={t('segmenter.datasetDetail.deleteImage') as string}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -284,22 +328,27 @@ const SegmenterDatasetDetail: React.FC = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete image?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('segmenter.datasetDetail.deleteConfirmTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes "{deleteTarget?.name}" and its
-              annotation. This cannot be undone.
+              {t('segmenter.datasetDetail.deleteConfirmDescription', {
+                name: deleteTarget?.name ?? '',
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeletingImage}>
-              Cancel
+              {t('segmenter.datasetDetail.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteImageConfirm}
               disabled={isDeletingImage}
               className="bg-red-600 hover:bg-red-700"
             >
-              {isDeletingImage ? 'Deleting…' : 'Delete'}
+              {isDeletingImage
+                ? t('segmenter.datasetDetail.deleting')
+                : t('segmenter.datasetDetail.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

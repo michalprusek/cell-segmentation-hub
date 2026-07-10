@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Tag, Plus, Pencil, Trash2 } from 'lucide-react';
 import type { SegmenterClass } from '@/lib/segmenterApi';
+import { useLanguage } from '@/contexts/exports';
 import ClassLabelDialog from './ClassLabelDialog';
 
 interface ClassManagerPanelProps {
@@ -21,9 +22,6 @@ interface ClassManagerPanelProps {
  * "manage labels" block at the bottom of that panel), lifted out into its
  * own component since the segmenter dashboard has no polygon list to attach
  * it to.
- *
- * NOTE: strings below are plain English literals pending i18n wiring by the
- * orchestrator (see the file-level list of UI strings for `segmenter.*` keys).
  */
 const ClassManagerPanel: React.FC<ClassManagerPanelProps> = ({
   classes,
@@ -32,6 +30,7 @@ const ClassManagerPanel: React.FC<ClassManagerPanelProps> = ({
   onRenameClass,
   onDeleteClass,
 }) => {
+  const { t } = useLanguage();
   // Dialog state: null = closed, 'new' = create, SegmenterClass = rename.
   const [editingClass, setEditingClass] = useState<
     SegmenterClass | null | 'new'
@@ -53,26 +52,26 @@ const ClassManagerPanel: React.FC<ClassManagerPanelProps> = ({
       <div className="px-3 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
           <Tag className="h-4 w-4" />
-          Classes
+          {t('segmenter.classes.panelTitle')}
         </span>
         <button
           type="button"
           onClick={() => setEditingClass('new')}
           className="flex items-center gap-1 text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 transition-colors"
-          title="New class"
+          title={t('segmenter.classes.newClass') as string}
         >
           <Plus className="h-4 w-4" />
-          <span>New class</span>
+          <span>{t('segmenter.classes.newClass')}</span>
         </button>
       </div>
 
       {loading ? (
         <div className="px-3 py-4 text-sm text-gray-400 dark:text-gray-500">
-          Loading classes…
+          {t('segmenter.classes.loading')}
         </div>
       ) : classes.length === 0 ? (
         <div className="px-3 py-4 text-sm text-gray-400 dark:text-gray-500">
-          No classes yet. Create one to start annotating.
+          {t('segmenter.classes.empty')}
         </div>
       ) : (
         <div className="max-h-64 overflow-y-auto py-1">
@@ -91,8 +90,8 @@ const ClassManagerPanel: React.FC<ClassManagerPanelProps> = ({
                 type="button"
                 onClick={() => setEditingClass(cls)}
                 className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex-shrink-0"
-                aria-label="Rename class"
-                title="Rename class"
+                aria-label={t('segmenter.classes.renameLabel') as string}
+                title={t('segmenter.classes.renameLabel') as string}
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>
@@ -101,8 +100,8 @@ const ClassManagerPanel: React.FC<ClassManagerPanelProps> = ({
                 onClick={() => handleDelete(cls.id)}
                 disabled={deletingId === cls.id}
                 className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0 disabled:opacity-50"
-                aria-label="Delete class"
-                title="Delete class"
+                aria-label={t('segmenter.classes.deleteLabel') as string}
+                title={t('segmenter.classes.deleteLabel') as string}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

@@ -91,12 +91,22 @@ export interface SegmenterAnnotationData {
   imageHeight: number;
 }
 
+/** `POST /segmenter/datasets/:id/images` — partial upload failures are
+ *  surfaced explicitly (`failedCount`/`failedNames`), never swallowed behind
+ *  a bare success (see `SegmenterService.uploadImages` on the backend). */
+export interface SegmenterUploadResult {
+  images: SegmenterImage[];
+  failedCount: number;
+  failedNames: string[];
+}
+
 // ---------------------------------------------------------------------------
 // URL builders (root-relative) — for use directly in `<img src>`, not routed
 // through axios. Backed by `GET /api/segmenter/images/:imageId/file`, which
-// streams the original bytes owner-scoped (see segmenterRoutes.ts). P0 has no
-// separate thumbnail (thumbnails aren't generated), so both point at /file —
-// the grid just renders the original scaled down via CSS.
+// streams the original bytes owner-scoped (see segmenterRoutes.ts). There is
+// NO separate `/display` or `/thumbnail` route on this controller — P0 never
+// generates thumbnails, so both builders below point at the same `/file`
+// route; the grid just renders the original scaled down via CSS.
 // ---------------------------------------------------------------------------
 
 export function segmenterImageUrl(imageId: string): string {
@@ -214,7 +224,7 @@ class SegmenterApiClient {
     files: File[],
     onProgress?: (progressPercent: number) => void,
     signal?: AbortSignal
-  ): Promise<SegmenterImage[]> {
+  ): Promise<SegmenterUploadResult> {
     const formData = new FormData();
     files.forEach(file => {
       const normalizedName = file.name.normalize('NFC');
@@ -247,10 +257,26 @@ class SegmenterApiClient {
 
     const data = this.extractData<unknown>(response);
     if (data && typeof data === 'object' && 'images' in data) {
-      const typedData = data as { images: SegmenterImage[] };
-      return Array.isArray(typedData.images) ? typedData.images : [];
+      const typedData = data as {
+        images?: SegmenterImage[];
+        failedCount?: number;
+        failedNames?: string[];
+      };
+      return {
+        images: Array.isArray(typedData.images) ? typedData.images : [],
+        failedCount: typedData.failedCount ?? 0,
+        failedNames: Array.isArray(typedData.failedNames)
+          ? typedData.failedNames
+          : [],
+      };
     }
-    return Array.isArray(data) ? (data as SegmenterImage[]) : [];
+    // Defensive: tolerate a bare array response (pre-partial-failure-report
+    // backend shape) so this client never throws on an older server.
+    return {
+      images: Array.isArray(data) ? (data as SegmenterImage[]) : [],
+      failedCount: 0,
+      failedNames: [],
+    };
   }
 
   async deleteImage(imageId: string): Promise<void> {

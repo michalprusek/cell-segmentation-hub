@@ -17,12 +17,21 @@ export function resolveClassColor(
   return classes.find(c => c.id === classId)?.color ?? UNCLASSIFIED_COLOR;
 }
 
+/** Minimal shape of `useLanguage()`'s `t` needed here — kept local (rather
+ *  than importing `useLanguage`'s hook type) since this is a plain utility
+ *  function, not a hook: it can't call `useLanguage()` itself (would break
+ *  the rules of hooks), so the caller — always a component that already has
+ *  `t` — passes it in. */
+type TranslateFn = (key: string, options?: Record<string, unknown>) => unknown;
+
 export function resolveClassName(
   classId: string | null | undefined,
-  classes: SegmenterClass[]
+  classes: SegmenterClass[],
+  t: TranslateFn
 ): string {
-  if (!classId) return 'Unclassified';
-  return classes.find(c => c.id === classId)?.name ?? 'Unknown class';
+  if (!classId) return t('segmenter.classes.unclassified') as string;
+  const found = classes.find(c => c.id === classId)?.name;
+  return found ?? (t('segmenter.classes.unknown') as string);
 }
 
 /** `#rrggbb` -> `rgba(r,g,b,alpha)` for translucent polygon fills. Falls

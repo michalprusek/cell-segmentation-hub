@@ -259,10 +259,15 @@ export async function uploadImages(
   userId: string,
   datasetId: string,
   files: SegmenterImageUploadInput[]
-): Promise<SegmenterDatasetDetail['images'][number][]> {
+): Promise<{
+  images: SegmenterDatasetDetail['images'][number][];
+  failedCount: number;
+  failedNames: string[];
+}> {
   await requireOwnedDataset(userId, datasetId);
   const storage = getStorageProvider();
   const uploaded: SegmenterDatasetDetail['images'][number][] = [];
+  const failedNames: string[] = [];
 
   for (const file of files) {
     try {
@@ -301,6 +306,7 @@ export async function uploadImages(
 
       uploaded.push({ ...image, hasAnnotation: false });
     } catch (error) {
+      failedNames.push(file.originalname);
       logger.error(
         'Failed to upload segmenter image',
         error instanceof Error ? error : undefined,
@@ -321,10 +327,10 @@ export async function uploadImages(
     userId,
     datasetId,
     uploadedCount: uploaded.length,
-    failedCount: files.length - uploaded.length,
+    failedCount: failedNames.length,
   });
 
-  return uploaded;
+  return { images: uploaded, failedCount: failedNames.length, failedNames };
 }
 
 /** Extract a filesystem-safe extension (including the leading dot) from an
@@ -411,7 +417,18 @@ export async function getImageFile(
   }
 
   const storage = getStorageProvider();
-  const buffer = await storage.getBuffer(image.storagePath);
+  let buffer: Buffer;
+  try {
+    buffer = await storage.getBuffer(image.storagePath);
+  } catch (error) {
+    // A DB row whose file is missing (partial delete / orphan) is a 404, not a
+    // 500 — otherwise real server faults are indistinguishable from an expected
+    // missing file in monitoring.
+    if ((error as { code?: string })?.code === 'FILE_NOT_FOUND') {
+      throw new SegmenterError('NOT_FOUND', 'Soubor obrázku nebyl nalezen');
+    }
+    throw error;
+  }
   return {
     buffer,
     mimeType: inferImageMimeType(image.name || image.storagePath),
@@ -493,8 +510,17 @@ export async function deleteClass(
     throw new SegmenterError('NOT_FOUND', 'Třída nebyla nalezena');
   }
 
-  await prisma.segmenterClass.delete({ where: { id: classId } });
-  const imagesCleaned = await clearClassReferences(datasetId, [classId]);
+  // Atomic: deleting the class row and nulling its now-dangling `classId`
+  // references across the dataset's annotations must be all-or-nothing —
+  // otherwise a failure after the delete leaves polygons pointing at a class
+  // that no longer exists.
+  const { ops, cleaned: imagesCleaned } = await computeClearClassOps(datasetId, [
+    classId,
+  ]);
+  await prisma.$transaction([
+    prisma.segmenterClass.delete({ where: { id: classId } }),
+    ...ops,
+  ]);
   const classes = await listClasses(userId, datasetId);
 
   logger.info('Segmenter class deleted', 'SegmenterService', {
@@ -507,16 +533,18 @@ export async function deleteClass(
   return { classes, imagesCleaned };
 }
 
-/** Null `classId` on every polygon whose `classId` is in `classIds`, across
- *  every annotation in the dataset. Runs as one transaction so a delete is
- *  all-or-nothing. Returns how many annotations were rewritten. */
-async function clearClassReferences(
+/** Compute (but do NOT run) the ops that null `classId` on every polygon whose
+ *  `classId` is in `classIds`, across every annotation in the dataset. The
+ *  caller runs these in one transaction together with the class delete, so the
+ *  whole operation is all-or-nothing. Returns the ops + how many annotations
+ *  would be rewritten. */
+async function computeClearClassOps(
   datasetId: string,
   classIds: string[]
-): Promise<number> {
+): Promise<{ ops: Prisma.PrismaPromise<unknown>[]; cleaned: number }> {
   const idSet = new Set(classIds.filter(Boolean));
   if (idSet.size === 0) {
-    return 0;
+    return { ops: [], cleaned: 0 };
   }
 
   const annotations = await prisma.segmenterAnnotation.findMany({
@@ -547,10 +575,7 @@ async function clearClassReferences(
       );
     }
   }
-  if (ops.length > 0) {
-    await prisma.$transaction(ops);
-  }
-  return cleaned;
+  return { ops, cleaned };
 }
 
 // ---------------------------------------------------------------------------

@@ -604,7 +604,8 @@ describe('uploadImages', () => {
         size: 1,
       },
     ];
-    const [uploaded] = await uploadImages(USER_ID, DATASET_ID, files);
+    const { images } = await uploadImages(USER_ID, DATASET_ID, files);
+    const uploaded = images[0];
 
     const [, key] = storageMock.upload.mock.calls[0];
     expect(key).toMatch(
@@ -644,10 +645,13 @@ describe('uploadImages', () => {
         size: 1,
       },
     ];
-    const uploaded = await uploadImages(USER_ID, DATASET_ID, files);
+    const result = await uploadImages(USER_ID, DATASET_ID, files);
 
-    expect(uploaded).toHaveLength(1);
-    expect(uploaded[0].name).toBe('good.png');
+    expect(result.images).toHaveLength(1);
+    expect(result.images[0].name).toBe('good.png');
+    // The partial failure is reported, not swallowed.
+    expect(result.failedCount).toBe(1);
+    expect(result.failedNames).toEqual(['bad.png']);
   });
 
   it('throws INVALID_INPUT when every file fails', async () => {

@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useLanguage } from '@/contexts/exports';
 
 /** Default colour for a brand-new class (Tailwind rose-600) — same default
  *  as the microtubule type-label dialog this was forked from. */
@@ -33,9 +34,6 @@ interface ClassLabelDialogProps {
  * shape, not tied to microtubule vocabulary. Uses the native
  * `<input type="color">` picker so no extra dependency is needed. Name is
  * trimmed and required (Confirm disabled while empty).
- *
- * NOTE: strings below are plain English literals pending i18n wiring by the
- * orchestrator (see the file-level list of UI strings for `segmenter.*` keys).
  */
 const ClassLabelDialog: React.FC<ClassLabelDialogProps> = ({
   open,
@@ -45,6 +43,7 @@ const ClassLabelDialog: React.FC<ClassLabelDialogProps> = ({
   mode = 'create',
   onConfirm,
 }) => {
+  const { t } = useLanguage();
   const [name, setName] = React.useState(initialName);
   const [color, setColor] = React.useState(initialColor);
 
@@ -71,15 +70,19 @@ const ClassLabelDialog: React.FC<ClassLabelDialogProps> = ({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>
-            {mode === 'rename' ? 'Rename class' : 'New class'}
+            {mode === 'rename'
+              ? t('segmenter.classes.dialogTitleRename')
+              : t('segmenter.classes.dialogTitleCreate')}
           </DialogTitle>
           <DialogDescription>
-            Give the class a name and a colour used to render its polygons.
+            {t('segmenter.classes.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label htmlFor="segmenter-class-name">Class name</Label>
+            <Label htmlFor="segmenter-class-name">
+              {t('segmenter.classes.nameLabel')}
+            </Label>
             <Input
               id="segmenter-class-name"
               value={name}
@@ -88,11 +91,13 @@ const ClassLabelDialog: React.FC<ClassLabelDialogProps> = ({
               onKeyDown={e => {
                 if (e.key === 'Enter') handleConfirm();
               }}
-              placeholder="e.g. Nucleus"
+              placeholder={t('segmenter.classes.namePlaceholder') as string}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="segmenter-class-color">Colour</Label>
+            <Label htmlFor="segmenter-class-color">
+              {t('segmenter.classes.colorLabel')}
+            </Label>
             <div className="flex items-center gap-3">
               <input
                 id="segmenter-class-color"
@@ -109,10 +114,12 @@ const ClassLabelDialog: React.FC<ClassLabelDialogProps> = ({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('segmenter.classes.cancel')}
           </Button>
           <Button onClick={handleConfirm} disabled={!canConfirm}>
-            {mode === 'rename' ? 'Save' : 'Create'}
+            {mode === 'rename'
+              ? t('segmenter.classes.save')
+              : t('segmenter.classes.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

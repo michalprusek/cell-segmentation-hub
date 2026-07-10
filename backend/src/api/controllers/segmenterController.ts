@@ -171,12 +171,14 @@ export const uploadImages = asyncHandler(
     );
 
     try {
-      const images = await SegmenterService.uploadImages(
+      // Returns { images, failedCount, failedNames } — a partial failure is
+      // NOT swallowed behind a bare success; the FE warns when failedCount > 0.
+      const result = await SegmenterService.uploadImages(
         req.user.id,
         req.params.id,
         files
       );
-      ResponseHelper.success(res, images, 'Obrázky byly nahrány', 201);
+      ResponseHelper.success(res, result, 'Obrázky byly nahrány', 201);
     } catch (error) {
       handleSegmenterError(
         res,
@@ -377,12 +379,15 @@ export const serveImageFile = asyncHandler(
     try {
       const { buffer, mimeType, filename } =
         await SegmenterService.getImageFile(req.user.id, req.params.imageId);
+      // Strip characters that would break the header (quotes / CR / LF) from the
+      // user-supplied filename before interpolating it into Content-Disposition.
+      const safeFilename = filename.replace(/["\r\n]/g, '_');
       res.set({
         'Content-Type': mimeType,
         'Content-Length': buffer.length.toString(),
         'Cache-Control': 'private, max-age=3600',
         ETag: `"${req.params.imageId}"`,
-        'Content-Disposition': `inline; filename="${filename}"`,
+        'Content-Disposition': `inline; filename="${safeFilename}"`,
       });
       res.send(buffer);
     } catch (error) {

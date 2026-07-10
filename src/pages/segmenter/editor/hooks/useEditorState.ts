@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 import type { SegmenterPolygon } from '@/lib/segmenterApi';
+import { useLanguage } from '@/contexts/exports';
 import {
   calculateCenteringTransform,
   calculateFixedPointZoom,
@@ -129,6 +130,7 @@ export function useEditorState({
   containerHeight,
   activeClassId,
 }: UseEditorStateOptions): UseEditorStateResult {
+  const { t } = useLanguage();
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const [history, setHistory] = useState<SegmenterPolygon[][]>([
@@ -407,7 +409,7 @@ export function useEditorState({
       const poly = polygons.find(p => p.id === polygonId);
       if (!poly) return;
       if (poly.points.length <= 3) {
-        toast.warning('A polygon needs at least 3 points');
+        toast.warning(t('segmenter.editor.minVertices') as string);
         return;
       }
       commit(
@@ -418,7 +420,7 @@ export function useEditorState({
         )
       );
     },
-    [editMode, polygons, commit]
+    [editMode, polygons, commit, t]
   );
 
   const handleContainerMouseDown = useCallback(
@@ -522,19 +524,31 @@ export function useEditorState({
       dragOriginRef.current = null;
       const dragState = vertexDragState;
       setVertexDragState(EMPTY_VERTEX_DRAG_STATE);
-      if (dragState.dragOffset) {
+      const offset = dragState.dragOffset;
+      // A click-without-drag on a vertex (mousedown immediately followed by
+      // mouseup, no mousemove in between) seeds `dragOffset` at exactly
+      // {0,0} — committing that would push a no-op undo step and flip
+      // `hasUnsavedChanges` even though nothing actually changed.
+      const isNoOpDrag = offset && offset.x === 0 && offset.y === 0;
+      if (offset && !isNoOpDrag) {
         const newPoint = {
-          x: origin.original.x + dragState.dragOffset.x,
-          y: origin.original.y + dragState.dragOffset.y,
+          x: origin.original.x + offset.x,
+          y: origin.original.y + offset.y,
         };
-        commit(
-          polygons.map(p => {
-            if (p.id !== origin.polygonId) return p;
-            const points = p.points.slice();
-            points[origin.vertexIndex] = newPoint;
-            return { ...p, points };
-          })
-        );
+        // Guard against NaN/Infinity ever reaching a committed polygon — the
+        // backend's `sanitizeAnnotationPolygons` silently DROPS a polygon
+        // once it has fewer than 3 valid points, so a corrupted vertex here
+        // could make an entire polygon vanish on save with no error shown.
+        if (Number.isFinite(newPoint.x) && Number.isFinite(newPoint.y)) {
+          commit(
+            polygons.map(p => {
+              if (p.id !== origin.polygonId) return p;
+              const points = p.points.slice();
+              points[origin.vertexIndex] = newPoint;
+              return { ...p, points };
+            })
+          );
+        }
       }
       return;
     }

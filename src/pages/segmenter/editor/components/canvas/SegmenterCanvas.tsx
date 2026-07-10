@@ -1,10 +1,14 @@
 import React, {
+  useEffect,
   useMemo,
+  useState,
   type MouseEvent as ReactMouseEvent,
   type WheelEvent,
   type RefObject,
 } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import type { SegmenterClass, SegmenterPolygon } from '@/lib/segmenterApi';
+import { useLanguage } from '@/contexts/exports';
 import {
   EditMode,
   type Point,
@@ -91,9 +95,23 @@ const SegmenterCanvas: React.FC<SegmenterCanvasProps> = ({
   onVertexMouseDown,
   onVertexContextMenu,
 }) => {
+  const { t } = useLanguage();
+  const [imageError, setImageError] = useState(false);
+
+  // A new image URL (navigated to a different image) deserves a fresh
+  // attempt — otherwise a stale error from the previous image would keep
+  // the new one hidden behind the "failed to load" message forever.
+  useEffect(() => {
+    setImageError(false);
+  }, [imageUrl]);
+
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     onImageLoad(img.naturalWidth, img.naturalHeight);
+  };
+
+  const handleImgError = () => {
+    setImageError(true);
   };
 
   const tempPathD = useMemo(() => {
@@ -131,21 +149,34 @@ const SegmenterCanvas: React.FC<SegmenterCanvasProps> = ({
           }}
           data-testid="segmenter-canvas-transform"
         >
-          <img
-            src={imageUrl}
-            alt="Image to annotate"
-            draggable={false}
-            onLoad={handleImgLoad}
-            className="absolute top-0 left-0 max-w-none select-none pointer-events-none"
-            style={
-              hasImageSize
-                ? { width: imageWidth, height: imageHeight }
-                : undefined
-            }
-            data-testid="segmenter-canvas-image"
-          />
+          {imageError ? (
+            <div
+              className="flex flex-col items-center justify-center gap-2 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-6 py-8 text-center"
+              data-testid="segmenter-canvas-image-error"
+            >
+              <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                {t('segmenter.editor.imageLoadFailed')}
+              </p>
+            </div>
+          ) : (
+            <img
+              src={imageUrl}
+              alt={t('segmenter.editor.imageAlt') as string}
+              draggable={false}
+              onLoad={handleImgLoad}
+              onError={handleImgError}
+              className="absolute top-0 left-0 max-w-none select-none pointer-events-none"
+              style={
+                hasImageSize
+                  ? { width: imageWidth, height: imageHeight }
+                  : undefined
+              }
+              data-testid="segmenter-canvas-image"
+            />
+          )}
 
-          {hasImageSize && (
+          {!imageError && hasImageSize && (
             <svg
               width={imageWidth}
               height={imageHeight}

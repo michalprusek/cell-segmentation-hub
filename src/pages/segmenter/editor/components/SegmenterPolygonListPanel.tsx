@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { SegmenterClass, SegmenterPolygon } from '@/lib/segmenterApi';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/exports';
 import { resolveClassColor, resolveClassName } from '../utils/classColor';
 
 interface SegmenterPolygonListPanelProps {
@@ -35,6 +36,7 @@ const SegmenterPolygonListPanel: React.FC<SegmenterPolygonListPanelProps> = ({
   onDelete,
   onChangeClass,
 }) => {
+  const { t } = useLanguage();
   const groups = useMemo<InstanceGroup[]>(() => {
     const map = new Map<string, SegmenterPolygon[]>();
     for (const polygon of polygons) {
@@ -52,11 +54,11 @@ const SegmenterPolygonListPanel: React.FC<SegmenterPolygonListPanelProps> = ({
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
       <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300">
-        Polygons ({polygons.length})
+        {t('segmenter.polygonList.title', { count: polygons.length })}
       </div>
       {groups.length === 0 ? (
         <div className="px-3 py-4 text-sm text-gray-400 dark:text-gray-500">
-          No polygons yet. Switch to “Draw polygon” and click on the image.
+          {t('segmenter.polygonList.empty')}
         </div>
       ) : (
         <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
@@ -64,7 +66,9 @@ const SegmenterPolygonListPanel: React.FC<SegmenterPolygonListPanelProps> = ({
             <div key={group.instanceId}>
               {group.polygons.length > 1 && (
                 <div className="px-3 pt-2 text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                  Instance {group.instanceId.slice(0, 8)}
+                  {t('segmenter.polygonList.instance', {
+                    id: group.instanceId.slice(0, 8),
+                  })}
                 </div>
               )}
               {group.polygons.map(polygon => {
@@ -87,9 +91,12 @@ const SegmenterPolygonListPanel: React.FC<SegmenterPolygonListPanelProps> = ({
                       aria-hidden
                     />
                     <span className="flex-1 truncate">
-                      {resolveClassName(polygon.classId, classes)}
+                      {resolveClassName(polygon.classId, classes, t)}
                       <span className="ml-1 text-gray-400 dark:text-gray-500">
-                        · {polygon.points.length} pts
+                        ·{' '}
+                        {t('segmenter.polygonList.points', {
+                          count: polygon.points.length,
+                        })}
                       </span>
                     </span>
                     <select
@@ -99,9 +106,13 @@ const SegmenterPolygonListPanel: React.FC<SegmenterPolygonListPanelProps> = ({
                         onChangeClass(polygon.id, e.target.value || null)
                       }
                       className="flex-shrink-0 rounded border border-gray-200 dark:border-gray-700 bg-transparent text-xs px-1 py-0.5 max-w-[6.5rem]"
-                      aria-label="Change class"
+                      aria-label={
+                        t('segmenter.polygonList.changeClass') as string
+                      }
                     >
-                      <option value="">Unclassified</option>
+                      <option value="">
+                        {t('segmenter.classes.unclassified')}
+                      </option>
                       {classes.map(cls => (
                         <option key={cls.id} value={cls.id}>
                           {cls.name}
@@ -115,8 +126,8 @@ const SegmenterPolygonListPanel: React.FC<SegmenterPolygonListPanelProps> = ({
                         onDelete(polygon.id);
                       }}
                       className="flex-shrink-0 p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-                      aria-label="Delete polygon"
-                      title="Delete polygon"
+                      aria-label={t('segmenter.polygonList.delete') as string}
+                      title={t('segmenter.polygonList.delete') as string}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import segmenterApi, { type SegmenterClass } from '@/lib/segmenterApi';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/exports';
 
 /**
  * Generic fork of `useMtTypeLabels` (`@/pages/segmentation/hooks/useMtTypeLabels.ts`)
@@ -31,6 +32,7 @@ export interface UseSegmenterClassesResult {
 export function useSegmenterClasses(
   datasetId: string | undefined
 ): UseSegmenterClassesResult {
+  const { t } = useLanguage();
   const [classes, setClasses] = useState<SegmenterClass[]>([]);
   const [loading, setLoading] = useState<boolean>(!!datasetId);
 
@@ -45,7 +47,7 @@ export function useSegmenterClasses(
       })
       .catch(err => {
         logger.error('Failed to load segmenter classes', err as Error);
-        if (alive) toast.error('Failed to load classes');
+        if (alive) toast.error(t('segmenter.classes.loadFailed') as string);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -53,7 +55,7 @@ export function useSegmenterClasses(
     return () => {
       alive = false;
     };
-  }, [datasetId]);
+  }, [datasetId, t]);
 
   const colorById = useMemo(
     () => new Map(classes.map(c => [c.id, c.color])),
@@ -94,11 +96,11 @@ export function useSegmenterClasses(
         );
       } catch (err) {
         logger.error('Failed to create segmenter class', err as Error);
-        toast.error('Failed to create class');
+        toast.error(t('segmenter.classes.createFailed') as string);
         return null;
       }
     },
-    [classes, datasetId]
+    [classes, datasetId, t]
   );
 
   const renameClass = useCallback(
@@ -112,7 +114,7 @@ export function useSegmenterClasses(
         c => c.id !== id && c.name.toLowerCase() === trimmed.toLowerCase()
       );
       if (clash) {
-        toast.error('A class with that name already exists');
+        toast.error(t('segmenter.classes.nameClash') as string);
         return;
       }
       try {
@@ -123,10 +125,10 @@ export function useSegmenterClasses(
         setClasses(updated);
       } catch (err) {
         logger.error('Failed to rename segmenter class', err as Error);
-        toast.error('Failed to rename class');
+        toast.error(t('segmenter.classes.renameFailed') as string);
       }
     },
-    [classes, datasetId]
+    [classes, datasetId, t]
   );
 
   const deleteClass = useCallback(
@@ -137,10 +139,10 @@ export function useSegmenterClasses(
         setClasses(result.classes);
       } catch (err) {
         logger.error('Failed to delete segmenter class', err as Error);
-        toast.error('Failed to delete class');
+        toast.error(t('segmenter.classes.deleteFailed') as string);
       }
     },
-    [datasetId]
+    [datasetId, t]
   );
 
   return {
