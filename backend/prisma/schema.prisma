@@ -28,6 +28,7 @@ model User {
   folders           ProjectFolder[]
   folderItems       ProjectFolderItem[]
   essayJobs         EssayJob[]
+  segmenterDatasets SegmenterDataset[]
 
   @@map("users")
 }
@@ -329,4 +330,66 @@ model EssayJob {
   @@index([userId, createdAt], map: "idx_essayjob_user_created")
   @@index([status], map: "idx_essayjob_status")
   @@map("essay_jobs")
+}
+
+// ---------------------------------------------------------------------------
+// Segmenter (few-shot active-learning polygon tool) — P0 data model.
+// A SegmenterDataset holds uploaded images + a project-scoped class palette.
+// Annotations are one polygons-JSON blob per image (mirrors Segmentation.polygons):
+//   [{ id, points: [{x, y}], classId, instanceId? }] — polygons may overlap.
+// ML (in-context pre-label + active learning) is P1+ and adds no schema here.
+// See docs/superpowers/specs/2026-07-09-segmenter-fewshot-al-design.md
+// ---------------------------------------------------------------------------
+model SegmenterDataset {
+  id        String           @id @default(uuid())
+  userId    String
+  name      String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images    SegmenterImage[]
+  classes   SegmenterClass[]
+
+  @@index([userId, createdAt], map: "idx_segmenter_dataset_user_created")
+  @@map("segmenter_datasets")
+}
+
+model SegmenterImage {
+  id            String               @id @default(uuid())
+  datasetId     String
+  name          String
+  storagePath   String
+  thumbnailPath String?
+  width         Int?
+  height        Int?
+  createdAt     DateTime             @default(now())
+  dataset       SegmenterDataset     @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  annotation    SegmenterAnnotation?
+
+  @@index([datasetId], map: "idx_segmenter_image_dataset")
+  @@map("segmenter_images")
+}
+
+model SegmenterClass {
+  id        String           @id @default(uuid())
+  datasetId String
+  name      String
+  color     String
+  createdAt DateTime         @default(now())
+  dataset   SegmenterDataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([datasetId], map: "idx_segmenter_class_dataset")
+  @@map("segmenter_classes")
+}
+
+model SegmenterAnnotation {
+  id          String         @id @default(uuid())
+  imageId     String         @unique
+  polygons    String // JSON string: [{ id, points: [{x,y}], classId, instanceId? }]
+  imageWidth  Int
+  imageHeight Int
+  updatedAt   DateTime       @updatedAt
+  image       SegmenterImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@map("segmenter_annotations")
 }

@@ -90,7 +90,10 @@ export const batchQueueSchema = z.object({
     .string()
     .min(1, 'Kanál nesmí být prázdný')
     .max(64, 'Kanál může mít maximálně 64 znaků')
-    .regex(/^[A-Za-z0-9_-]+$/, 'Kanál může obsahovat jen alfanumerické znaky, _ a -')
+    .regex(
+      /^[A-Za-z0-9_-]+$/,
+      'Kanál může obsahovat jen alfanumerické znaky, _ a -'
+    )
     .optional(),
 });
 
@@ -483,7 +486,11 @@ const folderNameSchema = z
 
 export const createFolderSchema = z.object({
   name: folderNameSchema,
-  parentId: z.string().uuid('Neplatné ID nadřazené složky').nullable().optional(),
+  parentId: z
+    .string()
+    .uuid('Neplatné ID nadřazené složky')
+    .nullable()
+    .optional(),
 });
 
 // PATCH semantics: any subset of { name, parentId } may be supplied.
@@ -492,10 +499,15 @@ export const createFolderSchema = z.object({
 export const updateFolderSchema = z
   .object({
     name: folderNameSchema.optional(),
-    parentId: z.string().uuid('Neplatné ID nadřazené složky').nullable().optional(),
+    parentId: z
+      .string()
+      .uuid('Neplatné ID nadřazené složky')
+      .nullable()
+      .optional(),
   })
   .refine(v => v.name !== undefined || v.parentId !== undefined, {
-    message: 'Aktualizace musí obsahovat alespoň jedno pole (name nebo parentId)',
+    message:
+      'Aktualizace musí obsahovat alespoň jedno pole (name nebo parentId)',
   });
 
 export const folderItemsSchema = z.object({
@@ -535,3 +547,84 @@ export const createFeedbackSchema = z.object({
 });
 
 export type CreateFeedbackData = z.infer<typeof createFeedbackSchema>;
+
+// ============================================================================
+// Segmenter (few-shot active-learning polygon tool) — P0
+// ============================================================================
+
+const segmenterHexColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, 'Barva musí být ve formátu #RRGGBB');
+
+const segmenterNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Název je povinný')
+  .max(200, 'Název může mít maximálně 200 znaků');
+
+export const createSegmenterDatasetSchema = z.object({
+  name: segmenterNameSchema,
+});
+
+export const segmenterDatasetIdSchema = z.object({
+  id: z.string().uuid('Neplatné ID datasetu'),
+});
+
+// Dataset id + a class id (PUT/DELETE …/classes/:classId). MUST include both —
+// `validateParams` replaces req.params with the parsed object, so a schema
+// missing `classId` would silently drop it (see projectLabelParamsSchema).
+export const segmenterClassParamsSchema = z.object({
+  id: z.string().uuid('Neplatné ID datasetu'),
+  classId: z.string().uuid('Neplatné ID třídy'),
+});
+
+export const createSegmenterClassSchema = z.object({
+  name: segmenterNameSchema.max(
+    100,
+    'Název třídy může mít maximálně 100 znaků'
+  ),
+  color: segmenterHexColorSchema,
+});
+
+export const updateSegmenterClassSchema = z
+  .object({
+    name: segmenterNameSchema
+      .max(100, 'Název třídy může mít maximálně 100 znaků')
+      .optional(),
+    color: segmenterHexColorSchema.optional(),
+  })
+  .refine(v => v.name !== undefined || v.color !== undefined, {
+    message: 'Aktualizace musí obsahovat alespoň jedno pole (name nebo color)',
+  });
+
+export const segmenterImageIdSchema = z.object({
+  imageId: z.string().uuid('Neplatné ID obrázku'),
+});
+
+// PUT …/images/:imageId/annotations body. Loose on `polygons` on purpose —
+// gross error (not an array) → 400 here, but per-polygon shape validation
+// (points, classId, overlap-friendly — no dedupe) lives in
+// segmenterService.sanitizeAnnotationPolygons so a partially-malformed
+// payload is cleaned rather than wholesale rejected.
+export const segmenterAnnotationsPutSchema = z.object({
+  polygons: z.array(z.unknown()).max(5000),
+  imageWidth: z.number().int().positive(),
+  imageHeight: z.number().int().positive(),
+});
+
+export type CreateSegmenterDatasetData = z.infer<
+  typeof createSegmenterDatasetSchema
+>;
+export type SegmenterDatasetIdParams = z.infer<typeof segmenterDatasetIdSchema>;
+export type SegmenterClassParams = z.infer<typeof segmenterClassParamsSchema>;
+export type CreateSegmenterClassData = z.infer<
+  typeof createSegmenterClassSchema
+>;
+export type UpdateSegmenterClassData = z.infer<
+  typeof updateSegmenterClassSchema
+>;
+export type SegmenterImageIdParams = z.infer<typeof segmenterImageIdSchema>;
+export type SegmenterAnnotationsPutData = z.infer<
+  typeof segmenterAnnotationsPutSchema
+>;

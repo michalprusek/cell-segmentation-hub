@@ -20,6 +20,7 @@ import healthRoutes from './healthRoutes';
 import feedbackRoutes from './feedbackRoutes';
 import projectFolderRoutes from './projectFolderRoutes';
 import { essaysRoutes } from './essaysRoutes';
+import segmenterRoutes from './segmenterRoutes';
 
 interface RouteInfo {
   path: string;
@@ -86,6 +87,7 @@ export function setupRoutes(app: Express): void {
   app.use('/api/ml', mlRoutes); // ML service routes
   app.use('/api/feedback', feedbackRoutes); // User-submitted bug reports + feature requests
   app.use('/api/folders', projectFolderRoutes); // Per-user project folder hierarchy
+  app.use('/api/segmenter', segmenterRoutes); // Few-shot AL polygon annotation module (P0)
 
   // Test email routes (enabled in all environments for debugging)
   app.use('/api/test-email', testEmailRoutes);
@@ -278,6 +280,80 @@ function registerKnownRoutes(): void {
     path: '/api/folders/root/items',
     method: 'POST',
     description: 'Přesun projektů zpět do rootu',
+    authenticated: true,
+  });
+
+  // Segmenter endpoints (few-shot AL polygon annotation module, P0)
+  registerRoute({
+    path: '/api/segmenter/datasets',
+    method: 'GET',
+    description: 'Seznam datasetů uživatele (s počtem obrázků)',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/datasets',
+    method: 'POST',
+    description: 'Vytvoření nového datasetu',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/datasets/:id',
+    method: 'GET',
+    description: 'Detail datasetu (obrázky + třídy)',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/datasets/:id',
+    method: 'DELETE',
+    description: 'Smazání datasetu (kaskádově)',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/datasets/:id/images',
+    method: 'POST',
+    description: 'Nahrání obrázků do datasetu',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/datasets/:id/classes',
+    method: 'GET',
+    description: 'Seznam tříd datasetu',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/datasets/:id/classes',
+    method: 'POST',
+    description: 'Vytvoření nové třídy',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/datasets/:id/classes/:classId',
+    method: 'PUT',
+    description: 'Úprava třídy (název/barva)',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/datasets/:id/classes/:classId',
+    method: 'DELETE',
+    description: 'Smazání třídy (a vyčištění odkazů v anotacích)',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/images/:imageId',
+    method: 'DELETE',
+    description: 'Smazání obrázku',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/images/:imageId/annotations',
+    method: 'GET',
+    description: 'Načtení anotace obrázku',
+    authenticated: true,
+  });
+  registerRoute({
+    path: '/api/segmenter/images/:imageId/annotations',
+    method: 'PUT',
+    description: 'Uložení anotace obrázku (upsert)',
     authenticated: true,
   });
 
