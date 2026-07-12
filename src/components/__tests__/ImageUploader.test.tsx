@@ -1,28 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen } from '@testing-library/react';
+import {
+  render as rtlRender,
+  screen,
+  waitFor,
+  act,
+  fireEvent,
+} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import ImageUploader from '@/components/ImageUploader';
 
-// Mock the sub-components
+// --- Mocks -------------------------------------------------------------
+
+// DropZone: capture the parent's onDrop so the drop-flow tests can invoke it,
+// and render an <input> so rendering tests have a queryable element.
+let capturedOnDrop: ((files: File[]) => void) | null = null;
 vi.mock('@/components/upload/DropZone', () => ({
-  default: ({ onDrop, disabled }: any) => (
-    <div data-testid="dropzone">
-      <input
-        data-testid="file-input"
-        type="file"
-        accept="image/*"
-        multiple
-        disabled={disabled}
-        onChange={e => {
-          if (e.target.files) {
-            onDrop(Array.from(e.target.files));
-          }
-        }}
-      />
-      <span>Drag &amp; drop images here or click to browse</span>
-    </div>
-  ),
+  default: ({
+    onDrop,
+    disabled,
+  }: {
+    onDrop: (files: File[]) => void;
+    disabled?: boolean;
+  }) => {
+    capturedOnDrop = onDrop;
+    return (
+      <div data-testid="dropzone">
+        <input
+          data-testid="file-input"
+          type="file"
+          accept="image/*"
+          multiple
+          disabled={disabled}
+          onChange={e => {
+            if (e.target.files) onDrop(Array.from(e.target.files));
+          }}
+        />
+        <span>Drag &amp; drop images here or click to browse</span>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/components/upload/UploaderOptions', () => ({
@@ -46,132 +63,181 @@ vi.mock('@/components/upload/UploaderOptions', () => ({
   ),
 }));
 
-// Mock react-router-dom — stub out hooks that need a Router context
+// useParams is mutable so one file can exercise both the "no project in URL"
+// (rendering) and "project in URL" (drop flow) branches.
+let mockParams: Record<string, string> = {};
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
-    useParams: () => ({}),
+    useParams: () => mockParams,
     useNavigate: () => vi.fn(),
     useLocation: () => ({ pathname: '/' }),
   };
 });
 
-// Mock sonner toast
-vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-// Mock the useUpload hook
-const mockStartUpload = vi.fn().mockReturnValue('upload_123');
+const mockStartUpload = vi.fn().mockReturnValue('up_1');
 vi.mock('@/contexts/useUpload', () => ({
   useUpload: () => ({
     startUpload: mockStartUpload,
+    isUploading: false,
     cancelUpload: vi.fn(),
     clearSession: vi.fn(),
-    isUploading: false,
     activeSession: null,
     sessions: {},
   }),
 }));
 
-// Mock useLanguage to avoid LanguageProvider complexity
+// t(key) → key, so dialog text is the raw i18n key we can query on.
 vi.mock('@/contexts/useLanguage', () => ({
   useLanguage: () => ({
-    t: (key: string) => key,
+    t: (k: string) => k,
     language: 'en',
     setLanguage: vi.fn(),
   }),
 }));
 
-// Minimal wrapper — no Router, but a QueryClientProvider is required because
-// ImageUploader uses `useQuery` (to read the project type, which decides
-// whether to show the MT-only "register channels?" prompt after a drop). The
-// query is disabled here (useParams()→{}, so projectId is null) but `useQuery`
-// still calls `useQueryClient()`.
-const render = (ui: React.ReactElement) => {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+// Project type drives the MT-only register-channels prompt.
+let mockProjectType = 'microtubules';
+const mockGetProject = vi.fn(() =>
+  Promise.resolve({ id: 'p1', type: mockProjectType })
+);
+vi.mock('@/lib/api', () => ({
+  apiClient: { getProject: (...a: unknown[]) => mockGetProject(...a) },
+}));
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+}));
+
+// --- Shared fixtures / helpers ----------------------------------------
+
+const PROMPT = 'images.registerChannels.promptTitle';
+const files = [new File([new Blob(['x'])], 'v.mp4', { type: 'video/mp4' })];
+const onUploadComplete = vi.fn();
+
+// QueryClientProvider is required because ImageUploader uses `useQuery` (to read
+// the project type). The query is only enabled once a projectId is known.
+function renderUploader() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return rtlRender(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    <QueryClientProvider client={qc}>
+      <ImageUploader onUploadComplete={onUploadComplete} />
+    </QueryClientProvider>
   );
-};
+}
 
-describe('ImageUploader', () => {
-  const defaultProps = {
-    onUploadComplete: vi.fn(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+// Render, then flush the project-type query so `isMicrotubuleProject` is
+// resolved before we trigger the drop (onDrop closes over it).
+async function renderAndSettle() {
+  renderUploader();
+  await waitFor(() => expect(mockGetProject).toHaveBeenCalledWith('p1'));
+  await act(async () => {
+    await Promise.resolve();
   });
+}
 
-  it('renders upload area with correct text', () => {
-    render(<ImageUploader {...defaultProps} />);
+beforeEach(() => {
+  vi.clearAllMocks();
+  capturedOnDrop = null;
+  mockParams = {};
+  mockProjectType = 'microtubules';
+});
 
-    expect(screen.getByText(/drag.*drop images here/i)).toBeInTheDocument();
-  });
-
-  it('accepts image files only', () => {
-    render(<ImageUploader {...defaultProps} />);
-
-    const input = screen.getByTestId('file-input');
-    expect(input).toHaveAttribute('accept', 'image/*');
-  });
-
-  it('renders dropzone component', () => {
-    render(<ImageUploader {...defaultProps} />);
-
+describe('ImageUploader — rendering', () => {
+  it('renders the dropzone, uploader options and layout wrapper', () => {
+    renderUploader();
     expect(screen.getByTestId('dropzone')).toBeInTheDocument();
-  });
-
-  it('renders uploader options component', () => {
-    render(<ImageUploader {...defaultProps} />);
-
     expect(screen.getByTestId('uploader-options')).toBeInTheDocument();
+    expect(screen.getByText(/drag.*drop images here/i)).toBeInTheDocument();
+    // `space-y-6` is the real component's layout wrapper.
+    expect(screen.getByTestId('dropzone').parentElement).toHaveClass(
+      'space-y-6'
+    );
   });
 
-  it('accepts multiple files attribute', () => {
-    render(<ImageUploader {...defaultProps} />);
-
-    const input = screen.getByTestId('file-input');
-    expect(input).toHaveAttribute('multiple');
-  });
-
-  it('shows project selector when no project ID is provided', () => {
-    render(<ImageUploader {...defaultProps} />);
-
+  it('shows the project selector when no project is set in the URL', () => {
+    renderUploader();
     expect(screen.getByTestId('project-selector')).toBeInTheDocument();
   });
 
-  it('renders all components in proper layout', () => {
-    render(<ImageUploader {...defaultProps} />);
+  it('hides the project selector when a project id is in the URL', async () => {
+    mockParams = { id: 'p1' };
+    renderUploader();
+    // showProjectSelector={!currentProjectId} → false when the URL has an id.
+    expect(screen.queryByTestId('project-selector')).not.toBeInTheDocument();
+    // Settle the project-type query kicked off by the URL id.
+    await waitFor(() => expect(mockGetProject).toHaveBeenCalledWith('p1'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+});
 
-    const container = screen.getByTestId('dropzone').parentElement;
-    expect(container).toHaveClass('space-y-6');
-
-    expect(screen.getByTestId('uploader-options')).toBeInTheDocument();
-    expect(screen.getByTestId('dropzone')).toBeInTheDocument();
+describe('ImageUploader — register-channels prompt', () => {
+  beforeEach(() => {
+    mockParams = { id: 'p1' };
+    mockProjectType = 'microtubules';
   });
 
-  it('handles project ID from URL params', () => {
-    render(<ImageUploader {...defaultProps} />);
-
-    expect(screen.getByTestId('dropzone')).toBeInTheDocument();
-    expect(screen.getByTestId('uploader-options')).toBeInTheDocument();
+  it('drops into an MT project → shows the prompt, no checkbox, no upload yet', async () => {
+    await renderAndSettle();
+    // No persistent checkbox in the uploader anymore.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    act(() => capturedOnDrop!(files));
+    expect(await screen.findByText(PROMPT)).toBeInTheDocument();
+    // Not uploaded yet — waiting for the answer.
+    expect(mockStartUpload).not.toHaveBeenCalled();
   });
 
-  it('calls onUploadComplete callback when provided', async () => {
-    const mockOnUploadComplete = vi.fn();
+  it('confirm → startUpload WITH registration', async () => {
+    await renderAndSettle();
+    act(() => capturedOnDrop!(files));
+    await screen.findByText(PROMPT);
+    fireEvent.click(screen.getByText('images.registerChannels.confirm'));
+    expect(mockStartUpload).toHaveBeenCalledWith(
+      'p1',
+      files,
+      undefined,
+      onUploadComplete,
+      true
+    );
+  });
 
-    render(<ImageUploader onUploadComplete={mockOnUploadComplete} />);
+  it('decline → startUpload WITHOUT registration', async () => {
+    await renderAndSettle();
+    act(() => capturedOnDrop!(files));
+    await screen.findByText(PROMPT);
+    fireEvent.click(screen.getByText('images.registerChannels.decline'));
+    expect(mockStartUpload).toHaveBeenCalledWith(
+      'p1',
+      files,
+      undefined,
+      onUploadComplete,
+      false
+    );
+  });
 
-    expect(screen.getByTestId('dropzone')).toBeInTheDocument();
-    // The callback is passed to startUpload and called after upload completes via UploadContext
-    expect(mockOnUploadComplete).not.toHaveBeenCalled();
+  it('cancel → nothing is uploaded', async () => {
+    await renderAndSettle();
+    act(() => capturedOnDrop!(files));
+    await screen.findByText(PROMPT);
+    fireEvent.click(screen.getByText('common.cancel'));
+    expect(mockStartUpload).not.toHaveBeenCalled();
+  });
+
+  it('non-MT project → uploads directly, no prompt', async () => {
+    mockProjectType = 'spheroid';
+    await renderAndSettle();
+    act(() => capturedOnDrop!(files));
+    expect(screen.queryByText(PROMPT)).not.toBeInTheDocument();
+    expect(mockStartUpload).toHaveBeenCalledWith(
+      'p1',
+      files,
+      undefined,
+      onUploadComplete,
+      false
+    );
   });
 });

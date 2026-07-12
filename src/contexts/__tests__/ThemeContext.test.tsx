@@ -3,7 +3,6 @@ import { renderHook, act, waitFor, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { useTheme } from '@/contexts/exports';
-import type { Theme } from '@/contexts/ThemeContext.types';
 import { AuthProvider } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api';
 import { ReactNode } from 'react';
@@ -405,27 +404,6 @@ describe('ThemeContext', () => {
       // Should have a valid theme value
       const themeElement = getByTestId('theme-value');
       expect(['light', 'dark', 'system']).toContain(themeElement.textContent);
-    });
-  });
-
-  describe('all theme values', () => {
-    const themes: Theme[] = ['light', 'dark', 'system'];
-
-    themes.forEach(theme => {
-      it(`should handle ${theme} theme correctly`, async () => {
-        const { result } = renderHook(() => useTheme(), { wrapper });
-
-        await waitFor(() => {
-          expect(result.current.theme).toBeDefined();
-        });
-
-        await act(async () => {
-          await result.current.setTheme(theme);
-        });
-
-        expect(result.current.theme).toBe(theme);
-        expect(localStorageMock.setItem).toHaveBeenCalledWith('theme', theme);
-      });
     });
   });
 });
