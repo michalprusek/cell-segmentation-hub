@@ -483,6 +483,12 @@ describe('MetricsCalculator — calculateAllImageMetrics', () => {
     expect(postMock).not.toHaveBeenCalled();
     // Areas are still reported.
     expect(result[0]!.totalSpheroidArea).toBeCloseTo(100, 3);
+    // The whole disintegration panel is N/A (null) without a core.
+    expect(result[0]!.radialReachQ95).toBeNull();
+    expect(result[0]!.dispersedMassFraction).toBeNull();
+    expect(result[0]!.fragmentCount).toBeNull();
+    expect(result[0]!.solidity).toBeNull();
+    expect(result[0]!.coreEquivDiameter).toBeNull();
   });
 
   it('referenceMode="failed" when DI HTTP call rejects', async () => {
@@ -503,9 +509,22 @@ describe('MetricsCalculator — calculateAllImageMetrics', () => {
     expect(result[0]!.totalSpheroidArea).toBeCloseTo(100, 3);
   });
 
-  it('propagates DI values from successful ML response', async () => {
+  it('propagates DI + panel values from successful ML response', async () => {
     postMock.mockResolvedValue({
-      data: { di: 0.42, w1: 2.1, reference: 'core', n_pixels: 12345 },
+      data: {
+        di: 0.42,
+        w1: 2.1,
+        reference: 'core',
+        n_pixels: 12345,
+        radial_reach_q95: 2.5,
+        dispersed_mass_fraction: 0.7,
+        fragment_count: 4,
+        largest_fragment_fraction: 0.55,
+        solidity: 0.6,
+        hole_count: 2,
+        core_equiv_diameter_px: 10,
+        whole_equiv_diameter_px: 40,
+      },
     });
     const corePoly = {
       type: 'external' as const,
@@ -521,6 +540,52 @@ describe('MetricsCalculator — calculateAllImageMetrics', () => {
     expect(result[0]!.wassersteinW1).toBeCloseTo(2.1, 5);
     expect(result[0]!.referenceMode).toBe('core');
     expect(result[0]!.nPixels).toBe(12345);
+    // Scale-free panel fields pass through unchanged.
+    expect(result[0]!.radialReachQ95).toBeCloseTo(2.5, 5);
+    expect(result[0]!.dispersedMassFraction).toBeCloseTo(0.7, 5);
+    expect(result[0]!.fragmentCount).toBe(4);
+    expect(result[0]!.largestFragmentFraction).toBeCloseTo(0.55, 5);
+    expect(result[0]!.solidity).toBeCloseTo(0.6, 5);
+    expect(result[0]!.holeCount).toBe(2);
+    // No scale passed → diameters stay in pixels (×1).
+    expect(result[0]!.coreEquivDiameter).toBeCloseTo(10, 5);
+    expect(result[0]!.wholeEquivDiameter).toBeCloseTo(40, 5);
+  });
+
+  it('scales equivalent diameters by µm/px but not the fractions', async () => {
+    postMock.mockResolvedValue({
+      data: {
+        di: 0.3,
+        w1: 1.0,
+        reference: 'core',
+        n_pixels: 9999,
+        radial_reach_q95: 3.0,
+        dispersed_mass_fraction: 0.5,
+        fragment_count: 1,
+        largest_fragment_fraction: 1.0,
+        solidity: 0.9,
+        hole_count: 0,
+        core_equiv_diameter_px: 10,
+        whole_equiv_diameter_px: 20,
+      },
+    });
+    const corePoly = {
+      type: 'external' as const,
+      partClass: 'core' as const,
+      points: square(4),
+    };
+    const image = buildImage('a8b', [extPolygon(square(10)), corePoly], {
+      width: 100,
+      height: 100,
+    });
+    const result = await calc.calculateAllImageMetrics([image], 2); // 2 µm/px
+    // Diameters are lengths → ×2.
+    expect(result[0]!.coreEquivDiameter).toBeCloseTo(20, 5);
+    expect(result[0]!.wholeEquivDiameter).toBeCloseTo(40, 5);
+    // Dimensionless panel fields are unaffected by scale.
+    expect(result[0]!.radialReachQ95).toBeCloseTo(3.0, 5);
+    expect(result[0]!.dispersedMassFraction).toBeCloseTo(0.5, 5);
+    expect(result[0]!.solidity).toBeCloseTo(0.9, 5);
   });
 
   it('polygonCount counts all closed polygons (external + internal)', async () => {
