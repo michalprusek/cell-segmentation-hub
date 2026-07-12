@@ -585,56 +585,49 @@ edge cases where Core slightly exceeds Total due to numerical artefacts.
 
 ## Disintegration Index (DI)
 
-The DI is a scalar in \`[0, 1)\` that quantifies *how much spheroid mass has
-escaped beyond a uniform-disk reference of equivalent core area*. Reported in
-the Excel column **Disintegration Index** (4 decimal places, dimensionless).
+The DI is a scalar in \`[0, 1)\` that quantifies *how far the spheroid's radial
+mass distribution has dispersed beyond its dense core*, in a size-invariant
+way. It is **core-anchored** and **requires a core** — there is no
+equivalent-disk fallback. Reported in the Excel column **Disintegration Index**
+(4 decimal places, dimensionless); rendered as **N/A** when no core is present.
 
 Algorithm (implemented in
 \`backend/segmentation/api/metrics_endpoint.py\` — POST \`/api/disintegration-index\`):
 
 1. **Rasterise the union of every external polygon** (the whole ASPP segmentation
  mask, excluding cores) into a single binary canvas via repeated
- \`cv2.fillPoly\`. Collect the \`(x, y)\` of all \`N\` white pixels.
+ \`cv2.fillPoly\`. Collect the \`(x, y)\` of all \`M\` foreground pixels.
 
-2. **Centroid anchor**:
- - If a core polygon is present, \`(cx, cy) = (mean(xᵢ_core), mean(yᵢ_core))\` —
-   the centroid of the **core pixels**. The metric thus measures how far
-   mass spread from the dense core, not from the smeared mass centroid
-   that drifts toward the invasion zone (improvement A — biologically the
-   core is the natural reference point for "how far did things go").
- - Otherwise (no core) fallback to mask centroid
-   \`(cx, cy) = (mean(xᵢ), mean(yᵢ))\`.
+2. **Core (required)**. Rasterise the union of the \`partClass="core"\` polygon(s)
+ into \`N_C\` pixels with centroid \`c = (mean(xᵢ_core), mean(yᵢ_core))\` and
+ effective radius \`R_C = √(N_C / π)\`. If no core rasterises to ≥ 1 pixel the
+ DI is **undefined**: the endpoint returns \`reference="no_core"\` and the Excel
+ cell shows \`N/A\` (never a computed 0).
 
- Distances \`dᵢ = √((xᵢ − cx)² + (yᵢ − cy)²)\` are computed for both
- sets (\`d_mask\` over all mask pixels and \`d_core\` over core pixels)
- relative to this single anchor.
+3. **Core-anchored, core-normalised distances**. For each foreground pixel take
+ the Euclidean distance to the **core centroid** \`c\`,
+ \`rᵢ = √((xᵢ − cx)² + (yᵢ − cy)²)\`, and normalise by the core radius:
+ \`d̃ᵢ = rᵢ / R_C\`. Anchoring on the core (not the mask centroid, which drifts
+ toward the invasion zone) makes the metric measure how far mass spread *from
+ the dense core*.
 
-3. **Reference radius**:
- - If a core polygon is present, \`R_ref = √(N_core / π)\` where \`N_core\` is
-   the rasterised pixel count of the core.
- - Otherwise fallback to \`R_eff = √(N / π)\`.
+4. **Reference distribution — analytical uniform disk**. The reference is a
+ filled disk of the core's size, \`F_ref(d̃) = min(d̃², 1)\`, whose inverse
+ (quantile) is \`F_ref⁻¹(u) = √u\`. This is an *idealised* disk of radius
+ \`R_C\`, independent of the core's actual shape.
 
-4. **Reference distribution — empirical core CDF**. When a core polygon is
- present, the reference is the **empirical** distribution of distances
- \`d_core\` for every pixel inside the core, anchored on the **same
- centroid as d_mask** (the core centroid from step 2). This means the
- reference reflects the **actual radial profile of the dense core**,
- not an idealised disk. The fallback (no core) uses the analytical
- equivalent-disk CDF \`F_ref(d̃) = d̃²\` for \`d̃ ∈ [0, 1]\`.
+5. **1-Wasserstein distance** in inverse-cumulative (quantile) form, estimated
+ bin-free from the sorted normalised distances:
+ \`W₁ = ∫₀¹ |d̃(u) − √u| du ≈ (1/M) · Σᵢ |d̃₍ᵢ₎ − √((i + 0.5) / M)|\`,
+ where \`d̃₍ᵢ₎\` are the ascending \`d̃\` values. This is the paper's eq. (1).
 
-5. **1-Wasserstein distance**:
- - **Core path**: \`W₁_px = wasserstein_distance(d_mask, d_core)\` via
-   \`scipy.stats\`, computed exactly between the two empirical 1D
-   distributions. Scale-normalised: \`W₁ = W₁_px / R_core\`, where
-   \`R_core = √(N_core / π)\`.
- - **r_eff fallback**: bin-free quantile formula
-   \`W₁ ≈ (1/N) · Σᵢ |d̃₍ᵢ₎ − √((i − 0.5) / N)|\` where d̃₍ᵢ₎ are sorted
-   normalised distances \`d_mask / R_eff\`.
+6. **Saturation**: \`DI = tanh(W₁)\`. Maps \`W₁ ∈ [0, ∞) → [0, 1)\`. An intact
+ spheroid (foreground ≈ core) gives \`d̃ ≤ 1\` distributed as a filled disk and
+ \`DI ≈ 0\`; as mass disperses to \`d̃ ≫ 1\`, \`DI → 1\`.
 
-6. **Saturation**: \`DI = tanh(W₁)\`. Maps \`W₁ ∈ [0, ∞) → [0, 1)\`.
-
-**Properties**: dimensionless, scale-invariant (all distances normalised by
-\`R_ref\`), rotation-invariant, translation-invariant (centroid-relative).
+**Properties**: dimensionless, scale-invariant (distances normalised by
+\`R_C\`), rotation-invariant, translation-invariant (core-relative). Depends only
+on the core's *size* (\`R_C\`), not its shape — the reference is an ideal disk.
 
 **Calibrated thresholds** (user 12bprusek, April 2026):
 - *time_0h* (compact): DI median ≈ 0.001
@@ -645,7 +638,9 @@ Algorithm (implemented in
 
 - **No ASPP segmentation** (HRNet, CBAM-ResUNet, plain U-Net, sperm, wound):
 no core polygon is generated. \`Core Area = 0\`, \`Total Spheroid Area\` still
-reports the sum of all external polygons. Compatibility-safe for any model.
+reports the sum of all external polygons, but the **Disintegration Index is
+\`N/A\`** (\`reference="no_core"\`) — DI is core-anchored and undefined without a
+core. Area columns remain compatibility-safe for any model.
 - **Image with no polygons or no externals**: both metrics report \`0\`.
 - **Cropped spheroid touching image edge**: the centroid is biased, the
 rasterised area is truncated. Detected via bbox of mask = canvas edge —
