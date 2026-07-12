@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import ExportStateManager, {
   type PersistedExportState,
 } from '@/lib/exportStateManager';
@@ -12,6 +12,10 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+// ---------------------------------------------------------------------------
+// Shared fixtures & helpers
+// ---------------------------------------------------------------------------
+
 const makeState = (
   overrides: Partial<PersistedExportState> = {}
 ): PersistedExportState => ({
@@ -23,10 +27,10 @@ const makeState = (
   ...overrides,
 });
 
-// Real localStorage backed by a plain object so Object.keys() works
+// Real localStorage backed by a plain object so Object.keys() enumerates keys.
 let store: Record<string, string>;
 
-function makeLocalStorageMock() {
+function makeLocalStorageMock(): Storage {
   return new Proxy(store, {
     get(target, prop) {
       if (prop === 'getItem') return (key: string) => target[key] ?? null;
@@ -65,6 +69,36 @@ function makeLocalStorageMock() {
   }) as unknown as Storage;
 }
 
+function installLocalStorage(value: Storage): void {
+  Object.defineProperty(window, 'localStorage', {
+    value,
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(global, 'localStorage', {
+    value,
+    writable: true,
+    configurable: true,
+  });
+}
+
+// Install a localStorage whose setItem is overridden (for quota/error paths),
+// while getItem/removeItem still operate on the backing `store`.
+function installLocalStorageWithSetItem(
+  setItem: (key: string, val: string) => void
+): void {
+  installLocalStorage({
+    getItem: (key: string) => store[key] ?? null,
+    setItem,
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      Object.keys(store).forEach(k => delete store[k]);
+    },
+  } as unknown as Storage);
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   store = {};
@@ -76,17 +110,7 @@ beforeEach(() => {
   (ExportStateManager as any).pendingRequests = new Map();
   (ExportStateManager as any).lastCleanupTime = 0;
 
-  Object.defineProperty(window, 'localStorage', {
-    value: makeLocalStorageMock(),
-    writable: true,
-    configurable: true,
-  });
-  // Also update global.localStorage used internally
-  Object.defineProperty(global, 'localStorage', {
-    value: window.localStorage,
-    writable: true,
-    configurable: true,
-  });
+  installLocalStorage(makeLocalStorageMock());
 });
 
 afterEach(() => {
@@ -97,20 +121,15 @@ afterEach(() => {
 
 describe('ExportStateManager', () => {
   describe('initialize', () => {
-    it('initializes without error on first call', () => {
+    it('is idempotent — first and repeat calls do not throw', () => {
       expect(() => ExportStateManager.initialize()).not.toThrow();
-    });
-
-    it('is idempotent — calling twice does not throw or double-register', () => {
-      ExportStateManager.initialize();
       expect(() => ExportStateManager.initialize()).not.toThrow();
     });
   });
 
   describe('saveExportState / getExportState', () => {
     it('saves and retrieves a state by projectId', () => {
-      const state = makeState();
-      ExportStateManager.saveExportState('proj-1', state);
+      ExportStateManager.saveExportState('proj-1', makeState());
       const loaded = ExportStateManager.getExportState('proj-1');
       expect(loaded).not.toBeNull();
       expect(loaded!.jobId).toBe('job-1');
@@ -122,17 +141,120 @@ describe('ExportStateManager', () => {
     });
 
     it('returns null and removes storage entry when state has expired', () => {
-      const state = makeState();
-
-      // Write an expired entry directly into the backing store
-      const storageKey = `export-state-proj-1`;
+      const storageKey = 'export-state-proj-1';
       store[storageKey] = JSON.stringify({
         timestamp: Date.now() - 3 * 60 * 60 * 1000,
-        state,
+        state: makeState(),
       });
 
       expect(ExportStateManager.getExportState('proj-1')).toBeNull();
       expect(store[storageKey]).toBeUndefined();
+    });
+
+    it('populates startedAt from the stored timestamp when startedAt is falsy', () => {
+      const ts = Date.now() - 1000;
+      store['export-state-proj-1'] = JSON.stringify({
+        timestamp: ts,
+        state: makeState({ startedAt: 0 }),
+      });
+
+      const loaded = ExportStateManager.getExportState('proj-1');
+      expect(loaded).not.toBeNull();
+      expect(loaded!.startedAt).toBe(ts);
+    });
+
+    it('returns null when stored JSON is malformed', () => {
+      store['export-state-proj-bad'] = '{{{not-json';
+      expect(ExportStateManager.getExportState('proj-bad')).toBeNull();
+    });
+  });
+
+  describe('saveExportState — error handling', () => {
+    it('retries after cleanup and persists when quota is detected by error.name', () => {
+      let calls = 0;
+      installLocalStorageWithSetItem((key, val) => {
+        calls++;
+        if (calls === 1) {
+          throw Object.assign(new Error('QuotaExceededError'), {
+            name: 'QuotaExceededError',
+            code: 22,
+          });
+        }
+        store[key] = val;
+      });
+
+      expect(() =>
+        ExportStateManager.saveExportState('proj-quota', makeState())
+      ).not.toThrow();
+      expect(ExportStateManager.getExportState('proj-quota')).not.toBeNull();
+    });
+
+    it('retries and persists when quota is detected by error.code=22 only', () => {
+      let calls = 0;
+      installLocalStorageWithSetItem((key, val) => {
+        calls++;
+        if (calls === 1) {
+          const err = new Error('Storage full');
+          (err as any).code = 22; // no name === 'QuotaExceededError'
+          throw err;
+        }
+        store[key] = val;
+      });
+
+      expect(() =>
+        ExportStateManager.saveExportState('proj-quota-code22', makeState())
+      ).not.toThrow();
+      expect(
+        ExportStateManager.getExportState('proj-quota-code22')
+      ).not.toBeNull();
+    });
+
+    it('does not throw (and does not persist) when the retry also fails', () => {
+      installLocalStorageWithSetItem(() => {
+        throw Object.assign(new Error('QuotaExceededError'), {
+          name: 'QuotaExceededError',
+        });
+      });
+
+      expect(() =>
+        ExportStateManager.saveExportState('proj-retry-fail', makeState())
+      ).not.toThrow();
+      expect(ExportStateManager.getExportState('proj-retry-fail')).toBeNull();
+    });
+
+    it('does not throw for a non-quota error (warn branch)', () => {
+      installLocalStorageWithSetItem(() => {
+        throw new TypeError('Unexpected type');
+      });
+
+      expect(() =>
+        ExportStateManager.saveExportState('proj-type-err', makeState())
+      ).not.toThrow();
+      expect(ExportStateManager.getExportState('proj-type-err')).toBeNull();
+    });
+  });
+
+  describe('saveExportStateThrottled', () => {
+    it('does not save immediately — saves after the 500ms delay', () => {
+      ExportStateManager.saveExportStateThrottled('proj-1', makeState());
+      expect(ExportStateManager.getExportState('proj-1')).toBeNull();
+
+      vi.advanceTimersByTime(500);
+      expect(ExportStateManager.getExportState('proj-1')).not.toBeNull();
+    });
+
+    it('debounces rapid calls — only the last state is saved', () => {
+      ExportStateManager.saveExportStateThrottled(
+        'proj-1',
+        makeState({ progress: 10 })
+      );
+      ExportStateManager.saveExportStateThrottled(
+        'proj-1',
+        makeState({ progress: 90 })
+      );
+
+      vi.advanceTimersByTime(500);
+      expect(ExportStateManager.getExportState('proj-1')!.progress).toBe(90);
     });
   });
 
@@ -147,6 +269,31 @@ describe('ExportStateManager', () => {
       expect(() =>
         ExportStateManager.clearExportState('ghost-proj')
       ).not.toThrow();
+    });
+
+    it('cancels a pending throttled save so it does not fire after clear', () => {
+      ExportStateManager.saveExportStateThrottled(
+        'proj-2',
+        makeState({ projectId: 'proj-2' })
+      );
+      ExportStateManager.clearExportState('proj-2');
+
+      vi.advanceTimersByTime(600);
+      expect(ExportStateManager.getExportState('proj-2')).toBeNull();
+    });
+  });
+
+  describe('hasExportState', () => {
+    it('returns true when state exists', () => {
+      ExportStateManager.saveExportState(
+        'proj-has',
+        makeState({ projectId: 'proj-has' })
+      );
+      expect(ExportStateManager.hasExportState('proj-has')).toBe(true);
+    });
+
+    it('returns false when no state exists', () => {
+      expect(ExportStateManager.hasExportState('proj-no-state')).toBe(false);
     });
   });
 
@@ -165,6 +312,17 @@ describe('ExportStateManager', () => {
       );
     });
 
+    it('leaves exportStatus unchanged when not provided', () => {
+      ExportStateManager.saveExportState(
+        'proj-1',
+        makeState({ exportStatus: 'Processing', progress: 10 })
+      );
+      ExportStateManager.updateExportProgress('proj-1', 50);
+      const loaded = ExportStateManager.getExportState('proj-1');
+      expect(loaded!.progress).toBe(50);
+      expect(loaded!.exportStatus).toBe('Processing');
+    });
+
     it('does nothing when no state exists for the projectId', () => {
       expect(() =>
         ExportStateManager.updateExportProgress('no-such-proj', 50)
@@ -178,7 +336,6 @@ describe('ExportStateManager', () => {
         timestamp: Date.now() - 3 * 60 * 60 * 1000,
         state: makeState({ projectId: 'old-proj' }),
       });
-
       ExportStateManager.saveExportState(
         'fresh-proj',
         makeState({ projectId: 'fresh-proj' })
@@ -197,29 +354,7 @@ describe('ExportStateManager', () => {
 
     it('removes entries with invalid JSON', () => {
       store['export-state-corrupt'] = 'not-json';
-      const count = ExportStateManager.cleanupExpiredStates();
-      expect(count).toBe(1);
-    });
-  });
-
-  describe('saveExportStateThrottled', () => {
-    it('does not save immediately — saves after 500ms delay', () => {
-      ExportStateManager.saveExportStateThrottled('proj-1', makeState());
-      expect(ExportStateManager.getExportState('proj-1')).toBeNull();
-
-      vi.advanceTimersByTime(500);
-      expect(ExportStateManager.getExportState('proj-1')).not.toBeNull();
-    });
-
-    it('debounces rapid calls — only the last state is saved', () => {
-      const first = makeState({ progress: 10 });
-      const last = makeState({ progress: 90 });
-
-      ExportStateManager.saveExportStateThrottled('proj-1', first);
-      ExportStateManager.saveExportStateThrottled('proj-1', last);
-
-      vi.advanceTimersByTime(500);
-      expect(ExportStateManager.getExportState('proj-1')!.progress).toBe(90);
+      expect(ExportStateManager.cleanupExpiredStates()).toBe(1);
     });
   });
 
@@ -235,38 +370,29 @@ describe('ExportStateManager', () => {
     it('cleans up the pending request after it resolves', async () => {
       const fn = vi.fn().mockResolvedValue('done');
       await ExportStateManager.deduplicateRequest('job-xyz', fn);
-
-      // Second call after first resolved should create a new request
+      // Second call after the first resolved should create a new request
       await ExportStateManager.deduplicateRequest('job-xyz', fn);
       expect(fn).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('subscribeToChanges', () => {
-    it('returns an unsubscribe function', () => {
-      const unsub = ExportStateManager.subscribeToChanges('proj-1', vi.fn());
-      expect(typeof unsub).toBe('function');
-      expect(() => unsub()).not.toThrow();
-    });
-
-    it('calls the callback when a storage event fires for the watched key', () => {
+    it('calls the callback with the parsed state for the watched key', () => {
       const callback = vi.fn();
       ExportStateManager.subscribeToChanges('proj-1', callback);
 
       const state = makeState();
-      const stored = JSON.stringify({ timestamp: Date.now(), state });
-
       window.dispatchEvent(
         new StorageEvent('storage', {
           key: 'export-state-proj-1',
-          newValue: stored,
+          newValue: JSON.stringify({ timestamp: Date.now(), state }),
         })
       );
 
       expect(callback).toHaveBeenCalledWith(state);
     });
 
-    it('calls callback with null when storage entry is removed', () => {
+    it('calls callback with null when the storage entry is removed', () => {
       const callback = vi.fn();
       ExportStateManager.subscribeToChanges('proj-1', callback);
 
@@ -278,6 +404,55 @@ describe('ExportStateManager', () => {
       );
 
       expect(callback).toHaveBeenCalledWith(null);
+    });
+
+    it('calls callback(null) when newValue is invalid JSON', () => {
+      const callback = vi.fn();
+      ExportStateManager.subscribeToChanges('proj-corrupt', callback);
+
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'export-state-proj-corrupt',
+          newValue: '{bad-json',
+        })
+      );
+
+      expect(callback).toHaveBeenCalledWith(null);
+    });
+
+    it('does not call the callback for an unrelated storage key', () => {
+      const callback = vi.fn();
+      ExportStateManager.subscribeToChanges('proj-watch', callback);
+
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'export-state-other-project',
+          newValue: JSON.stringify({
+            timestamp: Date.now(),
+            state: makeState(),
+          }),
+        })
+      );
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('stops invoking the callback after unsubscribe', () => {
+      const callback = vi.fn();
+      const unsub = ExportStateManager.subscribeToChanges('proj-1', callback);
+      unsub();
+
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'export-state-proj-1',
+          newValue: JSON.stringify({
+            timestamp: Date.now(),
+            state: makeState(),
+          }),
+        })
+      );
+
+      expect(callback).not.toHaveBeenCalled();
     });
   });
 
@@ -312,44 +487,24 @@ describe('ExportStateManager', () => {
       expect(all['old']).toBeUndefined();
       expect(all['fresh']).toBeDefined();
     });
+
+    it('skips keys that read back as null mid-loop (race condition)', () => {
+      ExportStateManager.saveExportState(
+        'proj-a',
+        makeState({ projectId: 'proj-a', jobId: 'j-a' })
+      );
+      store['export-state-proj-b'] = null as any; // key exists but reads as null
+
+      const all = ExportStateManager.getAllActiveStates();
+      expect(all['proj-a']).toBeDefined();
+      expect(all['proj-b']).toBeUndefined();
+    });
   });
 
-  describe('QuotaExceededError handling', () => {
-    it('retries the save after cleaning up expired states', () => {
-      let callCount = 0;
-      // Patch setItem on the proxy target by replacing the mock setter
-      const _original = store;
-      let throwOnNext = true;
-      // Override the proxy's setItem by rebuilding the mock temporarily
-      const patchedMock = {
-        ...window.localStorage,
-        setItem: (key: string, val: string) => {
-          callCount++;
-          if (throwOnNext && callCount === 1) {
-            throwOnNext = false;
-            const err = Object.assign(new Error('QuotaExceededError'), {
-              name: 'QuotaExceededError',
-              code: 22,
-            });
-            throw err;
-          }
-          store[key] = val;
-        },
-      };
-      Object.defineProperty(window, 'localStorage', {
-        value: patchedMock,
-        writable: true,
-        configurable: true,
-      });
-      Object.defineProperty(global, 'localStorage', {
-        value: patchedMock,
-        writable: true,
-        configurable: true,
-      });
-
-      expect(() =>
-        ExportStateManager.saveExportState('proj-quota', makeState())
-      ).not.toThrow();
+  describe('cleanup', () => {
+    it('does not throw when called with no active timer', () => {
+      expect(() => ExportStateManager.cleanup()).not.toThrow();
+      expect(() => ExportStateManager.cleanup()).not.toThrow();
     });
   });
 });

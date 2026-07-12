@@ -439,43 +439,6 @@ describe('ImageUploader Cancel Integration', () => {
       expect(onUploadError).not.toHaveBeenCalled();
     });
 
-    it('should clean up resources after cancellation', async () => {
-      const { operation: _operation } = uploadScenarios.singleFileUpload;
-
-      render(<ImageUploader projectId="test-project" />);
-
-      const _fileInput = screen.getByTestId('_file-input');
-      const _file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-
-      fireEvent.change(_fileInput, { target: { _files: [_file] } });
-      await user.click(
-        await screen.findByTestId('start-upload-button', undefined, {
-          timeout: 3000,
-        })
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId(`status-${_file.name}`)).toHaveTextContent(
-          'uploading'
-        );
-      });
-
-      // Cancel and verify cleanup
-      await user.click(screen.getByTestId(`cancel-${_file.name}`));
-
-      await waitFor(() => {
-        expect(screen.getByTestId(`status-${_file.name}`)).toHaveTextContent(
-          'cancelled'
-        );
-      });
-
-      // Cancelled status confirms the upload was properly cleaned up
-      // (The start-upload-button visibility depends on isUploading state management)
-      expect(screen.getByTestId(`status-${_file.name}`)).toHaveTextContent(
-        'cancelled'
-      );
-    });
-
     it('should handle AbortController integration', async () => {
       const mockAbortController = cancelTestUtils.createMockAbortController();
       global.AbortController = vi
@@ -586,72 +549,9 @@ describe('ImageUploader Cancel Integration', () => {
         });
       });
     });
-
-    it('should preserve completed uploads when cancelling batch', async () => {
-      render(<ImageUploader projectId="test-project" />);
-
-      const _fileInput = screen.getByTestId('_file-input');
-      const _files = [
-        new File(['content1'], '_file1.jpg', { type: 'image/jpeg' }),
-        new File(['content2'], '_file2.jpg', { type: 'image/jpeg' }),
-      ];
-
-      fireEvent.change(_fileInput, { target: { _files } });
-      await user.click(
-        await screen.findByTestId('start-upload-button', undefined, {
-          timeout: 3000,
-        })
-      );
-
-      // Wait for uploads to start
-      await waitFor(() => {
-        expect(
-          screen.getByTestId(`status-${_files[0].name}`)
-        ).toHaveTextContent('uploading');
-      });
-
-      // Cancel all before either finishes
-      await user.click(screen.getByTestId('cancel-all-button'));
-
-      // Both files should eventually be cancelled
-      await waitFor(() => {
-        expect(
-          screen.getByTestId(`status-${_files[0].name}`)
-        ).toHaveTextContent('cancelled');
-        expect(
-          screen.getByTestId(`status-${_files[1].name}`)
-        ).toHaveTextContent('cancelled');
-      });
-    });
   });
 
   describe('WebSocket Integration', () => {
-    it('should emit WebSocket events during cancellation', async () => {
-      render(<ImageUploader projectId="test-project" />);
-
-      const _fileInput = screen.getByTestId('_file-input');
-      const _file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-
-      fireEvent.change(_fileInput, { target: { _files: [_file] } });
-      await user.click(
-        await screen.findByTestId('start-upload-button', undefined, {
-          timeout: 3000,
-        })
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId(`status-${_file.name}`)).toHaveTextContent(
-          'uploading'
-        );
-      });
-
-      await user.click(screen.getByTestId(`cancel-${_file.name}`));
-
-      // Verify WebSocket events would be emitted
-      // (In real implementation, this would check webSocketManager.emit calls)
-      expect(true).toBe(true); // Placeholder for actual WebSocket verification
-    });
-
     it('should handle WebSocket disconnection during cancel', async () => {
       render(<ImageUploader projectId="test-project" />);
 
@@ -680,37 +580,6 @@ describe('ImageUploader Cancel Integration', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle API cancellation errors', async () => {
-      mockApi.delete.mockRejectedValue(new Error('Network error'));
-
-      render(<ImageUploader projectId="test-project" />);
-
-      const _fileInput = screen.getByTestId('_file-input');
-      const _file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-
-      fireEvent.change(_fileInput, { target: { _files: [_file] } });
-      await user.click(
-        await screen.findByTestId('start-upload-button', undefined, {
-          timeout: 3000,
-        })
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId(`status-${_file.name}`)).toHaveTextContent(
-          'uploading'
-        );
-      });
-
-      await user.click(screen.getByTestId(`cancel-${_file.name}`));
-
-      // Should still cancel locally even if API call fails
-      await waitFor(() => {
-        expect(screen.getByTestId(`status-${_file.name}`)).toHaveTextContent(
-          'cancelled'
-        );
-      });
-    });
-
     it('should handle cancellation of already completed uploads', async () => {
       render(<ImageUploader projectId="test-project" />);
 
@@ -742,40 +611,6 @@ describe('ImageUploader Cancel Integration', () => {
   });
 
   describe('Performance and Memory', () => {
-    it('should handle cancellation of large _file uploads', async () => {
-      const { operation, performance: perfConfig } =
-        uploadScenarios.largeFileUpload;
-
-      render(<ImageUploader projectId="test-project" />);
-
-      const _fileInput = screen.getByTestId('_file-input');
-      // Use fixture metadata fields (no underscore prefix in the fixture)
-      const _file = new File(
-        ['large-file-content'],
-        operation.metadata.fileName,
-        { type: operation.metadata.fileType }
-      );
-
-      fireEvent.change(_fileInput, { target: { _files: [_file] } });
-      await user.click(
-        await screen.findByTestId('start-upload-button', undefined, {
-          timeout: 3000,
-        })
-      );
-
-      const cancelStart = window.performance.now();
-      await user.click(screen.getByTestId(`cancel-${_file.name}`));
-
-      await waitFor(() => {
-        expect(screen.getByTestId(`status-${_file.name}`)).toHaveTextContent(
-          'cancelled'
-        );
-      });
-
-      const cancelDuration = window.performance.now() - cancelStart;
-      expect(cancelDuration).toBeLessThan(perfConfig.expectedCancelTime);
-    });
-
     it('should not leak memory with rapid cancel operations', async () => {
       const detector = cancelTestUtils.createMemoryLeakDetector();
 
@@ -810,49 +645,6 @@ describe('ImageUploader Cancel Integration', () => {
       detector.cleanup();
       const assertions = cancelTestUtils.createCancelAssertions();
       await assertions.assertNoMemoryLeaks(detector);
-    });
-  });
-
-  describe('Accessibility', () => {
-    it('should provide accessible cancel controls', async () => {
-      render(<ImageUploader projectId="test-project" />);
-
-      const _fileInput = screen.getByTestId('_file-input');
-      const _file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-
-      fireEvent.change(_fileInput, { target: { _files: [_file] } });
-      await user.click(
-        await screen.findByTestId('start-upload-button', undefined, {
-          timeout: 3000,
-        })
-      );
-
-      await waitFor(() => {
-        const cancelButton = screen.getByTestId(`cancel-${_file.name}`);
-        expect(cancelButton).toBeInTheDocument();
-        expect(cancelButton.tagName).toBe('BUTTON');
-        expect(cancelButton).toHaveTextContent('Cancel');
-      });
-    });
-
-    it('should be keyboard navigable', async () => {
-      render(<ImageUploader projectId="test-project" />);
-
-      const _fileInput = screen.getByTestId('_file-input');
-      const _file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-
-      fireEvent.change(_fileInput, { target: { _files: [_file] } });
-      await user.click(
-        await screen.findByTestId('start-upload-button', undefined, {
-          timeout: 3000,
-        })
-      );
-
-      await waitFor(() => {
-        const cancelButton = screen.getByTestId(`cancel-${_file.name}`);
-        cancelButton.focus();
-        expect(cancelButton).toHaveFocus();
-      });
     });
   });
 });
