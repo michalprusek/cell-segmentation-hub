@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from scipy.stats import wasserstein_distance
 
 # Import characteristic_functions from utils package
 from utils.characteristic_functions import calculate_all
@@ -42,7 +41,7 @@ class DisintegrationRequest(BaseModel):
 class DisintegrationResponse(BaseModel):
     di: float
     w1: float
-    reference: str  # 'core' | 'r_eff' | 'r_eff_fallback' | 'none'
+    reference: str  # 'core' | 'no_core' | 'none'
     n_pixels: int
 
 class Point(BaseModel):
@@ -169,13 +168,27 @@ async def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[Metric
 
 @router.post("/disintegration-index", response_model=DisintegrationResponse)
 async def disintegration_index(request: DisintegrationRequest):
-    """Compute the per-image Disintegration Index (DI).
+    """Compute the per-image core-anchored Disintegration Index (DI).
 
-    Reduces the binary mask polygon to a 1-D radial distribution of pixel
-    distances from the centroid, normalises by R_ref (derived from core
-    area if provided, else from mask area), and measures the
-    1-Wasserstein distance to the analytical CDF of a uniform disk
-    `F_ref(d̃) = d̃²`. The raw W1 is squashed via `tanh` into `[0, 1)`.
+    Implements the paper's core-anchored DI. Radial distances of every
+    foreground pixel are measured from the **core centroid** and normalised by
+    the core's effective radius ``R_C = sqrt(N_core / pi)`` to give
+    ``d̃ = d / R_C``. The empirical CDF of ``{d̃}`` is compared, via the
+    1-Wasserstein distance in inverse-cumulative (quantile) form, to the
+    analytical CDF of a uniform filled disk ``F_ref(d̃) = min(d̃², 1)`` whose
+    inverse is ``F_ref⁻¹(u) = sqrt(u)``::
+
+        W1 = ∫₀¹ |d̃(u) − sqrt(u)| du ≈ (1/N) Σ_i |d̃₍ᵢ₎ − sqrt((i + 0.5) / N)|
+        DI = tanh(W1)  ∈ [0, 1)
+
+    An intact spheroid (foreground ≈ core) gives ``d̃ ≤ 1`` distributed as a
+    filled disk and ``DI ≈ 0``; as mass disperses to ``d̃ ≫ 1``, ``DI → 1``.
+
+    A valid core is **required** — the DI is undefined without one. When no
+    usable core polygon is supplied (or it rasterises to zero pixels) the
+    endpoint returns ``reference='no_core'`` with ``di=0.0`` as an N/A
+    sentinel; callers must render it as N/A, never as a computed zero. There
+    is deliberately no equivalent-disk (``r_eff``) fallback.
     """
     try:
         H = int(request.image_height)
@@ -218,85 +231,64 @@ async def disintegration_index(request: DisintegrationRequest):
                 di=0.0, w1=0.0, reference="none", n_pixels=0
             )
 
-        # Step 1: rasterise the optional core polygon(s). The core's centroid,
-        # when available, is the *anchor* for both d_mask and d_core — that
-        # way the metric measures "how far did mass spread from where the
-        # dense core sits", not the smeared mass centroid that drifts toward
-        # the invasion zone.
-        ref_label = "r_eff"
-        r_ref: Optional[float] = None
-        d_core: Optional[np.ndarray] = None
+        # Step 1: rasterise the REQUIRED core polygon(s). The core defines both
+        # the anchor (its centroid) and the normalising radius R_C; without a
+        # valid core the metric is undefined.
         candidate_cores: List[List[List[float]]] = []
         if request.core_polygons:
             candidate_cores = request.core_polygons
         elif request.core_polygon is not None:
             candidate_cores = [request.core_polygon]
 
-        ys_c: Optional[np.ndarray] = None
-        xs_c: Optional[np.ndarray] = None
-        if candidate_cores:
-            core_mask = np.zeros((H, W), dtype=np.uint8)
-            valid_count = 0
-            for poly in candidate_cores:
-                core_pts_arr = np.asarray(poly, dtype=np.float32)
-                if (
-                    core_pts_arr.ndim == 2
-                    and core_pts_arr.shape[1] == 2
-                    and core_pts_arr.shape[0] >= 3
-                ):
-                    cv2.fillPoly(core_mask, [core_pts_arr.astype(np.int32)], 1)
-                    valid_count += 1
-            n_core = int(core_mask.sum())
-            if valid_count > 0 and n_core > 0:
-                ys_c, xs_c = np.nonzero(core_mask)
-                r_ref = float(np.sqrt(n_core / np.pi))
-                ref_label = "core"
-            else:
-                # Surface a warning so a malformed/off-canvas/collinear core
-                # polygon doesn't silently degrade DI to the r_eff fallback.
-                logger.warning(
-                    "DI core polygons rejected: provided=%d valid_shape=%d "
-                    "rasterised_pixels=%d image=%dx%d -> r_eff fallback",
-                    len(candidate_cores), valid_count, n_core, W, H,
-                )
-                ref_label = "r_eff_fallback"
-
-        # Step 2: choose the centroid. Prefer the core's centroid (improvement A
-        # over the original mass-weighted mask centroid); fall back to the mask
-        # centroid only when no core is available.
-        if xs_c is not None and ys_c is not None and xs_c.size > 0:
-            cx = float(xs_c.mean())
-            cy = float(ys_c.mean())
-            d_core = np.hypot(xs_c - cx, ys_c - cy)
-        else:
-            cx = float(xs.mean())
-            cy = float(ys.mean())
-        d_mask = np.hypot(xs - cx, ys - cy)
-
-        if r_ref is None:
-            r_ref = float(np.sqrt(n / np.pi))
-        if r_ref <= 0:
+        core_mask = np.zeros((H, W), dtype=np.uint8)
+        valid_count = 0
+        for poly in candidate_cores:
+            core_pts_arr = np.asarray(poly, dtype=np.float32)
+            if (
+                core_pts_arr.ndim == 2
+                and core_pts_arr.shape[1] == 2
+                and core_pts_arr.shape[0] >= 3
+            ):
+                cv2.fillPoly(core_mask, [core_pts_arr.astype(np.int32)], 1)
+                valid_count += 1
+        n_core = int(core_mask.sum())
+        if valid_count == 0 or n_core == 0:
+            # DI requires a core. A malformed/off-canvas/collinear core (or no
+            # core at all) yields an explicit N/A instead of a fabricated value.
+            logger.warning(
+                "DI requires a valid core polygon; none usable "
+                "(provided=%d valid_shape=%d rasterised_pixels=%d image=%dx%d) "
+                "-> reference='no_core'",
+                len(candidate_cores), valid_count, n_core, W, H,
+            )
             return DisintegrationResponse(
-                di=0.0, w1=0.0, reference=ref_label, n_pixels=n
+                di=0.0, w1=0.0, reference="no_core", n_pixels=n
             )
 
-        if d_core is not None and d_core.size > 0:
-            # Empirical-CDF reference: compare the radial distance distribution
-            # of mask pixels against the same distribution of core pixels —
-            # both anchored on the core's centroid. Normalised by R_core to
-            # keep the metric scale-invariant.
-            w1_px = float(wasserstein_distance(d_mask, d_core))
-            w1 = w1_px / r_ref
-        else:
-            # No core: fall back to the equivalent-disk reference CDF
-            # F_ref(d̃) = d̃² in the d̃ = d / R_eff space.
-            d_tilde = np.sort(d_mask / r_ref)
-            u = (np.arange(n, dtype=np.float64) + 0.5) / n
-            w1 = float(np.mean(np.abs(d_tilde - np.sqrt(u))))
+        r_ref = float(np.sqrt(n_core / np.pi))  # R_C
+        if r_ref <= 0:
+            return DisintegrationResponse(
+                di=0.0, w1=0.0, reference="no_core", n_pixels=n
+            )
+
+        # Step 2: anchor radial distances on the CORE centroid — the metric
+        # measures how far mass spread from where the dense core sits, not the
+        # smeared mask centroid that drifts toward the invasion zone.
+        ys_c, xs_c = np.nonzero(core_mask)
+        cx = float(xs_c.mean())
+        cy = float(ys_c.mean())
+        d_mask = np.hypot(xs - cx, ys - cy)
+
+        # Step 3: 1-Wasserstein distance between the core-normalised foreground
+        # distances and the analytical uniform-disk reference F_ref(d̃)=min(d̃²,1)
+        # (inverse sqrt(u)), in inverse-cumulative form. This is exactly eq. (1).
+        d_tilde = np.sort(d_mask / r_ref)
+        u = (np.arange(n, dtype=np.float64) + 0.5) / n
+        w1 = float(np.mean(np.abs(d_tilde - np.sqrt(u))))
         di = float(np.tanh(w1))
 
         return DisintegrationResponse(
-            di=di, w1=w1, reference=ref_label, n_pixels=n
+            di=di, w1=w1, reference="core", n_pixels=n
         )
     except HTTPException:
         raise

@@ -469,7 +469,7 @@ describe('MetricsCalculator — exportToExcel (ASPP / spheroid_invasive path)', 
       polygonCount: 2,
       disintegrationIndex: 0.15,
       wassersteinW1: 0.6,
-      referenceMode: 'r_eff',
+      referenceMode: 'no_core',
       nPixels: 30000,
       totalSpheroidArea: 800,
       coreArea: 0,
@@ -515,8 +515,21 @@ describe('MetricsCalculator — exportToExcel (ASPP / spheroid_invasive path)', 
     );
     const calls = (mockWorksheet.addRow as ReturnType<typeof vi.fn>).mock.calls;
     const firstRow = calls[0][0] as Record<string, number>;
-    // DI from first entry: 0.42 → rounded to 4 decimals = 0.42
+    // DI from first entry (referenceMode='core'): 0.42 → rounded 4dp = 0.42
     expect(firstRow.disintegrationIndex).toBeCloseTo(0.42, 4);
+  });
+
+  it("renders DI as 'N/A' for non-core reference modes (no fabricated 0)", async () => {
+    await calc.exportToExcel(
+      [],
+      '/tmp/aspp.xlsx',
+      undefined,
+      sampleImageMetrics
+    );
+    const calls = (mockWorksheet.addRow as ReturnType<typeof vi.fn>).mock.calls;
+    // Second entry has referenceMode='no_core' → DI is undefined → 'N/A'.
+    const secondRow = calls[1][0] as Record<string, unknown>;
+    expect(secondRow.disintegrationIndex).toBe('N/A');
   });
 
   it('uses px^2 units in column headers when no scale is provided', async () => {

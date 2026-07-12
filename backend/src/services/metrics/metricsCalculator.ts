@@ -24,11 +24,8 @@ import {
   calculatePerimeter,
   calculateBoundingBox,
   calculateConvexHull,
-  pointToLineDistance,
   rotatingCalipers,
-  isPointInPolygon,
   isPolygonInside,
-  calculateCentroid,
 } from './geometricPrimitives';
 
 export interface PolygonMetrics {
@@ -64,21 +61,25 @@ export interface PolygonMetrics {
 
 /** Per-image disintegration metrics. Computed on-demand at export time.
  *
- * `referenceMode` distinguishes how DI was computed (or why it wasn't):
- *   - 'core'           → empirical-CDF reference from detected core pixels
- *   - 'r_eff'          → equivalent-disk fallback (no core polygon present)
- *   - 'r_eff_fallback' → core polygon supplied but rasterised to 0 pixels
- *   - 'none'           → no externals or no image dimensions; DI not attempted
- *   - 'failed'         → DI HTTP call or polygon JSON parse threw an error
- *                        Lets exporters render `'N/A'` instead of a sentinel 0.
+ * DI is core-anchored and **requires a core**: distances are normalised by the
+ * core radius R_C and compared to the analytical uniform-disk reference
+ * (paper eq. 1). There is no equivalent-disk fallback.
+ *
+ * `referenceMode` distinguishes whether DI was computed (or why it wasn't):
+ *   - 'core'    → computed per eq. (1) from the detected core polygon
+ *   - 'no_core' → no usable core polygon; DI is undefined → N/A (not 0)
+ *   - 'none'    → no externals or no image dimensions; DI not attempted
+ *   - 'failed'  → DI HTTP call or polygon JSON parse threw an error
+ * Every non-'core' mode means the DI field is an N/A sentinel: exporters must
+ * render `'N/A'`, never the sentinel `0`.
  */
 export interface ImageMetrics {
   imageId: string;
   imageName: string;
   polygonCount: number;
-  disintegrationIndex: number; // tanh(W1) ∈ [0, 1)
+  disintegrationIndex: number; // tanh(W1) ∈ [0, 1); valid only when referenceMode==='core'
   wassersteinW1: number; // raw 1-Wasserstein distance, ≥ 0
-  referenceMode: 'core' | 'r_eff' | 'r_eff_fallback' | 'none' | 'failed';
+  referenceMode: 'core' | 'no_core' | 'none' | 'failed';
   nPixels: number;
   // Areas (px² by default, μm² when pixelToMicrometerScale is provided).
   totalSpheroidArea: number; // sum of external polygon areas, core excluded
@@ -384,8 +385,9 @@ export class MetricsCalculator {
    * `/api/disintegration-index` endpoint. Areas are computed locally via the
    * Shoelace formula and reported even if the DI HTTP call fails.
    *
-   * Falls back to R_eff (equivalent radius of the mask union) when no core
-   * polygon is present (non-ASPP segmentations).
+   * DI is core-anchored and **requires a core**. When no `partClass='core'`
+   * polygon is present the DI is undefined (`referenceMode='no_core'`, rendered
+   * as N/A) and no ML call is made — there is no equivalent-disk fallback.
    */
   async calculateAllImageMetrics(
     images: ImageWithSegmentation[],
@@ -461,7 +463,16 @@ export class MetricsCalculator {
       };
 
       const usableExternals = externals.filter(p => p.partClass !== 'core');
-      if (usableExternals.length > 0) {
+      if (usableExternals.length > 0 && cores.length === 0) {
+        // DI is core-anchored and requires a core. Without one it is undefined;
+        // report N/A explicitly rather than issuing a doomed ML call.
+        di = {
+          disintegrationIndex: 0,
+          wassersteinW1: 0,
+          referenceMode: 'no_core',
+          nPixels: 0,
+        };
+      } else if (usableExternals.length > 0) {
         try {
           // DI is computed from the UNION of every external polygon (the
           // entire ASPP segmentation mask), not just the largest spheroid.
@@ -477,7 +488,7 @@ export class MetricsCalculator {
           } else {
             di = await this.calculateImageDisintegrationIndex(
               maskPolygons,
-              corePolygonsForDi.length > 0 ? corePolygonsForDi : undefined,
+              corePolygonsForDi,
               image.width,
               image.height
             );
@@ -531,7 +542,7 @@ export class MetricsCalculator {
 
   private async calculateImageDisintegrationIndex(
     maskPolygons: Point[][],
-    corePolygons: Point[][] | undefined,
+    corePolygons: Point[][],
     imageWidth: number,
     imageHeight: number
   ): Promise<{
@@ -541,9 +552,8 @@ export class MetricsCalculator {
     nPixels: number;
   }> {
     const mask_polygons = maskPolygons.map(pts => pts.map(p => [p.x, p.y]));
-    const core_polygons = corePolygons
-      ? corePolygons.map(pts => pts.map(p => [p.x, p.y]))
-      : null;
+    // DI requires a core; callers only reach here with a non-empty core set.
+    const core_polygons = corePolygons.map(pts => pts.map(p => [p.x, p.y]));
     const response = await this.http.post<{
       di: number;
       w1: number;
@@ -1137,7 +1147,11 @@ export class MetricsCalculator {
           totalSpheroidArea: safe(m.totalSpheroidArea, 2),
           coreArea: safe(m.coreArea, 2),
           invasionArea: safe(m.invasionArea, 2),
-          disintegrationIndex: safe(m.disintegrationIndex, 4),
+          // DI is defined only when a core anchored the computation; every
+          // other reference mode (no_core / none / failed) is a genuine N/A,
+          // not a real zero.
+          disintegrationIndex:
+            m.referenceMode === 'core' ? safe(m.disintegrationIndex, 4) : 'N/A',
         });
       });
     }
