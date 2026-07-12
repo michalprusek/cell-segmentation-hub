@@ -85,6 +85,46 @@ export interface ImageMetrics {
   totalSpheroidArea: number; // sum of external polygon areas, core excluded
   coreArea: number; // detected core polygon area (0 if no core)
   invasionArea: number; // totalSpheroidArea − coreArea, clamped at 0
+  // Disintegration metric panel — spans the axes DI does not. Every field is
+  // null when referenceMode !== 'core' (undefined without a core → N/A).
+  radialReachQ95: number | null; // A: 95th pct of core-normalised distances (core radii)
+  dispersedMassFraction: number | null; // B: N_K / N_FG ∈ [0,1]
+  fragmentCount: number | null; // C: connected components of FG (speckle-guarded)
+  largestFragmentFraction: number | null; // C: largest piece / de-speckled mass ∈ (0,1]
+  solidity: number | null; // D: N_FG / hull area ∈ [0,1]
+  holeCount: number | null; // D: enclosed holes in FG (Betti-1)
+  coreEquivDiameter: number | null; // E: 2√(N_core/π) (px, or μm with scale)
+  wholeEquivDiameter: number | null; // E: 2√(N_FG/π) (px, or μm with scale)
+}
+
+/** The DI + panel subset of ImageMetrics (everything not derived locally). */
+type DiFields = Omit<
+  ImageMetrics,
+  | 'imageId'
+  | 'imageName'
+  | 'polygonCount'
+  | 'totalSpheroidArea'
+  | 'coreArea'
+  | 'invasionArea'
+>;
+
+/** N/A DI result: DI + every panel metric absent. Used for every reference mode
+ * except 'core' (no core → the whole panel is undefined, rendered as N/A). */
+function naDiFields(referenceMode: ImageMetrics['referenceMode']): DiFields {
+  return {
+    disintegrationIndex: 0,
+    wassersteinW1: 0,
+    referenceMode,
+    nPixels: 0,
+    radialReachQ95: null,
+    dispersedMassFraction: null,
+    fragmentCount: null,
+    largestFragmentFraction: null,
+    solidity: null,
+    holeCount: null,
+    coreEquivDiameter: null,
+    wholeEquivDiameter: null,
+  };
 }
 
 // Local Point alias kept so the many call sites in this file stay terse.
@@ -448,30 +488,15 @@ export class MetricsCalculator {
         continue;
       }
 
-      // Step 2: optional DI computation. Network call to ML; failures must
-      // NOT void the area metrics already computed in step 1.
-      let di: {
-        disintegrationIndex: number;
-        wassersteinW1: number;
-        referenceMode: ImageMetrics['referenceMode'];
-        nPixels: number;
-      } = {
-        disintegrationIndex: 0,
-        wassersteinW1: 0,
-        referenceMode: 'none',
-        nPixels: 0,
-      };
+      // Step 2: optional DI + panel computation. Network call to ML; failures
+      // must NOT void the area metrics already computed in step 1.
+      let di: DiFields = naDiFields('none');
 
       const usableExternals = externals.filter(p => p.partClass !== 'core');
       if (usableExternals.length > 0 && cores.length === 0) {
         // DI is core-anchored and requires a core. Without one it is undefined;
         // report N/A explicitly rather than issuing a doomed ML call.
-        di = {
-          disintegrationIndex: 0,
-          wassersteinW1: 0,
-          referenceMode: 'no_core',
-          nPixels: 0,
-        };
+        di = naDiFields('no_core');
       } else if (usableExternals.length > 0) {
         try {
           // DI is computed from the UNION of every external polygon (the
@@ -490,7 +515,8 @@ export class MetricsCalculator {
               maskPolygons,
               corePolygonsForDi,
               image.width,
-              image.height
+              image.height,
+              pixelToMicrometerScale
             );
           }
         } catch (err) {
@@ -501,12 +527,7 @@ export class MetricsCalculator {
             'MetricsCalculator',
             { imageId: image.id }
           );
-          di = {
-            disintegrationIndex: 0,
-            wassersteinW1: 0,
-            referenceMode: 'failed',
-            nPixels: 0,
-          };
+          di = naDiFields('failed');
         }
       }
 
@@ -530,10 +551,7 @@ export class MetricsCalculator {
       imageId: image?.id ?? '',
       imageName: image?.name ?? '',
       polygonCount: 0,
-      disintegrationIndex: 0,
-      wassersteinW1: 0,
-      referenceMode: 'none',
-      nPixels: 0,
+      ...naDiFields('none'),
       totalSpheroidArea: 0,
       coreArea: 0,
       invasionArea: 0,
@@ -544,13 +562,9 @@ export class MetricsCalculator {
     maskPolygons: Point[][],
     corePolygons: Point[][],
     imageWidth: number,
-    imageHeight: number
-  ): Promise<{
-    disintegrationIndex: number;
-    wassersteinW1: number;
-    referenceMode: ImageMetrics['referenceMode'];
-    nPixels: number;
-  }> {
+    imageHeight: number,
+    pixelToMicrometerScale?: number
+  ): Promise<DiFields> {
     const mask_polygons = maskPolygons.map(pts => pts.map(p => [p.x, p.y]));
     // DI requires a core; callers only reach here with a non-empty core set.
     const core_polygons = corePolygons.map(pts => pts.map(p => [p.x, p.y]));
@@ -559,17 +573,42 @@ export class MetricsCalculator {
       w1: number;
       reference: ImageMetrics['referenceMode'];
       n_pixels: number;
+      radial_reach_q95: number | null;
+      dispersed_mass_fraction: number | null;
+      fragment_count: number | null;
+      largest_fragment_fraction: number | null;
+      solidity: number | null;
+      hole_count: number | null;
+      core_equiv_diameter_px: number | null;
+      whole_equiv_diameter_px: number | null;
     }>('/api/disintegration-index', {
       mask_polygons,
       core_polygons,
       image_width: imageWidth,
       image_height: imageHeight,
     });
+    const d = response.data;
+    // Diameters are lengths → ×scale (μm/px). Fractions/counts/reach are
+    // scale-free. Panel fields are null unless the endpoint returned 'core'.
+    const lengthScale =
+      pixelToMicrometerScale && pixelToMicrometerScale > 0
+        ? pixelToMicrometerScale
+        : 1;
+    const scaleLen = (v: number | null): number | null =>
+      v === null || v === undefined ? null : v * lengthScale;
     return {
-      disintegrationIndex: response.data.di,
-      wassersteinW1: response.data.w1,
-      referenceMode: response.data.reference,
-      nPixels: response.data.n_pixels,
+      disintegrationIndex: d.di,
+      wassersteinW1: d.w1,
+      referenceMode: d.reference,
+      nPixels: d.n_pixels,
+      radialReachQ95: d.radial_reach_q95 ?? null,
+      dispersedMassFraction: d.dispersed_mass_fraction ?? null,
+      fragmentCount: d.fragment_count ?? null,
+      largestFragmentFraction: d.largest_fragment_fraction ?? null,
+      solidity: d.solidity ?? null,
+      holeCount: d.hole_count ?? null,
+      coreEquivDiameter: scaleLen(d.core_equiv_diameter_px),
+      wholeEquivDiameter: scaleLen(d.whole_equiv_diameter_px),
     };
   }
 
@@ -1115,6 +1154,7 @@ export class MetricsCalculator {
 
     const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
     const areaUnit = isScaled ? 'um^2' : 'px^2';
+    const lengthUnit = isScaled ? 'um' : 'px';
 
     const sheet = workbook.addWorksheet('Image Metrics');
     sheet.columns = [
@@ -1135,10 +1175,41 @@ export class MetricsCalculator {
         key: 'disintegrationIndex',
         width: 22,
       },
+      // Disintegration metric panel — the axes DI does not cover. All N/A when
+      // no core anchored the computation.
+      { header: 'Radial Reach q95 (R_core)', key: 'radialReachQ95', width: 24 },
+      {
+        header: 'Dispersed-Mass Fraction',
+        key: 'dispersedMassFraction',
+        width: 24,
+      },
+      { header: 'Fragment Count', key: 'fragmentCount', width: 16 },
+      {
+        header: 'Largest-Fragment Fraction',
+        key: 'largestFragmentFraction',
+        width: 26,
+      },
+      { header: 'Solidity', key: 'solidity', width: 14 },
+      { header: 'Hole Count', key: 'holeCount', width: 14 },
+      {
+        header: `Core Equiv. Diameter (${lengthUnit})`,
+        key: 'coreEquivDiameter',
+        width: 26,
+      },
+      {
+        header: `Whole Equiv. Diameter (${lengthUnit})`,
+        key: 'wholeEquivDiameter',
+        width: 26,
+      },
     ];
 
     const safe = (v: number, decimals = 2): number =>
       isFinite(v) ? parseFloat(v.toFixed(decimals)) : 0;
+    // Panel fields are null exactly when DI wasn't core-anchored → render N/A.
+    const naNum = (v: number | null, decimals: number): number | 'N/A' =>
+      v === null || v === undefined || !isFinite(v)
+        ? 'N/A'
+        : parseFloat(v.toFixed(decimals));
 
     if (imageMetrics) {
       imageMetrics.forEach(m => {
@@ -1152,6 +1223,14 @@ export class MetricsCalculator {
           // not a real zero.
           disintegrationIndex:
             m.referenceMode === 'core' ? safe(m.disintegrationIndex, 4) : 'N/A',
+          radialReachQ95: naNum(m.radialReachQ95, 3),
+          dispersedMassFraction: naNum(m.dispersedMassFraction, 4),
+          fragmentCount: naNum(m.fragmentCount, 0),
+          largestFragmentFraction: naNum(m.largestFragmentFraction, 4),
+          solidity: naNum(m.solidity, 4),
+          holeCount: naNum(m.holeCount, 0),
+          coreEquivDiameter: naNum(m.coreEquivDiameter, 2),
+          wholeEquivDiameter: naNum(m.wholeEquivDiameter, 2),
         });
       });
     }

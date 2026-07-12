@@ -38,11 +38,41 @@ class DisintegrationRequest(BaseModel):
     image_height: int
 
 
+# Speckle guard for the fragmentation/porosity panel metrics. Exposed in the
+# response so results are reproducible; keep in sync with the metrics guide.
+_DI_CLOSING_RADIUS_PX = 2
+_DI_MIN_FRAGMENT_PX = 30
+_DI_MIN_HOLE_PX = 30
+
+
 class DisintegrationResponse(BaseModel):
     di: float
     w1: float
     reference: str  # 'core' | 'no_core' | 'none'
     n_pixels: int
+
+    # --- disintegration metric panel (populated only when reference == 'core';
+    # every field stays None for no_core / none so callers render N/A) ---
+    # Axis A (radial dispersal): 95th percentile of core-normalised distances.
+    radial_reach_q95: Optional[float] = None
+    # Axis B (mass partition): fraction of FG mass outside the core.
+    dispersed_mass_fraction: Optional[float] = None
+    # Axis C (fragmentation): connected components of FG after a speckle guard.
+    fragment_count: Optional[int] = None
+    largest_fragment_fraction: Optional[float] = None
+    # Axis D (porosity): FG solidity + enclosed-hole count (Betti-1).
+    solidity: Optional[float] = None
+    hole_count: Optional[int] = None
+    # Rasterised region sizes (px) — FG = C ∪ K, so n_fg_px = n_core_px + n_corona_px.
+    n_core_px: Optional[int] = None
+    n_corona_px: Optional[int] = None
+    n_fg_px: Optional[int] = None
+    # Axis E (absolute size): equivalent diameters 2*sqrt(N/pi) in pixels.
+    core_equiv_diameter_px: Optional[float] = None
+    whole_equiv_diameter_px: Optional[float] = None
+    # Echoed speckle-guard settings for reproducibility.
+    closing_radius_px: Optional[int] = None
+    min_fragment_px: Optional[int] = None
 
 class Point(BaseModel):
     x: float
@@ -287,8 +317,14 @@ async def disintegration_index(request: DisintegrationRequest):
         w1 = float(np.mean(np.abs(d_tilde - np.sqrt(u))))
         di = float(np.tanh(w1))
 
+        # Step 4: companion panel metrics spanning the other disintegration axes,
+        # all derived from the same rasterised masks. FG = C ∪ K (union of the
+        # foreground mask and the core) so the core is always inside FG even if
+        # its polygon slightly overhangs the mask.
+        panel = _compute_panel_metrics(mask | core_mask, cx, cy, r_ref, n_core)
+
         return DisintegrationResponse(
-            di=di, w1=w1, reference="core", n_pixels=n
+            di=di, w1=w1, reference="core", n_pixels=n, **panel
         )
     except HTTPException:
         raise
@@ -304,6 +340,89 @@ async def disintegration_index(request: DisintegrationRequest):
         raise internal_error(
             logger, "Failed to compute disintegration index", exc
         ) from exc
+
+
+def _compute_panel_metrics(
+    fg_mask: np.ndarray, cx: float, cy: float, r_ref: float, n_core: int
+) -> Dict[str, Any]:
+    """Companion disintegration metrics from the rasterised foreground mask.
+
+    Spans the axes DI does not: radial reach (A), fragmentation (C) and porosity
+    (D), plus rasterised region sizes (E). All are size/resolution comparable or
+    reported with their pixel context. ``fg_mask`` is the binary FG = C ∪ K.
+    """
+    ys_fg, xs_fg = np.nonzero(fg_mask)
+    n_fg = int(xs_fg.size)
+    n_corona = max(0, n_fg - int(n_core))
+
+    # Axis A companion — 95th percentile of core-normalised FG distances (reach
+    # of the leading edge, in core radii).
+    d_fg = np.hypot(xs_fg - cx, ys_fg - cy) / r_ref
+    radial_reach_q95 = float(np.percentile(d_fg, 95)) if n_fg > 0 else 0.0
+
+    # Axis C — fragmentation. Close small gaps, drop speckle, count components.
+    ksz = 2 * _DI_CLOSING_RADIUS_PX + 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ksz, ksz))
+    closed = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+    num_labels, _labels, stats, _cent = cv2.connectedComponentsWithStats(
+        closed, connectivity=8
+    )
+    if num_labels > 1:
+        areas = stats[1:, cv2.CC_STAT_AREA]  # skip background label 0
+        kept = areas[areas >= _DI_MIN_FRAGMENT_PX]
+    else:
+        kept = np.empty(0, dtype=np.int64)
+    fragment_count = int(kept.size)
+    # Fraction of the de-speckled mass in the single largest piece. Denominator
+    # is the kept-component total (not raw n_fg) so closing can't push it past 1.
+    kept_total = int(kept.sum())
+    largest_fragment_fraction = (
+        float(int(kept.max()) / kept_total) if kept_total > 0 else 0.0
+    )
+
+    # Axis D — porosity. Solidity = FG area / convex-hull area; hole count is the
+    # number of enclosed background regions (Betti-1) above the speckle floor.
+    solidity = 0.0
+    if n_fg >= 3:
+        hull = cv2.convexHull(np.column_stack([xs_fg, ys_fg]).astype(np.int32))
+        hull_area = float(cv2.contourArea(hull))
+        if hull_area > 0:
+            # Clamp to 1.0: pixel-count / hull-polygon-area can drift slightly
+            # above 1 for convex shapes due to rasterisation.
+            solidity = min(1.0, float(n_fg / hull_area))
+
+    hole_count = 0
+    contours, hierarchy = cv2.findContours(
+        (fg_mask > 0).astype(np.uint8), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE
+    )
+    if hierarchy is not None:
+        for idx, node in enumerate(hierarchy[0]):
+            # node = [next, prev, first_child, parent]; a parent means this is a
+            # hole contour nested inside a foreground component.
+            if node[3] != -1 and cv2.contourArea(contours[idx]) >= _DI_MIN_HOLE_PX:
+                hole_count += 1
+
+    # Axis B — dispersed-mass fraction f_disp = N_K / N_FG (share of mass outside
+    # the dense core). Axis E — equivalent diameters 2*sqrt(N/pi) in pixels.
+    dispersed_mass_fraction = float(n_corona / n_fg) if n_fg > 0 else 0.0
+    core_equiv_diameter_px = float(2.0 * np.sqrt(int(n_core) / np.pi))
+    whole_equiv_diameter_px = float(2.0 * np.sqrt(n_fg / np.pi)) if n_fg > 0 else 0.0
+
+    return {
+        "radial_reach_q95": radial_reach_q95,
+        "dispersed_mass_fraction": dispersed_mass_fraction,
+        "fragment_count": fragment_count,
+        "largest_fragment_fraction": largest_fragment_fraction,
+        "solidity": solidity,
+        "hole_count": hole_count,
+        "n_core_px": int(n_core),
+        "n_corona_px": n_corona,
+        "n_fg_px": n_fg,
+        "core_equiv_diameter_px": core_equiv_diameter_px,
+        "whole_equiv_diameter_px": whole_equiv_diameter_px,
+        "closing_radius_px": _DI_CLOSING_RADIUS_PX,
+        "min_fragment_px": _DI_MIN_FRAGMENT_PX,
+    }
 
 
 @router.get("/metrics-info")
