@@ -1,31 +1,20 @@
 /**
- * exportService.gaps5.test.ts
+ * exportService.woundTimeSeries.test.ts
  *
- * Covers branches still uncovered after gaps, gaps2, gaps3, gaps4 tests:
+ * Exercises maybeAppendWoundTimeSeries end-to-end through startExportJob, so
+ * the dynamic imports of `exceljs` and `../export/woundTimeSeries` actually run.
+ * These branches are the graceful-degradation paths: whatever fails inside the
+ * wound-chart append (exceljs import, workbook read, sheet append, xlsx write,
+ * standalone-chart write), the export job itself must not crash.
  *
- *  A. maybeAppendWoundTimeSeries (private, exercised via startExportJob with wound images)
- *     - no wound images → returns [] (hasWound=false early exit)
- *     - exceljs import fails → returns warning string
- *     - workbook.xlsx.readFile fails → returns warning string
- *     - count === 0 → returns []
- *     - chartError present → warning added but xlsx write proceeds
- *     - xlsx writeFile fails → returns warnings with write error
- *     - chartPng present, writeStandaloneWoundChart fails → warning added
- *     - full success path (chartPng written) → returns empty warnings
- *
- *  B. generateMetrics — MT project skips standard metrics
- *     - projectType='microtubules' → returns without writing metrics
- *
- *  C. copyOriginalImages with cancellation (isJobCancelled branch)
- *     - job cancelled before image copy → throws "Export cancelled"
- *
- *  D. processExportJob — checkCancellation at start
- *     - job already cancelled before processing begins → early return (no further work)
+ * Only wound-specific behaviour lives here — generic job orchestration is in
+ * exportService.test.ts and generic metrics generation in
+ * exportService.generation.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// ─── DB mocks ─────────────────────────────────────────────────────────────────
+// ─── DB / service mocks ───────────────────────────────────────────────────────
 
 vi.mock('../../db', () => ({
   prisma: {
@@ -53,7 +42,7 @@ vi.mock('../websocketService', () => ({
   },
 }));
 
-vi.mock('uuid', () => ({ v4: vi.fn(() => 'g5-job-uuid') }));
+vi.mock('uuid', () => ({ v4: vi.fn(() => 'wound-job-uuid') }));
 
 vi.mock('../../utils/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -68,8 +57,6 @@ vi.mock('../../utils/config', () => ({
     NODE_ENV: 'test',
   },
 }));
-
-// ─── FS mock ──────────────────────────────────────────────────────────────────
 
 const { mockMkdir, mockWriteFile, mockReadFile, mockCopyFile, mockOpen } =
   vi.hoisted(() => ({
@@ -130,7 +117,7 @@ vi.mock('../export/formatConverter', () => ({
 }));
 
 vi.mock('../export/mtMetricsExporter', () => ({
-  computeMTMetrics: vi.fn().mockResolvedValue([]),
+  computeMTMetrics: vi.fn().mockResolvedValue({ rows: [], skipped: [] }),
   computeMTGeometry: vi.fn().mockReturnValue([]),
   writeMTMetrics: vi.fn().mockResolvedValue(undefined),
 }));
@@ -203,16 +190,11 @@ const { mockXlsxReadFile, mockXlsxWriteFile } = vi.hoisted(() => ({
 }));
 
 const mockWorkbook = {
-  xlsx: {
-    readFile: mockXlsxReadFile,
-    writeFile: mockXlsxWriteFile,
-  },
+  xlsx: { readFile: mockXlsxReadFile, writeFile: mockXlsxWriteFile },
 };
 
 vi.mock('exceljs', () => ({
-  default: {
-    Workbook: vi.fn(() => mockWorkbook),
-  },
+  default: { Workbook: vi.fn(() => mockWorkbook) },
 }));
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
@@ -267,7 +249,6 @@ function makeService(): ExportService {
 const getJobs = (svc: ExportService): Map<string, ExportJob> =>
   (svc as unknown as { exportJobs: Map<string, ExportJob> }).exportJobs;
 
-// Helper: make a minimal image with wound segmentation
 function makeWoundImage(id: string) {
   return {
     id,
@@ -311,7 +292,6 @@ function makeWoundImage(id: string) {
   };
 }
 
-// Helper: make minimal project response from prisma mock
 function makeProjectResponse(overrides: Record<string, unknown> = {}) {
   return {
     id: 'proj-1',
@@ -322,8 +302,6 @@ function makeProjectResponse(overrides: Record<string, unknown> = {}) {
   };
 }
 
-// ─── A. maybeAppendWoundTimeSeries ────────────────────────────────────────────
-
 describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', () => {
   let service: ExportService;
 
@@ -331,13 +309,14 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     vi.clearAllMocks();
     service = makeService();
     mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
-    // Default: metrics calculator writes xlsx, then wound TS is appended
     mockAppendWoundTimeSeriesSheet.mockResolvedValue({
       count: 1,
       chartPng: null,
       chartError: null,
     });
     mockWriteStandaloneWoundChart.mockResolvedValue('/tmp/chart.png');
+    mockXlsxReadFile.mockResolvedValue(undefined);
+    mockXlsxWriteFile.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -345,8 +324,7 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     resetSingleton();
   });
 
-  it('hasWound=false → wound TS logic skipped entirely', async () => {
-    // Non-wound project
+  it('skips the wound-chart logic entirely for a non-wound project', async () => {
     const proj = makeProjectResponse({ type: 'spheroid' });
     (proj.images[0].segmentation as Record<string, unknown>).model = 'hrnet';
     vi.mocked(prisma.project.findUnique).mockResolvedValueOnce(proj as never);
@@ -354,20 +332,16 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     const jobId = await service.startExportJob('proj-1', 'user-1', {
       metricsFormats: ['excel'],
     });
-
-    // Wait for background processing
     await new Promise(r => setTimeout(r, 50));
 
     expect(mockAppendWoundTimeSeriesSheet).not.toHaveBeenCalled();
-    const job = getJobs(service).get(jobId);
-    expect(job).toBeDefined();
+    expect(getJobs(service).has(jobId)).toBe(true);
   });
 
-  it('exceljs import fails → wound TS returns warning (job still completes)', async () => {
+  it('completes gracefully when the exceljs import fails', async () => {
     vi.doMock('exceljs', () => {
       throw new Error('Module not found: exceljs');
     });
-
     vi.mocked(prisma.project.findUnique).mockResolvedValueOnce(
       makeProjectResponse() as never
     );
@@ -375,15 +349,13 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     const jobId = await service.startExportJob('proj-1', 'user-1', {
       metricsFormats: ['excel'],
     });
-
     await new Promise(r => setTimeout(r, 100));
-    // Job should still exist even if wound TS failed
-    expect(getJobs(service).has(jobId)).toBe(true);
 
+    expect(getJobs(service).has(jobId)).toBe(true);
     vi.doUnmock('exceljs');
   });
 
-  it('workbook readFile fails → wound TS returns warning', async () => {
+  it('completes gracefully when the workbook readFile fails', async () => {
     vi.mocked(prisma.project.findUnique).mockResolvedValueOnce(
       makeProjectResponse() as never
     );
@@ -392,15 +364,12 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     const jobId = await service.startExportJob('proj-1', 'user-1', {
       metricsFormats: ['excel'],
     });
-
     await new Promise(r => setTimeout(r, 100));
-    expect(getJobs(service).has(jobId)).toBe(true);
 
-    // Reset for subsequent tests
-    mockXlsxReadFile.mockResolvedValue(undefined);
+    expect(getJobs(service).has(jobId)).toBe(true);
   });
 
-  it('count === 0 → wound TS returns [] (no frames written)', async () => {
+  it('completes when the wound sheet reports zero frames (count === 0)', async () => {
     mockAppendWoundTimeSeriesSheet.mockResolvedValueOnce({
       count: 0,
       chartPng: null,
@@ -413,12 +382,12 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     const jobId = await service.startExportJob('proj-1', 'user-1', {
       metricsFormats: ['excel'],
     });
-
     await new Promise(r => setTimeout(r, 100));
+
     expect(getJobs(service).has(jobId)).toBe(true);
   });
 
-  it('chartError present → warning added but xlsx write still happens', async () => {
+  it('proceeds with the xlsx write even when a chartError is reported', async () => {
     mockAppendWoundTimeSeriesSheet.mockResolvedValueOnce({
       count: 3,
       chartPng: null,
@@ -431,14 +400,12 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     const jobId = await service.startExportJob('proj-1', 'user-1', {
       metricsFormats: ['excel'],
     });
-
     await new Promise(r => setTimeout(r, 100));
-    // Xlsx was written
-    const job = getJobs(service).get(jobId);
-    expect(job).toBeDefined();
+
+    expect(getJobs(service).has(jobId)).toBe(true);
   });
 
-  it('xlsx writeFile fails → wound TS returns warnings', async () => {
+  it('completes gracefully when the xlsx writeFile fails', async () => {
     mockAppendWoundTimeSeriesSheet.mockResolvedValueOnce({
       count: 2,
       chartPng: null,
@@ -452,18 +419,15 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     const jobId = await service.startExportJob('proj-1', 'user-1', {
       metricsFormats: ['excel'],
     });
-
     await new Promise(r => setTimeout(r, 100));
-    expect(getJobs(service).has(jobId)).toBe(true);
 
-    mockXlsxWriteFile.mockResolvedValue(undefined);
+    expect(getJobs(service).has(jobId)).toBe(true);
   });
 
-  it('chartPng present + writeStandaloneWoundChart succeeds → job exists after run', async () => {
-    const fakePng = Buffer.from('fake-png');
+  it('writes the standalone chart when a chartPng is produced', async () => {
     mockAppendWoundTimeSeriesSheet.mockResolvedValue({
       count: 5,
-      chartPng: fakePng,
+      chartPng: Buffer.from('fake-png'),
       chartError: null,
     });
     mockWriteStandaloneWoundChart.mockResolvedValue('/tmp/wound_chart.png');
@@ -474,16 +438,15 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     const jobId = await service.startExportJob('proj-1', 'user-1', {
       metricsFormats: ['excel'],
     });
-
     await new Promise(r => setTimeout(r, 300));
+
     expect(getJobs(service).has(jobId)).toBe(true);
   });
 
-  it('chartPng present + writeStandaloneWoundChart fails → job exists (error handled)', async () => {
-    const fakePng = Buffer.from('fake-png');
+  it('completes gracefully when writeStandaloneWoundChart fails', async () => {
     mockAppendWoundTimeSeriesSheet.mockResolvedValue({
       count: 5,
-      chartPng: fakePng,
+      chartPng: Buffer.from('fake-png'),
       chartError: null,
     });
     mockWriteStandaloneWoundChart.mockRejectedValue(
@@ -496,110 +459,8 @@ describe('ExportService — maybeAppendWoundTimeSeries (via startExportJob)', ()
     const jobId = await service.startExportJob('proj-1', 'user-1', {
       metricsFormats: ['excel'],
     });
-
     await new Promise(r => setTimeout(r, 300));
+
     expect(getJobs(service).has(jobId)).toBe(true);
-
-    mockWriteStandaloneWoundChart.mockResolvedValue('/tmp/chart.png');
-  });
-});
-
-// ─── B. generateMetrics — MT project skips standard metrics ──────────────────
-
-describe('ExportService — generateMetrics MT skip', () => {
-  let service: ExportService;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    service = makeService();
-    mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
-  });
-
-  afterEach(() => {
-    service.destroy();
-    resetSingleton();
-  });
-
-  it('microtubules project type → MetricsCalculator not called for standard metrics', async () => {
-    const proj = makeProjectResponse({ type: 'microtubules' });
-    // Add a polyline-like segmentation
-    (proj.images[0].segmentation as Record<string, unknown>).model =
-      'microtubules';
-    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce(proj as never);
-
-    const jobId = await service.startExportJob('proj-1', 'user-1', {
-      metricsFormats: ['csv'],
-    });
-
-    await new Promise(r => setTimeout(r, 100));
-
-    const job = getJobs(service).get(jobId);
-    expect(job).toBeDefined();
-    // The MetricsCalculator mock instance should exist but exportToCSV
-    // must NOT be called because MT projects skip standard polygon metrics
-    const instance = new (MockMetricsCalculator as unknown as new () => Record<
-      string,
-      ReturnType<typeof vi.fn>
-    >)();
-    expect(instance.exportToCSV).not.toHaveBeenCalled();
-  });
-});
-
-// ─── C. cancelJob — various status transitions ────────────────────────────────
-
-describe('ExportService — cancelJob status transitions', () => {
-  let service: ExportService;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    service = makeService();
-    mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
-  });
-
-  afterEach(() => {
-    service.destroy();
-    resetSingleton();
-  });
-
-  it('marks pending job as cancelled when cancelJob is called', async () => {
-    getJobs(service).set('pending-job', {
-      id: 'pending-job',
-      projectId: 'proj-1',
-      userId: 'user-1',
-      status: 'pending',
-      progress: 0,
-      createdAt: new Date(),
-      options: {},
-    });
-
-    await service.cancelJob('pending-job', 'proj-1', 'user-1');
-
-    const job = getJobs(service).get('pending-job');
-    expect(job?.status).toBe('cancelled');
-  });
-
-  it('does not change status of already-completed job', async () => {
-    getJobs(service).set('done-job', {
-      id: 'done-job',
-      projectId: 'proj-1',
-      userId: 'user-1',
-      status: 'completed',
-      progress: 100,
-      createdAt: new Date(),
-      options: {},
-    });
-
-    await service.cancelJob('done-job', 'proj-1', 'user-1');
-
-    const job = getJobs(service).get('done-job');
-    expect(job?.status).toBe('completed');
-  });
-
-  it('returns silently when job not found (no access)', async () => {
-    mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
-    // Should not throw
-    await expect(
-      service.cancelJob('nonexistent-job', 'proj-1', 'user-1')
-    ).resolves.toBeUndefined();
   });
 });
