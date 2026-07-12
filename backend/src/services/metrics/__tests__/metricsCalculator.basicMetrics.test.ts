@@ -406,7 +406,8 @@ describe('MetricsCalculator — calculateAllImageMetrics', () => {
     // 10×10 external polygon → area = 100 px²; no core, no scale
     const image = buildImage('a1', [extPolygon(square(10))]);
     const result = await calc.calculateAllImageMetrics([image]);
-    // postMock will be called for DI; area comes from local Shoelace
+    // No core → DI short-circuits to 'no_core' (no ML call); area still comes
+    // from the local Shoelace computation.
     expect(result[0]!.totalSpheroidArea).toBeCloseTo(100, 3);
   });
 
@@ -454,18 +455,45 @@ describe('MetricsCalculator — calculateAllImageMetrics', () => {
     expect(result[0]!.disintegrationIndex).toBe(0);
   });
 
-  it('referenceMode="none" when image has external polygon but missing dimensions', async () => {
-    // Image has no width/height → DI endpoint skip
-    const image = buildImage('a6', [extPolygon(square(10))]);
+  it('referenceMode="none" when image has external polygon + core but missing dimensions', async () => {
+    // A core is present (so the no_core short-circuit does not fire), but the
+    // image has no width/height → DI endpoint is skipped and referenceMode
+    // stays at its initialised 'none'.
+    const corePoly = {
+      type: 'external' as const,
+      partClass: 'core' as const,
+      points: square(4),
+    };
+    const image = buildImage('a6', [extPolygon(square(10)), corePoly]);
     // No dims passed → width/height are undefined
     const result = await calc.calculateAllImageMetrics([image]);
-    // The code logs a warn and keeps di.referenceMode as initialised 'none'
     expect(result[0]!.referenceMode).toBe('none');
+  });
+
+  it('referenceMode="no_core" when externals are present but no core polygon', async () => {
+    // DI is core-anchored; without a core it is undefined → N/A, and no ML
+    // call is issued (the short-circuit fires before the network path).
+    const image = buildImage('a6b', [extPolygon(square(10))], {
+      width: 100,
+      height: 100,
+    });
+    const result = await calc.calculateAllImageMetrics([image]);
+    expect(result[0]!.referenceMode).toBe('no_core');
+    expect(result[0]!.disintegrationIndex).toBe(0);
+    expect(postMock).not.toHaveBeenCalled();
+    // Areas are still reported.
+    expect(result[0]!.totalSpheroidArea).toBeCloseTo(100, 3);
   });
 
   it('referenceMode="failed" when DI HTTP call rejects', async () => {
     postMock.mockRejectedValue(new Error('Network error'));
-    const image = buildImage('a7', [extPolygon(square(10))], {
+    // A core is required for the ML call to be issued at all.
+    const corePoly = {
+      type: 'external' as const,
+      partClass: 'core' as const,
+      points: square(4),
+    };
+    const image = buildImage('a7', [extPolygon(square(10)), corePoly], {
       width: 100,
       height: 100,
     });
@@ -477,16 +505,21 @@ describe('MetricsCalculator — calculateAllImageMetrics', () => {
 
   it('propagates DI values from successful ML response', async () => {
     postMock.mockResolvedValue({
-      data: { di: 0.42, w1: 2.1, reference: 'r_eff', n_pixels: 12345 },
+      data: { di: 0.42, w1: 2.1, reference: 'core', n_pixels: 12345 },
     });
-    const image = buildImage('a8', [extPolygon(square(10))], {
+    const corePoly = {
+      type: 'external' as const,
+      partClass: 'core' as const,
+      points: square(4),
+    };
+    const image = buildImage('a8', [extPolygon(square(10)), corePoly], {
       width: 100,
       height: 100,
     });
     const result = await calc.calculateAllImageMetrics([image]);
     expect(result[0]!.disintegrationIndex).toBeCloseTo(0.42, 5);
     expect(result[0]!.wassersteinW1).toBeCloseTo(2.1, 5);
-    expect(result[0]!.referenceMode).toBe('r_eff');
+    expect(result[0]!.referenceMode).toBe('core');
     expect(result[0]!.nPixels).toBe(12345);
   });
 
