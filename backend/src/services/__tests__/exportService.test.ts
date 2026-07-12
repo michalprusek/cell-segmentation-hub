@@ -1,30 +1,62 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+/**
+ * exportService.test.ts — Job management & lifecycle.
+ *
+ * Covers the public job-orchestration surface of ExportService and its
+ * job-state private helpers:
+ *   - getInstance singleton
+ *   - startExportJob (access guard, per-user rate limit, projectName
+ *     supplied / fetched-from-DB / DB-lookup-throws)
+ *   - hasActiveJobForUser (which statuses block a new job)
+ *   - getJobStatus / getExportFilePath / getExportJob (access + project gating)
+ *   - cancelJob (status transitions, idempotency, silent no-op paths)
+ *   - getExportHistory (project filter, newest-first, cap 10, access guard)
+ *   - cleanupOldJobs (TTL eviction + logging)
+ *   - destroy (interval teardown)
+ *   - sendToUser (WS passthrough + no-ws + emit-throws branches)
+ *   - updateJobProgress (enriched progress payload + phase computation)
+ *
+ * Content-generation paths (metrics / annotations / visualizations / docs /
+ * MT / wound) live in exportService.generation.test.ts and
+ * exportService.woundTimeSeries.test.ts.
+ *
+ * All I/O (FS / archiver / sharp / Prisma / ML) is mocked — nothing real runs.
+ */
 
-// All vi.mock() calls must use inline factories (not outer variables),
-// because vi.mock() is hoisted above const declarations.
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// ─── Hoisted mocks — factories use only inline vi.fn() / hoisted consts ───────
 
 vi.mock('../../db', () => ({
   prisma: {
-    project: {
-      findUnique: vi.fn(),
-    },
+    project: { findUnique: vi.fn() },
+    image: { update: vi.fn() },
   },
 }));
 
-vi.mock('../sharingService', () => ({
-  hasProjectAccess: vi.fn(),
+vi.mock('../../db/prismaClient', () => ({
+  prisma: {
+    project: { findUnique: vi.fn() },
+    image: { update: vi.fn() },
+  },
 }));
 
+const mockHasProjectAccess = vi.fn().mockResolvedValue({ hasAccess: true });
+vi.mock('../sharingService', () => ({
+  hasProjectAccess: (...args: unknown[]) => mockHasProjectAccess(...args),
+}));
+
+const mockEmitToUser = vi.fn();
 vi.mock('../websocketService', () => ({
   WebSocketService: {
-    getInstance: vi.fn(() => ({
-      emitToUser: vi.fn(),
-    })),
+    getInstance: vi.fn(() => ({ emitToUser: mockEmitToUser })),
   },
 }));
 
-vi.mock('uuid', () => ({ v4: vi.fn(() => 'test-job-id-1234') }));
-vi.mock('../../utils/logger');
+vi.mock('uuid', () => ({ v4: vi.fn(() => 'export-job-id') }));
+
+vi.mock('../../utils/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 vi.mock('../../utils/config', () => ({
   config: {
@@ -36,22 +68,40 @@ vi.mock('../../utils/config', () => ({
   },
 }));
 
-vi.mock('fs/promises', () => ({
-  mkdir: vi.fn(),
-  writeFile: vi.fn(),
-  readFile: vi.fn(),
-  readdir: vi.fn(),
-  stat: vi.fn(),
-  unlink: vi.fn(),
-  copyFile: vi.fn(),
-}));
+vi.mock('fs/promises', () => {
+  const mod = {
+    mkdir: vi.fn().mockResolvedValue(undefined),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    readFile: vi.fn().mockResolvedValue(Buffer.from('')),
+    readdir: vi.fn().mockResolvedValue([]),
+    stat: vi.fn().mockResolvedValue({ size: 0 }),
+    unlink: vi.fn().mockResolvedValue(undefined),
+    copyFile: vi.fn().mockResolvedValue(undefined),
+    open: vi.fn().mockResolvedValue({
+      read: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    }),
+    rm: vi.fn().mockResolvedValue(undefined),
+  };
+  return { ...mod, default: mod };
+});
 
 vi.mock('archiver', () => ({
   default: vi.fn(() => ({
     directory: vi.fn(),
     on: vi.fn(),
     pipe: vi.fn(),
-    finalize: vi.fn(),
+    finalize: vi.fn().mockResolvedValue(undefined),
+    readable: false,
+    writable: false,
+    destroy: vi.fn(),
+    removeAllListeners: vi.fn(),
+  })),
+}));
+
+vi.mock('sharp', () => ({
+  default: vi.fn(() => ({
+    metadata: vi.fn().mockResolvedValue({ width: 100, height: 100 }),
   })),
 }));
 
@@ -65,10 +115,30 @@ vi.mock('../metrics/metricsCalculator', () => ({
 
 vi.mock('../export/formatConverter', () => ({
   FormatConverter: vi.fn(),
-  resolveImageDimensions: vi
-    .fn()
-    .mockResolvedValue({ width: 100, height: 100 }),
+  resolveImageDimensions: vi.fn().mockReturnValue({ width: 100, height: 100 }),
 }));
+
+vi.mock('../export/mtMetricsExporter', () => ({
+  computeMTMetrics: vi.fn().mockResolvedValue({ rows: [], skipped: [] }),
+  computeMTGeometry: vi.fn().mockReturnValue([]),
+  writeMTMetrics: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../export/exportDocs', () => ({
+  generateReadme: vi.fn().mockReturnValue('readme'),
+  generateMetricsGuide: vi.fn().mockReturnValue('guide'),
+  generateAnnotationGuides: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../export/exportFileOperations', async () => {
+  const real = await vi.importActual<
+    typeof import('../export/exportFileOperations')
+  >('../export/exportFileOperations');
+  return {
+    ...real,
+    createZipArchive: vi.fn().mockResolvedValue('/tmp/export.zip'),
+  };
+});
 
 vi.mock('../../utils/batchProcessor', () => ({
   batchProcessor: {
@@ -81,437 +151,702 @@ vi.mock('../../utils/batchProcessor', () => ({
   },
 }));
 
-// --- Import source under test AFTER all mocks ---
-import { ExportService, ExportJob } from '../exportService';
-import * as SharingService from '../sharingService';
-import { prisma } from '../../db';
-import { v4 as uuidv4 } from 'uuid';
+vi.mock('../../utils/concurrency', () => ({
+  mapWithConcurrency: vi.fn(
+    async (
+      items: unknown[],
+      _c: number,
+      processor: (item: unknown) => Promise<unknown>
+    ) => Promise.all(items.map(processor))
+  ),
+}));
+
+vi.mock('../../types/validation', () => ({
+  isMicrotubuleProject: (t: string | undefined | null) => t === 'microtubules',
+  coerceProjectType: vi.fn((t: string) => t ?? 'spheroid'),
+}));
+
+// ─── Imports (after mocks) ────────────────────────────────────────────────────
+
+import { ExportService, type ExportJob } from '../exportService';
 import { MetricsCalculator } from '../metrics/metricsCalculator';
 import { FormatConverter } from '../export/formatConverter';
 import { VisualizationGenerator } from '../visualization/visualizationGenerator';
+import { prisma } from '../../db';
+import { logger } from '../../utils/logger';
 
-const JOB_ID = 'test-job-id-1234';
-const PROJECT_ID = 'project-id';
-const USER_ID = 'user-id';
-
-// Typed references to the mocked functions
-const mockHasProjectAccess = (SharingService as any)
-  .hasProjectAccess as ReturnType<typeof vi.fn>;
-const mockPrismaProjectFindUnique = (prisma as any).project
-  .findUnique as ReturnType<typeof vi.fn>;
-const mockUuidV4 = uuidv4 as unknown as ReturnType<typeof vi.fn>;
 const MockMetricsCalculator = MetricsCalculator as unknown as ReturnType<
   typeof vi.fn
 >;
 const MockFormatConverter = FormatConverter as unknown as ReturnType<
   typeof vi.fn
 >;
-const MockVisualizationGenerator =
-  VisualizationGenerator as unknown as ReturnType<typeof vi.fn>;
+const MockVizGen = VisualizationGenerator as unknown as ReturnType<
+  typeof vi.fn
+>;
+
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+
+const JOB_ID = 'export-job-id';
 
 const resetSingleton = () => {
-  (ExportService as any).instance = undefined;
+  (ExportService as unknown as { instance: unknown }).instance = undefined;
 };
 
-const makeService = (): ExportService => {
+/**
+ * Fresh singleton with the three constructor collaborators stubbed. The stubs
+ * must be (re)wired here because vitest's `restoreMocks` clears the factory
+ * implementations before every test, and the ExportService constructor `new`s
+ * all three collaborators.
+ */
+function makeService(): ExportService {
   resetSingleton();
-  const svc = ExportService.getInstance();
-  return svc;
+  MockMetricsCalculator.mockImplementation(function (
+    this: Record<string, unknown>
+  ) {
+    this.calculateAllMetrics = vi.fn().mockResolvedValue([]);
+    this.calculateAllImageMetrics = vi.fn().mockResolvedValue([]);
+    this.exportPolygonMetricsToExcel = vi.fn().mockResolvedValue(undefined);
+    this.exportSpermToExcel = vi.fn().mockResolvedValue(true);
+    this.exportToExcel = vi.fn().mockResolvedValue(undefined);
+    this.exportToCSV = vi.fn().mockResolvedValue(undefined);
+  });
+  MockFormatConverter.mockImplementation(function (
+    this: Record<string, unknown>
+  ) {
+    this.convertToCOCO = vi.fn().mockResolvedValue({});
+    this.convertToYOLO = vi
+      .fn()
+      .mockResolvedValue({ content: '', warnings: [] });
+    this.convertToJSON = vi.fn().mockResolvedValue({});
+  });
+  MockVizGen.mockImplementation(function (this: Record<string, unknown>) {
+    this.generateVisualization = vi.fn().mockResolvedValue('success');
+  });
+  return ExportService.getInstance();
+}
+
+const getJobs = (svc: ExportService): Map<string, ExportJob> =>
+  (svc as unknown as { exportJobs: Map<string, ExportJob> }).exportJobs;
+
+const seedJob = (
+  svc: ExportService,
+  overrides: Partial<ExportJob> = {}
+): ExportJob => {
+  const job: ExportJob = {
+    id: 'seed-job',
+    projectId: 'proj-1',
+    userId: 'user-1',
+    status: 'completed',
+    progress: 100,
+    createdAt: new Date(),
+    options: {},
+    ...overrides,
+  };
+  getJobs(svc).set(job.id, job);
+  return job;
 };
 
-const mockProjectData = {
-  id: PROJECT_ID,
-  title: 'Test Project',
-  images: [],
+/**
+ * Make the background processExportJob (which re-checks access) exit
+ * immediately so it never races the assertions. startExportJob's own guard
+ * sees the first `true`; processExportJob's guard sees the second `false`.
+ */
+const failBackground = () => {
+  mockHasProjectAccess
+    .mockResolvedValueOnce({ hasAccess: true })
+    .mockResolvedValueOnce({ hasAccess: false });
 };
 
-describe('ExportService', () => {
+// ─── getInstance ──────────────────────────────────────────────────────────────
+
+describe('ExportService — getInstance', () => {
+  afterEach(resetSingleton);
+
+  it('returns the same singleton on repeated calls', () => {
+    resetSingleton();
+    const a = ExportService.getInstance();
+    const b = ExportService.getInstance();
+    expect(a).toBe(b);
+  });
+});
+
+// ─── startExportJob ───────────────────────────────────────────────────────────
+
+describe('ExportService — startExportJob', () => {
   let service: ExportService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Re-set constructor mocks (resetMocks:true clears factory-set implementations).
-    // Cast to `any` to avoid TS2345 "never" inference inside mockImplementation callbacks.
-    // Vitest v4 quirk: `mockImplementation(() => obj)` produces a non-
-    // constructable arrow function. Use function-form so `new MockX()`
-    // sets properties on `this` and returns it.
-    MockVisualizationGenerator.mockImplementation(function (this: any) {
-      this.generateVisualization = (vi.fn() as any).mockResolvedValue(
-        undefined
-      );
-    });
-    MockMetricsCalculator.mockImplementation(function (this: any) {
-      this.calculateAllMetrics = (vi.fn() as any).mockResolvedValue([]);
-      this.calculateAllImageMetrics = (vi.fn() as any).mockResolvedValue([]);
-      this.exportToExcel = (vi.fn() as any).mockResolvedValue(undefined);
-      this.exportToCSV = (vi.fn() as any).mockResolvedValue(undefined);
-      this.exportPolygonMetricsToExcel = (vi.fn() as any).mockResolvedValue(
-        undefined
-      );
-      this.exportSpermToExcel = (vi.fn() as any).mockResolvedValue(false);
-    });
-    MockFormatConverter.mockImplementation(function (this: any) {
-      this.convertToCOCO = (vi.fn() as any).mockResolvedValue({});
-      this.convertToYOLO = (vi.fn() as any).mockResolvedValue({
-        content: '',
-        warnings: [],
-      });
-      this.convertToJSON = (vi.fn() as any).mockResolvedValue({});
-    });
-
     service = makeService();
-
-    // Re-set implementations after resetMocks:true clears them
-    mockUuidV4.mockReturnValue(JOB_ID);
     mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
-    mockPrismaProjectFindUnique.mockResolvedValue(mockProjectData);
+    vi.mocked(prisma.project.findUnique).mockResolvedValue(null);
   });
 
   afterEach(() => {
+    service.destroy();
     resetSingleton();
   });
 
-  // ---------------------------------------------------------------------------
-  describe('startExportJob', () => {
-    it('creates job with pending status and returns jobId', async () => {
-      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: ['json'],
-      });
-
-      expect(jobId).toBe(JOB_ID);
+  it('creates a pending job record and returns the jobId', async () => {
+    failBackground();
+    const id = await service.startExportJob('proj-1', 'user-1', {
+      annotationFormats: ['json'],
     });
 
-    it('notifies user via WebSocket when job is started', async () => {
-      // Check that the job gets added to the internal map (signaling the flow ran)
-      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: ['json'],
-      });
+    expect(id).toBe(JOB_ID);
+    const job = getJobs(service).get(JOB_ID);
+    expect(job).toBeDefined();
+    expect(job!.projectId).toBe('proj-1');
+    expect(job!.userId).toBe('user-1');
+    expect(typeof job!.progress).toBe('number');
+  });
 
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      expect(jobs.has(jobId)).toBe(true);
-    });
+  it('throws "Access denied" when the user has no project access', async () => {
+    mockHasProjectAccess.mockResolvedValue({ hasAccess: false });
+    await expect(
+      service.startExportJob('proj-1', 'user-1', {})
+    ).rejects.toThrow('Access denied');
+  });
 
-    it('throws access denied when user has no project access', async () => {
-      mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
+  it('throws "Rate limit exceeded" when the user already has a pending job', async () => {
+    seedJob(service, { id: 'existing', status: 'pending', userId: 'user-1' });
+    await expect(
+      service.startExportJob('proj-1', 'user-1', {})
+    ).rejects.toThrow('Rate limit exceeded');
+  });
 
-      await expect(
-        service.startExportJob(PROJECT_ID, USER_ID, {})
-      ).rejects.toThrow('Access denied');
-    });
+  it('does not rate-limit a DIFFERENT user while the first is processing', async () => {
+    seedJob(service, { id: 'u1-job', status: 'processing', userId: 'user-1' });
+    failBackground();
+    const id = await service.startExportJob('proj-1', 'user-2', {});
+    expect(id).toBe(JOB_ID);
+  });
 
-    it('uses provided projectName without DB lookup', async () => {
-      const jobId = await service.startExportJob(
-        PROJECT_ID,
-        USER_ID,
-        { annotationFormats: ['json'] },
-        'Custom Name'
+  it('uses a supplied projectName without a DB title lookup', async () => {
+    failBackground();
+    await service.startExportJob('proj-1', 'user-1', {}, 'Explicit Name');
+
+    const job = getJobs(service).get(JOB_ID);
+    expect(job!.projectName).toBe('Explicit Name');
+    const titleCall = vi
+      .mocked(prisma.project.findUnique)
+      .mock.calls.find(
+        c => (c[0] as { select?: { title?: boolean } }).select?.title === true
       );
+    expect(titleCall).toBeUndefined();
+  });
 
-      expect(jobId).toBe(JOB_ID);
+  it('fetches projectName from the DB when none is supplied', async () => {
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      title: 'DB Project Name',
+    } as never);
+    failBackground();
+
+    await service.startExportJob('proj-1', 'user-1', {});
+    expect(getJobs(service).get(JOB_ID)!.projectName).toBe('DB Project Name');
+  });
+
+  it('still creates the job when the projectName DB lookup throws', async () => {
+    vi.mocked(prisma.project.findUnique).mockRejectedValueOnce(
+      new Error('DB offline')
+    );
+    const id = await service.startExportJob('proj-1', 'user-1', {});
+    expect(typeof id).toBe('string');
+    expect(getJobs(service).has(id)).toBe(true);
+  });
+});
+
+// ─── hasActiveJobForUser (via startExportJob) ────────────────────────────────
+
+describe('ExportService — per-user active-job guard', () => {
+  let service: ExportService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = makeService();
+    mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
+    vi.mocked(prisma.project.findUnique).mockResolvedValue({
+      title: 'T',
+    } as never);
+  });
+
+  afterEach(() => {
+    service.destroy();
+    resetSingleton();
+  });
+
+  it('a "processing" job blocks a new export for the same user', async () => {
+    seedJob(service, { id: 'active', status: 'processing', userId: 'u' });
+    await expect(service.startExportJob('proj-1', 'u', {})).rejects.toThrow(
+      'Rate limit exceeded'
+    );
+  });
+
+  it.each(['completed', 'failed', 'cancelled'] as const)(
+    'a "%s" (terminal) job does NOT block a new export',
+    async status => {
+      seedJob(service, { id: `${status}-job`, status, userId: 'u' });
+      failBackground();
+      const id = await service.startExportJob('proj-1', 'u', {});
+      expect(typeof id).toBe('string');
+    }
+  );
+});
+
+// ─── getJobStatus / getExportFilePath / getExportJob ─────────────────────────
+
+describe('ExportService — job read methods', () => {
+  let service: ExportService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = makeService();
+    mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
+  });
+
+  afterEach(() => {
+    service.destroy();
+    resetSingleton();
+  });
+
+  const plant = (overrides: Partial<ExportJob> = {}): ExportJob =>
+    seedJob(service, {
+      id: 'job-read',
+      projectId: 'proj-r',
+      userId: 'user-r',
+      status: 'completed',
+      progress: 100,
+      filePath: '/tmp/file.zip',
+      ...overrides,
     });
 
-    it('rejects a second concurrent export from the same user', async () => {
-      // Pre-seed a pending job for the user. We don't await startExportJob
-      // again because the first call kicks off async processing — using
-      // the internal map keeps the test deterministic.
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      jobs.set('existing-job', {
-        id: 'existing-job',
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'pending',
-        progress: 0,
-        createdAt: new Date(),
-        options: {},
-      });
+  // getJobStatus
+  it('getJobStatus returns the job when access + projectId match', async () => {
+    const job = plant();
+    expect(await service.getJobStatus('job-read', 'proj-r', 'user-r')).toEqual(
+      job
+    );
+  });
 
-      await expect(
-        service.startExportJob(PROJECT_ID, USER_ID, {
-          annotationFormats: ['json'],
-        })
-      ).rejects.toThrow(/Rate limit exceeded/);
+  it('getJobStatus returns null for an unknown jobId', async () => {
+    expect(await service.getJobStatus('nope', 'proj-r', 'user-r')).toBeNull();
+  });
+
+  it('getJobStatus returns null when the projectId does not match', async () => {
+    plant();
+    expect(
+      await service.getJobStatus('job-read', 'wrong-proj', 'user-r')
+    ).toBeNull();
+  });
+
+  it('getJobStatus returns null when access is denied', async () => {
+    mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
+    plant();
+    expect(
+      await service.getJobStatus('job-read', 'proj-r', 'user-r')
+    ).toBeNull();
+  });
+
+  // getExportFilePath
+  it('getExportFilePath returns the filePath for a completed job', async () => {
+    plant();
+    expect(
+      await service.getExportFilePath('job-read', 'proj-r', 'user-r')
+    ).toBe('/tmp/file.zip');
+  });
+
+  it('getExportFilePath returns null when the job has no filePath', async () => {
+    plant({ filePath: undefined });
+    expect(
+      await service.getExportFilePath('job-read', 'proj-r', 'user-r')
+    ).toBeNull();
+  });
+
+  it('getExportFilePath returns null for an unknown jobId', async () => {
+    expect(
+      await service.getExportFilePath('nope', 'proj-r', 'user-r')
+    ).toBeNull();
+  });
+
+  it('getExportFilePath returns null when access is denied', async () => {
+    mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
+    plant();
+    expect(
+      await service.getExportFilePath('job-read', 'proj-r', 'user-r')
+    ).toBeNull();
+  });
+
+  // getExportJob
+  it('getExportJob returns the full job when access + projectId match', async () => {
+    const job = plant();
+    expect(await service.getExportJob('job-read', 'proj-r', 'user-r')).toEqual(
+      job
+    );
+  });
+
+  it('getExportJob returns null when the projectId does not match', async () => {
+    plant();
+    expect(
+      await service.getExportJob('job-read', 'other-proj', 'user-r')
+    ).toBeNull();
+  });
+
+  it('getExportJob returns null when access is denied', async () => {
+    mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
+    plant();
+    expect(
+      await service.getExportJob('job-read', 'proj-r', 'user-r')
+    ).toBeNull();
+  });
+});
+
+// ─── cancelJob ───────────────────────────────────────────────────────────────
+
+describe('ExportService — cancelJob', () => {
+  let service: ExportService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = makeService();
+    mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
+    service.setWebSocketService({ emitToUser: mockEmitToUser } as never);
+  });
+
+  afterEach(() => {
+    service.destroy();
+    resetSingleton();
+  });
+
+  const plant = (overrides: Partial<ExportJob> = {}): ExportJob =>
+    seedJob(service, {
+      id: 'c-job',
+      projectId: 'proj-c',
+      userId: 'user-c',
+      status: 'pending',
+      progress: 42,
+      ...overrides,
     });
 
-    it('allows a new export after the previous one finishes', async () => {
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      jobs.set('past-job', {
-        id: 'past-job',
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'completed', // terminal state — no longer "active"
-        progress: 100,
-        createdAt: new Date(),
-        options: {},
-      });
+  it('transitions a pending job to cancelled and emits export:cancelled', async () => {
+    plant({ status: 'pending' });
+    await service.cancelJob('c-job', 'proj-c', 'user-c');
 
-      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: ['json'],
-      });
+    const job = getJobs(service).get('c-job');
+    expect(job!.status).toBe('cancelled');
+    expect(job!.completedAt).toBeInstanceOf(Date);
+    expect(mockEmitToUser).toHaveBeenCalledWith(
+      'user-c',
+      'export:cancelled',
+      expect.objectContaining({ jobId: 'c-job' })
+    );
+  });
 
-      expect(jobId).toBe(JOB_ID);
+  it('transitions a processing job to cancelled', async () => {
+    plant({ status: 'processing' });
+    await service.cancelJob('c-job', 'proj-c', 'user-c');
+    expect(getJobs(service).get('c-job')!.status).toBe('cancelled');
+  });
+
+  it('is idempotent when the job is already completed (no WS, status kept)', async () => {
+    plant({ status: 'completed' });
+    await service.cancelJob('c-job', 'proj-c', 'user-c');
+    expect(getJobs(service).get('c-job')!.status).toBe('completed');
+    expect(mockEmitToUser).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent when the job is already cancelled', async () => {
+    plant({ status: 'cancelled', completedAt: new Date() });
+    const before = getJobs(service).get('c-job')!.completedAt;
+    await service.cancelJob('c-job', 'proj-c', 'user-c');
+    expect(getJobs(service).get('c-job')!.completedAt).toEqual(before);
+  });
+
+  it('silently no-ops when access is denied (job untouched)', async () => {
+    mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
+    plant({ status: 'pending' });
+    await expect(
+      service.cancelJob('c-job', 'proj-c', 'stranger')
+    ).resolves.toBeUndefined();
+    expect(getJobs(service).get('c-job')!.status).toBe('pending');
+  });
+
+  it('silently no-ops for an unknown jobId', async () => {
+    await expect(
+      service.cancelJob('no-such', 'proj-c', 'user-c')
+    ).resolves.toBeUndefined();
+  });
+
+  it('silently no-ops when the projectId does not match', async () => {
+    plant({ status: 'pending' });
+    await service.cancelJob('c-job', 'wrong-project', 'user-c');
+    expect(getJobs(service).get('c-job')!.status).toBe('pending');
+  });
+});
+
+// ─── getExportHistory ─────────────────────────────────────────────────────────
+
+describe('ExportService — getExportHistory', () => {
+  let service: ExportService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = makeService();
+    mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
+  });
+
+  afterEach(() => {
+    service.destroy();
+    resetSingleton();
+  });
+
+  const addJob = (id: string, createdAt: Date, projectId = 'proj-h'): void => {
+    seedJob(service, {
+      id,
+      projectId,
+      userId: 'user-h',
+      status: 'completed',
+      createdAt,
+    });
+  };
+
+  it('returns an empty array when the project has no jobs', async () => {
+    expect(await service.getExportHistory('proj-h', 'user-h')).toEqual([]);
+  });
+
+  it('returns jobs newest-first', async () => {
+    addJob('older', new Date('2024-01-01'));
+    addJob('newer', new Date('2024-06-01'));
+
+    const result = await service.getExportHistory('proj-h', 'user-h');
+    expect(result[0].id).toBe('newer');
+    expect(result[1].id).toBe('older');
+  });
+
+  it('caps the output at 10 entries and excludes other projects', async () => {
+    for (let i = 0; i < 12; i++) {
+      addJob(`job-${i}`, new Date(Date.now() - i * 1000));
+    }
+    addJob('other', new Date(), 'proj-other');
+
+    const result = await service.getExportHistory('proj-h', 'user-h');
+    expect(result).toHaveLength(10);
+    expect(result.every(j => j.projectId === 'proj-h')).toBe(true);
+    for (let i = 0; i < result.length - 1; i++) {
+      expect(result[i].createdAt.getTime()).toBeGreaterThanOrEqual(
+        result[i + 1].createdAt.getTime()
+      );
+    }
+  });
+
+  it('returns an empty array when access is denied', async () => {
+    mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
+    addJob('mine', new Date());
+    expect(await service.getExportHistory('proj-h', 'stranger')).toEqual([]);
+  });
+});
+
+// ─── cleanupOldJobs ───────────────────────────────────────────────────────────
+
+describe('ExportService — cleanupOldJobs', () => {
+  let service: ExportService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = makeService();
+  });
+
+  afterEach(() => {
+    service.destroy();
+    resetSingleton();
+  });
+
+  const callCleanup = (svc: ExportService) =>
+    (svc as unknown as { cleanupOldJobs(): void }).cleanupOldJobs();
+
+  it('evicts jobs older than the 24h TTL and keeps fresh ones', () => {
+    const jobs = getJobs(service);
+    seedJob(service, {
+      id: 'old-job',
+      createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    });
+    seedJob(service, {
+      id: 'fresh-job',
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
     });
 
-    it('does not block a different user from exporting concurrently', async () => {
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      jobs.set('other-users-job', {
-        id: 'other-users-job',
-        projectId: PROJECT_ID,
-        userId: 'other-user',
-        status: 'processing',
+    callCleanup(service);
+
+    expect(jobs.has('old-job')).toBe(false);
+    expect(jobs.has('fresh-job')).toBe(true);
+    expect(vi.mocked(logger.info)).toHaveBeenCalled();
+  });
+
+  it('does nothing (and does not log) when there is nothing to clean', () => {
+    vi.clearAllMocks();
+    expect(() => callCleanup(service)).not.toThrow();
+    expect(vi.mocked(logger.info)).not.toHaveBeenCalled();
+  });
+});
+
+// ─── destroy ──────────────────────────────────────────────────────────────────
+
+describe('ExportService — destroy', () => {
+  afterEach(resetSingleton);
+
+  it('clears the cleanup interval', () => {
+    const svc = makeService();
+    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
+    svc.destroy();
+    expect(clearSpy).toHaveBeenCalledOnce();
+    clearSpy.mockRestore();
+  });
+
+  it('is idempotent across multiple calls', () => {
+    const svc = makeService();
+    expect(() => {
+      svc.destroy();
+      svc.destroy();
+    }).not.toThrow();
+  });
+});
+
+// ─── sendToUser (WS dispatch) ─────────────────────────────────────────────────
+
+describe('ExportService — sendToUser', () => {
+  let service: ExportService;
+  let emitToUser: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = makeService();
+    emitToUser = vi.fn();
+  });
+
+  afterEach(() => {
+    service.destroy();
+    resetSingleton();
+  });
+
+  const callSendToUser = (
+    userId: string,
+    event: string,
+    data: Record<string, unknown>
+  ) =>
+    (
+      service as unknown as {
+        sendToUser(
+          userId: string,
+          event: string,
+          data: Record<string, unknown>
+        ): void;
+      }
+    ).sendToUser(userId, event, data);
+
+  it('forwards the event and payload to wsService.emitToUser', () => {
+    service.setWebSocketService({ emitToUser } as never);
+    callSendToUser('user-1', 'export:started', { jobId: 'j1' });
+    expect(emitToUser).toHaveBeenCalledWith('user-1', 'export:started', {
+      jobId: 'j1',
+    });
+  });
+
+  it('logs a warning and does not throw when no wsService is set', () => {
+    expect(() =>
+      callSendToUser('u', 'export:started', { jobId: 'j' })
+    ).not.toThrow();
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('WebSocketService not available'),
+      expect.any(String),
+      expect.objectContaining({ userId: 'u', event: 'export:started' })
+    );
+  });
+
+  it('swallows errors thrown by emitToUser', () => {
+    service.setWebSocketService({
+      emitToUser: vi.fn(() => {
+        throw new Error('ws down');
+      }),
+    } as never);
+    expect(() =>
+      callSendToUser('user-1', 'export:completed', { jobId: 'j1', warnings: [] })
+    ).not.toThrow();
+  });
+});
+
+// ─── updateJobProgress ────────────────────────────────────────────────────────
+
+describe('ExportService — updateJobProgress', () => {
+  let service: ExportService;
+  let emitToUser: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = makeService();
+    emitToUser = vi.fn();
+    service.setWebSocketService({ emitToUser } as never);
+    seedJob(service, {
+      id: 'up-job',
+      projectId: 'proj-u',
+      userId: 'user-u',
+      status: 'processing',
+      progress: 0,
+    });
+  });
+
+  afterEach(() => {
+    service.destroy();
+    resetSingleton();
+  });
+
+  const callUpdate = (
+    jobId: string,
+    progress: number,
+    stage?: string,
+    stageProgress?: { current: number; total: number; currentItem?: string }
+  ) =>
+    (
+      service as unknown as {
+        updateJobProgress(
+          jobId: string,
+          progress: number,
+          stage?: string,
+          stageProgress?: {
+            current: number;
+            total: number;
+            currentItem?: string;
+          }
+        ): void;
+      }
+    ).updateJobProgress(jobId, progress, stage, stageProgress);
+
+  it('updates the job progress field', () => {
+    callUpdate('up-job', 42);
+    expect(getJobs(service).get('up-job')!.progress).toBe(42);
+  });
+
+  it('emits enriched progress data with phase=processing below 90%', () => {
+    callUpdate('up-job', 50, 'images', { current: 3, total: 10 });
+    expect(emitToUser).toHaveBeenCalledWith(
+      'user-u',
+      'export:progress',
+      expect.objectContaining({
+        jobId: 'up-job',
         progress: 50,
-        createdAt: new Date(),
-        options: {},
-      });
-
-      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: ['json'],
-      });
-
-      expect(jobId).toBe(JOB_ID);
-    });
+        phase: 'processing',
+        stage: 'images',
+        stageProgress: { current: 3, total: 10 },
+      })
+    );
   });
 
-  // ---------------------------------------------------------------------------
-  describe('getJobStatus', () => {
-    it('returns status for matching userId/projectId', async () => {
-      await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: ['json'],
-      });
-
-      // Re-allow access for the getJobStatus call
-      mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
-
-      const job = await service.getJobStatus(JOB_ID, PROJECT_ID, USER_ID);
-
-      expect(job).not.toBeNull();
-      expect(job?.id).toBe(JOB_ID);
-      expect(job?.projectId).toBe(PROJECT_ID);
-    });
-
-    it('returns null for non-existent job', async () => {
-      const job = await service.getJobStatus(
-        'nonexistent',
-        PROJECT_ID,
-        USER_ID
-      );
-
-      expect(job).toBeNull();
-    });
-
-    it('returns null when user has no project access', async () => {
-      // Insert a job manually
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      jobs.set(JOB_ID, {
-        id: JOB_ID,
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'completed',
-        progress: 100,
-        createdAt: new Date(),
-        options: {},
-      });
-
-      mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
-
-      const job = await service.getJobStatus(JOB_ID, PROJECT_ID, 'other-user');
-
-      expect(job).toBeNull();
-    });
+  it('reports phase=downloading at or above 90%', () => {
+    callUpdate('up-job', 95, 'compression');
+    expect(emitToUser.mock.calls[0][2].phase).toBe('downloading');
   });
 
-  // ---------------------------------------------------------------------------
-  describe('cancelExport', () => {
-    it('sets status to cancelled', async () => {
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      jobs.set(JOB_ID, {
-        id: JOB_ID,
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'pending',
-        progress: 10,
-        createdAt: new Date(),
-        options: {},
-      });
-
-      await service.cancelJob(JOB_ID, PROJECT_ID, USER_ID);
-
-      expect(jobs.get(JOB_ID)?.status).toBe('cancelled');
-    });
-
-    it('is idempotent when job already completed', async () => {
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      jobs.set(JOB_ID, {
-        id: JOB_ID,
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'completed',
-        progress: 100,
-        createdAt: new Date(),
-        options: {},
-      });
-
-      await service.cancelJob(JOB_ID, PROJECT_ID, USER_ID);
-
-      // Status should remain completed (not overwritten)
-      expect(jobs.get(JOB_ID)?.status).toBe('completed');
-    });
-
-    it('does nothing silently when user has no access', async () => {
-      mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
-
-      await expect(
-        service.cancelJob(JOB_ID, PROJECT_ID, 'stranger')
-      ).resolves.toBeUndefined();
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  describe('getExportFilePath / downloadExport', () => {
-    it('returns file path for completed job', async () => {
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      jobs.set(JOB_ID, {
-        id: JOB_ID,
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'completed',
-        progress: 100,
-        filePath: '/exports/test-job-id-1234/export.zip',
-        createdAt: new Date(),
-        options: {},
-      });
-
-      const filePath = await service.getExportFilePath(
-        JOB_ID,
-        PROJECT_ID,
-        USER_ID
-      );
-
-      expect(filePath).toBe('/exports/test-job-id-1234/export.zip');
-    });
-
-    it('returns null when job has no file path', async () => {
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-      jobs.set(JOB_ID, {
-        id: JOB_ID,
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'processing',
-        progress: 40,
-        createdAt: new Date(),
-        options: {},
-      });
-
-      const filePath = await service.getExportFilePath(
-        JOB_ID,
-        PROJECT_ID,
-        USER_ID
-      );
-
-      expect(filePath).toBeNull();
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  describe('getExportHistory', () => {
-    it('returns all jobs for project in descending creation order', async () => {
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-
-      const job1: ExportJob = {
-        id: 'job-1',
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'completed',
-        progress: 100,
-        createdAt: new Date('2026-03-01'),
-        options: {},
-      };
-      const job2: ExportJob = {
-        id: 'job-2',
-        projectId: PROJECT_ID,
-        userId: USER_ID,
-        status: 'failed',
-        progress: 30,
-        createdAt: new Date('2026-03-02'),
-        options: {},
-      };
-
-      jobs.set('job-1', job1);
-      jobs.set('job-2', job2);
-
-      const history = await service.getExportHistory(PROJECT_ID, USER_ID);
-
-      expect(history.length).toBeGreaterThanOrEqual(2);
-      // Latest first
-      expect(history[0].createdAt.getTime()).toBeGreaterThanOrEqual(
-        history[1].createdAt.getTime()
-      );
-    });
-
-    it('returns empty array when user has no access', async () => {
-      mockHasProjectAccess.mockResolvedValueOnce({ hasAccess: false });
-
-      const history = await service.getExportHistory(PROJECT_ID, 'stranger');
-
-      expect(history).toEqual([]);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  describe('Job lifecycle', () => {
-    it('job is added to internal map when startExportJob is called', async () => {
-      const jobs = (service as any).exportJobs as Map<string, ExportJob>;
-
-      await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: [],
-      });
-
-      expect(jobs.has(JOB_ID)).toBe(true);
-      // Status at creation (before async processing) starts as 'pending'
-      const job = jobs.get(JOB_ID);
-      expect(['pending', 'processing', 'completed', 'failed']).toContain(
-        job?.status
-      );
-    });
-
-    it('export with COCO format creates a job successfully', async () => {
-      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: ['coco'],
-      });
-      expect(jobId).toBe(JOB_ID);
-    });
-
-    it('export with YOLO format creates a job successfully', async () => {
-      resetSingleton();
-      service = makeService();
-      mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
-      mockPrismaProjectFindUnique.mockResolvedValue(mockProjectData);
-
-      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: ['yolo'],
-      });
-      expect(jobId).toBe(JOB_ID);
-    });
-
-    it('export with JSON format creates a job successfully', async () => {
-      resetSingleton();
-      service = makeService();
-      mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
-      mockPrismaProjectFindUnique.mockResolvedValue(mockProjectData);
-
-      const jobId = await service.startExportJob(PROJECT_ID, USER_ID, {
-        annotationFormats: ['json'],
-      });
-      expect(jobId).toBe(JOB_ID);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  describe('getInstance', () => {
-    it('returns singleton after first init', () => {
-      const a = ExportService.getInstance();
-      const b = ExportService.getInstance();
-      expect(a).toBe(b);
-    });
+  it('is a no-op for an unknown jobId', () => {
+    callUpdate('no-such-job', 50);
+    expect(emitToUser).not.toHaveBeenCalled();
   });
 });

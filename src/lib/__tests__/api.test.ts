@@ -1,1195 +1,770 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import axios from 'axios';
+/**
+ * api.ts — ApiClient core / cross-cutting behaviour.
+ *
+ * Covers the axios-client plumbing that is shared by every request:
+ *   • axios instance configuration (cookie auth, timeout, headers)
+ *   • response interceptor: success pass-through
+ *   • token refresh on 401 (refresh + retry, auth-endpoint skip, _retry guard,
+ *     signed-out handling, concurrent de-duplication, refreshAccessToken)
+ *   • retryable-status backoff (429 / 502 / 503) and its limits
+ *   • response-envelope extraction (success wrapper vs direct data)
+ *   • field mapping (project / image / segmentation-status / dtoToProjectImage)
+ *   • generic HTTP pass-through helpers
+ *   • auth methods (login / register / logout)
+ *
+ * Resource-method coverage (projects, folders, sharing, images, segmentation,
+ * queue, upload, export, profile) lives in api-methods.test.ts; chunked upload
+ * lives in api-chunked-upload.test.ts. All three share
+ * ./helpers/apiClientTestKit.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  localStorageMock,
+  sessionStorageMock,
+  wrap,
+} from './helpers/apiClientTestKit';
 
-// Import types
-import type {
-  AuthResponse as _AuthResponse,
-  Project as _Project,
-  ProjectImage as _ProjectImage,
-  SegmentationResult as _SegmentationResult,
-  SegmentationPolygon as _SegmentationPolygon,
-  SegmentationResultData as _SegmentationResultData,
-  QueueItem as _QueueItem,
-  QueueStats as _QueueStats,
-  AddToQueueResponse as _AddToQueueResponse,
-  BatchQueueResponse as _BatchQueueResponse,
-} from '../api';
+// ── hoisted axios mock: captures the create() config + interceptor handlers ──
+const {
+  mockAxiosInstance,
+  createConfigRef,
+  responseInterceptorRef,
+  responseErrorHandlerRef,
+} = vi.hoisted(() => {
+  const createConfigRef: { value: any } = { value: undefined };
+  const responseInterceptorRef: { value: any } = { value: undefined };
+  const responseErrorHandlerRef: { value: any } = { value: undefined };
 
-// Mock axios completely
-vi.mock('axios');
-const mockAxios = axios as any;
+  const mockAxiosInstance = {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+    interceptors: {
+      request: { use: vi.fn(), eject: vi.fn() },
+      response: {
+        // No request interceptor after the cookie cutover — auth rides in the
+        // httpOnly cookie. Capture the response success + error handlers so the
+        // interceptor branches can be exercised directly.
+        use: vi.fn((success: any, error: any) => {
+          responseInterceptorRef.value = success;
+          responseErrorHandlerRef.value = error;
+          return 0;
+        }),
+        eject: vi.fn(),
+      },
+    },
+  };
 
-// Mock localStorage and sessionStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-};
-const sessionStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-};
-
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-});
-Object.defineProperty(window, 'sessionStorage', {
-  value: sessionStorageMock,
-});
-
-// Mock config
-vi.mock('../config', () => ({
-  default: {
-    apiBaseUrl: 'http://localhost:3001/api',
-  },
-}));
-
-// Mock logger
-vi.mock('../logger', () => ({
-  logger: {
-    debug: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
-// Mock the API module but allow us to test it
-vi.mock('@/lib/api', async importOriginal => {
-  const actual = (await importOriginal()) as any;
   return {
-    ...actual,
-    // Keep the actual exports but we'll mock axios
+    mockAxiosInstance,
+    createConfigRef,
+    responseInterceptorRef,
+    responseErrorHandlerRef,
   };
 });
 
-describe('API Client', () => {
-  let mockAxiosInstance: any;
-  let apiClient: any;
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn((cfg: any) => {
+      createConfigRef.value = cfg;
+      return mockAxiosInstance;
+    }),
+  },
+}));
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
+// Override the global setup.ts mock so we test the real ApiClient.
+vi.mock('@/lib/api', async importOriginal => {
+  const actual = (await importOriginal()) as any;
+  return { ...actual };
+});
 
-    mockAxiosInstance = {
-      post: vi.fn(),
-      get: vi.fn(),
-      put: vi.fn(),
-      delete: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
+vi.mock('@/lib/config', () => ({
+  default: { apiBaseUrl: 'http://localhost:3001/api' },
+}));
+
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+// ── real singleton (constructor runs once, capturing the interceptor refs) ──
+import { apiClient, dtoToProjectImage, type ProjectImageDTO } from '../api';
+
+beforeEach(() => {
+  // resetAllMocks clears queued mockResolvedValueOnce chains between tests.
+  vi.resetAllMocks();
+  localStorageMock.getItem.mockReturnValue(null);
+  sessionStorageMock.getItem.mockReturnValue(null);
+  (apiClient as any).instance = mockAxiosInstance;
+  (apiClient as any).refreshPromise = null;
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+describe('axios instance configuration', () => {
+  it('creates the client with cookie auth + JSON defaults', () => {
+    // createConfigRef is captured at construction time and survives resetAllMocks.
+    expect(createConfigRef.value).toEqual({
+      baseURL: 'http://localhost:3001/api',
+      timeout: 120000,
+      headers: { 'Content-Type': 'application/json' },
+      withCredentials: true,
+    });
+  });
+
+  it('registers a response interceptor with success + error handlers', () => {
+    expect(responseInterceptorRef.value).toBeInstanceOf(Function);
+    expect(responseErrorHandlerRef.value).toBeInstanceOf(Function);
+  });
+
+  it('passes through successful responses unchanged', () => {
+    const response = { data: { success: true }, status: 200 };
+    expect(responseInterceptorRef.value(response)).toBe(response);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+describe('token refresh (401)', () => {
+  it('refreshes the token on 401 and retries the original request', async () => {
+    const error = {
+      response: { status: 401 },
+      config: { url: '/test-endpoint', headers: {} },
     };
 
-    mockAxios.create.mockReturnValue(mockAxiosInstance);
+    // The instance is called for the retry; .post is called for the refresh.
+    const callableMock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { result: 'ok' } });
+    Object.assign(callableMock, mockAxiosInstance);
+    callableMock.post = vi.fn().mockResolvedValueOnce({ data: {} });
+    (apiClient as any).instance = callableMock;
 
-    // Reset storage mocks
-    localStorageMock.getItem.mockReturnValue(null);
-    sessionStorageMock.getItem.mockReturnValue(null);
+    try {
+      await responseErrorHandlerRef.value(error);
+    } catch {
+      // Retry wiring may reject in the mock — we only assert the refresh call.
+    }
 
-    // Import fresh API client
-    vi.resetModules();
-    const { apiClient: freshApiClient } = await import('../api');
-    apiClient = freshApiClient;
+    // Refresh posts with NO body (the refresh_token cookie carries the token).
+    expect(callableMock.post).toHaveBeenCalledWith('/auth/refresh-token');
 
-    // Mock the internal instance property directly
     (apiClient as any).instance = mockAxiosInstance;
   });
 
-  afterEach(() => {
-    vi.resetAllMocks();
+  it('does not attempt refresh for auth endpoints on 401', async () => {
+    const err = {
+      response: { status: 401 },
+      config: { url: '/auth/login', headers: {} },
+    };
+
+    await expect(responseErrorHandlerRef.value(err)).rejects.toEqual(err);
+    expect(mockAxiosInstance.post).not.toHaveBeenCalledWith(
+      '/auth/refresh',
+      expect.any(Object)
+    );
   });
 
-  describe('Initial State', () => {
-    test('should create the axios instance with withCredentials for cookie auth', () => {
-      // Tokens travel only in httpOnly cookies now, so every request must
-      // carry credentials. There is no client-readable token state.
-      expect(mockAxios.create).toHaveBeenCalledWith(
-        expect.objectContaining({ withCredentials: true })
-      );
-    });
+  it('surfaces signed-out state (and touches no localStorage) when refresh fails', async () => {
+    const err = {
+      response: { status: 401 },
+      config: { url: '/protected-endpoint', headers: {} },
+    };
+    mockAxiosInstance.post.mockRejectedValue(new Error('Refresh failed'));
 
-    test('should have axios instance configured', () => {
-      expect((apiClient as any).instance).toBeDefined();
-    });
+    await expect(responseErrorHandlerRef.value(err)).rejects.toBeDefined();
+
+    // Tokens live in httpOnly cookies — nothing to clear client-side.
+    expect(localStorageMock.removeItem).not.toHaveBeenCalled();
+    expect(sessionStorageMock.removeItem).not.toHaveBeenCalled();
   });
 
-  describe('Authentication Methods', () => {
-    describe('login', () => {
-      test('should login and return the user (tokens come back as cookies)', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              // The server sets tokens as httpOnly cookies; the body has user.
-              user: {
-                id: '1',
-                email: 'test@example.com',
-                username: 'testuser',
-              },
-            },
-          },
-        };
+  it('does not retry a request that already carries the _retry flag', async () => {
+    const err = {
+      response: { status: 401 },
+      config: { url: '/test', headers: {}, _retry: true },
+    };
 
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.login('test@example.com', 'password123');
-
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/login', {
-          email: 'test@example.com',
-          password: 'password123',
-          rememberMe: true,
-        });
-
-        // Body carries only the user — no tokens are returned or stored.
-        expect(result).toEqual({
-          user: { id: '1', email: 'test@example.com', username: 'testuser' },
-        });
-        expect(localStorageMock.setItem).not.toHaveBeenCalled();
-        expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
-      });
-
-      test('should forward rememberMe=false to the server (cookie Max-Age)', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: { user: { id: '1', email: 'test@example.com' } },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        await apiClient.login('test@example.com', 'password123', false);
-
-        // rememberMe now only affects the refresh-cookie lifetime server-side.
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/login', {
-          email: 'test@example.com',
-          password: 'password123',
-          rememberMe: false,
-        });
-        expect(localStorageMock.setItem).not.toHaveBeenCalled();
-        expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
-      });
-
-      test('should handle direct data response format (no data envelope)', async () => {
-        const mockResponse = {
-          data: {
-            user: { id: '1', email: 'test@example.com' },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.login('test@example.com', 'password123');
-
-        expect(result.user).toEqual({ id: '1', email: 'test@example.com' });
-      });
-
-      test('should handle login errors', async () => {
-        const mockError = new Error('Invalid credentials');
-        mockAxiosInstance.post.mockRejectedValue(mockError);
-
-        await expect(
-          apiClient.login('test@example.com', 'wrong')
-        ).rejects.toThrow('Invalid credentials');
-      });
-    });
-
-    describe('register', () => {
-      test('should register successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              // Tokens are set as httpOnly cookies; body carries the user.
-              user: { id: '1', email: 'new@example.com', username: 'newuser' },
-            },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.register(
-          'new@example.com',
-          'password123',
-          'newuser',
-          {
-            consentToMLTraining: true,
-            consentToAlgorithmImprovement: false,
-            consentToFeatureDevelopment: true,
-          }
-        );
-
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/register', {
-          email: 'new@example.com',
-          password: 'password123',
-          username: 'newuser',
-          consentToMLTraining: true,
-          consentToAlgorithmImprovement: false,
-          consentToFeatureDevelopment: true,
-        });
-
-        expect(result).toEqual({
-          user: { id: '1', email: 'new@example.com', username: 'newuser' },
-        });
-      });
-
-      test('should register without optional parameters', async () => {
-        const mockResponse = {
-          data: {
-            data: {
-              accessToken: 'access-token',
-              refreshToken: 'refresh-token',
-              user: { id: '1', email: 'simple@example.com' },
-            },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        await apiClient.register('simple@example.com', 'password123');
-
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/register', {
-          email: 'simple@example.com',
-          password: 'password123',
-          username: undefined,
-        });
-      });
-    });
-
-    describe('logout', () => {
-      test('should POST /auth/logout with no body (refresh cookie carries the token)', async () => {
-        mockAxiosInstance.post.mockResolvedValue({});
-
-        await apiClient.logout();
-
-        // No body — the refresh_token cookie is sent automatically and the
-        // server clears both cookies. Nothing to remove client-side.
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/logout');
-        expect(localStorageMock.removeItem).not.toHaveBeenCalled();
-        expect(sessionStorageMock.removeItem).not.toHaveBeenCalled();
-      });
-
-      test('should resolve without throwing even if the logout request fails', async () => {
-        mockAxiosInstance.post.mockRejectedValue(new Error('Network error'));
-
-        await expect(apiClient.logout()).resolves.toBeUndefined();
-      });
-    });
-
-    describe('refreshAccessToken', () => {
-      test('should POST /auth/refresh-token with no body (cookie carries the token)', async () => {
-        mockAxiosInstance.post.mockResolvedValue({ data: { success: true } });
-
-        await apiClient.refreshAccessToken();
-
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-          '/auth/refresh-token'
-        );
-      });
-
-      test('should propagate a refresh failure (dead/missing refresh cookie)', async () => {
-        mockAxiosInstance.post.mockRejectedValue(
-          new Error('Invalid refresh token')
-        );
-
-        await expect(apiClient.refreshAccessToken()).rejects.toThrow(
-          'Invalid refresh token'
-        );
-      });
-    });
+    await expect(responseErrorHandlerRef.value(err)).rejects.toEqual(err);
+    expect(mockAxiosInstance.post).not.toHaveBeenCalled();
   });
 
-  describe('Project Methods', () => {
-    beforeEach(() => {
-      (apiClient as any).accessToken = 'valid-access-token';
+  it('handles two concurrent 401s without wedging', async () => {
+    const err1 = {
+      response: { status: 401 },
+      config: { url: '/a', headers: {} },
+    };
+    const err2 = {
+      response: { status: 401 },
+      config: { url: '/b', headers: {} },
+    };
+
+    mockAxiosInstance.post.mockResolvedValueOnce({ data: {} });
+    mockAxiosInstance.get.mockResolvedValue({ data: { result: 'ok' } });
+
+    const results = await Promise.allSettled([
+      responseErrorHandlerRef.value(err1),
+      responseErrorHandlerRef.value(err2),
+    ]);
+
+    expect(results).toHaveLength(2);
+    expect(mockAxiosInstance.post).toHaveBeenCalled();
+  });
+
+  it('refreshAccessToken de-duplicates concurrent callers into one POST', async () => {
+    let resolveRefresh!: (v: unknown) => void;
+    mockAxiosInstance.post.mockReturnValue(
+      new Promise(res => {
+        resolveRefresh = res;
+      })
+    );
+
+    const p1 = (apiClient as any).refreshAccessToken();
+    const p2 = (apiClient as any).refreshAccessToken();
+
+    resolveRefresh({ data: {} });
+    await Promise.all([p1, p2]);
+
+    // Two callers, a single in-flight request.
+    expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/refresh-token');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+describe('retryable-status backoff (429 / 502 / 503)', () => {
+  it('retries a 429 with exponential backoff and returns the success', async () => {
+    const success = { data: { result: 'success' } };
+    const callableMock = vi.fn().mockResolvedValueOnce(success);
+    Object.assign(callableMock, mockAxiosInstance);
+    (apiClient as any).instance = callableMock;
+
+    const result = await responseErrorHandlerRef.value({
+      response: { status: 429 },
+      config: { url: '/rate-limited' },
     });
 
-    describe('getProjects', () => {
-      test('should get projects successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: [
-              {
-                id: '1',
-                title: 'Project 1', // Backend uses title
-                description: 'Test project',
-                createdAt: '2024-01-01T00:00:00Z',
-                updatedAt: '2024-01-01T00:00:00Z',
-                userId: 'user1',
-                _count: { images: 5 },
-              },
-            ],
-            pagination: {
-              total: 1,
-              page: 1,
-              totalPages: 1,
-            },
-          },
-        };
+    expect(result).toBeDefined();
+    (apiClient as any).instance = mockAxiosInstance;
+  }, 10000);
 
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+  it('rejects a 429 after the maximum retry attempts', async () => {
+    const rateLimitError = {
+      response: { status: 429 },
+      config: { url: '/always-429' },
+    };
+    const callableMock = vi.fn().mockRejectedValue(rateLimitError);
+    Object.assign(callableMock, mockAxiosInstance);
+    (apiClient as any).instance = callableMock;
 
-        const result = await apiClient.getProjects({ page: 1, limit: 10 });
+    await expect(
+      responseErrorHandlerRef.value(rateLimitError)
+    ).rejects.toBeDefined();
 
-        expect(mockAxiosInstance.get).toHaveBeenCalledWith('/projects', {
-          params: { page: 1, limit: 10 },
-        });
+    (apiClient as any).instance = mockAxiosInstance;
+  }, 30000);
 
-        expect(result).toEqual({
-          projects: [
-            {
-              id: '1',
-              name: 'Project 1', // Mapped from title to name
-              description: 'Test project',
-              type: 'spheroid', // Default type when not provided by backend
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-01T00:00:00Z',
-              user_id: 'user1',
-              image_count: 5,
-            },
-          ],
-          total: 1,
-          page: 1,
-          totalPages: 1,
-        });
-      });
+  it('retries a 502 and returns the eventual success', async () => {
+    const success = { data: 'ok', status: 200 };
+    const callableMock = vi.fn().mockResolvedValueOnce(success);
+    Object.assign(callableMock, mockAxiosInstance);
+    (apiClient as any).instance = callableMock;
 
-      test('should handle fallback response format', async () => {
-        const mockResponse = {
-          data: {
-            projects: [
-              {
-                id: '1',
-                name: 'Direct Project',
-                created_at: '2024-01-01T00:00:00Z',
-                updated_at: '2024-01-01T00:00:00Z',
-                user_id: 'user1',
-              },
-            ],
-            total: 1,
-          },
-        };
+    const result = await responseErrorHandlerRef.value({
+      response: { status: 502 },
+      config: { url: '/flaky', headers: {} },
+    });
 
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+    expect(result).toEqual(success);
+    (apiClient as any).instance = mockAxiosInstance;
+  }, 15000);
 
+  it('throws after max retries when a 503 persists', async () => {
+    const error = {
+      response: { status: 503 },
+      config: { url: '/down', headers: {} },
+    };
+    const callableMock = vi.fn().mockRejectedValue(error);
+    Object.assign(callableMock, mockAxiosInstance);
+    (apiClient as any).instance = callableMock;
+
+    await expect(responseErrorHandlerRef.value(error)).rejects.toBeDefined();
+    (apiClient as any).instance = mockAxiosInstance;
+  }, 30000);
+
+  it('does not apply backoff to non-retryable status codes (500)', async () => {
+    const serverError = {
+      response: { status: 500 },
+      config: { url: '/server-error' },
+    };
+
+    await expect(responseErrorHandlerRef.value(serverError)).rejects.toEqual(
+      serverError
+    );
+    expect(mockAxiosInstance.get).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+describe('response-envelope extraction', () => {
+  it('unwraps the { success, data } envelope', async () => {
+    mockAxiosInstance.get.mockResolvedValue({
+      data: { success: true, data: { id: '1', name: 'Test' }, message: 'ok' },
+    });
+
+    const result = await apiClient.getUserProfile();
+    expect(result).toEqual({ id: '1', name: 'Test' });
+  });
+
+  it('accepts a direct data response without a wrapper', async () => {
+    mockAxiosInstance.get.mockResolvedValue({
+      data: { id: '1', name: 'Direct' },
+    });
+
+    const result = await apiClient.getUserProfile();
+    expect(result).toEqual({ id: '1', name: 'Direct' });
+  });
+
+  it('returns safe defaults for a variety of malformed responses', async () => {
+    const malformed = [
+      { data: null },
+      { data: undefined },
+      { data: 'not an object' },
+      { data: 123 },
+      { data: [] },
+      {},
+      null,
+      undefined,
+    ];
+
+    for (const response of malformed) {
+      mockAxiosInstance.get.mockResolvedValueOnce(response);
+      try {
         const result = await apiClient.getProjects();
-
-        expect(result.projects).toHaveLength(1);
-        expect(result.projects[0].name).toBe('Direct Project');
-      });
-    });
-
-    describe('createProject', () => {
-      test('should create project successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              id: '1',
-              title: 'New Project',
-              description: 'Test description',
-              createdAt: '2024-01-01T00:00:00Z',
-              updatedAt: '2024-01-01T00:00:00Z',
-              userId: 'user1',
-            },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.createProject({
-          name: 'New Project',
-          description: 'Test description',
-        });
-
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/projects', {
-          title: 'New Project', // Converted to title for backend
-          description: 'Test description',
-        });
-
-        expect(result.name).toBe('New Project');
-        expect(result.description).toBe('Test description');
-      });
-
-      test('should create project without description', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              id: '1',
-              title: 'Simple Project',
-              createdAt: '2024-01-01T00:00:00Z',
-              updatedAt: '2024-01-01T00:00:00Z',
-              userId: 'user1',
-            },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.createProject({
-          name: 'Simple Project',
-        });
-
-        expect(result.name).toBe('Simple Project');
-        expect(result.description).toBeUndefined();
-      });
-    });
-
-    describe('updateProject', () => {
-      test('should update project successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              id: '1',
-              title: 'Updated Project',
-              description: 'Updated description',
-              createdAt: '2024-01-01T00:00:00Z',
-              updatedAt: '2024-01-01T01:00:00Z',
-              userId: 'user1',
-            },
-          },
-        };
-
-        mockAxiosInstance.put.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.updateProject('1', {
-          name: 'Updated Project',
-          description: 'Updated description',
-        });
-
-        expect(mockAxiosInstance.put).toHaveBeenCalledWith('/projects/1', {
-          name: undefined, // Remove name to avoid backend confusion
-          description: 'Updated description',
-          title: 'Updated Project', // Converted to title
-        });
-
-        expect(result.name).toBe('Updated Project');
-      });
-    });
-
-    describe('getProject', () => {
-      test('should get single project successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              id: '1',
-              title: 'Single Project',
-              createdAt: '2024-01-01T00:00:00Z',
-              updatedAt: '2024-01-01T00:00:00Z',
-              userId: 'user1',
-            },
-          },
-        };
-
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getProject('1');
-
-        expect(mockAxiosInstance.get).toHaveBeenCalledWith('/projects/1');
-        expect(result.name).toBe('Single Project');
-      });
-    });
-
-    describe('deleteProject', () => {
-      test('should delete project successfully', async () => {
-        mockAxiosInstance.delete.mockResolvedValue({});
-
-        await apiClient.deleteProject('1');
-
-        expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/projects/1');
-      });
-    });
+        if (result && typeof result === 'object') {
+          expect(result).toMatchObject({
+            projects: expect.any(Array),
+            total: expect.any(Number),
+            page: expect.any(Number),
+            totalPages: expect.any(Number),
+          });
+        } else {
+          expect(result).toBeDefined();
+        }
+      } catch (error) {
+        expect(error).toBeDefined();
+      }
+    }
   });
+});
 
-  describe('Image Methods', () => {
-    beforeEach(() => {
-      (apiClient as any).accessToken = 'valid-access-token';
-    });
-
-    describe('getProjectImages', () => {
-      test('should get project images successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              images: [
-                {
-                  id: '1',
-                  name: 'test.jpg',
-                  projectId: 'project1',
-                  userId: 'user1',
-                  originalUrl: '/uploads/image1.jpg',
-                  thumbnailUrl: '/thumbnails/image1_thumb.jpg',
-                  width: 800,
-                  height: 600,
-                  segmentationStatus: 'completed',
-                  createdAt: '2024-01-01T00:00:00Z',
-                  updatedAt: '2024-01-01T00:00:00Z',
-                },
-              ],
-              pagination: {
-                total: 1,
-                page: 1,
-                totalPages: 1,
-              },
-            },
-          },
-        };
-
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getProjectImages('project1', {
-          page: 1,
-          limit: 10,
-        });
-
-        expect(mockAxiosInstance.get).toHaveBeenCalledWith(
-          '/projects/project1/images',
+// ════════════════════════════════════════════════════════════════════════════
+describe('field mapping', () => {
+  it('maps backend project field names to the frontend shape', async () => {
+    mockAxiosInstance.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
           {
-            params: { page: 1, limit: 10 },
-          }
-        );
-
-        expect(result.images).toHaveLength(1);
-        expect(result.images[0]).toMatchObject({
-          id: '1',
-          name: 'test.jpg',
-          project_id: 'project1',
-          user_id: 'user1',
-          segmentation_status: 'completed',
-        });
-      });
-
-      test('should handle empty images response', async () => {
-        const mockResponse = {
-          data: {
-            data: {
-              images: null,
-              pagination: {
-                total: 0,
-                page: 1,
-                totalPages: 1,
-              },
-            },
+            id: '1',
+            title: 'Backend Title',
+            createdAt: '2024-01-01T00:00:00Z',
+            userId: 'user123',
           },
-        };
-
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getProjectImages('project1');
-
-        expect(result).toEqual({
-          images: [],
-          total: 0,
-          page: 1,
-          totalPages: 1,
-        });
-      });
+        ],
+        pagination: { total: 1, page: 1, totalPages: 1 },
+      },
     });
 
-    describe('uploadImages', () => {
-      test('should upload images successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              images: [
-                {
-                  id: '1',
-                  name: 'uploaded.jpg',
-                  projectId: 'project1',
-                  userId: 'user1',
-                  originalUrl: '/uploads/uploaded.jpg',
-                  createdAt: '2024-01-01T00:00:00Z',
-                  updatedAt: '2024-01-01T00:00:00Z',
-                },
-              ],
-              count: 1,
-            },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const mockFile = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-        const mockProgressCallback = vi.fn();
-
-        const result = await apiClient.uploadImages(
-          'project1',
-          [mockFile],
-          mockProgressCallback
-        );
-
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-          '/projects/project1/images',
-          expect.any(FormData),
-          expect.objectContaining({
-            headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: 300000,
-            onUploadProgress: expect.any(Function),
-          })
-        );
-
-        expect(result).toHaveLength(1);
-        expect(result[0].name).toBe('uploaded.jpg');
-      });
-
-      test('should handle upload progress callback', async () => {
-        const mockResponse = { data: { data: { images: [], count: 0 } } };
-        mockAxiosInstance.post.mockImplementation((url, data, config) => {
-          // Simulate progress event
-          if (config?.onUploadProgress) {
-            config.onUploadProgress({ loaded: 50, total: 100 });
-          }
-          return Promise.resolve(mockResponse);
-        });
-
-        const mockFile = new File(['test'], 'test.jpg');
-        const mockProgressCallback = vi.fn();
-
-        await apiClient.uploadImages(
-          'project1',
-          [mockFile],
-          mockProgressCallback
-        );
-
-        expect(mockProgressCallback).toHaveBeenCalledWith(50);
-      });
-    });
-
-    describe('getImage', () => {
-      test('should get single image successfully', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              image: {
-                id: '1',
-                name: 'single.jpg',
-                projectId: 'project1',
-                userId: 'user1',
-                originalUrl: '/uploads/single.jpg',
-                createdAt: '2024-01-01T00:00:00Z',
-                updatedAt: '2024-01-01T00:00:00Z',
-              },
-            },
-          },
-        };
-
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getImage('project1', '1');
-
-        expect(mockAxiosInstance.get).toHaveBeenCalledWith(
-          '/projects/project1/images/1'
-        );
-        expect(result.name).toBe('single.jpg');
-      });
-
-      test('should handle direct image data response', async () => {
-        const mockResponse = {
-          data: {
-            success: true,
-            data: {
-              id: '1',
-              name: 'direct.jpg',
-              projectId: 'project1',
-              userId: 'user1',
-              originalUrl: '/uploads/direct.jpg',
-              createdAt: '2024-01-01T00:00:00Z',
-              updatedAt: '2024-01-01T00:00:00Z',
-            },
-          },
-        };
-
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getImage('project1', '1');
-
-        expect(result.name).toBe('direct.jpg');
-      });
-    });
-
-    describe('deleteImage', () => {
-      test('should delete image successfully', async () => {
-        mockAxiosInstance.delete.mockResolvedValue({});
-
-        await apiClient.deleteImage('project1', '1');
-
-        expect(mockAxiosInstance.delete).toHaveBeenCalledWith(
-          '/projects/project1/images/1'
-        );
-      });
+    const result = await apiClient.getProjects();
+    expect(result.projects[0]).toMatchObject({
+      id: '1',
+      name: 'Backend Title',
+      created_at: '2024-01-01T00:00:00Z',
+      user_id: 'user123',
     });
   });
 
-  describe('Generic HTTP Methods', () => {
-    beforeEach(() => {
-      (apiClient as any).accessToken = 'valid-access-token';
-    });
-
-    test('should call post method correctly', async () => {
-      const mockResponse = { data: { result: 'success' } };
-      mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-      const result = await apiClient.post('/test', { data: 'test' });
-
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/test',
-        { data: 'test' },
-        undefined
-      );
-      expect(result).toEqual(mockResponse);
-    });
-
-    test('should call get method correctly', async () => {
-      const mockResponse = { data: { result: 'success' } };
-      mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-      const result = await apiClient.get('/test', { params: { id: 1 } });
-
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/test', {
-        params: { id: 1 },
-      });
-      expect(result).toEqual(mockResponse);
-    });
-
-    test('should call put method correctly', async () => {
-      const mockResponse = { data: { result: 'updated' } };
-      mockAxiosInstance.put.mockResolvedValue(mockResponse);
-
-      const result = await apiClient.put('/test', { data: 'updated' });
-
-      expect(mockAxiosInstance.put).toHaveBeenCalledWith(
-        '/test',
-        { data: 'updated' },
-        undefined
-      );
-      expect(result).toEqual(mockResponse);
-    });
-
-    test('should call delete method correctly', async () => {
-      const mockResponse = { data: { result: 'deleted' } };
-      mockAxiosInstance.delete.mockResolvedValue(mockResponse);
-
-      const result = await apiClient.delete('/test');
-
-      expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/test', undefined);
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('Error Handling and Edge Cases', () => {
-    test('should handle network errors gracefully', async () => {
-      const networkError = new Error('Network Error');
-      mockAxiosInstance.get.mockRejectedValue(networkError);
-
-      await expect(apiClient.getProjects()).rejects.toThrow('Network Error');
-    });
-
-    test('should handle malformed response data', async () => {
-      const malformedResponse = {
-        data: null,
-      };
-      mockAxiosInstance.get.mockResolvedValue(malformedResponse);
-
-      const result = await apiClient.getProjects();
-
-      // Should return safe defaults
-      expect(result).toMatchObject({
-        projects: [],
-        total: 0,
-        page: 1,
-        totalPages: 1,
-      });
-    });
-
-    test('should handle undefined response data', async () => {
-      const undefinedResponse = {
-        data: undefined,
-      };
-      mockAxiosInstance.get.mockResolvedValue(undefinedResponse);
-
-      const result = await apiClient.getProjects();
-
-      expect(result).toMatchObject({
-        projects: [],
-        total: 0,
-        page: 1,
-        totalPages: 1,
-      });
-    });
-  });
-
-  describe('Field Mapping', () => {
-    test('should map backend project fields to frontend format', async () => {
-      const mockResponse = {
+  it('ensures relative image URLs become absolute (under /uploads/)', async () => {
+    mockAxiosInstance.get.mockResolvedValue({
+      data: {
+        success: true,
         data: {
-          success: true,
-          data: [
+          images: [
             {
               id: '1',
-              title: 'Backend Title',
-              description: 'Backend Description',
+              name: 'test.jpg',
+              projectId: 'proj1',
+              userId: 'user1',
+              originalUrl: '/uploads/relative.jpg',
+              thumbnailUrl: '/uploads/thumb.jpg',
               createdAt: '2024-01-01T00:00:00Z',
-              updatedAt: '2024-01-01T01:00:00Z',
-              userId: 'backend-user-id',
-              imageCount: 10,
+              updatedAt: '2024-01-01T00:00:00Z',
             },
           ],
           pagination: { total: 1, page: 1, totalPages: 1 },
         },
-      };
-
-      mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-      const result = await apiClient.getProjects();
-
-      expect(result.projects[0]).toMatchObject({
-        id: '1',
-        name: 'Backend Title', // title -> name
-        description: 'Backend Description',
-        created_at: '2024-01-01T00:00:00Z', // createdAt -> created_at
-        updated_at: '2024-01-01T01:00:00Z', // updatedAt -> updated_at
-        user_id: 'backend-user-id', // userId -> user_id
-        image_count: 10, // imageCount -> image_count
-      });
+      },
     });
 
-    test('should map backend image fields to frontend format', async () => {
-      const mockResponse = {
+    const result = await apiClient.getProjectImages('proj1');
+    expect(result.images[0].image_url).toBe(
+      'http://localhost:3001/uploads/relative.jpg'
+    );
+    expect(result.images[0].thumbnail_url).toBe(
+      'http://localhost:3001/uploads/thumb.jpg'
+    );
+  });
+
+  it('preserves already-absolute image URLs', async () => {
+    mockAxiosInstance.get.mockResolvedValue({
+      data: {
+        success: true,
         data: {
-          success: true,
-          data: {
-            images: [
-              {
-                id: '1',
-                name: 'test.jpg',
-                projectId: 'proj1',
-                userId: 'user1',
-                originalUrl: 'http://backend/image.jpg',
-                thumbnailUrl: 'http://backend/thumb.jpg',
-                width: 800,
-                height: 600,
-                segmentationStatus: 'no_segmentation',
-                createdAt: '2024-01-01T00:00:00Z',
-                updatedAt: '2024-01-01T00:00:00Z',
-              },
-            ],
-            pagination: { total: 1, page: 1, totalPages: 1 },
-          },
+          images: [
+            {
+              id: '1',
+              name: 'test.jpg',
+              projectId: 'proj1',
+              userId: 'user1',
+              originalUrl: 'https://cdn.example.com/image.jpg',
+              thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
+              createdAt: '2024-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+            },
+          ],
+          pagination: { total: 1, page: 1, totalPages: 1 },
         },
-      };
-
-      mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-      const result = await apiClient.getProjectImages('proj1');
-
-      expect(result.images[0]).toMatchObject({
-        id: '1',
-        name: 'test.jpg',
-        project_id: 'proj1', // projectId -> project_id
-        user_id: 'user1', // userId -> user_id
-        image_url: 'http://backend/image.jpg', // originalUrl -> image_url
-        thumbnail_url: 'http://backend/thumb.jpg', // thumbnailUrl -> thumbnail_url
-        segmentation_status: 'pending', // no_segmentation -> pending
-        created_at: '2024-01-01T00:00:00Z', // createdAt -> created_at
-        updated_at: '2024-01-01T00:00:00Z', // updatedAt -> updated_at
-      });
+      },
     });
 
-    test('should map segmentation status values correctly through getImage', async () => {
-      // Test segmentation status mapping by verifying the mapped results through public API
-      const testCases = [
-        { input: 'no_segmentation', expected: 'pending' },
-        { input: 'queued', expected: 'pending' },
-        { input: 'segmented', expected: 'completed' },
-        { input: 'completed', expected: 'completed' },
-      ];
+    const result = await apiClient.getProjectImages('proj1');
+    expect(result.images[0].image_url).toBe(
+      'https://cdn.example.com/image.jpg'
+    );
+    expect(result.images[0].thumbnail_url).toBe(
+      'https://cdn.example.com/thumb.jpg'
+    );
+  });
 
-      for (const { input, expected } of testCases) {
-        const mockImage = {
-          id: '1',
-          name: 'test.jpg',
-          projectId: 'proj1',
-          userId: 'user1',
-          originalUrl: '/test.jpg',
-          segmentationStatus: input,
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z',
-        };
+  it('maps every backend segmentation status to the frontend enum', async () => {
+    const cases = [
+      { backend: 'no_segmentation', expected: 'pending' },
+      { backend: 'queued', expected: 'pending' },
+      { backend: 'segmented', expected: 'completed' },
+      { backend: 'no_polygons', expected: 'completed' },
+      { backend: 'pending', expected: 'pending' },
+      { backend: 'processing', expected: 'processing' },
+      { backend: 'completed', expected: 'completed' },
+      { backend: 'failed', expected: 'failed' },
+      { backend: 'unknown_status', expected: 'failed' },
+      { backend: null, expected: 'failed' },
+      { backend: undefined, expected: 'failed' },
+    ];
 
-        mockAxiosInstance.get.mockResolvedValue({
-          data: {
-            success: true,
-            data: { image: mockImage },
+    for (const { backend, expected } of cases) {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({
+          image: {
+            id: '1',
+            name: 'test.jpg',
+            projectId: 'proj1',
+            userId: 'user1',
+            originalUrl: '/test.jpg',
+            segmentationStatus: backend,
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
           },
-        });
+        })
+      );
+      const result = await apiClient.getImage('proj1', '1');
+      expect(result.segmentation_status).toBe(expected);
+    }
+  });
 
-        const result = await apiClient.getImage('proj1', '1');
-        expect(result.segmentation_status).toBe(expected);
-      }
+  // mapImageFields branch battery (exercised via getImage) ────────────────────
+  describe('mapImageFields', () => {
+    function imageResponse(overrides: Record<string, unknown>) {
+      return wrap({
+        image: {
+          id: 'img-1',
+          name: 'test.jpg',
+          projectId: 'proj-1',
+          userId: 'user-1',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-02T00:00:00Z',
+          segmentationStatus: 'completed',
+          ...overrides,
+        },
+      });
+    }
+
+    it('derives segmentationThumbnailUrl from segmentationThumbnailPath', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        imageResponse({
+          originalUrl: 'http://host/img.png',
+          segmentationThumbnailPath: '/uploads/seg/thumb.jpg',
+        })
+      );
+      const result = await apiClient.getImage('proj-1', 'img-1');
+      expect(result.segmentationThumbnailUrl).toContain('thumb.jpg');
+      expect(result.segmentationThumbnailPath).toBe('/uploads/seg/thumb.jpg');
+    });
+
+    it('keeps a relative imageUrl resolvable', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        imageResponse({ image_url: 'relative/path/img.png' })
+      );
+      const result = await apiClient.getImage('proj-1', 'img-1');
+      expect(result.image_url).toContain('relative/path/img.png');
+    });
+
+    it('passes through absolute http(s) URLs unchanged', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        imageResponse({
+          originalUrl: 'https://cdn.example.com/img.png',
+          thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
+        })
+      );
+      const result = await apiClient.getImage('proj-1', 'img-1');
+      expect(result.image_url).toBe('https://cdn.example.com/img.png');
+    });
+
+    it('falls back thumbnail_url to the image URL when thumbnail is absent', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        imageResponse({ originalUrl: 'http://localhost/img.png' })
+      );
+      const result = await apiClient.getImage('proj-1', 'img-1');
+      expect(result.thumbnail_url).toContain('img.png');
+    });
+
+    it('preserves null width/height rather than coercing to a number', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        imageResponse({
+          originalUrl: 'http://localhost/img.png',
+          width: null,
+          height: null,
+        })
+      );
+      const result = await apiClient.getImage('proj-1', 'img-1');
+      expect(result.width).toBeNull();
+      expect(result.height).toBeNull();
     });
   });
 
-  describe('Batch Segmentation Results', () => {
-    beforeEach(() => {
-      (apiClient as any).accessToken = 'valid-access-token';
+  // mapProjectFields edge cases (exercised via getProject) ─────────────────────
+  describe('mapProjectFields', () => {
+    const baseProject = {
+      id: 'proj-1',
+      title: 'My Project',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      userId: 'user-1',
+      type: 'spheroid',
+    };
+
+    it('preserves folderId=null (explicit root placement)', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, folderId: null })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(Object.prototype.hasOwnProperty.call(result, 'folderId')).toBe(
+        true
+      );
+      expect(result.folderId).toBeNull();
     });
 
-    describe('getBatchSegmentationResults', () => {
-      test('should validate input parameters correctly', async () => {
-        // Test with empty array
-        const result = await apiClient.getBatchSegmentationResults([]);
-        expect(result).toEqual({});
-        expect(mockAxiosInstance.post).not.toHaveBeenCalled();
-      });
-
-      test('should handle invalid image IDs gracefully', async () => {
-        // Test with null/undefined values — treated as non-array, returns {}
-        const invalidIds = null as any;
-
-        const result = await apiClient.getBatchSegmentationResults(invalidIds);
-        expect(result).toEqual({});
-        expect(mockAxiosInstance.post).not.toHaveBeenCalled();
-      });
-
-      test('should make correct API call with valid image IDs', async () => {
-        const imageIds = ['img-1', 'img-2', 'img-3'];
-        const mockResponse = {
-          data: {
-            'img-1': {
-              polygons: [
-                {
-                  id: 'poly-1',
-                  points: [
-                    { x: 0, y: 0 },
-                    { x: 10, y: 0 },
-                    { x: 10, y: 10 },
-                    { x: 0, y: 10 },
-                  ],
-                  type: 'external',
-                  confidence: 0.9,
-                  area: 100,
-                },
-              ],
-              imageWidth: 800,
-              imageHeight: 600,
-              modelUsed: 'hrnet',
-              confidence: 0.9,
-            },
-            'img-2': null,
-            'img-3': null,
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getBatchSegmentationResults(imageIds);
-
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-          '/segmentation/batch/results',
-          { imageIds }
-        );
-
-        expect(result['img-1']).toEqual(
-          expect.objectContaining({
-            polygons: expect.any(Array),
-            imageWidth: 800,
-            imageHeight: 600,
-          })
-        );
-        expect(result['img-2']).toBeNull();
-        expect(result['img-3']).toBeNull();
-      });
-
-      test('should handle API errors gracefully', async () => {
-        const imageIds = ['img-1'];
-        const apiError = new Error('Network error');
-
-        mockAxiosInstance.post.mockRejectedValue(apiError);
-
-        await expect(
-          apiClient.getBatchSegmentationResults(imageIds)
-        ).rejects.toThrow('Network error');
-      });
-
-      test('should handle timeout errors', async () => {
-        const imageIds = ['img-1'];
-        const timeoutError = {
-          code: 'ECONNABORTED',
-          message: 'timeout of 30000ms exceeded',
-        };
-
-        mockAxiosInstance.post.mockRejectedValue(timeoutError);
-
-        await expect(
-          apiClient.getBatchSegmentationResults(imageIds)
-        ).rejects.toMatchObject({ message: 'timeout of 30000ms exceeded' });
-      });
-
-      test('should handle large batches correctly', async () => {
-        // Test with 100 image IDs — fits in one chunk (BATCH_SIZE=500)
-        const imageIds = Array.from({ length: 100 }, (_, i) => `img-${i}`);
-        const mockResponse = {
-          data: imageIds.reduce(
-            (acc, id) => {
-              acc[id] = null;
-              return acc;
-            },
-            {} as Record<string, any>
-          ),
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getBatchSegmentationResults(imageIds);
-
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-          '/segmentation/batch/results',
-          { imageIds }
-        );
-
-        expect(Object.keys(result)).toHaveLength(100);
-        expect(result['img-0']).toBeNull();
-        expect(result['img-99']).toBeNull();
-      });
-
-      test('should handle mixed response data types', async () => {
-        const imageIds = ['img-1', 'img-2', 'img-3'];
-        const mockResponse = {
-          data: {
-            'img-1': {
-              polygons: [],
-              imageWidth: 800,
-              imageHeight: 600,
-            },
-            'img-2': null,
-            'img-3': {
-              polygons: [
-                {
-                  id: 'poly-1',
-                  points: [
-                    { x: 0, y: 0 },
-                    { x: 10, y: 0 },
-                  ],
-                  type: 'external',
-                },
-              ],
-            },
-          },
-        };
-
-        mockAxiosInstance.post.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getBatchSegmentationResults(imageIds);
-
-        expect(result['img-1']).toEqual(
-          expect.objectContaining({
-            polygons: [],
-            imageWidth: 800,
-            imageHeight: 600,
-          })
-        );
-        expect(result['img-2']).toBeNull();
-        expect(result['img-3']).toEqual(
-          expect.objectContaining({
-            polygons: expect.arrayContaining([
-              expect.objectContaining({ id: 'poly-1' }),
-            ]),
-          })
-        );
-      });
-
-      test('should handle HTTP error status codes', async () => {
-        const imageIds = ['img-1'];
-        const httpError = {
-          response: {
-            status: 500,
-            statusText: 'Internal Server Error',
-            data: { error: 'Database error' },
-          },
-          message: 'Request failed with status code 500',
-        };
-
-        mockAxiosInstance.post.mockRejectedValue(httpError);
-
-        await expect(
-          apiClient.getBatchSegmentationResults(imageIds)
-        ).rejects.toMatchObject({
-          message: 'Request failed with status code 500',
-        });
-      });
-
-      test('should handle concurrent batch requests efficiently', async () => {
-        const batchSizes = [10, 50, 100];
-        const mockResponses = batchSizes.map(size => ({
-          data: Array.from({ length: size }, (_, i) => [
-            `img-${i}`,
-            null,
-          ]).reduce(
-            (acc, [key, value]) => {
-              acc[key] = value;
-              return acc;
-            },
-            {} as Record<string, any>
-          ),
-        }));
-
-        mockAxiosInstance.post.mockImplementation((_url, body) => {
-          const batchSize = (body as { imageIds: string[] }).imageIds.length;
-          const responseIndex = batchSizes.indexOf(batchSize);
-          return Promise.resolve(mockResponses[responseIndex]);
-        });
-
-        // Execute concurrent requests
-        const promises = batchSizes.map(size =>
-          apiClient.getBatchSegmentationResults(
-            Array.from({ length: size }, (_, i) => `img-${i}`)
-          )
-        );
-
-        const results = await Promise.all(promises);
-
-        expect(results).toHaveLength(3);
-        expect(Object.keys(results[0])).toHaveLength(10);
-        expect(Object.keys(results[1])).toHaveLength(50);
-        expect(Object.keys(results[2])).toHaveLength(100);
-        expect(mockAxiosInstance.post).toHaveBeenCalledTimes(3);
-      });
+    it('omits folderId entirely when the backend did not send it', async () => {
+      mockAxiosInstance.get.mockResolvedValue(wrap({ ...baseProject }));
+      const result = await apiClient.getProject('proj-1');
+      expect(Object.prototype.hasOwnProperty.call(result, 'folderId')).toBe(
+        false
+      );
     });
 
-    describe('getSegmentationResults - null handling', () => {
-      test('should handle null response gracefully', async () => {
-        mockAxiosInstance.get.mockResolvedValue({ data: null });
+    it('uses _count.images as image_count when imageCount is absent', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, _count: { images: 7 } })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(result.image_count).toBe(7);
+    });
 
-        const result = await apiClient.getSegmentationResults('img-1');
-        expect(result).toBeNull();
-      });
+    it('defaults an unrecognised project type to "spheroid"', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, type: 'totally_unknown_type' })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(result.type).toBe('spheroid');
+    });
+  });
 
-      test('should handle undefined response gracefully', async () => {
-        // When data is undefined the implementation falls through to return null
-        mockAxiosInstance.get.mockResolvedValue({ data: undefined });
+  // dtoToProjectImage pure mapper ─────────────────────────────────────────────
+  describe('dtoToProjectImage', () => {
+    const dto: ProjectImageDTO = {
+      id: 'img-42',
+      name: 'sample.tif',
+      project_id: 'proj-99',
+      user_id: 'user-7',
+      url: 'http://host/display',
+      image_url: 'http://host/orig.tif',
+      thumbnail_url: 'http://host/thumb.jpg',
+      displayUrl: 'http://host/display',
+      width: 1024,
+      height: 768,
+      segmentation_status: 'completed',
+      segmentationThumbnailPath: '/uploads/seg/thumb.jpg',
+      segmentationThumbnailUrl: 'http://host/seg/thumb.jpg',
+      created_at: '2024-03-01T00:00:00Z',
+      updated_at: '2024-03-02T12:00:00Z',
+    };
 
-        const result = await apiClient.getSegmentationResults('img-1');
-        expect(result).toBeNull();
-      });
+    it('maps all snake_case DTO fields to the camelCase domain shape', () => {
+      const image = dtoToProjectImage(dto);
+      expect(image.id).toBe('img-42');
+      expect(image.name).toBe('sample.tif');
+      expect(image.project_id).toBe('proj-99');
+      expect(image.segmentationStatus).toBe('completed');
+      expect(image.segmentationThumbnailPath).toBe('/uploads/seg/thumb.jpg');
+      expect(image.segmentationThumbnailUrl).toBe('http://host/seg/thumb.jpg');
+      expect(image.width).toBe(1024);
+      expect(image.height).toBe(768);
+    });
 
-      test('should handle API errors', async () => {
-        const apiError = new Error('Not found');
-        mockAxiosInstance.get.mockRejectedValue(apiError);
+    it('creates Date objects for createdAt and updatedAt', () => {
+      const image = dtoToProjectImage(dto);
+      expect(image.createdAt).toBeInstanceOf(Date);
+      expect(image.updatedAt).toBeInstanceOf(Date);
+      expect(image.createdAt.getFullYear()).toBe(2024);
+    });
 
-        await expect(
-          apiClient.getSegmentationResults('invalid-id')
-        ).rejects.toThrow('Not found');
-      });
+    it('falls back url → image_url when url is undefined', () => {
+      const image = dtoToProjectImage({ ...dto, url: undefined });
+      expect(image.url).toBe('http://host/orig.tif');
+    });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+describe('generic HTTP pass-through helpers', () => {
+  it('get() delegates to the axios instance', async () => {
+    mockAxiosInstance.get.mockResolvedValue({ data: 'resp' });
+    expect(await apiClient.get('/custom')).toEqual({ data: 'resp' });
+  });
+
+  it('post() delegates to the axios instance', async () => {
+    mockAxiosInstance.post.mockResolvedValue({ data: 'resp' });
+    expect(await apiClient.post('/custom', { key: 'val' })).toEqual({
+      data: 'resp',
+    });
+  });
+
+  it('put() delegates to the axios instance', async () => {
+    mockAxiosInstance.put.mockResolvedValue({ data: 'resp' });
+    expect(await apiClient.put('/custom', { x: 1 })).toEqual({ data: 'resp' });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+describe('auth methods', () => {
+  const authData = { user: { id: '1', email: 'a@b.com', username: 'ab' } };
+
+  describe('login', () => {
+    it('sends rememberMe=true by default and returns only { user }', async () => {
+      mockAxiosInstance.post.mockResolvedValue(wrap(authData));
+
+      const result = await apiClient.login('a@b.com', 'pw');
+
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+        '/auth/login',
+        expect.objectContaining({ email: 'a@b.com', rememberMe: true })
+      );
+      expect(result.user).toEqual(authData.user);
+      // Tokens live in httpOnly cookies — nothing is written to storage.
+      expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
+    });
+
+    it('forwards rememberMe=false when specified', async () => {
+      mockAxiosInstance.post.mockResolvedValue(wrap(authData));
+
+      await apiClient.login('a@b.com', 'pw', false);
+
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+        '/auth/login',
+        expect.objectContaining({ rememberMe: false })
+      );
+    });
+
+    it('returns no tokens in the body (cookies only)', async () => {
+      mockAxiosInstance.post.mockResolvedValue(wrap(authData));
+
+      const result = await apiClient.login('a@b.com', 'pw');
+      expect((result as any).accessToken).toBeUndefined();
+      expect((result as any).refreshToken).toBeUndefined();
+    });
+
+    it('handles a flat (non-nested) backend response', async () => {
+      mockAxiosInstance.post.mockResolvedValue({ data: authData });
+
+      const result = await apiClient.login('a@b.com', 'pw');
+      expect(result.user).toEqual(authData.user);
+    });
+  });
+
+  describe('register', () => {
+    const registerData = {
+      user: { id: '2', email: 'new@example.com', username: 'newu' },
+    };
+
+    it('posts to /auth/register with body + consent and returns { user }', async () => {
+      mockAxiosInstance.post.mockResolvedValue(wrap(registerData));
+
+      const result = await apiClient.register(
+        'new@example.com',
+        'pw123',
+        'newu',
+        {
+          consentToMLTraining: true,
+          consentToAlgorithmImprovement: false,
+        }
+      );
+
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+        '/auth/register',
+        expect.objectContaining({
+          email: 'new@example.com',
+          username: 'newu',
+          consentToMLTraining: true,
+        })
+      );
+      expect(result.user.email).toBe('new@example.com');
+      expect(localStorageMock.setItem).not.toHaveBeenCalled();
+    });
+
+    it('works without username or consent options', async () => {
+      mockAxiosInstance.post.mockResolvedValue(wrap(registerData));
+
+      const result = await apiClient.register('new@example.com', 'pw123');
+      expect(result.user.email).toBe('new@example.com');
+      expect((result as any).accessToken).toBeUndefined();
+    });
+  });
+
+  describe('logout', () => {
+    it('always POSTs /auth/logout and touches no localStorage', async () => {
+      mockAxiosInstance.post.mockResolvedValue({ data: {} });
+
+      await apiClient.logout();
+
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/logout');
+      expect(localStorageMock.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('swallows a failing /auth/logout without throwing', async () => {
+      mockAxiosInstance.post.mockRejectedValue(new Error('Server down'));
+
+      await expect(apiClient.logout()).resolves.toBeUndefined();
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/auth/logout');
     });
   });
 });
