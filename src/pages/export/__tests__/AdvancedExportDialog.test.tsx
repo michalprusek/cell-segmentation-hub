@@ -1,50 +1,26 @@
 /**
  * Behavioral unit tests for AdvancedExportDialog.
  *
- * Tested behaviours:
- *  1.  Dialog does not mount its content when open=false.
- *  2.  Dialog title renders when open=true.
- *  3.  Three tabs are present: General / Visualization / Formats.
- *  4.  General tab is active by default; its content is visible.
- *  5.  Content toggles: includeOriginalImages, includeVisualizations,
- *      includeDocumentation checkboxes call updateExportOptions with the
- *      right key/value when clicked.
- *  6.  Formats tab: COCO checkbox adds/removes 'coco' from annotationFormats.
- *  7.  Formats tab: YOLO checkbox adds/removes 'yolo' from annotationFormats.
- *  8.  Formats tab: JSON annotation checkbox adds/removes 'json'.
- *  9.  Formats tab: Excel metrics checkbox adds/removes 'excel'.
- *  10. Formats tab: CSV metrics checkbox adds/removes 'csv'.
- *  11. Formats tab: JSON metrics checkbox adds/removes 'json' from metricsFormats.
- *  12. Summary card on Formats tab shows selected image count.
- *  13. MicrotubuleMetricsSection is NOT rendered for non-MT project types.
- *  14. MicrotubuleMetricsSection IS rendered for projectType === 'microtubules'.
- *      (Per-channel intensity incl. the sum is always on — no channel picker
- *       and no incomplete-metrics warning any more.)
- *  17. Start Export button calls startExport(projectName) on success and
- *      calls toast.success + onClose.
- *  18. Start Export failure calls toast.error.
- *  23. WebSocket-disconnected banner appears when wsConnected=false.
- *  24. WebSocket banner is absent when wsConnected=true.
- *  25. Export progress bar appears when isExporting=true.
- *  26. Progress bar is absent when isExporting=false.
- *  27. Failed-export error banner shown when currentJob.status === 'failed'.
- *  28. Completed-job download banner shown when completedJobId is set and
- *      not exporting.
- *  29. Cancel button hidden while exporting; shown when not exporting.
- *  30. onExportingChange notified when isExporting changes.
- *  31. onDownloadingChange notified when isDownloading changes.
- *  32. selectedImageIds synced to exportOptions on mount.
- *  33. pixelToMicrometerScale auto-fill from first calibrated image.
- *  34. pixelToMicrometerScale input rejects empty string (sets undefined).
- *  35. Scale input: out-of-range values are ignored.
+ * Consolidated from AdvancedExportDialog.test.tsx + .extra.test.tsx.
  *
- * Skipped / not tested here:
- *  - Deep internals of MicrotubuleMetricsSection (has its own test file).
- *  - Deep internals of ImageSelectionGrid (has its own test file).
- *  - Visualization tab slider interactions (no accessible role; UI-only).
- *  - Auto-download side effect (requires WS event races + real timers;
- *    tested in useSharedAdvancedExport.test.ts).
- *  - Polling fallback path (same rationale as above).
+ * Concerns covered (one describe each):
+ *  - open/closed rendering (Dialog mount branch)
+ *  - default tab content
+ *  - content option checkboxes (General tab)
+ *  - visualization tab interactions (show-numbers + color hex inputs)
+ *  - annotation / metrics format checkboxes (Formats tab, add + remove branches)
+ *  - Formats-tab summary card (image count + content lines)
+ *  - MT-project gating predicate (all branches incl. typo guard)
+ *  - Start Export action (success + failure)
+ *  - WebSocket / progress / failed / completed-download banners
+ *  - Cancel button visibility, parent callbacks, selectedImageIds sync
+ *  - pixelToMicrometerScale auto-fill + input validation (empty / in-range /
+ *    below-min / above-max)
+ *
+ * Not tested here (own suites / no accessible surface):
+ *  - MicrotubuleMetricsSection + ImageSelectionGrid internals (stubbed).
+ *  - Radix Slider interactions (no input role in jsdom).
+ *  - Auto-download WS race + polling fallback (useSharedAdvancedExport.test.ts).
  */
 
 import React from 'react';
@@ -315,7 +291,7 @@ describe('AdvancedExportDialog', () => {
     };
   });
 
-  // ── 1. open/closed rendering ───────────────────────────────────────────────
+  // ── open/closed rendering ──────────────────────────────────────────────────
 
   describe('open/closed rendering', () => {
     it('does not render dialog content when open=false', () => {
@@ -325,42 +301,14 @@ describe('AdvancedExportDialog', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('renders dialog title when open=true', () => {
-      renderDialog();
-      expect(screen.getByText('Advanced Export Options')).toBeInTheDocument();
-    });
-  });
-
-  // ── 2. tab structure ──────────────────────────────────────────────────────
-
-  describe('tab structure', () => {
-    it('renders three tabs: General, Visualization, Formats', () => {
-      renderDialog();
-      expect(screen.getByRole('tab', { name: 'General' })).toBeInTheDocument();
-      expect(
-        screen.getByRole('tab', { name: 'Visualization' })
-      ).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Formats' })).toBeInTheDocument();
-    });
-
     it('General tab is active by default and its content is visible', () => {
       renderDialog();
       // "Export Contents" card header is in the General tab
       expect(screen.getByText('Export Contents')).toBeInTheDocument();
     });
-
-    it('switching to Formats tab shows annotation format checkboxes', async () => {
-      const user = userEvent.setup();
-      renderDialog();
-      await clickTab(user, 'Formats');
-      // COCO label appears in the Formats tab
-      expect(
-        screen.getByLabelText('Include COCO format annotations')
-      ).toBeInTheDocument();
-    });
   });
 
-  // ── 3. content option checkboxes ──────────────────────────────────────────
+  // ── content option checkboxes (General tab) ────────────────────────────────
 
   describe('content option checkboxes', () => {
     it('toggling "Include original images" calls updateExportOptions with includeOriginalImages: false when currently checked', async () => {
@@ -403,18 +351,67 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 4. annotation format checkboxes ──────────────────────────────────────
+  // ── visualization tab interactions ─────────────────────────────────────────
+
+  describe('Visualization tab interactions', () => {
+    it('toggling showNumbers calls updateExportOptions with updated showNumbers', async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Visualization');
+
+      const showNumbersCheckbox = screen.getByRole('checkbox', {
+        name: /show polygon numbers/i,
+      });
+      await user.click(showNumbersCheckbox);
+
+      expect(_mockUpdateExportOptions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          visualizationOptions: expect.objectContaining({ showNumbers: false }),
+        })
+      );
+    });
+
+    it('changing external stroke color input calls updateExportOptions with new color', async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Visualization');
+
+      // First textbox in the color section is the external color hex input
+      const externalHexInput = screen.getAllByRole('textbox')[0];
+      await user.clear(externalHexInput);
+      await user.type(externalHexInput, '#aabbcc');
+
+      const colorCalls = _mockUpdateExportOptions.mock.calls.filter(
+        c => c[0]?.visualizationOptions?.polygonColors?.external !== undefined
+      );
+      expect(colorCalls.length).toBeGreaterThan(0);
+    });
+
+    it('changing internal background color input calls updateExportOptions', async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Visualization');
+
+      // Second textbox is the internal color hex input
+      const internalHexInput = screen.getAllByRole('textbox')[1];
+      await user.clear(internalHexInput);
+      await user.type(internalHexInput, '#ccddee');
+
+      const colorCalls = _mockUpdateExportOptions.mock.calls.filter(
+        c => c[0]?.visualizationOptions?.polygonColors?.internal !== undefined
+      );
+      expect(colorCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ── annotation format checkboxes (Formats tab) ─────────────────────────────
 
   describe('annotation format checkboxes (Formats tab)', () => {
-    async function openFormats(user: ReturnType<typeof userEvent.setup>) {
-      await clickTab(user, 'Formats');
-    }
-
     it('checking COCO adds "coco" to annotationFormats', async () => {
       overrideHookState({ exportOptions: { annotationFormats: [] } });
       const user = userEvent.setup();
       renderDialog();
-      await openFormats(user);
+      await clickTab(user, 'Formats');
       await user.click(
         screen.getByRole('checkbox', {
           name: /include coco format annotations/i,
@@ -433,7 +430,7 @@ describe('AdvancedExportDialog', () => {
       });
       const user = userEvent.setup();
       renderDialog();
-      await openFormats(user);
+      await clickTab(user, 'Formats');
       await user.click(
         screen.getByRole('checkbox', {
           name: /include coco format annotations/i,
@@ -447,7 +444,7 @@ describe('AdvancedExportDialog', () => {
       overrideHookState({ exportOptions: { annotationFormats: [] } });
       const user = userEvent.setup();
       renderDialog();
-      await openFormats(user);
+      await clickTab(user, 'Formats');
       await user.click(screen.getByRole('checkbox', { name: /yolo format/i }));
       expect(_mockUpdateExportOptions).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -460,7 +457,7 @@ describe('AdvancedExportDialog', () => {
       overrideHookState({ exportOptions: { annotationFormats: [] } });
       const user = userEvent.setup();
       renderDialog();
-      await openFormats(user);
+      await clickTab(user, 'Formats');
       await user.click(
         screen.getByRole('checkbox', { name: /include json metadata/i })
       );
@@ -472,18 +469,14 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 5. metrics format checkboxes ─────────────────────────────────────────
+  // ── metrics format checkboxes (Formats tab) ────────────────────────────────
 
   describe('metrics format checkboxes (Formats tab)', () => {
-    async function openFormats(user: ReturnType<typeof userEvent.setup>) {
-      await clickTab(user, 'Formats');
-    }
-
     it('checking Excel adds "excel" to metricsFormats', async () => {
       overrideHookState({ exportOptions: { metricsFormats: [] } });
       const user = userEvent.setup();
       renderDialog();
-      await openFormats(user);
+      await clickTab(user, 'Formats');
       await user.click(screen.getByRole('checkbox', { name: /excel format/i }));
       expect(_mockUpdateExportOptions).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -496,7 +489,7 @@ describe('AdvancedExportDialog', () => {
       overrideHookState({ exportOptions: { metricsFormats: [] } });
       const user = userEvent.setup();
       renderDialog();
-      await openFormats(user);
+      await clickTab(user, 'Formats');
       await user.click(
         screen.getByRole('checkbox', {
           name: /comma-separated values/i,
@@ -513,7 +506,7 @@ describe('AdvancedExportDialog', () => {
       overrideHookState({ exportOptions: { metricsFormats: [] } });
       const user = userEvent.setup();
       renderDialog();
-      await openFormats(user);
+      await clickTab(user, 'Formats');
       await user.click(
         screen.getByRole('checkbox', { name: /^json format$/i })
       );
@@ -528,14 +521,14 @@ describe('AdvancedExportDialog', () => {
       overrideHookState({ exportOptions: { metricsFormats: ['excel'] } });
       const user = userEvent.setup();
       renderDialog();
-      await openFormats(user);
+      await clickTab(user, 'Formats');
       await user.click(screen.getByRole('checkbox', { name: /excel format/i }));
       const call = _mockUpdateExportOptions.mock.calls.at(-1)?.[0];
       expect(call?.metricsFormats).not.toContain('excel');
     });
   });
 
-  // ── 6. formats tab summary card ───────────────────────────────────────────
+  // ── formats tab summary card ───────────────────────────────────────────────
 
   describe('summary card on Formats tab', () => {
     it('displays correct selected image count when no selectedImageIds', async () => {
@@ -555,9 +548,71 @@ describe('AdvancedExportDialog', () => {
       await clickTab(user, 'Formats');
       expect(screen.getByText(/images:\s*1/i)).toBeInTheDocument();
     });
+
+    it('shows "Original images included" when includeOriginalImages=true', async () => {
+      overrideHookState({ exportOptions: { includeOriginalImages: true } });
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Formats');
+      expect(screen.getByText(/original images included/i)).toBeInTheDocument();
+    });
+
+    it('does NOT show "Original images included" when includeOriginalImages=false', async () => {
+      overrideHookState({ exportOptions: { includeOriginalImages: false } });
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Formats');
+      expect(
+        screen.queryByText(/original images included/i)
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows "Visualizations" line when includeVisualizations=true', async () => {
+      overrideHookState({ exportOptions: { includeVisualizations: true } });
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Formats');
+      expect(
+        screen.getByText(/visualizations with numbered polygons/i)
+      ).toBeInTheDocument();
+    });
+
+    it('shows annotations formats line when annotationFormats is non-empty', async () => {
+      overrideHookState({
+        exportOptions: { annotationFormats: ['coco', 'yolo'] },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Formats');
+      // "COCO, YOLO" (uppercased) should appear in summary
+      const annLine = screen.getByText(/annotations:/i);
+      expect(annLine.textContent).toMatch(/COCO/);
+      expect(annLine.textContent).toMatch(/YOLO/);
+    });
+
+    it('shows metrics formats line when metricsFormats is non-empty', async () => {
+      overrideHookState({
+        exportOptions: { metricsFormats: ['excel', 'csv'] },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Formats');
+      const metricsLine = screen.getByText(/metrics:/i);
+      expect(metricsLine.textContent).toMatch(/EXCEL/);
+    });
+
+    it('shows "Documentation and metadata" line when includeDocumentation=true', async () => {
+      overrideHookState({ exportOptions: { includeDocumentation: true } });
+      const user = userEvent.setup();
+      renderDialog();
+      await clickTab(user, 'Formats');
+      expect(
+        screen.getByText(/documentation and metadata/i)
+      ).toBeInTheDocument();
+    });
   });
 
-  // ── 7. MT-project gating ──────────────────────────────────────────────────
+  // ── MT-project gating ──────────────────────────────────────────────────────
 
   describe('MT-project gating', () => {
     it('does NOT render MicrotubuleMetricsSection for non-MT project types', () => {
@@ -587,7 +642,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 9. start export action ────────────────────────────────────────────────
+  // ── start export action ────────────────────────────────────────────────────
 
   describe('Start Export action', () => {
     it('calls startExport with projectName on button click (success path)', async () => {
@@ -623,7 +678,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 11. WebSocket banner ──────────────────────────────────────────────────
+  // ── WebSocket banner ───────────────────────────────────────────────────────
 
   describe('WebSocket connection status banner', () => {
     it('shows disconnected banner when wsConnected=false', () => {
@@ -643,7 +698,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 12. export progress bar ───────────────────────────────────────────────
+  // ── export progress bar ────────────────────────────────────────────────────
 
   describe('export progress display', () => {
     it('shows progress bar with status text when isExporting=true', () => {
@@ -665,7 +720,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 13. failed export banner ──────────────────────────────────────────────
+  // ── failed export banner ───────────────────────────────────────────────────
 
   describe('failed export banner', () => {
     it('shows error banner when currentJob.status === "failed"', () => {
@@ -680,6 +735,16 @@ describe('AdvancedExportDialog', () => {
       expect(screen.getByText(/export failed: disk full/i)).toBeInTheDocument();
     });
 
+    it('falls back to "Unknown error" when a failed job has no message', () => {
+      overrideHookState({
+        currentJob: { id: 'j1', status: 'failed' },
+      });
+      renderDialog();
+      expect(
+        screen.getByText(/export failed: unknown error/i)
+      ).toBeInTheDocument();
+    });
+
     it('does not show error banner when currentJob is null', () => {
       overrideHookState({ currentJob: null });
       renderDialog();
@@ -687,7 +752,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 14. completed download banner ─────────────────────────────────────────
+  // ── completed download banner ──────────────────────────────────────────────
 
   describe('completed job download banner', () => {
     it('shows download banner when completedJobId is set and not exporting', () => {
@@ -700,6 +765,19 @@ describe('AdvancedExportDialog', () => {
       // The download button or the status message should appear
       expect(
         screen.getByRole('button', { name: /download/i })
+      ).toBeInTheDocument();
+    });
+
+    it('shows exportStatus text when set alongside completedJobId', () => {
+      overrideHookState({
+        completedJobId: 'job-done',
+        isExporting: false,
+        isDownloading: false,
+        exportStatus: 'Your export is ready to download.',
+      });
+      renderDialog();
+      expect(
+        screen.getByText(/your export is ready to download/i)
       ).toBeInTheDocument();
     });
 
@@ -727,7 +805,7 @@ describe('AdvancedExportDialog', () => {
       expect(_mockDismissExport).toHaveBeenCalled();
     });
 
-    it('does not show download banner when completedJobId is null', () => {
+    it('hides the download banner when completedJobId is null', () => {
       overrideHookState({ completedJobId: null, isExporting: false });
       renderDialog();
       // Only the Start Export button visible, not a Download button
@@ -735,9 +813,22 @@ describe('AdvancedExportDialog', () => {
         screen.queryByRole('button', { name: /^download$/i })
       ).not.toBeInTheDocument();
     });
+
+    it('hides the download banner while isDownloading=true (outer condition requires !isDownloading)', () => {
+      overrideHookState({
+        completedJobId: 'job-done',
+        isExporting: false,
+        isDownloading: true,
+        exportStatus: 'Export ready',
+      });
+      renderDialog();
+      expect(
+        screen.queryByRole('button', { name: /^download$/i })
+      ).not.toBeInTheDocument();
+    });
   });
 
-  // ── 15. cancel button visibility ─────────────────────────────────────────
+  // ── cancel button visibility ───────────────────────────────────────────────
 
   describe('Cancel button visibility', () => {
     it('Cancel button is visible when not exporting', () => {
@@ -757,7 +848,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 16. parent callbacks ──────────────────────────────────────────────────
+  // ── parent callbacks ───────────────────────────────────────────────────────
 
   describe('parent state callbacks', () => {
     it('calls onExportingChange(true) when isExporting becomes true', () => {
@@ -775,7 +866,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 17. selectedImageIds sync ─────────────────────────────────────────────
+  // ── selectedImageIds sync ──────────────────────────────────────────────────
 
   describe('selectedImageIds sync', () => {
     it('calls updateExportOptions with selectedImageIds on mount', () => {
@@ -786,7 +877,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 18. pixelToMicrometerScale auto-fill ─────────────────────────────────
+  // ── pixelToMicrometerScale auto-fill ───────────────────────────────────────
 
   describe('pixelToMicrometerScale auto-fill', () => {
     it('auto-fills scale from first image with positive pixelSizeUm', () => {
@@ -829,7 +920,7 @@ describe('AdvancedExportDialog', () => {
     });
   });
 
-  // ── 19. scale input validation ─────────────────────────────────────────────
+  // ── scale input validation ─────────────────────────────────────────────────
 
   describe('scale input validation', () => {
     it('clears the scale when input is emptied', async () => {
@@ -858,6 +949,42 @@ describe('AdvancedExportDialog', () => {
         c => typeof c[0].pixelToMicrometerScale === 'number'
       );
       expect(validCalls.length).toBeGreaterThan(0);
+    });
+
+    it('ignores a value below the minimum (< 0.001)', async () => {
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton');
+      await user.type(input, '0.0001');
+
+      const numericCalls = _mockUpdateExportOptions.mock.calls.filter(
+        c => typeof c[0]?.pixelToMicrometerScale === 'number'
+      );
+      const outOfRangeCalls = numericCalls.filter(
+        c => c[0].pixelToMicrometerScale < 0.001
+      );
+      expect(outOfRangeCalls).toHaveLength(0);
+    });
+
+    it('ignores a value above the maximum (> 1000)', async () => {
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton');
+      await user.type(input, '1001');
+
+      const numericCalls = _mockUpdateExportOptions.mock.calls.filter(
+        c => typeof c[0]?.pixelToMicrometerScale === 'number'
+      );
+      const outOfRangeCalls = numericCalls.filter(
+        c => c[0].pixelToMicrometerScale > 1000
+      );
+      expect(outOfRangeCalls).toHaveLength(0);
     });
   });
 });
