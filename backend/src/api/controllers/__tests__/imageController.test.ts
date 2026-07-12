@@ -1,13 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+/**
+ * imageController.test.ts
+ *
+ * Consolidated unit tests for ImageController. Merged from the former
+ * imageController.test.ts (large-batch upload) + .behavior + .gaps3 + .gaps4.
+ *
+ * Harness: supertest against minimal Express apps that mount the real
+ * controller. All collaborators (ImageService, SegmentationThumbnailService,
+ * WebSocketService, SharingService, storage, Prisma) are mocked, so no real
+ * storage/DB/ML is touched.
+ *
+ * A single module-level `controller` is constructed; its captured mock
+ * instances (`imageServiceInstance`, `thumbService`) are reset per-test and
+ * configured per-test. Grouped per endpoint; each group covers request
+ * validation, success + controller→service delegation, and error/permission
+ * branches.
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { ImageController } from '../imageController';
-import { ImageService } from '../../../services/imageService';
-import { authenticate } from '../../../middleware/auth';
-// Unused imports removed: uploadImages, handleUploadError
-import { prisma } from '../../../db/index';
 
-// Mock dependencies
+// ── config mock MUST come first (prevents process.exit(1) on bad env) ─────────
 vi.mock('../../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
@@ -24,689 +37,1383 @@ vi.mock('../../../utils/config', () => ({
     WS_ALLOWED_ORIGINS: 'http://localhost:3000',
     UPLOAD_DIR: './test-uploads',
     STORAGE_TYPE: 'local',
-    MAX_FILE_SIZE: 10485760,
+    MAX_FILE_SIZE: '10485760',
+    SESSION_SECRET: 'test-session-secret',
+    REDIS_URL: 'redis://localhost:6379',
+    SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
+    FROM_EMAIL: 'test@example.com',
+    FROM_NAME: 'Test Platform',
+    EMAIL_SERVICE: 'none',
+    REQUIRE_EMAIL_VERIFICATION: false,
   },
+  isDevelopment: false,
+  isProduction: false,
+  isTest: true,
+  getOrigins: () => ['http://localhost:3000'],
 }));
-vi.mock('../../../services/imageService');
-vi.mock('../../../middleware/auth');
-vi.mock('../../../services/segmentationThumbnailService', () => ({
-  SegmentationThumbnailService: vi.fn().mockImplementation(function (
-    this: any
+
+vi.mock('../../../utils/logger', () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
+// ImageService — constructible class returning a controlled instance
+vi.mock('../../../services/imageService', () => {
+  const ImageService = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>
   ) {
-    this.generateThumbnail = vi.fn(() => Promise.resolve());
-  }),
-}));
+    this.uploadImages = vi.fn();
+    this.uploadImagesWithProgress = vi.fn();
+    this.getProjectImages = vi.fn();
+    this.getImageById = vi.fn();
+    this.deleteImage = vi.fn();
+    this.deleteBatch = vi.fn();
+    this.getImageStats = vi.fn();
+    this.getBrowserCompatibleImage = vi.fn();
+    this.reorderImages = vi.fn();
+  });
+  return { ImageService };
+});
+
+// SegmentationThumbnailService — capture the constructed instance so
+// regenerateThumbnails tests can drive generateBatchThumbnails per-test.
+let capturedThumb: Record<string, ReturnType<typeof vi.fn>> | undefined;
+vi.mock('../../../services/segmentationThumbnailService', () => {
+  const SegmentationThumbnailService = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>
+  ) {
+    this.generateBatchThumbnails = vi.fn().mockResolvedValue(new Map());
+    this.getConcurrencyStatus = vi
+      .fn()
+      .mockReturnValue({ active: 0, queued: 0 });
+    capturedThumb = this as Record<string, ReturnType<typeof vi.fn>>;
+  });
+  return { SegmentationThumbnailService };
+});
+
 vi.mock('../../../services/websocketService', () => ({
   WebSocketService: {
-    getInstance: () => ({
-      emitToUser: () => undefined,
-      emitToProject: () => undefined,
-    }),
+    getInstance: vi.fn(() => ({
+      emitToUser: vi.fn(),
+      emitToProject: vi.fn(),
+    })),
   },
 }));
+
+vi.mock('../../../services/sharingService', () => ({
+  hasProjectAccess: vi.fn(),
+}));
+
 vi.mock('../../../storage/index', () => ({
   getStorageProvider: vi.fn(() => ({
+    getUrl: vi.fn((p: string) => Promise.resolve(`http://storage/${p}`)),
     saveFile: vi.fn(() => Promise.resolve('/mock/path')),
     deleteFile: vi.fn(() => Promise.resolve()),
-    getFileUrl: vi.fn(() => 'http://mock/url'),
   })),
 }));
-vi.mock('../../../services/sharingService', () => ({
-  hasProjectAccess: vi.fn(() => Promise.resolve({ hasAccess: true })),
-}));
-vi.mock('../../../utils/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    warn: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
+
 vi.mock('../../../db/index', () => ({
   prisma: {
-    project: {
-      findFirst: vi.fn(),
-      findUnique: vi.fn(),
-    },
-    image: {
-      findMany: vi.fn(),
-      count: vi.fn(),
-      create: vi.fn(),
-      createMany: vi.fn(),
-      delete: vi.fn(),
-      deleteMany: vi.fn(),
-    },
-    segmentation: {
-      findUnique: vi.fn(),
-    },
+    image: { findMany: vi.fn(), count: vi.fn() },
+    segmentation: { findUnique: vi.fn() },
   },
 }));
 
-const MockImageService = vi.mocked(ImageService);
-const mockAuthenticate = vi.mocked(authenticate);
+// ── Imports AFTER mocks ───────────────────────────────────────────────────────
+import { ImageController } from '../imageController';
+import { ImageService } from '../../../services/imageService';
+import * as SharingService from '../../../services/sharingService';
+import { prisma } from '../../../db/index';
+import { ApiError } from '../../../middleware/error';
 
-describe('ImageController - Large Batch Upload Tests', () => {
-  let app: express.Application;
-  let imageController: ImageController;
-  let mockImageService: any;
+// ── Single controller + captured mock instances ──────────────────────────────
+const controller = new ImageController();
 
-  const mockUser = {
-    id: 'user-123',
-    email: 'test@example.com',
-    username: 'testuser',
-  };
+const _instances = vi.mocked(ImageService).mock.instances;
+const imageServiceInstance = _instances[_instances.length - 1] as Record<
+  string,
+  ReturnType<typeof vi.fn>
+>;
+const thumbService = capturedThumb as Record<string, ReturnType<typeof vi.fn>>;
 
-  const mockProject = {
-    id: 'project-123',
-    name: 'Test Project',
-    title: 'Test Project',
-    description: null,
-    userId: 'user-123',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+// ── Constants ─────────────────────────────────────────────────────────────────
+const PROJECT_ID = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
+const USER_ID = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
+const IMAGE_ID = 'cccccccc-cccc-4ccc-cccc-cccccccccccc';
+const SEG_ID = 'dddddddd-dddd-4ddd-dddd-dddddddddddd';
 
-  // Helper function to create mock file buffers
-  const createMockFile = (name: string, size: number = 1024): Buffer => {
-    const buffer = Buffer.alloc(size);
-    buffer.fill(0xff); // Fill with dummy data
-    return buffer;
-  };
+// ── App builders ──────────────────────────────────────────────────────────────
 
-  // Helper function to create mock FormData with files
-  const createMockFormData = (
-    fileCount: number,
-    fileSize: number = 1024
-  ): Express.Multer.File[] => {
-    const files = Array.from({ length: fileCount }, (_, i) => ({
-      fieldname: 'images',
-      originalname: `test-image-${i + 1}.jpg`,
-      encoding: '7bit',
-      mimetype: 'image/jpeg',
-      buffer: createMockFile(`test-image-${i + 1}.jpg`, fileSize),
-      size: fileSize,
-      stream: {} as never,
-      destination: '',
-      filename: '',
-      path: '',
-    }));
-    return files;
-  };
+/** Wildcard app with an injected user (params come from the request URL). */
+function buildApp(handler: express.RequestHandler) {
+  const app = express();
+  app.use(express.json());
+  app.use((req: express.Request & { user?: unknown }, _res, next) => {
+    req.user = { id: USER_ID, email: 'user@test.com' };
+    next();
+  });
+  app.all('/*', handler);
+  return app;
+}
 
+/** Wildcard app with NO user → controller auth guard fires. */
+function buildUnauthApp(handler: express.RequestHandler) {
+  const app = express();
+  app.use(express.json());
+  app.all('/*', handler);
+  return app;
+}
+
+/** Authenticated app on a specific route (so a named path param resolves). */
+function mountAuthed(
+  method: 'get' | 'post' | 'delete' | 'patch',
+  routePath: string,
+  handler: express.RequestHandler
+) {
+  const app = express();
+  app.use(express.json());
+  app.use((req: express.Request & { user?: unknown }, _res, next) => {
+    req.user = { id: USER_ID };
+    next();
+  });
+  (
+    app as unknown as Record<
+      string,
+      (p: string, h: express.RequestHandler) => void
+    >
+  )[method](routePath, handler);
+  return app;
+}
+
+/** Public app on a specific route (no user injected). */
+function mountPublic(
+  method: 'get' | 'post',
+  routePath: string,
+  handler: express.RequestHandler
+) {
+  const app = express();
+  app.use(express.json());
+  (
+    app as unknown as Record<
+      string,
+      (p: string, h: express.RequestHandler) => void
+    >
+  )[method](routePath, handler);
+  return app;
+}
+
+/** Upload app: injects user + req.files, mounts POST /:id. */
+function buildUploadApp(files: unknown[]) {
+  const app = express();
+  app.use(express.json());
+  app.use(
+    (
+      req: express.Request & { user?: unknown; files?: unknown },
+      _res,
+      next
+    ) => {
+      req.user = { id: USER_ID };
+      req.files = files as Express.Multer.File[];
+      next();
+    }
+  );
+  app.post('/:id', controller.uploadImages);
+  return app;
+}
+
+function makeImageFiles(count: number): unknown[] {
+  return Array.from({ length: count }, (_, i) => ({
+    fieldname: 'images',
+    originalname: `img-${i}.jpg`,
+    encoding: '7bit',
+    mimetype: 'image/jpeg',
+    buffer: Buffer.alloc(1024),
+    size: 1024,
+  }));
+}
+
+// ── Tests ──────────────────────────────────────────────────────────────────────
+
+describe('ImageController', () => {
   beforeEach(() => {
-    app = express();
-    app.use(express.json());
-
-    // Setup mocks BEFORE creating controller so auto-mock has them set up
-    mockImageService = {
-      uploadImages: vi.fn(),
-      uploadImagesWithProgress: vi.fn(),
-      getProjectImages: vi.fn(),
-      getImageById: vi.fn(),
-      deleteImage: vi.fn(),
-      deleteBatch: vi.fn(),
-      getImageStats: vi.fn(),
-      getBrowserCompatibleImage: vi.fn(),
-    };
-
-    // Configure the auto-mock class to return our mock instance.
-    // Vitest 4: arrow fn impl can't be constructed, use function form.
-    MockImageService.mockImplementation(function (this: any) {
-      Object.assign(this, mockImageService);
+    Object.values(imageServiceInstance ?? {}).forEach(fn => {
+      if (typeof fn?.mockReset === 'function') fn.mockReset();
     });
-
-    imageController = new ImageController();
-
-    // Mock auth middleware
-    mockAuthenticate.mockImplementation(
-      async (
-        req: express.Request & { user?: Record<string, unknown> },
-        res: express.Response,
-        next: express.NextFunction
-      ) => {
-        req.user = mockUser as any;
-        next();
-      }
-    );
-
-    // Setup routes
-    app.post(
-      '/api/projects/:id/images',
-      mockAuthenticate,
-      (req, res, next) => {
-        req.files = createMockFormData(20); // Default to 20 files
-        next();
-      },
-      imageController.uploadImages
-    );
-
-    // Mock prisma
-    vi.mocked(prisma.project.findFirst).mockResolvedValue(mockProject);
+    vi.mocked(prisma.image.findMany).mockReset();
+    vi.mocked(prisma.image.count).mockReset();
+    vi.mocked(prisma.segmentation.findUnique).mockReset();
+    vi.mocked(SharingService.hasProjectAccess).mockReset();
+    thumbService.generateBatchThumbnails.mockReset().mockResolvedValue(new Map());
+    thumbService.getConcurrencyStatus
+      .mockReset()
+      .mockReturnValue({ active: 0, queued: 0 });
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+  // ── uploadImages ─────────────────────────────────────────────────────────────
+  describe('uploadImages', () => {
+    it('uploads valid files and delegates to uploadImagesWithProgress with a progress callback', async () => {
+      const uploaded = [
+        {
+          id: 'image-1',
+          name: 'img-0.jpg',
+          originalUrl: '/uploads/img-0.jpg',
+          thumbnailUrl: '/uploads/img-0_thumb.jpg',
+        },
+      ];
+      imageServiceInstance.uploadImagesWithProgress.mockResolvedValue(uploaded);
 
-  describe('Upload Limits and Validation', () => {
-    it('should successfully upload 20 files (current limit)', async () => {
-      const mockUploadedImages = Array.from({ length: 20 }, (_, i) => ({
-        id: `image-${i + 1}`,
-        name: `test-image-${i + 1}.jpg`,
-        projectId: 'project-123',
-        userId: 'user-123',
-        originalUrl: `/uploads/test-image-${i + 1}.jpg`,
-        thumbnailUrl: `/uploads/thumbnails/test-image-${i + 1}_thumb.jpg`,
-        fileSize: 1024,
-        width: 800,
-        height: 600,
-        mimeType: 'image/jpeg',
-        segmentationStatus: 'pending' as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
+      const app = buildUploadApp(makeImageFiles(1));
+      const res = await request(app).post(`/${PROJECT_ID}`).expect(200);
 
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(
-        mockUploadedImages
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images')
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.images).toHaveLength(20);
-      expect(response.body.data.count).toBe(20);
-      expect(mockImageService.uploadImagesWithProgress).toHaveBeenCalledWith(
-        'project-123',
-        'user-123',
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.images).toHaveLength(1);
+      expect(res.body.data.count).toBe(1);
+      expect(imageServiceInstance.uploadImagesWithProgress).toHaveBeenCalledWith(
+        PROJECT_ID,
+        USER_ID,
         expect.any(Array),
         expect.any(String),
         expect.any(Function)
       );
     });
 
-    it('should successfully upload 50 files (new increased limit)', async () => {
-      // Override the middleware to provide 50 files
-      app.post(
-        '/api/projects/:id/images-50',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = createMockFormData(50);
-          next();
-        },
-        imageController.uploadImages
-      );
-
-      const mockUploadedImages = Array.from({ length: 50 }, (_, i) => ({
-        id: `image-${i + 1}`,
-        name: `test-image-${i + 1}.jpg`,
-        projectId: 'project-123',
-        userId: 'user-123',
-        originalUrl: `/uploads/test-image-${i + 1}.jpg`,
-        thumbnailUrl: `/uploads/thumbnails/test-image-${i + 1}_thumb.jpg`,
-        fileSize: 1024,
-        width: 800,
-        height: 600,
-        mimeType: 'image/jpeg',
-        segmentationStatus: 'pending' as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
-
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(
-        mockUploadedImages
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images-50')
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.images).toHaveLength(50);
-      expect(response.body.data.count).toBe(50);
+    it('returns 401 when unauthenticated', async () => {
+      const app = express();
+      app.use(express.json());
+      app.post('/:id', controller.uploadImages);
+      const res = await request(app).post(`/${PROJECT_ID}`).expect(401);
+      expect(res.body.success).toBe(false);
     });
 
-    it('should reject upload when exceeding file count limit (51 files)', async () => {
-      // This test assumes the new limit is 50 files
-      app.post(
-        '/api/projects/:id/images-51',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = createMockFormData(51);
-          next();
-        },
-        imageController.uploadImages
-      );
-
-      // Mock service to throw error for too many files
-      mockImageService.uploadImagesWithProgress.mockRejectedValue(
-        new Error(
-          'Příliš mnoho souborů. Maximálně lze nahrát 50 souborů najednou'
-        )
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images-51')
-        .expect(500);
-
-      expect(response.body.success).toBe(false);
+    it('returns 400 when the files array is empty', async () => {
+      const app = buildUploadApp([]);
+      const res = await request(app).post(`/${PROJECT_ID}`).expect(400);
+      expect(res.body.success).toBe(false);
     });
 
-    it('should reject files with invalid MIME types', async () => {
-      app.post(
-        '/api/projects/:id/images-invalid',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = [
-            {
-              fieldname: 'images',
-              originalname: 'test-file.txt',
-              encoding: '7bit',
-              mimetype: 'text/plain',
-              buffer: Buffer.from('test content'),
-              size: 100,
-            } as unknown as Express.Multer.File,
-          ];
-          next();
-        },
-        imageController.uploadImages
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images-invalid')
-        .expect(400);
-
-      expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('Invalid file type');
-    });
-
-    it('should reject files exceeding size limit', async () => {
-      const largeFileSize = 100 * 1024 * 1024; // 100MB (exceeds typical 10MB limit)
-      app.post(
-        '/api/projects/:id/images-large',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = [
-            {
-              fieldname: 'images',
-              originalname: 'large-image.jpg',
-              encoding: '7bit',
-              mimetype: 'image/jpeg',
-              buffer: createMockFile('large-image.jpg', largeFileSize),
-              size: largeFileSize,
-            } as unknown as Express.Multer.File,
-          ];
-          next();
-        },
-        imageController.uploadImages
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images-large')
-        .expect(400);
-
-      expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('File too large');
-    });
-
-    it('should validate project ownership before upload', async () => {
-      // Service throws when project not found
-      mockImageService.uploadImagesWithProgress.mockRejectedValue(
-        new Error('Project not found')
-      );
-
-      const response = await request(app)
-        .post('/api/projects/invalid-project/images')
-        .expect(500);
-
-      expect(response.body.success).toBe(false);
-    });
-
-    it('should handle missing projectId parameter', async () => {
-      // Route /api/projects//images doesn't match :id pattern, returns 404
-      const response = await request(app)
-        .post('/api/projects//images')
-        .expect(404);
-
-      // Express returns 404 for unmatched routes
-      expect(response.status).toBe(404);
-    });
-
-    it('should handle missing files', async () => {
-      app.post(
-        '/api/projects/:id/images-empty',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = [];
-          next();
-        },
-        imageController.uploadImages
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images-empty')
-        .expect(400);
-
-      expect(response.body.success).toBe(false);
-    });
-  });
-
-  describe('Batch Processing Performance', () => {
-    it('should handle concurrent upload requests with rate limiting', async () => {
-      const mockUploadedImages = [
+    it('returns 400 for an invalid MIME type', async () => {
+      const app = buildUploadApp([
         {
-          id: 'image-1',
-          name: 'test-image.jpg',
-          projectId: 'project-123',
-          userId: 'user-123',
-          originalUrl: '/uploads/test-image.jpg',
-          thumbnailUrl: '/uploads/thumbnails/test-image_thumb.jpg',
-          fileSize: 1024,
-          width: 800,
-          height: 600,
-          mimeType: 'image/jpeg',
-          segmentationStatus: 'pending' as const,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          fieldname: 'images',
+          originalname: 'virus.exe',
+          mimetype: 'application/octet-stream',
+          buffer: Buffer.alloc(10),
+          size: 10,
         },
-      ];
-
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(
-        mockUploadedImages
-      );
-
-      // Simulate concurrent requests
-      const requests = Array.from({ length: 5 }, () =>
-        request(app).post('/api/projects/project-123/images').expect(200)
-      );
-
-      const responses = await Promise.all(requests);
-
-      // All should succeed (assuming rate limit allows)
-      responses.forEach(response => {
-        expect(response.body.success).toBe(true);
-      });
-
-      expect(mockImageService.uploadImagesWithProgress).toHaveBeenCalledTimes(
-        5
-      );
+      ]);
+      const res = await request(app).post(`/${PROJECT_ID}`).expect(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toMatch(/Invalid file type/);
     });
 
-    it('should handle upload timeout gracefully', async () => {
-      // Mock a timeout scenario
-      mockImageService.uploadImagesWithProgress.mockImplementation(
-        () =>
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Upload timeout')), 100)
-          )
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images')
-        .expect(500);
-
-      expect(response.body.success).toBe(false);
-    });
-
-    it('should track memory usage during large uploads', async () => {
-      const initialMemory = process.memoryUsage();
-
-      // Upload 30 files of 1MB each
-      app.post(
-        '/api/projects/:id/images-memory',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = createMockFormData(30, 1024 * 1024); // 1MB each
-          next();
+    it('returns 400 when a file exceeds the size limit', async () => {
+      const app = buildUploadApp([
+        {
+          fieldname: 'images',
+          originalname: 'huge.png',
+          mimetype: 'image/png',
+          buffer: Buffer.alloc(100 * 1024 * 1024),
+          size: 100 * 1024 * 1024,
         },
-        imageController.uploadImages
-      );
-
-      const mockUploadedImages = Array.from({ length: 30 }, (_, i) => ({
-        id: `image-${i + 1}`,
-        name: `test-image-${i + 1}.jpg`,
-        projectId: 'project-123',
-        userId: 'user-123',
-        originalUrl: `/uploads/test-image-${i + 1}.jpg`,
-        thumbnailUrl: `/uploads/thumbnails/test-image-${i + 1}_thumb.jpg`,
-        fileSize: 1024 * 1024,
-        width: 800,
-        height: 600,
-        mimeType: 'image/jpeg',
-        segmentationStatus: 'pending' as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
-
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(
-        mockUploadedImages
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images-memory')
-        .expect(200);
-
-      const finalMemory = process.memoryUsage();
-      const memoryIncrease = finalMemory.heapUsed - initialMemory.heapUsed;
-
-      // Memory increase should be reasonable (less than 100MB for this test)
-      expect(memoryIncrease).toBeLessThan(100 * 1024 * 1024);
-      expect(response.body.success).toBe(true);
+      ]);
+      const res = await request(app).post(`/${PROJECT_ID}`).expect(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toMatch(/File too large/);
     });
-  });
 
-  describe('Error Handling and Recovery', () => {
-    it('should handle partial upload failures gracefully', async () => {
-      // Mock service to simulate partial failure
-      mockImageService.uploadImagesWithProgress.mockRejectedValue(
+    it('returns 400 when a file buffer is null (corrupted multer upload)', async () => {
+      const app = buildUploadApp([
+        {
+          fieldname: 'images',
+          originalname: 'corrupt.jpg',
+          mimetype: 'image/jpeg',
+          buffer: null,
+          size: 0,
+        },
+      ]);
+      const res = await request(app).post(`/${PROJECT_ID}`).expect(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toMatch(/Invalid file/);
+    });
+
+    it('returns 500 when the upload service throws', async () => {
+      imageServiceInstance.uploadImagesWithProgress.mockRejectedValue(
         new Error('Storage service temporarily unavailable')
       );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images')
-        .expect(500);
-
-      expect(response.body.success).toBe(false);
-    });
-
-    it('should handle database transaction failures', async () => {
-      // Mock database error
-      mockImageService.uploadImagesWithProgress.mockRejectedValue(
-        new Error('Database connection failed')
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images')
-        .expect(500);
-
-      expect(response.body.success).toBe(false);
-    });
-
-    it('should clean up resources on upload failure', async () => {
-      const cleanupSpy = vi.fn();
-
-      mockImageService.uploadImagesWithProgress.mockImplementation(async () => {
-        cleanupSpy(); // Simulate cleanup call
-        throw new Error('Upload failed');
-      });
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images')
-        .expect(500);
-
-      expect(response.body.success).toBe(false);
+      const app = buildUploadApp(makeImageFiles(1));
+      const res = await request(app).post(`/${PROJECT_ID}`).expect(500);
+      expect(res.body.success).toBe(false);
     });
   });
 
-  describe('File Validation Edge Cases', () => {
-    it('should handle corrupted file buffers', async () => {
-      app.post(
-        '/api/projects/:id/images-corrupt',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = [
-            {
-              fieldname: 'images',
-              originalname: 'corrupt-image.jpg',
-              encoding: '7bit',
-              mimetype: 'image/jpeg',
-              buffer: null as unknown as Buffer, // Simulate corrupted buffer
-              size: 0,
-            } as unknown as Express.Multer.File,
-          ];
-          next();
-        },
-        imageController.uploadImages
-      );
+  // ── getImages ────────────────────────────────────────────────────────────────
+  describe('getImages', () => {
+    it('returns 401 when unauthenticated', async () => {
+      const res = await request(buildUnauthApp(controller.getImages))
+        .get('/')
+        .query({ projectId: PROJECT_ID })
+        .expect(401);
+      expect(res.body.success).toBe(false);
+    });
 
-      const response = await request(app)
-        .post('/api/projects/project-123/images-corrupt')
+    it('returns 400 when projectId param is absent', async () => {
+      const res = await request(mountAuthed('get', '/', controller.getImages))
+        .get('/')
         .expect(400);
+      expect(res.body.success).toBe(false);
+    });
 
-      expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain(
-        'Invalid file: missing buffer or name'
+    it('returns 400 when sortBy is not in the allowlist', async () => {
+      const res = await request(mountAuthed('get', '/:id', controller.getImages))
+        .get(`/${PROJECT_ID}`)
+        .query({ sortBy: 'INVALID' })
+        .expect(400);
+      expect(res.body.error).toMatch(/Invalid query parameter/);
+      expect(res.body.field).toBe('sortBy');
+    });
+
+    it('returns 400 when sortOrder is invalid', async () => {
+      const res = await request(mountAuthed('get', '/:id', controller.getImages))
+        .get(`/${PROJECT_ID}`)
+        .query({ sortOrder: 'random' })
+        .expect(400);
+      expect(res.body.error).toMatch(/Invalid query parameter/);
+      expect(res.body.field).toBe('sortOrder');
+    });
+
+    it('returns 400 when status is not a valid JOB_STATUS', async () => {
+      const res = await request(mountAuthed('get', '/:id', controller.getImages))
+        .get(`/${PROJECT_ID}`)
+        .query({ status: 'flying' })
+        .expect(400);
+      expect(res.body.field).toBe('status');
+    });
+
+    it('delegates to getProjectImages with parsed params and returns 200', async () => {
+      const mockResult = {
+        images: [{ id: IMAGE_ID, name: 'shot.png' }],
+        total: 1,
+        page: 1,
+        limit: 10,
+      };
+      imageServiceInstance.getProjectImages.mockResolvedValue(mockResult);
+
+      const res = await request(mountAuthed('get', '/:id', controller.getImages))
+        .get(`/${PROJECT_ID}`)
+        .query({
+          page: '2',
+          limit: '5',
+          sortBy: 'name',
+          sortOrder: 'asc',
+          status: 'pending',
+        })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toEqual(mockResult);
+      expect(imageServiceInstance.getProjectImages).toHaveBeenCalledWith(
+        PROJECT_ID,
+        USER_ID,
+        { page: 2, limit: 5, sortBy: 'name', sortOrder: 'asc', status: 'pending' }
       );
     });
 
-    it('should handle files with suspicious extensions', async () => {
-      app.post(
-        '/api/projects/:id/images-suspicious',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = [
-            {
-              fieldname: 'images',
-              originalname: 'malicious.jpg.exe',
-              encoding: '7bit',
-              mimetype: 'image/jpeg',
-              buffer: createMockFile('malicious.jpg.exe'),
-              size: 1024,
-            } as unknown as Express.Multer.File,
-          ];
-          next();
-        },
-        imageController.uploadImages
+    it('passes ApiError status through to the client', async () => {
+      imageServiceInstance.getProjectImages.mockRejectedValue(
+        ApiError.notFound('Project not found')
       );
-
-      // Controller uploads with valid MIME type jpeg - so service is called
-      const mockUploadedImages = [
-        {
-          id: 'image-1',
-          name: 'malicious.jpg.exe',
-          projectId: 'project-123',
-          userId: 'user-123',
-          originalUrl: '/uploads/malicious.jpg.exe',
-          thumbnailUrl: '/uploads/thumbnails/malicious_thumb.jpg',
-          fileSize: 1024,
-          width: 800,
-          height: 600,
-          mimeType: 'image/jpeg',
-          segmentationStatus: 'pending' as const,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(
-        mockUploadedImages
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images-suspicious')
-        .expect(200);
-
-      // Controller doesn't reject based on extension, only MIME type
-      expect(response.body.success).toBe(true);
+      const res = await request(mountAuthed('get', '/:id', controller.getImages))
+        .get(`/${PROJECT_ID}`)
+        .expect(404);
+      expect(res.body.success).toBe(false);
     });
 
-    it('should validate MIME type matches file extension', async () => {
-      app.post(
-        '/api/projects/:id/images-mismatch',
-        mockAuthenticate,
-        (req, res, next) => {
-          req.files = [
-            {
-              fieldname: 'images',
-              originalname: 'image.jpg',
-              encoding: '7bit',
-              mimetype: 'image/png', // MIME type doesn't match extension (both are allowed)
-              buffer: createMockFile('image.jpg'),
-              size: 1024,
-            } as unknown as Express.Multer.File,
-          ];
-          next();
-        },
-        imageController.uploadImages
+    it('returns 500 for non-ApiError service failures', async () => {
+      imageServiceInstance.getProjectImages.mockRejectedValue(
+        new Error('DB crash')
       );
-
-      const mockUploadedImages = [
-        {
-          id: 'image-1',
-          name: 'image.jpg',
-          projectId: 'project-123',
-          userId: 'user-123',
-          originalUrl: '/uploads/image.jpg',
-          thumbnailUrl: '/uploads/thumbnails/image_thumb.jpg',
-          fileSize: 1024,
-          width: 800,
-          height: 600,
-          mimeType: 'image/png',
-          segmentationStatus: 'pending' as const,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(
-        mockUploadedImages
-      );
-
-      const response = await request(app)
-        .post('/api/projects/project-123/images-mismatch')
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
+      const res = await request(mountAuthed('get', '/:id', controller.getImages))
+        .get(`/${PROJECT_ID}`)
+        .expect(500);
+      expect(res.body.success).toBe(false);
     });
   });
 
-  describe('Progress Tracking and WebSocket Integration', () => {
-    it('should emit progress events during upload', async () => {
-      const mockUploadedImages = [
-        {
-          id: 'image-1',
-          name: 'test-image.jpg',
-          projectId: 'project-123',
-          userId: 'user-123',
-          originalUrl: '/uploads/test-image.jpg',
-          thumbnailUrl: '/uploads/thumbnails/test-image_thumb.jpg',
-          fileSize: 1024,
-          width: 800,
-          height: 600,
-          mimeType: 'image/jpeg',
-          segmentationStatus: 'pending' as const,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
+  // ── getImage ─────────────────────────────────────────────────────────────────
+  describe('getImage', () => {
+    it('returns 401 when unauthenticated', async () => {
+      const res = await request(buildUnauthApp(controller.getImage))
+        .get(`/${IMAGE_ID}`)
+        .expect(401);
+      expect(res.body.success).toBe(false);
+    });
 
-      mockImageService.uploadImagesWithProgress.mockResolvedValue(
-        mockUploadedImages
-      );
+    it('returns 400 when imageId param is absent', async () => {
+      const res = await request(mountAuthed('get', '/', controller.getImage))
+        .get('/')
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
 
-      const response = await request(app)
-        .post('/api/projects/project-123/images')
+    it('returns 404 when the service returns null', async () => {
+      imageServiceInstance.getImageById.mockResolvedValue(null);
+      const res = await request(
+        mountAuthed('get', '/:imageId', controller.getImage)
+      )
+        .get(`/${IMAGE_ID}`)
+        .expect(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 200 with image data and delegates to getImageById', async () => {
+      const mockImage = { id: IMAGE_ID, name: 'cell.png', projectId: PROJECT_ID };
+      imageServiceInstance.getImageById.mockResolvedValue(mockImage);
+
+      const res = await request(
+        mountAuthed('get', '/:imageId', controller.getImage)
+      )
+        .get(`/${IMAGE_ID}`)
         .expect(200);
 
-      expect(response.body.success).toBe(true);
-      // Progress events are emitted via WebSocket - verify the service was called with a callback
-      expect(mockImageService.uploadImagesWithProgress).toHaveBeenCalledWith(
-        'project-123',
-        'user-123',
-        expect.any(Array),
-        expect.any(String),
-        expect.any(Function)
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.image).toEqual(mockImage);
+      expect(imageServiceInstance.getImageById).toHaveBeenCalledWith(
+        IMAGE_ID,
+        USER_ID
       );
+    });
+  });
+
+  // ── deleteImage ──────────────────────────────────────────────────────────────
+  describe('deleteImage', () => {
+    it('returns 401 when unauthenticated', async () => {
+      const res = await request(buildUnauthApp(controller.deleteImage))
+        .delete(`/${IMAGE_ID}`)
+        .expect(401);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when imageId param is absent', async () => {
+      const res = await request(
+        mountAuthed('delete', '/', controller.deleteImage)
+      )
+        .delete('/')
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 200 and delegates to deleteImage on success', async () => {
+      imageServiceInstance.deleteImage.mockResolvedValue(undefined);
+      const res = await request(
+        mountAuthed('delete', '/:imageId', controller.deleteImage)
+      )
+        .delete(`/${IMAGE_ID}`)
+        .expect(200);
+      expect(res.body.success).toBe(true);
+      expect(imageServiceInstance.deleteImage).toHaveBeenCalledWith(
+        IMAGE_ID,
+        USER_ID
+      );
+    });
+
+    it('passes ApiError.forbidden (403) through to the client', async () => {
+      imageServiceInstance.deleteImage.mockRejectedValue(
+        ApiError.forbidden('Not your image')
+      );
+      const res = await request(
+        mountAuthed('delete', '/:imageId', controller.deleteImage)
+      )
+        .delete(`/${IMAGE_ID}`)
+        .expect(403);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 500 for a non-ApiError service failure', async () => {
+      imageServiceInstance.deleteImage.mockRejectedValue(
+        new Error('Generic DB crash')
+      );
+      const res = await request(
+        mountAuthed('delete', '/:imageId', controller.deleteImage)
+      )
+        .delete(`/${IMAGE_ID}`)
+        .expect(500);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  // ── deleteBatch ──────────────────────────────────────────────────────────────
+  describe('deleteBatch', () => {
+    const validBody = {
+      imageIds: [
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      ],
+      projectId: PROJECT_ID,
+    };
+
+    it('returns 401 when unauthenticated', async () => {
+      const res = await request(buildUnauthApp(controller.deleteBatch))
+        .delete('/')
+        .send(validBody)
+        .expect(401);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when imageIds is empty', async () => {
+      const res = await request(buildApp(controller.deleteBatch))
+        .delete('/')
+        .send({ imageIds: [], projectId: PROJECT_ID })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when imageIds exceeds 100 items', async () => {
+      const ids = Array(101).fill('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+      const res = await request(buildApp(controller.deleteBatch))
+        .delete('/')
+        .send({ imageIds: ids, projectId: PROJECT_ID })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when projectId is missing', async () => {
+      const res = await request(buildApp(controller.deleteBatch))
+        .delete('/')
+        .send({ imageIds: validBody.imageIds })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when any imageId is not a valid UUID', async () => {
+      const res = await request(buildApp(controller.deleteBatch))
+        .delete('/')
+        .send({ imageIds: ['not-a-uuid'], projectId: PROJECT_ID })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 200 with deletedCount and forwards all ids', async () => {
+      imageServiceInstance.deleteBatch.mockResolvedValue({
+        deletedCount: 2,
+        failedIds: [],
+      });
+      const res = await request(buildApp(controller.deleteBatch))
+        .delete('/')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.deletedCount).toBe(2);
+      expect(imageServiceInstance.deleteBatch).toHaveBeenCalledWith(
+        validBody.imageIds,
+        USER_ID,
+        PROJECT_ID
+      );
+    });
+
+    it('passes ApiError status through on service failure', async () => {
+      imageServiceInstance.deleteBatch.mockRejectedValue(
+        ApiError.notFound('Images not found')
+      );
+      const res = await request(buildApp(controller.deleteBatch))
+        .delete('/')
+        .send(validBody)
+        .expect(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 500 for a non-ApiError service failure', async () => {
+      imageServiceInstance.deleteBatch.mockRejectedValue(
+        new Error('Unexpected DB')
+      );
+      const res = await request(buildApp(controller.deleteBatch))
+        .delete('/')
+        .send({
+          imageIds: ['cccccccc-cccc-4ccc-8ccc-cccccccccccc'],
+          projectId: PROJECT_ID,
+        })
+        .expect(500);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  // ── getImageWithSegmentation ───────────────────────────────────────────────
+  describe('getImageWithSegmentation', () => {
+    it('returns 401 when unauthenticated', async () => {
+      await request(buildUnauthApp(controller.getImageWithSegmentation))
+        .get(`/${IMAGE_ID}`)
+        .expect(401);
+    });
+
+    it('returns 400 when imageId param is absent', async () => {
+      const res = await request(
+        mountAuthed('get', '/', controller.getImageWithSegmentation)
+      )
+        .get('/')
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 404 when the image is not found', async () => {
+      imageServiceInstance.getImageById.mockResolvedValue(null);
+      const res = await request(
+        mountAuthed('get', '/:imageId', controller.getImageWithSegmentation)
+      )
+        .get(`/${IMAGE_ID}`)
+        .expect(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns bare image when includeSegmentation is not set', async () => {
+      imageServiceInstance.getImageById.mockResolvedValue({
+        id: IMAGE_ID,
+        name: 'cell.png',
+      });
+      const res = await request(
+        mountAuthed('get', '/:imageId', controller.getImageWithSegmentation)
+      )
+        .get(`/${IMAGE_ID}`)
+        .expect(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.segmentation).toBeUndefined();
+    });
+
+    it('returns bare image when includeSegmentation=true but no record exists', async () => {
+      imageServiceInstance.getImageById.mockResolvedValue({
+        id: IMAGE_ID,
+        name: 'cell.png',
+      });
+      vi.mocked(prisma.segmentation.findUnique).mockResolvedValue(null);
+
+      const res = await request(
+        mountAuthed('get', '/:imageId', controller.getImageWithSegmentation)
+      )
+        .get(`/${IMAGE_ID}`)
+        .query({ includeSegmentation: 'true' })
+        .expect(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('returns parsed segmentation when a record exists and includeSegmentation=true', async () => {
+      const polygons = [{ id: 'p1', points: [{ x: 0, y: 0 }] }];
+      imageServiceInstance.getImageById.mockResolvedValue({
+        id: IMAGE_ID,
+        name: 'cell.png',
+      });
+      vi.mocked(prisma.segmentation.findUnique).mockResolvedValue({
+        id: 'seg-1',
+        imageId: IMAGE_ID,
+        polygons: JSON.stringify(polygons),
+        model: 'hrnet',
+        threshold: 0.5,
+        confidence: 0.9,
+        processingTime: 200,
+        imageWidth: 800,
+        imageHeight: 600,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+
+      const res = await request(
+        mountAuthed('get', '/:imageId', controller.getImageWithSegmentation)
+      )
+        .get(`/${IMAGE_ID}`)
+        .query({ includeSegmentation: 'true' })
+        .expect(200);
+
+      expect(res.body.data.segmentation.polygons).toEqual(polygons);
+      expect(res.body.data.segmentation.model).toBe('hrnet');
+      expect(res.body.data.segmentation.status).toBe('completed');
+    });
+
+    it('returns 500 when segmentation JSON is malformed', async () => {
+      imageServiceInstance.getImageById.mockResolvedValue({
+        id: IMAGE_ID,
+        name: 'cell.png',
+      });
+      vi.mocked(prisma.segmentation.findUnique).mockResolvedValue({
+        id: 'seg-1',
+        imageId: IMAGE_ID,
+        polygons: '{INVALID JSON',
+        model: 'hrnet',
+        threshold: 0.5,
+        confidence: 0.9,
+        processingTime: 200,
+        imageWidth: 800,
+        imageHeight: 600,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+
+      const res = await request(
+        mountAuthed('get', '/:imageId', controller.getImageWithSegmentation)
+      )
+        .get(`/${IMAGE_ID}`)
+        .query({ includeSegmentation: 'true' })
+        .expect(500);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 500 for a generic service error', async () => {
+      imageServiceInstance.getImageById.mockRejectedValue(new Error('DB gone'));
+      const res = await request(
+        mountAuthed('get', '/:imageId', controller.getImageWithSegmentation)
+      )
+        .get(`/${IMAGE_ID}`)
+        .expect(500);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  // ── getImageStats ────────────────────────────────────────────────────────────
+  describe('getImageStats', () => {
+    it('returns 401 when unauthenticated', async () => {
+      await request(buildUnauthApp(controller.getImageStats)).get('/').expect(401);
+    });
+
+    it('returns 400 when projectId param is absent', async () => {
+      const res = await request(
+        mountAuthed('get', '/', controller.getImageStats)
+      )
+        .get('/')
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 200 with stats and delegates to getImageStats', async () => {
+      const mockStats = { total: 42, segmented: 30, pending: 12 };
+      imageServiceInstance.getImageStats.mockResolvedValue(mockStats);
+      const res = await request(
+        mountAuthed('get', '/:id', controller.getImageStats)
+      )
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+      expect(res.body.data.stats).toEqual(mockStats);
+      expect(imageServiceInstance.getImageStats).toHaveBeenCalledWith(
+        PROJECT_ID,
+        USER_ID
+      );
+    });
+
+    it('passes ApiError status through to the client', async () => {
+      imageServiceInstance.getImageStats.mockRejectedValue(
+        ApiError.notFound('Project not found')
+      );
+      const res = await request(
+        mountAuthed('get', '/:id', controller.getImageStats)
+      )
+        .get(`/${PROJECT_ID}`)
+        .expect(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 500 for a non-ApiError service error', async () => {
+      imageServiceInstance.getImageStats.mockRejectedValue(
+        new Error('Generic crash')
+      );
+      const res = await request(
+        mountAuthed('get', '/:id', controller.getImageStats)
+      )
+        .get(`/${PROJECT_ID}`)
+        .expect(500);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  // ── getProjectImagesWithThumbnails ─────────────────────────────────────────
+  describe('getProjectImagesWithThumbnails', () => {
+    function makePrismaImage(overrides: Record<string, unknown> = {}) {
+      return {
+        id: IMAGE_ID,
+        name: 'frame.png',
+        projectId: PROJECT_ID,
+        originalPath: 'projects/p/images/frame.png',
+        thumbnailPath: null,
+        segmentationThumbnailPath: null,
+        segmentationStatus: 'pending',
+        fileSize: 1024,
+        width: 800,
+        height: 600,
+        mimeType: 'image/png',
+        createdAt: new Date('2024-01-01'),
+        updatedAt: new Date('2024-01-01'),
+        segmentation: null,
+        isVideoContainer: false,
+        parentVideoId: null,
+        frameIndex: null,
+        frameCount: null,
+        videoDurationMs: null,
+        pixelSizeUm: null,
+        frameIntervalMs: null,
+        channels: null,
+        displayOrder: 0,
+        ...overrides,
+      };
+    }
+
+    const handler = controller.getProjectImagesWithThumbnails;
+
+    beforeEach(() => {
+      vi.mocked(SharingService.hasProjectAccess).mockResolvedValue({
+        hasAccess: true,
+      } as never);
+      vi.mocked(prisma.image.findMany).mockResolvedValue([]);
+      vi.mocked(prisma.image.count).mockResolvedValue(0);
+    });
+
+    it('returns 401 when unauthenticated', async () => {
+      const res = await request(buildUnauthApp(handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(401);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when page is not a positive integer', async () => {
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .query({ page: '0' })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when limit exceeds 100', async () => {
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .query({ limit: '101' })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when lod is invalid', async () => {
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .query({ lod: 'ultra' })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 404 when SharingService denies access', async () => {
+      vi.mocked(SharingService.hasProjectAccess).mockResolvedValue({
+        hasAccess: false,
+      } as never);
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(404);
+      expect(res.body.success).toBe(false);
+      expect(SharingService.hasProjectAccess).toHaveBeenCalledWith(
+        PROJECT_ID,
+        USER_ID
+      );
+    });
+
+    it('returns 200 with pagination metadata for an empty project', async () => {
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .query({ page: '1', limit: '10' })
+        .expect(200);
+
+      expect(res.body.data.images).toHaveLength(0);
+      expect(res.body.data.pagination.page).toBe(1);
+      expect(res.body.data.pagination.limit).toBe(10);
+      expect(res.body.data.pagination.total).toBe(0);
+      expect(res.body.data.pagination.pages).toBe(0);
+      expect(res.body.data.metadata.projectChannels).toEqual([]);
+    });
+
+    it('defaults limit=50 when no limit query param is provided', async () => {
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .query({ page: '1' })
+        .expect(200);
+      expect(res.body.data.pagination.limit).toBe(50);
+    });
+
+    it('filters video containers (isVideoContainer:false) in the gallery query', async () => {
+      await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+
+      const galleryCall = vi.mocked(prisma.image.findMany).mock.calls[0];
+      expect(galleryCall[0]?.where).toMatchObject({
+        projectId: PROJECT_ID,
+        isVideoContainer: false,
+      });
+    });
+
+    it('aggregates distinct, sorted projectChannels from container rows', async () => {
+      vi.mocked(prisma.image.findMany)
+        .mockResolvedValueOnce([makePrismaImage()])
+        .mockResolvedValueOnce([
+          { channels: [{ name: 'DAPI' }, { name: 'GFP' }] },
+          { channels: [{ name: 'GFP' }] },
+        ] as never);
+      vi.mocked(prisma.image.count).mockResolvedValue(1);
+
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+      expect(res.body.data.metadata.projectChannels).toEqual(['DAPI', 'GFP']);
+    });
+
+    it('bubbles calibration from the parent container onto frame rows', async () => {
+      const PARENT_ID = 'eeeeeeee-eeee-4eee-aeee-eeeeeeeeeeee';
+      vi.mocked(prisma.image.findMany)
+        .mockResolvedValueOnce([
+          makePrismaImage({
+            parentVideoId: PARENT_ID,
+            pixelSizeUm: null,
+            frameIntervalMs: null,
+          }) as never,
+        ])
+        .mockResolvedValueOnce([
+          { id: PARENT_ID, pixelSizeUm: 0.65, frameIntervalMs: 200 },
+        ] as never)
+        .mockResolvedValueOnce([]);
+      vi.mocked(prisma.image.count).mockResolvedValue(1);
+
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+
+      const frame = res.body.data.images[0];
+      expect(frame.pixelSizeUm).toBe(0.65);
+      expect(frame.frameIntervalMs).toBe(200);
+    });
+
+    it('uses the /display url for frame images (parentVideoId set)', async () => {
+      const PARENT_ID = 'eeeeeeee-eeee-4eee-aeee-eeeeeeeeeeee';
+      vi.mocked(prisma.image.findMany)
+        .mockResolvedValueOnce([
+          makePrismaImage({ parentVideoId: PARENT_ID }) as never,
+        ])
+        .mockResolvedValueOnce([
+          { id: PARENT_ID, pixelSizeUm: null, frameIntervalMs: null },
+        ] as never)
+        .mockResolvedValueOnce([]);
+      vi.mocked(prisma.image.count).mockResolvedValue(1);
+
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+      expect(res.body.data.images[0].url).toBe(`/api/images/${IMAGE_ID}/display`);
+    });
+
+    it('uses the /display url for video container images (isVideoContainer=true)', async () => {
+      vi.mocked(prisma.image.findMany)
+        .mockResolvedValueOnce([
+          makePrismaImage({ isVideoContainer: true }) as never,
+        ])
+        .mockResolvedValueOnce([]);
+      vi.mocked(prisma.image.count).mockResolvedValue(1);
+
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+      expect(res.body.data.images[0].url).toBe(`/api/images/${IMAGE_ID}/display`);
+    });
+
+    it('strips polygon data for LOD=low but keeps the count', async () => {
+      const polygons = [{ id: 'p1', points: [{ x: 0, y: 0 }] }];
+      vi.mocked(prisma.image.findMany)
+        .mockResolvedValueOnce([
+          makePrismaImage({
+            segmentation: {
+              polygons: JSON.stringify(polygons),
+              imageWidth: 800,
+              imageHeight: 600,
+            },
+          }) as never,
+        ])
+        .mockResolvedValueOnce([]);
+      vi.mocked(prisma.image.count).mockResolvedValue(1);
+
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .query({ lod: 'low' })
+        .expect(200);
+
+      const seg = res.body.data.images[0].segmentationResult;
+      expect(seg.polygons).toEqual([]);
+      expect(seg.polygonCount).toBe(1);
+    });
+
+    it('returns full polygon data for LOD=high', async () => {
+      const polygons = [{ id: 'p1', points: [{ x: 0, y: 0 }] }];
+      vi.mocked(prisma.image.findMany)
+        .mockResolvedValueOnce([
+          makePrismaImage({
+            segmentation: {
+              polygons: JSON.stringify(polygons),
+              imageWidth: 800,
+              imageHeight: 600,
+            },
+          }) as never,
+        ])
+        .mockResolvedValueOnce([]);
+      vi.mocked(prisma.image.count).mockResolvedValue(1);
+
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .query({ lod: 'high' })
+        .expect(200);
+      expect(res.body.data.images[0].segmentationResult.polygons).toEqual(
+        polygons
+      );
+    });
+
+    it('falls back to a safe default when segmentation JSON is corrupted', async () => {
+      vi.mocked(prisma.image.findMany)
+        .mockResolvedValueOnce([
+          makePrismaImage({
+            segmentation: {
+              polygons: 'NOT_JSON',
+              imageWidth: 800,
+              imageHeight: 600,
+            },
+          }) as never,
+        ])
+        .mockResolvedValueOnce([]);
+      vi.mocked(prisma.image.count).mockResolvedValue(1);
+
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+      const seg = res.body.data.images[0].segmentationResult;
+      expect(seg.polygonCount).toBe(0);
+      expect(seg.polygons).toEqual([]);
+    });
+
+    it('falls back to a safe default when polygons is valid JSON but not an array', async () => {
+      vi.mocked(prisma.image.findMany)
+        .mockResolvedValueOnce([
+          makePrismaImage({
+            segmentation: {
+              polygons: JSON.stringify({ not: 'array' }),
+              imageWidth: 800,
+              imageHeight: 600,
+            },
+          }) as never,
+        ])
+        .mockResolvedValueOnce([]);
+      vi.mocked(prisma.image.count).mockResolvedValue(1);
+
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+      const seg = res.body.data.images[0].segmentationResult;
+      expect(seg.polygonCount).toBe(0);
+      expect(seg.polygons).toEqual([]);
+    });
+
+    it('returns 500 on an unexpected error (DB crash)', async () => {
+      vi.mocked(prisma.image.findMany).mockRejectedValueOnce(
+        new Error('DB gone')
+      );
+      const res = await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(500);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  // ── getImageForDisplay ─────────────────────────────────────────────────────
+  describe('getImageForDisplay', () => {
+    it('returns 400 when imageId param is missing', async () => {
+      const res = await request(
+        mountPublic('get', '/', controller.getImageForDisplay)
+      )
+        .get('/')
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 404 when the service throws a "nenalezen" error', async () => {
+      imageServiceInstance.getBrowserCompatibleImage.mockRejectedValue(
+        new Error('Image nenalezen in storage')
+      );
+      const res = await request(
+        mountPublic('get', '/:imageId', controller.getImageForDisplay)
+      )
+        .get(`/${IMAGE_ID}`)
+        .expect(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 500 for other service errors', async () => {
+      imageServiceInstance.getBrowserCompatibleImage.mockRejectedValue(
+        new Error('S3 timeout')
+      );
+      const res = await request(
+        mountPublic('get', '/:imageId', controller.getImageForDisplay)
+      )
+        .get(`/${IMAGE_ID}`)
+        .expect(500);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('sets Content-Type and cache headers and returns the image buffer', async () => {
+      imageServiceInstance.getBrowserCompatibleImage.mockResolvedValue({
+        buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+        mimeType: 'image/png',
+        filename: 'cell.png',
+      });
+      const res = await request(
+        mountPublic('get', '/:imageId', controller.getImageForDisplay)
+      )
+        .get(`/${IMAGE_ID}`)
+        .expect(200);
+      expect(res.headers['content-type']).toMatch(/image\/png/);
+      expect(res.headers['cache-control']).toMatch(/max-age=31536000/);
+    });
+  });
+
+  // ── reorderImages ──────────────────────────────────────────────────────────
+  describe('reorderImages', () => {
+    const validBody = { imageIds: [IMAGE_ID], mode: 'all' };
+
+    it('returns 401 when unauthenticated', async () => {
+      const res = await request(buildUnauthApp(controller.reorderImages))
+        .patch('/')
+        .send(validBody)
+        .expect(401);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 200 with count + mode and delegates to reorderImages', async () => {
+      imageServiceInstance.reorderImages.mockResolvedValue(undefined);
+      const res = await request(
+        mountAuthed('patch', '/:id', controller.reorderImages)
+      )
+        .patch(`/${PROJECT_ID}`)
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.data.reordered).toBe(1);
+      expect(res.body.data.mode).toBe('all');
+      expect(imageServiceInstance.reorderImages).toHaveBeenCalledWith(
+        PROJECT_ID,
+        USER_ID,
+        [IMAGE_ID],
+        'all'
+      );
+    });
+
+    it('defaults mode to "all" when omitted', async () => {
+      imageServiceInstance.reorderImages.mockResolvedValue(undefined);
+      const res = await request(
+        mountAuthed('patch', '/:id', controller.reorderImages)
+      )
+        .patch(`/${PROJECT_ID}`)
+        .send({ imageIds: [IMAGE_ID] })
+        .expect(200);
+      expect(res.body.data.mode).toBe('all');
+    });
+
+    it('returns 409 on Prisma P2025 (record not found mid-drag)', async () => {
+      const { Prisma } = await import('@prisma/client');
+      imageServiceInstance.reorderImages.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Record not found', {
+          code: 'P2025',
+          clientVersion: '5.0.0',
+        })
+      );
+      const res = await request(
+        mountAuthed('patch', '/:id', controller.reorderImages)
+      )
+        .patch(`/${PROJECT_ID}`)
+        .send(validBody)
+        .expect(409);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 409 on Prisma P2034 (serialization conflict)', async () => {
+      const { Prisma } = await import('@prisma/client');
+      imageServiceInstance.reorderImages.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Serialization failure', {
+          code: 'P2034',
+          clientVersion: '5.0.0',
+        })
+      );
+      const res = await request(
+        mountAuthed('patch', '/:id', controller.reorderImages)
+      )
+        .patch(`/${PROJECT_ID}`)
+        .send(validBody)
+        .expect(409);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('passes ApiError status through for service-level errors', async () => {
+      imageServiceInstance.reorderImages.mockRejectedValue(
+        ApiError.forbidden('Not project owner')
+      );
+      const res = await request(
+        mountAuthed('patch', '/:id', controller.reorderImages)
+      )
+        .patch(`/${PROJECT_ID}`)
+        .send(validBody)
+        .expect(403);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  // ── regenerateThumbnails ───────────────────────────────────────────────────
+  describe('regenerateThumbnails', () => {
+    function buildRegenApp(userId?: string) {
+      const app = express();
+      app.use(express.json());
+      if (userId) {
+        app.use((req: express.Request & { user?: unknown }, _res, next) => {
+          req.user = { id: userId };
+          next();
+        });
+      }
+      app.post('/:projectId', controller.regenerateThumbnails);
+      return app;
+    }
+
+    function makeImageWithSeg(name = 'cell.png') {
+      return {
+        id: IMAGE_ID,
+        name,
+        updatedAt: new Date(),
+        segmentation: { id: SEG_ID, imageId: IMAGE_ID },
+        segmentationThumbnailPath: null,
+      };
+    }
+
+    beforeEach(() => {
+      vi.mocked(SharingService.hasProjectAccess).mockResolvedValue({
+        hasAccess: true,
+      } as never);
+      vi.mocked(prisma.image.findMany).mockResolvedValue([
+        makeImageWithSeg() as never,
+      ]);
+    });
+
+    it('returns 401 when unauthenticated', async () => {
+      const res = await request(buildRegenApp())
+        .post(`/${PROJECT_ID}`)
+        .expect(401);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when projectId param is absent', async () => {
+      const app = express();
+      app.use(express.json());
+      app.use((req: express.Request & { user?: unknown }, _res, next) => {
+        req.user = { id: USER_ID };
+        next();
+      });
+      app.post('/', controller.regenerateThumbnails);
+      const res = await request(app).post('/').expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 400 when limit is out of range', async () => {
+      const res = await request(buildRegenApp(USER_ID))
+        .post(`/${PROJECT_ID}`)
+        .query({ limit: '2000' })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 404 when SharingService denies access', async () => {
+      vi.mocked(SharingService.hasProjectAccess).mockResolvedValue({
+        hasAccess: false,
+      } as never);
+      const res = await request(buildRegenApp(USER_ID))
+        .post(`/${PROJECT_ID}`)
+        .expect(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('dry-run returns counts without regenerating', async () => {
+      vi.mocked(prisma.image.findMany).mockResolvedValue([
+        {
+          id: IMAGE_ID,
+          name: 'cell.png',
+          updatedAt: new Date(),
+          segmentation: { id: SEG_ID, imageId: IMAGE_ID },
+          segmentationThumbnailPath: null,
+        } as never,
+      ]);
+
+      const res = await request(buildRegenApp(USER_ID))
+        .post(`/${PROJECT_ID}`)
+        .query({ dryRun: 'true' })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.imagesWithMissingThumbnails).toBe(1);
+      expect(thumbService.generateBatchThumbnails).not.toHaveBeenCalled();
+    });
+
+    it('returns 200 with zero counts when no image needs regeneration', async () => {
+      vi.mocked(prisma.image.findMany).mockResolvedValue([
+        {
+          id: IMAGE_ID,
+          name: 'no-seg.png',
+          updatedAt: new Date(),
+          segmentation: null,
+        } as never,
+      ]);
+
+      const res = await request(buildRegenApp(USER_ID))
+        .post(`/${PROJECT_ID}`)
+        .expect(200);
+      expect(res.body.data.regeneratedCount).toBe(0);
+    });
+
+    it('reports failedCount and failedImages when generation returns null values', async () => {
+      thumbService.generateBatchThumbnails.mockResolvedValueOnce(
+        new Map([[SEG_ID, null]])
+      );
+
+      const res = await request(buildRegenApp(USER_ID))
+        .post(`/${PROJECT_ID}`)
+        .expect(200);
+
+      expect(res.body.data.failedCount).toBe(1);
+      expect(res.body.data.regeneratedCount).toBe(0);
+      expect(res.body.data.failedImages).toContain('cell.png');
+      expect(res.body.message).toMatch(/selhalo/);
+    });
+
+    it('reports full success (failedCount 0) with processingTime + concurrencyStatus', async () => {
+      thumbService.generateBatchThumbnails.mockResolvedValueOnce(
+        new Map([[SEG_ID, 'http://storage/thumb.png']])
+      );
+
+      const res = await request(buildRegenApp(USER_ID))
+        .post(`/${PROJECT_ID}`)
+        .expect(200);
+
+      expect(res.body.data.regeneratedCount).toBe(1);
+      expect(res.body.data.failedCount).toBe(0);
+      expect(res.body.data.failedImages).toBeUndefined();
+      expect(res.body.message).not.toMatch(/selhalo/);
+      expect(typeof res.body.data.processingTime).toBe('number');
+      expect(res.body.data.concurrencyStatus).toBeDefined();
+    });
+
+    it('forwards an ApiError status (e.g. 403) from the service', async () => {
+      thumbService.generateBatchThumbnails.mockRejectedValueOnce(
+        ApiError.forbidden('Access denied')
+      );
+      const res = await request(buildRegenApp(USER_ID))
+        .post(`/${PROJECT_ID}`)
+        .expect(403);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('returns 500 for an unexpected error', async () => {
+      thumbService.generateBatchThumbnails.mockRejectedValueOnce(
+        new Error('Database exploded')
+      );
+      const res = await request(buildRegenApp(USER_ID))
+        .post(`/${PROJECT_ID}`)
+        .expect(500);
+      expect(res.body.success).toBe(false);
     });
   });
 });

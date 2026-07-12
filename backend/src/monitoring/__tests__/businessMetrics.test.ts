@@ -15,6 +15,9 @@
  *  - updateQueueSize() sets queueSize gauge per queue_name
  *  - initializeBusinessMetricsCollection() seeds gauges without throwing
  *  - getBusinessMetricsSummary() returns all required keys with aggregated counts
+ *  - every tracker swallows a throwing Prometheus call and logs it via
+ *      logger.error instead of re-throwing (catch-branch coverage)
+ *  - getBusinessMetricsSummary() returns a zero-filled object on registry error
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -75,6 +78,12 @@ import {
   apiResponseTime,
   queueSize,
 } from '../../monitoring/businessMetrics';
+import { logger } from '../../utils/logger';
+
+const mockLogger = logger as unknown as {
+  error: ReturnType<typeof vi.fn>;
+  info: ReturnType<typeof vi.fn>;
+};
 
 // ---------------------------------------------------------------------------
 // Helper: extract value from the business registry
@@ -99,6 +108,7 @@ async function getMetricValue(
 // Reset all metrics before each test
 // ---------------------------------------------------------------------------
 beforeEach(() => {
+  vi.clearAllMocks();
   apiErrorsTotal.reset();
   featureUsageCounter.reset();
   imageProcessingCounter.reset();
@@ -371,8 +381,11 @@ describe('updateQueueSize()', () => {
 // ---------------------------------------------------------------------------
 
 describe('initializeBusinessMetricsCollection()', () => {
-  it('runs without throwing', () => {
+  it('runs without throwing and logs initialization', () => {
     expect(() => initializeBusinessMetricsCollection()).not.toThrow();
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('Business metrics collection initialized')
+    );
   });
 
   it('seeds active_users gauges for free/premium/admin tiers', async () => {
@@ -394,6 +407,14 @@ describe('initializeBusinessMetricsCollection()', () => {
     const exp = await getMetricValue('queue_size', { queue_name: 'export' });
     expect(seg).toBeGreaterThanOrEqual(0);
     expect(exp).toBeGreaterThanOrEqual(0);
+  });
+
+  it('catches and swallows when an inner metric call throws', () => {
+    const spy = vi.spyOn(userActivityGauge, 'set').mockImplementationOnce(() => {
+      throw new Error('init error');
+    });
+    expect(() => initializeBusinessMetricsCollection()).not.toThrow();
+    spy.mockRestore();
   });
 });
 
@@ -447,5 +468,170 @@ describe('getBusinessMetricsSummary()', () => {
     trackAuthenticationAttempt('password', 'success');
     const summary = await getBusinessMetricsSummary();
     expect(summary.totalAuthAttempts).toBeGreaterThanOrEqual(1);
+  });
+
+  it('returns a zero-filled summary when the registry read throws', async () => {
+    const spy = vi
+      .spyOn(businessMetricsRegistry, 'getMetricsAsJSON')
+      .mockRejectedValueOnce(new Error('registry error'));
+
+    const summary = await getBusinessMetricsSummary();
+
+    expect(summary).toEqual({
+      totalApiErrors: 0,
+      totalFeatureUsage: 0,
+      totalImagesProcessed: 0,
+      totalProjects: 0,
+      totalSegmentationJobs: 0,
+      totalAuthAttempts: 0,
+    });
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to get business metrics summary:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Error catch-branches — each tracker swallows a throwing Prometheus call and
+// delegates it to logger.error instead of re-throwing.
+// ---------------------------------------------------------------------------
+
+describe('metric error catch-branches', () => {
+  it('trackApiError logs when counter.inc throws', () => {
+    const spy = vi.spyOn(apiErrorsTotal, 'inc').mockImplementationOnce(() => {
+      throw new Error('prom error');
+    });
+    expect(() => trackApiError('/api/test', 'server_error', 500)).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track API error metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('trackFeatureUsage logs when counter.inc throws', () => {
+    const spy = vi
+      .spyOn(featureUsageCounter, 'inc')
+      .mockImplementationOnce(() => {
+        throw new Error('prom error');
+      });
+    expect(() => trackFeatureUsage('export', 'admin')).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track feature usage metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('trackImageProcessing logs when counter.inc throws', () => {
+    const spy = vi
+      .spyOn(imageProcessingCounter, 'inc')
+      .mockImplementationOnce(() => {
+        throw new Error('prom error');
+      });
+    expect(() => trackImageProcessing('resize', 'failure')).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track image processing metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('updateActiveUsers logs when gauge.set throws', () => {
+    const spy = vi.spyOn(userActivityGauge, 'set').mockImplementationOnce(() => {
+      throw new Error('prom error');
+    });
+    expect(() => updateActiveUsers('premium', 10)).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to update active users metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('trackProjectCreated logs when counter.inc throws', () => {
+    const spy = vi
+      .spyOn(projectsCreatedTotal, 'inc')
+      .mockImplementationOnce(() => {
+        throw new Error('prom error');
+      });
+    expect(() => trackProjectCreated()).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track project creation metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('trackSegmentationJob logs when counter.inc throws', () => {
+    const spy = vi
+      .spyOn(segmentationJobsTotal, 'inc')
+      .mockImplementationOnce(() => {
+        throw new Error('prom error');
+      });
+    expect(() => trackSegmentationJob('hrnet', 'failed')).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track segmentation job metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('updateStorageUsage logs when gauge.set throws', () => {
+    const spy = vi.spyOn(storageUsageGauge, 'set').mockImplementationOnce(() => {
+      throw new Error('prom error');
+    });
+    expect(() => updateStorageUsage('thumbnails', 512)).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to update storage usage metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('trackAuthenticationAttempt logs when counter.inc throws', () => {
+    const spy = vi
+      .spyOn(authenticationAttempts, 'inc')
+      .mockImplementationOnce(() => {
+        throw new Error('prom error');
+      });
+    expect(() =>
+      trackAuthenticationAttempt('refresh', 'failure')
+    ).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track authentication attempt metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('recordApiResponseTime logs when histogram.observe throws', () => {
+    const spy = vi
+      .spyOn(apiResponseTime, 'observe')
+      .mockImplementationOnce(() => {
+        throw new Error('prom error');
+      });
+    expect(() =>
+      recordApiResponseTime('/api/projects', 'GET', 0.05)
+    ).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to record API response time metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
+
+  it('updateQueueSize logs when gauge.set throws', () => {
+    const spy = vi.spyOn(queueSize, 'set').mockImplementationOnce(() => {
+      throw new Error('prom error');
+    });
+    expect(() => updateQueueSize('export', 3)).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to update queue size metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
   });
 });

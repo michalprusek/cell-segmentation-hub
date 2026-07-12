@@ -2,54 +2,31 @@
  * Tests for src/monitoring/databaseMetrics.ts
  *
  * Behavioral focus:
- *  - trackDatabaseQuery() increments dbQueryTotal counter with correct labels,
- *    records histogram observation, and emits slow-query counter when > 1000 ms
- *  - trackDatabaseTransaction() records histogram with success/failure label
- *  - trackConnectionError() increments dbConnectionErrors with error_type label
- *  - updateConnectionPoolMetrics() sets active/idle/total/wait gauges correctly
- *  - updateDatabaseSizeMetrics() sets table and index size gauges
- *  - initializeDatabaseMetrics() zeroes the pool and creates known table/index entries
- *  - getDatabaseMetricsSummary() returns the correct aggregated structure
- *  - DatabaseMetricsService.start() is idempotent (calling twice doesn't reinitialize)
- *  - DatabaseMetricsService.stop() resets all metric counters/gauges
- *  - DatabaseMetricsService.trackQuery() delegates to trackDatabaseQuery
- *  - DatabaseMetricsService.trackTransaction() delegates to trackDatabaseTransaction
- *  - DatabaseMetricsService.trackConnectionError() delegates to trackConnectionError
- *  - DatabaseMetricsService.updateConnectionPool() delegates to updateConnectionPoolMetrics
+ *  - trackDatabaseQuery()        counter/histogram/slow-query counter + warn log,
+ *                                and the catch branch swallows prom errors.
+ *  - trackDatabaseTransaction()  success/failure histogram + catch branch.
+ *  - trackConnectionError()      error_type counter + catch branch.
+ *  - updateConnectionPoolMetrics active/idle/total/wait gauges + catch branch.
+ *  - updateDatabaseSizeMetrics() table/index gauges + catch branch.
+ *  - initializeDatabaseMetrics() zeroes pool, seeds known tables, swallows errors.
+ *  - getDatabaseMetricsSummary() aggregated shape + zeroed error fallback.
+ *  - DatabaseMetricsService       start/stop lifecycle (idempotent, reset,
+ *                                no-op-when-stopped, error handling) + delegation.
+ *
+ * prom-client is real — assertions read back from its in-memory registry.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Mocks — before any source import
+// Mocks — before any source import. databaseMetrics.ts imports only
+// prom-client + logger, so logger is the sole dependency worth mocking.
 // ---------------------------------------------------------------------------
 
 vi.mock('../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../utils/config', () => ({
-  config: {
-    NODE_ENV: 'test',
-    JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32chars!!',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32chars!',
-    JWT_ACCESS_EXPIRY: '15m',
-    JWT_REFRESH_EXPIRY: '7d',
-    ALLOWED_ORIGINS: 'http://localhost:3000',
-    REDIS_URL: 'redis://localhost:6379',
-    FROM_EMAIL: 'test@test.com',
-    EMAIL_SERVICE: 'none',
-    REQUIRE_EMAIL_VERIFICATION: false,
-  },
-  isDevelopment: false,
-  isProduction: false,
-  isTest: true,
-  getOrigins: () => ['http://localhost:3000'],
-}));
-
-// ---------------------------------------------------------------------------
-// Import module under test (prom-client is real — we use its in-memory store)
-// ---------------------------------------------------------------------------
 import {
   trackDatabaseQuery,
   trackDatabaseTransaction,
@@ -61,6 +38,7 @@ import {
   databaseMetrics,
   dbQueryTotal,
   dbQueryDuration,
+  dbTransactionDuration,
   dbSlowQueries,
   dbConnectionErrors,
   dbConnectionPoolSize,
@@ -69,6 +47,13 @@ import {
   dbIndexSize,
   dbMetricsRegistry,
 } from '../../monitoring/databaseMetrics';
+import { logger } from '../../utils/logger';
+
+const mockLogger = logger as unknown as {
+  info: ReturnType<typeof vi.fn>;
+  warn: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
+};
 
 // ---------------------------------------------------------------------------
 // Helper: extract current value for a counter/gauge from the registry
@@ -81,21 +66,19 @@ async function getCounterValue(
   const metrics = await dbMetricsRegistry.getMetricsAsJSON();
   const metric = metrics.find(m => m.name === metricName);
   if (!metric?.values) return 0;
-  const found = metric.values.find(v => {
-    return Object.entries(labels).every(
+  const found = metric.values.find(v =>
+    Object.entries(labels).every(
       ([k, val]) => (v.labels as Record<string, string>)[k] === val
-    );
-  });
+    )
+  );
   return found?.value ?? 0;
 }
 
-// ---------------------------------------------------------------------------
-// Reset counters between tests by resetting all metrics
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
+  vi.clearAllMocks();
   dbQueryTotal.reset();
   dbQueryDuration.reset();
+  dbTransactionDuration.reset();
   dbSlowQueries.reset();
   dbConnectionErrors.reset();
   dbConnectionPoolSize.reset();
@@ -141,13 +124,16 @@ describe('trackDatabaseQuery()', () => {
     expect(val).toBe(3);
   });
 
-  it('increments dbSlowQueries when duration > 1000 ms', async () => {
+  it('increments dbSlowQueries and warns when duration > 1000 ms', async () => {
     trackDatabaseQuery('findMany', 'QueueItem', 1500, true);
     const val = await getCounterValue('db_slow_queries_total', {
       operation: 'findMany',
       model: 'QueueItem',
     });
     expect(val).toBe(1);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Slow query')
+    );
   });
 
   it('does NOT increment dbSlowQueries when duration <= 1000 ms', async () => {
@@ -172,6 +158,18 @@ describe('trackDatabaseQuery()', () => {
         (v.metricName as string)?.endsWith('_sum')
     );
     expect(sumEntry?.value).toBeCloseTo(0.5, 2);
+  });
+
+  it('swallows and logs prom errors when the counter throws', () => {
+    const spy = vi.spyOn(dbQueryTotal, 'inc').mockImplementationOnce(() => {
+      throw new Error('prom error');
+    });
+    expect(() => trackDatabaseQuery('findMany', 'User', 50, true)).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track database query metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
   });
 });
 
@@ -207,6 +205,20 @@ describe('trackDatabaseTransaction()', () => {
     );
     expect(countEntry?.value ?? 0).toBeGreaterThanOrEqual(1);
   });
+
+  it('swallows and logs prom errors when the histogram throws', () => {
+    const spy = vi
+      .spyOn(dbTransactionDuration, 'observe')
+      .mockImplementationOnce(() => {
+        throw new Error('prom error');
+      });
+    expect(() => trackDatabaseTransaction(100, true)).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track database transaction metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -234,6 +246,18 @@ describe('trackConnectionError()', () => {
     });
     expect(refused).toBe(2);
     expect(ssl).toBe(1);
+  });
+
+  it('swallows and logs prom errors when the counter throws', () => {
+    const spy = vi.spyOn(dbConnectionErrors, 'inc').mockImplementationOnce(() => {
+      throw new Error('prom error');
+    });
+    expect(() => trackConnectionError('ECONNREFUSED')).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to track connection error metric:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
   });
 });
 
@@ -273,6 +297,20 @@ describe('updateConnectionPoolMetrics()', () => {
     const val = gauge?.values?.[0]?.value ?? -1;
     expect(val).toBe(8);
   });
+
+  it('swallows and logs prom errors when a gauge throws', () => {
+    const spy = vi
+      .spyOn(dbConnectionPoolSize, 'set')
+      .mockImplementationOnce(() => {
+        throw new Error('prom error');
+      });
+    expect(() => updateConnectionPoolMetrics(5, 3, 2)).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to update connection pool metrics:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -305,6 +343,23 @@ describe('updateDatabaseSizeMetrics()', () => {
     });
     expect(val).toBe(512);
   });
+
+  it('swallows and logs prom errors when a gauge throws', () => {
+    const spy = vi.spyOn(dbTableSize, 'set').mockImplementationOnce(() => {
+      throw new Error('prom error');
+    });
+    expect(() =>
+      updateDatabaseSizeMetrics(
+        [{ name: 'User', size: 100 }],
+        [{ name: 'idx', size: 50 }]
+      )
+    ).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to update database size metrics:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -312,10 +367,6 @@ describe('updateDatabaseSizeMetrics()', () => {
 // ---------------------------------------------------------------------------
 
 describe('initializeDatabaseMetrics()', () => {
-  it('runs without throwing', () => {
-    expect(() => initializeDatabaseMetrics()).not.toThrow();
-  });
-
   it('sets active pool to 0 after initialization', async () => {
     initializeDatabaseMetrics();
     const val = await getCounterValue('db_connection_pool_size', {
@@ -333,6 +384,16 @@ describe('initializeDatabaseMetrics()', () => {
     );
     expect(tableNames).toContain('User');
     expect(tableNames).toContain('Project');
+  });
+
+  it('swallows errors when an inner gauge throws', () => {
+    const spy = vi
+      .spyOn(dbConnectionPoolSize, 'set')
+      .mockImplementationOnce(() => {
+        throw new Error('init error');
+      });
+    expect(() => initializeDatabaseMetrics()).not.toThrow();
+    spy.mockRestore();
   });
 });
 
@@ -368,6 +429,27 @@ describe('getDatabaseMetricsSummary()', () => {
     const summary = await getDatabaseMetricsSummary();
     expect(summary.totalErrors).toBeGreaterThanOrEqual(1);
   });
+
+  it('returns a zeroed summary and logs when the registry throws', async () => {
+    const spy = vi
+      .spyOn(dbMetricsRegistry, 'getMetricsAsJSON')
+      .mockRejectedValueOnce(new Error('registry down'));
+
+    const result = await getDatabaseMetricsSummary();
+
+    expect(result).toEqual({
+      totalQueries: 0,
+      totalSlowQueries: 0,
+      totalErrors: 0,
+      avgQueryTime: 0,
+      connectionPoolSize: 0,
+    });
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to get database metrics summary:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -375,18 +457,9 @@ describe('getDatabaseMetricsSummary()', () => {
 // ---------------------------------------------------------------------------
 
 describe('DatabaseMetricsService', () => {
-  it('start() runs without throwing', () => {
-    expect(() => databaseMetrics.start()).not.toThrow();
-  });
-
   it('start() is idempotent — calling twice does not throw or double-initialize', () => {
     databaseMetrics.start();
     expect(() => databaseMetrics.start()).not.toThrow();
-  });
-
-  it('stop() runs without throwing', () => {
-    databaseMetrics.start();
-    expect(() => databaseMetrics.stop()).not.toThrow();
   });
 
   it('stop() resets query counters to zero', async () => {
@@ -439,9 +512,44 @@ describe('DatabaseMetricsService', () => {
     expect(val).toBe(10);
   });
 
-  it('getMetricsSummary() returns a promise resolving to summary shape', async () => {
+  it('getMetricsSummary() resolves to the summary shape', async () => {
     const summary = await databaseMetrics.getMetricsSummary();
     expect(summary).toHaveProperty('totalQueries');
     expect(summary).toHaveProperty('connectionPoolSize');
+  });
+
+  it('start() stays resilient when initialization internals throw', () => {
+    databaseMetrics.stop();
+    const spy = vi
+      .spyOn(dbConnectionPoolSize, 'set')
+      .mockImplementationOnce(() => {
+        throw new Error('start error');
+      });
+    (databaseMetrics as unknown as { isStarted: boolean }).isStarted = false;
+
+    expect(() => databaseMetrics.start()).not.toThrow();
+    spy.mockRestore();
+  });
+
+  it('stop() is a no-op when the service was never started', () => {
+    (databaseMetrics as unknown as { isStarted: boolean }).isStarted = false;
+    expect(() => databaseMetrics.stop()).not.toThrow();
+    expect(mockLogger.info).not.toHaveBeenCalledWith(
+      'Database metrics service stopped'
+    );
+  });
+
+  it('stop() swallows and logs errors from metric.reset()', () => {
+    (databaseMetrics as unknown as { isStarted: boolean }).isStarted = true;
+    const spy = vi.spyOn(dbQueryTotal, 'reset').mockImplementationOnce(() => {
+      throw new Error('reset error');
+    });
+    expect(() => databaseMetrics.stop()).not.toThrow();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to stop database metrics service:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+    (databaseMetrics as unknown as { isStarted: boolean }).isStarted = false;
   });
 });
