@@ -462,6 +462,15 @@ describe('MetricsCalculator — exportToExcel (ASPP / spheroid_invasive path)', 
       totalSpheroidArea: 1200,
       coreArea: 300,
       invasionArea: 900,
+      // Panel populated for a core-anchored row.
+      radialReachQ95: 2.5,
+      dispersedMassFraction: 0.75,
+      fragmentCount: 3,
+      largestFragmentFraction: 0.6,
+      solidity: 0.55,
+      holeCount: 1,
+      coreEquivDiameter: 19.5,
+      wholeEquivDiameter: 39.1,
     },
     {
       imageId: 'img-b',
@@ -474,6 +483,15 @@ describe('MetricsCalculator — exportToExcel (ASPP / spheroid_invasive path)', 
       totalSpheroidArea: 800,
       coreArea: 0,
       invasionArea: 800,
+      // No core → whole panel is N/A.
+      radialReachQ95: null,
+      dispersedMassFraction: null,
+      fragmentCount: null,
+      largestFragmentFraction: null,
+      solidity: null,
+      holeCount: null,
+      coreEquivDiameter: null,
+      wholeEquivDiameter: null,
     },
   ];
 
@@ -530,6 +548,53 @@ describe('MetricsCalculator — exportToExcel (ASPP / spheroid_invasive path)', 
     // Second entry has referenceMode='no_core' → DI is undefined → 'N/A'.
     const secondRow = calls[1][0] as Record<string, unknown>;
     expect(secondRow.disintegrationIndex).toBe('N/A');
+  });
+
+  it('writes the panel metrics for a core row and N/A for a no_core row', async () => {
+    await calc.exportToExcel(
+      [],
+      '/tmp/aspp.xlsx',
+      undefined,
+      sampleImageMetrics
+    );
+    const calls = (mockWorksheet.addRow as ReturnType<typeof vi.fn>).mock.calls;
+    const coreRow = calls[0][0] as Record<string, unknown>;
+    const noCoreRow = calls[1][0] as Record<string, unknown>;
+    // Core row: every panel field carries its value.
+    expect(coreRow.radialReachQ95).toBeCloseTo(2.5, 3);
+    expect(coreRow.dispersedMassFraction).toBeCloseTo(0.75, 4);
+    expect(coreRow.fragmentCount).toBe(3);
+    expect(coreRow.largestFragmentFraction).toBeCloseTo(0.6, 4);
+    expect(coreRow.solidity).toBeCloseTo(0.55, 4);
+    expect(coreRow.holeCount).toBe(1);
+    expect(coreRow.coreEquivDiameter).toBeCloseTo(19.5, 2);
+    expect(coreRow.wholeEquivDiameter).toBeCloseTo(39.1, 2);
+    // no_core row: the entire panel is N/A, not a fabricated 0.
+    for (const key of [
+      'radialReachQ95',
+      'dispersedMassFraction',
+      'fragmentCount',
+      'largestFragmentFraction',
+      'solidity',
+      'holeCount',
+      'coreEquivDiameter',
+      'wholeEquivDiameter',
+    ]) {
+      expect(noCoreRow[key]).toBe('N/A');
+    }
+  });
+
+  it('scales equivalent diameters by µm/px but leaves fractions scale-free', async () => {
+    // Diameters are lengths → ×scale; dimensionless panel fields are unchanged.
+    // (This exercises the exporter's column layout under a scale, not the
+    // upstream ML scaling which lives in calculateAllImageMetrics.)
+    await calc.exportToExcel([], '/tmp/aspp.xlsx', 2.0, sampleImageMetrics);
+    const headers = mockWorksheetColumns.map(
+      (c: Record<string, unknown>) => c.header as string
+    );
+    expect(
+      headers.some(h => typeof h === 'string' && h.includes('Equiv. Diameter (um)'))
+    ).toBe(true);
   });
 
   it('uses px^2 units in column headers when no scale is provided', async () => {

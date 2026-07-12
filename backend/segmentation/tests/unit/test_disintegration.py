@@ -306,3 +306,77 @@ class TestDisintegrationIndex:
         })
         assert out["reference"] == "core"
         assert out["di"] > 0.20
+
+
+@pytest.mark.unit
+class TestDisintegrationPanel:
+    """Tests for the companion metric panel returned alongside DI."""
+
+    H, W = 256, 256
+    CX, CY = 128.0, 128.0
+
+    def _post(self, client, body):
+        resp = client.post("/api/disintegration-index", json=body)
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    def test_intact_disk_panel(self, client):
+        """Intact disk (core == mask): one fragment, near-solid, no holes."""
+        pts = _circle(self.CX, self.CY, 60)
+        out = self._post(client, {
+            "mask_polygon": pts, "core_polygon": pts,
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert out["reference"] == "core"
+        assert out["fragment_count"] == 1
+        assert out["largest_fragment_fraction"] == pytest.approx(1.0, abs=1e-6)
+        assert out["solidity"] > 0.9
+        assert out["solidity"] <= 1.0
+        assert out["hole_count"] == 0
+        # FG = C ∪ K, and here K is empty (core == mask).
+        assert out["n_fg_px"] == out["n_core_px"] + out["n_corona_px"]
+        assert out["radial_reach_q95"] == pytest.approx(0.97, abs=0.06)
+        assert out["core_equiv_diameter_px"] > 0
+        assert out["whole_equiv_diameter_px"] > 0
+        # Speckle-guard settings are echoed for reproducibility.
+        assert out["closing_radius_px"] == 2
+        assert out["min_fragment_px"] == 30
+
+    def test_two_separated_blobs_two_fragments(self, client):
+        """A main blob + a distant satellite → two fragments, split mass."""
+        out = self._post(client, {
+            "mask_polygons": [_circle(80, 128, 35), _circle(200, 128, 30)],
+            "core_polygons": [_circle(80, 128, 20)],
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert out["fragment_count"] == 2
+        assert out["largest_fragment_fraction"] < 0.75
+        assert 0.0 <= out["dispersed_mass_fraction"] <= 1.0
+
+    def test_no_core_panel_is_null(self, client):
+        """No core → the whole panel is null (N/A), not a fabricated 0."""
+        out = self._post(client, {
+            "mask_polygon": _circle(self.CX, self.CY, 60),
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert out["reference"] == "no_core"
+        for key in (
+            "radial_reach_q95", "dispersed_mass_fraction", "fragment_count",
+            "largest_fragment_fraction", "solidity", "hole_count",
+            "n_core_px", "n_corona_px", "n_fg_px",
+            "core_equiv_diameter_px", "whole_equiv_diameter_px",
+        ):
+            assert out[key] is None, f"{key} should be null without a core"
+
+    def test_dispersed_mass_fraction_increases_with_corona(self, client):
+        """A larger corona (bigger mask, same core) raises dispersed-mass frac."""
+        core = _circle(self.CX, self.CY, 20)
+        tight = self._post(client, {
+            "mask_polygon": _circle(self.CX, self.CY, 25), "core_polygon": core,
+            "image_width": self.W, "image_height": self.H,
+        })
+        wide = self._post(client, {
+            "mask_polygon": _circle(self.CX, self.CY, 70), "core_polygon": core,
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert wide["dispersed_mass_fraction"] > tight["dispersed_mass_fraction"]

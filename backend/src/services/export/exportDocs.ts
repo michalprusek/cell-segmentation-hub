@@ -634,6 +634,31 @@ on the core's *size* (\`R_C\`), not its shape — the reference is an ideal disk
 - *time_48h* (rozprsknuté): DI median ≈ 0.48
 - 320× separation between groups
 
+## Disintegration Metric Panel
+
+Alongside DI the export reports a panel of companion metrics spanning the
+*independent* ways a spheroid disintegrates, so redundancy with DI is explicit.
+All are computed in the **same endpoint** from the same rasterised masks
+(\`FG = C ∪ K\`, i.e. the foreground mask unioned with the core), and all are
+**\`N/A\` unless a core anchored the computation** (\`reference="core"\`). Notation:
+\`N_C\`/\`N_K\`/\`N_FG\` = pixel counts of core / corona / foreground; \`R_C\` = core
+radius; \`d̃ = |p − c| / R_C\`.
+
+| Metric (Excel column) | Axis | Formula | Reads as |
+| --- | --- | --- | --- |
+| **Radial Reach q95** | A — radial dispersal | 95th percentile of \`{d̃}\` | how far (in core radii) the leading 5 % of mass has travelled |
+| **Dispersed-Mass Fraction** | B — mass partition | \`N_K / N_FG\` ∈ [0,1] | fraction of mass now outside the dense core |
+| **Fragment Count** | C — fragmentation | connected components of FG after closing (\`r=2 px\`) with components \`< 30 px\` dropped | into how many pieces the spheroid has broken |
+| **Largest-Fragment Fraction** | C — fragmentation | largest component ÷ de-speckled mass ∈ (0,1] | \`1\` = one mass, \`→0\` = fully fragmented |
+| **Solidity** | D — porosity | \`N_FG / N_hull\` ∈ [0,1] | \`1\` = compact, \`→0\` = porous/dispersed |
+| **Hole Count** | D — porosity | enclosed holes in FG (Betti-1, holes \`≥ 30 px\`) | internal porosity |
+| **Core/Whole Equiv. Diameter** | E — absolute size | \`2·√(N/π)\` ×(µm/px) | absolute size context (not size-invariant) |
+
+The **speckle guard** (closing radius \`2 px\`, min component/hole \`30 px\`) is fixed
+and echoed by the endpoint (\`closing_radius_px\`, \`min_fragment_px\`) so results are
+reproducible. Axis-A **Radius of gyration** and other second-moment descriptors
+are deliberately *omitted* — their rank correlation with DI is ≈ 0.95 (same axis).
+
 ## Edge Cases & Caveats
 
 - **No ASPP segmentation** (HRNet, CBAM-ResUNet, plain U-Net, sperm, wound):
@@ -660,8 +685,10 @@ spheroids known to have necrotic centres.
 - **DI computation**: \`backend/segmentation/api/metrics_endpoint.py\`
 - **Per-image area orchestration**: \`backend/src/services/metrics/metricsCalculator.ts\`
 (\`calculateAllImageMetrics\`)
-- **Excel writer**: same file (\`exportToExcel\` — emits Image Name, Image ID,
-Total Spheroid Area, Core Area, Invasion Area, Disintegration Index)
+- **Excel writer**: same file (\`exportToExcel\` — emits Image Name, Total
+Spheroid Area, Core Area, Invasion Area, Disintegration Index, and the metric
+panel: Radial Reach q95, Dispersed-Mass Fraction, Fragment Count,
+Largest-Fragment Fraction, Solidity, Hole Count, Core/Whole Equiv. Diameter)
 `;
 }
 
