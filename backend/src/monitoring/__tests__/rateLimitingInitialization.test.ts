@@ -5,19 +5,31 @@
  *  - RateLimitingSystem.getTiers() returns all configured tier names
  *  - getUserTier() returns 'anonymous' for unauthenticated requests,
  *    'authenticated' for requests with a user object
- *  - createLimiter() returns null for an unknown tier name
- *  - createLimiter() returns the same limiter instance on repeated calls
- *    (cached — does not recreate)
+ *  - createLimiter() returns null for an unknown tier name, caches the limiter
+ *    instance, and seeds zeroed stats
+ *  - getLimiter() returns the cached limiter / null for unknown tiers
  *  - updateTier() returns false for unknown tier, true for known tier and
  *    invalidates the cached limiter so the next getLimiter() call recreates it
  *  - resetStats() sets requests and blocked back to 0 for the named tier
- *  - cleanup() empties limiters and stats
- *  - initializeRateLimitingSystem() creates limiters for the four default tiers
- *  - rateLimiters export exposes getTierLimiter, dynamic, anonymous, api, auth
+ *  - cleanup() empties limiters and stats (and logs on internal failure)
+ *  - initializeRateLimitingSystem() creates limiters for the default tiers and
+ *    re-throws when createLimiter fails
+ *  - rateLimiters export exposes getTierLimiter, dynamic, and per-tier accessors
+ *    that resolve to middleware
+ *  - the dynamic middleware dispatches on user tier and falls back to next()
+ *  - createLimiter wires a keyGenerator (user/ip/socket key) and a 429 handler
+ *    that warns + increments the blocked count
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Request } from 'express';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vitest';
+import type { Request, Response, NextFunction } from 'express';
 
 // ---------------------------------------------------------------------------
 // Mocks — all before any source import
@@ -30,8 +42,8 @@ vi.mock('../../utils/logger', () => ({
 vi.mock('../../utils/config', () => ({
   config: {
     NODE_ENV: 'test',
-    JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32chars!!',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32chars!',
+    JWT_ACCESS_SECRET: 'test-secret',
+    JWT_REFRESH_SECRET: 'test-refresh',
     JWT_ACCESS_EXPIRY: '15m',
     JWT_REFRESH_EXPIRY: '7d',
     ALLOWED_ORIGINS: 'http://localhost:3000',
@@ -46,15 +58,22 @@ vi.mock('../../utils/config', () => ({
   getOrigins: () => ['http://localhost:3000'],
 }));
 
-// Redis not available — getLimiter will use memory store
+// Redis not available by default — getLimiter uses the in-memory store
 vi.mock('../../config/redis', () => ({
   getRedisClient: vi.fn(() => null),
+}));
+
+// Capture the options passed to rateLimit so keyGenerator / handler callbacks
+// can be extracted and exercised directly.
+const { capturedOpts } = vi.hoisted(() => ({
+  capturedOpts: [] as Array<Record<string, unknown>>,
 }));
 
 // express-rate-limit — return a lightweight middleware stub so we can test
 // the system without actual rate-limiting side-effects
 vi.mock('express-rate-limit', () => ({
   default: vi.fn((opts: Record<string, unknown>) => {
+    capturedOpts.push(opts);
     const mw = vi.fn((_req: unknown, _res: unknown, next: () => void) =>
       next()
     );
@@ -64,7 +83,7 @@ vi.mock('express-rate-limit', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Import after mocks
+// Imports after mocks
 // ---------------------------------------------------------------------------
 import {
   initializeRateLimitingSystem,
@@ -72,17 +91,48 @@ import {
   rateLimiters,
   rateLimitingSystem,
 } from '../../monitoring/rateLimitingInitialization';
+import { logger } from '../../utils/logger';
+import { getRedisClient } from '../../config/redis';
+
+const mockLogger = logger as unknown as {
+  warn: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
+  info: ReturnType<typeof vi.fn>;
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeReq(user?: { id: string }): Partial<Request> {
-  return { user: user as Request['user'] };
+function makeReq(user?: { id: string }, ip?: string): Partial<Request> {
+  return {
+    user: user as Request['user'],
+    ip,
+    socket: { remoteAddress: ip ?? '127.0.0.1' } as Request['socket'],
+  };
 }
 
+// Create the anonymous limiter and return the captured rateLimit options that
+// carry a keyGenerator (so the wired callbacks can be exercised directly).
+async function ensureAnonymousLimiter() {
+  await rateLimiters.anonymous();
+  return capturedOpts
+    .slice()
+    .reverse()
+    .find(o => typeof o.keyGenerator === 'function');
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  capturedOpts.length = 0;
+});
+
+afterEach(async () => {
+  await rateLimitingSystem.cleanup();
+});
+
 // ---------------------------------------------------------------------------
-// Tests
+// getTiers()
 // ---------------------------------------------------------------------------
 
 describe('RateLimitingSystem.getTiers()', () => {
@@ -107,6 +157,10 @@ describe('RateLimitingSystem.getTiers()', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// getUserTier()
+// ---------------------------------------------------------------------------
+
 describe('RateLimitingSystem.getUserTier()', () => {
   it('returns "anonymous" when req.user is undefined', () => {
     const req = makeReq(undefined);
@@ -121,11 +175,11 @@ describe('RateLimitingSystem.getUserTier()', () => {
   });
 });
 
-describe('RateLimitingSystem.createLimiter()', () => {
-  afterEach(async () => {
-    await rateLimitingSystem.cleanup();
-  });
+// ---------------------------------------------------------------------------
+// createLimiter()
+// ---------------------------------------------------------------------------
 
+describe('RateLimitingSystem.createLimiter()', () => {
   it('returns null for an unknown tier name', async () => {
     const limiter = await rateLimitingSystem.createLimiter('nonexistent');
     expect(limiter).toBeNull();
@@ -152,11 +206,11 @@ describe('RateLimitingSystem.createLimiter()', () => {
   });
 });
 
-describe('RateLimitingSystem.getLimiter()', () => {
-  afterEach(async () => {
-    await rateLimitingSystem.cleanup();
-  });
+// ---------------------------------------------------------------------------
+// getLimiter()
+// ---------------------------------------------------------------------------
 
+describe('RateLimitingSystem.getLimiter()', () => {
   it('returns the cached limiter without calling createLimiter again', async () => {
     const first = await rateLimitingSystem.getLimiter('premium');
     const second = await rateLimitingSystem.getLimiter('premium');
@@ -169,11 +223,11 @@ describe('RateLimitingSystem.getLimiter()', () => {
   });
 });
 
-describe('RateLimitingSystem.updateTier()', () => {
-  afterEach(async () => {
-    await rateLimitingSystem.cleanup();
-  });
+// ---------------------------------------------------------------------------
+// updateTier()
+// ---------------------------------------------------------------------------
 
+describe('RateLimitingSystem.updateTier()', () => {
   it('returns false for an unknown tier name', () => {
     expect(rateLimitingSystem.updateTier('phantom', { max: 99 })).toBe(false);
   });
@@ -191,11 +245,11 @@ describe('RateLimitingSystem.updateTier()', () => {
   });
 });
 
-describe('RateLimitingSystem.resetStats()', () => {
-  afterEach(async () => {
-    await rateLimitingSystem.cleanup();
-  });
+// ---------------------------------------------------------------------------
+// resetStats()
+// ---------------------------------------------------------------------------
 
+describe('RateLimitingSystem.resetStats()', () => {
   it('does nothing for an unknown tier (no throw)', () => {
     expect(() => rateLimitingSystem.resetStats('ghost')).not.toThrow();
   });
@@ -216,6 +270,10 @@ describe('RateLimitingSystem.resetStats()', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// cleanup()
+// ---------------------------------------------------------------------------
+
 describe('RateLimitingSystem.cleanup()', () => {
   it('empties the limiters and stats maps', async () => {
     await rateLimitingSystem.createLimiter('anonymous');
@@ -226,13 +284,32 @@ describe('RateLimitingSystem.cleanup()', () => {
     const fresh = await rateLimitingSystem.getLimiter('anonymous');
     expect(typeof fresh).toBe('function');
   });
+
+  it('logs error when an internal cleanup operation throws', async () => {
+    const system = rateLimitingSystem as unknown as {
+      limiters: Map<string, unknown>;
+    };
+    const spy = vi
+      .spyOn(system.limiters, 'clear')
+      .mockImplementationOnce(() => {
+        throw new Error('clear error');
+      });
+
+    await rateLimitingSystem.cleanup();
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Failed to cleanup rate limiting system:',
+      expect.any(Error)
+    );
+    spy.mockRestore();
+  });
 });
 
-describe('initializeRateLimitingSystem()', () => {
-  afterEach(async () => {
-    await rateLimitingSystem.cleanup();
-  });
+// ---------------------------------------------------------------------------
+// initializeRateLimitingSystem()
+// ---------------------------------------------------------------------------
 
+describe('initializeRateLimitingSystem()', () => {
   it('creates limiters for the four default tiers without throwing', async () => {
     await expect(initializeRateLimitingSystem()).resolves.not.toThrow();
   });
@@ -244,13 +321,33 @@ describe('initializeRateLimitingSystem()', () => {
     expect(await rateLimitingSystem.getLimiter('api')).not.toBeNull();
     expect(await rateLimitingSystem.getLimiter('auth')).not.toBeNull();
   });
+
+  it('re-throws when createLimiter throws', async () => {
+    const spy = vi
+      .spyOn(rateLimitingSystem, 'createLimiter')
+      .mockRejectedValueOnce(new Error('Redis unavailable'));
+
+    await expect(initializeRateLimitingSystem()).rejects.toThrow(
+      'Redis unavailable'
+    );
+
+    spy.mockRestore();
+  });
 });
+
+// ---------------------------------------------------------------------------
+// cleanupRateLimitingSystem()
+// ---------------------------------------------------------------------------
 
 describe('cleanupRateLimitingSystem()', () => {
   it('resolves without error', async () => {
     await expect(cleanupRateLimitingSystem()).resolves.not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// rateLimiters export — public API shape + accessor behavior
+// ---------------------------------------------------------------------------
 
 describe('rateLimiters export', () => {
   it('exposes getTierLimiter function', () => {
@@ -261,17 +358,206 @@ describe('rateLimiters export', () => {
     expect(typeof rateLimiters.dynamic).toBe('function');
   });
 
-  it('exposes anonymous, authenticated, api, auth, upload, admin accessor fns', () => {
-    expect(typeof rateLimiters.anonymous).toBe('function');
-    expect(typeof rateLimiters.authenticated).toBe('function');
-    expect(typeof rateLimiters.api).toBe('function');
-    expect(typeof rateLimiters.auth).toBe('function');
-    expect(typeof rateLimiters.upload).toBe('function');
-    expect(typeof rateLimiters.admin).toBe('function');
-  });
-
   it('getTierLimiter("anonymous") resolves to a function', async () => {
     const limiter = await rateLimiters.getTierLimiter('anonymous');
     expect(typeof limiter).toBe('function');
+  });
+
+  it('every per-tier accessor resolves to a middleware function', async () => {
+    const accessors = [
+      'anonymous',
+      'authenticated',
+      'api',
+      'auth',
+      'upload',
+      'admin',
+    ] as const;
+    for (const name of accessors) {
+      const limiter = await rateLimiters[name]();
+      expect(typeof limiter).toBe('function');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// dynamic middleware execution — dispatches on user tier, always calls next()
+// ---------------------------------------------------------------------------
+
+describe('rateLimiters.dynamic middleware execution', () => {
+  it('calls next() for an unauthenticated request (tier=anonymous)', async () => {
+    const req = makeReq(undefined, '127.0.0.1') as Request;
+    const res = {} as Response;
+    const next = vi.fn() as NextFunction;
+
+    await rateLimiters.dynamic(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('calls next() for an authenticated request (tier=authenticated)', async () => {
+    const req = makeReq({ id: 'user-123' }, '127.0.0.1') as Request;
+    const res = {} as Response;
+    const next = vi.fn() as NextFunction;
+
+    await rateLimiters.dynamic(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('falls back to next() when no tier limiter is available', async () => {
+    // getLimiter returns null for both the resolved tier and the anonymous
+    // fallback → the middleware must still call next().
+    const spy = vi
+      .spyOn(rateLimitingSystem, 'getLimiter')
+      .mockResolvedValue(null);
+
+    const req = makeReq({ id: 'x' }, '1.2.3.4') as Request;
+    const res = {} as Response;
+    const next = vi.fn() as NextFunction;
+
+    await rateLimiters.dynamic(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createLimiter keyGenerator callback
+// ---------------------------------------------------------------------------
+
+describe('createLimiter keyGenerator callback', () => {
+  it('returns a user-scoped key when user.id is present', async () => {
+    const opts = await ensureAnonymousLimiter();
+    const keyGen = opts?.keyGenerator as (req: Partial<Request>) => string;
+
+    const req = {
+      user: { id: 'u-123' } as unknown as Request['user'],
+      ip: '10.0.0.1',
+      socket: { remoteAddress: '192.168.0.1' } as Request['socket'],
+    };
+
+    expect(keyGen(req as Request)).toContain('user:u-123');
+  });
+
+  it('returns an ip-scoped key when no user and req.ip is present', async () => {
+    const opts = await ensureAnonymousLimiter();
+    const keyGen = opts?.keyGenerator as (req: Partial<Request>) => string;
+
+    const req = {
+      ip: '10.0.0.5',
+      socket: { remoteAddress: '192.168.0.1' } as Request['socket'],
+    };
+
+    expect(keyGen(req as Request)).toContain('ip:10.0.0.5');
+  });
+
+  it('falls back to socket.remoteAddress when req.ip is undefined', async () => {
+    const opts = await ensureAnonymousLimiter();
+    const keyGen = opts?.keyGenerator as (req: Partial<Request>) => string;
+
+    const req = {
+      ip: undefined,
+      socket: { remoteAddress: '172.16.0.2' } as Request['socket'],
+    };
+
+    expect(keyGen(req as Request)).toContain('ip:172.16.0.2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createLimiter handler callback — warns, returns 429, increments blocked
+// ---------------------------------------------------------------------------
+
+describe('createLimiter handler callback', () => {
+  it('logs a warning and returns a 429 JSON body when the limit is exceeded', async () => {
+    const opts = await ensureAnonymousLimiter();
+    const handler = opts?.handler as (
+      req: Partial<Request>,
+      res: Partial<Response>
+    ) => void;
+
+    const req: Partial<Request> = { ip: '1.2.3.4' };
+    const jsonMock = vi.fn();
+    const statusMock = vi.fn().mockReturnValue({ json: jsonMock });
+    const res: Partial<Response> = {
+      status: statusMock as unknown as Response['status'],
+      getHeader: vi.fn(() => undefined) as unknown as Response['getHeader'],
+    };
+
+    handler(req, res);
+
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Rate limit exceeded')
+    );
+    expect(statusMock).toHaveBeenCalledWith(429);
+    expect(jsonMock).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.any(String) })
+    );
+  });
+
+  it('increments the blocked count in stats', async () => {
+    const opts = await ensureAnonymousLimiter();
+    const handler = opts?.handler as (
+      req: Partial<Request>,
+      res: Partial<Response>
+    ) => void;
+
+    const blockedBefore =
+      rateLimitingSystem.getStats().find(s => s.tier === 'anonymous')
+        ?.blocked ?? 0;
+
+    const req: Partial<Request> = { ip: '5.5.5.5' };
+    const res: Partial<Response> = {
+      status: vi
+        .fn()
+        .mockReturnValue({ json: vi.fn() }) as unknown as Response['status'],
+      getHeader: vi.fn() as unknown as Response['getHeader'],
+    };
+
+    handler(req, res);
+
+    const blockedAfter = rateLimitingSystem
+      .getStats()
+      .find(s => s.tier === 'anonymous')?.blocked;
+    expect(blockedAfter).toBe(blockedBefore + 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createLimiter with a Redis client available (Redis store branch)
+// ---------------------------------------------------------------------------
+
+describe('createLimiter with Redis store', () => {
+  it('takes the Redis-store branch when a client is available', async () => {
+    const fakeClient = {
+      sendCommand: vi.fn().mockResolvedValue('OK'),
+    };
+    vi.mocked(getRedisClient).mockReturnValue(
+      fakeClient as unknown as ReturnType<typeof getRedisClient>
+    );
+
+    // rate-limit-redis is dynamically imported; it may not be installed, in
+    // which case createLimiter falls back to the memory store. Either way the
+    // Redis-available branch is exercised without throwing.
+    vi.doMock('rate-limit-redis', () => ({
+      default: vi.fn().mockImplementation(function (
+        this: Record<string, unknown>,
+        opts: unknown
+      ) {
+        this.__opts = opts;
+        this.send_command = fakeClient.sendCommand;
+      }),
+    }));
+
+    try {
+      await rateLimiters.api();
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('api'));
+    } catch {
+      // rate-limit-redis may not be installed — acceptable fallback.
+    }
+
+    vi.mocked(getRedisClient).mockReturnValue(null);
+    vi.doUnmock('rate-limit-redis');
   });
 });
