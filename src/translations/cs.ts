@@ -2186,8 +2186,6 @@ export default {
       deleteFailed: 'Nepodařilo se smazat label',
       loadFailed: 'Nepodařilo se načíst typové labely',
       duplicateName: 'Label s tímto názvem už existuje',
-      noTrack:
-        'Tento mikrotubulus zatím nemá track — nejprve spusťte trackování.',
     },
     color: {
       label: 'Barva:',

@@ -2253,7 +2253,6 @@ export default {
       deleteFailed: 'Failed to delete label',
       loadFailed: 'Failed to load type labels',
       duplicateName: 'A label with this name already exists',
-      noTrack: 'This microtubule has no track yet — run tracking first.',
     },
     color: {
       label: 'Colour:',

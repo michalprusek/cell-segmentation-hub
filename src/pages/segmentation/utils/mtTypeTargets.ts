@@ -32,3 +32,54 @@ export function resolveTargetTrackIds(
     )
   );
 }
+
+/**
+ * Resolve which of the current frame's polygons a "change type" action targets:
+ * a real multi-selection (≥2) acts on the whole selection; otherwise just the
+ * right-clicked polygon. Mirrors {@link resolveTargetTrackIds}'s single-vs-multi
+ * rule, but returns POLYGON ids — so an untracked (hand-drawn) polyline, which
+ * contributes no trackId, is still a valid target.
+ */
+export function resolveTargetPolygonIds(
+  polygonId: string,
+  selectedIds: ReadonlySet<string>
+): Set<string> {
+  return selectedIds.size >= 2 ? new Set(selectedIds) : new Set([polygonId]);
+}
+
+export interface TypeablePolygon {
+  id: string;
+  trackId?: string | null;
+  mtType?: string;
+}
+
+/**
+ * Return a new array with `mtType` set (or cleared, when `mtType` is null) on
+ * every polygon the action targets — matched by its own id (covers untracked,
+ * hand-drawn polylines) OR by belonging to one of the target tracks (keeps a
+ * tracked MT's current-frame polyline in lock-step with the cross-frame backend
+ * write). Pure: untouched polygons keep their reference, changed ones are
+ * shallow-copied. This optimistic stamp is what recolours the canvas + panel
+ * immediately and — crucially — keeps `mtType` in the polygons a later save
+ * serialises, instead of depending on an abortable network reload.
+ */
+export function applyMtTypeToPolygons<T extends TypeablePolygon>(
+  polygons: ReadonlyArray<T>,
+  targetPolygonIds: ReadonlySet<string>,
+  targetTrackIds: ReadonlySet<string>,
+  mtType: string | null
+): T[] {
+  const next = mtType ?? undefined;
+  return polygons.map(p => {
+    const isTarget =
+      targetPolygonIds.has(p.id) ||
+      (typeof p.trackId === 'string' &&
+        p.trackId.length > 0 &&
+        targetTrackIds.has(p.trackId));
+    if (!isTarget) return p;
+    const copy = { ...p };
+    if (next === undefined) delete copy.mtType;
+    else copy.mtType = next;
+    return copy;
+  });
+}
