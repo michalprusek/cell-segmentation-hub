@@ -64,25 +64,73 @@ describe('resolveTargetPolygonIds', () => {
 describe('applyMtTypeToPolygons', () => {
   const set = (...ids: string[]) => new Set(ids);
 
-  it('types an untracked, hand-drawn polyline by its id (Bug 1 fix)', () => {
-    const out = applyMtTypeToPolygons(polys, set('e'), set(), 'brain');
+  it('types an untracked, hand-drawn polyline by its id (no trackId needed)', () => {
+    const { polygons: out, changed } = applyMtTypeToPolygons(
+      polys,
+      set('e'),
+      set(),
+      'brain'
+    );
     expect(out.find(p => p.id === 'e')?.mtType).toBe('brain');
+    expect(changed).toBe(1);
     // Everything else is untouched (same reference).
     expect(out.find(p => p.id === 'a')).toBe(polys[0]);
   });
 
   it('types a tracked MT and its same-track siblings by trackId', () => {
     // Target only polygon 'a', but its trackId t1 also covers sibling 'c'.
-    const out = applyMtTypeToPolygons(polys, set('a'), set('t1'), 'hela');
+    const { polygons: out, changed } = applyMtTypeToPolygons(
+      polys,
+      set('a'),
+      set('t1'),
+      'hela'
+    );
     expect(out.find(p => p.id === 'a')?.mtType).toBe('hela');
     expect(out.find(p => p.id === 'c')?.mtType).toBe('hela');
     expect(out.find(p => p.id === 'b')?.mtType).toBeUndefined();
+    expect(changed).toBe(2);
   });
 
   it('clears mtType when passed null', () => {
     const typed = [{ id: 'x', trackId: 't9', mtType: 'brain' }];
-    const out = applyMtTypeToPolygons(typed, set('x'), set('t9'), null);
+    const { polygons: out, changed } = applyMtTypeToPolygons(
+      typed,
+      set('x'),
+      set('t9'),
+      null
+    );
     expect('mtType' in out[0]).toBe(false);
+    expect(changed).toBe(1);
+  });
+
+  it('clears mtType across a whole track (all same-track siblings)', () => {
+    const typed = [
+      { id: 'a', trackId: 't1', mtType: 'brain' },
+      { id: 'c', trackId: 't1', mtType: 'brain' },
+      { id: 'b', trackId: 't2', mtType: 'hela' },
+    ];
+    const { polygons: out, changed } = applyMtTypeToPolygons(
+      typed,
+      set('a'),
+      set('t1'),
+      null
+    );
+    expect('mtType' in out.find(p => p.id === 'a')!).toBe(false);
+    expect('mtType' in out.find(p => p.id === 'c')!).toBe(false);
+    expect(out.find(p => p.id === 'b')?.mtType).toBe('hela'); // other track kept
+    expect(changed).toBe(2);
+  });
+
+  it('is a no-op (changed=0, references preserved) when the value is unchanged', () => {
+    const typed = [{ id: 'x', trackId: 't9', mtType: 'brain' }];
+    const { polygons: out, changed } = applyMtTypeToPolygons(
+      typed,
+      set('x'),
+      set('t9'),
+      'brain' // already brain
+    );
+    expect(changed).toBe(0);
+    expect(out[0]).toBe(typed[0]); // same reference — caller can skip updatePolygons
   });
 
   it('does not mutate the input polygons', () => {

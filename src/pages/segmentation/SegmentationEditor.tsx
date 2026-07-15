@@ -1053,18 +1053,35 @@ const SegmentationEditor = () => {
   // save — so drawing an MT by hand and typing it must NOT error with "no track".
   const handleChangeMtType = useCallback(
     async (polygonId: string, mtType: string | null) => {
-      const polys = editorRef.current.getPolygons();
+      // Snapshot the target selection ONCE, before the await. A frame scrub or
+      // selection change during setTrackType must not skew which polygons we
+      // stamp — the cross-frame trackIds and the current-frame ids have to come
+      // from the same instant.
+      const selection = new Set(selectedPolygonIdsRef.current);
       const trackIds = resolveTargetTrackIds(
         polygonId,
-        selectedPolygonIdsRef.current,
-        polys
+        selection,
+        editorRef.current.getPolygons()
       );
+      const targetPolygonIds = resolveTargetPolygonIds(polygonId, selection);
       const videoId = video.container?.id;
 
       // Cross-frame whole-track persistence — only for tracked targets.
       if (videoId && trackIds.length > 0) {
         try {
-          await apiClient.setTrackType(videoId, trackIds, mtType);
+          const { framesAffected } = await apiClient.setTrackType(
+            videoId,
+            trackIds,
+            mtType
+          );
+          // 0 frames means the track wasn't found in the video (stale trackId).
+          // The label still applies to the current frame below, but the promised
+          // cross-frame write didn't happen — surface it in logs.
+          if (framesAffected === 0) {
+            logger.warn(
+              `setTrackType matched no frames for track(s) ${trackIds.join(', ')} on video ${videoId}`
+            );
+          }
           evictVideoFrameSegmentationCaches();
         } catch (error) {
           logger.error('Failed to set microtubule type', error);
@@ -1073,17 +1090,22 @@ const SegmentationEditor = () => {
         }
       }
 
-      // Optimistically stamp the current frame's target polygons (re-read after
-      // the await so we build on the latest state). Match by polygon id AND by
-      // trackId, so a tracked MT's current-frame polyline recolours in lock-step
-      // with the cross-frame write above, and an untracked one still updates.
-      const updated = applyMtTypeToPolygons(
+      // Optimistically stamp the current frame's target polygons (re-read for the
+      // latest geometry, but with the pre-await target sets). Match by polygon id
+      // OR trackId, so a tracked MT's current-frame polyline recolours in
+      // lock-step with the cross-frame write above and an untracked one still
+      // updates. Commit only when something actually changed — a no-op
+      // reassignment (or a mid-await frame scrub that leaves no matching polygon)
+      // must not dirty the frame or push an empty undo entry.
+      const { polygons: updated, changed } = applyMtTypeToPolygons(
         editorRef.current.getPolygons(),
-        resolveTargetPolygonIds(polygonId, selectedPolygonIdsRef.current),
+        targetPolygonIds,
         new Set(trackIds),
         mtType
       );
-      editorRef.current.updatePolygons(updated);
+      if (changed > 0) {
+        editorRef.current.updatePolygons(updated);
+      }
 
       toast.success(t('microtubule.type.updated'));
     },
