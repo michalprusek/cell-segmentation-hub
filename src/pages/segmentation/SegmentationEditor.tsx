@@ -1067,21 +1067,14 @@ const SegmentationEditor = () => {
       const videoId = video.container?.id;
 
       // Cross-frame whole-track persistence — only for tracked targets.
+      let framesAffected: number | null = null;
       if (videoId && trackIds.length > 0) {
         try {
-          const { framesAffected } = await apiClient.setTrackType(
+          ({ framesAffected } = await apiClient.setTrackType(
             videoId,
             trackIds,
             mtType
-          );
-          // 0 frames means the track wasn't found in the video (stale trackId).
-          // The label still applies to the current frame below, but the promised
-          // cross-frame write didn't happen — surface it in logs.
-          if (framesAffected === 0) {
-            logger.warn(
-              `setTrackType matched no frames for track(s) ${trackIds.join(', ')} on video ${videoId}`
-            );
-          }
+          ));
           evictVideoFrameSegmentationCaches();
         } catch (error) {
           logger.error('Failed to set microtubule type', error);
@@ -1105,6 +1098,17 @@ const SegmentationEditor = () => {
       );
       if (changed > 0) {
         editorRef.current.updatePolygons(updated);
+      }
+
+      // Genuine cross-frame desync: the current frame carries the track (we just
+      // changed it) yet the whole-track write matched 0 frames — the track's
+      // other frames are now stale. `framesAffected === 0` with `changed === 0`
+      // is only a no-op re-assignment, not a desync, so it is intentionally not
+      // warned.
+      if (framesAffected === 0 && changed > 0) {
+        logger.warn(
+          `setTrackType matched no frames for track(s) ${trackIds.join(', ')} on video ${videoId}`
+        );
       }
 
       toast.success(t('microtubule.type.updated'));
