@@ -689,3 +689,202 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
         frame_height=int(H),
         frame_width=int(W),
     )
+
+
+# ----------------------------------------------------------------------------
+#  Background-ROI endpoint (ImageJ composite ROIs for the MT export)
+# ----------------------------------------------------------------------------
+#
+# The ImageJ RoiSet export draws each microtubule's per-MT LOCAL background as a
+# ROI so a biologist can re-measure exactly what the ``median/mean_background``
+# columns were computed from. That region is the vicinity ring
+# ``dilate(band, thickness*margin) & ~signal_union`` — a band with EVERY
+# microtubule (its own core + any neighbour crossing the ring) cut out. A plain
+# stroke-width polyline cannot express those holes, so it is exported as an
+# ImageJ COMPOSITE (ShapeRoi): the outer contour plus a hole contour per cut-out,
+# rendered with the even-odd fill rule. The mask is the SAME ``_vicinity_mask``
+# the metrics endpoint samples, so the ROI and the numbers can never diverge.
+
+
+class MTBgPolylineInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    instance_id: str
+    points: List[List[float]]
+    # ImageJ ROI name (e.g. ``mt_3_bg``) baked into the composite bytes.
+    roi_name: str
+    # ARGB stroke colour (opaque alpha in the high byte) matching the sibling MT
+    # ROI's per-track colour. None leaves ImageJ's default.
+    stroke_color: Optional[int] = None
+    # 1-based stack slice this ROI sits on (the video frame).
+    position: Optional[int] = None
+
+
+class MTBgFrameInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int
+    polylines: List[MTBgPolylineInput]
+
+
+class MTBackgroundRoisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frames: List[MTBgFrameInput]
+    thickness_px: int = Field(5, ge=1, le=100)
+    margin_multiplier: float = Field(2.0, ge=0.0, le=10.0)
+    # Real frame dimensions so the ring clips at the true image border exactly as
+    # the metrics endpoint does. When omitted, a canvas bounding all polylines
+    # (padded by the margin) is used — identical except for MTs touching a border.
+    frame_height: Optional[int] = None
+    frame_width: Optional[int] = None
+
+
+class MTBackgroundRoi(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    instance_id: str
+    # Base64 of the ImageJ ``.roi`` composite bytes.
+    roi_b64: str
+
+
+class MTBackgroundRoisFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int
+    rois: List[MTBackgroundRoi]
+
+
+class MTBackgroundRoisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frames: List[MTBackgroundRoisFrame]
+
+
+def _vicinity_composite_roi_bytes(
+    vicinity: np.ndarray,
+    name: str,
+    stroke_color: Optional[int],
+    position: Optional[int],
+) -> Optional[bytes]:
+    """Encode a boolean vicinity mask as ImageJ COMPOSITE ``.roi`` bytes.
+
+    Outer contours + hole contours (``RETR_CCOMP``) become one geometric path
+    (MOVETO/LINETO/CLOSE per contour); ImageJ's even-odd fill turns the hole
+    contours into cut-outs. Returns None for an empty mask (no ring — the
+    metrics side reports null background for the same case).
+    """
+    import cv2
+    import struct
+    import roifile
+
+    mask = np.ascontiguousarray(vicinity.astype(np.uint8))
+    if mask.sum() == 0:
+        return None
+    contours, _ = cv2.findContours(
+        mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE
+    )
+    contours = [c for c in contours if c.shape[0] >= 3]
+    if not contours:
+        return None
+
+    path: List[float] = []
+    for c in contours:
+        pts = c.reshape(-1, 2)
+        path.extend((0.0, float(pts[0, 0]), float(pts[0, 1])))  # MOVETO
+        for q in pts[1:]:
+            path.extend((1.0, float(q[0]), float(q[1])))  # LINETO
+        path.append(4.0)  # CLOSE
+    multi = np.asarray(path, dtype=np.float32)
+
+    ys, xs = np.nonzero(mask)
+    roi = roifile.ImagejRoi(
+        roitype=roifile.ROI_TYPE.RECT,
+        name=name,
+        left=int(xs.min()),
+        top=int(ys.min()),
+        right=int(xs.max()) + 1,
+        bottom=int(ys.max()) + 1,
+        n_coordinates=0,
+        shape_roi_size=int(multi.size),
+        multi_coordinates=multi,
+    )
+    if stroke_color is not None:
+        # ImageJ .roi is big-endian ARGB.
+        roi.stroke_color = struct.pack(">I", int(stroke_color) & 0xFFFFFFFF)
+    if position is not None and position > 0:
+        roi.position = int(position)
+    return roi.tobytes()
+
+
+@router.post("/mt-background-rois", response_model=MTBackgroundRoisResponse)
+async def mt_background_rois(
+    req: MTBackgroundRoisRequest,
+) -> MTBackgroundRoisResponse:
+    """Per-MT background composite ROIs for the ImageJ export.
+
+    Mirrors the metrics endpoint's geometry step (exact-thickness bands →
+    signal union → per-MT vicinity ring) and encodes each ring as an ImageJ
+    COMPOSITE ROI. Geometry-only (no raster read), so it is cheap.
+    """
+    import base64
+
+    margin_radius = int(round(req.thickness_px * req.margin_multiplier))
+    out_frames: List[MTBackgroundRoisFrame] = []
+
+    for fr in req.frames:
+        valid_pts = [
+            np.asarray(pl.points, dtype=np.float32)
+            for pl in fr.polylines
+            if len(pl.points) >= 2
+        ]
+        if not valid_pts:
+            out_frames.append(
+                MTBackgroundRoisFrame(frame_index=fr.frame_index, rois=[])
+            )
+            continue
+
+        if req.frame_height and req.frame_width:
+            h, w = int(req.frame_height), int(req.frame_width)
+        else:
+            stacked = np.concatenate(valid_pts, axis=0)
+            pad = margin_radius + req.thickness_px + 4
+            w = int(np.ceil(stacked[:, 0].max())) + pad
+            h = int(np.ceil(stacked[:, 1].max())) + pad
+
+        band_masks: List[np.ndarray] = []
+        for pl in fr.polylines:
+            pts = np.asarray(pl.points, dtype=np.float32)
+            if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
+                band_masks.append(np.zeros((h, w), dtype=np.uint8))
+            else:
+                band_masks.append(_rasterize_band(pts, h, w, req.thickness_px))
+
+        signal_union = np.zeros((h, w), dtype=np.uint8)
+        for m in band_masks:
+            signal_union |= m
+        not_signal = signal_union == 0
+
+        rois: List[MTBackgroundRoi] = []
+        for i, pl in enumerate(fr.polylines):
+            vicinity = _vicinity_mask(band_masks[i], not_signal, margin_radius)
+            roi_bytes = _vicinity_composite_roi_bytes(
+                vicinity, pl.roi_name, pl.stroke_color, pl.position
+            )
+            if roi_bytes is not None:
+                rois.append(
+                    MTBackgroundRoi(
+                        instance_id=pl.instance_id,
+                        roi_b64=base64.b64encode(roi_bytes).decode("ascii"),
+                    )
+                )
+        out_frames.append(
+            MTBackgroundRoisFrame(frame_index=fr.frame_index, rois=rois)
+        )
+
+    logger.info(
+        "mt-background-rois: %d frames, %d composite ROIs",
+        len(out_frames),
+        sum(len(f.rois) for f in out_frames),
+    )
+    return MTBackgroundRoisResponse(frames=out_frames)
