@@ -1001,6 +1001,8 @@ export default {
           'Cliquez pour ajouter des points, puis cliquez sur un autre sommet pour terminer. Cliquez directement sur un autre sommet sans ajouter de points pour supprimer tous les points entre eux.',
         holdShift: 'Maintenez SHIFT pour ajouter automatiquement des points',
         cancel: 'Appuyez sur ESC pour annuler',
+        joinHint:
+          'Cliquez sur l’extrémité d’une autre polyligne de la même classe pour les joindre',
       },
       editVertices: {
         selectPolygon:

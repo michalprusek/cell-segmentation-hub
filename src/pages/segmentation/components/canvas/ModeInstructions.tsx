@@ -3,6 +3,7 @@ import { EditMode, InteractionState } from '../../types';
 import { Point } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/useLanguage';
 import { isMicrotubuleProject, type ProjectType } from '@/types';
+import { polylinePanelKind } from '@/lib/polylineSemantics';
 
 interface ModeInstructionsProps {
   editMode: EditMode;
@@ -32,6 +33,9 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
   // with Enter (or double-click), not by closing back onto the first point. The
   // hints branch on this so MT users aren't told to "close the polygon".
   const isMicrotubule = isMicrotubuleProject(projectType);
+  // Endpoint-join in add-points mode is offered wherever polylines have a
+  // dedicated panel (sperm + microtubule); generic projects don't join.
+  const supportsJoin = polylinePanelKind(projectType) !== null;
   const [isVisible, setIsVisible] = useState(true);
 
   // Auto-hide instructions after 5 seconds in View mode
@@ -144,6 +148,9 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
               isMicrotubule
                 ? t('segmentation.instructions.addPoints.clickVertexMt')
                 : t('segmentation.instructions.addPoints.clickVertex'),
+              ...(supportsJoin
+                ? [t('segmentation.instructions.addPoints.joinHint')]
+                : []),
               t('segmentation.instructions.addPoints.cancel'),
             ],
           };
@@ -157,6 +164,9 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
               isMicrotubule
                 ? t('segmentation.instructions.addPoints.addPointsMt')
                 : t('segmentation.instructions.addPoints.addPoints'),
+              ...(supportsJoin
+                ? [t('segmentation.instructions.addPoints.joinHint')]
+                : []),
               `${t('segmentation.instructions.addPoints.holdShift')} • ${t('segmentation.instructions.addPoints.cancel')}`,
             ],
           };
