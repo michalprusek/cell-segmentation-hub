@@ -182,30 +182,56 @@ def _polyline_length(points: np.ndarray) -> float:
 def _rasterize_band(
     points: np.ndarray, h: int, w: int, thickness: int
 ) -> np.ndarray:
-    """Rasterize a polyline as a thickness-wide 0/1 mask.
+    """Rasterize a polyline as an EXACT ``thickness``-wide 0/1 band.
 
-    cv2.polylines with `LINE_8` strokes whole pixels (no antialiasing),
-    so the resulting mask is binary and the pixel_count is exactly the
-    band area at the requested thickness. Rounded line caps + joins
-    follow OpenCV's default, which matches what ImageJ's "fill stroke"
-    produces for a width-N polyline.
+    A pixel is in the band iff its centre lies within ``thickness / 2`` of the
+    polyline centreline, computed via a precise Euclidean distance transform of
+    the 1-px-rasterised centreline. This makes ``pixel_count`` the band area at
+    the *requested* thickness and makes the band coincide with an ImageJ line
+    ROI of stroke width ``thickness`` (the region exported alongside the
+    metrics).
+
+    Why not ``cv2.polylines(thickness=N)``: OpenCV's thick-line renderer draws a
+    band ~``N + 2`` px wide (measured: N=3→5, N=5→7, N=7→9 px on cv2 4.8), so it
+    over-counts the area by ~40 % at N=5 and disagrees with the exported ImageJ
+    stroke. The distance-transform band removes that systematic bias (exact for
+    odd ``thickness``; even widths round to ``thickness + 1`` since an integer
+    band cannot be centred symmetrically on a 1-px line).
+
+    The transform runs only inside the polyline's bounding box padded by
+    ``ceil(thickness/2) + 2`` — a band is tiny relative to the frame, so this is
+    O(bbox) not O(H*W), and the padded window fully contains the band so the
+    windowed result is identical to a full-frame transform.
     """
     import cv2  # local import to keep module load cheap for tests
-    mask = np.zeros((h, w), dtype=np.uint8)
+    band = np.zeros((h, w), dtype=np.uint8)
     if points.shape[0] < 2:
-        return mask
+        return band
     # cv2 wants (N, 1, 2) int32. (x, y) order matches what the editor
-    # serialises; cv2 also uses (x, y) for polyline points so no swap
-    # is needed.
-    pts_int = np.rint(points).astype(np.int32).reshape(-1, 1, 2)
-    cv2.polylines(
-        mask, [pts_int],
-        isClosed=False,
-        color=1,
-        thickness=int(thickness),
-        lineType=8,  # cv2.LINE_8 numeric constant; avoids attr lookup on cold cv2 import
-    )
-    return mask
+    # serialises; cv2 also uses (x, y) for polyline points so no swap is needed.
+    pts = np.rint(points).astype(np.int32)
+    t = int(thickness)
+    if t <= 1:
+        cv2.polylines(band, [pts.reshape(-1, 1, 2)], False, 1, 1, lineType=8)
+        return band
+
+    r = t / 2.0
+    pad = int(np.ceil(r)) + 2
+    x0 = max(0, int(pts[:, 0].min()) - pad)
+    x1 = min(w, int(pts[:, 0].max()) + pad + 1)
+    y0 = max(0, int(pts[:, 1].min()) - pad)
+    y1 = min(h, int(pts[:, 1].max()) + pad + 1)
+    if x1 <= x0 or y1 <= y0:
+        return band
+    center = np.zeros((y1 - y0, x1 - x0), dtype=np.uint8)
+    local = (pts - np.array([x0, y0])).reshape(-1, 1, 2)
+    cv2.polylines(center, [local], False, 1, 1, lineType=8)
+    # distanceTransform gives, for every non-zero pixel, the distance to the
+    # nearest zero pixel — so invert (centreline → 0) and threshold at r.
+    inv = np.where(center > 0, 0, 255).astype(np.uint8)
+    dist = cv2.distanceTransform(inv, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+    band[y0:y1, x0:x1] = (dist <= r).astype(np.uint8)
+    return band
 
 
 def _dilate(mask: np.ndarray, radius: int) -> np.ndarray:
