@@ -46,6 +46,8 @@ import {
   imageJStrokeColor,
   imageJColorFromHex,
 } from './imagejColor';
+import axios from 'axios';
+import { config } from '../../utils/config';
 
 // ---------------------------------------------------------------------------
 //  Low-level encoder
@@ -417,6 +419,48 @@ export interface VideoRoiBuild {
   droppedPolygons: number;
 }
 
+/** One planned ROI: the resolved geometry, points, `<type>_<counter>` label and
+ *  per-track/per-class stroke colour. Shared by the entry encoder and the
+ *  background-ROI request builder so both see the SAME items in the SAME order —
+ *  the list index is the join key for the per-MT background composite bytes. */
+interface PlannedRoiItem {
+  geometry: RoiGeometry;
+  points: PolygonPoint[];
+  label: string;
+  strokeColor: number;
+}
+
+/**
+ * Resolve a frame's raw polygons into ordered {@link PlannedRoiItem}s: map the
+ * geometry/label/colour, then drop degenerate geometry (polyline < 2 / polygon <
+ * 3 points, or any non-finite coordinate). Deterministic in `polygons` order, so
+ * item index `i` identifies the same polyline in both the encoder and the ML
+ * background request.
+ */
+function planFrameItems(
+  polygons: RawPolygon[],
+  mtNameByKey: Map<string, string>,
+  labelById?: Map<string, RoiTypeLabel>
+): PlannedRoiItem[] {
+  return polygons
+    .map((p, index) => {
+      const geometry: RoiGeometry =
+        p.geometry === 'polygon' ? 'polygon' : 'polyline';
+      const typeLabel = p.mtType ? labelById?.get(p.mtType) : undefined;
+      const key = p.trackId || p.instanceId || p.id;
+      const label = (key && mtNameByKey.get(key)) || roiLabel(p, index);
+      return {
+        geometry,
+        points: validPoints(p.points),
+        label,
+        strokeColor: typeLabel
+          ? imageJColorFromHex(typeLabel.color)
+          : imageJStrokeColor(colorKeyForRoi(p)),
+      };
+    })
+    .filter(it => it.points.length >= (it.geometry === 'polyline' ? 2 : 3));
+}
+
 /**
  * Build the ImageJ ``.roi`` zip entries for ONE video's frames. Pure (no IO)
  * so the exact bytes — slice position, per-track stroke colour, geometry, and
@@ -451,8 +495,19 @@ export function buildVideoRoiEntries(
    *  the region background stats are sampled from (`thickness + 2*margin`). When
    *  set and wider than the signal thickness, each polyline also gets a
    *  `<name>_bg` polyline drawn at this width, so ImageJ shows the background
-   *  band around the (narrower) signal band. Omit to skip background ROIs. */
-  backgroundStrokeWidth?: number
+   *  band around the (narrower) signal band. Omit to skip background ROIs.
+   *
+   *  Superseded by `bgRoiBytes` when that map is supplied: the fallback only
+   *  applies when the ML background-ROI request was skipped or failed. */
+  backgroundStrokeWidth?: number,
+  /** Pre-fetched per-MT background COMPOSITE ROI bytes from the ML
+   *  `/mt-background-rois` endpoint, keyed by ``\`${frameIndex}:${itemIndex}\```
+   *  (itemIndex = position in {@link planFrameItems}). When provided, a
+   *  polyline's `<name>_bg` ROI is this exact composite (the vicinity ring with
+   *  every MT cut out) instead of the wide stroke polyline — so ImageJ shows
+   *  precisely the region the background metrics sample. A missing key means the
+   *  ring was empty (background nulled), so no `_bg` ROI is emitted. */
+  bgRoiBytes?: Map<string, Buffer>
 ): VideoRoiBuild {
   const ordered = [...frames].sort(
     (a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0)
@@ -480,31 +535,9 @@ export function buildVideoRoiEntries(
     const position =
       typeof frame.frameIndex === 'number' ? frame.frameIndex + 1 : undefined;
 
-    // Normalise to concrete items, dropping degenerate geometry (polyline < 2 /
-    // polygon < 3) and any polygon with non-finite coordinates. Missing geometry
-    // defaults to 'polyline' — MT annotations are always open polylines.
-    const items = parsed.polygons
-      .map((p, index) => {
-        const geometry: RoiGeometry =
-          p.geometry === 'polygon' ? 'polygon' : 'polyline';
-        // Resolve the assigned tubulin type label (if any). Its COLOUR drives
-        // the stroke so the ROI reads as its class; its NAME feeds the
-        // `<type>_<counter>` scheme via buildMtNameByKey.
-        const typeLabel = p.mtType ? labelById?.get(p.mtType) : undefined;
-        // ROI name: the per-video `<type>_<counter>` (or manual rename) when a
-        // stable key resolved, else the legacy trackId/id label as a fallback.
-        const key = p.trackId || p.instanceId || p.id;
-        const label = (key && mtNameByKey.get(key)) || roiLabel(p, index);
-        return {
-          geometry,
-          points: validPoints(p.points),
-          label,
-          strokeColor: typeLabel
-            ? imageJColorFromHex(typeLabel.color)
-            : imageJStrokeColor(colorKeyForRoi(p)),
-        };
-      })
-      .filter(it => it.points.length >= (it.geometry === 'polyline' ? 2 : 3));
+    // Normalise to concrete items (shared with the ML background-ROI request so
+    // item indices align), dropping degenerate geometry.
+    const items = planFrameItems(parsed.polygons, mtNameByKey, labelById);
 
     droppedPolygons += parsed.polygons.length - items.length;
     if (items.length === 0) continue;
@@ -529,7 +562,8 @@ export function buildVideoRoiEntries(
       usedEntryNames.add(stem.toLowerCase());
       return stem;
     };
-    for (const { geometry, points, label, strokeColor } of items) {
+    for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+      const { geometry, points, label, strokeColor } = items[itemIndex];
       const entryStem = reserveEntry(sanitizeFilename(label));
       const buffer = encodeImageJRoi(points, geometry, label, {
         position,
@@ -539,23 +573,30 @@ export function buildVideoRoiEntries(
       entries.push({ name: `${entryStem}.roi`, buffer });
       frameRois++;
 
-      // Second ROI: the per-MT background band. It's the SAME polyline drawn at
-      // the vicinity width (thickness + 2*margin), so ImageJ renders the
-      // background band around the (narrower) signal band — the ring between
-      // them is where background stats come from. Only for polylines, and only
-      // when the vicinity is actually wider than the signal (margin > 0).
-      if (
-        geometry === 'polyline' &&
+      // Per-MT background ROI (polylines only). Preferred: the exact COMPOSITE
+      // fetched from ML — the vicinity ring with every microtubule cut out, i.e.
+      // precisely the pixels `median/mean_background` are computed from. When no
+      // composite map was supplied (ML skipped or failed) fall back to the wide
+      // `<name>_bg` stroke polyline (a solid band; overstates the background but
+      // keeps a visual indicator).
+      if (geometry !== 'polyline') continue;
+      const bgLabel = `${label}_bg`;
+      let bgBuffer: Buffer | undefined;
+      if (bgRoiBytes) {
+        // A present map is authoritative: a missing key = empty ring = no ROI.
+        bgBuffer = bgRoiBytes.get(`${frame.frameIndex}:${itemIndex}`);
+      } else if (
         typeof backgroundStrokeWidth === 'number' &&
         backgroundStrokeWidth > (strokeWidth ?? 0)
       ) {
-        const bgLabel = `${label}_bg`;
-        const bgStem = reserveEntry(sanitizeFilename(bgLabel));
-        const bgBuffer = encodeImageJRoi(points, 'polyline', bgLabel, {
+        bgBuffer = encodeImageJRoi(points, 'polyline', bgLabel, {
           position,
           strokeColor,
           strokeWidth: backgroundStrokeWidth,
         });
+      }
+      if (bgBuffer) {
+        const bgStem = reserveEntry(sanitizeFilename(bgLabel));
         entries.push({ name: `${bgStem}.roi`, buffer: bgBuffer });
         frameRois++;
       }
@@ -603,6 +644,90 @@ async function writeRoiSetZip(
   });
 }
 
+interface MtBgRequestPolyline {
+  instance_id: string;
+  points: Array<[number, number]>;
+  roi_name: string;
+  stroke_color?: number;
+  position?: number;
+}
+interface MtBgRequestFrame {
+  frame_index: number;
+  polylines: MtBgRequestPolyline[];
+}
+interface MtBgResponse {
+  frames?: Array<{
+    frame_index: number;
+    rois?: Array<{ instance_id: string; roi_b64: string }>;
+  }>;
+}
+
+/**
+ * Fetch per-MT background COMPOSITE ROI bytes for one video from the ML
+ * `/mt-background-rois` endpoint. The request mirrors {@link buildVideoRoiEntries}
+ * (same frame sort, same {@link planFrameItems} order, same `<name>_bg` label +
+ * per-track colour + slice position) so the returned bytes key by
+ * ``\`${frameIndex}:${itemIndex}\``` line up with the encoder. Returns an empty
+ * map when there are no polylines; the caller treats a THROWN error as
+ * "fall back to the wide stroke band".
+ */
+async function fetchMtBackgroundRois(
+  frames: RoiFrameInput[],
+  labelById: Map<string, RoiTypeLabel> | undefined,
+  thicknessPx: number,
+  marginMultiplier: number
+): Promise<Map<string, Buffer>> {
+  const ordered = [...frames].sort(
+    (a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0)
+  );
+  const mtNameByKey = buildMtNameByKey(ordered, labelById);
+
+  const reqFrames: MtBgRequestFrame[] = [];
+  for (const frame of ordered) {
+    if (typeof frame.frameIndex !== 'number') continue;
+    const parsed = parseFramePolygons(frame.segmentation?.polygons);
+    if (parsed.corrupt) continue;
+    const items = planFrameItems(parsed.polygons, mtNameByKey, labelById);
+    const polylines: MtBgRequestPolyline[] = [];
+    items.forEach((it, itemIndex) => {
+      if (it.geometry !== 'polyline') return;
+      polylines.push({
+        instance_id: String(itemIndex),
+        points: it.points.map(p => [p.x, p.y] as [number, number]),
+        roi_name: `${it.label}_bg`,
+        stroke_color: it.strokeColor,
+        position: frame.frameIndex! + 1,
+      });
+    });
+    if (polylines.length) {
+      reqFrames.push({ frame_index: frame.frameIndex, polylines });
+    }
+  }
+
+  const map = new Map<string, Buffer>();
+  if (reqFrames.length === 0) return map;
+
+  const url = `${config.SEGMENTATION_SERVICE_URL}/api/v1/mt-background-rois`;
+  const res = await axios.post<MtBgResponse>(
+    url,
+    {
+      frames: reqFrames,
+      thickness_px: thicknessPx,
+      margin_multiplier: marginMultiplier,
+    },
+    { timeout: 5 * 60 * 1000 }
+  );
+  for (const fr of res.data.frames ?? []) {
+    for (const roi of fr.rois ?? []) {
+      map.set(
+        `${fr.frame_index}:${roi.instance_id}`,
+        Buffer.from(roi.roi_b64, 'base64')
+      );
+    }
+  }
+  return map;
+}
+
 /**
  * Export one ImageJ **RoiSet.zip per video** for a microtubule project:
  *
@@ -633,9 +758,17 @@ export async function exportImageJRoiSets(
     shouldAbort?: () => boolean;
     strokeWidth?: number;
     /** Vicinity band width (px) for the per-MT background ROI
-     *  (`thickness + 2*margin`). When wider than `strokeWidth`, each MT also
-     *  gets a `<name>_bg` band ROI. Omit to skip background ROIs. */
+     *  (`thickness + 2*margin`). Used only as the FALLBACK stroke-band `<name>_bg`
+     *  when the composite fetch is disabled or fails. Omit to skip background
+     *  ROIs entirely. */
     backgroundStrokeWidth?: number;
+    /** Signal band thickness (px). When set, each video fetches exact per-MT
+     *  background COMPOSITE ROIs from ML (`/mt-background-rois`) and uses them for
+     *  `<name>_bg` instead of the wide stroke band. */
+    thicknessPx?: number;
+    /** Vicinity margin multiplier (× thickness) for the background ring, matching
+     *  the metrics request. Defaults to 2 when `thicknessPx` is set. */
+    marginMultiplier?: number;
   } = {}
 ): Promise<ImageJRoiExportResult> {
   const baseDir = path.join(exportDir, 'annotations', 'imagej');
@@ -681,11 +814,38 @@ export async function exportImageJRoiSets(
       throw new Error('Export cancelled by user');
     }
 
+    // Exact per-MT background composite ROIs from ML (vicinity ring with every
+    // MT cut out). On any failure, fall back to the wide stroke `<name>_bg` band
+    // so the export still ships — non-fatal.
+    let bgRoiBytes: Map<string, Buffer> | undefined;
+    if (typeof options.thicknessPx === 'number' && options.thicknessPx > 0) {
+      try {
+        bgRoiBytes = await fetchMtBackgroundRois(
+          videoFrames,
+          labelById,
+          options.thicknessPx,
+          options.marginMultiplier ?? 2
+        );
+      } catch (error) {
+        logger.warn(
+          'ImageJ ROI export: background composite fetch failed; falling back to the stroke band',
+          'imagejRoiEncoder',
+          {
+            projectId,
+            videoKey,
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
+        bgRoiBytes = undefined;
+      }
+    }
+
     const build = buildVideoRoiEntries(
       videoFrames,
       options.strokeWidth,
       labelById,
-      options.backgroundStrokeWidth
+      options.backgroundStrokeWidth,
+      bgRoiBytes
     );
     corruptFrames += build.corruptFrames;
     droppedPolygons += build.droppedPolygons;

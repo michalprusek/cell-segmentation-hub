@@ -1001,6 +1001,63 @@ describe('buildVideoRoiEntries', () => {
     expect(bg.position).toBe(sig.position);
   });
 
+  const onePolylineFrame = () => [
+    {
+      id: 'f0',
+      name: 'v',
+      parentVideoId: 'c1',
+      frameIndex: 0,
+      segmentation: {
+        polygons: JSON.stringify([
+          {
+            trackId: 't1',
+            geometry: 'polyline',
+            mtType: 'h',
+            points: [
+              { x: 0, y: 0 },
+              { x: 10, y: 0 },
+            ],
+          },
+        ]),
+      },
+    },
+  ];
+
+  it('uses the pre-fetched composite buffer for <name>_bg when bgRoiBytes is provided', () => {
+    const palette = new Map([['h', { name: 'HeLa', color: '#ff0000' }]]);
+    const composite = Buffer.from('COMPOSITE_BG_BYTES_FROM_ML');
+    // key = `${frameIndex}:${itemIndex}` = '0:0'.
+    const bgMap = new Map<string, Buffer>([['0:0', composite]]);
+    const build = buildVideoRoiEntries(
+      onePolylineFrame(),
+      5,
+      palette,
+      13, // stroke-band fallback width — must be IGNORED when the map is present
+      bgMap
+    );
+    expect(build.entries.map(e => e.name).sort()).toEqual([
+      'HeLa_1__frame_0000.roi',
+      'HeLa_1_bg__frame_0000.roi',
+    ]);
+    const map = byName(build.entries);
+    // The _bg entry is the exact ML composite bytes, not a re-encoded stroke band.
+    expect(map.get('HeLa_1_bg__frame_0000.roi')!.buffer).toBe(composite);
+  });
+
+  it('omits <name>_bg when a present bgRoiBytes map has no key (empty vicinity ring)', () => {
+    const palette = new Map([['h', { name: 'HeLa', color: '#ff0000' }]]);
+    // Present-but-empty map is authoritative: no background ROI AND no stroke
+    // fallback (an empty ring = null background on the metrics side).
+    const build = buildVideoRoiEntries(
+      onePolylineFrame(),
+      5,
+      palette,
+      13,
+      new Map<string, Buffer>()
+    );
+    expect(build.entries.map(e => e.name)).toEqual(['HeLa_1__frame_0000.roi']);
+  });
+
   it('skips the background band when it is not wider than the signal (margin 0)', () => {
     const build = buildVideoRoiEntries(
       [
