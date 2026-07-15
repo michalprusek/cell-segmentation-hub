@@ -52,6 +52,9 @@ interface UseAdvancedInteractionsProps {
   setHoveredVertex: (
     vertex: { polygonId: string; vertexIndex: number } | null
   ) => void;
+  setHoveredJoinTarget: (
+    target: { polygonId: string; endpoint: 'head' | 'tail' } | null
+  ) => void;
   setVertexDragState?: (state: {
     isDragging: boolean;
     polygonId: string | null;
@@ -86,6 +89,7 @@ export const useAdvancedInteractions = ({
   setInteractionState,
   setTempPoints,
   setHoveredVertex,
+  setHoveredJoinTarget,
   setVertexDragState,
   updatePolygons,
   getPolygons,
@@ -938,6 +942,12 @@ export const useAdvancedInteractions = ({
         }
       }
 
+      // Clear the join highlight whenever we leave add-points mode so a stale
+      // ring can't linger (the render layer also gates on AddPoints).
+      if (editMode !== EditMode.AddPoints) {
+        setHoveredJoinTarget(null);
+      }
+
       // Update hover state for vertices
       if (
         (editMode === EditMode.EditVertices ||
@@ -984,6 +994,23 @@ export const useAdvancedInteractions = ({
           } else {
             setHoveredVertex(null);
           }
+
+          // Add-points join hover: highlight a same-class foreign endpoint the
+          // cursor is near, so the user sees it can be clicked to merge.
+          if (editMode === EditMode.AddPoints) {
+            const join = findJoinTarget(
+              polygons,
+              selectedPolygon,
+              imagePoint,
+              hitRadius,
+              projectType
+            );
+            setHoveredJoinTarget(
+              join
+                ? { polygonId: join.polygonId, endpoint: join.endpoint }
+                : null
+            );
+          }
         }
       }
     },
@@ -997,10 +1024,12 @@ export const useAdvancedInteractions = ({
       setInteractionState,
       setTempPoints,
       setHoveredVertex,
+      setHoveredJoinTarget,
       setVertexDragState,
       canvasRef,
       handlePan,
       isShiftPressedCallback,
+      projectType,
     ]
   );
 
