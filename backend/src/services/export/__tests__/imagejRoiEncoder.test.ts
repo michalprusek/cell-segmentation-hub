@@ -1257,6 +1257,100 @@ describe('exportImageJRoiSets', () => {
     expect(result.warnings.some(w => /approximate/i.test(w))).toBe(true);
   });
 
+  it('drops malformed background-ROI bytes (no ImageJ magic) and emits no _bg', async () => {
+    const out = await mkTmp();
+    axiosPostMock.mockReset();
+    // A 200 whose payload is not a valid ImageJ ROI (no `Iout` magic). It must
+    // be dropped — never written into the zip as a corrupt .roi — and the
+    // authoritative-map branch then emits no `_bg` (no stroke fallback either).
+    axiosPostMock.mockResolvedValueOnce({
+      data: {
+        frames: [
+          {
+            frame_index: 0,
+            rois: [
+              {
+                instance_id: '0',
+                roi_b64: Buffer.from('not-a-roi').toString('base64'),
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const result = await exportImageJRoiSets(oneVideoFrame(), out, 'proj', {
+      thicknessPx: 5,
+      marginMultiplier: 2,
+      backgroundStrokeWidth: 13,
+    });
+
+    const zip = await fs.readFile(
+      path.join(out, 'annotations', 'imagej', 'vid_RoiSet.zip')
+    );
+    const names = zipEntryNames(zip);
+    expect(names).toContain('untyped_1__frame_0000.roi'); // signal ROI still there
+    expect(names).not.toContain('untyped_1_bg__frame_0000.roi'); // malformed → dropped
+    // Composite fetch "succeeded" (no throw) → no fallback warning.
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('excludes corrupt frames and non-polyline items from the background request', async () => {
+    const out = await mkTmp();
+    axiosPostMock.mockReset();
+    axiosPostMock.mockResolvedValueOnce({ data: { frames: [] } });
+
+    const frames: RoiFrameInput[] = [
+      { id: 'c1', name: 'vid.nd2', isVideoContainer: true, segmentation: null },
+      // Corrupt JSON — must be skipped in BOTH the request and the encoder.
+      {
+        id: 'bad',
+        name: 'vid.nd2 (frame 1)',
+        parentVideoId: 'c1',
+        frameIndex: 0,
+        segmentation: { polygons: '{not json' },
+      },
+      // A polyline + a closed polygon: only the polyline is a background target.
+      {
+        id: 'f1',
+        name: 'vid.nd2 (frame 2)',
+        parentVideoId: 'c1',
+        frameIndex: 1,
+        segmentation: {
+          polygons: JSON.stringify([
+            line('1', [
+              [10, 10],
+              [20, 25],
+            ]),
+            line(
+              '2',
+              [
+                [30, 30],
+                [40, 30],
+                [40, 40],
+              ],
+              'polygon'
+            ),
+          ]),
+        },
+      },
+    ];
+
+    await exportImageJRoiSets(frames, out, 'proj', {
+      thicknessPx: 5,
+      marginMultiplier: 2,
+    });
+
+    const body = axiosPostMock.mock.calls[0][1] as {
+      frames: Array<{ frame_index: number; polylines: unknown[] }>;
+    };
+    // Only frame 1 (the polyline), and only its single polyline — corrupt frame 0
+    // dropped, the polygon excluded.
+    expect(body.frames).toHaveLength(1);
+    expect(body.frames[0].frame_index).toBe(1);
+    expect(body.frames[0].polylines).toHaveLength(1);
+  });
+
   it('writes one <video>_RoiSet.zip per container, skipping empty frames', async () => {
     const out = await mkTmp();
     const frames: RoiFrameInput[] = [
