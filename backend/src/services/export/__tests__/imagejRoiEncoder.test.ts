@@ -32,7 +32,13 @@
  * `roifile` Python package during development.
  */
 
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, vi } from 'vitest';
+
+// Mock only the axios default export so the ML `/mt-background-rois` fetch in
+// `exportImageJRoiSets` is controllable. Tests that don't pass `thicknessPx`
+// never call it, so the existing suites are unaffected.
+const axiosPostMock = vi.hoisted(() => vi.fn());
+vi.mock('axios', () => ({ default: { post: axiosPostMock } }));
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -1156,6 +1162,100 @@ describe('exportImageJRoiSets', () => {
     tmpDirs.push(dir);
     return dir;
   }
+
+  const oneVideoFrame = (): RoiFrameInput[] => [
+    { id: 'c1', name: 'vid.nd2', isVideoContainer: true, segmentation: null },
+    {
+      id: 'f0',
+      name: 'vid.nd2 (frame 1)',
+      parentVideoId: 'c1',
+      frameIndex: 0,
+      segmentation: {
+        polygons: JSON.stringify([
+          line('1', [
+            [10, 10],
+            [20, 25],
+          ]),
+        ]),
+      },
+    },
+  ];
+
+  it('fetches composite _bg ROIs from ML and inserts them by the aligned key', async () => {
+    const out = await mkTmp();
+    axiosPostMock.mockReset();
+    // A real ImageJ ROI buffer (starts with the `Iout` magic the fetch validates).
+    const fakeComposite = encodeImageJRoi(
+      [
+        { x: 1, y: 1 },
+        { x: 9, y: 1 },
+      ],
+      'polyline',
+      'bg'
+    );
+    axiosPostMock.mockResolvedValueOnce({
+      data: {
+        frames: [
+          {
+            frame_index: 0,
+            rois: [{ instance_id: '0', roi_b64: fakeComposite.toString('base64') }],
+          },
+        ],
+      },
+    });
+
+    const result = await exportImageJRoiSets(oneVideoFrame(), out, 'proj', {
+      thicknessPx: 5,
+      marginMultiplier: 2,
+    });
+
+    // The request carries the join fields the encoder looks up: frame_index +
+    // instance_id (= itemIndex) + the `<label>_bg` name + 1-based position.
+    expect(axiosPostMock).toHaveBeenCalledTimes(1);
+    const body = axiosPostMock.mock.calls[0][1] as {
+      frames: Array<{
+        frame_index: number;
+        polylines: Array<{
+          instance_id: string;
+          roi_name: string;
+          position: number;
+        }>;
+      }>;
+    };
+    expect(body.frames[0].frame_index).toBe(0);
+    expect(body.frames[0].polylines[0].instance_id).toBe('0');
+    expect(body.frames[0].polylines[0].roi_name).toBe('untyped_1_bg');
+    expect(body.frames[0].polylines[0].position).toBe(1);
+
+    // The composite _bg entry landed in the zip → the key `0:0` matched.
+    const zip = await fs.readFile(
+      path.join(out, 'annotations', 'imagej', 'vid_RoiSet.zip')
+    );
+    const names = zipEntryNames(zip);
+    expect(names).toContain('untyped_1__frame_0000.roi');
+    expect(names).toContain('untyped_1_bg__frame_0000.roi');
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('falls back to the stroke _bg band and warns the user when the ML fetch fails', async () => {
+    const out = await mkTmp();
+    axiosPostMock.mockReset();
+    axiosPostMock.mockRejectedValueOnce(new Error('ML unavailable'));
+
+    const result = await exportImageJRoiSets(oneVideoFrame(), out, 'proj', {
+      thicknessPx: 5,
+      marginMultiplier: 2,
+      backgroundStrokeWidth: 13,
+    });
+
+    // Non-fatal: the export still ships a (coarser) stroke-band _bg…
+    const zip = await fs.readFile(
+      path.join(out, 'annotations', 'imagej', 'vid_RoiSet.zip')
+    );
+    expect(zipEntryNames(zip)).toContain('untyped_1_bg__frame_0000.roi');
+    // …and the degradation is surfaced to the user, not just the server log.
+    expect(result.warnings.some(w => /approximate/i.test(w))).toBe(true);
+  });
 
   it('writes one <video>_RoiSet.zip per container, skipping empty frames', async () => {
     const out = await mkTmp();

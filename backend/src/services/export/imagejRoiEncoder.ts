@@ -506,7 +506,8 @@ export function buildVideoRoiEntries(
    *  polyline's `<name>_bg` ROI is this exact composite (the vicinity ring with
    *  every MT cut out) instead of the wide stroke polyline — so ImageJ shows
    *  precisely the region the background metrics sample. A missing key means the
-   *  ring was empty (background nulled), so no `_bg` ROI is emitted. */
+   *  ML endpoint returned no composite for that polyline (empty or degenerate
+   *  ring), so no `_bg` ROI is emitted. */
   bgRoiBytes?: Map<string, Buffer>
 ): VideoRoiBuild {
   const ordered = [...frames].sort(
@@ -583,7 +584,8 @@ export function buildVideoRoiEntries(
       const bgLabel = `${label}_bg`;
       let bgBuffer: Buffer | undefined;
       if (bgRoiBytes) {
-        // A present map is authoritative: a missing key = empty ring = no ROI.
+        // A present map is authoritative: a missing key = ML emitted no
+        // composite for this polyline (empty/degenerate ring) = no `_bg` ROI.
         bgBuffer = bgRoiBytes.get(`${frame.frameIndex}:${itemIndex}`);
       } else if (
         typeof backgroundStrokeWidth === 'number' &&
@@ -705,7 +707,8 @@ async function fetchMtBackgroundRois(
   }
 
   const map = new Map<string, Buffer>();
-  if (reqFrames.length === 0) return map;
+  const requested = reqFrames.reduce((n, f) => n + f.polylines.length, 0);
+  if (requested === 0) return map;
 
   const url = `${config.SEGMENTATION_SERVICE_URL}/api/v1/mt-background-rois`;
   const res = await axios.post<MtBgResponse>(
@@ -717,13 +720,48 @@ async function fetchMtBackgroundRois(
     },
     { timeout: 5 * 60 * 1000 }
   );
+
+  // Validate each entry before trusting it: a response-shape drift (renamed /
+  // missing field) or a truncated payload would otherwise embed corrupt bytes
+  // into the zip as a `.roi` ImageJ can't open — `Buffer.from(bad, 'base64')`
+  // never throws, it silently truncates. Require a string field + the ImageJ
+  // ROI magic `Iout`; drop and count anything else.
+  const IMAGEJ_ROI_MAGIC = Buffer.from('Iout', 'ascii');
+  let malformed = 0;
   for (const fr of res.data.frames ?? []) {
     for (const roi of fr.rois ?? []) {
-      map.set(
-        `${fr.frame_index}:${roi.instance_id}`,
-        Buffer.from(roi.roi_b64, 'base64')
-      );
+      if (
+        typeof roi?.roi_b64 !== 'string' ||
+        typeof roi?.instance_id !== 'string'
+      ) {
+        malformed++;
+        continue;
+      }
+      const buf = Buffer.from(roi.roi_b64, 'base64');
+      if (buf.length < 4 || !buf.subarray(0, 4).equals(IMAGEJ_ROI_MAGIC)) {
+        malformed++;
+        continue;
+      }
+      map.set(`${fr.frame_index}:${roi.instance_id}`, buf);
     }
+  }
+  if (malformed > 0) {
+    logger.warn(
+      'ImageJ ROI export: dropped malformed background-ROI bytes from the ML response',
+      'imagejRoiEncoder',
+      { malformed, requested }
+    );
+  }
+  // A 200 that yields ZERO ROIs for a video that requested many is far more
+  // likely a degradation (bad canvas / vicinity regression) than "every ring is
+  // genuinely empty" — surface it rather than silently emitting no background
+  // ROIs (which the authoritative-map branch can't distinguish from intent).
+  if (map.size === 0) {
+    logger.warn(
+      'ImageJ ROI export: ML returned no background ROIs though polylines were requested; background ROIs will be missing for this video',
+      'imagejRoiEncoder',
+      { requested }
+    );
   }
   return map;
 }
@@ -806,6 +844,7 @@ export async function exportImageJRoiSets(
   let corruptFrames = 0;
   let droppedPolygons = 0;
   let failedVideos = 0;
+  let compositeFallbackVideos = 0;
   const usedZipNames = new Set<string>();
 
   // One zip per video, written sequentially to cap concurrent write streams.
@@ -837,6 +876,7 @@ export async function exportImageJRoiSets(
           }
         );
         bgRoiBytes = undefined;
+        compositeFallbackVideos++;
       }
     }
 
@@ -892,6 +932,15 @@ export async function exportImageJRoiSets(
   if (failedVideos > 0) {
     warnings.push(
       `ImageJ ROI export: ${failedVideos} video(s) could not be packaged into a RoiSet.zip and were skipped.`
+    );
+  }
+  if (compositeFallbackVideos > 0) {
+    // Surface the degradation to the USER, not just the server log: the exact
+    // per-MT background composite ROIs (the vicinity ring with every MT cut
+    // out) couldn't be fetched, so the `_bg` ROIs are the coarser stroke band,
+    // which is NOT the region the median/mean_background columns sample.
+    warnings.push(
+      `ImageJ ROI export: exact background ROIs were unavailable for ${compositeFallbackVideos} video(s); the "_bg" ROIs are an approximate band and do not match the background metric region.`
     );
   }
   if (corruptFrames > 0) {
