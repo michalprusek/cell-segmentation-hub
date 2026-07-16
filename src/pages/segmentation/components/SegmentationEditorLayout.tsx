@@ -520,6 +520,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                         interactionState={editor.interactionState}
                         selectedPolygonId={editor.selectedPolygonId}
                         polygons={editor.polygons}
+                        hoveredJoinTarget={editor.hoveredJoinTarget}
                       />
                     </svg>
 

@@ -1001,6 +1001,8 @@ export default {
           'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
         cancel: 'Presiona ESC para cancelar',
+        joinHint:
+          'Haz clic en el extremo de otra polilínea de la misma clase para unirlas',
       },
       editVertices: {
         selectPolygon: 'Haz clic en un polígono para seleccionarlo para editar',

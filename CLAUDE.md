@@ -40,7 +40,9 @@ the guess.
 
 ## Production Safety
 
-**Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`. Single-stack deployment (no more blue-green); containers are named `spheroseg-*` (frontend/backend/ml/postgres/redis/nginx). Database: `spheroseg`. URL: `https://spherosegapp.utia.cas.cz`. Test account: `12bprusek@gym-nymburk.cz` / `spheroids2026`.
+Production runs on `docker-compose.production.yml` with `.env.production`. Single-stack deployment (no more blue-green); containers are named `spheroseg-*` (frontend/backend/ml/postgres/redis/nginx). Database: `spheroseg`. URL: `https://spherosegapp.utia.cas.cz`. Test account: `12bprusek@gym-nymburk.cz` / `spheroids2026`.
+
+Deploys are autonomous — build the changed service, recreate it, restart nginx after a backend recreate, and verify (see [Production](#production-single-stack-post-2026-05-15)). Still exercise judgment: verify in a real browser after deploying, and never run destructive DB operations without care.
 
 ---
 

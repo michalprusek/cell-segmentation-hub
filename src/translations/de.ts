@@ -1009,6 +1009,8 @@ export default {
           'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen. Klicken Sie direkt auf einen anderen Eckpunkt ohne Punkte hinzuzufügen, um alle Punkte dazwischen zu entfernen.',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
+        joinHint:
+          'Klicke auf den Endpunkt einer anderen Polylinie derselben Klasse, um sie zu verbinden',
       },
       editVertices: {
         selectPolygon:

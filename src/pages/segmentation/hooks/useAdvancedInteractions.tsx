@@ -15,6 +15,13 @@ import {
 } from '@/lib/polygonGeometry';
 import { vertexSpatialIndex } from '@/lib/rendering/VertexSpatialIndex';
 import { polylineSemanticsForProjectType } from '@/lib/polylineSemantics';
+import {
+  findJoinTarget,
+  joinPolylinePoints,
+  nearestEndpoint,
+  endpointPoint,
+  type Endpoint,
+} from '../utils/polylineJoin';
 import type { ProjectType } from '@/types';
 
 /**
@@ -44,6 +51,9 @@ interface UseAdvancedInteractionsProps {
   setTempPoints: (points: Point[]) => void;
   setHoveredVertex: (
     vertex: { polygonId: string; vertexIndex: number } | null
+  ) => void;
+  setHoveredJoinTarget: (
+    target: { polygonId: string; endpoint: 'head' | 'tail' } | null
   ) => void;
   setVertexDragState?: (state: {
     isDragging: boolean;
@@ -79,6 +89,7 @@ export const useAdvancedInteractions = ({
   setInteractionState,
   setTempPoints,
   setHoveredVertex,
+  setHoveredJoinTarget,
   setVertexDragState,
   updatePolygons,
   getPolygons,
@@ -252,6 +263,77 @@ export const useAdvancedInteractions = ({
         hitRadius
       );
 
+      // Join: clicking a same-class foreign polyline's endpoint merges it
+      // into the selected polyline (A survives, B is dropped from this frame).
+      // Prefer the join only when the foreign endpoint is at least as close
+      // as A's own nearest vertex, so existing splice/extend keeps priority.
+      const joinTarget = findJoinTarget(
+        polygons,
+        selectedPolygon,
+        imagePoint,
+        hitRadius,
+        projectType
+      );
+      const ownVertexDistSq = closestVertex
+        ? closestVertex.distance ** 2
+        : Infinity;
+      if (joinTarget && joinTarget.distanceSq <= ownVertexDistSq) {
+        const targetPolygon = polygons.find(p => p.id === joinTarget.polygonId);
+        if (targetPolygon) {
+          const anchor = interactionState.addPointStartVertex;
+          const lastIdx = selectedPolygon.points.length - 1;
+          let aEnd: Endpoint;
+          let bridge: Point[];
+          if (
+            interactionState.isAddingPoints &&
+            anchor &&
+            anchor.polygonId === selectedPolygonId
+          ) {
+            // Phase 2: connect at the anchored end; drawn points form a bridge.
+            aEnd =
+              anchor.vertexIndex === 0
+                ? 'head'
+                : anchor.vertexIndex === lastIdx
+                  ? 'tail'
+                  : nearestEndpoint(
+                      selectedPolygon,
+                      endpointPoint(targetPolygon, joinTarget.endpoint)
+                    );
+            bridge = tempPoints;
+          } else {
+            // Phase 1: direct join at A's end nearer to the clicked endpoint.
+            aEnd = nearestEndpoint(
+              selectedPolygon,
+              endpointPoint(targetPolygon, joinTarget.endpoint)
+            );
+            bridge = [];
+          }
+          const merged = joinPolylinePoints(
+            selectedPolygon,
+            aEnd,
+            targetPolygon,
+            joinTarget.endpoint,
+            bridge
+          );
+          updatePolygons(
+            polygons
+              .filter(p => p.id !== targetPolygon.id)
+              .map(p =>
+                p.id === selectedPolygonId ? { ...p, points: merged } : p
+              )
+          );
+          setTempPoints([]);
+          setInteractionState({
+            ...interactionState,
+            isAddingPoints: false,
+            addPointStartVertex: null,
+            addPointEndVertex: null,
+          });
+          setEditMode(EditMode.EditVertices);
+          return;
+        }
+      }
+
       if (!interactionState.isAddingPoints) {
         // Open polyline: auto-anchor at nearest endpoint, treat click as
         // first new point so the curve can be extended without first
@@ -349,6 +431,7 @@ export const useAdvancedInteractions = ({
       setTempPoints,
       setInteractionState,
       setEditMode,
+      projectType,
     ]
   );
 
@@ -859,6 +942,12 @@ export const useAdvancedInteractions = ({
         }
       }
 
+      // Clear the join highlight whenever we leave add-points mode so a stale
+      // ring can't linger (the render layer also gates on AddPoints).
+      if (editMode !== EditMode.AddPoints) {
+        setHoveredJoinTarget(null);
+      }
+
       // Update hover state for vertices
       if (
         (editMode === EditMode.EditVertices ||
@@ -905,6 +994,23 @@ export const useAdvancedInteractions = ({
           } else {
             setHoveredVertex(null);
           }
+
+          // Add-points join hover: highlight a same-class foreign endpoint the
+          // cursor is near, so the user sees it can be clicked to merge.
+          if (editMode === EditMode.AddPoints) {
+            const join = findJoinTarget(
+              polygons,
+              selectedPolygon,
+              imagePoint,
+              hitRadius,
+              projectType
+            );
+            setHoveredJoinTarget(
+              join
+                ? { polygonId: join.polygonId, endpoint: join.endpoint }
+                : null
+            );
+          }
         }
       }
     },
@@ -918,10 +1024,12 @@ export const useAdvancedInteractions = ({
       setInteractionState,
       setTempPoints,
       setHoveredVertex,
+      setHoveredJoinTarget,
       setVertexDragState,
       canvasRef,
       handlePan,
       isShiftPressedCallback,
+      projectType,
     ]
   );
 
