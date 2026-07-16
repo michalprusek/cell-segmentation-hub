@@ -122,6 +122,7 @@ function makeProps(
     setInteractionState: vi.fn(),
     setTempPoints: vi.fn(),
     setHoveredVertex: vi.fn(),
+    setHoveredJoinTarget: vi.fn(),
     setVertexDragState: vi.fn(),
     updatePolygons: vi.fn(),
     getPolygons: vi.fn(() => [SQUARE, POLYLINE]),

@@ -834,6 +834,8 @@ export default {
           'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
+        joinHint:
+          'Click another polyline endpoint of the same class to join them',
       },
       editVertices: {
         selectPolygon: 'Click on a polygon to select it for editing',

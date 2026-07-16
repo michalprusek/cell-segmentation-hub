@@ -11,6 +11,7 @@ interface CanvasTemporaryGeometryLayerProps {
   interactionState: InteractionState;
   selectedPolygonId: string | null;
   polygons: Polygon[];
+  hoveredJoinTarget: { polygonId: string; endpoint: 'head' | 'tail' } | null;
 }
 
 /**
@@ -27,6 +28,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
   interactionState,
   selectedPolygonId,
   polygons,
+  hoveredJoinTarget,
 }) => {
   const strokeWidth = Math.max(1, 2 / transform.zoom);
   // Use the same vertex radius calculation as regular vertices for consistency
@@ -387,12 +389,39 @@ const CanvasTemporaryGeometryLayer: React.FC<
     return null;
   };
 
+  const renderJoinTargetHighlight = () => {
+    if (editMode !== EditMode.AddPoints || !hoveredJoinTarget) {
+      return null;
+    }
+    const target = polygons.find(p => p.id === hoveredJoinTarget.polygonId);
+    if (!target || target.points.length < 2) {
+      return null;
+    }
+    const p =
+      hoveredJoinTarget.endpoint === 'head'
+        ? target.points[0]
+        : target.points[target.points.length - 1];
+    return (
+      <circle
+        key="join-target-ring"
+        cx={p.x}
+        cy={p.y}
+        r={vertexRadius * 1.6}
+        fill="none"
+        stroke="#f59e0b"
+        strokeWidth={Math.max(1.5, 2.5 / transform.zoom)}
+        style={{ opacity: 0.95 }}
+      />
+    );
+  };
+
   return (
     <g className="temporary-geometry-layer">
       {renderCreatePolygonPreview()}
       {renderCreatePolylinePreview()}
       {renderSlicePreview()}
       {renderAddPointsPreview()}
+      {renderJoinTargetHighlight()}
       {renderDragPreview()}
     </g>
   );

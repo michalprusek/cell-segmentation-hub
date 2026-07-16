@@ -206,6 +206,7 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
                 interactionState={editor.interactionState}
                 selectedPolygonId={editor.selectedPolygonId}
                 polygons={editor.polygons}
+                hoveredJoinTarget={editor.hoveredJoinTarget}
               />
             </svg>
           </CanvasContent>

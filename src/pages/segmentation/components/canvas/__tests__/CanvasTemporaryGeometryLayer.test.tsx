@@ -55,6 +55,7 @@ interface RenderOptions {
   interactionState?: InteractionState;
   selectedPolygonId?: string | null;
   polygons?: ReturnType<typeof createMockPolygon>[];
+  hoveredJoinTarget?: { polygonId: string; endpoint: 'head' | 'tail' } | null;
 }
 
 const renderLayer = (opts: RenderOptions = {}) =>
@@ -68,6 +69,7 @@ const renderLayer = (opts: RenderOptions = {}) =>
         interactionState={opts.interactionState ?? makeInteraction()}
         selectedPolygonId={opts.selectedPolygonId ?? null}
         polygons={opts.polygons ?? []}
+        hoveredJoinTarget={opts.hoveredJoinTarget ?? null}
       />
     </svg>
   );
@@ -587,5 +589,55 @@ describe('renderDragPreview', () => {
 
     const g = container.querySelector('g.temporary-geometry-layer');
     expect(g?.children).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderJoinTargetHighlight — amber ring over a joinable foreign endpoint
+// ---------------------------------------------------------------------------
+
+const joinRing = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('circle')).find(
+    c => c.getAttribute('stroke') === '#f59e0b'
+  );
+
+describe('renderJoinTargetHighlight', () => {
+  const target = createMockPolygon({
+    id: 'target',
+    geometry: 'polyline',
+    points: [
+      { x: 10, y: 10 },
+      { x: 10, y: 50 },
+    ],
+  });
+
+  it('draws an amber ring at the targeted endpoint in AddPoints mode', () => {
+    const { container } = renderLayer({
+      editMode: EditMode.AddPoints,
+      polygons: [target],
+      hoveredJoinTarget: { polygonId: 'target', endpoint: 'tail' },
+    });
+    const ring = joinRing(container);
+    expect(ring).toBeTruthy();
+    expect(ring?.getAttribute('cx')).toBe('10');
+    expect(ring?.getAttribute('cy')).toBe('50'); // tail
+  });
+
+  it('does not draw the ring outside AddPoints mode', () => {
+    const { container } = renderLayer({
+      editMode: EditMode.View,
+      polygons: [target],
+      hoveredJoinTarget: { polygonId: 'target', endpoint: 'tail' },
+    });
+    expect(joinRing(container)).toBeUndefined();
+  });
+
+  it('draws nothing when there is no join target', () => {
+    const { container } = renderLayer({
+      editMode: EditMode.AddPoints,
+      polygons: [target],
+      hoveredJoinTarget: null,
+    });
+    expect(joinRing(container)).toBeUndefined();
   });
 });
