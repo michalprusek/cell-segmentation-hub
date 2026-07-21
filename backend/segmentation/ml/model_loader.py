@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 from models.hrnet import HRNetV2
 from models.cbam_resunet import ResUNetCBAM
 from models.unet import UNet
-from models.unet_attention import UNet as UNetAttention
 
 # Optional sperm model import
 _sperm_import_error = None
@@ -90,6 +89,19 @@ except ImportError as e:
     )
     MicrocapsuleModel = None
     _microcapsule_import_error = e
+
+# Optional spheroid-disintegration model import (UNet++/EfficientNet-B5, 3-class;
+# needs segmentation-models-pytorch + timm). Backs the `unet_attention_aspp` key.
+_disintegration_import_error = None
+try:
+    from models.disintegration import DisintegrationModel
+except ImportError as e:
+    logger.warning(
+        f"Could not import DisintegrationModel: {e}. "
+        "Spheroid-disintegration (unet_attention_aspp) segmentation will not be available."
+    )
+    DisintegrationModel = None
+    _disintegration_import_error = e
 
 # Optional Mamba-UNet spheroid model import (requires mamba_ssm CUDA kernels).
 # OSError is caught alongside ImportError: an ABI-mismatched compiled .so can
@@ -203,9 +215,13 @@ class ModelLoader:
             'config_path': None
         },
         'unet_attention_aspp': {
-            'class': UNetAttention,
-            'pretrained_path': 'weights/unet_v4_weights.pth',
-            'finetuned_path': 'weights/unet_v4_weights.pth',
+            # Repointed 2026-07-15 to the UNet++/EfficientNet-B5 3-class
+            # spheroid-disintegration model (predicts the dense core directly).
+            # The key name is kept for continuity (project-type mapping, stored
+            # segmentations, frontend); `class` is None if smp/timm are missing.
+            'class': DisintegrationModel,
+            'pretrained_path': 'weights/spheroid_disintegration_unetpp_effb5_3class.pth',
+            'finetuned_path': 'weights/spheroid_disintegration_unetpp_effb5_3class.pth',
             'config_path': None
         },
         'segformer': {
@@ -341,14 +357,21 @@ class ModelLoader:
                     )
                 model = UMamba(in_channels=3, out_channels=1, use_instance_norm=True)
             elif model_name == 'unet_attention_aspp':
-                # Enhanced UNet with Attention Gates + ASPP for dissolving spheroids
-                model = UNetAttention(
-                    in_channels=3, out_channels=1,
-                    features=[64, 128, 256, 512, 1024],
-                    use_instance_norm=True, dropout_rate=0.0,
-                    use_deep_supervision=False,
-                    use_attention_gates=True, use_aspp=True
-                )
+                # Spheroid-disintegration model (UNet++/EfficientNet-B5, 3-class).
+                # The wrapper builds the smp architecture and loads the checkpoint,
+                # so it drives loading end-to-end (the generic torch.load +
+                # load_state_dict path below doesn't apply). Inference is served
+                # by predict_disintegration, not the generic single-channel path.
+                if DisintegrationModel is None:
+                    raise ImportError(
+                        f"Disintegration model architecture not available: "
+                        f"{_disintegration_import_error}"
+                    )
+                model = DisintegrationModel()
+                model.load_weights(str(weights_full_path), self.device)
+                self.loaded_models[model_name] = model
+                logger.info(f"Successfully loaded disintegration model from: {weights_full_path}")
+                return model
             elif model_name == 'segformer':
                 # SegFormer-B0 wraps a HuggingFace model, so it can't use the
                 # generic torch.load + load_state_dict path below — it builds
@@ -856,46 +879,6 @@ class ModelLoader:
             logger.info(f"Polygon detection: {len(polygons)} valid polygons from {total_contours} contours "
                        f"({external_count} external, {internal_count} internal, filtered {filtered_count} small contours)")
 
-            # ASPP-only: detect dense central 'core' inside the largest polygon
-            # via the shared 2-of-3 voting logic (Otsu + core-fraction + solidity).
-            if model_name == 'unet_attention_aspp' and polygons:
-                try:
-                    # Ensure each polygon carries an `area` field so detect_core_polygon
-                    # can pick the largest one consistently with `mask_to_polygons`.
-                    for poly in polygons:
-                        if 'area' not in poly and poly.get('points'):
-                            pts_arr = np.array(
-                                [[p['x'], p['y']] for p in poly['points']],
-                                dtype=np.float32,
-                            )
-                            poly['area'] = float(cv2.contourArea(pts_arr))
-
-                    rgb_arr = np.array(image.convert('RGB'))
-                    gray_arr = cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2GRAY)
-                    from services.postprocessing import PostprocessingService
-                    core_polygons = PostprocessingService().detect_core_polygons(
-                        gray_arr, polygons
-                    )
-                    for core_polygon in core_polygons:
-                        core_polygon.setdefault('id', f"polygon_{polygon_id_counter}")
-                        core_polygon.setdefault('class', 'spheroid')
-                        polygons.append(core_polygon)
-                        polygon_id_counter += 1
-                    if core_polygons:
-                        logger.info(
-                            f"ASPP appended {len(core_polygons)} core polygon(s) "
-                            f"(areas={[round(c['area'], 1) for c in core_polygons]})"
-                        )
-                except (cv2.error, ValueError) as core_exc:
-                    # Inner narrow catch: detect_core_polygons already swallows
-                    # geometric/numerical errors. Anything reaching here is a
-                    # second-line defence (e.g., colour-space conversion edge case).
-                    logger.error(
-                        "Core polygon detection hook failed (model=%s, size=%s, n_polys=%d): %s",
-                        model_name, original_size, len(polygons), core_exc,
-                        exc_info=True,
-                    )
-
             if len(polygons) == 0:
                 logger.warning(f"No valid polygons detected! Total contours: {total_contours}, filtered: {filtered_count}")
                 logger.warning(f"Binary mask stats - shape: {binary_mask.shape}, unique values: {np.unique(binary_mask)}")
@@ -1270,6 +1253,110 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('microcapsule')
+
+    def predict_disintegration(self, image: Image.Image, threshold: float = 0.5,
+                               detect_holes: bool = True,
+                               timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Run the spheroid-disintegration model (UNet++/EffB5, 3-class).
+
+        The model predicts 0 = background, 1 = corona, 2 = core. The foreground
+        (corona ∪ core) becomes the outer spheroid polygons; the core (class 2)
+        becomes polygons tagged ``partClass='core'`` — exactly the contract the
+        Disintegration Index expects (``mask_polygons`` = externals minus core,
+        ``core_polygons`` = the tagged ones). This replaces the previous heuristic
+        core detection: the core is now read straight from the segmentation, so DI
+        is anchored correctly on intact (0 h) spheroids too.
+
+        ``threshold`` is accepted for interface symmetry but does not apply — the
+        3-class decision is an argmax. ``detect_holes`` controls internal-hole
+        detection on the foreground (cores are always solid). ``timeout`` is
+        accepted for symmetry with the other predict_* methods.
+        """
+        import time as _time
+        from services.postprocessing import PostprocessingService
+
+        self.get_model('unet_attention_aspp')
+        if 'unet_attention_aspp' not in self.loaded_models:
+            raise ValueError(
+                "Disintegration model not loaded. "
+                "Load it first with load_model('unet_attention_aspp')"
+            )
+
+        model = self.loaded_models['unet_attention_aspp']
+        original_size = image.size  # (width, height)
+
+        self.is_processing = True
+        self.current_model = 'unet_attention_aspp'
+        start_time = _time.time()
+
+        try:
+            rgb = np.array(image.convert('RGB'))
+            mask3 = model.predict(rgb)  # (H, W) uint8: 0 bg / 1 corona / 2 core
+
+            pp = PostprocessingService()
+            foreground = (mask3 >= 1).astype(np.float32)
+            core = (mask3 == 2).astype(np.float32)
+            fg_polys = pp.mask_to_polygons(
+                foreground, threshold=0.5, detect_holes=detect_holes
+            )
+            core_polys = pp.mask_to_polygons(
+                core, threshold=0.5, detect_holes=False
+            )
+
+            polygons: List[Dict[str, Any]] = []
+            polygon_id_counter = 1
+            for poly in fg_polys:
+                poly['id'] = f"polygon_{polygon_id_counter}"
+                poly.setdefault('class', 'spheroid')
+                polygons.append(poly)
+                polygon_id_counter += 1
+            for poly in core_polys:
+                poly['id'] = f"polygon_{polygon_id_counter}"
+                poly.setdefault('class', 'spheroid')
+                # Core polygons stay external-typed (so area metrics see them) but
+                # carry partClass='core' so the DI split treats them as the core.
+                poly['type'] = 'external'
+                poly['partClass'] = 'core'
+                polygons.append(poly)
+                polygon_id_counter += 1
+
+            processing_time = _time.time() - start_time
+            logger.info(
+                "Disintegration: %d foreground + %d core polygon(s) "
+                "(corona=%.1f%% core=%.1f%%) in %.2fs",
+                len(fg_polys), len(core_polys),
+                float((mask3 == 1).mean()) * 100.0,
+                float((mask3 == 2).mean()) * 100.0,
+                processing_time,
+            )
+
+            return {
+                "model_used": "unet_attention_aspp",
+                "threshold_used": threshold,
+                "image_size": {"width": original_size[0], "height": original_size[1]},
+                "polygons": polygons,
+                "processing_info": {
+                    "device": str(self.device),
+                    "num_polygons": len(polygons),
+                    "num_core": len(core_polys),
+                    "confidence_scores": [p.get("confidence", 1.0) for p in polygons],
+                    "processing_time_s": processing_time,
+                    "batch_size": 1,
+                },
+            }
+
+        except Exception as e:
+            processing_time = _time.time() - start_time
+            logger.error(
+                "Disintegration inference failed after %.2fs: %s: %s",
+                processing_time, type(e).__name__, e, exc_info=True,
+            )
+            raise
+
+        finally:
+            self.is_processing = False
+            self.current_model = None
+            self.release_model('unet_attention_aspp')
 
     def predict_microtubule(self, image: Image.Image, threshold: float = 0.5,
                             timeout: Optional[float] = None) -> Dict[str, Any]:
