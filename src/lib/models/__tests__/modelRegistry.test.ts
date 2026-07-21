@@ -149,9 +149,9 @@ describe('model registry SSOT', () => {
         defaultThreshold: 0.2,
         category: 'spheroid',
         performance: {
-          avgTimePerImage: 0.35,
-          throughput: 2.8,
-          p95Latency: 0.5,
+          avgTimePerImage: 0.7,
+          throughput: 1.5,
+          p95Latency: 1.0,
           batchSize: 1,
         },
       },
