@@ -143,10 +143,10 @@ export const MODEL_REGISTRY = {
       p95Latency: 0.5,
       batchSize: 1,
     },
-    name: 'UNet Attention-ASPP',
-    displayName: 'UNet Attention-ASPP',
+    name: 'Spheroid Disintegration',
+    displayName: 'Spheroid Disintegration',
     description:
-      'Enhanced UNet with Attention Gates and ASPP for detecting dissolving spheroids and small satellite cells',
+      'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly for a correct Disintegration Index',
     i18nKey: 'spheroid_disintegration',
     compatibleProjectTypes: ['spheroid_invasive'],
   },
