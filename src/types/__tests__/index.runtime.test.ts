@@ -96,19 +96,19 @@ describe('isProjectType()', () => {
 // ---------------------------------------------------------------------------
 
 describe('MODEL_TYPE_COMPATIBILITY', () => {
-  it('spheroid accepts the 5 general models and excludes unet_attention_aspp', () => {
+  it('spheroid accepts the 5 general models and excludes spheroid_disintegration', () => {
     const models = MODEL_TYPE_COMPATIBILITY.spheroid;
     expect(models).toContain('hrnet');
     expect(models).toContain('cbam_resunet');
     expect(models).toContain('unet_spherohq');
     expect(models).toContain('segformer');
     expect(models).toContain('mamba_unet');
-    expect(models).not.toContain('unet_attention_aspp');
+    expect(models).not.toContain('spheroid_disintegration');
   });
 
-  it('spheroid_invasive is locked to unet_attention_aspp only', () => {
+  it('spheroid_invasive is locked to spheroid_disintegration only', () => {
     const models = MODEL_TYPE_COMPATIBILITY.spheroid_invasive;
-    expect([...models]).toEqual(['unet_attention_aspp']);
+    expect([...models]).toEqual(['spheroid_disintegration']);
   });
 
   it('wound uses only the wound model', () => {
@@ -141,7 +141,7 @@ describe('isModelCompatibleWithType()', () => {
     expect(isModelCompatibleWithType('sperm', 'sperm')).toBe(true);
     expect(isModelCompatibleWithType('microtubule', 'microtubules')).toBe(true);
     expect(
-      isModelCompatibleWithType('unet_attention_aspp', 'spheroid_invasive')
+      isModelCompatibleWithType('spheroid_disintegration', 'spheroid_invasive')
     ).toBe(true);
   });
 
@@ -149,9 +149,9 @@ describe('isModelCompatibleWithType()', () => {
     expect(isModelCompatibleWithType('sperm', 'spheroid')).toBe(false);
     expect(isModelCompatibleWithType('wound', 'sperm')).toBe(false);
     expect(isModelCompatibleWithType('hrnet', 'wound')).toBe(false);
-    expect(isModelCompatibleWithType('unet_attention_aspp', 'spheroid')).toBe(
-      false
-    );
+    expect(
+      isModelCompatibleWithType('spheroid_disintegration', 'spheroid')
+    ).toBe(false);
     expect(isModelCompatibleWithType('microtubule', 'spheroid')).toBe(false);
   });
 

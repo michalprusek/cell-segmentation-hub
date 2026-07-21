@@ -55,7 +55,7 @@ WEIGHTS_CONFIG = {
         "size": 429175255,  # 410 MB
         "sha256": None,
     },
-    "unet_attention_aspp": {
+    "spheroid_disintegration": {
         "gdrive_id": "TODO",  # Fill after Google Drive upload
         "filename": "unet_v4_weights.pth",
         "size": 141903720,  # 135 MB

@@ -98,7 +98,7 @@ describe('useResegment', () => {
     ['sperm', 'hrnet', 'sperm'],
     ['wound', 'hrnet', 'wound'],
     ['microcapsule', 'hrnet', 'microcapsule'],
-    ['spheroid_invasive', 'hrnet', 'unet_attention_aspp'],
+    ['spheroid_invasive', 'hrnet', 'spheroid_disintegration'],
     // spheroid has >1 compatible model → the user's pick is honored. Use a model
     // distinct from compat[0] ('hrnet') so this proves selectedModel wins,
     // rather than coincidentally matching the first registry entry.

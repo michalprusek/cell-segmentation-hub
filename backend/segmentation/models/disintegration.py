@@ -9,11 +9,10 @@ so the core anchor for the core-anchored Disintegration Index (DI) is correct at
 both the intact (0 h) and disintegrated (48 h) time points — this is exactly the
 0 h core mis-scaling the previous heuristic-core model suffered from.
 
-This replaces the earlier ``unet_attention_aspp`` architecture (a binary U-Net +
-Attention/ASPP whose core was inferred post-hoc by an Otsu/solidity heuristic).
-The model key ``unet_attention_aspp`` is kept for continuity (project-type
-mapping, stored segmentations, the frontend), but its implementation and weights
-are now this UNet++/EffB5 network.
+This replaced an earlier binary U-Net + Attention/ASPP architecture whose core was
+inferred post-hoc by an Otsu/solidity heuristic. When the architecture changed the
+public model key was renamed from ``unet_attention_aspp`` to
+``spheroid_disintegration``.
 
 Weights load from a local ``spheroid_disintegration_unetpp_effb5_3class.pth``
 checkpoint (dict with ``model`` state + ``arch``/``encoder``/``num_classes``

@@ -21,7 +21,7 @@ const CANONICAL_IDS: ModelType[] = [
   'hrnet',
   'cbam_resunet',
   'unet_spherohq',
-  'unet_attention_aspp',
+  'spheroid_disintegration',
   'segformer',
   'mamba_unet',
   'sperm',
@@ -63,7 +63,7 @@ describe('model registry SSOT', () => {
         'segformer',
         'mamba_unet',
       ],
-      spheroid_invasive: ['unet_attention_aspp'],
+      spheroid_invasive: ['spheroid_disintegration'],
       wound: ['wound'],
       sperm: ['sperm'],
       microtubules: ['microtubule'],
@@ -139,8 +139,8 @@ describe('model registry SSOT', () => {
           batchSize: 4,
         },
       },
-      unet_attention_aspp: {
-        id: 'unet_attention_aspp',
+      spheroid_disintegration: {
+        id: 'spheroid_disintegration',
         name: 'UNet Attention-ASPP',
         displayName: 'UNet Attention-ASPP',
         description:
@@ -259,7 +259,7 @@ describe('model registry SSOT', () => {
       hrnet: 'hrnet',
       cbam_resunet: 'cbam',
       unet_spherohq: 'unet_spherohq',
-      unet_attention_aspp: 'unet_attention_aspp',
+      spheroid_disintegration: 'spheroid_disintegration',
       segformer: 'segformer',
       mamba_unet: 'mamba_unet',
       sperm: 'sperm',

@@ -133,7 +133,7 @@ export const MODEL_REGISTRY = {
     i18nKey: 'unet_spherohq',
     compatibleProjectTypes: ['spheroid'],
   },
-  unet_attention_aspp: {
+  spheroid_disintegration: {
     size: 'medium',
     defaultThreshold: 0.2,
     category: 'spheroid',
@@ -147,7 +147,7 @@ export const MODEL_REGISTRY = {
     displayName: 'UNet Attention-ASPP',
     description:
       'Enhanced UNet with Attention Gates and ASPP for detecting dissolving spheroids and small satellite cells',
-    i18nKey: 'unet_attention_aspp',
+    i18nKey: 'spheroid_disintegration',
     compatibleProjectTypes: ['spheroid_invasive'],
   },
   segformer: {

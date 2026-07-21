@@ -174,7 +174,7 @@ async def segment_image(
             # is a single closed instance polygon. The model is light (~14.5 MB),
             # so it runs in parallel like hrnet/sperm/wound (no inference lock).
             result = loader.predict_microcapsule(image, threshold)
-        elif model == 'unet_attention_aspp':
+        elif model == 'spheroid_disintegration':
             # Spheroid-disintegration model (UNet++/EffB5, 3-class). Uses its own
             # CLAHE preprocessing and emits foreground + core polygons directly,
             # so it can't flow through the generic single-channel predict path.

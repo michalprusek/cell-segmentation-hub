@@ -91,14 +91,14 @@ except ImportError as e:
     _microcapsule_import_error = e
 
 # Optional spheroid-disintegration model import (UNet++/EfficientNet-B5, 3-class;
-# needs segmentation-models-pytorch + timm). Backs the `unet_attention_aspp` key.
+# needs segmentation-models-pytorch + timm). Backs the `spheroid_disintegration` key.
 _disintegration_import_error = None
 try:
     from models.disintegration import DisintegrationModel
 except ImportError as e:
     logger.warning(
         f"Could not import DisintegrationModel: {e}. "
-        "Spheroid-disintegration (unet_attention_aspp) segmentation will not be available."
+        "Spheroid-disintegration (spheroid_disintegration) segmentation will not be available."
     )
     DisintegrationModel = None
     _disintegration_import_error = e
@@ -157,7 +157,7 @@ class BatchConfig:
                         "expected_throughput": 2.2,
                         "memory_limit_mb": 4000
                     },
-                    "unet_attention_aspp": {
+                    "spheroid_disintegration": {
                         "optimal_batch_size": 1,
                         "max_safe_batch_size": 1,
                         "expected_throughput": 1.5,
@@ -214,11 +214,11 @@ class ModelLoader:
             'finetuned_path': 'weights/unet_spherohq_best.pth',
             'config_path': None
         },
-        'unet_attention_aspp': {
-            # Repointed 2026-07-15 to the UNet++/EfficientNet-B5 3-class
-            # spheroid-disintegration model (predicts the dense core directly).
-            # The key name is kept for continuity (project-type mapping, stored
-            # segmentations, frontend); `class` is None if smp/timm are missing.
+        'spheroid_disintegration': {
+            # UNet++/EfficientNet-B5 3-class model (predicts the dense core
+            # directly). Replaced an earlier binary U-Net + Attention/ASPP model
+            # (old key `unet_attention_aspp`). `class` is None if smp/timm are
+            # missing.
             'class': DisintegrationModel,
             'pretrained_path': 'weights/spheroid_disintegration_unetpp_effb5_3class.pth',
             'finetuned_path': 'weights/spheroid_disintegration_unetpp_effb5_3class.pth',
@@ -356,7 +356,7 @@ class ModelLoader:
                         f"Mamba-UNet architecture not available: {_mamba_unet_import_error}"
                     )
                 model = UMamba(in_channels=3, out_channels=1, use_instance_norm=True)
-            elif model_name == 'unet_attention_aspp':
+            elif model_name == 'spheroid_disintegration':
                 # Spheroid-disintegration model (UNet++/EfficientNet-B5, 3-class).
                 # The wrapper builds the smp architecture and loads the checkpoint,
                 # so it drives loading end-to-end (the generic torch.load +
@@ -487,8 +487,8 @@ class ModelLoader:
                     # Recreate model with detected features - DROPOUT SET TO 0 FOR INFERENCE!
                     model = ResUNetCBAM(in_channels=3, out_channels=1, features=detected_features, use_instance_norm=True, dropout_rate=0.0)
             
-            # Load state dict (strict=True for unet_attention_aspp, False for legacy models)
-            strict = (model_name == 'unet_attention_aspp')
+            # Load state dict (strict=True for spheroid_disintegration, False for legacy models)
+            strict = (model_name == 'spheroid_disintegration')
             load_result = model.load_state_dict(state_dict, strict=strict)
             if not strict and (load_result.missing_keys or load_result.unexpected_keys):
                 logger.warning(
@@ -1275,18 +1275,18 @@ class ModelLoader:
         import time as _time
         from services.postprocessing import PostprocessingService
 
-        self.get_model('unet_attention_aspp')
-        if 'unet_attention_aspp' not in self.loaded_models:
+        self.get_model('spheroid_disintegration')
+        if 'spheroid_disintegration' not in self.loaded_models:
             raise ValueError(
                 "Disintegration model not loaded. "
-                "Load it first with load_model('unet_attention_aspp')"
+                "Load it first with load_model('spheroid_disintegration')"
             )
 
-        model = self.loaded_models['unet_attention_aspp']
+        model = self.loaded_models['spheroid_disintegration']
         original_size = image.size  # (width, height)
 
         self.is_processing = True
-        self.current_model = 'unet_attention_aspp'
+        self.current_model = 'spheroid_disintegration'
         start_time = _time.time()
 
         try:
@@ -1331,7 +1331,7 @@ class ModelLoader:
             )
 
             return {
-                "model_used": "unet_attention_aspp",
+                "model_used": "spheroid_disintegration",
                 "threshold_used": threshold,
                 "image_size": {"width": original_size[0], "height": original_size[1]},
                 "polygons": polygons,
@@ -1356,7 +1356,7 @@ class ModelLoader:
         finally:
             self.is_processing = False
             self.current_model = None
-            self.release_model('unet_attention_aspp')
+            self.release_model('spheroid_disintegration')
 
     def predict_microtubule(self, image: Image.Image, threshold: float = 0.5,
                             timeout: Optional[float] = None) -> Dict[str, Any]:
