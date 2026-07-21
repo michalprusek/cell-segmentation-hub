@@ -481,9 +481,9 @@ apply equally to compact (t=0) and disintegrated (t>0) spheroids.
 ## Pipeline Overview
 
 \`\`\`
-ASPP segmentation  →  polygons[]  →  core detection (Otsu + 2-of-3 voting)
+3-class segmentation (bg / corona / core)  →  core = class-2 polygons
                                      ↓
-                            partClass="core" polygon attached
+                            partClass="core" polygons attached
                                      ↓
      ┌──────────────┬─────────────────┬──────────────────┐
      ↓              ↓                 ↓                  ↓
@@ -497,45 +497,23 @@ ASPP segmentation  →  polygons[]  →  core detection (Otsu + 2-of-3 voting)
                                                   normalised by R_core
 \`\`\`
 
-## Core Detection (ASPP-only)
+## Core Detection
 
-Performed in the Python ML service inside \`PostprocessingService.detect_core_polygons\`
-(file \`backend/segmentation/services/postprocessing.py\`). Pipeline:
+The spheroid-disintegration model (UNet++ / EfficientNet-B5, model key
+\`spheroid_disintegration\`) segments each image into three classes directly —
+**0 = background, 1 = corona (dispersing cells), 2 = dense core** — so the core is
+a *predicted class*, not an intensity heuristic. It is read straight from the
+segmentation in \`predict_disintegration\`
+(\`backend/segmentation/ml/model_loader.py\`):
 
-1. **Pick parent**: the **largest** external polygon detected by ASPP (\`A_all\`)
- that exceeds \`CORE_MIN_PARENT_AREA = 1000 px²\`. Smaller externals are
- noise/debris and don't get a core.
+1. **Foreground** = classes 1 ∪ 2 → the outer spheroid polygons
+ (\`type="external"\`): the total cell-covered area.
 
-2. **Rasterise** the parent polygon into a binary mask matching the original
- image dimensions (\`cv2.fillPoly\` on a uint8 zero canvas).
+2. **Core** = class 2 → polygons tagged \`partClass="core"\`.
 
-3. **Local Otsu** on the grayscale intensities **inside the mask only**:
- \`thr = threshold_otsu(gray[mask>0])\`. The histogram restriction is essential
- — global Otsu sits between background and cells, which is the duality of
- the segmentation itself and yields no information about core vs. corona.
-
-4. **2-of-3 compactness gate**. The spheroid is "compact" (= core covers the
- whole parent) when **at least two** of these indicators agree:
- - **mean_diff** < 45 grayscale levels: difference of \`mean(below_thr)\` and
-   \`mean(above_thr)\` inside the mask. Small ⇒ unimodal interior.
- - **core_frac** > 0.75: fraction of mask pixels below Otsu. High ⇒ most of
-   the spheroid is dense.
- - **solidity** > 0.85: \`area / convex_hull_area\` of the parent polygon.
-   High ⇒ round, no invasion projections.
-
- Calibrated on user 12bprusek's *time_0h* (compact) vs *time_48h* (invasive)
- projects, April 2026. Cohen's *d* = 3.18 on \`mean_diff\`. Class constants
- are tunable in \`PostprocessingService\`.
-
-5. **Compact path** (votes ≥ 2): return the **whole parent polygon** as the
- core. \`Core Area ≈ Total Spheroid Area\`.
-
-6. **Bimodal path** (votes < 2): build \`core_raw = (gray ≤ thr) & mask\`, label
- connected components, return the **single largest CC** as the core polygon.
- The contour is extracted via \`cv2.findContours(RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)\`.
-
-7. The returned core polygon carries \`partClass="core"\` and \`parent_id\` linking
- it to the parent spheroid.
+Predicting the core directly (rather than by thresholding an earlier binary
+segmentation) keeps the DI anchor correct on intact (t=0) spheroids too, where
+the whole spheroid is core.
 
 ## Total Spheroid Area (${areaUnit})
 
@@ -560,10 +538,11 @@ area* in the image, not just the largest.
 CoreArea = area(polygon with partClass="core")
 \`\`\`
 
-- Geometric area of the **single core polygon** (largest connected component
-below Otsu threshold; or the whole parent in the compact case).
+- Geometric area of the core polygon(s) — the region(s) the model predicts as
+class 2 (dense core).
 - Same Shoelace formula and same scale conversion as Total Spheroid Area.
-- For a compact spheroid: \`CoreArea ≈ TotalSpheroidArea\` (whole parent = core).
+- For a compact spheroid: \`CoreArea ≈ TotalSpheroidArea\` (the model labels the
+whole spheroid as core).
 - For a fully invasive spheroid: \`CoreArea\` is the dense central agglomerate
 while the rest of \`TotalSpheroidArea\` is the diffuse invasion zone.
 - **Reference**: Lim 2020 \`A_core\` (paper notation) corresponds directly.
@@ -594,7 +573,7 @@ equivalent-disk fallback. Reported in the Excel column **Disintegration Index**
 Algorithm (implemented in
 \`backend/segmentation/api/metrics_endpoint.py\` — POST \`/api/disintegration-index\`):
 
-1. **Rasterise the union of every external polygon** (the whole ASPP segmentation
+1. **Rasterise the union of every external polygon** (the whole disintegration segmentation
  mask, excluding cores) into a single binary canvas via repeated
  \`cv2.fillPoly\`. Collect the \`(x, y)\` of all \`M\` foreground pixels.
 
@@ -661,7 +640,7 @@ are deliberately *omitted* — their rank correlation with DI is ≈ 0.95 (same 
 
 ## Edge Cases & Caveats
 
-- **No ASPP segmentation** (HRNet, CBAM-ResUNet, plain U-Net, sperm, wound):
+- **No disintegration segmentation** (HRNet, CBAM-ResUNet, plain U-Net, sperm, wound):
 no core polygon is generated. \`Core Area = 0\`, \`Total Spheroid Area\` still
 reports the sum of all external polygons, but the **Disintegration Index is
 \`N/A\`** (\`reference="no_core"\`) — DI is core-anchored and undefined without a
@@ -670,18 +649,17 @@ core. Area columns remain compatibility-safe for any model.
 - **Cropped spheroid touching image edge**: the centroid is biased, the
 rasterised area is truncated. Detected via bbox of mask = canvas edge —
 not auto-flagged in the export but visible by inspection.
-- **Multiple spheroids, only the largest gets a core**: smaller spheroids
-contribute to \`Total Spheroid Area\` only. By design — paper Lim 2020
-treats each spheroid as its own experimental unit.
-- **Hollow / necrotic core**: the central pixels may be lighter than the
-surrounding ring, which inflates \`mean_diff\` and the algorithm may pick a
-ring-shaped CC as the "core". Mathematically correct given the intensity
-histogram, biologically ambiguous; manual inspection recommended for
-spheroids known to have necrotic centres.
+- **Multiple spheroids**: each spheroid whose dense centre the model labels as
+core (class 2) gets its own core polygon; a spheroid with no predicted core
+contributes to \`Total Spheroid Area\` only.
+- **Hollow / necrotic core**: a lighter necrotic centre may be under- or
+over-segmented by the model (class 2 vs corona), which is biologically
+ambiguous; manual inspection is recommended for spheroids known to have
+necrotic centres.
 
 ## Source Files
 
-- **Core detection**: \`backend/segmentation/services/postprocessing.py\`
+- **Core detection**: \`backend/segmentation/ml/model_loader.py\` (\`predict_disintegration\`)
 - **DI computation**: \`backend/segmentation/api/metrics_endpoint.py\`
 - **Per-image area orchestration**: \`backend/src/services/metrics/metricsCalculator.ts\`
 (\`calculateAllImageMetrics\`)

@@ -32,14 +32,14 @@ const ModelSettingsSection = () => {
   } = useLocalizedModels();
 
   // The disintegrated-spheroid workflow uses a dedicated model
-  // (unet_attention_aspp) — surface it as its own section so users
+  // (spheroid_disintegration) — surface it as its own section so users
   // aren't tempted to pick it for standard spheroid analysis.
   const [showAdditional, setShowAdditional] = useState(false);
 
   const spheroidModels = useMemo(
     () =>
       availableModels.filter(
-        m => m.category === 'spheroid' && m.id !== 'unet_attention_aspp'
+        m => m.category === 'spheroid' && m.id !== 'spheroid_disintegration'
       ),
     [availableModels]
   );
@@ -53,7 +53,7 @@ const ModelSettingsSection = () => {
     [spheroidModels]
   );
   const spheroidInvasiveModels = useMemo(
-    () => availableModels.filter(m => m.id === 'unet_attention_aspp'),
+    () => availableModels.filter(m => m.id === 'spheroid_disintegration'),
     [availableModels]
   );
   const spermModels = useMemo(

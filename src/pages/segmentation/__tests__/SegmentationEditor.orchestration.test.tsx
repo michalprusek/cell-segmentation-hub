@@ -693,7 +693,7 @@ describe('effectiveResegmentModel — project-type gating', () => {
     );
   });
 
-  it('uses "unet_attention_aspp" for spheroid_invasive project', async () => {
+  it('uses "spheroid_disintegration" for spheroid_invasive project', async () => {
     mockProjectData.projectType = 'spheroid_invasive';
     renderEditor();
 
@@ -708,7 +708,7 @@ describe('effectiveResegmentModel — project-type gating', () => {
 
     expect(mockApiClient.requestBatchSegmentation).toHaveBeenCalledWith(
       ['img-1'],
-      'unet_attention_aspp',
+      'spheroid_disintegration',
       expect.anything(),
       expect.anything(),
       undefined

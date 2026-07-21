@@ -330,7 +330,7 @@ export class VisualizationGenerator {
       : isPolyline
         ? POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7'
         : isCorePolygon
-          ? '#22c55e' // green — matches frontend CanvasPolygon for ASPP core
+          ? '#22c55e' // green — matches frontend CanvasPolygon for the disintegration core
           : polygon.type === 'external'
             ? options.polygonColors?.external || '#00FF00'
             : options.polygonColors?.internal || '#FF0000';

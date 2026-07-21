@@ -131,7 +131,7 @@ describe('useLocalizedModels', () => {
       const { result } = renderHook(() => useLocalizedModels());
       const models = result.current.getAllModels();
 
-      // Registry: hrnet, cbam_resunet, unet_spherohq, unet_attention_aspp,
+      // Registry: hrnet, cbam_resunet, unet_spherohq, spheroid_disintegration,
       // segformer, mamba_unet, sperm, wound, microtubule, microcapsule.
       // Count updated 6 → 9 (Mamba-UNet, SegFormer, MT) → 10 (microcapsule).
       // If this count changes intentionally, update here.
@@ -140,7 +140,7 @@ describe('useLocalizedModels', () => {
       expect(ids).toContain('hrnet');
       expect(ids).toContain('cbam_resunet');
       expect(ids).toContain('unet_spherohq');
-      expect(ids).toContain('unet_attention_aspp');
+      expect(ids).toContain('spheroid_disintegration');
       expect(ids).toContain('segformer');
       expect(ids).toContain('mamba_unet');
       expect(ids).toContain('sperm');

@@ -27,7 +27,7 @@ export type { ModelCategory, ModelInfo, ModelPerformance, ModelType };
 export type SpheroidPresetTier = 'fast' | 'accurate' | 'robust' | 'additional';
 
 /** The standard spheroid models that participate in the preset framing.
- *  Excludes `unet_attention_aspp` (the disintegrated/invasive model, shown in
+ *  Excludes `spheroid_disintegration` (the disintegrated/invasive model, shown in
  *  its own section). `satisfies Record<SpheroidModelId, …>` makes forgetting to
  *  classify a newly-added spheroid model a compile error. */
 type SpheroidModelId =

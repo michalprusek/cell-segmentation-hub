@@ -492,10 +492,10 @@ export default {
           description:
             'Beste Leistung auf SpheroHQ-Datensatz - optimiert für Sphäroid-Segmentierung mit ausgewogener Geschwindigkeit und Genauigkeit (~0.25s/Bild, 10 Bilder/s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Sphäroid-Zerfall',
           description:
-            'Erweitertes UNet mit Attention Gates und ASPP zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (~0.35s/Bild)',
+            'UNet++ mit EfficientNet-B5-Encoder — 3-Klassen-Segmentierung (Hintergrund / Korona / dichter Kern) zerfallender Sphäroide; sagt den Kern direkt für einen korrekten Zerfallsindex voraus (~0.7s/Bild)',
         },
         segformer: {
           name: 'SegFormer',
@@ -546,8 +546,8 @@ export default {
         'Präziseste Segmentierung mit Aufmerksamkeitsmechanismen (E2E ~482ms, 2.7 Bilder/s)',
       unet_spherohq:
         'Schnellstes Modell nach Optimierungen! Hervorragend für Echtzeitverarbeitung (E2E ~286ms, 5.5 Bilder/s)',
-      unet_attention_aspp:
-        'Erweitertes UNet mit Attention Gates und ASPP-Bottleneck zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (35,5M Parameter)',
+      spheroid_disintegration:
+        'UNet++ / EfficientNet-B5-Modell mit 3 Klassen (Hintergrund / Korona / Kern) für zerfallende Sphäroide; sagt den dichten Kern direkt für einen korrekten Zerfallsindex voraus (30,7M Parameter)',
       segformer:
         'Transformer-basiertes SegFormer-B0-Modell, trainiert auf dem SpheroMix-Datensatz. Höchste Sphäroid-Genauigkeit der Plattform (93% IoU) bei gleichzeitig kleinstem und schnellstem Modell (~13 ms/Bild).',
       mamba_unet:

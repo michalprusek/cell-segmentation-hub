@@ -500,7 +500,7 @@ export class MetricsCalculator {
       } else if (usableExternals.length > 0) {
         try {
           // DI is computed from the UNION of every external polygon (the
-          // entire ASPP segmentation mask), not just the largest spheroid.
+          // entire disintegration segmentation mask), not just the largest spheroid.
           const maskPolygons = usableExternals.map(p => p.points);
           // Use every detected core; the Python endpoint unions them too.
           const corePolygonsForDi = cores.map(c => c.points);
