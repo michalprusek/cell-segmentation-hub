@@ -121,7 +121,7 @@ describe('ModelContext', () => {
       expect(modelIds).toContain('hrnet');
       expect(modelIds).toContain('cbam_resunet');
       expect(modelIds).toContain('unet_spherohq');
-      expect(modelIds).toContain('unet_attention_aspp');
+      expect(modelIds).toContain('spheroid_disintegration');
       expect(modelIds).toContain('sperm');
       expect(modelIds).toContain('wound');
     });
@@ -200,10 +200,10 @@ describe('ModelContext', () => {
       });
       expect(result.current.confidenceThreshold).toBe(0.5);
 
-      // unet_attention_aspp is calibrated to 0.2; switching the selected
+      // spheroid_disintegration is calibrated to 0.2; switching the selected
       // model must propagate to the threshold reported by the context.
       act(() => {
-        result.current.setSelectedModel('unet_attention_aspp');
+        result.current.setSelectedModel('spheroid_disintegration');
       });
 
       expect(result.current.confidenceThreshold).toBe(0.2);

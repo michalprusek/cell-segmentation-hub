@@ -100,7 +100,7 @@ const coerceNonEmptyString = (value: unknown): string | undefined =>
 
 export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
   // partClass accepts both sperm parts (head/midpiece/tail) and 'core' for
-  // ASPP spheroid core polygons; older code only validated SpermPartClass
+  // spheroid disintegration core polygons; older code only validated SpermPartClass
   // which silently stripped 'core' during polygon JSON load.
   {
     key: 'partClass',

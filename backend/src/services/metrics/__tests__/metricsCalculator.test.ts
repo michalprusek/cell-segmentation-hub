@@ -623,7 +623,7 @@ describe('MetricsCalculator — calculateImageMetrics: offline fallback geometry
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// calculateAllImageMetrics — ASPP per-image / disintegration panel
+// calculateAllImageMetrics — disintegration per-image / disintegration panel
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
@@ -877,7 +877,7 @@ describe('MetricsCalculator — exportPolygonMetricsToExcel', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// exportToExcel (ASPP / spheroid_invasive per-image report)
+// exportToExcel (disintegration / spheroid_invasive per-image report)
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {

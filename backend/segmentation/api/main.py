@@ -118,7 +118,7 @@ async def lifespan(app: FastAPI):
         
         # Pre-load all models for faster first response
         # Note: 'sperm' is optional - only loaded if weights file exists
-        models_to_load = ["hrnet", "cbam_resunet", "unet_spherohq", "unet_attention_aspp", "sperm"]
+        models_to_load = ["hrnet", "cbam_resunet", "unet_spherohq", "spheroid_disintegration", "sperm"]
         loaded_count = 0
         
         models_failed: list[str] = []

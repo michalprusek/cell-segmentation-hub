@@ -471,10 +471,10 @@ export default {
           description:
             'Mejor rendimiento en el conjunto de datos SpheroHQ - optimizado para segmentación de esferoides con velocidad y precisión equilibradas (~0.25s/imagen, 10 img/s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Desintegración de esferoides',
           description:
-            'UNet mejorado con Attention Gates y ASPP para detectar esferoides en disolución y pequeñas células satélite (~0.35s/imagen)',
+            'UNet++ con codificador EfficientNet-B5 — segmentación de 3 clases (fondo / corona / núcleo denso) de esferoides en desintegración; predice el núcleo directamente para un Índice de Desintegración correcto (~0.7s/imagen)',
         },
         segformer: {
           name: 'SegFormer',
@@ -525,8 +525,8 @@ export default {
         'Segmentación más precisa con mecanismos de atención (E2E ~482ms, 2.7 img/s)',
       unet_spherohq:
         '¡El modelo más rápido después de las optimizaciones! Excelente para procesamiento en tiempo real (E2E ~286ms, 5.5 img/s)',
-      unet_attention_aspp:
-        'UNet mejorado con Attention Gates y cuello de botella ASPP para detectar esferoides en disolución y pequeñas células satélite (35,5M parámetros)',
+      spheroid_disintegration:
+        'Modelo UNet++ / EfficientNet-B5 de 3 clases (fondo / corona / núcleo) para esferoides en desintegración; predice el núcleo denso directamente para un Índice de Desintegración correcto (30,7M parámetros)',
       segformer:
         'Modelo SegFormer-B0 basado en transformador, entrenado con el conjunto de datos SpheroMix. La mayor precisión de segmentación de esferoides de la plataforma (93% IoU), siendo además el modelo más pequeño y rápido (~13 ms/imagen).',
       mamba_unet:
