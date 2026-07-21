@@ -487,8 +487,13 @@ class ModelLoader:
                     # Recreate model with detected features - DROPOUT SET TO 0 FOR INFERENCE!
                     model = ResUNetCBAM(in_channels=3, out_channels=1, features=detected_features, use_instance_norm=True, dropout_rate=0.0)
             
-            # Load state dict (strict=True for spheroid_disintegration, False for legacy models)
-            strict = (model_name == 'spheroid_disintegration')
+            # Only the legacy binary models (hrnet, cbam_resunet, unet_spherohq,
+            # mamba_unet) reach this generic load path, and they load
+            # non-strict for checkpoint-format tolerance. Wrapper models
+            # (spheroid_disintegration, sperm, wound, ...) load their own weights
+            # earlier and return before here (spheroid_disintegration uses
+            # strict=True inside DisintegrationModel.load_weights).
+            strict = False
             load_result = model.load_state_dict(state_dict, strict=strict)
             if not strict and (load_result.missing_keys or load_result.unexpected_keys):
                 logger.warning(
@@ -1302,6 +1307,22 @@ class ModelLoader:
             core_polys = pp.mask_to_polygons(
                 core, threshold=0.5, detect_holes=False
             )
+
+            # The model predicted core pixels but none survived polygonisation
+            # (dropped by the min-area filter, or an error swallowed inside
+            # mask_to_polygons). Surface it: this is NOT a genuine "no core"
+            # image, and the core-anchored Disintegration Index would silently
+            # report N/A for it. Logged (not raised) so a single lost core on
+            # one frame of a batch doesn't fail the whole segmentation.
+            core_px = int((mask3 == 2).sum())
+            if core_px > 0 and not core_polys:
+                logger.warning(
+                    "Disintegration: %d core pixel(s) predicted but 0 core "
+                    "polygon(s) emitted (min-area filter or postprocessing "
+                    "failure) — DI will be N/A for this image despite a "
+                    "predicted core.",
+                    core_px,
+                )
 
             polygons: List[Dict[str, Any]] = []
             polygon_id_counter = 1

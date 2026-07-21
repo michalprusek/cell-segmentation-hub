@@ -538,10 +538,11 @@ area* in the image, not just the largest.
 CoreArea = area(polygon with partClass="core")
 \`\`\`
 
-- Geometric area of the **single core polygon** (largest connected component
-below Otsu threshold; or the whole parent in the compact case).
+- Geometric area of the core polygon(s) — the region(s) the model predicts as
+class 2 (dense core).
 - Same Shoelace formula and same scale conversion as Total Spheroid Area.
-- For a compact spheroid: \`CoreArea ≈ TotalSpheroidArea\` (whole parent = core).
+- For a compact spheroid: \`CoreArea ≈ TotalSpheroidArea\` (the model labels the
+whole spheroid as core).
 - For a fully invasive spheroid: \`CoreArea\` is the dense central agglomerate
 while the rest of \`TotalSpheroidArea\` is the diffuse invasion zone.
 - **Reference**: Lim 2020 \`A_core\` (paper notation) corresponds directly.
@@ -648,18 +649,17 @@ core. Area columns remain compatibility-safe for any model.
 - **Cropped spheroid touching image edge**: the centroid is biased, the
 rasterised area is truncated. Detected via bbox of mask = canvas edge —
 not auto-flagged in the export but visible by inspection.
-- **Multiple spheroids, only the largest gets a core**: smaller spheroids
-contribute to \`Total Spheroid Area\` only. By design — paper Lim 2020
-treats each spheroid as its own experimental unit.
-- **Hollow / necrotic core**: the central pixels may be lighter than the
-surrounding ring, which inflates \`mean_diff\` and the algorithm may pick a
-ring-shaped CC as the "core". Mathematically correct given the intensity
-histogram, biologically ambiguous; manual inspection recommended for
-spheroids known to have necrotic centres.
+- **Multiple spheroids**: each spheroid whose dense centre the model labels as
+core (class 2) gets its own core polygon; a spheroid with no predicted core
+contributes to \`Total Spheroid Area\` only.
+- **Hollow / necrotic core**: a lighter necrotic centre may be under- or
+over-segmented by the model (class 2 vs corona), which is biologically
+ambiguous; manual inspection is recommended for spheroids known to have
+necrotic centres.
 
 ## Source Files
 
-- **Core detection**: \`backend/segmentation/services/postprocessing.py\`
+- **Core detection**: \`backend/segmentation/ml/model_loader.py\` (\`predict_disintegration\`)
 - **DI computation**: \`backend/segmentation/api/metrics_endpoint.py\`
 - **Per-image area orchestration**: \`backend/src/services/metrics/metricsCalculator.ts\`
 (\`calculateAllImageMetrics\`)

@@ -103,9 +103,11 @@ class DisintegrationModel:
         pad_h = (_STRIDE - h % _STRIDE) % _STRIDE
         pad_w = (_STRIDE - w % _STRIDE) % _STRIDE
         if pad_h or pad_w:
-            # Reflect-pad the bottom/right up to the encoder stride; cropped off
-            # again below so padding only touches the (discarded) border.
-            x = torch.nn.functional.pad(x, (0, pad_w, 0, pad_h), mode="reflect")
+            # Pad the bottom/right up to the encoder stride; cropped off again
+            # below so padding only touches the (discarded) border. "replicate"
+            # (not "reflect") so it also works when a dimension is <= the pad
+            # width — reflect requires pad < dim and would raise on tiny images.
+            x = torch.nn.functional.pad(x, (0, pad_w, 0, pad_h), mode="replicate")
         x = x.to(self._device)
         with torch.no_grad():
             logits = self._model(x)

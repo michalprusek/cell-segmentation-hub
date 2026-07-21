@@ -14,6 +14,7 @@ class ModelType(str, Enum):
     SPERM = "sperm"
     WOUND = "wound"
     MICROCAPSULE = "microcapsule"
+    MICROTUBULE = "microtubule"
 
 class SegmentationRequest(BaseModel):
     model: ModelType = Field(default=ModelType.HRNET, description="Model to use for segmentation")
