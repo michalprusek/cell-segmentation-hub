@@ -93,11 +93,18 @@ def _path_class_is_native(module: str, name: str) -> bool:
     process, so a memo would buy nothing while forcing every test that patches
     ``pathlib`` to remember to invalidate it.
 
-    A missing attribute is a bug in the caller's table, not a fact about the
-    host, so it propagates instead of being flattened into ``False`` (which
-    would silently remap on a platform where the class works fine).
+    A missing *module* means the recording interpreter had one this host does
+    not — 3.13 records ``pathlib._local`` where <=3.12 has no such module — so
+    the class is definitionally not constructible here and must be remapped.
+    A missing *attribute* in a module that does exist is a typo in the caller's
+    table, not a fact about the host, so that propagates rather than being
+    flattened into ``False`` (which would silently remap on a platform where
+    the class works fine).
     """
-    cls = getattr(sys.modules[module], name)
+    host_module = sys.modules.get(module)
+    if host_module is None:
+        return False
+    cls = getattr(host_module, name)
     try:
         cls(".")
         return True

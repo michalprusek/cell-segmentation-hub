@@ -476,3 +476,17 @@ def test_path_class_probe_rejects_unknown_name():
     assert _path_class_is_native("pathlib", "WindowsPath") is False
     with pytest.raises(AttributeError):
         _path_class_is_native("pathlib", "PosixPathh")
+
+
+def test_path_class_probe_handles_a_module_this_host_lacks():
+    """A 3.13-saved checkpoint records ``pathlib._local``, absent on <=3.12.
+
+    That is precisely the case the extra table keys exist for, so it must
+    remap rather than raise. An earlier version indexed ``sys.modules[module]``
+    directly and died with a bare KeyError here.
+    """
+    pytest.importorskip("torch")
+
+    from models.microtubule.segment_mt import _path_class_is_native
+
+    assert _path_class_is_native("pathlib._local_does_not_exist", "PosixPath") is False
