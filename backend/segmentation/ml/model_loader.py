@@ -275,7 +275,9 @@ class ModelLoader:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # A container declared `runtime: nvidia` that resolves to CPU has lost
         # its GPU, and unlike the essays worker nothing here surfaces that to a
-        # user — segmentation just gets ~30x slower with no visible change. The
+        # user — segmentation just gets far slower with no visible change. (No
+        # measured multiplier for THIS model; the 27x on record is a microtubule
+        # essay batch, a different net on different inputs.) The
         # allowlist can be stripped from a RUNNING container by any cgroup
         # re-apply, so this is a real state, not just a misconfiguration at
         # build time. See the device_cgroup_rules comment in

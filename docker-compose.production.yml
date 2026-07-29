@@ -129,17 +129,24 @@ services:
     # them instead of dropping them.
     #
     # Rules rather than `devices:` deliberately. `devices:` re-resolves the host
-    # path on every `docker start`, and the NVIDIA nodes are created lazily by
-    # `nvidia-modprobe` on first CUDA use — on the 2026-01-13 boot they did
-    # not exist until 1 h 43 min after dockerd. With `restart: always` that
-    # turns a reboot into a crash-loop ("error gathering device information"),
-    # i.e. a full outage instead of the silent CPU fallback we are fixing.
+    # path on every `docker start`, and `/dev/nvidia-uvm` is created lazily by
+    # `nvidia-modprobe` on first CUDA use. On the 2026-01-13 boot the toolkit
+    # hook itself logged, while docker was restoring containers, "Could not
+    # locate /dev/nvidia-uvm: pattern /dev/nvidia-uvm not found" — the node
+    # appeared ~0.6 s later. A hook can warn and continue; an explicit
+    # `devices:` entry cannot, so with `restart: always` that same moment is a
+    # hard "error gathering device information" instead of a degradation.
     # Cgroup rules stat nothing, so they are safe before the nodes appear.
     #
-    # `runtime: nvidia` above is still load-bearing and must stay: the hook is
-    # what creates the nodes inside the container and mounts the driver
-    # userspace. These rules only grant ACCESS to a major:minor — they cannot
-    # make a device appear. Unlike a hardcoded `/dev/nvidia0`, `c 195:*` also
+    # (Do not trust wall-clock timestamps from that boot: the realtime clock
+    # jumped +2 h at monotonic 4.65 s, which makes the device-node ctimes look
+    # ~1 h 43 min later than dockerd. Use `journalctl -o short-monotonic`.)
+    #
+    # `runtime: nvidia` above (and the `deploy.resources.reservations.devices`
+    # block further down — either one triggers the hook) is still load-bearing:
+    # the hook is what creates the nodes inside the container and mounts the
+    # driver userspace. These rules only grant ACCESS to a major:minor — they
+    # cannot make a device appear. Unlike a hardcoded `/dev/nvidia0`, `c 195:*` also
     # covers a second GPU if one is ever added. Major 239 (nvidia-caps, MIG) is
     # deliberately excluded — not used on an A5000.
     #

@@ -317,7 +317,7 @@ model EssayJob {
   progress     Int       @default(0)
   fileCount    Int       @default(0)
   mtCount      Int       @default(0)
-  device       String? // "cuda" | "cpu" — what the worker actually used
+  device       String? // "cuda" | "cpu" | "cpu-degraded" | "cpu-busy" — see coerceDevice()
   inputKey     String // storage key: essays/<userId>/<jobId>/input
   outputKey    String // storage key: essays/<userId>/<jobId>/output
   resultZipKey String? // zip basename in EXPORT_DIR, set once completed

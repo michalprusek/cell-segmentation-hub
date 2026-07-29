@@ -213,6 +213,10 @@ const AutomatedEssays: React.FC = () => {
                             >
                               {t('automatedEssays.deviceDegraded')}
                             </span>
+                          ) : job.device === 'cpu-busy' ? (
+                            <span title={t('automatedEssays.deviceBusyHint')}>
+                              {t('automatedEssays.deviceBusy')}
+                            </span>
                           ) : (
                             job.device.toUpperCase()
                           )}

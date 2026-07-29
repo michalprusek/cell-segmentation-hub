@@ -45,7 +45,7 @@ interface WorkerStatus {
   positionsDone?: number;
   mtCount?: number;
   device?: string;
-  deviceDegraded?: boolean;
+  deviceReason?: string;
   error?: string | null;
 }
 
@@ -59,23 +59,31 @@ const clampProgress = (n: number): number =>
  * Coerce the worker's device report into the domain the UI knows how to render.
  *
  * `readWorkerStatus` parses status.json with an unchecked cast, so everything
- * downstream — the DB column and `job.device.toUpperCase()` in the UI — trusts
- * whatever the worker wrote. `progress` already gets clamped on this boundary;
- * `device` got nothing.
+ * downstream — the DB column and the badge in the UI — trusts whatever the
+ * worker wrote. `progress` already gets clamped on this boundary; `device` got
+ * nothing.
  *
- * `cpu-degraded` is not a device the worker ever runs on. It is `cpu` plus the
- * worker's `deviceDegraded` flag, folded into the existing free-form column so
- * the UI can tell "this host has no GPU" (nothing to report) from "the GPU
- * broke and your job is 20x slower" (tell an admin) — the two the bare `CPU`
- * badge could not distinguish. Folding avoids a migration for a display-only
- * distinction.
+ * Neither `cpu-degraded` nor `cpu-busy` is a device the worker runs on: both
+ * are `cpu` plus the worker's `deviceReason`, folded into the existing
+ * free-form column so the UI can distinguish three situations the bare `CPU`
+ * badge could not — no GPU on this host (nothing to say), the GPU broke (tell
+ * an admin), and the shared card was busy for the whole wait (nothing anyone
+ * can act on). Folding avoids a migration for a display-only distinction.
+ * The incident that motivated all of this is written down once, in `GpuProbe`
+ * in backend/essays/essays_api.py.
+ *
+ * The reason must stay separate from the device on the worker side, because
+ * `_await_gpu`'s device goes straight into `evaluate.py --device`.
  */
 export const coerceDevice = (
   device: unknown,
-  degraded: unknown
-): 'cuda' | 'cpu' | 'cpu-degraded' | undefined => {
+  reason: unknown
+): 'cuda' | 'cpu' | 'cpu-degraded' | 'cpu-busy' | undefined => {
   if (device !== 'cuda' && device !== 'cpu') return undefined;
-  return device === 'cpu' && degraded === true ? 'cpu-degraded' : device;
+  if (device !== 'cpu') return device;
+  if (reason === 'fault') return 'cpu-degraded';
+  if (reason === 'busy') return 'cpu-busy';
+  return 'cpu';
 };
 
 /**
@@ -372,7 +380,7 @@ export class EssaysService {
     const nextStatus = ws.state === 'queued' ? 'queued' : 'running';
     const nextProgress = clampProgress(ws.progress ?? job.progress);
     const nextMt = ws.mtCount ?? job.mtCount;
-    const nextDevice = coerceDevice(ws.device, ws.deviceDegraded) ?? job.device;
+    const nextDevice = coerceDevice(ws.device, ws.deviceReason) ?? job.device;
     if (
       job.status === nextStatus &&
       job.progress === nextProgress &&
@@ -430,7 +438,7 @@ export class EssaysService {
           status: 'completed',
           progress: 100,
           mtCount: ws.mtCount ?? job.mtCount,
-          device: coerceDevice(ws.device, ws.deviceDegraded) ?? job.device,
+          device: coerceDevice(ws.device, ws.deviceReason) ?? job.device,
           resultZipKey,
           completedAt: new Date(),
         },

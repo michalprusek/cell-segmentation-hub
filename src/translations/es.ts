@@ -2417,6 +2417,9 @@ export default {
     deviceDegraded: 'CPU (GPU no disponible)',
     deviceDegradedHint:
       'Esta ejecución debía usar la GPU pero no pudo acceder a ella, así que se ejecutó en la CPU y tardó mucho más. Por favor, repórtelo.',
+    deviceBusy: 'CPU (GPU ocupada)',
+    deviceBusyHint:
+      'La GPU compartida estuvo ocupada durante toda la espera, así que se ejecutó en la CPU y tardó más. No hay ningún problema, no es necesario informarlo.',
     download: 'Descargar',
     delete: 'Eliminar',
     deleteFailed: 'No se pudo eliminar la ejecución',

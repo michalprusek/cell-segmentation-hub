@@ -267,8 +267,12 @@ def _posixpath_unavailable():
 
 def _v7_shaped_checkpoint(torch):
     """A miniature stand-in for microtubule_v7.pt's pickle structure."""
+    # Key order mirrors the real checkpoint: model_state FIRST, args LAST. Pickle
+    # preserves insertion order, so putting args first would reproduce an early
+    # abort — the exact failure mode the module docstring says this is NOT.
     return {
         "epoch": 9,
+        "model_state": {"head.weight": torch.arange(4.0).reshape(2, 2)},
         "args": {
             "backbone": "facebook/dinov3-vitl16-pretrain-lvd1689m",
             # Explicitly PosixPath, not Path: on a Windows host Path() yields a
@@ -278,7 +282,6 @@ def _v7_shaped_checkpoint(torch):
             "out_dir": pathlib.PosixPath(
                 "/home/prusek/BIOCEV/results/training_v7_dinov3l_v5arch"),
         },
-        "model_state": {"head.weight": torch.arange(4.0).reshape(2, 2)},
     }
 
 
@@ -410,10 +413,12 @@ def test_load_v7_model_survives_windows_like_host(tmp_path, monkeypatch):
 def test_checkpoint_loads_on_windows_like_host_legacy_format(tmp_path):
     """The remap also covers torch's non-zip serialisation.
 
-    ``torch.save`` defaults to the zip format, which routes through
-    ``shim.Unpickler``; the legacy format goes through ``shim.load`` instead.
-    The shim claims both, so both are exercised — otherwise the docstring
-    promises coverage the tests do not have.
+    Both formats reach the remap through ``shim.Unpickler`` — ``_legacy_load``
+    uses ``pickle_module.load`` only for the header scalars (magic number,
+    protocol, sys-info), which carry no path objects. So this pins that the
+    legacy path picks up our Unpickler; it does NOT exercise ``shim.load``.
+    That rebinding is covered separately by
+    ``test_shim_load_and_loads_are_rebound``.
     """
     torch = pytest.importorskip("torch")
 
@@ -438,6 +443,21 @@ def test_checkpoint_loads_on_windows_like_host_legacy_format(tmp_path):
     )
 
 
+class _SavedOnWindows:
+    """Pickles as a real ``pathlib.WindowsPath`` without constructing one.
+
+    ``WindowsPath`` cannot be instantiated on POSIX, so a Windows-trained
+    checkpoint cannot be produced here directly. ``__reduce__`` names the class
+    by reference and only the *unpickler* calls it — which is exactly the code
+    path under test. Using ``PureWindowsPath`` instead would be a tautology: it
+    pickles as ``pathlib.PureWindowsPath``, a name absent from the remap table,
+    so the test would pass without ever entering the remap.
+    """
+
+    def __reduce__(self):
+        return (pathlib.WindowsPath, ("C:\\", "runs", "v7"))
+
+
 def test_windows_paths_are_remapped_on_posix(tmp_path):
     """The reverse direction works too — a checkpoint trained on Windows.
 
@@ -449,8 +469,12 @@ def test_windows_paths_are_remapped_on_posix(tmp_path):
     from models.microtubule.segment_mt import _CROSS_PLATFORM_PICKLE
 
     ckpt_path = tmp_path / "ckpt_win.pt"
-    torch.save({"args": {"out_dir": pathlib.PureWindowsPath(r"C:\runs\v7")}},
-               ckpt_path)
+    torch.save({"args": {"out_dir": _SavedOnWindows()}}, ckpt_path)
+
+    # Control: without the remap this is unloadable on POSIX at all.
+    with pytest.raises(Exception) as excinfo:
+        torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+    assert "WindowsPath" in str(excinfo.value)
 
     ckpt = torch.load(
         str(ckpt_path),
@@ -458,7 +482,8 @@ def test_windows_paths_are_remapped_on_posix(tmp_path):
         pickle_module=_CROSS_PLATFORM_PICKLE,
         weights_only=False,
     )
-    assert str(ckpt["args"]["out_dir"]) == r"C:\runs\v7"
+    assert isinstance(ckpt["args"]["out_dir"], pathlib.PureWindowsPath)
+    assert ckpt["args"]["out_dir"].as_posix().endswith("runs/v7")
 
 
 def test_path_class_probe_rejects_unknown_name():
@@ -490,3 +515,64 @@ def test_path_class_probe_handles_a_module_this_host_lacks():
     from models.microtubule.segment_mt import _path_class_is_native
 
     assert _path_class_is_native("pathlib._local_does_not_exist", "PosixPath") is False
+
+
+def test_shim_load_and_loads_are_rebound(tmp_path):
+    """``shim.load`` and ``shim.loads`` route through the remapping unpickler.
+
+    Both come across from the ``pickle.__dict__`` copy still bound to the STOCK
+    ``Unpickler``, so leaving them alone would reintroduce the bug on any entry
+    point torch does not currently use. torch reaches the object graph through
+    ``Unpickler`` on both formats, so nothing else covers these two — without
+    this test, reverting the rebinding is invisible.
+    """
+    import pickle as stock_pickle
+
+    pytest.importorskip("torch")
+
+    from models.microtubule.segment_mt import _CROSS_PLATFORM_PICKLE
+
+    blob = stock_pickle.dumps(
+        {"out_dir": pathlib.PosixPath("/home/prusek/BIOCEV/results/x")})
+
+    with _posixpath_unavailable():
+        # Control: the stock entry point fails on a Windows-like host.
+        with pytest.raises(Exception):
+            stock_pickle.loads(blob)
+
+        via_loads = _CROSS_PLATFORM_PICKLE.loads(blob)
+        with open(tmp_path / "blob.pkl", "wb") as fh:
+            fh.write(blob)
+        with open(tmp_path / "blob.pkl", "rb") as fh:
+            via_load = _CROSS_PLATFORM_PICKLE.load(fh)
+
+    for got in (via_loads, via_load):
+        assert isinstance(got["out_dir"], pathlib.PurePosixPath)
+        assert str(got["out_dir"]) == "/home/prusek/BIOCEV/results/x"
+
+
+def test_find_class_remaps_the_3_13_module_name():
+    """A 3.13-saved checkpoint records ``pathlib._local``, not ``pathlib``.
+
+    The probe returning False for an absent module is only half the mechanism —
+    without the table key, ``find_class`` never consults the probe at all. This
+    covers the other half, which is the whole point of commit a558b66.
+    """
+    import io
+    import pickle as stock_pickle
+
+    pytest.importorskip("torch")
+
+    from models.microtubule.segment_mt import _CrossPlatformUnpickler
+
+    # Hand-craft a 3.13-style reference without needing a 3.13 interpreter.
+    blob = (b"\x80\x04\x95\x00\x00\x00\x00\x00\x00\x00\x00"
+            b"\x8c\x0epathlib._local\x8c\tPosixPath\x93\x94"
+            b"\x8c\x05/home\x85\x94R\x94.")
+    got = _CrossPlatformUnpickler(io.BytesIO(blob)).load()
+    assert isinstance(got, pathlib.PurePosixPath)
+    assert str(got) == "/home"
+
+    # And the stock unpickler cannot read it on this interpreter at all.
+    with pytest.raises(Exception):
+        stock_pickle.loads(blob)
