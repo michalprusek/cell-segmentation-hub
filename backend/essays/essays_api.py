@@ -96,7 +96,15 @@ def _set_status(job_id: str, out_dir: str, **fields) -> None:
 
 
 def _gpu_free_mib() -> int | None:
-    """Free VRAM in MiB via nvidia-smi, or None if there is no usable GPU."""
+    """Free VRAM in MiB via nvidia-smi, or None if there is no usable GPU.
+
+    A missing ``nvidia-smi`` means a CPU-only host — expected, quiet. An
+    ``nvidia-smi`` that is present but *fails* means this container lost its
+    GPU while running, and every job from here on silently takes the ~30x
+    slower CPU path. That is worth shouting about: it went unnoticed for weeks
+    in production (jobs ran 36 h instead of 1.3 h) precisely because the only
+    signal was a ``device: cpu`` field nobody was watching.
+    """
     if shutil.which("nvidia-smi") is None:
         return None
     try:
@@ -106,13 +114,32 @@ def _gpu_free_mib() -> int | None:
             text=True, timeout=15,
         )
         return int(out.strip().splitlines()[0])
-    except Exception:
+    except Exception as e:
+        print(f"[essays] WARN: nvidia-smi is installed but failed ({e}) — this "
+              "container has lost GPU access; jobs will run on CPU. Recreate it "
+              "so the NVIDIA device nodes are re-applied.",
+              file=sys.stderr, flush=True)
         return None
+
+
+def _degraded_to_cpu(job_id: str) -> str:
+    """Name the job that a broken GPU just pushed onto CPU, and return "cpu".
+
+    Only for the fault case — a host that genuinely has no GPU is not degraded
+    and stays quiet. The job's ``device`` field already tells the *user* it is
+    on CPU; this line tells an *operator* it was not supposed to be.
+    """
+    print(f"[essays] job {job_id}: GPU unreachable, falling back to CPU",
+          file=sys.stderr, flush=True)
+    return "cpu"
 
 
 def _await_gpu(job_id: str, out_dir: str) -> str:
     """Wait until the GPU has room, else fall back to CPU. Returns the device."""
     if _gpu_free_mib() is None:
+        # No nvidia-smi at all is a CPU-only host: expected, not a degradation.
+        if shutil.which("nvidia-smi") is not None:
+            return _degraded_to_cpu(job_id)
         return "cpu"
     need = int(GPU_MIN_FREE_GB * 1024)
     deadline = time.monotonic() + GPU_WAIT_TIMEOUT_S
@@ -120,7 +147,8 @@ def _await_gpu(job_id: str, out_dir: str) -> str:
     while True:
         free = _gpu_free_mib()
         if free is None:
-            return "cpu"
+            # It answered a moment ago, so this is the GPU going away mid-wait.
+            return _degraded_to_cpu(job_id)
         if free >= need:
             return "cuda"
         if time.monotonic() >= deadline:

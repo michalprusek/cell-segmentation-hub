@@ -13,9 +13,13 @@ inside `segment_microtubules()`. Safe to import on any host.
 """
 from __future__ import annotations
 
+import functools
 import logging
 import os
+import pathlib
+import pickle
 import sys
+import types
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -73,6 +77,76 @@ def _normalize(img: np.ndarray) -> np.ndarray:
     return np.clip((img - lo) / max(hi - lo, 1e-9), 0.0, 1.0)
 
 
+@functools.lru_cache(maxsize=None)
+def _path_class_is_native(name: str) -> bool:
+    """True when ``pathlib.<name>`` can actually be instantiated on this host.
+
+    ``PosixPath`` refuses to construct on Windows and ``WindowsPath`` refuses on
+    POSIX. Probing the constructor keeps this version-agnostic: the exception
+    type moved from ``NotImplementedError`` (<=3.12) to
+    ``pathlib.UnsupportedOperation`` (3.13+), and the private ``_flavour`` /
+    ``parser`` attribute it derives from was renamed over the same releases.
+    """
+    try:
+        getattr(pathlib, name)(".")
+        return True
+    except Exception:
+        return False
+
+
+class _CrossPlatformUnpickler(pickle.Unpickler):
+    """Unpickler that tolerates paths pickled on a foreign operating system.
+
+    The v7 checkpoint stores the training run's argparse values, two of which
+    are the trainer's own ``pathlib.PosixPath`` directories::
+
+        args['data_dir'] = PosixPath('/home/prusek/BIOCEV/datasets/...')
+        args['out_dir']  = PosixPath('/home/prusek/BIOCEV/results/...')
+
+    Inference never reads them — only ``args['backbone']`` and ``model_state``
+    matter — but unpickling calls ``PosixPath.__new__``, which rejects a
+    flavour the host cannot support. On Windows that kills the load before it
+    reaches a single weight ("cannot instantiate 'PosixPath' on your system"),
+    which is why the pipeline ran on Linux/macOS but not Windows.
+
+    Remapping the concrete classes to their ``Pure`` counterparts keeps the
+    values intact and inspectable everywhere; ``PurePosixPath`` constructs on
+    any OS because it does pure lexical path handling with no filesystem
+    access — which is all these two values were ever going to get.
+    """
+
+    _PURE_EQUIVALENT = {
+        ("pathlib", "PosixPath"): pathlib.PurePosixPath,
+        ("pathlib", "WindowsPath"): pathlib.PureWindowsPath,
+    }
+
+    def find_class(self, module: str, name: str):
+        pure = self._PURE_EQUIVALENT.get((module, name))
+        if pure is not None and not _path_class_is_native(name):
+            return pure
+        return super().find_class(module, name)
+
+
+def _build_cross_platform_pickle_module() -> types.ModuleType:
+    """A drop-in ``pickle`` module whose unpickler tolerates foreign paths.
+
+    Built by copying ``pickle``'s whole surface rather than hand-listing the
+    members ``torch.load`` is documented to use (``Unpickler`` for the zip
+    format, ``load`` for the legacy one). Torch also reads ``__name__`` — its
+    dill-version check — and a future release may reach for more, so a partial
+    stand-in is a latent break on the next torch bump.
+    """
+    shim = types.ModuleType("segment_mt_cross_platform_pickle")
+    shim.__dict__.update(pickle.__dict__)
+    shim.__name__ = "segment_mt_cross_platform_pickle"
+    shim.Unpickler = _CrossPlatformUnpickler
+    shim.load = lambda f, **kw: _CrossPlatformUnpickler(f, **kw).load()
+    return shim
+
+
+_CROSS_PLATFORM_PICKLE = _build_cross_platform_pickle_module()
+
+
 def load_v7_model(ckpt_path: Path, device: str = "cuda"):
     """Load v7 model checkpoint. Requires synth_irm on sys.path.
 
@@ -104,7 +178,16 @@ def load_v7_model(ckpt_path: Path, device: str = "cuda"):
             "Set ALLOW_UNSAFE_WEIGHTS=0 to refuse this fallback.",
             e1,
         )
-        ckpt = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+        # ``pickle_module`` is only accepted alongside ``weights_only=False``
+        # (torch refuses to mix a custom unpickler into the safe path), which is
+        # also the only branch that reaches the ``args`` paths — see
+        # :class:`_CrossPlatformUnpickler` for why they need remapping.
+        ckpt = torch.load(
+            str(ckpt_path),
+            map_location="cpu",
+            pickle_module=_CROSS_PLATFORM_PICKLE,
+            weights_only=False,
+        )
 
     backbone = ckpt["args"].get("backbone", "facebook/dinov3-vitl16-pretrain-lvd1689m")
     model = FilamentInstanceModelV4(

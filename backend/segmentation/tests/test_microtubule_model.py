@@ -16,6 +16,7 @@ and the kymograph endpoint all rely on.
 from __future__ import annotations
 
 import base64
+import contextlib
 import sys
 from pathlib import Path
 
@@ -217,3 +218,140 @@ def test_rdp_short_polyline_passthrough(monkeypatch):
     result = mt.predict(np.zeros((16, 16), dtype=np.float32), seed_threshold=0.5)
     assert result["centerlines_rc"][0].shape == short_cl.shape
     assert result["embedding_samples"][0].shape[0] == short_cl.shape[0]
+
+
+# --- Cross-platform checkpoint loading ------------------------------------
+#
+# The v7 checkpoint embeds the training run's argparse values, two of which are
+# the trainer's own ``pathlib.PosixPath`` directories. Unpickling those on
+# Windows raises before a single weight is read, so the pipeline ran on
+# Linux/macOS but not Windows (reported from the field, 2026-07-29). The loader
+# hands ``torch.load`` a pickle module that remaps POSIX-only path classes to
+# their ``Pure`` equivalents; these tests pin that behaviour down.
+
+
+@contextlib.contextmanager
+def _posixpath_unavailable():
+    """Make ``pathlib.PosixPath`` refuse to construct, as it does on Windows.
+
+    Scoped to a ``with`` block rather than applied as a fixture: pytest builds
+    ``Path`` objects of its own while collecting and while formatting failures,
+    so a patch left in place for a whole test crashes the runner instead of the
+    code under test.
+
+    Both constructor entry points are blocked because they differ by version —
+    ``__new__`` is the one a direct ``PosixPath(...)`` call (and therefore
+    unpickling) goes through, while ``_from_parts`` is the internal path on
+    Python <=3.11. Subclassing the real class keeps every other attribute
+    intact, so a stray instance can't produce a confusing unrelated error.
+    """
+    import pathlib as pathlib_mod
+
+    from models.microtubule import segment_mt
+
+    message = "cannot instantiate 'PosixPath' on your system"
+
+    class _WindowsHostPosixPath(pathlib_mod.PosixPath):
+        def __new__(cls, *_args, **_kwargs):
+            raise NotImplementedError(message)
+
+        @classmethod
+        def _from_parts(cls, *_args, **_kwargs):
+            raise NotImplementedError(message)
+
+    real = pathlib_mod.PosixPath
+    pathlib_mod.PosixPath = _WindowsHostPosixPath
+    segment_mt._path_class_is_native.cache_clear()
+    try:
+        yield
+    finally:
+        pathlib_mod.PosixPath = real
+        segment_mt._path_class_is_native.cache_clear()
+
+
+def _v7_shaped_checkpoint(torch):
+    """A miniature stand-in for microtubule_v7.pt's pickle structure."""
+    return {
+        "epoch": 9,
+        "args": {
+            "backbone": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+            "data_dir": Path("/home/prusek/BIOCEV/datasets/microtubules/synth_train_v2"),
+            "out_dir": Path("/home/prusek/BIOCEV/results/training_v7_dinov3l_v5arch"),
+        },
+        "model_state": {"head.weight": torch.arange(4.0).reshape(2, 2)},
+    }
+
+
+def test_stock_torch_load_fails_on_windows_like_host(tmp_path):
+    """Control: without the remap the checkpoint is unloadable on Windows.
+
+    If this ever stops raising, the fix below is no longer testing anything —
+    the reproduction has drifted away from the reported failure.
+    """
+    torch = pytest.importorskip("torch")
+
+    ckpt_path = tmp_path / "ckpt_ep09.pt"
+    torch.save(_v7_shaped_checkpoint(torch), ckpt_path)  # written by a POSIX host
+
+    with _posixpath_unavailable():
+        with pytest.raises(Exception) as excinfo:
+            torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+        captured = str(excinfo.value)
+
+    assert "cannot instantiate 'PosixPath' on your system" in captured
+
+
+def test_checkpoint_loads_on_windows_like_host(tmp_path):
+    """The loader's pickle module makes that same checkpoint load anyway.
+
+    Both the inference-relevant payload (``backbone``, ``model_state``) and the
+    inert training directories must survive; the latter come back as
+    ``PurePosixPath``, which stringifies identically.
+    """
+    torch = pytest.importorskip("torch")
+
+    from models.microtubule.segment_mt import _CROSS_PLATFORM_PICKLE
+
+    ckpt_path = tmp_path / "ckpt_ep09.pt"
+    torch.save(_v7_shaped_checkpoint(torch), ckpt_path)
+
+    with _posixpath_unavailable():
+        ckpt = torch.load(
+            str(ckpt_path),
+            map_location="cpu",
+            pickle_module=_CROSS_PLATFORM_PICKLE,
+            weights_only=False,
+        )
+
+    assert ckpt["args"]["backbone"] == "facebook/dinov3-vitl16-pretrain-lvd1689m"
+    assert torch.equal(
+        ckpt["model_state"]["head.weight"], torch.arange(4.0).reshape(2, 2)
+    )
+    assert (
+        str(ckpt["args"]["data_dir"])
+        == "/home/prusek/BIOCEV/datasets/microtubules/synth_train_v2"
+    )
+
+
+def test_native_posix_paths_are_left_alone(tmp_path):
+    """On a POSIX host nothing is remapped — production behaviour is unchanged.
+
+    The remap is conditional on the concrete class being unusable here, so the
+    Linux ML service keeps getting real ``PosixPath`` objects exactly as before.
+    """
+    import pathlib as pathlib_mod
+
+    torch = pytest.importorskip("torch")
+
+    from models.microtubule.segment_mt import _CROSS_PLATFORM_PICKLE
+
+    ckpt_path = tmp_path / "ckpt_ep09.pt"
+    torch.save(_v7_shaped_checkpoint(torch), ckpt_path)
+
+    ckpt = torch.load(
+        str(ckpt_path),
+        map_location="cpu",
+        pickle_module=_CROSS_PLATFORM_PICKLE,
+        weights_only=False,
+    )
+    assert type(ckpt["args"]["data_dir"]) is pathlib_mod.PosixPath
