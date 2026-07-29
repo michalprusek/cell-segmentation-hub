@@ -13,7 +13,6 @@ inside `segment_microtubules()`. Safe to import on any host.
 """
 from __future__ import annotations
 
-import functools
 import logging
 import os
 import pathlib
@@ -77,15 +76,21 @@ def _normalize(img: np.ndarray) -> np.ndarray:
     return np.clip((img - lo) / max(hi - lo, 1e-9), 0.0, 1.0)
 
 
-@functools.lru_cache(maxsize=None)
 def _path_class_is_native(name: str) -> bool:
     """True when ``pathlib.<name>`` can actually be instantiated on this host.
 
     ``PosixPath`` refuses to construct on Windows and ``WindowsPath`` refuses on
-    POSIX. Probing the constructor keeps this version-agnostic: the exception
-    type moved from ``NotImplementedError`` (<=3.12) to
-    ``pathlib.UnsupportedOperation`` (3.13+), and the private ``_flavour`` /
-    ``parser`` attribute it derives from was renamed over the same releases.
+    POSIX. Probing the constructor keeps this version-agnostic, and it has
+    needed to be: the check moved three times. On 3.10-3.11 it lived in
+    ``Path.__new__`` and tested ``self._flavour.is_supported``; on 3.12 it
+    became a class-body ``os.name`` guard raising ``NotImplementedError`` with
+    no attribute behind it; on 3.13 the same guard raises
+    ``pathlib.UnsupportedOperation``. Calling the constructor is the one
+    formulation that survives all of them.
+
+    Deliberately uncached — the probe costs ~1.3 us and runs about twice per
+    process, so a memo would buy nothing while forcing every test that patches
+    ``pathlib`` to remember to invalidate it.
     """
     try:
         getattr(pathlib, name)(".")
@@ -105,9 +110,11 @@ class _CrossPlatformUnpickler(pickle.Unpickler):
 
     Inference never reads them — only ``args['backbone']`` and ``model_state``
     matter — but unpickling calls ``PosixPath.__new__``, which rejects a
-    flavour the host cannot support. On Windows that kills the load before it
-    reaches a single weight ("cannot instantiate 'PosixPath' on your system"),
-    which is why the pipeline ran on Linux/macOS but not Windows.
+    flavour the host cannot support. ``args`` is serialised *after* the weights,
+    so on Windows all 493 tensors are materialised and the load then dies on the
+    trailing dict ("cannot instantiate 'PosixPath' on your system") and returns
+    nothing. That is why the pipeline ran on Linux/macOS but not Windows — and
+    why the failure looks expensive rather than an early abort.
 
     Remapping the concrete classes to their ``Pure`` counterparts keeps the
     values intact and inspectable everywhere; ``PurePosixPath`` constructs on
@@ -115,9 +122,15 @@ class _CrossPlatformUnpickler(pickle.Unpickler):
     access — which is all these two values were ever going to get.
     """
 
+    # Keyed on the module name recorded *at save time*, not the one this
+    # interpreter would use. The shipped v7 pickle records plain ``pathlib``;
+    # Python 3.13+ records ``pathlib._local``, so a checkpoint re-trained on
+    # 3.13 would need that key too or it would silently miss the remap.
     _PURE_EQUIVALENT = {
         ("pathlib", "PosixPath"): pathlib.PurePosixPath,
         ("pathlib", "WindowsPath"): pathlib.PureWindowsPath,
+        ("pathlib._local", "PosixPath"): pathlib.PurePosixPath,
+        ("pathlib._local", "WindowsPath"): pathlib.PureWindowsPath,
     }
 
     def find_class(self, module: str, name: str):
@@ -131,10 +144,12 @@ def _build_cross_platform_pickle_module() -> types.ModuleType:
     """A drop-in ``pickle`` module whose unpickler tolerates foreign paths.
 
     Built by copying ``pickle``'s whole surface rather than hand-listing the
-    members ``torch.load`` is documented to use (``Unpickler`` for the zip
-    format, ``load`` for the legacy one). Torch also reads ``__name__`` — its
-    dill-version check — and a future release may reach for more, so a partial
-    stand-in is a latent break on the next torch bump.
+    members ``torch.load`` uses (``Unpickler`` on both the zip and legacy
+    paths, plus ``load`` on the legacy one). Torch also reads ``__name__`` for
+    its dill-version check and ``__version__`` inside that branch, and a future
+    release may reach for more, so a partial stand-in is a latent break on the
+    next torch bump — an earlier draft using ``SimpleNamespace`` broke on
+    exactly that.
     """
     shim = types.ModuleType("segment_mt_cross_platform_pickle")
     shim.__dict__.update(pickle.__dict__)
@@ -151,10 +166,14 @@ def load_v7_model(ckpt_path: Path, device: str = "cuda"):
     """Load v7 model checkpoint. Requires synth_irm on sys.path.
 
     Follows the same safe-load policy as WoundModel and SegFormerModel: try
-    ``weights_only=True`` first (mitigates CVE-2025-32434). The v7 checkpoint
-    embeds custom dataclass instances (``ckpt["args"]``) that pickle cannot
-    reconstruct under ``weights_only=True``, so the fallback is almost always
-    needed. The fallback is enabled by default (``ALLOW_UNSAFE_WEIGHTS``
+    ``weights_only=True`` first (mitigates CVE-2025-32434). For this checkpoint
+    the safe path *always* fails, and for the same two dead paths as the
+    Windows bug: ``ckpt["args"]`` holds ``pathlib.PosixPath`` values, which the
+    safe unpickler refuses as a disallowed global ("Unsupported global: GLOBAL
+    pathlib.PosixPath"). ``args`` is a plain dict — there are no custom classes
+    in this pickle. Stripping those two values from the checkpoint would let it
+    load under ``weights_only=True`` on every platform and make this whole
+    fallback, and the shim below, unnecessary. The fallback is enabled by default (``ALLOW_UNSAFE_WEIGHTS``
     defaults to ``"1"`` in the ML Dockerfile) because this is our own shipped
     checkpoint; set ``ALLOW_UNSAFE_WEIGHTS=0`` to refuse the fallback.
     """

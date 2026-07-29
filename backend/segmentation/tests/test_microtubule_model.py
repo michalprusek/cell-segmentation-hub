@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import pathlib
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -224,8 +226,10 @@ def test_rdp_short_polyline_passthrough(monkeypatch):
 #
 # The v7 checkpoint embeds the training run's argparse values, two of which are
 # the trainer's own ``pathlib.PosixPath`` directories. Unpickling those on
-# Windows raises before a single weight is read, so the pipeline ran on
-# Linux/macOS but not Windows (reported from the field, 2026-07-29). The loader
+# Windows raises only at the very end of the unpickle — every weight tensor is
+# materialised first, then the trailing ``args`` dict kills the load and nothing
+# is returned. That is why the pipeline ran on Linux/macOS but not Windows
+# (reported from the field, 2026-07-29). The loader
 # hands ``torch.load`` a pickle module that remaps POSIX-only path classes to
 # their ``Pure`` equivalents; these tests pin that behaviour down.
 
@@ -239,15 +243,13 @@ def _posixpath_unavailable():
     so a patch left in place for a whole test crashes the runner instead of the
     code under test.
 
-    Both constructor entry points are blocked because they differ by version —
-    ``__new__`` is the one a direct ``PosixPath(...)`` call (and therefore
-    unpickling) goes through, while ``_from_parts`` is the internal path on
-    Python <=3.11. Subclassing the real class keeps every other attribute
-    intact, so a stray instance can't produce a confusing unrelated error.
+    Blocking ``__new__`` is sufficient on every version — a direct
+    ``PosixPath(...)`` call, which is what unpickling does, always enters there
+    (``_from_parts`` on Python <=3.11 sits *downstream* of it, not beside it).
+    Subclassing the real class keeps every other attribute intact, so a stray
+    instance can't produce a confusing unrelated error.
     """
     import pathlib as pathlib_mod
-
-    from models.microtubule import segment_mt
 
     message = "cannot instantiate 'PosixPath' on your system"
 
@@ -255,18 +257,12 @@ def _posixpath_unavailable():
         def __new__(cls, *_args, **_kwargs):
             raise NotImplementedError(message)
 
-        @classmethod
-        def _from_parts(cls, *_args, **_kwargs):
-            raise NotImplementedError(message)
-
     real = pathlib_mod.PosixPath
     pathlib_mod.PosixPath = _WindowsHostPosixPath
-    segment_mt._path_class_is_native.cache_clear()
     try:
         yield
     finally:
         pathlib_mod.PosixPath = real
-        segment_mt._path_class_is_native.cache_clear()
 
 
 def _v7_shaped_checkpoint(torch):
@@ -275,8 +271,12 @@ def _v7_shaped_checkpoint(torch):
         "epoch": 9,
         "args": {
             "backbone": "facebook/dinov3-vitl16-pretrain-lvd1689m",
-            "data_dir": Path("/home/prusek/BIOCEV/datasets/microtubules/synth_train_v2"),
-            "out_dir": Path("/home/prusek/BIOCEV/results/training_v7_dinov3l_v5arch"),
+            # Explicitly PosixPath, not Path: on a Windows host Path() yields a
+            # WindowsPath and the reproduction would silently invert.
+            "data_dir": pathlib.PosixPath(
+                "/home/prusek/BIOCEV/datasets/microtubules/synth_train_v2"),
+            "out_dir": pathlib.PosixPath(
+                "/home/prusek/BIOCEV/results/training_v7_dinov3l_v5arch"),
         },
         "model_state": {"head.weight": torch.arange(4.0).reshape(2, 2)},
     }
@@ -355,3 +355,53 @@ def test_native_posix_paths_are_left_alone(tmp_path):
         weights_only=False,
     )
     assert type(ckpt["args"]["data_dir"]) is pathlib_mod.PosixPath
+
+
+def test_load_v7_model_survives_windows_like_host(tmp_path, monkeypatch):
+    """``load_v7_model`` itself works on a Windows-like host — not just the shim.
+
+    This is the test that actually guards the fix. The three above drive
+    ``torch.load`` directly, so all of them stay green if someone tidies the
+    ``pickle_module=`` argument out of ``load_v7_model`` — the helper stays
+    proven while the wiring silently regresses. This one goes red.
+
+    The real network is a DINOv3-L (a gated 1.1 GB download), so
+    ``FilamentInstanceModelV4`` is stubbed; the assertions are about what the
+    loader pulled out of the checkpoint, which is the part under test.
+    """
+    torch = pytest.importorskip("torch")
+
+    from models.microtubule import segment_mt
+
+    seen: dict = {}
+
+    class _StubNet:
+        def __init__(self, **kwargs):
+            seen["init"] = kwargs
+
+        def load_state_dict(self, state):
+            seen["state_keys"] = sorted(state)
+
+        def to(self, device):
+            seen["device"] = device
+            return self
+
+        def eval(self):
+            return self
+
+    for name in ("synth_irm", "synth_irm.training"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    stub = types.ModuleType("synth_irm.training.model_v4")
+    stub.FilamentInstanceModelV4 = _StubNet
+    monkeypatch.setitem(sys.modules, "synth_irm.training.model_v4", stub)
+
+    ckpt_path = tmp_path / "ckpt_ep09.pt"
+    torch.save(_v7_shaped_checkpoint(torch), ckpt_path)
+
+    with _posixpath_unavailable():
+        model = segment_mt.load_v7_model(ckpt_path, device="cpu")
+
+    assert model is not None
+    assert seen["init"]["backbone_name"] == "facebook/dinov3-vitl16-pretrain-lvd1689m"
+    assert seen["state_keys"] == ["head.weight"]
+    assert seen["device"] == "cpu"

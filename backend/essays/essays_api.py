@@ -21,6 +21,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -51,6 +52,13 @@ _BOOL_FLAGS = {"noOverlays": "--no-overlays", "noJson": "--no-json"}
 
 _INFO_TOTAL = re.compile(r"\[info\]\s+(\d+)\s+well file")
 _OK_LINE = re.compile(r"\[ok\]\s+\((\d+)/(\d+)\)\s+(\S+):\s+(\d+)\s+MT")
+# evaluate.py resolves the device itself and will silently downgrade a
+# `--device cuda` run to CPU when torch cannot init CUDA (nvidia-smi can
+# succeed while /dev/nvidia-uvm is missing, so our own probe is not enough).
+# Without this the job would keep reporting `device: cuda` while running on
+# CPU — worse than the bug this file exists to surface, because the field is
+# then actively wrong rather than merely unwatched.
+_DEVICE_LINE = re.compile(r"\[info\]\s+device=(\S+)")
 
 app = FastAPI(title="Automated Essays Worker", version="1.0")
 
@@ -95,70 +103,94 @@ def _set_status(job_id: str, out_dir: str, **fields) -> None:
               file=sys.stderr, flush=True)
 
 
-def _gpu_free_mib() -> int | None:
-    """Free VRAM in MiB via nvidia-smi, or None if there is no usable GPU.
+class GpuProbe(NamedTuple):
+    """Outcome of one nvidia-smi query.
 
-    A missing ``nvidia-smi`` means a CPU-only host — expected, quiet. An
-    ``nvidia-smi`` that is present but *fails* means this container lost its
-    GPU while running, and every job from here on silently takes the ~30x
-    slower CPU path. That is worth shouting about: it went unnoticed for weeks
-    in production (jobs ran 36 h instead of 1.3 h) precisely because the only
-    signal was a ``device: cpu`` field nobody was watching.
+    ``degraded`` is the whole point of this type. A CPU run because the host
+    has no GPU is normal; a CPU run because a GPU-declared container lost its
+    card is the incident that hid for weeks behind a ``device: cpu`` field
+    nobody watched — one 180-well job took 36 h on CPU on 2026-07-27 where the
+    same-sized job had taken 1 h 20 m on GPU on 07-08. Returning a bare
+    ``int | None`` collapses the two, and every caller then has to guess which
+    one it got — so the probe reports it instead.
     """
+
+    free_mib: int | None
+    degraded: bool
+
+
+def _gpu_free_mib() -> GpuProbe:
+    """Query free VRAM, distinguishing "no GPU here" from "GPU went away"."""
     if shutil.which("nvidia-smi") is None:
-        return None
+        # In THIS container that is already a fault: nvidia-smi is not in the
+        # image, the nvidia runtime hook injects it along with the driver
+        # userspace. Its absence means the hook did not run, even though the
+        # service is declared `runtime: nvidia`. Elsewhere (a plain CPU host)
+        # the env var is unset and we stay quiet.
+        if os.environ.get("NVIDIA_VISIBLE_DEVICES") not in (None, "", "void"):
+            print("[essays] WARN: NVIDIA_VISIBLE_DEVICES is set but nvidia-smi "
+                  "is absent — the nvidia runtime hook did not inject the "
+                  "driver userspace. Jobs will run on CPU. Recreate the "
+                  "container.", file=sys.stderr, flush=True)
+            return GpuProbe(None, degraded=True)
+        return GpuProbe(None, degraded=False)
     try:
         out = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=memory.free",
              "--format=csv,noheader,nounits"],
             text=True, timeout=15,
         )
-        return int(out.strip().splitlines()[0])
+        return GpuProbe(int(out.strip().splitlines()[0]), degraded=False)
     except Exception as e:
-        print(f"[essays] WARN: nvidia-smi is installed but failed ({e}) — this "
-              "container has lost GPU access; jobs will run on CPU. Recreate it "
-              "so the NVIDIA device nodes are re-applied.",
-              file=sys.stderr, flush=True)
-        return None
-
-
-def _degraded_to_cpu(job_id: str) -> str:
-    """Name the job that a broken GPU just pushed onto CPU, and return "cpu".
-
-    Only for the fault case — a host that genuinely has no GPU is not degraded
-    and stays quiet. The job's ``device`` field already tells the *user* it is
-    on CPU; this line tells an *operator* it was not supposed to be.
-    """
-    print(f"[essays] job {job_id}: GPU unreachable, falling back to CPU",
-          file=sys.stderr, flush=True)
-    return "cpu"
+        # Usually a stripped device allowlist, but this also catches the 15 s
+        # TimeoutExpired when the shared card is saturated — so name the
+        # symptom, not a diagnosis the exception does not support.
+        print(f"[essays] WARN: nvidia-smi is unusable ({e}) — jobs will run on "
+              "CPU. Most often the container lost its GPU device permissions "
+              "(recreate it); under heavy load it can also be the query timing "
+              "out.", file=sys.stderr, flush=True)
+        return GpuProbe(None, degraded=True)
 
 
 def _await_gpu(job_id: str, out_dir: str) -> str:
-    """Wait until the GPU has room, else fall back to CPU. Returns the device."""
-    if _gpu_free_mib() is None:
-        # No nvidia-smi at all is a CPU-only host: expected, not a degradation.
-        if shutil.which("nvidia-smi") is not None:
-            return _degraded_to_cpu(job_id)
+    """Wait until the GPU has room, else fall back to CPU. Returns the device.
+
+    Every CPU exit that was not the operator's intent gets a log line. The
+    timeout one matters most in practice: the card is shared with the ml
+    service and Maptimize, so "GPU healthy but never free enough" is a far more
+    ordinary way to end up on CPU than the driver disappearing.
+    """
+    probe = _gpu_free_mib()
+    if probe.free_mib is None:
+        if probe.degraded:
+            print(f"[essays] job {job_id}: GPU unreachable, running on CPU",
+                  file=sys.stderr, flush=True)
         return "cpu"
     need = int(GPU_MIN_FREE_GB * 1024)
     deadline = time.monotonic() + GPU_WAIT_TIMEOUT_S
     waited = False
+    free = probe.free_mib
     while True:
-        free = _gpu_free_mib()
-        if free is None:
-            # It answered a moment ago, so this is the GPU going away mid-wait.
-            return _degraded_to_cpu(job_id)
         if free >= need:
             return "cuda"
         if time.monotonic() >= deadline:
             # Never block a job forever — a slow CPU run beats a stuck queue.
+            print(f"[essays] job {job_id}: GPU still below {need} MiB free "
+                  f"after {GPU_WAIT_TIMEOUT_S:.0f}s (last saw {free} MiB) — "
+                  "running on CPU, which is far slower. Check for a stuck CUDA "
+                  "process if this repeats.", file=sys.stderr, flush=True)
             return "cpu"
         if not waited:
             waited = True
             _set_status(job_id, out_dir, state="waiting_gpu",
                         message=f"waiting for GPU ({free} MiB free, need {need})")
         time.sleep(GPU_POLL_S)
+        probe = _gpu_free_mib()
+        if probe.free_mib is None:
+            print(f"[essays] job {job_id}: GPU vanished mid-wait, running on "
+                  "CPU", file=sys.stderr, flush=True)
+            return "cpu"
+        free = probe.free_mib
 
 
 def _build_cmd(req: ProcessRequest, device: str) -> list[str]:
@@ -208,6 +240,15 @@ def _run_job(req: ProcessRequest) -> None:
         )
         assert proc.stdout is not None
         for line in proc.stdout:
+            m = _DEVICE_LINE.search(line)
+            if m and m.group(1) != device:
+                print(f"[essays] job {job_id}: module downgraded device "
+                      f"{device} -> {m.group(1)}; our nvidia-smi probe said the "
+                      "GPU was usable but torch could not initialise CUDA",
+                      file=sys.stderr, flush=True)
+                device = m.group(1)
+                _set_status(job_id, out_dir, device=device)
+                continue
             m = _INFO_TOTAL.search(line)
             if m:
                 wells_total = int(m.group(1))
