@@ -13,6 +13,7 @@ inside `segment_microtubules()`. Safe to import on any host.
 """
 from __future__ import annotations
 
+import io
 import logging
 import os
 import pathlib
@@ -76,8 +77,8 @@ def _normalize(img: np.ndarray) -> np.ndarray:
     return np.clip((img - lo) / max(hi - lo, 1e-9), 0.0, 1.0)
 
 
-def _path_class_is_native(name: str) -> bool:
-    """True when ``pathlib.<name>`` can actually be instantiated on this host.
+def _path_class_is_native(module: str, name: str) -> bool:
+    """True when ``<module>.<name>`` can actually be instantiated on this host.
 
     ``PosixPath`` refuses to construct on Windows and ``WindowsPath`` refuses on
     POSIX. Probing the constructor keeps this version-agnostic, and it has
@@ -91,9 +92,14 @@ def _path_class_is_native(name: str) -> bool:
     Deliberately uncached — the probe costs ~1.3 us and runs about twice per
     process, so a memo would buy nothing while forcing every test that patches
     ``pathlib`` to remember to invalidate it.
+
+    A missing attribute is a bug in the caller's table, not a fact about the
+    host, so it propagates instead of being flattened into ``False`` (which
+    would silently remap on a platform where the class works fine).
     """
+    cls = getattr(sys.modules[module], name)
     try:
-        getattr(pathlib, name)(".")
+        cls(".")
         return True
     except Exception:
         return False
@@ -135,7 +141,11 @@ class _CrossPlatformUnpickler(pickle.Unpickler):
 
     def find_class(self, module: str, name: str):
         pure = self._PURE_EQUIVALENT.get((module, name))
-        if pure is not None and not _path_class_is_native(name):
+        if pure is not None and not _path_class_is_native(module, name):
+            # Fires at most twice per load, and never on Linux. If it ever
+            # shows up in a server log, that itself is the interesting fact.
+            logger.info("remapping %s.%s -> %s (not constructible here)",
+                        module, name, pure.__name__)
             return pure
         return super().find_class(module, name)
 
@@ -154,8 +164,24 @@ def _build_cross_platform_pickle_module() -> types.ModuleType:
     shim = types.ModuleType("segment_mt_cross_platform_pickle")
     shim.__dict__.update(pickle.__dict__)
     shim.__name__ = "segment_mt_cross_platform_pickle"
+    # Copying the dict also copies pickle's __spec__/__file__, which would make
+    # a traceback or debugger claim this IS pickle. Drop the identity.
+    shim.__spec__ = None
+    shim.__file__ = None
     shim.Unpickler = _CrossPlatformUnpickler
-    shim.load = lambda f, **kw: _CrossPlatformUnpickler(f, **kw).load()
+
+    # ``load``/``loads`` come across from the copy still bound to the STOCK
+    # Unpickler, which would quietly reintroduce the bug on any entry point
+    # torch does not currently use. Rebind both. Parameter names match
+    # pickle's so a keyword call keeps working.
+    def _load(file, **kwargs):
+        return _CrossPlatformUnpickler(file, **kwargs).load()
+
+    def _loads(data, **kwargs):
+        return _CrossPlatformUnpickler(io.BytesIO(data), **kwargs).load()
+
+    shim.load = _load
+    shim.loads = _loads
     return shim
 
 

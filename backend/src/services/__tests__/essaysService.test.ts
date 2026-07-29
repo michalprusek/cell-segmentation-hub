@@ -46,7 +46,7 @@ vi.mock('../export/exportFileOperations', () => ({
   sanitizeFilename: (s: string) => s.replace(/[^A-Za-z0-9_.-]/g, '_'),
 }));
 
-import { sanitizeNd2Name, EssaysService } from '../essaysService';
+import { sanitizeNd2Name, EssaysService, coerceDevice } from '../essaysService';
 
 const USER = 'user-1';
 const JOB = 'job-1';
@@ -153,5 +153,36 @@ describe('EssaysService.resolveDownload (path-traversal + ownership guard)', () 
     );
     // sanitized (no slash/space) and suffixed
     expect(dl!.downloadName).toBe('My_Run_2026_results.zip');
+  });
+});
+
+describe('coerceDevice (worker device report -> UI domain)', () => {
+  it('passes through the two devices the worker can actually run on', () => {
+    expect(coerceDevice('cuda', false)).toBe('cuda');
+    expect(coerceDevice('cpu', false)).toBe('cpu');
+  });
+
+  it('marks a CPU run degraded so the UI can distinguish it from a CPU-only host', () => {
+    // The whole point: a bare "CPU" badge could not tell "this machine has no
+    // GPU" from "the GPU broke and your job is 20x slower".
+    expect(coerceDevice('cpu', true)).toBe('cpu-degraded');
+  });
+
+  it('never marks cuda degraded — that combination is meaningless', () => {
+    expect(coerceDevice('cuda', true)).toBe('cuda');
+  });
+
+  it('rejects anything outside the domain so junk cannot reach the DB or toUpperCase()', () => {
+    // status.json is parsed with an unchecked cast, so this is the only guard.
+    expect(coerceDevice('gpu', false)).toBeUndefined();
+    expect(coerceDevice('cpu-degraded', false)).toBeUndefined();
+    expect(coerceDevice(undefined, false)).toBeUndefined();
+    expect(coerceDevice(null, true)).toBeUndefined();
+    expect(coerceDevice(42, false)).toBeUndefined();
+  });
+
+  it('treats a non-boolean degraded flag as not degraded', () => {
+    expect(coerceDevice('cpu', 'yes')).toBe('cpu');
+    expect(coerceDevice('cpu', undefined)).toBe('cpu');
   });
 });

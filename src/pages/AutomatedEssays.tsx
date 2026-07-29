@@ -203,7 +203,21 @@ const AutomatedEssays: React.FC = () => {
                           {t('automatedEssays.mtCount', { count: job.mtCount })}
                         </>
                       )}
-                      {job.device && <> · {job.device.toUpperCase()}</>}
+                      {job.device && (
+                        <>
+                          {' · '}
+                          {job.device === 'cpu-degraded' ? (
+                            <span
+                              className="text-amber-600 dark:text-amber-500"
+                              title={t('automatedEssays.deviceDegradedHint')}
+                            >
+                              {t('automatedEssays.deviceDegraded')}
+                            </span>
+                          ) : (
+                            job.device.toUpperCase()
+                          )}
+                        </>
+                      )}
                     </div>
                     {(job.status === 'running' || job.status === 'queued') && (
                       <Progress value={job.progress} className="mt-2" />

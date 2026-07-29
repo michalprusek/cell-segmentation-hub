@@ -2377,6 +2377,9 @@ export default {
     noRuns: 'Zatím žádné úlohy. Začněte nahráním složky.',
     fileCount: '{{count}} souborů',
     mtCount: '{{count}} mikrotubulů',
+    deviceDegraded: 'CPU (GPU nedostupné)',
+    deviceDegradedHint:
+      'Tento běh měl použít GPU, ale nepodařilo se k němu přistoupit, takže běžel na CPU a trval výrazně déle. Nahlaste to prosím.',
     download: 'Stáhnout',
     delete: 'Smazat',
     deleteFailed: 'Úlohu se nepodařilo smazat',

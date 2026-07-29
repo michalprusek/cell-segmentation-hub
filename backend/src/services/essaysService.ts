@@ -45,6 +45,7 @@ interface WorkerStatus {
   positionsDone?: number;
   mtCount?: number;
   device?: string;
+  deviceDegraded?: boolean;
   error?: string | null;
 }
 
@@ -53,6 +54,29 @@ const exportDir = (): string => path.resolve(process.env.EXPORT_DIR || './export
 /** Coerce a worker-reported progress into the 0-100 invariant. */
 const clampProgress = (n: number): number =>
   Math.min(100, Math.max(0, Math.round(Number.isFinite(n) ? n : 0)));
+
+/**
+ * Coerce the worker's device report into the domain the UI knows how to render.
+ *
+ * `readWorkerStatus` parses status.json with an unchecked cast, so everything
+ * downstream — the DB column and `job.device.toUpperCase()` in the UI — trusts
+ * whatever the worker wrote. `progress` already gets clamped on this boundary;
+ * `device` got nothing.
+ *
+ * `cpu-degraded` is not a device the worker ever runs on. It is `cpu` plus the
+ * worker's `deviceDegraded` flag, folded into the existing free-form column so
+ * the UI can tell "this host has no GPU" (nothing to report) from "the GPU
+ * broke and your job is 20x slower" (tell an admin) — the two the bare `CPU`
+ * badge could not distinguish. Folding avoids a migration for a display-only
+ * distinction.
+ */
+export const coerceDevice = (
+  device: unknown,
+  degraded: unknown
+): 'cuda' | 'cpu' | 'cpu-degraded' | undefined => {
+  if (device !== 'cuda' && device !== 'cpu') return undefined;
+  return device === 'cpu' && degraded === true ? 'cpu-degraded' : device;
+};
 
 /**
  * Strip path components and unsafe chars; guarantee a lowercase `.nd2` suffix.
@@ -348,7 +372,7 @@ export class EssaysService {
     const nextStatus = ws.state === 'queued' ? 'queued' : 'running';
     const nextProgress = clampProgress(ws.progress ?? job.progress);
     const nextMt = ws.mtCount ?? job.mtCount;
-    const nextDevice = ws.device ?? job.device;
+    const nextDevice = coerceDevice(ws.device, ws.deviceDegraded) ?? job.device;
     if (
       job.status === nextStatus &&
       job.progress === nextProgress &&
@@ -406,7 +430,7 @@ export class EssaysService {
           status: 'completed',
           progress: 100,
           mtCount: ws.mtCount ?? job.mtCount,
-          device: ws.device ?? job.device,
+          device: coerceDevice(ws.device, ws.deviceDegraded) ?? job.device,
           resultZipKey,
           completedAt: new Date(),
         },

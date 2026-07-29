@@ -2365,6 +2365,9 @@ export default {
       'Aucune exécution pour l’instant. Téléversez un dossier pour commencer.',
     fileCount: '{{count}} fichier(s)',
     mtCount: '{{count}} microtubules',
+    deviceDegraded: 'CPU (GPU indisponible)',
+    deviceDegradedHint:
+      "Cette exécution devait utiliser le GPU mais n'a pas pu y accéder ; elle s'est donc déroulée sur le CPU et a pris beaucoup plus de temps. Merci de le signaler.",
     download: 'Télécharger',
     delete: 'Supprimer',
     deleteFailed: 'Impossible de supprimer l’exécution',

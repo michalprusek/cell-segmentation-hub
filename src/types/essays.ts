@@ -6,7 +6,12 @@ export interface EssayJob {
   progress: number;
   fileCount: number;
   mtCount: number;
-  device?: string | null;
+  /**
+   * What the worker actually ran on. `cpu-degraded` means it was supposed to
+   * use the GPU and could not — worth telling an admin, unlike a plain `cpu`
+   * on a machine that has no GPU.
+   */
+  device?: 'cuda' | 'cpu' | 'cpu-degraded' | null;
   resultZipKey?: string | null;
   error?: string | null;
   createdAt: string;

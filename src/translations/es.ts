@@ -2414,6 +2414,9 @@ export default {
     noRuns: 'Aún no hay ejecuciones. Sube una carpeta para empezar.',
     fileCount: '{{count}} archivo(s)',
     mtCount: '{{count}} microtúbulos',
+    deviceDegraded: 'CPU (GPU no disponible)',
+    deviceDegradedHint:
+      'Esta ejecución debía usar la GPU pero no pudo acceder a ella, así que se ejecutó en la CPU y tardó mucho más. Por favor, repórtelo.',
     download: 'Descargar',
     delete: 'Eliminar',
     deleteFailed: 'No se pudo eliminar la ejecución',

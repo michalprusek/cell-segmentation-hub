@@ -405,3 +405,74 @@ def test_load_v7_model_survives_windows_like_host(tmp_path, monkeypatch):
     assert seen["init"]["backbone_name"] == "facebook/dinov3-vitl16-pretrain-lvd1689m"
     assert seen["state_keys"] == ["head.weight"]
     assert seen["device"] == "cpu"
+
+
+def test_checkpoint_loads_on_windows_like_host_legacy_format(tmp_path):
+    """The remap also covers torch's non-zip serialisation.
+
+    ``torch.save`` defaults to the zip format, which routes through
+    ``shim.Unpickler``; the legacy format goes through ``shim.load`` instead.
+    The shim claims both, so both are exercised — otherwise the docstring
+    promises coverage the tests do not have.
+    """
+    torch = pytest.importorskip("torch")
+
+    from models.microtubule.segment_mt import _CROSS_PLATFORM_PICKLE
+
+    ckpt_path = tmp_path / "ckpt_legacy.pt"
+    torch.save(_v7_shaped_checkpoint(torch), ckpt_path,
+               _use_new_zipfile_serialization=False)
+
+    with _posixpath_unavailable():
+        ckpt = torch.load(
+            str(ckpt_path),
+            map_location="cpu",
+            pickle_module=_CROSS_PLATFORM_PICKLE,
+            weights_only=False,
+        )
+
+    assert ckpt["args"]["backbone"] == "facebook/dinov3-vitl16-pretrain-lvd1689m"
+    assert (
+        str(ckpt["args"]["data_dir"])
+        == "/home/prusek/BIOCEV/datasets/microtubules/synth_train_v2"
+    )
+
+
+def test_windows_paths_are_remapped_on_posix(tmp_path):
+    """The reverse direction works too — a checkpoint trained on Windows.
+
+    No such checkpoint exists today, so this pins the ``WindowsPath`` half of
+    the table as a decision rather than leaving it as untested dead weight.
+    """
+    torch = pytest.importorskip("torch")
+
+    from models.microtubule.segment_mt import _CROSS_PLATFORM_PICKLE
+
+    ckpt_path = tmp_path / "ckpt_win.pt"
+    torch.save({"args": {"out_dir": pathlib.PureWindowsPath(r"C:\runs\v7")}},
+               ckpt_path)
+
+    ckpt = torch.load(
+        str(ckpt_path),
+        map_location="cpu",
+        pickle_module=_CROSS_PLATFORM_PICKLE,
+        weights_only=False,
+    )
+    assert str(ckpt["args"]["out_dir"]) == r"C:\runs\v7"
+
+
+def test_path_class_probe_rejects_unknown_name():
+    """A typo must raise, not masquerade as "you're on Windows".
+
+    A blanket ``except`` here would make ``_path_class_is_native`` answer
+    ``False`` for a misspelled class — the same answer as a genuinely foreign
+    host — and silently remap on a platform where the class works fine.
+    """
+    pytest.importorskip("torch")
+
+    from models.microtubule.segment_mt import _path_class_is_native
+
+    assert _path_class_is_native("pathlib", "PosixPath") is True
+    assert _path_class_is_native("pathlib", "WindowsPath") is False
+    with pytest.raises(AttributeError):
+        _path_class_is_native("pathlib", "PosixPathh")
