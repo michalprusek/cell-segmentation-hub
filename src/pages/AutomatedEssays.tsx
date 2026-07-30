@@ -226,6 +226,17 @@ const AutomatedEssays: React.FC = () => {
                     {(job.status === 'running' || job.status === 'queued') && (
                       <Progress value={job.progress} className="mt-2" />
                     )}
+                    {job.status === 'completed' && job.error && (
+                      // A completed run can still be partial — evaluate.py
+                      // returns 0 even when wells failed. Amber, not red: the
+                      // results are there and downloadable, just incomplete.
+                      <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-500 mt-2">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        <span className="truncate" title={job.error}>
+                          {job.error}
+                        </span>
+                      </div>
+                    )}
                     {job.status === 'failed' && job.error && (
                       <div className="flex items-center gap-1 text-xs text-red-500 mt-2">
                         <AlertCircle className="h-3 w-3 shrink-0" />

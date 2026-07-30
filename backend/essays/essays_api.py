@@ -11,6 +11,7 @@ the backend reaches it over the docker network.
 """
 from __future__ import annotations
 
+import collections
 import json
 import os
 import queue
@@ -20,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from pathlib import Path
 from typing import Literal, NamedTuple
 
@@ -60,6 +62,19 @@ _OK_LINE = re.compile(r"\[ok\]\s+\((\d+)/(\d+)\)\s+(\S+):\s+(\d+)\s+MT")
 # worse than the bug this file exists to surface, because the field was then
 # actively wrong rather than merely unwatched.
 _DEVICE_LINE = re.compile(r"\[info\]\s+device=(\S+)")
+# evaluate.py catches per-well read failures and per-position segmentation
+# failures, counts them, prints them as [warn], and then returns 0 REGARDLESS.
+# The worker checked only the exit code, so a run where most wells failed to read
+# was reported as `completed, 100%` with a downloadable zip — and because the
+# parse loop dropped every unmatched line, the reasons existed nowhere. For a
+# scientific pipeline that is worse than crashing: a crash demands attention,
+# this produces data someone trusts.
+_DONE_LINE = re.compile(
+    r"\[done\]\s+(\d+)\s+positions?,\s+(\d+)\s+microtubules?,\s+(\d+)\s+failures?")
+_DIAG_LINE = re.compile(r"\[(warn|error)\]")
+# Unmatched output is kept in a bounded tail so a traceback can reach the user
+# instead of only `evaluate.py exited with code 1`.
+_OUTPUT_TAIL_LINES = 100
 
 # The two values this worker ever sends (`evaluate.py` also accepts `auto` and
 # `mps`, which we never use). A CPU-with-a-reason state deliberately is NOT here:
@@ -206,7 +221,7 @@ def _await_gpu(job_id: str, out_dir: str) -> tuple[Device, "CpuReason | None"]:
             print(f"[essays] job {job_id}: GPU unreachable, running on CPU",
                   file=sys.stderr, flush=True)
             return "cpu", "fault"
-        return "cpu", None, probe.degraded
+        return "cpu", None
     need = int(GPU_MIN_FREE_GB * 1024)
     deadline = time.monotonic() + GPU_WAIT_TIMEOUT_S
     waited = False
@@ -248,6 +263,17 @@ def _build_cmd(req: ProcessRequest, device: Device) -> list[str]:
     return cmd
 
 
+def _exit_error(code: int, tail: "collections.deque[str]") -> str:
+    """Message for a non-zero exit, carrying the output that explains it.
+
+    Without the tail the operator gets only the exit code and every diagnosis
+    starts with a re-run — the module's traceback went to a pipe we parsed with
+    three regexes and then discarded.
+    """
+    msg = f"evaluate.py exited with code {code}"
+    return f"{msg}. Last output:\n" + "\n".join(tail) if tail else msg
+
+
 def _run_job(req: ProcessRequest) -> None:
     job_id, out_dir = req.jobId, req.outDir
     # Everything runs inside the try so ANY failure (a bad input dir, an mkdir on
@@ -277,6 +303,9 @@ def _run_job(req: ProcessRequest) -> None:
             env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
         wells_total = 0
+        n_fail: int | None = None
+        tail: "collections.deque[str]" = collections.deque(
+            maxlen=_OUTPUT_TAIL_LINES)
         proc = subprocess.Popen(
             _build_cmd(req, device), cwd=str(MODULE_DIR), env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
@@ -318,14 +347,45 @@ def _run_job(req: ProcessRequest) -> None:
                 _set_status(job_id, out_dir, wellsDone=wells_done,
                             positionsDone=pos, mtCount=mts, progress=progress)
                 continue
+            m = _DONE_LINE.search(line)
+            if m:
+                n_fail = int(m.group(3))
+                continue
+            # Anything else: keep it, and echo the module's own diagnostics so a
+            # failed well leaves a trace an operator can actually read.
+            tail.append(line.rstrip())
+            if _DIAG_LINE.search(line):
+                print(f"[essays] job {job_id}: {line.rstrip()}",
+                      file=sys.stderr, flush=True)
         code = proc.wait()
-        if code == 0:
-            _set_status(job_id, out_dir, state="completed", progress=100)
-        else:
+        if code != 0:
             _set_status(job_id, out_dir, state="failed",
-                        error=f"evaluate.py exited with code {code}")
+                        error=_exit_error(code, tail))
+        elif n_fail:
+            # Exit 0 with failures counted is a PARTIAL result. Deliberately
+            # still `completed`: the run did finish and the zip is useful — one
+            # bad well out of 180 must not withhold the other 179. But it is not
+            # a clean success either, so the count travels in `error` and the UI
+            # renders it as a warning on a completed run. Withholding the results
+            # would be wrong in one direction; saying nothing was wrong in the
+            # other.
+            print(f"[essays] job {job_id}: module reported {n_fail} "
+                  "well/position failure(s) — results are incomplete",
+                  file=sys.stderr, flush=True)
+            _set_status(
+                job_id, out_dir, state="completed", progress=100,
+                failures=n_fail,
+                error=f"{n_fail} well/position failure(s) — some wells are "
+                      "missing from the results. See the worker log for the "
+                      "module's [warn] lines.")
+        else:
+            _set_status(job_id, out_dir, state="completed", progress=100,
+                        failures=0, error=None)
     except Exception as e:  # noqa: BLE001 — surface any failure to the backend
-        _set_status(job_id, out_dir, state="failed", error=str(e))
+        # repr, not str: str(KeyError()) and str(RuntimeError()) are empty, which
+        # would put a failed job in the UI with no reason at all.
+        traceback.print_exc()
+        _set_status(job_id, out_dir, state="failed", error=repr(e))
 
 
 def _worker() -> None:
