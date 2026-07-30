@@ -89,13 +89,18 @@ def _path_class_is_native(module: str, name: str) -> bool:
     ``pathlib.UnsupportedOperation``. Calling the constructor is the one
     formulation that survives all of them.
 
-    Deliberately uncached — the probe costs ~1.3 us and runs about twice per
-    process, so a memo would buy nothing while forcing every test that patches
-    ``pathlib`` to remember to invalidate it.
+    Deliberately uncached — the probe costs a couple of microseconds and runs
+    once per checkpoint load, so a memo would buy nothing while forcing every
+    test that patches ``pathlib`` to remember to invalidate it. (The old cache
+    also keyed on ``name`` alone, which became outright wrong once the
+    ``pathlib._local`` entries arrived.)
 
-    A missing *module* means the recording interpreter had one this host does
-    not — 3.13 records ``pathlib._local`` where <=3.12 has no such module — so
-    the class is definitionally not constructible here and must be remapped.
+    A module absent from ``sys.modules`` is treated as one this interpreter does
+    not have — 3.13 records ``pathlib._local`` where <=3.12 has no such module.
+    Strictly this tests "not imported", not "does not exist"; that is sound for
+    the closed table below because importing ``pathlib`` pulls ``pathlib._local``
+    in on every version that has it. A future entry for a lazily-imported module
+    would need ``importlib.util.find_spec`` instead.
     A missing *attribute* in a module that does exist is a typo in the caller's
     table, not a fact about the host, so that propagates rather than being
     flattened into ``False`` (which would silently remap on a platform where
@@ -136,9 +141,10 @@ class _CrossPlatformUnpickler(pickle.Unpickler):
     """
 
     # Keyed on the module name recorded *at save time*, not the one this
-    # interpreter would use. The shipped v7 pickle records plain ``pathlib``;
-    # Python 3.13+ records ``pathlib._local``, so a checkpoint re-trained on
-    # 3.13 would need that key too or it would silently miss the remap.
+    # interpreter would use. The shipped v7 pickle records plain ``pathlib``
+    # while Python 3.13+ records ``pathlib._local``, which is why both module
+    # names are keyed — a checkpoint re-trained on 3.13 would otherwise miss
+    # the remap silently.
     _PURE_EQUIVALENT = {
         ("pathlib", "PosixPath"): pathlib.PurePosixPath,
         ("pathlib", "WindowsPath"): pathlib.PureWindowsPath,
@@ -149,8 +155,10 @@ class _CrossPlatformUnpickler(pickle.Unpickler):
     def find_class(self, module: str, name: str):
         pure = self._PURE_EQUIVALENT.get((module, name))
         if pure is not None and not _path_class_is_native(module, name):
-            # Fires at most twice per load, and never on Linux. If it ever
-            # shows up in a server log, that itself is the interesting fact.
+            # On Linux this fires only for a checkpoint saved on Python 3.13+
+            # (whose ``pathlib._local`` this interpreter lacks), which is
+            # benign. A ``pathlib``-keyed remap on Linux would be the
+            # interesting fact.
             logger.info("remapping %s.%s -> %s (not constructible here)",
                         module, name, pure.__name__)
             return pure
@@ -163,10 +171,11 @@ def _build_cross_platform_pickle_module() -> types.ModuleType:
     Built by copying ``pickle``'s whole surface rather than hand-listing the
     members ``torch.load`` uses (``Unpickler`` on both the zip and legacy
     paths, plus ``load`` on the legacy one). Torch also reads ``__name__`` for
-    its dill-version check and ``__version__`` inside that branch, and a future
-    release may reach for more, so a partial stand-in is a latent break on the
-    next torch bump — an earlier draft using ``SimpleNamespace`` broke on
-    exactly that.
+    its dill-version check — and ``__version__`` inside that branch, which
+    neither ``pickle`` nor this shim actually has, so the rename to a non-"dill"
+    name is what keeps torch out of it. A future release may reach for more, so
+    a partial stand-in is a latent break on the next torch bump; an earlier
+    draft using ``SimpleNamespace`` broke on exactly that.
     """
     shim = types.ModuleType("segment_mt_cross_platform_pickle")
     shim.__dict__.update(pickle.__dict__)
@@ -206,9 +215,12 @@ def load_v7_model(ckpt_path: Path, device: str = "cuda"):
     pathlib.PosixPath"). ``args`` is a plain dict — there are no custom classes
     in this pickle. Stripping those two values from the checkpoint would let it
     load under ``weights_only=True`` on every platform and make this whole
-    fallback, and the shim below, unnecessary. The fallback is enabled by default (``ALLOW_UNSAFE_WEIGHTS``
+    fallback, and the shim below, unnecessary.
+
+    The fallback is enabled by default (``ALLOW_UNSAFE_WEIGHTS``
     defaults to ``"1"`` in the ML Dockerfile) because this is our own shipped
-    checkpoint; set ``ALLOW_UNSAFE_WEIGHTS=0`` to refuse the fallback.
+    checkpoint; set ``ALLOW_UNSAFE_WEIGHTS=0`` to refuse the fallback — note
+    that for this checkpoint that means it never loads at all.
     """
     import torch
     from synth_irm.training.model_v4 import FilamentInstanceModelV4
