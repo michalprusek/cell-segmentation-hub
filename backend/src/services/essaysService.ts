@@ -46,6 +46,7 @@ interface WorkerStatus {
   mtCount?: number;
   device?: string;
   deviceReason?: string;
+  failures?: number;
   error?: string | null;
 }
 
@@ -312,7 +313,19 @@ export class EssaysService {
     const p = path.join(this.jobDir(userId, jobId), 'status.json');
     try {
       return JSON.parse(await fs.readFile(p, 'utf8')) as WorkerStatus;
-    } catch {
+    } catch (e) {
+      // ENOENT is the normal case — the worker has not written yet. Anything
+      // else (a torn/corrupt file, an EACCES from the uid-1001 shared mount)
+      // used to be swallowed identically, and the staleness watchdog would then
+      // fail the job with "Worker stopped reporting" — a false diagnosis of a
+      // problem that was on our side of the handoff.
+      if ((e as { code?: string }).code !== 'ENOENT') {
+        logger.error(
+          `essays: cannot read status.json for ${jobId}: ${String(e)}`,
+          undefined,
+          CTX
+        );
+      }
       return null;
     }
   }
@@ -439,6 +452,10 @@ export class EssaysService {
           progress: 100,
           mtCount: ws.mtCount ?? job.mtCount,
           device: coerceDevice(ws.device, ws.deviceReason) ?? job.device,
+          // A completed run can still be partial: evaluate.py returns 0 even
+          // when wells failed to read or segment. Carrying `error` on the
+          // success path is what lets the UI say so without withholding the zip.
+          error: ws.error ?? null,
           resultZipKey,
           completedAt: new Date(),
         },

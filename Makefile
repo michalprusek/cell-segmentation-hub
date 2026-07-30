@@ -194,15 +194,30 @@ rebuild: down build up
 health-check:
 	@echo "🧪 Testing services..."
 	@command -v curl >/dev/null 2>&1 || { echo "❌ Error: curl is not installed. Please install curl to run health checks."; exit 1; }
+	@# Each service is checked on its dev port first, then its production port.
+	@# Before this the target only knew the dev ports, so it silently could not
+	@# check a production stack at all — which is why the essays worker's GPU
+	@# field had no reader despite being the whole point of adding it.
 	@set -e; \
-	status=$$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:3001/health) && \
-	 if [ "$$status" = "200" ]; then echo "✅ Backend healthy"; else echo "❌ Backend unhealthy (HTTP $$status)"; exit 1; fi
-	@set -e; \
-	status=$$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:8000/health) && \
-	 if [ "$$status" = "200" ]; then echo "✅ ML Service healthy"; else echo "❌ ML Service unhealthy (HTTP $$status)"; exit 1; fi
-	@set -e; \
-	status=$$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:3000/health) && \
-	 if [ "$$status" = "200" ]; then echo "✅ Frontend healthy"; else echo "❌ Frontend unhealthy (HTTP $$status)"; exit 1; fi
+	probe() { \
+	  name="$$1"; shift; \
+	  for port in "$$@"; do \
+	    code=$$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "http://localhost:$$port/health" 2>/dev/null || true); \
+	    if [ "$$code" = "200" ]; then echo "✅ $$name healthy (:$$port)"; return 0; fi; \
+	  done; \
+	  echo "❌ $$name unhealthy on ports $$*"; return 1; \
+	}; \
+	probe Backend 3001 4001; \
+	probe "ML Service" 8000 4008; \
+	probe Frontend 3000 4000; \
+	for port in 8001 4009; do \
+	  body=$$(curl -sS --max-time 5 "http://localhost:$$port/health" 2>/dev/null || true); \
+	  case "$$body" in \
+	    "") continue;; \
+	    *'"gpu":"ok"'*) echo "✅ Essays worker healthy, GPU ok (:$$port)"; break;; \
+	    *) echo "⚠️  Essays worker serving but GPU degraded (:$$port): $$body"; break;; \
+	  esac; \
+	done
 
 # Run unit tests in Docker
 test:
