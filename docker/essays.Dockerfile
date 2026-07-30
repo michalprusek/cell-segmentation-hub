@@ -54,6 +54,6 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:8000/health').raise_for_status()" || exit 1
 
 CMD ["uvicorn", "essays_api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

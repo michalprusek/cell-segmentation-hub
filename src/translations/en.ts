@@ -2442,6 +2442,12 @@ export default {
     noRuns: 'No runs yet. Upload a folder to get started.',
     fileCount: '{{count}} file(s)',
     mtCount: '{{count}} microtubules',
+    deviceDegraded: 'CPU (GPU unavailable)',
+    deviceDegradedHint:
+      'This run was supposed to use the GPU but could not reach it, so it ran on the CPU and took far longer. Please report this.',
+    deviceBusy: 'CPU (GPU busy)',
+    deviceBusyHint:
+      'The shared GPU was busy for the whole wait, so this ran on the CPU and took longer. Nothing is wrong — no need to report it.',
     download: 'Download',
     delete: 'Delete',
     deleteFailed: 'Could not delete the run',

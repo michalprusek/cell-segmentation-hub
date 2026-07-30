@@ -6,11 +6,13 @@ const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     essayJob: {
       findFirst: vi.fn() as any,
+      update: vi.fn() as any,
     },
   },
 }));
 
 const fsAccess = vi.fn();
+const fsReadFile = vi.fn();
 
 vi.mock('../../db', () => ({ prisma: prismaMock }));
 vi.mock('../../utils/logger', () => ({
@@ -34,7 +36,7 @@ vi.mock('fs', () => ({
     rm: vi.fn(),
     readdir: vi.fn(),
     stat: vi.fn(),
-    readFile: vi.fn(),
+    readFile: (...a: unknown[]) => fsReadFile(...a),
     rename: vi.fn(),
     copyFile: vi.fn(),
     unlink: vi.fn(),
@@ -46,7 +48,7 @@ vi.mock('../export/exportFileOperations', () => ({
   sanitizeFilename: (s: string) => s.replace(/[^A-Za-z0-9_.-]/g, '_'),
 }));
 
-import { sanitizeNd2Name, EssaysService } from '../essaysService';
+import { sanitizeNd2Name, EssaysService, coerceDevice } from '../essaysService';
 
 const USER = 'user-1';
 const JOB = 'job-1';
@@ -153,5 +155,92 @@ describe('EssaysService.resolveDownload (path-traversal + ownership guard)', () 
     );
     // sanitized (no slash/space) and suffixed
     expect(dl!.downloadName).toBe('My_Run_2026_results.zip');
+  });
+});
+
+describe('coerceDevice (worker device report -> UI domain)', () => {
+  it('passes through the two devices the worker can actually run on', () => {
+    expect(coerceDevice('cuda', undefined)).toBe('cuda');
+    expect(coerceDevice('cpu', undefined)).toBe('cpu');
+  });
+
+  it('distinguishes a broken GPU from a merely busy one', () => {
+    // The whole point. Only 'fault' is worth telling a user to report; 'busy'
+    // is a shared card doing its job and must not wear the incident badge.
+    expect(coerceDevice('cpu', 'fault')).toBe('cpu-degraded');
+    expect(coerceDevice('cpu', 'busy')).toBe('cpu-busy');
+  });
+
+  it('leaves a CPU-only host as plain cpu', () => {
+    expect(coerceDevice('cpu', null)).toBe('cpu');
+  });
+
+  it('never annotates cuda — no reason is meaningful there', () => {
+    expect(coerceDevice('cuda', 'fault')).toBe('cuda');
+    expect(coerceDevice('cuda', 'busy')).toBe('cuda');
+  });
+
+  it('rejects anything outside the domain so junk cannot reach the DB or the badge', () => {
+    // status.json is parsed with an unchecked cast, so this is the only guard.
+    expect(coerceDevice('gpu', undefined)).toBeUndefined();
+    expect(coerceDevice('cpu-degraded', undefined)).toBeUndefined();
+    expect(coerceDevice(undefined, undefined)).toBeUndefined();
+    expect(coerceDevice(null, 'fault')).toBeUndefined();
+    expect(coerceDevice(42, undefined)).toBeUndefined();
+  });
+
+  it('ignores an unrecognised reason rather than inventing a state', () => {
+    expect(coerceDevice('cpu', 'degraded')).toBe('cpu');
+    expect(coerceDevice('cpu', true)).toBe('cpu');
+  });
+});
+
+describe('reconcileJob wiring (coerceDevice is actually applied to the DB write)', () => {
+  // The pure-function tests above all pass even if both call sites are reverted
+  // to a raw `ws.device` cast — the helper stays proven while the wiring
+  // regresses silently, and the badge quietly goes back to plain "CPU". This
+  // suite is what fails in that case.
+  const jobRow = {
+    id: JOB,
+    userId: USER,
+    status: 'running',
+    progress: 10,
+    mtCount: 0,
+    device: 'cuda',
+    updatedAt: new Date(),
+  } as never;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.essayJob.update.mockResolvedValue({});
+  });
+
+  const reconcile = (ws: Record<string, unknown>) => {
+    fsReadFile.mockResolvedValue(JSON.stringify(ws));
+    return (EssaysService.getInstance() as never as {
+      reconcileJob: (j: never) => Promise<boolean>;
+    }).reconcileJob(jobRow);
+  };
+
+  it("writes cpu-degraded when the worker reports a fault", async () => {
+    await reconcile({ state: 'running', progress: 20, device: 'cpu', deviceReason: 'fault' });
+    expect(prismaMock.essayJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ device: 'cpu-degraded' }) })
+    );
+  });
+
+  it('writes cpu-busy when the shared card was merely busy', async () => {
+    await reconcile({ state: 'running', progress: 20, device: 'cpu', deviceReason: 'busy' });
+    expect(prismaMock.essayJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ device: 'cpu-busy' }) })
+    );
+  });
+
+  it('keeps the stored device when the worker reports something out of domain', async () => {
+    await reconcile({ state: 'running', progress: 20, device: 'quantum', deviceReason: 'fault' });
+    const call = prismaMock.essayJob.update.mock.calls[0];
+    // Either no update at all (nothing changed) or the previous value retained —
+    // never the junk value.
+    if (call) expect(call[0].data.device).toBe('cuda');
   });
 });

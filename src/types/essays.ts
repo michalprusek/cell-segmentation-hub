@@ -6,7 +6,13 @@ export interface EssayJob {
   progress: number;
   fileCount: number;
   mtCount: number;
-  device?: string | null;
+  /**
+   * What the worker ran on, plus why if it wanted the GPU and did not get it.
+   * `cpu-degraded` = the GPU broke, worth telling an admin. `cpu-busy` = the
+   * shared card never freed up, nothing to act on. Plain `cpu` = this host has
+   * no GPU. See coerceDevice() in backend/src/services/essaysService.ts.
+   */
+  device?: 'cuda' | 'cpu' | 'cpu-degraded' | 'cpu-busy' | null;
   resultZipKey?: string | null;
   error?: string | null;
   createdAt: string;
