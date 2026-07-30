@@ -21,6 +21,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import Literal, NamedTuple
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -51,6 +52,28 @@ _BOOL_FLAGS = {"noOverlays": "--no-overlays", "noJson": "--no-json"}
 
 _INFO_TOTAL = re.compile(r"\[info\]\s+(\d+)\s+well file")
 _OK_LINE = re.compile(r"\[ok\]\s+\((\d+)/(\d+)\)\s+(\S+):\s+(\d+)\s+MT")
+# evaluate.py resolves the device itself and downgrades a `--device cuda` run to
+# CPU when torch cannot init CUDA (nvidia-smi needs only /dev/nvidia0 +
+# /dev/nvidiactl, CUDA also needs /dev/nvidia-uvm, so our own probe is not
+# enough). It prints a `[warn]` we capture but did not parse, so the silence was
+# in status.json: the job kept reporting `device: cuda` while running on CPU —
+# worse than the bug this file exists to surface, because the field was then
+# actively wrong rather than merely unwatched.
+_DEVICE_LINE = re.compile(r"\[info\]\s+device=(\S+)")
+
+# The two values this worker ever sends (`evaluate.py` also accepts `auto` and
+# `mps`, which we never use). A CPU-with-a-reason state deliberately is NOT here:
+# this value goes straight onto the command line, so a third value would be an
+# invalid argument — the reason travels beside it as CpuReason.
+Device = Literal["cuda", "cpu"]
+
+# Why a run that wanted the GPU ended up on CPU. "fault" is worth reporting
+# (the container lost its GPU, or torch could not init CUDA); "busy" is not —
+# the card is shared with the ml service and Maptimize and simply never freed
+# ESSAYS_GPU_MIN_FREE_GB in time. Collapsing these into one flag made the
+# ordinary case wear the incident badge, so they stay distinct all the way to
+# the UI. A host with no GPU at all is neither — it gets None.
+CpuReason = Literal["fault", "busy"]
 
 app = FastAPI(title="Automated Essays Worker", version="1.0")
 
@@ -95,45 +118,124 @@ def _set_status(job_id: str, out_dir: str, **fields) -> None:
               file=sys.stderr, flush=True)
 
 
-def _gpu_free_mib() -> int | None:
-    """Free VRAM in MiB via nvidia-smi, or None if there is no usable GPU."""
+class GpuProbe(NamedTuple):
+    """What one GPU probe found (the no-nvidia-smi branch runs no query).
+
+    ``degraded`` is the whole point of this type, and this docstring is the one
+    place the incident behind it is written down.
+
+    A CPU run because the host has no GPU is normal. A CPU run because a
+    GPU-declared container lost its card is the incident that hid for weeks
+    behind a ``device: cpu`` field nobody watched: one 180-well job took 36 h on
+    CPU on 2026-07-27 where the same-sized job had taken 1 h 20 m on GPU on
+    07-08 (27x, though per-well work differed too, so treat it as one measured
+    pair rather than a standing multiplier).
+
+    Returning a bare ``int | None`` collapses the two and makes every caller
+    guess which it got, so the probe reports it instead. Note ``degraded=False``
+    means "nvidia-smi answered", not "the GPU is healthy" — it can answer while
+    /dev/nvidia-uvm is gone, which is what _DEVICE_LINE exists for.
+    """
+
+    free_mib: int | None
+    degraded: bool
+
+
+def _gpu_free_mib(warn: bool = True) -> GpuProbe:
+    """Query free VRAM, distinguishing "no GPU here" from "GPU went away".
+
+    ``warn=False`` for pollers: /health calls this on every container
+    healthcheck (30 s), and a broken GPU would otherwise emit the same warning
+    2 880 times a day, burying the one line that matters. The job path keeps
+    warning, and /health reports the state structurally instead.
+    """
     if shutil.which("nvidia-smi") is None:
-        return None
+        # In THIS container that is already a fault: nvidia-smi is not in the
+        # image, the nvidia runtime hook injects it along with the driver
+        # userspace. Its absence means the hook did not run, even though the
+        # service is declared `runtime: nvidia`. Elsewhere (a plain CPU host)
+        # the env var is unset and we stay quiet.
+        if os.environ.get("NVIDIA_VISIBLE_DEVICES") not in (None, "", "void"):
+            if warn:
+                print(
+                    "[essays] WARN: NVIDIA_VISIBLE_DEVICES is set but nvidia-smi "
+                    "is absent — the nvidia runtime hook did not inject the "
+                    "driver userspace. Jobs will run on CPU. Recreate the "
+                    "container.", file=sys.stderr, flush=True)
+            return GpuProbe(None, degraded=True)
+        return GpuProbe(None, degraded=False)
     try:
         out = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=memory.free",
              "--format=csv,noheader,nounits"],
-            text=True, timeout=15,
+            # Must stay well under the compose healthcheck timeout (10 s):
+            # /health calls this synchronously, so a longer budget here would
+            # let docker kill the healthcheck and mark a serving worker
+            # unhealthy instead of letting it report gpu: unreachable.
+            text=True, timeout=5,
         )
-        return int(out.strip().splitlines()[0])
-    except Exception:
-        return None
+        return GpuProbe(int(out.strip().splitlines()[0]), degraded=False)
+    except Exception as e:
+        # Usually a stripped device allowlist, but this also catches the 15 s
+        # TimeoutExpired when the shared card is saturated — so name the
+        # symptom, not a diagnosis the exception does not support.
+        if warn:
+            print(f"[essays] WARN: nvidia-smi is unusable ({e}) — jobs will run "
+                  "on CPU. Most often the container lost its GPU device "
+                  "permissions (recreate it); under heavy load it can also be "
+                  "the query timing out.", file=sys.stderr, flush=True)
+        return GpuProbe(None, degraded=True)
 
 
-def _await_gpu(job_id: str, out_dir: str) -> str:
-    """Wait until the GPU has room, else fall back to CPU. Returns the device."""
-    if _gpu_free_mib() is None:
-        return "cpu"
+def _await_gpu(job_id: str, out_dir: str) -> tuple[Device, "CpuReason | None"]:
+    """Wait until the GPU has room, else fall back to CPU.
+
+    Returns ``(device, reason)``. ``device`` stays within the two values
+    ``evaluate.py`` is ever sent, because it goes straight onto the command
+    line. ``reason`` says *why* a GPU run became a CPU run, which is the
+    distinction a bare "CPU" badge cannot make.
+
+    Every CPU exit that wanted the GPU gets a log line; the busy one too, since
+    a card that never frees up for 30 minutes is worth an operator's attention
+    even though it is not the user's problem. A host with no GPU is neither and
+    stays silent.
+    """
+    probe = _gpu_free_mib()
+    if probe.free_mib is None:
+        if probe.degraded:
+            print(f"[essays] job {job_id}: GPU unreachable, running on CPU",
+                  file=sys.stderr, flush=True)
+            return "cpu", "fault"
+        return "cpu", None, probe.degraded
     need = int(GPU_MIN_FREE_GB * 1024)
     deadline = time.monotonic() + GPU_WAIT_TIMEOUT_S
     waited = False
+    free = probe.free_mib
     while True:
-        free = _gpu_free_mib()
-        if free is None:
-            return "cpu"
         if free >= need:
-            return "cuda"
+            return "cuda", None
         if time.monotonic() >= deadline:
             # Never block a job forever — a slow CPU run beats a stuck queue.
-            return "cpu"
+            print(f"[essays] job {job_id}: GPU still below {need} MiB free "
+                  f"after {GPU_WAIT_TIMEOUT_S:.0f}s (last saw {free} MiB) — "
+                  "running on CPU, which is far slower. Check for a stuck CUDA "
+                  "process if this repeats.", file=sys.stderr, flush=True)
+            # Healthy card, just never free enough — not a fault to report.
+            return "cpu", "busy"
         if not waited:
             waited = True
             _set_status(job_id, out_dir, state="waiting_gpu",
                         message=f"waiting for GPU ({free} MiB free, need {need})")
         time.sleep(GPU_POLL_S)
+        probe = _gpu_free_mib()
+        if probe.free_mib is None:
+            print(f"[essays] job {job_id}: GPU vanished mid-wait, running on "
+                  "CPU", file=sys.stderr, flush=True)
+            return "cpu", "fault"
+        free = probe.free_mib
 
 
-def _build_cmd(req: ProcessRequest, device: str) -> list[str]:
+def _build_cmd(req: ProcessRequest, device: Device) -> list[str]:
     cmd = ["python", "evaluate.py", "--data", req.inputDir, "--out", req.outDir,
            "--weights", WEIGHTS, "--device", device]
     opts = req.options or {}
@@ -158,9 +260,10 @@ def _run_job(req: ProcessRequest) -> None:
                         error=f"input directory not found: {req.inputDir}")
             return
 
-        device = _await_gpu(job_id, out_dir)
+        device, cpu_reason = _await_gpu(job_id, out_dir)
         Path(out_dir).mkdir(parents=True, exist_ok=True)
-        _set_status(job_id, out_dir, state="running", device=device, progress=0,
+        _set_status(job_id, out_dir, state="running", device=device,
+                    deviceReason=cpu_reason, progress=0,
                     wellsTotal=0, wellsDone=0, positionsDone=0, mtCount=0,
                     error=None)
 
@@ -180,6 +283,24 @@ def _run_job(req: ProcessRequest) -> None:
         )
         assert proc.stdout is not None
         for line in proc.stdout:
+            m = _DEVICE_LINE.search(line)
+            if m and m.group(1) != device:
+                print(f"[essays] job {job_id}: module downgraded device "
+                      f"{device} -> {m.group(1)}; our nvidia-smi probe said the "
+                      "GPU was usable but torch could not initialise CUDA",
+                      file=sys.stderr, flush=True)
+                reported = m.group(1)
+                if reported not in ("cuda", "cpu"):
+                    # Keep the Literal honest: anything else is a contract
+                    # change in AutomatedEssaysModule, not a device we know.
+                    print(f"[essays] job {job_id}: unparseable device report "
+                          f"{reported!r}; keeping {device}",
+                          file=sys.stderr, flush=True)
+                    continue
+                device = reported
+                _set_status(job_id, out_dir, device=device,
+                            deviceReason="fault")
+                continue
             m = _INFO_TOTAL.search(line)
             if m:
                 wells_total = int(m.group(1))
@@ -233,7 +354,31 @@ threading.Thread(target=_worker, daemon=True).start()
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "queued": _work.qsize()}
+    """Liveness plus GPU reachability.
+
+    The GPU state belongs here because a stderr line is only marginally better
+    than the ``device: cpu`` field that went unwatched for weeks — both need
+    somebody to go looking. This at least makes it one `curl`.
+
+    Nothing consumes it yet, and it is worth being honest about that: the
+    compose healthcheck only checks the status code, ``make health`` never
+    contacts this service, and Prometheus scrapes ``/metrics`` (which this
+    worker does not expose) with no essays job configured. Wiring one of those
+    up is what would make this field earn its place.
+
+    ``status`` stays "ok" when degraded, deliberately: an ``unhealthy`` marker
+    would claim the worker is not serving, which is false — it is serving, just
+    slowly. (Plain docker would not restart it either way; only Swarm acts on
+    health.) The distinction lives in ``gpu``.
+    """
+    probe = _gpu_free_mib(warn=False)
+    return {
+        "status": "ok",
+        "queued": _work.qsize(),
+        "gpu": ("unreachable" if probe.degraded
+                else "none" if probe.free_mib is None else "ok"),
+        "gpuFreeMib": probe.free_mib,
+    }
 
 
 @app.post("/process", status_code=202)

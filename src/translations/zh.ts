@@ -2217,6 +2217,12 @@ export default {
     noRuns: '暂无任务。上传文件夹即可开始。',
     fileCount: '{{count}} 个文件',
     mtCount: '{{count}} 条微管',
+    deviceDegraded: 'CPU（GPU 不可用）',
+    deviceDegradedHint:
+      '此次运行本应使用 GPU，但无法访问，因此在 CPU 上运行，耗时长得多。请报告此问题。',
+    deviceBusy: 'CPU（GPU 繁忙）',
+    deviceBusyHint:
+      '共享 GPU 在整个等待期间都处于繁忙状态，因此本次运行在 CPU 上完成，耗时更长。这不是故障，无需报告。',
     download: '下载',
     delete: '删除',
     deleteFailed: '无法删除该任务',

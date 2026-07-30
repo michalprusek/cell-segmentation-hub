@@ -118,6 +118,45 @@ services:
       dockerfile: docker/ml.optimized.Dockerfile
     container_name: spheroseg-ml
     runtime: nvidia
+    # Put NVIDIA device permissions into the OCI spec. `runtime: nvidia` alone
+    # grants them via a hook that runs AFTER the spec is built, so they never
+    # land in `linux.resources.devices`. Anything that makes containerd re-apply
+    # that spec (`docker update`, `systemctl daemon-reload`, a systemd cgroup
+    # rewrite) then resets the allowlist to the hookless version and the running
+    # container silently loses the GPU: `open('/dev/nvidiactl')` starts
+    # returning EPERM, `torch.cuda.is_available()` flips to False, and inference
+    # falls back to CPU. These rules live in the spec, so a re-apply restores
+    # them instead of dropping them.
+    #
+    # Rules rather than `devices:` deliberately. `devices:` re-resolves the host
+    # path on every `docker start`, and `/dev/nvidia-uvm` is created lazily by
+    # `nvidia-modprobe` on first CUDA use. On the 2026-01-13 boot the toolkit
+    # hook itself logged, while docker was restoring containers, "Could not
+    # locate /dev/nvidia-uvm: pattern /dev/nvidia-uvm not found" — the node
+    # appeared ~0.6 s later. A hook can warn and continue; an explicit
+    # `devices:` entry cannot, so with `restart: always` that same moment is a
+    # hard "error gathering device information" instead of a degradation.
+    # Cgroup rules stat nothing, so they are safe before the nodes appear.
+    #
+    # (Do not trust wall-clock timestamps from that boot: the realtime clock
+    # jumped +2 h at monotonic 4.65 s, which makes the device-node ctimes look
+    # ~1 h 43 min later than dockerd. Use `journalctl -o short-monotonic`.)
+    #
+    # `runtime: nvidia` above (and the `deploy.resources.reservations.devices`
+    # block further down — either one triggers the hook) is still load-bearing:
+    # the hook is what creates the nodes inside the container and mounts the
+    # driver userspace. These rules only grant ACCESS to a major:minor — they
+    # cannot make a device appear. Unlike a hardcoded `/dev/nvidia0`, `c 195:*` also
+    # covers a second GPU if one is ever added. Major 239 (nvidia-caps, MIG) is
+    # deliberately excluded — not used on an A5000.
+    #
+    # 195 is NVIDIA's statically assigned major (nvidia0 / nvidiactl /
+    # nvidia-modeset). 236 is nvidia-uvm, which takes a DYNAMIC major — verify
+    # with `grep nvidia-uvm /proc/devices` after a driver upgrade. If it ever
+    # moves, the symptom is the original bug (silent CPU), not an outage.
+    device_cgroup_rules:
+      - 'c 195:* rmw'
+      - 'c 236:* rmw'
     # 1 worker to free GPU memory for Maptimize
     command:
       [
@@ -199,7 +238,7 @@ services:
           'CMD',
           'python',
           '-c',
-          "import requests; requests.get('http://localhost:8000/health')",
+          "import requests; requests.get('http://localhost:8000/health').raise_for_status()",
         ]
       interval: 30s
       timeout: 10s
@@ -226,6 +265,13 @@ services:
     image: cell-segmentation-hub-essays:latest
     container_name: spheroseg-essays
     runtime: nvidia
+    # Same reason and same trade-off as the ml service above — see the comment
+    # there for why these are cgroup rules and not `devices:`. This container is
+    # the one that regressed in the wild: a 180-well job took 36 h on CPU on
+    # 2026-07-27 where the same-sized job had taken 1 h 20 m on GPU on 07-08.
+    device_cgroup_rules:
+      - 'c 195:* rmw'
+      - 'c 236:* rmw'
     # Run as the backend's uid:gid (nodejs 1001) so the worker can write into the
     # job dirs the backend creates on the shared uploads volume (status.json +
     # output/). HOME=/tmp keeps any home-dir writes (matplotlib/torch cache) off
@@ -270,7 +316,7 @@ services:
           'CMD',
           'python',
           '-c',
-          "import requests; requests.get('http://localhost:8000/health')",
+          "import requests; requests.get('http://localhost:8000/health').raise_for_status()",
         ]
       interval: 30s
       timeout: 10s

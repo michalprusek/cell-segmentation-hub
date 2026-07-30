@@ -273,6 +273,23 @@ class ModelLoader:
         self.loaded_models: Dict[str, torch.nn.Module] = {}
         self.model_configs: Dict[str, ModelConfig] = {}
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # A container declared `runtime: nvidia` that resolves to CPU has lost
+        # its GPU, and unlike the essays worker nothing here surfaces that to a
+        # user — segmentation just gets far slower with no visible change. (No
+        # measured multiplier for THIS model; the 27x on record is a microtubule
+        # essay batch, a different net on different inputs.) The
+        # allowlist can be stripped from a RUNNING container by any cgroup
+        # re-apply, so this is a real state, not just a misconfiguration at
+        # build time. See the device_cgroup_rules comment in
+        # docker-compose.production.yml.
+        if self.device.type != 'cuda' and os.environ.get(
+                'NVIDIA_VISIBLE_DEVICES') not in (None, '', 'void'):
+            logger.error(
+                'NVIDIA_VISIBLE_DEVICES is set but CUDA is unavailable — this '
+                'container has lost its GPU. Inference will run on CPU and be '
+                'far slower. Recreate the container to re-apply the NVIDIA '
+                'device permissions.'
+            )
         
         # Load batch processing configuration
         batch_config_path = self.base_path / "config" / "batch_sizes.json"

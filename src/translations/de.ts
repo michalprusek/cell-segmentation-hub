@@ -2374,6 +2374,12 @@ export default {
     noRuns: 'Noch keine Läufe. Laden Sie einen Ordner hoch, um zu beginnen.',
     fileCount: '{{count}} Datei(en)',
     mtCount: '{{count}} Mikrotubuli',
+    deviceDegraded: 'CPU (GPU nicht verfügbar)',
+    deviceDegradedHint:
+      'Dieser Lauf sollte die GPU verwenden, konnte sie aber nicht erreichen, lief daher auf der CPU und dauerte wesentlich länger. Bitte melden Sie dies.',
+    deviceBusy: 'CPU (GPU belegt)',
+    deviceBusyHint:
+      'Die gemeinsam genutzte GPU war während der gesamten Wartezeit belegt, daher lief dieser Durchlauf auf der CPU und dauerte länger. Es liegt kein Fehler vor, eine Meldung ist nicht nötig.',
     download: 'Herunterladen',
     delete: 'Löschen',
     deleteFailed: 'Der Lauf konnte nicht gelöscht werden',
