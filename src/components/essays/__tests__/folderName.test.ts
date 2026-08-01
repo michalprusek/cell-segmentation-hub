@@ -69,13 +69,14 @@ describe('folderNameFromFiles', () => {
   });
 
   it('prefers webkitRelativePath when both are present', () => {
-    // The picker path goes through file-selector too, which then copies
-    // webkitRelativePath into `path`; either would do, but the preference must
-    // be deterministic.
+    // In production both properties agree (file-selector copies
+    // webkitRelativePath into `path` for picker-sourced files), so the two are
+    // given DIFFERENT folders here on purpose — otherwise the assertion holds
+    // whichever property is read and pins nothing.
     const files = [
       fileWith('WellA01.nd2', {
         webkitRelativePath: 'run_from_picker/WellA01.nd2',
-        path: 'run_from_picker/WellA01.nd2',
+        path: '/run_from_drop/WellA01.nd2',
       }),
     ];
     expect(folderNameFromFiles(files)).toBe('run_from_picker');
