@@ -29,6 +29,12 @@ export interface EssayJobOptions {
   mtWidth?: number;
   bgGap?: number;
   bgWidth?: number;
+  /**
+   * Substring naming the channel each role uses. They are separate because the
+   * module segments IRM (what the v7 checkpoint was trained on) and reads the
+   * intensities off TIRF — conflating them is the defect fixed 2026-08.
+   */
+  irmName?: string;
   tirfName?: string;
   solutionName?: string;
   limitWells?: number;

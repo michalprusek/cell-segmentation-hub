@@ -36,6 +36,7 @@ export function parseOptions(raw: unknown): EssayJobOptions {
   if (num(parsed.bgGap) !== undefined) out.bgGap = num(parsed.bgGap);
   if (num(parsed.bgWidth) !== undefined) out.bgWidth = num(parsed.bgWidth);
   if (num(parsed.limitWells) !== undefined) out.limitWells = num(parsed.limitWells);
+  if (typeof parsed.irmName === 'string') out.irmName = parsed.irmName;
   if (typeof parsed.tirfName === 'string') out.tirfName = parsed.tirfName;
   if (typeof parsed.solutionName === 'string') out.solutionName = parsed.solutionName;
   if (typeof parsed.noOverlays === 'boolean') out.noOverlays = parsed.noOverlays;
