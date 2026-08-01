@@ -2,15 +2,18 @@
 """Batch microtubule analysis of ND2 well recordings.
 
 Point this at a folder of ``.nd2`` well recordings (one file per well, several
-positions, channels IRM / 488-in-solution / TIRF 488) and it produces, per
-microtubule, a row in ``results.csv`` with:
+positions, channels IRM / 488-in-solution / TIRF 488). Microtubules are
+**segmented on the IRM channel** — the one the v7 checkpoint was trained on —
+and the intensities are then **read off the TIRF channel** along the resulting
+centerlines. Per microtubule it produces a row in ``results.csv`` with:
 
   * the well's solution concentration (median of the 488-in-solution channel),
   * the microtubule's length,
   * the mean / std / sum TIRF intensity along the microtubule (a 5-px band),
   * the mean / median / sum TIRF intensity of the surrounding background ring,
+  * the acquisition timestamp of the recording (``acquired_at``, ISO-8601 UTC),
 
-plus QC overlay PNGs and polyline annotation JSON.
+plus QC overlay PNGs (one per channel) and polyline annotation JSON.
 
 Quick start
 -----------
@@ -94,9 +97,13 @@ def build_args() -> argparse.Namespace:
                     help="Gap between the MT band and the background ring (px).")
     ap.add_argument("--bg-width", type=int, default=5,
                     help="Width of the background ring (px).")
-    # Channel name matching.
+    # Channel name matching. The two roles are deliberately separate flags: the
+    # model segments IRM (that is what it was trained on) and the intensities
+    # are read off TIRF.
+    ap.add_argument("--irm-name", default="irm",
+                    help="Substring identifying the IRM channel (segmented).")
     ap.add_argument("--tirf-name", default="tirf",
-                    help="Substring identifying the TIRF (microtubule) channel.")
+                    help="Substring identifying the TIRF channel (measured).")
     ap.add_argument("--solution-name", default="insol,in sol,solution",
                     help="Comma-separated substrings identifying the solution channel.")
     # Output toggles / subsetting.
@@ -139,6 +146,12 @@ def main() -> int:
     device = resolve_device(args.device)
     print(f"[info] device={device}  threshold={args.threshold}  "
           f"mt_width={args.mt_width} bg_gap={args.bg_gap} bg_width={args.bg_width}")
+    # Say out loud which channel plays which role. A run that segments the wrong
+    # channel produces plausible-looking numbers, so the log has to be the place
+    # you can check it afterwards without re-deriving it from the code.
+    print(f"[info] segmenting channel ~{args.irm_name!r}, "
+          f"measuring intensity on channel ~{args.tirf_name!r}, "
+          f"solution channel ~{args.solution_name!r}")
 
     from microtubule import MicrotubuleModel
     t0 = time.time()
@@ -153,7 +166,8 @@ def main() -> int:
     t_start = time.time()
     for fi, f in enumerate(files, start=1):
         try:
-            positions = list(iter_positions(f, tirf_match=(args.tirf_name,),
+            positions = list(iter_positions(f, irm_match=(args.irm_name,),
+                                            tirf_match=(args.tirf_name,),
                                             solution_match=sol_match))
         except Exception as e:
             n_fail += 1
@@ -165,13 +179,18 @@ def main() -> int:
             ti = time.time()
             solution_median = float(np.median(pos.solution))
             try:
-                seg = model.predict(pos.tirf, seed_threshold=args.threshold)
+                # IRM, not TIRF: the v7 checkpoint was trained on IRM frames
+                # (see microtubule/segment_mt.py). Feeding it TIRF produced
+                # confident, wrong centerlines for every run before 2026-08.
+                seg = model.predict(pos.irm, seed_threshold=args.threshold)
                 centerlines = seg["centerlines_rc"]
             except Exception as e:
                 n_fail += 1
                 print(f"[warn] segmentation failed {well} pos{pos.position}: {e}")
                 continue
 
+            # ...and TIRF for the readout: the centerlines come from IRM, the
+            # intensities integrated along them are the TIRF signal.
             rows = measure_frame(pos.tirf, centerlines,
                                  mt_width=args.mt_width, bg_gap=args.bg_gap,
                                  bg_width=args.bg_width, px_um=pos.px_um)
@@ -180,15 +199,23 @@ def main() -> int:
                 r["position"] = pos.position
                 r["solution_intensity_median"] = round(solution_median, 3)
                 r["source_file"] = f.name
+                r["acquired_at"] = pos.acquired_at
             csvw.write_rows(rows)
 
             stem = f"{pos.well_id}_pos{pos.position}"
             if not args.no_overlays:
-                save_overlay(pos.tirf, centerlines, out / "overlays" / f"{stem}.png")
+                # One overlay per role: `_irm` checks the segmentation against
+                # its own input, `_tirf` checks the measured band against the
+                # signal it integrates.
+                save_overlay(pos.irm, centerlines,
+                             out / "overlays" / f"{stem}_irm.png")
+                save_overlay(pos.tirf, centerlines,
+                             out / "overlays" / f"{stem}_tirf.png")
             if not args.no_json:
                 save_annotation_json(pos.well_id, pos.position, f.name,
-                                     pos.tirf.shape, centerlines, rows,
-                                     out / "annotations" / f"{stem}.json")
+                                     pos.irm.shape, centerlines, rows,
+                                     out / "annotations" / f"{stem}.json",
+                                     acquired_at=pos.acquired_at)
 
             n_pos += 1
             n_mt += len(rows)

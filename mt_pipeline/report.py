@@ -11,7 +11,9 @@ from pathlib import Path
 
 import numpy as np
 
-# Column order for the results table (one row per microtubule).
+# Column order for the results table (one row per microtubule). New columns are
+# APPENDED, never inserted: users' downstream scripts index this CSV by column
+# position as often as by name.
 COLUMNS = [
     "well_id", "position", "mt_id",
     "solution_intensity_median",
@@ -21,6 +23,11 @@ COLUMNS = [
     "net_mean_intensity",
     "n_px_mt", "n_px_bg",
     "source_file",
+    # When the well was recorded on the microscope, ISO-8601 UTC. This is the
+    # only run identifier that survives renaming, re-uploading or re-running the
+    # folder, which is why it lives in the table and not just in a directory
+    # name. Blank when the ND2 carries no timestamp.
+    "acquired_at",
 ]
 
 
@@ -54,14 +61,20 @@ def _normalize_for_display(frame: np.ndarray) -> np.ndarray:
     return (img * 255).astype(np.uint8)
 
 
-def save_overlay(tirf: np.ndarray, centerlines_rc: list[np.ndarray],
+def save_overlay(frame: np.ndarray, centerlines_rc: list[np.ndarray],
                  out_path: Path) -> None:
-    """Render MT centerlines (distinct colour per instance) over the TIRF frame."""
+    """Render MT centerlines (distinct colour per instance) over ``frame``.
+
+    Called once per channel that is worth eyeballing: over IRM it shows whether
+    the segmentation matched what the model actually saw, over TIRF whether the
+    measured band sits on the signal being integrated. Drawing only the latter
+    is how a whole batch of TIRF-segmented runs looked plausible for weeks.
+    """
     import cv2
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    gray = _normalize_for_display(tirf)
+    gray = _normalize_for_display(frame)
     rgb = np.repeat(gray[:, :, None], 3, axis=2)
     for idx, cl in enumerate(centerlines_rc):
         pts = np.asarray(cl)[:, ::-1].round().astype(np.int32)  # (row,col)->(x,y)
@@ -73,9 +86,9 @@ def save_overlay(tirf: np.ndarray, centerlines_rc: list[np.ndarray],
 
 
 def save_annotation_json(well_id: str, position: int, source_file: str,
-                         tirf_shape: tuple[int, int],
+                         image_shape: tuple[int, int],
                          centerlines_rc: list[np.ndarray], rows: list[dict],
-                         out_path: Path) -> None:
+                         out_path: Path, acquired_at: str | None = None) -> None:
     """Write MT centerlines as polylines (points are ``{x, y}`` = col, row px)."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -95,7 +108,8 @@ def save_annotation_json(well_id: str, position: int, source_file: str,
         "well_id": well_id,
         "position": position,
         "source_file": source_file,
-        "image_size": {"width": int(tirf_shape[1]), "height": int(tirf_shape[0])},
+        "acquired_at": acquired_at,
+        "image_size": {"width": int(image_shape[1]), "height": int(image_shape[0])},
         "num_microtubules": len(polylines),
         "polylines": polylines,
     }

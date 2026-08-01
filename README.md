@@ -9,6 +9,11 @@ It wraps a trained instance-segmentation model (**DINOv3-L → DPT → PySOAX**,
 "microtubule v7") that traces each microtubule as an open centerline; a
 measurement layer turns those centerlines into numbers.
 
+The two imaging channels have separate jobs and are **not** interchangeable:
+
+* **IRM** is the *segmentation* input — the channel the v7 model was trained on.
+* **TIRF** is the *readout* — the intensities integrated along the centerlines.
+
 ![Detected microtubule centerlines on a TIRF frame](docs/example_overlay.png)
 
 *Each coloured line is one detected microtubule (well D04, position 0 — 70 MTs).*
@@ -54,9 +59,13 @@ For **every microtubule** in every position of every well, one row in
 | `net_mean_intensity` | `mt_mean_intensity − bg_mean_intensity` (background-subtracted signal) |
 | `n_px_mt`, `n_px_bg` | number of pixels in the band / ring |
 | `source_file` | originating `.nd2` file name |
+| `acquired_at` | when the well was recorded, **ISO-8601 UTC** (e.g. `2026-05-19T21:48:02Z`) — read from the ND2 itself, so it identifies the run no matter how the folder is named |
 
-It also writes a QC **overlay PNG** and a **polyline annotation JSON** per
-position (toggle off with `--no-overlays` / `--no-json`).
+The centerlines come from the **IRM** channel; every `mt_*` / `bg_*` intensity is
+measured on the **TIRF** channel.
+
+It also writes **two QC overlay PNGs** (one per channel) and a **polyline
+annotation JSON** per position (toggle off with `--no-overlays` / `--no-json`).
 
 ---
 
@@ -167,7 +176,8 @@ keeps its partial results.
 | `--mt-width` | `5` | Width of the on-MT band across the centerline (px). |
 | `--bg-gap` | `1` | Gap between the MT band and the background ring (px). |
 | `--bg-width` | `5` | Width of the background ring (px). |
-| `--tirf-name` | `tirf` | Substring identifying the TIRF (microtubule) channel. |
+| `--irm-name` | `irm` | Substring identifying the IRM channel — the one that gets **segmented**. |
+| `--tirf-name` | `tirf` | Substring identifying the TIRF channel — the one that gets **measured**. |
 | `--solution-name` | `insol,in sol,solution` | Comma-separated substrings identifying the solution channel. |
 | `--no-overlays` | off | Skip overlay PNGs. |
 | `--no-json` | off | Skip annotation JSON. |
@@ -181,17 +191,23 @@ keeps its partial results.
 * **One `.nd2` file per well**; the file name should contain `Well<id>` (e.g.
   `WellD04_Channel...nd2`) — `D04` becomes `well_id`. Files that don't match
   fall back to the file stem.
-* Each file holds **several positions** (fields of view) and **three channels**.
-  Channels are matched **by name**, not by order, so acquisition-order changes
-  don't matter. By default it looks for:
-  * the **TIRF** channel — name contains `TIRF` (the microtubule signal),
+* Each file holds **several positions** (fields of view) and **three channels**,
+  all three of which are required. Channels are matched **by name**, not by
+  order, so acquisition-order changes don't matter. By default it looks for:
+  * the **IRM** channel — name contains `IRM` — which is **segmented**,
+  * the **TIRF** channel — name contains `TIRF` — on which the microtubule and
+    background intensities are **measured**,
   * the **solution** channel — name contains `InSol` / `in sol` / `solution`.
-  Override with `--tirf-name` / `--solution-name` if your channels are named
-  differently.
+  Override with `--irm-name` / `--tirf-name` / `--solution-name` if your channels
+  are named differently.
 * Pixel calibration is read from the ND2 (used for `length_um`); if it's
   missing, `length_um` is left blank and `length_px` is still reported.
+* The acquisition timestamp is read from the ND2 and reported as `acquired_at`.
 
-The IRM channel is not required by the measurement and is ignored.
+A file with no IRM channel is **skipped with a warning** and counted as a
+failure, rather than segmented on some other channel: the v7 checkpoint is
+trained on IRM, and running it on TIRF yields confident but wrong centerlines
+(this was the behaviour up to 2026-08 — see §12).
 
 ---
 
@@ -201,7 +217,10 @@ The IRM channel is not required by the measurement and is ignored.
 results/
 ├── results.csv                 # one row per microtubule (see §1)
 ├── overlays/
-│   ├── D04_pos0.png            # centerlines drawn on the TIRF frame (QC)
+│   ├── D04_pos0_irm.png        # centerlines on the IRM frame — did segmentation
+│   │                           #   match what the model was actually given?
+│   ├── D04_pos0_tirf.png       # the same centerlines on the TIRF frame — does
+│   │                           #   the measured band sit on the signal?
 │   └── ...
 └── annotations/
     ├── D04_pos0.json           # centerlines as polylines (points are x=col, y=row px)
@@ -211,9 +230,9 @@ results/
 Example `results.csv` rows:
 
 ```csv
-well_id,position,mt_id,solution_intensity_median,length_px,length_um,mt_mean_intensity,mt_std_intensity,mt_sum_intensity,bg_mean_intensity,bg_median_intensity,bg_sum_intensity,net_mean_intensity,n_px_mt,n_px_bg,source_file
-D04,0,1,4603.0,95.83,6.9209,176.503,20.986,51892.0,194.811,182.0,99743.0,-18.307,294,512,"WellD04_....nd2"
-D04,0,2,4603.0,299.46,21.6278,158.946,20.668,182311.0,156.894,155.0,438677.0,2.051,1147,2796,"WellD04_....nd2"
+well_id,position,mt_id,solution_intensity_median,length_px,length_um,mt_mean_intensity,mt_std_intensity,mt_sum_intensity,bg_mean_intensity,bg_median_intensity,bg_sum_intensity,net_mean_intensity,n_px_mt,n_px_bg,source_file,acquired_at
+D04,0,1,4603.0,95.83,6.9209,176.503,20.986,51892.0,194.811,182.0,99743.0,-18.307,294,512,"WellD04_....nd2",2026-05-19T21:48:02Z
+D04,0,2,4603.0,299.46,21.6278,158.946,20.668,182311.0,156.894,155.0,438677.0,2.051,1147,2796,"WellD04_....nd2",2026-05-19T21:48:02Z
 ```
 
 Read it in Python:
@@ -300,7 +319,9 @@ the partial table stays valid. Use `--device cpu` on a Mac (the default;
 | ------- | --- |
 | `gh: ... not found` / weights won't download | Install [`gh`](https://cli.github.com) and run `gh auth login`, or download the asset manually and pass `--weights /path/to/microtubule_v7.pt`. |
 | `no .nd2 files found` | Check `--data`; the folder is searched recursively for `*.nd2`. |
+| `no channel matching ('irm',)` | The well has no IRM channel under that name — pass `--irm-name <substring>`. Segmentation needs IRM; the well is skipped rather than segmented on another channel. |
 | `no channel matching ('tirf',)` | Your TIRF channel is named differently — pass `--tirf-name <substring>` (likewise `--solution-name`). |
+| `--irm-name and --tirf-name both resolve to channel ...` | Both roles landed on one channel, so segmentation and readout use the same image. Intentional only if you know your recording has a single usable channel. |
 | `weights_only` load warning on startup | Expected; the checkpoint embeds a small config object and the loader falls back safely. Set `ALLOW_UNSAFE_WEIGHTS=0` to refuse. |
 | Very slow on a Mac | Expected for a ViT-L on CPU. Use a CUDA GPU for the full batch, or run overnight. |
 | `OSError: ... gated repo` / HF 401 | Only happens with `--online-backbone`. Don't use that flag — the default offline path needs no token. |
@@ -326,6 +347,19 @@ Inspect `overlays/` to judge.
 **Can I segment a single image (not a well recording)?** Yes — `infer.py`
 handles one frame at a time and writes centerlines as JSON; see
 [`MODEL.md`](MODEL.md).
+
+**Which channel is segmented?** IRM. Up to 2026-08 this tool segmented **TIRF**
+and ignored IRM entirely, which is wrong: the v7 checkpoint is trained on IRM
+frames. The failure was hard to spot because the QC overlay was drawn on TIRF
+too, so a wrong centerline still looked like it followed a filament. **Results
+produced before that change should be re-run** — the intensity columns were
+measured along centerlines that came from the wrong image. `--irm-name` /
+`--tirf-name` let you point either role at any channel name.
+
+**How do I tell which run a row came from?** `acquired_at` — the recording's own
+timestamp, in ISO-8601 UTC, read out of the ND2. It survives renaming or
+re-uploading the folder, which a directory name does not. `source_file` gives the
+individual well file.
 
 ---
 
