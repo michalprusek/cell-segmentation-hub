@@ -46,6 +46,8 @@ _VALUE_FLAGS = {
     "mtWidth": "--mt-width",
     "bgGap": "--bg-gap",
     "bgWidth": "--bg-width",
+    # Two channel roles, two flags: the module segments IRM and measures TIRF.
+    "irmName": "--irm-name",
     "tirfName": "--tirf-name",
     "solutionName": "--solution-name",
     "limitWells": "--limit-wells",

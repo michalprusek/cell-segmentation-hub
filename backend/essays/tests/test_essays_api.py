@@ -207,6 +207,16 @@ def test_device_line_matches_the_modules_real_output():
     # ...and must not swallow the well-count line the other regex needs.
     assert not essays_api._DEVICE_LINE.search(
         "[info] 180 well file(s) to process from /in")
+    # ...nor the channel-roles line added alongside the IRM segmentation fix.
+    # Three [info] lines now share this stream; only one carries the device, and
+    # a device parsed out of the wrong one would put a false value in the UI.
+    # Literal copied from a real run.
+    channels = ("[info] segmenting channel ~'irm', measuring intensity on "
+                "channel ~'tirf', solution channel ~'insol,in sol,solution'")
+    assert not essays_api._DEVICE_LINE.search(channels)
+    assert not essays_api._INFO_TOTAL.search(channels)
+    assert not essays_api._OK_LINE.search(channels)
+    assert not essays_api._DIAG_LINE.search(channels)
 
 
 @pytest.mark.parametrize("line,n_fail", [
@@ -236,3 +246,65 @@ def test_exit_error_without_output_is_still_readable():
 
     assert essays_api._exit_error(2, collections.deque()) == \
         "evaluate.py exited with code 2"
+
+
+# --- _build_cmd: the option pass-through ----------------------------------
+#
+# These flags are the ONLY way a caller can reach evaluate.py, so a missing
+# entry in _VALUE_FLAGS is not a broken option — it is an option that silently
+# runs on the module's default. `irmName` is the one that matters most: without
+# it a user could not point segmentation at their IRM channel, which is the
+# whole subject of the 2026-08 channel-role fix.
+
+def _req(**options):
+    return essays_api.ProcessRequest(
+        jobId="job-1", inputDir="/in", outDir="/out", options=options or None)
+
+
+def test_build_cmd_has_the_invariant_head():
+    cmd = essays_api._build_cmd(_req(), "cuda")
+
+    assert cmd[:2] == ["python", "evaluate.py"]
+    assert cmd[cmd.index("--data") + 1] == "/in"
+    assert cmd[cmd.index("--out") + 1] == "/out"
+    assert cmd[cmd.index("--device") + 1] == "cuda"
+    assert cmd[cmd.index("--weights") + 1] == essays_api.WEIGHTS
+
+
+def test_build_cmd_passes_both_channel_roles_separately():
+    cmd = essays_api._build_cmd(_req(irmName="reflect", tirfName="epi"), "cpu")
+
+    assert cmd[cmd.index("--irm-name") + 1] == "reflect"
+    assert cmd[cmd.index("--tirf-name") + 1] == "epi"
+
+
+@pytest.mark.parametrize("key,flag,value,expected", [
+    ("threshold", "--threshold", 0.6, "0.6"),
+    ("mtWidth", "--mt-width", 7, "7"),
+    ("bgGap", "--bg-gap", 2, "2"),
+    ("bgWidth", "--bg-width", 4, "4"),
+    ("irmName", "--irm-name", "irm", "irm"),
+    ("tirfName", "--tirf-name", "tirf", "tirf"),
+    ("solutionName", "--solution-name", "insol", "insol"),
+    ("limitWells", "--limit-wells", 3, "3"),
+])
+def test_build_cmd_maps_every_value_option(key, flag, value, expected):
+    cmd = essays_api._build_cmd(_req(**{key: value}), "cpu")
+
+    assert cmd[cmd.index(flag) + 1] == expected
+
+
+def test_build_cmd_omits_unset_options():
+    """An absent option must not become an empty-string argument."""
+    cmd = essays_api._build_cmd(_req(), "cpu")
+
+    for flag in essays_api._VALUE_FLAGS.values():
+        assert flag not in cmd
+    for flag in essays_api._BOOL_FLAGS.values():
+        assert flag not in cmd
+
+
+def test_build_cmd_treats_bool_flags_as_presence_only():
+    on = essays_api._build_cmd(_req(noOverlays=True, noJson=False), "cpu")
+
+    assert "--no-overlays" in on and "--no-json" not in on
