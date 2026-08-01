@@ -26,6 +26,12 @@ export interface EssayJobOptions {
   mtWidth?: number;
   bgGap?: number;
   bgWidth?: number;
+  /**
+   * Substring naming the channel each role uses. Separate flags because the
+   * module segments IRM and measures intensities on TIRF; see EssayJobOptions
+   * in backend/src/services/essaysService.ts.
+   */
+  irmName?: string;
   tirfName?: string;
   solutionName?: string;
   limitWells?: number;

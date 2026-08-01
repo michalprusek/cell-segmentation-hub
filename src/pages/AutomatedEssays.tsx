@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import EssaysDropzone from '@/components/essays/EssaysDropzone';
+import { folderNameFromFiles } from '@/components/essays/folderName';
 import { useLanguage } from '@/contexts/useLanguage';
 import apiClient from '@/lib/api';
 import type { EssayJob } from '@/types/essays';
@@ -23,14 +24,6 @@ const humanSize = (bytes: number): string => {
     i++;
   }
   return `${v.toFixed(1)} ${units[i]}`;
-};
-
-// Best-effort folder name from a picked/dragged file's relative path.
-const folderNameFromFiles = (files: File[]): string | undefined => {
-  const rel = (files[0] as File & { webkitRelativePath?: string })
-    ?.webkitRelativePath;
-  if (rel && rel.includes('/')) return rel.split('/')[0];
-  return undefined;
 };
 
 const statusVariant = (
