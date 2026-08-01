@@ -207,6 +207,16 @@ def test_device_line_matches_the_modules_real_output():
     # ...and must not swallow the well-count line the other regex needs.
     assert not essays_api._DEVICE_LINE.search(
         "[info] 180 well file(s) to process from /in")
+    # ...nor the channel-roles line added alongside the IRM segmentation fix.
+    # Three [info] lines now share this stream; only one carries the device, and
+    # a device parsed out of the wrong one would put a false value in the UI.
+    # Literal copied from a real run.
+    channels = ("[info] segmenting channel ~'irm', measuring intensity on "
+                "channel ~'tirf', solution channel ~'insol,in sol,solution'")
+    assert not essays_api._DEVICE_LINE.search(channels)
+    assert not essays_api._INFO_TOTAL.search(channels)
+    assert not essays_api._OK_LINE.search(channels)
+    assert not essays_api._DIAG_LINE.search(channels)
 
 
 @pytest.mark.parametrize("line,n_fail", [
