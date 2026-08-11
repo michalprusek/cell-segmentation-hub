@@ -13,8 +13,8 @@
 # The module used to live in a separate private repo cloned at build time; it is
 # now vendored at backend/essays/module and copied in like any other first-party
 # source. No git, no build secret, no network at build time — and the module's
-# microtubule model code is no longer a second copy: it imports the ML service's
-# package, which this image already carries at /app/models (see MT_PACKAGE_DIR).
+# microtubule model code is no longer a second copy: it shares the ML service's
+# package (see MT_PACKAGE_DIR).
 ARG ML_IMAGE=cell-segmentation-hub-ml:latest
 FROM ${ML_IMAGE}
 
@@ -25,10 +25,19 @@ COPY --chown=app:app backend/essays/module /app/essays_module
 COPY --chown=app:app backend/essays/sitecustomize.py /app/sitecustomize.py
 COPY --chown=app:app backend/essays/essays_api.py /app/essays_api.py
 
-# Where the shared microtubule package lives in THIS image. The base ML image
-# puts the ML service at /app, so its model packages sit under /app/models. Set
-# explicitly rather than left to the resolver's fallback search, so a future move
-# of the ML sources fails the build here instead of silently finding nothing.
+# The shared model code, taken from the REPO rather than inherited from the base
+# image. The base image already carries a copy at /app/models/microtubule, but it
+# is only as fresh as the last `make build-service SERVICE=ml` — so inheriting it
+# silently ships whatever model code the ml image was last built with, which is
+# not necessarily what is committed. Copying it here makes this image a function
+# of the repo alone: `make build-essays` can no longer produce a worker running
+# yesterday's model. Same single source in git; this just pins which revision of
+# it lands in the image.
+COPY --chown=app:app backend/segmentation/models/microtubule /app/models/microtubule
+
+# Where that package lives in THIS image. Set explicitly rather than left to the
+# resolver's fallback search, so a future move of the ML sources fails the build
+# here instead of silently finding nothing.
 ENV MT_PACKAGE_DIR=/app/models
 
 # Build-time smoke: the module imports cleanly against this stack AND resolves
@@ -38,7 +47,9 @@ ENV MT_PACKAGE_DIR=/app/models
 # The backbone config is checked explicitly: an import-only smoke passes without
 # it, and the failure would surface on a user's first batch job instead of here.
 RUN cd /app/essays_module \
-    && python -c "import evaluate, mt_pipeline, microtubule; \
+    && python -c "import _mt_package; \
+pkg = _mt_package.ensure_on_path(); \
+import evaluate, mt_pipeline, microtubule; \
 assert evaluate.BUNDLED_BACKBONE_CONFIG.joinpath('config.json').is_file(), \
     'offline backbone config missing: %s' % evaluate.BUNDLED_BACKBONE_CONFIG; \
 print('essays module import OK; microtubule from', microtubule.__file__)"
