@@ -122,9 +122,10 @@ build-service:
 	$(DOCKER_COMPOSE) -f docker-compose.production.yml build $(SERVICE)
 
 # Build the Automated Essays worker from the vendored module at
-# backend/essays/module. The essays image is FROM the ml image and imports the
-# ML service's microtubule package from it, so the ml image must be built first —
-# and must be current, or the worker runs yesterday's model code.
+# backend/essays/module. The essays image is FROM the ml image (which supplies
+# the validated torch/transformers stack), but it copies the microtubule model
+# code from the repo rather than inheriting it — so a stale ml image affects only
+# the dependency stack, never which model code the worker runs.
 build-essays:
 	@docker image inspect cell-segmentation-hub-ml:latest >/dev/null 2>&1 || \
 		{ echo "❌ base image cell-segmentation-hub-ml:latest missing — run 'make build-service SERVICE=ml' first"; exit 1; }
