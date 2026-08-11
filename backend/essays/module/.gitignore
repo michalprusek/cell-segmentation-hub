@@ -1,0 +1,25 @@
+# --- model weights (distributed via GitHub Release, not git) ---
+weights/*.pt
+weights/*.pth
+
+# --- python / venv ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- pipeline outputs ---
+results/
+outputs/
+overlays/
+annotations/
+*.mt.json
+
+# --- data (never commit microscopy recordings) ---
+*.nd2
+data/
+
+# --- misc ---
+.DS_Store
+microtubule-segmentation.zip
