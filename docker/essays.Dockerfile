@@ -35,8 +35,12 @@ ENV MT_PACKAGE_DIR=/app/models
 # the shared microtubule package. Fails the build early if a dependency is
 # unexpectedly absent, or if MT_PACKAGE_DIR ever stops pointing at the model code
 # — which would otherwise surface only when a user's batch job dies mid-run.
+# The backbone config is checked explicitly: an import-only smoke passes without
+# it, and the failure would surface on a user's first batch job instead of here.
 RUN cd /app/essays_module \
     && python -c "import evaluate, mt_pipeline, microtubule; \
+assert evaluate.BUNDLED_BACKBONE_CONFIG.joinpath('config.json').is_file(), \
+    'offline backbone config missing: %s' % evaluate.BUNDLED_BACKBONE_CONFIG; \
 print('essays module import OK; microtubule from', microtubule.__file__)"
 
 USER app
