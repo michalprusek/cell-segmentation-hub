@@ -1,0 +1,28 @@
+# This file covers what the repo root's .gitignore does not (.venv/, *.nd2,
+# *.egg-info) for people running this module standalone in its own virtualenv.
+
+# --- model weights: staged by scripts/download-microtubule-weights.sh ---
+weights/*.pt
+weights/*.pth
+
+# --- python / venv ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- pipeline outputs ---
+results/
+outputs/
+overlays/
+annotations/
+*.mt.json
+
+# --- data (never commit microscopy recordings) ---
+*.nd2
+data/
+
+# --- misc ---
+.DS_Store
+microtubule-segmentation.zip

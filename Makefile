@@ -121,19 +121,17 @@ build-service:
 	@echo "🔨 Building service: $(SERVICE)..."
 	$(DOCKER_COMPOSE) -f docker-compose.production.yml build $(SERVICE)
 
-# Build the Automated Essays worker. Re-clones the private AutomatedEssaysModule
-# at build time (gh token supplied as a BuildKit secret, never baked in) and
-# busts the clone cache so upstream module changes propagate. The essays image
-# is FROM the ml image, so that must be built first.
+# Build the Automated Essays worker from the vendored module at
+# backend/essays/module. The essays image is FROM the ml image (which supplies
+# the validated torch/transformers stack), but it copies the microtubule model
+# code from the repo rather than inheriting it — so a stale ml image affects only
+# the dependency stack, never which model code the worker runs.
 build-essays:
-	@command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required (run 'gh auth login')"; exit 1; }
 	@docker image inspect cell-segmentation-hub-ml:latest >/dev/null 2>&1 || \
 		{ echo "❌ base image cell-segmentation-hub-ml:latest missing — run 'make build-service SERVICE=ml' first"; exit 1; }
-	@echo "🔨 Building Automated Essays worker (re-cloning module @ $${ESSAYS_MODULE_REF:-main})..."
-	@umask 077; gh auth token > .essays_ghtoken
-	@ESSAYS_MODULE_CACHE_BUST=$$(date +%s) DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
-		$(DOCKER_COMPOSE) -f docker-compose.production.yml build essays; \
-		rc=$$?; rm -f .essays_ghtoken; exit $$rc
+	@echo "🔨 Building Automated Essays worker..."
+	@DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
+		$(DOCKER_COMPOSE) -f docker-compose.production.yml build essays
 
 # Show Docker disk usage
 docker-usage:

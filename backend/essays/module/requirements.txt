@@ -1,0 +1,34 @@
+# Microtubule v7 standalone inference — pinned to the versions the
+# cell-segmentation-hub ML service runs in production (Python 3.10).
+# All have macOS arm64 (Apple Silicon) wheels, so this installs on a MacBook.
+#
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# torch / transformers pins are LOAD-BEARING: transformers >= 4.57 is required
+# for the DINOv3 backbone. Pin transformers to 4.57.1 — the LAST version whose
+# DINOv3-ViT-L forward output matches the v7 checkpoint. 4.57.2 silently changed
+# the DINOv3 forward (no error, no failed load): the ViT features degrade into
+# low-frequency blobs, so the seed map fills ~50% of the frame and PySOAX emits
+# random microtubules (bisected on a reference frame: 4.57.0/.1 -> 303 MTs
+# tracing real filaments; 4.57.2-4.57.6 -> 76 scattered). 4.57.0 also worked but
+# PyPI YANKED it for a setup/install defect, so 4.57.1 is the safe floor. DO NOT
+# bump into 4.57.2+ or 5.x without re-verifying MT output against a known-good
+# frame — a green install proves nothing here.
+
+# --- Deep learning core ---
+torch==2.6.0
+torchvision==0.21.0
+transformers==4.57.1
+huggingface_hub>=0.20
+
+# --- Numerics / classical CV (PySOAX postprocessing) ---
+numpy==1.26.4
+scipy==1.11.4
+scikit-image==0.22.0
+opencv-python-headless==4.8.1.78
+
+# --- Image I/O ---
+Pillow==12.2.0
+tifffile>=2024.1.30   # multi-page TIFF microscopy stacks
+nd2>=0.10.0           # Nikon NIS-Elements .nd2 (optional input format)

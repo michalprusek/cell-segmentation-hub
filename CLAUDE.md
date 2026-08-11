@@ -364,6 +364,16 @@ Controllers → Services → Prisma ORM → Storage (local FS / S3)
 - Weights from Google Drive; `make check-weights`. Microtubule v7: `scripts/download-microtubule-weights.sh` + `HF_TOKEN` for DINOv3 backbone.
 - Cross-frame routes: `/api/v1/track` (Hungarian matching on 32-d embeddings) + `/api/v1/kymograph` (line-profile + viridis) in `api/tracker_kymograph.py`.
 
+### Automated Essays worker (`/backend/essays/`)
+
+Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runner that shells out to `module/evaluate.py`; the `essays` image is built `FROM` the ml image so it inherits the exact validated stack (torch 2.6.0+cu124, transformers 4.57.1 — see the pin warning in [Deploy Gotchas](#deploy-gotchas)).
+
+- **The module is vendored at `backend/essays/module`** (it was a separate private repo cloned at image build until 2026-08-11 — no more git clone, build secret, or network at build time).
+- **The v7 model code has ONE copy**, in `backend/segmentation/models/microtubule`. The essays module imports it via `_mt_package.ensure_on_path()` (`MT_PACKAGE_DIR=/app/models` in the image, populated by a `COPY` from the repo — _not_ inherited from the ml base image, so a stale ml image can never make the worker run older model code). Before this, the two copies drifted in opposite directions for months — the ML copy grew warm-start seeding, the module copy grew the offline backbone path — and neither side got the other's fix. **Do not re-introduce a second copy**; a change to `pysoax.py`, `segment_mt.py` or `wrapper.py` now reaches both callers, so re-verify BOTH the essays batch run and interactive MT segmentation when touching them.
+- `MT_BACKBONE_CONFIG=<dir>` builds the DINOv3 backbone offline from a bundled config with random weights (the v7 checkpoint then overwrites every weight), so the batch path needs no `HF_TOKEN`. Unset — the interactive path — still downloads the gated backbone.
+- Checkpoint: staged once by `scripts/download-microtubule-weights.sh` into `backend/segmentation/weights/`, bind-mounted read-only at `/app/mt_weights`. Both callers run the byte-identical file.
+- **A capped run does not bit-match an uncapped one.** `sitecustomize.py` applies `set_per_process_memory_fraction` (`ESSAYS_APPLY_GPU_CAP=1`) to the `evaluate.py` subprocess, which shrinks cuDNN's workspace and changes convolution algorithm selection. The numbers stay valid and MT counts hold, but a filament endpoint can move ~1 px — and because a background ring excludes _neighbouring_ MTs, that shifts an adjacent MT's `bg_*` columns while its centerline is unchanged. So when diffing a local run against production, hold the cap constant or you will chase a phantom regression. (Measured 2026-08-11: identical output for capped-vs-capped and uncapped-vs-uncapped; 2 of 73 rows differ across the cap boundary.)
+
 ### Video projects
 
 - Video container = one `Image` row with `isVideoContainer=true` + `channels` JSON. Each frame is a child `Image` row with `parentVideoId` + `frameIndex` + `displayOrder`. Containers are never enqueued.
