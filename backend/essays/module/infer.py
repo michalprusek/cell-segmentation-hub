@@ -51,10 +51,14 @@ from pathlib import Path
 
 import numpy as np
 
-# Make the bundled ``microtubule`` package importable regardless of CWD.
+# Make this directory importable regardless of CWD.
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
+
+from _mt_package import (  # noqa: E402  (needs _HERE on sys.path)
+    default_weights, ensure_on_path, missing_weights_message,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -207,8 +211,7 @@ def main() -> int:
     )
     ap.add_argument("--image", required=True, type=Path,
                     help="Input frame (PNG/JPG/BMP/TIFF/ND2/NPY).")
-    ap.add_argument("--weights", type=Path,
-                    default=_HERE / "weights" / "microtubule_v7.pt",
+    ap.add_argument("--weights", type=Path, default=default_weights(),
                     help="Path to microtubule_v7.pt checkpoint.")
     ap.add_argument("--output", type=Path, default=None,
                     help="Output JSON path (default: <image>.mt.json).")
@@ -227,9 +230,7 @@ def main() -> int:
         print(f"[error] image not found: {args.image}", file=sys.stderr)
         return 2
     if not args.weights.exists():
-        print(f"[error] checkpoint not found: {args.weights}\n"
-              "        It ships in weights/microtubule_v7.pt — see README.",
-              file=sys.stderr)
+        print(f"[error] {missing_weights_message(args.weights)}", file=sys.stderr)
         return 2
 
     device = resolve_device(args.device)
@@ -239,6 +240,8 @@ def main() -> int:
     print(f"[info] loaded {args.image.name}  shape={image_2d.shape}  "
           f"dtype={image_2d.dtype}")
 
+    mt_pkg = ensure_on_path()
+    print(f"[info] microtubule package: {mt_pkg / 'microtubule'}")
     from microtubule import MicrotubuleModel
 
     t0 = time.time()

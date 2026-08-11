@@ -31,8 +31,13 @@ import pytest
 PKG_ROOT = Path(__file__).resolve().parents[1]
 if str(PKG_ROOT) not in sys.path:
     sys.path.insert(0, str(PKG_ROOT))
+
+from _mt_package import ensure_on_path  # noqa: E402  (needs PKG_ROOT on sys.path)
+
+# The model code is shared with the ML service rather than copied here, so these
+# tests exercise the same checkpoint loader the segmentation service runs.
+MT_DIR = ensure_on_path() / "microtubule"
 # segment_mt does `from synth_irm.training...`, which needs the package dir too.
-MT_DIR = PKG_ROOT / "microtubule"
 if str(MT_DIR) not in sys.path:
     sys.path.insert(0, str(MT_DIR))
 

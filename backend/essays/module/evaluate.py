@@ -43,7 +43,11 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-DEFAULT_WEIGHTS = _HERE / "weights" / "microtubule_v7.pt"
+from _mt_package import (  # noqa: E402  (needs _HERE on sys.path)
+    default_weights, ensure_on_path, missing_weights_message,
+)
+
+DEFAULT_WEIGHTS = default_weights()
 BUNDLED_BACKBONE_CONFIG = _HERE / "config" / "dinov3_vitl16"
 
 
@@ -65,13 +69,11 @@ def resolve_device(requested: str) -> str:
 
 
 def ensure_weights(weights: Path) -> Path:
-    """Make sure the checkpoint exists locally, downloading it if necessary."""
+    """Return the checkpoint path, or fail with instructions to stage it."""
     weights = Path(weights)
     if weights.exists():
         return weights
-    print(f"[info] checkpoint not found at {weights}; attempting download...")
-    from scripts.download_weights import download_weights
-    return download_weights(weights)
+    raise FileNotFoundError(missing_weights_message(weights))
 
 
 def build_args() -> argparse.Namespace:
@@ -142,7 +144,14 @@ def main() -> int:
         files = files[:args.limit_wells]
     print(f"[info] {len(files)} well file(s) to process from {args.data}")
 
-    weights = ensure_weights(args.weights)
+    try:
+        weights = ensure_weights(args.weights)
+    except FileNotFoundError as exc:
+        # Same shape as the other operator errors above: a readable message and
+        # exit 2, not a traceback. The job runner tails this output into the
+        # job's error field, where a stack trace helps nobody.
+        print(f"[error] {exc}", file=sys.stderr)
+        return 2
     device = resolve_device(args.device)
     print(f"[info] device={device}  threshold={args.threshold}  "
           f"mt_width={args.mt_width} bg_gap={args.bg_gap} bg_width={args.bg_width}")
@@ -153,6 +162,11 @@ def main() -> int:
           f"measuring intensity on channel ~{args.tirf_name!r}, "
           f"solution channel ~{args.solution_name!r}")
 
+    # The model code is shared with the interactive segmentation service rather
+    # than copied here; say which copy ran, so a surprising result can be traced
+    # to the code that produced it without guessing.
+    mt_pkg = ensure_on_path()
+    print(f"[info] microtubule package: {mt_pkg / 'microtubule'}")
     from microtubule import MicrotubuleModel
     t0 = time.time()
     model = MicrotubuleModel().load_weights(str(weights), device)

@@ -23,8 +23,8 @@ PySOAX is pure NumPy/SciPy/scikit-image.
 
 ## Backbone: offline (default here) vs. online
 
-The v7 checkpoint `weights/microtubule_v7.pt` **contains the full DINOv3-L
-backbone weights**. Two ways to construct the backbone:
+The v7 checkpoint `microtubule_v7.pt` **contains the full DINOv3-L backbone
+weights**. Two ways to construct the backbone:
 
 * **Offline (default in this repo).** Set `MT_BACKBONE_CONFIG` to the bundled
   `config/dinov3_vitl16` directory; the backbone is built from that config with
@@ -58,7 +58,7 @@ python infer.py --image frame.tif --device cpu        # CPU (default on Mac)
 | Flag | Default | Meaning |
 | ---- | ------- | ------- |
 | `--image` | *(required)* | Input frame: PNG/JPG/BMP/TIFF/ND2/NPY. |
-| `--weights` | `weights/microtubule_v7.pt` | Checkpoint path. |
+| `--weights` | auto-detected (see README §4) | Checkpoint path. |
 | `--output` | `<image>.mt.json` | Output JSON path. |
 | `--overlay` | *(off)* | Render centerlines over the frame to this PNG. |
 | `--device` | `auto` | `auto` = CUDA if present else CPU. `cpu` / `cuda` / `mps`. |
@@ -102,8 +102,10 @@ measurement of well recordings, use `evaluate.py` instead.
 ### Library use
 
 ```python
-from microtubule import MicrotubuleModel    # run from the repo root
-model = MicrotubuleModel().load_weights("weights/microtubule_v7.pt", "cpu")
+from _mt_package import default_weights, ensure_on_path
+ensure_on_path()                            # shared package from the ML service
+from microtubule import MicrotubuleModel
+model = MicrotubuleModel().load_weights(str(default_weights()), "cpu")
 out = model.predict(frame_2d, seed_threshold=0.5)
 out["centerlines_rc"]      # list of (M_i, 2) float64 (row, col) px
 out["seed_prob"]           # (H, W) float32
@@ -118,7 +120,7 @@ out["embedding_samples"]   # list of (M_i, 32) float16
 | ------- | --- |
 | `weights_only` load warning | Expected — the checkpoint embeds a small config object; the loader falls back to `weights_only=False`. Gate with `ALLOW_UNSAFE_WEIGHTS=0` to refuse. |
 | `OSError: ... is a gated repo` / 401 | Only happens on the **online** backbone path; use the default offline path, or set `HF_TOKEN` and accept the DINOv3 license. |
-| `ModuleNotFoundError: synth_irm` / `pysoax` | The `microtubule/` dir was moved/flattened — keep it intact and run from the repo root. |
+| `ModuleNotFoundError: synth_irm` / `pysoax` | The shared `microtubule/` package was moved/flattened — keep it intact at `backend/segmentation/models/microtubule`, or point `MT_PACKAGE_DIR` at its parent. |
 | MPS error / odd results on Mac | Use `--device cpu`; `mps` is experimental for this model. |
 
 ## Provenance
