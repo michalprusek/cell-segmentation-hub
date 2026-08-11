@@ -30,13 +30,27 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 
 
+def _sibling_of_essays(*parts: str) -> list[Path]:
+    """``backend/<parts>`` for a checkout, where this file is backend/essays/module.
+
+    Returns an empty list when this file is not that deep — the module gets
+    mounted straight onto ``/essays_module`` in one-off containers, where
+    ``parents[1]`` would raise IndexError and take down every import of
+    ``evaluate`` with it.
+    """
+    parents = _HERE.parents
+    if len(parents) < 2:
+        return []
+    return [parents[1].joinpath(*parts)]
+
+
 def _candidates() -> list[Path]:
     override = os.environ.get("MT_PACKAGE_DIR")
     if override:
         return [Path(override)]
     return [
         # backend/essays/module/ -> backend/segmentation/models/
-        _HERE.parents[1] / "segmentation" / "models",
+        *_sibling_of_essays("segmentation", "models"),
         Path("/app/models"),
     ]
 
@@ -83,7 +97,7 @@ def weights_candidates() -> list[Path]:
     out = [Path(env)] if env else []
     out += [
         # backend/essays/module/ -> backend/segmentation/weights/
-        _HERE.parents[1] / "segmentation" / "weights" / WEIGHTS_NAME,
+        *_sibling_of_essays("segmentation", "weights", WEIGHTS_NAME),
         Path("/app/mt_weights") / WEIGHTS_NAME,
     ]
     return out
