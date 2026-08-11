@@ -1,4 +1,4 @@
-# AutomatedEssaysModule
+# Automated Essays module
 
 **Automated microtubule analysis of ND2 well recordings.** Point this tool at a
 folder of `.nd2` files (one per well) and it detects every microtubule (MT) in
@@ -71,16 +71,21 @@ annotation JSON** per position (toggle off with `--no-overlays` / `--no-json`).
 
 ## 2. Quick start
 
+In the app, this runs as the `essays` service and you drive it from the
+**Automated Essays** page — nothing below is needed. The steps here are for
+running the batch assay standalone, on a laptop:
+
 ```bash
-git clone https://github.com/michalprusek/AutomatedEssaysModule.git
-cd AutomatedEssaysModule
+cd backend/essays/module
 
 python3 -m venv .venv
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# run on a folder of well recordings (weights auto-download on first run)
+# stage the 1.2 GB checkpoint once (from the repo root)
+../../../scripts/download-microtubule-weights.sh
+
 python evaluate.py --data /path/to/well_recordings --out results/
 ```
 
@@ -94,9 +99,8 @@ Results land in `results/results.csv`, with `results/overlays/` and
 
 ## 3. Installation
 
-**Requirements:** Python **3.10–3.12**, ~3 GB free disk (1.2 GB weights + the
-dependencies), and the GitHub CLI [`gh`](https://cli.github.com) authenticated
-(`gh auth login`) so the weights can be fetched from the private release.
+**Requirements:** Python **3.10–3.12** and ~3 GB free disk (1.2 GB weights + the
+dependencies).
 
 ```bash
 python3 -m venv .venv
@@ -118,18 +122,17 @@ CPU.
 
 ## 4. The model weights
 
-The 1.2 GB checkpoint `weights/microtubule_v7.pt` is **not** stored in git. On
-the first run, `evaluate.py` downloads it from this repository's GitHub Release
-`weights-v7` using `gh` (which reuses your existing GitHub credentials). You can
-also fetch it explicitly:
+The 1.2 GB checkpoint `microtubule_v7.pt` is **not** stored in git — it is the
+same file the ML service uses, staged out-of-band from the repo root:
 
 ```bash
-python scripts/download_weights.py            # -> weights/microtubule_v7.pt
+scripts/download-microtubule-weights.sh    # -> backend/segmentation/weights/microtubule_v7.pt
 ```
 
-If you cannot use `gh`, download `microtubule_v7.pt` from the
-[release page](https://github.com/michalprusek/AutomatedEssaysModule/releases/tag/weights-v7)
-and pass `--weights /path/to/microtubule_v7.pt`.
+`evaluate.py` finds it automatically, looking in this order: `$ESSAYS_WEIGHTS`,
+`backend/segmentation/weights/`, then `/app/mt_weights/` (where the essays
+container bind-mounts that same directory read-only). Pass
+`--weights /path/to/microtubule_v7.pt` to override.
 
 > **No HuggingFace token or login is required.** The checkpoint already contains
 > the DINOv3 backbone weights, so the backbone is rebuilt offline from the
@@ -170,7 +173,7 @@ keeps its partial results.
 | ---- | ------- | ------- |
 | `--data` | *(required)* | Folder of `.nd2` files (recursive) or a single `.nd2`. |
 | `--out` | `results` | Output directory (`results.csv`, `overlays/`, `annotations/`). |
-| `--weights` | `weights/microtubule_v7.pt` | Checkpoint path (auto-downloaded if missing). |
+| `--weights` | auto-detected (see §4) | Checkpoint path. |
 | `--device` | `auto` | `auto` = CUDA if present else CPU. Also `cpu` / `cuda` / `mps`. |
 | `--threshold` | `0.5` | Seed-probability threshold of the segmentation model. Higher = stricter (fewer, more confident MTs). |
 | `--mt-width` | `5` | Width of the on-MT band across the centerline (px). |
@@ -317,7 +320,8 @@ the partial table stays valid. Use `--device cpu` on a Mac (the default;
 
 | Symptom | Fix |
 | ------- | --- |
-| `gh: ... not found` / weights won't download | Install [`gh`](https://cli.github.com) and run `gh auth login`, or download the asset manually and pass `--weights /path/to/microtubule_v7.pt`. |
+| `microtubule v7 checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh` from the repo root, or pass `--weights /path/to/microtubule_v7.pt`. The error lists every path that was searched. |
+| `Could not locate the shared 'microtubule' package` | The model code lives in the ML service at `backend/segmentation/models/microtubule`. Run from a full checkout, or set `MT_PACKAGE_DIR` to the directory that *contains* the `microtubule` package. |
 | `no .nd2 files found` | Check `--data`; the folder is searched recursively for `*.nd2`. |
 | `no channel matching ('irm',)` | The well has no IRM channel under that name — pass `--irm-name <substring>`. Segmentation needs IRM; the well is skipped rather than segmented on another channel. |
 | `no channel matching ('tirf',)` | Your TIRF channel is named differently — pass `--tirf-name <substring>` (likewise `--solution-name`). |
@@ -325,7 +329,7 @@ the partial table stays valid. Use `--device cpu` on a Mac (the default;
 | `weights_only` load warning on startup | Expected; the checkpoint embeds a small config object and the loader falls back safely. Set `ALLOW_UNSAFE_WEIGHTS=0` to refuse. |
 | Very slow on a Mac | Expected for a ViT-L on CPU. Use a CUDA GPU for the full batch, or run overnight. |
 | `OSError: ... gated repo` / HF 401 | Only happens with `--online-backbone`. Don't use that flag — the default offline path needs no token. |
-| `ModuleNotFoundError: synth_irm` / `pysoax` | Run from the repo root and keep the `microtubule/` directory intact (don't flatten it). |
+| `ModuleNotFoundError: synth_irm` / `pysoax` | The shared `microtubule/` package was moved or flattened — keep it intact at `backend/segmentation/models/microtubule`, or point `MT_PACKAGE_DIR` at its parent. |
 
 ---
 
@@ -363,7 +367,10 @@ individual well file.
 
 ---
 
-## 13. Repository layout
+## 13. Layout
+
+This module lives at `backend/essays/module` inside the cell-segmentation-hub
+repo. It was a separate repo until 2026-08-11.
 
 ```
 evaluate.py                 # batch entry point — start here
@@ -371,14 +378,19 @@ mt_pipeline/                # measurement layer
   nd2_io.py                 #   read ND2, pick channels by name, iterate positions
   measure.py                #   MT band / background ring masks + intensity stats
   report.py                 #   results.csv, overlays, annotation JSON
-microtubule/                # the v7 segmentation model package (do not flatten)
+_mt_package.py              # locates the shared model package + the checkpoint
 config/dinov3_vitl16/       # bundled backbone config (enables offline, token-free)
-scripts/download_weights.py # fetches microtubule_v7.pt from the GitHub Release
 infer.py                    # single-frame segmentation CLI (diagnostic)
-weights/microtubule_v7.pt   # downloaded on first run, not in git
+tests/                      # channel-role + checkpoint-portability tests
 docs/                       # README images
 MODEL.md                    # model internals + single-frame CLI reference
 ```
+
+**The v7 model code is not here.** It lives once, in the ML service at
+`backend/segmentation/models/microtubule`, and both this batch assay and the
+app's interactive segmentation import that same package — so a fix to PySOAX or
+the checkpoint loader reaches both. `_mt_package.ensure_on_path()` finds it
+(override with `MT_PACKAGE_DIR`).
 
 The segmentation model and the single-frame CLI are documented in
 [`MODEL.md`](MODEL.md).

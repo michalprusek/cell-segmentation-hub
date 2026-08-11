@@ -5,6 +5,15 @@ Wraps the v7 DINOv3-L + DPT + PySOAX pipeline (sources copied from
 through the same ``load_weights`` / ``predict`` surface used by the other
 models.
 
+TWO callers share this package, so it is not free to change:
+
+- the ML service's interactive per-frame segmentation (this repo's queue), and
+- the Automated Essays batch assay (``backend/essays/module``), which imports
+  it via ``_mt_package.ensure_on_path()`` rather than keeping its own copy.
+
+They used to be separate copies that silently drifted apart. Re-verify both
+paths when changing ``predict``, ``segment_mt`` or ``pysoax``.
+
 The microtubule pipeline differs from the other registered models:
 
 - DINOv3 ViT-L/16 backbone is gated on HuggingFace — the first run needs

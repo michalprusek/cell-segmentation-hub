@@ -1,4 +1,7 @@
-# --- model weights (distributed via GitHub Release, not git) ---
+# This file covers what the repo root's .gitignore does not (.venv/, *.nd2,
+# *.egg-info) for people running this module standalone in its own virtualenv.
+
+# --- model weights: staged by scripts/download-microtubule-weights.sh ---
 weights/*.pt
 weights/*.pth
 
