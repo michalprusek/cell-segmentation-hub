@@ -245,23 +245,18 @@ services:
       retries: 5
       start_period: 120s
 
-  # Automated Essays worker — batch microtubule assay of ND2 wells via
-  # AutomatedEssaysModule (cloned at image build). Shares the GPU with `ml` but
-  # is guarded (start-gate on free VRAM + per-process memory cap) so a batch
-  # never OOMs interactive segmentation. Loopback-only + NO auth layer — only the
+  # Automated Essays worker — batch microtubule assay of ND2 wells via the
+  # vendored module at backend/essays/module. Shares the GPU with `ml` but is
+  # guarded (start-gate on free VRAM + per-process memory cap) so a batch never
+  # OOMs interactive segmentation. Loopback-only + NO auth layer — only the
   # backend reaches it over the docker network (essays:8000). Build with
-  # `make build-essays` (supplies the gh token as a BuildKit secret + re-clones
-  # the module so upstream changes propagate).
+  # `make build-essays`, which checks the ml base image exists first.
   essays:
     build:
       context: .
       dockerfile: docker/essays.Dockerfile
       args:
         ML_IMAGE: cell-segmentation-hub-ml:latest
-        MODULE_REF: ${ESSAYS_MODULE_REF:-main}
-        MODULE_CACHE_BUST: ${ESSAYS_MODULE_CACHE_BUST:-0}
-      secrets:
-        - ghtoken
     image: cell-segmentation-hub-essays:latest
     container_name: spheroseg-essays
     runtime: nvidia
@@ -365,10 +360,3 @@ volumes:
     name: spheroseg_postgres_blue
   redis_blue_data:
     name: spheroseg_redis_blue
-
-secrets:
-  # gh token for cloning the private AutomatedEssaysModule at build time. Written
-  # by `make build-essays` (gitignored) and only read during the essays image
-  # build — never used at runtime, never baked into a layer.
-  ghtoken:
-    file: ${ESSAYS_GH_TOKEN_FILE:-./.essays_ghtoken}

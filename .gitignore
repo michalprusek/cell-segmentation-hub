@@ -161,6 +161,3 @@ backend/segmentation/.hf-cache/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
-
-# Automated Essays: transient gh token for the BuildKit clone secret (make build-essays)
-.essays_ghtoken

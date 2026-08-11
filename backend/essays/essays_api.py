@@ -1,10 +1,11 @@
-"""Automated Essays worker — thin FastAPI job runner over AutomatedEssaysModule.
+"""Automated Essays worker — thin FastAPI job runner over the essays module.
 
 The Node backend stages an uploaded folder of ``.nd2`` wells onto the shared
 uploads volume, then POSTs here. This service runs the module's ``evaluate.py``
-as a subprocess (one job at a time), honouring a passive GPU guard so a batch
-never OOMs interactive segmentation on the shared A5000, and writes a
-``status.json`` next to the output dir that the backend polls.
+(vendored at ``backend/essays/module``) as a subprocess (one job at a time),
+honouring a passive GPU guard so a batch never OOMs interactive segmentation on
+the shared A5000, and writes a ``status.json`` next to the output dir that the
+backend polls.
 
 It has NO auth layer — like the ``ml`` service it is bound to loopback and only
 the backend reaches it over the docker network.
@@ -323,7 +324,7 @@ def _run_job(req: ProcessRequest) -> None:
                 reported = m.group(1)
                 if reported not in ("cuda", "cpu"):
                     # Keep the Literal honest: anything else is a contract
-                    # change in AutomatedEssaysModule, not a device we know.
+                    # change in the essays module, not a device we know.
                     print(f"[essays] job {job_id}: unparseable device report "
                           f"{reported!r}; keeping {device}",
                           file=sys.stderr, flush=True)
