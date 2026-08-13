@@ -206,13 +206,18 @@ def build_args() -> argparse.Namespace:
                     help="Compute device.")
     ap.add_argument("--threshold", type=float, default=0.5,
                     help="Seed-probability threshold for the segmentation model.")
-    # Measurement geometry (pixels).
+    # Measurement geometry. Shared with the project export's /mt-metrics
+    # endpoint (models/mt_measure.py), so these two flags mean exactly what
+    # ``thickness_px`` and ``margin_multiplier`` mean there. The former
+    # --bg-gap / --bg-width pair described a different ring and is gone with the
+    # implementation that read it.
     ap.add_argument("--mt-width", type=int, default=5,
-                    help="Width of the on-MT band across the centerline (px).")
-    ap.add_argument("--bg-gap", type=int, default=1,
-                    help="Gap between the MT band and the background ring (px).")
-    ap.add_argument("--bg-width", type=int, default=5,
-                    help="Width of the background ring (px).")
+                    help="Width of the on-MT band across the centerline (px); "
+                         "the ImageJ line-ROI stroke width.")
+    ap.add_argument("--bg-margin", type=float, default=2.0,
+                    help="Background ring reach as a multiple of --mt-width "
+                         "(2.0 = out to 10 px for a 5 px band). The ring "
+                         "excludes every microtubule's band.")
     # Channel name matching. The two roles are deliberately separate flags: the
     # model segments IRM (that is what it was trained on) and the intensities
     # are read off TIRF.
@@ -269,7 +274,7 @@ def main() -> int:
         return 2
     device = resolve_device(args.device)
     print(f"[info] device={device}  threshold={args.threshold}  "
-          f"mt_width={args.mt_width} bg_gap={args.bg_gap} bg_width={args.bg_width}")
+          f"mt_width={args.mt_width} bg_margin={args.bg_margin}")
     # Say out loud which channel plays which role. A run that segments the wrong
     # channel produces plausible-looking numbers, so the log has to be the place
     # you can check it afterwards without re-deriving it from the code.
@@ -337,8 +342,8 @@ def main() -> int:
             # ...and TIRF for the readout: the centerlines come from IRM, the
             # intensities integrated along them are the TIRF signal.
             rows = measure_frame(pos.tirf, centerlines,
-                                 mt_width=args.mt_width, bg_gap=args.bg_gap,
-                                 bg_width=args.bg_width, px_um=pos.px_um)
+                                 mt_width=args.mt_width,
+                                 bg_margin=args.bg_margin, px_um=pos.px_um)
             for r in rows:
                 r["well_id"] = pos.well_id
                 r["position"] = pos.position

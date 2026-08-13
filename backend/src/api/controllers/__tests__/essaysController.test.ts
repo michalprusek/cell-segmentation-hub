@@ -76,8 +76,7 @@ describe('parseOptions (evaluate.py option whitelist)', () => {
       JSON.stringify({
         threshold: 0.6,
         mtWidth: 5,
-        bgGap: 1,
-        bgWidth: 5,
+        bgMargin: 2,
         limitWells: 2,
         irmName: 'irm',
         tirfName: 'tirf',
@@ -90,8 +89,7 @@ describe('parseOptions (evaluate.py option whitelist)', () => {
     expect(out).toEqual({
       threshold: 0.6,
       mtWidth: 5,
-      bgGap: 1,
-      bgWidth: 5,
+      bgMargin: 2,
       limitWells: 2,
       irmName: 'irm',
       tirfName: 'tirf',

@@ -27,8 +27,14 @@ const STAGING_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 export interface EssayJobOptions {
   threshold?: number;
   mtWidth?: number;
-  bgGap?: number;
-  bgWidth?: number;
+  /**
+   * Background-ring reach as a multiple of mtWidth (2 = out to 10 px for a
+   * 5 px band). Mirrors `margin_multiplier` in the shared measurement
+   * (backend/segmentation/models/mt_measure.py), which the project export
+   * uses too. Replaced bgGap/bgWidth on 2026-08-13 along with the
+   * gap-plus-width ring they described.
+   */
+  bgMargin?: number;
   /**
    * Substring naming the channel each role uses. They are separate because the
    * module segments IRM (what the v7 checkpoint was trained on) and reads the
