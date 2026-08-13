@@ -174,3 +174,22 @@ def test_vicinity_composite_rasterises_back_to_the_exact_mask():
     assert len(subs) == 2, "annulus should yield an outer contour + a hole contour"
     recovered = _imagej_even_odd_fill(subs, *mask.shape)
     assert np.array_equal(recovered, mask), "composite must round-trip to the exact mask"
+
+
+def test_the_band_math_is_the_shared_module_not_a_local_copy():
+    """This endpoint and the Automated Essays batch must measure identically.
+
+    They did not until 2026-08-13: the export was aligned to ImageJ *Measure* in
+    2026-07 while the essays module was still a separate repository, and on one
+    real frame the two disagreed on the net signal by a median of +9.9 % (up to
+    +33.2 %). The fix was structural — one implementation in
+    ``models/mt_measure.py`` — so what is worth asserting is that this module
+    still delegates rather than that today's numbers happen to line up.
+    """
+    shared = pytest.importorskip("mt_measure")
+    assert mt._rasterize_band is shared.rasterize_band
+    assert mt._vicinity_mask is shared.vicinity_mask
+    assert mt._imagej_median is shared.imagej_median
+    assert mt._polyline_length is shared.polyline_length
+    assert mt._fill_convex_polygon is shared.fill_convex_polygon
+    assert mt._dilate is shared.dilate

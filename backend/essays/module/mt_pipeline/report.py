@@ -28,6 +28,14 @@ COLUMNS = [
     # folder, which is why it lives in the table and not just in a directory
     # name. Blank when the ND2 carries no timestamp.
     "acquired_at",
+    # Added 2026-08-13 with the switch to the shared ImageJ measurement. Appended
+    # rather than slotted next to their siblings because scripts index this table
+    # by position; the grouping reads worse, the existing scripts keep working.
+    "mt_median_intensity",
+    # mean(band) - median(ring): what the project export reports as
+    # ``signal_minus_background``. ``net_mean_intensity`` above stays
+    # mean-minus-MEAN so earlier runs remain interpretable.
+    "signal_minus_background",
 ]
 
 
