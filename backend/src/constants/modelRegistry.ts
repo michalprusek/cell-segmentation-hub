@@ -40,7 +40,7 @@ export const MODEL_REGISTRY = {
   hrnet: { compatibleProjectTypes: ['spheroid'] },
   cbam_resunet: { compatibleProjectTypes: ['spheroid'] },
   unet_spherohq: { compatibleProjectTypes: ['spheroid'] },
-  unet_attention_aspp: { compatibleProjectTypes: ['spheroid_invasive'] },
+  spheroid_disintegration: { compatibleProjectTypes: ['spheroid_invasive'] },
   segformer: { compatibleProjectTypes: ['spheroid'] },
   mamba_unet: { compatibleProjectTypes: ['spheroid'] },
   sperm: { compatibleProjectTypes: ['sperm'] },

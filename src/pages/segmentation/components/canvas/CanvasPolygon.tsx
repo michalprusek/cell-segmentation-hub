@@ -193,7 +193,7 @@ const CanvasPolygon = React.memo(
       if (polygon.complete === false) {
         return isSelected ? '#737373' : '#969696';
       }
-      // Spheroid 'core' (closed polygon, dense central region from ASPP model)
+      // Spheroid 'core' (closed polygon, dense central region from the disintegration model)
       if (!isPolyline && polygon.partClass === 'core') {
         return isSelected ? '#16a34a' : '#22c55e'; // green
       }

@@ -58,7 +58,12 @@ const makeProject = (id: string, overrides: Record<string, unknown> = {}) => ({
   description: 'desc',
   image_count: 0,
   created_at: '2024-01-01T00:00:00.000Z',
-  updated_at: new Date().toISOString(), // "today" by default
+  // Fixed (deterministic) so multiple makeProject() calls tie on updated_at and
+  // the default `updated_at desc` sort is STABLE — preserving input order.
+  // `new Date()` here made the order flaky: two calls in one array occasionally
+  // straddled a millisecond boundary, so `p2` sorted before `p1` under CI load.
+  // Sorting tests pass an explicit `daysAgo(n)` override, so they're unaffected.
+  updated_at: '2024-06-01T00:00:00.000Z',
   ...overrides,
 });
 

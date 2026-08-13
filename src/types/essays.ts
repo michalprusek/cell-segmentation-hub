@@ -6,7 +6,13 @@ export interface EssayJob {
   progress: number;
   fileCount: number;
   mtCount: number;
-  device?: string | null;
+  /**
+   * What the worker ran on, plus why if it wanted the GPU and did not get it.
+   * `cpu-degraded` = the GPU broke, worth telling an admin. `cpu-busy` = the
+   * shared card never freed up, nothing to act on. Plain `cpu` = this host has
+   * no GPU. See coerceDevice() in backend/src/services/essaysService.ts.
+   */
+  device?: 'cuda' | 'cpu' | 'cpu-degraded' | 'cpu-busy' | null;
   resultZipKey?: string | null;
   error?: string | null;
   createdAt: string;
@@ -18,8 +24,20 @@ export interface EssayJob {
 export interface EssayJobOptions {
   threshold?: number;
   mtWidth?: number;
-  bgGap?: number;
-  bgWidth?: number;
+  /**
+   * Background-ring reach as a multiple of mtWidth (2 = out to 10 px for a
+   * 5 px band). Mirrors `margin_multiplier` in the shared measurement
+   * (backend/segmentation/models/mt_measure.py), which the project export
+   * uses too. Replaced bgGap/bgWidth on 2026-08-13 along with the
+   * gap-plus-width ring they described.
+   */
+  bgMargin?: number;
+  /**
+   * Substring naming the channel each role uses. Separate flags because the
+   * module segments IRM and measures intensities on TIRF; see EssayJobOptions
+   * in backend/src/services/essaysService.ts.
+   */
+  irmName?: string;
   tirfName?: string;
   solutionName?: string;
   limitWells?: number;

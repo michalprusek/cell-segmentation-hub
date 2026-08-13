@@ -484,10 +484,10 @@ export default {
           description:
             "Meilleures performances sur l'ensemble de données SpheroHQ - optimisé pour la segmentation de sphéroïdes avec vitesse et précision équilibrées (~0.25s/image, 10 img/s)",
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Désintégration des sphéroïdes',
           description:
-            'UNet amélioré avec Attention Gates et ASPP pour la détection de sphéroïdes en dissolution et de petites cellules satellites (~0.35s/image)',
+            'UNet++ avec encodeur EfficientNet-B5 — segmentation en 3 classes (fond / couronne / noyau dense) de sphéroïdes en désintégration ; prédit le noyau directement pour un Indice de Désintégration correct (~0.7s/image)',
         },
         segformer: {
           name: 'SegFormer',
@@ -538,8 +538,8 @@ export default {
         "Segmentation la plus précise avec mécanismes d'attention (E2E ~482ms, 2.7 img/s)",
       unet_spherohq:
         'Le modèle le plus rapide après optimisations! Excellent pour le traitement en temps réel (E2E ~286ms, 5.5 img/s)',
-      unet_attention_aspp:
-        'UNet amélioré avec Attention Gates et goulot ASPP pour la détection de sphéroïdes en dissolution et de petites cellules satellites (35,5M paramètres)',
+      spheroid_disintegration:
+        'Modèle UNet++ / EfficientNet-B5 à 3 classes (fond / couronne / noyau) pour sphéroïdes en désintégration ; prédit le noyau dense directement pour un Indice de Désintégration correct (30,7M paramètres)',
       segformer:
         'Modèle SegFormer-B0 basé sur un transformeur, entraîné sur le jeu de données SpheroMix. Meilleure précision de segmentation des sphéroïdes de la plateforme (93% IoU), tout en étant le modèle le plus petit et le plus rapide (~13 ms/image).',
       mamba_unet:
@@ -1001,6 +1001,8 @@ export default {
           'Cliquez pour ajouter des points, puis cliquez sur un autre sommet pour terminer. Cliquez directement sur un autre sommet sans ajouter de points pour supprimer tous les points entre eux.',
         holdShift: 'Maintenez SHIFT pour ajouter automatiquement des points',
         cancel: 'Appuyez sur ESC pour annuler',
+        joinHint:
+          'Cliquez sur l’extrémité d’une autre polyligne de la même classe pour les joindre',
       },
       editVertices: {
         selectPolygon:
@@ -2361,6 +2363,12 @@ export default {
       'Aucune exécution pour l’instant. Téléversez un dossier pour commencer.',
     fileCount: '{{count}} fichier(s)',
     mtCount: '{{count}} microtubules',
+    deviceDegraded: 'CPU (GPU indisponible)',
+    deviceDegradedHint:
+      "Cette exécution devait utiliser le GPU mais n'a pas pu y accéder ; elle s'est donc déroulée sur le CPU et a pris beaucoup plus de temps. Merci de le signaler.",
+    deviceBusy: 'CPU (GPU occupé)',
+    deviceBusyHint:
+      "Le GPU partagé est resté occupé pendant toute l'attente ; cette exécution s'est donc déroulée sur le CPU et a pris plus de temps. Rien d'anormal, inutile de le signaler.",
     download: 'Télécharger',
     delete: 'Supprimer',
     deleteFailed: 'Impossible de supprimer l’exécution',

@@ -61,7 +61,7 @@ describe('getSpheroidPreset', () => {
     'wound',
     'microtubule',
     'microcapsule',
-    'unet_attention_aspp',
+    'spheroid_disintegration',
   ];
   for (const id of nonSpheroidModels) {
     it(`falls back to 'additional' for non-preset model '${id}'`, () => {
@@ -109,7 +109,7 @@ describe('BASIC_MODEL_INFO', () => {
     'hrnet',
     'cbam_resunet',
     'unet_spherohq',
-    'unet_attention_aspp',
+    'spheroid_disintegration',
     'segformer',
     'mamba_unet',
     'sperm',
@@ -159,7 +159,7 @@ describe('BASIC_MODEL_INFO', () => {
         'hrnet',
         'cbam_resunet',
         'unet_spherohq',
-        'unet_attention_aspp',
+        'spheroid_disintegration',
         'segformer',
         'mamba_unet',
       ];
@@ -203,8 +203,10 @@ describe('BASIC_MODEL_INFO', () => {
       }
     });
 
-    it('unet_attention_aspp has lower threshold (0.2) for dissolved spheroids', () => {
-      expect(BASIC_MODEL_INFO.unet_attention_aspp.defaultThreshold).toBe(0.2);
+    it('spheroid_disintegration has lower threshold (0.2) for dissolved spheroids', () => {
+      expect(BASIC_MODEL_INFO.spheroid_disintegration.defaultThreshold).toBe(
+        0.2
+      );
     });
 
     it('microtubule has the slowest avgTimePerImage', () => {
@@ -303,7 +305,7 @@ describe('getAllLocalizedModels', () => {
       'hrnet',
       'cbam_resunet',
       'unet_spherohq',
-      'unet_attention_aspp',
+      'spheroid_disintegration',
       'segformer',
       'mamba_unet',
       'sperm',

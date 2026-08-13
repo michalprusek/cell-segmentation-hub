@@ -8,12 +8,13 @@ class ModelType(str, Enum):
     HRNET = "hrnet"
     CBAM_RESUNET = "cbam_resunet"
     UNET_SPHEROHQ = "unet_spherohq"
-    UNET_ATTENTION_ASPP = "unet_attention_aspp"
+    SPHEROID_DISINTEGRATION = "spheroid_disintegration"
     SEGFORMER = "segformer"
     MAMBA_UNET = "mamba_unet"
     SPERM = "sperm"
     WOUND = "wound"
     MICROCAPSULE = "microcapsule"
+    MICROTUBULE = "microtubule"
 
 class SegmentationRequest(BaseModel):
     model: ModelType = Field(default=ModelType.HRNET, description="Model to use for segmentation")

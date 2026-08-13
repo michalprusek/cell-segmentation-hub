@@ -25,12 +25,29 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Literal, Optional
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+
+# The shared band/background measurement, imported off the models DIRECTORY
+# rather than as ``models.mt_measure``. Going through the package would execute
+# ``models/__init__``, which pulls in mamba_ssm and Triton and therefore needs a
+# live CUDA driver — measuring pixels needs neither, and the import would make
+# this module's tests silently skip on any box without a GPU. It is also the
+# exact spelling the essays batch uses (``_mt_package.ensure_on_path()`` puts the
+# same directory on its path), so both callers name the one file the same way.
+# Appended, not prepended: that directory also holds hrnet.py, unet.py, sperm.py
+# and friends, and putting it ahead of site-packages would let any of those
+# generic names shadow a real dependency for the whole process. Nothing in the
+# ML service imports them top-level today, and appending keeps it that way.
+_MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
+if str(_MODELS_DIR) not in sys.path:
+    sys.path.append(str(_MODELS_DIR))
+import mt_measure  # noqa: E402  (needs the path set above)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -171,80 +188,19 @@ class MTMetricsResponse(BaseModel):
 # ----------------------------------------------------------------------------
 
 
-def _polyline_length(points: np.ndarray) -> float:
-    """Sum of consecutive Euclidean distances. Returns 0 for <2 points."""
-    if points.shape[0] < 2:
-        return 0.0
-    diffs = np.diff(points, axis=0)
-    return float(np.sqrt((diffs ** 2).sum(axis=1)).sum())
-
-
-def _rasterize_band(
-    points: np.ndarray, h: int, w: int, thickness: int
-) -> np.ndarray:
-    """Rasterize a polyline as a thickness-wide 0/1 mask.
-
-    cv2.polylines with `LINE_8` strokes whole pixels (no antialiasing),
-    so the resulting mask is binary and the pixel_count is exactly the
-    band area at the requested thickness. Rounded line caps + joins
-    follow OpenCV's default, which matches what ImageJ's "fill stroke"
-    produces for a width-N polyline.
-    """
-    import cv2  # local import to keep module load cheap for tests
-    mask = np.zeros((h, w), dtype=np.uint8)
-    if points.shape[0] < 2:
-        return mask
-    # cv2 wants (N, 1, 2) int32. (x, y) order matches what the editor
-    # serialises; cv2 also uses (x, y) for polyline points so no swap
-    # is needed.
-    pts_int = np.rint(points).astype(np.int32).reshape(-1, 1, 2)
-    cv2.polylines(
-        mask, [pts_int],
-        isClosed=False,
-        color=1,
-        thickness=int(thickness),
-        lineType=8,  # cv2.LINE_8 numeric constant; avoids attr lookup on cold cv2 import
-    )
-    return mask
-
-
-def _dilate(mask: np.ndarray, radius: int) -> np.ndarray:
-    """Dilate a binary mask by a disc of given radius (in pixels)."""
-    if radius <= 0:
-        return mask
-    import cv2
-    kernel = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE,
-        (radius * 2 + 1, radius * 2 + 1),
-    )
-    return cv2.dilate(mask, kernel)
-
-
-def _vicinity_mask(
-    band: np.ndarray, not_signal: np.ndarray, margin_radius: int
-) -> np.ndarray:
-    """One microtubule's background ring: ``dilate(band, margin_radius)`` minus
-    every signal band (``not_signal`` = the complement of the union of all
-    bands).
-
-    The dilation runs only within the band's bounding box expanded by
-    ``margin_radius`` — a band is tiny relative to the frame, so this is O(bbox)
-    instead of O(H*W). Since the band's pixels sit at least ``margin_radius``
-    inside the sub-window (or at a real frame edge), the windowed dilation is
-    bit-identical to a full-frame dilate. Empty band → empty ring.
-    """
-    ys, xs = np.nonzero(band)
-    vicinity = np.zeros(band.shape, dtype=bool)
-    if ys.size == 0:
-        return vicinity
-    h, w = band.shape
-    y0 = max(0, int(ys.min()) - margin_radius)
-    y1 = min(h, int(ys.max()) + margin_radius + 1)
-    x0 = max(0, int(xs.min()) - margin_radius)
-    x1 = min(w, int(xs.max()) + margin_radius + 1)
-    capsule = _dilate(band[y0:y1, x0:x1], margin_radius)
-    vicinity[y0:y1, x0:x1] = (capsule > 0) & not_signal[y0:y1, x0:x1]
-    return vicinity
+# The band geometry and the ImageJ statistics are NOT defined here. They live in
+# models/mt_measure.py, which the Automated Essays batch imports through the same
+# shared-package mechanism it uses for the v7 model, so the export and the batch
+# can no longer answer "how bright is this filament" differently. These aliases
+# keep the endpoint's own vocabulary (and its tests) while making the delegation
+# explicit: rebinding one of them here would NOT change the essays batch, which
+# is exactly the drift this arrangement exists to prevent.
+_polyline_length = mt_measure.polyline_length
+_imagej_median = mt_measure.imagej_median
+_fill_convex_polygon = mt_measure.fill_convex_polygon
+_rasterize_band = mt_measure.rasterize_band
+_dilate = mt_measure.dilate
+_vicinity_mask = mt_measure.vicinity_mask
 
 
 def _normalize_axes_nd2(arr: np.ndarray, axes: str) -> np.ndarray:
@@ -435,27 +391,20 @@ def _emit_channel_rows(
     local vicinity ring (``vicinity_masks[pl_idx]``), not a frame-global region.
     """
     for pl_idx, pl in enumerate(fr.polylines):
-        band = band_masks[pl_idx]
-        pixels = frame_arr[band > 0]
-        pixel_count = int(pixels.size)
-
+        sig = mt_measure.region_stats(frame_arr, band_masks[pl_idx])
         # Per-MT LOCAL background: pixels in this microtubule's vicinity ring.
-        bg_pixels = frame_arr[vicinity_masks[pl_idx]]
-        has_bg = bg_pixels.size > 0
-        median_bg = float(np.median(bg_pixels)) if has_bg else None
-        mean_bg = float(bg_pixels.mean()) if has_bg else None
+        # ImageJ measures the exported ``_bg`` composite ROI as an area, so its
+        # median follows the same histogram tie-rule as the signal.
+        bg = mt_measure.region_stats(frame_arr, vicinity_masks[pl_idx])
 
-        if pixel_count == 0:
-            sum_v = mean_v = median_v = std_v = 0.0
-            signal_minus_bg: Optional[float] = None
-        else:
-            sum_v = float(pixels.sum())
-            mean_v = float(pixels.mean())
-            median_v = float(np.median(pixels))
-            std_v = float(pixels.std())
-            signal_minus_bg = (
-                (mean_v - median_bg) if median_bg is not None else None
-            )
+        # An empty ring is reported as *absent*, not as zero: a zero background
+        # would silently inflate signal_minus_background by the full signal.
+        median_bg = bg.median if bg.n else None
+        mean_bg = bg.mean if bg.n else None
+        signal_minus_bg: Optional[float] = (
+            (sig.mean - median_bg)
+            if (sig.n and median_bg is not None) else None
+        )
 
         rows.append(MTMetricsRow(
             frame_index=fr.frame_index,
@@ -464,12 +413,12 @@ def _emit_channel_rows(
             track_id=pl.track_id,
             channel=channel_name,
             length_px=polyline_lengths[pl_idx],
-            area_px=pixel_count,
-            pixel_count=pixel_count,
-            sum_intensity=sum_v,
-            mean_intensity=mean_v,
-            median_intensity=median_v,
-            std_intensity=std_v,
+            area_px=sig.n,
+            pixel_count=sig.n,
+            sum_intensity=sig.sum,
+            mean_intensity=sig.mean,
+            median_intensity=sig.median,
+            std_intensity=sig.std,
             median_background=median_bg,
             mean_background=mean_bg,
             signal_minus_background=signal_minus_bg,
@@ -569,7 +518,6 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             frames=frames_present,
         ))
 
-    margin_radius = int(round(req.thickness_px * req.margin_multiplier))
     rows: List[MTMetricsRow] = []
 
     for fr in req.frames:
@@ -583,32 +531,19 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
         if not fr.polylines:
             continue
 
-        # 1. Per-polyline thickness masks (kept in a list so the index
-        # aligns with `fr.polylines` for the per-channel loop below).
-        band_masks: List[np.ndarray] = []
-        polyline_lengths: List[float] = []
-        for pl in fr.polylines:
-            pts = np.asarray(pl.points, dtype=np.float32)
-            if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
-                band_masks.append(np.zeros((H, W), dtype=np.uint8))
-                polyline_lengths.append(0.0)
-                continue
-            band_masks.append(_rasterize_band(pts, H, W, req.thickness_px))
-            polyline_lengths.append(_polyline_length(pts))
-
-        # 2 + 3. Per-MT LOCAL background. Each microtubule's background is the
-        # ring within `margin_radius` of ITS OWN band (dilate(band)), minus the
-        # union of every MT's signal band — so a neighbouring microtubule never
-        # counts as background. Computed once per frame (geometry is
-        # channel-independent) and reused across channels.
-        signal_union = np.zeros((H, W), dtype=np.uint8)
-        for m in band_masks:
-            signal_union |= m
-        not_signal = signal_union == 0
-        vicinity_masks: List[np.ndarray] = [
-            _vicinity_mask(band, not_signal, margin_radius)
-            for band in band_masks
-        ]
+        # 1 + 2 + 3. Per-polyline thickness masks, and each microtubule's LOCAL
+        # background ring: within `thickness * margin` of ITS OWN band, minus the
+        # union of every MT's band — so a neighbouring microtubule never counts
+        # as background. Built once per frame (geometry is channel-independent)
+        # and reused across channels. Shared with the Automated Essays batch, so
+        # both measure the same pixels.
+        geom = mt_measure.frame_geometry(
+            [np.asarray(pl.points, dtype=np.float32) for pl in fr.polylines],
+            H, W, req.thickness_px, req.margin_multiplier,
+        )
+        band_masks = geom.bands
+        polyline_lengths = geom.lengths
+        vicinity_masks = geom.vicinities
 
         # 4. Per-channel computations.
         # Per-frame registration offsets (channel-registration at upload), one
@@ -663,3 +598,222 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
         frame_height=int(H),
         frame_width=int(W),
     )
+
+
+# ----------------------------------------------------------------------------
+#  Background-ROI endpoint (ImageJ composite ROIs for the MT export)
+# ----------------------------------------------------------------------------
+#
+# The ImageJ RoiSet export draws each microtubule's per-MT LOCAL background as a
+# ROI so a biologist can re-measure exactly what the ``median/mean_background``
+# columns were computed from. That region is the vicinity ring
+# ``dilate(band, thickness*margin) & ~signal_union`` — a band with EVERY
+# microtubule (its own core + any neighbour crossing the ring) cut out. A plain
+# stroke-width polyline cannot express those holes, so it is exported as an
+# ImageJ COMPOSITE (ShapeRoi): the outer contour plus a hole contour per cut-out,
+# rendered with the even-odd fill rule. The mask is the SAME ``_vicinity_mask``
+# the metrics endpoint samples, so the ROI and the numbers can never diverge.
+
+
+class MTBgPolylineInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    instance_id: str
+    points: List[List[float]]
+    # ImageJ ROI name (e.g. ``mt_3_bg``) baked into the composite bytes.
+    roi_name: str
+    # ARGB stroke colour (opaque alpha in the high byte) matching the sibling MT
+    # ROI's per-track colour. None leaves ImageJ's default.
+    stroke_color: Optional[int] = None
+    # 1-based stack slice this ROI sits on (the video frame).
+    position: Optional[int] = None
+
+
+class MTBgFrameInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int
+    polylines: List[MTBgPolylineInput]
+
+
+class MTBackgroundRoisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frames: List[MTBgFrameInput]
+    thickness_px: int = Field(5, ge=1, le=100)
+    margin_multiplier: float = Field(2.0, ge=0.0, le=10.0)
+    # Real frame dimensions so the ring clips at the true image border exactly as
+    # the metrics endpoint does. When omitted, a canvas bounding all polylines
+    # (padded by the margin) is used — identical except for MTs touching a border.
+    frame_height: Optional[int] = None
+    frame_width: Optional[int] = None
+
+
+class MTBackgroundRoi(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    instance_id: str
+    # Base64 of the ImageJ ``.roi`` composite bytes.
+    roi_b64: str
+
+
+class MTBackgroundRoisFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int
+    rois: List[MTBackgroundRoi]
+
+
+class MTBackgroundRoisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frames: List[MTBackgroundRoisFrame]
+
+
+def _vicinity_composite_roi_bytes(
+    vicinity: np.ndarray,
+    name: str,
+    stroke_color: Optional[int],
+    position: Optional[int],
+) -> Optional[bytes]:
+    """Encode a boolean vicinity mask as ImageJ COMPOSITE ``.roi`` bytes.
+
+    The composite must rasterise IN IMAGEJ back to the exact ``vicinity`` mask so
+    that measuring the exported ``_bg`` ROI reproduces the ``mean/median_background``
+    columns. That requires tracing the mask boundary along pixel EDGES, not pixel
+    centres: ``cv2.findContours`` puts vertices at integer pixel indices (centres),
+    and ImageJ fills a pixel only when its centre is inside the polygon, so a
+    centre-traced outline drops the whole outer boundary ring (~½ px shrink, biasing
+    the mean by a few % because those lost pixels hug the bright microtubule).
+
+    Instead we trace the ``0.5`` iso-contour (``skimage.measure.find_contours``),
+    whose vertices sit on pixel edges, and shift ``skimage``'s centre-indexed
+    coordinates into ImageJ's corner-indexed space with ``+0.5``. Outer and hole
+    contours all become one geometric path (MOVETO/LINETO/CLOSE per contour) and
+    ImageJ's even-odd fill turns the holes into cut-outs — reproducing the mask
+    exactly (verified round-trip: area/mean/median identical to the vicinity metric
+    on real frames). Collinear vertices are dropped so the path stays compact.
+    Returns None for an empty mask (no ring — the metrics side reports null
+    background for the same case).
+    """
+    import struct
+    import roifile
+    from skimage import measure
+
+    mask = np.ascontiguousarray(vicinity.astype(np.uint8))
+    if mask.sum() == 0:
+        return None
+    # Pad by 1 so a ring touching the frame border still traces a closed contour;
+    # the pad is removed again by the -1 below.
+    contours = measure.find_contours(np.pad(mask, 1).astype(np.float64), 0.5)
+
+    path: List[float] = []
+    for c in contours:
+        # c is (row, col) on the padded grid. Unpad (-1) and shift +0.5 so the
+        # edge crossings land on ImageJ pixel corners: (x, y) = (col-0.5, row-0.5).
+        pts = np.column_stack((c[:, 1] - 0.5, c[:, 0] - 0.5))
+        if len(pts) > 1 and np.allclose(pts[0], pts[-1]):
+            pts = pts[:-1]  # find_contours repeats the first point to close
+        if len(pts) < 3:
+            continue
+        # Keep only direction-change vertices (drop collinear runs) around the loop.
+        prev = np.roll(pts, 1, axis=0)
+        nxt = np.roll(pts, -1, axis=0)
+        cross = ((pts[:, 0] - prev[:, 0]) * (nxt[:, 1] - prev[:, 1])
+                 - (pts[:, 1] - prev[:, 1]) * (nxt[:, 0] - prev[:, 0]))
+        pts = pts[np.abs(cross) > 1e-9]
+        if len(pts) < 3:
+            continue
+        path.extend((0.0, float(pts[0, 0]), float(pts[0, 1])))  # MOVETO
+        for q in pts[1:]:
+            path.extend((1.0, float(q[0]), float(q[1])))  # LINETO
+        path.append(4.0)  # CLOSE
+    if not path:
+        return None
+    multi = np.asarray(path, dtype=np.float32)
+
+    ys, xs = np.nonzero(mask)
+    roi = roifile.ImagejRoi(
+        roitype=roifile.ROI_TYPE.RECT,
+        name=name,
+        left=int(xs.min()),
+        top=int(ys.min()),
+        right=int(xs.max()) + 1,
+        bottom=int(ys.max()) + 1,
+        n_coordinates=0,
+        shape_roi_size=int(multi.size),
+        multi_coordinates=multi,
+    )
+    if stroke_color is not None:
+        # ImageJ .roi is big-endian ARGB.
+        roi.stroke_color = struct.pack(">I", int(stroke_color) & 0xFFFFFFFF)
+    if position is not None and position > 0:
+        roi.position = int(position)
+    return roi.tobytes()
+
+
+@router.post("/mt-background-rois", response_model=MTBackgroundRoisResponse)
+async def mt_background_rois(
+    req: MTBackgroundRoisRequest,
+) -> MTBackgroundRoisResponse:
+    """Per-MT background composite ROIs for the ImageJ export.
+
+    Mirrors the metrics endpoint's geometry step (exact-thickness bands →
+    signal union → per-MT vicinity ring) and encodes each ring as an ImageJ
+    COMPOSITE ROI. Geometry-only (no raster read), so it is cheap.
+    """
+    import base64
+
+    margin_radius = int(round(req.thickness_px * req.margin_multiplier))
+    out_frames: List[MTBackgroundRoisFrame] = []
+
+    for fr in req.frames:
+        valid_pts = [
+            np.asarray(pl.points, dtype=np.float32)
+            for pl in fr.polylines
+            if len(pl.points) >= 2
+        ]
+        if not valid_pts:
+            out_frames.append(
+                MTBackgroundRoisFrame(frame_index=fr.frame_index, rois=[])
+            )
+            continue
+
+        if req.frame_height and req.frame_width:
+            h, w = int(req.frame_height), int(req.frame_width)
+        else:
+            stacked = np.concatenate(valid_pts, axis=0)
+            pad = margin_radius + req.thickness_px + 4
+            w = int(np.ceil(stacked[:, 0].max())) + pad
+            h = int(np.ceil(stacked[:, 1].max())) + pad
+
+        # The SAME geometry call the metrics endpoint makes, so the exported ROI
+        # can never enclose a different region than the numbers were taken from.
+        geom = mt_measure.frame_geometry(
+            [np.asarray(pl.points, dtype=np.float32) for pl in fr.polylines],
+            h, w, req.thickness_px, req.margin_multiplier,
+        )
+
+        rois: List[MTBackgroundRoi] = []
+        for i, pl in enumerate(fr.polylines):
+            vicinity = geom.vicinities[i]
+            roi_bytes = _vicinity_composite_roi_bytes(
+                vicinity, pl.roi_name, pl.stroke_color, pl.position
+            )
+            if roi_bytes is not None:
+                rois.append(
+                    MTBackgroundRoi(
+                        instance_id=pl.instance_id,
+                        roi_b64=base64.b64encode(roi_bytes).decode("ascii"),
+                    )
+                )
+        out_frames.append(
+            MTBackgroundRoisFrame(frame_index=fr.frame_index, rois=rois)
+        )
+
+    logger.info(
+        "mt-background-rois: %d frames, %d composite ROIs",
+        len(out_frames),
+        sum(len(f.rois) for f in out_frames),
+    )
+    return MTBackgroundRoisResponse(frames=out_frames)

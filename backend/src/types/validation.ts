@@ -171,11 +171,11 @@ export const isMicrotubuleProject = (v: string | undefined | null): boolean =>
  *  Cross-tree (frontend) parity is guaranteed by two independent equality
  *  tests pinning each side to the canonical matrix, plus the source-level
  *  `scripts/check-model-parity.cjs` guard. Compatibility rationale:
- *  - `spheroid_invasive` is locked to `unet_attention_aspp` (core detection is
+ *  - `spheroid_invasive` is locked to `spheroid_disintegration` (core detection is
  *    tied to that model's postprocessing path).
  *  - `wound`, `sperm`, `microtubules` use their dedicated specialised models.
  *  - Standard `spheroid` projects use the general spheroid models;
- *    `unet_attention_aspp` is excluded there on purpose. */
+ *    `spheroid_disintegration` is excluded there on purpose. */
 import {
   MODEL_TYPE_COMPATIBILITY,
   type KnownModelId,

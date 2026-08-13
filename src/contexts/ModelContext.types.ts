@@ -15,7 +15,7 @@ export interface ModelContextType {
    * Read-only inference threshold for the currently selected model.
    * Derived from `getModelInfo(selectedModel).defaultThreshold` — calibrated
    * per-model in `modelUtils.ts`. No longer user-configurable: each model
-   * has its own calibrated value (e.g. `unet_attention_aspp` uses 0.2,
+   * has its own calibrated value (e.g. `spheroid_disintegration` uses 0.2,
    * others 0.5) and a global slider produced inconsistent results.
    */
   confidenceThreshold: number;

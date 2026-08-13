@@ -118,7 +118,7 @@ async def lifespan(app: FastAPI):
         
         # Pre-load all models for faster first response
         # Note: 'sperm' is optional - only loaded if weights file exists
-        models_to_load = ["hrnet", "cbam_resunet", "unet_spherohq", "unet_attention_aspp", "sperm"]
+        models_to_load = ["hrnet", "cbam_resunet", "unet_spherohq", "spheroid_disintegration", "sperm"]
         loaded_count = 0
         
         models_failed: list[str] = []
@@ -259,6 +259,24 @@ async def health():
     try:
         # Detect CUDA
         cuda_available = torch.cuda.is_available()
+        # torch.cuda.is_available() keeps returning True after a cgroup re-apply
+        # strips this container's device allowlist, because the CUDA context is
+        # already initialised in-process — that false negative is exactly how the
+        # 2026-07-27 incident hid. Probing the device node is the live check:
+        # EPERM on a mode-0666 node is the strip's signature, and it costs an
+        # open() rather than a CUDA call or a subprocess.
+        device_nodes_open = True
+        if cuda_available:
+            try:
+                os.close(os.open("/dev/nvidiactl", os.O_RDONLY))
+            except OSError:
+                device_nodes_open = False
+                logger.error(
+                    "CUDA reports available but /dev/nvidiactl is not openable — "
+                    "this container's device allowlist was stripped. Inference "
+                    "still works while the existing CUDA context lives, but any "
+                    "new process gets CPU. Recreate the container."
+                )
         
         # Detect MPS (Apple Silicon)
         mps_available = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
@@ -289,7 +307,7 @@ async def health():
             status="healthy",
             timestamp=datetime.now().isoformat(),
             models_loaded=models_loaded,
-            gpu_available=gpu_available
+            gpu_available=gpu_available and device_nodes_open
         )
     except Exception as e:
         raise internal_error(logger, "Health check failed", e)

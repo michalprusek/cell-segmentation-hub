@@ -693,6 +693,11 @@ export class ExportService {
               shouldAbort: () => this.isJobCancelled(jobId),
               strokeWidth: mtThicknessPx,
               backgroundStrokeWidth: mtBackgroundStrokeWidth,
+              // Fetch exact per-MT background COMPOSITE ROIs (vicinity ring with
+              // every MT cut out) from ML; backgroundStrokeWidth stays as the
+              // fallback band if that request fails.
+              thicknessPx: mtThicknessPx,
+              marginMultiplier: mtMarginMultiplier,
             }
           )
             .then(result => {

@@ -230,7 +230,7 @@ async def disintegration_index(request: DisintegrationRequest):
 
         # Build a UNION mask from every supplied external polygon.
         # `mask_polygons` (plural) is the preferred input — represents the full
-        # ASPP segmentation (all spheroids in one canvas). `mask_polygon`
+        # disintegration segmentation (all spheroids in one canvas). `mask_polygon`
         # (singular) is a legacy alias for a single-element list.
         mask_polys: List[List[List[float]]] = []
         if request.mask_polygons:

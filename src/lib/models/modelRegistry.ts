@@ -133,21 +133,21 @@ export const MODEL_REGISTRY = {
     i18nKey: 'unet_spherohq',
     compatibleProjectTypes: ['spheroid'],
   },
-  unet_attention_aspp: {
+  spheroid_disintegration: {
     size: 'medium',
     defaultThreshold: 0.2,
     category: 'spheroid',
     performance: {
-      avgTimePerImage: 0.35,
-      throughput: 2.8,
-      p95Latency: 0.5,
+      avgTimePerImage: 0.7,
+      throughput: 1.5,
+      p95Latency: 1.0,
       batchSize: 1,
     },
-    name: 'UNet Attention-ASPP',
-    displayName: 'UNet Attention-ASPP',
+    name: 'Spheroid Disintegration',
+    displayName: 'Spheroid Disintegration',
     description:
-      'Enhanced UNet with Attention Gates and ASPP for detecting dissolving spheroids and small satellite cells',
-    i18nKey: 'unet_attention_aspp',
+      'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly for a correct Disintegration Index',
+    i18nKey: 'spheroid_disintegration',
     compatibleProjectTypes: ['spheroid_invasive'],
   },
   segformer: {

@@ -471,10 +471,10 @@ export default {
           description:
             'Mejor rendimiento en el conjunto de datos SpheroHQ - optimizado para segmentación de esferoides con velocidad y precisión equilibradas (~0.25s/imagen, 10 img/s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Desintegración de esferoides',
           description:
-            'UNet mejorado con Attention Gates y ASPP para detectar esferoides en disolución y pequeñas células satélite (~0.35s/imagen)',
+            'UNet++ con codificador EfficientNet-B5 — segmentación de 3 clases (fondo / corona / núcleo denso) de esferoides en desintegración; predice el núcleo directamente para un Índice de Desintegración correcto (~0.7s/imagen)',
         },
         segformer: {
           name: 'SegFormer',
@@ -525,8 +525,8 @@ export default {
         'Segmentación más precisa con mecanismos de atención (E2E ~482ms, 2.7 img/s)',
       unet_spherohq:
         '¡El modelo más rápido después de las optimizaciones! Excelente para procesamiento en tiempo real (E2E ~286ms, 5.5 img/s)',
-      unet_attention_aspp:
-        'UNet mejorado con Attention Gates y cuello de botella ASPP para detectar esferoides en disolución y pequeñas células satélite (35,5M parámetros)',
+      spheroid_disintegration:
+        'Modelo UNet++ / EfficientNet-B5 de 3 clases (fondo / corona / núcleo) para esferoides en desintegración; predice el núcleo denso directamente para un Índice de Desintegración correcto (30,7M parámetros)',
       segformer:
         'Modelo SegFormer-B0 basado en transformador, entrenado con el conjunto de datos SpheroMix. La mayor precisión de segmentación de esferoides de la plataforma (93% IoU), siendo además el modelo más pequeño y rápido (~13 ms/imagen).',
       mamba_unet:
@@ -1001,6 +1001,8 @@ export default {
           'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
         cancel: 'Presiona ESC para cancelar',
+        joinHint:
+          'Haz clic en el extremo de otra polilínea de la misma clase para unirlas',
       },
       editVertices: {
         selectPolygon: 'Haz clic en un polígono para seleccionarlo para editar',
@@ -2410,6 +2412,12 @@ export default {
     noRuns: 'Aún no hay ejecuciones. Sube una carpeta para empezar.',
     fileCount: '{{count}} archivo(s)',
     mtCount: '{{count}} microtúbulos',
+    deviceDegraded: 'CPU (GPU no disponible)',
+    deviceDegradedHint:
+      'Esta ejecución debía usar la GPU pero no pudo acceder a ella, así que se ejecutó en la CPU y tardó mucho más. Por favor, repórtelo.',
+    deviceBusy: 'CPU (GPU ocupada)',
+    deviceBusyHint:
+      'La GPU compartida estuvo ocupada durante toda la espera, así que se ejecutó en la CPU y tardó más. No hay ningún problema, no es necesario informarlo.',
     download: 'Descargar',
     delete: 'Eliminar',
     deleteFailed: 'No se pudo eliminar la ejecución',

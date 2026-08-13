@@ -119,6 +119,12 @@ export const useEnhancedSegmentationEditor = ({
     polygonId: string;
     vertexIndex: number;
   } | null>(null);
+  // Add-points join: the same-class foreign polyline endpoint currently under
+  // the cursor, highlighted as a ring so the user can click to merge into it.
+  const [hoveredJoinTarget, setHoveredJoinTarget] = useState<{
+    polygonId: string;
+    endpoint: 'head' | 'tail';
+  } | null>(null);
   const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
 
   // Vertex drag state for smooth dragging
@@ -1085,6 +1091,7 @@ export const useEnhancedSegmentationEditor = ({
     setInteractionState,
     setTempPoints,
     setHoveredVertex,
+    setHoveredJoinTarget,
     setVertexDragState,
     updatePolygons,
     getPolygons,
@@ -1178,6 +1185,7 @@ export const useEnhancedSegmentationEditor = ({
       interactionState,
       tempPoints,
       hoveredVertex,
+      hoveredJoinTarget,
       cursorPosition,
       hasUnsavedChanges,
       canUndo,
@@ -1194,6 +1202,7 @@ export const useEnhancedSegmentationEditor = ({
       interactionState,
       tempPoints,
       hoveredVertex,
+      hoveredJoinTarget,
       cursorPosition,
       hasUnsavedChanges,
       canUndo,

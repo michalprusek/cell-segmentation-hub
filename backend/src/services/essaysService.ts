@@ -27,8 +27,20 @@ const STAGING_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 export interface EssayJobOptions {
   threshold?: number;
   mtWidth?: number;
-  bgGap?: number;
-  bgWidth?: number;
+  /**
+   * Background-ring reach as a multiple of mtWidth (2 = out to 10 px for a
+   * 5 px band). Mirrors `margin_multiplier` in the shared measurement
+   * (backend/segmentation/models/mt_measure.py), which the project export
+   * uses too. Replaced bgGap/bgWidth on 2026-08-13 along with the
+   * gap-plus-width ring they described.
+   */
+  bgMargin?: number;
+  /**
+   * Substring naming the channel each role uses. They are separate because the
+   * module segments IRM (what the v7 checkpoint was trained on) and reads the
+   * intensities off TIRF — conflating them is the defect fixed 2026-08.
+   */
+  irmName?: string;
   tirfName?: string;
   solutionName?: string;
   limitWells?: number;
@@ -45,6 +57,8 @@ interface WorkerStatus {
   positionsDone?: number;
   mtCount?: number;
   device?: string;
+  deviceReason?: string;
+  failures?: number;
   error?: string | null;
 }
 
@@ -53,6 +67,37 @@ const exportDir = (): string => path.resolve(process.env.EXPORT_DIR || './export
 /** Coerce a worker-reported progress into the 0-100 invariant. */
 const clampProgress = (n: number): number =>
   Math.min(100, Math.max(0, Math.round(Number.isFinite(n) ? n : 0)));
+
+/**
+ * Coerce the worker's device report into the domain the UI knows how to render.
+ *
+ * `readWorkerStatus` parses status.json with an unchecked cast, so everything
+ * downstream — the DB column and the badge in the UI — trusts whatever the
+ * worker wrote. `progress` already gets clamped on this boundary; `device` got
+ * nothing.
+ *
+ * Neither `cpu-degraded` nor `cpu-busy` is a device the worker runs on: both
+ * are `cpu` plus the worker's `deviceReason`, folded into the existing
+ * free-form column so the UI can distinguish three situations the bare `CPU`
+ * badge could not — no GPU on this host (nothing to say), the GPU broke (tell
+ * an admin), and the shared card was busy for the whole wait (nothing anyone
+ * can act on). Folding avoids a migration for a display-only distinction.
+ * The incident that motivated all of this is written down once, in `GpuProbe`
+ * in backend/essays/essays_api.py.
+ *
+ * The reason must stay separate from the device on the worker side, because
+ * `_await_gpu`'s device goes straight into `evaluate.py --device`.
+ */
+export const coerceDevice = (
+  device: unknown,
+  reason: unknown
+): 'cuda' | 'cpu' | 'cpu-degraded' | 'cpu-busy' | undefined => {
+  if (device !== 'cuda' && device !== 'cpu') return undefined;
+  if (device !== 'cpu') return device;
+  if (reason === 'fault') return 'cpu-degraded';
+  if (reason === 'busy') return 'cpu-busy';
+  return 'cpu';
+};
 
 /**
  * Strip path components and unsafe chars; guarantee a lowercase `.nd2` suffix.
@@ -280,7 +325,19 @@ export class EssaysService {
     const p = path.join(this.jobDir(userId, jobId), 'status.json');
     try {
       return JSON.parse(await fs.readFile(p, 'utf8')) as WorkerStatus;
-    } catch {
+    } catch (e) {
+      // ENOENT is the normal case — the worker has not written yet. Anything
+      // else (a torn/corrupt file, an EACCES from the uid-1001 shared mount)
+      // used to be swallowed identically, and the staleness watchdog would then
+      // fail the job with "Worker stopped reporting" — a false diagnosis of a
+      // problem that was on our side of the handoff.
+      if ((e as { code?: string }).code !== 'ENOENT') {
+        logger.error(
+          `essays: cannot read status.json for ${jobId}: ${String(e)}`,
+          undefined,
+          CTX
+        );
+      }
       return null;
     }
   }
@@ -348,7 +405,7 @@ export class EssaysService {
     const nextStatus = ws.state === 'queued' ? 'queued' : 'running';
     const nextProgress = clampProgress(ws.progress ?? job.progress);
     const nextMt = ws.mtCount ?? job.mtCount;
-    const nextDevice = ws.device ?? job.device;
+    const nextDevice = coerceDevice(ws.device, ws.deviceReason) ?? job.device;
     if (
       job.status === nextStatus &&
       job.progress === nextProgress &&
@@ -406,7 +463,11 @@ export class EssaysService {
           status: 'completed',
           progress: 100,
           mtCount: ws.mtCount ?? job.mtCount,
-          device: ws.device ?? job.device,
+          device: coerceDevice(ws.device, ws.deviceReason) ?? job.device,
+          // A completed run can still be partial: evaluate.py returns 0 even
+          // when wells failed to read or segment. Carrying `error` on the
+          // success path is what lets the UI say so without withholding the zip.
+          error: ws.error ?? null,
           resultZipKey,
           completedAt: new Date(),
         },

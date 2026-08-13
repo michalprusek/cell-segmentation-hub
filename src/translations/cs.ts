@@ -472,10 +472,10 @@ export default {
           description:
             'Nejlepší výkon na datové sadě SpheroHQ - optimalizováno pro segmentaci sféroidů s vyváženou rychlostí a přesností (~0.25s/obr., 10 obr./s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Rozpad sféroidů',
           description:
-            'Vylepšený UNet s Attention Gates a ASPP pro detekci rozpadajících se sféroidů a malých satelitních buněk (~0.35s/snímek)',
+            'UNet++ s enkodérem EfficientNet-B5 — 3třídová segmentace (pozadí / korona / husté jádro) rozpadajících se sféroidů; jádro predikuje přímo pro správný Disintegration Index (~0.7s/snímek)',
         },
         segformer: {
           name: 'SegFormer',
@@ -526,8 +526,8 @@ export default {
         'Nejpřesnější segmentace s mechanismy pozornosti (E2E ~482ms, 2.7 obr/s)',
       unet_spherohq:
         'Nejrychlejší model po optimalizacích! Výborný pro zpracování v reálném čase (E2E ~286ms, 5.5 obr/s)',
-      unet_attention_aspp:
-        'Vylepšený UNet s Attention Gates a ASPP bottleneck pro detekci rozpadajících se sféroidů a malých satelitních buněk (35.5M parametrů)',
+      spheroid_disintegration:
+        'Model UNet++ / EfficientNet-B5, 3 třídy (pozadí / korona / jádro) pro rozpadající se sféroidy; husté jádro predikuje přímo pro správný Disintegration Index (30.7M parametrů)',
       segformer:
         'Model SegFormer-B0 založený na transformeru, trénovaný na datasetu SpheroMix. Nejvyšší přesnost segmentace sféroidů v platformě (93% IoU) a zároveň nejmenší a nejrychlejší model (~13 ms/snímek).',
       mamba_unet:
@@ -842,6 +842,8 @@ export default {
           'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení. Klikněte přímo na jiný vrchol bez přidávání bodů pro odstranění všech bodů mezi nimi.',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
+        joinHint:
+          'Kliknutím na koncový bod jiné polylinie stejné třídy je spojíte',
       },
       editVertices: {
         selectPolygon: 'Klikněte na polygon pro jeho výběr k úpravě',
@@ -2373,6 +2375,12 @@ export default {
     noRuns: 'Zatím žádné úlohy. Začněte nahráním složky.',
     fileCount: '{{count}} souborů',
     mtCount: '{{count}} mikrotubulů',
+    deviceDegraded: 'CPU (GPU nedostupné)',
+    deviceDegradedHint:
+      'Tento běh měl použít GPU, ale nepodařilo se k němu přistoupit, takže běžel na CPU a trval výrazně déle. Nahlaste to prosím.',
+    deviceBusy: 'CPU (GPU zaneprázdněné)',
+    deviceBusyHint:
+      'Společné GPU bylo po celou dobu čekání obsazené, takže běh proběhl na CPU a trval déle. Nic není rozbité, není třeba to hlásit.',
     download: 'Stáhnout',
     delete: 'Smazat',
     deleteFailed: 'Úlohu se nepodařilo smazat',

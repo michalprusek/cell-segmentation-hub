@@ -31,6 +31,11 @@ Pillow==12.2.0
 numpy==1.26.4
 scipy==1.11.4
 scikit-image==0.22.0
+# roifile encodes the ImageJ .roi background ROIs for the MT export as COMPOSITE
+# (ShapeRoi) shapes — an outer band with the microtubule signal cut out, which a
+# plain stroke-width polyline cannot represent. Pure-Python, numpy-only; used by
+# the /mt-background-rois endpoint. Pinned to the validated release.
+roifile==2025.12.12
 # matplotlib renders the per-frame intensity-profile plots for the "intensity
 # profiles" export mode (/kymograph render_profiles). 3.9.x supports Python 3.10
 # + numpy 1.26. Imported lazily with the Agg backend — no runtime display needed.

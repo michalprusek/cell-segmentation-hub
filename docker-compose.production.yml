@@ -118,6 +118,45 @@ services:
       dockerfile: docker/ml.optimized.Dockerfile
     container_name: spheroseg-ml
     runtime: nvidia
+    # Put NVIDIA device permissions into the OCI spec. `runtime: nvidia` alone
+    # grants them via a hook that runs AFTER the spec is built, so they never
+    # land in `linux.resources.devices`. Anything that makes containerd re-apply
+    # that spec (`docker update`, `systemctl daemon-reload`, a systemd cgroup
+    # rewrite) then resets the allowlist to the hookless version and the running
+    # container silently loses the GPU: `open('/dev/nvidiactl')` starts
+    # returning EPERM, `torch.cuda.is_available()` flips to False, and inference
+    # falls back to CPU. These rules live in the spec, so a re-apply restores
+    # them instead of dropping them.
+    #
+    # Rules rather than `devices:` deliberately. `devices:` re-resolves the host
+    # path on every `docker start`, and `/dev/nvidia-uvm` is created lazily by
+    # `nvidia-modprobe` on first CUDA use. On the 2026-01-13 boot the toolkit
+    # hook itself logged, while docker was restoring containers, "Could not
+    # locate /dev/nvidia-uvm: pattern /dev/nvidia-uvm not found" — the node
+    # appeared ~0.6 s later. A hook can warn and continue; an explicit
+    # `devices:` entry cannot, so with `restart: always` that same moment is a
+    # hard "error gathering device information" instead of a degradation.
+    # Cgroup rules stat nothing, so they are safe before the nodes appear.
+    #
+    # (Do not trust wall-clock timestamps from that boot: the realtime clock
+    # jumped +2 h at monotonic 4.65 s, which makes the device-node ctimes look
+    # ~1 h 43 min later than dockerd. Use `journalctl -o short-monotonic`.)
+    #
+    # `runtime: nvidia` above (and the `deploy.resources.reservations.devices`
+    # block further down — either one triggers the hook) is still load-bearing:
+    # the hook is what creates the nodes inside the container and mounts the
+    # driver userspace. These rules only grant ACCESS to a major:minor — they
+    # cannot make a device appear. Unlike a hardcoded `/dev/nvidia0`, `c 195:*` also
+    # covers a second GPU if one is ever added. Major 239 (nvidia-caps, MIG) is
+    # deliberately excluded — not used on an A5000.
+    #
+    # 195 is NVIDIA's statically assigned major (nvidia0 / nvidiactl /
+    # nvidia-modeset). 236 is nvidia-uvm, which takes a DYNAMIC major — verify
+    # with `grep nvidia-uvm /proc/devices` after a driver upgrade. If it ever
+    # moves, the symptom is the original bug (silent CPU), not an outage.
+    device_cgroup_rules:
+      - 'c 195:* rmw'
+      - 'c 236:* rmw'
     # 1 worker to free GPU memory for Maptimize
     command:
       [
@@ -199,33 +238,35 @@ services:
           'CMD',
           'python',
           '-c',
-          "import requests; requests.get('http://localhost:8000/health')",
+          "import requests; requests.get('http://localhost:8000/health').raise_for_status()",
         ]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 120s
 
-  # Automated Essays worker — batch microtubule assay of ND2 wells via
-  # AutomatedEssaysModule (cloned at image build). Shares the GPU with `ml` but
-  # is guarded (start-gate on free VRAM + per-process memory cap) so a batch
-  # never OOMs interactive segmentation. Loopback-only + NO auth layer — only the
+  # Automated Essays worker — batch microtubule assay of ND2 wells via the
+  # vendored module at backend/essays/module. Shares the GPU with `ml` but is
+  # guarded (start-gate on free VRAM + per-process memory cap) so a batch never
+  # OOMs interactive segmentation. Loopback-only + NO auth layer — only the
   # backend reaches it over the docker network (essays:8000). Build with
-  # `make build-essays` (supplies the gh token as a BuildKit secret + re-clones
-  # the module so upstream changes propagate).
+  # `make build-essays`, which checks the ml base image exists first.
   essays:
     build:
       context: .
       dockerfile: docker/essays.Dockerfile
       args:
         ML_IMAGE: cell-segmentation-hub-ml:latest
-        MODULE_REF: ${ESSAYS_MODULE_REF:-main}
-        MODULE_CACHE_BUST: ${ESSAYS_MODULE_CACHE_BUST:-0}
-      secrets:
-        - ghtoken
     image: cell-segmentation-hub-essays:latest
     container_name: spheroseg-essays
     runtime: nvidia
+    # Same reason and same trade-off as the ml service above — see the comment
+    # there for why these are cgroup rules and not `devices:`. This container is
+    # the one that regressed in the wild: a 180-well job took 36 h on CPU on
+    # 2026-07-27 where the same-sized job had taken 1 h 20 m on GPU on 07-08.
+    device_cgroup_rules:
+      - 'c 195:* rmw'
+      - 'c 236:* rmw'
     # Run as the backend's uid:gid (nodejs 1001) so the worker can write into the
     # job dirs the backend creates on the shared uploads volume (status.json +
     # output/). HOME=/tmp keeps any home-dir writes (matplotlib/torch cache) off
@@ -243,11 +284,25 @@ services:
       - PYTHONUNBUFFERED=1
       - HOME=/tmp
       - MPLCONFIGDIR=/tmp/mpl
-      # GPU guard: only start a batch when >=13 GB is free (a v7 forward peaks
-      # ~12.5 GB); cap this process at 0.6 of the 24 GB card so it can never grab
-      # the whole GPU. Tuned against a real well recording.
-      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-13}
-      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.6}
+      # GPU guard, measured on the 24 GB A5000 against a real well recording
+      # (2026-08-13). A v7 forward pass on a 2048x2048 well wants a 16.36 GiB
+      # working set, and that figure is FLAT — identical at caps of 16.49, 17.67
+      # and 20.02 GiB, so the process is not simply growing to fill whatever it
+      # is given.
+      #
+      # The old 0.6 (14.13 GiB) sat BELOW that working set, so every position
+      # hit the ceiling, released ~3.7 GiB of cached blocks back to the driver
+      # and then had to win them back. On a card shared with the ml service and
+      # Maptimize that re-acquisition is a race, and losing it is an
+      # OutOfMemoryError — which is how one folder lost 255 wells in one run and
+      # 68 in the next (see backend/essays/module/tests/test_failure_resilience.py).
+      # 0.75 clears the working set with 1.31 GiB to spare; higher buys nothing
+      # because the demand does not grow.
+      #
+      # The start gate rises with it: a batch admitted with only 13 GB free
+      # would resume exactly the release-and-re-acquire cycle the cap now avoids.
+      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-17}
+      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.75}
       - ESSAYS_GPU_WAIT_TIMEOUT_S=${ESSAYS_GPU_WAIT_TIMEOUT_S:-1800}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
@@ -270,7 +325,7 @@ services:
           'CMD',
           'python',
           '-c',
-          "import requests; requests.get('http://localhost:8000/health')",
+          "import requests; requests.get('http://localhost:8000/health').raise_for_status()",
         ]
       interval: 30s
       timeout: 10s
@@ -319,10 +374,3 @@ volumes:
     name: spheroseg_postgres_blue
   redis_blue_data:
     name: spheroseg_redis_blue
-
-secrets:
-  # gh token for cloning the private AutomatedEssaysModule at build time. Written
-  # by `make build-essays` (gitignored) and only read during the essays image
-  # build — never used at runtime, never baked into a layer.
-  ghtoken:
-    file: ${ESSAYS_GH_TOKEN_FILE:-./.essays_ghtoken}

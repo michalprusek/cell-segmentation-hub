@@ -487,10 +487,10 @@ export default {
           description:
             'Best performance on SpheroHQ dataset - optimized for spheroid segmentation with balanced speed and accuracy (~0.25s/image, 10 img/s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Spheroid Disintegration',
           description:
-            'Enhanced UNet with Attention Gates and ASPP for detecting dissolving spheroids and small satellite cells (~0.35s/image)',
+            'UNet++ with an EfficientNet-B5 encoder — 3-class segmentation (background / corona / dense core) of disintegrating spheroids; predicts the core directly for a correct Disintegration Index (~0.7s/image)',
         },
         segformer: {
           name: 'SegFormer',
@@ -541,8 +541,8 @@ export default {
         'Most precise segmentation with attention mechanisms (E2E ~482ms, 2.7 img/s)',
       unet_spherohq:
         'Fastest model after optimizations! Excellent for real-time processing (E2E ~286ms, 5.5 img/s)',
-      unet_attention_aspp:
-        'Enhanced UNet with Attention Gates and ASPP bottleneck for detecting dissolving spheroids and small satellite cells (35.5M params)',
+      spheroid_disintegration:
+        'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly for a correct Disintegration Index (30.7M params)',
       segformer:
         'Transformer-based SegFormer-B0 model trained on the SpheroMix dataset. Highest spheroid accuracy in the platform (93% IoU) while being the smallest and fastest model (~13 ms/image).',
       mamba_unet:
@@ -834,6 +834,8 @@ export default {
           'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
+        joinHint:
+          'Click another polyline endpoint of the same class to join them',
       },
       editVertices: {
         selectPolygon: 'Click on a polygon to select it for editing',
@@ -2439,6 +2441,12 @@ export default {
     noRuns: 'No runs yet. Upload a folder to get started.',
     fileCount: '{{count}} file(s)',
     mtCount: '{{count}} microtubules',
+    deviceDegraded: 'CPU (GPU unavailable)',
+    deviceDegradedHint:
+      'This run was supposed to use the GPU but could not reach it, so it ran on the CPU and took far longer. Please report this.',
+    deviceBusy: 'CPU (GPU busy)',
+    deviceBusyHint:
+      'The shared GPU was busy for the whole wait, so this ran on the CPU and took longer. Nothing is wrong — no need to report it.',
     download: 'Download',
     delete: 'Delete',
     deleteFailed: 'Could not delete the run',

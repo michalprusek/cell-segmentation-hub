@@ -19,7 +19,7 @@ export const isValidSpermPartClass = (
   (SPERM_PART_CLASSES as readonly string[]).includes(value);
 
 // Wider class union covering both sperm parts and spheroid 'core'
-// (dense central region detected for the ASPP model).
+// (dense central region detected by the disintegration model).
 export const POLYGON_PART_CLASSES = [...SPERM_PART_CLASSES, 'core'] as const;
 export type PolygonPartClass = (typeof POLYGON_PART_CLASSES)[number];
 

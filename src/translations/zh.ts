@@ -438,10 +438,10 @@ export default {
           description:
             '在SpheroHQ数据集上表现最佳 - 专为球体分割优化，速度和精度平衡 (~0.25秒/图像, 10图像/秒)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: '球体解体',
           description:
-            '增强型UNet，配备注意力门控和ASPP，用于检测溶解中的球体和小型卫星细胞（约0.35秒/图像）',
+            'UNet++ 搭配 EfficientNet-B5 编码器——对解体球体进行3类分割（背景/冠状层/致密核心）；直接预测核心以获得正确的解体指数（约0.7秒/图像）',
         },
         segformer: {
           name: 'SegFormer',
@@ -489,8 +489,8 @@ export default {
       cbam_resunet: '具有注意力机制的最精确分割 (E2E ~482ms, 2.7 图像/秒)',
       unet_spherohq:
         '优化后最快的模型！非常适合实时处理 (E2E ~286ms, 5.5 图像/秒)',
-      unet_attention_aspp:
-        '增强型UNet，配备注意力门控和ASPP瓶颈层，用于检测溶解中的球体和小型卫星细胞（3550万参数）',
+      spheroid_disintegration:
+        'UNet++ / EfficientNet-B5 三类模型（背景/冠状层/核心），用于解体球体；直接预测致密核心以获得正确的解体指数（3070万参数）',
       segformer:
         '基于 Transformer 的 SegFormer-B0 模型，在 SpheroMix 数据集上训练。平台中球体分割精度最高（93% IoU），同时是体积最小、速度最快的模型（约 13 毫秒/图像）。',
       mamba_unet:
@@ -924,6 +924,7 @@ export default {
           '点击添加点，然后点击另一个顶点完成。直接点击另一个顶点而不添加点，可删除它们之间的所有点。',
         holdShift: '按住SHIFT自动添加点',
         cancel: '按ESC取消',
+        joinHint: '点击同类另一条折线的端点即可将它们连接',
       },
       editVertices: {
         selectPolygon: '点击多边形选择要编辑的对象',
@@ -2215,6 +2216,12 @@ export default {
     noRuns: '暂无任务。上传文件夹即可开始。',
     fileCount: '{{count}} 个文件',
     mtCount: '{{count}} 条微管',
+    deviceDegraded: 'CPU（GPU 不可用）',
+    deviceDegradedHint:
+      '此次运行本应使用 GPU，但无法访问，因此在 CPU 上运行，耗时长得多。请报告此问题。',
+    deviceBusy: 'CPU（GPU 繁忙）',
+    deviceBusyHint:
+      '共享 GPU 在整个等待期间都处于繁忙状态，因此本次运行在 CPU 上完成，耗时更长。这不是故障，无需报告。',
     download: '下载',
     delete: '删除',
     deleteFailed: '无法删除该任务',
