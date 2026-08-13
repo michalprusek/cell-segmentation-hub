@@ -28,6 +28,7 @@ SEG_ROOT = Path(__file__).resolve().parents[1]
 if str(SEG_ROOT) not in sys.path:
     sys.path.insert(0, str(SEG_ROOT))
 
+from api import tracker_kymograph as tracker_kymograph_module  # noqa: E402
 from api.tracker_kymograph import router as tracker_kymograph_router  # noqa: E402
 from api.tracker_kymograph import (  # noqa: E402
     PolylineInput,
@@ -481,13 +482,20 @@ def _write_gradient_png(path: Path, height: int = 16, width: int = 64) -> None:
     PILImage.fromarray(arr, mode="L").save(path)
 
 
-def test_kymograph_samples_intensity_in_row_col_order(client):
+def test_kymograph_samples_intensity_in_row_col_order(client, monkeypatch):
     """A horizontal polyline through a column-index gradient should
     produce monotonically-increasing intensity in the output CSV. Catches
     accidental row/col swap (would produce uniform output for a
     horizontal line through that gradient)."""
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
+        # The endpoint rejects any image_path outside the storage root (the
+        # path-injection guard from PR #237), which landed after this test was
+        # written and had been failing it ever since — taking the row/col-swap
+        # guard offline. _UPLOAD_ROOT is resolved once at import, so setting
+        # UPLOAD_DIR here would be too late; point the constant at this temp dir.
+        monkeypatch.setattr(tracker_kymograph_module, "_UPLOAD_ROOT",
+                            td_path.resolve())
         png0 = td_path / "frame0.png"
         png1 = td_path / "frame1.png"
         _write_gradient_png(png0)

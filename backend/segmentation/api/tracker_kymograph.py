@@ -205,9 +205,17 @@ def _safe_mean_embedding(p: PolylineInput) -> tuple[Optional[np.ndarray], bool]:
         return None, True
     if emb is None:
         return None, False
-    # Upcast the float16-stored embedding mean to float64: cosine distances are
-    # otherwise computed in lossy float16 precision, and it lets the scalar
-    # (gap-closing) and vectorized (frame-to-frame) cost paths agree bit-for-bit.
+    # Upcast the float16-stored embedding mean to float64. Without it BOTH
+    # np.linalg.norm and np.dot return float16, so the whole cosine was computed
+    # in ~2e-4 relative precision, and the scalar (gap-closing) and vectorized
+    # (frame-to-frame) cost paths would disagree with each other.
+    #
+    # This is NOT a no-op refactor: it shifts every d_emb cell by up to ~1e-4
+    # against the float16 arithmetic this service used before. Measured on three
+    # synthetic videos the resulting track partitions were unchanged — the shift
+    # sits far below the LAP's decision margins — but a pair sitting exactly on
+    # `cost_threshold` could in principle now fall the other way, so a re-run of
+    # an old container is not guaranteed to reproduce its previous grouping.
     return emb.mean(axis=0).astype(np.float64), False
 
 
@@ -436,8 +444,20 @@ def _build_link_cost(
     # scalar double loop. The old loop called np.linalg.norm/np.clip O(P·Q)
     # times per frame pair — ~13M norm calls on a dense 200-filament frame —
     # and dominated tracking wall-clock (55s on a 41-frame video, tripping the
-    # caller's 60s timeout so tracking silently produced no trackIds). This is
-    # ~140× faster and numerically identical to the per-cell _filament_cost.
+    # caller's 60s timeout so tracking silently produced no trackIds). Measured
+    # ~50-100x faster at 50-200 filaments per frame.
+    #
+    # It agrees with the per-cell _filament_cost to floating-point rounding
+    # (~1e-16), NOT bit-for-bit: np.linalg.norm(axis=1) reduces pairwise while
+    # the scalar path uses BLAS ddot, and E_p @ E_n.T is dgemm — different
+    # summation orders. Roughly 2% of cells land 1 ULP apart.
+    #
+    # One deliberate behaviour change: an embedding that decodes but holds
+    # Inf/NaN used to make _emb_distance return NaN, which _solve_link_lap read
+    # as "cost > threshold" and so refused to link. Here NaN is caught by the
+    # valid mask and falls back to the neutral median, i.e. the pair degrades to
+    # geometry instead of being rejected outright — the same treatment a missing
+    # embedding already got.
     w_emb, w_end, w_orient, w_len = weights
     diag = max(float(img_diag), 1.0)
 

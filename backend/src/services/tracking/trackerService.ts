@@ -205,9 +205,21 @@ async function _runTrackingForContainerInner(
   try {
     // Defense-in-depth: the vectorized tracker handles a dense 41-frame video
     // in ~3s, but a very long or unusually dense container can still take
-    // longer. The old 60s ceiling silently dropped a legitimately-slow track
-    // pass (leaving the container with zero trackIds and no retry), so give it
-    // a generous margin — this call is fire-and-forget, nothing waits on it.
+    // longer — gap-closing is still a scalar O(M^2) loop (~9s at M=2000). The
+    // old 60s ceiling silently dropped a legitimately-slow pass, leaving the
+    // container with zero trackIds and no retry.
+    //
+    // Nothing awaits this call (scheduleTrackingForContainer is invoked without
+    // await from queueService), so a long wait blocks nothing HERE. It is not
+    // free on the ML side though: /track is an `async def` doing synchronous
+    // numpy work on a `--workers 1` uvicorn, so a multi-minute pass stalls that
+    // service's only event loop — including /health, which flips the container
+    // unhealthy after ~150s. Raising this ceiling does not cause that (the
+    // client timeout never bounded the server's work), but do not read the
+    // margin as evidence that a 5-minute /track is harmless.
+    //
+    // Note this also widens the _inFlightTrackers dedup window to 5 minutes:
+    // re-triggers for the same container during a slow pass are dropped.
     const res = await axios.post(mlUrl, trackPayload, { timeout: 300_000 });
     const payload = res.data?.data ?? res.data ?? {};
     assignments = payload.assignments ?? {};
