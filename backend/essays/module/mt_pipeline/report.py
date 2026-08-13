@@ -31,6 +31,24 @@ COLUMNS = [
 ]
 
 
+# One row per well/position the run could not produce. Ships next to results.csv
+# so it travels inside the download: before this existed the only record of a
+# failed well was a `[warn]` line on the worker's stderr, which is deleted with
+# the container — after the 2026-08-11 recreate, the reasons behind two runs'
+# 255 and 68 failures were unrecoverable, and the affected wells could only be
+# identified by diffing the two result zips.
+FAILURE_COLUMNS = [
+    "well_id", "position", "source_file",
+    # "read" = the ND2 could not be opened (the whole well is absent),
+    # "segment" = the model raised on this one position.
+    "stage",
+    # How many tries it took to give up. > 1 means the retry ran and the error
+    # outlived it, which separates a passing squall from a standing problem.
+    "attempts",
+    "error_type", "error_message",
+]
+
+
 class CsvWriter:
     """Append-as-you-go CSV writer with a fixed header."""
 
@@ -47,6 +65,55 @@ class CsvWriter:
         for r in rows:
             self._w.writerow(r)
         self.n_rows += len(rows)
+        self._fh.flush()
+
+    def close(self) -> None:
+        self._fh.close()
+
+
+class FailureLog:
+    """Names every well the run failed to produce, and why.
+
+    Written even when nothing fails: a header-only file states "no well was
+    lost", whereas a missing file cannot be told apart from a writer that never
+    ran. A run's results are only trustworthy if its gaps are enumerable.
+    """
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(self.path, "w", newline="")
+        self._w = csv.DictWriter(self._fh, fieldnames=FAILURE_COLUMNS,
+                                 extrasaction="ignore")
+        self._w.writeheader()
+        self._fh.flush()
+        self.n_rows = 0
+
+    def record(self, *, well_id: str, position: int | str, source_file: str,
+               stage: str, attempts: int, error_type: str,
+               error_message: str) -> None:
+        """Name one lost well.
+
+        Takes the error as *text*, never as an exception object: on the
+        segmentation path the caller must already have dropped the exception,
+        because its traceback pins the failed forward pass on the GPU (see
+        ``_ErrorInfo`` in evaluate.py). Accepting an exception here would invite
+        callers to keep one alive just to reach this line.
+        """
+        self._w.writerow({
+            "well_id": well_id,
+            "position": position,
+            "source_file": source_file,
+            "stage": stage,
+            "attempts": attempts,
+            "error_type": error_type,
+            # Newlines would break the row apart in a naive CSV reader, and a
+            # torch OOM message is multi-line.
+            "error_message": " ".join(error_message.split()),
+        })
+        self.n_rows += 1
+        # Flush per row: a batch that dies mid-run must still hand over the
+        # failures it already knew about.
         self._fh.flush()
 
     def close(self) -> None:
