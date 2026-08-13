@@ -349,6 +349,7 @@ export default {
       settings: 'Settings error',
     },
     deleteImages: 'Failed to delete selected images',
+    deleteAnnotations: 'Failed to delete annotations',
   },
   images: {
     uploadImages: 'Upload Images or Videos',
@@ -371,6 +372,12 @@ export default {
     viewResults: 'View Results',
     dropImagesHere: 'Drop the files here...',
     selectProjectFirst: 'Please select a project first',
+    registerChannels: {
+      promptTitle: 'Register channels?',
+      help: 'Correct small shifts between channels at upload by aligning each to the first (translation only).',
+      confirm: 'Register & upload',
+      decline: 'Upload without registering',
+    },
     projectRequired: 'You must select a project before you can upload images',
     pending: 'Pending',
     uploading: 'Uploading',
@@ -480,10 +487,10 @@ export default {
           description:
             'Best performance on SpheroHQ dataset - optimized for spheroid segmentation with balanced speed and accuracy (~0.25s/image, 10 img/s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Spheroid Disintegration',
           description:
-            'Enhanced UNet with Attention Gates and ASPP for detecting dissolving spheroids and small satellite cells (~0.35s/image)',
+            'UNet++ with an EfficientNet-B5 encoder — 3-class segmentation (background / corona / dense core) of disintegrating spheroids; predicts the core directly for a correct Disintegration Index (~0.7s/image)',
         },
         segformer: {
           name: 'SegFormer',
@@ -534,8 +541,8 @@ export default {
         'Most precise segmentation with attention mechanisms (E2E ~482ms, 2.7 img/s)',
       unet_spherohq:
         'Fastest model after optimizations! Excellent for real-time processing (E2E ~286ms, 5.5 img/s)',
-      unet_attention_aspp:
-        'Enhanced UNet with Attention Gates and ASPP bottleneck for detecting dissolving spheroids and small satellite cells (35.5M params)',
+      spheroid_disintegration:
+        'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly for a correct Disintegration Index (30.7M params)',
       segformer:
         'Transformer-based SegFormer-B0 model trained on the SpheroMix dataset. Highest spheroid accuracy in the platform (93% IoU) while being the smallest and fastest model (~13 ms/image).',
       mamba_unet:
@@ -612,6 +619,21 @@ export default {
     system: 'System',
   },
   segmentation: {
+    selection: {
+      selectAll: 'Select all',
+      deselectAll: 'Deselect all',
+      selected: '{{count}} selected',
+    },
+    trackOps: {
+      propagateSelectedSuccess:
+        'Propagated {{count}} microtubules to the following frames',
+      propagateSelectedPartial: '{{done}} of {{total}} microtubules propagated',
+      propagateSuccess:
+        'Microtubule propagated to {{count}} following frame(s)',
+      propagateFailed: 'Failed to propagate the microtubule',
+      deleteTrackSuccess: 'Track removed from {{count}} frame(s)',
+      deleteTrackFailed: 'Failed to delete the track',
+    },
     modelNotCompatible:
       'Model "{{model}}" is not compatible with project type "{{type}}". Allowed: {{allowed}}.',
     incompatibleModelTitle: 'Cannot segment with this model',
@@ -798,12 +820,22 @@ export default {
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
       },
+      createPolyline: {
+        start: 'Click to place the first point of the microtubule',
+        finish: 'Press Enter or double-click to finish the microtubule',
+        holdShift: 'Hold SHIFT to add points automatically',
+        cancel: 'Press ESC to cancel',
+      },
       addPoints: {
         clickVertex: 'Click on any vertex to start adding points',
+        clickVertexMt: 'Click a microtubule endpoint to start extending it',
+        addPointsMt: 'Click to add points, then press Enter to finish',
         addPoints:
           'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
+        joinHint:
+          'Click another polyline endpoint of the same class to join them',
       },
       editVertices: {
         selectPolygon: 'Click on a polygon to select it for editing',
@@ -821,6 +853,7 @@ export default {
       modes: {
         slice: 'Slice Mode',
         create: 'Create Polygon Mode',
+        createPolyline: 'Create Microtubule Mode',
         addPoints: 'Add Points Mode',
         editVertices: 'Edit Vertices Mode',
         deletePolygon: 'Delete Polygon Mode',
@@ -1146,6 +1179,43 @@ export default {
     selected: '{{count}} image selected',
     selected_other: '{{count}} images selected',
     deleteSelected: 'Delete Selected',
+    deleteAnnotations: 'Delete Annotations',
+    addChannel: 'Add channel',
+    addChannelSuccess: 'Added channel {{channels}} to {{frames}} frame(s)',
+    addChannelFailed: 'Failed to add channel',
+    addChannelDialog: {
+      title: 'Add channel',
+      description:
+        'Add an extra channel to the selected frames by uploading a video/stack with the same number of frames, or a single image stamped onto every selected frame.',
+      selectionSummary:
+        '{{frames}} frame(s) across {{videos}} video(s) selected.',
+      sourceLabel: 'Source file (video / stack / image)',
+      dropPrompt: 'Drag & drop a file here, or click to select',
+      dropInvalidType: 'Unsupported file type.',
+      dropTooManyFiles: 'Only one file can be added at a time.',
+      removeFile: 'Remove file',
+      imageHint: 'Single image → stamped onto every selected frame.',
+      videoHint:
+        'Video/stack → must have exactly {{frames}} frame(s) and belong to a single video.',
+      nameLabel: 'Channel name',
+      namePlaceholder: 'e.g. GFP',
+      alignLabel: 'Align to segmentation channel',
+      alignHint:
+        'Phase-correlation registration that corrects small stage drift.',
+      multiVideoError:
+        'A video/stack can only be added to frames of a single video. Select frames from one video, or upload a single image.',
+      uploading: 'Uploading… {{percent}}%',
+      adding: 'Adding…',
+      confirm: 'Add channel',
+    },
+    annotationsDeleted: 'Annotations deleted for {{count}} image(s)',
+    annotationsDeleteFailed:
+      'Failed to delete annotations for {{count}} image(s)',
+    deleteAnnotationsDialog: {
+      title: 'Delete annotations?',
+      description:
+        'This deletes the segmentation annotations for {{count}} selected image(s). The images are kept but their segmentation results are removed. This cannot be undone.',
+    },
     imagesDeleted: '{{count}} image deleted',
     imagesDeleted_other: '{{count}} images deleted',
   },
@@ -1158,27 +1228,25 @@ export default {
       enable: 'Include kymograph analysis',
       velocityMetrics: 'Velocity metrics (CSV)',
       segmentedImages: 'Segmented kymograph images (PNG)',
+      modeKymograph: 'Kymograph (space × time)',
+      modeProfiles: 'Intensity profiles (per image)',
+      singleFrameHint:
+        'Single frame — a kymograph needs a time series, so only the intensity profile is exported.',
+      profilesHint:
+        'Exports one matplotlib plot of intensity vs. position per frame, plus the intensity CSV.',
     },
     mt: {
       sectionTitle: 'Microtubule metrics',
       sectionDescription:
         'Per-MT length, area, and per-channel intensity from the raw ND2/TIFF file. Background-corrected using the median of pixels outside the dilated MT mask.',
-      enable: 'Compute per-channel intensity metrics',
+      intensityNote:
+        'Per-channel signal intensity — including the summed (integrated) intensity — is always computed for every channel and written to the metrics spreadsheet. No selection needed.',
       thicknessLabel: 'MT thickness (px)',
       thicknessHelp:
         'Width of the sampling band along each polyline. 5 px matches typical microtubule diameter in 100x widefield.',
       marginLabel: 'Background margin (× thickness)',
       marginHelp:
         'Excludes pixels within this radius (thickness × multiplier) of any MT from the background. Higher = more conservative.',
-      channelsLabel: 'Channels to sample',
-      noChannels:
-        'This project has no per-channel metadata. Re-upload the video to get channel-specific metrics.',
-      selectChannelRequired:
-        'Select at least one channel to export per-channel intensity metrics.',
-      incompleteTitle: 'Intensity calculation not selected',
-      incompleteBody:
-        'You have not enabled per-channel signal-intensity calculation, so the exported metrics will be incomplete: only microtubule length will be included, without the per-channel intensity columns. Export anyway?',
-      incompleteConfirm: 'Export anyway',
     },
     // Dialog headers
     advancedExport: 'Advanced Export',
@@ -1242,6 +1310,8 @@ export default {
     generateExcel: 'Generate Excel metrics',
     includeCocoFormat: 'Include COCO format annotations',
     includeJsonMetadata: 'Include JSON metadata',
+    microtubuleAnnotationsNote:
+      'Microtubule projects export annotations as ImageJ RoiSet + CVAT 1.1 (always included), each carrying the tubulin type class. COCO/YOLO/JSON are not used for microtubules.',
     // Progress and status
     preparing: 'Preparing export...',
     processing: 'Processing {{current}} of {{total}}',
@@ -1936,6 +2006,18 @@ export default {
 
   // Context menu
   contextMenu: {
+    propagateSelectedTracks: 'Propagate selected microtubules ({{count}})',
+    confirmPropagateSelected: 'Propagate {{count}} selected microtubules?',
+    propagateSelectedDescription:
+      'This overwrites the shape of {{count}} selected microtubules in all following frames of the video. This cannot be undone.',
+    propagateTrack: 'Propagate to following frames',
+    confirmPropagateTrack: 'Propagate to following frames?',
+    propagateTrackDescription:
+      "This overwrites this microtubule's shape in all following frames of the video. This cannot be undone.",
+    deleteTrack: 'Delete whole track',
+    confirmDeleteTrack: 'Delete the whole microtubule track?',
+    deleteTrackDescription:
+      'This removes this microtubule from all {{count}} frames of the video. This cannot be undone.',
     editPolygon: 'Edit polygon',
     splitPolygon: 'Split polygon',
     deletePolygon: 'Delete polygon',
@@ -2151,8 +2233,35 @@ export default {
     instance: 'Microtubule',
     hideInstance: 'Hide microtubule',
     showInstance: 'Show microtubule',
+    renameInstance: 'Rename microtubule',
     hideAll: 'Hide all',
     showAll: 'Show all',
+    type: {
+      set: 'Set type',
+      setForSelected: 'Set type for {{count}} selected',
+      none: 'None',
+      newLabel: 'New label…',
+      renameLabel: 'Rename label',
+      deleteLabel: 'Delete label',
+      manageLabels: 'Type labels',
+      labelName: 'Name',
+      labelNamePlaceholder: 'e.g. alpha-tubulin',
+      labelColor: 'Colour',
+      labelDialogDescription: 'Name the tubulin type and pick a colour.',
+      updated: 'Microtubule type updated',
+      updateFailed: 'Failed to update microtubule type',
+      createFailed: 'Failed to create label',
+      renameFailed: 'Failed to rename label',
+      deleteFailed: 'Failed to delete label',
+      loadFailed: 'Failed to load type labels',
+      duplicateName: 'A label with this name already exists',
+      noTrack: 'This microtubule has no track yet — run tracking first.',
+    },
+    color: {
+      label: 'Colour:',
+      byInstance: 'Instance',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Sperm Instances',
@@ -2333,6 +2442,12 @@ export default {
     noRuns: 'No runs yet. Upload a folder to get started.',
     fileCount: '{{count}} file(s)',
     mtCount: '{{count}} microtubules',
+    deviceDegraded: 'CPU (GPU unavailable)',
+    deviceDegradedHint:
+      'This run was supposed to use the GPU but could not reach it, so it ran on the CPU and took far longer. Please report this.',
+    deviceBusy: 'CPU (GPU busy)',
+    deviceBusyHint:
+      'The shared GPU was busy for the whole wait, so this ran on the CPU and took longer. Nothing is wrong — no need to report it.',
     download: 'Download',
     delete: 'Delete',
     deleteFailed: 'Could not delete the run',
@@ -2343,6 +2458,119 @@ export default {
       running: 'Processing',
       completed: 'Completed',
       failed: 'Failed',
+    },
+  },
+  segmenter: {
+    dashboard: {
+      title: 'Segmenter',
+      subtitle: 'Few-shot, self-trained polygon annotation datasets',
+      newDataset: 'New dataset',
+      noDatasets: 'No datasets yet.',
+      createFirst: 'Create your first dataset',
+      deleteDataset: 'Delete dataset',
+      imageCount: '{{count}} image(s)',
+      createDialogTitle: 'New dataset',
+      createDialogDescription:
+        "Datasets group unlabeled images you'll annotate with your own classes.",
+      nameLabel: 'Dataset name',
+      namePlaceholder: 'e.g. Nuclei — round 1',
+      creating: 'Creating…',
+      create: 'Create',
+      deleteConfirmTitle: 'Delete dataset?',
+      deleteConfirmDescription:
+        'This permanently deletes "{{name}}", all of its images, classes, and annotations. This cannot be undone.',
+      cancel: 'Cancel',
+      deleting: 'Deleting…',
+      delete: 'Delete',
+      loadFailed: 'Failed to load datasets',
+      created: 'Dataset created',
+      createFailed: 'Failed to create dataset',
+      deleted: 'Dataset deleted',
+      deleteFailed: 'Failed to delete dataset',
+    },
+    datasetDetail: {
+      backLabel: 'Back to datasets',
+      loading: 'Loading…',
+      imageCount: '{{count}} image(s)',
+      noImages: 'No images yet. Drop some above to get started.',
+      annotated: 'Annotated',
+      deleteImage: 'Delete image',
+      deleteConfirmTitle: 'Delete image?',
+      deleteConfirmDescription:
+        'This permanently deletes "{{name}}" and its annotation. This cannot be undone.',
+      cancel: 'Cancel',
+      deleting: 'Deleting…',
+      delete: 'Delete',
+      loadFailed: 'Failed to load dataset',
+      deleteFailed: 'Failed to delete image',
+    },
+    upload: {
+      skippedVideo:
+        '{{count}} file(s) skipped — the segmenter accepts static images only',
+      success: '{{count}} image(s) uploaded',
+      partialFail:
+        '{{uploaded}} uploaded, {{failed}} failed — check format/size',
+      failed: 'Upload failed',
+    },
+    classes: {
+      panelTitle: 'Classes',
+      newClass: 'New class',
+      loading: 'Loading classes…',
+      empty: 'No classes yet. Create one to start annotating.',
+      renameLabel: 'Rename class',
+      deleteLabel: 'Delete class',
+      unclassified: 'Unclassified',
+      unknown: 'Unknown class',
+      activeClass: 'Active class',
+      pickerEmpty: 'No classes yet — create one below before drawing.',
+      dialogTitleCreate: 'New class',
+      dialogTitleRename: 'Rename class',
+      dialogDescription:
+        'Give the class a name and a colour used to render its polygons.',
+      nameLabel: 'Class name',
+      namePlaceholder: 'e.g. Nucleus',
+      colorLabel: 'Colour',
+      cancel: 'Cancel',
+      create: 'Create',
+      save: 'Save',
+      loadFailed: 'Failed to load classes',
+      createFailed: 'Failed to create class',
+      nameClash: 'A class with that name already exists',
+      renameFailed: 'Failed to rename class',
+      deleteFailed: 'Failed to delete class',
+    },
+    editor: {
+      missingRouteParams: 'Missing dataset or image id in the route.',
+      back: 'Back',
+      selectMode: 'Select',
+      drawPolygon: 'Draw polygon',
+      editVertices: 'Edit vertices',
+      deletePolygon: 'Delete polygon',
+      undo: 'Undo',
+      redo: 'Redo',
+      zoomOut: 'Zoom out',
+      zoomIn: 'Zoom in',
+      resetView: 'Reset view',
+      save: 'Save',
+      saveUnsaved: 'Save*',
+      saved: 'Annotation saved',
+      saveFailed: 'Failed to save annotation',
+      loadFailed: 'Failed to load annotation',
+      saveDisabledLoadError:
+        "Saving is disabled until this image's annotation loads successfully, to avoid overwriting your saved work with an empty one.",
+      retry: 'Retry',
+      imageLoadFailed: 'Failed to load image',
+      imageAlt: 'Image to annotate',
+      minVertices: 'A polygon needs at least 3 points',
+    },
+    polygonList: {
+      title: 'Polygons ({{count}})',
+      empty:
+        'No polygons yet. Switch to "Draw polygon" and click on the image.',
+      instance: 'Instance {{id}}',
+      points: '{{count}} pts',
+      changeClass: 'Change class',
+      delete: 'Delete polygon',
     },
   },
 };

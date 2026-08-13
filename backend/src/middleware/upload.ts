@@ -162,6 +162,13 @@ try {
  */
 export const uploadSingleVideo = videoUpload.single('video');
 
+/**
+ * Middleware for the "Add channel" source upload (form field name: "file").
+ * Reuses the video multer (disk-backed, 100 GB ceiling, image+video MIME
+ * filter) because the source may be a full video/stack OR a single image.
+ */
+export const uploadChannelSource = videoUpload.single('file');
+
 // Feedback attachments: the reporter can attach the file their report is
 // about — a screenshot OR the microscopy video/ND2 that triggered it.
 // Capped at 50 GB (a tile-scan ND2 can reach that) and streamed to disk,

@@ -96,6 +96,14 @@ export interface SegmentationRequest {
 import type { SpermPartClass } from '@/lib/segmentation';
 import type { EssayJob, EssayJobOptions } from '@/types/essays';
 
+/** One microtubule type-label in a project's palette (SSOT for name + colour).
+ *  A polyline references it by `id` via its `mtType` field. */
+export interface MTTypeLabel {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface SegmentationPolygon {
   id: string;
   points: Array<{ x: number; y: number }>;
@@ -121,6 +129,9 @@ export interface SegmentationPolygon {
    *  the image border. Drives grey rendering in the editor and exclusion from
    *  metrics. Absent for other project types. */
   complete?: boolean;
+  /** User-assigned microtubule type-label id (references the project's
+   *  `mtTypeLabels` palette). Set/cleared via the tracks/type endpoint. */
+  mtType?: string;
 }
 
 export interface SegmentationResultData {
@@ -1127,7 +1138,8 @@ class ApiClient {
   async uploadImages(
     projectId: string,
     files: File[],
-    onProgress?: (progressPercent: number) => void
+    onProgress?: (progressPercent: number) => void,
+    signal?: AbortSignal
   ): Promise<ProjectImageDTO[]> {
     const formData = new FormData();
     files.forEach(file => {
@@ -1156,6 +1168,9 @@ class ApiClient {
           'Content-Type': 'multipart/form-data',
         },
         timeout: TIMEOUTS.FILE_UPLOAD_LARGE,
+        // Wire the abort signal so Cancel aborts the in-flight image batch too
+        // (the chunked path already does this; the plain path didn't).
+        signal,
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(
@@ -1195,7 +1210,9 @@ class ApiClient {
   async uploadVideo(
     projectId: string,
     file: File,
-    onProgress?: (progressPercent: number) => void
+    onProgress?: (progressPercent: number) => void,
+    registerChannels?: boolean,
+    signal?: AbortSignal
   ): Promise<{
     videoContainerId: string;
     frameCount: number;
@@ -1217,6 +1234,11 @@ class ApiClient {
           })
         : file;
     formData.append('video', payload);
+    // Opt-in multimodal channel registration (translation-only). The backend
+    // re-gates this to MT projects; sending the field is harmless otherwise.
+    if (registerChannels) {
+      formData.append('registerChannels', 'true');
+    }
 
     const response = await this.instance.post(
       `/projects/${projectId}/videos`,
@@ -1228,12 +1250,78 @@ class ApiClient {
         // multi-GB ND2 uploads mid-transfer); small clips still get a 20-min
         // floor, huge files up to a 4-hour ceiling.
         timeout: videoUploadTimeoutMs(payload.size),
+        // Lets the "Cancel" button actually abort the in-flight upload. Without
+        // this the video POST is a single blocking request the loop can't
+        // interrupt (it only guards BETWEEN files), so Cancel was a no-op.
+        signal,
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / progressEvent.total
             );
             onProgress(percentCompleted);
+          }
+        },
+      }
+    );
+    return this.extractData(response) as never;
+  }
+
+  /**
+   * Adds an extra (PNG-backed) channel to the SELECTED video frames of a
+   * microtubule project.
+   *
+   * The source (`file`) may be a video / stack / ND2 whose frame count equals
+   * the number of selected frames (which must all belong to a single video), or
+   * a single image that is stamped onto every selected frame. When `align` is
+   * set, each added frame is phase-correlation aligned to that frame's
+   * segmentation-source channel. Routes to POST
+   * /projects/:id/images/add-channel.
+   */
+  async addChannel(
+    projectId: string,
+    params: {
+      file: File;
+      channelName: string;
+      align: boolean;
+      imageIds: string[];
+    },
+    onProgress?: (progressPercent: number) => void,
+    signal?: AbortSignal
+  ): Promise<{
+    addedChannels: string[];
+    affectedContainerIds: string[];
+    framesWritten: number;
+  }> {
+    const { file, channelName, align, imageIds } = params;
+    const formData = new FormData();
+    const normalizedName = file.name.normalize('NFC');
+    const payload =
+      normalizedName !== file.name
+        ? new File([file], normalizedName, {
+            type: file.type,
+            lastModified: file.lastModified,
+          })
+        : file;
+    formData.append('file', payload);
+    formData.append('channelName', channelName);
+    formData.append('align', align ? 'true' : 'false');
+    formData.append('imageIds', JSON.stringify(imageIds));
+
+    const response = await this.instance.post(
+      `/projects/${projectId}/images/add-channel`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        // Transfer + synchronous server-side extraction/alignment share one
+        // request, so scale the timeout to the source size like uploadVideo.
+        timeout: videoUploadTimeoutMs(payload.size),
+        signal,
+        onUploadProgress: progressEvent => {
+          if (onProgress && progressEvent.total) {
+            onProgress(
+              Math.round((progressEvent.loaded * 100) / progressEvent.total)
+            );
           }
         },
       }
@@ -1665,6 +1753,122 @@ class ApiClient {
     await this.instance.delete(`/segmentation/images/${imageId}/results`);
   }
 
+  /**
+   * Delete segmentation annotations for many images at once (project-page bulk
+   * action). The images are kept; their status resets to no-segmentation.
+   */
+  async deleteSegmentationBatch(
+    imageIds: string[]
+  ): Promise<{ deletedCount: number; failedIds: string[] }> {
+    const response = await this.instance.post('/segmentation/batch/delete', {
+      imageIds,
+    });
+    const data = this.extractData(response);
+    return {
+      deletedCount: Number(data?.deletedCount ?? 0),
+      failedIds: Array.isArray(data?.failedIds) ? data.failedIds : [],
+    };
+  }
+
+  /**
+   * Propagate a microtubule polyline into every frame of the video after
+   * `fromFrameIndex`, overwriting the same track where present and adding it
+   * where missing. The backend returns the (possibly newly-generated) trackId
+   * so the editor can patch it onto the source polyline for stable colour.
+   */
+  async propagateTrackForward(
+    videoId: string,
+    fromFrameIndex: number,
+    polyline: {
+      // Nullable to match the backend `PropagatedPolyline` contract (the wire
+      // can carry null); an untracked source sends no trackId and the backend
+      // generates one.
+      trackId?: string | null;
+      // Carried so the propagated copies keep their "MT{n}" badge in the export
+      // visualization + metrics (which key on instanceId).
+      instanceId?: string | null;
+      name?: string | null;
+      geometry?: 'polygon' | 'polyline';
+      points: Array<{ x: number; y: number }>;
+    }
+  ): Promise<{ trackId: string; framesUpdated: number }> {
+    const response = await this.instance.post(
+      `/segmentation/videos/${videoId}/tracks/propagate`,
+      { fromFrameIndex, polyline }
+    );
+    const data = this.extractData(response);
+    return {
+      trackId: String(data?.trackId ?? polyline.trackId ?? ''),
+      framesUpdated: Number(data?.framesUpdated ?? 0),
+    };
+  }
+
+  /**
+   * Delete a whole microtubule track: remove every polyline carrying `trackId`
+   * from all frames of the video. Returns how many frames were affected.
+   */
+  async deleteTrack(
+    videoId: string,
+    trackId: string
+  ): Promise<{ framesAffected: number }> {
+    const response = await this.instance.delete(
+      `/segmentation/videos/${videoId}/tracks/${encodeURIComponent(trackId)}`
+    );
+    const data = this.extractData(response);
+    return { framesAffected: Number(data?.framesAffected ?? 0) };
+  }
+
+  /**
+   * Set (or clear, with `mtType: null`) the microtubule type-label id on one or
+   * more whole tracks across a video. Returns how many frames were written.
+   */
+  async setTrackType(
+    videoId: string,
+    trackIds: string[],
+    mtType: string | null
+  ): Promise<{ framesAffected: number }> {
+    const response = await this.instance.patch(
+      `/segmentation/videos/${videoId}/tracks/type`,
+      { trackIds, mtType }
+    );
+    const data = this.extractData(response);
+    return { framesAffected: Number(data?.framesAffected ?? 0) };
+  }
+
+  /** Read the project's microtubule type-label palette. */
+  async getMtTypeLabels(projectId: string): Promise<MTTypeLabel[]> {
+    const response = await this.instance.get(
+      `/projects/${projectId}/mt-type-labels`
+    );
+    const data = this.extractData(response);
+    return Array.isArray(data?.labels) ? (data.labels as MTTypeLabel[]) : [];
+  }
+
+  /** Replace the palette (create / rename / reorder). Returns the stored set. */
+  async putMtTypeLabels(
+    projectId: string,
+    labels: MTTypeLabel[]
+  ): Promise<MTTypeLabel[]> {
+    const response = await this.instance.put(
+      `/projects/${projectId}/mt-type-labels`,
+      { labels }
+    );
+    const data = this.extractData(response);
+    return Array.isArray(data?.labels) ? (data.labels as MTTypeLabel[]) : [];
+  }
+
+  /** Delete a label and null its references; returns the surviving palette. */
+  async deleteMtTypeLabel(
+    projectId: string,
+    labelId: string
+  ): Promise<MTTypeLabel[]> {
+    const response = await this.instance.delete(
+      `/projects/${projectId}/mt-type-labels/${encodeURIComponent(labelId)}`
+    );
+    const data = this.extractData(response);
+    return Array.isArray(data?.labels) ? (data.labels as MTTypeLabel[]) : [];
+  }
+
   async getImageWithSegmentation(
     imageId: string
   ): Promise<ProjectImageDTO & { segmentation?: SegmentationResult }> {
@@ -1832,6 +2036,10 @@ class ApiClient {
       wavelengthNm?: number;
       displayColor?: string;
       isSegmentationSource: boolean;
+      // Preserved verbatim through a rename so an added channel's PNG-backed
+      // flag + partial-frame coverage survive (see addChannelService).
+      pngBacked?: boolean;
+      frameIds?: string[];
     }>
   ): Promise<void> {
     await this.instance.patch(`/images/${imageId}/channels`, { channels });

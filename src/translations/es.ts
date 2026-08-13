@@ -337,6 +337,7 @@ export default {
         'No se pudo quitar el proyecto de los proyectos compartidos',
       deleteProject: 'No se pudo eliminar el proyecto',
     },
+    deleteAnnotations: 'No se pudieron eliminar las anotaciones',
     deleteImages: 'Error al eliminar las imágenes seleccionadas',
     contexts: {
       dashboard: 'Error del dashboard',
@@ -370,6 +371,12 @@ export default {
     viewResults: 'Ver resultados',
     dropImagesHere: 'Suelta los archivos aquí...',
     selectProjectFirst: 'Por favor selecciona un proyecto primero',
+    registerChannels: {
+      promptTitle: '¿Registrar canales?',
+      help: 'Corrige pequeños desplazamientos entre canales al subir, alineando cada uno al primero (solo traslación).',
+      confirm: 'Registrar y subir',
+      decline: 'Subir sin registrar',
+    },
     projectRequired:
       'Debes seleccionar un proyecto antes de poder subir imágenes',
     pending: 'Pendiente',
@@ -464,10 +471,10 @@ export default {
           description:
             'Mejor rendimiento en el conjunto de datos SpheroHQ - optimizado para segmentación de esferoides con velocidad y precisión equilibradas (~0.25s/imagen, 10 img/s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Desintegración de esferoides',
           description:
-            'UNet mejorado con Attention Gates y ASPP para detectar esferoides en disolución y pequeñas células satélite (~0.35s/imagen)',
+            'UNet++ con codificador EfficientNet-B5 — segmentación de 3 clases (fondo / corona / núcleo denso) de esferoides en desintegración; predice el núcleo directamente para un Índice de Desintegración correcto (~0.7s/imagen)',
         },
         segformer: {
           name: 'SegFormer',
@@ -518,8 +525,8 @@ export default {
         'Segmentación más precisa con mecanismos de atención (E2E ~482ms, 2.7 img/s)',
       unet_spherohq:
         '¡El modelo más rápido después de las optimizaciones! Excelente para procesamiento en tiempo real (E2E ~286ms, 5.5 img/s)',
-      unet_attention_aspp:
-        'UNet mejorado con Attention Gates y cuello de botella ASPP para detectar esferoides en disolución y pequeñas células satélite (35,5M parámetros)',
+      spheroid_disintegration:
+        'Modelo UNet++ / EfficientNet-B5 de 3 clases (fondo / corona / núcleo) para esferoides en desintegración; predice el núcleo denso directamente para un Índice de Desintegración correcto (30,7M parámetros)',
       segformer:
         'Modelo SegFormer-B0 basado en transformador, entrenado con el conjunto de datos SpheroMix. La mayor precisión de segmentación de esferoides de la plataforma (93% IoU), siendo además el modelo más pequeño y rápido (~13 ms/imagen).',
       mamba_unet:
@@ -764,6 +771,21 @@ export default {
     },
   },
   segmentation: {
+    selection: {
+      selectAll: 'Seleccionar todo',
+      deselectAll: 'Deseleccionar todo',
+      selected: '{{count}} seleccionados',
+    },
+    trackOps: {
+      propagateSelectedSuccess:
+        '{{count}} microtúbulos propagados a los fotogramas siguientes',
+      propagateSelectedPartial: '{{done}} de {{total}} microtúbulos propagados',
+      propagateSuccess:
+        'Microtúbulo propagado a {{count}} fotogramas siguientes',
+      propagateFailed: 'No se pudo propagar el microtúbulo',
+      deleteTrackSuccess: 'Traza eliminada de {{count}} fotogramas',
+      deleteTrackFailed: 'No se pudo eliminar la traza',
+    },
     modelNotCompatible:
       'El modelo "{{model}}" no es compatible con el tipo de proyecto "{{type}}". Permitidos: {{allowed}}.',
     incompatibleModelTitle: 'No se puede segmentar con este modelo',
@@ -962,13 +984,25 @@ export default {
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
         cancel: 'Presiona ESC para cancelar',
       },
+      createPolyline: {
+        start: 'Haga clic para colocar el primer punto del microtúbulo',
+        finish: 'Pulse Enter o haga doble clic para finalizar el microtúbulo',
+        holdShift: 'Mantenga SHIFT para añadir puntos automáticamente',
+        cancel: 'Pulse ESC para cancelar',
+      },
       addPoints: {
         clickVertex:
           'Haz clic en cualquier vértice para comenzar a agregar puntos',
+        clickVertexMt:
+          'Haga clic en un extremo del microtúbulo para extenderlo',
+        addPointsMt:
+          'Haga clic para añadir puntos y pulse Enter para finalizar',
         addPoints:
           'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
         cancel: 'Presiona ESC para cancelar',
+        joinHint:
+          'Haz clic en el extremo de otra polilínea de la misma clase para unirlas',
       },
       editVertices: {
         selectPolygon: 'Haz clic en un polígono para seleccionarlo para editar',
@@ -986,6 +1020,7 @@ export default {
       modes: {
         slice: 'Modo cortar',
         create: 'Modo crear polígono',
+        createPolyline: 'Modo crear microtúbulo',
         addPoints: 'Modo agregar puntos',
         editVertices: 'Modo editar vértices',
         deletePolygon: 'Modo eliminar polígono',
@@ -1151,6 +1186,44 @@ export default {
     selected: '{{count}} imagen seleccionada',
     selected_other: '{{count}} imágenes seleccionadas',
     deleteSelected: 'Eliminar Seleccionadas',
+    deleteAnnotations: 'Eliminar anotaciones',
+    addChannel: 'Añadir canal',
+    addChannelSuccess: 'Canal {{channels}} añadido a {{frames}} fotograma(s)',
+    addChannelFailed: 'No se pudo añadir el canal',
+    addChannelDialog: {
+      title: 'Añadir canal',
+      description:
+        'Añade un canal extra a los fotogramas seleccionados subiendo un vídeo/pila con el mismo número de fotogramas, o una sola imagen que se aplicará a cada fotograma seleccionado.',
+      selectionSummary:
+        '{{frames}} fotograma(s) en {{videos}} vídeo(s) seleccionados.',
+      sourceLabel: 'Archivo de origen (vídeo / pila / imagen)',
+      dropPrompt:
+        'Arrastre y suelte un archivo aquí, o haga clic para seleccionar',
+      dropInvalidType: 'Tipo de archivo no compatible.',
+      dropTooManyFiles: 'Solo se puede añadir un archivo a la vez.',
+      removeFile: 'Quitar archivo',
+      imageHint: 'Una sola imagen → se aplica a cada fotograma seleccionado.',
+      videoHint:
+        'Vídeo/pila → debe tener exactamente {{frames}} fotograma(s) y pertenecer a un solo vídeo.',
+      nameLabel: 'Nombre del canal',
+      namePlaceholder: 'p. ej. GFP',
+      alignLabel: 'Alinear con el canal de segmentación',
+      alignHint:
+        'Registro por correlación de fase que corrige una pequeña deriva de la platina.',
+      multiVideoError:
+        'Un vídeo/pila solo puede añadirse a fotogramas de un único vídeo. Selecciona fotogramas de un solo vídeo o sube una sola imagen.',
+      uploading: 'Subiendo… {{percent}} %',
+      adding: 'Añadiendo…',
+      confirm: 'Añadir canal',
+    },
+    annotationsDeleted: 'Anotaciones eliminadas de {{count}} imagen(es)',
+    annotationsDeleteFailed:
+      'No se pudieron eliminar las anotaciones de {{count}} imagen(es)',
+    deleteAnnotationsDialog: {
+      title: '¿Eliminar anotaciones?',
+      description:
+        'Esto elimina las anotaciones de segmentación de {{count}} imagen(es) seleccionada(s). Las imágenes se conservan, pero se eliminan sus resultados de segmentación. Esta acción no se puede deshacer.',
+    },
     imagesDeleted: '{{count}} imagen eliminada',
     imagesDeleted_other: '{{count}} imágenes eliminadas',
   },
@@ -1162,27 +1235,25 @@ export default {
       enable: 'Incluir análisis de kimografía',
       velocityMetrics: 'Métricas de velocidad (CSV)',
       segmentedImages: 'Imágenes de kimograma segmentadas (PNG)',
+      modeKymograph: 'Kimograma (espacio × tiempo)',
+      modeProfiles: 'Perfiles de intensidad (por imagen)',
+      singleFrameHint:
+        'Un solo fotograma: un kimograma necesita una serie temporal, por lo que solo se exporta el perfil de intensidad.',
+      profilesHint:
+        'Exporta un gráfico de matplotlib de intensidad frente a posición por fotograma, además del CSV de intensidad.',
     },
     mt: {
       sectionTitle: 'Métricas de microtúbulos',
       sectionDescription:
         'Longitud, área e intensidad por canal de cada MT desde el archivo ND2/TIFF original. Corregido con la mediana del fondo (fuera de la máscara MT dilatada).',
-      enable: 'Calcular métricas de intensidad por canal',
+      intensityNote:
+        'La intensidad de señal por canal —incluida la intensidad sumada (integrada)— se calcula siempre para cada canal y se escribe en la hoja de métricas. No es necesario seleccionar nada.',
       thicknessLabel: 'Grosor del MT (px)',
       thicknessHelp:
         'Ancho de la banda de muestreo a lo largo de cada polilínea. 5 px corresponde al diámetro típico del microtúbulo a 100× campo amplio.',
       marginLabel: 'Margen del fondo (× grosor)',
       marginHelp:
         'Excluye píxeles dentro de este radio (grosor × multiplicador) de cualquier MT del fondo. Mayor = más conservador.',
-      channelsLabel: 'Canales a muestrear',
-      noChannels:
-        'Este proyecto no tiene metadatos de canales. Vuelva a subir el vídeo para obtener métricas por canal.',
-      selectChannelRequired:
-        'Seleccione al menos un canal para exportar las métricas de intensidad por canal.',
-      incompleteTitle: 'Cálculo de intensidad no seleccionado',
-      incompleteBody:
-        'No ha activado el cálculo de intensidad de señal por canal, por lo que las métricas exportadas estarán incompletas: solo se incluirá la longitud de los microtúbulos, sin las columnas de intensidad por canal. ¿Exportar de todos modos?',
-      incompleteConfirm: 'Exportar de todos modos',
     },
     advancedExport: 'Exportación Avanzada',
     advancedOptions: 'Opciones Avanzadas de Exportación',
@@ -1249,6 +1320,8 @@ export default {
     generateExcel: 'Generar métricas de Excel',
     includeCocoFormat: 'Incluir anotaciones en formato COCO',
     includeJsonMetadata: 'Incluir metadatos JSON',
+    microtubuleAnnotationsNote:
+      'Los proyectos de microtúbulos exportan anotaciones como ImageJ RoiSet + CVAT 1.1 (siempre incluidas), cada una con la clase de tipo de tubulina. COCO/YOLO/JSON no se usan para microtúbulos.',
     preparing: 'Preparando exportación...',
     processing: 'Procesando {{current}} de {{total}}',
     processingExport: 'Procesando...',
@@ -1917,6 +1990,18 @@ export default {
     },
   },
   contextMenu: {
+    propagateSelectedTracks: 'Propagar microtúbulos seleccionados ({{count}})',
+    confirmPropagateSelected: '¿Propagar {{count}} microtúbulos seleccionados?',
+    propagateSelectedDescription:
+      'Esto sobrescribe la forma de {{count}} microtúbulos seleccionados en todos los fotogramas siguientes del vídeo. Esta acción no se puede deshacer.',
+    propagateTrack: 'Propagar a los fotogramas siguientes',
+    confirmPropagateTrack: '¿Propagar a los fotogramas siguientes?',
+    propagateTrackDescription:
+      'Esto sobrescribe la forma de este microtúbulo en todos los fotogramas siguientes del vídeo. Esta acción no se puede deshacer.',
+    deleteTrack: 'Eliminar toda la traza',
+    confirmDeleteTrack: '¿Eliminar toda la traza del microtúbulo?',
+    deleteTrackDescription:
+      'Esto elimina este microtúbulo de los {{count}} fotogramas del vídeo. Esta acción no se puede deshacer.',
     editPolygon: 'Editar polígono',
     splitPolygon: 'Dividir polígono',
     deletePolygon: 'Eliminar polígono',
@@ -2117,8 +2202,36 @@ export default {
     instance: 'Microtúbulo',
     hideInstance: 'Ocultar microtúbulo',
     showInstance: 'Mostrar microtúbulo',
+    renameInstance: 'Renombrar microtúbulo',
     hideAll: 'Ocultar todo',
     showAll: 'Mostrar todo',
+    type: {
+      set: 'Establecer tipo',
+      setForSelected: 'Establecer tipo para {{count}} seleccionados',
+      none: 'Ninguno',
+      newLabel: 'Nueva etiqueta…',
+      renameLabel: 'Renombrar etiqueta',
+      deleteLabel: 'Eliminar etiqueta',
+      manageLabels: 'Etiquetas de tipo',
+      labelName: 'Nombre',
+      labelNamePlaceholder: 'p. ej. alfa-tubulina',
+      labelColor: 'Color',
+      labelDialogDescription: 'Nombre el tipo de tubulina y elija un color.',
+      updated: 'Tipo de microtúbulo actualizado',
+      updateFailed: 'No se pudo actualizar el tipo de microtúbulo',
+      createFailed: 'No se pudo crear la etiqueta',
+      renameFailed: 'No se pudo renombrar la etiqueta',
+      deleteFailed: 'No se pudo eliminar la etiqueta',
+      loadFailed: 'No se pudieron cargar las etiquetas de tipo',
+      duplicateName: 'Ya existe una etiqueta con este nombre',
+      noTrack:
+        'Este microtúbulo aún no tiene seguimiento — ejecute primero el seguimiento.',
+    },
+    color: {
+      label: 'Color:',
+      byInstance: 'Instancia',
+      byLabel: 'Etiqueta',
+    },
   },
   sperm: {
     instancePanel: 'Instancias de espermatozoides',
@@ -2301,6 +2414,12 @@ export default {
     noRuns: 'Aún no hay ejecuciones. Sube una carpeta para empezar.',
     fileCount: '{{count}} archivo(s)',
     mtCount: '{{count}} microtúbulos',
+    deviceDegraded: 'CPU (GPU no disponible)',
+    deviceDegradedHint:
+      'Esta ejecución debía usar la GPU pero no pudo acceder a ella, así que se ejecutó en la CPU y tardó mucho más. Por favor, repórtelo.',
+    deviceBusy: 'CPU (GPU ocupada)',
+    deviceBusyHint:
+      'La GPU compartida estuvo ocupada durante toda la espera, así que se ejecutó en la CPU y tardó más. No hay ningún problema, no es necesario informarlo.',
     download: 'Descargar',
     delete: 'Eliminar',
     deleteFailed: 'No se pudo eliminar la ejecución',
@@ -2311,6 +2430,121 @@ export default {
       running: 'Procesando',
       completed: 'Completado',
       failed: 'Fallido',
+    },
+  },
+  segmenter: {
+    dashboard: {
+      title: 'Segmentador',
+      subtitle:
+        'Conjuntos de datos de anotación de polígonos con aprendizaje de pocos ejemplos y autoentrenamiento',
+      newDataset: 'Nuevo conjunto de datos',
+      noDatasets: 'Aún no hay conjuntos de datos.',
+      createFirst: 'Crea tu primer conjunto de datos',
+      deleteDataset: 'Eliminar conjunto de datos',
+      imageCount: '{{count}} imagen(es)',
+      createDialogTitle: 'Nuevo conjunto de datos',
+      createDialogDescription:
+        'Los conjuntos de datos agrupan imágenes sin etiquetar que anotarás con tus propias clases.',
+      nameLabel: 'Nombre del conjunto de datos',
+      namePlaceholder: 'p. ej. Núcleos — ronda 1',
+      creating: 'Creando…',
+      create: 'Crear',
+      deleteConfirmTitle: '¿Eliminar conjunto de datos?',
+      deleteConfirmDescription:
+        'Esto elimina permanentemente "{{name}}", todas sus imágenes, clases y anotaciones. Esta acción no se puede deshacer.',
+      cancel: 'Cancelar',
+      deleting: 'Eliminando…',
+      delete: 'Eliminar',
+      loadFailed: 'No se pudieron cargar los conjuntos de datos',
+      created: 'Conjunto de datos creado',
+      createFailed: 'No se pudo crear el conjunto de datos',
+      deleted: 'Conjunto de datos eliminado',
+      deleteFailed: 'No se pudo eliminar el conjunto de datos',
+    },
+    datasetDetail: {
+      backLabel: 'Volver a los conjuntos de datos',
+      loading: 'Cargando…',
+      imageCount: '{{count}} imagen(es)',
+      noImages: 'Aún no hay imágenes. Suelta algunas arriba para empezar.',
+      annotated: 'Anotado',
+      deleteImage: 'Eliminar imagen',
+      deleteConfirmTitle: '¿Eliminar imagen?',
+      deleteConfirmDescription:
+        'Esto elimina permanentemente "{{name}}" y su anotación. Esta acción no se puede deshacer.',
+      cancel: 'Cancelar',
+      deleting: 'Eliminando…',
+      delete: 'Eliminar',
+      loadFailed: 'No se pudo cargar el conjunto de datos',
+      deleteFailed: 'No se pudo eliminar la imagen',
+    },
+    upload: {
+      skippedVideo:
+        '{{count}} archivo(s) omitido(s) — el segmentador solo acepta imágenes estáticas',
+      success: '{{count}} imagen(es) subida(s)',
+      partialFail:
+        '{{uploaded}} subida(s), {{failed}} con errores — revisa el formato y el tamaño',
+      failed: 'Error al subir',
+    },
+    classes: {
+      panelTitle: 'Clases',
+      newClass: 'Nueva clase',
+      loading: 'Cargando clases…',
+      empty: 'Aún no hay clases. Crea una para empezar a anotar.',
+      renameLabel: 'Renombrar clase',
+      deleteLabel: 'Eliminar clase',
+      unclassified: 'Sin clasificar',
+      unknown: 'Clase desconocida',
+      activeClass: 'Clase activa',
+      pickerEmpty: 'Aún no hay clases — crea una antes de dibujar.',
+      dialogTitleCreate: 'Nueva clase',
+      dialogTitleRename: 'Renombrar clase',
+      dialogDescription:
+        'Ponle a la clase un nombre y un color con los que se dibujarán sus polígonos.',
+      nameLabel: 'Nombre de la clase',
+      namePlaceholder: 'p. ej. Núcleo',
+      colorLabel: 'Color',
+      cancel: 'Cancelar',
+      create: 'Crear',
+      save: 'Guardar',
+      loadFailed: 'No se pudieron cargar las clases',
+      createFailed: 'No se pudo crear la clase',
+      nameClash: 'Ya existe una clase con ese nombre',
+      renameFailed: 'No se pudo renombrar la clase',
+      deleteFailed: 'No se pudo eliminar la clase',
+    },
+    editor: {
+      missingRouteParams:
+        'Falta el id del conjunto de datos o de la imagen en la ruta.',
+      back: 'Volver',
+      selectMode: 'Seleccionar',
+      drawPolygon: 'Dibujar polígono',
+      editVertices: 'Editar vértices',
+      deletePolygon: 'Eliminar polígono',
+      undo: 'Deshacer',
+      redo: 'Rehacer',
+      zoomOut: 'Alejar',
+      zoomIn: 'Acercar',
+      resetView: 'Restablecer vista',
+      save: 'Guardar',
+      saveUnsaved: 'Guardar*',
+      saved: 'Anotación guardada',
+      saveFailed: 'No se pudo guardar la anotación',
+      loadFailed: 'No se pudo cargar la anotación',
+      saveDisabledLoadError:
+        'Guardar está deshabilitado hasta que la anotación de esta imagen se cargue correctamente, para evitar sobrescribir tu trabajo guardado con una anotación vacía.',
+      retry: 'Reintentar',
+      imageLoadFailed: 'No se pudo cargar la imagen',
+      imageAlt: 'Imagen para anotar',
+      minVertices: 'Un polígono necesita al menos 3 puntos',
+    },
+    polygonList: {
+      title: 'Polígonos ({{count}})',
+      empty:
+        'Aún no hay polígonos. Cambia a "Dibujar polígono" y haz clic en la imagen.',
+      instance: 'Instancia {{id}}',
+      points: '{{count}} puntos',
+      changeClass: 'Cambiar clase',
+      delete: 'Eliminar polígono',
     },
   },
 };

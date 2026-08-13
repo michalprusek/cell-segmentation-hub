@@ -58,8 +58,12 @@ class TestDisintegrationIndex:
         assert resp.status_code == 200, resp.text
         return resp.json()
 
-    def test_perfect_disk_returns_low_di(self, client):
-        """Mask = perfect disk, no core → R_eff path → DI is small."""
+    def test_no_core_returns_na_not_a_computed_value(self, client):
+        """Mask present but no core → DI is undefined → reference='no_core'.
+
+        A core is required; there is no r_eff fallback. The DI field is a 0.0
+        N/A sentinel (callers render it as N/A), and n_pixels is still reported.
+        """
         pts = _circle(self.CX, self.CY, 60)
         body = {
             "mask_polygon": pts,
@@ -68,14 +72,13 @@ class TestDisintegrationIndex:
             "image_height": self.H,
         }
         out = self._post(client, body)
-        assert out["reference"] == "r_eff"
-        # A discretised disk has tiny rasterisation noise; DI should be near zero.
-        assert out["di"] < 0.05
-        assert out["w1"] >= 0.0
+        assert out["reference"] == "no_core"
+        assert out["di"] == 0.0
+        assert out["w1"] == 0.0
         assert out["n_pixels"] > 1000
 
     def test_disk_with_matching_core_returns_low_di(self, client):
-        """Mask polygon == core polygon → R_core ≈ R_eff → DI is small."""
+        """Mask polygon == core polygon → intact spheroid → DI is small."""
         pts = _circle(self.CX, self.CY, 60)
         body = {
             "mask_polygon": pts,
@@ -88,20 +91,29 @@ class TestDisintegrationIndex:
         assert out["di"] < 0.05
 
     def test_smaller_core_increases_di(self, client):
-        """Core ⊊ Mask → R_core < R_eff → d̃ stretched → DI larger."""
+        """Core ⊊ Mask → R_core small → d̃ = d/R_C stretched → DI larger.
+
+        Both cases carry a core (a core is required). A tight core makes the
+        same mask look far more dispersed than a core equal to the mask.
+        """
         mask_pts = _circle(self.CX, self.CY, 80)
-        core_pts = _circle(self.CX, self.CY, 30)
-        with_core = self._post(client, {
+        tight_core = _circle(self.CX, self.CY, 30)
+        full_core = _circle(self.CX, self.CY, 80)  # core == mask → intact
+        with_tight = self._post(client, {
             "mask_polygon": mask_pts,
-            "core_polygon": core_pts,
+            "core_polygon": tight_core,
             "image_width": self.W, "image_height": self.H,
         })
-        without_core = self._post(client, {
+        with_full = self._post(client, {
             "mask_polygon": mask_pts,
-            "core_polygon": None,
+            "core_polygon": full_core,
             "image_width": self.W, "image_height": self.H,
         })
-        assert with_core["di"] > without_core["di"] + 0.10
+        assert with_tight["reference"] == "core"
+        assert with_full["reference"] == "core"
+        # Intact (core == mask) → DI ≈ 0; tight core → clearly higher.
+        assert with_full["di"] < 0.05
+        assert with_tight["di"] > with_full["di"] + 0.10
 
     def test_invasion_pattern_returns_high_di(self, client):
         """Star-shape mask with a tight core → significant DI > 0."""
@@ -117,15 +129,20 @@ class TestDisintegrationIndex:
         # Heavy invasion → DI well above 0.1.
         assert out["di"] > 0.15
 
-    def test_falls_back_when_core_degenerate(self, client):
-        """Core polygon with <3 points → r_eff_fallback label."""
+    def test_degenerate_core_returns_no_core(self, client):
+        """Core polygon with <3 points → undefined DI → reference='no_core'.
+
+        A degenerate core cannot anchor the metric, so DI is N/A rather than
+        silently degrading to an equivalent-disk value.
+        """
         mask_pts = _circle(self.CX, self.CY, 60)
         out = self._post(client, {
             "mask_polygon": mask_pts,
             "core_polygon": [[10.0, 10.0], [11.0, 11.0]],  # only 2 vertices
             "image_width": self.W, "image_height": self.H,
         })
-        assert out["reference"] == "r_eff_fallback"
+        assert out["reference"] == "no_core"
+        assert out["di"] == 0.0
 
     def test_returns_zero_for_empty_polygon(self, client):
         """Mask polygon with <3 vertices → DI = 0, reference='none'."""
@@ -231,29 +248,29 @@ class TestDisintegrationIndex:
     # and the core centroid coincide and the anchor change is invisible. The
     # tests below deliberately break symmetry to exercise the new anchor.
 
-    def test_asymmetric_invasion_uses_core_anchor_not_mass(self, client):
-        """Mask extends rightward of the core. Mass centroid drifts right;
-        core centroid stays at (CX, CY). With the core-centroid anchor, all
-        rightward pixels are now far from the anchor, so DI is significantly
-        higher than when the same mask is processed without a core (which
-        falls back to the mass centroid).
+    def test_off_core_mass_raises_di_via_core_anchor(self, client):
+        """Same centred core; mass that sits off the core inflates DI.
+
+        Both cases are core-anchored on (CX, CY). A compact mask over the core
+        looks nearly intact; adding a distant rightward bulge places mass far
+        from the anchor and drives DI up. This exercises the core-centroid
+        anchor without relying on any no-core fallback.
         """
-        # Asymmetric mask: a centred blob plus a bulge to the right.
-        mask = [_circle(self.CX, self.CY, 30), _circle(self.CX + 80, self.CY, 25)]
         core = [_circle(self.CX, self.CY, 18)]
-        with_core = self._post(client, {
-            "mask_polygons": mask, "core_polygons": core,
+        compact = [_circle(self.CX, self.CY, 24)]
+        with_bulge = [_circle(self.CX, self.CY, 24), _circle(self.CX + 80, self.CY, 25)]
+        symmetric = self._post(client, {
+            "mask_polygons": compact, "core_polygons": core,
             "image_width": self.W, "image_height": self.H,
         })
-        no_core = self._post(client, {
-            "mask_polygons": mask, "core_polygons": None,
+        asymmetric = self._post(client, {
+            "mask_polygons": with_bulge, "core_polygons": core,
             "image_width": self.W, "image_height": self.H,
         })
-        assert with_core["reference"] == "core"
-        # The core anchor on (CX, CY) sees the right bulge as far away;
-        # the mass-anchor fallback sits between the blobs and sees them as
-        # roughly equidistant. Net: with_core DI must exceed no_core DI.
-        assert with_core["di"] > no_core["di"] + 0.05
+        assert symmetric["reference"] == "core"
+        assert asymmetric["reference"] == "core"
+        # Distant off-core mass (anchored on the core) must raise DI.
+        assert asymmetric["di"] > symmetric["di"] + 0.05
 
     def test_off_centre_core_changes_di_vs_centred_core(self, client):
         """Same mask, two different core positions. Old code (mass anchor)
@@ -289,3 +306,77 @@ class TestDisintegrationIndex:
         })
         assert out["reference"] == "core"
         assert out["di"] > 0.20
+
+
+@pytest.mark.unit
+class TestDisintegrationPanel:
+    """Tests for the companion metric panel returned alongside DI."""
+
+    H, W = 256, 256
+    CX, CY = 128.0, 128.0
+
+    def _post(self, client, body):
+        resp = client.post("/api/disintegration-index", json=body)
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    def test_intact_disk_panel(self, client):
+        """Intact disk (core == mask): one fragment, near-solid, no holes."""
+        pts = _circle(self.CX, self.CY, 60)
+        out = self._post(client, {
+            "mask_polygon": pts, "core_polygon": pts,
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert out["reference"] == "core"
+        assert out["fragment_count"] == 1
+        assert out["largest_fragment_fraction"] == pytest.approx(1.0, abs=1e-6)
+        assert out["solidity"] > 0.9
+        assert out["solidity"] <= 1.0
+        assert out["hole_count"] == 0
+        # FG = C ∪ K, and here K is empty (core == mask).
+        assert out["n_fg_px"] == out["n_core_px"] + out["n_corona_px"]
+        assert out["radial_reach_q95"] == pytest.approx(0.97, abs=0.06)
+        assert out["core_equiv_diameter_px"] > 0
+        assert out["whole_equiv_diameter_px"] > 0
+        # Speckle-guard settings are echoed for reproducibility.
+        assert out["closing_radius_px"] == 2
+        assert out["min_fragment_px"] == 30
+
+    def test_two_separated_blobs_two_fragments(self, client):
+        """A main blob + a distant satellite → two fragments, split mass."""
+        out = self._post(client, {
+            "mask_polygons": [_circle(80, 128, 35), _circle(200, 128, 30)],
+            "core_polygons": [_circle(80, 128, 20)],
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert out["fragment_count"] == 2
+        assert out["largest_fragment_fraction"] < 0.75
+        assert 0.0 <= out["dispersed_mass_fraction"] <= 1.0
+
+    def test_no_core_panel_is_null(self, client):
+        """No core → the whole panel is null (N/A), not a fabricated 0."""
+        out = self._post(client, {
+            "mask_polygon": _circle(self.CX, self.CY, 60),
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert out["reference"] == "no_core"
+        for key in (
+            "radial_reach_q95", "dispersed_mass_fraction", "fragment_count",
+            "largest_fragment_fraction", "solidity", "hole_count",
+            "n_core_px", "n_corona_px", "n_fg_px",
+            "core_equiv_diameter_px", "whole_equiv_diameter_px",
+        ):
+            assert out[key] is None, f"{key} should be null without a core"
+
+    def test_dispersed_mass_fraction_increases_with_corona(self, client):
+        """A larger corona (bigger mask, same core) raises dispersed-mass frac."""
+        core = _circle(self.CX, self.CY, 20)
+        tight = self._post(client, {
+            "mask_polygon": _circle(self.CX, self.CY, 25), "core_polygon": core,
+            "image_width": self.W, "image_height": self.H,
+        })
+        wide = self._post(client, {
+            "mask_polygon": _circle(self.CX, self.CY, 70), "core_polygon": core,
+            "image_width": self.W, "image_height": self.H,
+        })
+        assert wide["dispersed_mass_fraction"] > tight["dispersed_mass_fraction"]

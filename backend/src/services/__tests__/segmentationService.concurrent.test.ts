@@ -288,8 +288,16 @@ describe('SegmentationService - Concurrent Request Handling', () => {
       // Initially should have full capacity
       expect(segmentationService.hasAvailableCapacity()).toBe(true);
 
-      // After starting requests up to the limit, capacity should be checked
-      // (This would require more complex mocking to test properly in isolation)
+      // Fill the pool to the max — capacity must then read false (the `<`
+      // comparison's false branch).
+      const pool = segmentationService as unknown as {
+        concurrentRequestsPool: Map<string, unknown>;
+        maxConcurrentRequests: number;
+      };
+      for (let i = 0; i < pool.maxConcurrentRequests; i++) {
+        pool.concurrentRequestsPool.set(`req-${i}`, Promise.resolve());
+      }
+      expect(segmentationService.hasAvailableCapacity()).toBe(false);
     });
 
     it('should handle individual request failures in concurrent processing', async () => {

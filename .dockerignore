@@ -48,13 +48,20 @@ e2e/
 # But keep tsconfig files
 !tsconfig*.json
 
-# Python cache
+# Python cache. The `**/` prefix is load-bearing: a bare `__pycache__/` matches
+# ONLY the context root, so host-built bytecode under backend/ was being copied
+# into the images. Harmless by luck (the host's cpython-312 tags don't match the
+# containers' 3.10, so Python ignores them) but it ships stale artifacts and
+# would bite the day the versions line up.
 __pycache__/
+**/__pycache__/
 *.py[cod]
+**/*.py[cod]
 *$py.class
 *.so
 .Python
 .pytest_cache/
+**/.pytest_cache/
 .coverage
 htmlcov/
 .tox/

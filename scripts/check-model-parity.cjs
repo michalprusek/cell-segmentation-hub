@@ -68,6 +68,31 @@ function extractObjectKeys(filePath, declMarker) {
   return keys;
 }
 
+/**
+ * Extract the string VALUES of a Python `class <name>(str, Enum):` body, i.e.
+ * the `FOO = "foo"` right-hand sides, stopping at the first dedented
+ * (column-0, non-blank) line after the class declaration.
+ */
+function extractEnumValues(filePath, className) {
+  const src = fs.readFileSync(filePath, 'utf8');
+  const lines = src.split('\n');
+  const start = lines.findIndex(l =>
+    new RegExp(`^class\\s+${className}\\b`).test(l)
+  );
+  if (start === -1) {
+    throw new Error(`Could not find "class ${className}" in ${filePath}`);
+  }
+  const values = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === '') continue;
+    if (!/^\s/.test(line)) break; // dedent → end of class body
+    const m = line.match(/^\s+[A-Z0-9_]+\s*=\s*['"]([a-z0-9_]+)['"]/);
+    if (m) values.push(m[1]);
+  }
+  return values;
+}
+
 function setEq(a, b) {
   if (a.size !== b.size) return false;
   for (const x of a) if (!b.has(x)) return false;
@@ -90,11 +115,17 @@ const sources = [
     file: path.join(ROOT, 'backend', 'segmentation', 'ml', 'model_loader.py'),
     marker: 'AVAILABLE_MODELS',
   },
+  {
+    name: 'python ModelType enum',
+    file: path.join(ROOT, 'backend', 'segmentation', 'api', 'models.py'),
+    marker: 'ModelType',
+    parse: extractEnumValues,
+  },
 ];
 
 let ok = true;
 const sets = sources.map(s => {
-  const keys = extractObjectKeys(s.file, s.marker).sort();
+  const keys = (s.parse || extractObjectKeys)(s.file, s.marker).sort();
   return { ...s, keys, set: new Set(keys) };
 });
 

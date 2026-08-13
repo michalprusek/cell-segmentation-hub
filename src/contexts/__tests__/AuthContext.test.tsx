@@ -1,517 +1,586 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import React, { ReactNode } from 'react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/exports';
 import apiClient from '@/lib/api';
-import React, { ReactNode } from 'react';
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-};
-Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+// ── mocks ─────────────────────────────────────────────────────────────────────
+//
+// Auth lives in httpOnly cookies now; the client no longer exposes
+// isAuthenticated()/getAccessToken(). The only client-visible session signal is
+// the /auth/profile response, gated on the non-secret `authenticated` hint
+// cookie. The event emitter is hoisted so tests can assert on emitted events.
 
-// Mock the apiClient to match the actual interface. Note: the client no
-// longer exposes isAuthenticated()/getAccessToken() — auth lives in httpOnly
-// cookies and the only client-visible signal is the /auth/profile response.
-vi.mock('@/lib/api', () => ({
-  default: {
-    getUserProfile: vi.fn(),
-    login: vi.fn(),
-    logout: vi.fn(),
-    register: vi.fn(),
-    updateUserProfile: vi.fn(),
-    deleteAccount: vi.fn(),
-  },
-  apiClient: {
-    getUserProfile: vi.fn(),
-    login: vi.fn(),
-    logout: vi.fn(),
-    register: vi.fn(),
-    updateUserProfile: vi.fn(),
-    deleteAccount: vi.fn(),
-  },
+const mockAuthEventEmitter = vi.hoisted(() => ({
+  emit: vi.fn(),
+  on: vi.fn(),
+  off: vi.fn(),
 }));
 
-// Mock authEventEmitter
+const mockTokenRefreshManager = vi.hoisted(() => ({
+  startTokenRefreshManager: vi.fn(),
+  stopTokenRefreshManager: vi.fn(),
+}));
+
+vi.mock('@/lib/api', () => {
+  const client = {
+    login: vi.fn(),
+    logout: vi.fn(),
+    register: vi.fn(),
+    refreshAccessToken: vi.fn(),
+    getUserProfile: vi.fn(),
+    updateUserProfile: vi.fn(),
+    deleteAccount: vi.fn(),
+  };
+  return { default: client, apiClient: client };
+});
+
 vi.mock('@/lib/authEvents', () => ({
-  authEventEmitter: {
-    emit: vi.fn(),
-    on: vi.fn(),
-    off: vi.fn(),
-  },
+  authEventEmitter: mockAuthEventEmitter,
 }));
 
-// Mock tokenRefreshManager
 vi.mock('@/lib/tokenRefresh', () => ({
-  tokenRefreshManager: {
-    startTokenRefreshManager: vi.fn(),
-    stopTokenRefreshManager: vi.fn(),
-  },
+  tokenRefreshManager: mockTokenRefreshManager,
 }));
 
-// Mock logger
 vi.mock('@/lib/logger', () => ({
-  logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-describe('AuthContext', () => {
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <MemoryRouter>
-      <AuthProvider>{children}</AuthProvider>
-    </MemoryRouter>
+// ── shared helpers ──────────────────────────────────────────────────────────────
+
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <MemoryRouter>
+    <AuthProvider>{children}</AuthProvider>
+  </MemoryRouter>
+);
+
+const validProfile = {
+  id: 'u1',
+  email: 'user@example.com',
+  username: 'testuser',
+  avatarUrl: null,
+};
+
+const validAuthResponse = {
+  accessToken: 'at',
+  refreshToken: 'rt',
+  user: { id: 'u1', email: 'user@example.com', username: 'testuser' },
+};
+
+/** Renders the hook and waits for the initial /auth/profile probe to settle. */
+const renderAuth = async () => {
+  const { result } = renderHook(() => useAuth(), { wrapper });
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  return result;
+};
+
+/** Finds an emitted auth event by type (events fire in a setTimeout(0)). */
+const findEmitted = (type: string) =>
+  (mockAuthEventEmitter.emit.mock.calls as Array<[{ type: string }]>).find(
+    ([event]) => event?.type === type
   );
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorageMock.clear();
-    // The init probe only runs when the non-secret `authenticated` hint cookie
-    // is present. Set it so these tests exercise the probe path; the default
-    // profile mock rejects, so the result is still the unauthenticated state
-    // unless a test overrides getUserProfile.
-    document.cookie = 'authenticated=1';
-    vi.mocked(apiClient.getUserProfile).mockRejectedValue(
-      new Error('Not authenticated')
+beforeEach(() => {
+  vi.clearAllMocks();
+  // The init probe only runs when the non-secret `authenticated` hint cookie is
+  // present. Set it so tests exercise the probe path; the default profile mock
+  // rejects, so the result is the unauthenticated state unless a test overrides
+  // getUserProfile.
+  document.cookie = 'authenticated=1';
+  vi.mocked(apiClient.getUserProfile).mockRejectedValue(
+    new Error('Not authenticated')
+  );
+  // localStorage is a global vi.fn mock (see src/test/setup.ts). Default to no
+  // stored preferences; sync tests override per-test.
+  vi.mocked(localStorage.getItem).mockReturnValue(null);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+// ── initial state / provider init ─────────────────────────────────────────────
+
+describe('AuthContext – initial state', () => {
+  it('initializes unauthenticated when the /auth/profile probe rejects', async () => {
+    const result = await renderAuth();
+
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+  });
+
+  it('skips the /auth/profile probe entirely on a logged-out cold load (no hint cookie)', async () => {
+    // No `authenticated` hint cookie → a fresh visitor makes ZERO auth requests
+    // (avoids the guaranteed 401 + console error).
+    document.cookie = 'authenticated=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+    const result = await renderAuth();
+
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+    expect(vi.mocked(apiClient.getUserProfile)).not.toHaveBeenCalled();
+  });
+
+  it('restores the session from the /auth/profile probe on mount', async () => {
+    const mockProfile = {
+      id: '1',
+      email: 'test@example.com',
+      username: undefined,
+    };
+    vi.mocked(apiClient.getUserProfile).mockResolvedValueOnce(mockProfile);
+
+    const result = await renderAuth();
+
+    // The init probe is the suppress-errors variant (silent on 401).
+    expect(vi.mocked(apiClient.getUserProfile)).toHaveBeenCalledWith({
+      suppressAuthErrors: true,
+    });
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.user).toEqual({
+      id: '1',
+      email: 'test@example.com',
+      username: undefined,
+      emailVerified: true,
+    });
+  });
+
+  it('renders signed-out (and suppresses errors) when the probe fails on mount', async () => {
+    vi.mocked(apiClient.getUserProfile).mockRejectedValueOnce(
+      new Error('Unauthorized')
     );
-    vi.mocked(apiClient.login).mockReset();
-    vi.mocked(apiClient.logout).mockReset();
-    vi.mocked(apiClient.register).mockReset();
-    vi.mocked(apiClient.deleteAccount).mockReset();
-    vi.mocked(apiClient.updateUserProfile).mockReset();
+
+    const result = await renderAuth();
+
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+    // The probe always runs the suppress-errors variant so a fresh visitor with
+    // a stale hint cookie sees no error toast.
+    expect(apiClient.getUserProfile).toHaveBeenCalledWith({
+      suppressAuthErrors: true,
+    });
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
+  it('renders signed-out when the probe returns a profile missing its id', async () => {
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue({
+      email: 'user@example.com',
+      // id intentionally absent
+    } as never);
+
+    const result = await renderAuth();
+
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+    expect(apiClient.logout).not.toHaveBeenCalled();
   });
 
-  describe('initial state', () => {
-    it('should initialize with unauthenticated state', async () => {
-      // Default beforeEach makes the /auth/profile probe reject → signed out.
-      const { result } = renderHook(() => useAuth(), { wrapper });
+  it('renders signed-out when the probe returns a profile missing its email', async () => {
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue({
+      id: 'u1',
+      // email intentionally absent
+    } as never);
 
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
+    const result = await renderAuth();
 
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.user).toBeNull();
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+  });
+});
+
+// ── signIn ─────────────────────────────────────────────────────────────────────
+
+describe('AuthContext – signIn', () => {
+  it('signs in successfully, sets user, and emits signin_success', async () => {
+    vi.mocked(apiClient.login).mockResolvedValueOnce(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
+
+    const result = await renderAuth();
+
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
     });
 
-    it('skips the /auth/profile probe entirely on a logged-out cold load (no hint cookie)', async () => {
-      // No `authenticated` hint cookie → a fresh visitor makes ZERO auth
-      // requests (avoids the guaranteed 401 + console error).
-      document.cookie = 'authenticated=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    // rememberMe defaults to true.
+    expect(vi.mocked(apiClient.login)).toHaveBeenCalledWith(
+      'user@example.com',
+      'pw',
+      true
+    );
+    expect(result.current.user).toEqual(validAuthResponse.user);
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+    await waitFor(() => expect(findEmitted('signin_success')).toBeDefined());
+  });
 
-      const { result } = renderHook(() => useAuth(), { wrapper });
+  it('rejects, stays signed out, and emits signin_error when login fails', async () => {
+    vi.mocked(apiClient.login).mockRejectedValueOnce(
+      new Error('Invalid credentials')
+    );
 
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
+    const result = await renderAuth();
 
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.user).toBeNull();
-      expect(vi.mocked(apiClient.getUserProfile)).not.toHaveBeenCalled();
+    await expect(
+      act(async () => {
+        await result.current.signIn('test@example.com', 'wrong');
+      })
+    ).rejects.toThrow('Invalid credentials');
+
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+    await waitFor(() => expect(findEmitted('signin_error')).toBeDefined());
+  });
+
+  it('still succeeds when the post-login profile fetch rejects', async () => {
+    vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
+    // getUserProfile rejects for both the init probe and the post-login fetch.
+    vi.mocked(apiClient.getUserProfile).mockRejectedValue(
+      new Error('Profile load failed')
+    );
+
+    const result = await renderAuth();
+
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
     });
 
-    it('should restore the session from the /auth/profile probe on mount', async () => {
-      const mockProfile = {
-        id: '1',
-        email: 'test@example.com',
-        user: {
-          id: '1',
-          email: 'test@example.com',
-          emailVerified: true,
-          username: undefined,
-        },
-      };
+    expect(result.current.user).toEqual(validAuthResponse.user);
+    expect(result.current.isAuthenticated).toBe(true);
+  });
+});
 
-      // A valid cookie → /auth/profile resolves → session restored.
-      vi.mocked(apiClient.getUserProfile).mockResolvedValueOnce(mockProfile);
+// ── signUp ─────────────────────────────────────────────────────────────────────
 
-      const { result } = renderHook(() => useAuth(), { wrapper });
+describe('AuthContext – signUp', () => {
+  it('signs up successfully, sets user, and emits signup_success', async () => {
+    const consentOptions = {
+      consentToMLTraining: true,
+      consentToAlgorithmImprovement: false,
+    };
+    vi.mocked(apiClient.register).mockResolvedValueOnce(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
 
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
+    const result = await renderAuth();
 
-      // The init probe is the suppress-errors variant (silent on 401).
-      expect(vi.mocked(apiClient.getUserProfile)).toHaveBeenCalledWith({
-        suppressAuthErrors: true,
-      });
-      expect(result.current.isAuthenticated).toBe(true);
-      expect(result.current.user).toEqual(mockProfile.user);
-    });
-
-    it('should render signed-out when the /auth/profile probe fails on mount', async () => {
-      vi.mocked(apiClient.getUserProfile).mockRejectedValueOnce(
-        new Error('Unauthorized')
+    await act(async () => {
+      await result.current.signUp(
+        'new@example.com',
+        'pw',
+        consentOptions,
+        'newuser'
       );
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.user).toBeNull();
     });
+
+    expect(vi.mocked(apiClient.register)).toHaveBeenCalledWith(
+      'new@example.com',
+      'pw',
+      'newuser',
+      consentOptions
+    );
+    expect(result.current.user).toEqual(validAuthResponse.user);
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+    await waitFor(() => expect(findEmitted('signup_success')).toBeDefined());
   });
 
-  describe('signIn', () => {
-    it('should sign in successfully', async () => {
-      const email = 'test@example.com';
-      const password = 'password';
-      const mockResponse = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        user: { id: '1', email: 'test@example.com', username: 'test' },
-      };
+  it('rejects, stays signed out, and emits signup_error when register fails', async () => {
+    vi.mocked(apiClient.register).mockRejectedValueOnce(
+      new Error('Email already exists')
+    );
 
-      vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
+    const result = await renderAuth();
 
-      const { result } = renderHook(() => useAuth(), { wrapper });
+    await expect(
+      act(async () => {
+        await result.current.signUp('existing@example.com', 'pw');
+      })
+    ).rejects.toThrow('Email already exists');
 
-      // Wait for initial load to complete
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+    await waitFor(() => expect(findEmitted('signup_error')).toBeDefined());
+  });
 
-      await act(async () => {
-        await result.current.signIn(email, password);
-      });
+  it('still succeeds when the post-register profile fetch rejects', async () => {
+    vi.mocked(apiClient.register).mockResolvedValue(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockRejectedValue(
+      new Error('No profile yet')
+    );
 
-      // Check that the signIn was called correctly
-      expect(vi.mocked(apiClient.login)).toHaveBeenCalledWith(
-        email,
-        password,
-        true
+    const result = await renderAuth();
+
+    await act(async () => {
+      await result.current.signUp('new@example.com', 'pw');
+    });
+
+    expect(result.current.user).toEqual(validAuthResponse.user);
+    expect(result.current.isAuthenticated).toBe(true);
+  });
+});
+
+// ── signOut ────────────────────────────────────────────────────────────────────
+
+describe('AuthContext – signOut', () => {
+  it('signs out successfully and clears state', async () => {
+    vi.mocked(apiClient.login).mockResolvedValueOnce(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
+    vi.mocked(apiClient.logout).mockResolvedValueOnce(undefined);
+
+    const result = await renderAuth();
+
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+    await act(async () => {
+      await result.current.signOut();
+    });
+
+    expect(vi.mocked(apiClient.logout)).toHaveBeenCalled();
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+  });
+
+  it('clears local state and emits logout_error even when logout API throws', async () => {
+    vi.mocked(apiClient.login).mockResolvedValueOnce(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
+    vi.mocked(apiClient.logout).mockRejectedValueOnce(
+      new Error('Network error')
+    );
+
+    const result = await renderAuth();
+
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+    await act(async () => {
+      await result.current.signOut();
+    });
+
+    // State is cleared despite the API error.
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+    await waitFor(() => expect(findEmitted('logout_error')).toBeDefined());
+  });
+});
+
+// ── deleteAccount ──────────────────────────────────────────────────────────────
+
+describe('AuthContext – deleteAccount', () => {
+  const signInFirst = async () => {
+    vi.mocked(apiClient.login).mockResolvedValueOnce(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
+    const result = await renderAuth();
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+    return result;
+  };
+
+  it('deletes the account when the confirmation matches the email', async () => {
+    vi.mocked(apiClient.deleteAccount).mockResolvedValueOnce(undefined);
+    const result = await signInFirst();
+
+    await act(async () => {
+      await result.current.deleteAccount('user@example.com');
+    });
+
+    expect(vi.mocked(apiClient.deleteAccount)).toHaveBeenCalled();
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+  });
+
+  it('throws and stays authenticated when the confirmation does not match', async () => {
+    const result = await signInFirst();
+
+    await expect(
+      act(async () => {
+        await result.current.deleteAccount('wrong-email@example.com');
+      })
+    ).rejects.toThrow(
+      'Confirmation text is required and must match your email address'
+    );
+
+    expect(vi.mocked(apiClient.deleteAccount)).not.toHaveBeenCalled();
+    expect(result.current.isAuthenticated).toBe(true);
+  });
+
+  it('throws when the confirmation text is undefined', async () => {
+    const result = await signInFirst();
+
+    await expect(
+      act(async () => {
+        await result.current.deleteAccount(undefined);
+      })
+    ).rejects.toThrow();
+  });
+
+  it('rethrows and emits profile_error when the delete API throws', async () => {
+    vi.mocked(apiClient.deleteAccount).mockRejectedValue(
+      new Error('Delete failed')
+    );
+    const result = await signInFirst();
+
+    await expect(
+      act(async () => {
+        await result.current.deleteAccount('user@example.com');
+      })
+    ).rejects.toThrow('Delete failed');
+
+    await waitFor(() => expect(findEmitted('profile_error')).toBeDefined());
+  });
+});
+
+// ── refreshProfile ─────────────────────────────────────────────────────────────
+
+describe('AuthContext – refreshProfile', () => {
+  it('is a no-op when there is no user', async () => {
+    const result = await renderAuth();
+    const callsBefore = vi.mocked(apiClient.getUserProfile).mock.calls.length;
+
+    await act(async () => {
+      await result.current.refreshProfile();
+    });
+
+    // No additional getUserProfile call beyond the init probe.
+    expect(vi.mocked(apiClient.getUserProfile).mock.calls.length).toBe(
+      callsBefore
+    );
+    expect(result.current.user).toBeNull();
+  });
+
+  it('updates the profile when getUserProfile succeeds', async () => {
+    vi.mocked(apiClient.login).mockResolvedValueOnce(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile)
+      .mockResolvedValueOnce(validProfile) // init probe
+      .mockResolvedValueOnce(validProfile) // post-login fetch
+      .mockResolvedValueOnce({ ...validProfile, username: 'updated-user' }); // refresh
+
+    const result = await renderAuth();
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+
+    await act(async () => {
+      await result.current.refreshProfile();
+    });
+
+    expect(result.current.profile?.username).toBe('updated-user');
+  });
+
+  it('rethrows and emits profile_error when getUserProfile fails', async () => {
+    vi.mocked(apiClient.login).mockResolvedValueOnce(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile)
+      .mockResolvedValueOnce(validProfile) // init probe
+      .mockResolvedValueOnce(validProfile) // post-login fetch
+      .mockRejectedValueOnce(new Error('Profile refresh failed')); // refresh
+
+    const result = await renderAuth();
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+
+    await expect(
+      act(async () => {
+        await result.current.refreshProfile();
+      })
+    ).rejects.toThrow('Profile refresh failed');
+
+    await waitFor(() => expect(findEmitted('profile_error')).toBeDefined());
+  });
+});
+
+// ── syncLocalPreferencesToDatabase ─────────────────────────────────────────────
+
+describe('AuthContext – syncLocalPreferencesToDatabase (on signIn)', () => {
+  it('forwards both theme and language when both are valid', async () => {
+    vi.mocked(localStorage.getItem).mockImplementation((key: string) => {
+      if (key === 'theme') return 'dark';
+      if (key === 'language') return 'cs';
+      return null;
+    });
+    vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
+    vi.mocked(apiClient.updateUserProfile).mockResolvedValue(validProfile);
+
+    const result = await renderAuth();
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+
+    expect(apiClient.updateUserProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: 'dark', language: 'cs' })
+    );
+  });
+
+  it('forwards only theme when the stored language is invalid', async () => {
+    vi.mocked(localStorage.getItem).mockImplementation((key: string) => {
+      if (key === 'theme') return 'light';
+      if (key === 'language') return 'klingon'; // invalid
+      return null;
+    });
+    vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
+    vi.mocked(apiClient.updateUserProfile).mockResolvedValue(validProfile);
+
+    const result = await renderAuth();
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+
+    const callArg = vi.mocked(apiClient.updateUserProfile).mock.calls[0][0];
+    expect(callArg).toEqual(expect.objectContaining({ theme: 'light' }));
+    expect(callArg).not.toHaveProperty('language');
+  });
+
+  it('does not call updateUserProfile when nothing is stored', async () => {
+    // localStorage.getItem returns null for everything (beforeEach default).
+    vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
+
+    const result = await renderAuth();
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+
+    expect(apiClient.updateUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('does not block signIn when updateUserProfile throws', async () => {
+    vi.mocked(localStorage.getItem).mockImplementation((key: string) => {
+      if (key === 'theme') return 'system';
+      return null;
+    });
+    vi.mocked(apiClient.login).mockResolvedValue(validAuthResponse);
+    vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
+    vi.mocked(apiClient.updateUserProfile).mockRejectedValue(
+      new Error('DB error')
+    );
+
+    const result = await renderAuth();
+    await act(async () => {
+      await result.current.signIn('user@example.com', 'pw');
+    });
+
+    expect(result.current.user).toEqual(validAuthResponse.user);
+  });
+});
+
+// ── hook usage ─────────────────────────────────────────────────────────────────
+
+describe('AuthContext – hook usage', () => {
+  it('throws when useAuth is used outside an AuthProvider', () => {
+    const originalError = console.error;
+    console.error = vi.fn();
+    try {
+      expect(() => renderHook(() => useAuth())).toThrow(
+        'useAuth must be used within an AuthProvider'
       );
-
-      // Check that user state was updated (no client-side token any more)
-      expect(result.current.user).toEqual(mockResponse.user);
-
-      // isAuthenticated is derived from the user state.
-      await waitFor(() => {
-        expect(result.current.isAuthenticated).toBe(true);
-      });
-    });
-
-    it('should handle sign in failure', async () => {
-      const email = 'test@example.com';
-      const password = 'wrong';
-      const error = new Error('Invalid credentials');
-
-      vi.mocked(apiClient.login).mockRejectedValueOnce(error);
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load to complete
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      await expect(
-        act(async () => {
-          await result.current.signIn(email, password);
-        })
-      ).rejects.toThrow('Invalid credentials');
-
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.user).toBeNull();
-    });
-
-    it('should handle network error during sign in', async () => {
-      const email = 'test@example.com';
-      const password = 'password';
-      const error = new Error('Network error');
-
-      vi.mocked(apiClient.login).mockRejectedValueOnce(error);
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load to complete
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      await expect(
-        act(async () => {
-          await result.current.signIn(email, password);
-        })
-      ).rejects.toThrow('Network error');
-
-      expect(result.current.isAuthenticated).toBe(false);
-    });
-  });
-
-  describe('signOut', () => {
-    it('should sign out successfully', async () => {
-      // Setup authenticated state first by mocking successful sign in
-      const mockResponse = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        user: { id: '1', email: 'test@example.com', username: 'test' },
-      };
-
-      vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.logout).mockResolvedValueOnce(undefined);
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      // First sign in
-      await act(async () => {
-        await result.current.signIn('test@example.com', 'password');
-      });
-
-      // Wait for authentication state to update
-      await waitFor(() => {
-        expect(result.current.isAuthenticated).toBe(true);
-      });
-
-      // Then sign out
-      await act(async () => {
-        await result.current.signOut();
-      });
-
-      expect(vi.mocked(apiClient.logout)).toHaveBeenCalled();
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.user).toBeNull();
-    });
-
-    it('should handle sign out error gracefully', async () => {
-      // Setup authenticated state first
-      const mockResponse = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        user: { id: '1', email: 'test@example.com', username: 'test' },
-      };
-
-      vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.logout).mockRejectedValueOnce(
-        new Error('Network error')
-      );
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      // First sign in
-      await act(async () => {
-        await result.current.signIn('test@example.com', 'password');
-      });
-
-      await waitFor(() => {
-        expect(result.current.isAuthenticated).toBe(true);
-      });
-
-      // Then try to sign out with error
-      await act(async () => {
-        await result.current.signOut();
-      });
-
-      // Should still clear local state even if the API call fails.
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.user).toBeNull();
-    });
-  });
-
-  describe('signUp', () => {
-    it('should sign up successfully', async () => {
-      const email = 'new@example.com';
-      const password = 'password';
-      const username = 'newuser';
-      const consentOptions = {
-        consentToMLTraining: true,
-        consentToAlgorithmImprovement: false,
-      };
-      const mockResponse = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        user: { id: '2', email, username },
-      };
-
-      vi.mocked(apiClient.register).mockResolvedValueOnce(mockResponse);
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      await act(async () => {
-        await result.current.signUp(email, password, consentOptions, username);
-      });
-
-      expect(vi.mocked(apiClient.register)).toHaveBeenCalledWith(
-        email,
-        password,
-        username,
-        consentOptions
-      );
-      expect(result.current.user).toEqual(mockResponse.user);
-
-      await waitFor(() => {
-        expect(result.current.isAuthenticated).toBe(true);
-      });
-    });
-
-    it('should handle registration failure', async () => {
-      const email = 'existing@example.com';
-      const password = 'password';
-      const error = new Error('Email already exists');
-
-      vi.mocked(apiClient.register).mockRejectedValueOnce(error);
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      await expect(
-        act(async () => {
-          await result.current.signUp(email, password);
-        })
-      ).rejects.toThrow('Email already exists');
-
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.user).toBeNull();
-    });
-
-    it('should handle validation errors during registration', async () => {
-      const email = 'invalid-email';
-      const password = '123'; // Too short
-      const error = new Error('Validation failed');
-
-      vi.mocked(apiClient.register).mockRejectedValueOnce(error);
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      await expect(
-        act(async () => {
-          await result.current.signUp(email, password);
-        })
-      ).rejects.toThrow('Validation failed');
-
-      expect(result.current.isAuthenticated).toBe(false);
-    });
-  });
-
-  describe('deleteAccount', () => {
-    it('should delete account successfully with proper confirmation', async () => {
-      // Setup authenticated state first
-      const mockResponse = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        user: { id: '1', email: 'test@example.com', username: 'test' },
-      };
-
-      vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-      vi.mocked(apiClient.deleteAccount).mockResolvedValueOnce(undefined);
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      // First sign in
-      await act(async () => {
-        await result.current.signIn('test@example.com', 'password');
-      });
-
-      await waitFor(() => {
-        expect(result.current.isAuthenticated).toBe(true);
-      });
-
-      // Then delete account
-      await act(async () => {
-        await result.current.deleteAccount('test@example.com');
-      });
-
-      expect(vi.mocked(apiClient.deleteAccount)).toHaveBeenCalled();
-      expect(result.current.isAuthenticated).toBe(false);
-      expect(result.current.user).toBeNull();
-    });
-
-    it('should require confirmation text to match email', async () => {
-      // Setup authenticated state
-      const mockResponse = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        user: { id: '1', email: 'test@example.com', username: 'test' },
-      };
-
-      vi.mocked(apiClient.login).mockResolvedValueOnce(mockResponse);
-
-      const { result } = renderHook(() => useAuth(), { wrapper });
-
-      // Wait for initial load
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      // First sign in
-      await act(async () => {
-        await result.current.signIn('test@example.com', 'password');
-      });
-
-      await waitFor(() => {
-        expect(result.current.isAuthenticated).toBe(true);
-      });
-
-      // Try to delete with wrong confirmation
-      await expect(
-        act(async () => {
-          await result.current.deleteAccount('wrong-email');
-        })
-      ).rejects.toThrow(
-        'Confirmation text is required and must match your email address'
-      );
-
-      expect(result.current.isAuthenticated).toBe(true); // Should still be authenticated
-    });
-  });
-
-  describe('error boundaries', () => {
-    it('should handle context usage outside provider', () => {
-      // Mock console.error to suppress error output in test
-      const originalError = console.error;
-      console.error = vi.fn();
-
-      try {
-        expect(() => {
-          renderHook(() => useAuth());
-        }).toThrow('useAuth must be used within an AuthProvider');
-      } finally {
-        console.error = originalError;
-      }
-    });
+    } finally {
+      console.error = originalError;
+    }
   });
 });

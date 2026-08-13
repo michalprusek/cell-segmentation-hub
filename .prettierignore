@@ -74,6 +74,11 @@ Thumbs.db
 # External / scratch model artifacts dropped at repo root
 path_c_v24c/
 microtubules_v7_pysoax/
+# Git ignores this one through its OWN nested .gitignore ("Deployment artifact,
+# not part of the cell-segmentation-hub repository"), which prettier does not
+# read — so without this line `prettier --check .` fails on vendored DINOv2
+# files and the pre-commit hook blocks every commit in the repo.
+mt-instance-seg/
 
 # Local "remember" skill scratch state (gitignored, never shipped).
 # Contains free-form notes + bare-expression timestamp files that

@@ -19,7 +19,7 @@ export const isValidSpermPartClass = (
   (SPERM_PART_CLASSES as readonly string[]).includes(value);
 
 // Wider class union covering both sperm parts and spheroid 'core'
-// (dense central region detected for the ASPP model).
+// (dense central region detected by the disintegration model).
 export const POLYGON_PART_CLASSES = [...SPERM_PART_CLASSES, 'core'] as const;
 export type PolygonPartClass = (typeof POLYGON_PART_CLASSES)[number];
 
@@ -51,6 +51,10 @@ export interface Polygon {
    *  blob with no UI consumer). Field name starts with ``_`` to signal
    *  "internal" in JSON dumps. */
   _embedding?: string;
+  /** User-assigned microtubule type-label id. Resolved to a class
+   *  name/colour via the project's `mtTypeLabels` palette. Microtubule
+   *  projects only; set/cleared via the tracks/type endpoint. */
+  mtType?: string;
 }
 
 export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';

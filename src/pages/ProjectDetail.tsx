@@ -19,6 +19,7 @@ import {
   SegmentChannelDialog,
   extractChannelsFromPaths,
 } from '@/components/project/SegmentChannelDialog';
+import { AddChannelDialog } from '@/components/project/AddChannelDialog';
 import { useSharedAdvancedExport } from '@/pages/export/hooks/useSharedAdvancedExport';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
@@ -45,6 +46,7 @@ import {
   isModelCompatibleWithType,
   MODEL_TYPE_COMPATIBILITY,
   getErrorMessage,
+  isMicrotubuleProject,
 } from '@/types';
 
 const ProjectDetail = () => {
@@ -64,6 +66,10 @@ const ProjectDetail = () => {
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
+  const [showDeleteAnnotationsDialog, setShowDeleteAnnotationsDialog] =
+    useState<boolean>(false);
+  const [isDeletingAnnotations, setIsDeletingAnnotations] =
+    useState<boolean>(false);
   // Channel-picker state for Segment All on multi-channel video projects.
   // `pendingChannelChoice` is non-null while the dialog is open; resolving it
   // triggers the actual dispatch with the picked channel.
@@ -71,6 +77,13 @@ const ProjectDetail = () => {
     channels: string[];
     defaultChannel: string;
   } | null>(null);
+  // "Add channel" dialog state (microtubule projects only).
+  const [showAddChannelDialog, setShowAddChannelDialog] =
+    useState<boolean>(false);
+  const [isAddingChannel, setIsAddingChannel] = useState<boolean>(false);
+  const [addChannelProgress, setAddChannelProgress] = useState<number | null>(
+    null
+  );
 
   const lastStatusRef = useRef<{ [imageId: string]: string }>({});
 
@@ -1200,6 +1213,118 @@ const ProjectDetail = () => {
     setShowDeleteDialog(true);
   };
 
+  const handleDeleteAnnotations = () => {
+    setShowDeleteAnnotationsDialog(true);
+  };
+
+  const handleDeleteAnnotationsConfirm = async () => {
+    if (!user?.id || selectedImageIds.size === 0) {
+      toast.error(t('errors.noProjectOrUser'));
+      return;
+    }
+    if (isDeletingAnnotations) {
+      return;
+    }
+    setIsDeletingAnnotations(true);
+
+    try {
+      const imageIds = Array.from(selectedImageIds);
+      const result = await apiClient.deleteSegmentationBatch(imageIds);
+
+      if (result.deletedCount > 0) {
+        toast.success(
+          t('project.annotationsDeleted', { count: result.deletedCount })
+        );
+        // Reset only the images whose annotations were actually deleted back to
+        // no-segmentation (mirror the WS-cancel reset shape) so the gallery
+        // reflects the change without a full refresh.
+        const clearedIds = new Set(
+          imageIds.filter(imageId => !result.failedIds.includes(imageId))
+        );
+        updateImages(prevImages =>
+          prevImages.map(img =>
+            clearedIds.has(img.id)
+              ? {
+                  ...img,
+                  segmentationStatus: 'no_segmentation',
+                  segmentationResult: undefined,
+                  segmentationData: undefined,
+                  segmentationThumbnailPath: undefined,
+                  segmentationThumbnailUrl: undefined,
+                  thumbnail_url: img.url,
+                  updatedAt: new Date(),
+                }
+              : img
+          )
+        );
+        setSelectedImageIds(new Set());
+      }
+
+      if (result.failedIds.length > 0) {
+        toast.warning(
+          t('project.annotationsDeleteFailed', {
+            count: result.failedIds.length,
+          })
+        );
+      }
+    } catch {
+      toast.error(t('errors.deleteAnnotations'));
+    } finally {
+      setShowDeleteAnnotationsDialog(false);
+      setIsDeletingAnnotations(false);
+    }
+  };
+
+  // Distinct parent videos among the selected frames — a multi-frame (video)
+  // source can only target a single video, so the dialog uses this to guide
+  // the user.
+  const selectedVideoCount = useMemo(() => {
+    const videos = new Set<string>();
+    for (const img of images) {
+      if (selectedImageIds.has(img.id) && img.parentVideoId) {
+        videos.add(img.parentVideoId);
+      }
+    }
+    return videos.size;
+  }, [images, selectedImageIds]);
+
+  const handleAddChannelConfirm = useCallback(
+    async (params: { file: File; channelName: string; align: boolean }) => {
+      if (!id || selectedImageIds.size === 0 || isAddingChannel) {
+        return;
+      }
+      setIsAddingChannel(true);
+      setAddChannelProgress(0);
+      try {
+        const result = await apiClient.addChannel(
+          id,
+          {
+            file: params.file,
+            channelName: params.channelName,
+            align: params.align,
+            imageIds: Array.from(selectedImageIds),
+          },
+          percent => setAddChannelProgress(percent)
+        );
+        toast.success(
+          t('project.addChannelSuccess', {
+            channels: result.addedChannels.join(', '),
+            frames: result.framesWritten,
+          })
+        );
+        setShowAddChannelDialog(false);
+      } catch (err) {
+        // Surface the backend's validation detail (frame-count mismatch,
+        // dimension mismatch, single-video rule, …) so the user can correct it.
+        toast.error(getErrorMessage(err, t) || t('project.addChannelFailed'));
+      } finally {
+        setIsAddingChannel(false);
+        setAddChannelProgress(null);
+      }
+    },
+    [id, selectedImageIds, isAddingChannel, t]
+  );
+
   // Calculate selection state
   const selectedCount = selectedImageIds.size;
   const isAllSelected =
@@ -1515,12 +1640,14 @@ const ProjectDetail = () => {
               projectName={projectTitle}
               projectType={projectType}
               images={images}
-              projectChannels={projectChannels}
               selectedCount={selectedCount}
               isAllSelected={isAllSelected}
               isPartiallySelected={isPartiallySelected}
               onSelectAllToggle={handleSelectAllToggle}
               onBatchDelete={handleBatchDelete}
+              onDeleteAnnotations={handleDeleteAnnotations}
+              onAddChannel={() => setShowAddChannelDialog(true)}
+              canAddChannel={isMicrotubuleProject(projectType)}
               showSelectAll={true}
               onExportingChange={() => {}} // No longer needed - hook handles state
               onDownloadingChange={() => {}} // No longer needed - hook handles state
@@ -1631,6 +1758,34 @@ const ProjectDetail = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Delete annotations (segmentation results) confirmation dialog */}
+      <AlertDialog
+        open={showDeleteAnnotationsDialog}
+        onOpenChange={setShowDeleteAnnotationsDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('project.deleteAnnotationsDialog.title')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('project.deleteAnnotationsDialog.description', {
+                count: selectedCount,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAnnotationsConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Incompatible model dialog — blocks the user from running a model
           that doesn't fit the current project type, with a clear list of
           allowed models for that type. */}
@@ -1676,6 +1831,18 @@ const ProjectDetail = () => {
           setTimeout(() => handleSegmentAll(ch), 0);
         }}
         onCancel={() => setPendingChannelChoice(null)}
+      />
+
+      {/* Add-channel dialog — appends an extra channel to the selected frames
+          (microtubule projects only; gated by the toolbar button). */}
+      <AddChannelDialog
+        open={showAddChannelDialog}
+        selectedCount={selectedCount}
+        videoCount={selectedVideoCount}
+        isSubmitting={isAddingChannel}
+        progress={addChannelProgress}
+        onConfirm={handleAddChannelConfirm}
+        onCancel={() => setShowAddChannelDialog(false)}
       />
     </motion.div>
   );

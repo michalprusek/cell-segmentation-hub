@@ -76,9 +76,9 @@ describe('parseOptions (evaluate.py option whitelist)', () => {
       JSON.stringify({
         threshold: 0.6,
         mtWidth: 5,
-        bgGap: 1,
-        bgWidth: 5,
+        bgMargin: 2,
         limitWells: 2,
+        irmName: 'irm',
         tirfName: 'tirf',
         solutionName: 'insol',
         noOverlays: true,
@@ -89,14 +89,24 @@ describe('parseOptions (evaluate.py option whitelist)', () => {
     expect(out).toEqual({
       threshold: 0.6,
       mtWidth: 5,
-      bgGap: 1,
-      bgWidth: 5,
+      bgMargin: 2,
       limitWells: 2,
+      irmName: 'irm',
       tirfName: 'tirf',
       solutionName: 'insol',
       noOverlays: true,
       noJson: false,
     });
+  });
+
+  it('carries irmName independently of tirfName', () => {
+    // The two channel roles are separate on purpose: the module segments IRM
+    // and measures TIRF. A whitelist that let only one through would silently
+    // pin the other to its default.
+    expect(parseOptions('{"irmName":"reflect"}')).toEqual({
+      irmName: 'reflect',
+    });
+    expect(parseOptions('{"irmName":42}')).toEqual({});
   });
 });
 

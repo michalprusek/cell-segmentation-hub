@@ -11,6 +11,7 @@ import {
 import {
   uploadImages,
   uploadSingleVideo,
+  uploadChannelSource,
   handleUploadError,
   validateUploadedFiles,
 } from '../../middleware/upload';
@@ -128,6 +129,21 @@ router.post(
   uploadSingleVideo,
   handleUploadError,
   VideoController.upload
+);
+
+/**
+ * Add an extra (PNG-backed) channel to SELECTED video frames of a
+ * microtubule project. The source (video/stack/ND2 or a single image) is
+ * decoded and written as one per-frame PNG per source channel; the new
+ * channel(s) are appended to each affected video container's channels JSON.
+ * POST /projects/:id/images/add-channel  (multipart field: "file")
+ */
+router.post(
+  '/:id/images/add-channel',
+  validateParams(projectIdSchema),
+  uploadChannelSource,
+  handleUploadError,
+  VideoController.addChannel
 );
 
 /**

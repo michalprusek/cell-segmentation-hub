@@ -2,6 +2,8 @@ import React from 'react';
 import { shouldPreventCanvasDeselection } from '../config/modeConfig';
 import { generateSafePolygonKey } from '@/lib/polygonIdUtils';
 import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
+import { isMicrotubuleProject } from '@/types';
+import { resolveMtColor } from '../utils/instanceColors';
 
 import VerticalToolbar from './VerticalToolbar';
 import TopToolbar from './TopToolbar';
@@ -33,6 +35,7 @@ import { ImageDisplayProvider } from '../contexts/ImageDisplayContext';
 // Type-only: the orchestrator owns these hooks; the layout only needs their
 // return shapes. `import type` keeps the hook modules out of the layout's
 // runtime import graph (relevant to the editor-test OOM import-graph issue).
+import type { MTTypeLabel } from '@/lib/api';
 import type { useEnhancedSegmentationEditor } from '../hooks/useEnhancedSegmentationEditor';
 import type { useVideoFrames } from '../hooks/useVideoFrames';
 import type { usePolygonRenderProps } from '../hooks/usePolygonRenderProps';
@@ -115,13 +118,40 @@ export interface SegmentationEditorLayoutProps {
   handleTogglePolygonVisibility: PolygonHandlers['handleTogglePolygonVisibility'];
   handleDeletePolygonFromPanel: PolygonHandlers['handleDeletePolygonFromPanel'];
   handleSelectPolygon: PolygonHandlers['handleSelectPolygon'];
-  handleDeletePolygonFromContextMenu: PolygonHandlers['handleDeletePolygonFromContextMenu'];
+  /** Canvas right-click delete: removes the whole MT track (all frames) when
+   *  the polyline has a trackId, else a single-frame delete. */
+  handleDeletePolygonOrTrack: (polygonId: string) => void;
+  /** Canvas right-click: propagate this MT into all following frames. */
+  handlePropagateTrack: (polygonId: string) => void;
+  /** Canvas click: Shift+click multi-selects; plain click single-selects. */
+  handleCanvasSelect: (polygonId: string | null, additive?: boolean) => void;
+  /** Propagate all Shift-selected microtubules to the following frames. */
+  handlePropagateSelected: () => void;
+  /** Current Shift+click multi-selection (per-frame polygon ids). */
+  selectedPolygonIds: Set<string>;
+  /** Sidebar checkbox toggle — mirrors Shift+click on the canvas. */
+  handleToggleSelectedInList: (id: string) => void;
+  /** Sidebar "select all" — pass the listed current-frame polygon ids. */
+  handleSelectAllInList: (ids: string[]) => void;
+  /** Sidebar "deselect all" — clear both selection sets. */
+  handleClearSelectionInList: () => void;
   handleSlicePolygonFromContextMenu: PolygonHandlers['handleSlicePolygonFromContextMenu'];
   handleEditPolygonFromContextMenu: PolygonHandlers['handleEditPolygonFromContextMenu'];
   handleDeleteVertexFromContextMenu: PolygonHandlers['handleDeleteVertexFromContextMenu'];
   handleRenamePolygon: PolygonHandlers['handleRenamePolygon'];
   handleChangeInstanceId: PolygonHandlers['handleChangeInstanceId'];
   handleChangePartClass: PolygonHandlers['handleChangePartClass'];
+
+  // Microtubule type-label palette + canvas colour mode (MT projects only).
+  mtTypeLabels: MTTypeLabel[];
+  mtLabelById: Map<string, MTTypeLabel>;
+  mtColorById: Map<string, string>;
+  mtColorMode: 'instance' | 'semantic';
+  onSetMtColorMode: (mode: 'instance' | 'semantic') => void;
+  onChangeMtType: (polygonId: string, mtType: string | null) => void;
+  onCreateMtLabel: (name: string, color: string) => Promise<MTTypeLabel | null>;
+  onRenameMtLabel: (id: string, name: string, color: string) => Promise<void>;
+  onDeleteMtLabel: (id: string) => Promise<void>;
 
   // Sperm instance-panel state
   activePartClass: React.ComponentProps<
@@ -189,13 +219,29 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   handleTogglePolygonVisibility,
   handleDeletePolygonFromPanel,
   handleSelectPolygon,
-  handleDeletePolygonFromContextMenu,
+  handleDeletePolygonOrTrack,
+  handlePropagateTrack,
+  handleCanvasSelect,
+  handlePropagateSelected,
+  selectedPolygonIds,
+  handleToggleSelectedInList,
+  handleSelectAllInList,
+  handleClearSelectionInList,
   handleSlicePolygonFromContextMenu,
   handleEditPolygonFromContextMenu,
   handleDeleteVertexFromContextMenu,
   handleRenamePolygon,
   handleChangeInstanceId,
   handleChangePartClass,
+  mtTypeLabels,
+  mtLabelById,
+  mtColorById,
+  mtColorMode,
+  onSetMtColorMode,
+  onChangeMtType,
+  onCreateMtLabel,
+  onRenameMtLabel,
+  onDeleteMtLabel,
   activePartClass,
   setActivePartClass,
   activeInstanceId,
@@ -385,8 +431,13 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           isUndoRedoInProgress={editor.isUndoRedoInProgress}
                           isHovered={polygon.id === hoveredPolygonId}
                           editMode={editor.editMode}
-                          onSelectPolygon={editor.handlePolygonClick}
-                          onDeletePolygon={handleDeletePolygonFromContextMenu}
+                          onSelectPolygon={handleCanvasSelect}
+                          isMultiSelected={selectedPolygonIds.has(polygon.id)}
+                          multiSelectCount={selectedPolygonIds.size}
+                          onPropagateSelected={handlePropagateSelected}
+                          onDeletePolygon={handleDeletePolygonOrTrack}
+                          onPropagateTrack={handlePropagateTrack}
+                          videoFrameCount={video.container?.frameCount}
                           onSlicePolygon={handleSlicePolygonFromContextMenu}
                           onEditPolygon={handleEditPolygonFromContextMenu}
                           // Sperm-specific context-menu actions
@@ -410,6 +461,44 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                               ? availableInstanceIds
                               : undefined
                           }
+                          // Microtubule type-label context-menu items + canvas
+                          // colour mode. Gated to MT polylines (mirrors the
+                          // sperm gating above). `semanticColor` is the resolved
+                          // by-label colour; CanvasPolygon uses it only when
+                          // colorMode === 'semantic'.
+                          colorMode={
+                            isMicrotubuleProject(projectType)
+                              ? mtColorMode
+                              : 'instance'
+                          }
+                          semanticColor={
+                            // Only resolve the by-label colour when it will be
+                            // used (semantic mode); in the default instance mode
+                            // CanvasPolygon ignores it, so skip the Map lookup.
+                            isMicrotubuleProject(projectType) &&
+                            mtColorMode === 'semantic'
+                              ? resolveMtColor(polygon.mtType, mtColorById, {
+                                  selected:
+                                    polygon.id === editor.selectedPolygonId,
+                                })
+                              : undefined
+                          }
+                          mtTypeLabels={
+                            polylineKind === 'microtubule'
+                              ? mtTypeLabels
+                              : undefined
+                          }
+                          currentMtType={polygon.mtType}
+                          onChangeMtType={
+                            polylineKind === 'microtubule'
+                              ? onChangeMtType
+                              : undefined
+                          }
+                          onCreateMtLabel={
+                            polylineKind === 'microtubule'
+                              ? onCreateMtLabel
+                              : undefined
+                          }
                           onDeleteVertex={handleDeleteVertexFromContextMenu}
                           onHover={setHoveredPolygonId}
                           // Drives sperm-vs-microtubule context-menu
@@ -431,6 +520,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                         interactionState={editor.interactionState}
                         selectedPolygonId={editor.selectedPolygonId}
                         polygons={editor.polygons}
+                        hoveredJoinTarget={editor.hoveredJoinTarget}
                       />
                     </svg>
 
@@ -456,6 +546,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     selectedPolygonId={editor.selectedPolygonId}
                     tempPoints={editor.tempPoints}
                     isShiftPressed={editor.keyboardState.isShiftPressed()}
+                    projectType={projectType}
                   />
                 </CanvasContainer>
               </div>
@@ -471,16 +562,26 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     <DisplaySection />
                   </>
                 )}
-                <PolygonListPanel
-                  loading={projectLoading}
-                  polygons={editor.polygons}
-                  selectedPolygonId={editor.selectedPolygonId}
-                  onSelectPolygon={handleSelectPolygon}
-                  hiddenPolygonIds={frameHiddenIds}
-                  onTogglePolygonVisibility={handleTogglePolygonVisibility}
-                  onRenamePolygon={handleRenamePolygon}
-                  onDeletePolygon={handleDeletePolygonFromPanel}
-                />
+                {/* Microtubule projects use the purpose-built Microtubule
+                    Instances panel below (trackId order, per-instance colour,
+                    length, delete) — the generic Polygon List would just
+                    duplicate it, so it's hidden for MT projects. */}
+                {!isMicrotubuleProject(projectType) && (
+                  <PolygonListPanel
+                    loading={projectLoading}
+                    polygons={editor.polygons}
+                    selectedPolygonId={editor.selectedPolygonId}
+                    onSelectPolygon={handleSelectPolygon}
+                    hiddenPolygonIds={frameHiddenIds}
+                    onTogglePolygonVisibility={handleTogglePolygonVisibility}
+                    onRenamePolygon={handleRenamePolygon}
+                    onDeletePolygon={handleDeletePolygonFromPanel}
+                    selectedPolygonIds={selectedPolygonIds}
+                    onToggleSelected={handleToggleSelectedInList}
+                    onSelectAll={handleSelectAllInList}
+                    onClearSelection={handleClearSelectionInList}
+                  />
+                )}
                 {hasPolylines && polylineKind === 'sperm' && (
                   <SpermInstancePanel
                     polygons={editor.polygons}
@@ -499,6 +600,19 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     onSelectPolygon={handleSelectPolygon}
                     hiddenPolygonIds={frameHiddenIds}
                     onToggleVisibility={handleTogglePolygonVisibility}
+                    selectedPolygonIds={selectedPolygonIds}
+                    onToggleSelected={handleToggleSelectedInList}
+                    onSelectAll={handleSelectAllInList}
+                    onClearSelection={handleClearSelectionInList}
+                    onDeletePolygon={handleDeletePolygonFromPanel}
+                    onRenamePolygon={handleRenamePolygon}
+                    mtTypeLabels={mtTypeLabels}
+                    mtLabelById={mtLabelById}
+                    colorMode={mtColorMode}
+                    onSetColorMode={onSetMtColorMode}
+                    onCreateLabel={onCreateMtLabel}
+                    onRenameLabel={onRenameMtLabel}
+                    onDeleteLabel={onDeleteMtLabel}
                   />
                 )}
               </div>

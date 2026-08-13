@@ -62,14 +62,19 @@ import { logger } from '../../../utils/logger';
 function makeFrame(
   overrides: Partial<{
     id: string;
+    name: string | null;
     parentVideoId: string | null;
     frameIndex: number | null;
     isVideoContainer: boolean;
     segmentation: { polygons: string | null } | null;
   }> = {}
 ) {
+  const id = overrides.id ?? 'frame-1';
   return {
-    id: 'frame-1',
+    id,
+    // Default the human-readable name to the id so `imageName`-based
+    // assertions read the same token the tests pass as `id`.
+    name: id,
     parentVideoId: 'video-1',
     frameIndex: 0,
     isVideoContainer: false,
@@ -109,6 +114,25 @@ describe('computeMTGeometry', () => {
     expect(computeMTGeometry([], null)).toEqual([]);
   });
 
+  it('emits rows grouped by video, frame-ascending, regardless of input order', () => {
+    const rows = computeMTGeometry(
+      [
+        makeFrame({ id: 'b2', parentVideoId: 'vidB', frameIndex: 2, segmentation: { polygons: polylineJson([{ x: 0, y: 0 }, { x: 5, y: 0 }]) } }),
+        makeFrame({ id: 'a1', parentVideoId: 'vidA', frameIndex: 1, segmentation: { polygons: polylineJson([{ x: 0, y: 0 }, { x: 5, y: 0 }]) } }),
+        makeFrame({ id: 'b0', parentVideoId: 'vidB', frameIndex: 0, segmentation: { polygons: polylineJson([{ x: 0, y: 0 }, { x: 5, y: 0 }]) } }),
+        makeFrame({ id: 'a0', parentVideoId: 'vidA', frameIndex: 0, segmentation: { polygons: polylineJson([{ x: 0, y: 0 }, { x: 5, y: 0 }]) } }),
+      ],
+      null
+    );
+    // vidA (frame 0, 1) then vidB (frame 0, 2).
+    expect(rows.map(r => `${r.imageName}@${r.frameIndex}`)).toEqual([
+      'a0@0',
+      'a1@1',
+      'b0@0',
+      'b2@2',
+    ]);
+  });
+
   it('skips video containers and frames without parentVideoId / frameIndex', () => {
     const rows = computeMTGeometry(
       [
@@ -124,6 +148,65 @@ describe('computeMTGeometry', () => {
   it('skips frames with no segmentation data', () => {
     const rows = computeMTGeometry([makeFrame({ segmentation: null })], 0.5);
     expect(rows).toHaveLength(0);
+  });
+
+  it('resolves the mtType label id to the class name via the palette', () => {
+    const rows = computeMTGeometry(
+      [
+        makeFrame({
+          segmentation: {
+            polygons: polylineJson(
+              [
+                { x: 0, y: 0 },
+                { x: 5, y: 0 },
+              ],
+              { mtType: 'mt_type_a' }
+            ),
+          },
+        }),
+      ],
+      null,
+      new Map([['mt_type_a', 'alpha-tubulin']])
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].mtType).toBe('alpha-tubulin');
+  });
+
+  it('leaves mtType blank for an untyped polyline or unknown label id', () => {
+    const untyped = computeMTGeometry(
+      [
+        makeFrame({
+          segmentation: {
+            polygons: polylineJson([
+              { x: 0, y: 0 },
+              { x: 5, y: 0 },
+            ]),
+          },
+        }),
+      ],
+      null,
+      new Map([['mt_type_a', 'alpha-tubulin']])
+    );
+    expect(untyped[0].mtType).toBe('');
+
+    const unknownId = computeMTGeometry(
+      [
+        makeFrame({
+          segmentation: {
+            polygons: polylineJson(
+              [
+                { x: 0, y: 0 },
+                { x: 5, y: 0 },
+              ],
+              { mtType: 'mt_type_missing' }
+            ),
+          },
+        }),
+      ],
+      null,
+      new Map([['mt_type_a', 'alpha-tubulin']])
+    );
+    expect(unknownId[0].mtType).toBe('');
   });
 
   it('skips polygons (closed geometry) and only emits polylines', () => {
@@ -319,7 +402,9 @@ describe('computeMTMetrics — early-exit paths (no ML call)', () => {
     vi.clearAllMocks();
   });
 
-  it('returns empty array immediately when channels is empty', async () => {
+  it('returns empty array when there are no frame images (all-channels default still needs frames)', async () => {
+    // Empty `channels` no longer short-circuits (it now means "all channels");
+    // an empty FRAME list is what makes this a no-op with no ML call.
     const result = await computeMTMetrics([], 'proj-1', {
       ...BASE_OPTIONS,
       channels: [],
@@ -547,6 +632,72 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     expect(body.margin_multiplier).toBe(1.5);
   });
 
+  it('empty channels => samples ALL container channels (always-on, no opt-in)', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
+    axiosPostMock.mockResolvedValueOnce(mlResponse);
+
+    await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: frameSeg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: [] }
+    );
+
+    expect(axiosPostMock).toHaveBeenCalledOnce();
+    const [, body] = axiosPostMock.mock.calls[0];
+    // Container has [BF, DAPI]; an empty request must sample BOTH, in order.
+    expect(body.channel_indices).toEqual([0, 1]);
+    expect(body.channel_names).toEqual(['BF', 'DAPI']);
+  });
+
+  it('maps channel_summaries (whole-image per-channel totals) from ML', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([
+      { ...containerRow, name: 'video.nd2' },
+    ]);
+    axiosPostMock.mockResolvedValueOnce({
+      data: {
+        ...mlResponse.data,
+        channel_summaries: [
+          {
+            channel: 'DAPI',
+            total_intensity: 123456,
+            mean_intensity: 6.7,
+            pixel_count: 18432,
+            frames: 3,
+          },
+        ],
+      },
+    });
+
+    const { channelSummaries } = await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: frameSeg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: ['DAPI'] }
+    );
+
+    expect(channelSummaries).toHaveLength(1);
+    expect(channelSummaries[0]).toEqual({
+      video: 'video.nd2',
+      channel: 'DAPI',
+      totalIntensity: 123456,
+      meanIntensity: 6.7,
+      pixelCount: 18432,
+      frames: 3,
+    });
+  });
+
+  it('tolerates an ML response without channel_summaries (stale ML build)', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
+    axiosPostMock.mockResolvedValueOnce(mlResponse); // no channel_summaries field
+
+    const { channelSummaries } = await computeMTMetrics(
+      [makeFrame({ segmentation: { polygons: frameSeg } })],
+      'proj-1',
+      { ...BASE_OPTIONS, channels: ['DAPI'] }
+    );
+
+    expect(channelSummaries).toEqual([]);
+  });
+
   it('maps ML response rows to MTMetricsRow with px→µm conversion', async () => {
     prismaMock.image.findMany.mockResolvedValueOnce([containerRow]);
     axiosPostMock.mockResolvedValueOnce(mlResponse);
@@ -562,7 +713,7 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     const r = rows[0];
 
     expect(r.frameIndex).toBe(0);
-    expect(r.imageId).toBe('frame-1');
+    expect(r.imageName).toBe('frame-1');
     // Label matches the "MT1" badge the visualization draws for this instance.
     expect(r.label).toBe('MT1');
     expect(r.instanceId).toBe('inst-1');
@@ -883,7 +1034,7 @@ describe('computeMTMetrics — ML request payload and response mapping', () => {
     );
 
     expect(rows).toHaveLength(2);
-    expect(rows.map(r => r.imageId)).toEqual(['frame-a', 'frame-b']);
+    expect(rows.map(r => r.imageName)).toEqual(['frame-a', 'frame-b']);
   });
 });
 

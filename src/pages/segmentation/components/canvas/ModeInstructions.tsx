@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { EditMode, InteractionState } from '../../types';
 import { Point } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/useLanguage';
+import { isMicrotubuleProject, type ProjectType } from '@/types';
+import { polylinePanelKind } from '@/lib/polylineSemantics';
 
 interface ModeInstructionsProps {
   editMode: EditMode;
@@ -9,6 +11,9 @@ interface ModeInstructionsProps {
   selectedPolygonId: string | null;
   tempPoints: Point[];
   isShiftPressed?: boolean;
+  /** Drives microtubule-specific wording (open polylines finished with Enter)
+   *  vs the default closed-polygon (spheroid) wording. */
+  projectType?: ProjectType;
 }
 
 /**
@@ -21,8 +26,16 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
   selectedPolygonId,
   tempPoints,
   isShiftPressed = false,
+  projectType,
 }) => {
   const { t } = useLanguage();
+  // Microtubule annotations are open polylines: creation/extension is committed
+  // with Enter (or double-click), not by closing back onto the first point. The
+  // hints branch on this so MT users aren't told to "close the polygon".
+  const isMicrotubule = isMicrotubuleProject(projectType);
+  // Endpoint-join in add-points mode is offered wherever polylines have a
+  // dedicated panel (sperm + microtubule); generic projects don't join.
+  const supportsJoin = polylinePanelKind(projectType) !== null;
   const [isVisible, setIsVisible] = useState(true);
 
   // Auto-hide instructions after 5 seconds in View mode
@@ -100,13 +113,44 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
           };
         }
 
+      case EditMode.CreatePolyline:
+        // Microtubule (open polyline) creation — committed with Enter, NOT by
+        // closing onto the first point. Falls back to the polygon "create"
+        // wording only if somehow used outside an MT project.
+        if (tempPoints.length === 0) {
+          return {
+            title: t('segmentation.instructions.modes.createPolyline'),
+            color: '#3b82f6', // blue-500 to match border
+            instructions: [
+              t('segmentation.instructions.createPolyline.start'),
+              t('segmentation.instructions.createPolyline.holdShift'),
+            ],
+          };
+        } else {
+          return {
+            title: t('segmentation.instructions.modes.createPolyline'),
+            color: '#3b82f6', // blue-500 to match border
+            instructions: [
+              t('segmentation.instructions.createPolyline.finish'),
+              `${t('segmentation.instructions.createPolyline.holdShift')} • ${t('segmentation.instructions.createPolyline.cancel')}`,
+            ],
+          };
+        }
+
       case EditMode.AddPoints:
         if (!interactionState.isAddingPoints) {
           return {
             title: t('segmentation.instructions.modes.addPoints'),
             color: '#10b981', // emerald-500 to match border
             instructions: [
-              t('segmentation.instructions.addPoints.clickVertex'),
+              // MT: click an endpoint to extend the microtubule; spheroid: click
+              // any vertex of an existing polygon to start inserting points.
+              isMicrotubule
+                ? t('segmentation.instructions.addPoints.clickVertexMt')
+                : t('segmentation.instructions.addPoints.clickVertex'),
+              ...(supportsJoin
+                ? [t('segmentation.instructions.addPoints.joinHint')]
+                : []),
               t('segmentation.instructions.addPoints.cancel'),
             ],
           };
@@ -115,7 +159,14 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             title: t('segmentation.instructions.modes.addPoints'),
             color: '#10b981', // emerald-500 to match border
             instructions: [
-              t('segmentation.instructions.addPoints.addPoints'),
+              // MT: add points then press Enter to finish; spheroid: click
+              // another vertex to complete the inserted run.
+              isMicrotubule
+                ? t('segmentation.instructions.addPoints.addPointsMt')
+                : t('segmentation.instructions.addPoints.addPoints'),
+              ...(supportsJoin
+                ? [t('segmentation.instructions.addPoints.joinHint')]
+                : []),
               `${t('segmentation.instructions.addPoints.holdShift')} • ${t('segmentation.instructions.addPoints.cancel')}`,
             ],
           };
@@ -232,6 +283,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
       {/* Show shift key indicator */}
       {isShiftPressed &&
         (editMode === EditMode.CreatePolygon ||
+          editMode === EditMode.CreatePolyline ||
           (editMode === EditMode.AddPoints &&
             interactionState.isAddingPoints)) && (
           <div

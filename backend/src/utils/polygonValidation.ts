@@ -56,6 +56,10 @@ export interface Polygon {
    *  capsule's mask is cut off by the image border. Must be preserved here so
    *  the editor can grey it out and metrics/export can exclude it. */
   complete?: boolean;
+  /** User-assigned microtubule type-label id (references the project's
+   *  `mtTypeLabels` palette). Preserved so the editor + exports can resolve the
+   *  class name/colour. Microtubule projects only. */
+  mtType?: string;
 }
 
 /**
@@ -96,7 +100,7 @@ const coerceNonEmptyString = (value: unknown): string | undefined =>
 
 export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
   // partClass accepts both sperm parts (head/midpiece/tail) and 'core' for
-  // ASPP spheroid core polygons; older code only validated SpermPartClass
+  // spheroid disintegration core polygons; older code only validated SpermPartClass
   // which silently stripped 'core' during polygon JSON load.
   {
     key: 'partClass',
@@ -114,6 +118,9 @@ export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
     key: 'complete',
     coerce: value => (typeof value === 'boolean' ? value : undefined),
   },
+  // Preserve the user-assigned microtubule type-label id (resolved to a class
+  // name/colour via the project's mtTypeLabels palette).
+  { key: 'mtType', coerce: coerceNonEmptyString },
 ] as const;
 
 export interface ParsedPolygonResult {

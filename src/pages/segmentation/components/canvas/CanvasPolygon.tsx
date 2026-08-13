@@ -4,10 +4,12 @@ import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
-import type { ProjectType } from '@/types';
+import { isMicrotubuleProject, type ProjectType } from '@/types';
+import type { MTTypeLabel } from '@/lib/api';
 import {
   colorFromInstanceId,
   isMicrotubuleInstance,
+  NEUTRAL_COLOR,
 } from '@/pages/segmentation/utils/instanceColors';
 
 interface CanvasPolygonProps {
@@ -20,7 +22,16 @@ interface CanvasPolygonProps {
   hideVertices?: boolean;
   isHovered?: boolean;
   isUndoRedoInProgress?: boolean;
-  onSelectPolygon?: (id: string) => void;
+  /** `additive` (Shift+click) toggles this polygon in the multi-selection
+   *  instead of replacing the single selection. */
+  onSelectPolygon?: (id: string, additive?: boolean) => void;
+  /** True when this polygon is in the Shift+click multi-selection. */
+  isMultiSelected?: boolean;
+  /** Size of the current multi-selection (drives the "Propagate selected N"
+   *  context-menu item). */
+  multiSelectCount?: number;
+  /** Propagate all multi-selected microtubules to the following frames. */
+  onPropagateSelected?: () => void;
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
@@ -30,6 +41,10 @@ interface CanvasPolygonProps {
   ) => void;
   onChangeInstanceId?: (polygonId: string, instanceId: string) => void;
   availableInstanceIds?: string[];
+  /** Propagate this microtubule into all following frames (MT only). */
+  onPropagateTrack?: (polygonId: string) => void;
+  /** Total frames in the video — shown in the "delete whole track" dialog. */
+  videoFrameCount?: number;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
   onHover?: (polygonId: string | null) => void;
@@ -38,6 +53,23 @@ interface CanvasPolygonProps {
   projectType?: ProjectType;
   /** Wheel-zoom in progress. Skips per-vertex 1/zoom re-compute. */
   isZooming?: boolean;
+  /** Microtubule canvas colour mode: 'instance' = per-trackId hash colour,
+   *  'semantic' = the assigned type-label's colour. Non-MT projects pass
+   *  'instance' (the default). */
+  colorMode?: 'instance' | 'semantic';
+  /** Resolved by-label colour for this polyline; used only in semantic mode. */
+  semanticColor?: string;
+  /** Microtubule type-label palette — drives the "Set type" context submenu. */
+  mtTypeLabels?: MTTypeLabel[];
+  /** This polyline's current type-label id (check-marks the active label). */
+  currentMtType?: string;
+  /** Assign (or clear, with null) the microtubule type for this polyline. */
+  onChangeMtType?: (polygonId: string, mtType: string | null) => void;
+  /** Create a new type label (name + colour) and return it for immediate assign. */
+  onCreateMtLabel?: (
+    name: string,
+    color: string
+  ) => Promise<MTTypeLabel | null>;
 }
 
 const CanvasPolygon = React.memo(
@@ -52,18 +84,29 @@ const CanvasPolygon = React.memo(
     isHovered = false,
     isUndoRedoInProgress = false,
     onSelectPolygon,
+    isMultiSelected = false,
+    multiSelectCount = 0,
+    onPropagateSelected,
     onDeletePolygon,
     onSlicePolygon,
     onEditPolygon,
     onChangePartClass,
     onChangeInstanceId,
     availableInstanceIds,
+    onPropagateTrack,
+    videoFrameCount,
     onDeleteVertex,
     onDuplicateVertex,
     onHover,
     editMode,
     projectType,
     isZooming,
+    colorMode = 'instance',
+    semanticColor,
+    mtTypeLabels,
+    currentMtType,
+    onChangeMtType,
+    onCreateMtLabel,
   }: CanvasPolygonProps) => {
     const { id, points, type = 'external', parent_id } = polygon;
 
@@ -150,7 +193,7 @@ const CanvasPolygon = React.memo(
       if (polygon.complete === false) {
         return isSelected ? '#737373' : '#969696';
       }
-      // Spheroid 'core' (closed polygon, dense central region from ASPP model)
+      // Spheroid 'core' (closed polygon, dense central region from the disintegration model)
       if (!isPolyline && polygon.partClass === 'core') {
         return isSelected ? '#16a34a' : '#22c55e'; // green
       }
@@ -163,8 +206,16 @@ const CanvasPolygon = React.memo(
           case 'tail':
             return isSelected ? '#0891b2' : '#06b6d4'; // cyan
         }
-        // Seed priority: cross-frame trackId, then MT-prefixed instanceId,
-        // then per-polygon UUID — guarantees a distinct colour per
+        // Semantic (by-label) mode: colour the microtubule by its assigned type
+        // label. `semanticColor` is pre-resolved by the parent (label colour, or
+        // neutral gray when untyped), so this branch just returns it.
+        if (colorMode === 'semantic') {
+          // Shared NEUTRAL_COLOR (not a literal) so the untyped-MT gray here
+          // can't drift from resolveMtColor's untyped fallback.
+          return semanticColor ?? NEUTRAL_COLOR;
+        }
+        // Instance mode — seed priority: cross-frame trackId, then MT-prefixed
+        // instanceId, then per-polygon UUID — guarantees a distinct colour per
         // polyline even when ML identity is absent.
         const colorKey =
           polygon.trackId ||
@@ -188,6 +239,8 @@ const CanvasPolygon = React.memo(
       polygon.complete,
       isSelected,
       isInternal,
+      colorMode,
+      semanticColor,
     ]);
 
     // Compute hover-dependent stroke width multiplier
@@ -214,7 +267,13 @@ const CanvasPolygon = React.memo(
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (onSelectPolygon) {
+        if (!onSelectPolygon) return;
+        // Only pass the `additive` arg on a Shift+click so a plain click stays a
+        // single-argument call (keeps the single-selection call sites + their
+        // tests unchanged).
+        if (e.shiftKey) {
+          onSelectPolygon(id, true);
+        } else {
           onSelectPolygon(id);
         }
       },
@@ -233,6 +292,10 @@ const CanvasPolygon = React.memo(
       () => onEditPolygon?.(id),
       [onEditPolygon, id]
     );
+    const handleChangeMtType = useCallback(
+      (mtType: string | null) => onChangeMtType?.(id, mtType),
+      [onChangeMtType, id]
+    );
     const handleChangePartClass = useCallback(
       (partClass: 'head' | 'midpiece' | 'tail') =>
         onChangePartClass?.(id, partClass),
@@ -241,6 +304,10 @@ const CanvasPolygon = React.memo(
     const handleChangeInstanceId = useCallback(
       (instanceId: string) => onChangeInstanceId?.(id, instanceId),
       [onChangeInstanceId, id]
+    );
+    const handlePropagate = useCallback(
+      () => onPropagateTrack?.(id),
+      [onPropagateTrack, id]
     );
     const handleMouseEnter = useCallback(() => onHover?.(id), [onHover, id]);
     const handleMouseLeave = useCallback(() => onHover?.(null), [onHover]);
@@ -277,6 +344,19 @@ const CanvasPolygon = React.memo(
         onChangeInstanceId={isPolyline ? handleChangeInstanceId : undefined}
         currentInstanceId={isPolyline ? polygon.instanceId : undefined}
         availableInstanceIds={isPolyline ? availableInstanceIds : undefined}
+        onPropagate={
+          isPolyline && onPropagateTrack ? handlePropagate : undefined
+        }
+        onPropagateSelected={isPolyline ? onPropagateSelected : undefined}
+        multiSelectCount={multiSelectCount}
+        trackId={polygon.trackId}
+        videoFrameCount={videoFrameCount}
+        mtTypeLabels={isPolyline ? mtTypeLabels : undefined}
+        currentMtType={isPolyline ? currentMtType : undefined}
+        onChangeMtType={
+          isPolyline && onChangeMtType ? handleChangeMtType : undefined
+        }
+        onCreateMtLabel={isPolyline ? onCreateMtLabel : undefined}
       >
         <g
           data-testid={id}
@@ -343,7 +423,11 @@ const CanvasPolygon = React.memo(
                       : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
-            strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}
+            strokeWidth={Math.max(
+              strokeWidth * hoverStrokeMultiplier * (isMultiSelected ? 2.2 : 1),
+              0.5
+            )}
+            strokeDasharray={isMultiSelected ? '6 3' : undefined}
             strokeOpacity={pathString ? 1 : 0}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -365,7 +449,7 @@ const CanvasPolygon = React.memo(
           {isPolyline &&
             !isSelected &&
             validPoints.length >= 2 &&
-            projectType !== 'microtubules' && (
+            !isMicrotubuleProject(projectType) && (
               <>
                 <circle
                   cx={validPoints[0].x}
@@ -398,6 +482,7 @@ const CanvasPolygon = React.memo(
               points={points}
               polygonType={type}
               isSelected={isSelected}
+              isMultiSelected={isMultiSelected}
               isHovered={isHovered}
               hoveredVertex={hoveredVertex}
               vertexDragState={vertexDragState}
@@ -448,6 +533,16 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.instanceId === nextProps.polygon.instanceId &&
       prevProps.polygon.trackId === nextProps.polygon.trackId &&
       prevProps.polygon.complete === nextProps.polygon.complete &&
+      // Type-label id + resolved semantic colour + colour mode drive the
+      // by-label recolour; omitting these means an MT wouldn't re-colour when
+      // its type or the palette colour changes (repo bug #5: incomplete memo).
+      prevProps.polygon.mtType === nextProps.polygon.mtType &&
+      prevProps.colorMode === nextProps.colorMode &&
+      prevProps.semanticColor === nextProps.semanticColor &&
+      prevProps.currentMtType === nextProps.currentMtType &&
+      prevProps.mtTypeLabels === nextProps.mtTypeLabels &&
+      prevProps.onChangeMtType === nextProps.onChangeMtType &&
+      prevProps.onCreateMtLabel === nextProps.onCreateMtLabel &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
@@ -470,6 +565,11 @@ const CanvasPolygon = React.memo(
       prevProps.onChangePartClass === nextProps.onChangePartClass &&
       prevProps.onChangeInstanceId === nextProps.onChangeInstanceId &&
       prevProps.availableInstanceIds === nextProps.availableInstanceIds &&
+      prevProps.onPropagateTrack === nextProps.onPropagateTrack &&
+      prevProps.videoFrameCount === nextProps.videoFrameCount &&
+      prevProps.isMultiSelected === nextProps.isMultiSelected &&
+      prevProps.multiSelectCount === nextProps.multiSelectCount &&
+      prevProps.onPropagateSelected === nextProps.onPropagateSelected &&
       // Drives context-menu gating; must be in comparator.
       prevProps.projectType === nextProps.projectType &&
       // Context-menu / vertex callbacks. These are identity-stable

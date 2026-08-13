@@ -5,10 +5,24 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
 } from '@/components/ui/context-menu';
-import { Trash, Scissors, Edit, Link, BarChart3 } from 'lucide-react';
+import {
+  Trash,
+  Scissors,
+  Edit,
+  Link,
+  BarChart3,
+  ChevronsRight,
+  Tag,
+  Plus,
+} from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
-import type { ProjectType } from '@/types';
+import { isMicrotubuleProject, type ProjectType } from '@/types';
+import type { MTTypeLabel } from '@/lib/api';
+import MtTypeLabelDialog from './MtTypeLabelDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +50,30 @@ interface PolygonContextMenuProps {
   onChangeInstanceId?: (instanceId: string) => void;
   currentInstanceId?: string;
   availableInstanceIds?: string[];
+  /** Propagate this microtubule into all following frames (MT only). */
+  onPropagate?: () => void;
+  /** Cross-frame track id — when set on a microtubule, delete removes the whole
+   *  track (all frames) rather than just this polyline. Matches the source
+   *  `polygon.trackId` (string | undefined). */
+  trackId?: string;
+  /** Total frames in the video, shown in the "delete whole track" dialog. */
+  videoFrameCount?: number;
+  /** Propagate ALL Shift-selected microtubules to the following frames. */
+  onPropagateSelected?: () => void;
+  /** Size of the Shift+click multi-selection (gates the bulk-propagate item). */
+  multiSelectCount?: number;
+  /** Microtubule type-label palette (drives the "Set type" submenu, MT only). */
+  mtTypeLabels?: MTTypeLabel[];
+  /** This polyline's current type-label id (check-marks the active label). */
+  currentMtType?: string;
+  /** Assign (or clear, with null) the microtubule type. Applies to the whole
+   *  multi-selection when ≥2 MTs are selected. */
+  onChangeMtType?: (mtType: string | null) => void;
+  /** Create a new type label (name + colour); the returned label is assigned. */
+  onCreateMtLabel?: (
+    name: string,
+    color: string
+  ) => Promise<MTTypeLabel | null>;
 }
 
 const PolygonContextMenu = ({
@@ -50,9 +88,21 @@ const PolygonContextMenu = ({
   onChangeInstanceId,
   currentInstanceId,
   availableInstanceIds,
+  onPropagate,
+  trackId,
+  videoFrameCount,
+  onPropagateSelected,
+  multiSelectCount = 0,
+  mtTypeLabels,
+  currentMtType,
+  onChangeMtType,
+  onCreateMtLabel,
 }: PolygonContextMenuProps) => {
   const isSperm = projectType === 'sperm';
-  const isMicrotubules = projectType === 'microtubules';
+  const isMicrotubules = isMicrotubuleProject(projectType);
+  // A microtubule with a cross-frame trackId: deleting it removes the whole
+  // track, and it can be propagated forward.
+  const hasTrack = isMicrotubules && !!trackId;
 
   // Fire the global "open kymograph" event that VideoModeOverlay
   // already listens for — no new prop plumbing needed. The overlay
@@ -66,6 +116,23 @@ const PolygonContextMenu = ({
     );
   }, [polygonId]);
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const [showPropagateDialog, setShowPropagateDialog] = React.useState(false);
+  const [showPropagateSelectedDialog, setShowPropagateSelectedDialog] =
+    React.useState(false);
+  const [showNewLabelDialog, setShowNewLabelDialog] = React.useState(false);
+  // Create a label from the "+ New label…" dialog, then immediately assign it
+  // to this microtubule (and the rest of the multi-selection).
+  const handleCreateAndAssign = React.useCallback(
+    async (name: string, color: string) => {
+      if (!onCreateMtLabel) return;
+      const created = await onCreateMtLabel(name, color);
+      if (created) onChangeMtType?.(created.id);
+    },
+    [onCreateMtLabel, onChangeMtType]
+  );
+  // Bulk-propagate the Shift+click multi-selection — only meaningful with ≥2.
+  const canPropagateSelected =
+    isMicrotubules && !!onPropagateSelected && multiSelectCount >= 2;
   const { t } = useLanguage();
 
   return (
@@ -101,6 +168,96 @@ const PolygonContextMenu = ({
                   })}
                 </span>
               </ContextMenuItem>
+              {onPropagate && (
+                <ContextMenuItem
+                  onClick={() => setShowPropagateDialog(true)}
+                  className="cursor-pointer"
+                >
+                  <ChevronsRight className="mr-2 h-4 w-4" />
+                  <span>{t('contextMenu.propagateTrack')}</span>
+                </ContextMenuItem>
+              )}
+              {canPropagateSelected && (
+                <ContextMenuItem
+                  onClick={() => setShowPropagateSelectedDialog(true)}
+                  className="cursor-pointer"
+                >
+                  <ChevronsRight className="mr-2 h-4 w-4" />
+                  <span>
+                    {t('contextMenu.propagateSelectedTracks', {
+                      count: multiSelectCount,
+                    })}
+                  </span>
+                </ContextMenuItem>
+              )}
+              {onChangeMtType && (
+                <ContextMenuSub>
+                  <ContextMenuSubTrigger className="cursor-pointer">
+                    <Tag className="mr-2 h-4 w-4" />
+                    <span>
+                      {multiSelectCount >= 2
+                        ? t('microtubule.type.setForSelected', {
+                            count: multiSelectCount,
+                          })
+                        : t('microtubule.type.set')}
+                    </span>
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-56">
+                    <ContextMenuItem
+                      onClick={() => onChangeMtType(null)}
+                      className="cursor-pointer"
+                    >
+                      <span
+                        className="mr-2 inline-block rounded-full border border-gray-400"
+                        style={{ width: 12, height: 12 }}
+                      />
+                      <span>{t('microtubule.type.none')}</span>
+                      {!currentMtType && (
+                        <span className="ml-auto text-xs text-violet-500">
+                          ✓
+                        </span>
+                      )}
+                    </ContextMenuItem>
+                    {(mtTypeLabels ?? []).length > 0 && (
+                      <ContextMenuSeparator />
+                    )}
+                    {(mtTypeLabels ?? []).map(label => (
+                      <ContextMenuItem
+                        key={label.id}
+                        onClick={() => onChangeMtType(label.id)}
+                        className="cursor-pointer"
+                      >
+                        <span
+                          className="mr-2 inline-block rounded-full"
+                          style={{
+                            width: 12,
+                            height: 12,
+                            backgroundColor: label.color,
+                          }}
+                        />
+                        <span className="truncate">{label.name}</span>
+                        {currentMtType === label.id && (
+                          <span className="ml-auto text-xs text-violet-500">
+                            ✓
+                          </span>
+                        )}
+                      </ContextMenuItem>
+                    ))}
+                    {onCreateMtLabel && (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                          onClick={() => setShowNewLabelDialog(true)}
+                          className="cursor-pointer"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          <span>{t('microtubule.type.newLabel')}</span>
+                        </ContextMenuItem>
+                      </>
+                    )}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
+              )}
             </>
           )}
           {isPolyline && isSperm && onChangePartClass && (
@@ -183,9 +340,11 @@ const PolygonContextMenu = ({
           >
             <Trash className="mr-2 h-4 w-4" />
             <span>
-              {isPolyline
-                ? t('contextMenu.deletePolyline')
-                : t('contextMenu.deletePolygon')}
+              {hasTrack
+                ? t('contextMenu.deleteTrack')
+                : isPolyline
+                  ? t('contextMenu.deletePolyline')
+                  : t('contextMenu.deletePolygon')}
             </span>
           </ContextMenuItem>
         </ContextMenuContent>
@@ -195,10 +354,16 @@ const PolygonContextMenu = ({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {t('contextMenu.confirmDeletePolygon')}
+              {hasTrack
+                ? t('contextMenu.confirmDeleteTrack')
+                : t('contextMenu.confirmDeletePolygon')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('contextMenu.deletePolygonDescription')}
+              {hasTrack
+                ? t('contextMenu.deleteTrackDescription', {
+                    count: videoFrameCount ?? 0,
+                  })
+                : t('contextMenu.deletePolygonDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -215,6 +380,73 @@ const PolygonContextMenu = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog
+        open={showPropagateDialog}
+        onOpenChange={setShowPropagateDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('contextMenu.confirmPropagateTrack')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('contextMenu.propagateTrackDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onPropagate?.();
+                setShowPropagateDialog(false);
+              }}
+            >
+              {t('contextMenu.propagateTrack')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={showPropagateSelectedDialog}
+        onOpenChange={setShowPropagateSelectedDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('contextMenu.confirmPropagateSelected', {
+                count: multiSelectCount,
+              })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('contextMenu.propagateSelectedDescription', {
+                count: multiSelectCount,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onPropagateSelected?.();
+                setShowPropagateSelectedDialog(false);
+              }}
+            >
+              {t('contextMenu.propagateSelectedTracks', {
+                count: multiSelectCount,
+              })}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <MtTypeLabelDialog
+        open={showNewLabelDialog}
+        onOpenChange={setShowNewLabelDialog}
+        mode="create"
+        onConfirm={handleCreateAndAssign}
+      />
     </>
   );
 };

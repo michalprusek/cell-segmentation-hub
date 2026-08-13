@@ -86,6 +86,23 @@ export interface KymographServiceInput {
   /** Width (kymograph position columns) of the signal band sampled around each
    *  trajectory for the background-subtracted intensity metric. Default 3. */
   intensityWidth?: number;
+  /** When true, the ML service also renders one matplotlib line plot per frame
+   *  (intensity vs. position along the microtubule) and the result carries
+   *  ``profiles``. Used by the "intensity profiles" export mode. */
+  renderProfiles?: boolean;
+  /** Restrict the kymograph/profiles to these frame indices (the export image
+   *  selection). When omitted, every frame of the container is used (the editor
+   *  modal's full-kymograph behaviour). Frames not in the set are excluded from
+   *  the sampled matrix, so both the ML render cost and the output scope shrink
+   *  to the selection. */
+  frameFilter?: number[];
+}
+
+/** One per-frame intensity profile rendered as a matplotlib PNG. Mirrors the ML
+ *  ``ProfilePng`` (frame index + base64 PNG). */
+export interface KymographProfile {
+  frame: number;
+  pngBase64: string;
 }
 
 /** A sub-pixel trajectory sample: `[frame, xPosition]` along the polyline. */
@@ -134,6 +151,8 @@ export interface KymographServiceResult {
   velocityError?: string;
   /** Base64 PNG of the kymograph + tracks; present only with ``renderOverlay``. */
   overlayPngBase64?: string;
+  /** Per-frame intensity-profile plots; present only with ``renderProfiles``. */
+  profiles?: KymographProfile[];
 }
 
 /** Resolves the on-disk PNG path for a given frame + channel. */
@@ -177,7 +196,14 @@ export async function buildKymograph(
     detectVelocity,
     renderOverlay,
     intensityWidth,
+    renderProfiles,
+    frameFilter,
   } = input;
+
+  // Selected-frame scope (export image selection). A Set for O(1) membership;
+  // null means "all frames" (editor modal / unfiltered export).
+  const frameFilterSet =
+    frameFilter && frameFilter.length > 0 ? new Set(frameFilter) : null;
 
   // Defence in depth: reject any sourceChannel containing path separators
   // or other unsafe characters. The route layer also validates, but this
@@ -249,6 +275,8 @@ export async function buildKymograph(
 
   for (const f of allFrames) {
     if (f.frameIndex == null) continue;
+    // Restrict to the selected frames when the export passed a filter.
+    if (frameFilterSet && !frameFilterSet.has(f.frameIndex)) continue;
     let geometry: Array<{ x: number; y: number }> | null = null;
     if (trackedMode) {
       const polygons = parsePolygons(f.segmentation?.polygons ?? null);
@@ -300,6 +328,7 @@ export async function buildKymograph(
       ...(channelColor ? { channel_color: channelColor } : {}),
       ...(detectVelocity ? { detect_velocity: true } : {}),
       ...(detectVelocity && renderOverlay ? { render_overlay: true } : {}),
+      ...(renderProfiles ? { render_profiles: true } : {}),
     },
     { timeout: 120_000 }
   );
@@ -371,12 +400,24 @@ export async function buildKymograph(
       }))
     : undefined;
 
+  // Map per-frame intensity profiles (present only when renderProfiles was set).
+  // ML shape: [{ frame, png_base64 }]. Anything malformed degrades to undefined
+  // rather than throwing — profiles are an optional add-on.
+  const profiles: KymographProfile[] | undefined = Array.isArray(
+    payload.profiles
+  )
+    ? (payload.profiles as Array<{ frame: number; png_base64: string }>)
+        .filter(p => typeof p?.png_base64 === 'string')
+        .map(p => ({ frame: Number(p.frame), pngBase64: p.png_base64 }))
+    : undefined;
+
   logger.info('Kymograph generated', 'KymographService', {
     videoContainerId,
     polylineId,
     tracked: trackedMode,
     frames: framesPayload.length,
     velocityTracks: tracks?.length,
+    profiles: profiles?.length,
   });
 
   return {
@@ -397,5 +438,6 @@ export async function buildKymograph(
     ...(typeof payload.overlay_png_base64 === 'string'
       ? { overlayPngBase64: payload.overlay_png_base64 }
       : {}),
+    ...(profiles ? { profiles } : {}),
   };
 }

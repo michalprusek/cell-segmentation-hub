@@ -153,7 +153,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
     expect(mockWorksheet.addRow).not.toHaveBeenCalled();
   });
 
-  it('returns true and writes one row per sperm instance with exact lengths', async () => {
+  it('writes one row per instance with exact px lengths and px headers (no scale)', async () => {
     const result = await calculator.exportSpermToExcel(
       [buildImage('img1', 'a.png', [headPart(), midPart(), tailPart()])],
       outputPath
@@ -170,14 +170,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       tailLength: 5,
       totalLength: 12,
     });
-  });
-
-  it('uses px units in headers when no scale is provided', async () => {
-    await calculator.exportSpermToExcel(
-      [buildImage('img1', 'a.png', [headPart(), midPart(), tailPart()])],
-      outputPath
-    );
-
+    // Headers carry px units when no pixel scale is supplied.
     const headers = mockWorksheet.columns.map(c => c.header);
     expect(headers).toEqual([
       'Image Name',

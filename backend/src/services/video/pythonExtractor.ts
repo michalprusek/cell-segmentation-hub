@@ -168,11 +168,14 @@ function buildChannelMeta(
 export async function extractTiffStack(
   sourcePath: string,
   destDir: string,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  registerChannels = false
 ): Promise<ExtractionResult> {
   const result = await runHelper(
     'extract_tiff_stack.py',
-    [sourcePath, destDir],
+    registerChannels
+      ? [sourcePath, destDir, '--register-channels']
+      : [sourcePath, destDir],
     onProgress
   );
   const channels = buildChannelMeta(result.channels, true);
@@ -210,11 +213,14 @@ function toExtractionResult(r: PythonResult): ExtractionResult {
 export async function extractNd2(
   sourcePath: string,
   destDir: string,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  registerChannels = false
 ): Promise<ExtractionOutcome> {
   const raw = await runHelper<PythonNd2Result>(
     'extract_nd2.py',
-    [sourcePath, destDir],
+    registerChannels
+      ? [sourcePath, destDir, '--register-channels']
+      : [sourcePath, destDir],
     onProgress
   );
 
@@ -248,4 +254,34 @@ export async function extractNd2(
     channels: result.channels.length,
   });
   return { kind: 'single', result };
+}
+
+/** One (moving → reference → out) alignment job for {@link alignChannelFrames}. */
+export interface ChannelAlignJob {
+  /** Absolute path of the added channel's raster for one frame (moved). */
+  moving: string;
+  /** Absolute path of that frame's segmentation-source PNG (reference). */
+  reference: string;
+  /** Absolute destination path for the aligned raster. */
+  out: string;
+}
+
+/** Result of a batch alignment run: per-job integer shift + confidence. */
+export interface ChannelAlignResult {
+  aligned: number;
+  shifts: Array<[number, number, number]>;
+}
+
+/**
+ * Phase-correlate each added-channel frame onto its reference (the target
+ * frame's segmentation-source PNG) and write the losslessly-shifted result to
+ * ``out``. Reuses the same registration math as upload-time channel
+ * registration (``channel_registration.py``). The manifest is written to a
+ * temp file and its path passed to the helper (avoids CLI-length limits for
+ * hundreds of frames).
+ */
+export async function alignChannelFrames(
+  manifestPath: string
+): Promise<ChannelAlignResult> {
+  return runHelper<ChannelAlignResult>('add_channel_align.py', [manifestPath]);
 }

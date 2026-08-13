@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Polygon } from '@/lib/segmentation';
 import { motion } from 'framer-motion';
 import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
@@ -30,6 +31,17 @@ interface PolygonListPanelProps {
   onTogglePolygonVisibility?: (id: string) => void;
   onRenamePolygon?: (id: string, name: string) => void;
   onDeletePolygon?: (id: string) => void;
+  /**
+   * Multi-selection (per-row checkbox column). This mirrors the canvas
+   * selection set: a row is checked when it is the single selection
+   * (`selectedPolygonId`) OR a member of the Shift+left-click multi-select set
+   * (`selectedPolygonIds`). Toggling a checkbox drives the same bulk set that
+   * Shift+left-click on the canvas drives. Omit these props to hide the column.
+   */
+  selectedPolygonIds?: Set<string>;
+  onToggleSelected?: (id: string) => void;
+  onSelectAll?: (ids: string[]) => void;
+  onClearSelection?: () => void;
 }
 
 /**
@@ -44,6 +56,10 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   onTogglePolygonVisibility,
   onRenamePolygon,
   onDeletePolygon,
+  selectedPolygonIds = new Set<string>(),
+  onToggleSelected,
+  onSelectAll,
+  onClearSelection,
 }) => {
   const { t } = useLanguage();
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
@@ -56,6 +72,42 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   // buttons stay snappy. Only the list body lags one render — invisible
   // during fast updates.
   const deferredPolygons = useDeferredValue(polygons);
+
+  // Bulk visibility toggle. When every polygon/polyline in the list is
+  // already hidden, the control flips to "show all"; otherwise it hides the
+  // whole set. Iterating the per-item toggle is the only API we have — the
+  // current all-hidden state drives the direction so a single click reaches
+  // a consistent end-state without flicker between mixed states.
+  const allHidden =
+    polygons.length > 0 && polygons.every(p => hiddenPolygonIds.has(p.id));
+  const handleToggleAllVisibility = () => {
+    if (!onTogglePolygonVisibility) return;
+    for (const p of polygons) {
+      const isHidden = hiddenPolygonIds.has(p.id);
+      if (allHidden && isHidden) onTogglePolygonVisibility(p.id);
+      else if (!allHidden && !isHidden) onTogglePolygonVisibility(p.id);
+    }
+  };
+
+  // Multi-selection checkbox column. A row is "checked" when it is the single
+  // selection OR a member of the Shift+click multi-select set, so a plain
+  // left-click on the canvas also lights up its checkbox. The column is only
+  // shown when the parent wires the toggle handler.
+  const multiSelectEnabled = !!onToggleSelected;
+  const isRowSelected = (id: string) =>
+    id === selectedPolygonId || selectedPolygonIds.has(id);
+  const selectableIds = polygons.map(p => p.id);
+  const selectedCount = selectableIds.filter(isRowSelected).length;
+  const allSelected = polygons.length > 0 && selectedCount === polygons.length;
+  const headerCheckboxState: boolean | 'indeterminate' = allSelected
+    ? true
+    : selectedCount > 0
+      ? 'indeterminate'
+      : false;
+  const handleHeaderToggle = () => {
+    if (allSelected) onClearSelection?.();
+    else onSelectAll?.(selectableIds);
+  };
 
   const handleStartRename = (polygon: Polygon) => {
     setEditingPolygonId(polygon.id);
@@ -137,7 +189,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (loading) {
     return (
-      <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center dark:bg-gray-900">
+      <div className="w-full flex-1 min-h-[8rem] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center dark:bg-gray-900">
         <div className="text-gray-500">{t('common.loading')}</div>
       </div>
     );
@@ -145,7 +197,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (!polygons || polygons.length === 0) {
     return (
-      <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col dark:bg-gray-900">
+      <div className="w-full flex-1 min-h-[8rem] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col dark:bg-gray-900">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('segmentation.status.polygons')}
@@ -164,7 +216,12 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   }
 
   return (
-    <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col dark:bg-gray-900">
+    // min-h-[20rem]: when the sidebar also stacks Channels + Display + the MT
+    // instance panel (video/MT projects), this panel's flex-1 gets squeezed and
+    // the header (title + select-all row) ate almost all of the old 8rem, leaving
+    // ~1 visible row. A 20rem floor keeps ~6-7 rows scrollable; the whole sidebar
+    // column scrolls to reach the sections below.
+    <div className="w-full flex-1 min-h-[20rem] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col dark:bg-gray-900">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2 lg:mb-0">
@@ -172,58 +229,106 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
             {t('segmentation.status.polygonList')} ({polygons.length})
           </h3>
 
-          {/* Mobile polygon navigation - only visible on mobile */}
-          {polygons.length > 0 && (
-            <div className="flex items-center gap-1 lg:hidden">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const currentIndex = polygons.findIndex(
-                    p => p.id === selectedPolygonId
-                  );
-                  if (currentIndex > 0) {
-                    onSelectPolygon(polygons[currentIndex - 1].id);
-                  }
-                }}
-                disabled={
-                  !selectedPolygonId ||
-                  polygons.findIndex(p => p.id === selectedPolygonId) === 0
+          <div className="flex items-center gap-2">
+            {/* Bulk hide/show — mirrors the microtubule instance panel so
+                every list (polygons or polylines) has a one-click toggle. */}
+            {onTogglePolygonVisibility && polygons.length > 0 && (
+              <button
+                type="button"
+                onClick={handleToggleAllVisibility}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                title={
+                  allHidden
+                    ? t('microtubule.showAll')
+                    : t('microtubule.hideAll')
                 }
-                className="h-8 w-8 p-0"
               >
-                <ChevronUp className="h-4 w-4" />
-              </Button>
+                {allHidden ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+                <span>
+                  {allHidden
+                    ? t('microtubule.showAll')
+                    : t('microtubule.hideAll')}
+                </span>
+              </button>
+            )}
 
-              <span className="text-xs text-gray-500 dark:text-gray-400 min-w-[3rem] text-center">
-                {selectedPolygonId
-                  ? `${polygons.findIndex(p => p.id === selectedPolygonId) + 1}/${polygons.length}`
-                  : `0/${polygons.length}`}
-              </span>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const currentIndex = polygons.findIndex(
-                    p => p.id === selectedPolygonId
-                  );
-                  if (currentIndex < polygons.length - 1) {
-                    onSelectPolygon(polygons[currentIndex + 1].id);
+            {/* Mobile polygon navigation - only visible on mobile */}
+            {polygons.length > 0 && (
+              <div className="flex items-center gap-1 lg:hidden">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const currentIndex = polygons.findIndex(
+                      p => p.id === selectedPolygonId
+                    );
+                    if (currentIndex > 0) {
+                      onSelectPolygon(polygons[currentIndex - 1].id);
+                    }
+                  }}
+                  disabled={
+                    !selectedPolygonId ||
+                    polygons.findIndex(p => p.id === selectedPolygonId) === 0
                   }
-                }}
-                disabled={
-                  !selectedPolygonId ||
-                  polygons.findIndex(p => p.id === selectedPolygonId) ===
-                    polygons.length - 1
-                }
-                className="h-8 w-8 p-0"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+
+                <span className="text-xs text-gray-500 dark:text-gray-400 min-w-[3rem] text-center">
+                  {selectedPolygonId
+                    ? `${polygons.findIndex(p => p.id === selectedPolygonId) + 1}/${polygons.length}`
+                    : `0/${polygons.length}`}
+                </span>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const currentIndex = polygons.findIndex(
+                      p => p.id === selectedPolygonId
+                    );
+                    if (currentIndex < polygons.length - 1) {
+                      onSelectPolygon(polygons[currentIndex + 1].id);
+                    }
+                  }}
+                  disabled={
+                    !selectedPolygonId ||
+                    polygons.findIndex(p => p.id === selectedPolygonId) ===
+                      polygons.length - 1
+                  }
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Select-all row — toggles the whole visible list into the multi-select
+            set that Shift+left-click on the canvas also drives. */}
+        {multiSelectEnabled && polygons.length > 0 && (
+          <div className="flex items-center gap-2 mt-2">
+            <Checkbox
+              id="polygon-list-select-all"
+              checked={headerCheckboxState}
+              onCheckedChange={handleHeaderToggle}
+            />
+            <label
+              htmlFor="polygon-list-select-all"
+              className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none"
+            >
+              {selectedCount > 0
+                ? t('segmentation.selection.selected', { count: selectedCount })
+                : t('segmentation.selection.selectAll')}
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Polygon List */}
@@ -235,6 +340,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
         <div className="p-2 space-y-1">
           {deferredPolygons.map((polygon, index) => {
             const isSelected = selectedPolygonId === polygon.id;
+            const isChecked = isSelected || selectedPolygonIds.has(polygon.id);
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;
             const isPolyline = polygon.geometry === 'polyline';
@@ -265,6 +371,18 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
               >
                 <div className="p-3">
                   <div className="flex items-center gap-3">
+                    {/* Multi-select checkbox — stops propagation so it doesn't
+                        also trigger the row's single-select onClick. */}
+                    {multiSelectEnabled && (
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => onToggleSelected?.(polygon.id)}
+                        onClick={e => e.stopPropagation()}
+                        aria-label={polygonName}
+                        className="flex-shrink-0"
+                      />
+                    )}
+
                     {/* Color indicator */}
                     <div
                       className={`w-3 h-3 rounded-full ${getPolygonColor(polygon)}`}

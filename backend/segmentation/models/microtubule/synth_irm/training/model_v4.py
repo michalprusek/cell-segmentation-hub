@@ -32,10 +32,32 @@ class FilamentInstanceModelV4(nn.Module):
         use_positional: bool = True,   # v5 sets False — pos channels fragment long MTs
     ):
         super().__init__()
-        token = os.environ.get("HF_TOKEN") or open(
-            os.path.expanduser("~/.cache/huggingface/token")
-        ).read().strip()
-        self.backbone = AutoModel.from_pretrained(backbone_name, token=token)
+        # Backbone construction has two paths:
+        #   1. OFFLINE (env MT_BACKBONE_CONFIG=<dir with config.json>): build the
+        #      DINOv3 architecture from a bundled, non-gated config with RANDOM
+        #      weights. The caller is expected to immediately overwrite every
+        #      weight via load_state_dict() from the v7 checkpoint (which bundles
+        #      the full backbone). No HuggingFace token / download / network is
+        #      needed — this is what the batch essays evaluator uses.
+        #   2. ONLINE (default): download the gated pretrained backbone from
+        #      HuggingFace (needs HF_TOKEN + accepted DINOv3 license). This is
+        #      the path the interactive segmentation service takes.
+        offline_cfg = os.environ.get("MT_BACKBONE_CONFIG")
+        if offline_cfg:
+            from transformers import AutoConfig
+            cfg = AutoConfig.from_pretrained(offline_cfg)
+            self.backbone = AutoModel.from_config(cfg)
+        else:
+            token = os.environ.get("HF_TOKEN")
+            if not token:
+                # Absent token file is not fatal on its own — a cached backbone
+                # or a public model still loads. Crashing here on a missing file
+                # would turn a recoverable case into a hard failure.
+                _tok_file = os.path.expanduser("~/.cache/huggingface/token")
+                if os.path.exists(_tok_file):
+                    with open(_tok_file) as _fh:
+                        token = _fh.read().strip()
+            self.backbone = AutoModel.from_pretrained(backbone_name, token=token)
         self.backbone_name = backbone_name
         self.feat_dim = self.backbone.config.hidden_size
         self.patch_size = 16

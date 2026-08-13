@@ -41,6 +41,12 @@ interface ImageDisplayState {
   /** Per-channel opacity 0..100 (% of channel intensity contributed to
    *  the additive overlay). Missing entry = 100 (full intensity). */
   channelOpacities: Record<string, number>;
+  /** Per-channel frame coverage for PNG-backed channels added post-upload
+   *  (see addChannelService): channel name → frame Image ids it covers. A
+   *  channel absent from this map covers EVERY frame (the volume-backed
+   *  default). Lets the canvas + prefetcher skip requesting a channel for
+   *  frames it doesn't cover, so a partial channel produces no 404 noise. */
+  channelCoverage: Record<string, string[]>;
   /** Lower window cutoff (0..windowRangeMax) — pixels at/below this map to
    *  black. Same units as the source samples: 0..255 for 8-bit, 0..65535
    *  for 16-bit microscopy frames. */
@@ -73,6 +79,9 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   /** Replace the full visible-channel list (used when initialising from
    *  container metadata). */
   setVisibleChannels: (channels: string[]) => void;
+  /** Seed the per-channel frame coverage map (from container metadata).
+   *  Only PNG-backed partial channels appear here. */
+  setChannelCoverage: (coverage: Record<string, string[]>) => void;
   /** Set the display colour (hex `#RRGGBB`) for a single channel. Marks the
    *  channel as user-edited so a persisted pref cannot later overwrite it. */
   setChannelColor: (channel: string, color: string) => void;
@@ -109,6 +118,7 @@ const DEFAULT_STATE: ImageDisplayState = {
   visibleChannels: [],
   channelColors: {},
   channelOpacities: {},
+  channelCoverage: {},
   windowMin: 0,
   windowMax: 255,
   windowRangeMax: 255,
@@ -291,6 +301,13 @@ export function ImageDisplayProvider({
     setState(s => ({ ...s, visibleChannels: channels }));
   }, []);
 
+  const setChannelCoverage = useCallback(
+    (coverage: Record<string, string[]>) => {
+      setState(s => ({ ...s, channelCoverage: coverage }));
+    },
+    []
+  );
+
   const setChannelColor = useCallback((channel: string, color: string) => {
     userEditedColorsRef.current.add(channel);
     setState(s => ({
@@ -420,6 +437,7 @@ export function ImageDisplayProvider({
       setChannel,
       toggleChannelVisibility,
       setVisibleChannels,
+      setChannelCoverage,
       setChannelColor,
       seedChannelColors,
       setChannelOpacity,
@@ -439,6 +457,7 @@ export function ImageDisplayProvider({
       setChannel,
       toggleChannelVisibility,
       setVisibleChannels,
+      setChannelCoverage,
       setChannelColor,
       seedChannelColors,
       setChannelOpacity,

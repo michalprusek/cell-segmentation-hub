@@ -33,9 +33,9 @@ export function parseOptions(raw: unknown): EssayJobOptions {
     typeof v === 'number' && Number.isFinite(v) ? v : undefined;
   if (num(parsed.threshold) !== undefined) out.threshold = num(parsed.threshold);
   if (num(parsed.mtWidth) !== undefined) out.mtWidth = num(parsed.mtWidth);
-  if (num(parsed.bgGap) !== undefined) out.bgGap = num(parsed.bgGap);
-  if (num(parsed.bgWidth) !== undefined) out.bgWidth = num(parsed.bgWidth);
+  if (num(parsed.bgMargin) !== undefined) out.bgMargin = num(parsed.bgMargin);
   if (num(parsed.limitWells) !== undefined) out.limitWells = num(parsed.limitWells);
+  if (typeof parsed.irmName === 'string') out.irmName = parsed.irmName;
   if (typeof parsed.tirfName === 'string') out.tirfName = parsed.tirfName;
   if (typeof parsed.solutionName === 'string') out.solutionName = parsed.solutionName;
   if (typeof parsed.noOverlays === 'boolean') out.noOverlays = parsed.noOverlays;

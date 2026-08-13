@@ -3,7 +3,6 @@
 from .hrnet import HRNetV2
 from .cbam_resunet import ResUNetCBAM
 from .unet import UNet
-from .unet_attention import UNet as UNetAttention
 
 # Sperm model: optional import (loaded only when weights file is present)
 try:
@@ -52,6 +51,6 @@ except (ImportError, OSError) as _e:
     )
     UMamba = None
 
-__all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'UNetAttention', 'SpermModel',
+__all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'SpermModel',
            'WoundModel', 'MicrotubuleModel', 'SegFormerModel', 'UMamba',
            'MicrocapsuleModel']

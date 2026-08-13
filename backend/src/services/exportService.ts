@@ -5,6 +5,7 @@ import archiver from 'archiver';
 import sharp from 'sharp';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import { getLabels as getMtTypeLabels } from './mtTypeLabelService';
 import { logger } from '../utils/logger';
 import { VisualizationGenerator } from './visualization/visualizationGenerator';
 import {
@@ -27,12 +28,15 @@ import {
   generateMetricsGuide,
   generateAnnotationGuides,
 } from './export/exportDocs';
-import { coerceProjectType } from '../types/validation';
 import {
-  MICROTUBULE_LABEL_PREFIX,
+  coerceProjectType,
+  isMicrotubuleProject as isMicrotubuleProjectType,
+} from '../types/validation';
+import {
   SPERM_LABEL_PREFIX,
   type InstanceLabelPrefix,
 } from '../utils/instanceLabels';
+import { polylineSemanticsForProjectType } from '../utils/polylineSemantics';
 import {
   sanitizeFilename,
   getProgressMessage,
@@ -43,14 +47,24 @@ import {
   computeMTGeometry,
   writeMTMetrics,
   type MTMetricsRow,
+  type MTChannelSummaryRow,
 } from './export/mtMetricsExporter';
 import {
   exportMicrotubuleKymographs,
   type MTKymographOptions,
 } from './export/mtKymographExporter';
-import { exportImageJRois } from './export/imagejRoiEncoder';
+import { exportImageJRoiSets } from './export/imagejRoiEncoder';
+import { exportCvatAnnotations } from './export/cvatExporter';
 
 const YOLO_WRITE_CONCURRENCY = 16;
+
+/**
+ * Default microtubule thickness (px) written as the ImageJ ROI stroke width when
+ * the export request carries no `mtMetrics.thicknessPx` (the ROI export is
+ * always-on for MT projects, but the MT-metrics block is optional). Matches the
+ * export dialog's own thickness-slider default so the two never disagree.
+ */
+const DEFAULT_MT_ROI_THICKNESS_PX = 5;
 
 export interface ExportOptions {
   includeOriginalImages?: boolean;
@@ -73,17 +87,26 @@ export interface ExportOptions {
   /**
    * Microtubule-only export options. For ``microtubules`` projects the MT
    * metrics exporter owns the standard ``metrics.{csv,xlsx,json}`` files:
-   * microtubule length is always written (geometry, no channel needed), and
-   * when ``enabled`` with one or more ``channels`` selected, the pipeline
-   * re-reads the original ND2/TIFF to add per-channel intensity + band-area
-   * columns derived from raw 16-bit signal (NOT the 8-bit display-normalised
-   * per-channel PNGs).
+   * microtubule length is always written (geometry, no channel needed), and the
+   * pipeline ALWAYS re-reads the original ND2/TIFF to add per-channel intensity
+   * + band-area columns (incl. the integrated ``sumIntensity``) for every
+   * channel, derived from raw 16-bit signal (NOT the 8-bit display-normalised
+   * per-channel PNGs). There is no opt-in — ``thicknessPx`` / ``marginMultiplier``
+   * only tune the band. All fields are optional for direct API callers.
    */
   mtMetrics?: {
-    enabled: boolean;
-    thicknessPx: number;
-    marginMultiplier: number;
-    channels: string[];
+    /**
+     * @deprecated Ignored — per-channel intensity is always computed for MT
+     * projects. Retained only for wire-compat with older clients.
+     */
+    enabled?: boolean;
+    thicknessPx?: number;
+    marginMultiplier?: number;
+    /**
+     * Optional channel subset (machine names). Empty or absent => ALL channels
+     * of each video container are sampled.
+     */
+    channels?: string[];
   };
   /**
    * Microtubule-only kymograph export. For ``microtubules`` projects, builds a
@@ -504,16 +527,19 @@ export class ExportService {
         );
       }
 
+      // Whether this is a microtubule project — drives which exporters run
+      // (skip standard annotations/metrics, add MT-metrics/kymograph/ImageJ/CVAT).
+      const isMicrotubuleProject = isMicrotubuleProjectType(project.type);
+
       // Generate visualizations (can run in parallel)
       if (options.includeVisualizations && project.images) {
         const visualizationProgressBase = 5 + progressStep * progressIncrement;
-        // Microtubule polylines reuse the sperm labeller, so badge them "MT1"
-        // instead of the sperm "S1". The MT metrics table is labelled with the
-        // same prefix so rows can be matched to badges on the image.
+        // The per-instance badge prefix follows the PROJECT type (S=sperm,
+        // MT=microtubule, P=generic) — a polyline is a generic primitive, not a
+        // sperm one. The MT metrics table uses the same prefix so spreadsheet
+        // rows match the badges drawn on the image.
         const labelPrefix =
-          (project.type ?? '') === 'microtubules'
-            ? MICROTUBULE_LABEL_PREFIX
-            : SPERM_LABEL_PREFIX;
+          polylineSemanticsForProjectType(project.type).labelPrefix;
         exportTasks.push(
           this.generateVisualizations(
             project.images as ImageWithSegmentation[],
@@ -542,8 +568,16 @@ export class ExportService {
         );
       }
 
-      // Generate annotations (can run in parallel)
-      if (options.annotationFormats?.length && project.images) {
+      // Generate annotations (can run in parallel). COCO/YOLO/JSON express
+      // class only as a flat category and do not suit per-instance polyline
+      // tracks, so they are NOT emitted for microtubule projects — MT annotation
+      // export is ImageJ RoiSet + CVAT (both always-on, below), each of which
+      // carries the tubulin type class natively.
+      if (
+        !isMicrotubuleProject &&
+        options.annotationFormats?.length &&
+        project.images
+      ) {
         const annotationProgressBase = 5 + progressStep * progressIncrement;
         exportTasks.push(
           this.generateAnnotations(
@@ -560,7 +594,8 @@ export class ExportService {
                 current,
                 total,
               });
-            }
+            },
+            project.type
           ).then(() => {
             progressStep++;
             this.updateJobProgress(
@@ -596,10 +631,9 @@ export class ExportService {
       // no area). Runs whenever metrics are requested for an MT project, not
       // just when the intensity section is on: it always writes microtubule
       // LENGTH (geometry, no channel needed) and adds per-channel intensity
-      // columns only when a channel was selected. ProjectType is
-      // `'microtubules'` (plural) — `'microtubule'` is the model id.
+      // columns only when a channel was selected.
       if (
-        (project.type ?? '') === 'microtubules' &&
+        isMicrotubuleProject &&
         options.metricsFormats?.length &&
         project.images?.length
       ) {
@@ -614,34 +648,57 @@ export class ExportService {
       }
 
       // MT kymographs (segmented images + velocity metrics) — MT projects only.
-      if (
-        (project.type ?? '') === 'microtubules' &&
-        options.mtKymographs?.enabled
-      ) {
+      if (isMicrotubuleProject && options.mtKymographs?.enabled) {
         exportTasks.push(
           exportMicrotubuleKymographs(
             project.id,
             exportDir,
-            options.mtKymographs
+            options.mtKymographs,
+            // Scope kymographs/profiles to the selected frames, like the other
+            // MT exporters (which already scope via the filtered project.images).
+            options.selectedImageIds
           )
         );
       }
 
-      // ImageJ ROI files — ALWAYS bundled for MT projects (no toggle) so
+      // ImageJ ROI export — ALWAYS bundled for MT projects (no toggle) so
       // biologists can re-open microtubule polylines in ImageJ / Fiji
-      // (RoiManager, kymograph plugins). Written as loose `.roi` files grouped
-      // per frame under `annotations/imagej/<video>/frame_NNNN/`, named by
-      // cross-frame trackId when tracking ran. Independent of the selected
-      // annotation formats. Because this is always-on (the user did not opt in),
-      // a failure must NOT sink the whole export they did request: it degrades
-      // to a warning. Only a genuine cancellation stays fatal.
-      if ((project.type ?? '') === 'microtubules' && project.images?.length) {
+      // (RoiManager, kymograph plugins). Written as one `RoiSet.zip` per video
+      // under `annotations/imagej/<video>_RoiSet.zip`; each ROI is placed on its
+      // own stack slice and coloured per cross-frame trackId (matching the
+      // editor). Independent of the selected annotation formats. Because this is
+      // always-on (the user did not opt in), a failure must NOT sink the whole
+      // export they did request: it degrades to a warning. Only a genuine
+      // cancellation stays fatal.
+      if (isMicrotubuleProject && project.images?.length) {
+        // MT thickness (px) → ImageJ ROI stroke width (the signal band). The
+        // background band ROI is drawn at the vicinity width
+        // (thickness + 2*margin) — the same region the metrics step samples the
+        // per-MT background from. `mtMetrics` is optional (ROI export is
+        // always-on), so fall back to the slider defaults (thickness 5,
+        // margin 2).
+        const mtThicknessPx =
+          options.mtMetrics?.thicknessPx && options.mtMetrics.thicknessPx > 0
+            ? options.mtMetrics.thicknessPx
+            : DEFAULT_MT_ROI_THICKNESS_PX;
+        const mtMarginMultiplier = options.mtMetrics?.marginMultiplier ?? 2;
+        const mtBackgroundStrokeWidth =
+          mtThicknessPx + 2 * Math.round(mtThicknessPx * mtMarginMultiplier);
         exportTasks.push(
-          exportImageJRois(
+          exportImageJRoiSets(
             project.images as ImageWithSegmentation[],
             exportDir,
             project.id,
-            { shouldAbort: () => this.isJobCancelled(jobId) }
+            {
+              shouldAbort: () => this.isJobCancelled(jobId),
+              strokeWidth: mtThicknessPx,
+              backgroundStrokeWidth: mtBackgroundStrokeWidth,
+              // Fetch exact per-MT background COMPOSITE ROIs (vicinity ring with
+              // every MT cut out) from ML; backgroundStrokeWidth stays as the
+              // fallback band if that request fails.
+              thicknessPx: mtThicknessPx,
+              marginMultiplier: mtMarginMultiplier,
+            }
           )
             .then(result => {
               if (result.warnings.length) {
@@ -667,6 +724,46 @@ export class ExportService {
                 job.warnings = [
                   ...(job.warnings ?? []),
                   'ImageJ ROI export could not be completed; the rest of the export is unaffected.',
+                ];
+              }
+            })
+        );
+      }
+
+      // CVAT-for-images 1.1 export — ALWAYS bundled for MT projects (like the
+      // ImageJ RoiSet). One `annotations/cvat/<video>.xml` per video, each
+      // polyline labelled with its tubulin type class. Non-fatal on failure.
+      if (isMicrotubuleProject && project.images?.length) {
+        exportTasks.push(
+          exportCvatAnnotations(
+            project.images as ImageWithSegmentation[],
+            exportDir,
+            project.id,
+            { shouldAbort: () => this.isJobCancelled(jobId) }
+          )
+            .then(result => {
+              if (result.warnings.length) {
+                const job = this.exportJobs.get(jobId);
+                if (job) {
+                  job.warnings = [...(job.warnings ?? []), ...result.warnings];
+                }
+              }
+            })
+            .catch(error => {
+              if (this.isJobCancelled(jobId)) {
+                throw error;
+              }
+              logger.error(
+                'CVAT export failed (non-fatal; rest of export continues)',
+                error instanceof Error ? error : new Error(String(error)),
+                'ExportService',
+                { jobId, projectId: project.id }
+              );
+              const job = this.exportJobs.get(jobId);
+              if (job) {
+                job.warnings = [
+                  ...(job.warnings ?? []),
+                  'CVAT export could not be completed; the rest of the export is unaffected.',
                 ];
               }
             })
@@ -1086,7 +1183,8 @@ export class ExportService {
     exportDir: string,
     formats: string[],
     jobId?: string,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    projectType?: string | null
   ): Promise<void> {
     for (const format of formats) {
       // Check if job was cancelled before processing each format
@@ -1117,7 +1215,7 @@ export class ExportService {
         }));
 
         const { data: cocoData, parseFailures: cocoFailures } =
-          await this.formatConverter.convertToCOCO(imageDataArray);
+          await this.formatConverter.convertToCOCO(imageDataArray, projectType);
         await fs.writeFile(
           path.join(formatDir, 'annotations.json'),
           JSON.stringify(cocoData, null, 2)
@@ -1213,7 +1311,7 @@ export class ExportService {
         }));
 
         const { data: jsonData, parseFailures: jsonFailures } =
-          await this.formatConverter.convertToJSON(imageDataArray);
+          await this.formatConverter.convertToJSON(imageDataArray, projectType);
         await fs.writeFile(
           path.join(formatDir, 'segmentation_data.json'),
           JSON.stringify(jsonData, null, 2)
@@ -1251,7 +1349,7 @@ export class ExportService {
     // intensity exporter (`generateMTIntensityMetrics`) writes the
     // metrics.{csv,xlsx,json} files for MT projects instead. Skip here to
     // avoid emitting empty files and racing the MT writer on the same paths.
-    if (projectType === 'microtubules') {
+    if (isMicrotubuleProjectType(projectType)) {
       logger.info(
         'Microtubule project: standard polygon metrics skipped; the MT intensity exporter owns the metrics files',
         'ExportService',
@@ -1494,12 +1592,13 @@ export class ExportService {
    * because MT annotations are open polylines with no area).
    *
    * Always writes microtubule LENGTH per (frame, polyline) — geometry only,
-   * computed Node-side from the stored polylines, no channel needed. When the
-   * user selected one or more channels it additionally re-reads the original
-   * ND2/TIFF via the ML `/mt-metrics` route to add per-channel intensity +
-   * band-area columns. If intensity can't be produced (no channel chosen, ML
-   * error, or original file missing) it falls back to length-only and records
-   * a user-facing warning rather than silently emitting nothing.
+   * computed Node-side from the stored polylines, no channel needed. It ALSO
+   * always re-reads the original ND2/TIFF via the ML `/mt-metrics` route to add
+   * per-channel intensity + band-area columns (incl. the integrated
+   * `sumIntensity`) for every channel — there is no opt-in. If intensity can't
+   * be produced (ML error, or the original file is missing / has no channel
+   * metadata) it falls back to length-only and records a user-facing warning
+   * rather than silently emitting nothing.
    */
   private async generateMicrotubuleMetrics(
     images: ImageWithSegmentation[],
@@ -1518,6 +1617,7 @@ export class ExportService {
     const scale = options.pixelToMicrometerScale ?? null;
     const frameInputs = images.map(i => ({
       id: i.id,
+      name: i.name,
       parentVideoId: i.parentVideoId ?? null,
       frameIndex: i.frameIndex ?? null,
       isVideoContainer: i.isVideoContainer,
@@ -1525,9 +1625,16 @@ export class ExportService {
         ? { polygons: i.segmentation.polygons }
         : null,
     }));
-    const channels = options.mtMetrics?.enabled
-      ? options.mtMetrics.channels ?? []
-      : [];
+    // Per-channel intensity (incl. the integrated sum) is ALWAYS computed for
+    // MT exports — there is no opt-in. An empty channel list means "all
+    // channels of each container" (see computeMTMetrics); the modal no longer
+    // asks the user to enable this or pick channels. Band thickness / margin
+    // still come from the modal, falling back to sensible defaults for direct
+    // API callers.
+    const channels = options.mtMetrics?.channels ?? [];
+    const thicknessPx =
+      options.mtMetrics?.thicknessPx ?? DEFAULT_MT_ROI_THICKNESS_PX;
+    const marginMultiplier = options.mtMetrics?.marginMultiplier ?? 2;
 
     const addWarning = (msg: string) => {
       if (!jobId) return;
@@ -1536,43 +1643,48 @@ export class ExportService {
     };
 
     let rows: MTMetricsRow[] = [];
+    // Whole-video per-channel totals (independent of the MTs) → second sheet /
+    // companion file. Empty on the geometry-only fallback.
+    let channelSummaries: MTChannelSummaryRow[] = [];
     let intensityIncluded = false;
 
-    if (channels.length > 0) {
-      try {
-        const mtResult = await computeMTMetrics(frameInputs, projectId, {
-          thicknessPx: options.mtMetrics!.thicknessPx,
-          marginMultiplier: options.mtMetrics!.marginMultiplier,
-          channels,
-          pixelToMicrometerScale: scale,
-        });
-        rows = mtResult.rows;
-        for (const reason of mtResult.skipped) {
-          addWarning(`MT intensity metrics skipped: ${reason}`);
-        }
-        intensityIncluded = rows.length > 0;
-      } catch (err) {
-        logger.error(
-          'MT intensity metrics failed; falling back to length-only',
-          err instanceof Error ? err : new Error(String(err)),
-          'ExportService',
-          { jobId, projectId }
-        );
-        addWarning(
-          'Per-channel signal-intensity metrics could not be computed (the original ND2/TIFF was unreadable or the ML service failed). The metrics file contains microtubule length only.'
-        );
-        rows = [];
+    try {
+      const mtResult = await computeMTMetrics(frameInputs, projectId, {
+        thicknessPx,
+        marginMultiplier,
+        channels,
+        pixelToMicrometerScale: scale,
+      });
+      rows = mtResult.rows;
+      channelSummaries = mtResult.channelSummaries ?? [];
+      for (const reason of mtResult.skipped) {
+        addWarning(`MT intensity metrics skipped: ${reason}`);
       }
+      intensityIncluded = rows.length > 0;
+    } catch (err) {
+      logger.error(
+        'MT intensity metrics failed; falling back to length-only',
+        err instanceof Error ? err : new Error(String(err)),
+        'ExportService',
+        { jobId, projectId }
+      );
+      addWarning(
+        'Per-channel signal-intensity metrics could not be computed (the original ND2/TIFF was unreadable or the ML service failed). The metrics file contains microtubule length only.'
+      );
+      rows = [];
     }
 
-    // Geometry-only fallback: no channel chosen, or intensity failed / empty.
+    // Geometry-only fallback: intensity failed or produced nothing (e.g. no
+    // channel metadata stored, or the ML service was unavailable). Microtubule
+    // LENGTH needs no channel, so it is always exportable.
     if (!intensityIncluded) {
-      rows = computeMTGeometry(frameInputs, scale);
-      if (channels.length === 0) {
-        addWarning(
-          'Per-channel signal-intensity metrics were not exported because no channel was selected. The metrics file contains microtubule length only — enable "Calculate signal intensity for each channel" and pick a channel to include intensity.'
-        );
+      // Resolve the project's type-label palette (id → class name) so the
+      // geometry-only rows still carry the tubulin class column.
+      const mtTypeNameById = new Map<string, string>();
+      for (const label of await getMtTypeLabels(projectId)) {
+        mtTypeNameById.set(label.id, label.name);
       }
+      rows = computeMTGeometry(frameInputs, scale, mtTypeNameById);
     }
 
     if (!rows.length) {
@@ -1588,11 +1700,18 @@ export class ExportService {
     }
 
     const metricsDir = path.join(exportDir, 'metrics');
-    await writeMTMetrics(rows, metricsDir, formats);
+    await writeMTMetrics(rows, metricsDir, formats, channelSummaries);
     logger.info(
       'MT metrics: wrote files',
       'ExportService',
-      { jobId, projectId, rows: rows.length, intensityIncluded, formats }
+      {
+        jobId,
+        projectId,
+        rows: rows.length,
+        channelSummaries: channelSummaries.length,
+        intensityIncluded,
+        formats,
+      }
     );
   }
 

@@ -6,6 +6,8 @@ import {
   Loader2,
   FolderPlus,
   Plus,
+  Eraser,
+  Layers,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -37,12 +39,6 @@ interface ProjectToolbarProps {
   projectName?: string;
   projectType?: string | null;
   images?: unknown[];
-  /** Distinct channel names across the project's video containers
-   *  (BE-aggregated `metadata.projectChannels`). Drives the microtubule
-   *  per-channel intensity picker in the export dialog — the container rows
-   *  that carry `channels` are hidden from the gallery image list, so this
-   *  is the only path that list to the dialog. */
-  projectChannels?: string[];
   selectedImageIds?: string[];
   // Selection props
   selectedCount?: number;
@@ -50,6 +46,13 @@ interface ProjectToolbarProps {
   isPartiallySelected?: boolean;
   onSelectAllToggle?: () => void;
   onBatchDelete?: () => void;
+  /** Delete segmentation annotations for the selected images (keeps images). */
+  onDeleteAnnotations?: () => void;
+  /** Add an extra channel to the selected frames. Rendered only for
+   *  microtubule projects (see canAddChannel). */
+  onAddChannel?: () => void;
+  /** Gate for the "Add channel" button — true only for microtubule projects. */
+  canAddChannel?: boolean;
   showSelectAll?: boolean;
   // Export state callbacks
   onExportingChange?: (isExporting: boolean) => void;
@@ -78,13 +81,15 @@ const ProjectToolbar = ({
   projectName = 'Project',
   projectType,
   images = [],
-  projectChannels,
   selectedImageIds,
   selectedCount = 0,
   isAllSelected = false,
   isPartiallySelected = false,
   onSelectAllToggle,
   onBatchDelete,
+  onDeleteAnnotations,
+  onAddChannel,
+  canAddChannel = false,
   showSelectAll = false,
   onExportingChange,
   onDownloadingChange,
@@ -176,6 +181,28 @@ const ProjectToolbar = ({
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('project.selected', { count: selectedCount })}
             </span>
+            {canAddChannel && onAddChannel && (
+              <Button
+                onClick={onAddChannel}
+                size="sm"
+                variant="outline"
+                className="ml-2"
+              >
+                <Layers className="h-4 w-4 mr-1" />
+                {t('project.addChannel')}
+              </Button>
+            )}
+            {onDeleteAnnotations && (
+              <Button
+                onClick={onDeleteAnnotations}
+                size="sm"
+                variant="outline"
+                className="ml-2"
+              >
+                <Eraser className="h-4 w-4 mr-1" />
+                {t('project.deleteAnnotations')}
+              </Button>
+            )}
             <Button
               onClick={onBatchDelete}
               size="sm"
@@ -409,7 +436,6 @@ const ProjectToolbar = ({
           projectName={projectName}
           projectType={projectType ?? null}
           images={images}
-          projectChannels={projectChannels}
           selectedImageIds={selectedImageIds}
           onExportingChange={onExportingChange || setIsExporting}
           onDownloadingChange={onDownloadingChange || setIsDownloading}

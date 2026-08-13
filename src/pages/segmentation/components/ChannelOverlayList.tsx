@@ -49,6 +49,7 @@ export function ChannelOverlayList({
     channelOpacities,
     toggleChannelVisibility,
     setVisibleChannels,
+    setChannelCoverage,
     setChannelColor,
     seedChannelColors,
     setChannelOpacity,
@@ -76,6 +77,17 @@ export function ChannelOverlayList({
     );
     const seg = channels.find(c => c.isSegmentationSource)?.name;
     if (seg) setChannel(seg);
+    // Frame coverage for PNG-backed channels added post-upload. Only channels
+    // that cover a subset of frames carry `frameIds`; full-coverage channels
+    // are absent from the map (= always shown). The canvas + prefetcher use
+    // this to skip requesting a channel for frames it doesn't cover.
+    const coverage: Record<string, string[]> = {};
+    for (const c of channels) {
+      if (Array.isArray(c.frameIds) && c.frameIds.length > 0) {
+        coverage[c.name] = c.frameIds;
+      }
+    }
+    setChannelCoverage(coverage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels]);
 
@@ -109,13 +121,13 @@ export function ChannelOverlayList({
     }
     setRenameSubmitting(true);
     try {
+      // Spread the original channel so added-channel metadata (pngBacked +
+      // frameIds coverage) survives the rename — rebuilding field-by-field
+      // would silently strip them and make the whole video re-request the
+      // channel on every frame.
       const updated = channels.map(c => ({
-        name: c.name,
+        ...c,
         displayName: c.name === channelName ? trimmed : c.displayName,
-        type: c.type,
-        wavelengthNm: c.wavelengthNm,
-        displayColor: c.displayColor,
-        isSegmentationSource: c.isSegmentationSource,
       }));
       await apiClient.updateImageChannels(containerId, updated);
       // Invalidate the video container query so the new displayName

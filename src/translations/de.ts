@@ -341,6 +341,7 @@ export default {
       deleteProject:
         'Das Projekt kann nicht gelöscht werden. Stellen Sie sicher, dass Sie die erforderlichen Berechtigungen haben.',
     },
+    deleteAnnotations: 'Anmerkungen konnten nicht gelöscht werden',
     deleteImages: 'Fehler beim Löschen der ausgewählten Bilder',
     contexts: {
       dashboard: 'Dashboard-Fehler',
@@ -374,6 +375,12 @@ export default {
     viewResults: 'Ergebnisse anzeigen',
     dropImagesHere: 'Dateien hier ablegen...',
     selectProjectFirst: 'Bitte wählen Sie zuerst ein Projekt aus',
+    registerChannels: {
+      promptTitle: 'Kanäle registrieren?',
+      help: 'Korrigiert beim Hochladen kleine Verschiebungen zwischen Kanälen, indem jeder am ersten ausgerichtet wird (nur Translation).',
+      confirm: 'Registrieren & hochladen',
+      decline: 'Ohne Registrierung hochladen',
+    },
     projectRequired:
       'Sie müssen ein Projekt auswählen, bevor Sie Bilder hochladen können',
     pending: 'Ausstehend',
@@ -485,10 +492,10 @@ export default {
           description:
             'Beste Leistung auf SpheroHQ-Datensatz - optimiert für Sphäroid-Segmentierung mit ausgewogener Geschwindigkeit und Genauigkeit (~0.25s/Bild, 10 Bilder/s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Sphäroid-Zerfall',
           description:
-            'Erweitertes UNet mit Attention Gates und ASPP zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (~0.35s/Bild)',
+            'UNet++ mit EfficientNet-B5-Encoder — 3-Klassen-Segmentierung (Hintergrund / Korona / dichter Kern) zerfallender Sphäroide; sagt den Kern direkt für einen korrekten Zerfallsindex voraus (~0.7s/Bild)',
         },
         segformer: {
           name: 'SegFormer',
@@ -539,8 +546,8 @@ export default {
         'Präziseste Segmentierung mit Aufmerksamkeitsmechanismen (E2E ~482ms, 2.7 Bilder/s)',
       unet_spherohq:
         'Schnellstes Modell nach Optimierungen! Hervorragend für Echtzeitverarbeitung (E2E ~286ms, 5.5 Bilder/s)',
-      unet_attention_aspp:
-        'Erweitertes UNet mit Attention Gates und ASPP-Bottleneck zur Erkennung zerfallender Sphäroide und kleiner Satellitenzellen (35,5M Parameter)',
+      spheroid_disintegration:
+        'UNet++ / EfficientNet-B5-Modell mit 3 Klassen (Hintergrund / Korona / Kern) für zerfallende Sphäroide; sagt den dichten Kern direkt für einen korrekten Zerfallsindex voraus (30,7M Parameter)',
       segformer:
         'Transformer-basiertes SegFormer-B0-Modell, trainiert auf dem SpheroMix-Datensatz. Höchste Sphäroid-Genauigkeit der Plattform (93% IoU) bei gleichzeitig kleinstem und schnellstem Modell (~13 ms/Bild).',
       mamba_unet:
@@ -771,6 +778,20 @@ export default {
     },
   },
   segmentation: {
+    selection: {
+      selectAll: 'Alle auswählen',
+      deselectAll: 'Auswahl aufheben',
+      selected: '{{count}} ausgewählt',
+    },
+    trackOps: {
+      propagateSelectedSuccess:
+        '{{count}} Mikrotubuli in die folgenden Frames übertragen',
+      propagateSelectedPartial: '{{done}} von {{total}} Mikrotubuli übertragen',
+      propagateSuccess: 'Mikrotubulus in {{count}} folgende Frames übertragen',
+      propagateFailed: 'Übertragung des Mikrotubulus fehlgeschlagen',
+      deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
+      deleteTrackFailed: 'Löschen des Tracks fehlgeschlagen',
+    },
     modelNotCompatible:
       'Modell "{{model}}" ist nicht mit dem Projekttyp "{{type}}" kompatibel. Erlaubt: {{allowed}}.',
     incompatibleModelTitle: 'Mit diesem Modell kann nicht segmentiert werden',
@@ -971,13 +992,25 @@ export default {
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
       },
+      createPolyline: {
+        start: 'Klicken Sie, um den ersten Punkt des Mikrotubulus zu setzen',
+        finish: 'Mit Enter oder Doppelklick abschließen',
+        holdShift: 'SHIFT halten, um Punkte automatisch hinzuzufügen',
+        cancel: 'ESC zum Abbrechen drücken',
+      },
       addPoints: {
         clickVertex:
           'Klicken Sie auf einen beliebigen Eckpunkt, um mit dem Hinzufügen von Punkten zu beginnen',
+        clickVertexMt:
+          'Klicken Sie auf ein Mikrotubulus-Ende, um es zu verlängern',
+        addPointsMt:
+          'Klicken zum Hinzufügen von Punkten, dann Enter zum Abschließen',
         addPoints:
           'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen. Klicken Sie direkt auf einen anderen Eckpunkt ohne Punkte hinzuzufügen, um alle Punkte dazwischen zu entfernen.',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
+        joinHint:
+          'Klicke auf den Endpunkt einer anderen Polylinie derselben Klasse, um sie zu verbinden',
       },
       editVertices: {
         selectPolygon:
@@ -997,6 +1030,7 @@ export default {
       modes: {
         slice: 'Schnitt-Modus',
         create: 'Polygon-Erstellungs-Modus',
+        createPolyline: 'Mikrotubulus-Erstellmodus',
         addPoints: 'Punkte-Hinzufüge-Modus',
         editVertices: 'Eckpunkt-Bearbeitungs-Modus',
         deletePolygon: 'Polygon-Lösch-Modus',
@@ -1166,6 +1200,43 @@ export default {
     selected: '{{count}} Bild ausgewählt',
     selected_other: '{{count}} Bilder ausgewählt',
     deleteSelected: 'Ausgewählte löschen',
+    deleteAnnotations: 'Anmerkungen löschen',
+    addChannel: 'Kanal hinzufügen',
+    addChannelSuccess: 'Kanal {{channels}} zu {{frames}} Bild(ern) hinzugefügt',
+    addChannelFailed: 'Kanal konnte nicht hinzugefügt werden',
+    addChannelDialog: {
+      title: 'Kanal hinzufügen',
+      description:
+        'Fügen Sie den ausgewählten Bildern einen zusätzlichen Kanal hinzu, indem Sie ein Video/Stapel mit gleicher Bildanzahl oder ein einzelnes Bild hochladen, das auf jedes ausgewählte Bild angewendet wird.',
+      selectionSummary:
+        '{{frames}} Bild(er) in {{videos}} Video(s) ausgewählt.',
+      sourceLabel: 'Quelldatei (Video / Stapel / Bild)',
+      dropPrompt: 'Datei hierher ziehen und ablegen oder klicken zum Auswählen',
+      dropInvalidType: 'Nicht unterstützter Dateityp.',
+      dropTooManyFiles: 'Es kann nur eine Datei auf einmal hinzugefügt werden.',
+      removeFile: 'Datei entfernen',
+      imageHint: 'Einzelnes Bild → wird auf jedes ausgewählte Bild angewendet.',
+      videoHint:
+        'Video/Stapel → muss genau {{frames}} Bild(er) haben und zu einem einzigen Video gehören.',
+      nameLabel: 'Kanalname',
+      namePlaceholder: 'z. B. GFP',
+      alignLabel: 'Am Segmentierungskanal ausrichten',
+      alignHint:
+        'Phasenkorrelations-Registrierung, die eine kleine Tischdrift korrigiert.',
+      multiVideoError:
+        'Ein Video/Stapel kann nur zu Bildern eines einzigen Videos hinzugefügt werden. Wählen Sie Bilder aus einem Video oder laden Sie ein einzelnes Bild hoch.',
+      uploading: 'Wird hochgeladen… {{percent}} %',
+      adding: 'Wird hinzugefügt…',
+      confirm: 'Kanal hinzufügen',
+    },
+    annotationsDeleted: 'Anmerkungen für {{count}} Bild(er) gelöscht',
+    annotationsDeleteFailed:
+      'Anmerkungen für {{count}} Bild(er) konnten nicht gelöscht werden',
+    deleteAnnotationsDialog: {
+      title: 'Anmerkungen löschen?',
+      description:
+        'Dies löscht die Segmentierungsanmerkungen für {{count}} ausgewählte Bild(er). Die Bilder bleiben erhalten, ihre Segmentierungsergebnisse werden jedoch entfernt. Dies kann nicht rückgängig gemacht werden.',
+    },
     imagesDeleted: '{{count}} Bild gelöscht',
     imagesDeleted_other: '{{count}} Bilder gelöscht',
   },
@@ -1177,27 +1248,25 @@ export default {
       enable: 'Kymograph-Analyse einbeziehen',
       velocityMetrics: 'Geschwindigkeitsmetriken (CSV)',
       segmentedImages: 'Segmentierte Kymograph-Bilder (PNG)',
+      modeKymograph: 'Kymograph (Raum × Zeit)',
+      modeProfiles: 'Intensitätsprofile (pro Bild)',
+      singleFrameHint:
+        'Einzelbild — ein Kymograph benötigt eine Zeitreihe, daher wird nur das Intensitätsprofil exportiert.',
+      profilesHint:
+        'Exportiert pro Bild ein matplotlib-Diagramm der Intensität gegen die Position sowie die Intensitäts-CSV.',
     },
     mt: {
       sectionTitle: 'Mikrotubuli-Metriken',
       sectionDescription:
         'Pro-MT-Länge, -Fläche und kanalweise Intensität aus der rohen ND2/TIFF-Datei. Hintergrundkorrektur über den Median außerhalb der dilatierten MT-Maske.',
-      enable: 'Kanalweise Intensitätsmetriken berechnen',
+      intensityNote:
+        'Die kanalweise Signalintensität — einschließlich der summierten (integrierten) Intensität — wird immer für jeden Kanal berechnet und in die Metriktabelle geschrieben. Keine Auswahl erforderlich.',
       thicknessLabel: 'MT-Dicke (px)',
       thicknessHelp:
         'Breite des Abtastbands entlang jeder Polyline. 5 px entspricht dem typischen Mikrotubulus-Durchmesser bei 100× Widefield.',
       marginLabel: 'Hintergrundrand (× Dicke)',
       marginHelp:
         'Pixel innerhalb dieses Radius (Dicke × Multiplikator) von einem MT werden vom Hintergrund ausgeschlossen. Höher = konservativer.',
-      channelsLabel: 'Zu abtastende Kanäle',
-      noChannels:
-        'Dieses Projekt hat keine Kanal-Metadaten. Laden Sie das Video erneut hoch, um kanalspezifische Metriken zu erhalten.',
-      selectChannelRequired:
-        'Wählen Sie mindestens einen Kanal, um kanalspezifische Intensitätsmetriken zu exportieren.',
-      incompleteTitle: 'Intensitätsberechnung nicht ausgewählt',
-      incompleteBody:
-        'Sie haben die kanalweise Signalintensitätsberechnung nicht aktiviert, daher sind die exportierten Metriken unvollständig: Es wird nur die Mikrotubuli-Länge einbezogen, ohne die kanalspezifischen Intensitätsspalten. Trotzdem exportieren?',
-      incompleteConfirm: 'Trotzdem exportieren',
     },
     advancedExport: 'Erweiterter Export',
     advancedOptions: 'Erweiterte Export-Optionen',
@@ -1266,6 +1335,8 @@ export default {
     generateExcel: 'Excel-Metriken generieren',
     includeCocoFormat: 'COCO-Format-Annotationen einschließen',
     includeJsonMetadata: 'JSON-Metadaten einschließen',
+    microtubuleAnnotationsNote:
+      'Mikrotubuli-Projekte exportieren Annotationen als ImageJ RoiSet + CVAT 1.1 (immer enthalten), jeweils mit der Tubulin-Typklasse. COCO/YOLO/JSON werden für Mikrotubuli nicht verwendet.',
     preparing: 'Export wird vorbereitet...',
     processing: 'Verarbeitung {{current}} von {{total}}',
     processingExport: 'Verarbeitung...',
@@ -1878,6 +1949,18 @@ export default {
     },
   },
   contextMenu: {
+    propagateSelectedTracks: 'Ausgewählte Mikrotubuli übertragen ({{count}})',
+    confirmPropagateSelected: '{{count}} ausgewählte Mikrotubuli übertragen?',
+    propagateSelectedDescription:
+      'Dies überschreibt die Form von {{count}} ausgewählten Mikrotubuli in allen folgenden Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
+    propagateTrack: 'In folgende Frames übertragen',
+    confirmPropagateTrack: 'In folgende Frames übertragen?',
+    propagateTrackDescription:
+      'Dies überschreibt die Form dieses Mikrotubulus in allen folgenden Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
+    deleteTrack: 'Ganzen Track löschen',
+    confirmDeleteTrack: 'Den gesamten Mikrotubulus-Track löschen?',
+    deleteTrackDescription:
+      'Dies entfernt diesen Mikrotubulus aus allen {{count}} Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
     editPolygon: 'Polygon bearbeiten',
     splitPolygon: 'Polygon teilen',
     deletePolygon: 'Polygon löschen',
@@ -2078,8 +2161,37 @@ export default {
     instance: 'Mikrotubulus',
     hideInstance: 'Mikrotubulus ausblenden',
     showInstance: 'Mikrotubulus einblenden',
+    renameInstance: 'Mikrotubulus umbenennen',
     hideAll: 'Alle ausblenden',
     showAll: 'Alle einblenden',
+    type: {
+      set: 'Typ festlegen',
+      setForSelected: 'Typ für {{count}} ausgewählte festlegen',
+      none: 'Keiner',
+      newLabel: 'Neues Label…',
+      renameLabel: 'Label umbenennen',
+      deleteLabel: 'Label löschen',
+      manageLabels: 'Typ-Labels',
+      labelName: 'Name',
+      labelNamePlaceholder: 'z. B. Alpha-Tubulin',
+      labelColor: 'Farbe',
+      labelDialogDescription:
+        'Benennen Sie den Tubulin-Typ und wählen Sie eine Farbe.',
+      updated: 'Mikrotubulus-Typ aktualisiert',
+      updateFailed: 'Mikrotubulus-Typ konnte nicht aktualisiert werden',
+      createFailed: 'Label konnte nicht erstellt werden',
+      renameFailed: 'Label konnte nicht umbenannt werden',
+      deleteFailed: 'Label konnte nicht gelöscht werden',
+      loadFailed: 'Typ-Labels konnten nicht geladen werden',
+      duplicateName: 'Ein Label mit diesem Namen existiert bereits',
+      noTrack:
+        'Dieser Mikrotubulus hat noch keinen Track — führen Sie zuerst das Tracking aus.',
+    },
+    color: {
+      label: 'Farbe:',
+      byInstance: 'Instanz',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Spermien-Instanzen',
@@ -2262,6 +2374,12 @@ export default {
     noRuns: 'Noch keine Läufe. Laden Sie einen Ordner hoch, um zu beginnen.',
     fileCount: '{{count}} Datei(en)',
     mtCount: '{{count}} Mikrotubuli',
+    deviceDegraded: 'CPU (GPU nicht verfügbar)',
+    deviceDegradedHint:
+      'Dieser Lauf sollte die GPU verwenden, konnte sie aber nicht erreichen, lief daher auf der CPU und dauerte wesentlich länger. Bitte melden Sie dies.',
+    deviceBusy: 'CPU (GPU belegt)',
+    deviceBusyHint:
+      'Die gemeinsam genutzte GPU war während der gesamten Wartezeit belegt, daher lief dieser Durchlauf auf der CPU und dauerte länger. Es liegt kein Fehler vor, eine Meldung ist nicht nötig.',
     download: 'Herunterladen',
     delete: 'Löschen',
     deleteFailed: 'Der Lauf konnte nicht gelöscht werden',
@@ -2273,6 +2391,121 @@ export default {
       running: 'Verarbeitung',
       completed: 'Abgeschlossen',
       failed: 'Fehlgeschlagen',
+    },
+  },
+  segmenter: {
+    dashboard: {
+      title: 'Segmentierer',
+      subtitle: 'Few-Shot-Datensätze zur Polygon-Annotation mit Selbsttraining',
+      newDataset: 'Neuer Datensatz',
+      noDatasets: 'Noch keine Datensätze.',
+      createFirst: 'Ersten Datensatz erstellen',
+      deleteDataset: 'Datensatz löschen',
+      imageCount: '{{count}} Bild(er)',
+      createDialogTitle: 'Neuer Datensatz',
+      createDialogDescription:
+        'Datensätze gruppieren unbeschriftete Bilder, die Sie mit eigenen Klassen annotieren.',
+      nameLabel: 'Name des Datensatzes',
+      namePlaceholder: 'z. B. Zellkerne — Runde 1',
+      creating: 'Wird erstellt…',
+      create: 'Erstellen',
+      deleteConfirmTitle: 'Datensatz löschen?',
+      deleteConfirmDescription:
+        'Dies löscht „{{name}}“ sowie alle zugehörigen Bilder, Klassen und Annotationen dauerhaft. Dies kann nicht rückgängig gemacht werden.',
+      cancel: 'Abbrechen',
+      deleting: 'Wird gelöscht…',
+      delete: 'Löschen',
+      loadFailed: 'Datensätze konnten nicht geladen werden',
+      created: 'Datensatz erstellt',
+      createFailed: 'Datensatz konnte nicht erstellt werden',
+      deleted: 'Datensatz gelöscht',
+      deleteFailed: 'Datensatz konnte nicht gelöscht werden',
+    },
+    datasetDetail: {
+      backLabel: 'Zurück zu den Datensätzen',
+      loading: 'Wird geladen…',
+      imageCount: '{{count}} Bild(er)',
+      noImages:
+        'Noch keine Bilder. Ziehen Sie welche oben hinein, um zu beginnen.',
+      annotated: 'Annotiert',
+      deleteImage: 'Bild löschen',
+      deleteConfirmTitle: 'Bild löschen?',
+      deleteConfirmDescription:
+        'Dies löscht „{{name}}“ und seine Annotation dauerhaft. Dies kann nicht rückgängig gemacht werden.',
+      cancel: 'Abbrechen',
+      deleting: 'Wird gelöscht…',
+      delete: 'Löschen',
+      loadFailed: 'Datensatz konnte nicht geladen werden',
+      deleteFailed: 'Bild konnte nicht gelöscht werden',
+    },
+    upload: {
+      skippedVideo:
+        '{{count}} Datei(en) übersprungen — der Segmentierer akzeptiert nur statische Bilder',
+      success: '{{count}} Bild(er) hochgeladen',
+      partialFail:
+        '{{uploaded}} hochgeladen, {{failed}} fehlgeschlagen — Format/Größe prüfen',
+      failed: 'Upload fehlgeschlagen',
+    },
+    classes: {
+      panelTitle: 'Klassen',
+      newClass: 'Neue Klasse',
+      loading: 'Klassen werden geladen…',
+      empty:
+        'Noch keine Klassen. Erstellen Sie eine, um mit dem Annotieren zu beginnen.',
+      renameLabel: 'Klasse umbenennen',
+      deleteLabel: 'Klasse löschen',
+      unclassified: 'Nicht klassifiziert',
+      unknown: 'Unbekannte Klasse',
+      activeClass: 'Aktive Klasse',
+      pickerEmpty: 'Noch keine Klassen — erstellen Sie vor dem Zeichnen eine.',
+      dialogTitleCreate: 'Neue Klasse',
+      dialogTitleRename: 'Klasse umbenennen',
+      dialogDescription:
+        'Geben Sie der Klasse einen Namen und eine Farbe, mit der ihre Polygone gezeichnet werden.',
+      nameLabel: 'Klassenname',
+      namePlaceholder: 'z. B. Zellkern',
+      colorLabel: 'Farbe',
+      cancel: 'Abbrechen',
+      create: 'Erstellen',
+      save: 'Speichern',
+      loadFailed: 'Klassen konnten nicht geladen werden',
+      createFailed: 'Klasse konnte nicht erstellt werden',
+      nameClash: 'Eine Klasse mit diesem Namen existiert bereits',
+      renameFailed: 'Klasse konnte nicht umbenannt werden',
+      deleteFailed: 'Klasse konnte nicht gelöscht werden',
+    },
+    editor: {
+      missingRouteParams: 'In der Route fehlt die Datensatz- oder Bild-ID.',
+      back: 'Zurück',
+      selectMode: 'Auswählen',
+      drawPolygon: 'Polygon zeichnen',
+      editVertices: 'Eckpunkte bearbeiten',
+      deletePolygon: 'Polygon löschen',
+      undo: 'Rückgängig',
+      redo: 'Wiederholen',
+      zoomOut: 'Verkleinern',
+      zoomIn: 'Vergrößern',
+      resetView: 'Ansicht zurücksetzen',
+      save: 'Speichern',
+      saveUnsaved: 'Speichern*',
+      saved: 'Annotation gespeichert',
+      saveFailed: 'Annotation konnte nicht gespeichert werden',
+      loadFailed: 'Annotation konnte nicht geladen werden',
+      saveDisabledLoadError:
+        'Das Speichern ist deaktiviert, bis die Annotation dieses Bildes erfolgreich geladen wurde — so wird verhindert, dass Ihre gespeicherte Arbeit durch eine leere Annotation überschrieben wird.',
+      retry: 'Erneut versuchen',
+      imageLoadFailed: 'Bild konnte nicht geladen werden',
+      imageAlt: 'Zu annotierendes Bild',
+      minVertices: 'Ein Polygon benötigt mindestens 3 Punkte',
+    },
+    polygonList: {
+      title: 'Polygone ({{count}})',
+      empty:
+        'Noch keine Polygone. Wechseln Sie zu „Polygon zeichnen“ und klicken Sie auf das Bild.',
+      instance: 'Instanz {{id}}',
+      points: '{{count}} Punkte',
+      changeClass: 'Klasse ändern',
+      delete: 'Polygon löschen',
     },
   },
 };

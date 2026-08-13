@@ -94,6 +94,12 @@ const mockApiClient = vi.hoisted(() => ({
     failed: 0,
     results: [],
   }),
+  // Microtubule type-label palette (useMtTypeLabels loads it on mount for MT
+  // projects). Resolve empty so the hook's effect doesn't throw.
+  getMtTypeLabels: vi.fn().mockResolvedValue([]),
+  putMtTypeLabels: vi.fn().mockResolvedValue([]),
+  deleteMtTypeLabel: vi.fn().mockResolvedValue([]),
+  setTrackType: vi.fn().mockResolvedValue({ framesAffected: 0 }),
 }));
 
 // ─── vi.mock declarations ─────────────────────────────────────────────────────
@@ -518,12 +524,12 @@ describe('polylineKind discriminator — sidebar panel selection', () => {
     mockParams.imageId = 'img-1';
   });
 
-  it('shows SpermInstancePanel when a polyline has class=sperm', () => {
+  it('shows SpermInstancePanel when the project type is sperm', () => {
+    mockProjectData.projectType = 'sperm';
     mockEditor.polygons = [
       {
         id: 'p1',
         geometry: 'polyline',
-        class: 'sperm',
         points: [
           { x: 0, y: 0 },
           { x: 1, y: 1 },
@@ -535,12 +541,12 @@ describe('polylineKind discriminator — sidebar panel selection', () => {
     expect(screen.queryByTestId('mt-panel')).not.toBeInTheDocument();
   });
 
-  it('shows MicrotubuleInstancePanel when a polyline has class=microtubule', () => {
+  it('shows MicrotubuleInstancePanel when the project type is microtubules', () => {
+    mockProjectData.projectType = 'microtubules';
     mockEditor.polygons = [
       {
         id: 'p1',
         geometry: 'polyline',
-        class: 'microtubule',
         points: [
           { x: 0, y: 0 },
           { x: 1, y: 1 },
@@ -552,11 +558,16 @@ describe('polylineKind discriminator — sidebar panel selection', () => {
     expect(screen.queryByTestId('sperm-panel')).not.toBeInTheDocument();
   });
 
-  it('shows SpermInstancePanel when polyline has partClass (legacy)', () => {
+  it('keys the panel on project type, NOT per-polygon class/partClass', () => {
+    // A polyline stamped microtubule-ish in a SPERM project is still sperm —
+    // the project type is the single source of truth, so one mis-stamped
+    // polyline can no longer flip the whole sidebar.
+    mockProjectData.projectType = 'sperm';
     mockEditor.polygons = [
       {
         id: 'p1',
         geometry: 'polyline',
+        class: 'microtubule',
         partClass: 'head',
         points: [
           { x: 0, y: 0 },
@@ -566,6 +577,7 @@ describe('polylineKind discriminator — sidebar panel selection', () => {
     ];
     renderEditor();
     expect(screen.getByTestId('sperm-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('mt-panel')).not.toBeInTheDocument();
   });
 
   it('shows no instance panel when there are no polylines', () => {
@@ -681,7 +693,7 @@ describe('effectiveResegmentModel — project-type gating', () => {
     );
   });
 
-  it('uses "unet_attention_aspp" for spheroid_invasive project', async () => {
+  it('uses "spheroid_disintegration" for spheroid_invasive project', async () => {
     mockProjectData.projectType = 'spheroid_invasive';
     renderEditor();
 
@@ -696,7 +708,7 @@ describe('effectiveResegmentModel — project-type gating', () => {
 
     expect(mockApiClient.requestBatchSegmentation).toHaveBeenCalledWith(
       ['img-1'],
-      'unet_attention_aspp',
+      'spheroid_disintegration',
       expect.anything(),
       expect.anything(),
       undefined

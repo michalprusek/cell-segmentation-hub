@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import EssaysDropzone from '@/components/essays/EssaysDropzone';
+import { folderNameFromFiles } from '@/components/essays/folderName';
 import { useLanguage } from '@/contexts/useLanguage';
 import apiClient from '@/lib/api';
 import type { EssayJob } from '@/types/essays';
@@ -23,14 +24,6 @@ const humanSize = (bytes: number): string => {
     i++;
   }
   return `${v.toFixed(1)} ${units[i]}`;
-};
-
-// Best-effort folder name from a picked/dragged file's relative path.
-const folderNameFromFiles = (files: File[]): string | undefined => {
-  const rel = (files[0] as File & { webkitRelativePath?: string })
-    ?.webkitRelativePath;
-  if (rel && rel.includes('/')) return rel.split('/')[0];
-  return undefined;
 };
 
 const statusVariant = (
@@ -203,17 +196,58 @@ const AutomatedEssays: React.FC = () => {
                           {t('automatedEssays.mtCount', { count: job.mtCount })}
                         </>
                       )}
-                      {job.device && <> · {job.device.toUpperCase()}</>}
+                      {job.device && (
+                        <>
+                          {' · '}
+                          {job.device === 'cpu-degraded' ? (
+                            <span
+                              className="text-amber-600 dark:text-amber-500"
+                              title={t('automatedEssays.deviceDegradedHint')}
+                            >
+                              {t('automatedEssays.deviceDegraded')}
+                            </span>
+                          ) : job.device === 'cpu-busy' ? (
+                            <span title={t('automatedEssays.deviceBusyHint')}>
+                              {t('automatedEssays.deviceBusy')}
+                            </span>
+                          ) : (
+                            job.device.toUpperCase()
+                          )}
+                        </>
+                      )}
                     </div>
                     {(job.status === 'running' || job.status === 'queued') && (
                       <Progress value={job.progress} className="mt-2" />
                     )}
-                    {job.status === 'failed' && job.error && (
-                      <div className="flex items-center gap-1 text-xs text-red-500 mt-2">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{job.error}</span>
-                      </div>
-                    )}
+                    {job.error &&
+                      (job.status === 'completed' ||
+                        job.status === 'failed') && (
+                        // A completed run can still be partial — evaluate.py
+                        // returns 0 even when wells failed. Amber, not red: the
+                        // results are there and downloadable, just incomplete.
+                        // Red is for a run that produced nothing at all.
+                        <div
+                          data-testid="essay-job-error"
+                          className={`flex items-start gap-1 text-xs mt-2 ${
+                            job.status === 'completed'
+                              ? 'text-amber-600 dark:text-amber-500'
+                              : 'text-red-500'
+                          }`}
+                        >
+                          <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
+                          {/* Wrapped and scrollable, never clamped to one line.
+                              Reported 2026-08-12: a `truncate` hid everything
+                              past the first sentence, and the rest was reachable
+                              only through a native title tooltip the reporter
+                              never found — on the `failed` branch not even that.
+                              A failed run's message carries the module's output
+                              tail, so it is capped by height, not by characters:
+                              long errors scroll, they do not disappear. */}
+                          <span className="whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                            {job.error}
+                          </span>
+                        </div>
+                      )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {job.status === 'completed' && (

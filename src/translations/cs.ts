@@ -339,6 +339,7 @@ export default {
       deleteProject: 'Nepodařilo se smazat projekt',
     },
     deleteImages: 'Nepodařilo se smazat vybrané obrázky',
+    deleteAnnotations: 'Nepodařilo se smazat anotace',
     contexts: {
       dashboard: 'Chyba dashboardu',
       project: 'Chyba projektu',
@@ -371,6 +372,12 @@ export default {
     viewResults: 'Zobrazit výsledky',
     dropImagesHere: 'Přetáhněte soubory sem...',
     selectProjectFirst: 'Nejprve vyberte projekt',
+    registerChannels: {
+      promptTitle: 'Registrovat kanály?',
+      help: 'Při nahrání opraví malé posuny mezi kanály zarovnáním každého k prvnímu (pouze translace).',
+      confirm: 'Registrovat a nahrát',
+      decline: 'Nahrát bez registrace',
+    },
     projectRequired: 'Před nahráním obrázků musíte vybrat projekt',
     pending: 'Čekající',
     uploading: 'Nahrávání',
@@ -465,10 +472,10 @@ export default {
           description:
             'Nejlepší výkon na datové sadě SpheroHQ - optimalizováno pro segmentaci sféroidů s vyváženou rychlostí a přesností (~0.25s/obr., 10 obr./s)',
         },
-        unet_attention_aspp: {
-          name: 'UNet Attention-ASPP',
+        spheroid_disintegration: {
+          name: 'Rozpad sféroidů',
           description:
-            'Vylepšený UNet s Attention Gates a ASPP pro detekci rozpadajících se sféroidů a malých satelitních buněk (~0.35s/snímek)',
+            'UNet++ s enkodérem EfficientNet-B5 — 3třídová segmentace (pozadí / korona / husté jádro) rozpadajících se sféroidů; jádro predikuje přímo pro správný Disintegration Index (~0.7s/snímek)',
         },
         segformer: {
           name: 'SegFormer',
@@ -519,8 +526,8 @@ export default {
         'Nejpřesnější segmentace s mechanismy pozornosti (E2E ~482ms, 2.7 obr/s)',
       unet_spherohq:
         'Nejrychlejší model po optimalizacích! Výborný pro zpracování v reálném čase (E2E ~286ms, 5.5 obr/s)',
-      unet_attention_aspp:
-        'Vylepšený UNet s Attention Gates a ASPP bottleneck pro detekci rozpadajících se sféroidů a malých satelitních buněk (35.5M parametrů)',
+      spheroid_disintegration:
+        'Model UNet++ / EfficientNet-B5, 3 třídy (pozadí / korona / jádro) pro rozpadající se sféroidy; husté jádro predikuje přímo pro správný Disintegration Index (30.7M parametrů)',
       segformer:
         'Model SegFormer-B0 založený na transformeru, trénovaný na datasetu SpheroMix. Nejvyšší přesnost segmentace sféroidů v platformě (93% IoU) a zároveň nejmenší a nejrychlejší model (~13 ms/snímek).',
       mamba_unet:
@@ -610,6 +617,21 @@ export default {
     system: 'Systémový',
   },
   segmentation: {
+    selection: {
+      selectAll: 'Vybrat vše',
+      deselectAll: 'Zrušit výběr',
+      selected: 'Vybráno: {{count}}',
+    },
+    trackOps: {
+      propagateSelectedSuccess:
+        '{{count}} mikrotubulů propagováno do dalších snímků',
+      propagateSelectedPartial: 'Propagováno {{done}} z {{total}} mikrotubulů',
+      propagateSuccess:
+        'Mikrotubulus propagován do {{count}} následujících snímků',
+      propagateFailed: 'Propagace mikrotubulu selhala',
+      deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
+      deleteTrackFailed: 'Smazání tracku selhalo',
+    },
     modelNotCompatible:
       'Model "{{model}}" není kompatibilní s typem projektu "{{type}}". Povolené: {{allowed}}.',
     incompatibleModelTitle: 'Tímto modelem nelze segmentovat',
@@ -806,12 +828,22 @@ export default {
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
       },
+      createPolyline: {
+        start: 'Kliknutím umístíte první bod mikrotubulu',
+        finish: 'Tvorbu ukončíte stiskem Enter nebo dvojklikem',
+        holdShift: 'Podržte SHIFT pro automatické přidávání bodů',
+        cancel: 'Stiskněte ESC pro zrušení',
+      },
       addPoints: {
         clickVertex: 'Klikněte na jakýkoli vrchol pro zahájení přidávání bodů',
+        clickVertexMt: 'Klikněte na konec mikrotubulu pro jeho prodloužení',
+        addPointsMt: 'Klikáním přidávejte body, poté ukončete stiskem Enter',
         addPoints:
           'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení. Klikněte přímo na jiný vrchol bez přidávání bodů pro odstranění všech bodů mezi nimi.',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
+        joinHint:
+          'Kliknutím na koncový bod jiné polylinie stejné třídy je spojíte',
       },
       editVertices: {
         selectPolygon: 'Klikněte na polygon pro jeho výběr k úpravě',
@@ -829,6 +861,7 @@ export default {
       modes: {
         slice: 'Režim řezání',
         create: 'Režim vytváření polygonu',
+        createPolyline: 'Režim tvorby mikrotubulu',
         addPoints: 'Režim přidávání bodů',
         editVertices: 'Režim úpravy vrcholů',
         deletePolygon: 'Režim mazání polygonu',
@@ -1155,6 +1188,40 @@ export default {
     selected: '{{count}} obrázek vybrán',
     selected_other: '{{count}} obrázky vybrány',
     deleteSelected: 'Smazat vybrané',
+    deleteAnnotations: 'Smazat anotace',
+    addChannel: 'Přidat kanál',
+    addChannelSuccess: 'Kanál {{channels}} přidán k {{frames}} snímkům',
+    addChannelFailed: 'Nepodařilo se přidat kanál',
+    addChannelDialog: {
+      title: 'Přidat kanál',
+      description:
+        'Přidejte k vybraným snímkům další kanál nahráním videa/stacku se stejným počtem snímků, nebo jednoho obrázku, který se otiskne na každý vybraný snímek.',
+      selectionSummary: 'Vybráno {{frames}} snímků napříč {{videos}} videi.',
+      sourceLabel: 'Zdrojový soubor (video / stack / obrázek)',
+      dropPrompt: 'Přetáhněte soubor sem, nebo klikněte pro výběr',
+      dropInvalidType: 'Nepodporovaný typ souboru.',
+      dropTooManyFiles: 'Najednou lze přidat pouze jeden soubor.',
+      removeFile: 'Odebrat soubor',
+      imageHint: 'Jeden obrázek → otiskne se na každý vybraný snímek.',
+      videoHint:
+        'Video/stack → musí mít přesně {{frames}} snímků a patřit jednomu videu.',
+      nameLabel: 'Název kanálu',
+      namePlaceholder: 'např. GFP',
+      alignLabel: 'Zarovnat k segmentačnímu kanálu',
+      alignHint: 'Registrace fázovou korelací, která opraví malý drift stolku.',
+      multiVideoError:
+        'Video/stack lze přidat jen ke snímkům jednoho videa. Vyberte snímky z jednoho videa, nebo nahrajte jeden obrázek.',
+      uploading: 'Nahrávání… {{percent}} %',
+      adding: 'Přidávání…',
+      confirm: 'Přidat kanál',
+    },
+    annotationsDeleted: 'Anotace smazány u {{count}} obrázků',
+    annotationsDeleteFailed: 'Nepodařilo se smazat anotace u {{count}} obrázků',
+    deleteAnnotationsDialog: {
+      title: 'Smazat anotace?',
+      description:
+        'Smaže segmentační anotace u {{count}} vybraných obrázků. Obrázky zůstanou, ale jejich výsledky segmentace se odstraní. Tuto akci nelze vrátit.',
+    },
     imagesDeleted: '{{count}} obrázek smazán',
     imagesDeleted_other: '{{count}} obrázky smazány',
   },
@@ -1166,27 +1233,25 @@ export default {
       enable: 'Zahrnout analýzu kymografů',
       velocityMetrics: 'Metriky rychlosti (CSV)',
       segmentedImages: 'Segmentované kymografy (PNG)',
+      modeKymograph: 'Kymograf (prostor × čas)',
+      modeProfiles: 'Profily intenzity (na obrázek)',
+      singleFrameHint:
+        'Jen jeden snímek — kymograf potřebuje časovou řadu, proto se exportuje pouze profil intenzity.',
+      profilesHint:
+        'Exportuje jeden matplotlib graf intenzity v závislosti na pozici pro každý snímek a k tomu CSV s intenzitami.',
     },
     mt: {
       sectionTitle: 'Metriky mikrotubulů',
       sectionDescription:
         'Délka, plocha a intenzita signálu pro každý MT z původního ND2/TIFF souboru. Odečteno median pozadí (mimo dilatovanou masku MT).',
-      enable: 'Spočítat intenzitu signálu pro každý kanál',
+      intensityNote:
+        'Intenzita signálu podle kanálu — včetně součtové (integrované) intenzity — se vždy vypočítá pro každý kanál a zapíše do tabulky metrik. Není třeba nic vybírat.',
       thicknessLabel: 'Tloušťka MT (px)',
       thicknessHelp:
         'Šířka pásu podél polyline, ze kterého se sbírá signál. 5 px odpovídá běžnému průměru mikrotubulu při 100× widefield.',
       marginLabel: 'Okraj pozadí (× tloušťka)',
       marginHelp:
         'Pixely v tomto poloměru (tloušťka × násobek) od libovolného MT se z pozadí vyloučí. Vyšší = konzervativnější.',
-      channelsLabel: 'Kanály ke zpracování',
-      noChannels:
-        'Tento projekt nemá metadata o kanálech. Pro získání metrik podle kanálů znovu nahrajte video.',
-      selectChannelRequired:
-        'Pro export metrik intenzity podle kanálů vyberte alespoň jeden kanál.',
-      incompleteTitle: 'Výpočet intenzit nezvolen',
-      incompleteBody:
-        'Nemáte zapnutý výpočet intenzity signálu podle kanálů, takže exportované metriky budou neúplné: zahrnuta bude pouze délka mikrotubulů, bez sloupců s intenzitou podle kanálů. Přesto exportovat?',
-      incompleteConfirm: 'Přesto exportovat',
     },
     advancedExport: 'Pokročilý export',
     advancedOptions: 'Pokročilé možnosti exportu',
@@ -1253,6 +1318,8 @@ export default {
     generateExcel: 'Generovat Excel metriky',
     includeCocoFormat: 'Zahrnout anotace ve formátu COCO',
     includeJsonMetadata: 'Zahrnout JSON metadata',
+    microtubuleAnnotationsNote:
+      'Mikrotubulární projekty exportují anotace jako ImageJ RoiSet + CVAT 1.1 (vždy zahrnuto), každá nese třídu tubulin typu. COCO/YOLO/JSON se pro mikrotubuly nepoužívají.',
     preparing: 'Příprava exportu...',
     processing: 'Zpracování {{current}} z {{total}}',
     processingExport: 'Zpracování...',
@@ -1896,6 +1963,18 @@ export default {
     disconnected: 'Odpojeno od aktualizací v reálném čase',
   },
   contextMenu: {
+    propagateSelectedTracks: 'Propagovat vybrané mikrotubuly ({{count}})',
+    confirmPropagateSelected: 'Propagovat {{count}} vybraných mikrotubulů?',
+    propagateSelectedDescription:
+      'Přepíše tvar {{count}} vybraných mikrotubulů ve všech následujících snímcích videa. Tuto akci nelze vrátit.',
+    propagateTrack: 'Propagovat do dalších snímků',
+    confirmPropagateTrack: 'Propagovat do dalších snímků?',
+    propagateTrackDescription:
+      'Přepíše tvar tohoto mikrotubulu ve všech následujících snímcích videa. Tuto akci nelze vrátit.',
+    deleteTrack: 'Smazat celý track',
+    confirmDeleteTrack: 'Smazat celý track mikrotubulu?',
+    deleteTrackDescription:
+      'Odstraní tento mikrotubulus ze všech {{count}} snímků videa. Tuto akci nelze vrátit.',
     editPolygon: 'Upravit polygon',
     splitPolygon: 'Rozdělit polygon',
     deletePolygon: 'Smazat polygon',
@@ -2087,8 +2166,36 @@ export default {
     instance: 'Mikrotubulus',
     hideInstance: 'Skrýt mikrotubulus',
     showInstance: 'Zobrazit mikrotubulus',
+    renameInstance: 'Přejmenovat mikrotubulus',
     hideAll: 'Skrýt vše',
     showAll: 'Zobrazit vše',
+    type: {
+      set: 'Nastavit typ',
+      setForSelected: 'Nastavit typ pro {{count}} vybraných',
+      none: 'Žádný',
+      newLabel: 'Nový label…',
+      renameLabel: 'Přejmenovat label',
+      deleteLabel: 'Smazat label',
+      manageLabels: 'Typové labely',
+      labelName: 'Název',
+      labelNamePlaceholder: 'např. alfa-tubulin',
+      labelColor: 'Barva',
+      labelDialogDescription: 'Pojmenujte typ tubulinu a vyberte barvu.',
+      updated: 'Typ mikrotubulu upraven',
+      updateFailed: 'Nepodařilo se upravit typ mikrotubulu',
+      createFailed: 'Nepodařilo se vytvořit label',
+      renameFailed: 'Nepodařilo se přejmenovat label',
+      deleteFailed: 'Nepodařilo se smazat label',
+      loadFailed: 'Nepodařilo se načíst typové labely',
+      duplicateName: 'Label s tímto názvem už existuje',
+      noTrack:
+        'Tento mikrotubulus zatím nemá track — nejprve spusťte trackování.',
+    },
+    color: {
+      label: 'Barva:',
+      byInstance: 'Instance',
+      byLabel: 'Label',
+    },
   },
   sperm: {
     instancePanel: 'Instance spermií',
@@ -2270,6 +2377,12 @@ export default {
     noRuns: 'Zatím žádné úlohy. Začněte nahráním složky.',
     fileCount: '{{count}} souborů',
     mtCount: '{{count}} mikrotubulů',
+    deviceDegraded: 'CPU (GPU nedostupné)',
+    deviceDegradedHint:
+      'Tento běh měl použít GPU, ale nepodařilo se k němu přistoupit, takže běžel na CPU a trval výrazně déle. Nahlaste to prosím.',
+    deviceBusy: 'CPU (GPU zaneprázdněné)',
+    deviceBusyHint:
+      'Společné GPU bylo po celou dobu čekání obsazené, takže běh proběhl na CPU a trval déle. Nic není rozbité, není třeba to hlásit.',
     download: 'Stáhnout',
     delete: 'Smazat',
     deleteFailed: 'Úlohu se nepodařilo smazat',
@@ -2281,6 +2394,121 @@ export default {
       running: 'Zpracovává se',
       completed: 'Dokončeno',
       failed: 'Selhalo',
+    },
+  },
+  segmenter: {
+    dashboard: {
+      title: 'Segmentátor',
+      subtitle:
+        'Datové sady pro anotaci polygonů s malým počtem příkladů a vlastním trénováním',
+      newDataset: 'Nová datová sada',
+      noDatasets: 'Zatím žádné datové sady.',
+      createFirst: 'Vytvořit první datovou sadu',
+      deleteDataset: 'Smazat datovou sadu',
+      imageCount: '{{count}} obrázek(ů)',
+      createDialogTitle: 'Nová datová sada',
+      createDialogDescription:
+        'Datové sady seskupují neoznačené obrázky, které budete anotovat vlastními třídami.',
+      nameLabel: 'Název datové sady',
+      namePlaceholder: 'např. Jádra — kolo 1',
+      creating: 'Vytváření…',
+      create: 'Vytvořit',
+      deleteConfirmTitle: 'Smazat datovou sadu?',
+      deleteConfirmDescription:
+        'Tímto trvale smažete „{{name}}“ a všechny její obrázky, třídy a anotace. Tuto akci nelze vrátit zpět.',
+      cancel: 'Zrušit',
+      deleting: 'Mazání…',
+      delete: 'Smazat',
+      loadFailed: 'Nepodařilo se načíst datové sady',
+      created: 'Datová sada byla vytvořena',
+      createFailed: 'Nepodařilo se vytvořit datovou sadu',
+      deleted: 'Datová sada byla smazána',
+      deleteFailed: 'Nepodařilo se smazat datovou sadu',
+    },
+    datasetDetail: {
+      backLabel: 'Zpět na datové sady',
+      loading: 'Načítání…',
+      imageCount: '{{count}} obrázek(ů)',
+      noImages: 'Zatím žádné obrázky. Přetáhněte je nahoru pro začátek.',
+      annotated: 'Anotováno',
+      deleteImage: 'Smazat obrázek',
+      deleteConfirmTitle: 'Smazat obrázek?',
+      deleteConfirmDescription:
+        'Tímto trvale smažete „{{name}}“ a jeho anotaci. Tuto akci nelze vrátit zpět.',
+      cancel: 'Zrušit',
+      deleting: 'Mazání…',
+      delete: 'Smazat',
+      loadFailed: 'Nepodařilo se načíst datovou sadu',
+      deleteFailed: 'Nepodařilo se smazat obrázek',
+    },
+    upload: {
+      skippedVideo:
+        '{{count}} soubor(ů) přeskočeno — segmentátor přijímá pouze statické obrázky',
+      success: '{{count}} obrázek(ů) nahráno',
+      partialFail:
+        '{{uploaded}} nahráno, {{failed}} se nezdařilo — zkontrolujte formát a velikost',
+      failed: 'Nahrávání se nezdařilo',
+    },
+    classes: {
+      panelTitle: 'Třídy',
+      newClass: 'Nová třída',
+      loading: 'Načítání tříd…',
+      empty: 'Zatím žádné třídy. Vytvořte jednu a začněte anotovat.',
+      renameLabel: 'Přejmenovat třídu',
+      deleteLabel: 'Smazat třídu',
+      unclassified: 'Nezařazeno',
+      unknown: 'Neznámá třída',
+      activeClass: 'Aktivní třída',
+      pickerEmpty: 'Zatím žádné třídy — před kreslením vytvořte alespoň jednu.',
+      dialogTitleCreate: 'Nová třída',
+      dialogTitleRename: 'Přejmenovat třídu',
+      dialogDescription:
+        'Zadejte název třídy a barvu, kterou se budou vykreslovat její polygony.',
+      nameLabel: 'Název třídy',
+      namePlaceholder: 'např. Jádro',
+      colorLabel: 'Barva',
+      cancel: 'Zrušit',
+      create: 'Vytvořit',
+      save: 'Uložit',
+      loadFailed: 'Nepodařilo se načíst třídy',
+      createFailed: 'Nepodařilo se vytvořit třídu',
+      nameClash: 'Třída s tímto názvem již existuje',
+      renameFailed: 'Nepodařilo se přejmenovat třídu',
+      deleteFailed: 'Nepodařilo se smazat třídu',
+    },
+    editor: {
+      missingRouteParams:
+        'V adrese chybí identifikátor datové sady nebo obrázku.',
+      back: 'Zpět',
+      selectMode: 'Výběr',
+      drawPolygon: 'Kreslit polygon',
+      editVertices: 'Upravit vrcholy',
+      deletePolygon: 'Smazat polygon',
+      undo: 'Zpět',
+      redo: 'Znovu',
+      zoomOut: 'Oddálit',
+      zoomIn: 'Přiblížit',
+      resetView: 'Obnovit zobrazení',
+      save: 'Uložit',
+      saveUnsaved: 'Uložit*',
+      saved: 'Anotace byla uložena',
+      saveFailed: 'Nepodařilo se uložit anotaci',
+      loadFailed: 'Nepodařilo se načíst anotaci',
+      saveDisabledLoadError:
+        'Ukládání je zakázáno, dokud se anotace tohoto obrázku úspěšně nenačte — jinak byste mohli přepsat uloženou práci prázdnou anotací.',
+      retry: 'Zkusit znovu',
+      imageLoadFailed: 'Nepodařilo se načíst obrázek',
+      imageAlt: 'Obrázek k anotaci',
+      minVertices: 'Polygon musí mít alespoň 3 body',
+    },
+    polygonList: {
+      title: 'Polygony ({{count}})',
+      empty:
+        'Zatím žádné polygony. Přepněte na „Kreslit polygon“ a klikněte do obrázku.',
+      instance: 'Instance {{id}}',
+      points: '{{count}} bodů',
+      changeClass: 'Změnit třídu',
+      delete: 'Smazat polygon',
     },
   },
 };

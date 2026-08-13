@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
 import { transformSegmentationPolygons } from './utils/transformSegmentationPolygons';
+import { resolveTargetTrackIds } from './utils/mtTypeTargets';
 import { usePolygonHandlers } from './hooks/usePolygonHandlers';
 import { useSegmentationLoader } from './hooks/useSegmentationLoader';
 import { useResegment } from './hooks/useResegment';
@@ -30,9 +31,13 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 
 // Presentational render tree — pure component, all values threaded via props.
 import SegmentationEditorLayout from './components/SegmentationEditorLayout';
+import { useMtTypeLabels } from './hooks/useMtTypeLabels';
 
 import { useVideoFrames } from './hooks/useVideoFrames';
-import { setCachedSegmentationPolygons } from './hooks/segmentationPolygonCache';
+import {
+  setCachedSegmentationPolygons,
+  segmentationPolygonsQueryKey,
+} from './hooks/segmentationPolygonCache';
 
 const SegmentationEditor = () => {
   const { projectId, imageId } = useParams<{
@@ -70,6 +75,7 @@ const SegmentationEditor = () => {
     images,
     loading: projectLoading,
     refreshImageSegmentation,
+    updateImages,
     // useProjectData always fetches metadata only (lod: 'low') and loads
     // segmentation geometry on demand — there is no fetch-all path to disable,
     // so no options arg is passed. Adjacent-frame prefetch is handled separately.
@@ -648,7 +654,39 @@ const SegmentationEditor = () => {
     handleRenamePolygon,
     handleChangeInstanceId,
     handleChangePartClass,
+    handleUpdatePolygonField,
+    selectedPolygonIds,
+    toggleMultiSelect,
+    clearMultiSelect,
+    selectAllMultiSelect,
   } = usePolygonHandlers({ editor, imageId });
+
+  // Microtubule type-label palette (SSOT for the tubulin class name + colour)
+  // and the canvas colour mode (instance hash vs semantic/by-label). Both are
+  // gated to microtubule projects; the hook no-ops its fetch otherwise.
+  const isMicrotubuleProject = projectType === 'microtubules';
+  const {
+    labels: mtTypeLabels,
+    labelById: mtLabelById,
+    colorById: mtColorById,
+    createLabel: handleCreateMtLabel,
+    renameLabel: handleRenameMtLabel,
+    deleteLabel: deleteMtLabelRaw,
+  } = useMtTypeLabels(projectId, isMicrotubuleProject);
+  const [mtColorMode, setMtColorMode] = useState<'instance' | 'semantic'>(
+    () => {
+      if (typeof localStorage === 'undefined') return 'instance';
+      return localStorage.getItem('mtColorMode') === 'semantic'
+        ? 'semantic'
+        : 'instance';
+    }
+  );
+  const handleSetMtColorMode = useCallback((mode: 'instance' | 'semantic') => {
+    setMtColorMode(mode);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('mtColorMode', mode);
+    }
+  }, []);
 
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
   // edit-mode booleans, hidden/degenerate polygon filter — no viewport culling).
@@ -664,6 +702,7 @@ const SegmentationEditor = () => {
     editor,
     hiddenPolygonIds,
     activeInstanceId,
+    projectType,
   });
 
   // Development-only debug logger: logs polygon rendering state.
@@ -769,8 +808,19 @@ const SegmentationEditor = () => {
   // (kymograph modal + key bindings) read from the same source.
   // useVideoFrames(null) short-circuits internally via `enabled: !!id`.
   const video = useVideoFrames(videoContainerId);
+  // A container is in video / multi-channel mode when it has more than one
+  // frame (the classic time-lapse) OR any channels to composite. The
+  // channel clause is load-bearing for SINGLE-FRAME multi-channel stacks
+  // (e.g. a 2-channel IRM+TIRF frame extracted from a 1-timepoint TIFF):
+  // without it, frameCount === 1 fell through to the plain <img> path,
+  // which naively 8-bit-downcasts the 16-bit frame PNG and renders
+  // low-signal channels near-black — the "frame not showing any image"
+  // report. Any video container has ≥1 channel, so this also routes a
+  // single-channel single frame through the auto-scaling canvas.
   const isVideoMode =
-    !!videoContainerId && (video.container?.frameCount ?? 0) > 1;
+    !!videoContainerId &&
+    ((video.container?.frameCount ?? 0) > 1 ||
+      (video.container?.channels?.length ?? 0) > 0);
 
   // ───────────────── Resegment chain ─────────────────
   // Lives HERE (after `const video = useVideoFrames`) to avoid the TDZ that
@@ -797,6 +847,350 @@ const SegmentationEditor = () => {
     currentImageIdRef,
   });
   // ─────────────── End resegment chain ───────────────
+
+  // ───────────────── Cross-frame track operations ─────────────────
+  // Placed AFTER `const video = useVideoFrames(...)` so they can read
+  // video.container without a TDZ (CLAUDE.md production bug #11).
+
+  // `editor` is a fresh object literal every render of
+  // useEnhancedSegmentationEditor. Mirror it into a ref so the track-op handlers
+  // below stay identity-stable (they read the latest polygons via the ref) —
+  // they're compared in the CanvasPolygon React.memo comparator, so closing over
+  // `editor` directly would break the comparator and re-render every polyline on
+  // each cursor/hover/zoom tick (CLAUDE.md failure pattern #5).
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+
+  // Evict the cached segmentation of the video's frames after a track op so a
+  // scrub refetches the mutated data. MUST be removeQueries, not
+  // invalidateQueries: the editor's frame loader reads the cache imperatively
+  // (`getCachedSegmentationPolygons` → getQueryData) and paints any entry that
+  // exists regardless of staleness, so merely marking it stale would keep
+  // showing the pre-op geometry until a full page reload. Removing the entry
+  // forces the loader's cache-miss path to re-fetch from the server.
+  const evictVideoFrameSegmentationCaches = useCallback(() => {
+    const frames = video.container?.frames;
+    if (!frames) return;
+    for (const frame of frames) {
+      queryClient.removeQueries({
+        queryKey: segmentationPolygonsQueryKey(frame.id),
+      });
+    }
+  }, [video.container, queryClient]);
+
+  // After a propagate, the following frames now have segmentation (created or
+  // updated). Bump their status in the in-memory project images so the frame
+  // loader's `hasSegmentation` gate passes on a scrub — otherwise a frame whose
+  // cached status is still `no_segmentation` (e.g. its annotations were just
+  // deleted) never re-fetches and stays blank until a full page reload.
+  const markFollowingFramesSegmented = useCallback(
+    (fromFrameIndex: number) => {
+      const frames = video.container?.frames;
+      if (!frames) return;
+      const followingIds = new Set(
+        frames.filter(f => f.frameIndex > fromFrameIndex).map(f => f.id)
+      );
+      if (followingIds.size === 0) return;
+      updateImages(prev =>
+        prev.map(img =>
+          followingIds.has(img.id) && img.segmentationStatus !== 'segmented'
+            ? { ...img, segmentationStatus: 'segmented' }
+            : img
+        )
+      );
+    },
+    [video.container, updateImages]
+  );
+
+  // Right-click "Propagate to following frames": stamp this microtubule's
+  // current shape into every later frame of the video.
+  const handlePropagateTrack = useCallback(
+    async (polygonId: string) => {
+      const videoId = video.container?.id;
+      const source = editorRef.current
+        .getPolygons()
+        .find(p => p.id === polygonId);
+      const fromFrameIndex = video.container?.frames.find(
+        f => f.id === imageId
+      )?.frameIndex;
+      const points = (source?.points ?? []).map(p => ({ x: p.x, y: p.y }));
+      // Guard failures are unexpected (missing video/source) or a degenerate
+      // polyline; always give feedback rather than a silent no-op.
+      if (
+        !videoId ||
+        !source ||
+        typeof fromFrameIndex !== 'number' ||
+        points.length < 2
+      ) {
+        logger.warn('Cannot propagate microtubule track', {
+          hasVideo: !!videoId,
+          hasSource: !!source,
+          fromFrameIndex,
+          points: points.length,
+        });
+        toast.error(t('segmentation.trackOps.propagateFailed'));
+        return;
+      }
+
+      try {
+        const result = await apiClient.propagateTrackForward(
+          videoId,
+          fromFrameIndex,
+          {
+            trackId: source.trackId,
+            instanceId: source.instanceId,
+            name: source.name,
+            geometry: 'polyline',
+            points,
+          }
+        );
+        // When the backend generated a trackId (source had none), patch it onto
+        // the source polyline so its colour + a later save stay consistent with
+        // the propagated copies.
+        if (result.trackId && result.trackId !== source.trackId) {
+          handleUpdatePolygonField(polygonId, { trackId: result.trackId });
+        }
+        evictVideoFrameSegmentationCaches();
+        markFollowingFramesSegmented(fromFrameIndex);
+        toast.success(
+          t('segmentation.trackOps.propagateSuccess', {
+            count: result.framesUpdated,
+          })
+        );
+      } catch (error) {
+        logger.error('Failed to propagate microtubule track', error);
+        toast.error(t('segmentation.trackOps.propagateFailed'));
+      }
+    },
+    [
+      video.container,
+      imageId,
+      handleUpdatePolygonField,
+      evictVideoFrameSegmentationCaches,
+      markFollowingFramesSegmented,
+      t,
+    ]
+  );
+
+  // Right-click delete: whole track for a tracked microtubule, else the single
+  // polyline (untracked MT or non-MT project).
+  const handleDeletePolygonOrTrack = useCallback(
+    async (polygonId: string) => {
+      const videoId = video.container?.id;
+      const target = editorRef.current
+        .getPolygons()
+        .find(p => p.id === polygonId);
+      const trackId = target?.trackId;
+      if (projectType === 'microtubules' && videoId && trackId) {
+        try {
+          const result = await apiClient.deleteTrack(videoId, trackId);
+          // Remove it from the current frame + hidden-set locally for instant
+          // feedback; the backend already purged every sibling frame.
+          handleDeletePolygonFromContextMenu(polygonId);
+          evictVideoFrameSegmentationCaches();
+          toast.success(
+            t('segmentation.trackOps.deleteTrackSuccess', {
+              count: result.framesAffected,
+            })
+          );
+        } catch (error) {
+          logger.error('Failed to delete microtubule track', error);
+          toast.error(t('segmentation.trackOps.deleteTrackFailed'));
+        }
+        return;
+      }
+      handleDeletePolygonFromContextMenu(polygonId);
+    },
+    [
+      video.container,
+      projectType,
+      handleDeletePolygonFromContextMenu,
+      evictVideoFrameSegmentationCaches,
+      t,
+    ]
+  );
+
+  // Read the multi-selection through a ref so the canvas callbacks below stay
+  // identity-stable (they're compared in the CanvasPolygon memo comparator).
+  const selectedPolygonIdsRef = useRef(selectedPolygonIds);
+  selectedPolygonIdsRef.current = selectedPolygonIds;
+
+  // Canvas click: Shift+click toggles the polygon in the multi-selection; a
+  // plain click clears the multi-selection and runs the normal single select.
+  const handleCanvasSelect = useCallback(
+    (polygonId: string | null, additive?: boolean) => {
+      if (additive && polygonId) {
+        toggleMultiSelect(polygonId);
+        return;
+      }
+      clearMultiSelect();
+      editorRef.current.handlePolygonClick(polygonId);
+    },
+    [toggleMultiSelect, clearMultiSelect]
+  );
+
+  // Assign (or clear) a microtubule type label. Whole-track semantics: resolves
+  // the target polygons' trackIds and sets `mtType` on every frame via the
+  // backend, then reloads so the current frame recolours. When ≥2 MTs are
+  // multi-selected the label applies to all of them; otherwise just the
+  // right-clicked polyline's track. Reads the selection through the ref so this
+  // callback stays identity-stable for the CanvasPolygon memo comparator.
+  const handleChangeMtType = useCallback(
+    async (polygonId: string, mtType: string | null) => {
+      const videoId = video.container?.id;
+      if (!videoId) return;
+      const polys = editorRef.current.getPolygons();
+      const trackIds = resolveTargetTrackIds(
+        polygonId,
+        selectedPolygonIdsRef.current,
+        polys
+      );
+      if (trackIds.length === 0) {
+        toast.error(t('microtubule.type.noTrack'));
+        return;
+      }
+      try {
+        await apiClient.setTrackType(videoId, trackIds, mtType);
+        evictVideoFrameSegmentationCaches();
+        await reloadSegmentation();
+        toast.success(t('microtubule.type.updated'));
+      } catch (error) {
+        logger.error('Failed to set microtubule type', error);
+        toast.error(t('microtubule.type.updateFailed'));
+      }
+    },
+    [video.container, reloadSegmentation, evictVideoFrameSegmentationCaches, t]
+  );
+
+  // Delete a label: the backend nulls every `mtType` reference to it, so evict
+  // sibling caches + reload the current frame so cleared MTs revert to neutral.
+  const handleDeleteMtLabel = useCallback(
+    async (labelId: string) => {
+      await deleteMtLabelRaw(labelId);
+      evictVideoFrameSegmentationCaches();
+      await reloadSegmentation();
+    },
+    [deleteMtLabelRaw, evictVideoFrameSegmentationCaches, reloadSegmentation]
+  );
+
+  // Sidebar list checkbox toggle. A row is "checked" when it is the single
+  // selection OR a member of the multi-select set, so a plain left-click on the
+  // canvas also lights up its checkbox. Toggling a checkbox mirrors Shift+click:
+  // it adds/removes the row from the bulk multi-select set. When there is a lone
+  // single (vertex-edit) selection, we fold it into the bulk set first so the
+  // checked rows and the "propagate selected (N)" count always agree.
+  const handleToggleSelectedInList = useCallback(
+    (id: string) => {
+      const single = editorRef.current.selectedPolygonId;
+      if (single === id) {
+        // Clear the single selection via handleSelectPolygon(null) — NOT a bare
+        // setSelectedPolygonId(null). The latter leaves persistedSelectionTrackId
+        // set, so the cross-frame re-select effect (usePolygonHandlers) instantly
+        // re-selects this MT and the checkbox can never be unchecked.
+        handleSelectPolygon(null);
+        return;
+      }
+      if (single) {
+        handleSelectPolygon(null);
+        toggleMultiSelect(single);
+      }
+      toggleMultiSelect(id);
+    },
+    [toggleMultiSelect, handleSelectPolygon]
+  );
+
+  // Sidebar "select all": put every listed current-frame polygon id into the
+  // bulk set and drop the single selection so the whole list reads as checked.
+  const handleSelectAllInList = useCallback(
+    (ids: string[]) => {
+      // Clear via handleSelectPolygon(null) so persistedSelectionTrackId is
+      // dropped too (see handleToggleSelectedInList) — otherwise a lingering
+      // single selection is re-applied by the cross-frame re-select effect.
+      handleSelectPolygon(null);
+      selectAllMultiSelect(ids);
+    },
+    [selectAllMultiSelect, handleSelectPolygon]
+  );
+
+  // Sidebar "deselect all": clear both selection sets. Route the single-selection
+  // clear through handleSelectPolygon(null) so persistedSelectionTrackId is
+  // cleared and the re-select effect can't re-check a row.
+  const handleClearSelectionInList = useCallback(() => {
+    handleSelectPolygon(null);
+    clearMultiSelect();
+  }, [clearMultiSelect, handleSelectPolygon]);
+
+  // Right-click "Propagate selected MTs (N)": propagate every Shift-selected
+  // microtubule forward. Loops the single-track endpoint so each keeps its own
+  // trackId + colour; ids read via ref to keep this handler stable.
+  const handlePropagateSelected = useCallback(async () => {
+    const videoId = video.container?.id;
+    const fromFrameIndex = video.container?.frames.find(
+      f => f.id === imageId
+    )?.frameIndex;
+    if (!videoId || typeof fromFrameIndex !== 'number') return;
+
+    const polys = editorRef.current.getPolygons();
+    const sources = Array.from(selectedPolygonIdsRef.current)
+      .map(pid => polys.find(p => p.id === pid))
+      .filter(
+        (p): p is NonNullable<typeof p> => !!p && (p.points?.length ?? 0) >= 2
+      );
+    if (sources.length === 0) {
+      toast.error(t('segmentation.trackOps.propagateFailed'));
+      return;
+    }
+
+    let failed = 0;
+    for (const src of sources) {
+      try {
+        const result = await apiClient.propagateTrackForward(
+          videoId,
+          fromFrameIndex,
+          {
+            trackId: src.trackId,
+            instanceId: src.instanceId,
+            name: src.name,
+            geometry: 'polyline',
+            points: src.points.map(p => ({ x: p.x, y: p.y })),
+          }
+        );
+        if (result.trackId && result.trackId !== src.trackId) {
+          handleUpdatePolygonField(src.id, { trackId: result.trackId });
+        }
+      } catch (error) {
+        logger.error('Failed to propagate a selected microtubule', error);
+        failed++;
+      }
+    }
+
+    evictVideoFrameSegmentationCaches();
+    markFollowingFramesSegmented(fromFrameIndex);
+    clearMultiSelect();
+    if (failed === 0) {
+      toast.success(
+        t('segmentation.trackOps.propagateSelectedSuccess', {
+          count: sources.length,
+        })
+      );
+    } else {
+      toast.warning(
+        t('segmentation.trackOps.propagateSelectedPartial', {
+          done: sources.length - failed,
+          total: sources.length,
+        })
+      );
+    }
+  }, [
+    video.container,
+    imageId,
+    handleUpdatePolygonField,
+    evictVideoFrameSegmentationCaches,
+    markFollowingFramesSegmented,
+    clearMultiSelect,
+    t,
+  ]);
+  // ─────────────── End cross-frame track operations ───────────────
 
   // The overlay debounce moved into `FrameLoadingGate` — it needs
   // `visibleChannels` from ImageDisplayContext which is only mounted
@@ -933,13 +1327,29 @@ const SegmentationEditor = () => {
         handleTogglePolygonVisibility={handleTogglePolygonVisibility}
         handleDeletePolygonFromPanel={handleDeletePolygonFromPanel}
         handleSelectPolygon={handleSelectPolygon}
-        handleDeletePolygonFromContextMenu={handleDeletePolygonFromContextMenu}
+        handleDeletePolygonOrTrack={handleDeletePolygonOrTrack}
+        handlePropagateTrack={handlePropagateTrack}
+        handleCanvasSelect={handleCanvasSelect}
+        handlePropagateSelected={handlePropagateSelected}
+        selectedPolygonIds={selectedPolygonIds}
+        handleToggleSelectedInList={handleToggleSelectedInList}
+        handleSelectAllInList={handleSelectAllInList}
+        handleClearSelectionInList={handleClearSelectionInList}
         handleSlicePolygonFromContextMenu={handleSlicePolygonFromContextMenu}
         handleEditPolygonFromContextMenu={handleEditPolygonFromContextMenu}
         handleDeleteVertexFromContextMenu={handleDeleteVertexFromContextMenu}
         handleRenamePolygon={handleRenamePolygon}
         handleChangeInstanceId={handleChangeInstanceId}
         handleChangePartClass={handleChangePartClass}
+        mtTypeLabels={mtTypeLabels}
+        mtLabelById={mtLabelById}
+        mtColorById={mtColorById}
+        mtColorMode={mtColorMode}
+        onSetMtColorMode={handleSetMtColorMode}
+        onChangeMtType={handleChangeMtType}
+        onCreateMtLabel={handleCreateMtLabel}
+        onRenameMtLabel={handleRenameMtLabel}
+        onDeleteMtLabel={handleDeleteMtLabel}
         activePartClass={activePartClass}
         setActivePartClass={setActivePartClass}
         activeInstanceId={activeInstanceId}

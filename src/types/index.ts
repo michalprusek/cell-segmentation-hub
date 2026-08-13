@@ -354,6 +354,13 @@ export type ProjectType = (typeof PROJECT_TYPES)[number];
 export const isProjectType = (v: unknown): v is ProjectType =>
   typeof v === 'string' && (PROJECT_TYPES as readonly string[]).includes(v);
 
+/** True for microtubule projects. Prefer this shared predicate over a bare
+ *  `t === 'microtubules'` literal: the project type is the PLURAL `microtubules`
+ *  while the model id is the SINGULAR `microtubule`, and mixing them up has
+ *  already shipped a bug (silently hiding the MT export section). */
+export const isMicrotubuleProject = (t: string | undefined | null): boolean =>
+  t === 'microtubules';
+
 /** All known model identifiers, derived from the frontend model registry
  *  SSOT (`@/lib/models/modelRegistry`), which mirrors the backend SSOT.
  *  Re-exported as `KnownModelId` so existing `@/types` consumers are
@@ -364,13 +371,13 @@ type KnownModelId = RegistryModelType;
  * model registry SSOT. Cross-type segmentation is blocked at both frontend
  * (dropdown filter) and backend (400 on submit).
  *
- * - `spheroid_invasive` is locked to `unet_attention_aspp` because core
+ * - `spheroid_invasive` is locked to `spheroid_disintegration` because core
  *   detection is tied to that model's postprocessing path.
  * - `wound`, `sperm` and `microtubules` use their dedicated specialised
  *   models only. `microtubules` ships with the v7 DINOv3 + DPT + PySOAX
  *   pipeline producing per-instance polyline centerlines.
  * - Standard `spheroid` projects can use any of the general spheroid
- *   models, with `unet_attention_aspp` excluded so users wanting core
+ *   models, with `spheroid_disintegration` excluded so users wanting core
  *   detection are nudged toward marking the project disintegrated.
  */
 export const MODEL_TYPE_COMPATIBILITY: Record<
@@ -579,6 +586,13 @@ export interface VideoChannel {
   wavelengthNm?: number;
   displayColor?: string;
   isSegmentationSource: boolean;
+  /** True for channels ADDED after upload ("Add channel"): pixels live only
+   *  in the per-frame PNGs, and the channel may cover only some frames. */
+  pngBacked?: boolean;
+  /** Frame Image ids this channel actually covers, when it covers only SOME
+   *  frames. Omitted => full coverage. The editor uses this to skip requesting
+   *  the channel for frames it doesn't cover (avoids 404 noise). */
+  frameIds?: string[];
 }
 
 // Metric types for XLSX export

@@ -90,7 +90,10 @@ export const batchQueueSchema = z.object({
     .string()
     .min(1, 'Kanál nesmí být prázdný')
     .max(64, 'Kanál může mít maximálně 64 znaků')
-    .regex(/^[A-Za-z0-9_-]+$/, 'Kanál může obsahovat jen alfanumerické znaky, _ a -')
+    .regex(
+      /^[A-Za-z0-9_-]+$/,
+      'Kanál může obsahovat jen alfanumerické znaky, _ a -'
+    )
     .optional(),
 });
 
@@ -153,6 +156,13 @@ export const isProjectType = (v: unknown): v is ProjectType =>
 export const coerceProjectType = (v: unknown): ProjectType =>
   isProjectType(v) ? v : 'spheroid';
 
+/** True for microtubule projects. Prefer over a bare `t === 'microtubules'`:
+ *  the project type is PLURAL `microtubules` while the model id is SINGULAR
+ *  `microtubule`, and mixing them has shipped a bug before. Accepts a raw
+ *  `project.type` (`string | undefined | null`) — no `?? ''` needed. */
+export const isMicrotubuleProject = (v: string | undefined | null): boolean =>
+  v === 'microtubules';
+
 /** Model identifiers and the model↔project-type compatibility map now derive
  *  from the single source of truth in `../constants/modelRegistry`. Adding or
  *  removing a model there updates this automatically — no more hand-synced
@@ -161,11 +171,11 @@ export const coerceProjectType = (v: unknown): ProjectType =>
  *  Cross-tree (frontend) parity is guaranteed by two independent equality
  *  tests pinning each side to the canonical matrix, plus the source-level
  *  `scripts/check-model-parity.cjs` guard. Compatibility rationale:
- *  - `spheroid_invasive` is locked to `unet_attention_aspp` (core detection is
+ *  - `spheroid_invasive` is locked to `spheroid_disintegration` (core detection is
  *    tied to that model's postprocessing path).
  *  - `wound`, `sperm`, `microtubules` use their dedicated specialised models.
  *  - Standard `spheroid` projects use the general spheroid models;
- *    `unet_attention_aspp` is excluded there on purpose. */
+ *    `spheroid_disintegration` is excluded there on purpose. */
 import {
   MODEL_TYPE_COMPATIBILITY,
   type KnownModelId,
@@ -257,6 +267,23 @@ export const projectQuerySchema = z.object({
  */
 export const projectIdSchema = z.object({
   id: z.string().uuid('Neplatné ID projektu'),
+});
+
+// Project id + a microtubule type-label id (DELETE …/mt-type-labels/:labelId).
+// MUST include labelId or `validateParams` (which replaces req.params with the
+// Zod-parsed object, stripping unknown keys) would drop it and the handler
+// would receive `labelId === undefined`.
+export const projectLabelParamsSchema = z.object({
+  id: z.string().uuid('Neplatné ID projektu'),
+  labelId: z.string().min(1, 'ID labelu je povinné').max(100),
+});
+
+// PUT …/mt-type-labels body. Loose on purpose: `labels` must be an array (gross
+// error → 400), but per-entry validation/sanitization (id/name/#RRGGBB, dedupe)
+// lives in mtTypeLabelService.sanitizeLabels so a partially-malformed palette is
+// cleaned rather than wholesale rejected. Cap the count to bound the payload.
+export const mtTypeLabelsPutSchema = z.object({
+  labels: z.array(z.unknown()).max(500),
 });
 
 // Image validation schemas
@@ -459,7 +486,11 @@ const folderNameSchema = z
 
 export const createFolderSchema = z.object({
   name: folderNameSchema,
-  parentId: z.string().uuid('Neplatné ID nadřazené složky').nullable().optional(),
+  parentId: z
+    .string()
+    .uuid('Neplatné ID nadřazené složky')
+    .nullable()
+    .optional(),
 });
 
 // PATCH semantics: any subset of { name, parentId } may be supplied.
@@ -468,10 +499,15 @@ export const createFolderSchema = z.object({
 export const updateFolderSchema = z
   .object({
     name: folderNameSchema.optional(),
-    parentId: z.string().uuid('Neplatné ID nadřazené složky').nullable().optional(),
+    parentId: z
+      .string()
+      .uuid('Neplatné ID nadřazené složky')
+      .nullable()
+      .optional(),
   })
   .refine(v => v.name !== undefined || v.parentId !== undefined, {
-    message: 'Aktualizace musí obsahovat alespoň jedno pole (name nebo parentId)',
+    message:
+      'Aktualizace musí obsahovat alespoň jedno pole (name nebo parentId)',
   });
 
 export const folderItemsSchema = z.object({
@@ -511,3 +547,84 @@ export const createFeedbackSchema = z.object({
 });
 
 export type CreateFeedbackData = z.infer<typeof createFeedbackSchema>;
+
+// ============================================================================
+// Segmenter (few-shot active-learning polygon tool) — P0
+// ============================================================================
+
+const segmenterHexColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, 'Barva musí být ve formátu #RRGGBB');
+
+const segmenterNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Název je povinný')
+  .max(200, 'Název může mít maximálně 200 znaků');
+
+export const createSegmenterDatasetSchema = z.object({
+  name: segmenterNameSchema,
+});
+
+export const segmenterDatasetIdSchema = z.object({
+  id: z.string().uuid('Neplatné ID datasetu'),
+});
+
+// Dataset id + a class id (PUT/DELETE …/classes/:classId). MUST include both —
+// `validateParams` replaces req.params with the parsed object, so a schema
+// missing `classId` would silently drop it (see projectLabelParamsSchema).
+export const segmenterClassParamsSchema = z.object({
+  id: z.string().uuid('Neplatné ID datasetu'),
+  classId: z.string().uuid('Neplatné ID třídy'),
+});
+
+export const createSegmenterClassSchema = z.object({
+  name: segmenterNameSchema.max(
+    100,
+    'Název třídy může mít maximálně 100 znaků'
+  ),
+  color: segmenterHexColorSchema,
+});
+
+export const updateSegmenterClassSchema = z
+  .object({
+    name: segmenterNameSchema
+      .max(100, 'Název třídy může mít maximálně 100 znaků')
+      .optional(),
+    color: segmenterHexColorSchema.optional(),
+  })
+  .refine(v => v.name !== undefined || v.color !== undefined, {
+    message: 'Aktualizace musí obsahovat alespoň jedno pole (name nebo color)',
+  });
+
+export const segmenterImageIdSchema = z.object({
+  imageId: z.string().uuid('Neplatné ID obrázku'),
+});
+
+// PUT …/images/:imageId/annotations body. Loose on `polygons` on purpose —
+// gross error (not an array) → 400 here, but per-polygon shape validation
+// (points, classId, overlap-friendly — no dedupe) lives in
+// segmenterService.sanitizeAnnotationPolygons so a partially-malformed
+// payload is cleaned rather than wholesale rejected.
+export const segmenterAnnotationsPutSchema = z.object({
+  polygons: z.array(z.unknown()).max(5000),
+  imageWidth: z.number().int().positive(),
+  imageHeight: z.number().int().positive(),
+});
+
+export type CreateSegmenterDatasetData = z.infer<
+  typeof createSegmenterDatasetSchema
+>;
+export type SegmenterDatasetIdParams = z.infer<typeof segmenterDatasetIdSchema>;
+export type SegmenterClassParams = z.infer<typeof segmenterClassParamsSchema>;
+export type CreateSegmenterClassData = z.infer<
+  typeof createSegmenterClassSchema
+>;
+export type UpdateSegmenterClassData = z.infer<
+  typeof updateSegmenterClassSchema
+>;
+export type SegmenterImageIdParams = z.infer<typeof segmenterImageIdSchema>;
+export type SegmenterAnnotationsPutData = z.infer<
+  typeof segmenterAnnotationsPutSchema
+>;

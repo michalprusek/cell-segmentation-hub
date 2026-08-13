@@ -11,7 +11,10 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import type { ExportOptions, ProjectWithImages } from '../exportService';
-import type { ProjectType } from '../../types/validation';
+import {
+  isMicrotubuleProject,
+  type ProjectType,
+} from '../../types/validation';
 
 export function generateReadme(
   project: ProjectWithImages,
@@ -50,8 +53,8 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 * yolo/ - YOLO format annotations
 * json/ - Custom JSON format
 ${
-  project.type === 'microtubules'
-    ? '* imagej/ - ImageJ/Fiji .roi files (one file per microtubule, grouped as <video>/frame_NNNN/, named by cross-frame trackId when tracking ran)\n'
+  isMicrotubuleProject(project.type)
+    ? '* imagej/ - ImageJ/Fiji ROIs, one <video>_RoiSet.zip per video (each microtubule polyline on its own stack slice, named <type>_<n> per tubulin class (rename overrides; untyped_<n> otherwise), coloured per class/track, drawn at the MT thickness)\n'
     : ''
 }* metrics/ - Calculated metrics
 * documentation/ - This folder
@@ -215,8 +218,12 @@ columns are filled only when a channel was selected in the export dialog
   only).
 - **sumIntensity / meanIntensity / stdIntensity** — raw 16-bit signal
   statistics inside the band for this channel (intensity exports only).
-- **medianBackground** — median signal outside the dilated band union, used
-  as the per-frame background for this channel.
+- **medianBackground / meanBackground** — median resp. mean signal in THIS
+  microtubule's own LOCAL vicinity ring: the band within
+  \`thickness * margin\` of its centerline, excluding every microtubule's signal
+  band. Each MT therefore gets a background appropriate to where it sits — a
+  bright neighbourhood no longer averages away a dim one (this changed from a
+  single frame-global background; older exports are not directly comparable).
 - **signalMinusBackground** — meanIntensity − medianBackground
   (background-corrected mean).
 
@@ -236,18 +243,28 @@ The JSON format preserves the full microtubule structure:
 ## ImageJ / Fiji ROIs (\`annotations/imagej/\`)
 
 Every microtubule export also bundles the polyline centerlines as native
-ImageJ \`.roi\` files, so you can re-open them in ImageJ / Fiji for manual
-re-measurement or line-based plugins. Files are loose (one \`.roi\` per
-microtubule), grouped as \`annotations/imagej/<video>/frame_NNNN/\`, and named
-by the cross-frame **trackId** when tracking ran (falling back to the
-polyline's name/id otherwise) — so a tracked microtubule keeps the same ROI
-name in every frame.
+ImageJ ROIs, so you can re-open them in ImageJ / Fiji for manual
+re-measurement or line-based plugins. They are packaged as **one
+\`<video>_RoiSet.zip\` per video** under \`annotations/imagej/\`, with each ROI
+named **\`<type>_<n>\`** — the microtubule's tubulin type class plus a per-type
+counter numbered from 1 (e.g. \`HeLa_1\`, \`HeLa_2\`, \`brain_1\`). A manually
+renamed microtubule uses that name verbatim, and an untyped one reads
+\`untyped_<n>\`. The name is keyed on the cross-frame trackId, so the same
+microtubule keeps one name in every frame.
 
+- Each ROI is placed on its own 1-based **stack slice** (its video frame) and
+  coloured per track, matching the editor.
+- Each polyline is drawn at the configured **MT thickness** (the "MT thickness
+  (px)" export setting, default 5) as its stroke width — so ImageJ renders and
+  measures each microtubule as a band of that width, not a hairline.
+- Each microtubule also gets a companion **\`<name>_bg\`** ROI — the same
+  polyline drawn at the wider **vicinity width** (\`thickness + 2*margin\`), so
+  you can see the band its LOCAL background is sampled from (the ring between
+  the signal band and this wider band). Omitted when the margin is 0.
 - Geometry is stored with sub-pixel (float) precision, in image-pixel space.
-- To load a frame's ROIs: open the frame image in ImageJ and **drag the
-  frame's \`.roi\` files onto the ImageJ window** — this accepts multiple files
-  at once and adds them to the ROI Manager. (ImageJ's *ROI Manager ▸ More ▸
-  Open…* loads only a single \`.roi\`, or a single RoiSet \`.zip\`, at a time.)
+- To load a video's ROIs: **drag its \`<video>_RoiSet.zip\` onto the ImageJ
+  window**, or use *ROI Manager ▸ More ▸ Open…* and pick the \`.zip\` — either
+  loads every microtubule across all frames into the ROI Manager at once.
 
 ## Kymograph velocity metrics
 
@@ -464,9 +481,9 @@ apply equally to compact (t=0) and disintegrated (t>0) spheroids.
 ## Pipeline Overview
 
 \`\`\`
-ASPP segmentation  →  polygons[]  →  core detection (Otsu + 2-of-3 voting)
+3-class segmentation (bg / corona / core)  →  core = class-2 polygons
                                      ↓
-                            partClass="core" polygon attached
+                            partClass="core" polygons attached
                                      ↓
      ┌──────────────┬─────────────────┬──────────────────┐
      ↓              ↓                 ↓                  ↓
@@ -480,45 +497,23 @@ ASPP segmentation  →  polygons[]  →  core detection (Otsu + 2-of-3 voting)
                                                   normalised by R_core
 \`\`\`
 
-## Core Detection (ASPP-only)
+## Core Detection
 
-Performed in the Python ML service inside \`PostprocessingService.detect_core_polygons\`
-(file \`backend/segmentation/services/postprocessing.py\`). Pipeline:
+The spheroid-disintegration model (UNet++ / EfficientNet-B5, model key
+\`spheroid_disintegration\`) segments each image into three classes directly —
+**0 = background, 1 = corona (dispersing cells), 2 = dense core** — so the core is
+a *predicted class*, not an intensity heuristic. It is read straight from the
+segmentation in \`predict_disintegration\`
+(\`backend/segmentation/ml/model_loader.py\`):
 
-1. **Pick parent**: the **largest** external polygon detected by ASPP (\`A_all\`)
- that exceeds \`CORE_MIN_PARENT_AREA = 1000 px²\`. Smaller externals are
- noise/debris and don't get a core.
+1. **Foreground** = classes 1 ∪ 2 → the outer spheroid polygons
+ (\`type="external"\`): the total cell-covered area.
 
-2. **Rasterise** the parent polygon into a binary mask matching the original
- image dimensions (\`cv2.fillPoly\` on a uint8 zero canvas).
+2. **Core** = class 2 → polygons tagged \`partClass="core"\`.
 
-3. **Local Otsu** on the grayscale intensities **inside the mask only**:
- \`thr = threshold_otsu(gray[mask>0])\`. The histogram restriction is essential
- — global Otsu sits between background and cells, which is the duality of
- the segmentation itself and yields no information about core vs. corona.
-
-4. **2-of-3 compactness gate**. The spheroid is "compact" (= core covers the
- whole parent) when **at least two** of these indicators agree:
- - **mean_diff** < 45 grayscale levels: difference of \`mean(below_thr)\` and
-   \`mean(above_thr)\` inside the mask. Small ⇒ unimodal interior.
- - **core_frac** > 0.75: fraction of mask pixels below Otsu. High ⇒ most of
-   the spheroid is dense.
- - **solidity** > 0.85: \`area / convex_hull_area\` of the parent polygon.
-   High ⇒ round, no invasion projections.
-
- Calibrated on user 12bprusek's *time_0h* (compact) vs *time_48h* (invasive)
- projects, April 2026. Cohen's *d* = 3.18 on \`mean_diff\`. Class constants
- are tunable in \`PostprocessingService\`.
-
-5. **Compact path** (votes ≥ 2): return the **whole parent polygon** as the
- core. \`Core Area ≈ Total Spheroid Area\`.
-
-6. **Bimodal path** (votes < 2): build \`core_raw = (gray ≤ thr) & mask\`, label
- connected components, return the **single largest CC** as the core polygon.
- The contour is extracted via \`cv2.findContours(RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)\`.
-
-7. The returned core polygon carries \`partClass="core"\` and \`parent_id\` linking
- it to the parent spheroid.
+Predicting the core directly (rather than by thresholding an earlier binary
+segmentation) keeps the DI anchor correct on intact (t=0) spheroids too, where
+the whole spheroid is core.
 
 ## Total Spheroid Area (${areaUnit})
 
@@ -543,10 +538,11 @@ area* in the image, not just the largest.
 CoreArea = area(polygon with partClass="core")
 \`\`\`
 
-- Geometric area of the **single core polygon** (largest connected component
-below Otsu threshold; or the whole parent in the compact case).
+- Geometric area of the core polygon(s) — the region(s) the model predicts as
+class 2 (dense core).
 - Same Shoelace formula and same scale conversion as Total Spheroid Area.
-- For a compact spheroid: \`CoreArea ≈ TotalSpheroidArea\` (whole parent = core).
+- For a compact spheroid: \`CoreArea ≈ TotalSpheroidArea\` (the model labels the
+whole spheroid as core).
 - For a fully invasive spheroid: \`CoreArea\` is the dense central agglomerate
 while the rest of \`TotalSpheroidArea\` is the diffuse invasion zone.
 - **Reference**: Lim 2020 \`A_core\` (paper notation) corresponds directly.
@@ -568,88 +564,109 @@ edge cases where Core slightly exceeds Total due to numerical artefacts.
 
 ## Disintegration Index (DI)
 
-The DI is a scalar in \`[0, 1)\` that quantifies *how much spheroid mass has
-escaped beyond a uniform-disk reference of equivalent core area*. Reported in
-the Excel column **Disintegration Index** (4 decimal places, dimensionless).
+The DI is a scalar in \`[0, 1)\` that quantifies *how far the spheroid's radial
+mass distribution has dispersed beyond its dense core*, in a size-invariant
+way. It is **core-anchored** and **requires a core** — there is no
+equivalent-disk fallback. Reported in the Excel column **Disintegration Index**
+(4 decimal places, dimensionless); rendered as **N/A** when no core is present.
 
 Algorithm (implemented in
 \`backend/segmentation/api/metrics_endpoint.py\` — POST \`/api/disintegration-index\`):
 
-1. **Rasterise the union of every external polygon** (the whole ASPP segmentation
+1. **Rasterise the union of every external polygon** (the whole disintegration segmentation
  mask, excluding cores) into a single binary canvas via repeated
- \`cv2.fillPoly\`. Collect the \`(x, y)\` of all \`N\` white pixels.
+ \`cv2.fillPoly\`. Collect the \`(x, y)\` of all \`M\` foreground pixels.
 
-2. **Centroid anchor**:
- - If a core polygon is present, \`(cx, cy) = (mean(xᵢ_core), mean(yᵢ_core))\` —
-   the centroid of the **core pixels**. The metric thus measures how far
-   mass spread from the dense core, not from the smeared mass centroid
-   that drifts toward the invasion zone (improvement A — biologically the
-   core is the natural reference point for "how far did things go").
- - Otherwise (no core) fallback to mask centroid
-   \`(cx, cy) = (mean(xᵢ), mean(yᵢ))\`.
+2. **Core (required)**. Rasterise the union of the \`partClass="core"\` polygon(s)
+ into \`N_C\` pixels with centroid \`c = (mean(xᵢ_core), mean(yᵢ_core))\` and
+ effective radius \`R_C = √(N_C / π)\`. If no core rasterises to ≥ 1 pixel the
+ DI is **undefined**: the endpoint returns \`reference="no_core"\` and the Excel
+ cell shows \`N/A\` (never a computed 0).
 
- Distances \`dᵢ = √((xᵢ − cx)² + (yᵢ − cy)²)\` are computed for both
- sets (\`d_mask\` over all mask pixels and \`d_core\` over core pixels)
- relative to this single anchor.
+3. **Core-anchored, core-normalised distances**. For each foreground pixel take
+ the Euclidean distance to the **core centroid** \`c\`,
+ \`rᵢ = √((xᵢ − cx)² + (yᵢ − cy)²)\`, and normalise by the core radius:
+ \`d̃ᵢ = rᵢ / R_C\`. Anchoring on the core (not the mask centroid, which drifts
+ toward the invasion zone) makes the metric measure how far mass spread *from
+ the dense core*.
 
-3. **Reference radius**:
- - If a core polygon is present, \`R_ref = √(N_core / π)\` where \`N_core\` is
-   the rasterised pixel count of the core.
- - Otherwise fallback to \`R_eff = √(N / π)\`.
+4. **Reference distribution — analytical uniform disk**. The reference is a
+ filled disk of the core's size, \`F_ref(d̃) = min(d̃², 1)\`, whose inverse
+ (quantile) is \`F_ref⁻¹(u) = √u\`. This is an *idealised* disk of radius
+ \`R_C\`, independent of the core's actual shape.
 
-4. **Reference distribution — empirical core CDF**. When a core polygon is
- present, the reference is the **empirical** distribution of distances
- \`d_core\` for every pixel inside the core, anchored on the **same
- centroid as d_mask** (the core centroid from step 2). This means the
- reference reflects the **actual radial profile of the dense core**,
- not an idealised disk. The fallback (no core) uses the analytical
- equivalent-disk CDF \`F_ref(d̃) = d̃²\` for \`d̃ ∈ [0, 1]\`.
+5. **1-Wasserstein distance** in inverse-cumulative (quantile) form, estimated
+ bin-free from the sorted normalised distances:
+ \`W₁ = ∫₀¹ |d̃(u) − √u| du ≈ (1/M) · Σᵢ |d̃₍ᵢ₎ − √((i + 0.5) / M)|\`,
+ where \`d̃₍ᵢ₎\` are the ascending \`d̃\` values. This is the paper's eq. (1).
 
-5. **1-Wasserstein distance**:
- - **Core path**: \`W₁_px = wasserstein_distance(d_mask, d_core)\` via
-   \`scipy.stats\`, computed exactly between the two empirical 1D
-   distributions. Scale-normalised: \`W₁ = W₁_px / R_core\`, where
-   \`R_core = √(N_core / π)\`.
- - **r_eff fallback**: bin-free quantile formula
-   \`W₁ ≈ (1/N) · Σᵢ |d̃₍ᵢ₎ − √((i − 0.5) / N)|\` where d̃₍ᵢ₎ are sorted
-   normalised distances \`d_mask / R_eff\`.
+6. **Saturation**: \`DI = tanh(W₁)\`. Maps \`W₁ ∈ [0, ∞) → [0, 1)\`. An intact
+ spheroid (foreground ≈ core) gives \`d̃ ≤ 1\` distributed as a filled disk and
+ \`DI ≈ 0\`; as mass disperses to \`d̃ ≫ 1\`, \`DI → 1\`.
 
-6. **Saturation**: \`DI = tanh(W₁)\`. Maps \`W₁ ∈ [0, ∞) → [0, 1)\`.
-
-**Properties**: dimensionless, scale-invariant (all distances normalised by
-\`R_ref\`), rotation-invariant, translation-invariant (centroid-relative).
+**Properties**: dimensionless, scale-invariant (distances normalised by
+\`R_C\`), rotation-invariant, translation-invariant (core-relative). Depends only
+on the core's *size* (\`R_C\`), not its shape — the reference is an ideal disk.
 
 **Calibrated thresholds** (user 12bprusek, April 2026):
 - *time_0h* (compact): DI median ≈ 0.001
 - *time_48h* (rozprsknuté): DI median ≈ 0.48
 - 320× separation between groups
 
+## Disintegration Metric Panel
+
+Alongside DI the export reports a panel of companion metrics spanning the
+*independent* ways a spheroid disintegrates, so redundancy with DI is explicit.
+All are computed in the **same endpoint** from the same rasterised masks
+(\`FG = C ∪ K\`, i.e. the foreground mask unioned with the core), and all are
+**\`N/A\` unless a core anchored the computation** (\`reference="core"\`). Notation:
+\`N_C\`/\`N_K\`/\`N_FG\` = pixel counts of core / corona / foreground; \`R_C\` = core
+radius; \`d̃ = |p − c| / R_C\`.
+
+| Metric (Excel column) | Axis | Formula | Reads as |
+| --- | --- | --- | --- |
+| **Radial Reach q95** | A — radial dispersal | 95th percentile of \`{d̃}\` | how far (in core radii) the leading 5 % of mass has travelled |
+| **Dispersed-Mass Fraction** | B — mass partition | \`N_K / N_FG\` ∈ [0,1] | fraction of mass now outside the dense core |
+| **Fragment Count** | C — fragmentation | connected components of FG after closing (\`r=2 px\`) with components \`< 30 px\` dropped | into how many pieces the spheroid has broken |
+| **Largest-Fragment Fraction** | C — fragmentation | largest component ÷ de-speckled mass ∈ (0,1] | \`1\` = one mass, \`→0\` = fully fragmented |
+| **Solidity** | D — porosity | \`N_FG / N_hull\` ∈ [0,1] | \`1\` = compact, \`→0\` = porous/dispersed |
+| **Hole Count** | D — porosity | enclosed holes in FG (Betti-1, holes \`≥ 30 px\`) | internal porosity |
+| **Core/Whole Equiv. Diameter** | E — absolute size | \`2·√(N/π)\` ×(µm/px) | absolute size context (not size-invariant) |
+
+The **speckle guard** (closing radius \`2 px\`, min component/hole \`30 px\`) is fixed
+and echoed by the endpoint (\`closing_radius_px\`, \`min_fragment_px\`) so results are
+reproducible. Axis-A **Radius of gyration** and other second-moment descriptors
+are deliberately *omitted* — their rank correlation with DI is ≈ 0.95 (same axis).
+
 ## Edge Cases & Caveats
 
-- **No ASPP segmentation** (HRNet, CBAM-ResUNet, plain U-Net, sperm, wound):
+- **No disintegration segmentation** (HRNet, CBAM-ResUNet, plain U-Net, sperm, wound):
 no core polygon is generated. \`Core Area = 0\`, \`Total Spheroid Area\` still
-reports the sum of all external polygons. Compatibility-safe for any model.
+reports the sum of all external polygons, but the **Disintegration Index is
+\`N/A\`** (\`reference="no_core"\`) — DI is core-anchored and undefined without a
+core. Area columns remain compatibility-safe for any model.
 - **Image with no polygons or no externals**: both metrics report \`0\`.
 - **Cropped spheroid touching image edge**: the centroid is biased, the
 rasterised area is truncated. Detected via bbox of mask = canvas edge —
 not auto-flagged in the export but visible by inspection.
-- **Multiple spheroids, only the largest gets a core**: smaller spheroids
-contribute to \`Total Spheroid Area\` only. By design — paper Lim 2020
-treats each spheroid as its own experimental unit.
-- **Hollow / necrotic core**: the central pixels may be lighter than the
-surrounding ring, which inflates \`mean_diff\` and the algorithm may pick a
-ring-shaped CC as the "core". Mathematically correct given the intensity
-histogram, biologically ambiguous; manual inspection recommended for
-spheroids known to have necrotic centres.
+- **Multiple spheroids**: each spheroid whose dense centre the model labels as
+core (class 2) gets its own core polygon; a spheroid with no predicted core
+contributes to \`Total Spheroid Area\` only.
+- **Hollow / necrotic core**: a lighter necrotic centre may be under- or
+over-segmented by the model (class 2 vs corona), which is biologically
+ambiguous; manual inspection is recommended for spheroids known to have
+necrotic centres.
 
 ## Source Files
 
-- **Core detection**: \`backend/segmentation/services/postprocessing.py\`
+- **Core detection**: \`backend/segmentation/ml/model_loader.py\` (\`predict_disintegration\`)
 - **DI computation**: \`backend/segmentation/api/metrics_endpoint.py\`
 - **Per-image area orchestration**: \`backend/src/services/metrics/metricsCalculator.ts\`
 (\`calculateAllImageMetrics\`)
-- **Excel writer**: same file (\`exportToExcel\` — emits Image Name, Image ID,
-Total Spheroid Area, Core Area, Invasion Area, Disintegration Index)
+- **Excel writer**: same file (\`exportToExcel\` — emits Image Name, Total
+Spheroid Area, Core Area, Invasion Area, Disintegration Index, and the metric
+panel: Radial Reach q95, Dispersed-Mass Fraction, Fragment Count,
+Largest-Fragment Fraction, Solidity, Hole Count, Core/Whole Equiv. Diameter)
 `;
 }
 

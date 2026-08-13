@@ -37,22 +37,13 @@ import {
 } from 'lucide-react';
 import { useSharedAdvancedExport } from './hooks/useSharedAdvancedExport';
 import { useLanguage } from '@/contexts/useLanguage';
-import { ProjectImage } from '@/types';
+import { ProjectImage, isMicrotubuleProject } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
 import { MicrotubuleMetricsSection } from './components/MicrotubuleMetricsSection';
 import { MicrotubuleKymographsSection } from './components/MicrotubuleKymographsSection';
+import { projectCanBuildKymograph } from './utils/kymographGating';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 
 interface AdvancedExportDialogProps {
   open: boolean;
@@ -62,26 +53,21 @@ interface AdvancedExportDialogProps {
   /** Used to gate microtubule-specific export controls. */
   projectType?: string | null;
   images: ProjectImage[];
-  /** Distinct channel names across the project's video containers
-   *  (BE-aggregated `metadata.projectChannels`). The container rows that
-   *  carry the `channels` JSON are filtered out of `images` by the gallery
-   *  endpoint, so this prop is the only source the MT channel picker has. */
-  projectChannels?: string[];
   selectedImageIds?: string[];
   onExportingChange?: (isExporting: boolean) => void;
   onDownloadingChange?: (isDownloading: boolean) => void;
 }
 
-/** Default MT metrics options when the user toggles the section on. */
+/** Default MT metrics tuning. Per-channel intensity (incl. the integrated sum)
+ *  is always computed for every channel — these two only tune the band. */
 const MT_METRICS_DEFAULTS = {
-  enabled: false,
   thicknessPx: 5,
   marginMultiplier: 2,
-  channels: [] as string[],
 };
 
 const MT_KYMOGRAPHS_DEFAULTS = {
   enabled: false,
+  mode: 'kymograph' as const,
   includeVelocityMetrics: true,
   includeSegmentedImages: true,
 };
@@ -95,38 +81,24 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       projectName,
       projectType,
       images,
-      projectChannels,
       selectedImageIds,
       onExportingChange,
       onDownloadingChange,
     }) => {
       const { t } = useLanguage();
-      // ProjectType is `'microtubules'` (plural) — `'microtubule'`
-      // (singular) is the model id, not the project type. Mis-comparing
-      // them silently hides the MT section on every MT project.
-      const isMTProject = projectType === 'microtubules';
+      // Shared predicate guards the plural-`microtubules`-vs-singular-
+      // `microtubule`-model-id footgun that once silently hid this section.
+      const isMTProject = isMicrotubuleProject(projectType);
 
-      // Distinct channels across the project's video containers. These come
-      // from the BE-aggregated `projectChannels` (metadata on the thumbnails
-      // response): the container rows that actually carry the `channels` JSON
-      // are filtered out of `images` by the gallery endpoint, so scanning
-      // `images` for `isVideoContainer` rows always yielded an empty list and
-      // the picker never rendered — leaving `channels: []` and a silent
-      // empty MT metrics export. `projectChannels` is name-only, so the
-      // machine name doubles as the display label.
-      const availableChannels = React.useMemo(() => {
-        if (!isMTProject || !projectChannels) return [];
-        const byName = new Map<
-          string,
-          { name: string; displayName?: string }
-        >();
-        for (const name of projectChannels) {
-          if (name && !byName.has(name)) {
-            byName.set(name, { name, displayName: name });
-          }
-        }
-        return Array.from(byName.values());
-      }, [projectChannels, isMTProject]);
+      // A kymograph needs a time axis (≥ 2 frames). The images listing returns
+      // per-frame rows, not container rows, so this counts frames per container
+      // (see projectCanBuildKymograph). When no multi-frame video exists — a
+      // single-frame container or only standalone images — the section forces
+      // profile-only.
+      const canBuildKymograph = React.useMemo(
+        () => projectCanBuildKymograph(images),
+        [images]
+      );
 
       // Local snapshot of MT options. We always merge into the shared
       // exportOptions state when the user toggles or edits inputs so the
@@ -146,13 +118,6 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         wsConnected,
         currentJob,
       } = useSharedAdvancedExport(projectId);
-
-      // Note: export is never blocked for microtubule projects. Without a
-      // selected channel the backend still exports microtubule LENGTH
-      // (geometry) and surfaces a warning that the per-channel intensity
-      // metrics were omitted — so there's no silent-empty trap and no
-      // dead-end when a project has no channel metadata. The channel picker
-      // shows an informational hint instead (see MicrotubuleMetricsSection).
 
       const [activeTab, setActiveTab] = useState('general');
       // `pixelToMicrometerScale != null` was the old auto-fill guard, but
@@ -199,21 +164,6 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         }
       }, [images, exportOptions.pixelToMicrometerScale, updateExportOptions]);
 
-      const [showIncompleteWarning, setShowIncompleteWarning] = useState(false);
-
-      // Microtubule intensity columns require a selected channel. If the user
-      // requested metrics but didn't enable intensity (or pick a channel), the
-      // export still produces microtubule LENGTH but omits the per-channel
-      // intensity columns — so warn before exporting that the metric set will
-      // be incomplete.
-      const shouldWarnIncompleteMetrics =
-        isMTProject &&
-        (exportOptions.metricsFormats?.length ?? 0) > 0 &&
-        !(
-          (exportOptions.mtMetrics?.enabled ?? false) &&
-          (exportOptions.mtMetrics?.channels?.length ?? 0) > 0
-        );
-
       const handleExport = async () => {
         try {
           await startExport(projectName);
@@ -222,21 +172,6 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         } catch (_error) {
           toast.error(t('toast.exportFailed'));
         }
-      };
-
-      // Intercept the Export click: on an MT project missing intensity, pop the
-      // incomplete-metrics confirmation modal first; otherwise export directly.
-      const handleExportClick = () => {
-        if (shouldWarnIncompleteMetrics) {
-          setShowIncompleteWarning(true);
-        } else {
-          void handleExport();
-        }
-      };
-
-      const confirmIncompleteExport = () => {
-        setShowIncompleteWarning(false);
-        void handleExport();
       };
 
       return (
@@ -423,11 +358,17 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     (intensity sampling needs the raw ND2/TIFF on disk). */}
                   {isMTProject && (
                     <MicrotubuleMetricsSection
-                      value={exportOptions.mtMetrics ?? MT_METRICS_DEFAULTS}
+                      value={{
+                        thicknessPx:
+                          exportOptions.mtMetrics?.thicknessPx ??
+                          MT_METRICS_DEFAULTS.thicknessPx,
+                        marginMultiplier:
+                          exportOptions.mtMetrics?.marginMultiplier ??
+                          MT_METRICS_DEFAULTS.marginMultiplier,
+                      }}
                       onChange={next =>
                         updateExportOptions({ mtMetrics: next })
                       }
-                      availableChannels={availableChannels}
                     />
                   )}
 
@@ -436,6 +377,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                       value={
                         exportOptions.mtKymographs ?? MT_KYMOGRAPHS_DEFAULTS
                       }
+                      canBuildKymograph={canBuildKymograph}
                       onChange={next =>
                         updateExportOptions({ mtKymographs: next })
                       }
@@ -709,77 +651,90 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 sm:space-y-4 p-0">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="coco-format"
-                          checked={exportOptions.annotationFormats?.includes(
-                            'coco'
-                          )}
-                          onCheckedChange={checked => {
-                            const formats =
-                              exportOptions.annotationFormats || [];
-                            updateExportOptions({
-                              annotationFormats: checked
-                                ? [...formats, 'coco']
-                                : formats.filter(f => f !== 'coco'),
-                            });
-                          }}
-                        />
-                        <Label
-                          htmlFor="coco-format"
-                          className="text-sm sm:text-base"
-                        >
-                          {t('export.includeCocoFormat')}
-                        </Label>
-                      </div>
+                      {isMTProject ? (
+                        // Microtubule projects don't emit COCO/YOLO/JSON (those
+                        // express class only as a flat category, unsuited to
+                        // per-instance polyline tracks). MT annotations are
+                        // always exported as ImageJ RoiSet + CVAT 1.1, each
+                        // carrying the tubulin type class.
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                          {t('export.microtubuleAnnotationsNote')}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="coco-format"
+                              checked={exportOptions.annotationFormats?.includes(
+                                'coco'
+                              )}
+                              onCheckedChange={checked => {
+                                const formats =
+                                  exportOptions.annotationFormats || [];
+                                updateExportOptions({
+                                  annotationFormats: checked
+                                    ? [...formats, 'coco']
+                                    : formats.filter(f => f !== 'coco'),
+                                });
+                              }}
+                            />
+                            <Label
+                              htmlFor="coco-format"
+                              className="text-sm sm:text-base"
+                            >
+                              {t('export.includeCocoFormat')}
+                            </Label>
+                          </div>
 
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="yolo-format"
-                          checked={exportOptions.annotationFormats?.includes(
-                            'yolo'
-                          )}
-                          onCheckedChange={checked => {
-                            const formats =
-                              exportOptions.annotationFormats || [];
-                            updateExportOptions({
-                              annotationFormats: checked
-                                ? [...formats, 'yolo']
-                                : formats.filter(f => f !== 'yolo'),
-                            });
-                          }}
-                        />
-                        <Label
-                          htmlFor="yolo-format"
-                          className="text-sm sm:text-base"
-                        >
-                          {t('export.exportFormats.yolo')}
-                        </Label>
-                      </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="yolo-format"
+                              checked={exportOptions.annotationFormats?.includes(
+                                'yolo'
+                              )}
+                              onCheckedChange={checked => {
+                                const formats =
+                                  exportOptions.annotationFormats || [];
+                                updateExportOptions({
+                                  annotationFormats: checked
+                                    ? [...formats, 'yolo']
+                                    : formats.filter(f => f !== 'yolo'),
+                                });
+                              }}
+                            />
+                            <Label
+                              htmlFor="yolo-format"
+                              className="text-sm sm:text-base"
+                            >
+                              {t('export.exportFormats.yolo')}
+                            </Label>
+                          </div>
 
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="json-format"
-                          checked={exportOptions.annotationFormats?.includes(
-                            'json'
-                          )}
-                          onCheckedChange={checked => {
-                            const formats =
-                              exportOptions.annotationFormats || [];
-                            updateExportOptions({
-                              annotationFormats: checked
-                                ? [...formats, 'json']
-                                : formats.filter(f => f !== 'json'),
-                            });
-                          }}
-                        />
-                        <Label
-                          htmlFor="json-format"
-                          className="text-sm sm:text-base"
-                        >
-                          {t('export.includeJsonMetadata')}
-                        </Label>
-                      </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="json-format"
+                              checked={exportOptions.annotationFormats?.includes(
+                                'json'
+                              )}
+                              onCheckedChange={checked => {
+                                const formats =
+                                  exportOptions.annotationFormats || [];
+                                updateExportOptions({
+                                  annotationFormats: checked
+                                    ? [...formats, 'json']
+                                    : formats.filter(f => f !== 'json'),
+                                });
+                              }}
+                            />
+                            <Label
+                              htmlFor="json-format"
+                              className="text-sm sm:text-base"
+                            >
+                              {t('export.includeJsonMetadata')}
+                            </Label>
+                          </div>
+                        </>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -1005,7 +960,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                   isOperationActive={isExporting}
                   isCancelling={isDownloading} // Use downloading state as cancelling indicator
                   onCancel={cancelExport}
-                  onPrimaryAction={handleExportClick}
+                  onPrimaryAction={() => void handleExport()}
                   primaryText={t('export.startExport')}
                   disabled={false}
                   className="w-full sm:w-auto"
@@ -1013,28 +968,6 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
               </DialogFooter>
             </DialogContent>
           </Dialog>
-
-          <AlertDialog
-            open={showIncompleteWarning}
-            onOpenChange={setShowIncompleteWarning}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {t('export.mt.incompleteTitle')}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {t('export.mt.incompleteBody')}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmIncompleteExport}>
-                  {t('export.mt.incompleteConfirm')}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </>
       );
     }
