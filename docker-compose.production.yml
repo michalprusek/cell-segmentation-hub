@@ -284,11 +284,25 @@ services:
       - PYTHONUNBUFFERED=1
       - HOME=/tmp
       - MPLCONFIGDIR=/tmp/mpl
-      # GPU guard: only start a batch when >=13 GB is free (a v7 forward peaks
-      # ~12.5 GB); cap this process at 0.6 of the 24 GB card so it can never grab
-      # the whole GPU. Tuned against a real well recording.
-      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-13}
-      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.6}
+      # GPU guard, measured on the 24 GB A5000 against a real well recording
+      # (2026-08-13). A v7 forward pass on a 2048x2048 well wants a 16.36 GiB
+      # working set, and that figure is FLAT — identical at caps of 16.49, 17.67
+      # and 20.02 GiB, so the process is not simply growing to fill whatever it
+      # is given.
+      #
+      # The old 0.6 (14.13 GiB) sat BELOW that working set, so every position
+      # hit the ceiling, released ~3.7 GiB of cached blocks back to the driver
+      # and then had to win them back. On a card shared with the ml service and
+      # Maptimize that re-acquisition is a race, and losing it is an
+      # OutOfMemoryError — which is how one folder lost 255 wells in one run and
+      # 68 in the next (see backend/essays/module/tests/test_failure_resilience.py).
+      # 0.75 clears the working set with 1.31 GiB to spare; higher buys nothing
+      # because the demand does not grow.
+      #
+      # The start gate rises with it: a batch admitted with only 13 GB free
+      # would resume exactly the release-and-re-acquire cycle the cap now avoids.
+      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-17}
+      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.75}
       - ESSAYS_GPU_WAIT_TIMEOUT_S=${ESSAYS_GPU_WAIT_TIMEOUT_S:-1800}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility

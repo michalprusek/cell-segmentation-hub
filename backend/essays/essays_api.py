@@ -31,13 +31,33 @@ from pydantic import BaseModel
 
 MODULE_DIR = Path(os.environ.get("ESSAYS_MODULE_DIR", "/app/essays_module"))
 WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v7.pt")
-# A microtubule-v7 forward pass on a full-frame TIRF well peaks near ~12.5 GiB
-# (measured on a 1024²+ well), so the start-gate waits for that much free VRAM
-# before launching, and the per-process cap sits at 0.6 (~14 GiB, matching the
-# ml service's ML_MEMORY_LIMIT_GB) — high enough not to self-OOM, low enough not
-# to grab the whole shared A5000.
-GPU_MIN_FREE_GB = float(os.environ.get("ESSAYS_GPU_MIN_FREE_GB", "13"))
-GPU_MEM_FRACTION = os.environ.get("ESSAYS_GPU_MEM_FRACTION", "0.6")
+# Measured on the 24 GB A5000 against a real 2048x2048 well (2026-08-13): a v7
+# forward pass wants a **16.36 GiB working set**, and that number is FLAT — the
+# same at caps of 16.49, 17.67 and 20.02 GiB — so the process is not merely
+# growing into whatever ceiling it is handed.
+#
+# These two values were previously 13 GB / 0.6 (14.13 GiB), i.e. the cap sat
+# BELOW the working set. Every position therefore hit the ceiling, dropped ~3.7
+# GiB of cached blocks back to the driver and had to re-acquire them; on a card
+# shared with the ml service and Maptimize that re-acquisition is a race, and
+# losing it raises OutOfMemoryError. That is the mechanism behind the field
+# report of one folder losing 255 wells in one run and 68 in the next.
+#
+# 0.75 clears the working set with 1.31 GiB to spare. Raising it further buys
+# nothing, because the demand does not grow — it only licenses a batch to take
+# more of a card that interactive segmentation also needs. The start gate tracks
+# the cap: admitting a job with less free than the working set would restart the
+# very release-and-re-acquire cycle the cap now avoids.
+#
+# The two numbers the settings below must clear. They are measurements, not
+# preferences, and test_gpu_budget.py fails if a future tweak puts the cap back
+# under the working set — which is precisely the mistake that caused the data
+# loss, and which nothing else would catch until a batch had already lost wells.
+GPU_WORKING_SET_GB = 16.36
+GPU_TOTAL_GB = 23.56  # usable VRAM of the production A5000, per torch
+
+GPU_MIN_FREE_GB = float(os.environ.get("ESSAYS_GPU_MIN_FREE_GB", "17"))
+GPU_MEM_FRACTION = os.environ.get("ESSAYS_GPU_MEM_FRACTION", "0.75")
 GPU_WAIT_TIMEOUT_S = float(os.environ.get("ESSAYS_GPU_WAIT_TIMEOUT_S", "1800"))
 GPU_POLL_S = float(os.environ.get("ESSAYS_GPU_POLL_S", "10"))
 
