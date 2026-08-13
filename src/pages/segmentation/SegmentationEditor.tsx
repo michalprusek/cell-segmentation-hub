@@ -1068,7 +1068,20 @@ const SegmentationEditor = () => {
 
       // Cross-frame whole-track persistence — only for tracked targets.
       let framesAffected: number | null = null;
-      if (videoId && trackIds.length > 0) {
+      if (trackIds.length > 0) {
+        // A tracked target needs the container id to reach its other frames.
+        // `video.container` is null for a beat during a container switch —
+        // useVideoFrames keeps the PREVIOUS container's data until the new id
+        // matches — and the context menu is gated on `isPolyline` alone, so
+        // this is reachable. Stamping only the current frame and then reporting
+        // success would leave the rest of the track quietly unlabelled.
+        if (!videoId) {
+          logger.error(
+            'Cannot set microtubule type: no video container for a tracked polyline'
+          );
+          toast.error(t('microtubule.type.updateFailed'));
+          return;
+        }
         try {
           ({ framesAffected } = await apiClient.setTrackType(
             videoId,
