@@ -72,6 +72,13 @@ _DEVICE_LINE = re.compile(r"\[info\]\s+device=(\S+)")
 # parse loop dropped every unmatched line, the reasons existed nowhere. For a
 # scientific pipeline that is worse than crashing: a crash demands attention,
 # this produces data someone trusts.
+#
+# The count below is still the only number we parse, but it is no longer the
+# only record: evaluate.py now writes failures.csv into the output dir (and so
+# into the download) naming every lost well and its exception. Echoing the
+# [warn] lines to stderr stays as an operator convenience, but it is no longer
+# load-bearing — that log dies with the container, which is exactly how two
+# runs' failure reasons became unrecoverable in 2026-08.
 _DONE_LINE = re.compile(
     r"\[done\]\s+(\d+)\s+positions?,\s+(\d+)\s+microtubules?,\s+(\d+)\s+failures?")
 _DIAG_LINE = re.compile(r"\[(warn|error)\]")
@@ -378,9 +385,9 @@ def _run_job(req: ProcessRequest) -> None:
             _set_status(
                 job_id, out_dir, state="completed", progress=100,
                 failures=n_fail,
-                error=f"{n_fail} well/position failure(s) — some wells are "
-                      "missing from the results. See the worker log for the "
-                      "module's [warn] lines.")
+                error=f"{n_fail} well/position failure(s) — these wells are "
+                      "missing from results.csv. failures.csv in the download "
+                      "names each one and why it failed.")
         else:
             _set_status(job_id, out_dir, state="completed", progress=100,
                         failures=0, error=None)

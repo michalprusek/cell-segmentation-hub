@@ -219,23 +219,35 @@ const AutomatedEssays: React.FC = () => {
                     {(job.status === 'running' || job.status === 'queued') && (
                       <Progress value={job.progress} className="mt-2" />
                     )}
-                    {job.status === 'completed' && job.error && (
-                      // A completed run can still be partial — evaluate.py
-                      // returns 0 even when wells failed. Amber, not red: the
-                      // results are there and downloadable, just incomplete.
-                      <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-500 mt-2">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        <span className="truncate" title={job.error}>
-                          {job.error}
-                        </span>
-                      </div>
-                    )}
-                    {job.status === 'failed' && job.error && (
-                      <div className="flex items-center gap-1 text-xs text-red-500 mt-2">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{job.error}</span>
-                      </div>
-                    )}
+                    {job.error &&
+                      (job.status === 'completed' ||
+                        job.status === 'failed') && (
+                        // A completed run can still be partial — evaluate.py
+                        // returns 0 even when wells failed. Amber, not red: the
+                        // results are there and downloadable, just incomplete.
+                        // Red is for a run that produced nothing at all.
+                        <div
+                          data-testid="essay-job-error"
+                          className={`flex items-start gap-1 text-xs mt-2 ${
+                            job.status === 'completed'
+                              ? 'text-amber-600 dark:text-amber-500'
+                              : 'text-red-500'
+                          }`}
+                        >
+                          <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
+                          {/* Wrapped and scrollable, never clamped to one line.
+                              Reported 2026-08-12: a `truncate` hid everything
+                              past the first sentence, and the rest was reachable
+                              only through a native title tooltip the reporter
+                              never found — on the `failed` branch not even that.
+                              A failed run's message carries the module's output
+                              tail, so it is capped by height, not by characters:
+                              long errors scroll, they do not disappear. */}
+                          <span className="whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                            {job.error}
+                          </span>
+                        </div>
+                      )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {job.status === 'completed' && (

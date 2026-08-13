@@ -31,11 +31,13 @@ repository's GitHub Release on first run (or pass ``--weights /path/to.pt``).
 from __future__ import annotations
 
 import argparse
+import gc
 import os
 import sys
 import time
 import traceback
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -49,6 +51,118 @@ from _mt_package import (  # noqa: E402  (needs _HERE on sys.path)
 
 DEFAULT_WEIGHTS = default_weights()
 BUNDLED_BACKBONE_CONFIG = _HERE / "config" / "dinov3_vitl16"
+
+# A position that fails on the GPU is usually a passing squall rather than a
+# verdict on the data. Measured in production (RTX A5000, 2026-08): one
+# 2048x2048 position peaks at 13.37 GiB against a 14.13 GiB per-process cap, on
+# a 23.56 GiB card shared with the interactive `ml` service and Maptimize — so a
+# co-tenant's spike makes the next allocation raise OutOfMemoryError. The
+# failures arrived in contiguous 5-9 minute bursts, and re-running the same
+# folder a week later failed on a *disjoint* set of positions: every well that
+# was lost one time came back the next. Waiting a burst out costs minutes;
+# dropping the well costs the well, silently, from a scientific table.
+RETRY_BACKOFF_S = (30, 120, 300)
+
+# ...but a GPU that is broken rather than merely busy would otherwise turn a
+# 20 h job into a week of sleeping (720 positions x 7.5 min each). This is a
+# run-wide stop-loss: once this much has been spent waiting, the remaining
+# failures are recorded straight away and the batch finishes on time.
+RETRY_WAIT_BUDGET_S = 3600.0
+
+
+class _RetryBudget:
+    """Run-wide allowance for time spent waiting on a transient GPU failure."""
+
+    def __init__(self, total_s: float):
+        self.remaining = total_s
+
+    def take(self, seconds: float) -> bool:
+        """Consume ``seconds``; False once the run's allowance is spent.
+
+        Deliberately allows the final wait to overshoot rather than refusing a
+        retry that a nearly-exhausted budget could almost afford — the point is
+        to bound the damage, not to meter it exactly.
+        """
+        if self.remaining <= 0:
+            return False
+        self.remaining -= seconds
+        return True
+
+
+class _ErrorInfo(NamedTuple):
+    """What a failed attempt leaves behind — text only, never the exception.
+
+    A caught exception owns its ``__traceback__``, which owns every frame of the
+    failed call, which owns their locals: for an OOM inside the model that is
+    the entire forward pass, still resident on the GPU. Keeping the exception
+    alive across the backoff makes ``empty_cache()`` a no-op and the retry
+    hopeless — measured 2026-08-13, a first cut that held the exception saw all
+    three positions burn all four attempts although the 3 GiB that squeezed them
+    out had been freed 40 s earlier: the process's own usage sat at 14.2 GiB of
+    its 14.13 GiB cap the whole time.
+    """
+
+    type_name: str
+    message: str
+
+
+class _Attempt(NamedTuple):
+    """Outcome of one position: exactly one of ``result`` / ``error`` is set."""
+
+    result: dict | None
+    attempts: int
+    error: _ErrorInfo | None
+
+
+def _release_gpu_memory() -> None:
+    """Hand this process's cached-but-unused VRAM back before a retry.
+
+    ``gc.collect()`` first and not for tidiness: a traceback and its frames
+    reference each other, so the failed attempt's tensors sit in a reference
+    cycle that plain refcounting will not break, and ``empty_cache()`` can only
+    return blocks that nothing still points at.
+    """
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception as e:  # noqa: BLE001 — cleanup must never end the run
+        print(f"[warn] could not release GPU memory before retry: {e}")
+
+
+def _predict_with_retry(model, image, threshold: float, label: str,
+                        budget: _RetryBudget) -> _Attempt:
+    """Segment one position, riding out a transient failure.
+
+    Retries on ANY exception rather than on OutOfMemoryError alone: OOM is the
+    failure mode we measured, but the cost of retrying something unrecoverable
+    is bounded by ``budget`` while the cost of not retrying is a missing well.
+    """
+    last: _ErrorInfo | None = None
+    attempt = 1
+    for attempt in range(1, len(RETRY_BACKOFF_S) + 2):
+        try:
+            return _Attempt(model.predict(image, seed_threshold=threshold),
+                            attempt, None)
+        except Exception as e:  # noqa: BLE001 — the budget decides, not the type
+            # Take the text and nothing else; see _ErrorInfo. Everything below
+            # deliberately sits OUTSIDE this block, because `e` — and with it
+            # the failed forward pass — only becomes collectable once it ends.
+            last = _ErrorInfo(type(e).__name__, str(e))
+
+        if attempt > len(RETRY_BACKOFF_S):
+            break
+        wait = RETRY_BACKOFF_S[attempt - 1]
+        if not budget.take(wait):
+            print(f"[warn] {label}: {last.type_name}: {last.message} — run's "
+                  f"retry budget is spent, giving up on this position")
+            break
+        print(f"[warn] {label}: {last.type_name}: {last.message} — retrying in "
+              f"{wait}s (attempt {attempt + 1}/{len(RETRY_BACKOFF_S) + 1})")
+        _release_gpu_memory()
+        time.sleep(wait)
+    return _Attempt(None, attempt, last)
 
 
 def resolve_device(requested: str) -> str:
@@ -134,7 +248,8 @@ def main() -> int:
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
     from mt_pipeline import (iter_positions, find_nd2_files, measure_frame,
-                             CsvWriter, save_overlay, save_annotation_json)
+                             CsvWriter, FailureLog, parse_well_id, save_overlay,
+                             save_annotation_json)
 
     files = find_nd2_files(args.data)
     if not files:
@@ -174,6 +289,10 @@ def main() -> int:
 
     out = Path(args.out)
     csvw = CsvWriter(out / "results.csv")
+    # Opened unconditionally: a header-only failures.csv is the run stating that
+    # nothing was lost, which a missing file cannot do.
+    failures = FailureLog(out / "failures.csv")
+    budget = _RetryBudget(RETRY_WAIT_BUDGET_S)
     sol_match = tuple(s.strip() for s in args.solution_name.split(",") if s.strip())
 
     n_pos = n_mt = n_fail = 0
@@ -185,6 +304,11 @@ def main() -> int:
                                             solution_match=sol_match))
         except Exception as e:
             n_fail += 1
+            # No position list, so no per-position identity to record — the
+            # whole well is gone, which is what a blank position column means.
+            failures.record(well_id=parse_well_id(f), position="",
+                            source_file=f.name, stage="read", attempts=1,
+                            error_type=type(e).__name__, error_message=str(e))
             print(f"[warn] ({fi}/{len(files)}) failed to read {f.name}: {e}")
             continue
 
@@ -192,16 +316,23 @@ def main() -> int:
         for pos in positions:
             ti = time.time()
             solution_median = float(np.median(pos.solution))
-            try:
-                # IRM, not TIRF: the v7 checkpoint was trained on IRM frames
-                # (see microtubule/segment_mt.py). Feeding it TIRF produced
-                # confident, wrong centerlines for every run before 2026-08.
-                seg = model.predict(pos.irm, seed_threshold=args.threshold)
-                centerlines = seg["centerlines_rc"]
-            except Exception as e:
+            # IRM, not TIRF: the v7 checkpoint was trained on IRM frames
+            # (see microtubule/segment_mt.py). Feeding it TIRF produced
+            # confident, wrong centerlines for every run before 2026-08.
+            attempt = _predict_with_retry(model, pos.irm, args.threshold,
+                                          f"{well} pos{pos.position}", budget)
+            if attempt.error is not None:
                 n_fail += 1
-                print(f"[warn] segmentation failed {well} pos{pos.position}: {e}")
+                failures.record(well_id=pos.well_id, position=pos.position,
+                                source_file=f.name, stage="segment",
+                                attempts=attempt.attempts,
+                                error_type=attempt.error.type_name,
+                                error_message=attempt.error.message)
+                print(f"[warn] segmentation failed {well} pos{pos.position} "
+                      f"after {attempt.attempts} attempt(s): "
+                      f"{attempt.error.type_name}: {attempt.error.message}")
                 continue
+            centerlines = attempt.result["centerlines_rc"]
 
             # ...and TIRF for the readout: the centerlines come from IRM, the
             # intensities integrated along them are the TIRF signal.
@@ -237,10 +368,14 @@ def main() -> int:
                   f"solution_median={solution_median:.1f}  ({time.time()-ti:.1f}s)")
 
     csvw.close()
+    failures.close()
     dt = time.time() - t_start
     print(f"\n[done] {n_pos} positions, {n_mt} microtubules, {n_fail} failures "
           f"in {dt/60:.1f} min")
     print(f"[done] results -> {csvw.path}")
+    if n_fail:
+        print(f"[done] failures -> {failures.path} (one row per lost well, "
+              f"with the reason)")
     return 0
 
 
