@@ -9,11 +9,13 @@ table plus QC overlays.
 from .nd2_io import (Position, iter_positions, find_nd2_files, parse_well_id,
                      read_acquisition_time)
 from .measure import measure_frame
-from .report import CsvWriter, save_overlay, save_annotation_json, COLUMNS
+from .report import (CsvWriter, FailureLog, save_overlay, save_annotation_json,
+                     COLUMNS, FAILURE_COLUMNS)
 
 __all__ = [
     "Position", "iter_positions", "find_nd2_files", "parse_well_id",
     "read_acquisition_time",
     "measure_frame",
-    "CsvWriter", "save_overlay", "save_annotation_json", "COLUMNS",
+    "CsvWriter", "FailureLog", "save_overlay", "save_annotation_json",
+    "COLUMNS", "FAILURE_COLUMNS",
 ]
