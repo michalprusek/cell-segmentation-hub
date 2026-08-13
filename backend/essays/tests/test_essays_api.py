@@ -202,7 +202,7 @@ def test_health_does_not_spam_the_log(monkeypatch):
 def test_device_line_matches_the_modules_real_output():
     """Pinned against the literal line evaluate.py prints."""
     m = essays_api._DEVICE_LINE.search(
-        "[info] device=cpu  threshold=0.5  mt_width=3 bg_gap=2 bg_width=4")
+        "[info] device=cpu  threshold=0.5  mt_width=3 bg_margin=2.0")
     assert m and m.group(1) == "cpu"
     # ...and must not swallow the well-count line the other regex needs.
     assert not essays_api._DEVICE_LINE.search(
@@ -281,8 +281,7 @@ def test_build_cmd_passes_both_channel_roles_separately():
 @pytest.mark.parametrize("key,flag,value,expected", [
     ("threshold", "--threshold", 0.6, "0.6"),
     ("mtWidth", "--mt-width", 7, "7"),
-    ("bgGap", "--bg-gap", 2, "2"),
-    ("bgWidth", "--bg-width", 4, "4"),
+    ("bgMargin", "--bg-margin", 2.5, "2.5"),
     ("irmName", "--irm-name", "irm", "irm"),
     ("tirfName", "--tirf-name", "tirf", "tirf"),
     ("solutionName", "--solution-name", "insol", "insol"),

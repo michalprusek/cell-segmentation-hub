@@ -65,8 +65,10 @@ GPU_POLL_S = float(os.environ.get("ESSAYS_GPU_POLL_S", "10"))
 _VALUE_FLAGS = {
     "threshold": "--threshold",
     "mtWidth": "--mt-width",
-    "bgGap": "--bg-gap",
-    "bgWidth": "--bg-width",
+    # Ring reach as a multiple of mtWidth — the shared measurement's
+    # `margin_multiplier`. Replaced bgGap/bgWidth on 2026-08-13 together with the
+    # ring they described; see models/mt_measure.py.
+    "bgMargin": "--bg-margin",
     # Two channel roles, two flags: the module segments IRM and measures TIRF.
     "irmName": "--irm-name",
     "tirfName": "--tirf-name",

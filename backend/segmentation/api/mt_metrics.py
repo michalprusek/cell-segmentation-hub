@@ -25,12 +25,29 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Literal, Optional
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+
+# The shared band/background measurement, imported off the models DIRECTORY
+# rather than as ``models.mt_measure``. Going through the package would execute
+# ``models/__init__``, which pulls in mamba_ssm and Triton and therefore needs a
+# live CUDA driver — measuring pixels needs neither, and the import would make
+# this module's tests silently skip on any box without a GPU. It is also the
+# exact spelling the essays batch uses (``_mt_package.ensure_on_path()`` puts the
+# same directory on its path), so both callers name the one file the same way.
+# Appended, not prepended: that directory also holds hrnet.py, unet.py, sperm.py
+# and friends, and putting it ahead of site-packages would let any of those
+# generic names shadow a real dependency for the whole process. Nothing in the
+# ML service imports them top-level today, and appending keeps it that way.
+_MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
+if str(_MODELS_DIR) not in sys.path:
+    sys.path.append(str(_MODELS_DIR))
+import mt_measure  # noqa: E402  (needs the path set above)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -171,187 +188,19 @@ class MTMetricsResponse(BaseModel):
 # ----------------------------------------------------------------------------
 
 
-def _polyline_length(points: np.ndarray) -> float:
-    """Sum of consecutive Euclidean distances. Returns 0 for <2 points."""
-    if points.shape[0] < 2:
-        return 0.0
-    diffs = np.diff(points, axis=0)
-    return float(np.sqrt((diffs ** 2).sum(axis=1)).sum())
-
-
-def _imagej_median(pixels: np.ndarray) -> float:
-    """Median using ImageJ's histogram tie-rule so it matches *Measure* exactly.
-
-    ImageJ's ``ImageStatistics`` reports, for an even count, the *upper* of the two
-    central order statistics (the value at which the cumulative histogram first
-    exceeds ``n / 2``), not their average as ``numpy.median`` does. For a sorted
-    array that is simply ``sorted[n // 2]``. On 16-bit fluorescence data (integer
-    valued) this reproduces ImageJ's median to the exact gray level; ``np.median``
-    was off by up to a few levels on even-count bands.
-    """
-    n = int(pixels.size)
-    if n == 0:
-        return 0.0
-    return float(np.sort(pixels, axis=None)[n // 2])
-
-
-def _fill_convex_polygon(band: np.ndarray, poly: np.ndarray) -> None:
-    """Set to 1 every ``band`` pixel strictly inside the convex polygon ``poly``.
-
-    ``poly`` is an ``(N, 2)`` array of ``[x, y]`` float vertices. A pixel is
-    considered inside iff the point at its *integer* coordinate ``(px, py)`` lies
-    on the interior side of every edge, with a **top-left fill rule** for pixels
-    that fall exactly on an edge: only edges pointing generally downward
-    (``dy > 0``) or horizontally leftward (``dy == 0 and dx < 0``) claim their
-    boundary pixels. This reproduces ImageJ's ``PolygonFiller`` scanline
-    convention (it only bites at even stroke widths, where the band edges land on
-    integer coordinates — an 8-px band then keeps exactly one boundary row, not
-    zero or two). Verified against ImageJ's own ``Roi.convertLineToArea`` masks at
-    IoU ≥ 0.998 for stroke widths 5 and 8 on real microtubule frames.
-
-    Windowed to the polygon's bounding box, so cost is O(bbox), not O(H*W).
-    """
-    h, w = band.shape
-    xs = poly[:, 0]
-    ys = poly[:, 1]
-    x0 = max(int(np.floor(xs.min())), 0)
-    x1 = min(int(np.ceil(xs.max())), w - 1)
-    y0 = max(int(np.floor(ys.min())), 0)
-    y1 = min(int(np.ceil(ys.max())), h - 1)
-    if x1 < x0 or y1 < y0:
-        return
-    gx, gy = np.meshgrid(np.arange(x0, x1 + 1), np.arange(y0, y1 + 1))
-    # Orient CCW so the interior is the positive (left) side of every edge.
-    shoelace = float(np.sum(xs * np.roll(ys, -1) - np.roll(xs, -1) * ys))
-    p = poly if shoelace >= 0 else poly[::-1]
-    inside = np.ones(gx.shape, dtype=bool)
-    eps = 1e-9
-    k = len(p)
-    for e in range(k):
-        ax, ay = p[e]
-        bx, by = p[(e + 1) % k]
-        cross = (bx - ax) * (gy - ay) - (by - ay) * (gx - ax)
-        dx = bx - ax
-        dy = by - ay
-        top_left = (dy > 0) or (dy == 0 and dx < 0)
-        inside &= cross > (-eps if top_left else eps)
-    band[y0:y1 + 1, x0:x1 + 1][inside] = 1
-
-
-def _rasterize_band(
-    points: np.ndarray, h: int, w: int, thickness: int
-) -> np.ndarray:
-    """Rasterize a polyline as the 0/1 region ImageJ measures for a wide line ROI.
-
-    This must coincide with the pixels ImageJ's *Analyze ▸ Measure* samples when a
-    biologist measures the exported ImageJ line ROI (stroke width ``thickness``).
-    For a wide line (``strokeWidth > 1``) ImageJ does NOT use the
-    straightener/line-profile path; ``Analyzer.measureLength`` calls
-    ``Roi.convertLineToArea`` to turn the stroked line into a FILLED polygon and
-    then measures the raw pixels inside it. We rasterise that exact polygon:
-
-      * ``radius = thickness / 2``;
-      * per segment, a quadrilateral offset ``±radius`` perpendicular to the
-        segment (perpendicular of unit tangent ``(dx, dy)`` is ``(dy, -dx)``);
-      * the two endpoints extended ``0.5`` px along the line (butt caps — ImageJ's
-        line↔area 0.5 px convention);
-      * a triangular filler at each interior joint (ImageJ's ``rightTurn`` logic);
-      * the union rasterised at integer pixel coordinates (``_fill_convex_polygon``).
-
-    Why this replaced a distance-transform band: the old band used *round* caps
-    (semicircles) and a symmetric distance threshold, over-counting area by ~8 %
-    at width 5 and ~14 % at width 8 versus ImageJ, and shifting mean/median by a
-    few percent. This offset polygon matches ImageJ to area 0.0 % / mean 0.0 % /
-    median ~0.15 % (IoU 1.000 at width 5) on real microtubule frames.
-    """
-    band = np.zeros((h, w), dtype=np.uint8)
-    n = int(points.shape[0])
-    if points.ndim != 2 or points.shape[1] != 2 or n < 2:
-        return band
-    pts = np.asarray(points, dtype=np.float64)
-    radius = max(int(thickness), 1) / 2.0
-
-    def _unit(dx: float, dy: float) -> tuple:
-        length = float(np.hypot(dx, dy))
-        return (dx / length, dy / length) if length > 0 else (0.0, 0.0)
-
-    dx1, dy1 = _unit(pts[1, 0] - pts[0, 0], pts[1, 1] - pts[0, 1])
-    dx0, dy0 = dx1, dy1
-    xfrom = pts[0, 0] - 0.5 * dx1
-    yfrom = pts[0, 1] - 0.5 * dy1
-    for i in range(1, n):
-        xto = pts[i, 0]
-        yto = pts[i, 1]
-        if i == n - 1:  # extend the far end by 0.5 px along the last segment
-            xto += 0.5 * dx1
-            yto += 0.5 * dy1
-        _fill_convex_polygon(band, np.array([
-            [xfrom + radius * dy1, yfrom - radius * dx1],
-            [xfrom - radius * dy1, yfrom + radius * dx1],
-            [xto - radius * dy1, yto + radius * dx1],
-            [xto + radius * dy1, yto - radius * dx1],
-        ]))
-        if i > 1:  # fill the outer wedge at the joint between two segments
-            right_turn = (dx1 * dy0) > (dx0 * dy1)
-            if right_turn:
-                tri = np.array([
-                    [xfrom + 0.5 * (radius * dy0 + radius * dy1),
-                     yfrom - 0.5 * (radius * dx0 + radius * dx1)],
-                    [xfrom - radius * dy0, yfrom + radius * dx0],
-                    [xfrom - radius * dy1, yfrom + radius * dx1],
-                ])
-            else:
-                tri = np.array([
-                    [xfrom - 0.5 * (radius * dy0 + radius * dy1),
-                     yfrom + 0.5 * (radius * dx0 + radius * dx1)],
-                    [xfrom + radius * dy0, yfrom - radius * dx0],
-                    [xfrom + radius * dy1, yfrom - radius * dx1],
-                ])
-            _fill_convex_polygon(band, tri)
-        dx0, dy0 = dx1, dy1
-        xfrom, yfrom = xto, yto
-        if i < n - 1:
-            dx1, dy1 = _unit(pts[i + 1, 0] - pts[i, 0], pts[i + 1, 1] - pts[i, 1])
-    return band
-
-
-def _dilate(mask: np.ndarray, radius: int) -> np.ndarray:
-    """Dilate a binary mask by a disc of given radius (in pixels)."""
-    if radius <= 0:
-        return mask
-    import cv2
-    kernel = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE,
-        (radius * 2 + 1, radius * 2 + 1),
-    )
-    return cv2.dilate(mask, kernel)
-
-
-def _vicinity_mask(
-    band: np.ndarray, not_signal: np.ndarray, margin_radius: int
-) -> np.ndarray:
-    """One microtubule's background ring: ``dilate(band, margin_radius)`` minus
-    every signal band (``not_signal`` = the complement of the union of all
-    bands).
-
-    The dilation runs only within the band's bounding box expanded by
-    ``margin_radius`` — a band is tiny relative to the frame, so this is O(bbox)
-    instead of O(H*W). Since the band's pixels sit at least ``margin_radius``
-    inside the sub-window (or at a real frame edge), the windowed dilation is
-    bit-identical to a full-frame dilate. Empty band → empty ring.
-    """
-    ys, xs = np.nonzero(band)
-    vicinity = np.zeros(band.shape, dtype=bool)
-    if ys.size == 0:
-        return vicinity
-    h, w = band.shape
-    y0 = max(0, int(ys.min()) - margin_radius)
-    y1 = min(h, int(ys.max()) + margin_radius + 1)
-    x0 = max(0, int(xs.min()) - margin_radius)
-    x1 = min(w, int(xs.max()) + margin_radius + 1)
-    capsule = _dilate(band[y0:y1, x0:x1], margin_radius)
-    vicinity[y0:y1, x0:x1] = (capsule > 0) & not_signal[y0:y1, x0:x1]
-    return vicinity
+# The band geometry and the ImageJ statistics are NOT defined here. They live in
+# models/mt_measure.py, which the Automated Essays batch imports through the same
+# shared-package mechanism it uses for the v7 model, so the export and the batch
+# can no longer answer "how bright is this filament" differently. These aliases
+# keep the endpoint's own vocabulary (and its tests) while making the delegation
+# explicit: rebinding one of them here would NOT change the essays batch, which
+# is exactly the drift this arrangement exists to prevent.
+_polyline_length = mt_measure.polyline_length
+_imagej_median = mt_measure.imagej_median
+_fill_convex_polygon = mt_measure.fill_convex_polygon
+_rasterize_band = mt_measure.rasterize_band
+_dilate = mt_measure.dilate
+_vicinity_mask = mt_measure.vicinity_mask
 
 
 def _normalize_axes_nd2(arr: np.ndarray, axes: str) -> np.ndarray:
@@ -542,32 +391,20 @@ def _emit_channel_rows(
     local vicinity ring (``vicinity_masks[pl_idx]``), not a frame-global region.
     """
     for pl_idx, pl in enumerate(fr.polylines):
-        band = band_masks[pl_idx]
-        pixels = frame_arr[band > 0]
-        pixel_count = int(pixels.size)
-
+        sig = mt_measure.region_stats(frame_arr, band_masks[pl_idx])
         # Per-MT LOCAL background: pixels in this microtubule's vicinity ring.
         # ImageJ measures the exported ``_bg`` composite ROI as an area, so its
         # median follows the same histogram tie-rule as the signal.
-        bg_pixels = frame_arr[vicinity_masks[pl_idx]]
-        has_bg = bg_pixels.size > 0
-        median_bg = _imagej_median(bg_pixels) if has_bg else None
-        mean_bg = float(bg_pixels.mean()) if has_bg else None
+        bg = mt_measure.region_stats(frame_arr, vicinity_masks[pl_idx])
 
-        if pixel_count == 0:
-            sum_v = mean_v = median_v = std_v = 0.0
-            signal_minus_bg: Optional[float] = None
-        else:
-            sum_v = float(pixels.sum())
-            mean_v = float(pixels.mean())
-            median_v = _imagej_median(pixels)
-            # ImageJ's ImageStatistics reports the *sample* standard deviation
-            # (denominator n-1); numpy defaults to the population one (ddof=0).
-            # Undefined for a single pixel — ImageJ reports 0 there.
-            std_v = float(pixels.std(ddof=1)) if pixel_count > 1 else 0.0
-            signal_minus_bg = (
-                (mean_v - median_bg) if median_bg is not None else None
-            )
+        # An empty ring is reported as *absent*, not as zero: a zero background
+        # would silently inflate signal_minus_background by the full signal.
+        median_bg = bg.median if bg.n else None
+        mean_bg = bg.mean if bg.n else None
+        signal_minus_bg: Optional[float] = (
+            (sig.mean - median_bg)
+            if (sig.n and median_bg is not None) else None
+        )
 
         rows.append(MTMetricsRow(
             frame_index=fr.frame_index,
@@ -576,12 +413,12 @@ def _emit_channel_rows(
             track_id=pl.track_id,
             channel=channel_name,
             length_px=polyline_lengths[pl_idx],
-            area_px=pixel_count,
-            pixel_count=pixel_count,
-            sum_intensity=sum_v,
-            mean_intensity=mean_v,
-            median_intensity=median_v,
-            std_intensity=std_v,
+            area_px=sig.n,
+            pixel_count=sig.n,
+            sum_intensity=sig.sum,
+            mean_intensity=sig.mean,
+            median_intensity=sig.median,
+            std_intensity=sig.std,
             median_background=median_bg,
             mean_background=mean_bg,
             signal_minus_background=signal_minus_bg,
@@ -681,7 +518,6 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             frames=frames_present,
         ))
 
-    margin_radius = int(round(req.thickness_px * req.margin_multiplier))
     rows: List[MTMetricsRow] = []
 
     for fr in req.frames:
@@ -695,32 +531,19 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
         if not fr.polylines:
             continue
 
-        # 1. Per-polyline thickness masks (kept in a list so the index
-        # aligns with `fr.polylines` for the per-channel loop below).
-        band_masks: List[np.ndarray] = []
-        polyline_lengths: List[float] = []
-        for pl in fr.polylines:
-            pts = np.asarray(pl.points, dtype=np.float32)
-            if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
-                band_masks.append(np.zeros((H, W), dtype=np.uint8))
-                polyline_lengths.append(0.0)
-                continue
-            band_masks.append(_rasterize_band(pts, H, W, req.thickness_px))
-            polyline_lengths.append(_polyline_length(pts))
-
-        # 2 + 3. Per-MT LOCAL background. Each microtubule's background is the
-        # ring within `margin_radius` of ITS OWN band (dilate(band)), minus the
-        # union of every MT's signal band — so a neighbouring microtubule never
-        # counts as background. Computed once per frame (geometry is
-        # channel-independent) and reused across channels.
-        signal_union = np.zeros((H, W), dtype=np.uint8)
-        for m in band_masks:
-            signal_union |= m
-        not_signal = signal_union == 0
-        vicinity_masks: List[np.ndarray] = [
-            _vicinity_mask(band, not_signal, margin_radius)
-            for band in band_masks
-        ]
+        # 1 + 2 + 3. Per-polyline thickness masks, and each microtubule's LOCAL
+        # background ring: within `thickness * margin` of ITS OWN band, minus the
+        # union of every MT's band — so a neighbouring microtubule never counts
+        # as background. Built once per frame (geometry is channel-independent)
+        # and reused across channels. Shared with the Automated Essays batch, so
+        # both measure the same pixels.
+        geom = mt_measure.frame_geometry(
+            [np.asarray(pl.points, dtype=np.float32) for pl in fr.polylines],
+            H, W, req.thickness_px, req.margin_multiplier,
+        )
+        band_masks = geom.bands
+        polyline_lengths = geom.lengths
+        vicinity_masks = geom.vicinities
 
         # 4. Per-channel computations.
         # Per-frame registration offsets (channel-registration at upload), one
@@ -964,22 +787,16 @@ async def mt_background_rois(
             w = int(np.ceil(stacked[:, 0].max())) + pad
             h = int(np.ceil(stacked[:, 1].max())) + pad
 
-        band_masks: List[np.ndarray] = []
-        for pl in fr.polylines:
-            pts = np.asarray(pl.points, dtype=np.float32)
-            if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
-                band_masks.append(np.zeros((h, w), dtype=np.uint8))
-            else:
-                band_masks.append(_rasterize_band(pts, h, w, req.thickness_px))
-
-        signal_union = np.zeros((h, w), dtype=np.uint8)
-        for m in band_masks:
-            signal_union |= m
-        not_signal = signal_union == 0
+        # The SAME geometry call the metrics endpoint makes, so the exported ROI
+        # can never enclose a different region than the numbers were taken from.
+        geom = mt_measure.frame_geometry(
+            [np.asarray(pl.points, dtype=np.float32) for pl in fr.polylines],
+            h, w, req.thickness_px, req.margin_multiplier,
+        )
 
         rois: List[MTBackgroundRoi] = []
         for i, pl in enumerate(fr.polylines):
-            vicinity = _vicinity_mask(band_masks[i], not_signal, margin_radius)
+            vicinity = geom.vicinities[i]
             roi_bytes = _vicinity_composite_roi_bytes(
                 vicinity, pl.roi_name, pl.stroke_color, pl.position
             )

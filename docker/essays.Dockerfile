@@ -34,6 +34,11 @@ COPY --chown=app:app backend/essays/essays_api.py /app/essays_api.py
 # yesterday's model. Same single source in git; this just pins which revision of
 # it lands in the image.
 COPY --chown=app:app backend/segmentation/models/microtubule /app/models/microtubule
+# The shared band/background measurement, for the same reason and from the same
+# place the project export takes it. It sits BESIDE the package rather than
+# inside it so importing it does not drag in the v7 wrapper and therefore torch —
+# measuring pixels needs neither.
+COPY --chown=app:app backend/segmentation/models/mt_measure.py /app/models/mt_measure.py
 
 # Where that package lives in THIS image. Set explicitly rather than left to the
 # resolver's fallback search, so a future move of the ML sources fails the build
@@ -49,10 +54,13 @@ ENV MT_PACKAGE_DIR=/app/models
 RUN cd /app/essays_module \
     && python -c "import _mt_package; \
 pkg = _mt_package.ensure_on_path(); \
-import evaluate, mt_pipeline, microtubule; \
+import evaluate, mt_pipeline, microtubule, mt_measure; \
 assert evaluate.BUNDLED_BACKBONE_CONFIG.joinpath('config.json').is_file(), \
     'offline backbone config missing: %s' % evaluate.BUNDLED_BACKBONE_CONFIG; \
-print('essays module import OK; microtubule from', microtubule.__file__)"
+assert mt_pipeline.measure.mt_measure is mt_measure, \
+    'the essays measurement is not the shared one'; \
+print('essays module import OK; microtubule from', microtubule.__file__); \
+print('shared measurement from', mt_measure.__file__)"
 
 USER app
 
