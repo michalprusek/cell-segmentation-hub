@@ -118,6 +118,54 @@ def test_params_json_must_be_a_json_object(client):
             f"{r.text}")
 
 
+def _client_with(loader):
+    from api import frap_targets
+    from api.routes import get_model_loader
+    app = FastAPI()
+    app.include_router(frap_targets.router, prefix="/api/v1")
+    app.dependency_overrides[get_model_loader] = lambda: loader
+    return TestClient(app)
+
+
+class _TimingOutLoader:
+    def predict_microtubule(self, image, *args, **kwargs):
+        from ml.inference_executor import InferenceTimeoutError
+        raise InferenceTimeoutError("microtubule", 60.0, (600, 600))
+
+
+class _FailingLoader:
+    def predict_microtubule(self, image, *args, **kwargs):
+        from ml.inference_executor import InferenceError
+        raise InferenceError("CUDA out of memory")
+
+
+def test_a_model_timeout_is_a_504_naming_the_model_and_the_timeout():
+    # Unwrapped, a model failure reached the microscope as
+    # `ERROR Server returned HTTP 500: {"detail":"Internal error (id: ab12cd34)"}` --
+    # indistinguishable from a bad request. On an unattended JOBS run that is the
+    # difference between "retry this field" and "stop the experiment", and the
+    # sibling endpoint in api/routes.py already separates them.
+    page = np.zeros((600, 600), dtype=np.uint16)
+    r = _client_with(_TimingOutLoader()).post(
+        "/api/v1/frap/targets",
+        files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+        data={"um_per_px": "0.1", "k_min": "1"})
+    assert r.status_code == 504, r.text
+    detail = str(r.json()["detail"])
+    assert "microtubule" in detail
+    assert "60" in detail
+
+
+def test_an_inference_failure_is_a_500_carrying_the_models_own_message():
+    page = np.zeros((600, 600), dtype=np.uint16)
+    r = _client_with(_FailingLoader()).post(
+        "/api/v1/frap/targets",
+        files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+        data={"um_per_px": "0.1", "k_min": "1"})
+    assert r.status_code == 500, r.text
+    assert "CUDA out of memory" in str(r.json()["detail"])
+
+
 def test_a_body_over_the_size_cap_is_a_413(client, monkeypatch):
     # `raw = file.file.read()` had no cap at all. A 4000-page frame is ~2 GB, and
     # this endpoint is about to be the only externally reachable route to a shared
