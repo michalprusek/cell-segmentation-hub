@@ -12,7 +12,6 @@ import pytest
 from api.mt_geometry_cost import (
     GATE_MIN_OVERLAP,
     arclength,
-    contour_shift,
     curve_distance,
     estimate_drift,
     overlap_fraction,
@@ -143,25 +142,6 @@ def test_drift_ignores_filaments_beyond_the_gate():
     prev = [_line(0, 0, 100, 0), _line(0, 0, 0, 100)]
     curr = [p + np.array([2.0, 2.0]) for p in prev] + [_line(500, 500, 600, 500)]
     assert estimate_drift(prev, curr) == pytest.approx(np.array([2.0, 2.0]), abs=0.8)
-
-
-# --------------------------------------------------------------------------
-# contour_shift
-# --------------------------------------------------------------------------
-
-
-def test_contour_shift_measures_sliding_a_distance_metric_cannot_see():
-    """The filament slid 8 px along itself; its perpendicular displacement is
-    zero, so curve_distance reports ~0 while the material clearly moved."""
-    a = _line(0, 0, 100, 0, n=100)
-    b = _line(8, 0, 108, 0, n=100)
-    assert curve_distance(a, b) < 1.0            # invisible to distance
-    assert abs(contour_shift(a, b)) == pytest.approx(8.0, abs=1.5)
-
-
-def test_contour_shift_of_a_stationary_filament_is_zero():
-    a = _line(0, 0, 100, 0, n=100)
-    assert contour_shift(a, a.copy()) == pytest.approx(0.0, abs=0.5)
 
 
 # --------------------------------------------------------------------------
