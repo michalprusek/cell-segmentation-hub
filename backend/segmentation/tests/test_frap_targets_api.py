@@ -391,6 +391,46 @@ def test_params_json_a_bad_spot_shape_is_a_400(client):
     assert "ellipse" in detail
 
 
+def test_params_json_f_mid_alone_cannot_clip_the_observation_window(client):
+    # The cross-field case the per-key checks structurally cannot catch: each sees
+    # one key, and this constraint spans three. f_mid ALONE is the realistic input --
+    # someone widens the candidate band and does not think about l_min_um -- and it
+    # is the unsafe direction, because below the bound _slice_window CLIPS, so
+    # criterion 5b is evaluated over a shorter stretch than intended and a
+    # contaminant just past the clipped end is never seen.
+    r = _post_params(client, '{"f_mid": 0.8}')
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    # All three values must be named: the operator has to know which one to change.
+    assert "l_min_um=6.0" in detail
+    assert "obs_len_um=3.0" in detail
+    assert "f_mid=0.8" in detail
+    assert "15.0" in detail                     # the derived minimum
+
+
+def test_params_json_f_mid_with_a_matching_l_min_is_accepted(client):
+    # The constraint has to be satisfiable, and satisfying it has to use the
+    # OVERRIDDEN l_min_um rather than the default -- otherwise the check would be
+    # unpassable by exactly the correction its own message asks for.
+    r = _post_params(client, '{"f_mid": 0.8, "l_min_um": 20.0}')
+    assert r.status_code == 200, r.text
+
+
+def test_params_json_f_mid_of_exactly_one_is_a_400_not_a_zero_division(client):
+    # The range check is [0.0, 1.0] INCLUSIVE, so 1.0 PASSES it and reaches the
+    # division: 1 - 1.0 == 0.0. The two values below therefore fail through
+    # DIFFERENT paths, and both are asserted -- 1.0 by the dedicated guard (there is
+    # no l_min_um that rescues it, so it gets its own message), 1.5 by the range.
+    r = _post_params(client, '{"f_mid": 1.0}')
+    assert r.status_code == 400, r.text
+    assert "f_mid" in r.json()["detail"]
+    assert "strictly below 1.0" in r.json()["detail"]
+
+    r2 = _post_params(client, '{"f_mid": 1.5}')
+    assert r2.status_code == 400, r2.text
+    assert "between 0.0 and 1.0" in r2.json()["detail"]
+
+
 def test_params_json_a_valid_in_range_override_is_accepted_and_applied(client):
     # The other side of the boundary: validation must not become a wall. A coarser
     # resampling pitch is a legitimate setting and must still reach select_spots --
