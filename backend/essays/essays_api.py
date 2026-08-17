@@ -30,7 +30,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 MODULE_DIR = Path(os.environ.get("ESSAYS_MODULE_DIR", "/app/essays_module"))
-WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v7.pt")
+WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v5h.pth")
 # Measured on the 24 GB A5000 against a real 2048x2048 well (2026-08-13): a v7
 # forward pass wants a **16.36 GiB working set**, and that number is FLAT — the
 # same at caps of 16.49, 17.67 and 20.02 GiB — so the process is not merely
