@@ -21,17 +21,33 @@ its inputs. The tracker feeds it ``(row, col)``, so it gets ``(d_row, d_col)``.
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 from scipy.spatial import cKDTree
 
-#: Hard gate: no association beyond this curve-to-curve distance, px.
-#: This is the gate that owns "is it in the same place?".
-GATE_MAX_SHIFT: float = 25.0
+#: Scale at which the curve-to-curve distance saturates the cost term, px.
+#:
+#: NOT a gate. This was ``GATE_MAX_SHIFT`` and did reject pairs outright until
+#: 2026-08-17, when a real production video showed that 25.3 % of genuinely
+#: linked pairs exceed it — the instancer re-traces a different extent of the
+#: same filament between frames, so the distance is bimodal (median 2.35 px,
+#: p99 727 px). Rejecting them fragmented tracks 3.14x. See ``_filament_cost``
+#: in tracker_kymograph.py for the measurement.
+#:
+#: It still sets the scale on which "far" is charged: the cost term is
+#: ``min(1, distance / CURVE_SCALE_PX)``, so a pair beyond it pays the full
+#: weight but can still win if the other terms agree.
+CURVE_SCALE_PX: float = 25.0
 
-#: Fraction of BOTH curves that must have a partner nearby before two polylines
-#: may be called the same microtubule. This gate owns "is it the same extent?".
+#: Fraction of BOTH curves that must have a partner nearby for them to describe
+#: the same extent.
+#:
+#: NOT used by the tracker's cost — see ``_filament_cost``, which measured it as
+#: harmful as a gate and worthless-but-expensive as a cost term. Kept because it
+#: is a meaningful, tested geometry primitive and the validation set may yet
+#: find a use for it (e.g. splitting a merged detection, where extent rather
+#: than position is the question).
 GATE_MIN_OVERLAP: float = 0.35
 
 #: What "nearby" means when measuring that fraction, px.
@@ -40,7 +56,7 @@ GATE_MIN_OVERLAP: float = 0.35
 #: silently becomes a 4 px *perpendicular displacement* gate — a filament that
 #: moved 5 px sideways has zero overlap and is rejected however well
 #: curve_distance scores it. That double-counts distance, which
-#: GATE_MAX_SHIFT already owns, and makes the real gate the tighter
+#: CURVE_SCALE_PX already owns, and made the real gate the tighter
 #: undocumented one.
 #:
 #: 12 px is comfortably above the residual displacement expected after stage
@@ -49,10 +65,10 @@ GATE_MIN_OVERLAP: float = 0.35
 #: fragment lying on a long filament is still rejected.
 OVERLAP_TOL: float = 12.0
 
-#: Search gate for the drift estimator. MUST exceed GATE_MAX_SHIFT: drift is
-#: exactly what pushes a genuine pair past the association gate, so an
-#: estimator that refused to look further than that gate could never recover a
-#: drift large enough to matter. Pairs are matched by centroid here only to
+#: Search gate for the drift estimator. This one IS a gate, and it must exceed
+#: CURVE_SCALE_PX: drift is exactly what pushes a genuine pair far apart, so an
+#: estimator that refused to look further than the cost scale could never
+#: recover a drift large enough to matter. Pairs are matched by centroid here only to
 #: collect normal-flow constraints; a few wrong pairs are absorbed by the
 #: least-squares, whereas a missed drift severs every track in the field.
 DRIFT_MAX_SHIFT: float = 60.0
@@ -89,20 +105,48 @@ def resample(p: np.ndarray, ds: float = DS) -> np.ndarray:
     return np.stack([np.interp(t, s, p[:, k]) for k in range(p.shape[1])], axis=1)
 
 
+def build_tree(curve: np.ndarray) -> Optional[cKDTree]:
+    """cKDTree over a resampled centerline, or None when it is too short to compare.
+
+    Exists so the tracker can build ONE tree per filament per frame instead of
+    two per candidate PAIR. The cost matrix is P x Q, so the naive form rebuilds
+    the same tree Q (or P) times: on a real frame pair with ~100 filaments each
+    that is ~20 000 tree constructions where 200 suffice, and it is what made
+    /track roughly ten times slower than the embedding cost it replaced.
+    """
+    curve = np.asarray(curve, dtype=float)
+    if len(curve) < 2:
+        return None
+    return cKDTree(curve)
+
+
+def curve_distance_prebuilt(
+    a: np.ndarray,
+    tree_a: Optional[cKDTree],
+    b: np.ndarray,
+    tree_b: Optional[cKDTree],
+) -> float:
+    """:func:`curve_distance` with the two trees supplied by the caller."""
+    if tree_a is None or tree_b is None:
+        return float("inf")
+    da, _ = tree_b.query(a, k=1)
+    db, _ = tree_a.query(b, k=1)
+    return float(0.5 * (da.mean() + db.mean()))
+
+
 def curve_distance(a: np.ndarray, b: np.ndarray) -> float:
     """Symmetric mean nearest-point distance between two polylines, px.
 
     Returns ``inf`` for degenerate input rather than 0, so a one-point stub can
     never be mistaken for a perfect match -- the failure mode a plain centroid
     distance has.
+
+    Convenience wrapper; the tracker's hot path uses
+    :func:`curve_distance_prebuilt` so it does not rebuild a tree per pair.
     """
     a = np.asarray(a, dtype=float)
     b = np.asarray(b, dtype=float)
-    if len(a) < 2 or len(b) < 2:
-        return float("inf")
-    da, _ = cKDTree(b).query(a, k=1)
-    db, _ = cKDTree(a).query(b, k=1)
-    return float(0.5 * (da.mean() + db.mean()))
+    return curve_distance_prebuilt(a, build_tree(a), b, build_tree(b))
 
 
 def overlap_fraction(a: np.ndarray, b: np.ndarray, tol: float = OVERLAP_TOL) -> float:
@@ -134,36 +178,6 @@ def overlap_fraction(a: np.ndarray, b: np.ndarray, tol: float = OVERLAP_TOL) -> 
     return min(fa, fb)
 
 
-def contour_shift(a: np.ndarray, b: np.ndarray, edge_frac: float = 0.15) -> float:
-    """Signed shift of ``b`` along ``a``'s own contour, px. Positive = toward a's head.
-
-    A gliding filament slides along itself, so its perpendicular displacement is
-    ~zero and a distance-based tracker sees no motion at all. What moves is the
-    material, and the way to see it is that every point of b sits at a constant
-    arclength offset from its counterpart on a.
-
-    The subtlety is the ends. Once b has advanced, its head lies BEYOND a's
-    head, so the nearest point on a is a's last vertex and the projection
-    saturates -- reporting zero shift however far the filament actually went.
-    Including those points halves the estimate, so the offset is taken over
-    interior matches only.
-    """
-    a = np.asarray(a, dtype=float)
-    b = np.asarray(b, dtype=float)
-    if len(a) < 2 or len(b) < 2:
-        return 0.0
-    sa, sb = arclength(a), arclength(b)
-    if sa[-1] <= 0 or sb[-1] <= 0:
-        return 0.0
-    _, idx = cKDTree(a).query(b, k=1)
-    offs = sa[idx] - sb
-    lo, hi = edge_frac * sa[-1], (1.0 - edge_frac) * sa[-1]
-    interior = (sa[idx] > lo) & (sa[idx] < hi)
-    if int(interior.sum()) < 3:
-        interior = np.ones(len(offs), dtype=bool)   # too short to trim
-    return float(np.median(offs[interior]))
-
-
 def estimate_drift(
     prev: Sequence[np.ndarray],
     curr: Sequence[np.ndarray],
@@ -180,7 +194,11 @@ def estimate_drift(
     the signal a motility assay exists to measure.
 
     What separates the two is that gliding is motion ALONG the filament while
-    drift moves the whole field. The component of a displacement perpendicular
+    drift moves the whole field. THIS function is where that separation lives —
+    a ``contour_shift`` helper that measured per-filament sliding was ported
+    alongside it and removed on 2026-08-17, because nothing called it and its
+    docstring read as the live mechanism, which is exactly the wrong thing to
+    find when debugging a gliding regression. The component of a displacement perpendicular
     to the filament's own tangent therefore contains no gliding at all. This is
     the aperture problem, and it is solved the way optical flow solves it:
     collect the perpendicular ("normal flow") constraints from filaments at

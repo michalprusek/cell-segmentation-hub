@@ -17,7 +17,11 @@ during per-frame segmentation:
   point. v5H emits one foreground channel and no embedding field, so
   association is geometric: see ``mt_geometry_cost``. Common-mode stage
   drift is removed before matching, because a drifting field would
-  otherwise push genuine links past the curve-distance gate.
+  otherwise inflate every curve distance at once.
+
+  The cost has NO hard gates. An earlier version rejected pairs beyond a
+  distance/overlap threshold outright, which fragmented tracks 3.14x on
+  real data — see ``_filament_cost`` for the measurement.
 
 - ``/kymograph`` samples raw image intensity along a polyline through
   every frame (using the tracked sibling polyline if available, the
@@ -49,11 +53,11 @@ from api.kymograph_velocity import (
     track_intensity,
 )
 from api.mt_geometry_cost import (
-    GATE_MAX_SHIFT,
-    GATE_MIN_OVERLAP,
+    CURVE_SCALE_PX,
+    build_tree,
     curve_distance,
+    curve_distance_prebuilt,
     estimate_drift,
-    overlap_fraction,
     resample,
 )
 
@@ -182,10 +186,37 @@ class _Filament(NamedTuple):
     """
 
     curve: np.ndarray  # (K, 2) arclength-uniform resample, row/col
+    #: cKDTree over ``curve``, built ONCE here rather than per candidate pair.
+    #: The cost matrix is P x Q, so building it inside the pair loop rebuilds
+    #: the same tree Q times — ~20 000 constructions per frame pair at ~100
+    #: filaments a side, where 200 suffice.
+    tree: Any
+    #: (min_row, min_col, max_row, max_col) of ``curve``. Lets the cost skip
+    #: the KD-tree queries entirely for a pair that is provably beyond
+    #: CURVE_SCALE_PX — see ``_filament_cost``.
+    bbox: np.ndarray
     end_a: np.ndarray  # first centerline point [row, col]
     end_b: np.ndarray  # last centerline point [row, col]
     theta: float  # atan2 orientation of the (undirected) end_b - end_a vector
     length: float  # summed segment length of the centerline (px)
+
+
+def _bbox(curve: np.ndarray) -> np.ndarray:
+    """Axis-aligned bounds of a curve as (min_row, min_col, max_row, max_col)."""
+    if curve.size == 0:
+        return np.zeros(4, dtype=np.float64)
+    return np.concatenate([curve.min(axis=0), curve.max(axis=0)])
+
+
+def _bbox_gap(a: np.ndarray, b: np.ndarray) -> float:
+    """Euclidean gap between two axis-aligned boxes; 0 when they overlap.
+
+    A LOWER BOUND on the curve-to-curve distance, because no point of one curve
+    can be nearer to the other curve than its box is to the other box.
+    """
+    dr = max(0.0, a[0] - b[2], b[0] - a[2])
+    dc = max(0.0, a[1] - b[3], b[1] - a[3])
+    return float(np.hypot(dr, dc))
 
 
 def _filament_features(p: PolylineInput) -> _Filament:
@@ -194,7 +225,8 @@ def _filament_features(p: PolylineInput) -> _Filament:
     pts = np.asarray(p.points_rc, dtype=np.float64)
     if pts.ndim != 2 or pts.shape[0] == 0:
         zero = np.zeros(2, dtype=np.float64)
-        return _Filament(np.zeros((0, 2)), zero, zero.copy(), 0.0, 0.0)
+        return _Filament(np.zeros((0, 2)), None, np.zeros(4), zero, zero.copy(),
+                         0.0, 0.0)
     end_a = pts[0]
     end_b = pts[-1]
     vec = end_b - end_a
@@ -203,7 +235,9 @@ def _filament_features(p: PolylineInput) -> _Filament:
         length = float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
     else:
         length = 0.0
-    return _Filament(resample(pts), end_a, end_b, theta, length)
+    curve = resample(pts)
+    return _Filament(curve, build_tree(curve), _bbox(curve), end_a, end_b,
+                     theta, length)
 
 
 class _TrackState:
@@ -255,6 +289,7 @@ def _align_endpoints(feat: _Filament, ref: _Filament) -> _Filament:
     if swapped < straight:
         vec = feat.end_a - feat.end_b
         theta = float(np.arctan2(float(vec[0]), float(vec[1])))
+        # Reversing moves neither the points nor the bbox, so both stay valid.
         return feat._replace(
             curve=feat.curve[::-1].copy(),
             end_a=feat.end_b,
@@ -309,7 +344,9 @@ def _predict_filament(state: _TrackState, target_frame: int) -> _Filament:
     # make the curve distance measure the invention.
     shift = 0.5 * ((pred_a - last.end_a) + (pred_b - last.end_b))
     curve = last.curve + shift if last.curve.size else last.curve
-    return last._replace(curve=curve, end_a=pred_a, end_b=pred_b, theta=theta)
+    # The curve moved, so its tree is stale and must be rebuilt.
+    return last._replace(curve=curve, tree=build_tree(curve), bbox=_bbox(curve),
+                         end_a=pred_a, end_b=pred_b, theta=theta)
 
 
 def _shift_filament(f: _Filament, drift: np.ndarray) -> _Filament:
@@ -318,8 +355,11 @@ def _shift_filament(f: _Filament, drift: np.ndarray) -> _Filament:
     Orientation and length are translation-invariant, so only the positional
     members change.
     """
+    shifted = f.curve - drift if f.curve.size else f.curve
     return f._replace(
-        curve=f.curve - drift if f.curve.size else f.curve,
+        curve=shifted,
+        tree=build_tree(shifted),   # the curve moved; the old tree is stale
+        bbox=_bbox(shifted),
         end_a=f.end_a - drift,
         end_b=f.end_b - drift,
     )
@@ -369,27 +409,68 @@ def _filament_cost(
     w_orient: float = 0.1,
     w_len: float = 0.1,
 ) -> float:
-    """Filament-to-filament matching cost in [0, w_curve+w_end+w_orient+w_len],
-    or ``inf`` when a hard gate rejects the pair.
+    """Filament-to-filament matching cost in [0, w_curve+w_end+w_orient+w_len].
 
     The primary evidence is the symmetric curve-to-curve distance, which
     replaced the embedding cosine when the v5H model stopped emitting
-    embeddings. At the single-digit-pixel displacements these acquisitions
-    have, consecutive centerlines overlap heavily, so geometry carries most of
-    what the embedding used to.
+    embeddings.
 
-    Two HARD gates precede the weighted sum, which the embedding cost never
-    had: a missing embedding merely substituted a neutral value, so no pair was
-    ever forbidden outright and a bad link could always be bought by making
-    everything else expensive. Returning ``inf`` here cannot be outbid.
+    NO HARD GATES. An earlier version of this function rejected a pair outright
+    (``inf``) when the curve distance exceeded ``CURVE_SCALE_PX`` or the overlap
+    fell below a floor, and argued that being unable to outbid a rejection was a
+    virtue. Measured on 30 frames of a real production video (3095 polylines,
+    ~103/frame), that was wrong in both directions:
+
+    - **25.3 %** of pairs the previous embedding tracker called the same
+      microtubule exceed those thresholds. Their curve-distance distribution is
+      bimodal — median 2.35 px, but p90 184 px and p99 727 px — because the
+      instancer re-traces a different EXTENT of the same filament from frame to
+      frame. The embedding recognised those by identity; a distance gate cannot.
+    - The result was **417 tracks where the embedding tracker produced 133**, a
+      3.14x fragmentation. Each gate caused nearly all of it independently
+      (416 with distance alone, 408 with overlap alone). Every per-track
+      measurement downstream — kymograph velocity, run length, intensity over
+      time — was then computed over fragments of filaments, with no error
+      anywhere to show for it.
+
+    Removing both gates brings it to 250 (1.88x). The residue is the curve term
+    itself, which saturates at 1.0 beyond ``CURVE_SCALE_PX`` and so charges a
+    flat 0.5 for every far pair; ``w_curve`` is the knob for that, and lowering
+    it to 0.25 measured 146 (1.10x) on the same data. That weight is NOT changed
+    here, because 133 is not ground truth either — the same measurement shows
+    the embedding tracker linking filaments 727 px apart between adjacent
+    frames, which is not physically possible for a microtubule. Both trackers
+    are wrong in opposite directions and the honest number needs a validation
+    set, not a fit to one video's output.
+
+    ``inf`` survives for one case only: geometry too degenerate to compare
+    (a centerline with fewer than two points), where a distance of 0 would
+    otherwise read as a perfect match.
+
+    ``overlap_fraction`` is deliberately NOT consulted. As a hard gate it caused
+    the fragmentation above; folded in as a cost term instead it measured 404
+    tracks at weight 0.2 (worse) or 247 at a rebalanced weight (no better than
+    250), while **doubling wall-clock** — 78 s vs 41 s for 30 frames — because
+    it rebuilds the two cKDTrees ``curve_distance`` has already built.
     """
-    d_curve_px = curve_distance(fa.curve, fb.curve)
-    if not np.isfinite(d_curve_px) or d_curve_px > GATE_MAX_SHIFT:
-        return float("inf")
-    if overlap_fraction(fa.curve, fb.curve) < GATE_MIN_OVERLAP:
+    if fa.tree is None or fb.tree is None:
         return float("inf")
 
-    d_curve = float(min(1.0, d_curve_px / GATE_MAX_SHIFT))
+    # EXACT short-circuit, not a gate. ``d_curve`` saturates at 1.0 beyond
+    # CURVE_SCALE_PX, and the bounding-box gap is a lower bound on the
+    # curve-to-curve distance — so once the boxes are that far apart the term is
+    # provably 1.0 and the two KD-tree queries cannot change the answer.
+    #
+    # Worth the trouble: profiling 12 real frames put 95 % of /track in this
+    # function and 58 % in cKDTree.query alone (233 028 calls, two per candidate
+    # pair). Most pairs in a frame are nowhere near each other.
+    if _bbox_gap(fa.bbox, fb.bbox) >= CURVE_SCALE_PX:
+        d_curve = 1.0
+    else:
+        d_curve_px = curve_distance_prebuilt(fa.curve, fa.tree, fb.curve, fb.tree)
+        if not np.isfinite(d_curve_px):
+            return float("inf")
+        d_curve = float(min(1.0, d_curve_px / CURVE_SCALE_PX))
     d_end, d_orient, d_len = _geom_terms(fa, fb, img_diag)
     return float(
         w_curve * d_curve + w_end * d_end + w_orient * d_orient + w_len * d_len
@@ -544,7 +625,18 @@ def _gap_close_merges(
 
 
 @router.post("/track", response_model=TrackResponse)
-async def track(req: TrackRequest) -> TrackResponse:
+def track(req: TrackRequest) -> TrackResponse:
+    # SYNCHRONOUS on purpose. This endpoint is pure CPU numpy/scipy with no
+    # awaits, and the ML service runs uvicorn with `--workers 1`. As `async def`
+    # it executed on the event loop, so a multi-frame video blocked the ONLY
+    # worker for the whole run — /health included, which the compose healthcheck
+    # polls every 30 s with a 10 s timeout and 3 retries. A long track therefore
+    # marked the container unhealthy while doing nothing wrong. Declaring it
+    # `def` hands it to FastAPI's threadpool instead, so the loop stays free.
+    return _track_sync(req)
+
+
+def _track_sync(req: TrackRequest) -> TrackResponse:
     """Two-step LAP filament tracker (TrackMate / u-track paradigm).
 
     Step 1 links filaments between adjacent frames with an augmented
