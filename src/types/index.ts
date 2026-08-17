@@ -374,8 +374,9 @@ type KnownModelId = RegistryModelType;
  * - `spheroid_invasive` is locked to `spheroid_disintegration` because core
  *   detection is tied to that model's postprocessing path.
  * - `wound`, `sperm` and `microtubules` use their dedicated specialised
- *   models only. `microtubules` ships with the v7 DINOv3 + DPT + PySOAX
- *   pipeline producing per-instance polyline centerlines.
+ *   models only. `microtubules` ships with the v5H nnU-Net ResEnc-M network
+ *   plus a curvature-bounded instancer, producing per-instance polyline
+ *   centerlines.
  * - Standard `spheroid` projects can use any of the general spheroid
  *   models, with `spheroid_disintegration` excluded so users wanting core
  *   detection are nudged toward marking the project disintegrated.

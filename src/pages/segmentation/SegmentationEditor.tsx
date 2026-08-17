@@ -386,8 +386,9 @@ const SegmentationEditor = () => {
         // Transform Polygon[] to SegmentationPolygon[] for API. Spread preserves
         // every wire-level field (trackId for MT, future additions); only
         // parent_id → parentIds[] needs explicit conversion. `_embedding` is a
-        // server-only blob (KB per polyline) — strip defensively even though
-        // backend already removes it before serving.
+        // legacy server-only blob written by the microtubule v7 model (KB per
+        // polyline) — nothing produces it any more, but rows carrying one are
+        // still served, so strip defensively.
         const polygonData: SegmentationPolygon[] = polygons.map(polygon => {
           const { parent_id, _embedding: _drop, ...rest } = polygon;
           return {

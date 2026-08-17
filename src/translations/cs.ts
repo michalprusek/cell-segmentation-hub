@@ -498,9 +498,9 @@ export default {
             'U-Net s enkodérem MiT-B5 (SegFormer) pro binární segmentaci ran v mikroskopii scratch-assay (~32 ms na A5000, 90% IoU na externí testovací sadě)',
         },
         microtubule: {
-          name: 'Mikrotubuly (DINOv3 + PySOAX)',
+          name: 'Mikrotubuly (ResEnc-M + zakřivený instancer)',
           description:
-            'Instanční segmentace mikrotubulů pro IRM/TIRF časosběrná videa. DINOv3-L ViT-L/16 + DPT fúze dává centerline polyline per MT a 32-d embedding na pixel, který umožňuje cross-frame tracking a generování kymografu. ~8 s/frame; jediný model v platformě s nativním polyline výstupem.',
+            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~4,5 s/frame; jediný model v platformě s nativním polyline výstupem.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -537,7 +537,7 @@ export default {
       wound:
         'U-Net + MiT-B5 (SegFormer enkodér) model pro segmentaci ran v mikroskopii scratch-assay. Jedna binární oblast rány na snímek; ideální pro časové řady hojení.',
       microtubule:
-        'Instanční segmentace mikrotubulů pro IRM/TIRF mikroskopii. DINOv3-L + DPT enkodér, PySOAX postprocessing, nativní polyline výstup s tracking přes 32-d embedding.',
+        'Instanční segmentace mikrotubulů pro IRM mikroskopii. Síť nnU-Net ResEnc-M, instancer s mezí zakřivení, nativní polyline výstup s geometrickým cross-frame trackingem.',
       microcapsule:
         'Kompaktní U-Net (destilovaný z Meta SAM 3) pro instanční segmentaci mikrokapsulí — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
     },
