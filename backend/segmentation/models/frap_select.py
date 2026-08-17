@@ -95,10 +95,23 @@ class SelectionResult:
     n_polylines: int
     shortfall: bool
     rejected_filaments: List[RejectedFilament]
+    # Counts FILAMENTS dropped after reaching the greedy pick, keyed by _DROP_KEYS.
+    # Deliberately not folded into `rejected_by`: that dict counts CANDIDATES
+    # against criteria, this one counts FILAMENTS after selection — one histogram
+    # mixing two units is how a number gets misread six months later.
+    dropped_by: Dict[str, int]
 
 
 _REJECT_KEYS = ("length", "border", "bleach_clearance",
                 "readout_clearance", "straightness", "snr")
+
+# A filament that reaches the greedy pick (it produced a fully-passing candidate)
+# was rejected by none of ``_REJECT_KEYS`` — if it still ends up without a spot, the
+# reason lives in this separate vocabulary instead: it lost to an already-chosen
+# neighbour ("separation", below d_sep_px) or simply ran out of slots ("budget",
+# k_max already reached). Kept apart from `_REJECT_KEYS` because the two counters
+# they feed measure different things (candidates vs. filaments) — see `dropped_by`.
+_DROP_KEYS = ("separation", "budget")
 
 
 def _polyline_midpoint_xy(pts: np.ndarray) -> Optional[Tuple[float, float]]:
@@ -182,6 +195,7 @@ def select_spots(
     p = params
     h, w = int(shape_hw[0]), int(shape_hw[1])
     rejected = {k: 0 for k in _REJECT_KEYS}
+    dropped = {k: 0 for k in _DROP_KEYS}
     # Per-filament reject tallies, kept separate from the frame-wide ``rejected``
     # histogram above: that one answers "how many candidates failed each test", this
     # one answers "of THIS filament's own candidates, which test failed most" — the
@@ -330,27 +344,50 @@ def select_spots(
     candidates.sort(key=lambda s: s.score, reverse=True)
     d_sep_px = p.d_sep_um / um_per_px
     chosen: List[Spot] = []
+    # Every filament that reaches this loop has exactly one candidate here (its
+    # `best`, built at most once per filament above), so recording a drop reason
+    # per candidate IS recording it per filament — no modal-reason tie-break needed,
+    # unlike the criterion rejections below. Deliberately never `break`s on hitting
+    # k_max: a later candidate that also fails d_sep must be counted as
+    # "separation", not "budget", so every remaining candidate must still be
+    # checked against `chosen` even once the budget is spent — `chosen` itself ends
+    # up identical to the old break-early loop either way, since nothing is
+    # appended once len(chosen) == k_max.
+    mt_drop_reason: Dict[int, str] = {}
     for cand in candidates:
+        clears_sep = all(np.hypot(cand.x - c.x, cand.y - c.y) >= d_sep_px for c in chosen)
+        if not clears_sep:
+            dropped["separation"] += 1
+            mt_drop_reason[cand.mt_index] = "separation"
+            continue
         if len(chosen) >= k_max:
-            break
-        if all(np.hypot(cand.x - c.x, cand.y - c.y) >= d_sep_px for c in chosen):
-            chosen.append(cand)
+            dropped["budget"] += 1
+            mt_drop_reason[cand.mt_index] = "budget"
+            continue
+        chosen.append(cand)
 
-    # One RejectedFilament per filament that contributed nothing to `chosen` AND has
-    # at least one of its own candidates with a defined rejection reason. A filament
-    # that produced a passing candidate but simply lost the d_sep/k_max round has no
-    # such reason (none of its own candidates were rejected by any criterion) — that
-    # is over-subscription, not rejection, so it is left undecorated rather than
-    # guessed at.
+    # One RejectedFilament per filament that contributed nothing to `chosen`.
+    # Two disjoint sources, per filament:
+    #  - it reached the greedy pick (had a fully-passing candidate) and lost there:
+    #    reason is `mt_drop_reason[i]` ("separation" or "budget") — not a criterion
+    #    rejection, since nothing about its own candidate failed any test.
+    #  - it never produced a passing candidate: reason is the MODAL rejection among
+    #    its own candidates' `_REJECT_KEYS` failures, ties broken by _REJECT_KEYS
+    #    order. If it has no recorded failure either (e.g. zero points), it is left
+    #    undecorated rather than guessed at.
+    had_best_mt_indices = {s.mt_index for s in candidates}
     chosen_mt_indices = {s.mt_index for s in chosen}
     rejected_filaments: List[RejectedFilament] = []
     for i, pts in enumerate(resampled):
         if i in chosen_mt_indices:
             continue
-        counts = per_filament_rejects.get(i)
-        if not counts:
-            continue
-        reason = max(_REJECT_KEYS, key=lambda k: counts.get(k, 0))
+        if i in had_best_mt_indices:
+            reason = mt_drop_reason[i]
+        else:
+            counts = per_filament_rejects.get(i)
+            if not counts:
+                continue
+            reason = max(_REJECT_KEYS, key=lambda k: counts.get(k, 0))
         mid_xy = _polyline_midpoint_xy(pts)
         if mid_xy is None:
             continue
@@ -360,4 +397,5 @@ def select_spots(
     return SelectionResult(spots=chosen, rejected_by=rejected,
                            n_candidates=n_candidates, n_polylines=len(list(polylines_xy)),
                            shortfall=len(chosen) < k_min,
-                           rejected_filaments=rejected_filaments)
+                           rejected_filaments=rejected_filaments,
+                           dropped_by=dropped)

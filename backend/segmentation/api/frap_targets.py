@@ -147,6 +147,10 @@ def frap_targets(
         "spots": [_spot_json(s, params, um_per_px) for s in sel.spots],
         "shortfall": sel.shortfall,
         "rejected_by": sel.rejected_by,
+        # rejected_by counts CANDIDATES against criteria; dropped_by counts
+        # FILAMENTS dropped after the greedy pick (d_sep or k_max) — kept as a
+        # sibling dict, not folded together, so a number can't be misread later.
+        "dropped_by": sel.dropped_by,
         "coordinate_order": COORDINATE_ORDER,
         "um_per_px": um_per_px,
         "image_shape": [int(irm.shape[0]), int(irm.shape[1])],
