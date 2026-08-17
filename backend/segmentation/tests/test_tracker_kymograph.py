@@ -402,25 +402,61 @@ def test_geom_terms_length_difference_costs_high_on_d_len():
     assert d_len > 0.8
 
 
-def test_filament_cost_is_infinite_beyond_the_displacement_gate():
-    """A hard gate, not an expensive term.
+def test_a_far_pair_is_expensive_but_NOT_forbidden():
+    """No hard gates — the defect that fragmented tracks 3.14x.
 
-    The embedding cost had no gate: a missing embedding merely substituted a
-    neutral value, so any pair could be bought by making the alternatives
-    expensive. `inf` cannot be outbid by the assignment solver.
+    This function used to return `inf` beyond a displacement threshold and the
+    docstring called being un-outbiddable a virtue. On 30 frames of a real
+    production video, 25.3% of pairs the embedding tracker called the same
+    microtubule exceed that threshold, because the instancer re-traces a
+    different EXTENT of the same filament between frames. Rejecting them turned
+    133 tracks into 417.
+
+    Cost must still RISE with distance — that is what lets the assignment
+    prefer the near pair — but it must stay finite so a good link can win when
+    the other terms agree.
     """
     fa = _feat([(0, 0), (0, 20)])
     far = _feat([(0, 400), (0, 420)])
-    assert _filament_cost(fa, far, 1000.0) == float("inf")
+    cost = _filament_cost(fa, far, 1000.0)
+    assert np.isfinite(cost), "a far pair must be expensive, not forbidden"
+    near = _feat([(2, 0), (2, 20)])
+    assert _filament_cost(fa, near, 1000.0) < cost
 
 
-def test_filament_cost_is_infinite_for_a_fragment_on_a_filament():
-    """The overlap gate. A 10 px fragment lying on a 200 px filament has a
-    small one-directional distance, so without the gate it can win the
-    assignment and orphan the real filament."""
+def test_a_pair_at_the_p90_of_real_links_stays_linkable():
+    """Regression for the real-data distribution.
+
+    True links measured on production have a bimodal curve distance: median
+    2.35 px but p90 184 px. A cost that forbids the tail severs a quarter of
+    them, silently, and every per-track measurement downstream is then computed
+    over fragments.
+    """
+    fa = _feat([(0, c) for c in range(0, 201, 5)])
+    shifted = _feat([(184, c) for c in range(0, 201, 5)])
+    assert np.isfinite(_filament_cost(fa, shifted, 1000.0))
+
+
+def test_a_fragment_costs_more_than_the_matching_filament():
+    """The fragment case still has to be discriminated — just by PRICE, not by
+    veto. A 10 px fragment on a 200 px filament must lose the assignment to the
+    filament's own re-detection, which is what
+    test_a_short_fragment_does_not_steal_a_long_filaments_track proves
+    end-to-end through the LAP."""
     long_mt = _feat([(0, c) for c in range(0, 201, 5)])
     fragment = _feat([(0, 95), (0, 105)])
-    assert _filament_cost(long_mt, fragment, 1000.0) == float("inf")
+    redetected = _feat([(1, c) for c in range(0, 201, 5)])
+    assert _filament_cost(long_mt, fragment, 1000.0) > _filament_cost(
+        long_mt, redetected, 1000.0
+    )
+
+
+def test_degenerate_geometry_is_still_infinite():
+    """The one surviving `inf`: a centerline with fewer than two points cannot
+    be compared, and a distance of 0 would otherwise read as a perfect match."""
+    stub = _feat([(5, 5)])
+    real = _feat([(0, c) for c in range(0, 41, 2)])
+    assert _filament_cost(real, stub, 1000.0) == float("inf")
 
 
 def test_filament_cost_rises_with_curve_distance():
