@@ -90,8 +90,21 @@ def _half_axes_px(p: SelectionParams, um_per_px: float) -> Tuple[float, float]:
     return (0.5 * p.spot_len_um / um_per_px, 0.5 * p.spot_wid_um / um_per_px)
 
 
+def _window_half_k(half_px: float, step_px: float) -> int:
+    """Sample count the observation window reaches from its centre index, each way.
+
+    The single source of truth for the window's quantised half-width — both
+    ``_slice_window`` (which actually builds the window) and ``select_spots``'s
+    KD-tree query radius (which must bound how far the window can really reach,
+    in pixels, so a too-close neighbour is never mistaken for isolated) call this
+    same function, so the two can never drift apart the way a query radius that
+    just assumed ``obs_half_px`` used to.
+    """
+    return max(1, int(round(half_px / step_px)))
+
+
 def _slice_window(pts: np.ndarray, i: int, half_px: float, step_px: float) -> np.ndarray:
-    k = max(1, int(round(half_px / step_px)))
+    k = _window_half_k(half_px, step_px)
     return pts[max(0, i - k): min(pts.shape[0], i + k + 1)]
 
 
@@ -172,12 +185,15 @@ def select_spots(
     # hypot(a_px, b_px), not max(a_px, b_px) — a neighbour at the corner is farther
     # from the centre than max() alone accounts for.
     corner_px = float(np.hypot(a_px, b_px))
-    # A neighbour can only matter if it is within spread_px of the (corner-anchored)
-    # footprint, OR within r_iso_px of the observation window (whose points are never
-    # farther than obs_half_px away in Euclidean distance, since that is arc length).
-    # This is a max of two independent "could matter" distances, not their sum —
-    # summing would double-count and over-fetch from the KD-tree for no benefit.
-    query_r_px = float(max(corner_px + spread_px, obs_half_px + r_iso_px) + 1.0)
+    # _slice_window quantises the window to whole samples, so it reaches k*step_px from
+    # the centre, not obs_half_px: the ratio can round down, and the max(1, ...) floor
+    # overshoots outright when obs_half_px < step_px/2. Mirror that arithmetic here via
+    # _window_half_k rather than hoping a fixed slack covers it — this bound is what
+    # stops a too-close neighbour from being missed and read as "isolated".
+    obs_reach_px = float(_window_half_k(obs_half_px, p.step_px) * p.step_px)
+    # A max of two terms, not a sum: a neighbour matters if it is within spread_px of the
+    # footprint OR within r_iso_px of the window. Do not "simplify" this into a sum.
+    query_r_px = float(max(corner_px + spread_px, obs_reach_px + r_iso_px) + p.step_px)
 
     candidates: List[Spot] = []
     n_candidates = 0

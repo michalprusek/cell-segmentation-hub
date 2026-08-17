@@ -104,6 +104,26 @@ def test_an_even_point_count_still_yields_a_candidate_at_f_mid_zero():
     assert len(r.spots) == 1
 
 
+def test_a_quantised_window_still_catches_a_too_close_neighbour():
+    # Regression for query_r_px's window term. step_px=3.0 with a tiny obs_len_um
+    # forces the max(1, ...) floor in _window_half_k: obs_half_px=1.0 px but the
+    # window actually reaches k*step_px=3.0 px (obs_reach_px), not obs_half_px.
+    # r_iso_um=1.5 makes the window term (obs_reach_px + r_iso_px = 18.0) dominate
+    # the footprint term (hypot(5,5) + 5 = 12.07). The single candidate sits at
+    # (250, 300) with its window at x in [247, 253]; the neighbour sits 17.5 px
+    # from the candidate centre but only 14.5 px from the window's near edge —
+    # inside r_iso_px=15.0, a genuine readout-clearance violation. The OLD bound
+    # (obs_half_px + r_iso_px + 1.0 = 17.0) excludes it from the KD-tree query and
+    # the candidate reads as isolated; the NEW bound (obs_reach_px + r_iso_px +
+    # step_px = 21.0) includes it and the candidate is correctly rejected.
+    params = S.SelectionParams(step_px=3.0, obs_len_um=0.2, r_iso_um=1.5, f_mid=0.0)
+    mts = [horizontal(300, 100, 400)]
+    neighbour = np.array([[267.5, 300.0]])
+    r = S.select_spots(mts + [neighbour], SHAPE, UM_PER_PX, params=params, k_min=1, k_max=10)
+    assert r.spots == []
+    assert r.rejected_by["readout_clearance"] >= 1
+
+
 def test_the_brightness_test_rejects_an_undecorated_filament():
     # Two filaments, identical geometry; only the lower one has 488 signal.
     bright = horizontal(200, 100, 400)
