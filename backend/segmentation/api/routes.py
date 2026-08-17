@@ -161,18 +161,25 @@ async def segment_image(
             # Wound model expects grayscale 512×512 — custom preprocessing lives in WoundModel
             result = loader.predict_wound(image, threshold, detect_holes)
         elif model == 'microtubule':
-            # Microtubule v7 takes the user threshold as the seed_prob cutoff
-            # (default 0.5). PySOAX hyperparameters are fixed to the production
-            # Optuna-tuned defaults; detect_holes is not meaningful for polylines.
+            # Microtubule v5H uses its OWN fitted foreground cut (0.97, from
+            # params_v5h.json), not the user's threshold — the same reason
+            # sperm ignores it above: it is calibrated differently.
             #
-            # Serialise on _microtubule_inference_lock: the model needs the full
-            # GPU memory budget for one forward pass and racing two of these
-            # OOMs even with empty_cache between.  Holding the lock across the
-            # entire predict_microtubule call is fine — FastAPI sync routes run
-            # on uvicorn's worker thread pool, so blocking here only blocks the
-            # worker thread, not the event loop.
+            # This is not merely a preference. `threshold` is declared
+            # `le=0.9`, so 0.97 is not even expressible on this endpoint:
+            # forwarding the user's value would silently cut this model's
+            # (very confident) foreground at 0.5 and flood the instancer with
+            # noise, and "fixing" that by sending 0.97 would 422. The cut
+            # belongs to the fitted parameter vector, so it travels with it.
+            #
+            # detect_holes is not meaningful for polylines.
+            #
+            # Serialise on _microtubule_inference_lock — see the comment at its
+            # definition. Holding it across the entire predict_microtubule call
+            # is fine: FastAPI sync routes run on uvicorn's worker thread pool,
+            # so blocking here only blocks the worker thread, not the event loop.
             with _microtubule_inference_lock:
-                result = loader.predict_microtubule(image, threshold)
+                result = loader.predict_microtubule(image)
         elif model == 'microcapsule':
             # Microcapsule distilled U-Net — the user threshold is forwarded as
             # the foreground cutoff. detect_holes is not meaningful: each capsule

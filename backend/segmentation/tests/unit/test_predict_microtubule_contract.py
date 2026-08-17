@@ -13,7 +13,14 @@ from PIL import Image
 
 
 class _StubMT:
-    """Returns one centerline in (row, col), the wrapper's contract."""
+    """Returns one centerline in (row, col), the wrapper's contract.
+
+    Mirrors the real MicrotubuleModel's surface, including ``params`` and
+    ``DEFAULT_SEED_THRESHOLD``: the loader reads them to report which cut was
+    actually applied when the caller passes none.
+    """
+
+    DEFAULT_SEED_THRESHOLD = 0.97
 
     def __init__(self, centerlines=None):
         self._cls = (
@@ -21,7 +28,8 @@ class _StubMT:
             if centerlines is not None
             else [np.array([[10.0, 20.0], [11.0, 21.0], [12.0, 22.0]])]
         )
-        self.seen_threshold = None
+        self.params = {"prob_thr": 0.97}
+        self.seen_threshold = "unset"
 
     def predict(self, image_np, seed_threshold=None, params=None):
         self.seen_threshold = seed_threshold
@@ -84,11 +92,25 @@ def test_instance_ids_are_unique_per_polyline(loader, monkeypatch):
     assert len(set(ids)) == 2
 
 
-def test_threshold_is_forwarded_to_the_model(loader):
-    """The user's threshold must reach the wrapper; silently ignoring it makes
-    the editor's slider a no-op."""
-    loader.predict_microtubule(Image.new("L", (64, 64)), threshold=0.85)
+def test_an_explicit_threshold_is_forwarded_to_the_model(loader):
+    """An override must reach the wrapper rather than being swallowed."""
+    out = loader.predict_microtubule(Image.new("L", (64, 64)), threshold=0.85)
     assert loader.loaded_models["microtubule"].seen_threshold == 0.85
+    assert out["threshold_used"] == 0.85
+
+
+def test_no_threshold_means_the_models_own_fitted_cut(loader):
+    """THE reason this defaults to None.
+
+    The /segment route declares `threshold` as `le=0.9`, so this model's fitted
+    0.97 is not expressible there, and the stack-wide default of 0.5 would cut
+    a very confident foreground far too low and flood the instancer. Passing
+    None lets the wrapper use params_v5h.json's prob_thr — and the response
+    must report what was APPLIED, not the empty request.
+    """
+    out = loader.predict_microtubule(Image.new("L", (64, 64)))
+    assert loader.loaded_models["microtubule"].seen_threshold is None
+    assert out["threshold_used"] == 0.97
 
 
 def test_response_envelope_is_unchanged(loader):
