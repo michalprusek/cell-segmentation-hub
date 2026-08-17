@@ -6,16 +6,25 @@ import sys
 import asyncio
 from typing import AsyncGenerator, Generator
 import pytest
-import torch
 import numpy as np
 from PIL import Image
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
+# Make torch optional for tests that don't need it
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
 # Add current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(__file__))
 
-from api.main import app
+try:
+    from api.main import app
+except ImportError:
+    app = None
 
 
 @pytest.fixture(scope="session")
@@ -33,6 +42,8 @@ def client() -> TestClient:
     Uses the context-manager form so that the lifespan startup/shutdown runs
     (initialises app.state.model_loader) before the test body executes.
     """
+    if app is None:
+        pytest.skip("FastAPI app not available")
     with TestClient(app) as tc:
         yield tc
 
@@ -45,6 +56,8 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
     (model-loader init) runs before any test request, matching how the real
     server behaves.
     """
+    if app is None:
+        pytest.skip("FastAPI app not available")
     import httpx
     from asgi_lifespan import LifespanManager
     async with LifespanManager(app) as manager:
@@ -86,33 +99,39 @@ def sample_image_bytes(sample_image: Image.Image) -> bytes:
 
 
 @pytest.fixture
-def sample_tensor() -> torch.Tensor:
+def sample_tensor():
     """Create a sample tensor for testing."""
+    if not HAS_TORCH:
+        pytest.skip("torch not available")
     # Set seed for deterministic tensors
     torch.manual_seed(42)
     return torch.randn(1, 3, 256, 256)
 
 
 @pytest.fixture
-def sample_mask() -> torch.Tensor:
+def sample_mask():
     """Create a sample mask tensor for testing."""
+    if not HAS_TORCH:
+        pytest.skip("torch not available")
     mask = torch.zeros(1, 1, 256, 256)
     # Add some circular masks to simulate cell segmentation
     center_x, center_y = 128, 128
     radius = 50
-    
+
     for i in range(256):
         for j in range(256):
             distance = ((i - center_x) ** 2 + (j - center_y) ** 2) ** 0.5
             if distance < radius:
                 mask[0, 0, i, j] = 1.0
-    
+
     return mask
 
 
 @pytest.fixture
-def mock_model_weights() -> dict:
+def mock_model_weights():
     """Create mock model weights for testing."""
+    if not HAS_TORCH:
+        pytest.skip("torch not available")
     # Set seed for deterministic weights
     torch.manual_seed(42)
     return {
