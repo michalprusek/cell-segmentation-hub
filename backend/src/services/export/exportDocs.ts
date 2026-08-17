@@ -299,9 +299,11 @@ session.
 
 ## Known limitations
 
-- PySOAX has a known wrong-pairing failure mode at MT crossings (~50 %
-  resolved by the v7 embedding-guided postprocessing). Splits/merges
-  may surface as multiple short tracks for one real MT.
+- Wrong pairings at MT crossings remain the main failure mode. The
+  instancer resolves each crossing by a min-cost matching over its arms
+  under a hard curvature bound (0.25 rad/px), which rules out kinked
+  joins but cannot separate two filaments that cross at a shallow angle.
+  Splits/merges may surface as multiple short tracks for one real MT.
 - Tracking does not currently model catastrophe / rescue events
   explicitly — sharp drops in length within a single trackId are the
   best heuristic for now.
