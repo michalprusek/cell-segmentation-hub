@@ -109,6 +109,12 @@ def frap_targets(
         except ValueError as exc:
             raise HTTPException(status_code=400,
                                 detail=f"params_json is not valid JSON: {exc}") from exc
+        if not isinstance(overrides, dict):
+            raise HTTPException(
+                status_code=400,
+                detail=f"params_json must be a JSON object, got "
+                       f"{type(overrides).__name__}",
+            )
         unknown = set(overrides) - set(vars(params))
         if unknown:
             raise HTTPException(status_code=400,
@@ -151,8 +157,8 @@ def frap_targets(
 
 
 def _spot_json(s, params: "FS.SelectionParams", um_per_px: float) -> Dict[str, Any]:
-    rx = 0.5 * params.spot_len_um / um_per_px
-    ry = 0.5 * params.spot_wid_um / um_per_px
+    rx_px = 0.5 * params.spot_len_um / um_per_px
+    ry_px = 0.5 * params.spot_wid_um / um_per_px
     return {
         "x": round(s.x, 2), "y": round(s.y, 2),
         "tangent_deg": round(s.tangent_deg, 2),
@@ -162,7 +168,10 @@ def _spot_json(s, params: "FS.SelectionParams", um_per_px: float) -> Dict[str, A
         "readout_clearance_um": round(s.readout_clearance_um, 3),
         "snr": (None if s.snr is None else round(s.snr, 3)),
         "score": round(s.score, 4),
+        # "rx"/"ry" here are in image pixels, per the top-level coordinate_order,
+        # same as "cx"/"cy" — wire keys are unchanged, only the local names moved
+        # to the _px suffix.
         "roi": {"type": params.spot_shape, "cx": round(s.x, 2), "cy": round(s.y, 2),
-                "rx": round(rx, 2), "ry": round(ry, 2),
+                "rx": round(rx_px, 2), "ry": round(ry_px, 2),
                 "angle_deg": round(s.tangent_deg, 2)},
     }
