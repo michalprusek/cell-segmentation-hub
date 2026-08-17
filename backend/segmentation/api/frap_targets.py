@@ -30,9 +30,17 @@ if _MODELS_DIR not in sys.path:
 import frap_select as FS  # noqa: E402
 
 from api import frap_render  # noqa: E402
-from api.routes import _microtubule_inference_lock, get_model_loader  # noqa: E402
-# Imported rather than re-created: the lock serialises microtubule inference across
-# EVERY caller. A second lock object would serialise nothing.
+from api.routes import (  # noqa: E402
+    InferenceError,
+    InferenceTimeoutError,
+    _microtubule_inference_lock,
+    get_model_loader,
+)
+# The lock is imported rather than re-created: it serialises microtubule inference
+# across EVERY caller, and a second lock object would serialise nothing. The two
+# inference exceptions come from api/routes.py for the same reason -- that module
+# already owns the ImportError fallback for a stripped image, so importing them from
+# there is what guarantees this endpoint catches exactly what the sibling catches.
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -316,8 +324,37 @@ def frap_targets(
 
     pil = Image.fromarray(irm)
     t0 = time.time()
-    with _microtubule_inference_lock:
-        result = loader.predict_microtubule(pil)
+    # Mirrors api/routes.py's handling of the same call: a timeout is a 504 and an
+    # inference failure a 500, so the two are distinguishable. Unwrapped, both
+    # reached the microscope as `ERROR Server returned HTTP 500: {"detail":
+    # "Internal error (id: ab12cd34)"}` -- the same thing a malformed request
+    # produces. On an unattended JOBS run that is exactly the difference between
+    # "retry this field" and "stop the experiment".
+    #
+    # Deliberate deviation from the sibling: the detail is one sentence, not
+    # routes.py's dict. This endpoint's client writes the response detail verbatim
+    # into a ONE-LINE frap_status.txt that an operator reads at the microscope, and
+    # a serialised dict there is noise. InferenceTimeoutError subclasses
+    # InferenceError, so it must be caught first.
+    try:
+        with _microtubule_inference_lock:
+            result = loader.predict_microtubule(pil)
+    except (InferenceTimeoutError, TimeoutError) as exc:
+        model_name = getattr(exc, "model_name", "microtubule")
+        timeout = getattr(exc, "timeout", None)
+        logger.error("frap/targets: model %s timed out after %ss: %s",
+                     model_name, timeout, exc)
+        raise HTTPException(
+            status_code=504,
+            detail=f"Model '{model_name}' inference timed out"
+                   + (f" after {timeout}s" if timeout is not None else "")
+                   + f" on a {irm.shape[1]}x{irm.shape[0]} frame. The GPU queue may "
+                     f"be busy; retrying this field is reasonable.") from exc
+    except InferenceError as exc:
+        logger.error("frap/targets: inference failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Microtubule inference failed: {exc}") from exc
     inference_s = time.time() - t0
 
     polylines = _polylines_from(result)
