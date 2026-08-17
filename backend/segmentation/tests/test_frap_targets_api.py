@@ -118,6 +118,60 @@ def test_params_json_must_be_a_json_object(client):
             f"{r.text}")
 
 
+def test_each_spot_carries_the_models_own_instance_id(client):
+    # frap_spots.json exists for offline analysis, and mt_index alone is an index
+    # into a list the response does not contain -- so nothing in the file could be
+    # joined back to the segmentation that produced it. The stub's instanceIds are
+    # mt_150 and mt_450, one per filament, in the order the polylines arrive.
+    page = np.zeros((600, 600), dtype=np.uint16)
+    r = client.post("/api/v1/frap/targets",
+                    files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+                    data={"um_per_px": "0.1", "k_min": "1", "k_max": "10"})
+    assert r.status_code == 200, r.text
+    spots = r.json()["spots"]
+    assert len(spots) == 2
+    expected = {0: "mt_150", 1: "mt_450"}
+    for spot in spots:
+        assert "mt_index" in spot          # kept alongside, not replaced by the id
+        assert spot["mt_instance_id"] == expected[spot["mt_index"]]
+
+
+class _OneDegeneratePolylineLoader:
+    """A single-point polyline first, then two usable filaments.
+
+    _polylines_from FILTERS anything with fewer than two points, and mt_index is an
+    index into what SURVIVES that filter. Collecting the instance ids in a separate
+    pass over the unfiltered list would therefore shift every id by one -- so this
+    frame is the one that tells a correct implementation from a plausible one.
+    """
+
+    def predict_microtubule(self, image, *args, **kwargs):
+        def line(y, name):
+            return {"id": f"polyline_{y}", "instanceId": name,
+                    "points": [{"x": 100.0, "y": float(y)}, {"x": 400.0, "y": float(y)}],
+                    "class": "microtubule", "geometry": "polyline"}
+        return {"polylines": [
+            {"id": "polyline_degenerate", "instanceId": "mt_DROPPED",
+             "points": [{"x": 10.0, "y": 10.0}],
+             "class": "microtubule", "geometry": "polyline"},
+            line(150, "mt_FIRST"),
+            line(450, "mt_SECOND"),
+        ], "success": True}
+
+
+def test_instance_ids_survive_the_short_polyline_filter_in_step():
+    page = np.zeros((600, 600), dtype=np.uint16)
+    r = _client_with(_OneDegeneratePolylineLoader()).post(
+        "/api/v1/frap/targets",
+        files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+        data={"um_per_px": "0.1", "k_min": "1", "k_max": "10"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["n_polylines"] == 2, "the one-point polyline must not be counted"
+    got = {s["mt_index"]: s["mt_instance_id"] for s in body["spots"]}
+    assert got == {0: "mt_FIRST", 1: "mt_SECOND"}
+
+
 def _client_with(loader):
     from api import frap_targets
     from api.routes import get_model_loader
@@ -386,7 +440,7 @@ def test_overlay_is_omitted_unless_asked_for(client):
 
 
 class _ShortFilamentLoader:
-    """One filament, 5 px = 0.5 um long -- well under the default l_min_um=5.0, so
+    """One filament, 5 px = 0.5 um long -- well under the default l_min_um=6.0, so
     it is guaranteed to be rejected at the length gate and produce exactly one
     RejectedFilament with reason="length"."""
 

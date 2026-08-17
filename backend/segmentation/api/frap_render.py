@@ -8,16 +8,34 @@ to audit it is to see the footprint, not the centre.
 from __future__ import annotations
 
 import io
+import os
+import sys
 from typing import List, Sequence
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+_MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models")
+if _MODELS_DIR not in sys.path:
+    sys.path.insert(0, _MODELS_DIR)
+
+import frap_select as FS  # noqa: E402
+# Imported off the models DIRECTORY, not as ``models.frap_select``: the package
+# __init__ pulls in torch and a live CUDA driver, and drawing an outline needs
+# neither. frap_select itself and api/mt_metrics.py established the same pattern.
+
 
 def _roi_polygon(spot, params, um_per_px: float, dilate_um: float = 0.0):
-    """The ROI outline as image-space vertices, optionally dilated."""
-    a = 0.5 * params.spot_len_um / um_per_px + dilate_um / um_per_px
-    b = 0.5 * params.spot_wid_um / um_per_px + dilate_um / um_per_px
+    """The ROI outline as image-space vertices, optionally dilated.
+
+    The half-axes come from ``frap_select.half_axes_px`` rather than being recomputed
+    here: what this DRAWS and what the isolation criteria VALIDATED have to be the
+    same footprint, and two copies of ``0.5 * spot_len_um / um_per_px`` are two
+    things to keep in step by hand.
+    """
+    a, b = FS.half_axes_px(params, um_per_px)
+    a += dilate_um / um_per_px
+    b += dilate_um / um_per_px
     th = np.radians(spot.tangent_deg)
     c, s = np.cos(th), np.sin(th)
     if params.spot_shape == "rect":

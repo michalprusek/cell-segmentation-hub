@@ -23,8 +23,21 @@ def test_a_lone_long_filament_yields_one_spot_at_its_midpoint():
     assert r.shortfall is False        # 1 spot achievable, k_min=1: not a shortfall
 
 
+def test_l_min_is_large_enough_to_hold_the_observation_window():
+    # l_min_um's stated rationale is that the filament must HOLD the observation
+    # window. That is an arithmetic relationship between three defaults, not a
+    # standalone number: candidates come from the middle f_mid of the filament, so
+    # the most extreme one sits (1 - f_mid)/2 of the length from the nearer end and
+    # needs obs_len/2 of room there. Hence l_min >= obs_len / (1 - f_mid), which at
+    # the defaults is 3.0 / 0.5 = 6.0 um. Below that, _slice_window CLIPS and
+    # criterion 5b is evaluated over a SHORTER window than intended -- the unsafe
+    # direction, and silent.
+    p = S.SelectionParams()
+    assert p.l_min_um >= p.obs_len_um / (1.0 - p.f_mid)
+
+
 def test_a_filament_shorter_than_l_min_is_rejected():
-    mts = [horizontal(300, 100, 130)]          # 30 px = 3 um, below l_min 5 um
+    mts = [horizontal(300, 100, 130)]          # 30 px = 3 um, below l_min 6 um
     r = S.select_spots(mts, SHAPE, UM_PER_PX, k_min=1, k_max=10)
     assert r.spots == []
     assert r.rejected_by["length"] >= 1

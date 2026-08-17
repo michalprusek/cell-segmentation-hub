@@ -25,6 +25,33 @@ def _spot(x, y, tangent_deg=0.0, mt_index=0):
                    readout_clearance_um=5.0, snr=3.0, score=1.0)
 
 
+def test_the_selection_the_mask_and_the_json_share_one_half_axis_calculation():
+    # frap_select.half_axes_px, frap_render._roi_polygon and
+    # frap_targets._spot_json each computed 0.5 * spot_len_um / um_per_px
+    # independently. The third is what the microscope BLEACHES and the first is what
+    # the isolation criteria VALIDATED, so those two disagreeing is a wrong bleach
+    # that looks right, and nothing enforced their agreement. A NON-circular spot is
+    # used deliberately: at spot_len_um == spot_wid_um the two axes coincide and any
+    # divergence between them is invisible.
+    import pytest
+
+    from api import frap_targets
+
+    params = FS.SelectionParams(spot_len_um=2.0, spot_wid_um=0.8)
+    a_px, b_px = FS.half_axes_px(params, UM_PER_PX)
+
+    spot = _spot(300.0, 300.0)
+    body = frap_targets._spot_json(spot, params, UM_PER_PX, ["mt_a"])
+    assert body["roi"]["rx"] == round(a_px, 2)
+    assert body["roi"]["ry"] == round(b_px, 2)
+
+    # A tangent of 0 with 48 samples starting at t=0 puts a vertex exactly on each
+    # semi-axis, so the polygon's extent IS the half-axis pair.
+    poly = frap_render._roi_polygon(spot, params, UM_PER_PX)
+    assert max(p[0] for p in poly) - spot.x == pytest.approx(a_px, abs=1e-9)
+    assert max(p[1] for p in poly) - spot.y == pytest.approx(b_px, abs=1e-9)
+
+
 def test_overlay_with_rejected_filaments_differs_in_bytes_from_without():
     frame = np.zeros(SHAPE_HW, dtype=np.uint16)
     polylines = [np.array([[100.0, 300.0], [400.0, 300.0]])]

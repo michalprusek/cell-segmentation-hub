@@ -38,7 +38,20 @@ class SelectionParams:
     shortfall is visible and recoverable, a bleach that clipped a neighbour is not.
     """
 
-    l_min_um: float = 5.0            # filament must hold the observation window
+    # The filament must HOLD the observation window, and that fixes the number
+    # rather than leaving it to taste. Candidates come from the middle ``f_mid`` of
+    # the filament, so the most extreme one sits (1 - f_mid)/2 of the length from the
+    # nearer end, and criterion 5b needs obs_len/2 of filament available there:
+    #
+    #     L * (1 - f_mid) / 2 >= obs_len / 2   =>   L_min >= obs_len / (1 - f_mid)
+    #
+    # At the defaults (f_mid 0.5, obs_len 3.0) that is 3.0 / 0.5 = 6.0 um. The
+    # previous 5.0 contradicted its own rationale: below the bound ``_slice_window``
+    # CLIPS, so 5b is evaluated over a shorter window than intended, which
+    # under-reports contamination -- the unsafe direction, and silent. Widening
+    # f_mid or obs_len raises this floor; the relationship is tested, not just
+    # written down here.
+    l_min_um: float = 6.0            # = obs_len_um / (1 - f_mid); see above
     spot_len_um: float = 1.0         # bleached length of lattice
     spot_wid_um: float = 1.0         # bleached width across the filament
     bleach_spread_um: float = 0.5    # MEASURE this, do not guess it (spec 9.6)
@@ -135,8 +148,17 @@ def _polyline_midpoint_xy(pts: np.ndarray) -> Optional[Tuple[float, float]]:
     return float(x), float(y)
 
 
-def _half_axes_px(p: SelectionParams, um_per_px: float) -> Tuple[float, float]:
-    """Half-length along the tangent and half-width across it, in pixels."""
+def half_axes_px(p: SelectionParams, um_per_px: float) -> Tuple[float, float]:
+    """Half-length along the tangent and half-width across it, in pixels.
+
+    PUBLIC, and the only place this arithmetic lives. Three sites used to compute
+    ``0.5 * spot_len_um / um_per_px`` independently: this one, which is what the
+    isolation criteria VALIDATE; ``api.frap_render._roi_polygon``, which is what the
+    mask and overlay DRAW; and ``api.frap_targets._spot_json``, which is what the
+    microscope actually BLEACHES. The first and the last disagreeing is a wrong
+    bleach that looks entirely right afterwards, and nothing enforced their
+    agreement -- so they share one function instead.
+    """
     return (0.5 * p.spot_len_um / um_per_px, 0.5 * p.spot_wid_um / um_per_px)
 
 
@@ -236,7 +258,7 @@ def select_spots(
                     r.astype(np.float32), h, w, p.band_thickness_px)
         not_signal = union == 0
 
-    a_px, b_px = _half_axes_px(p, um_per_px)
+    a_px, b_px = half_axes_px(p, um_per_px)
     spread_px = p.bleach_spread_um / um_per_px
     r_iso_px = p.r_iso_um / um_per_px
     obs_half_px = 0.5 * p.obs_len_um / um_per_px
