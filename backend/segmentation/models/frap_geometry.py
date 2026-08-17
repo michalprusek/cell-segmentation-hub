@@ -47,8 +47,11 @@ def resample_polyline(points_xy, step_px: float) -> np.ndarray:
 
 
 def _baseline_indices(n: int, baseline_px: float, step_px: float):
-    """Index pairs a fixed arc distance apart, clamped at the ends."""
-    k = max(1, int(round(float(baseline_px) / float(step_px))))
+    """Index pairs whose separation is baseline_px, i.e., ±baseline_px/2 around each vertex.
+
+    Returns (lo, hi) where hi - lo (in pixels) ≈ baseline_px.
+    """
+    k = max(1, int(round(float(baseline_px) / (2.0 * float(step_px)))))
     idx = np.arange(n)
     return np.clip(idx - k, 0, n - 1), np.clip(idx + k, 0, n - 1)
 
