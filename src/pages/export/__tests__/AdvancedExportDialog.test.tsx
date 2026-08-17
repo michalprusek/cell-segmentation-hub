@@ -987,4 +987,105 @@ describe('AdvancedExportDialog', () => {
       expect(outOfRangeCalls).toHaveLength(0);
     });
   });
+
+  // ── what the box actually SHOWS ────────────────────────────────────────────
+  //
+  // The tests above only ever inspected the calls the input made upward, which
+  // is why the field could be completely untypable without any of them failing.
+  // These assert the rendered value — the thing the user is looking at.
+
+  describe('scale input is typable', () => {
+    it('keeps a typed µm/px value in the box', async () => {
+      // THE reported bug. `value` was derived from the parsed number, so "0"
+      // (below the 0.001 minimum) was rejected and the field snapped back to
+      // empty — and every µm/px scale starts with a zero. Each accepted
+      // keystroke also re-rendered a new string, dropping the caret to the end,
+      // so characters typed at the front came out reversed.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.type(input, '0.072');
+      expect(input.value).toBe('0.072');
+    });
+
+    it('survives a lone leading zero mid-entry', async () => {
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.type(input, '0');
+      expect(input.value).toBe('0');
+    });
+
+    it('holds an out-of-range entry instead of erasing it', async () => {
+      // 0.0001 is below the minimum, but erasing it as the user types makes
+      // "0.00012" unreachable. Hold the text; simply do not commit the value.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.type(input, '0.0001');
+      expect(input.value).toBe('0.0001');
+    });
+
+    it('shows a scale that arrived from auto-fill', async () => {
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: 0.065 },
+      });
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await waitFor(() => expect(input.value).toBe('0.065'));
+    });
+
+    it('clears the box when the scale is cleared', async () => {
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: 0.5 },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.clear(input);
+      expect(input.value).toBe('');
+    });
+  });
+
+  describe('scale precision', () => {
+    it('keeps six decimals of a real ND2 calibration', async () => {
+      // Auto-fill writes calibration at full precision (a Nikon ND2 reports
+      // 0.0722222 µm/px). Rounding typed input to 3 decimals turned that into
+      // 0.072 the moment the user touched the field — a 0.3 % systematic error
+      // on every exported length, applied silently.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.type(input, '0.072222');
+
+      const committed = _mockUpdateExportOptions.mock.calls
+        .map(c => c[0]?.pixelToMicrometerScale)
+        .filter((v): v is number => typeof v === 'number');
+      expect(committed.at(-1)).toBeCloseTo(0.072222, 6);
+      expect(input.value).toBe('0.072222');
+    });
+
+    it('does not advertise a step that rejects real calibrations', () => {
+      // step="0.001" makes 0.072222 a step mismatch, so the browser marks a
+      // correct calibration invalid.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      expect(input.getAttribute('step')).toBe('any');
+    });
+  });
 });
