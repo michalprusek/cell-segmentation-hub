@@ -31,7 +31,6 @@ if str(SEG_ROOT) not in sys.path:
 from api.tracker_kymograph import router as tracker_kymograph_router  # noqa: E402
 from api.tracker_kymograph import (  # noqa: E402
     PolylineInput,
-    _emb_distance,
     _filament_cost,
     _filament_features,
     _geom_terms,
@@ -59,8 +58,11 @@ def _embed_b64(n_points: int, seed: int) -> str:
 
 
 def test_track_continues_track_id_across_close_polylines(client):
-    """A polyline near its previous-frame position with similar embedding
-    must inherit the trackId."""
+    """A polyline near its previous-frame position must inherit the trackId.
+
+    The `embedding` field is still sent here because stored v7 segmentations
+    carry one; it must make no difference to the result.
+    """
     emb_a = _embed_b64(20, seed=1)
     payload = {
         "frames": [
@@ -288,9 +290,14 @@ def test_track_crossing_filaments_keep_distinct_ids(client):
     assert r.json()["track_count"] == 2
 
 
-def test_track_degraded_on_corrupt_and_missing_embeddings(client):
-    """Corrupt / absent embeddings fall back to geometry without crashing;
-    corrupt_count and degraded are still reported."""
+def test_track_accepts_and_ignores_legacy_embedding_payloads(client):
+    """Segmentations written by the v7 model still carry an `_embedding`, and a
+    Node container that has not been recreated yet still forwards it.
+
+    Because the request model is extra='forbid', dropping the field would 400
+    both. It must be accepted, ignored, and never reported as degradation —
+    even when the payload is outright corrupt, since nothing decodes it now.
+    """
     corrupt = base64.b64encode(b"\x00\x01\x02").decode("ascii")  # bad float16 buf
     poly = _horiz(10, 20)
     payload = {
@@ -302,10 +309,25 @@ def test_track_degraded_on_corrupt_and_missing_embeddings(client):
     r = client.post("/api/v1/track", json=payload)
     assert r.status_code == 200, r.text
     body = r.json()
-    # geometry still links the (identical) centerlines
+    # geometry links the (identical) centerlines regardless of the payload
     assert body["assignments"]["A"] == body["assignments"]["A2"]
-    assert body["corrupt_count"] == 1
-    assert body["degraded"] is True
+    assert body["corrupt_count"] == 0
+    assert body["degraded"] is False
+
+
+def test_track_accepts_the_deprecated_weight_fields(client):
+    """`emb_template_alpha` is inert but still accepted, for the same
+    un-recreated-container reason."""
+    poly = _horiz(10, 20)
+    r = client.post("/api/v1/track", json={
+        "frames": [
+            {"frame": 0, "polylines": [{"id": "A", "points_rc": poly}]},
+            {"frame": 1, "polylines": [{"id": "A2", "points_rc": poly}]},
+        ],
+        "emb_template_alpha": 0.25,
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["assignments"]["A"] == r.json()["assignments"]["A2"]
 
 
 # ---------------------------------------------------------------------------
@@ -380,15 +402,40 @@ def test_geom_terms_length_difference_costs_high_on_d_len():
     assert d_len > 0.8
 
 
-def test_emb_distance_identical_is_zero_missing_is_none():
-    """Cosine-based d_emb is 0 for identical embeddings and None when
-    either side lacks one."""
-    emb = _embed_b64(8, seed=7)
-    fa = _feat([(0, 0), (0, 8)], emb=emb)
-    fb = _feat([(0, 0), (0, 8)], emb=emb)
-    assert _emb_distance(fa, fb) == pytest.approx(0.0, abs=1e-3)
-    fc = _feat([(0, 0), (0, 8)], emb=None)
-    assert _emb_distance(fa, fc) is None
+def test_filament_cost_is_infinite_beyond_the_displacement_gate():
+    """A hard gate, not an expensive term.
+
+    The embedding cost had no gate: a missing embedding merely substituted a
+    neutral value, so any pair could be bought by making the alternatives
+    expensive. `inf` cannot be outbid by the assignment solver.
+    """
+    fa = _feat([(0, 0), (0, 20)])
+    far = _feat([(0, 400), (0, 420)])
+    assert _filament_cost(fa, far, 1000.0) == float("inf")
+
+
+def test_filament_cost_is_infinite_for_a_fragment_on_a_filament():
+    """The overlap gate. A 10 px fragment lying on a 200 px filament has a
+    small one-directional distance, so without the gate it can win the
+    assignment and orphan the real filament."""
+    long_mt = _feat([(0, c) for c in range(0, 201, 5)])
+    fragment = _feat([(0, 95), (0, 105)])
+    assert _filament_cost(long_mt, fragment, 1000.0) == float("inf")
+
+
+def test_filament_cost_rises_with_curve_distance():
+    """The primary evidence term: two identical centerlines are cheapest, and
+    cost grows as one is displaced."""
+    fa = _feat([(0, c) for c in range(0, 41, 2)])
+    same = _feat([(0, c) for c in range(0, 41, 2)])
+    near = _feat([(3, c) for c in range(0, 41, 2)])
+    mid = _feat([(10, c) for c in range(0, 41, 2)])
+    c_same = _filament_cost(fa, same, 1000.0)
+    c_near = _filament_cost(fa, near, 1000.0)
+    c_mid = _filament_cost(fa, mid, 1000.0)
+    assert c_same == pytest.approx(0.0, abs=1e-6)
+    assert c_same < c_near < c_mid
+    assert np.isfinite(c_mid)
 
 
 def test_solve_link_lap_handles_birth_and_death():
@@ -490,3 +537,101 @@ def test_viridis_lut_ends_in_yellow_not_orange():
     assert 240 <= last[0] <= 255, f"R={last[0]}"
     assert 220 <= last[1] <= 240, f"G={last[1]}"
     assert 20 <= last[2] <= 60, f"B={last[2]}"
+
+
+# ---------------------------------------------------------------------------
+#  Geometric association (post-v5H): no embeddings anywhere in the request
+# ---------------------------------------------------------------------------
+
+def _seg(r0, c0, r1, c1, n=40):
+    """A straight centerline in (row, col)."""
+    return [
+        [float(r0 + (r1 - r0) * k / (n - 1)), float(c0 + (c1 - c0) * k / (n - 1))]
+        for k in range(n)
+    ]
+
+
+def test_geometric_tracking_keeps_two_filaments_distinct(client):
+    """The base case with the embedding gone entirely. Note frame 1 lists the
+    filaments in the OPPOSITE order, so a positional fallback would swap them.
+    """
+    payload = {
+        "frames": [
+            {"frame": 0, "polylines": [
+                {"id": "a0", "points_rc": _seg(0, 0, 0, 100)},
+                {"id": "b0", "points_rc": _seg(50, 0, 50, 100)},
+            ]},
+            {"frame": 1, "polylines": [
+                {"id": "b1", "points_rc": _seg(52, 0, 52, 100)},
+                {"id": "a1", "points_rc": _seg(2, 0, 2, 100)},
+            ]},
+        ],
+        "image_hw": [512, 512],
+    }
+    r = client.post("/api/v1/track", json=payload)
+    assert r.status_code == 200, r.text
+    a = r.json()["assignments"]
+    assert a["a0"] == a["a1"], "filament a lost its track"
+    assert a["b0"] == a["b1"], "filament b lost its track"
+    assert a["a0"] != a["b0"], "two filaments collapsed into one track"
+    assert r.json()["track_count"] == 2
+
+
+def test_geometric_tracking_survives_a_reversed_centerline(client):
+    """The instancer's centerline direction is arbitrary and can flip between
+    frames. Every geometric term must be direction-invariant or a flip would
+    sever the track."""
+    fwd = _seg(10, 0, 10, 100)
+    payload = {
+        "frames": [
+            {"frame": 0, "polylines": [{"id": "f0", "points_rc": fwd}]},
+            {"frame": 1, "polylines": [{"id": "f1", "points_rc": list(reversed(fwd))}]},
+        ],
+        "image_hw": [512, 512],
+    }
+    r = client.post("/api/v1/track", json=payload)
+    assert r.status_code == 200, r.text
+    a = r.json()["assignments"]
+    assert a["f0"] == a["f1"]
+
+
+def test_stage_drift_does_not_sever_every_track(client):
+    """A 30 px common-mode stage shift moves every filament at once, which is
+    BEYOND the 25 px association gate. Without drift removal every curve
+    distance is inf, the whole field is re-born as new tracks, and every
+    microtubule changes colour on a single frame scrub."""
+    payload = {
+        "frames": [
+            {"frame": 0, "polylines": [
+                {"id": "h0", "points_rc": _seg(0, 0, 0, 100)},
+                {"id": "v0", "points_rc": _seg(0, 0, 100, 0)},
+            ]},
+            {"frame": 1, "polylines": [
+                {"id": "h1", "points_rc": _seg(30, 30, 30, 130)},
+                {"id": "v1", "points_rc": _seg(30, 30, 130, 30)},
+            ]},
+        ],
+        "image_hw": [512, 512],
+    }
+    r = client.post("/api/v1/track", json=payload)
+    assert r.status_code == 200, r.text
+    a = r.json()["assignments"]
+    assert a["h0"] == a["h1"], "horizontal filament lost to drift"
+    assert a["v0"] == a["v1"], "vertical filament lost to drift"
+    assert r.json()["track_count"] == 2
+
+
+def test_a_gliding_filament_keeps_its_track(client):
+    """A filament sliding ALONG its own axis has ~zero perpendicular
+    displacement, so the curve distance barely moves. It must keep its id —
+    this is the motility signal the assay exists to measure."""
+    payload = {
+        "frames": [
+            {"frame": 0, "polylines": [{"id": "g0", "points_rc": _seg(10, 0, 10, 100)}]},
+            {"frame": 1, "polylines": [{"id": "g1", "points_rc": _seg(10, 8, 10, 108)}]},
+        ],
+        "image_hw": [512, 512],
+    }
+    r = client.post("/api/v1/track", json=payload)
+    assert r.status_code == 200, r.text
+    assert r.json()["assignments"]["g0"] == r.json()["assignments"]["g1"]
