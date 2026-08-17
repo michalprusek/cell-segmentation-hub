@@ -52,8 +52,10 @@ except ImportError as e:
     WoundModel = None
     _wound_import_error = e
 
-# Optional microtubule v7 model import (requires transformers>=4.57 and
-# HF_TOKEN at first use for the gated DINOv3 backbone download).
+# Optional microtubule v5H model import. Self-contained since the v7 → v5H
+# swap: an nnU-Net ResEnc-M network with dynamic_network_architectures vendored
+# alongside it, so an ImportError here means the vendored library or the
+# instancer failed to import — NOT a missing HuggingFace token.
 _microtubule_import_error = None
 try:
     from models.microtubule import MicrotubuleModel
@@ -251,10 +253,10 @@ class ModelLoader:
             'config_path': None
         },
         'microtubule': {
-            # Will be None if transformers not installed or HF_TOKEN missing
+            # Will be None if the vendored network library failed to import
             'class': MicrotubuleModel,
-            'pretrained_path': 'weights/microtubule_v7.pt',
-            'finetuned_path': 'weights/microtubule_v7.pt',
+            'pretrained_path': 'weights/microtubule_v5h.pth',
+            'finetuned_path': 'weights/microtubule_v5h.pth',
             'config_path': None
         },
         'microcapsule': {
@@ -425,10 +427,10 @@ class ModelLoader:
                 logger.info(f"Successfully loaded wound model from: {weights_full_path}")
                 return model
             elif model_name == 'microtubule':
-                # Microtubule v7 — wraps DINOv3 ViT-L/16 + DPT decoder + PySOAX.
-                # Loading is slow (HF backbone download on first run plus 1.2 GB
-                # checkpoint), so we skip the generic torch.load path below and
-                # let the wrapper drive it end-to-end.
+                # Microtubule v5H — nnU-Net ResEnc-M + curvature-bounded
+                # instancer. The wrapper reads the head width off the checkpoint
+                # before building the network, so we skip the generic torch.load
+                # path below and let it drive loading end-to-end.
                 if MicrotubuleModel is None:
                     raise ImportError(
                         f"Microtubule model architecture not available: "
@@ -437,7 +439,7 @@ class ModelLoader:
                 model = MicrotubuleModel()
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
-                logger.info(f"Successfully loaded microtubule v7 model from: {weights_full_path}")
+                logger.info(f"Successfully loaded microtubule v5H model from: {weights_full_path}")
                 return model
             elif model_name == 'microcapsule':
                 # Microcapsule distilled U-Net — the wrapper builds the smp
@@ -1398,20 +1400,20 @@ class ModelLoader:
 
     def predict_microtubule(self, image: Image.Image, threshold: float = 0.5,
                             timeout: Optional[float] = None) -> Dict[str, Any]:
-        """Run microtubule v7 (DINOv3-L + DPT + PySOAX) on a single frame.
+        """Run microtubule v5H (ResEnc-M + curvature instancer) on one frame.
 
         Differs from the standard predict() path:
 
         - Output is polylines (open centerlines), not closed mask polygons.
-        - Each polyline carries an instanceId (one microtubule = one polyline)
-          and a base64-encoded float16 embedding sample (M points x 32 dims)
-          which the tracking pipeline consumes to identify the same MT across
-          frames without re-running inference.
+        - Each polyline carries an instanceId (one microtubule = one polyline).
+          Cross-frame identity is NOT carried here: since the v5H swap it is
+          established geometrically by /api/v1/track, which needs no
+          per-polyline payload. The v7 model shipped a 32-d embedding sample
+          for that purpose; this model has no embedding field to sample.
         - The wrapper does its own preprocessing (percentile normalisation),
           so there is no shared executor / preprocess_image hand-off — the
           model runs inside MicrotubuleModel.predict().
         """
-        import base64 as _b64
         import time as _time
         import uuid as _uuid
 
@@ -1445,19 +1447,15 @@ class ModelLoader:
 
             result = mt_model.predict(image_np, seed_threshold=threshold)
             centerlines = result["centerlines_rc"]            # list of (M,2) float64
-            embedding_samples = result["embedding_samples"]   # list of (M,32) float16
 
             polylines: List[Dict[str, Any]] = []
-            for idx, (cl, emb) in enumerate(zip(centerlines, embedding_samples)):
+            for idx, cl in enumerate(centerlines):
                 # centerline is (M, 2) in (row, col) → convert to (x=col, y=row)
                 # so it lines up with the rest of the editor's image coords.
                 points = [
                     {"x": float(cl[i, 1]), "y": float(cl[i, 0])}
                     for i in range(cl.shape[0])
                 ]
-                # float16 → base64 of raw bytes; consumer reads back as
-                # np.frombuffer(buf, dtype=np.float16).reshape(M, 32).
-                emb_b64 = _b64.b64encode(np.ascontiguousarray(emb).tobytes()).decode("ascii")
                 instance_id = f"mt_{_uuid.uuid4().hex[:8]}"
                 polylines.append({
                     "id": f"polyline_{idx + 1}",
@@ -1466,15 +1464,13 @@ class ModelLoader:
                     "class": "microtubule",
                     "geometry": "polyline",
                     "instanceId": instance_id,
-                    "confidence": 1.0,  # PySOAX is deterministic; no per-snake score
+                    "confidence": 1.0,  # the instancer is deterministic
                     "vertices_count": len(points),
-                    "_embedding": emb_b64,
-                    "_embedding_dim": int(emb.shape[1]) if emb.size else 32,
                 })
 
             processing_time = _time.time() - start_time
             logger.info(
-                f"Microtubule v7: {len(polylines)} centerlines in {processing_time:.2f}s"
+                f"Microtubule v5H: {len(polylines)} centerlines in {processing_time:.2f}s"
             )
 
             return {
@@ -1494,12 +1490,13 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('microtubule')
-            # Microtubule activations are large (~7 GB for 1024x1024).  Without
-            # an explicit empty_cache the allocator keeps the reserved-but-
-            # unallocated blocks pinned, so a follow-up call ends up requesting
-            # fresh blocks instead of reusing freed ones, racing the per-process
-            # memory limit.  Releasing the cache between calls is cheap
-            # (<5 ms) compared to the 8 s inference itself.
+            # v5H's activations are modest (measured 0.73 GiB peak, flat across
+            # 1024x1024 and 2048x2048 because it tiles at 512x512), so this is
+            # no longer load-bearing the way it was for v7's ~7 GB.  It is kept
+            # because the card is shared with the essays batch worker and
+            # Maptimize: handing reserved-but-unallocated blocks back between
+            # calls costs <5 ms against a ~4 s inference and keeps this service
+            # from hoarding VRAM the other tenants are waiting on.
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
