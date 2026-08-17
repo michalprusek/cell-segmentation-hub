@@ -73,16 +73,53 @@ class Spot:
 
 
 @dataclass(frozen=True)
+class RejectedFilament:
+    """Why one filament produced no bleach spot, and roughly where it is.
+
+    One entry per rejected filament, not per rejected candidate: a frame has on the
+    order of a thousand candidates and a hundred filaments, and the question an
+    operator asks of an overlay is "why not that microtubule", not "why not that
+    pixel".
+    """
+    x: float
+    y: float
+    reason: str
+    mt_index: int
+
+
+@dataclass(frozen=True)
 class SelectionResult:
     spots: List[Spot]
     rejected_by: Dict[str, int]
     n_candidates: int
     n_polylines: int
     shortfall: bool
+    rejected_filaments: List[RejectedFilament]
 
 
 _REJECT_KEYS = ("length", "border", "bleach_clearance",
                 "readout_clearance", "straightness", "snr")
+
+
+def _polyline_midpoint_xy(pts: np.ndarray) -> Optional[Tuple[float, float]]:
+    """The arc-length midpoint of an already-resampled (uniform-spacing) polyline.
+
+    ``None`` when the filament is too degenerate to have one (zero points) — the
+    caller skips such a filament rather than guessing a position for it.
+    """
+    n = pts.shape[0]
+    if n == 0:
+        return None
+    if n == 1:
+        return float(pts[0, 0]), float(pts[0, 1])
+    mid = 0.5 * (n - 1)
+    lo, hi = int(np.floor(mid)), int(np.ceil(mid))
+    if lo == hi:
+        return float(pts[lo, 0]), float(pts[lo, 1])
+    frac = mid - lo
+    x = pts[lo, 0] * (1.0 - frac) + pts[hi, 0] * frac
+    y = pts[lo, 1] * (1.0 - frac) + pts[hi, 1] * frac
+    return float(x), float(y)
 
 
 def _half_axes_px(p: SelectionParams, um_per_px: float) -> Tuple[float, float]:
@@ -145,6 +182,16 @@ def select_spots(
     p = params
     h, w = int(shape_hw[0]), int(shape_hw[1])
     rejected = {k: 0 for k in _REJECT_KEYS}
+    # Per-filament reject tallies, kept separate from the frame-wide ``rejected``
+    # histogram above: that one answers "how many candidates failed each test", this
+    # one answers "of THIS filament's own candidates, which test failed most" — the
+    # question RejectedFilament.reason exists to answer. Populated at the exact same
+    # sites as ``rejected[...] += 1`` below, so the two can never disagree.
+    per_filament_rejects: Dict[int, Dict[str, int]] = {}
+
+    def _bump_filament_reject(mt_i: int, reason: str) -> None:
+        counts = per_filament_rejects.setdefault(mt_i, {})
+        counts[reason] = counts.get(reason, 0) + 1
 
     resampled = [G.resample_polyline(np.asarray(pl, dtype=np.float64), p.step_px)
                  for pl in polylines_xy]
@@ -201,6 +248,7 @@ def select_spots(
     for i, pts in enumerate(resampled):
         if lengths_um[i] < p.l_min_um or pts.shape[0] < 3:
             rejected["length"] += 1
+            _bump_filament_reject(i, "length")
             continue
         angles = G.tangent_angles(pts, p.kappa_baseline_px, p.step_px)
         curv = G.curvature_profile(pts, p.kappa_baseline_px, p.step_px)
@@ -220,6 +268,7 @@ def select_spots(
             reach_px = corner_px + spread_px + border_px
             if not (reach_px <= cx <= w - 1 - reach_px and reach_px <= cy <= h - 1 - reach_px):
                 rejected["border"] += 1
+                _bump_filament_reject(i, "border")
                 continue
 
             near = tree.query_ball_point([cx, cy], query_r_px) if tree is not None else []
@@ -230,16 +279,19 @@ def select_spots(
                                                  a_px, b_px, others)
             if bleach_px < spread_px:
                 rejected["bleach_clearance"] += 1
+                _bump_filament_reject(i, "bleach_clearance")
                 continue
 
             window = _slice_window(pts, j, obs_half_px, p.step_px)
             readout_px = G.window_clearance_px(window, others)
             if readout_px < r_iso_px:
                 rejected["readout_clearance"] += 1
+                _bump_filament_reject(i, "readout_clearance")
                 continue
 
             if float(curv[j]) > p.kappa_spot:
                 rejected["straightness"] += 1
+                _bump_filament_reject(i, "straightness")
                 continue
 
             snr = None
@@ -247,6 +299,7 @@ def select_spots(
                 snr = _spot_snr(fluor, window, not_signal, p)
                 if snr < p.snr_min:
                     rejected["snr"] += 1
+                    _bump_filament_reject(i, "snr")
                     continue
 
             # Clearance dominates. Passing the two tests is a floor, not the goal:
@@ -283,6 +336,28 @@ def select_spots(
         if all(np.hypot(cand.x - c.x, cand.y - c.y) >= d_sep_px for c in chosen):
             chosen.append(cand)
 
+    # One RejectedFilament per filament that contributed nothing to `chosen` AND has
+    # at least one of its own candidates with a defined rejection reason. A filament
+    # that produced a passing candidate but simply lost the d_sep/k_max round has no
+    # such reason (none of its own candidates were rejected by any criterion) — that
+    # is over-subscription, not rejection, so it is left undecorated rather than
+    # guessed at.
+    chosen_mt_indices = {s.mt_index for s in chosen}
+    rejected_filaments: List[RejectedFilament] = []
+    for i, pts in enumerate(resampled):
+        if i in chosen_mt_indices:
+            continue
+        counts = per_filament_rejects.get(i)
+        if not counts:
+            continue
+        reason = max(_REJECT_KEYS, key=lambda k: counts.get(k, 0))
+        mid_xy = _polyline_midpoint_xy(pts)
+        if mid_xy is None:
+            continue
+        rejected_filaments.append(RejectedFilament(
+            x=mid_xy[0], y=mid_xy[1], reason=reason, mt_index=i))
+
     return SelectionResult(spots=chosen, rejected_by=rejected,
                            n_candidates=n_candidates, n_polylines=len(list(polylines_xy)),
-                           shortfall=len(chosen) < k_min)
+                           shortfall=len(chosen) < k_min,
+                           rejected_filaments=rejected_filaments)

@@ -9,6 +9,7 @@ without touching the acquisition machine and the client can stay dependency-free
 """
 from __future__ import annotations
 
+import base64
 import io
 import logging
 import os
@@ -27,6 +28,7 @@ if _MODELS_DIR not in sys.path:
 
 import frap_select as FS  # noqa: E402
 
+from api import frap_render  # noqa: E402
 from api.routes import _microtubule_inference_lock, get_model_loader  # noqa: E402
 # Imported rather than re-created: the lock serialises microtubule inference across
 # EVERY caller. A second lock object would serialise nothing.
@@ -150,9 +152,21 @@ def frap_targets(
         "image_shape": [int(irm.shape[0]), int(irm.shape[1])],
         "timing": {"inference_s": round(inference_s, 3),
                    "selection_s": round(selection_s, 3)},
-        "mask_png_b64": None,
-        "overlay_png_b64": None,
     }
+    body["mask_png_b64"] = None
+    body["overlay_png_b64"] = None
+    if include_mask:
+        body["mask_png_b64"] = base64.b64encode(
+            frap_render.render_mask_png(sel.spots, irm.shape[:2], params, um_per_px)
+        ).decode("ascii")
+    if include_overlay:
+        # rejected_filaments feeds the overlay only, per Spec §8 — the diagnostic
+        # surface for a shortfall. It does NOT go in the JSON: rejected_by already
+        # serves the wire as a histogram, and doubling it here would be redundant.
+        body["overlay_png_b64"] = base64.b64encode(
+            frap_render.render_overlay_png(irm, polylines, sel.spots, params, um_per_px,
+                                           rejected=sel.rejected_filaments)
+        ).decode("ascii")
     return body
 
 

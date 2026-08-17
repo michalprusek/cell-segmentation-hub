@@ -115,3 +115,39 @@ def test_params_json_must_be_a_json_object(client):
         assert r.status_code == 400, (
             f"params_json={bad_params_json!r} should be 400, got {r.status_code}: "
             f"{r.text}")
+
+
+def test_mask_is_returned_and_is_a_png(client):
+    page = np.zeros((600, 600), dtype=np.uint16)
+    r = client.post("/api/v1/frap/targets",
+                    files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+                    data={"um_per_px": "0.1", "k_min": "1", "include_mask": "true"})
+    import base64
+    blob = base64.b64decode(r.json()["mask_png_b64"])
+    assert blob[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_mask_has_one_connected_blob_per_spot(client):
+    from skimage.measure import label
+    from PIL import Image as PILImage
+    import base64
+    page = np.zeros((600, 600), dtype=np.uint16)
+    r = client.post("/api/v1/frap/targets",
+                    files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+                    data={"um_per_px": "0.1", "k_min": "1", "include_mask": "true"})
+    body = r.json()
+    mask = np.array(PILImage.open(io.BytesIO(base64.b64decode(body["mask_png_b64"]))))
+    assert label(mask > 0).max() == len(body["spots"])
+
+
+def test_overlay_is_omitted_unless_asked_for(client):
+    page = np.zeros((600, 600), dtype=np.uint16)
+    r = client.post("/api/v1/frap/targets",
+                    files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+                    data={"um_per_px": "0.1", "k_min": "1"})
+    assert r.json()["overlay_png_b64"] is None
+    r2 = client.post("/api/v1/frap/targets",
+                     files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+                     data={"um_per_px": "0.1", "k_min": "1", "include_overlay": "true"})
+    import base64
+    assert base64.b64decode(r2.json()["overlay_png_b64"])[:8] == b"\x89PNG\r\n\x1a\n"
