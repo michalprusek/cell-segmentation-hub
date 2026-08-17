@@ -30,14 +30,19 @@ logger = logging.getLogger(__name__)
 # Initialize router
 router = APIRouter()
 
-# Microtubule v7 (DINOv3-L + DPT + PySOAX) holds ~7 GB of GPU activations
-# during a single 1024x1024 forward pass.  The per-process memory limit is
-# ML_MEMORY_LIMIT_GB; with multiple concurrent requests from the queue worker
-# (default parallel batches = 4) we'd try to allocate 4 * 7 GB simultaneously,
-# which fragments the allocator and trips OOM even when total free VRAM is
-# >15 GB.  Serialising microtubule inference at the request layer with a
-# threading.Lock keeps lighter models (hrnet, sperm, wound) parallel while
-# preventing the heavy model from racing itself.
+# Serialises microtubule inference at the request layer.
+#
+# This lock was introduced for v7 (DINOv3-L + DPT), which held ~7 GB of GPU
+# activations for a single 1024x1024 pass: four concurrent queue batches tried
+# to allocate 4 * 7 GB, fragmented the allocator and tripped OOM even with
+# >15 GB free.  v5H is far lighter — measured 0.73 GiB peak, and FLAT across
+# 1024^2 and 2048^2 because it tiles at 512^2 rather than running a ViT over
+# the whole frame — so the OOM argument no longer applies.
+#
+# The lock is kept anyway: it also bounds CPU contention, because the instancer
+# is single-threaded numpy/networkx and is the larger half of the ~4 s budget
+# on a dense frame (65 MTs).  Removing it is a throughput decision to make with
+# measurements, not a side effect of the model swap.
 _microtubule_inference_lock = threading.Lock()
 
 from fastapi import Request
@@ -73,7 +78,7 @@ async def health_check(request: Request):
         }
 
         # Surface models that failed to pre-load so deploy monitoring can detect
-        # missing weights or HF_TOKEN issues without reading log files.
+        # missing or unreadable weights without reading log files.
         models_failed = getattr(request.app.state, "models_failed", [])
 
         return {
