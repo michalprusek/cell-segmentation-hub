@@ -32,9 +32,10 @@ def test_l_min_is_large_enough_to_hold_the_observation_window():
     # the defaults is 3.0 / 0.5 = 6.0 um. Below that, _slice_window CLIPS and
     # criterion 5b is evaluated over a SHORTER window than intended -- the unsafe
     # direction, and silent.
-    # LIMIT OF THIS TEST: it pins the DEFAULTS only. A params_json override of f_mid
-    # or obs_len_um alone still recreates the clipping, because the request boundary
-    # validates each key independently and has no cross-field check yet.
+    # SCOPE OF THIS TEST: the DEFAULTS. The same relationship is enforced for
+    # params_json OVERRIDES by api/frap_targets._check_window_fits, which re-derives
+    # it from the effective values; that half is covered by
+    # test_params_json_f_mid_alone_cannot_clip_the_observation_window.
     p = S.SelectionParams()
     assert p.l_min_um >= p.obs_len_um / (1.0 - p.f_mid)
 

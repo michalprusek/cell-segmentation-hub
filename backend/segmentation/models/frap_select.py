@@ -51,11 +51,11 @@ class SelectionParams:
     # under-reports contamination -- the unsafe direction, and silent. Widening
     # f_mid or obs_len raises this floor.
     #
-    # KNOWN GAP: a test pins that relationship AT THE DEFAULTS only. params_json
-    # overrides are validated key by key with no cross-field constraint, so
-    # overriding f_mid to 0.8 or obs_len_um to 5.0 while leaving l_min_um at 6.0
-    # reintroduces the clipping silently. A cross-field check in
-    # api/frap_targets._validated_overrides is the fix; it is not in place yet.
+    # The relationship is ENFORCED, not merely documented: a test pins it at these
+    # defaults, and api/frap_targets._check_window_fits re-derives it from the
+    # EFFECTIVE values on every request, so a params_json override of f_mid alone is
+    # a 400 naming the derived minimum instead of a silently clipped window. Anyone
+    # changing a default here should expect that check to start rejecting callers.
     l_min_um: float = 6.0            # = obs_len_um / (1 - f_mid); see above
     spot_len_um: float = 1.0         # bleached length of lattice
     spot_wid_um: float = 1.0         # bleached width across the filament

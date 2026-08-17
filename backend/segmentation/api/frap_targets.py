@@ -160,7 +160,59 @@ def _validated_overrides(overrides: Dict[str, Any]) -> Dict[str, Any]:
 
         clean[key] = value
 
+    _check_window_fits(defaults, clean)
     return clean
+
+
+def _check_window_fits(defaults: Dict[str, Any], clean: Dict[str, Any]) -> None:
+    """The one CROSS-field constraint: l_min_um must hold the observation window.
+
+    Candidates come from the middle ``f_mid`` of the filament, so the most extreme
+    one sits (1 - f_mid)/2 of the length from the nearer end and criterion 5b needs
+    obs_len/2 of filament there:
+
+        L * (1 - f_mid) / 2 >= obs_len / 2   =>   l_min_um >= obs_len_um / (1 - f_mid)
+
+    The three defaults satisfy this (6.0 >= 3.0 / 0.5) but nothing kept an OVERRIDE
+    honest, and the per-field checks above cannot: each sees one key. Below the
+    bound ``_slice_window`` CLIPS, so 5b is evaluated over a shorter stretch than
+    intended and a contaminant just past the clipped end is never seen -- the unsafe
+    direction, and silent.
+
+    Checked on the EFFECTIVE values, defaults merged under the overrides, because
+    the realistic shape is someone setting ``f_mid`` alone: validating only the
+    all-three-overridden case would miss exactly the input that occurs.
+    """
+    effective = {**defaults, **clean}
+    f_mid = float(effective["f_mid"])
+    obs_len_um = float(effective["obs_len_um"])
+    l_min_um = float(effective["l_min_um"])
+
+    # f_mid == 1.0 passes the [0.0, 1.0] INCLUSIVE range check above, so this guard
+    # is what stops the division below -- not belt-and-braces. At f_mid == 1.0 the
+    # candidate band is the whole filament including its own endpoints, so the window
+    # is clipped for some candidate no matter how large l_min_um is: there is no
+    # value to suggest, which is why this is a separate message.
+    if f_mid >= 1.0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"f_mid={f_mid} makes the candidate band the entire filament, "
+                   f"including its endpoints, so the observation window is clipped "
+                   f"for some candidate at every l_min_um. f_mid must be strictly "
+                   f"below 1.0.")
+
+    # Rounded, and the SAME value is both compared and reported: 3.0 / (1 - 0.8)
+    # is 15.000000000000004 in binary floating point, so an operator told "need
+    # >= 15.0" who then sends exactly 15.0 must not be rejected again.
+    needed = round(obs_len_um / (1.0 - f_mid), 6)
+    if l_min_um < needed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"l_min_um={l_min_um} is too small for obs_len_um={obs_len_um} "
+                   f"with f_mid={f_mid}: the observation window would be clipped, "
+                   f"so the readout-clearance criterion would be evaluated over a "
+                   f"shorter stretch than intended. Need l_min_um >= {needed} "
+                   f"(= obs_len_um / (1 - f_mid)).")
 
 
 # --- upload and decode bounds ----------------------------------------------
