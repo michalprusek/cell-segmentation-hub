@@ -48,3 +48,37 @@ def test_a_filament_that_contributes_a_chosen_spot_has_no_rejected_filament_entr
     r = S.select_spots(mts, SHAPE, UM_PER_PX, k_min=1, k_max=10)
     assert len(r.spots) == 1
     assert r.rejected_filaments == []
+
+
+def test_three_filaments_closer_than_d_sep_yield_a_separation_drop():
+    # Same fixture as test_frap_select.py's test_spots_respect_the_minimum_separation:
+    # 60 px = 6 um apart, well beyond r_iso (3 um) and bleach clearance, so every
+    # filament's own candidate individually passes every criterion — none is ever
+    # rejected_by anything. But 60 px < d_sep_px (100 px @ d_sep_um=10), and the
+    # only pairwise-independent subset of three points spaced 60/60/120 px apart is
+    # size 2, so exactly one of the three MUST lose at the greedy pick to
+    # separation, regardless of which two win the tie.
+    mts = [horizontal(200, 100, 400), horizontal(260, 100, 400), horizontal(320, 100, 400)]
+    r = S.select_spots(mts, SHAPE, UM_PER_PX, k_min=1, k_max=10)
+    assert len(r.spots) == 2
+    assert r.dropped_by["separation"] == 1
+    assert r.dropped_by["budget"] == 0
+    sep_entries = [rf for rf in r.rejected_filaments if rf.reason == "separation"]
+    assert len(sep_entries) == 1
+    # And it must not also appear in rejected_by (it failed no criterion): the
+    # frame-wide histogram should show zero criterion rejections for this scenario.
+    assert all(v == 0 for v in r.rejected_by.values())
+
+
+def test_more_passing_filaments_than_k_max_yield_a_budget_drop():
+    # Two filaments 400 px apart -- far beyond d_sep_px (100 px @ d_sep_um=10) and
+    # each fully isolated from the other for every criterion -- but k_max=1 means
+    # only one slot exists. The loser cleared separation but ran out of budget.
+    mts = [horizontal(100, 100, 400), horizontal(500, 100, 400)]
+    r = S.select_spots(mts, SHAPE, UM_PER_PX, k_min=1, k_max=1)
+    assert len(r.spots) == 1
+    assert r.dropped_by["budget"] == 1
+    assert r.dropped_by["separation"] == 0
+    budget_entries = [rf for rf in r.rejected_filaments if rf.reason == "budget"]
+    assert len(budget_entries) == 1
+    assert all(v == 0 for v in r.rejected_by.values())

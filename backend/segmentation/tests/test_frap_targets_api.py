@@ -151,3 +151,52 @@ def test_overlay_is_omitted_unless_asked_for(client):
                      data={"um_per_px": "0.1", "k_min": "1", "include_overlay": "true"})
     import base64
     assert base64.b64decode(r2.json()["overlay_png_b64"])[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+class _ShortFilamentLoader:
+    """One filament, 5 px = 0.5 um long -- well under the default l_min_um=5.0, so
+    it is guaranteed to be rejected at the length gate and produce exactly one
+    RejectedFilament with reason="length"."""
+
+    def predict_microtubule(self, image, *args, **kwargs):
+        return {"polylines": [
+            {"id": "polyline_short", "instanceId": "mt_short",
+             "points": [{"x": 100.0, "y": 300.0}, {"x": 105.0, "y": 300.0}],
+             "class": "microtubule", "geometry": "polyline"},
+        ], "success": True}
+
+
+def test_rejected_filaments_pass_through_to_the_overlay_renderer():
+    # A wiring-line test, not a byte-content test: asserts the *interaction*
+    # between the endpoint and the renderer, since a pass-through argument can be
+    # typo'd (e.g. to `()`) and every other test here would still pass -- the stub
+    # loader used elsewhere never produces a rejected filament, so nothing else
+    # exercises this line.
+    import base64
+    from unittest.mock import patch
+    from PIL import Image as PILImage
+    from api import frap_targets
+    from api.routes import get_model_loader
+
+    app = FastAPI()
+    app.include_router(frap_targets.router, prefix="/api/v1")
+    app.dependency_overrides[get_model_loader] = lambda: _ShortFilamentLoader()
+    local_client = TestClient(app)
+
+    tiny_buf = io.BytesIO()
+    PILImage.new("RGB", (2, 2), (0, 0, 0)).save(tiny_buf, format="PNG")
+    tiny_png = tiny_buf.getvalue()
+
+    page = np.zeros((600, 600), dtype=np.uint16)
+    with patch("api.frap_render.render_overlay_png", return_value=tiny_png) as mock_render:
+        r = local_client.post(
+            "/api/v1/frap/targets",
+            files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+            data={"um_per_px": "0.1", "k_min": "1", "include_overlay": "true"})
+
+    assert r.status_code == 200
+    mock_render.assert_called_once()
+    rejected_arg = mock_render.call_args.kwargs["rejected"]
+    assert len(rejected_arg) == 1
+    assert rejected_arg[0].reason == "length"
+    assert base64.b64decode(r.json()["overlay_png_b64"]) == tiny_png
