@@ -17,7 +17,11 @@ during per-frame segmentation:
   point. v5H emits one foreground channel and no embedding field, so
   association is geometric: see ``mt_geometry_cost``. Common-mode stage
   drift is removed before matching, because a drifting field would
-  otherwise push genuine links past the curve-distance gate.
+  otherwise inflate every curve distance at once.
+
+  The cost has NO hard gates. An earlier version rejected pairs beyond a
+  distance/overlap threshold outright, which fragmented tracks 3.14x on
+  real data — see ``_filament_cost`` for the measurement.
 
 - ``/kymograph`` samples raw image intensity along a polyline through
   every frame (using the tracked sibling polyline if available, the
@@ -49,11 +53,9 @@ from api.kymograph_velocity import (
     track_intensity,
 )
 from api.mt_geometry_cost import (
-    GATE_MAX_SHIFT,
-    GATE_MIN_OVERLAP,
+    CURVE_SCALE_PX,
     curve_distance,
     estimate_drift,
-    overlap_fraction,
     resample,
 )
 
@@ -369,27 +371,55 @@ def _filament_cost(
     w_orient: float = 0.1,
     w_len: float = 0.1,
 ) -> float:
-    """Filament-to-filament matching cost in [0, w_curve+w_end+w_orient+w_len],
-    or ``inf`` when a hard gate rejects the pair.
+    """Filament-to-filament matching cost in [0, w_curve+w_end+w_orient+w_len].
 
     The primary evidence is the symmetric curve-to-curve distance, which
     replaced the embedding cosine when the v5H model stopped emitting
-    embeddings. At the single-digit-pixel displacements these acquisitions
-    have, consecutive centerlines overlap heavily, so geometry carries most of
-    what the embedding used to.
+    embeddings.
 
-    Two HARD gates precede the weighted sum, which the embedding cost never
-    had: a missing embedding merely substituted a neutral value, so no pair was
-    ever forbidden outright and a bad link could always be bought by making
-    everything else expensive. Returning ``inf`` here cannot be outbid.
+    NO HARD GATES. An earlier version of this function rejected a pair outright
+    (``inf``) when the curve distance exceeded ``CURVE_SCALE_PX`` or the overlap
+    fell below a floor, and argued that being unable to outbid a rejection was a
+    virtue. Measured on 30 frames of a real production video (3095 polylines,
+    ~103/frame), that was wrong in both directions:
+
+    - **25.3 %** of pairs the previous embedding tracker called the same
+      microtubule exceed those thresholds. Their curve-distance distribution is
+      bimodal — median 2.35 px, but p90 184 px and p99 727 px — because the
+      instancer re-traces a different EXTENT of the same filament from frame to
+      frame. The embedding recognised those by identity; a distance gate cannot.
+    - The result was **417 tracks where the embedding tracker produced 133**, a
+      3.14x fragmentation. Each gate caused nearly all of it independently
+      (416 with distance alone, 408 with overlap alone). Every per-track
+      measurement downstream — kymograph velocity, run length, intensity over
+      time — was then computed over fragments of filaments, with no error
+      anywhere to show for it.
+
+    Removing both gates brings it to 250 (1.88x). The residue is the curve term
+    itself, which saturates at 1.0 beyond ``CURVE_SCALE_PX`` and so charges a
+    flat 0.5 for every far pair; ``w_curve`` is the knob for that, and lowering
+    it to 0.25 measured 146 (1.10x) on the same data. That weight is NOT changed
+    here, because 133 is not ground truth either — the same measurement shows
+    the embedding tracker linking filaments 727 px apart between adjacent
+    frames, which is not physically possible for a microtubule. Both trackers
+    are wrong in opposite directions and the honest number needs a validation
+    set, not a fit to one video's output.
+
+    ``inf`` survives for one case only: geometry too degenerate to compare
+    (a centerline with fewer than two points), where a distance of 0 would
+    otherwise read as a perfect match.
+
+    ``overlap_fraction`` is deliberately NOT consulted. As a hard gate it caused
+    the fragmentation above; folded in as a cost term instead it measured 404
+    tracks at weight 0.2 (worse) or 247 at a rebalanced weight (no better than
+    250), while **doubling wall-clock** — 78 s vs 41 s for 30 frames — because
+    it rebuilds the two cKDTrees ``curve_distance`` has already built.
     """
     d_curve_px = curve_distance(fa.curve, fb.curve)
-    if not np.isfinite(d_curve_px) or d_curve_px > GATE_MAX_SHIFT:
-        return float("inf")
-    if overlap_fraction(fa.curve, fb.curve) < GATE_MIN_OVERLAP:
+    if not np.isfinite(d_curve_px):
         return float("inf")
 
-    d_curve = float(min(1.0, d_curve_px / GATE_MAX_SHIFT))
+    d_curve = float(min(1.0, d_curve_px / CURVE_SCALE_PX))
     d_end, d_orient, d_len = _geom_terms(fa, fb, img_diag)
     return float(
         w_curve * d_curve + w_end * d_end + w_orient * d_orient + w_len * d_len

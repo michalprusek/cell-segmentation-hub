@@ -80,6 +80,9 @@ microtubules_v7_pysoax/
 # files and the pre-commit hook blocks every commit in the repo.
 mt-instance-seg/
 mt-instance-seg-v5H/
+# Validation data (MT-34): 34 annotated frames + predictions, gitignored
+# through its own nested .gitignore for the same reason as the packages above.
+mt34-benchmark/
 
 # Local "remember" skill scratch state (gitignored, never shipped).
 # Contains free-form notes + bare-expression timestamp files that

@@ -26,12 +26,28 @@ from typing import Sequence
 import numpy as np
 from scipy.spatial import cKDTree
 
-#: Hard gate: no association beyond this curve-to-curve distance, px.
-#: This is the gate that owns "is it in the same place?".
-GATE_MAX_SHIFT: float = 25.0
+#: Scale at which the curve-to-curve distance saturates the cost term, px.
+#:
+#: NOT a gate. This was ``GATE_MAX_SHIFT`` and did reject pairs outright until
+#: 2026-08-17, when a real production video showed that 25.3 % of genuinely
+#: linked pairs exceed it — the instancer re-traces a different extent of the
+#: same filament between frames, so the distance is bimodal (median 2.35 px,
+#: p99 727 px). Rejecting them fragmented tracks 3.14x. See ``_filament_cost``
+#: in tracker_kymograph.py for the measurement.
+#:
+#: It still sets the scale on which "far" is charged: the cost term is
+#: ``min(1, distance / CURVE_SCALE_PX)``, so a pair beyond it pays the full
+#: weight but can still win if the other terms agree.
+CURVE_SCALE_PX: float = 25.0
 
-#: Fraction of BOTH curves that must have a partner nearby before two polylines
-#: may be called the same microtubule. This gate owns "is it the same extent?".
+#: Fraction of BOTH curves that must have a partner nearby for them to describe
+#: the same extent.
+#:
+#: NOT used by the tracker's cost — see ``_filament_cost``, which measured it as
+#: harmful as a gate and worthless-but-expensive as a cost term. Kept because it
+#: is a meaningful, tested geometry primitive and the validation set may yet
+#: find a use for it (e.g. splitting a merged detection, where extent rather
+#: than position is the question).
 GATE_MIN_OVERLAP: float = 0.35
 
 #: What "nearby" means when measuring that fraction, px.
@@ -40,7 +56,7 @@ GATE_MIN_OVERLAP: float = 0.35
 #: silently becomes a 4 px *perpendicular displacement* gate — a filament that
 #: moved 5 px sideways has zero overlap and is rejected however well
 #: curve_distance scores it. That double-counts distance, which
-#: GATE_MAX_SHIFT already owns, and makes the real gate the tighter
+#: CURVE_SCALE_PX already owns, and made the real gate the tighter
 #: undocumented one.
 #:
 #: 12 px is comfortably above the residual displacement expected after stage
@@ -49,10 +65,10 @@ GATE_MIN_OVERLAP: float = 0.35
 #: fragment lying on a long filament is still rejected.
 OVERLAP_TOL: float = 12.0
 
-#: Search gate for the drift estimator. MUST exceed GATE_MAX_SHIFT: drift is
-#: exactly what pushes a genuine pair past the association gate, so an
-#: estimator that refused to look further than that gate could never recover a
-#: drift large enough to matter. Pairs are matched by centroid here only to
+#: Search gate for the drift estimator. This one IS a gate, and it must exceed
+#: CURVE_SCALE_PX: drift is exactly what pushes a genuine pair far apart, so an
+#: estimator that refused to look further than the cost scale could never
+#: recover a drift large enough to matter. Pairs are matched by centroid here only to
 #: collect normal-flow constraints; a few wrong pairs are absorbed by the
 #: least-squares, whereas a missed drift severs every track in the field.
 DRIFT_MAX_SHIFT: float = 60.0
