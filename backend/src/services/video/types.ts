@@ -139,13 +139,37 @@ export function defaultColorForWavelength(nm: number | undefined): string {
 }
 
 /** Heuristic: is this channel name + wavelength label-free / IRM-like?
- *  Looks for IRM, BF (brightfield), DIC (differential interference
- *  contrast), or TL (transmitted light) and treats null/zero wavelength
- *  as a strong hint (fluorescence channels always have an emission λ). */
+ *
+ *  Requires POSITIVE evidence: a label-free name (IRM, BF, DIC, TL, …) or an
+ *  explicitly zero emission wavelength.
+ *
+ *  This used to also return true for an *unknown* wavelength, on the premise
+ *  that "fluorescence channels always have an emission λ". Both halves of that
+ *  premise are false in practice:
+ *
+ *  - Multi-page TIFFs carry no wavelength at all, so EVERY channel of every
+ *    TIFF stack matched and the whole stack was typed `irm`. The 3-frame
+ *    microtubule test fixture is exactly this: three channels all labelled
+ *    `irm`, with a TIRF channel first in line and therefore chosen as the
+ *    segmentation source for an IRM-trained model.
+ *  - Real ND2 IRM channels report a NONZERO emission λ anyway (measured
+ *    2026-08-17: 525 nm and 510 nm on two production files), so the fallback
+ *    never identified a genuine IRM channel that the name did not already
+ *    catch. It only ever fired where there was no evidence.
+ *
+ *  Absence of metadata is not evidence. Callers must therefore cope with "no
+ *  IRM channel found" — see `buildChannelMeta`, which still nominates a
+ *  segmentation source so a stack of unidentifiable channels stays segmentable.
+ */
 export function isIrmChannel(name: string | undefined,
                               wavelengthNm: number | undefined): boolean {
-  if (!name) return wavelengthNm == null || wavelengthNm === 0;
-  const upper = name.toUpperCase();
-  if (/\b(IRM|BF|DIC|TL|BRIGHTFIELD|TRANSMITTED)\b/.test(upper)) return true;
-  return wavelengthNm == null || wavelengthNm === 0;
+  if (wavelengthNm === 0) return true;
+  if (!name) return false;
+  // Underscores are separators in microscopy channel names (`IRM_widefield`,
+  // `TIRF_488`), but `\b` counts `_` as a word character, so `\bIRM\b` does not
+  // match `IRM_WIDEFIELD`. Normalise them to spaces before matching; this only
+  // ever admits more label-free names, never a fluorescence one — none of the
+  // tokens below appear inside a fluorophore name.
+  const upper = name.toUpperCase().replace(/_/g, ' ');
+  return /\b(IRM|BF|DIC|TL|BRIGHTFIELD|TRANSMITTED)\b/.test(upper);
 }
