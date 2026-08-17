@@ -1398,7 +1398,8 @@ class ModelLoader:
             self.current_model = None
             self.release_model('spheroid_disintegration')
 
-    def predict_microtubule(self, image: Image.Image, threshold: float = 0.5,
+    def predict_microtubule(self, image: Image.Image,
+                            threshold: Optional[float] = None,
                             timeout: Optional[float] = None) -> Dict[str, Any]:
         """Run microtubule v5H (ResEnc-M + curvature instancer) on one frame.
 
@@ -1413,6 +1414,11 @@ class ModelLoader:
         - The wrapper does its own preprocessing (percentile normalisation),
           so there is no shared executor / preprocess_image hand-off — the
           model runs inside MicrotubuleModel.predict().
+
+        ``threshold=None`` (the default, and what the /segment route passes)
+        means "use the fitted foreground cut from params_v5h.json" — 0.97,
+        which the generic 0.1-0.9 API bound cannot even express. Pass a float
+        only to deliberately override it.
         """
         import time as _time
         import uuid as _uuid
@@ -1446,6 +1452,10 @@ class ModelLoader:
                 image_np = np.array(image.convert('L'), dtype=np.uint8)
 
             result = mt_model.predict(image_np, seed_threshold=threshold)
+            threshold_used = (
+                threshold if threshold is not None
+                else mt_model.params.get("prob_thr", mt_model.DEFAULT_SEED_THRESHOLD)
+            )
             centerlines = result["centerlines_rc"]            # list of (M,2) float64
 
             polylines: List[Dict[str, Any]] = []
@@ -1475,7 +1485,7 @@ class ModelLoader:
 
             return {
                 "model_used": "microtubule",
-                "threshold_used": threshold,
+                "threshold_used": threshold_used,
                 "image_size": {"width": original_size[0], "height": original_size[1]},
                 "polygons": [],
                 "polylines": polylines,

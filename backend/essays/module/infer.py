@@ -31,7 +31,7 @@ Examples
     python infer.py --image stack.nd2 --frame 12 --output frame12.json
 
     # Force device / threshold
-    python infer.py --image frame.png --device cpu --threshold 0.4
+    python infer.py --image frame.png --device cpu --threshold 0.9
 
 Nothing is downloaded at run time: the v5H checkpoint is a complete state_dict
 with no frozen backbone, so no HF_TOKEN is needed and the worker runs on a
@@ -200,7 +200,7 @@ def draw_overlay(image_2d: np.ndarray, polylines: list[dict], out_path: Path) ->
 # --------------------------------------------------------------------------- #
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Standalone microtubule v7 segmentation inference.",
+        description="Standalone microtubule v5H segmentation inference.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument("--image", required=True, type=Path,
@@ -214,8 +214,12 @@ def main() -> int:
     ap.add_argument("--device", default="auto",
                     choices=["auto", "cuda", "cpu", "mps"],
                     help="Compute device (auto = cuda if present else cpu).")
-    ap.add_argument("--threshold", type=float, default=0.5,
-                    help="Seed-probability threshold for PySOAX init.")
+    ap.add_argument("--threshold", type=float, default=None,
+                    help="Foreground probability cut. Default: the fitted value "
+                         "from params_v5h.json (0.97). Only override if you know "
+                         "why — the generic 0.5 other models use floods the "
+                         "instancer, because this model's foreground is very "
+                         "confident.")
     ap.add_argument("--frame", type=int, default=0,
                     help="Frame index for multi-page TIFF / ND2 stacks.")
     args = ap.parse_args()
@@ -228,7 +232,8 @@ def main() -> int:
         return 2
 
     device = resolve_device(args.device)
-    print(f"[info] device={device}  threshold={args.threshold}")
+    thr_label = "fitted (params_v5h.json)" if args.threshold is None else args.threshold
+    print(f"[info] device={device}  threshold={thr_label}")
 
     image_2d = load_frame(args.image, args.frame)
     print(f"[info] loaded {args.image.name}  shape={image_2d.shape}  "
@@ -241,18 +246,21 @@ def main() -> int:
     t0 = time.time()
     model = MicrotubuleModel().load_weights(args.weights, device)
     t_load = time.time() - t0
-    print(f"[info] model loaded in {t_load:.1f}s (first run also downloads "
-          "the DINOv3 backbone)")
+    print(f"[info] model loaded in {t_load:.1f}s")
 
     t1 = time.time()
     result = model.predict(image_2d, seed_threshold=args.threshold)
     t_infer = time.time() - t1
 
     polylines = build_polylines(result)
-    H, W = result["seed_prob"].shape
+    H, W = result["prob"].shape
     payload = {
         "model_used": "microtubule",
-        "threshold_used": args.threshold,
+        # Report what was actually applied, not the (possibly None) request.
+        "threshold_used": (
+            args.threshold if args.threshold is not None
+            else model.params.get("prob_thr", model.DEFAULT_SEED_THRESHOLD)
+        ),
         "image_size": {"width": int(W), "height": int(H)},
         "polygons": [],            # MT outputs polylines only
         "polylines": polylines,
