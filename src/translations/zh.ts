@@ -464,9 +464,9 @@ export default {
             '使用MiT-B5（SegFormer）编码器的U-Net，用于划痕实验显微镜中的二进制伤口分割（A5000上约32毫秒，外部测试集上90% IoU）',
         },
         microtubule: {
-          name: '微管 (DINOv3 + PySOAX)',
+          name: '微管 (ResEnc-M + 曲率约束实例化)',
           description:
-            '面向 IRM/TIRF 微管延时实验的实例分割。DINOv3-L ViT-L/16 + DPT 融合生成每条微管的中线折线和每像素 32 维嵌入，可驱动跨帧跟踪和动态图（kymograph）生成。约 8 秒/帧；本平台唯一原生输出折线的模型。',
+            '面向 IRM 微管延时实验的实例分割。nnU-Net ResEnc-M 网络预测纤维前景，再由曲率约束实例化算法将其分离为单条中线，每个交叉点都在 0.25 rad/px 的硬性曲率上限下求解。完全基于合成图像训练，无需任何人工标注。约 4.5 秒/帧；本平台唯一原生输出折线的模型。',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -499,7 +499,7 @@ export default {
       wound:
         '用于划痕实验显微镜的伤口分割的U-Net + MiT-B5（SegFormer编码器）模型。每张图像一个二进制伤口区域；非常适合愈合速度的时间延迟拍摄。',
       microtubule:
-        '面向 IRM/TIRF 显微镜的微管实例分割。DINOv3-L + DPT 编码器，PySOAX 后处理，原生折线输出，并支持基于嵌入的跨帧跟踪。',
+        '面向 IRM 显微镜的微管实例分割。nnU-Net ResEnc-M 网络，曲率约束实例化，原生折线输出，并支持几何跨帧跟踪。',
       microcapsule:
         '紧凑型 U-Net（由 Meta SAM 3 蒸馏）用于微胶囊实例分割 — 输出每个胶囊的面积、周长和紧实度，被图像边缘截断的胶囊不计入指标。',
     },

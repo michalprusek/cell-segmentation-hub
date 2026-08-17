@@ -497,9 +497,9 @@ export default {
             'U-Net con codificador MiT-B5 (SegFormer) para segmentación binaria de heridas en microscopía de scratch-assay (~32 ms en A5000, 90 % IoU en conjunto de prueba externo)',
         },
         microtubule: {
-          name: 'Microtúbulos (DINOv3 + PySOAX)',
+          name: 'Microtúbulos (ResEnc-M + instanciador por curvatura)',
           description:
-            'Segmentación de instancias para time-lapses de microtúbulos IRM/TIRF. DINOv3-L ViT-L/16 + fusión DPT produce polilíneas centerline por MT y embeddings de 32 dim por píxel para tracking entre cuadros y generación de kymograph. ~8 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
+            'Segmentación de instancias para time-lapses de microtúbulos IRM. Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y un instanciador acotado por curvatura lo separa en centerlines individuales, resolviendo cada cruce bajo un límite duro de 0,25 rad/px. Entrenado íntegramente con imágenes sintéticas, sin anotación humana. ~4,5 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -536,7 +536,7 @@ export default {
       wound:
         'Modelo U-Net + MiT-B5 (codificador SegFormer) para segmentación de heridas en microscopía de scratch-assay. Una única región de herida binaria por imagen; ideal para time-lapses de cicatrización.',
       microtubule:
-        'Segmentación de instancias de microtúbulos para microscopía IRM/TIRF. Codificador DINOv3-L + DPT, postprocesado PySOAX, salida polilínea nativa con tracking basado en embeddings.',
+        'Segmentación de instancias de microtúbulos para microscopía IRM. Red nnU-Net ResEnc-M, instanciador acotado por curvatura, salida polilínea nativa con tracking geométrico entre cuadros.',
       microcapsule:
         'U-Net compacta (destilada de Meta SAM 3) para segmentación de instancias de microcápsulas — área, perímetro y compacidad por cápsula, con las cápsulas cortadas por el borde excluidas de las métricas.',
     },
