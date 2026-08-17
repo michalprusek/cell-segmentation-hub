@@ -296,25 +296,34 @@ services:
       - PYTHONUNBUFFERED=1
       - HOME=/tmp
       - MPLCONFIGDIR=/tmp/mpl
-      # GPU guard, measured on the 24 GB A5000 against a real well recording
-      # (2026-08-13). A v7 forward pass on a 2048x2048 well wants a 16.36 GiB
-      # working set, and that figure is FLAT — identical at caps of 16.49, 17.67
-      # and 20.02 GiB, so the process is not simply growing to fill whatever it
-      # is given.
+      # GPU guard, measured on the 24 GB A5000 against a real well recording.
       #
-      # The old 0.6 (14.13 GiB) sat BELOW that working set, so every position
-      # hit the ceiling, released ~3.7 GiB of cached blocks back to the driver
-      # and then had to win them back. On a card shared with the ml service and
-      # Maptimize that re-acquisition is a race, and losing it is an
-      # OutOfMemoryError — which is how one folder lost 255 wells in one run and
-      # 68 in the next (see backend/essays/module/tests/test_failure_resilience.py).
-      # 0.75 clears the working set with 1.31 GiB to spare; higher buys nothing
-      # because the demand does not grow.
+      # RE-MEASURED 2026-08-17 for microtubule v5H (3 positions of a 2048x2048
+      # IRM well, 162 microtubules): the working set is **1.41 GiB reserved**
+      # (1.05 GiB allocated), and FLAT — identical at caps of 17.99, 4.80, 2.88
+      # and 1.92 GiB, so the process does not grow to fill what it is given.
+      # Runtime was flat too (43.0 / 43.6 / 44.0 / 43.9 s) and `results.csv` came
+      # out BYTE-IDENTICAL at all four caps, because 1.41 GiB sits far below
+      # every one of them and cuDNN's workspace is never constrained.
       #
-      # The start gate rises with it: a batch admitted with only 13 GB free
-      # would resume exactly the release-and-re-acquire cycle the cap now avoids.
-      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-17}
-      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.75}
+      # 0.12 (2.88 GiB) is TWICE the measured working set. The cardinal rule is
+      # that the cap must sit ABOVE the working set: the old 0.6 (14.13 GiB) sat
+      # below v7's 16.36 GiB, so every position hit the ceiling, released
+      # ~3.7 GiB of cached blocks back to the driver and had to win them back.
+      # On a card shared with the ml service and Maptimize that re-acquisition
+      # is a race, and losing it is an OutOfMemoryError — which is how one
+      # folder lost 255 wells in one run and 68 in the next (see
+      # backend/essays/module/tests/test_failure_resilience.py).
+      #
+      # The previous 0.75 / 17 GB pair was sized for v7 and reserved ~17.7 GiB
+      # for a model that needs under 1.5. Do not raise these again without
+      # re-measuring: 17 GB of start-gate meant the batch waited for memory it
+      # was never going to use, on a card three tenants share.
+      #
+      # The start gate tracks the cap: it only has to cover the cap plus the
+      # CUDA context (~0.4 GiB), not the whole card.
+      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-4}
+      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.12}
       - ESSAYS_GPU_WAIT_TIMEOUT_S=${ESSAYS_GPU_WAIT_TIMEOUT_S:-1800}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
