@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import math
 import os
 import sys
 import time
@@ -37,6 +38,121 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 COORDINATE_ORDER = "x=col, y=row, in input image pixels"
+
+# --- params_json validation -------------------------------------------------
+#
+# Checking only that a key is KNOWN and then splatting the value into a frozen
+# dataclass turns operator typos into 500s carrying a bare correlation ID, and one
+# of them into a denial of service. Measured: step_px=0 divides by zero inside
+# resample_polyline and _baseline_indices; a string in a float field raises a
+# TypeError out of numpy; and step_px=0.2 costs 11.03 s against 0.23 s at the
+# default on five filaments, so step_px=0.02 on a real 100-filament frame is hours
+# of CPU on a SHARED GPU host. Rate-limiting by request COUNT cannot bound that --
+# one request is enough -- so the bound belongs on the value. This endpoint is about
+# to become the only externally reachable route to this service.
+
+# Lengths in micrometres. Zero or negative is not a loose setting, it is a physical
+# criterion switched off: for r_iso_um and bleach_spread_um that means isolation
+# quietly stops being tested at all. Strictly positive, with no upper bound -- a
+# criterion so wide that nothing passes yields a visible shortfall, which is the
+# safe direction.
+_UM_LENGTH_KEYS = ("l_min_um", "spot_len_um", "spot_wid_um", "bleach_spread_um",
+                   "r_iso_um", "obs_len_um", "border_margin_um", "d_sep_um")
+
+# Inclusive [lo, hi] bounds, for the keys where BOTH ends matter.
+#   step_px           the lower end is the CPU bound described above; past ~8 px the
+#                     resampled polyline is too coarse for the tangent baseline.
+#   band_thickness_px an mt_measure rasteriser width in pixels; 51 is already far
+#                     wider than a microtubule at any usable magnification.
+#   margin_multiplier scales band_thickness_px into the vicinity-ring radius.
+#   f_mid             a FRACTION of the filament, so outside [0, 1] is meaningless.
+_RANGES = {
+    "step_px": (0.25, 8.0),
+    "band_thickness_px": (1, 51),
+    "margin_multiplier": (0.5, 8.0),
+    "f_mid": (0.0, 1.0),
+}
+
+_SPOT_SHAPES = ("ellipse", "rect")
+
+
+def _validated_overrides(overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce and range-check params_json. Every rejection is a 400 naming the key.
+
+    Types come from the DEFAULT INSTANCE's runtime types rather than from the
+    dataclass's declared annotations: frap_select has `from __future__ import
+    annotations`, so those annotations are strings and `field.type` would hand back
+    the text "float".
+
+    kappa_spot, kappa_baseline_px and snr_min get the type and finiteness checks but
+    no range. No finite value of theirs can raise, and the effect of an extreme one
+    is that every candidate is rejected -- a visible shortfall, not a crash and not
+    an unsafe bleach. Inventing bounds for them would be guessing.
+    """
+    defaults = vars(FS.SelectionParams())
+
+    unknown = set(overrides) - set(defaults)
+    if unknown:
+        raise HTTPException(status_code=400,
+                            detail=f"Unknown selection parameters: {sorted(unknown)}")
+
+    clean: Dict[str, Any] = {}
+    for key, raw in overrides.items():
+        want = type(defaults[key])
+
+        if want is str:
+            if not isinstance(raw, str):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{key} must be a string, got {type(raw).__name__}")
+            if key == "spot_shape" and raw not in _SPOT_SHAPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"spot_shape must be one of {list(_SPOT_SHAPES)}, "
+                           f"got {raw!r}")
+            clean[key] = raw
+            continue
+
+        # `isinstance(True, int)` is True, so bools need excluding explicitly or
+        # {"step_px": true} would silently become a resampling pitch of 1.0 px.
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{key} must be a number, got {type(raw).__name__} ({raw!r})")
+
+        value = float(raw)
+        # json.loads accepts the NaN and Infinity literals by default. NaN reaches
+        # int(round(...)) as a ValueError and inf as an OverflowError, neither of
+        # which tells the caller anything.
+        if not math.isfinite(value):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{key} must be a finite number, got {raw!r}")
+
+        if want is int:
+            if value != int(value):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{key} must be a whole number of pixels, got {raw!r}")
+            value = int(value)
+
+        if key in _UM_LENGTH_KEYS and value <= 0.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{key} is a length in micrometres and must be greater "
+                       f"than zero, got {raw!r}")
+
+        if key in _RANGES:
+            lo, hi = _RANGES[key]
+            if not lo <= value <= hi:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{key} must be between {lo} and {hi} inclusive, "
+                           f"got {raw!r}")
+
+        clean[key] = value
+
+    return clean
 
 
 def _read_pages(raw: bytes) -> np.ndarray:
@@ -117,11 +233,8 @@ def frap_targets(
                 detail=f"params_json must be a JSON object, got "
                        f"{type(overrides).__name__}",
             )
-        unknown = set(overrides) - set(vars(params))
-        if unknown:
-            raise HTTPException(status_code=400,
-                                detail=f"Unknown selection parameters: {sorted(unknown)}")
-        params = FS.SelectionParams(**{**vars(params), **overrides})
+        params = FS.SelectionParams(
+            **{**vars(params), **_validated_overrides(overrides)})
 
     pil = Image.fromarray(irm)
     t0 = time.time()

@@ -118,6 +118,101 @@ def test_params_json_must_be_a_json_object(client):
             f"{r.text}")
 
 
+def _post_params(client, params_json):
+    page = np.zeros((600, 600), dtype=np.uint16)
+    return client.post("/api/v1/frap/targets",
+                       files={"file": ("frame.tif", _tiff_bytes([page]), "image/tiff")},
+                       data={"um_per_px": "0.1", "k_min": "1", "k_max": "10",
+                             "params_json": params_json})
+
+
+def test_params_json_step_px_zero_is_a_400_naming_the_key(client):
+    # Measured: step_px=0 divides by zero inside resample_polyline and
+    # _baseline_indices, so the operator got a 500 carrying a bare correlation ID.
+    # "Is the key known" was the only check before the value was splatted into a
+    # frozen dataclass, and this endpoint is about to become the only externally
+    # reachable route to the service.
+    r = _post_params(client, '{"step_px": 0}')
+    assert r.status_code == 400, r.text
+    assert "step_px" in r.json()["detail"]
+
+
+def test_params_json_a_string_in_a_float_field_is_a_400_naming_the_key(client):
+    # A TypeError raised deep inside numpy is not a message anybody can act on.
+    r = _post_params(client, '{"r_iso_um": "three"}')
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "r_iso_um" in detail
+    assert "number" in detail
+
+
+def test_params_json_an_absurdly_fine_step_px_is_a_400_not_hours_of_cpu(client):
+    # Measured: step_px=0.2 costs 11.03 s against 0.23 s at the default on five
+    # filaments, so step_px=0.02 on a real 100-filament frame is hours of CPU on a
+    # SHARED GPU host. Rate-limiting by request COUNT cannot bound that -- one
+    # request is enough -- so the bound has to be on the value itself.
+    r = _post_params(client, '{"step_px": 0.02}')
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "step_px" in detail
+    assert "0.25" in detail
+
+
+def test_params_json_a_non_finite_value_is_a_400(client):
+    # json.loads accepts the NaN and Infinity literals by default, and NaN reaches
+    # int(round(...)) as a ValueError rather than as anything a caller can read.
+    for bad in ('{"step_px": NaN}', '{"r_iso_um": Infinity}'):
+        r = _post_params(client, bad)
+        assert r.status_code == 400, f"{bad} -> {r.status_code}: {r.text}"
+        assert "finite" in r.json()["detail"]
+
+
+def test_params_json_a_zero_or_negative_um_length_is_a_400(client):
+    # Every physical criterion is a length in micrometres. Zero or negative is not a
+    # loose setting, it is an isolation criterion switched off by accident.
+    for bad in ('{"r_iso_um": 0}', '{"spot_len_um": -1.0}'):
+        r = _post_params(client, bad)
+        assert r.status_code == 400, f"{bad} -> {r.status_code}: {r.text}"
+        assert "greater than zero" in r.json()["detail"]
+
+
+def test_params_json_an_out_of_range_f_mid_is_a_400(client):
+    r = _post_params(client, '{"f_mid": 1.5}')
+    assert r.status_code == 400, r.text
+    assert "f_mid" in r.json()["detail"]
+
+
+def test_params_json_a_fractional_int_field_is_a_400(client):
+    # band_thickness_px is an int on the dataclass and an int in mt_measure's
+    # rasteriser. Silently truncating 7.5 would rasterise a different band width
+    # than the caller asked for and never say so.
+    r = _post_params(client, '{"band_thickness_px": 7.5}')
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "band_thickness_px" in detail
+    assert "whole number" in detail
+
+
+def test_params_json_a_bad_spot_shape_is_a_400(client):
+    r = _post_params(client, '{"spot_shape": "hexagon"}')
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "spot_shape" in detail
+    assert "ellipse" in detail
+
+
+def test_params_json_a_valid_in_range_override_is_accepted_and_applied(client):
+    # The other side of the boundary: validation must not become a wall. A coarser
+    # resampling pitch is a legitimate setting and must still reach select_spots --
+    # proved by the candidate count dropping, not merely by the 200.
+    baseline = _post_params(client, "{}")
+    coarse = _post_params(client, '{"step_px": 4.0, "band_thickness_px": 7}')
+    assert baseline.status_code == 200, baseline.text
+    assert coarse.status_code == 200, coarse.text
+    assert coarse.json()["n_candidates"] < baseline.json()["n_candidates"]
+    assert len(coarse.json()["spots"]) == 2
+
+
 def test_mask_is_returned_and_is_a_png(client):
     page = np.zeros((600, 600), dtype=np.uint16)
     r = client.post("/api/v1/frap/targets",
