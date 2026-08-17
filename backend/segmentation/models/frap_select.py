@@ -49,8 +49,13 @@ class SelectionParams:
     # previous 5.0 contradicted its own rationale: below the bound ``_slice_window``
     # CLIPS, so 5b is evaluated over a shorter window than intended, which
     # under-reports contamination -- the unsafe direction, and silent. Widening
-    # f_mid or obs_len raises this floor; the relationship is tested, not just
-    # written down here.
+    # f_mid or obs_len raises this floor.
+    #
+    # KNOWN GAP: a test pins that relationship AT THE DEFAULTS only. params_json
+    # overrides are validated key by key with no cross-field constraint, so
+    # overriding f_mid to 0.8 or obs_len_um to 5.0 while leaving l_min_um at 6.0
+    # reintroduces the clipping silently. A cross-field check in
+    # api/frap_targets._validated_overrides is the fix; it is not in place yet.
     l_min_um: float = 6.0            # = obs_len_um / (1 - f_mid); see above
     spot_len_um: float = 1.0         # bleached length of lattice
     spot_wid_um: float = 1.0         # bleached width across the filament
