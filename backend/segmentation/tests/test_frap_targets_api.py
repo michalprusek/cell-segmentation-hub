@@ -118,6 +118,94 @@ def test_params_json_must_be_a_json_object(client):
             f"{r.text}")
 
 
+def test_a_body_over_the_size_cap_is_a_413(client, monkeypatch):
+    # `raw = file.file.read()` had no cap at all. A 4000-page frame is ~2 GB, and
+    # this endpoint is about to be the only externally reachable route to a shared
+    # GPU host. The cap is monkeypatched down here rather than posting 256 MiB.
+    from api import frap_targets
+    monkeypatch.setattr(frap_targets, "MAX_UPLOAD_BYTES", 4096)
+    page = np.zeros((600, 600), dtype=np.uint16)
+    r = client.post("/api/v1/frap/targets",
+                    files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
+                    data={"um_per_px": "0.1", "k_min": "1"})
+    assert r.status_code == 413, r.text
+    assert "4096" in r.json()["detail"]
+
+
+def test_a_file_with_too_many_pages_is_a_400(client):
+    from api import frap_targets
+    buf = io.BytesIO()
+    tifffile.imwrite(buf, np.zeros((frap_targets.MAX_PAGES + 6, 8, 8), np.uint8))
+    raw = buf.getvalue()
+    r = client.post("/api/v1/frap/targets",
+                    files={"file": ("f.tif", raw, "image/tiff")},
+                    data={"um_per_px": "0.1", "k_min": "1"})
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "page" in detail.lower()
+    assert str(frap_targets.MAX_PAGES) in detail
+
+
+def test_a_page_declaring_absurd_dimensions_is_refused_before_it_is_decoded(client):
+    # The amplification this guards, measured: an all-zero 6000x6000 page under
+    # zlib is ~39 KB on the wire and 36 million pixels once decoded. The declared
+    # size comes from the TIFF tags, so the check has to happen BEFORE asarray() --
+    # checking the decoded array would already have paid the RSS.
+    buf = io.BytesIO()
+    tifffile.imwrite(buf, np.zeros((6000, 6000), np.uint8), compression="zlib")
+    raw = buf.getvalue()
+    assert len(raw) < 100_000, f"fixture should be tiny on the wire, got {len(raw)}"
+    r = client.post("/api/v1/frap/targets",
+                    files={"file": ("f.tif", raw, "image/tiff")},
+                    data={"um_per_px": "0.1", "k_min": "1"})
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "36000000" in detail
+    assert "before" in detail.lower() or "decod" in detail.lower()
+
+
+def test_only_the_pages_actually_used_are_decoded(client):
+    # A mechanism test, deliberately: nothing observable in the RESPONSE
+    # distinguishes "decoded 6 pages" from "decoded 2", so the only way to hold the
+    # per-page read in place is to count the decodes. tifffile.imread does not route
+    # through TiffPage.asarray at all (it reads a whole series in one go), so a
+    # regression to imread shows up here as zero recorded decodes.
+    from unittest.mock import patch
+    pages = [np.zeros((600, 600), dtype=np.uint16) for _ in range(6)]
+    real = tifffile.TiffPage.asarray
+    decoded = []
+
+    def counting(self, *args, **kwargs):
+        decoded.append(self.index)
+        return real(self, *args, **kwargs)
+
+    with patch.object(tifffile.TiffPage, "asarray", counting):
+        r = client.post("/api/v1/frap/targets",
+                        files={"file": ("f.tif", _tiff_bytes(pages), "image/tiff")},
+                        data={"um_per_px": "0.1", "irm_page": "0", "fluor_page": "1",
+                              "k_min": "1"})
+    assert r.status_code == 200, r.text
+    assert sorted(decoded) == [0, 1], f"decoded pages {sorted(decoded)}, wanted [0, 1]"
+
+
+def test_a_channel_last_tiff_is_refused_naming_both_interpretations(client):
+    # A single (H, W, 3) page was read as an H-page STACK, so page 0 became a
+    # 3-pixel-wide slice: the model found nothing, the operator got OK n=0, and
+    # concluded the field was empty. Which layout NIS's ImageSaveAs actually writes
+    # is spec section 9 item 1 and explicitly unverified, so refuse and name both
+    # readings rather than pick one.
+    buf = io.BytesIO()
+    tifffile.imwrite(buf, np.zeros((600, 600, 3), np.uint8), photometric="rgb")
+    r = client.post("/api/v1/frap/targets",
+                    files={"file": ("f.tif", buf.getvalue(), "image/tiff")},
+                    data={"um_per_px": "0.1", "k_min": "1"})
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "(600, 600, 3)" in detail
+    assert "channel-last" in detail
+    assert "600 separate" in detail
+
+
 def _post_params(client, params_json):
     page = np.zeros((600, 600), dtype=np.uint16)
     return client.post("/api/v1/frap/targets",

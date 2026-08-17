@@ -155,29 +155,111 @@ def _validated_overrides(overrides: Dict[str, Any]) -> Dict[str, Any]:
     return clean
 
 
-def _read_pages(raw: bytes) -> np.ndarray:
-    """Load an uploaded TIFF as a (P, H, W) stack, however many pages it has."""
-    try:
-        arr = tifffile.imread(io.BytesIO(raw))
-    except Exception as exc:                       # noqa: BLE001
-        raise HTTPException(status_code=400,
-                            detail=f"Unreadable TIFF: {exc}") from exc
+# --- upload and decode bounds ----------------------------------------------
+#
+# `file.file.read()` had no cap, and tifffile.imread decoded EVERY page although at
+# most two are ever used: a 4000-page file is ~2 GB of RSS, and a compressed
+# all-zero page with huge declared dimensions turns a few KB of upload into
+# gigabytes -- measured here at 39 KB of zlib declaring 36 million pixels. All three
+# bounds are generous against a real field of view, and they are the knobs to raise
+# if a larger camera turns up.
+MAX_UPLOAD_BYTES = 256 * 1024 * 1024   # a 2-page 2048^2 uint16 frame is 16 MB
+MAX_PAGES = 64                         # ImType 18 writes one page per layer
+MAX_PAGE_PIXELS = 4096 * 4096          # 2048^2 and 2560x2160 sCMOS both fit easily
+
+
+def _read_body(upload: UploadFile) -> bytes:
+    """Read the upload with a hard ceiling, so an unbounded body cannot be posted."""
+    raw = upload.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Frame is larger than the {MAX_UPLOAD_BYTES} byte upload "
+                   f"limit. One field of view is a two-page TIFF; if this is a "
+                   f"whole ND acquisition, save the single frame instead.")
+    return raw
+
+
+def _as_2d_page(arr: np.ndarray, index: int, what: str) -> np.ndarray:
+    """One decoded page as a 2-D image, or a 400 that refuses to guess."""
     arr = np.asarray(arr)
     if arr.ndim == 2:
-        return arr[None, ...]
-    if arr.ndim == 3:
         return arr
-    raise HTTPException(status_code=400,
-                        detail=f"Expected a 2D or 3D TIFF, got shape {arr.shape}")
+    if arr.ndim == 3 and arr.shape[2] in (2, 3, 4) and arr.shape[0] > 4:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{what} page {index} has shape {tuple(int(s) for s in arr.shape)}, "
+                   f"which is ambiguous: it is either one "
+                   f"{arr.shape[0]}x{arr.shape[1]} image with {arr.shape[2]} "
+                   f"interleaved samples per pixel (channel-last), or "
+                   f"{arr.shape[0]} separate {arr.shape[1]}x{arr.shape[2]} images. "
+                   f"Which layout NIS's ImageSaveAs writes is unverified (spec "
+                   f"section 9 item 1), and guessing wrong the second way hands "
+                   f"the model a {arr.shape[2]}-pixel-wide sliver, finds nothing, "
+                   f"and reports OK n=0 as though the field were empty. Save the "
+                   f"channels as separate TIFF pages and set irm_page/fluor_page.")
+    raise HTTPException(
+        status_code=400,
+        detail=f"{what} page {index} is not a 2-D image; got shape "
+               f"{tuple(int(s) for s in arr.shape)}")
 
 
-def _page(stack: np.ndarray, index: int, what: str) -> np.ndarray:
-    if not 0 <= index < stack.shape[0]:
+def _page_array(tif, index: int, what: str) -> np.ndarray:
+    """Decode exactly ONE page, bounded BEFORE the decode rather than after."""
+    n_pages = len(tif.pages)
+    if not 0 <= index < n_pages:
         raise HTTPException(
             status_code=400,
             detail=f"{what} page {index} is outside the file, which has "
-                   f"{stack.shape[0]} page(s)")
-    return stack[index]
+                   f"{n_pages} page(s)")
+    page = tif.pages[index]
+    shape = tuple(int(s) for s in page.shape)
+    n_px = 1
+    for dim in shape:
+        n_px *= dim
+    if n_px > MAX_PAGE_PIXELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{what} page {index} declares {n_px} pixels (shape {shape}), "
+                   f"over the {MAX_PAGE_PIXELS} pixel limit. The size is read from "
+                   f"the TIFF tags and checked BEFORE decoding, because a "
+                   f"compressed all-zero page is a few KB on the wire and "
+                   f"gigabytes once decoded.")
+    try:
+        arr = page.asarray()
+    except Exception as exc:                       # noqa: BLE001
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unreadable TIFF: could not decode {what.lower()} page "
+                   f"{index}: {exc}") from exc
+    return _as_2d_page(arr, index, what)
+
+
+def _read_frame(raw: bytes, irm_page: int, fluor_page: Optional[int]):
+    """Decode ONLY the one or two pages this call actually uses.
+
+    tifffile.imread decoded the whole file, so a 4000-page upload cost ~2 GB to
+    answer a question about page 0. Opening the file and taking pages by index
+    reads the tags for all of them (cheap) and the pixels for none but these.
+    """
+    try:
+        tif = tifffile.TiffFile(io.BytesIO(raw))
+    except Exception as exc:                       # noqa: BLE001
+        raise HTTPException(status_code=400,
+                            detail=f"Unreadable TIFF: {exc}") from exc
+    with tif:
+        n_pages = len(tif.pages)
+        if n_pages > MAX_PAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Frame has {n_pages} pages, over the {MAX_PAGES} page "
+                       f"limit. One field of view is a handful of layers; a file "
+                       f"this deep is a whole acquisition, not a frame.")
+        irm = _page_array(tif, irm_page, "IRM")
+        fluor = None
+        if fluor_page is not None:
+            fluor = _page_array(tif, fluor_page, "Fluorescence").astype(np.float32)
+    return irm, fluor
 
 
 def _polylines_from(result: Dict[str, Any]) -> List[np.ndarray]:
@@ -213,12 +295,8 @@ def frap_targets(
     """
     import json
 
-    raw = file.file.read()
-    stack = _read_pages(raw)
-    irm = _page(stack, irm_page, "IRM")
-    fluor = None
-    if fluor_page is not None:
-        fluor = _page(stack, fluor_page, "Fluorescence").astype(np.float32)
+    raw = _read_body(file)
+    irm, fluor = _read_frame(raw, irm_page, fluor_page)
 
     params = FS.SelectionParams()
     if params_json:
