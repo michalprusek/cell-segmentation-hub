@@ -50,7 +50,6 @@ from _mt_package import (  # noqa: E402  (needs _HERE on sys.path)
 )
 
 DEFAULT_WEIGHTS = default_weights()
-BUNDLED_BACKBONE_CONFIG = _HERE / "config" / "dinov3_vitl16"
 
 # A position that fails on the GPU is usually a passing squall rather than a
 # verdict on the data. Measured in production (RTX A5000, 2026-08): one
@@ -232,25 +231,15 @@ def build_args() -> argparse.Namespace:
     ap.add_argument("--no-json", action="store_true", help="Skip annotation JSON.")
     ap.add_argument("--limit-wells", type=int, default=0,
                     help="Process at most N wells (0 = all). Useful for a test run.")
-    ap.add_argument("--online-backbone", action="store_true",
-                    help="Download the gated DINOv3 backbone from HuggingFace "
-                         "instead of rebuilding it offline from the bundled config "
-                         "(needs HF_TOKEN). Not normally required.")
     return ap.parse_args()
 
 
 def main() -> int:
     args = build_args()
 
-    # Default to the fully-offline, no-token backbone path.
-    if not args.online_backbone:
-        if not BUNDLED_BACKBONE_CONFIG.exists():
-            print(f"[error] bundled backbone config missing at "
-                  f"{BUNDLED_BACKBONE_CONFIG}", file=sys.stderr)
-            return 2
-        os.environ["MT_BACKBONE_CONFIG"] = str(BUNDLED_BACKBONE_CONFIG)
-        os.environ.setdefault("HF_HUB_OFFLINE", "1")
-        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    # v5H's checkpoint is a complete state_dict with no frozen backbone, so
+    # there is nothing to fetch and no token to supply. The --online-backbone
+    # flag and the bundled DINOv3 config it guarded went with the v7 model.
 
     from mt_pipeline import (iter_positions, find_nd2_files, measure_frame,
                              CsvWriter, FailureLog, parse_well_id, save_overlay,
