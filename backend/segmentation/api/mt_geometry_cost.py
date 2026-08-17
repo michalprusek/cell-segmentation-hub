@@ -21,7 +21,7 @@ its inputs. The tracker feeds it ``(row, col)``, so it gets ``(d_row, d_col)``.
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -105,20 +105,48 @@ def resample(p: np.ndarray, ds: float = DS) -> np.ndarray:
     return np.stack([np.interp(t, s, p[:, k]) for k in range(p.shape[1])], axis=1)
 
 
+def build_tree(curve: np.ndarray) -> Optional[cKDTree]:
+    """cKDTree over a resampled centerline, or None when it is too short to compare.
+
+    Exists so the tracker can build ONE tree per filament per frame instead of
+    two per candidate PAIR. The cost matrix is P x Q, so the naive form rebuilds
+    the same tree Q (or P) times: on a real frame pair with ~100 filaments each
+    that is ~20 000 tree constructions where 200 suffice, and it is what made
+    /track roughly ten times slower than the embedding cost it replaced.
+    """
+    curve = np.asarray(curve, dtype=float)
+    if len(curve) < 2:
+        return None
+    return cKDTree(curve)
+
+
+def curve_distance_prebuilt(
+    a: np.ndarray,
+    tree_a: Optional[cKDTree],
+    b: np.ndarray,
+    tree_b: Optional[cKDTree],
+) -> float:
+    """:func:`curve_distance` with the two trees supplied by the caller."""
+    if tree_a is None or tree_b is None:
+        return float("inf")
+    da, _ = tree_b.query(a, k=1)
+    db, _ = tree_a.query(b, k=1)
+    return float(0.5 * (da.mean() + db.mean()))
+
+
 def curve_distance(a: np.ndarray, b: np.ndarray) -> float:
     """Symmetric mean nearest-point distance between two polylines, px.
 
     Returns ``inf`` for degenerate input rather than 0, so a one-point stub can
     never be mistaken for a perfect match -- the failure mode a plain centroid
     distance has.
+
+    Convenience wrapper; the tracker's hot path uses
+    :func:`curve_distance_prebuilt` so it does not rebuild a tree per pair.
     """
     a = np.asarray(a, dtype=float)
     b = np.asarray(b, dtype=float)
-    if len(a) < 2 or len(b) < 2:
-        return float("inf")
-    da, _ = cKDTree(b).query(a, k=1)
-    db, _ = cKDTree(a).query(b, k=1)
-    return float(0.5 * (da.mean() + db.mean()))
+    return curve_distance_prebuilt(a, build_tree(a), b, build_tree(b))
 
 
 def overlap_fraction(a: np.ndarray, b: np.ndarray, tol: float = OVERLAP_TOL) -> float:
