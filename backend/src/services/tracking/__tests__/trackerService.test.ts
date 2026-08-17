@@ -169,6 +169,55 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
     expect(errors).toMatch(/malformed polygons JSON/i);
   });
 
+  it('sends only geometry to the ML tracker, never an embedding payload', async () => {
+    // Stored rows written by the microtubule v7 model still carry a
+    // several-KB `_embedding` each. The v5H tracker matches on geometry and
+    // never decodes one, so forwarding it would ship tens of MB per video for
+    // a payload nothing reads.
+    prismaImageFindMany.mockImplementation(async (args: unknown) => {
+      const select = (args as { select?: Record<string, unknown> }).select;
+      if (select && 'segmentationStatus' in select) {
+        return [{ segmentationStatus: 'segmented' }];
+      }
+      return [
+        {
+          id: 'img-0',
+          frameIndex: 0,
+          segmentation: {
+            id: 'seg-0',
+            imageId: 'img-0',
+            polygons: JSON.stringify([
+              {
+                id: 'p0',
+                geometry: 'polyline',
+                points: [
+                  { x: 1, y: 1 },
+                  { x: 2, y: 2 },
+                ],
+                // A legacy v7 blob, present on real rows.
+                _embedding: 'ZmFrZS1lbWJlZGRpbmc=',
+                _embedding_dim: 32,
+              },
+            ]),
+          },
+        },
+      ];
+    });
+    axiosPostMock.mockResolvedValue({
+      data: { assignments: { '0::p0': 'track-A' } },
+    });
+
+    await runTrackingForContainer('vid-emb');
+
+    const postBody = axiosPostMock.mock.calls[0]?.[1] as {
+      frames: Array<{ polylines: Array<Record<string, unknown>> }>;
+    };
+    const polyline = postBody.frames[0]?.polylines[0] as Record<string, unknown>;
+    expect(polyline).toBeDefined();
+    expect(Object.keys(polyline).sort()).toEqual(['id', 'points_rc']);
+    expect(JSON.stringify(postBody)).not.toContain('ZmFrZS1lbWJlZGRpbmc=');
+  });
+
   it('proceeds when a mix of segmented / no_segmentation / failed reaches final states', async () => {
     // Regression: previously isBatchComplete required strict
     // 'segmented' across all frames, so one no_segmentation or failed

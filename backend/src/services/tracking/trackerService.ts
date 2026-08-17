@@ -5,7 +5,7 @@
  * every frame of a video container with the ``microtubule`` model
  * reaches status ``segmented``, this service:
  *
- *   1. Reads every per-frame Segmentation row + its polyline embeddings.
+ *   1. Reads every per-frame Segmentation row's polyline geometry.
  *   2. POSTs the bundle to the ML service's /track endpoint.
  *   3. Receives an assignments map (polylineId → trackId).
  *   4. Patches each Segmentation's polygon JSON to inject ``trackId``.
@@ -25,6 +25,8 @@ interface PolygonRecord {
   geometry?: string;
   instanceId?: string;
   trackId?: string;
+  /** Legacy: written by the microtubule v7 model, never by v5H. Declared so
+   *  the type still describes rows already in the database; nothing reads it. */
   _embedding?: string;
   [k: string]: unknown;
 }
@@ -75,7 +77,10 @@ function asTrackerPolylines(
       points_rc: (p.points as Array<{ x: number; y: number }>).map(
         pt => [pt.y, pt.x] as [number, number]
       ),
-      embedding: typeof p._embedding === 'string' ? p._embedding : null,
+      // No `embedding`: the microtubule v5H model emits no embedding field,
+      // and the tracker matches on geometry. Rows written by v7 still carry a
+      // several-KB `_embedding` each; deliberately NOT forwarding it keeps
+      // tens of MB per video off the wire for a payload nothing reads.
     }));
   return { frame: frameIndex, polylines };
 }
@@ -185,10 +190,10 @@ async function _runTrackingForContainerInner(
       ),
     // Max accepted filament-match cost for the two-step LAP tracker. The ML
     // side's filament-aware cost is a weighted sum of four [0,1] terms
-    // (embedding + endpoint + orientation + length), so 0.6 accepts
+    // (curve distance + endpoint + orientation + length), so 0.6 accepts
     // moderately-confident links. The remaining tracker params (motion_model,
-    // emb_template_alpha, max_gap=3, gap_penalty, term weights, image_hw
-    // fallback) use the ML defaults.
+    // max_gap=3, gap_penalty, term weights, image_hw fallback) use the ML
+    // defaults.
     cost_threshold: 0.6,
   };
 
@@ -273,8 +278,8 @@ async function _runTrackingForContainerInner(
   // transactions in this overload), so the contract is: log the partial
   // commit count loudly and re-throw so the caller's error path runs.
   // Ops can then re-trigger tracking; the next pass overwrites trackIds
-  // idempotently using the same Hungarian output as long as embeddings
-  // are stable.
+  // idempotently, because the same centerlines produce the same geometric
+  // cost matrix and therefore the same Hungarian output.
   let chunksCommitted = 0;
   const totalChunks = Math.ceil(updates.length / TX_CHUNK_SIZE);
   try {
