@@ -21,7 +21,7 @@ def horizontal(y, x0, x1):
 
 
 def test_a_filament_rejected_at_the_length_gate_yields_one_rejected_filament_reason_length():
-    mts = [horizontal(300, 100, 130)]          # 30 px = 3 um, below l_min 5 um
+    mts = [horizontal(300, 100, 130)]          # 30 px = 3 um, below l_min 6 um
     r = S.select_spots(mts, SHAPE, UM_PER_PX, k_min=1, k_max=10)
     assert r.spots == []
     assert len(r.rejected_filaments) == 1
@@ -47,9 +47,10 @@ def test_a_frame_with_two_distinct_rejection_reasons_attributes_each_filament_it
     # Distinguishes per-filament tallying from a frame-wide one, which the simpler
     # close-parallels test above cannot: there, EVERY rejected candidate in the
     # whole frame fails for the same reason (readout_clearance), so a frame-wide
-    # accumulator and a per-filament one happen to agree by coincidence -- see the
-    # mutation-test note in the module-level report for confirmation that the
-    # close-parallels test alone does not catch a frame-wide-vs-per-filament bug.
+    # accumulator and a per-filament one happen to agree by coincidence. Verified by
+    # mutation rather than asserted: substituting the frame-wide `rejected` histogram
+    # for the per-filament tally when choosing the modal reason leaves all five other
+    # tests in this file GREEN and fails only this one.
     # Here, a third filament near the top border -- isolated from the other two
     # (295 px away, far past query_r_px, so it shares no candidates with them) --
     # fails exclusively on "border", while the frame's DOMINANT reason overall is

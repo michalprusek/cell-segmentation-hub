@@ -270,14 +270,24 @@ def _read_frame(raw: bytes, irm_page: int, fluor_page: Optional[int]):
     return irm, fluor
 
 
-def _polylines_from(result: Dict[str, Any]) -> List[np.ndarray]:
+def _polylines_from(result: Dict[str, Any]):
+    """The model's polylines as point arrays, plus its own instance id per polyline.
+
+    ONE filtered pass, returning both lists together, because the filter is what
+    makes them fragile: a polyline with fewer than two points is dropped, and
+    ``Spot.mt_index`` indexes into what SURVIVES. Collecting the ids in a separate
+    pass over the unfiltered list would shift every id by each entry dropped before
+    it -- a mislabelled spot rather than a missing one, which is worse.
+    """
     out: List[np.ndarray] = []
+    instance_ids: List[Optional[str]] = []
     for pl in result.get("polylines", []) or []:
         pts = pl.get("points", [])
         if len(pts) >= 2:
             out.append(np.array([[float(q["x"]), float(q["y"])] for q in pts],
                                 dtype=np.float64))
-    return out
+            instance_ids.append(pl.get("instanceId"))
+    return out, instance_ids
 
 
 @router.post("/frap/targets")
@@ -357,7 +367,7 @@ def frap_targets(
             detail=f"Microtubule inference failed: {exc}") from exc
     inference_s = time.time() - t0
 
-    polylines = _polylines_from(result)
+    polylines, mt_instance_ids = _polylines_from(result)
     t1 = time.time()
     sel = FS.select_spots(polylines, irm.shape[:2], um_per_px, fluor=fluor,
                           params=params, k_min=k_min, k_max=k_max)
@@ -372,7 +382,8 @@ def frap_targets(
         "success": True,
         "n_polylines": sel.n_polylines,
         "n_candidates": sel.n_candidates,
-        "spots": [_spot_json(s, params, um_per_px) for s in sel.spots],
+        "spots": [_spot_json(s, params, um_per_px, mt_instance_ids)
+                  for s in sel.spots],
         "shortfall": sel.shortfall,
         "rejected_by": sel.rejected_by,
         # rejected_by counts CANDIDATES against criteria; dropped_by counts
@@ -402,13 +413,23 @@ def frap_targets(
     return body
 
 
-def _spot_json(s, params: "FS.SelectionParams", um_per_px: float) -> Dict[str, Any]:
-    rx_px = 0.5 * params.spot_len_um / um_per_px
-    ry_px = 0.5 * params.spot_wid_um / um_per_px
+def _spot_json(s, params: "FS.SelectionParams", um_per_px: float,
+               instance_ids: List[Optional[str]]) -> Dict[str, Any]:
+    # From frap_select, not recomputed: these half-axes are what the microscope
+    # BLEACHES, and frap_select's copy is what the isolation criteria VALIDATED. Two
+    # independent copies of the same arithmetic is the divergence this endpoint
+    # already shipped once, between the mask and the macro.
+    rx_px, ry_px = FS.half_axes_px(params, um_per_px)
     return {
         "x": round(s.x, 2), "y": round(s.y, 2),
         "tangent_deg": round(s.tangent_deg, 2),
         "mt_index": s.mt_index,
+        # The model's OWN id for the instance, alongside mt_index rather than
+        # instead of it: mt_index is an index into a list this response does not
+        # contain, so frap_spots.json -- whose stated purpose is offline analysis --
+        # could not otherwise be joined back to the segmentation that produced it.
+        "mt_instance_id": (instance_ids[s.mt_index]
+                           if 0 <= s.mt_index < len(instance_ids) else None),
         "mt_length_um": round(s.mt_length_um, 3),
         "bleach_clearance_um": round(s.bleach_clearance_um, 3),
         "readout_clearance_um": round(s.readout_clearance_um, 3),
