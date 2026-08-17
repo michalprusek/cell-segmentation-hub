@@ -46,6 +46,7 @@ def test_returns_spots_for_a_single_page_frame(client):
     assert len(body["spots"]) == 2
     assert body["coordinate_order"] == "x=col, y=row, in input image pixels"
     assert set(body["rejected_by"]) >= {"length", "bleach_clearance", "readout_clearance"}
+    assert set(body["dropped_by"]) >= {"separation", "budget"}
 
 
 def test_um_per_px_is_required(client):

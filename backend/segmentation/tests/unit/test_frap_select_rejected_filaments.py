@@ -43,6 +43,26 @@ def test_close_parallels_yield_rejected_filaments_with_reason_readout_clearance(
     assert reasons == {0: "readout_clearance", 1: "readout_clearance"}
 
 
+def test_a_frame_with_two_distinct_rejection_reasons_attributes_each_filament_its_own_reason():
+    # Distinguishes per-filament tallying from a frame-wide one, which the simpler
+    # close-parallels test above cannot: there, EVERY rejected candidate in the
+    # whole frame fails for the same reason (readout_clearance), so a frame-wide
+    # accumulator and a per-filament one happen to agree by coincidence -- see the
+    # mutation-test note in the module-level report for confirmation that the
+    # close-parallels test alone does not catch a frame-wide-vs-per-filament bug.
+    # Here, a third filament near the top border -- isolated from the other two
+    # (295 px away, far past query_r_px, so it shares no candidates with them) --
+    # fails exclusively on "border", while the frame's DOMINANT reason overall is
+    # still readout_clearance (two filaments' worth of candidates vs. one). A
+    # frame-wide-accumulator bug would mislabel this filament "readout_clearance"
+    # instead of its own true "border".
+    mts = [horizontal(300, 100, 400), horizontal(315, 100, 400), horizontal(5, 100, 400)]
+    r = S.select_spots(mts, SHAPE, UM_PER_PX, k_min=1, k_max=10)
+    assert r.spots == []
+    reasons = {rf.mt_index: rf.reason for rf in r.rejected_filaments}
+    assert reasons == {0: "readout_clearance", 1: "readout_clearance", 2: "border"}
+
+
 def test_a_filament_that_contributes_a_chosen_spot_has_no_rejected_filament_entry():
     mts = [horizontal(300, 100, 400)]
     r = S.select_spots(mts, SHAPE, UM_PER_PX, k_min=1, k_max=10)
