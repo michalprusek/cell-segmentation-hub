@@ -28,7 +28,8 @@ if str(PKG_ROOT) not in sys.path:
     sys.path.insert(0, str(PKG_ROOT))
 
 import _mt_package  # noqa: E402
-from _mt_package import ensure_on_path  # noqa: E402
+
+ensure_on_path = _mt_package.ensure_on_path
 
 
 def test_microtubule_package_is_not_a_local_copy():
