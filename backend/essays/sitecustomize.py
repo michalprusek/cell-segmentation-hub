@@ -12,27 +12,31 @@ VRAM. The wrapper sets that flag exclusively on the ``evaluate.py`` subprocess i
 launches on the GPU, so a batch can never grab more than its slice and starve
 interactive segmentation running in the ``ml`` container on the same card.
 
-**The cap must sit ABOVE the model's working set, not below it.** Measured
-2026-08-13: a v7 forward pass on a 2048x2048 well wants 16.36 GiB, flat across
-caps of 16.49 / 17.67 / 20.02 GiB. The original 0.6 (14.13 GiB) sat under that,
-so torch hit the ceiling on every position, released ~3.7 GiB of cached blocks
-to the driver and had to win them back from a shared card — losing that race is
-an OutOfMemoryError, and it cost one folder 255 wells in one run and 68 in the
+**The cap must sit ABOVE the model's working set, not below it.** With v7 that
+working set was 16.36 GiB and the original 0.6 (14.13 GiB) sat under it, so
+torch hit the ceiling on every position, released ~3.7 GiB of cached blocks to
+the driver and had to win them back from a shared card — losing that race is an
+OutOfMemoryError, and it cost one folder 255 wells in one run and 68 in the
 next. A cap set below the working set does not protect the other tenants; it
 just hands them memory the batch will immediately try to take back.
 
-Note this value CHANGES RESULTS: it sizes cuDNN's workspace and so its choice of
-convolution algorithm. Measured over one 3-position well, 0.6 -> 0.75 left 71 of
-73 microtubule rows byte-identical, moved one centerline by 1.10 px and shifted
-one neighbour's background ring in consequence. Same magnitude as the
-capped-vs-uncapped boundary already documented in CLAUDE.md — so when comparing
-two runs, hold this constant.
+Re-measured 2026-08-17 for microtubule **v5H** (3 positions of a 2048x2048 IRM
+well, 162 microtubules): the working set is **1.41 GiB reserved** / 1.05 GiB
+allocated, and flat across caps of 17.99 / 4.80 / 2.88 / 1.92 GiB. The default
+is therefore 0.12 (2.88 GiB) — twice the working set — rather than v7's 0.75.
+
+Note this value CAN CHANGE RESULTS: it sizes cuDNN's workspace and so its choice
+of convolution algorithm. Under v7 it did — 0.6 -> 0.75 moved one centerline by
+1.10 px out of 73 rows. Under v5H it does not: `results.csv` was byte-identical
+at all four caps above, because 1.41 GiB is far below every one of them and the
+workspace is never constrained. That equivalence holds only while the cap stays
+well clear of the working set, so re-check it if either moves.
 """
 import os
 
 if os.environ.get("ESSAYS_APPLY_GPU_CAP") == "1":
     try:
-        fraction = float(os.environ.get("ESSAYS_GPU_MEM_FRACTION", "0.75"))
+        fraction = float(os.environ.get("ESSAYS_GPU_MEM_FRACTION", "0.12"))
         import torch
 
         if torch.cuda.is_available() and 0.0 < fraction <= 1.0:
