@@ -200,7 +200,7 @@ def build_args() -> argparse.Namespace:
     ap.add_argument("--out", type=Path, default=Path("results"),
                     help="Output directory (results.csv, overlays/, annotations/).")
     ap.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS,
-                    help="Path to microtubule_v7.pt (auto-downloaded if missing).")
+                    help="Path to microtubule_v5h.pth (staged out-of-band; see README).")
     ap.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu", "mps"],
                     help="Compute device.")
     ap.add_argument("--threshold", type=float, default=0.5,

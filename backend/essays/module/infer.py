@@ -206,7 +206,7 @@ def main() -> int:
     ap.add_argument("--image", required=True, type=Path,
                     help="Input frame (PNG/JPG/BMP/TIFF/ND2/NPY).")
     ap.add_argument("--weights", type=Path, default=default_weights(),
-                    help="Path to microtubule_v7.pt checkpoint.")
+                    help="Path to the microtubule_v5h.pth checkpoint.")
     ap.add_argument("--output", type=Path, default=None,
                     help="Output JSON path (default: <image>.mt.json).")
     ap.add_argument("--overlay", type=Path, default=None,

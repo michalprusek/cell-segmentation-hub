@@ -194,9 +194,16 @@ services:
       - ML_INFERENCE_WORKERS=${ML_INFERENCE_WORKERS:-1}
       - ML_ENABLE_PARALLEL_INFERENCE=${ML_ENABLE_PARALLEL_INFERENCE:-false}
       - ML_MAX_CONCURRENT_USERS=${ML_MAX_CONCURRENT_USERS:-1}
-      # Microtubule v7 (DINOv3-L + DPT) needs ~7-8 GB for a single 1024x1024
-      # forward pass; the previous 8 GB cap tripped CUDA OOM. 14 GB leaves
-      # room on the shared A5000 (24 GB total) for the other tenant.
+      # Sized for the heaviest interactive model. This was microtubule v7
+      # (DINOv3-L + DPT), which held ~7-8 GB for a single 1024x1024 forward
+      # pass and tripped CUDA OOM under the previous 8 GB cap.
+      #
+      # Microtubule v5H replaced it and peaks at 0.73 GiB, flat across
+      # 1024x1024 and 2048x2048 (it tiles at 512x512 instead of running a ViT
+      # over the whole frame). The cap is therefore now sized by the OTHER
+      # models, and has NOT been re-measured for them -- lowering it would
+      # hand VRAM back to the essays worker on this shared A5000, but only
+      # after measuring hrnet / cbam / sperm peaks.
       - ML_MEMORY_LIMIT_GB=${ML_MEMORY_LIMIT_GB:-14}
       - ML_ENABLE_CUDA_STREAMS=true
       - GPU_MEMORY_WARNING_THRESHOLD=90
@@ -207,18 +214,23 @@ services:
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
       - CUDA_LAUNCH_BLOCKING=0
       - ML_GPU_PRIORITY=high
-      # Microtubule v7 requires a HuggingFace token to download the gated
-      # DINOv3 ViT-L/16 backbone (~1.1 GB) on first model load. Read from
-      # .env.production at compose time so the token isn't baked into the
-      # image. Absent token → microtubule model fails to load (other
-      # models unaffected).
+      # HuggingFace token, read from .env.production at compose time so it is
+      # not baked into the image.
+      #
+      # NO LONGER for microtubule: v5H's checkpoint is a complete state_dict
+      # with no frozen backbone, so MT segmentation needs neither a token nor
+      # network access. Kept because SegFormer and the sperm model still call
+      # from_pretrained() -- neither repo is gated today, so the token is
+      # belt-and-braces, but the cache mount below is load-bearing for them.
       - HF_TOKEN=${HF_TOKEN}
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ./backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro
       - ./backend/uploads/blue:/app/uploads
-      # Persist HuggingFace cache across container restarts so the 1.1 GB
-      # DINOv3 backbone download survives `docker compose down`.
+      # Persist the HuggingFace cache across container restarts. It held the
+      # 1.1 GB DINOv3 backbone for microtubule v7; that model is gone, but
+      # SegFormer and sperm still resolve configs/weights through this cache,
+      # so removing it would put a network fetch on their first load.
       - ./backend/segmentation/.hf-cache:/home/app/.cache/huggingface
     restart: always
     deploy:
@@ -307,7 +319,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
-      # Reuse the byte-identical microtubule_v7.pt already on disk (no download).
+      # Reuse the byte-identical microtubule_v5h.pth already on disk (no download).
       - ./backend/segmentation/weights:/app/mt_weights:ro
       # Same host uploads dir the backend writes to — the FS handoff for job I/O.
       - ./backend/uploads/blue:/app/uploads
