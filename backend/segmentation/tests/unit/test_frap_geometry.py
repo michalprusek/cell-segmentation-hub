@@ -55,3 +55,57 @@ def test_curvature_of_a_circle_is_one_over_its_radius():
     curv = G.curvature_profile(pts, baseline_px=8.0, step_px=1.0)
     mid = curv[len(curv) // 4: 3 * len(curv) // 4]
     assert float(np.median(mid)) == pytest.approx(1.0 / 40.0, rel=0.1)
+
+
+def test_footprint_clearance_is_zero_when_a_neighbour_sits_on_the_roi():
+    others = np.array([[10.0, 0.0]])
+    d = G.footprint_clearance_px(
+        center_xy=(10.0, 0.0), tangent_rad=0.0,
+        half_len_px=8.0, half_wid_px=3.0, other_pts_xy=others,
+    )
+    assert d == pytest.approx(0.0)
+
+
+def test_footprint_clearance_measures_from_the_roi_edge_not_the_centre():
+    # THE REGRESSION TEST FOR 5a. The ROI is 16 px long along x and the neighbour
+    # sits 20 px away along x, so the centre distance is 20 px but the real
+    # clearance is only 20 - 8 = 12 px. An implementation that measures from the
+    # centre returns 20.0 and fails here — which is the entire point of the test.
+    others = np.array([[20.0, 0.0]])
+    d = G.footprint_clearance_px(
+        center_xy=(0.0, 0.0), tangent_rad=0.0,
+        half_len_px=8.0, half_wid_px=3.0, other_pts_xy=others,
+    )
+    assert d == pytest.approx(12.0)
+
+
+def test_footprint_clearance_follows_the_tangent_rotation():
+    # Same neighbour, ROI rotated 90 deg: now the neighbour is off the ROI's SHORT
+    # axis, so the clearance is 20 - 3 = 17 px instead of 12 px.
+    others = np.array([[20.0, 0.0]])
+    d = G.footprint_clearance_px(
+        center_xy=(0.0, 0.0), tangent_rad=np.pi / 2,
+        half_len_px=8.0, half_wid_px=3.0, other_pts_xy=others,
+    )
+    assert d == pytest.approx(17.0)
+
+
+def test_footprint_clearance_takes_the_nearest_of_several_neighbours():
+    others = np.array([[20.0, 0.0], [0.0, 9.0], [40.0, 40.0]])
+    d = G.footprint_clearance_px(
+        center_xy=(0.0, 0.0), tangent_rad=0.0,
+        half_len_px=8.0, half_wid_px=3.0, other_pts_xy=others,
+    )
+    assert d == pytest.approx(6.0)  # the point at (0, 9): 9 - 3
+
+
+def test_clearance_is_infinite_with_no_neighbours():
+    empty = np.zeros((0, 2))
+    assert G.footprint_clearance_px((0.0, 0.0), 0.0, 8.0, 3.0, empty) == float("inf")
+    assert G.window_clearance_px(np.array([[0.0, 0.0]]), empty) == float("inf")
+
+
+def test_window_clearance_is_the_min_distance_to_the_observation_stretch():
+    window = np.array([[0.0, 0.0], [10.0, 0.0], [20.0, 0.0]])
+    others = np.array([[10.0, 7.0], [30.0, 0.0]])
+    assert G.window_clearance_px(window, others) == pytest.approx(7.0)

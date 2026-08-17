@@ -93,3 +93,52 @@ def curvature_profile(points_xy, baseline_px: float, step_px: float) -> np.ndarr
     delta = np.arctan2(np.sin(delta), np.cos(delta))
     span_px = np.maximum(hi - lo, 1).astype(np.float64) * float(step_px)
     return np.abs(delta) / span_px
+
+
+def footprint_clearance_px(
+    center_xy, tangent_rad: float,
+    half_len_px: float, half_wid_px: float,
+    other_pts_xy,
+) -> float:
+    """Distance from the bleach ROI's FOOTPRINT to the nearest other-microtubule point.
+
+    The footprint is the rectangle in the ROI's own frame: ``half_len_px`` along the
+    tangent, ``half_wid_px`` across it. For a rectangular ROI that is exact; for an
+    ellipse the rectangle contains it, so the answer is an under-estimate of the
+    clearance — conservative, which is the safe direction for "will the bleach touch
+    a neighbour".
+
+    Measuring from the centre point instead under-reports the risk by up to
+    ``half_len_px``: a 2 um oriented ROI reaches 1 um past its own centre, so a
+    2 um centre radius leaves only 1 um of real clearance at the ends. That is the
+    bug this function exists to make impossible.
+    """
+    pts = np.asarray(other_pts_xy, dtype=np.float64).reshape(-1, 2)
+    if pts.shape[0] == 0:
+        return float("inf")
+    c, s = np.cos(float(tangent_rad)), np.sin(float(tangent_rad))
+    d = pts - np.asarray(center_xy, dtype=np.float64)
+    along = np.abs(d[:, 0] * c + d[:, 1] * s)
+    across = np.abs(-d[:, 0] * s + d[:, 1] * c)
+    du = np.maximum(along - float(half_len_px), 0.0)
+    dv = np.maximum(across - float(half_wid_px), 0.0)
+    return float(np.min(np.hypot(du, dv)))
+
+
+def window_clearance_px(window_pts_xy, other_pts_xy) -> float:
+    """Smallest distance between an observation-window stretch and any other-MT point.
+
+    A neighbour the beam never touched still contaminates the recovery curve if it
+    lies inside the region whose intensity is being integrated, so this is a second,
+    larger radius rather than a wider version of the bleach test.
+
+    Both inputs are already resampled at ~1 px, so a brute-force pairwise minimum is
+    accurate to sub-pixel and the caller keeps ``other_pts_xy`` small with a KD-tree
+    prefilter.
+    """
+    win = np.asarray(window_pts_xy, dtype=np.float64).reshape(-1, 2)
+    pts = np.asarray(other_pts_xy, dtype=np.float64).reshape(-1, 2)
+    if win.shape[0] == 0 or pts.shape[0] == 0:
+        return float("inf")
+    d = np.linalg.norm(pts[:, None, :] - win[None, :, :], axis=2)
+    return float(d.min())
