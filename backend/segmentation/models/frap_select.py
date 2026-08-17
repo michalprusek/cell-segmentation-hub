@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -53,7 +53,10 @@ class SelectionParams:
     band_thickness_px: int = 5       # mt_measure defaults, kept identical
     margin_multiplier: float = 2.0
     step_px: float = 1.0             # resampling pitch
-    spot_shape: str = "ellipse"      # or "rect"
+    spot_shape: str = "ellipse"      # or "rect" — not read in this module; Task 5's
+    # renderer reads it to choose the emitted ROI outline. The clearance tests here
+    # deliberately always evaluate the conservative rectangle regardless of this
+    # value (see footprint_clearance_px's docstring in frap_geometry.py).
 
 
 @dataclass(frozen=True)
@@ -75,6 +78,7 @@ class SelectionResult:
     rejected_by: Dict[str, int]
     n_candidates: int
     n_polylines: int
+    shortfall: bool
 
 
 _REJECT_KEYS = ("length", "border", "bleach_clearance",
@@ -99,11 +103,6 @@ def _spot_snr(fluor: np.ndarray, window: np.ndarray, not_signal: np.ndarray,
     enough to bleach" is measured with the identical geometry that produces the
     assay's own numbers — one implementation, not two that drift apart.
     """
-    if window.shape[0] < 2:
-        # rasterize_band needs >= 2 points; a small obs_len_um can otherwise hand
-        # it a degenerate polyline. Rejecting here (snr_min will reject 0.0) is
-        # the safe direction.
-        return 0.0
     h, w = fluor.shape[:2]
     band = mt_measure.rasterize_band(window.astype(np.float32), h, w, p.band_thickness_px)
     margin_radius = int(round(p.band_thickness_px * p.margin_multiplier))
@@ -111,6 +110,11 @@ def _spot_snr(fluor: np.ndarray, window: np.ndarray, not_signal: np.ndarray,
     b = mt_measure.region_stats(fluor, band)
     r = mt_measure.region_stats(fluor, ring)
     if b.n == 0 or r.n == 0 or r.median <= 0.0:
+        # b.n == 0 is also what covers an empty or degenerate ``window`` (fewer than
+        # two points): mt_measure.rasterize_band itself guards ``n < 2`` and returns
+        # an all-zero band in that case, which makes b.n == 0 here — so a small
+        # obs_len_um handing this a degenerate polyline is already the safe
+        # direction (SNR reads 0.0, snr_min rejects it) with no extra check needed.
         return 0.0
     return float((b.mean - r.median) / r.median)
 
@@ -163,7 +167,17 @@ def select_spots(
     r_iso_px = p.r_iso_um / um_per_px
     obs_half_px = 0.5 * p.obs_len_um / um_per_px
     border_px = p.border_margin_um / um_per_px
-    query_r = float(max(a_px, b_px) + obs_half_px + max(spread_px, r_iso_px) + 2.0)
+    # footprint_clearance_px always evaluates the ROI as a rectangle (conservative:
+    # the rectangle contains the ellipse), so its centre-to-corner reach is
+    # hypot(a_px, b_px), not max(a_px, b_px) — a neighbour at the corner is farther
+    # from the centre than max() alone accounts for.
+    corner_px = float(np.hypot(a_px, b_px))
+    # A neighbour can only matter if it is within spread_px of the (corner-anchored)
+    # footprint, OR within r_iso_px of the observation window (whose points are never
+    # farther than obs_half_px away in Euclidean distance, since that is arc length).
+    # This is a max of two independent "could matter" distances, not their sum —
+    # summing would double-count and over-fetch from the KD-tree for no benefit.
+    query_r_px = float(max(corner_px + spread_px, obs_half_px + r_iso_px) + 1.0)
 
     candidates: List[Spot] = []
     n_candidates = 0
@@ -184,12 +198,15 @@ def select_spots(
         for j in range(lo, hi + 1):
             n_candidates += 1
             cx, cy = float(pts[j, 0]), float(pts[j, 1])
-            reach = max(a_px, b_px) + spread_px + border_px
-            if not (reach <= cx <= w - 1 - reach and reach <= cy <= h - 1 - reach):
+            # The dilated footprint's farthest point from the centre is its rounded
+            # corner, at corner_px + spread_px — the same corner-anchored reach used
+            # for query_r_px above, not max(a_px, b_px).
+            reach_px = corner_px + spread_px + border_px
+            if not (reach_px <= cx <= w - 1 - reach_px and reach_px <= cy <= h - 1 - reach_px):
                 rejected["border"] += 1
                 continue
 
-            near = tree.query_ball_point([cx, cy], query_r) if tree is not None else []
+            near = tree.query_ball_point([cx, cy], query_r_px) if tree is not None else []
             near = [k for k in near if owner_of[k] != i]
             others = pts_all[near] if near else np.zeros((0, 2))
 
@@ -251,4 +268,5 @@ def select_spots(
             chosen.append(cand)
 
     return SelectionResult(spots=chosen, rejected_by=rejected,
-                           n_candidates=n_candidates, n_polylines=len(list(polylines_xy)))
+                           n_candidates=n_candidates, n_polylines=len(list(polylines_xy)),
+                           shortfall=len(chosen) < k_min)

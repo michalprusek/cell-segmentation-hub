@@ -20,6 +20,7 @@ def test_a_lone_long_filament_yields_one_spot_at_its_midpoint():
     assert len(r.spots) == 1
     assert r.spots[0].x == pytest.approx(250.0, abs=5.0)
     assert r.spots[0].y == pytest.approx(300.0, abs=0.5)
+    assert r.shortfall is False        # 1 spot achievable, k_min=1: not a shortfall
 
 
 def test_a_filament_shorter_than_l_min_is_rejected():
@@ -27,6 +28,7 @@ def test_a_filament_shorter_than_l_min_is_rejected():
     r = S.select_spots(mts, SHAPE, UM_PER_PX, k_min=1, k_max=10)
     assert r.spots == []
     assert r.rejected_by["length"] >= 1
+    assert r.shortfall is True         # 0 spots achievable, k_min=1: a shortfall
 
 
 def test_close_parallels_are_both_rejected():
@@ -89,6 +91,17 @@ def test_empty_input_returns_empty_output():
     r = S.select_spots([], SHAPE, UM_PER_PX)
     assert r.spots == []
     assert r.n_polylines == 0
+
+
+def test_an_even_point_count_still_yields_a_candidate_at_f_mid_zero():
+    # Regression for the candidate-band bounds. A 299 px span resamples to n=300, so
+    # mid=149.5 is fractional. The original ceil/floor pair gave lo=150 > hi=149 and
+    # therefore NO candidates at all — a filament silently skipped rather than rejected.
+    mts = [horizontal(300, 100, 399)]
+    r = S.select_spots(mts, SHAPE, UM_PER_PX, params=S.SelectionParams(f_mid=0.0),
+                       k_min=1, k_max=10)
+    assert r.n_candidates >= 1
+    assert len(r.spots) == 1
 
 
 def test_the_brightness_test_rejects_an_undecorated_filament():
