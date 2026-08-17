@@ -3,15 +3,21 @@
 Both are pure NumPy / SciPy postprocessing on artefacts already produced
 during per-frame segmentation:
 
-- ``/track`` takes the per-frame polylines + their L2-normalised
-  embedding samples (32-d, sampled at centerline points) and runs a
-  two-step Linear Assignment Problem tracker (TrackMate / u-track
-  paradigm). A filament-aware cost blends embedding cosine distance with
+- ``/track`` takes the per-frame polylines and runs a two-step Linear
+  Assignment Problem tracker (TrackMate / u-track paradigm). A
+  filament-aware cost blends symmetric curve-to-curve distance with
   endpoint distance, orientation and length so crossing MTs that share a
   centroid stay distinct. Step 1 is a birth/death LAP between adjacent
   frames (producing tracklet segments); step 2 is a gap-closing LAP that
   re-links a segment's end to a later segment's start across up to
   ``max_gap`` missed frames, so a briefly-lost filament regains its id.
+
+  Until the microtubule v7 -> v5H swap the primary evidence was the cosine
+  distance between 32-d embeddings the model sampled at each centerline
+  point. v5H emits one foreground channel and no embedding field, so
+  association is geometric: see ``mt_geometry_cost``. Common-mode stage
+  drift is removed before matching, because a drifting field would
+  otherwise push genuine links past the curve-distance gate.
 
 - ``/kymograph`` samples raw image intensity along a polyline through
   every frame (using the tracked sibling polyline if available, the
@@ -41,6 +47,14 @@ from api.kymograph_velocity import (
     net_velocity_threshold,
     render_overlay,
     track_intensity,
+)
+from api.mt_geometry_cost import (
+    GATE_MAX_SHIFT,
+    GATE_MIN_OVERLAP,
+    curve_distance,
+    estimate_drift,
+    overlap_fraction,
+    resample,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,8 +93,12 @@ class PolylineInput(BaseModel):
     # (M, 2) row, col centerline pixel coords. List-of-list is the
     # JSON-friendly form; numpy conversion happens server-side.
     points_rc: List[List[float]]
-    # base64-encoded little-endian float16 byte string of (M, 32) embedding
-    # samples. None when embedding wasn't persisted (older segmentations).
+    # DEPRECATED AND IGNORED since the microtubule v7 -> v5H swap. The v5H
+    # model has no embedding field to sample, so cross-frame identity is
+    # established from geometry alone. The field is kept ACCEPTED because
+    # model_config forbids extras: segmentations stored by v7 still carry an
+    # `_embedding`, and a Node container that has not been recreated yet still
+    # sends it. Dropping the field outright would 400 both.
     embedding: Optional[str] = None
 
 
@@ -122,14 +140,15 @@ class TrackRequest(BaseModel):
     # degrades to a zero-velocity (identity) prediction, i.e. the old
     # behaviour. Disable to A/B against the memoryless tracker.
     motion_model: bool = True
-    # EMA weight of the newest frame's mean embedding when maintaining the
-    # per-track embedding template used for re-identification. 0.5 = equal
-    # weight to the newest frame and the running history; 1.0 reproduces the
-    # old "match against the single previous frame" behaviour.
+    # DEPRECATED AND IGNORED since the v5H swap: there is no embedding to
+    # maintain an EMA template of. Accepted so an un-recreated Node container
+    # does not 400 against model_config extra="forbid".
     emb_template_alpha: float = Field(0.5, ge=0.0, le=1.0)
-    # Weights of the four filament-cost terms (embedding, endpoint distance,
-    # orientation, length). Each in [0, 1]; defaults sum to 1.
-    w_emb: float = Field(0.5, ge=0.0, le=1.0)
+    # Weights of the four filament-cost terms (curve distance, endpoint
+    # distance, orientation, length). Each in [0, 1]; defaults sum to 1.
+    # w_curve replaced w_emb: the primary evidence is now the symmetric
+    # curve-to-curve distance rather than embedding cosine.
+    w_curve: float = Field(0.5, ge=0.0, le=1.0)
     w_end: float = Field(0.3, ge=0.0, le=1.0)
     w_orient: float = Field(0.1, ge=0.0, le=1.0)
     w_len: float = Field(0.1, ge=0.0, le=1.0)
@@ -144,76 +163,25 @@ class TrackResponse(BaseModel):
 
     assignments: Dict[str, str]  # polylineId -> trackId
     track_count: int
-    # Number of polylines whose embedding payload was corrupt (base64/shape
-    # error).  Those polylines fell back to spatial-only matching.  A non-zero
-    # value here means the Hungarian assignment may be less accurate than usual;
-    # Node can surface this as a warning or log it for debugging.
+    # Both retained for wire compatibility and both permanently 0/False since
+    # the v5H swap: there is no embedding payload left to be corrupt, so
+    # matching can no longer be "degraded" relative to itself. Node still reads
+    # these fields; removing them would need a coordinated deploy for no gain.
     corrupt_count: int = 0
-    # True when any embedding corruption was detected in this batch.
     degraded: bool = False
 
 
-class EmbeddingDecodeError(ValueError):
-    """Distinguishes a corrupt embedding payload from a legitimately
-    absent one (b64 == None). Caller decides whether to log + neutral-
-    cost or raise."""
-
-
-def _decode_embedding(
-    b64: str | None, n_points: int
-) -> Optional[np.ndarray]:
-    """Decode a base64 float16 (n_points × 32) embedding.
-
-    Returns None ONLY when the embedding string itself is None/empty
-    (older segmentations don't have one). Decode failures raise
-    EmbeddingDecodeError — callers should treat that as data corruption
-    and log it loudly rather than degrade silently to spatial-only
-    matching.
-    """
-    if not b64:
-        return None
-    try:
-        buf = base64.b64decode(b64)
-        arr = np.frombuffer(buf, dtype=np.float16)
-    except Exception as exc:
-        raise EmbeddingDecodeError(f"base64/float16 decode failed: {exc}")
-    if arr.size == 0 or arr.size % 32 != 0:
-        raise EmbeddingDecodeError(
-            f"embedding byte count {arr.size * 2} is not a multiple of 32 float16"
-        )
-    arr = arr.reshape(-1, 32)
-    if arr.shape[0] > n_points:
-        # Persisted too many rows — trim to centerline length so cosine
-        # mean is computed against the relevant slice.
-        return arr[:n_points]
-    if arr.shape[0] < n_points:
-        # Fewer embedding rows than centerline points: keep what we have
-        # rather than guessing. Caller may log a soft warning.
-        return arr
-    return arr
-
-
-def _safe_mean_embedding(p: PolylineInput) -> tuple[Optional[np.ndarray], bool]:
-    """Decode embedding mean for one polyline; second element is True iff
-    decoding raised EmbeddingDecodeError (i.e. corruption rather than
-    legitimately-absent embedding). Caller aggregates the corruption
-    count and logs once per frame pair."""
-    try:
-        emb = _decode_embedding(p.embedding, len(p.points_rc))
-    except EmbeddingDecodeError as exc:
-        logger.warning(f"polyline {p.id}: {exc}")
-        return None, True
-    if emb is None:
-        return None, False
-    return emb.mean(axis=0), False
-
-
 class _Filament(NamedTuple):
-    """Geometry + embedding summary of one polyline, cached once per
-    polyline so the two LAP passes never re-decode or re-measure it."""
+    """Geometry of one polyline, cached once per polyline so the two LAP
+    passes never re-measure it.
 
-    mean_emb: Optional[np.ndarray]  # (32,) mean of the sampled embedding rows
-    was_corrupt: bool  # True iff the embedding payload failed to decode
+    ``curve`` is an arclength-uniform resample of ``pts``. Without it the
+    curve-to-curve distance would be biased by whichever centerline happened
+    to carry more vertices, since the instancer's vertex density varies with
+    local curvature.
+    """
+
+    curve: np.ndarray  # (K, 2) arclength-uniform resample, row/col
     end_a: np.ndarray  # first centerline point [row, col]
     end_b: np.ndarray  # last centerline point [row, col]
     theta: float  # atan2 orientation of the (undirected) end_b - end_a vector
@@ -223,11 +191,10 @@ class _Filament(NamedTuple):
 def _filament_features(p: PolylineInput) -> _Filament:
     """Summarise one polyline into the features the filament-aware cost
     consumes. Robust to empty / single-point centerlines."""
-    mean_emb, was_corrupt = _safe_mean_embedding(p)
     pts = np.asarray(p.points_rc, dtype=np.float64)
     if pts.ndim != 2 or pts.shape[0] == 0:
         zero = np.zeros(2, dtype=np.float64)
-        return _Filament(mean_emb, was_corrupt, zero, zero.copy(), 0.0, 0.0)
+        return _Filament(np.zeros((0, 2)), zero, zero.copy(), 0.0, 0.0)
     end_a = pts[0]
     end_b = pts[-1]
     vec = end_b - end_a
@@ -236,44 +203,48 @@ def _filament_features(p: PolylineInput) -> _Filament:
         length = float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
     else:
         length = 0.0
-    return _Filament(mean_emb, was_corrupt, end_a, end_b, theta, length)
+    return _Filament(resample(pts), end_a, end_b, theta, length)
 
 
 class _TrackState:
     """Online per-track state accumulated during the frame-to-frame pass.
 
-    Holds the last two *endpoint-aligned* observations (so a constant-
-    velocity endpoint prediction can be computed despite arbitrary
-    centerline direction) plus an EMA embedding template. Matching a new
-    frame against the predicted endpoints + the running template — rather
-    than the raw previous frame — is what makes the LAP robust to the
-    per-frame geometry/embedding jitter of independently re-detected MTs.
+    Holds the last two *endpoint-aligned* observations, so a constant-velocity
+    prediction can be computed despite arbitrary centerline direction. Matching
+    a new frame against the predicted filament — rather than the raw previous
+    frame — is what makes the LAP robust to the per-frame geometry jitter of
+    independently re-detected MTs.
+
+    The EMA embedding template this used to carry is gone with the v5H swap;
+    the equivalent smoothing now comes from the motion model alone.
     """
 
-    __slots__ = ("last_frame", "last_feat", "prev_frame", "prev_feat", "emb_template")
+    __slots__ = ("last_frame", "last_feat", "prev_frame", "prev_feat")
 
     def __init__(self, frame: int, feat: _Filament) -> None:
         self.last_frame = frame
         self.last_feat = feat
         self.prev_frame: Optional[int] = None
         self.prev_feat: Optional[_Filament] = None
-        self.emb_template: Optional[np.ndarray] = (
-            None if feat.mean_emb is None else feat.mean_emb.astype(np.float64).copy()
-        )
 
 
 def _align_endpoints(feat: _Filament, ref: _Filament) -> _Filament:
     """Return *feat* with (end_a, end_b) swapped iff that better matches
     *ref*'s endpoint labelling (minimises head-head + tail-tail distance).
 
-    PySOAX centerline direction is arbitrary and can flip frame to frame;
+    Instancer centerline direction is arbitrary and can flip frame to frame;
     without this the per-endpoint velocity would be garbage. A single
     filament-vs-filament cost is direction-invariant (min-pairing endpoints,
-    ``|cos Δθ|``, order-independent mean embedding), so aligning a stored
-    observation never *retroactively* changes the cost of the link just
-    accepted. Its effect is confined to the per-endpoint velocity — which
-    does feed the next frame's predicted endpoints and therefore its costs;
-    that downstream influence is the whole point.
+    ``|cos Δθ|``, and a KD-tree curve distance that does not care about vertex
+    order), so aligning a stored observation never *retroactively* changes the
+    cost of the link just accepted. Its effect is confined to the per-endpoint
+    velocity — which does feed the next frame's predicted endpoints and
+    therefore its costs; that downstream influence is the whole point.
+
+    ``curve`` is reversed alongside the endpoints. The distance functions are
+    order-independent so nothing depends on it today, but keeping
+    ``curve[0] == end_a`` true means a future caller that does assume it is not
+    silently wrong.
     """
     straight = float(np.linalg.norm(feat.end_a - ref.end_a)) + float(
         np.linalg.norm(feat.end_b - ref.end_b)
@@ -284,21 +255,25 @@ def _align_endpoints(feat: _Filament, ref: _Filament) -> _Filament:
     if swapped < straight:
         vec = feat.end_a - feat.end_b
         theta = float(np.arctan2(float(vec[0]), float(vec[1])))
-        return feat._replace(end_a=feat.end_b, end_b=feat.end_a, theta=theta)
+        return feat._replace(
+            curve=feat.curve[::-1].copy(),
+            end_a=feat.end_b,
+            end_b=feat.end_a,
+            theta=theta,
+        )
     return feat
 
 
 def _predict_filament(state: _TrackState, target_frame: int) -> _Filament:
     """Constant-velocity prediction of a track's filament at *target_frame*.
 
-    Endpoints are extrapolated from the last two observations; the mean
-    embedding is replaced by the track's EMA template. With < 2 observations
-    the velocity is unknown and this returns a zero-velocity (identity)
-    prediction — i.e. the old memoryless behaviour, so the first step of a
-    freshly-born track is never worse than before.
+    Endpoints are extrapolated from the last two observations and the whole
+    centerline is carried along by the mean of the two endpoint displacements.
+    With < 2 observations the velocity is unknown and this returns a
+    zero-velocity (identity) prediction — i.e. the old memoryless behaviour, so
+    the first step of a freshly-born track is never worse than before.
     """
     last = state.last_feat
-    emb = state.emb_template if state.emb_template is not None else last.mean_emb
     # Fall back to a zero-velocity (identity) prediction with < 2 observations
     # OR when either observation is degenerate (empty / single-point centerline
     # → zero-vector endpoints, length 0): extrapolating from a [0, 0] endpoint
@@ -309,7 +284,7 @@ def _predict_filament(state: _TrackState, target_frame: int) -> _Filament:
         or last.length <= 0.0
         or state.prev_feat.length <= 0.0
     ):
-        return last._replace(mean_emb=emb)
+        return last
     dt_prev = max(state.last_frame - state.prev_frame, 1)
     step = float(target_frame - state.last_frame)
     # Cap per-endpoint extrapolation to the filament's own length (fallback
@@ -328,38 +303,36 @@ def _predict_filament(state: _TrackState, target_frame: int) -> _Filament:
     pred_b = _extrapolate(last.end_b, state.prev_feat.end_b)
     vec = pred_b - pred_a
     theta = float(np.arctan2(float(vec[0]), float(vec[1])))
-    return last._replace(mean_emb=emb, end_a=pred_a, end_b=pred_b, theta=theta)
+    # Translate the centerline by the mean endpoint displacement. A rigid
+    # translation is the honest model here: the endpoints tell us where the
+    # filament went, not how it deformed, and inventing a deformation would
+    # make the curve distance measure the invention.
+    shift = 0.5 * ((pred_a - last.end_a) + (pred_b - last.end_b))
+    curve = last.curve + shift if last.curve.size else last.curve
+    return last._replace(curve=curve, end_a=pred_a, end_b=pred_b, theta=theta)
 
 
-def _update_track_state(
-    state: _TrackState, feat: _Filament, frame: int, alpha: float
-) -> None:
+def _shift_filament(f: _Filament, drift: np.ndarray) -> _Filament:
+    """Move a filament into the previous frame's drift-free coordinates.
+
+    Orientation and length are translation-invariant, so only the positional
+    members change.
+    """
+    return f._replace(
+        curve=f.curve - drift if f.curve.size else f.curve,
+        end_a=f.end_a - drift,
+        end_b=f.end_b - drift,
+    )
+
+
+def _update_track_state(state: _TrackState, feat: _Filament, frame: int) -> None:
     """Extend a track with a new observation: align its endpoints to the
-    previous frame, shift history, and blend the embedding into the EMA
-    template."""
+    previous frame and shift history."""
     aligned = _align_endpoints(feat, state.last_feat)
     state.prev_feat = state.last_feat
     state.prev_frame = state.last_frame
     state.last_feat = aligned
     state.last_frame = frame
-    if aligned.mean_emb is not None:
-        m = aligned.mean_emb.astype(np.float64)
-        if state.emb_template is None:
-            state.emb_template = m.copy()
-        else:
-            state.emb_template = alpha * m + (1.0 - alpha) * state.emb_template
-
-
-def _emb_distance(fa: _Filament, fb: _Filament) -> Optional[float]:
-    """Cosine-based embedding distance in [0, 1]; None when either
-    filament has no (or corrupt) embedding — the caller substitutes a
-    neutral value derived from the rest of the matrix."""
-    if fa.mean_emb is None or fb.mean_emb is None:
-        return None
-    a, b = fa.mean_emb, fb.mean_emb
-    denom = float(np.linalg.norm(a) * np.linalg.norm(b)) + 1e-9
-    cos = float(np.dot(a, b) / denom)
-    return float(np.clip((1.0 - cos) / 2.0, 0.0, 1.0))
 
 
 def _geom_terms(
@@ -391,24 +364,35 @@ def _filament_cost(
     fa: _Filament,
     fb: _Filament,
     img_diag: float,
-    neutral_d_emb: float = 0.5,
-    w_emb: float = 0.5,
+    w_curve: float = 0.5,
     w_end: float = 0.3,
     w_orient: float = 0.1,
     w_len: float = 0.1,
 ) -> float:
-    """Filament-to-filament matching cost in [0, w_emb+w_end+w_orient+w_len].
+    """Filament-to-filament matching cost in [0, w_curve+w_end+w_orient+w_len],
+    or ``inf`` when a hard gate rejects the pair.
 
-    A missing/corrupt embedding on either side substitutes ``neutral_d_emb``
-    (the median of the valid embedding distances in the current matrix, or
-    0.5 when none are valid) so the pair degrades gracefully to geometry
-    rather than being rewarded or rejected outright.
+    The primary evidence is the symmetric curve-to-curve distance, which
+    replaced the embedding cosine when the v5H model stopped emitting
+    embeddings. At the single-digit-pixel displacements these acquisitions
+    have, consecutive centerlines overlap heavily, so geometry carries most of
+    what the embedding used to.
+
+    Two HARD gates precede the weighted sum, which the embedding cost never
+    had: a missing embedding merely substituted a neutral value, so no pair was
+    ever forbidden outright and a bad link could always be bought by making
+    everything else expensive. Returning ``inf`` here cannot be outbid.
     """
-    d = _emb_distance(fa, fb)
-    d_emb = neutral_d_emb if d is None else d
+    d_curve_px = curve_distance(fa.curve, fb.curve)
+    if not np.isfinite(d_curve_px) or d_curve_px > GATE_MAX_SHIFT:
+        return float("inf")
+    if overlap_fraction(fa.curve, fb.curve) < GATE_MIN_OVERLAP:
+        return float("inf")
+
+    d_curve = float(min(1.0, d_curve_px / GATE_MAX_SHIFT))
     d_end, d_orient, d_len = _geom_terms(fa, fb, img_diag)
     return float(
-        w_emb * d_emb + w_end * d_end + w_orient * d_orient + w_len * d_len
+        w_curve * d_curve + w_end * d_end + w_orient * d_orient + w_len * d_len
     )
 
 
@@ -420,34 +404,23 @@ def _build_link_cost(
 ) -> np.ndarray:
     """Dense ``P × Q`` base cost matrix of filament costs.
 
-    Missing-embedding cells reuse the MEDIAN of the valid embedding
-    distances in this matrix as their neutral ``d_emb`` (0.5 if the whole
-    matrix lacks embeddings) — the same graceful-degradation logic the
-    greedy tracker used, lifted to the filament cost.
+    ``inf`` marks a gated-out pair. The neutral-median machinery the embedding
+    cost needed is gone: geometry is always available, so there is no
+    missing-evidence case to degrade for.
     """
     P, Q = len(prev_feats), len(nxt_feats)
     if P == 0 or Q == 0:
         return np.zeros((P, Q), dtype=np.float64)
 
-    demb = np.full((P, Q), np.nan, dtype=np.float64)
-    for i in range(P):
-        for j in range(Q):
-            d = _emb_distance(prev_feats[i], nxt_feats[j])
-            if d is not None:
-                demb[i, j] = d
-    valid = ~np.isnan(demb)
-    neutral = float(np.median(demb[valid])) if valid.any() else 0.5
-
-    w_emb, w_end, w_orient, w_len = weights
-    base = np.zeros((P, Q), dtype=np.float64)
+    w_curve, w_end, w_orient, w_len = weights
+    base = np.empty((P, Q), dtype=np.float64)
     for i in range(P):
         for j in range(Q):
             base[i, j] = _filament_cost(
                 prev_feats[i],
                 nxt_feats[j],
                 img_diag,
-                neutral,
-                w_emb,
+                w_curve,
                 w_end,
                 w_orient,
                 w_len,
@@ -529,7 +502,6 @@ def _gap_close_merges(
 
     valid = np.zeros((M, M), dtype=bool)
     gap_arr = np.zeros((M, M), dtype=np.int64)
-    demb_vals: List[float] = []
     for x in range(M):
         for y in range(M):
             if x == y:
@@ -538,14 +510,10 @@ def _gap_close_merges(
             if 1 <= gap <= max_gap:
                 valid[x, y] = True
                 gap_arr[x, y] = gap
-                d = _emb_distance(segments[x].end_feat, segments[y].start_feat)
-                if d is not None:
-                    demb_vals.append(d)
     if not valid.any():
         return []
 
-    neutral = float(np.median(demb_vals)) if demb_vals else 0.5
-    w_emb, w_end, w_orient, w_len = weights
+    w_curve, w_end, w_orient, w_len = weights
     BIG = 1e6
     C = np.full((M, 2 * M), BIG, dtype=np.float64)
     accept = np.zeros((M, M), dtype=bool)
@@ -556,8 +524,7 @@ def _gap_close_merges(
                     segments[x].end_feat,
                     segments[y].start_feat,
                     img_diag,
-                    neutral,
-                    w_emb,
+                    w_curve,
                     w_end,
                     w_orient,
                     w_len,
@@ -609,29 +576,19 @@ async def track(req: TrackRequest) -> TrackResponse:
             img_diag = 1.0
     img_diag = max(img_diag, 1.0)
 
-    weights = (req.w_emb, req.w_end, req.w_orient, req.w_len)
+    weights = (req.w_curve, req.w_end, req.w_orient, req.w_len)
 
-    # Cache per-polyline features once; count each corrupt embedding once.
+    # Cache per-polyline features once so the two LAP passes never re-measure.
     feats: Dict[str, _Filament] = {}
-    corrupt_ids: set[str] = set()
     for f in frames:
         for p in f.polylines:
-            ft = _filament_features(p)
-            feats[p.id] = ft
-            if ft.was_corrupt:
-                corrupt_ids.add(p.id)
-    total_corrupt = len(corrupt_ids)
-    if total_corrupt > 0:
-        logger.error(
-            f"Tracker: {total_corrupt} embeddings were corrupt and fell "
-            "back to geometry-only matching"
-        )
+            feats[p.id] = _filament_features(p)
 
     # --- Step 1: frame-to-frame linking with birth/death -> tracklets ---
-    # An online per-track state (last two endpoint-aligned observations + EMA
-    # embedding template) lets each frame be matched against a constant-
-    # velocity *prediction* of where the track's filament should be, rather
-    # than the raw previous frame — the core of the propagation-aware upgrade.
+    # An online per-track state (last two endpoint-aligned observations) lets
+    # each frame be matched against a constant-velocity *prediction* of where
+    # the track's filament should be, rather than the raw previous frame — the
+    # core of the propagation-aware upgrade.
     assignments: Dict[str, str] = {}
     track_state: Dict[str, _TrackState] = {}
 
@@ -666,9 +623,22 @@ async def track(req: TrackRequest) -> TrackResponse:
         else:
             prev_feats = [feats[p.id] for p in prev_pl]
 
+        next_feats = [feats[p.id] for p in next_pl]
+
+        # Stage drift moves every filament in the field at once. Folding it
+        # into per-filament motion would report drift as motility — the one
+        # error a gliding assay cannot tolerate — and would also push genuine
+        # links past the curve-distance gate on a drifting acquisition. Recover
+        # the common-mode shift and match in the drift-free frame.
+        drift = estimate_drift(
+            [f.curve for f in prev_feats], [f.curve for f in next_feats]
+        )
+        if float(np.linalg.norm(drift)) > 1e-6:
+            next_feats = [_shift_filament(f, drift) for f in next_feats]
+
         base = _build_link_cost(
             prev_feats,
-            [feats[p.id] for p in next_pl],
+            next_feats,
             img_diag,
             weights,
         )
@@ -677,9 +647,11 @@ async def track(req: TrackRequest) -> TrackResponse:
         for pi, nj in links.items():
             tid = assignments[prev_pl[pi].id]
             assignments[next_pl[nj].id] = tid
+            # The UNSHIFTED observation is stored: drift is a property of the
+            # comparison, not of where the microtubule actually is. Storing the
+            # shifted copy would accumulate the correction across frames.
             _update_track_state(
-                track_state[tid], feats[next_pl[nj].id], next_f.frame,
-                req.emb_template_alpha,
+                track_state[tid], feats[next_pl[nj].id], next_f.frame
             )
         for c, p in enumerate(next_pl):
             if c not in linked_cols:
@@ -750,14 +722,16 @@ async def track(req: TrackRequest) -> TrackResponse:
     logger.info(
         f"Tracker: {len(req.frames)} frames, "
         f"{sum(len(f.polylines) for f in frames)} polylines, "
-        f"{len(segments)} tracklets -> {track_count} tracks after gap closing, "
-        f"{total_corrupt} corrupt embeddings"
+        f"{len(segments)} tracklets -> {track_count} tracks after gap closing"
     )
+    # corrupt_count / degraded are structurally 0 / False since the v5H swap;
+    # see TrackResponse. They stay on the wire so Node needs no coordinated
+    # deploy, and are not computed because there is nothing left to compute.
     return TrackResponse(
         assignments=assignments,
         track_count=track_count,
-        corrupt_count=total_corrupt,
-        degraded=total_corrupt > 0,
+        corrupt_count=0,
+        degraded=False,
     )
 
 

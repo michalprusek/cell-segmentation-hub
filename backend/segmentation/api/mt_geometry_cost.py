@@ -27,14 +27,35 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 #: Hard gate: no association beyond this curve-to-curve distance, px.
+#: This is the gate that owns "is it in the same place?".
 GATE_MAX_SHIFT: float = 25.0
 
-#: Fraction of the shorter curve that must have a partner nearby before two
-#: polylines may be called the same microtubule.
+#: Fraction of BOTH curves that must have a partner nearby before two polylines
+#: may be called the same microtubule. This gate owns "is it the same extent?".
 GATE_MIN_OVERLAP: float = 0.35
 
 #: What "nearby" means when measuring that fraction, px.
-OVERLAP_TOL: float = 4.0
+#:
+#: Deliberately NOT the upstream 4.0. With a 4 px tolerance the overlap gate
+#: silently becomes a 4 px *perpendicular displacement* gate — a filament that
+#: moved 5 px sideways has zero overlap and is rejected however well
+#: curve_distance scores it. That double-counts distance, which
+#: GATE_MAX_SHIFT already owns, and makes the real gate the tighter
+#: undocumented one.
+#:
+#: 12 px is comfortably above the residual displacement expected after stage
+#: drift and the constant-velocity prediction have been removed (single-digit
+#: px in these acquisitions), and far below microtubule lengths, so a short
+#: fragment lying on a long filament is still rejected.
+OVERLAP_TOL: float = 12.0
+
+#: Search gate for the drift estimator. MUST exceed GATE_MAX_SHIFT: drift is
+#: exactly what pushes a genuine pair past the association gate, so an
+#: estimator that refused to look further than that gate could never recover a
+#: drift large enough to matter. Pairs are matched by centroid here only to
+#: collect normal-flow constraints; a few wrong pairs are absorbed by the
+#: least-squares, whereas a missed drift severs every track in the field.
+DRIFT_MAX_SHIFT: float = 60.0
 
 #: Resampling step for centerline comparison, px.
 DS: float = 2.0
@@ -146,7 +167,7 @@ def contour_shift(a: np.ndarray, b: np.ndarray, edge_frac: float = 0.15) -> floa
 def estimate_drift(
     prev: Sequence[np.ndarray],
     curr: Sequence[np.ndarray],
-    max_shift: float = GATE_MAX_SHIFT,
+    max_shift: float = DRIFT_MAX_SHIFT,
     ds: float = DS,
 ) -> np.ndarray:
     """Common-mode translation between two frames, in the input column order.
