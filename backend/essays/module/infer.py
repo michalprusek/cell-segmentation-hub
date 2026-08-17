@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Standalone microtubule (MT) instance-segmentation inference.
 
-Runs the v7 pipeline — DINOv3-L backbone + DPT decoder + PySOAX
-postprocessing — on a single 2D microscopy frame and writes the detected
-microtubule centerlines as open polylines.
+Runs the v5H pipeline — an nnU-Net ResEnc-M network plus a curvature-bounded
+instancer — on a single 2D microscopy frame and writes the detected microtubule
+centerlines as open polylines.
 
 This is a self-contained extract of the inference path used by the
 cell-segmentation-hub ML service. It depends ONLY on the bundled
@@ -12,14 +12,12 @@ cell-segmentation-hub ML service. It depends ONLY on the bundled
 Pipeline
 --------
 1. Load a grayscale frame (PNG/JPG/BMP/TIFF/ND2/NPY).
-2. Percentile-normalize (1st / 99.5th) -> [0, 1].   (done inside the model)
-3. DINOv3-L + DPT forward -> seed-probability map (H, W) + 32-d embedding (32, H, W).
-4. Threshold the seed map; PySOAX grows stretching-open active contours
-   (snakes) into per-instance centerlines, using the embedding to
-   disambiguate crossings.
-5. Ramer-Douglas-Peucker simplify each centerline (eps = 1.0 px).
-6. Sample the 32-d embedding at each centerline pixel (float16) so the
-   output is compatible with the cross-frame tracker / kymograph tools.
+2. Percentile-normalize (1st / 99th) -> [0, 1].   (done inside the model)
+3. Tiled ResEnc-M forward at 1.5x upscale -> one foreground probability map.
+4. Threshold it; the instancer contracts junction clusters, fits tangents over
+   a window, and resolves each junction by a min-cost matching over its arms
+   under a hard curvature bound (0.25 rad/px).
+5. Map coordinates back to the input resolution.
 
 Output JSON mirrors the cell-segmentation-hub ``/segment`` response for the
 ``microtubule`` model, so it can be fed straight into the tracking pipeline.
@@ -35,13 +33,13 @@ Examples
     # Force device / threshold
     python infer.py --image frame.png --device cpu --threshold 0.4
 
-First run downloads the gated DINOv3-L backbone (~1.1 GB) from HuggingFace;
-set HF_TOKEN (see README) before running.
+Nothing is downloaded at run time: the v5H checkpoint is a complete state_dict
+with no frozen backbone, so no HF_TOKEN is needed and the worker runs on a
+network-isolated box.
 """
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
 import sys
@@ -154,17 +152,15 @@ def build_polylines(result: dict) -> list[dict]:
     """Convert the wrapper output to the app's polyline JSON schema.
 
     centerlines are (row, col) px; the app stores (x, y) = (col, row).
-    The 32-d embedding samples are base64-encoded float16 so the tracker /
-    kymograph endpoints can consume the file unchanged.
+
+    No ``_embedding``: the v5H model emits one foreground channel and no
+    embedding field, and the cross-frame tracker matches on geometry. The
+    output is still fed straight into the tracking pipeline.
     """
     centerlines = result["centerlines_rc"]
-    embeddings = result["embedding_samples"]
     polylines = []
-    for i, (cl, emb) in enumerate(zip(centerlines, embeddings), start=1):
+    for i, cl in enumerate(centerlines, start=1):
         points = [{"x": float(c), "y": float(r)} for r, c in cl]
-        emb_b64 = base64.b64encode(
-            np.ascontiguousarray(emb, dtype=np.float16).tobytes()
-        ).decode("ascii")
         polylines.append({
             "id": f"polyline_{i}",
             "points": points,
@@ -172,10 +168,8 @@ def build_polylines(result: dict) -> list[dict]:
             "class": "microtubule",
             "geometry": "polyline",
             "instanceId": f"mt_{uuid.uuid4().hex[:8]}",
-            "confidence": 1.0,  # PySOAX is deterministic
+            "confidence": 1.0,  # the instancer is deterministic
             "vertices_count": len(points),
-            "_embedding": emb_b64,
-            "_embedding_dim": 32,
         })
     return polylines
 

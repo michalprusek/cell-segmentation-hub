@@ -5,13 +5,14 @@ folder of `.nd2` files (one per well) and it detects every microtubule (MT) in
 every position and writes one table row per microtubule with its length and its
 on-MT vs. background fluorescence — plus the well's solution concentration.
 
-It wraps a trained instance-segmentation model (**DINOv3-L → DPT → PySOAX**,
-"microtubule v7") that traces each microtubule as an open centerline; a
+It wraps a trained instance-segmentation model (**nnU-Net ResEnc-M → a
+curvature-bounded instancer**, "microtubule v5H") that traces each microtubule
+as an open centerline; a
 measurement layer turns those centerlines into numbers.
 
 The two imaging channels have separate jobs and are **not** interchangeable:
 
-* **IRM** is the *segmentation* input — the channel the v7 model was trained on.
+* **IRM** is the *segmentation* input — the channel the model was trained on.
 * **TIRF** is the *readout* — the intensities integrated along the centerlines.
 
 ![Detected microtubule centerlines on a TIRF frame](docs/example_overlay.png)
@@ -83,7 +84,7 @@ source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# stage the 1.2 GB checkpoint once (from the repo root)
+# stage the 535 MB checkpoint once (from the repo root)
 ../../../scripts/download-microtubule-weights.sh
 
 python evaluate.py --data /path/to/well_recordings --out results/
@@ -99,7 +100,7 @@ Results land in `results/results.csv`, with `results/overlays/` and
 
 ## 3. Installation
 
-**Requirements:** Python **3.10–3.12** and ~3 GB free disk (1.2 GB weights + the
+**Requirements:** Python **3.10–3.12** and ~2 GB free disk (535 MB weights + the
 dependencies).
 
 ```bash
@@ -122,21 +123,20 @@ CPU.
 
 ## 4. The model weights
 
-The 1.2 GB checkpoint `microtubule_v7.pt` is **not** stored in git — it is the
+The 535 MB checkpoint `microtubule_v5h.pth` is **not** stored in git — it is the
 same file the ML service uses, staged out-of-band from the repo root:
 
 ```bash
-scripts/download-microtubule-weights.sh    # -> backend/segmentation/weights/microtubule_v7.pt
+scripts/download-microtubule-weights.sh    # -> backend/segmentation/weights/microtubule_v5h.pth
 ```
 
 `evaluate.py` finds it automatically, looking in this order: `$ESSAYS_WEIGHTS`,
 `backend/segmentation/weights/`, then `/app/mt_weights/` (where the essays
 container bind-mounts that same directory read-only). Pass
-`--weights /path/to/microtubule_v7.pt` to override.
+`--weights /path/to/microtubule_v5h.pth` to override.
 
-> **No HuggingFace token or login is required.** The checkpoint already contains
-> the DINOv3 backbone weights, so the backbone is rebuilt offline from the
-> bundled config in `config/dinov3_vitl16` — the pipeline runs with no network
+> **No HuggingFace token or login is required.** The checkpoint is a complete
+> `state_dict` with no frozen backbone to fetch — the pipeline runs with no network
 > access once the weights are present. (See [`MODEL.md`](MODEL.md) for the
 > optional online path.)
 
@@ -185,7 +185,6 @@ keeps its partial results.
 | `--no-overlays` | off | Skip overlay PNGs. |
 | `--no-json` | off | Skip annotation JSON. |
 | `--limit-wells` | `0` | Process at most N wells (0 = all). |
-| `--online-backbone` | off | Download the gated DINOv3 backbone from HuggingFace instead of rebuilding it offline (needs `HF_TOKEN`). Not normally needed. |
 
 ---
 
@@ -208,7 +207,7 @@ keeps its partial results.
 * The acquisition timestamp is read from the ND2 and reported as `acquired_at`.
 
 A file with no IRM channel is **skipped with a warning** and counted as a
-failure, rather than segmented on some other channel: the v7 checkpoint is
+failure, rather than segmented on some other channel: the checkpoint is
 trained on IRM, and running it on TIRF yields confident but wrong centerlines
 (this was the behaviour up to 2026-08 — see §12).
 
@@ -320,16 +319,15 @@ the partial table stays valid. Use `--device cpu` on a Mac (the default;
 
 | Symptom | Fix |
 | ------- | --- |
-| `microtubule v7 checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh` from the repo root, or pass `--weights /path/to/microtubule_v7.pt`. The error lists every path that was searched. |
+| `microtubule v5H checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh` from the repo root, or pass `--weights /path/to/microtubule_v5h.pth`. The error lists every path that was searched. |
 | `Could not locate the shared 'microtubule' package` | The model code lives in the ML service at `backend/segmentation/models/microtubule`. Run from a full checkout, or set `MT_PACKAGE_DIR` to the directory that *contains* the `microtubule` package. |
 | `no .nd2 files found` | Check `--data`; the folder is searched recursively for `*.nd2`. |
 | `no channel matching ('irm',)` | The well has no IRM channel under that name — pass `--irm-name <substring>`. Segmentation needs IRM; the well is skipped rather than segmented on another channel. |
 | `no channel matching ('tirf',)` | Your TIRF channel is named differently — pass `--tirf-name <substring>` (likewise `--solution-name`). |
 | `--irm-name and --tirf-name both resolve to channel ...` | Both roles landed on one channel, so segmentation and readout use the same image. Intentional only if you know your recording has a single usable channel. |
 | `weights_only` load warning on startup | Expected; the checkpoint embeds a small config object and the loader falls back safely. Set `ALLOW_UNSAFE_WEIGHTS=0` to refuse. |
-| Very slow on a Mac | Expected for a ViT-L on CPU. Use a CUDA GPU for the full batch, or run overnight. |
-| `OSError: ... gated repo` / HF 401 | Only happens with `--online-backbone`. Don't use that flag — the default offline path needs no token. |
-| `ModuleNotFoundError: synth_irm` / `pysoax` | The shared `microtubule/` package was moved or flattened — keep it intact at `backend/segmentation/models/microtubule`, or point `MT_PACKAGE_DIR` at its parent. |
+| Very slow on a Mac | Expected for a 140M-parameter network tiled over a large frame on CPU. Use a CUDA GPU for the full batch, or run overnight. |
+| `ModuleNotFoundError: instance` / `dynamic_network_architectures` | The shared `microtubule/` package was moved or flattened — keep it intact at `backend/segmentation/models/microtubule`, or point `MT_PACKAGE_DIR` at its parent. |
 
 ---
 
@@ -353,7 +351,7 @@ handles one frame at a time and writes centerlines as JSON; see
 [`MODEL.md`](MODEL.md).
 
 **Which channel is segmented?** IRM. Up to 2026-08 this tool segmented **TIRF**
-and ignored IRM entirely, which is wrong: the v7 checkpoint is trained on IRM
+and ignored IRM entirely, which is wrong: the checkpoint is trained on IRM
 frames. The failure was hard to spot because the QC overlay was drawn on TIRF
 too, so a wrong centerline still looked like it followed a filament. **Results
 produced before that change should be re-run** — the intensity columns were
@@ -386,10 +384,10 @@ docs/                       # README images
 MODEL.md                    # model internals + single-frame CLI reference
 ```
 
-**The v7 model code is not here.** It lives once, in the ML service at
+**The model code is not here.** It lives once, in the ML service at
 `backend/segmentation/models/microtubule`, and both this batch assay and the
-app's interactive segmentation import that same package — so a fix to PySOAX or
-the checkpoint loader reaches both. `_mt_package.ensure_on_path()` finds it
+app's interactive segmentation import that same package — so a fix to the
+instancer or the checkpoint loader reaches both. `_mt_package.ensure_on_path()` finds it
 (override with `MT_PACKAGE_DIR`).
 
 The segmentation model and the single-frame CLI are documented in
