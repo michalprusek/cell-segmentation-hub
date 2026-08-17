@@ -153,6 +153,19 @@ function buildChannelMeta(
     }
   }
 
+  // `irmIndex === -1` (no channel identifiable as IRM) leaves every channel
+  // with isSegmentationSource=false, and that is deliberate — see the test of
+  // the same name. It is now the NORMAL outcome for a multi-page TIFF, which
+  // carries no wavelength and usually no meaningful channel names, where it
+  // used to be impossible because isIrmChannel treated missing metadata as
+  // evidence and typed the whole stack `irm`.
+  //
+  // Nothing breaks: every consumer already resolves the source as
+  // `find(isSegmentationSource) ?? channels[0]` (videoUploadService,
+  // imageService, ChannelSwitcher), so the first channel remains the effective
+  // default. The difference is that the choice is no longer dressed up as a
+  // positive identification, and the user can override it per batch via
+  // SegmentChannelDialog.
   return raw.map((r, i) => ({
     name: r.name,
     displayName: r.displayName ?? undefined,
