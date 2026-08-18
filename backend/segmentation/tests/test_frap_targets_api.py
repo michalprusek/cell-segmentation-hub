@@ -181,6 +181,24 @@ def _client_with(loader):
     return TestClient(app)
 
 
+class _OomLoader:
+    """What a real CUDA OOM looks like here: a bare RuntimeError.
+
+    predict_microtubule wraps nothing -- unlike predict_wound, which converts
+    torch.cuda.OutOfMemoryError into InferenceError -- so this, not InferenceError,
+    is what the endpoint actually receives when the GPU is full.
+    """
+
+    def predict_microtubule(self, image, *args, **kwargs):
+        raise RuntimeError(
+            "CUDA out of memory. Tried to allocate 2.00 GiB (GPU 0; 23.68 GiB total)")
+
+
+class _NotLoadedLoader:
+    def predict_microtubule(self, image, *args, **kwargs):
+        raise ValueError("Microtubule model not loaded. Run load_model('microtubule')")
+
+
 class _TimingOutLoader:
     def predict_microtubule(self, image, *args, **kwargs):
         from ml.inference_executor import InferenceTimeoutError
@@ -193,21 +211,50 @@ class _FailingLoader:
         raise InferenceError("CUDA out of memory")
 
 
-def test_a_model_timeout_is_a_504_naming_the_model_and_the_timeout():
-    # Unwrapped, a model failure reached the microscope as
-    # `ERROR Server returned HTTP 500: {"detail":"Internal error (id: ab12cd34)"}` --
-    # indistinguishable from a bad request. On an unattended JOBS run that is the
-    # difference between "retry this field" and "stop the experiment", and the
-    # sibling endpoint in api/routes.py already separates them.
-    page = np.zeros((600, 600), dtype=np.uint16)
-    r = _client_with(_TimingOutLoader()).post(
+def _post_with(loader, pages=None, **form):
+    """POST one frame at the defaults, overriding any form field by keyword."""
+    data = {"um_per_px": "0.1", "k_min": "1"}
+    data.update(form)
+    if pages is None:
+        pages = [np.zeros((600, 600), dtype=np.uint16)]
+    return _client_with(loader).post(
         "/api/v1/frap/targets",
-        files={"file": ("f.tif", _tiff_bytes([page]), "image/tiff")},
-        data={"um_per_px": "0.1", "k_min": "1"})
-    assert r.status_code == 504, r.text
+        files={"file": ("f.tif", _tiff_bytes(pages), "image/tiff")},
+        data=data)
+
+
+@pytest.mark.parametrize("loader, needle", [
+    (_OomLoader(), "CUDA out of memory"),
+    (_NotLoadedLoader(), "not loaded"),
+])
+def test_the_failures_that_really_happen_are_a_500_an_operator_can_read(loader, needle):
+    # The regression this pins: the endpoint caught only InferenceError and
+    # InferenceTimeoutError, and predict_microtubule raises NEITHER. A real CUDA OOM
+    # is a bare RuntimeError and a missing model a bare ValueError, so both fell
+    # through to the global handler and reached the microscope as
+    # `{"detail": "Internal error (id: ab12cd34)"}` -- which is also what a malformed
+    # request produces, i.e. exactly the confusion the error mapping exists to
+    # prevent. The previous tests passed only because their fakes raised the two
+    # classes the handler expected.
+    r = _post_with(loader)
+    assert r.status_code == 500, r.text
     detail = str(r.json()["detail"])
-    assert "microtubule" in detail
-    assert "60" in detail
+    assert needle in detail, detail
+    assert "600x600" in detail, detail        # names the frame it failed on
+    assert "server-side" in detail, detail    # and says it is not the operator's file
+    assert "id:" not in detail, detail        # never the bare correlation ID
+
+
+def test_a_timeout_shaped_error_is_a_500_because_no_timeout_can_fire():
+    # There is deliberately no 504 branch: predict_microtubule takes a `timeout`
+    # argument and never reads it -- no executor, no wait -- so InferenceTimeoutError
+    # is unreachable on this path and a handler for it only disguised the fact that
+    # no timeout exists. This test exists so that removing the branch stays a
+    # decision; if an executor is ever put behind that call, replace it with a 504
+    # assertion and restore the clause ABOVE the InferenceError one.
+    r = _post_with(_TimingOutLoader())
+    assert r.status_code == 500, r.text
+    assert "timed out" in str(r.json()["detail"])
 
 
 def test_an_inference_failure_is_a_500_carrying_the_models_own_message():
@@ -526,3 +573,165 @@ def test_rejected_filaments_pass_through_to_the_overlay_renderer():
     assert len(rejected_arg) == 1
     assert rejected_arg[0].reason == "length"
     assert base64.b64decode(r.json()["overlay_png_b64"]) == tiny_png
+
+
+# --- pixel scale bounds -------------------------------------------------------
+
+
+def test_a_scale_in_nanometres_per_pixel_is_refused():
+    # 72.45 is the rig's own 0.07245 um/px written in nm/px, which is how the slip
+    # actually happens. Before this bound it was accepted: on a field of filaments
+    # 0.8 um apart -- where nothing is safe to bleach -- it returned 10 spots,
+    # shortfall false, and every rejection counter zero, because um_per_px divides
+    # EVERY criterion and a large one relaxes all of them together. That is the most
+    # confident-looking response this endpoint can emit, and it was wrong.
+    r = _post_with(_StubLoader(), um_per_px="72.45")
+    assert r.status_code == 400, r.text
+    detail = str(r.json()["detail"])
+    assert "um_per_px" in detail
+    assert "0.07245" in detail          # names the value they probably meant
+
+
+def test_a_scale_that_makes_the_roi_sub_pixel_is_refused():
+    # The range check alone does not catch this: 5.0 um/px is inside it, but a
+    # 1 um spot is then a fifth of a pixel across. Such an ROI cannot be bleached,
+    # and the mask PNG degenerates to a few stray pixels while the JSON still
+    # describes a full-size spot -- the two artefacts that are supposed to BE the
+    # same selection, disagreeing with nothing to announce it.
+    r = _post_with(_StubLoader(), um_per_px="5.0")
+    assert r.status_code == 400, r.text
+    detail = str(r.json()["detail"])
+    assert "smaller than one pixel" in detail
+    assert "spot_len_um" in detail
+
+
+def test_the_real_rig_calibration_is_accepted():
+    # The guard rejects wrong UNITS, never a real acquisition. 0.07245 um/px is this
+    # project's recorded ND2 calibration; if this ever fails, the bound is too tight.
+    r = _post_with(_StubLoader(), um_per_px="0.07245")
+    assert r.status_code == 200, r.text
+
+
+# --- a skipped criterion and a shortfall are visible on the wire ---------------
+
+
+def test_omitting_the_fluor_page_is_announced_not_silent():
+    # Omitting fluor_page removes the SNR criterion entirely, and on a real frame
+    # that makes the run 21x faster AND more productive (0 spots -> 10) -- so the
+    # case that most needs announcing is the one that looks healthiest. Before these
+    # fields, `rejected_by["snr"] == 0` read identically to "every candidate passed
+    # the brightness test".
+    r = _post_with(_StubLoader(), um_per_px="0.1")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["snr_evaluated"] is False
+    assert "snr_min" in body["warning"]
+    assert all(s["snr"] is None for s in body["spots"])
+
+
+def test_a_frame_with_no_filaments_says_so():
+    class _EmptyLoader:
+        def predict_microtubule(self, image, *args, **kwargs):
+            return {"polylines": [], "success": True}
+
+    r = _post_with(_EmptyLoader(), um_per_px="0.1")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["n_polylines"] == 0
+    # A missing 'polylines' key and a genuinely empty field produced byte-identical
+    # responses; the model is IRM-only, so pointing irm_page at a fluorescence page
+    # is a one-character mistake that looks like an empty field.
+    assert "irm_page" in body["warning"]
+
+
+def test_a_healthy_field_carries_no_warning():
+    # A real two-page frame: the y=150 filament is decorated on the fluorescence
+    # page so it clears snr_min, and k_min=1 makes one spot a success. Nothing was
+    # skipped and nothing fell short, so there must be nothing to report -- a
+    # warning that fires on a good field would be trained away within a week.
+    irm = np.zeros((600, 600), dtype=np.uint16)
+    fluor = np.full((600, 600), 100, dtype=np.uint16)
+    fluor[145:156, 100:401] = 900
+    r = _post_with(_StubLoader(), pages=[irm, fluor],
+                   fluor_page="1", k_min="1")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["snr_evaluated"] is True
+    assert body["shortfall"] is False
+    assert body["warning"] is None
+
+
+# --- a missing server codec is not the operator's fault ------------------------
+
+
+def test_a_missing_codec_package_is_a_500_not_a_400():
+    # tifffile decodes Deflate itself but delegates LZW to imagecodecs, which was
+    # absent from the ML image -- so an ordinary LZW frame (ImageJ's and NIS's
+    # default compression) came back as 400 "Unreadable TIFF", i.e. the server
+    # blaming the operator's file for its own missing dependency. The operator sees
+    # only that one line in frap_status.txt and re-saves the frame forever.
+    from unittest.mock import patch
+
+    err = ValueError("<COMPRESSION.LZW: 5> requires the 'imagecodecs' package")
+    with patch("tifffile.TiffPage.asarray", side_effect=err):
+        r = _post_with(_StubLoader())
+    assert r.status_code == 500, r.text
+    detail = str(r.json()["detail"])
+    assert "imagecodecs" in detail
+    assert "maintainer" in detail
+    assert "re-saving it will not help" in detail
+
+
+def test_a_genuinely_corrupt_page_is_still_a_400():
+    # The counterpart: the codec branch must not swallow real bad input. Without
+    # this, "everything is a 500" would pass the test above.
+    from unittest.mock import patch
+
+    with patch("tifffile.TiffPage.asarray",
+               side_effect=ValueError("truncated file")):
+        r = _post_with(_StubLoader())
+    assert r.status_code == 400, r.text
+    assert "Unreadable TIFF" in str(r.json()["detail"])
+
+
+# --- orientation and frame shape ----------------------------------------------
+
+
+class _DiagonalLoader:
+    """One filament at exactly 45 degrees.
+
+    Every other stub in this file emits horizontal filaments, so tangent_deg was
+    0.0 in every endpoint test and a rotation bug was a no-op by construction --
+    rotating every ROI by 90 degrees passed the whole suite.
+    """
+
+    def predict_microtubule(self, image, *args, **kwargs):
+        return {"polylines": [{
+            "id": "polyline_diag", "instanceId": "mt_diag",
+            "points": [{"x": 100.0, "y": 100.0}, {"x": 400.0, "y": 400.0}],
+            "class": "microtubule", "geometry": "polyline"}], "success": True}
+
+
+def test_a_diagonal_filament_reports_its_real_angle_on_a_non_square_frame():
+    # NON-SQUARE deliberately: every fixture in every FRAP test file was square
+    # (600x600, 8x8, 6000x6000), so swapping rows for cols -- in the border gate, in
+    # select_spots, in the mask canvas, or in image_shape on the wire -- changed
+    # nothing anywhere. The camera this endpoint sizes its page budget for is
+    # 2560x2160.
+    page = np.zeros((480, 640), dtype=np.uint16)
+    r = _post_with(_DiagonalLoader(), pages=[page], k_min="1")
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    # rows then cols, matching coordinate_order's "x=col, y=row".
+    assert body["image_shape"] == [480, 640]
+    assert len(body["spots"]) == 1, body
+    spot = body["spots"][0]
+
+    # (100,100) -> (400,400): dx == dy, so the tangent is 45 degrees.
+    assert spot["tangent_deg"] == pytest.approx(45.0, abs=0.5)
+    # The ROI the microscope BLEACHES must carry the angle the criteria VALIDATED.
+    assert spot["roi"]["angle_deg"] == spot["tangent_deg"]
+    # ...and sit on the filament, where x == y. A transposed coordinate pair would
+    # still land inside this frame, so the equality is what catches it.
+    assert spot["x"] == pytest.approx(spot["y"], abs=2.0)

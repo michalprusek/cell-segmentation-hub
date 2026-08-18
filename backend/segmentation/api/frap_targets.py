@@ -32,15 +32,16 @@ import frap_select as FS  # noqa: E402
 from api import frap_render  # noqa: E402
 from api.routes import (  # noqa: E402
     InferenceError,
-    InferenceTimeoutError,
     _microtubule_inference_lock,
     get_model_loader,
 )
 # The lock is imported rather than re-created: it serialises microtubule inference
-# across EVERY caller, and a second lock object would serialise nothing. The two
-# inference exceptions come from api/routes.py for the same reason -- that module
-# already owns the ImportError fallback for a stripped image, so importing them from
-# there is what guarantees this endpoint catches exactly what the sibling catches.
+# across EVERY caller, and a second lock object would serialise nothing.
+# InferenceError comes from api/routes.py for the same reason -- that module already
+# owns the ImportError fallback for a stripped image, so importing it from there is
+# what guarantees this endpoint classifies exactly what the sibling classifies. Note
+# that in that fallback it is aliased to Exception, which is why the clause below it
+# has to stay harmless when it never runs.
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -215,6 +216,65 @@ def _check_window_fits(defaults: Dict[str, Any], clean: Dict[str, Any]) -> None:
                    f"(= obs_len_um / (1 - f_mid)).")
 
 
+# --- pixel scale bounds ------------------------------------------------------
+#
+# um_per_px is the one input that scales EVERY isolation criterion at once, and it
+# arrives from the JOBS macro as a bare float that only had to be positive. A wrong
+# one does not fail -- it relaxes all six criteria together and returns the most
+# confident-looking response this endpoint can emit. Measured on a field of
+# filaments 0.8 um apart, where nothing is safe to bleach: at the correct 0.1 the
+# answer is 0 spots with shortfall true; at 72.45 -- the same rig calibration written
+# in nm/px, which is exactly how the slip happens -- it is 10 spots, shortfall false,
+# and every rejection counter zero. Note the asymmetry this fixes: step_px, whose
+# worst case is a slow request, was range-checked; um_per_px, whose worst case is a
+# bleach that clipped a neighbour, was not.
+#
+# Two bounds, because they catch different mistakes and neither subsumes the other:
+#
+#   the range         an absurd UNIT (nm/px, m/px). Deliberately far wider than any
+#                     real objective -- 0.005 um/px is past the diffraction limit and
+#                     10 um/px is a macro lens -- so it cannot reject a real
+#                     acquisition. It only refuses numbers that are not a
+#                     micrometre-per-pixel at all.
+#   _check_scale      an ROI SMALLER THAN A PIXEL, which is unbleachable and which
+#                     the range alone does not catch. This is what actually kills the
+#                     72.45 case: the half-axes come out at 0.0069 px, the mask PNG
+#                     degenerates to a few stray pixels, and the JSON still lists ten
+#                     properly-specified ROIs -- the two artefacts that are supposed
+#                     to be the same selection, disagreeing silently.
+MIN_UM_PER_PX = 0.005
+MAX_UM_PER_PX = 10.0
+MIN_ROI_HALF_AXIS_PX = 0.5
+
+
+def _check_scale(um_per_px: float, params: "FS.SelectionParams") -> None:
+    """Refuse a pixel scale that cannot describe the frame that was sent."""
+    if not MIN_UM_PER_PX <= um_per_px <= MAX_UM_PER_PX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"um_per_px={um_per_px} is outside {MIN_UM_PER_PX}-"
+                   f"{MAX_UM_PER_PX} um/px, which already spans every real "
+                   f"objective. A value this far out is usually the calibration in "
+                   f"other units -- nm/px is the common slip, so {um_per_px} most "
+                   f"likely means {um_per_px / 1000.0}. Every isolation criterion is "
+                   f"a micrometre length divided by this number, so a wrong unit "
+                   f"relaxes all of them at once instead of failing.")
+
+    # Checked against the EFFECTIVE params, so a params_json that shrinks the spot is
+    # caught too -- this is the same footprint half_axes_px hands the criteria.
+    a_px, b_px = FS.half_axes_px(params, um_per_px)
+    if min(a_px, b_px) < MIN_ROI_HALF_AXIS_PX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At um_per_px={um_per_px} the bleach ROI is {2 * a_px:.4g} x "
+                   f"{2 * b_px:.4g} pixels (spot_len_um={params.spot_len_um}, "
+                   f"spot_wid_um={params.spot_wid_um}), i.e. smaller than one pixel. "
+                   f"Such an ROI cannot be bleached, and the mask PNG would carry a "
+                   f"few stray pixels while the JSON still described a full-size "
+                   f"spot. Check that um_per_px is micrometres per pixel and that "
+                   f"the spot size matches the objective.")
+
+
 # --- upload and decode bounds ----------------------------------------------
 #
 # `file.file.read()` had no cap, and tifffile.imread decoded EVERY page although at
@@ -287,7 +347,33 @@ def _page_array(tif, index: int, what: str) -> np.ndarray:
                    f"gigabytes once decoded.")
     try:
         arr = page.asarray()
+    except MemoryError as exc:
+        # Ran out of memory decoding a page whose declared size we already accepted.
+        # That is this server's problem, not a malformed frame.
+        logger.error("frap/targets: out of memory decoding %s page %d (shape %s)",
+                     what.lower(), index, shape)
+        raise HTTPException(
+            status_code=500,
+            detail=f"The server ran out of memory decoding {what.lower()} page "
+                   f"{index} (shape {shape}). The frame is valid; retrying when the "
+                   f"host is less busy is reasonable.") from exc
     except Exception as exc:                       # noqa: BLE001
+        # A missing codec package is a SERVER fault and must not be a 400. tifffile
+        # decodes Deflate itself but delegates LZW -- ImageJ's and NIS's default
+        # compression -- to imagecodecs, which was absent from the image. The
+        # operator reads this sentence in a one-line frap_status.txt with no other
+        # diagnostic, so a 400 sends them off re-saving a frame that was never the
+        # problem. imagecodecs is now a declared dependency; this branch is what
+        # happens if it goes missing again.
+        if isinstance(exc, ImportError) or "imagecodecs" in str(exc):
+            logger.error("frap/targets: codec package missing for %s page %d: %s",
+                         what.lower(), index, exc)
+            raise HTTPException(
+                status_code=500,
+                detail=f"The server cannot decode this TIFF's compression ({exc}). "
+                       f"The frame itself is fine and re-saving it will not help -- "
+                       f"the ML image is missing a codec package. Contact the "
+                       f"maintainer.") from exc
         raise HTTPException(
             status_code=400,
             detail=f"Unreadable TIFF: could not decode {what.lower()} page "
@@ -342,6 +428,94 @@ def _polylines_from(result: Dict[str, Any]):
     return out, instance_ids
 
 
+# What to tell an operator when a criterion did most of the rejecting. Keyed by
+# frap_select._REJECT_KEYS. Only 'snr' carries a warning about the DEFAULT itself:
+# snr_min is a contrast threshold that was never calibrated, and on a real frame the
+# highest contrast measured over 3438 candidates was 0.854 against a threshold of
+# 2.0 -- so a field can be rejected wholesale by a number no filament can reach.
+_REJECT_HINTS = {
+    "snr": ("snr_min is a contrast threshold on the fluorescence page and is NOT "
+            "calibrated out of the box -- measure it from a dry-run overlay before "
+            "believing a shortfall attributed to it."),
+    "readout_clearance": ("r_iso_um is the readout isolation radius; a dense field "
+                          "legitimately exhausts it."),
+    "bleach_clearance": ("The field is too dense to bleach anywhere without "
+                         "touching a neighbour."),
+    "length": "They are shorter than l_min_um.",
+    "border": "They sit within border_margin_um of the frame edge.",
+    "straightness": "They are more curved than kappa_spot allows.",
+    "separation": "They lost to an already-chosen spot closer than d_sep_um.",
+    "budget": "k_max was already reached, so they were never needed.",
+}
+
+
+def _warning_for(sel, k_min: int, snr_evaluated: bool) -> Optional[str]:
+    """One sentence saying why this field produced too few spots, or None.
+
+    Without this, `success: true` with an empty `spots` list is the identical
+    response for "this field genuinely has nothing usable", "we ran on the wrong
+    page", and "a criterion was switched off" -- and the sibling /segment route
+    already attaches a warning in that situation. An unattended JOBS run has only
+    this string and a one-line status file to go on.
+
+    The skipped-criterion note fires INDEPENDENTLY of the shortfall, because those
+    two are opposites in practice: omitting fluor_page removes the SNR test, which
+    makes the run faster and MORE productive, so the case that most needs announcing
+    is the one that looks healthiest.
+    """
+    notes: List[str] = []
+    if not snr_evaluated:
+        notes.append(
+            "No fluor_page was supplied, so the brightness criterion (snr_min) was "
+            "NOT applied and these spots were chosen on geometry alone; every "
+            "spot's \"snr\" is null for that reason, not because it measured zero.")
+
+    if sel.n_polylines == 0:
+        notes.append(
+            "Segmentation returned no filaments for this frame. Check that "
+            "irm_page points at the IRM channel -- the model is IRM-only, and on a "
+            "fluorescence page it emits confident-looking polylines with no "
+            "contrast under them.")
+    elif sel.shortfall:
+        # Counted per FILAMENT, not per candidate. rejected_by's denominator is
+        # candidates -- on this frame it reported 3888 readout_clearance rejections
+        # out of 8777 -- and an operator asked "why not that microtubule", not "why
+        # not that pixel". SelectionResult.rejected_filaments already carries the
+        # modal reason per filament for exactly that reason; this reuses it rather
+        # than re-deriving a second answer from the other histogram.
+        blocked: Dict[str, int] = {}
+        for rf in sel.rejected_filaments:
+            blocked[rf.reason] = blocked.get(rf.reason, 0) + 1
+
+        detail = ""
+        if blocked:
+            worst = max(blocked, key=blocked.get)
+            detail = (f" {blocked[worst]} of {sel.n_polylines} filaments were "
+                      f"blocked by '{worst}'.")
+            hint = _REJECT_HINTS.get(worst)
+            if hint:
+                detail += " " + hint
+
+            # The modal blocker is not always the one worth acting on. On a dense
+            # field readout_clearance blocks the most filaments while being a real
+            # property of the sample, whereas snr_min is an UNCALIBRATED default --
+            # measured on one real frame, it blocked 15 filaments that alone would
+            # have filled the whole k_max budget, and no filament could reach it
+            # (highest contrast 0.854 against a threshold of 2.0). So when SNR alone
+            # accounts for the gap, say so even if something else blocked more.
+            n_snr = blocked.get("snr", 0)
+            if worst != "snr" and n_snr and len(sel.spots) + n_snr >= k_min:
+                detail += (f" Separately, 'snr' alone blocked {n_snr} filaments -- "
+                           f"enough to have met k_min on its own. "
+                           f"{_REJECT_HINTS['snr']}")
+
+        notes.append(
+            f"Only {len(sel.spots)} of the requested minimum {k_min} bleach spots "
+            f"were found on this field.{detail}")
+
+    return " ".join(notes) if notes else None
+
+
 @router.post("/frap/targets")
 def frap_targets(
     file: UploadFile = File(...),
@@ -384,39 +558,53 @@ def frap_targets(
         params = FS.SelectionParams(
             **{**vars(params), **_validated_overrides(overrides)})
 
+    # After the overrides, because the sub-pixel test needs the EFFECTIVE spot size,
+    # and before the model call, so a bad scale costs no GPU time.
+    _check_scale(um_per_px, params)
+
     pil = Image.fromarray(irm)
     t0 = time.time()
-    # Mirrors api/routes.py's handling of the same call: a timeout is a 504 and an
-    # inference failure a 500, so the two are distinguishable. Unwrapped, both
-    # reached the microscope as `ERROR Server returned HTTP 500: {"detail":
-    # "Internal error (id: ab12cd34)"}` -- the same thing a malformed request
-    # produces. On an unattended JOBS run that is exactly the difference between
-    # "retry this field" and "stop the experiment".
+    # EVERY failure of the inference call becomes a 500 carrying a sentence an
+    # operator can act on. Unwrapped, they reached the microscope as `ERROR Server
+    # returned HTTP 500: {"detail": "Internal error (id: ab12cd34)"}` -- the same
+    # thing a malformed request produces, which on an unattended JOBS run is the
+    # difference between "retry this field" and "stop the experiment". The detail is
+    # one sentence, not routes.py's dict: this endpoint's client writes it verbatim
+    # into a ONE-LINE frap_status.txt read at the microscope.
     #
-    # Deliberate deviation from the sibling: the detail is one sentence, not
-    # routes.py's dict. This endpoint's client writes the response detail verbatim
-    # into a ONE-LINE frap_status.txt that an operator reads at the microscope, and
-    # a serialised dict there is noise. InferenceTimeoutError subclasses
-    # InferenceError, so it must be caught first.
+    # There is deliberately NO 504 branch, and that is a difference from the sibling
+    # in api/routes.py rather than an oversight. A timeout is reachable there and not
+    # here: ModelLoader.predict_microtubule takes a `timeout` argument and never
+    # reads it -- no executor, no wait -- so InferenceTimeoutError cannot be raised
+    # on this path. A handler for a state that cannot occur only disguises the fact
+    # that no timeout exists; nginx's proxy_read_timeout is the real one. If an
+    # executor is ever put behind this call, restore the 504 clause ABOVE the
+    # InferenceError one, because InferenceTimeoutError subclasses it.
+    #
+    # The catch-all is not defensive padding either. The failures this path actually
+    # produces are torch's CUDA OutOfMemoryError and a bare ValueError/RuntimeError
+    # out of the wrapper ("expected 2D image", "Model not loaded") -- and
+    # predict_microtubule, unlike predict_wound, wraps none of them in
+    # InferenceError. Without this clause every failure that really happens is the
+    # bare correlation ID above, which is exactly the bug the paragraph above
+    # describes.
     try:
         with _microtubule_inference_lock:
             result = loader.predict_microtubule(pil)
-    except (InferenceTimeoutError, TimeoutError) as exc:
-        model_name = getattr(exc, "model_name", "microtubule")
-        timeout = getattr(exc, "timeout", None)
-        logger.error("frap/targets: model %s timed out after %ss: %s",
-                     model_name, timeout, exc)
-        raise HTTPException(
-            status_code=504,
-            detail=f"Model '{model_name}' inference timed out"
-                   + (f" after {timeout}s" if timeout is not None else "")
-                   + f" on a {irm.shape[1]}x{irm.shape[0]} frame. The GPU queue may "
-                     f"be busy; retrying this field is reasonable.") from exc
     except InferenceError as exc:
         logger.error("frap/targets: inference failed: %s", exc)
         raise HTTPException(
             status_code=500,
             detail=f"Microtubule inference failed: {exc}") from exc
+    except Exception as exc:                       # noqa: BLE001
+        logger.exception("frap/targets: inference raised %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Microtubule inference failed on a {irm.shape[1]}x"
+                   f"{irm.shape[0]} frame ({type(exc).__name__}: {exc}). This is a "
+                   f"server-side failure, not a problem with the submitted frame -- "
+                   f"the GPU may be out of memory. Retrying this field is "
+                   f"reasonable.") from exc
     inference_s = time.time() - t0
 
     polylines, mt_instance_ids = _polylines_from(result)
@@ -425,10 +613,22 @@ def frap_targets(
                           params=params, k_min=k_min, k_max=k_max)
     selection_s = time.time() - t1
 
+    snr_evaluated = fluor is not None
+    warning = _warning_for(sel, k_min, snr_evaluated)
+
+    # The effective inputs go in the log line, not just the counts: a run that came
+    # back empty cannot be reconstructed afterwards from "0 spots", and um_per_px and
+    # params_json are the first two things to check.
     logger.info("frap/targets: %d polylines -> %d candidates -> %d spots "
-                "(inference %.2fs, selection %.2fs, rejected %s)",
+                "(um_per_px %.5g, k %d..%d, snr_evaluated %s, inference %.2fs, "
+                "selection %.2fs, rejected %s, dropped %s)",
                 sel.n_polylines, sel.n_candidates, len(sel.spots),
-                inference_s, selection_s, sel.rejected_by)
+                um_per_px, k_min, k_max, snr_evaluated,
+                inference_s, selection_s, sel.rejected_by, sel.dropped_by)
+    if params != FS.SelectionParams():
+        logger.info("frap/targets: non-default selection params: %s", vars(params))
+    if warning:
+        logger.warning("frap/targets: %s", warning)
 
     body: Dict[str, Any] = {
         "success": True,
@@ -437,6 +637,14 @@ def frap_targets(
         "spots": [_spot_json(s, params, um_per_px, mt_instance_ids)
                   for s in sel.spots],
         "shortfall": sel.shortfall,
+        # Which criteria actually ran. `snr` is the only optional one -- it needs a
+        # fluorescence page -- and without one `rejected_by["snr"] == 0` reads
+        # identically to "every candidate passed the brightness test". Until this
+        # field existed there was nothing on the wire to tell the two apart.
+        "snr_evaluated": snr_evaluated,
+        # null on a healthy field; otherwise one sentence naming what was skipped or
+        # what did the rejecting. See _warning_for.
+        "warning": warning,
         "rejected_by": sel.rejected_by,
         # rejected_by counts CANDIDATES against criteria; dropped_by counts
         # FILAMENTS dropped after the greedy pick (d_sep or k_max) — kept as a

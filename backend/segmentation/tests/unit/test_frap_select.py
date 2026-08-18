@@ -152,3 +152,74 @@ def test_the_brightness_test_rejects_an_undecorated_filament():
     assert 200 in ys
     assert 400 not in ys
     assert r.rejected_by["snr"] >= 1
+
+
+def test_half_axes_px_are_the_length_along_the_tangent_and_the_width_across_it():
+    # ABSOLUTE values, deliberately. test_frap_render's sibling test pins that the
+    # criteria, the mask and the JSON all AGREE on the footprint -- but it computes
+    # its expectation from half_axes_px itself, so a wrong value propagates to all
+    # three call sites and the assertion still holds. Measured: swapping the two
+    # axes, and dropping the 0.5, each passed the ENTIRE suite. This is the only
+    # place the number itself is nailed down.
+    #
+    # 2.0 um along by 0.4 um across at 0.1 um/px is 10 px by 2 px. Non-square on
+    # purpose: at spot_len_um == spot_wid_um a swap is a no-op by construction, and
+    # every other fixture in this file uses the square 1.0 x 1.0 default.
+    p = S.SelectionParams(spot_len_um=2.0, spot_wid_um=0.4)
+    assert S.half_axes_px(p, 0.1) == (10.0, 2.0)
+    # First is ALONG the tangent, second ACROSS it -- so with spot_len > spot_wid the
+    # first must be the larger. A swap that kept both values would still fail here.
+    a_px, b_px = S.half_axes_px(p, 0.1)
+    assert a_px > b_px
+
+
+def _elongated():
+    """A 2.0 x 0.4 um spot with only the bleach criterion left switched on.
+
+    r_iso_um is dropped to half a pixel so readout_clearance cannot fire: this test
+    is about which AXIS the bleach footprint extends along, and a neighbour close
+    enough to test that is always inside a 3 um readout radius.
+    """
+    return S.SelectionParams(spot_len_um=2.0, spot_wid_um=0.4,
+                             r_iso_um=0.05, f_mid=0.02)
+
+
+@pytest.mark.parametrize("neighbour_y, expect_spots", [
+    (300, 0),      # 12 px ALONG the tangent -> inside the 10 px half-length
+    (312, 1),      # 12 px ACROSS it        -> clear of the 2 px half-width
+])
+def test_the_bleach_footprint_extends_along_the_tangent_not_across_it(
+        neighbour_y, expect_spots):
+    # The footprint is 10 px along by 2 px across, and bleach_spread_um is 0.5 um
+    # (5 px). A neighbour 12 px AWAY is therefore 2 px clear along the tangent
+    # (rejected) but 10 px clear across it (accepted) -- the same distance, opposite
+    # verdicts. That asymmetry is the whole point of an oriented ROI, and nothing
+    # tested it: with the axes swapped both verdicts invert and the suite stayed
+    # green, while the criterion reported 10 px of clearance where there were 2.
+    main = horizontal(300, 250, 350)           # candidates pinned near x=300
+    neighbour = horizontal(neighbour_y, 312, 340) if neighbour_y == 300 else \
+        horizontal(neighbour_y, 286, 314)
+    r = S.select_spots([main, neighbour], SHAPE, UM_PER_PX,
+                       params=_elongated(), k_min=1, k_max=10)
+    assert len(r.spots) == expect_spots, (
+        f"neighbour at y={neighbour_y}: {r.rejected_by}")
+    if expect_spots == 0:
+        assert r.rejected_by["bleach_clearance"] > 0
+
+
+def test_the_border_gate_reads_width_from_columns_and_height_from_rows():
+    # A non-square frame with the filament near the RIGHT edge: at 640 columns its
+    # candidates clear the border margin, at 480 they do not. Every other fixture in
+    # this file is square, so swapping h and w inside select_spots flipped no verdict
+    # anywhere and the suite stayed green.
+    #
+    # reach_px at the defaults is hypot(5,5) + 5 + 20 = 32.07 px, so x must lie in
+    # [32.07, 606.93] when w=640 and in [32.07, 446.93] when w=480. The candidate
+    # band here is the middle half of x in [500, 600], i.e. [525, 575] -- inside the
+    # first, outside the second.
+    shape_hw = (480, 640)                      # 480 rows, 640 columns
+    r = S.select_spots([horizontal(240, 500, 600)], shape_hw, UM_PER_PX,
+                       k_min=1, k_max=10)
+    assert len(r.spots) == 1, r.rejected_by
+    assert r.spots[0].x == pytest.approx(550.0, abs=30.0)
+    assert r.rejected_by["border"] == 0
