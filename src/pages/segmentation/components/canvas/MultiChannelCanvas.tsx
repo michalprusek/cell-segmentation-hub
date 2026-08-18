@@ -18,6 +18,14 @@
  *      composite (canvas `globalCompositeOperation = 'lighter'`), mimicking
  *      multi-channel fluorescence emission.
  *
+ * Step 3+4 run on the GPU when the browser has WebGL2: `createCompositor`
+ * moves the window/level remap, the tint and the additive blend into a
+ * fragment shader, so a frame costs a texture upload and a slider tick costs a
+ * uniform update. The CPU implementation below stays as the fallback — it is
+ * what runs when WebGL2 is unavailable and what takes over after a lost GL
+ * context (see the render-path effect). Both produce the same image; only the
+ * per-pixel loop's location differs.
+ *
  * Decoding is split from windowing: we fetch+decode once per frame/channel
  * set (cached in a ref) and re-run the cheap windowing+composite pass on any
  * Min/Max, colour, or opacity change (never a refetch), so dragging is
@@ -35,6 +43,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { decodeGrayPng } from '@/lib/png16';
+import { createCompositor } from '@/lib/webglCompositor';
+import type {
+  Compositor,
+  CompositorChannel,
+  CompositorWindow,
+} from '@/lib/webglCompositor.types';
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
 import { useLanguage } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
@@ -81,6 +95,19 @@ interface ChannelSamples {
   /** length = width*height, one grayscale sample per pixel. */
   data: Uint16Array | Uint8Array;
 }
+
+/**
+ * Which implementation is driving the composite.
+ *
+ * `'webgl'` is the OPTIMISTIC initial value, not a confirmed capability: a
+ * canvas element yields only ONE context type for its whole lifetime, so the
+ * WebGL2 request has to happen before anything else draws — there is no way to
+ * try it and fall back on the same element. When the request fails (no WebGL2)
+ * or the context is later lost, we flip to `'2d'`; that value is part of the
+ * `<canvas>`'s React `key`, so the flip mounts a FRESH element which has never
+ * been asked for a WebGL2 context and can therefore still give us a 2D one.
+ */
+type RenderPath = 'webgl' | '2d';
 
 /** Parse `#RRGGBB` (or `#rgb`) into [r, g, b]. White is the grayscale
  *  identity — invalid inputs degrade to it rather than throwing. */
@@ -174,6 +201,15 @@ export default function MultiChannelCanvas({
   // window-slider re-renders so dragging never refetches.
   const decodedRef = useRef<ChannelSamples[]>([]);
   const dimsRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  // Live WebGL2 compositor, or null while on the CPU path. Held in a ref (not
+  // state) so the composite effect can read it without the extra render a
+  // state write would cost.
+  const compositorRef = useRef<Compositor | null>(null);
+  // Scratch canvas for the CPU composite, allocated once and resized in place.
+  // It used to be `document.createElement('canvas')` INSIDE the effect, i.e. a
+  // fresh width*height bitmap on every slider tick.
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const [renderPath, setRenderPath] = useState<RenderPath>('webgl');
   // Bumped after a successful decode to trigger the windowing/composite
   // effect (which reads decodedRef).
   const [decodeVersion, setDecodeVersion] = useState(0);
@@ -205,6 +241,52 @@ export default function MultiChannelCanvas({
     [channelsKey, frameId, coverageKey]
   );
   const fetchChannelsKey = fetchChannels.join('|');
+
+  // --- Render-path selection: ask the CURRENT canvas element for WebGL2 once.
+  // Declared BEFORE the decode and composite effects so that on every commit
+  // the compositor is created (or torn down) before the composite pass looks
+  // for it. Re-runs only when `renderPath` changes, which — because that value
+  // is the canvas's key — always means a brand-new element to bind to. ---
+  useEffect(() => {
+    if (renderPath !== 'webgl') return; // already on the CPU fallback
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Guards the fallback against firing twice (a late onContextLost after we
+    // already gave up, or after this effect was cleaned up).
+    let released = false;
+    const fallBackTo2d = () => {
+      if (released) return;
+      released = true;
+      compositorRef.current = null;
+      setRenderPath('2d');
+    };
+
+    let created: Compositor | null = null;
+    try {
+      created = createCompositor(canvas, fallBackTo2d);
+    } catch (err) {
+      logger.warn(
+        'MultiChannelCanvas: WebGL2 compositor construction threw — using the 2D path',
+        err
+      );
+      created = null;
+    }
+    if (!created) {
+      // No WebGL2 (or it blew up). Remount as a fresh element and composite on
+      // the CPU; this element may already be in WebGL context mode.
+      fallBackTo2d();
+      return;
+    }
+
+    const compositor = created;
+    compositorRef.current = compositor;
+    return () => {
+      released = true;
+      compositorRef.current = null;
+      compositor.dispose();
+    };
+  }, [renderPath]);
 
   // --- Decode pass: fetch + decode all visible channels once per
   // frame/channel set. Deliberately does NOT depend on window/colour state
@@ -373,6 +455,47 @@ export default function MultiChannelCanvas({
     const canvas = canvasRef.current;
     const loaded = decodedRef.current;
     if (!canvas || loaded.length === 0) return;
+    const { w, h } = dimsRef.current;
+    if (w === 0 || h === 0) return;
+
+    // --- GPU path. Must return before ANY 2D use of this canvas: on a real
+    // browser `getContext('2d')` on a WebGL-mode canvas returns null, and
+    // writing canvas.width would clear the drawing buffer setSize() owns. ---
+    if (renderPath === 'webgl') {
+      const compositor = compositorRef.current;
+      // The render-path effect has not produced one yet, or has just torn it
+      // down. Skip this pass rather than touching the canvas 2D-wise; the
+      // pending setRenderPath('2d') re-runs us against a fresh element.
+      if (!compositor) return;
+      if (!compositor.isAlive()) {
+        // Context lost without onContextLost reaching us (or before it did).
+        // Remount as a 2D canvas; this effect re-runs and paints on the CPU,
+        // so the user never sees a blank frame.
+        compositorRef.current = null;
+        setRenderPath('2d');
+        return;
+      }
+      const channels: CompositorChannel[] = loaded.map(cs => ({
+        channel: cs.channel,
+        data: cs.data,
+        width: cs.width,
+        height: cs.height,
+        bitDepth: cs.bitDepth,
+        color: hexToRgb(channelColors[cs.channel] ?? '#FFFFFF'),
+        opacity: (channelOpacities[cs.channel] ?? 100) / 100,
+      }));
+      // Raw sample units — the same three numbers buildLut() takes below.
+      const compositorWindow: CompositorWindow = {
+        min: windowMin,
+        max: windowMax,
+        rangeMax: windowRangeMax,
+      };
+      compositor.setSize(w, h);
+      compositor.draw(channels, compositorWindow);
+      return;
+    }
+
+    // --- CPU fallback: the original per-pixel composite, unchanged. ---
     const ctx = canvas.getContext('2d', { willReadFrequently: false });
     if (!ctx) {
       logger.warn(
@@ -380,8 +503,6 @@ export default function MultiChannelCanvas({
       );
       return;
     }
-    const { w, h } = dimsRef.current;
-    if (w === 0 || h === 0) return;
     // Setting canvas.width/height resets the bitmap; only do it when the size
     // actually changes so a slider tick doesn't pay a full-canvas reset every
     // frame (clearRect below handles the per-pass clear).
@@ -394,9 +515,17 @@ export default function MultiChannelCanvas({
     ctx.clearRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'lighter';
 
-    const off = document.createElement('canvas');
-    off.width = w;
-    off.height = h;
+    // Reuse the scratch canvas across passes — a fresh one per pass meant a
+    // full width*height allocation on every slider tick. Every pixel of it is
+    // overwritten below (alpha included) before it is drawn, so there is no
+    // stale content to clear.
+    let off = offscreenRef.current;
+    if (!off) {
+      off = document.createElement('canvas');
+      offscreenRef.current = off;
+    }
+    if (off.width !== w) off.width = w;
+    if (off.height !== h) off.height = h;
     const offCtx = off.getContext('2d', { willReadFrequently: true });
     if (!offCtx) {
       logger.warn('MultiChannelCanvas: offscreen 2D context unavailable');
@@ -430,10 +559,16 @@ export default function MultiChannelCanvas({
     opacitiesKey,
     channelColors,
     channelOpacities,
+    // A path flip remounts the <canvas> (new key ⇒ new element), so the last
+    // composite is gone and has to be replayed on the new one.
+    renderPath,
   ]);
 
   return (
     <canvas
+      // Part of the identity, not just a value: flipping to '2d' must give us
+      // a NEW element, because this one is stuck in WebGL context mode.
+      key={renderPath}
       ref={canvasRef}
       width={width}
       height={height}
