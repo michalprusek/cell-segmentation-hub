@@ -89,3 +89,7 @@ mt34-benchmark/
 # shouldn't be formatted or linted.
 .remember/
 
+# Python virtualenvs (see .gitignore)
+.venv*/
+venv/
+**/.venv*/
