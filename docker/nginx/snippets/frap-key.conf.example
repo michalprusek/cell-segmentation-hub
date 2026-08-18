@@ -1,0 +1,19 @@
+# Template for docker/nginx/snippets/frap-key.conf, which is GIT-IGNORED because
+# it holds the shared secret. Copy this file to frap-key.conf on the server and
+# replace the placeholder with the real key.
+#
+#   cp frap-key.conf.example frap-key.conf   # then edit, then: nginx -t && reload
+#
+# The map sets $frap_authorized, which `location = /api/frap/targets` tests. A
+# request with no header, or any value not listed here, falls to the default and
+# is refused with 401 before it can reach the ML service.
+#
+# Generate a key with:  openssl rand -base64 32 | tr -d '=+/' | cut -c1-43
+#
+# Rotating it means editing this file on the server and updating [server] api_key
+# in the microscope PC's config.ini -- see github.com/michalprusek/nis-elements-frap-targets
+
+map $http_x_frap_key $frap_authorized {
+    default                                     0;
+    "REPLACE_WITH_THE_REAL_KEY"                 1;
+}
