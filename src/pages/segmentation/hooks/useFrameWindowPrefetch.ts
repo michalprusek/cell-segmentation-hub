@@ -175,6 +175,14 @@ export function useFrameWindowPrefetch({
     if (!enabled || windowFrames.length === 0) return;
 
     const startedImageUrls: string[] = [];
+    // Fetch-warmed (multi-channel) URLs, so the cleanup can cancel the ones
+    // that left the window — the same courtesy the image path already gets.
+    const startedFetches = new Map<string, AbortController>();
+    /** Fetch warms whose body has been fully read, so the HTTP cache holds
+     *  them. Mirrors `frameImageCache.isReady`: a finished warm must NOT be
+     *  aborted or un-marked when the window shifts, or every shift re-fetches
+     *  the whole window instead of just its leading edge. */
+    const completedFetches = new Set<string>();
 
     // Image prefetch — fire and forget for URLs we haven't seen.
     // The ref-tracked set is more aggressive than FrameImageCache.has
@@ -188,10 +196,37 @@ export function useFrameWindowPrefetch({
         const url = buildFrameImageUrl(frame.id, channel);
         if (prefetchedRef.current.has(url)) continue;
         prefetchedRef.current.add(url);
-        startedImageUrls.push(url);
-        frameImageCache.prefetch(url).catch(() => {
-          /* silent — surfaced by the actual mount */
-        });
+
+        if (channel === null) {
+          // Single-channel `/display` mode: this URL really is shown through
+          // an <img>, so warming the element cache is the point.
+          startedImageUrls.push(url);
+          frameImageCache.prefetch(url).catch(() => {
+            /* silent — surfaced by the actual mount */
+          });
+          continue;
+        }
+
+        // Multi-channel: MultiChannelCanvas fetches and decodes these itself
+        // and never puts them in an <img>. Warming them with `new Image()`
+        // made the browser fully decode each PNG into an RGBA bitmap that
+        // nothing ever draws — 8.3 MB apiece at 1474x1412, so roughly 250 MB
+        // across a 15-frame two-channel window — purely to populate the HTTP
+        // cache. A plain fetch populates exactly the same cache and decodes
+        // nothing.
+        const controller = new AbortController();
+        startedFetches.set(url, controller);
+        fetch(url, { signal: controller.signal })
+          // Read the body: an unread response is not reliably stored, and
+          // storing it is the entire point of this warm. The bytes are
+          // discarded immediately — the copy that matters is the HTTP cache's.
+          .then(res => res.arrayBuffer())
+          .then(() => {
+            completedFetches.add(url);
+          })
+          .catch(() => {
+            /* silent — the displayed frame surfaces its own failures */
+          });
       }
     }
 
@@ -237,6 +272,14 @@ export function useFrameWindowPrefetch({
           // abort means we never saw the response.
           prefetchedSet.delete(url);
         }
+      }
+      // Same for the fetch-warmed multi-channel URLs. A cancelled warm never
+      // saw a response, so drop it from the seen-set and let a later window
+      // shift retry it.
+      for (const [url, controller] of startedFetches) {
+        if (completedFetches.has(url)) continue; // already in the HTTP cache
+        controller.abort();
+        prefetchedSet.delete(url);
       }
       // React Query handles its own cancellation when the queryClient
       // detects the cache entry's signal observer count drops.
