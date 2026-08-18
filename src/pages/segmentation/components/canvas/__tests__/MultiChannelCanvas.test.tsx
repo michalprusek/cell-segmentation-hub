@@ -35,12 +35,12 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { toast } from 'sonner';
-import { createCompositor } from '@/lib/webglCompositor';
-import type {
-  Compositor,
-  CompositorChannel,
-  CompositorWindow,
-} from '@/lib/webglCompositor.types';
+import {
+  createCompositor,
+  type Compositor,
+  type CompositorChannel,
+  type CompositorWindow,
+} from '@/lib/webglCompositor';
 import { createMockCanvasContext } from '@/test-utils/canvasTestUtils';
 import MultiChannelCanvas from '../MultiChannelCanvas';
 
@@ -721,7 +721,8 @@ describe('MultiChannelCanvas', () => {
       expect(ch1?.opacity).toBe(1); // absent from channelOpacities ⇒ 100 %
       expect(ch1?.width).toBe(400);
       expect(ch1?.height).toBe(300);
-      expect(ch1?.bitDepth).toBe(8);
+      // The sample view IS the depth — there is no separate bitDepth field to
+      // disagree with it.
       expect(ch1?.data).toBeInstanceOf(Uint8Array);
       expect(ch1?.data.length).toBe(400 * 300);
 

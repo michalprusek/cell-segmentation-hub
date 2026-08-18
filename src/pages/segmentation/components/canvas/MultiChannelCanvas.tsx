@@ -43,12 +43,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { decodeGrayPng } from '@/lib/png16';
-import { createCompositor } from '@/lib/webglCompositor';
-import type {
-  Compositor,
-  CompositorChannel,
-  CompositorWindow,
-} from '@/lib/webglCompositor.types';
+import { buildLut } from '@/lib/windowLevel';
+import {
+  createCompositor,
+  type Compositor,
+  type CompositorChannel,
+  type CompositorWindow,
+} from '@/lib/webglCompositor';
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
 import { useLanguage } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
@@ -94,6 +95,13 @@ interface ChannelSamples {
   bitDepth: number;
   /** length = width*height, one grayscale sample per pixel. */
   data: Uint16Array | Uint8Array;
+  /** Min/max sample across this channel. Carried from the decoder rather than
+   *  recomputed: decodeGrayPng already found both inside the loop it had to
+   *  run anyway, and rescanning here cost a second full pass over every sample
+   *  of every channel — ~6.2 M iterations per frame at 1474x1412 x3, on the
+   *  main thread, for a number that was already known. */
+  min: number;
+  max: number;
 }
 
 /**
@@ -130,29 +138,6 @@ function hexToRgb(hex: string): [number, number, number] {
   return [255, 255, 255];
 }
 
-/** Window/level LUT over the sample domain [0, rangeMax] → 8-bit display.
- *  Sized to the current channel set's brightest value, so a 16-bit frame
- *  gets up to a 65536-entry table (64 KB, rebuilt on each windowing pass —
- *  Min/Max/colour/opacity change). Values ≤ windowMin map to black,
- *  ≥ windowMax to white. */
-function buildLut(
-  windowMin: number,
-  windowMax: number,
-  rangeMax: number
-): Uint8ClampedArray {
-  const size = Math.min(65535, Math.max(1, Math.round(rangeMax))) + 1;
-  const lut = new Uint8ClampedArray(size);
-  const lo = Math.min(windowMin, windowMax);
-  const hi = Math.max(windowMin, windowMax);
-  const range = Math.max(1, hi - lo);
-  for (let i = 0; i < size; i++) {
-    if (i <= lo) lut[i] = 0;
-    else if (i >= hi) lut[i] = 255;
-    else lut[i] = Math.round(((i - lo) * 255) / range);
-  }
-  return lut;
-}
-
 /** Fallback for non-grayscale PNGs: decode 8-bit via createImageBitmap. */
 async function decode8Bit(blob: Blob): Promise<ChannelSamples | null> {
   const bitmap = await createImageBitmap(blob);
@@ -171,8 +156,16 @@ async function decode8Bit(blob: Blob): Promise<ChannelSamples | null> {
   bitmap.close?.();
   const id = octx.getImageData(0, 0, w, h);
   const data = new Uint8Array(w * h);
-  for (let p = 0, i = 0; p < id.data.length; p += 4, i++) data[i] = id.data[p];
-  return { channel: '', width: w, height: h, bitDepth: 8, data };
+  let min = 255;
+  let max = 0;
+  // Range comes free here — the loop is already touching every sample.
+  for (let p = 0, i = 0; p < id.data.length; p += 4, i++) {
+    const v = id.data[p];
+    data[i] = v;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return { channel: '', width: w, height: h, bitDepth: 8, data, min, max };
 }
 
 export default function MultiChannelCanvas({
@@ -209,6 +202,11 @@ export default function MultiChannelCanvas({
   // It used to be `document.createElement('canvas')` INSIDE the effect, i.e. a
   // fresh width*height bitmap on every slider tick.
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  // Scratch pixel buffer for the CPU composite, kept alongside the canvas it is
+  // drawn into. createImageData allocates AND spec-mandates a zero fill —
+  // 8.3 MB at 1474x1412 — every call, and every byte of it is overwritten
+  // below before it is used, so paying for that per pass was pure waste.
+  const outImgRef = useRef<ImageData | null>(null);
   const [renderPath, setRenderPath] = useState<RenderPath>('webgl');
   // Bumped after a successful decode to trigger the windowing/composite
   // effect (which reads decodedRef).
@@ -332,6 +330,8 @@ export default function MultiChannelCanvas({
                 height: decoded.height,
                 bitDepth: decoded.bitDepth,
                 data: decoded.data,
+                min: decoded.min,
+                max: decoded.max,
               } as ChannelSamples;
             }
             const fallback = await decode8Bit(blob);
@@ -392,16 +392,14 @@ export default function MultiChannelCanvas({
       }
 
       // Combined sample range across visible channels → drives the ImageJ-
-      // style auto-scale + slider bounds in ImageDisplayContext.
+      // style auto-scale + slider bounds in ImageDisplayContext. Reduces over
+      // N per-channel scalars the decoders already produced, NOT over the
+      // samples themselves.
       let cmin = Infinity;
       let cmax = -Infinity;
       for (const cs of loaded) {
-        const src = cs.data;
-        for (let i = 0; i < src.length; i++) {
-          const v = src[i];
-          if (v < cmin) cmin = v;
-          if (v > cmax) cmax = v;
-        }
+        if (cs.min < cmin) cmin = cs.min;
+        if (cs.max > cmax) cmax = cs.max;
       }
 
       decodedRef.current = loaded;
@@ -480,7 +478,6 @@ export default function MultiChannelCanvas({
         data: cs.data,
         width: cs.width,
         height: cs.height,
-        bitDepth: cs.bitDepth,
         color: hexToRgb(channelColors[cs.channel] ?? '#FFFFFF'),
         opacity: (channelOpacities[cs.channel] ?? 100) / 100,
       }));
@@ -531,7 +528,11 @@ export default function MultiChannelCanvas({
       logger.warn('MultiChannelCanvas: offscreen 2D context unavailable');
       return;
     }
-    const outImg = offCtx.createImageData(w, h);
+    let outImg = outImgRef.current;
+    if (!outImg || outImg.width !== w || outImg.height !== h) {
+      outImg = offCtx.createImageData(w, h);
+      outImgRef.current = outImg;
+    }
     const out = outImg.data;
 
     for (const cs of loaded) {
