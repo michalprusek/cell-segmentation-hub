@@ -4,17 +4,19 @@
  * jsdom has no WebGL, so the suite is split in two:
  *
  *  1. ARITHMETIC — `computeChannelUniforms` / `evaluateChannelSample` are pure,
- *     so they are checked against a verbatim JavaScript port of the CPU
- *     composite loop that MultiChannelCanvas ran (`buildLut` + the per-pixel
- *     tint expression, copied unchanged below). Plus textual assertions that
- *     the GLSL really contains the same expressions — the shader itself can
- *     only be verified by eye here, so the text assertions are the guard
- *     against someone "simplifying" `>> 8` into `/ 255`.
+ *     so they are checked against the REAL `buildLut` the CPU composite runs,
+ *     imported from `@/lib/windowLevel` rather than copied here. That import is
+ *     the point: a copy would stay green after someone edited the production
+ *     tone curve, and the two composite paths would drift apart unnoticed.
+ *     Plus textual assertions that the GLSL contains the same expressions — the
+ *     shader can only be verified by eye here, so those are the guard against
+ *     someone "simplifying" `>> 8` into `/ 255`.
  *
  *  2. CALL SEQUENCING — `createCompositor` is driven against a hand-written
  *     fake WebGL2RenderingContext that appends every call to a shared log, so
  *     the tests can assert order and shape: program built once, one draw per
- *     channel, texSubImage2D on redraw, blend state, disposal.
+ *     channel, no re-upload when the samples are unchanged, blend state,
+ *     disposal.
  *
  * WHAT THIS CANNOT PROVE: no pixels are rendered anywhere in this file. The
  * fake context proves the compositor issues the right calls in the right
@@ -29,35 +31,18 @@ import {
   VERTEX_SHADER_SOURCE,
   FRAGMENT_SHADER_SOURCE,
   type ChannelUniforms,
+  type CompositorChannel,
+  type CompositorWindow,
 } from '../webglCompositor';
-import type {
-  CompositorChannel,
-  CompositorWindow,
-} from '../webglCompositor.types';
+import { buildLut } from '../windowLevel';
 import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
-// Reference implementation — copied VERBATIM from MultiChannelCanvas's CPU
-// path. This is the thing the shader must reproduce; do not "clean it up".
+// Reference implementation — the per-pixel expression only. It stays copied
+// because in production it is INLINED inside the hot composite loop, and
+// extracting it to share would put a call per pixel back into the very loop
+// this compositor exists to remove. `buildLut` above is imported, not copied.
 // ---------------------------------------------------------------------------
-
-function buildLut(
-  windowMin: number,
-  windowMax: number,
-  rangeMax: number
-): Uint8ClampedArray {
-  const size = Math.min(65535, Math.max(1, Math.round(rangeMax))) + 1;
-  const lut = new Uint8ClampedArray(size);
-  const lo = Math.min(windowMin, windowMax);
-  const hi = Math.max(windowMin, windowMax);
-  const range = Math.max(1, hi - lo);
-  for (let i = 0; i < size; i++) {
-    if (i <= lo) lut[i] = 0;
-    else if (i >= hi) lut[i] = 255;
-    else lut[i] = Math.round(((i - lo) * 255) / range);
-  }
-  return lut;
-}
 
 /** The CPU path's per-pixel expression, before the Uint8ClampedArray store. */
 function cpuComposite(
@@ -84,12 +69,19 @@ function makeChannel(
     data: new Uint16Array(4 * 3),
     width: 4,
     height: 3,
-    bitDepth: 16,
     color: [255, 255, 255],
     opacity: 1,
     ...overrides,
   };
 }
+
+// Spies are torn down here, once, for the whole file. Two tests used to call
+// vi.restoreAllMocks() from inside their own body, which restores EVERY spy in
+// the file mid-run — harmless while each describe sets up its own, and a
+// mystery failure in some unrelated test the moment a shared spy is added.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // ---------------------------------------------------------------------------
 // Fake WebGL2 context
@@ -133,13 +125,26 @@ interface GlCall {
 
 interface FakeGl {
   calls: GlCall[];
-  state: { compileOk: boolean; linkOk: boolean; textureOk: boolean };
+  state: {
+    compileOk: boolean;
+    linkOk: boolean;
+    textureOk: boolean;
+    /** Drives gl.isContextLost(). Set it to simulate a context that has died
+     *  WITHOUT the webglcontextlost event having been dispatched yet — the
+     *  window isAlive() exists to cover. */
+    contextLost: boolean;
+  };
   [key: string]: unknown;
 }
 
 function createFakeGl(): FakeGl {
   const calls: GlCall[] = [];
-  const state = { compileOk: true, linkOk: true, textureOk: true };
+  const state = {
+    compileOk: true,
+    linkOk: true,
+    textureOk: true,
+    contextLost: false,
+  };
   let nextId = 0;
   const tag = (kind: string) => ({ kind, id: ++nextId });
 
@@ -150,6 +155,7 @@ function createFakeGl(): FakeGl {
     });
 
   return {
+    isContextLost: fn('isContextLost', () => state.contextLost),
     ...GL_ENUMS,
     calls,
     state,
@@ -487,10 +493,6 @@ describe('createCompositor — construction failure', () => {
     vi.spyOn(logger, 'error').mockImplementation(() => undefined);
     vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
   });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it('returns null when WebGL2 is unavailable', () => {
     expect(createCompositor(attachContext(null))).toBeNull();
     expect(logger.warn).toHaveBeenCalled();
@@ -640,7 +642,12 @@ describe('createCompositor — draw', () => {
     expect(named(gl, 'uniform3f')[0].args.slice(1)).toEqual([255, 0, 128]);
   });
 
-  it('allocates a texture on the first draw and re-fills it on the second', () => {
+  it('allocates once and does NOT re-upload when the samples are unchanged', () => {
+    // THE SLIDER-DRAG CASE. A window/level drag re-runs the whole composite at
+    // pointer rate while the decoded samples stay the same object, so an
+    // unconditional upload would copy 4.2 MB per channel per tick (12.5 MB for
+    // three) into the driver for data already resident. Identity is the right
+    // test: a different array only ever appears with a different decode.
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
     const channel = makeChannel();
@@ -651,7 +658,24 @@ describe('createCompositor — draw', () => {
     expect(countOf(gl, 'texSubImage2D')).toBe(0);
 
     compositor.draw([channel], WINDOW);
-    // Same name, same dimensions -> reuse the allocation.
+    expect(countOf(gl, 'createTexture')).toBe(1);
+    expect(countOf(gl, 'texImage2D')).toBe(1);
+    expect(countOf(gl, 'texSubImage2D')).toBe(0);
+    // Still bound and drawn — skipping the UPLOAD must not skip the draw.
+    expect(countOf(gl, 'drawArrays')).toBe(2);
+  });
+
+  it('re-fills the existing allocation when new samples arrive', () => {
+    // The next frame of a video: same channel, same size, different pixels.
+    const gl = createFakeGl();
+    const compositor = createCompositor(attachContext(gl))!;
+
+    compositor.draw([makeChannel()], WINDOW);
+    const nextFrame = makeChannel();
+    compositor.draw([nextFrame], WINDOW);
+
+    // makeChannel() builds a fresh array each call, so the second draw uploads
+    // into the SAME texture rather than allocating another.
     expect(countOf(gl, 'createTexture')).toBe(1);
     expect(countOf(gl, 'texImage2D')).toBe(1);
     expect(countOf(gl, 'texSubImage2D')).toBe(1);
@@ -664,7 +688,7 @@ describe('createCompositor — draw', () => {
       3,
       GL_ENUMS.RED_INTEGER,
       GL_ENUMS.UNSIGNED_SHORT,
-      channel.data,
+      nextFrame.data,
     ]);
   });
 
@@ -690,16 +714,15 @@ describe('createCompositor — draw', () => {
     expect(countOf(gl, 'deleteTexture')).toBe(1);
   });
 
-  it('re-allocates when the same channel changes bit depth', () => {
+  it('re-allocates when the same channel changes sample depth', () => {
+    // Depth is read off the sample view, not off a separate field, so this is
+    // what a 16-bit channel replaced by an 8-bit one actually looks like.
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
 
-    compositor.draw([makeChannel({ bitDepth: 16 })], WINDOW);
+    compositor.draw([makeChannel({ data: new Uint16Array(4 * 3) })], WINDOW);
     gl.calls.length = 0;
-    compositor.draw(
-      [makeChannel({ bitDepth: 8, data: new Uint8Array(4 * 3) })],
-      WINDOW
-    );
+    compositor.draw([makeChannel({ data: new Uint8Array(4 * 3) })], WINDOW);
 
     expect(countOf(gl, 'deleteTexture')).toBe(1);
     expect(countOf(gl, 'texImage2D')).toBe(1);
@@ -710,11 +733,11 @@ describe('createCompositor — draw', () => {
     [8, () => new Uint8Array(12), GL_ENUMS.R8UI, GL_ENUMS.UNSIGNED_BYTE],
   ])(
     '%p-bit data uploads as an integer texture with the matching type',
-    (bitDepth, makeData, internalFormat, type) => {
+    (_bits, makeData, internalFormat, type) => {
       const gl = createFakeGl();
       const compositor = createCompositor(attachContext(gl))!;
       compositor.draw(
-        [makeChannel({ bitDepth, data: makeData() as Uint16Array })],
+        [makeChannel({ data: makeData() as Uint16Array })],
         WINDOW
       );
       const args = named(gl, 'texImage2D')[0].args;
@@ -754,7 +777,9 @@ describe('createCompositor — draw', () => {
     expect(countOf(gl, 'createVertexArray')).toBe(1);
     expect(countOf(gl, 'createTexture')).toBe(2);
     expect(countOf(gl, 'texImage2D')).toBe(2);
-    expect(countOf(gl, 'texSubImage2D')).toBe(8);
+    // Zero, not eight: the same two arrays are redrawn five times, which is the
+    // slider-drag shape. Only the draw calls repeat.
+    expect(countOf(gl, 'texSubImage2D')).toBe(0);
     expect(countOf(gl, 'drawArrays')).toBe(10);
   });
 
@@ -792,7 +817,6 @@ describe('createCompositor — draw', () => {
     expect(() => compositor.draw([makeChannel()], WINDOW)).not.toThrow();
     expect(countOf(gl, 'drawArrays')).toBe(0);
     expect(logger.error).toHaveBeenCalled();
-    vi.restoreAllMocks();
   });
 });
 
@@ -837,13 +861,25 @@ describe('createCompositor — setSize', () => {
 });
 
 describe('createCompositor — context loss', () => {
+  it('reports dead as soon as the CONTEXT is, before the event arrives', () => {
+    // webglcontextlost is dispatched asynchronously, so between the context
+    // dying and the handler running there is a window in which our own flag
+    // still says "alive". A composite scheduled in that window would draw into
+    // a dead context and show nothing, with no fallback triggered — which is
+    // the whole reason isAlive() asks gl.isContextLost() rather than trusting
+    // its own bookkeeping.
+    const gl = createFakeGl();
+    const compositor = createCompositor(attachContext(gl))!;
+    expect(compositor.isAlive()).toBe(true);
+
+    gl.state.contextLost = true; // context gone; no event dispatched yet
+
+    expect(compositor.isAlive()).toBe(false);
+  });
+
   beforeEach(() => {
     vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
   });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it('prevents the default, notifies the caller and stops drawing', () => {
     const gl = createFakeGl();
     const canvas = attachContext(gl);
@@ -973,6 +1009,5 @@ describe('createCompositor — dispose', () => {
     canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
     compositor.dispose();
     expect(countOf(lost, 'getExtension')).toBe(0);
-    vi.restoreAllMocks();
   });
 });

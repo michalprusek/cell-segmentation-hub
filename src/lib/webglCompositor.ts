@@ -38,12 +38,70 @@
  */
 
 import { logger } from '@/lib/logger';
-import type {
-  Compositor,
-  CompositorChannel,
-  CompositorWindow,
-  CreateCompositor,
-} from './webglCompositor.types';
+import { MAX_LUT_INDEX } from '@/lib/windowLevel';
+
+// ---------------------------------------------------------------------------
+// Contract
+//
+// Declared here rather than in a companion `.types.ts`: this module exports no
+// React component, so the `react-refresh/only-export-components` rule that
+// forces the split for the context files does not apply, and there is no import
+// cycle to break. Splitting them meant the same paragraphs appeared twice and
+// every contract change touched two files.
+// ---------------------------------------------------------------------------
+
+/** One decoded channel, ready to composite. Mirrors MultiChannelCanvas's
+ *  internal ChannelSamples plus the per-channel display settings. */
+export interface CompositorChannel {
+  /** Channel name — also the texture cache key. */
+  channel: string;
+  /** width*height grayscale samples, row-major, at native depth. */
+  data: Uint16Array | Uint8Array;
+  width: number;
+  height: number;
+  /** Display tint, each component 0-255, as produced by hexToRgb. */
+  color: [number, number, number];
+  /** 0-1. Multiplies the tinted result, matching the CPU path's `scale`. */
+  opacity: number;
+}
+
+/** Window/level, in RAW SAMPLE UNITS (not normalised). Identical meaning to
+ *  the arguments buildLut() took on the CPU path. */
+export interface CompositorWindow {
+  min: number;
+  max: number;
+  /** Largest sample value the LUT spanned. Retained so the shader can
+   *  reproduce the CPU path's clamping behaviour exactly. */
+  rangeMax: number;
+}
+
+export interface Compositor {
+  /** Resize the drawing buffer. A no-op when the size is unchanged, so a
+   *  per-frame caller pays nothing (assigning canvas.width clears the buffer
+   *  even when the value does not change, which is why the guard is here and
+   *  not an obligation on the caller). */
+  setSize(width: number, height: number): void;
+
+  /**
+   * Draw one composite. Channels are blended ADDITIVELY, matching the CPU
+   * path's `globalCompositeOperation = 'lighter'`, so their order is
+   * irrelevant. Safe to call on every frame and on every slider tick.
+   */
+  draw(channels: CompositorChannel[], window: CompositorWindow): void;
+
+  /** Release textures, buffers, programs and the GL context. */
+  dispose(): void;
+
+  /** False once the GL context has been lost and not yet restored. The caller
+   *  uses this to fall back to the 2D path rather than render nothing. */
+  isAlive(): boolean;
+}
+
+/** See createCompositor below for why this returns null instead of throwing. */
+export type CreateCompositor = (
+  canvas: HTMLCanvasElement,
+  onContextLost?: () => void
+) => Compositor | null;
 
 // ---------------------------------------------------------------------------
 // Shader sources
@@ -116,9 +174,6 @@ void main() {
 // ---------------------------------------------------------------------------
 // Pure uniform derivation (testable without a GL context)
 // ---------------------------------------------------------------------------
-
-/** Largest index buildLut() would ever produce (size caps at 65536 entries). */
-const MAX_LUT_INDEX = 65535;
 
 /** Clip-space positions for two triangles covering the viewport. */
 const QUAD_VERTICES = new Float32Array([
@@ -238,9 +293,13 @@ interface TextureEntry {
   texture: WebGLTexture;
   width: number;
   height: number;
-  bitDepth: number;
   /** gl.UNSIGNED_SHORT or gl.UNSIGNED_BYTE. */
   type: number;
+  /** The exact sample view last uploaded. Compared BY IDENTITY to skip the
+   *  upload entirely when nothing about the pixels changed — see uploadChannel.
+   *  Holds a reference, so a channel that stops being drawn pins its last frame
+   *  until the next upload or dispose(); one frame per channel, bounded. */
+  data: ArrayBufferView;
 }
 
 function compileShader(
@@ -427,18 +486,28 @@ export const createCompositor: CreateCompositor = (
   const uploadChannel = (channel: CompositorChannel): WebGLTexture | null => {
     // The GL type must match the ArrayBufferView actually passed — a
     // UNSIGNED_SHORT upload of a Uint8Array is an INVALID_OPERATION that leaves
-    // the texture incomplete (every sample reads 0). Deriving it from the view
-    // rather than from `bitDepth` is both safer and numerically identical.
+    // the texture incomplete (every sample reads 0). The sample view is the
+    // single source of truth for depth; an explicit `bitDepth` field on the
+    // channel would only be a second one, free to disagree.
     const isShort = channel.data instanceof Uint16Array;
     const type = isShort ? gl.UNSIGNED_SHORT : gl.UNSIGNED_BYTE;
     const internalFormat = isShort ? gl.R16UI : gl.R8UI;
 
     let entry = textures.get(channel.channel);
+    // Nothing about the pixels changed — the common case by far. A slider drag
+    // re-runs the whole composite at pointer rate while `decodedRef` keeps
+    // handing back the SAME Uint16Array, so without this the frame's samples
+    // are re-copied to the driver on every tick: 4.2 MB per channel at
+    // 1474x1412, ~12.5 MB per tick for three. Identity is the right test
+    // precisely because a new array only ever appears with a new decode.
+    if (entry && entry.data === channel.data) {
+      gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+      return entry.texture;
+    }
     if (
       entry &&
       (entry.width !== channel.width ||
         entry.height !== channel.height ||
-        entry.bitDepth !== channel.bitDepth ||
         entry.type !== type)
     ) {
       gl.deleteTexture(entry.texture);
@@ -477,8 +546,8 @@ export const createCompositor: CreateCompositor = (
         texture,
         width: channel.width,
         height: channel.height,
-        bitDepth: channel.bitDepth,
         type,
+        data: channel.data,
       });
       return texture;
     }
@@ -495,6 +564,7 @@ export const createCompositor: CreateCompositor = (
       type,
       channel.data
     );
+    entry.data = channel.data;
     return entry.texture;
   };
 
@@ -566,7 +636,13 @@ export const createCompositor: CreateCompositor = (
     },
 
     isAlive(): boolean {
-      return !disposed && !contextLost;
+      // Asks the CONTEXT, not just our own bookkeeping. `contextLost` is set by
+      // the webglcontextlost handler, and that event is dispatched
+      // asynchronously — so in the one window this method exists for (the
+      // context dies, a composite runs before the event arrives) a flag-only
+      // answer is `true`, which is exactly wrong. gl.isContextLost() is
+      // authoritative and synchronous.
+      return !disposed && !contextLost && !gl.isContextLost();
     },
   };
 };
