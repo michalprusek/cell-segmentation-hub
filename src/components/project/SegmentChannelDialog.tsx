@@ -75,9 +75,17 @@ export function SegmentChannelDialog({
           className="space-y-2 py-2"
         >
           {channels.map(ch => (
-            <div key={ch} className="flex items-center space-x-2">
-              <RadioGroupItem value={ch} id={`channel-${ch}`} />
-              <Label htmlFor={`channel-${ch}`} className="cursor-pointer">
+            <div key={ch} className="flex min-w-0 items-center space-x-2">
+              <RadioGroupItem
+                value={ch}
+                id={`channel-${ch}`}
+                className="flex-shrink-0"
+              />
+              <Label
+                htmlFor={`channel-${ch}`}
+                className="min-w-0 truncate cursor-pointer"
+                title={ch}
+              >
                 {ch}
               </Label>
             </div>

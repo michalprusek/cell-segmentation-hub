@@ -69,12 +69,17 @@ export function ChannelSwitcher({ channels }: ChannelSwitcherProps) {
         <SelectContent>
           {channels.map(ch => (
             <SelectItem key={ch.name} value={ch.name}>
-              <span className="flex items-center gap-2">
+              <span className="flex max-w-[280px] items-center gap-2">
                 <span
-                  className="inline-block h-2 w-2 rounded-full"
+                  className="inline-block h-2 w-2 flex-shrink-0 rounded-full"
                   style={{ backgroundColor: ch.displayColor ?? '#888' }}
                 />
-                <span>{ch.displayName ?? ch.name}</span>
+                <span
+                  className="min-w-0 truncate"
+                  title={ch.displayName ?? ch.name}
+                >
+                  {ch.displayName ?? ch.name}
+                </span>
                 {ch.isSegmentationSource && (
                   <span
                     className="text-[10px] text-muted-foreground"
