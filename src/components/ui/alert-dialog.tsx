@@ -25,6 +25,25 @@ const AlertDialogOverlay = React.forwardRef<
 ));
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 
+/**
+ * The `[&>*]:min-w-0` is load-bearing, not decoration.
+ *
+ * This content box is a `grid`, so every direct child is a grid item, and a grid
+ * item's default `min-width: auto` is a CONTENT-based minimum: one long
+ * unbreakable string -- a 128-character channel name, a pasted email, a server
+ * error with a URL in it -- makes the implicit track wider than `max-w-lg` and
+ * the whole dialog grows past the viewport, taking its buttons with it. Every
+ * dialog in this app had to defend against that individually, and most did not.
+ *
+ * `min-w-0` caps the track so the dialog keeps its geometry. It does NOT make
+ * the text wrap: `truncate` (or `break-words`) is still required at each site
+ * that renders a user-supplied string, and `break-words` in particular needs
+ * this class to be present on the grid-item ancestor, because `overflow-wrap`
+ * is excluded from min-content sizing by spec and would otherwise never fire.
+ *
+ * `overflow-hidden` is deliberately NOT used here -- it would clip any child
+ * that renders outside the box rather than through a portal.
+ */
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
@@ -34,7 +53,7 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg',
+        'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg [&>*]:min-w-0 translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg',
         className
       )}
       {...props}
