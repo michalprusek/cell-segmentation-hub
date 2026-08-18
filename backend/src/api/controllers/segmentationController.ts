@@ -440,10 +440,10 @@ class SegmentationController {
         return;
       }
 
-      if (threshold < 0.1 || threshold > 0.9) {
+      if (threshold < 0.1 || threshold > 0.99) {
         ResponseHelper.validationError(
           res,
-          'Threshold musí být mezi 0.1 a 0.9'
+          'Threshold musí být mezi 0.1 a 0.99'
         );
         return;
       }
