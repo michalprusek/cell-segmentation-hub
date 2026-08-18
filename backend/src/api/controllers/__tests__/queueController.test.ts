@@ -271,17 +271,30 @@ describe('Queue Controller Type Safety', () => {
     it('should handle threshold boundaries correctly', () => {
       // Valid boundaries
       const minValid = { threshold: 0.1 };
-      const maxValid = { threshold: 0.9 };
+      const maxValid = { threshold: 0.99 };
 
       expect(addImageToQueueSchema.safeParse(minValid).success).toBe(true);
       expect(addImageToQueueSchema.safeParse(maxValid).success).toBe(true);
 
       // Invalid boundaries
       const belowMin = { threshold: 0.09 };
-      const aboveMax = { threshold: 0.91 };
+      const aboveMax = { threshold: 1.01 };
 
       expect(addImageToQueueSchema.safeParse(belowMin).success).toBe(false);
       expect(addImageToQueueSchema.safeParse(aboveMax).success).toBe(false);
+    });
+
+    it('accepts the microtubule v5H default of 0.97', () => {
+      // The ceiling used to be 0.9, chosen when every model wanted a cut near
+      // the middle. v5H ships a FITTED foreground cut of 0.97 (see
+      // src/lib/models/modelRegistry.ts), so the frontend sent 0.97 on every
+      // microtubule batch and the API rejected all of them with
+      // "Threshold může být maximálně 0.9" -- batch segmentation of an MT
+      // project was impossible, and nothing in either test suite noticed
+      // because both halves were internally consistent.
+      expect(
+        addImageToQueueSchema.safeParse({ threshold: 0.97 }).success
+      ).toBe(true);
     });
 
     it('should handle priority boundaries correctly', () => {

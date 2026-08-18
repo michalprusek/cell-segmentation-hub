@@ -246,8 +246,8 @@ router.post(
       .withMessage(SEGMENTATION_MODEL_ERROR_MESSAGE),
     body('threshold')
       .optional()
-      .isFloat({ min: 0.1, max: 0.9 })
-      .withMessage('Threshold musí být mezi 0.1 a 0.9'),
+      .isFloat({ min: 0.1, max: 0.99 })
+      .withMessage('Threshold musí být mezi 0.1 a 0.99'),
     body('detectHoles')
       .optional()
       .isBoolean()
