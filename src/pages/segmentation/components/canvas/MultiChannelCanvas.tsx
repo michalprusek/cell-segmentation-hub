@@ -42,7 +42,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { decodeGrayPng } from '@/lib/png16';
+import { decodeGrayPngPooled } from '@/lib/png16Client';
+import { decodedFrameCache, frameCacheKey } from '@/lib/decodedFrameCache';
 import { buildLut } from '@/lib/windowLevel';
 import {
   createCompositor,
@@ -312,6 +313,23 @@ export default function MultiChannelCanvas({
     (async () => {
       const results = await Promise.all(
         fetchChannels.map(async channel => {
+          const cacheKey = frameCacheKey(frameId, channel);
+          const cached = decodedFrameCache.get(cacheKey);
+          if (cached) {
+            // Already decoded — stepping back a frame, replaying a clip, or a
+            // channel toggle that re-runs this effect. The prefetcher warms the
+            // HTTP cache, but the decode is the expensive half and this is the
+            // only thing that keeps it.
+            return {
+              channel,
+              width: cached.width,
+              height: cached.height,
+              bitDepth: cached.bitDepth,
+              data: cached.data,
+              min: cached.min,
+              max: cached.max,
+            } as ChannelSamples;
+          }
           try {
             const url = `/api/images/${frameId}/frame-data?channel=${encodeURIComponent(channel)}`;
             const res = await fetch(url, { signal: controller.signal });
@@ -322,8 +340,13 @@ export default function MultiChannelCanvas({
               return null;
             }
             const blob = await res.blob();
-            const decoded = await decodeGrayPng(blob);
+            // Off the main thread, and in parallel across channels. Decoding
+            // one 1474x1412 16-bit channel is ~15 ms of native inflate plus
+            // ~10 ms of JavaScript un-filtering; doing that inline for two
+            // channels is what froze playback.
+            const decoded = await decodeGrayPngPooled(blob);
             if (decoded) {
+              decodedFrameCache.set(cacheKey, decoded);
               return {
                 channel,
                 width: decoded.width,
