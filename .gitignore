@@ -161,3 +161,17 @@ backend/segmentation/.hf-cache/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# The FRAP endpoint's API key lives in this nginx snippet on the server and must
+# never be committed. The rule was applied by hand on cvat2 during deployment and
+# survived only as an uncommitted local edit -- one `git checkout` from being
+# lost, after which the next `git add -A` there would publish the key.
+docker/nginx/snippets/frap-key.conf
+
+# Local Python virtualenvs. `backend/segmentation` needs one to run its pytest
+# suite, and without this rule the whole tree lands in `git status` and in
+# prettier's --check (which the pre-commit hook runs over the repo), so the hook
+# fails on vendored files nobody wrote.
+.venv*/
+venv/
+**/.venv*/
