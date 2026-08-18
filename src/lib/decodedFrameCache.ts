@@ -81,6 +81,51 @@ export class DecodedFrameCache {
   }
 }
 
+/**
+ * In-flight decodes, keyed the same way as the cache.
+ *
+ * Two callers race for the same frame in the ordinary case: decode-ahead is
+ * working on frame N+1 when the playhead reaches it, so the canvas looks in the
+ * cache, misses (the decode has not finished), and starts a second one. Both
+ * then decode 4 MB of the same samples and one result is thrown away — worse
+ * than wasteful, since the duplicate occupies a worker the NEXT frame needs.
+ *
+ * De-duplicating here rather than in either caller is what makes it work: they
+ * do not know about each other, and the cache key is the only thing they share.
+ */
+const inFlight = new Map<string, Promise<DecodedGray | null>>();
+
+/**
+ * Return the cached samples, join an in-flight decode, or start one — in that
+ * order. `produce` is only called when this is the first request for `key`.
+ */
+export function getOrDecode(
+  key: string,
+  produce: () => Promise<DecodedGray | null>
+): Promise<DecodedGray | null> {
+  const cached = decodedFrameCache.get(key);
+  if (cached) return Promise.resolve(cached);
+
+  const running = inFlight.get(key);
+  if (running) return running;
+
+  const started = produce()
+    .then(result => {
+      if (result) decodedFrameCache.set(key, result);
+      return result;
+    })
+    .finally(() => {
+      inFlight.delete(key);
+    });
+  inFlight.set(key, started);
+  return started;
+}
+
+/** Test seam: forget any in-flight work so suites do not join each other's. */
+export function __resetInFlightForTests(): void {
+  inFlight.clear();
+}
+
 /** Shared instance — the editor shows one video at a time, and a per-component
  *  cache would throw the decoded frames away on every remount (which is what a
  *  render-path flip does). */

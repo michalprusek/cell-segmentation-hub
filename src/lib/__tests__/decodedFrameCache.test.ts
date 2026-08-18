@@ -4,8 +4,14 @@
  * right ones". These tests are about eviction order and byte accounting.
  */
 
-import { describe, it, expect } from 'vitest';
-import { DecodedFrameCache, frameCacheKey } from '../decodedFrameCache';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  DecodedFrameCache,
+  decodedFrameCache,
+  frameCacheKey,
+  getOrDecode,
+  __resetInFlightForTests,
+} from '../decodedFrameCache';
 import type { DecodedGray } from '../png16';
 
 /** A decoded frame of exactly `bytes` bytes (16-bit ⇒ 2 bytes per sample). */
@@ -99,5 +105,67 @@ describe('DecodedFrameCache', () => {
     expect(c.byteSize).toBe(0);
     c.set('b', frame(1000)); // would not fit if bytes had leaked
     expect(c.get('b')).toBeDefined();
+  });
+});
+
+describe('getOrDecode', () => {
+  beforeEach(() => {
+    decodedFrameCache.clear();
+    __resetInFlightForTests();
+  });
+
+  it('does not call the producer at all when the frame is cached', async () => {
+    decodedFrameCache.set('k', frame(400));
+    const produce = vi.fn();
+    await expect(getOrDecode('k', produce)).resolves.toBeDefined();
+    expect(produce).not.toHaveBeenCalled();
+  });
+
+  it('collapses concurrent requests for the same frame into ONE decode', async () => {
+    // The real race: decode-ahead is working on frame N+1 when the playhead
+    // arrives, the canvas misses the cache because the decode has not finished,
+    // and without this both decode 4 MB of the same samples — with the
+    // duplicate occupying a worker the next frame needs.
+    let release!: (v: ReturnType<typeof frame>) => void;
+    const produce = vi.fn(
+      () => new Promise<ReturnType<typeof frame>>(res => (release = res))
+    );
+
+    const a = getOrDecode('k', produce);
+    const b = getOrDecode('k', produce);
+    expect(produce).toHaveBeenCalledTimes(1);
+
+    release(frame(400));
+    const [ra, rb] = await Promise.all([a, b]);
+    expect(ra).toBe(rb); // the same object, not two decodes of equal content
+    expect(decodedFrameCache.get('k')).toBe(ra);
+  });
+
+  it('starts a fresh decode once the previous one has settled', async () => {
+    const produce = vi.fn().mockResolvedValue(frame(400));
+    await getOrDecode('k', produce);
+    decodedFrameCache.clear();
+    await getOrDecode('k', produce);
+    expect(produce).toHaveBeenCalledTimes(2);
+  });
+
+  it('caches nothing and forgets the flight when the decode yields null', async () => {
+    // Null is the decoder's ordinary "not a grayscale 8/16-bit PNG" answer, and
+    // the caller has an 8-bit fallback for it. Leaving a null in flight would
+    // wedge every later request for that frame.
+    const produce = vi.fn().mockResolvedValue(null);
+    await expect(getOrDecode('k', produce)).resolves.toBeNull();
+    expect(decodedFrameCache.get('k')).toBeUndefined();
+
+    await getOrDecode('k', produce);
+    expect(produce).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not wedge the key when the decode rejects', async () => {
+    const failing = vi.fn().mockRejectedValue(new Error('worker died'));
+    await expect(getOrDecode('k', failing)).rejects.toThrow('worker died');
+
+    const ok = vi.fn().mockResolvedValue(frame(400));
+    await expect(getOrDecode('k', ok)).resolves.toBeDefined();
   });
 });

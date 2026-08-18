@@ -20,7 +20,11 @@
 
 import { useEffect, useRef } from 'react';
 import { decodeGrayPngPooled } from '@/lib/png16Client';
-import { decodedFrameCache, frameCacheKey } from '@/lib/decodedFrameCache';
+import {
+  decodedFrameCache,
+  frameCacheKey,
+  getOrDecode,
+} from '@/lib/decodedFrameCache';
 import { buildFrameImageUrl } from './segmentationPolygonCache';
 import { logger } from '@/lib/logger';
 
@@ -83,9 +87,12 @@ export function useDecodeAhead({
               signal: controller.signal,
             });
             if (!res.ok) continue;
-            const decoded = await decodeGrayPngPooled(await res.blob());
+            const blob = await res.blob();
+            // Shared entry point with MultiChannelCanvas: if the playhead has
+            // just arrived at this frame and started its own decode, we join it
+            // instead of duplicating it.
+            await getOrDecode(key, () => decodeGrayPngPooled(blob));
             if (cancelled) return;
-            if (decoded) decodedFrameCache.set(key, decoded);
           } catch (err) {
             if (controller.signal.aborted) return;
             // Speculative work: a failure here costs nothing but the
