@@ -43,7 +43,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { decodeGrayPngPooled } from '@/lib/png16Client';
-import { decodedFrameCache, frameCacheKey } from '@/lib/decodedFrameCache';
+import {
+  decodedFrameCache,
+  frameCacheKey,
+  getOrDecode,
+} from '@/lib/decodedFrameCache';
 import { buildLut } from '@/lib/windowLevel';
 import {
   createCompositor,
@@ -344,9 +348,14 @@ export default function MultiChannelCanvas({
             // one 1474x1412 16-bit channel is ~15 ms of native inflate plus
             // ~10 ms of JavaScript un-filtering; doing that inline for two
             // channels is what froze playback.
-            const decoded = await decodeGrayPngPooled(blob);
+            // getOrDecode, not decodeGrayPngPooled directly: decode-ahead may
+            // already be decoding this exact frame, and joining its work beats
+            // starting a second 4 MB decode that occupies a worker the NEXT
+            // frame is about to need. It stores the result in the cache too.
+            const decoded = await getOrDecode(cacheKey, () =>
+              decodeGrayPngPooled(blob)
+            );
             if (decoded) {
-              decodedFrameCache.set(cacheKey, decoded);
               return {
                 channel,
                 width: decoded.width,
