@@ -15,6 +15,7 @@ import {
   useFrameWindowPrefetch,
   type FrameMinimal,
 } from '../../hooks/useFrameWindowPrefetch';
+import { useDecodeAhead } from '../../hooks/useDecodeAhead';
 
 interface FrameWindowPrefetcherProps {
   frames: readonly FrameMinimal[];
@@ -40,6 +41,19 @@ export default function FrameWindowPrefetcher({
     frames,
     currentIndex,
     channels,
+    enabled,
+    channelCoverage,
+  });
+
+  // Warming the HTTP cache above only removes the network from the critical
+  // path; the ~25 ms per-channel decode was the half that stalled playback.
+  // This runs a few frames ahead so the samples are already decoded when the
+  // playhead arrives. Multi-channel only — the single-channel `/display` path
+  // renders through an <img> and never decodes.
+  useDecodeAhead({
+    frames,
+    currentIndex,
+    channels: visibleChannels,
     enabled,
     channelCoverage,
   });
