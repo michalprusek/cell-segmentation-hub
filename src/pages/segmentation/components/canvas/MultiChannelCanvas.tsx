@@ -48,6 +48,7 @@ import {
   frameCacheKey,
   getOrDecode,
 } from '@/lib/decodedFrameCache';
+import { speculativeFrameRequests } from '@/lib/requestThrottle';
 import { buildLut } from '@/lib/windowLevel';
 import {
   createCompositor,
@@ -336,14 +337,30 @@ export default function MultiChannelCanvas({
           }
           try {
             const url = `/api/images/${frameId}/frame-data?channel=${encodeURIComponent(channel)}`;
-            const res = await fetch(url, { signal: controller.signal });
-            if (!res.ok) {
-              logger.warn(
-                `MultiChannelCanvas: channel '${channel}' frame ${frameId} HTTP ${res.status} ${res.statusText}`
-              );
-              return null;
-            }
-            const blob = await res.blob();
+            // EXEMPT from the speculative queue, not merely ranked ahead of it:
+            // `runImmediate` issues now and never waits. This is the frame the
+            // user is looking at, and a priority slot in a queue is still a
+            // queue — with 4 slots held by window warms, even a first-in-line
+            // displayed frame would wait for one of them to finish
+            // transferring several megabytes.
+            //
+            // It is not free, though: it OCCUPIES a slot for its whole cycle,
+            // so speculative work backs off while it runs and the shared
+            // budget stays honest. Peak concurrency is the cap plus one
+            // mounted canvas's channel count, not unbounded.
+            const blob = await speculativeFrameRequests.runImmediate(
+              async () => {
+                const res = await fetch(url, { signal: controller.signal });
+                if (!res.ok) {
+                  logger.warn(
+                    `MultiChannelCanvas: channel '${channel}' frame ${frameId} HTTP ${res.status} ${res.statusText}`
+                  );
+                  return null;
+                }
+                return res.blob();
+              }
+            );
+            if (!blob) return null;
             // Off the main thread, and in parallel across channels. Decoding
             // one 1474x1412 16-bit channel is ~15 ms of native inflate plus
             // ~10 ms of JavaScript un-filtering; doing that inline for two

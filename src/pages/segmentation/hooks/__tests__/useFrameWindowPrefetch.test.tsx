@@ -1,8 +1,9 @@
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { useFrameWindowPrefetch } from '../useFrameWindowPrefetch';
+import { MAX_SPECULATIVE_REQUESTS } from '@/lib/requestThrottle';
 
 const prefetchMock = vi.fn();
 const isReadyMock = vi.fn().mockReturnValue(false);
@@ -41,13 +42,44 @@ function warmCount(): number {
 }
 
 /** Let the fetch warms settle, the way ~100 ms between real window shifts
- *  does. A warm still in flight is deliberately abandoned and retried, so
- *  without this the dedup assertions below would measure the race, not the
- *  behaviour. */
+ *  does. Multi-channel warms drain through a shared 4-slot throttle, so a
+ *  32-URL window is a dozen sequential waves and a fixed number of microtasks
+ *  would measure the race rather than the behaviour — hence a macrotask turn,
+ *  and `waitFor` for anything counted. */
 async function settleWarms(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise(r => setTimeout(r, 0));
+}
+
+function abortError(): Error {
+  return new DOMException('The operation was aborted.', 'AbortError');
+}
+
+/**
+ * A `fetch` that never responds but DOES reject when aborted — which is what a
+ * real one does. It matters here: the throttle frees a slot when its task
+ * settles, so a mock that ignores its signal would wedge all four slots and
+ * every later assertion in this file would be measuring a deadlock.
+ */
+function neverSettlingFetch(
+  _url: string,
+  init?: RequestInit
+): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    const signal = init?.signal;
+    if (!signal) return;
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+    signal.addEventListener('abort', () => reject(abortError()), {
+      once: true,
+    });
+  });
+}
+
+/** `/api/images/frame-7/frame-data?channel=ch1` -> `frame-7`. */
+function frameIdOf(url: string): string {
+  return /\/images\/([^/]+)\//.exec(url)?.[1] ?? '';
 }
 
 function clearWarms(): void {
@@ -93,7 +125,7 @@ describe('useFrameWindowPrefetch', () => {
     qc.clear();
   });
 
-  it('prefetches every URL in the window on first render', () => {
+  it('warms every URL in the window, a few at a time rather than all at once', async () => {
     const frames = makeFrames(100);
     renderHook(
       () =>
@@ -105,8 +137,12 @@ describe('useFrameWindowPrefetch', () => {
         }),
       { wrapper: wrapper(qc) }
     );
-    // Window = 5 back + 10 ahead + current = 16 frames × 2 channels = 32
-    expect(warmCount()).toBe(32);
+    // Window = 5 back + 10 ahead + current = 16 frames × 2 channels = 32 URLs,
+    // and issuing all 32 in one synchronous burst is the regression. Only the
+    // shared cap goes out immediately; the rest wait for a slot.
+    expect(warmCount()).toBe(MAX_SPECULATIVE_REQUESTS);
+    // ...but none of them are dropped: throttled, not skipped.
+    await waitFor(() => expect(warmCount()).toBe(32));
   });
 
   it('window-shift fires prefetch ONLY for new leading-edge URLs', async () => {
@@ -124,14 +160,17 @@ describe('useFrameWindowPrefetch', () => {
         initialProps: { currentIndex: 20 },
       }
     );
-    expect(warmCount()).toBe(32);
-    await settleWarms();
+    await waitFor(() => expect(warmCount()).toBe(32));
     clearWarms();
 
     // Slide window by 1: only the new leading-edge frame (index 31)
     // contributes its 2 channels — the trailing edge (index 14) is
     // dropped silently, and every other URL is already in prefetchedRef.
     rerender({ currentIndex: 21 });
+    await waitFor(() => expect(warmCount()).toBe(2));
+    // And it stays 2 — a completed warm that fell off the trailing edge is in
+    // the HTTP cache, so the shift must not cancel and re-issue it.
+    await settleWarms();
     expect(warmCount()).toBe(2);
   });
 
@@ -151,17 +190,17 @@ describe('useFrameWindowPrefetch', () => {
       }
     );
     // Window clamped at frames.length - 1 = 19, so frames 13..19 = 7
-    expect(warmCount()).toBe(7);
-    await settleWarms();
+    await waitFor(() => expect(warmCount()).toBe(7));
     clearWarms();
 
     // Advance currentIndex but window stays clamped at the end of the
     // frames array — no new URLs to prefetch.
     rerender({ currentIndex: 19 });
+    await settleWarms();
     expect(warmCount()).toBe(0);
   });
 
-  it('clears dedup state and re-fires on channelsKey change', () => {
+  it('clears dedup state and re-fires on channelsKey change', async () => {
     const frames = makeFrames(50);
     const { rerender } = renderHook(
       ({ channels }: { channels: string[] }) =>
@@ -176,13 +215,13 @@ describe('useFrameWindowPrefetch', () => {
         initialProps: { channels: ['ch1'] },
       }
     );
-    expect(warmCount()).toBe(16);
+    await waitFor(() => expect(warmCount()).toBe(16));
     clearWarms();
 
     // Switching channel set must re-prefetch the whole window for the
     // new URLs (channel name is part of the URL).
     rerender({ channels: ['ch2'] });
-    expect(warmCount()).toBe(16);
+    await waitFor(() => expect(warmCount()).toBe(16));
   });
 
   it('skips polygon prefetch when frame status is not segmented', () => {
@@ -213,39 +252,96 @@ describe('useFrameWindowPrefetch', () => {
     expect(bData).toBeUndefined();
   });
 
-  it('cancels multi-channel warms that never settled, and retries them', async () => {
-    // A user mashing the slider must not leave N requests in flight. The
-    // multi-channel warm is a fetch, so cancellation is its AbortSignal —
-    // frameImageCache is not involved on this path at all.
-    const signals: AbortSignal[] = [];
-    fetchMock
-      .mockReset()
-      .mockImplementation((_url: string, init?: RequestInit) => {
-        if (init?.signal) signals.push(init.signal);
-        return new Promise(() => {}); // never settles: the warm stays pending
+  it('caps concurrent frame-data warms however many channels a project has', async () => {
+    // The regression, reproduced as a unit: 16 window frames × 3 channels = 48
+    // URLs handed over at once. That burst is what put 547 rejections a minute
+    // into nginx's 100 r/s `segmentation` zone. All 48 must still be warmed —
+    // just never more than the cap at a time.
+    const release: Array<() => void> = [];
+    let outstanding = 0;
+    let peak = 0;
+    fetchMock.mockReset().mockImplementation(() => {
+      outstanding++;
+      if (outstanding > peak) peak = outstanding;
+      return new Promise(resolve => {
+        release.push(() => {
+          outstanding--;
+          resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+        });
       });
+    });
 
     const frames = makeFrames(100);
+    renderHook(
+      () =>
+        useFrameWindowPrefetch({
+          frames,
+          currentIndex: 20,
+          channels: ['irm', 'gfp', 'dic'],
+          enabled: true,
+        }),
+      { wrapper: wrapper(qc) }
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(MAX_SPECULATIVE_REQUESTS);
+
+    // Drain one at a time; each completion may admit exactly one more.
+    for (let i = 0; i < 48; i++) {
+      await waitFor(() => expect(release.length).toBeGreaterThan(i));
+      release[i]();
+      await settleWarms();
+      expect(outstanding).toBeLessThanOrEqual(MAX_SPECULATIVE_REQUESTS);
+    }
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(48));
+    expect(peak).toBe(MAX_SPECULATIVE_REQUESTS);
+  });
+
+  it('never issues queued warms for URLs that left the window', async () => {
+    // Cancellation has to reach work that has not been issued yet, not just
+    // work in flight: aborting an already-issued request still cost nginx the
+    // request. A queued entry for a URL that left the window must never be
+    // handed to `fetch` at all.
+    fetchMock.mockReset().mockImplementation(neverSettlingFetch);
+
+    const frames = makeFrames(200);
     const { rerender } = renderHook(
       ({ currentIndex }: { currentIndex: number }) =>
         useFrameWindowPrefetch({
           frames,
           currentIndex,
-          channels: ['ch1'],
+          channels: ['ch1', 'ch2', 'ch3'],
           enabled: true,
         }),
       { wrapper: wrapper(qc), initialProps: { currentIndex: 20 } }
     );
-    expect(signals).toHaveLength(16);
-    expect(signals.every(s => !s.aborted)).toBe(true);
+
+    // 48 URLs wanted, 4 issued, 44 sitting in the queue touching nothing.
+    expect(fetchMock).toHaveBeenCalledTimes(MAX_SPECULATIVE_REQUESTS);
+    const firstSignals = fetchMock.mock.calls.map(
+      c => (c[1] as RequestInit).signal as AbortSignal
+    );
+    const abandonedIds = new Set(
+      Array.from({ length: 16 }, (_, i) => `frame-${15 + i}`)
+    );
     clearWarms();
 
-    rerender({ currentIndex: 40 });
+    // Jump the window somewhere disjoint, as a slider scrub does.
+    rerender({ currentIndex: 120 });
 
-    // Every warm from the first window is aborted...
-    expect(signals.slice(0, 16).every(s => s.aborted)).toBe(true);
-    // ...and the new window is warmed fresh.
-    expect(warmCount()).toBe(16);
+    // In-flight warms from the old window are aborted...
+    expect(firstSignals.every(s => s.aborted)).toBe(true);
+    // ...and the 44 that were still queued are dropped unissued: everything
+    // that reaches `fetch` from here on belongs to the NEW window.
+    await settleWarms();
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
+    const issuedAfterShift = fetchMock.mock.calls.map(c =>
+      frameIdOf(String(c[0]))
+    );
+    expect(issuedAfterShift.some(id => abandonedIds.has(id))).toBe(false);
+    expect(issuedAfterShift.length).toBeLessThanOrEqual(
+      MAX_SPECULATIVE_REQUESTS
+    );
   });
 
   it('warms the multi-channel window WITHOUT decoding it', async () => {
@@ -266,7 +362,7 @@ describe('useFrameWindowPrefetch', () => {
         }),
       { wrapper: wrapper(qc) }
     );
-    expect(fetchMock).toHaveBeenCalled();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(prefetchMock).not.toHaveBeenCalled();
   });
 
@@ -285,7 +381,7 @@ describe('useFrameWindowPrefetch', () => {
         }),
       { wrapper: wrapper(qc) }
     );
-    expect(prefetchMock).toHaveBeenCalled();
+    await waitFor(() => expect(prefetchMock).toHaveBeenCalled());
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
