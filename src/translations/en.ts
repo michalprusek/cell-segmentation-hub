@@ -1182,6 +1182,8 @@ export default {
     deleteAnnotations: 'Delete Annotations',
     addChannel: 'Add channel',
     addChannelSuccess: 'Added channel {{channels}} to {{frames}} frame(s)',
+    addChannelAlignWarning:
+      'Alignment failed on {{rejected}} of {{frames}} frame(s) — only {{shifted}} were registered. The channels could not be correlated (no shared structure); the frames were added unshifted.',
     addChannelFailed: 'Failed to add channel',
     addChannelDialog: {
       title: 'Add channel',

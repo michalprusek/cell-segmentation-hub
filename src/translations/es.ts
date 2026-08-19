@@ -1189,6 +1189,8 @@ export default {
     deleteAnnotations: 'Eliminar anotaciones',
     addChannel: 'Añadir canal',
     addChannelSuccess: 'Canal {{channels}} añadido a {{frames}} fotograma(s)',
+    addChannelAlignWarning:
+      'La alineación falló en {{rejected}} de {{frames}} fotograma(s): solo se registraron {{shifted}}. No se pudieron correlacionar los canales (sin estructura común); los fotogramas se añadieron sin desplazar.',
     addChannelFailed: 'No se pudo añadir el canal',
     addChannelDialog: {
       title: 'Añadir canal',
