@@ -59,6 +59,38 @@ Deploys are autonomous — build the changed service, recreate it, restart nginx
 
 **A change is "done" only when the runtime path that uses it has been observed working.** For user-facing changes, that means a real browser. For API changes, a real curl. For DB changes, a real query. No exceptions.
 
+### The test account — there is no excuse for stopping at the login page
+
+Production has a dedicated verification account. Credentials live OUTSIDE every
+repo, in `~/.claude/spheroseg-e2e-account.txt` (mode 600):
+
+```
+email: claude.e2e.test@example.com
+```
+
+Sign-up is open and e-mail verification is off, so a fresh account can be
+created the same way if that one is ever removed. Use it for every browser
+check; never verify against the user's own account or data.
+
+If the flow needs data the account does not have, MAKE the data rather than
+handing the check back: create a project, and synthesise an input. A multi-page
+16-bit TIFF is accepted as a video and is enough to exercise the multi-channel
+editor —
+
+```python
+import numpy as np, tifffile
+tifffile.imwrite('stack.tif', np.stack([...]), photometric='minisblack')
+```
+
+Playwright can only upload from inside the repo root, so stage the file in
+`.playwright-mcp/` first.
+
+This section exists because the rule above it was ignored for a whole session:
+a decode pipeline was rewritten, measured in Node, deployed, and handed over —
+and the user opened the editor to a console full of 404s that one
+`browser_console_messages` call would have shown. Server logs, unit tests and
+`curl` all looked clean. None of them run the app.
+
 ### Verification gates per change category
 
 The mandatory verification depends on what changed. Apply **every** gate that matches; ignoring "minor" UI tweaks is how regressions slip in.
