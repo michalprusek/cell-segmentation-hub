@@ -102,11 +102,15 @@ def test_an_explicit_threshold_is_forwarded_to_the_model(loader):
 def test_no_threshold_means_the_models_own_fitted_cut(loader):
     """THE reason this defaults to None.
 
-    The /segment route declares `threshold` as `le=0.9`, so this model's fitted
-    0.97 is not expressible there, and the stack-wide default of 0.5 would cut
-    a very confident foreground far too low and flood the instancer. Passing
-    None lets the wrapper use params_v5h.json's prob_thr — and the response
-    must report what was APPLIED, not the empty request.
+    The stack-wide default of 0.5 would cut a very confident foreground far too
+    low and flood the instancer. Passing None lets the wrapper use
+    params_v5h.json's prob_thr — and the response must report what was APPLIED,
+    not the empty request.
+
+    (This used to add that 0.97 was not expressible on /segment at all, whose
+    threshold was declared `le=0.9`. That bound has been raised to 0.99 — it was
+    rejecting every microtubule request with a 422 — but the reason for
+    defaulting to None is unchanged.)
     """
     out = loader.predict_microtubule(Image.new("L", (64, 64)))
     assert loader.loaded_models["microtubule"].seen_threshold is None
