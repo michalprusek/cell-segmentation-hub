@@ -532,10 +532,14 @@ def frap_targets(
     """Segment the IRM page, choose bleach spots, return them in image pixels.
 
     There is deliberately NO threshold parameter. v5H applies its own fitted
-    foreground cut of 0.97 from params_v5h.json; /api/v1/segment declares threshold
-    as le=0.9, so 0.97 is not expressible there, and forwarding a user value would
+    foreground cut of 0.97 from params_v5h.json, and forwarding a user value would
     cut a very confident foreground at 0.5 and flood the instancer with noise. A
     knob that is silently ignored is worse than no knob.
+
+    (This used to add that 0.97 was not even expressible on /api/v1/segment,
+    whose threshold was declared le=0.9. That bound has since been raised to
+    0.99 — it was rejecting every microtubule request the frontend made — but
+    the argument for keeping this endpoint knob-free stands on its own.)
     """
     import json
 

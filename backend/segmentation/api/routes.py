@@ -130,7 +130,12 @@ async def get_status(loader = Depends(get_model_loader)):
 async def segment_image(
     file: UploadFile = File(...),
     model: str = Form("hrnet", description="Model to use for segmentation"),
-    threshold: float = Form(0.5, ge=0.1, le=0.9, description="Segmentation threshold"),
+    threshold: float = Form(
+        0.5,
+        ge=0.1,
+        le=0.99,  # v5H's fitted cut is 0.97 — see api/models.py
+        description="Segmentation threshold",
+    ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):
@@ -271,7 +276,12 @@ async def segment_image(
 async def batch_segment_images(
     files: list[UploadFile] = File(..., description="List of images to segment"),
     model: str = Form("hrnet", description="Model to use for segmentation"),
-    threshold: float = Form(0.5, ge=0.1, le=0.9, description="Segmentation threshold"),
+    threshold: float = Form(
+        0.5,
+        ge=0.1,
+        le=0.99,  # v5H's fitted cut is 0.97 — see api/models.py
+        description="Segmentation threshold",
+    ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):
