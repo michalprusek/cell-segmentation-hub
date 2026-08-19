@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -46,6 +47,47 @@ _MAX_SHIFT_FRACTION = 0.10
 # trusted. A dark/low-signal frame produces a flat surface with no clear peak;
 # below this the estimate is discarded so noise can't inject jitter.
 _MIN_CONFIDENCE = 3.0
+
+# --------------------------------------------------------------------------
+# Per-frame outcome vocabulary.
+#
+# Every estimate ends on exactly one of these, one per *branch* of
+# :func:`estimate_translation_detailed`. Without them a rejected estimate is
+# indistinguishable from a successful one: both a genuine "already aligned"
+# result and an implausible peak that was discarded surface as (0, 0) with a
+# high confidence, so a caller counting zero shifts cannot tell a no-op success
+# from a silent failure.
+#
+# NOTE on branch ORDER: the plausibility guard runs BEFORE the confidence
+# guard, so an estimate that is both implausibly large AND weak is reported as
+# ``implausible_shift``. That is what the code does; the reason names the
+# branch actually taken, not a priority ranking.
+REASON_OK = "ok"  # estimate accepted and returned as-is (may be a real (0, 0))
+REASON_LOW_CONFIDENCE = "low_confidence"  # peak-to-background < _MIN_CONFIDENCE
+REASON_IMPLAUSIBLE_SHIFT = "implausible_shift"  # peak beyond _MAX_SHIFT_FRACTION
+# Not produced here — :func:`estimate_translation_detailed` RAISES on a shape
+# mismatch. It exists for callers that catch that case up-front and degrade to
+# an unshifted copy rather than aborting a batch (``add_channel_align.py``), so
+# that the vocabulary consumers see is complete.
+REASON_SHAPE_MISMATCH = "shape_mismatch"
+
+
+class TranslationEstimate(NamedTuple):
+    """One frame's registration outcome: the shift that was APPLIED, how much
+    the correlation was trusted, WHY the shift is what it is, and the raw
+    correlation peak before the guards ran.
+
+    ``(dy, dx)`` is zero whenever ``reason`` is not ``ok``; ``(peak_dy,
+    peak_dx)`` still carries the discarded candidate, which is what turns
+    "20 frames rejected" into the actionable "20 frames wanted (-87, 3)".
+    """
+
+    dy: int
+    dx: int
+    confidence: float
+    reason: str
+    peak_dy: int
+    peak_dx: int
 
 
 def _to_float_gray(arr: np.ndarray) -> np.ndarray:
@@ -88,7 +130,38 @@ def estimate_translation(
     ``moving``'s features on top of ``reference``'s.
 
     Returns ``(0, 0, confidence)`` when the estimate is implausibly large or
-    the correlation peak is too weak to trust — a safe no-op.
+    the correlation peak is too weak to trust — a safe no-op. Those two
+    outcomes are NOT distinguishable from this 3-tuple; call
+    :func:`estimate_translation_detailed` when you need to report *why*.
+
+    Kept as a thin wrapper so existing 3-tuple call sites are untouched: the
+    numbers are produced by exactly the same code path, so the shifts this
+    returns are identical to what it returned before the reason field existed.
+    """
+    est = estimate_translation_detailed(reference, moving)
+    return est.dy, est.dx, est.confidence
+
+
+def estimate_translation_detailed(
+    reference: np.ndarray, moving: np.ndarray
+) -> TranslationEstimate:
+    """:func:`estimate_translation` plus the outcome ``reason`` and the raw
+    correlation peak.
+
+    The registration math and both guards are unchanged — this only *names*
+    the branch that produced the returned shift:
+
+    * ``ok`` — the peak passed both guards and is returned. A returned
+      ``(0, 0)`` here is a genuine success: the channels are already aligned.
+    * ``implausible_shift`` — a peak was found but sits further than
+      ``_MAX_SHIFT_FRACTION`` of the smaller dimension from the origin, so it
+      was discarded. Zeroed shift, confidence untouched — this is the silent
+      failure that used to be indistinguishable from "already aligned".
+    * ``low_confidence`` — the peak-to-background ratio is below
+      ``_MIN_CONFIDENCE`` (a flat, no-match correlation surface).
+
+    A shape mismatch raises, as before; it is not a reason this function can
+    return (see ``REASON_SHAPE_MISMATCH``).
     """
     ref = _to_float_gray(reference)
     mov = _to_float_gray(moving)
@@ -125,11 +198,14 @@ def estimate_translation(
 
     max_shift = _MAX_SHIFT_FRACTION * min(ref.shape)
     if abs(dy) > max_shift or abs(dx) > max_shift:
-        return 0, 0, confidence  # implausible → reject
+        # Implausible → reject. The candidate peak survives in peak_dy/peak_dx
+        # so the caller can report WHAT was rejected, not just that something
+        # was.
+        return TranslationEstimate(0, 0, confidence, REASON_IMPLAUSIBLE_SHIFT, dy, dx)
     if confidence < _MIN_CONFIDENCE:
-        return 0, 0, confidence  # too weak → reject
+        return TranslationEstimate(0, 0, confidence, REASON_LOW_CONFIDENCE, dy, dx)
 
-    return dy, dx, confidence
+    return TranslationEstimate(dy, dx, confidence, REASON_OK, dy, dx)
 
 
 def shift_frame(arr: np.ndarray, dy: int, dx: int, fill: int = 0) -> np.ndarray:

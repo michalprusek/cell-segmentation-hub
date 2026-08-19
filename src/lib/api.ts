@@ -218,18 +218,39 @@ export interface BatchQueueResponse {
  * becomes a no-op and the frame is stored unshifted. So `frames` says how many
  * were processed and only `shifted` says how many were actually registered.
  */
+export type AlignReason =
+  | 'ok'
+  | 'low_confidence'
+  | 'implausible_shift'
+  | 'shape_mismatch'
+  | 'unreported';
+
 export interface ChannelAlignmentSummary {
   /** Frames handed to the aligner (target frames × source channels). */
   frames: number;
   /** Frames that received a non-zero translation. */
   shifted: number;
-  /** Frames whose correlation was too weak to trust — stored unshifted. */
+  /** Frames with a zero shift whose confidence was too low to trust. Legacy
+   *  bucket — see `reasons`. */
   rejected: number;
   /** Frames with a trusted zero shift: already aligned, or a peak rejected as
-   *  implausibly large (the two are indistinguishable downstream). */
+   *  implausibly large. Legacy bucket — `reasons` separates the two. */
   zeroShift: number;
-  /** `rejected / frames`, 0..1. */
+  /** `rejected / frames`, 0..1. Legacy; prefer `failedFraction`. */
   rejectedFraction: number;
+  /**
+   * How many frames ended on each outcome. OPTIONAL: a backend that predates
+   * the reason field omits this and every field below it, so a newer frontend
+   * talking to an older backend must fall back to the legacy counts.
+   */
+  reasons?: Record<AlignReason, number>;
+  /** Frames NOT registered (low confidence + implausible peak + shape
+   *  mismatch). */
+  failed?: number;
+  /** `failed / frames`, 0..1. Fall back to `rejectedFraction` when absent. */
+  failedFraction?: number;
+  /** Which failure dominated — drives the cause-specific warning. */
+  dominantFailure?: AlignReason | null;
   /** Peak-to-background confidence spread across the frames. */
   confidence: { min: number; median: number; max: number } | null;
   /** Largest translation applied, per axis (absolute pixels). */

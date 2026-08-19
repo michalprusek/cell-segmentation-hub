@@ -1204,7 +1204,11 @@ export default {
     addChannel: 'Kanal hinzufügen',
     addChannelSuccess: 'Kanal {{channels}} zu {{frames}} Bild(ern) hinzugefügt',
     addChannelAlignWarning:
-      'Ausrichtung bei {{rejected}} von {{frames}} Bild(ern) fehlgeschlagen — nur {{shifted}} wurden registriert. Die Kanäle konnten nicht korreliert werden (keine gemeinsame Struktur); die Bilder wurden unverschoben hinzugefügt.',
+      'Ausrichtung bei {{failed}} von {{frames}} Bild(ern) fehlgeschlagen — nur {{shifted}} wurden registriert. Die Kanäle konnten nicht korreliert werden (keine gemeinsame Struktur); die Bilder wurden unverschoben hinzugefügt.',
+    addChannelAlignWarningImplausible:
+      'Ausrichtung bei {{failed}} von {{frames}} Bild(ern) fehlgeschlagen — nur {{shifted}} wurden registriert. Ein deutlicher Versatz wurde gefunden, war aber zu groß, um plausibel zu sein, und wurde verworfen; die Bilder wurden unverschoben hinzugefügt. Prüfen Sie, ob der hinzugefügte Kanal aus demselben Sichtfeld stammt und gegenüber dem Zielvideo nicht beschnitten oder verschoben ist.',
+    addChannelAlignWarningShape:
+      'Ausrichtung bei {{failed}} von {{frames}} Bild(ern) fehlgeschlagen — nur {{shifted}} wurden registriert. Der hinzugefügte Kanal und die Zielbilder haben unterschiedliche Pixelmaße und konnten daher nicht ausgerichtet werden; die Bilder wurden unverschoben hinzugefügt.',
     addChannelFailed: 'Kanal konnte nicht hinzugefügt werden',
     addChannelDialog: {
       title: 'Kanal hinzufügen',

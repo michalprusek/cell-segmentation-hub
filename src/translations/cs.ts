@@ -1192,7 +1192,11 @@ export default {
     addChannel: 'Přidat kanál',
     addChannelSuccess: 'Kanál {{channels}} přidán k {{frames}} snímkům',
     addChannelAlignWarning:
-      'Zarovnání selhalo u {{rejected}} z {{frames}} snímků — zarovnáno bylo jen {{shifted}}. Kanály nelze zkorelovat (nemají společnou strukturu); snímky byly přidány neposunuté.',
+      'Zarovnání selhalo u {{failed}} z {{frames}} snímků — zarovnáno bylo jen {{shifted}}. Kanály nelze zkorelovat (nemají společnou strukturu); snímky byly přidány neposunuté.',
+    addChannelAlignWarningImplausible:
+      'Zarovnání selhalo u {{failed}} z {{frames}} snímků — zarovnáno bylo jen {{shifted}}. Byl nalezen zřetelný posun, ale příliš velký na to, aby byl věrohodný, proto byl zahozen a snímky byly přidány neposunuté. Ověřte, že přidávaný kanál pochází ze stejného zorného pole a není oříznutý ani posunutý vůči cílovému videu.',
+    addChannelAlignWarningShape:
+      'Zarovnání selhalo u {{failed}} z {{frames}} snímků — zarovnáno bylo jen {{shifted}}. Přidávaný kanál má jiné rozměry v pixelech než cílové snímky, proto je nelze zarovnat; snímky byly přidány neposunuté.',
     addChannelFailed: 'Nepodařilo se přidat kanál',
     addChannelDialog: {
       title: 'Přidat kanál',

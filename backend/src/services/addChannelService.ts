@@ -44,28 +44,84 @@ const MAX_DISPLAY_NAME_LEN = 128;
 export const MIN_ALIGN_CONFIDENCE = 3.0;
 
 /**
- * Fraction of frames whose estimate was rejected above which the run is
- * reported at ``warn``. Rationale: ``_MIN_CONFIDENCE`` already vets each frame
- * individually, so a handful of rejections (a dark or out-of-focus frame) is
+ * Fraction of frames that failed to register, above which the run is reported
+ * at ``warn``. Rationale: the per-frame guards already vet each frame
+ * individually, so a handful of failures (a dark or out-of-focus frame) is
  * expected noise on an otherwise good pair. A *majority* of frames failing is
- * not noise — it is the signature of a channel pair that shares no
- * correlatable structure, i.e. registration that cannot work at all.
+ * not noise — it is the signature of a channel pair that cannot be registered
+ * at all.
+ *
+ * Measured against {@link ChannelAlignmentSummary.failedFraction}, which counts
+ * every non-``ok`` outcome. It used to be measured against
+ * ``rejectedFraction``, which counts only weak-correlation frames — so a run
+ * where every frame's peak was discarded as implausible (a total failure with
+ * a HIGH confidence) fell in the ``zeroShift`` bucket and warned about
+ * nothing.
  */
 export const ALIGN_REJECTED_WARN_FRACTION = 0.5;
 
 /**
- * What the aligner actually did, derived from the helper's per-frame
- * ``[dy, dx, confidence]`` triples.
+ * Why one frame ended up with the shift it did — the helper's per-frame
+ * ``reason``, mirroring the branch names in
+ * ``video/pythonHelpers/channel_registration.py``:
  *
- * Classification (see ``channel_registration.estimate_translation``): a
- * rejected estimate returns ``(0, 0, confidence)`` — the confidence survives,
- * only the shift is zeroed — so a weak correlation IS distinguishable from a
- * real zero shift. What is NOT distinguishable from the helper's output alone
- * is a *trusted* peak at the origin (channels already aligned — a success)
- * from a peak rejected for exceeding ``_MAX_SHIFT_FRACTION`` (a failure):
- * both surface as ``[0, 0, <high confidence>]``. Those share the
- * ``zeroShift`` bucket and are labelled ambiguous rather than counted as
- * either.
+ * - ``ok`` — the estimate was accepted. ``(0, 0)`` here is a *success*: the
+ *   channels were already aligned and there was nothing to correct.
+ * - ``low_confidence`` — the correlation peak was below
+ *   {@link MIN_ALIGN_CONFIDENCE}; the frame was written unshifted.
+ * - ``implausible_shift`` — a peak was found but sat further from the origin
+ *   than ``_MAX_SHIFT_FRACTION`` allows, so it was discarded and the frame was
+ *   written unshifted. Its confidence is usually HIGH, which is what made this
+ *   failure indistinguishable from "already aligned". Python checks
+ *   plausibility BEFORE confidence, so an estimate that would fail both
+ *   branches reports this one.
+ * - ``shape_mismatch`` — moving and reference rasters differ in shape, so no
+ *   correlation was attempted (emitted by ``add_channel_align.py`` itself;
+ *   ``estimate_translation_detailed`` raises on that input).
+ * - ``unreported`` — NOT a Python outcome. Marks a row from a helper that
+ *   predates the reason field whose reason cannot be recovered: a zero shift
+ *   with a good confidence is exactly the ambiguity this field exists to
+ *   resolve, so it is labelled unknown rather than guessed at.
+ */
+export const ALIGN_REASONS = [
+  'ok',
+  'low_confidence',
+  'implausible_shift',
+  'shape_mismatch',
+  'unreported',
+] as const;
+export type AlignReason = (typeof ALIGN_REASONS)[number];
+
+/** Reasons that mean the frame was NOT registered. ``unreported`` is absent on
+ *  purpose: an unknown outcome is not evidence of failure. */
+const FAILURE_REASONS: readonly AlignReason[] = [
+  'low_confidence',
+  'implausible_shift',
+  'shape_mismatch',
+];
+
+/**
+ * One row of the helper's ``shifts`` array. Historically
+ * ``[dy, dx, confidence]``; since the reason field it is
+ * ``[dy, dx, confidence, reason, peakDy, peakDx]``. Typed as "three numbers
+ * plus an unknown tail" so BOTH shapes parse — this is the tolerant side of
+ * the wire contract (a new backend reading an old helper's output). The other
+ * direction is tolerant for free: an old backend destructures three elements
+ * and ignores the tail.
+ */
+export type AlignShiftRow = readonly [number, number, number, ...unknown[]];
+
+/**
+ * What the aligner actually did, derived from the helper's per-frame rows.
+ *
+ * The ``shifted`` / ``rejected`` / ``zeroShift`` trio is unchanged — a pure
+ * function of ``(dy, dx, confidence)`` — so existing consumers keep working.
+ * It cannot tell a *trusted* peak at the origin (already aligned — a success)
+ * from a peak discarded for exceeding ``_MAX_SHIFT_FRACTION`` (a silent
+ * failure): both are ``[0, 0, <high confidence>]`` and both land in
+ * ``zeroShift``. {@link ChannelAlignmentSummary.reasons} resolves that, and
+ * {@link ChannelAlignmentSummary.failed} — not ``rejected`` — is the count
+ * that should drive any "registration did not work" reporting.
  */
 export interface ChannelAlignmentSummary {
   /** Frames the helper reported on (target frames × source channels). */
@@ -73,19 +129,37 @@ export interface ChannelAlignmentSummary {
   /** Frames that received a non-zero translation — actually registered. */
   shifted: number;
   /**
-   * Frames whose estimate was too weak to trust (confidence below
-   * {@link MIN_ALIGN_CONFIDENCE}) and were therefore copied unshifted. A
-   * shape mismatch (helper emits ``[0, 0, 0.0]``) also lands here.
+   * Frames with a zero shift and a confidence below
+   * {@link MIN_ALIGN_CONFIDENCE}. Legacy bucket, kept for compatibility;
+   * ``reasons.low_confidence`` is the accurate count (such a row can also
+   * carry ``implausible_shift``, since Python checks plausibility first).
    */
   rejected: number;
   /**
-   * Frames with a trusted peak at the origin: either already aligned (nothing
-   * to correct) or an implausibly large peak rejected by
-   * ``_MAX_SHIFT_FRACTION``. The helper's output cannot separate the two.
+   * Frames with a zero shift and a trusted confidence: already aligned, or an
+   * implausibly large peak that was discarded. Legacy bucket — ``reasons``
+   * separates the two.
    */
   zeroShift: number;
-  /** ``rejected / frames``, 0..1, rounded to 3 decimals. */
+  /** ``rejected / frames``, 0..1, rounded to 3 decimals. Legacy; prefer
+   *  {@link ChannelAlignmentSummary.failedFraction}. */
   rejectedFraction: number;
+  /** How many frames ended on each reason. Every key is always present. */
+  reasons: Record<AlignReason, number>;
+  /** True when the helper actually emitted reasons, false when they had to be
+   *  inferred from legacy 3-element rows. */
+  reasonsReported: boolean;
+  /** Frames NOT registered: ``low_confidence`` + ``implausible_shift`` +
+   *  ``shape_mismatch``. */
+  failed: number;
+  /** ``failed / frames``, 0..1, rounded to 3 decimals. */
+  failedFraction: number;
+  /** Failure reason with the most frames (ties broken by
+   *  {@link ALIGN_REASONS} order); null when nothing failed. */
+  dominantFailure: AlignReason | null;
+  /** Largest correlation peak an ``implausible_shift`` frame discarded — what
+   *  the aligner *wanted* to do. Null when no frame hit that branch. */
+  implausiblePeak: { dy: number; dx: number } | null;
   /** Peak-to-background confidence spread; null when no frames were reported. */
   confidence: { min: number; median: number; max: number } | null;
   /** Largest translation actually applied, per axis (absolute pixels). */
@@ -97,11 +171,45 @@ function round3(n: number): number {
 }
 
 /**
+ * Reason for one row: the helper's own label when present, otherwise the most
+ * the legacy triple allows.
+ *
+ * The inference reproduces the old buckets exactly — nonzero → ``ok``,
+ * zero+weak → ``low_confidence``, zero+trusted → ``unreported`` — which is why
+ * ``failedFraction === rejectedFraction`` on legacy input and the warn
+ * threshold fires there exactly as it did before. The inferred
+ * ``low_confidence`` really is an inference: Python checks plausibility first,
+ * so such a row could equally have come from the ``implausible_shift`` branch.
+ * Only a reporting helper can tell them apart.
+ */
+function rowReason(row: AlignShiftRow): {
+  reason: AlignReason;
+  reported: boolean;
+} {
+  const raw = row[3];
+  if (
+    typeof raw === 'string' &&
+    raw !== 'unreported' &&
+    (ALIGN_REASONS as readonly string[]).includes(raw)
+  ) {
+    return { reason: raw as AlignReason, reported: true };
+  }
+  const [dy, dx, conf] = row;
+  if (dy !== 0 || dx !== 0) {
+    return { reason: 'ok', reported: false };
+  }
+  if (conf < MIN_ALIGN_CONFIDENCE) {
+    return { reason: 'low_confidence', reported: false };
+  }
+  return { reason: 'unreported', reported: false };
+}
+
+/**
  * Turn the helper's raw per-frame shifts into a summary of what happened.
  * Pure, and exported so the reporting can be tested without running Python.
  */
 export function summarizeAlignment(
-  shifts: ReadonlyArray<readonly [number, number, number]> | undefined
+  shifts: ReadonlyArray<AlignShiftRow> | undefined
 ): ChannelAlignmentSummary {
   const rows = shifts ?? [];
 
@@ -110,7 +218,13 @@ export function summarizeAlignment(
   let zeroShift = 0;
   let maxDy = 0;
   let maxDx = 0;
+  let reasonsReported = false;
+  let implausiblePeak: { dy: number; dx: number } | null = null;
   const confidences: number[] = [];
+  const reasons = Object.fromEntries(ALIGN_REASONS.map(r => [r, 0])) as Record<
+    AlignReason,
+    number
+  >;
 
   for (const row of rows) {
     const [dy, dx, conf] = row;
@@ -123,6 +237,22 @@ export function summarizeAlignment(
       rejected++;
     } else {
       zeroShift++;
+    }
+
+    const { reason, reported } = rowReason(row);
+    reasons[reason]++;
+    reasonsReported = reasonsReported || reported;
+
+    if (reason === 'implausible_shift') {
+      const peakDy = typeof row[4] === 'number' ? row[4] : 0;
+      const peakDx = typeof row[5] === 'number' ? row[5] : 0;
+      const magnitude = Math.abs(peakDy) + Math.abs(peakDx);
+      const best = implausiblePeak
+        ? Math.abs(implausiblePeak.dy) + Math.abs(implausiblePeak.dx)
+        : -1;
+      if (magnitude > best) {
+        implausiblePeak = { dy: peakDy, dx: peakDx };
+      }
     }
   }
 
@@ -141,6 +271,17 @@ export function summarizeAlignment(
     };
   }
 
+  const failed = FAILURE_REASONS.reduce((n, r) => n + reasons[r], 0);
+  let dominantFailure: AlignReason | null = null;
+  for (const r of FAILURE_REASONS) {
+    if (
+      reasons[r] > 0 &&
+      (dominantFailure === null || reasons[r] > reasons[dominantFailure])
+    ) {
+      dominantFailure = r;
+    }
+  }
+
   const frames = rows.length;
   return {
     frames,
@@ -148,9 +289,71 @@ export function summarizeAlignment(
     rejected,
     zeroShift,
     rejectedFraction: frames > 0 ? round3(rejected / frames) : 0,
+    reasons,
+    reasonsReported,
+    failed,
+    failedFraction: frames > 0 ? round3(failed / frames) : 0,
+    dominantFailure,
+    implausiblePeak,
     confidence,
     maxAbsShift: { dy: maxDy, dx: maxDx },
   };
+}
+
+/** ``ok=12, implausible_shift=8`` — non-zero reasons only, stable order. */
+export function formatAlignReasons(
+  reasons: Record<AlignReason, number>
+): string {
+  return ALIGN_REASONS.filter(r => reasons[r] > 0)
+    .map(r => `${r}=${reasons[r]}`)
+    .join(', ');
+}
+
+/**
+ * One sentence naming WHY most frames failed, chosen by the dominant failure
+ * reason. The three causes want three different fixes, so a single generic
+ * "the channels could not be correlated" sentence is wrong for two of them:
+ * an implausible peak means the correlation worked *and found something*, it
+ * was just refused as too far.
+ */
+export function alignFailureCause(
+  alignment: Pick<
+    ChannelAlignmentSummary,
+    'dominantFailure' | 'reasons' | 'implausiblePeak'
+  >
+): string {
+  switch (alignment.dominantFailure) {
+    case 'implausible_shift': {
+      const peak = alignment.implausiblePeak;
+      const found =
+        peak && (peak.dy !== 0 || peak.dx !== 0)
+          ? ` The largest discarded peak was dy=${peak.dy}, dx=${peak.dx}.`
+          : '';
+      return (
+        `Cause: the correlation DID find a peak on ${alignment.reasons.implausible_shift} ` +
+        `frame(s), but further from the origin than the plausibility cap allows (10% of the ` +
+        `smaller frame dimension), so it was discarded as spurious.${found} Likely either a ` +
+        `genuine offset larger than the cap (a differently cropped or stage-offset source) or ` +
+        `a periodic/self-similar structure the correlation locked onto in the wrong place. ` +
+        `Note this failure carries a HIGH confidence — it is not a weak-signal problem.`
+      );
+    }
+    case 'shape_mismatch':
+      return (
+        `Cause: on ${alignment.reasons.shape_mismatch} frame(s) the added channel's raster and ` +
+        `the reference frame have different shapes, so no correlation was attempted at all. ` +
+        `The two channels must share a pixel grid.`
+      );
+    case 'low_confidence':
+      return (
+        `Cause: ${alignment.reasons.low_confidence} estimate(s) were too weak to trust ` +
+        `(peak-to-background confidence < ${MIN_ALIGN_CONFIDENCE}) — this channel pair does not ` +
+        `correlate. Cross-modality channels (e.g. IRM vs fluorescence) correlate poorly, and a ` +
+        `pair with no shared structure cannot be registered at all.`
+      );
+    default:
+      return 'Cause: unknown — the aligner reported no per-frame reason.';
+  }
 }
 
 export interface AddChannelParams {
@@ -298,8 +501,14 @@ async function extractSource(
 export async function addChannelToFrames(
   params: AddChannelParams
 ): Promise<AddChannelResult> {
-  const { projectId, originalName, tempFilePath, channelName, align, imageIds } =
-    params;
+  const {
+    projectId,
+    originalName,
+    tempFilePath,
+    channelName,
+    align,
+    imageIds,
+  } = params;
 
   const baseSlug = slugifyChannelName(channelName);
   const displayBase = channelName.trim().slice(0, MAX_DISPLAY_NAME_LEN);
@@ -331,7 +540,11 @@ export async function addChannelToFrames(
     });
     const byContainer = new Map<string, TargetFrame[]>();
     for (const r of rows) {
-      if (r.isVideoContainer || r.parentVideoId == null || r.frameIndex == null) {
+      if (
+        r.isVideoContainer ||
+        r.parentVideoId == null ||
+        r.frameIndex == null
+      ) {
         continue;
       }
       const list = byContainer.get(r.parentVideoId) ?? [];
@@ -533,22 +746,26 @@ export async function addChannelToFrames(
         );
       }
 
+      // The reason breakdown is appended only when the helper actually
+      // reported reasons; against an older helper the line stays exactly as it
+      // was rather than implying a certainty we do not have.
       logger.info(
         `Add-channel alignment: ${alignment.shifted}/${alignment.frames} frame(s) shifted, ` +
           `${alignment.rejected} rejected (confidence < ${MIN_ALIGN_CONFIDENCE}), ` +
-          `${alignment.zeroShift} zero-shift (already aligned or rejected as implausible)`,
+          `${alignment.zeroShift} zero-shift (already aligned or rejected as implausible)` +
+          (alignment.reasonsReported
+            ? ` — per-frame reasons: ${formatAlignReasons(alignment.reasons)}`
+            : ''),
         'AddChannelService',
         logData
       );
 
-      if (alignment.rejectedFraction >= ALIGN_REJECTED_WARN_FRACTION) {
+      if (alignment.failedFraction >= ALIGN_REJECTED_WARN_FRACTION) {
         logger.warn(
-          `Add-channel alignment FAILED for most frames: ${alignment.rejected}/${alignment.frames} ` +
-            `estimate(s) were too weak to trust (peak-to-background confidence < ${MIN_ALIGN_CONFIDENCE}) ` +
-            `and those frames were written UNSHIFTED. Likely cause: this channel pair does not ` +
-            `correlate — cross-modality channels (e.g. IRM vs fluorescence) correlate poorly, and a ` +
-            `pair with no shared structure cannot be registered at all. The channel was still added; ` +
-            `its frames are simply not registered to the segmentation source.`,
+          `Add-channel alignment FAILED for most frames: ${alignment.failed}/${alignment.frames} ` +
+            `frame(s) were written UNSHIFTED. ${alignFailureCause(alignment)} ` +
+            `The channel was still added; its frames are simply not registered to the ` +
+            `segmentation source.`,
           'AddChannelService',
           logData
         );
@@ -588,6 +805,8 @@ export async function addChannelToFrames(
     };
   } finally {
     await fs.rm(tempFilePath, { force: true }).catch(() => undefined);
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    await fs
+      .rm(tempDir, { recursive: true, force: true })
+      .catch(() => undefined);
   }
 }

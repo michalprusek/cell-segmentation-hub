@@ -1322,18 +1322,34 @@ const ProjectDetail = () => {
           })
         );
         // Writing the frames always succeeds; REGISTERING them may not. When
-        // the phase correlation rejected most estimates the frames are stored
-        // unshifted — previously indistinguishable from a clean run, which is
-        // what made "registration doesn't work" impossible to see.
+        // most estimates failed the frames are stored unshifted — previously
+        // indistinguishable from a clean run, which is what made "registration
+        // doesn't work" impossible to see.
+        //
+        // `failedFraction` counts EVERY non-ok outcome, not just weak
+        // correlations, so a run whose peaks were all discarded as implausible
+        // (a confident total failure) now warns too. It is optional on the
+        // wire: an older backend sends only `rejectedFraction`, and falling
+        // back to that keeps the warning working against one.
         const alignment = result.alignment;
+        const failedFraction =
+          alignment?.failedFraction ?? alignment?.rejectedFraction ?? 0;
         if (
           alignment &&
           alignment.frames > 0 &&
-          alignment.rejectedFraction >= ADD_CHANNEL_ALIGN_WARN_FRACTION
+          failedFraction >= ADD_CHANNEL_ALIGN_WARN_FRACTION
         ) {
+          // Each cause needs a different fix, so name the one that dominated
+          // instead of always blaming a missing correlation.
+          const warningKey =
+            alignment.dominantFailure === 'implausible_shift'
+              ? 'project.addChannelAlignWarningImplausible'
+              : alignment.dominantFailure === 'shape_mismatch'
+                ? 'project.addChannelAlignWarningShape'
+                : 'project.addChannelAlignWarning';
           toast.warning(
-            t('project.addChannelAlignWarning', {
-              rejected: alignment.rejected,
+            t(warningKey, {
+              failed: alignment.failed ?? alignment.rejected,
               frames: alignment.frames,
               shifted: alignment.shifted,
             }),

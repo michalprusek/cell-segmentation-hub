@@ -1190,7 +1190,11 @@ export default {
     addChannel: 'Añadir canal',
     addChannelSuccess: 'Canal {{channels}} añadido a {{frames}} fotograma(s)',
     addChannelAlignWarning:
-      'La alineación falló en {{rejected}} de {{frames}} fotograma(s): solo se registraron {{shifted}}. No se pudieron correlacionar los canales (sin estructura común); los fotogramas se añadieron sin desplazar.',
+      'La alineación falló en {{failed}} de {{frames}} fotograma(s): solo se registraron {{shifted}}. No se pudieron correlacionar los canales (sin estructura común); los fotogramas se añadieron sin desplazar.',
+    addChannelAlignWarningImplausible:
+      'La alineación falló en {{failed}} de {{frames}} fotograma(s): solo se registraron {{shifted}}. Se encontró un desplazamiento claro, pero demasiado grande para ser plausible, así que se descartó y los fotogramas se añadieron sin desplazar. Comprueba que el canal añadido procede del mismo campo de visión y no está recortado ni desplazado respecto al vídeo de destino.',
+    addChannelAlignWarningShape:
+      'La alineación falló en {{failed}} de {{frames}} fotograma(s): solo se registraron {{shifted}}. El canal añadido y los fotogramas de destino tienen dimensiones en píxeles distintas, por lo que no se pudieron alinear; los fotogramas se añadieron sin desplazar.',
     addChannelFailed: 'No se pudo añadir el canal',
     addChannelDialog: {
       title: 'Añadir canal',
