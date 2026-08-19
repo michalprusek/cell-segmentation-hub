@@ -290,8 +290,8 @@ type-check:
 # legacy editor tests). Including it here would render `make ci` unusable
 # until the suite is healed. Use `make ci-test` to run vitest separately.
 ci:
-	@echo "🔍 [1/4] TypeScript (frontend)"
-	@npx tsc --noEmit
+	@echo "🔍 [1/4] TypeScript (frontend — baseline gate)"
+	@npm run type-check
 	@echo "🔍 [2/4] TypeScript (backend)"
 	@cd backend && npm run type-check
 	@echo "🔍 [3/4] ESLint (strict — 0 warnings)"
