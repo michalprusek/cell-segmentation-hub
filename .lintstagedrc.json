@@ -4,10 +4,8 @@
     "prettier --write",
     "bash -c 'node scripts/code-quality-check.js || true'"
   ],
-  "src/**/*.{ts,tsx}": [
-    "bash -c 'npm run type-check'",
-    "bash -c 'npx madge --circular src/ || true'"
-  ],
+  "_comment_type_check": "TypeScript is NOT run here. .husky/pre-commit runs `npm run type-check` (scripts/type-check-baseline.mjs) once, for the whole project. Adding it here too would (a) run a second full tsc per commit and (b) race the first one on the shared *.tsbuildinfo files, since lint-staged runs patterns concurrently.",
+  "src/**/*.{ts,tsx}": ["bash -c 'npx madge --circular src/ || true'"],
   "{src/types/**/*.ts,backend/src/types/**/*.ts}": [
     "bash -c 'node scripts/verify-shared-types.cjs'"
   ],
