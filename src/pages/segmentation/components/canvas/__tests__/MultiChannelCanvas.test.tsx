@@ -43,6 +43,10 @@ import {
 } from '@/lib/webglCompositor';
 import { createMockCanvasContext } from '@/test-utils/canvasTestUtils';
 import MultiChannelCanvas from '../MultiChannelCanvas';
+import {
+  MAX_SPECULATIVE_REQUESTS,
+  speculativeFrameRequests,
+} from '@/lib/requestThrottle';
 
 // The compositor is the unit under test's collaborator, not its subject: stub
 // it so the render-path decision is observable without a GPU. Default is null
@@ -333,6 +337,32 @@ describe('MultiChannelCanvas', () => {
   // ── fetch calls ───────────────────────────────────────────────────────────
 
   describe('fetch behaviour', () => {
+    it('issues the DISPLAYED frame immediately, never behind speculative warms', async () => {
+      // The window prefetcher fills every slot of the shared throttle during
+      // playback. The frame the user is actually looking at is exempt from the
+      // queue — a priority slot in a queue is still a queue, and waiting for
+      // one of four multi-megabyte warms to finish is latency the user sees.
+      const release: Array<() => void> = [];
+      for (let i = 0; i < MAX_SPECULATIVE_REQUESTS; i++) {
+        void speculativeFrameRequests
+          .schedule(() => new Promise<void>(r => release.push(r)))
+          .catch(() => undefined);
+      }
+      expect(speculativeFrameRequests.inFlight).toBe(MAX_SPECULATIVE_REQUESTS);
+
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} frameId="exempt-1" />);
+
+      // Synchronously, in the same tick as the effect — not one microtask of
+      // waiting for a slot.
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+      release.forEach(r => r());
+      await waitFor(() => expect(speculativeFrameRequests.inFlight).toBe(0));
+    });
+
     it('fetches one URL per visible channel with correct query string', async () => {
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;

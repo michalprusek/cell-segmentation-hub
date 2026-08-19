@@ -16,6 +16,11 @@
  * and only a few frames ahead. The worker pool dispatches to its least-loaded
  * worker, so a displayed frame's two channels still go out in parallel while
  * this trickles along behind them.
+ *
+ * Its fetches go through `speculativeFrameRequests`, the SAME limiter
+ * `useFrameWindowPrefetch` uses. Sequential-per-hook is not a budget: the two
+ * hooks run concurrently and compete for one nginx rate-limit zone, so a
+ * private limit here would only guarantee that this hook alone stays polite.
  */
 
 import { useEffect, useRef } from 'react';
@@ -26,6 +31,7 @@ import {
   getOrDecode,
 } from '@/lib/decodedFrameCache';
 import { buildFrameImageUrl } from './segmentationPolygonCache';
+import { speculativeFrameRequests } from '@/lib/requestThrottle';
 import { logger } from '@/lib/logger';
 
 /** Frames to run ahead of the playhead. Three covers the decode latency of a
@@ -64,30 +70,46 @@ export function useDecodeAhead({
   coverageRef.current = channelCoverage;
   const framesRef = useRef(frames);
   framesRef.current = frames;
+  // Same reason, and it matters more here: `channels` used to be a raw
+  // dependency, so every parent render that rebuilt the array aborted the walk
+  // and restarted it — re-issuing the fetches of anything not yet decoded.
+  // `channelsKey` is the primitive fingerprint that actually changes content.
+  const channelsRef = useRef(channels);
+  channelsRef.current = channels;
 
   useEffect(() => {
-    if (!enabled || channels.length === 0) return;
+    if (!enabled || channelsRef.current.length === 0) return;
     const controller = new AbortController();
     let cancelled = false;
 
     (async () => {
       const all = framesRef.current;
       const coverage = coverageRef.current;
+      const activeChannels = channelsRef.current;
       for (let step = 1; step <= lookahead; step++) {
         const frame = all[currentIndex + step];
         if (!frame) return;
-        for (const channel of channels) {
+        for (const channel of activeChannels) {
           if (cancelled) return;
           const covers = coverage[channel];
           if (covers && !covers.includes(frame.id)) continue;
           const key = frameCacheKey(frame.id, channel);
           if (decodedFrameCache.get(key)) continue;
           try {
-            const res = await fetch(buildFrameImageUrl(frame.id, channel), {
-              signal: controller.signal,
-            });
-            if (!res.ok) continue;
-            const blob = await res.blob();
+            // Through the SHARED throttle. The fetch and the body read are
+            // inside the slot because that whole cycle is what nginx counts
+            // and what bounds the issue rate; the DECODE deliberately is not —
+            // it is worker CPU, not a request, and holding a request slot
+            // during it would starve the window prefetcher for no reason.
+            const blob = await speculativeFrameRequests.schedule(async () => {
+              const res = await fetch(buildFrameImageUrl(frame.id, channel), {
+                signal: controller.signal,
+              });
+              if (!res.ok) return null;
+              return res.blob();
+            }, controller.signal);
+            if (cancelled) return;
+            if (!blob) continue;
             // Shared entry point with MultiChannelCanvas: if the playhead has
             // just arrived at this frame and started its own decode, we join it
             // instead of duplicating it.
@@ -110,5 +132,9 @@ export function useDecodeAhead({
       cancelled = true;
       controller.abort();
     };
-  }, [enabled, currentIndex, channelsKey, lookahead, channels]);
+    // `channels` is intentionally absent: `channelsKey` fingerprints it, and
+    // depending on the array identity restarted (and re-fetched) the walk on
+    // every unrelated parent render. Reading it through `channelsRef` is what
+    // keeps exhaustive-deps satisfied without lying to it.
+  }, [enabled, currentIndex, channelsKey, lookahead]);
 }

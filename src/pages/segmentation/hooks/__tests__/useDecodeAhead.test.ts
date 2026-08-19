@@ -11,6 +11,10 @@ import { useDecodeAhead } from '../useDecodeAhead';
 import { decodedFrameCache, frameCacheKey } from '@/lib/decodedFrameCache';
 import * as client from '@/lib/png16Client';
 import type { DecodedGray } from '@/lib/png16';
+import {
+  MAX_SPECULATIVE_REQUESTS,
+  speculativeFrameRequests,
+} from '@/lib/requestThrottle';
 
 const DECODED: DecodedGray = {
   width: 1,
@@ -134,6 +138,39 @@ describe('useDecodeAhead', () => {
     await new Promise(r => setTimeout(r, 20));
     expect(decodedFrameCache.size).toBe(0);
     expect(() => unmount()).not.toThrow();
+  });
+
+  it('draws from the SAME limiter as the window prefetcher', async () => {
+    // The two hooks run side by side and compete for one nginx rate-limit
+    // zone, so they have to share one budget. A private limiter here would
+    // guarantee only that this hook alone stays polite while the pair of them
+    // busted the zone — which is how the 503s happened.
+    const release: Array<() => void> = [];
+    for (let i = 0; i < MAX_SPECULATIVE_REQUESTS; i++) {
+      void speculativeFrameRequests
+        .schedule(() => new Promise<void>(r => release.push(r)))
+        .catch(() => undefined);
+    }
+    expect(release).toHaveLength(MAX_SPECULATIVE_REQUESTS);
+
+    renderHook(() =>
+      useDecodeAhead({
+        frames,
+        currentIndex: 0,
+        channels: ['a'],
+        enabled: true,
+      })
+    );
+
+    // Every slot is taken by (simulated) window warms: decode-ahead waits its
+    // turn instead of adding a request on top.
+    await new Promise(r => setTimeout(r, 20));
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    release.forEach(r => r());
+    await waitFor(() =>
+      expect(decodedFrameCache.get(frameCacheKey('frame-3', 'a'))).toBeDefined()
+    );
   });
 
   it('stops walking when the playhead moves on', async () => {

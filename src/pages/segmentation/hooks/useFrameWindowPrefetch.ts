@@ -21,11 +21,19 @@
  * Window choice is intentionally asymmetric (5 back / 10 ahead) — a
  * paused user is more likely to step forward than backward and
  * playback is forward-only. See `FRAME_PREFETCH_WINDOW`.
+ *
+ * RATE. The multi-channel warms are `fetch`es, and `fetch` has no queue of its
+ * own: without help, every URL of a shifted window is issued at once — 48 of
+ * them on a 3-channel project, on every playback tick. They therefore go
+ * through `speculativeFrameRequests`, the limiter shared with
+ * `useDecodeAhead`, which keeps the number outstanding at
+ * `MAX_SPECULATIVE_REQUESTS` regardless of channel count.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { frameImageCache } from '@/lib/rendering/FrameImageCache';
+import { speculativeFrameRequests } from '@/lib/requestThrottle';
 import {
   buildFrameImageUrl,
   getCachedSegmentationPolygons,
@@ -149,11 +157,18 @@ export function useFrameWindowPrefetch({
   // edge, not the 30+ already-warmed URLs at the trailing edge.
   // During playback the slider advances by 1 frame at a time, so
   // each tick should add just `channels.length` new URLs to this
-  // set — orders of magnitude below the nginx api-zone rate limit
-  // (30 r/s burst 80). Without this guard the prefetch fanout
-  // generated 50+ 503 responses per second during playback.
+  // set. This is the cheap guard; it bounds work per SHIFT but not
+  // the first-render burst (a whole window at once) nor a scrub that
+  // jumps the window wholesale — `speculativeFrameRequests` is what
+  // bounds those.
   const prefetchedRef = useRef<Set<string>>(new Set());
   const prefetchedPolygonsRef = useRef<Set<string>>(new Set());
+  /** Multi-channel warms that are queued or in flight, keyed by URL, so a
+   *  window shift can abort exactly the ones that LEFT the window and leave
+   *  the rest alone. Deliberately spans effect runs: tearing every warm down
+   *  on every run (the previous shape) re-issued the whole window on each
+   *  playback tick instead of just its leading edge. */
+  const pendingWarmsRef = useRef<Map<string, AbortController>>(new Map());
 
   // Reset the ref-tracked sets when the channel set or enable flag
   // changes — a different channel needs its own URLs prefetched
@@ -167,6 +182,23 @@ export function useFrameWindowPrefetch({
   useEffect(() => {
     prefetchedRef.current.clear();
     prefetchedPolygonsRef.current.clear();
+    // Wholesale teardown of the fetch warms lives HERE and not in the main
+    // effect: this cleanup runs on unmount and on a channel/enable change, but
+    // NOT on the window shifts that re-run the main effect many times a second.
+    //
+    // The three refs are captured into locals because the cleanup must operate
+    // on the containers this run set up. They are `useRef` containers that are
+    // never reassigned, so the capture is exact — and it keeps the
+    // ref-in-cleanup lint rule honest rather than suppressed.
+    const pending = pendingWarmsRef.current;
+    const prefetched = prefetchedRef.current;
+    const prefetchedPolygons = prefetchedPolygonsRef.current;
+    return () => {
+      for (const controller of pending.values()) controller.abort();
+      pending.clear();
+      prefetched.clear();
+      prefetchedPolygons.clear();
+    };
   }, [channelsKey, enabled]);
 
   // Effect: kick off image + polygon prefetch for each window frame.
@@ -175,14 +207,7 @@ export function useFrameWindowPrefetch({
     if (!enabled || windowFrames.length === 0) return;
 
     const startedImageUrls: string[] = [];
-    // Fetch-warmed (multi-channel) URLs, so the cleanup can cancel the ones
-    // that left the window — the same courtesy the image path already gets.
-    const startedFetches = new Map<string, AbortController>();
-    /** Fetch warms whose body has been fully read, so the HTTP cache holds
-     *  them. Mirrors `frameImageCache.isReady`: a finished warm must NOT be
-     *  aborted or un-marked when the window shifts, or every shift re-fetches
-     *  the whole window instead of just its leading edge. */
-    const completedFetches = new Set<string>();
+    const pendingWarms = pendingWarmsRef.current;
 
     // Image prefetch — fire and forget for URLs we haven't seen.
     // The ref-tracked set is more aggressive than FrameImageCache.has
@@ -190,6 +215,27 @@ export function useFrameWindowPrefetch({
     // shouldn't trigger redundant re-fetches mid-playback — the
     // browser HTTP cache (30 min) will serve them on real mount.
     const channelList = channels.length > 0 ? channels : [null];
+
+    // Retire warms that left the window BEFORE queueing new ones, so the
+    // leading edge inherits the slots the trailing edge gives up. A warm still
+    // queued in the throttle is discarded without ever being issued — which is
+    // the point of routing through it — and one already in flight is aborted.
+    // Either way the URL leaves the seen-set, so re-entering the window
+    // (scrubbing backwards) warms it again.
+    const inWindow = new Set<string>();
+    for (const frame of windowFrames) {
+      for (const channel of channelList) {
+        if (channel === null || !covers(channel, frame.id)) continue;
+        inWindow.add(buildFrameImageUrl(frame.id, channel));
+      }
+    }
+    for (const [url, controller] of pendingWarms) {
+      if (inWindow.has(url)) continue;
+      controller.abort();
+      pendingWarms.delete(url);
+      prefetchedRef.current.delete(url);
+    }
+
     for (const frame of windowFrames) {
       for (const channel of channelList) {
         if (!covers(channel, frame.id)) continue;
@@ -214,18 +260,36 @@ export function useFrameWindowPrefetch({
         // across a 15-frame two-channel window — purely to populate the HTTP
         // cache. A plain fetch populates exactly the same cache and decodes
         // nothing.
+        //
+        // Through the SHARED throttle, never straight to `fetch`. A window is
+        // 16 frames; at 3 channels that is 48 URLs issued in one synchronous
+        // burst, on every shift, which is what pushed nginx's 100 r/s
+        // `segmentation` zone to 547 rejections a minute. Queued here, at most
+        // `MAX_SPECULATIVE_REQUESTS` are ever outstanding no matter how many
+        // channels the project has.
         const controller = new AbortController();
-        startedFetches.set(url, controller);
-        fetch(url, { signal: controller.signal })
-          // Read the body: an unread response is not reliably stored, and
-          // storing it is the entire point of this warm. The bytes are
-          // discarded immediately — the copy that matters is the HTTP cache's.
-          .then(res => res.arrayBuffer())
+        pendingWarms.set(url, controller);
+        speculativeFrameRequests
+          .schedule(async () => {
+            const res = await fetch(url, { signal: controller.signal });
+            // Read the body INSIDE the slot: an unread response is not
+            // reliably stored, storing it is the entire point of this warm,
+            // and holding the slot for the whole transfer is what turns a
+            // concurrency cap into a rate cap. The bytes are discarded
+            // immediately — the copy that matters is the HTTP cache's.
+            await res.arrayBuffer();
+          }, controller.signal)
           .then(() => {
-            completedFetches.add(url);
+            // In the HTTP cache now, so it must stop being abortable.
+            pendingWarms.delete(url);
           })
           .catch(() => {
-            /* silent — the displayed frame surfaces its own failures */
+            // Silent — the displayed frame surfaces its own failures. An
+            // aborted warm was already un-marked by whoever aborted it; one
+            // that failed on its own stays marked, because re-issuing a
+            // failing speculative URL on every 100 ms window shift is how a
+            // server hiccup becomes the request storm this throttle prevents.
+            pendingWarms.delete(url);
           });
       }
     }
@@ -273,14 +337,12 @@ export function useFrameWindowPrefetch({
           prefetchedSet.delete(url);
         }
       }
-      // Same for the fetch-warmed multi-channel URLs. A cancelled warm never
-      // saw a response, so drop it from the seen-set and let a later window
-      // shift retry it.
-      for (const [url, controller] of startedFetches) {
-        if (completedFetches.has(url)) continue; // already in the HTTP cache
-        controller.abort();
-        prefetchedSet.delete(url);
-      }
+      // Multi-channel fetch warms are deliberately NOT torn down here: this
+      // cleanup runs on every window shift, and cancelling the whole window
+      // each shift is what made the leading-edge dedup pointless. Their
+      // lifetime is the in-window diff at the top of the effect body (left the
+      // window -> abort) plus the reset effect's cleanup (unmount / channel
+      // change -> abort all).
       // React Query handles its own cancellation when the queryClient
       // detects the cache entry's signal observer count drops.
     };
