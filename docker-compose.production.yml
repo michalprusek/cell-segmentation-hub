@@ -67,7 +67,20 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          # 12G, not 4G. The service idles around 130 MB; the limit exists only
+          # for the one job that can genuinely need gigabytes — decoding an
+          # uploaded ND2 in `extract_nd2.py`. At 4G a real two-channel
+          # well-plate acquisition was OOM-killed by the cgroup after a
+          # 27-minute upload (2026-08-19), with the host itself holding 35 GB
+          # free: the cap, not the machine, was the wall. Matched to the ml
+          # service's 12G because a decode's working set scales with the user's
+          # file, not with anything we control.
+          #
+          # This is HEADROOM, not the fix. The extractor is supposed to stream
+          # frames rather than hold a stack, and a limit is not a substitute for
+          # that — it only decides how large a file has to be before the same
+          # failure returns.
+          memory: 12G
           cpus: '2.0'
         reservations:
           memory: 1G

@@ -92,7 +92,32 @@ async function runHelper<T = PythonResult>(
     });
     child.stderr.on('data', c => (stderr += c.toString()));
     child.on('error', reject);
-    child.on('close', code => {
+    child.on('close', (code, signal) => {
+      // A helper KILLED by a signal reports code === null, and the reason
+      // lives entirely in `signal`. Dropping it printed "exited null:" with an
+      // empty stderr tail — SIGKILL gives the process no chance to write
+      // anything — which named neither the failure nor a place to look. On
+      // this deployment the overwhelmingly likely SIGKILL is the cgroup OOM
+      // killer: the backend container is memory-capped, and decoding a large
+      // ND2 is the one routine job that approaches the cap. Say so, and say
+      // where to confirm it, because the kernel log is the only place that
+      // records it — the container itself just vanishes mid-write.
+      if (signal) {
+        const oomHint =
+          signal === 'SIGKILL'
+            ? ' — killed by the kernel, almost certainly the container running ' +
+              'out of memory. Confirm with `journalctl -k | grep -i oom` on the ' +
+              'host (look for constraint=CONSTRAINT_MEMCG naming this container) ' +
+              'and raise the backend memory limit in docker-compose.production.yml ' +
+              'if the file is legitimately that large.'
+            : '';
+        return reject(
+          new Error(
+            `python helper ${scriptName} was killed by ${signal}${oomHint}` +
+              (stderr.trim() ? ` Last stderr: ${stderr.slice(-500)}` : '')
+          )
+        );
+      }
       if (code !== 0) {
         return reject(
           new Error(
