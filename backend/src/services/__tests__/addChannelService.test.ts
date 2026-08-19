@@ -39,7 +39,9 @@ import {
   slugifyChannelName,
   uniqueName,
   summarizeAlignment,
+  formatAlignReasons,
   MIN_ALIGN_CONFIDENCE,
+  type AlignShiftRow,
 } from '../addChannelService';
 import { prisma } from '../../db/prismaClient';
 import { logger } from '../../utils/logger';
@@ -210,6 +212,111 @@ describe('summarizeAlignment', () => {
   });
 });
 
+describe('summarizeAlignment reason breakdown', () => {
+  it('separates an already-aligned success from a discarded implausible peak', () => {
+    // The whole point of the reason field: these four rows are the SAME
+    // [0, 0, high-confidence] triple, and mean opposite things.
+    const s = summarizeAlignment([
+      [0, 0, 14.0, 'ok', 0, 0],
+      [0, 0, 12.0, 'ok', 0, 0],
+      [0, 0, 53.1, 'implausible_shift', -40, 0],
+      [0, 0, 49.4, 'implausible_shift', -38, 2],
+    ]);
+    // The legacy buckets still cannot tell them apart...
+    expect(s.zeroShift).toBe(4);
+    expect(s.rejected).toBe(0);
+    // ...the reasons can.
+    expect(s.reasons).toEqual({
+      ok: 2,
+      low_confidence: 0,
+      implausible_shift: 2,
+      shape_mismatch: 0,
+      unreported: 0,
+    });
+    expect(s.reasonsReported).toBe(true);
+    expect(s.failed).toBe(2);
+    expect(s.failedFraction).toBe(0.5);
+    expect(s.dominantFailure).toBe('implausible_shift');
+    // The largest discarded candidate is kept, so the log can say WHAT was
+    // refused rather than only that something was.
+    expect(s.implausiblePeak).toEqual({ dy: -40, dx: 0 });
+  });
+
+  it('counts each reason the helper can emit', () => {
+    const s = summarizeAlignment([
+      [3, -2, 8.5, 'ok', 3, -2],
+      [0, 0, 1.2, 'low_confidence', 5, 1],
+      [0, 0, 53.1, 'implausible_shift', -40, 0],
+      [0, 0, 0.0, 'shape_mismatch', 0, 0],
+    ]);
+    expect(s.reasons).toEqual({
+      ok: 1,
+      low_confidence: 1,
+      implausible_shift: 1,
+      shape_mismatch: 1,
+      unreported: 0,
+    });
+    expect(s.failed).toBe(3);
+    expect(s.failedFraction).toBe(0.75);
+    // Tie on 1 each → ALIGN_REASONS order decides, deterministically.
+    expect(s.dominantFailure).toBe('low_confidence');
+    expect(formatAlignReasons(s.reasons)).toBe(
+      'ok=1, low_confidence=1, implausible_shift=1, shape_mismatch=1'
+    );
+  });
+
+  it('marks nothing failed when every frame reported ok', () => {
+    const s = summarizeAlignment([
+      [0, 0, 14.0, 'ok', 0, 0],
+      [4, 1, 9.0, 'ok', 4, 1],
+    ]);
+    expect(s.failed).toBe(0);
+    expect(s.failedFraction).toBe(0);
+    expect(s.dominantFailure).toBeNull();
+    expect(s.implausiblePeak).toBeNull();
+  });
+
+  it('parses a legacy 3-element row and refuses to guess the ambiguous one', () => {
+    // Backward compatibility: rows from a helper that predates the reason
+    // field. What the triple determines is inferred; what it does not — a
+    // trusted zero shift — is `unreported`, NOT silently called a success.
+    const s = summarizeAlignment([
+      [3, -2, 8.5],
+      [0, 0, 1.2],
+      [0, 0, 11.0],
+    ]);
+    expect(s.reasons).toEqual({
+      ok: 1,
+      low_confidence: 1,
+      implausible_shift: 0,
+      shape_mismatch: 0,
+      unreported: 1,
+    });
+    expect(s.reasonsReported).toBe(false);
+    // Legacy input must reproduce the old warn behaviour exactly.
+    expect(s.failed).toBe(s.rejected);
+    expect(s.failedFraction).toBe(s.rejectedFraction);
+  });
+
+  it('ignores a reason it does not recognise and falls back to inference', () => {
+    // Forward compatibility: a future helper reason must not crash or be
+    // counted as something it is not.
+    const s = summarizeAlignment([
+      [0, 0, 1.0, 'some_future_reason', 0, 0],
+    ] as unknown as AlignShiftRow[]);
+    expect(s.reasons.low_confidence).toBe(1);
+    expect(s.reasonsReported).toBe(false);
+  });
+
+  it('survives a row with a missing peak tail', () => {
+    // reason present, peak absent (a helper reporting only the reason).
+    const s = summarizeAlignment([[0, 0, 20.0, 'implausible_shift']]);
+    expect(s.reasons.implausible_shift).toBe(1);
+    expect(s.implausiblePeak).toEqual({ dy: 0, dx: 0 });
+    expect(s.failedFraction).toBe(1);
+  });
+});
+
 describe('addChannelToFrames validation', () => {
   it('rejects a non-microtubule project', async () => {
     mockProject.mockResolvedValue({ type: 'spheroid' });
@@ -316,7 +423,7 @@ describe('addChannelToFrames alignment reporting', () => {
    *  segmentation source is `irm`, with the helper returning `shifts`. */
   const runAligned = async (
     frameIds: string[],
-    shifts: Array<[number, number, number]>
+    shifts: Array<[number, number, number, ...unknown[]]>
   ) => {
     mockProject.mockResolvedValue({ type: 'microtubules' });
     mockDetectKind.mockReturnValue(null); // single image source
@@ -472,6 +579,104 @@ describe('addChannelToFrames alignment reporting', () => {
     await runAligned(['f1', 'f2'], [[3, -2, 8.5]]);
     expect(warnMessages()[0]).toMatch(
       /reported 1 frame\(s\) for 2 job\(s\)/
+    );
+  });
+
+  // ---------------------------------------------------------------------
+  // The reported bug: "aligned: 20", frames visibly unregistered. Every
+  // estimate was a confident peak refused as implausible — a zero shift with a
+  // GOOD confidence, which the old three buckets filed under `zeroShift` and
+  // said nothing about.
+  // ---------------------------------------------------------------------
+
+  it('now warns — and names the cause — when every peak was discarded as implausible', async () => {
+    const result = await runAligned(
+      ['f1', 'f2', 'f3', 'f4'],
+      [
+        [0, 0, 53.1, 'implausible_shift', -40, 0],
+        [0, 0, 49.4, 'implausible_shift', -41, 1],
+        [0, 0, 51.0, 'implausible_shift', -40, 0],
+        [0, 0, 47.8, 'implausible_shift', -39, 0],
+      ]
+    );
+
+    expect(result.alignment).toMatchObject({
+      frames: 4,
+      shifted: 0,
+      rejected: 0, // the old count says nothing failed...
+      zeroShift: 4,
+      rejectedFraction: 0,
+      failed: 4, // ...the new one does
+      failedFraction: 1,
+      dominantFailure: 'implausible_shift',
+      implausiblePeak: { dy: -41, dx: 1 },
+    });
+
+    // Info line carries the breakdown now that the helper reports reasons.
+    expect(infoMessages()).toContain(
+      'Add-channel alignment: 0/4 frame(s) shifted, 0 rejected (confidence < 3), ' +
+        '4 zero-shift (already aligned or rejected as implausible) — ' +
+        'per-frame reasons: implausible_shift=4'
+    );
+
+    const warns = warnMessages();
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatch(/FAILED for most frames: 4\/4/);
+    // The cause is named, and it is NOT the weak-correlation story.
+    expect(warns[0]).toMatch(/plausibility cap/);
+    expect(warns[0]).toMatch(/largest discarded peak was dy=-41, dx=1/i);
+    expect(warns[0]).toMatch(/HIGH confidence/);
+    expect(warns[0]).not.toMatch(/cross-modality/i);
+  });
+
+  it('keeps the weak-correlation wording when that is the real cause', async () => {
+    await runAligned(
+      ['f1', 'f2'],
+      [
+        [0, 0, 1.1, 'low_confidence', 3, 1],
+        [0, 0, 1.3, 'low_confidence', -2, 4],
+      ]
+    );
+    const warns = warnMessages();
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatch(/FAILED for most frames: 2\/2/);
+    expect(warns[0]).toMatch(/too weak to trust/);
+    expect(warns[0]).toMatch(/cross-modality/i);
+    expect(warns[0]).not.toMatch(/plausibility cap/);
+  });
+
+  it('names a shape mismatch as a shape mismatch', async () => {
+    await runAligned(
+      ['f1', 'f2'],
+      [
+        [0, 0, 0.0, 'shape_mismatch', 0, 0],
+        [0, 0, 0.0, 'shape_mismatch', 0, 0],
+      ]
+    );
+    expect(warnMessages()[0]).toMatch(/different shapes/);
+    expect(warnMessages()[0]).toMatch(/share a pixel grid/);
+  });
+
+  it('stays silent when confident zero shifts are genuinely already aligned', async () => {
+    // Same triples as the implausible case above; only the reason differs.
+    const result = await runAligned(
+      ['f1', 'f2'],
+      [
+        [0, 0, 53.1, 'ok', 0, 0],
+        [0, 0, 49.4, 'ok', 0, 0],
+      ]
+    );
+    expect(result.alignment).toMatchObject({
+      zeroShift: 2,
+      failed: 0,
+      failedFraction: 0,
+      dominantFailure: null,
+    });
+    expect(warnMessages()).toHaveLength(0);
+    expect(infoMessages()).toContain(
+      'Add-channel alignment: 0/2 frame(s) shifted, 0 rejected (confidence < 3), ' +
+        '2 zero-shift (already aligned or rejected as implausible) — ' +
+        'per-frame reasons: ok=2'
     );
   });
 });

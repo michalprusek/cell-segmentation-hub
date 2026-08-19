@@ -6,7 +6,8 @@ Driver for the "Add channel" feature (MT projects). Given a JSON manifest of
   1. loads the moving PNG (the newly added channel's raster for one frame) and
      the reference PNG (that frame's segmentation-source channel);
   2. estimates the integer translation that best overlays moving onto reference
-     via phase correlation (``channel_registration.estimate_translation``);
+     via phase correlation
+     (``channel_registration.estimate_translation_detailed``);
   3. applies it losslessly (``channel_registration.shift_frame`` — no
      interpolation, so 16-bit intensity survives untouched);
   4. writes the aligned raster to ``out`` preserving bit depth.
@@ -19,11 +20,30 @@ The manifest path is the sole argument. All paths inside are absolute and are
 trusted (the backend builds them from validated storage segments). The script
 prints exactly one JSON line on stdout::
 
-    {"aligned": <count>, "shifts": [[dy, dx, confidence], ...]}
+    {"aligned": <count>,
+     "shifts": [[dy, dx, confidence, reason, peak_dy, peak_dx], ...]}
 
-``shifts[i]`` corresponds to ``jobs[i]``; a ``[0, 0, 0.0]`` entry means the
-estimate was rejected (implausible / low confidence) and the frame was copied
-unshifted — a safe no-op, never a failure.
+``shifts[i]`` corresponds to ``jobs[i]``. ``(dy, dx)`` is the shift that was
+APPLIED — zero whenever ``reason`` is not ``"ok"``, in which case the frame was
+copied unshifted (a safe no-op, never an abort). ``reason`` says WHY:
+
+    ok                 estimate accepted (a ``(0, 0)`` here = already aligned)
+    low_confidence     correlation peak too weak to trust
+    implausible_shift  peak found but beyond the plausibility cap → discarded
+    shape_mismatch     moving/reference rasters differ in shape; no estimate
+
+Without ``reason``, ``ok`` at ``(0, 0)`` (a success) and ``implausible_shift``
+(a silent failure) are the same row: both are a zero shift with a confidence
+above the threshold.
+
+``(peak_dy, peak_dx)`` is the raw correlation peak BEFORE the guards, so a
+rejected estimate still says what it wanted to do. It equals ``(dy, dx)`` on an
+``ok`` row and is ``(0, 0)`` for ``shape_mismatch`` (no correlation was run).
+
+WIRE COMPATIBILITY: elements 3-5 are APPENDED to the historical
+``[dy, dx, confidence]`` row, and no existing key changed meaning. A backend
+that predates them destructures the first three entries and ignores the tail,
+so it reads these rows exactly as it read the old ones.
 """
 
 from __future__ import annotations
@@ -35,7 +55,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from channel_registration import estimate_translation, shift_frame
+from channel_registration import (
+    REASON_SHAPE_MISMATCH,
+    estimate_translation_detailed,
+    shift_frame,
+)
 
 
 def _load_array(path: str) -> np.ndarray:
@@ -59,7 +83,7 @@ def main() -> int:
 
     manifest = json.loads(Path(sys.argv[1]).read_text())
     jobs = manifest.get("jobs", [])
-    shifts: list[list[float]] = []
+    shifts: list[list] = []
 
     for job in jobs:
         moving_path = job["moving"]
@@ -72,12 +96,18 @@ def main() -> int:
 
         dy = dx = 0
         conf = 0.0
+        reason = REASON_SHAPE_MISMATCH
+        peak_dy = peak_dx = 0
         if reference.shape == moving2d.shape and moving2d.ndim == 2:
-            dy, dx, conf = estimate_translation(reference, moving2d)
+            est = estimate_translation_detailed(reference, moving2d)
+            dy, dx, conf = est.dy, est.dx, est.confidence
+            reason, peak_dy, peak_dx = est.reason, est.peak_dy, est.peak_dx
         else:
             # Shape mismatch should never reach here (the backend validates
             # dimensions before extraction), but degrade to an unshifted copy
-            # rather than aborting the whole batch.
+            # rather than aborting the whole batch. This is the one reason
+            # estimate_translation_detailed cannot report — it raises instead —
+            # so it is labelled here.
             print(
                 f"WARNING: shape mismatch ref {reference.shape} vs moving "
                 f"{moving2d.shape} for {out_path}; writing unshifted",
@@ -86,7 +116,9 @@ def main() -> int:
 
         aligned = shift_frame(moving, dy, dx) if (dy or dx) else moving
         _save_array(aligned, out_path)
-        shifts.append([int(dy), int(dx), float(conf)])
+        shifts.append(
+            [int(dy), int(dx), float(conf), reason, int(peak_dy), int(peak_dx)]
+        )
 
     print(json.dumps({"aligned": len(jobs), "shifts": shifts}))
     return 0

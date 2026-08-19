@@ -1194,7 +1194,11 @@ export default {
     addChannel: 'Ajouter un canal',
     addChannelSuccess: 'Canal {{channels}} ajouté à {{frames}} image(s)',
     addChannelAlignWarning:
-      "L'alignement a échoué sur {{rejected}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Les canaux n'ont pas pu être corrélés (aucune structure commune) ; les images ont été ajoutées sans décalage.",
+      "L'alignement a échoué sur {{failed}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Les canaux n'ont pas pu être corrélés (aucune structure commune) ; les images ont été ajoutées sans décalage.",
+    addChannelAlignWarningImplausible:
+      "L'alignement a échoué sur {{failed}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Un décalage net a été trouvé, mais trop grand pour être plausible ; il a été écarté et les images ont été ajoutées sans décalage. Vérifiez que le canal ajouté provient du même champ de vision et n'est ni rogné ni décalé par rapport à la vidéo cible.",
+    addChannelAlignWarningShape:
+      "L'alignement a échoué sur {{failed}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Le canal ajouté et les images cibles n'ont pas les mêmes dimensions en pixels, ils n'ont donc pas pu être alignés ; les images ont été ajoutées sans décalage.",
     addChannelFailed: "Échec de l'ajout du canal",
     addChannelDialog: {
       title: 'Ajouter un canal',

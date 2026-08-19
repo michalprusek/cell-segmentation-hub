@@ -1183,7 +1183,11 @@ export default {
     addChannel: 'Add channel',
     addChannelSuccess: 'Added channel {{channels}} to {{frames}} frame(s)',
     addChannelAlignWarning:
-      'Alignment failed on {{rejected}} of {{frames}} frame(s) — only {{shifted}} were registered. The channels could not be correlated (no shared structure); the frames were added unshifted.',
+      'Alignment failed on {{failed}} of {{frames}} frame(s) — only {{shifted}} were registered. The channels could not be correlated (no shared structure); the frames were added unshifted.',
+    addChannelAlignWarningImplausible:
+      'Alignment failed on {{failed}} of {{frames}} frame(s) — only {{shifted}} were registered. A clear offset was found but it was too large to be plausible, so it was discarded and the frames were added unshifted. Check that the added channel comes from the same field of view and is not cropped or shifted relative to the target video.',
+    addChannelAlignWarningShape:
+      'Alignment failed on {{failed}} of {{frames}} frame(s) — only {{shifted}} were registered. The added channel and the target frames have different pixel dimensions, so they could not be aligned; the frames were added unshifted.',
     addChannelFailed: 'Failed to add channel',
     addChannelDialog: {
       title: 'Add channel',

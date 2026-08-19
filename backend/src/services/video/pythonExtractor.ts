@@ -266,10 +266,18 @@ export interface ChannelAlignJob {
   out: string;
 }
 
-/** Result of a batch alignment run: per-job integer shift + confidence. */
+/**
+ * Result of a batch alignment run: per-job integer shift + confidence, plus
+ * (since the helper started reporting it) the outcome reason and the raw
+ * correlation peak — ``[dy, dx, confidence, reason, peakDy, peakDx]``.
+ *
+ * Typed as three numbers plus an unknown tail so a row from an OLDER helper,
+ * which emits only the triple, still parses. ``AlignShiftRow`` in
+ * ``addChannelService.ts`` is the consumer side of the same contract.
+ */
 export interface ChannelAlignResult {
   aligned: number;
-  shifts: Array<[number, number, number]>;
+  shifts: Array<[number, number, number, ...unknown[]]>;
 }
 
 /**
