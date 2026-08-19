@@ -34,6 +34,125 @@ import { frameStorageKey } from './videoUploadService';
 const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_DISPLAY_NAME_LEN = 128;
 
+/**
+ * Peak-to-background confidence below which the phase-correlation estimate is
+ * discarded and the frame is copied UNSHIFTED. Mirrors ``_MIN_CONFIDENCE`` in
+ * ``video/pythonHelpers/channel_registration.py`` — the threshold lives in
+ * Python, so this copy exists only to *classify* the helper's output, never to
+ * drive the alignment. Keep the two in sync.
+ */
+export const MIN_ALIGN_CONFIDENCE = 3.0;
+
+/**
+ * Fraction of frames whose estimate was rejected above which the run is
+ * reported at ``warn``. Rationale: ``_MIN_CONFIDENCE`` already vets each frame
+ * individually, so a handful of rejections (a dark or out-of-focus frame) is
+ * expected noise on an otherwise good pair. A *majority* of frames failing is
+ * not noise — it is the signature of a channel pair that shares no
+ * correlatable structure, i.e. registration that cannot work at all.
+ */
+export const ALIGN_REJECTED_WARN_FRACTION = 0.5;
+
+/**
+ * What the aligner actually did, derived from the helper's per-frame
+ * ``[dy, dx, confidence]`` triples.
+ *
+ * Classification (see ``channel_registration.estimate_translation``): a
+ * rejected estimate returns ``(0, 0, confidence)`` — the confidence survives,
+ * only the shift is zeroed — so a weak correlation IS distinguishable from a
+ * real zero shift. What is NOT distinguishable from the helper's output alone
+ * is a *trusted* peak at the origin (channels already aligned — a success)
+ * from a peak rejected for exceeding ``_MAX_SHIFT_FRACTION`` (a failure):
+ * both surface as ``[0, 0, <high confidence>]``. Those share the
+ * ``zeroShift`` bucket and are labelled ambiguous rather than counted as
+ * either.
+ */
+export interface ChannelAlignmentSummary {
+  /** Frames the helper reported on (target frames × source channels). */
+  frames: number;
+  /** Frames that received a non-zero translation — actually registered. */
+  shifted: number;
+  /**
+   * Frames whose estimate was too weak to trust (confidence below
+   * {@link MIN_ALIGN_CONFIDENCE}) and were therefore copied unshifted. A
+   * shape mismatch (helper emits ``[0, 0, 0.0]``) also lands here.
+   */
+  rejected: number;
+  /**
+   * Frames with a trusted peak at the origin: either already aligned (nothing
+   * to correct) or an implausibly large peak rejected by
+   * ``_MAX_SHIFT_FRACTION``. The helper's output cannot separate the two.
+   */
+  zeroShift: number;
+  /** ``rejected / frames``, 0..1, rounded to 3 decimals. */
+  rejectedFraction: number;
+  /** Peak-to-background confidence spread; null when no frames were reported. */
+  confidence: { min: number; median: number; max: number } | null;
+  /** Largest translation actually applied, per axis (absolute pixels). */
+  maxAbsShift: { dy: number; dx: number };
+}
+
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * Turn the helper's raw per-frame shifts into a summary of what happened.
+ * Pure, and exported so the reporting can be tested without running Python.
+ */
+export function summarizeAlignment(
+  shifts: ReadonlyArray<readonly [number, number, number]> | undefined
+): ChannelAlignmentSummary {
+  const rows = shifts ?? [];
+
+  let shifted = 0;
+  let rejected = 0;
+  let zeroShift = 0;
+  let maxDy = 0;
+  let maxDx = 0;
+  const confidences: number[] = [];
+
+  for (const row of rows) {
+    const [dy, dx, conf] = row;
+    confidences.push(conf);
+    if (dy !== 0 || dx !== 0) {
+      shifted++;
+      maxDy = Math.max(maxDy, Math.abs(dy));
+      maxDx = Math.max(maxDx, Math.abs(dx));
+    } else if (conf < MIN_ALIGN_CONFIDENCE) {
+      rejected++;
+    } else {
+      zeroShift++;
+    }
+  }
+
+  let confidence: ChannelAlignmentSummary['confidence'] = null;
+  if (confidences.length > 0) {
+    const sorted = [...confidences].sort((a, b) => a - b);
+    const mid = sorted.length >> 1;
+    const median =
+      sorted.length % 2 === 1
+        ? sorted[mid]
+        : (sorted[mid - 1] + sorted[mid]) / 2;
+    confidence = {
+      min: round3(sorted[0]),
+      median: round3(median),
+      max: round3(sorted[sorted.length - 1]),
+    };
+  }
+
+  const frames = rows.length;
+  return {
+    frames,
+    shifted,
+    rejected,
+    zeroShift,
+    rejectedFraction: frames > 0 ? round3(rejected / frames) : 0,
+    confidence,
+    maxAbsShift: { dy: maxDy, dx: maxDx },
+  };
+}
+
 export interface AddChannelParams {
   projectId: string;
   /** Uploaded source file's original name — drives format detection. */
@@ -52,6 +171,14 @@ export interface AddChannelResult {
   addedChannels: string[];
   affectedContainerIds: string[];
   framesWritten: number;
+  /**
+   * What the phase-correlation alignment achieved. Present only when
+   * ``align`` was requested AND at least one frame was handed to the aligner;
+   * absent otherwise, so pre-existing consumers of this shape are unaffected.
+   * Writing the frames always succeeds — this is the only thing that says
+   * whether they were actually *registered*.
+   */
+  alignment?: ChannelAlignmentSummary;
 }
 
 interface TargetFrame {
@@ -375,6 +502,11 @@ export async function addChannelToFrames(
     }
 
     // 8. Run alignment (single batched Python call) if requested.
+    //    The helper never fails a frame: an estimate it cannot trust becomes a
+    //    (0, 0) no-op and the frame is copied through unshifted. So its
+    //    ``aligned`` count is just the job count and says nothing about
+    //    whether registration worked — only the per-frame shifts do.
+    let alignment: ChannelAlignmentSummary | undefined;
     if (align && alignJobs.length > 0) {
       const manifestPath = path.join(tempDir, 'align_manifest.json');
       await fs.writeFile(
@@ -383,10 +515,44 @@ export async function addChannelToFrames(
         'utf-8'
       );
       const res = await alignChannelFrames(manifestPath);
-      logger.info('Add-channel alignment complete', 'AddChannelService', {
+      alignment = summarizeAlignment(res.shifts);
+
+      const logData = {
         jobs: alignJobs.length,
-        aligned: res.aligned,
-      });
+        ...alignment,
+        minConfidence: MIN_ALIGN_CONFIDENCE,
+      };
+
+      if (alignment.frames !== alignJobs.length) {
+        // Should not happen; the helper emits one entry per job. If it ever
+        // does, the summary describes fewer frames than were written.
+        logger.warn(
+          `Add-channel alignment reported ${alignment.frames} frame(s) for ${alignJobs.length} job(s) — the summary below covers only the reported frames`,
+          'AddChannelService',
+          logData
+        );
+      }
+
+      logger.info(
+        `Add-channel alignment: ${alignment.shifted}/${alignment.frames} frame(s) shifted, ` +
+          `${alignment.rejected} rejected (confidence < ${MIN_ALIGN_CONFIDENCE}), ` +
+          `${alignment.zeroShift} zero-shift (already aligned or rejected as implausible)`,
+        'AddChannelService',
+        logData
+      );
+
+      if (alignment.rejectedFraction >= ALIGN_REJECTED_WARN_FRACTION) {
+        logger.warn(
+          `Add-channel alignment FAILED for most frames: ${alignment.rejected}/${alignment.frames} ` +
+            `estimate(s) were too weak to trust (peak-to-background confidence < ${MIN_ALIGN_CONFIDENCE}) ` +
+            `and those frames were written UNSHIFTED. Likely cause: this channel pair does not ` +
+            `correlate — cross-modality channels (e.g. IRM vs fluorescence) correlate poorly, and a ` +
+            `pair with no shared structure cannot be registered at all. The channel was still added; ` +
+            `its frames are simply not registered to the segmentation source.`,
+          'AddChannelService',
+          logData
+        );
+      }
     }
 
     // 9. Append new channels to each container's channels JSON (transaction).
@@ -411,12 +577,14 @@ export async function addChannelToFrames(
       addedChannels: [...addedChannelNames],
       framesWritten,
       align,
+      ...(alignment ? { alignedFrames: alignment.shifted } : {}),
     });
 
     return {
       addedChannels: [...addedChannelNames],
       affectedContainerIds: [...byContainer.keys()],
       framesWritten,
+      ...(alignment ? { alignment } : {}),
     };
   } finally {
     await fs.rm(tempFilePath, { force: true }).catch(() => undefined);

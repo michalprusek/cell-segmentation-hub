@@ -1193,6 +1193,8 @@ export default {
     deleteAnnotations: 'Supprimer les annotations',
     addChannel: 'Ajouter un canal',
     addChannelSuccess: 'Canal {{channels}} ajouté à {{frames}} image(s)',
+    addChannelAlignWarning:
+      "L'alignement a échoué sur {{rejected}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Les canaux n'ont pas pu être corrélés (aucune structure commune) ; les images ont été ajoutées sans décalage.",
     addChannelFailed: "Échec de l'ajout du canal",
     addChannelDialog: {
       title: 'Ajouter un canal',

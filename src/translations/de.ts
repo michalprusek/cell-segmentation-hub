@@ -1203,6 +1203,8 @@ export default {
     deleteAnnotations: 'Anmerkungen löschen',
     addChannel: 'Kanal hinzufügen',
     addChannelSuccess: 'Kanal {{channels}} zu {{frames}} Bild(ern) hinzugefügt',
+    addChannelAlignWarning:
+      'Ausrichtung bei {{rejected}} von {{frames}} Bild(ern) fehlgeschlagen — nur {{shifted}} wurden registriert. Die Kanäle konnten nicht korreliert werden (keine gemeinsame Struktur); die Bilder wurden unverschoben hinzugefügt.',
     addChannelFailed: 'Kanal konnte nicht hinzugefügt werden',
     addChannelDialog: {
       title: 'Kanal hinzufügen',

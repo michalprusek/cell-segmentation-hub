@@ -1191,6 +1191,8 @@ export default {
     deleteAnnotations: 'Smazat anotace',
     addChannel: 'Přidat kanál',
     addChannelSuccess: 'Kanál {{channels}} přidán k {{frames}} snímkům',
+    addChannelAlignWarning:
+      'Zarovnání selhalo u {{rejected}} z {{frames}} snímků — zarovnáno bylo jen {{shifted}}. Kanály nelze zkorelovat (nemají společnou strukturu); snímky byly přidány neposunuté.',
     addChannelFailed: 'Nepodařilo se přidat kanál',
     addChannelDialog: {
       title: 'Přidat kanál',

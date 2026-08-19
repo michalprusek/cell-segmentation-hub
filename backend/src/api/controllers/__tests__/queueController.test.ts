@@ -52,9 +52,12 @@ describe('Queue Controller Type Safety', () => {
         const resultLow = addImageToQueueSchema.safeParse(tooLow);
         expect(resultLow.success).toBe(false);
 
+        // 1.01, not 0.95: the ceiling was raised 0.9 -> 0.99 in 719dfaf7 so
+        // v5H's fitted cut of 0.97 is accepted, which makes 0.95 a VALID
+        // threshold. Matches `aboveMax` in the Boundary Testing block below.
         const tooHigh = {
           model: 'hrnet',
-          threshold: 0.95,
+          threshold: 1.01,
         };
 
         const resultHigh = addImageToQueueSchema.safeParse(tooHigh);

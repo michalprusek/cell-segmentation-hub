@@ -1098,6 +1098,8 @@ export default {
     deleteAnnotations: '删除标注',
     addChannel: '添加通道',
     addChannelSuccess: '已将通道 {{channels}} 添加到 {{frames}} 帧',
+    addChannelAlignWarning:
+      '{{frames}} 帧中有 {{rejected}} 帧对齐失败，仅 {{shifted}} 帧完成配准。通道之间无法相关（缺少共同结构），这些帧已按原位添加。',
     addChannelFailed: '添加通道失败',
     addChannelDialog: {
       title: '添加通道',

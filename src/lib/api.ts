@@ -210,6 +210,32 @@ export interface BatchQueueResponse {
   message: string;
 }
 
+/**
+ * What "Add channel" alignment achieved, per frame handed to the aligner.
+ * Mirrors `ChannelAlignmentSummary` in the backend's `addChannelService.ts`.
+ *
+ * A frame is never dropped: an estimate the phase correlation cannot trust
+ * becomes a no-op and the frame is stored unshifted. So `frames` says how many
+ * were processed and only `shifted` says how many were actually registered.
+ */
+export interface ChannelAlignmentSummary {
+  /** Frames handed to the aligner (target frames × source channels). */
+  frames: number;
+  /** Frames that received a non-zero translation. */
+  shifted: number;
+  /** Frames whose correlation was too weak to trust — stored unshifted. */
+  rejected: number;
+  /** Frames with a trusted zero shift: already aligned, or a peak rejected as
+   *  implausibly large (the two are indistinguishable downstream). */
+  zeroShift: number;
+  /** `rejected / frames`, 0..1. */
+  rejectedFraction: number;
+  /** Peak-to-background confidence spread across the frames. */
+  confidence: { min: number; median: number; max: number } | null;
+  /** Largest translation applied, per axis (absolute pixels). */
+  maxAbsShift: { dy: number; dx: number };
+}
+
 class ApiClient {
   private instance: AxiosInstance;
   private baseURL: string;
@@ -1277,6 +1303,12 @@ class ApiClient {
    * set, each added frame is phase-correlation aligned to that frame's
    * segmentation-source channel. Routes to POST
    * /projects/:id/images/add-channel.
+   *
+   * Writing the frames always succeeds; alignment may not. When `align` was
+   * requested the response carries an `alignment` summary saying what the
+   * phase correlation actually achieved — a channel pair with no shared
+   * structure yields `shifted: 0` with every estimate `rejected`, and the
+   * frames are stored unshifted.
    */
   async addChannel(
     projectId: string,
@@ -1292,6 +1324,8 @@ class ApiClient {
     addedChannels: string[];
     affectedContainerIds: string[];
     framesWritten: number;
+    /** Present only when `align` was requested and frames were aligned. */
+    alignment?: ChannelAlignmentSummary;
   }> {
     const { file, channelName, align, imageIds } = params;
     const formData = new FormData();
