@@ -1640,6 +1640,9 @@ const ProjectDetail = () => {
               projectName={projectTitle}
               projectType={projectType}
               images={images}
+              // The export dialog below wants every image in the project, but
+              // the select-all label must count what the checkbox acts on.
+              selectableCount={filteredImages.length}
               selectedCount={selectedCount}
               isAllSelected={isAllSelected}
               isPartiallySelected={isPartiallySelected}
