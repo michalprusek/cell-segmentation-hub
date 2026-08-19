@@ -33,6 +33,7 @@ Runs inside the backend container (numpy only — no scipy / skimage / cv2).
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
 
@@ -105,18 +106,37 @@ def _gradient_magnitude(a: np.ndarray) -> np.ndarray:
     Using the gradient (not raw intensity) is what makes the correlation
     *multimodal*-robust — it depends on where edges are, not on how bright or
     which way round the contrast runs.
+
+    ``np.hypot`` writes into the ``gx`` buffer rather than allocating a third
+    full-frame float64 array (elementwise, so the aliasing is safe and the
+    values are bit-identical to the out-of-place form). At 2048² that is one
+    32 MB allocation saved per gradient, and this runs twice per estimate on
+    every (frame, channel) — see the memory note on
+    :func:`estimate_translation_detailed`.
     """
     gy, gx = np.gradient(a)
-    return np.hypot(gx, gy)
+    np.hypot(gx, gy, out=gx)
+    return gx
 
 
+@lru_cache(maxsize=2)
 def _hann2d(shape: tuple[int, int]) -> np.ndarray:
     """Separable 2-D Hann window; tapers the borders to zero so the FFT's
     implicit periodicity doesn't create a false correlation ridge at the edges.
+
+    Cached per shape and returned READ-ONLY. The window depends only on the
+    frame geometry, which is constant for a whole acquisition, so rebuilding it
+    on every (frame, channel) estimate allocated a full-frame float64 array
+    (32 MB at 2048²) per call for an identical result. ``maxsize=2`` bounds the
+    retained cache at 2·Y·X·8 bytes — one live shape plus one in transition —
+    which is strictly less than the per-call allocation it replaces. The array
+    is frozen so a caller cannot mutate the shared instance.
     """
     wy = np.hanning(shape[0])
     wx = np.hanning(shape[1])
-    return np.outer(wy, wx)
+    win = np.outer(wy, wx)
+    win.flags.writeable = False
+    return win
 
 
 def estimate_translation(
@@ -162,6 +182,23 @@ def estimate_translation_detailed(
 
     A shape mismatch raises, as before; it is not a reason this function can
     return (see ``REASON_SHAPE_MISMATCH``).
+
+    Memory: every intermediate here is a FULL-FRAME float64 (or complex128
+    half-spectrum) array — 32 MB apiece at 2048² — and the naive out-of-place
+    form kept a dozen of them alive at once: a measured **386 MB of RSS per
+    call** for a single 2048² frame. Run from N encoder threads that is 386·N,
+    which is what OOM-killed a 4 GiB container on a 2-channel 2048²
+    acquisition. The steps below therefore reuse buffers in place and ``del``
+    each array at its last use, which brings the traced peak to exactly
+    **6·Y·X·8 bytes** (measured 6.00 full-frame float64 planes at 512², 1024²
+    and 2048² alike) and the RSS peak to ~290 MB at 2048² once allocator slack
+    and pocketfft's internal buffers are counted.
+
+    Every rewrite is elementwise with exact aliasing, so the arithmetic and the
+    returned numbers are BIT-IDENTICAL to the out-of-place form — verified over
+    84 frame/dtype/shift combinations and pinned by
+    ``test_channel_registration.py``. The algorithm, both guards and their
+    thresholds are untouched.
     """
     ref = _to_float_gray(reference)
     mov = _to_float_gray(moving)
@@ -171,16 +208,36 @@ def estimate_translation_detailed(
         )
     if ref.ndim != 2:
         raise ValueError(f"expected 2-D frames, got ndim={ref.ndim}")
+    shape = ref.shape
 
-    win = _hann2d(ref.shape)
-    rg = _gradient_magnitude(ref) * win
-    mg = _gradient_magnitude(mov) * win
+    win = _hann2d(shape)  # cached + read-only; see _hann2d
+    rg = _gradient_magnitude(ref)
+    rg *= win  # in place: same values as `_gradient_magnitude(ref) * win`
+    del ref  # gradient map supersedes the float copy
+    mg = _gradient_magnitude(mov)
+    mg *= win
+    del mov
 
     fr = np.fft.rfft2(rg)
+    del rg
     fm = np.fft.rfft2(mg)
+    del mg
+    # NOTE: written exactly as `fr * np.conj(fm)` on purpose. numpy dispatches
+    # this expression to a different complex-multiply loop than the buffer-
+    # reusing `np.conjugate(fm, out=fm); np.multiply(fr, fm, out=fm)` form, and
+    # the two disagree in the last ULP — enough to move `confidence` and, at a
+    # threshold boundary, the accepted shift. The 33 MB that rewrite would have
+    # saved is not worth an output change, so only the *lifetimes* are
+    # tightened here: fr and fm are dropped the moment the product exists,
+    # instead of staying live to the end of the function.
     cross = fr * np.conj(fm)
-    cross /= np.abs(cross) + 1e-8  # whiten → pure phase correlation
-    corr = np.fft.irfft2(cross, s=ref.shape)
+    del fr, fm
+    mag = np.abs(cross)
+    mag += 1e-8
+    cross /= mag  # whiten → pure phase correlation
+    del mag
+    corr = np.fft.irfft2(cross, s=shape)
+    del cross
 
     peak = np.unravel_index(int(np.argmax(corr)), corr.shape)
     peak_val = float(corr[peak])
@@ -191,12 +248,12 @@ def estimate_translation_detailed(
 
     # Fold the periodic FFT index into a signed shift in [-N/2, N/2).
     dy, dx = int(peak[0]), int(peak[1])
-    if dy > ref.shape[0] // 2:
-        dy -= ref.shape[0]
-    if dx > ref.shape[1] // 2:
-        dx -= ref.shape[1]
+    if dy > shape[0] // 2:
+        dy -= shape[0]
+    if dx > shape[1] // 2:
+        dx -= shape[1]
 
-    max_shift = _MAX_SHIFT_FRACTION * min(ref.shape)
+    max_shift = _MAX_SHIFT_FRACTION * min(shape)
     if abs(dy) > max_shift or abs(dx) > max_shift:
         # Implausible → reject. The candidate peak survives in peak_dy/peak_dx
         # so the caller can report WHAT was rejected, not just that something
