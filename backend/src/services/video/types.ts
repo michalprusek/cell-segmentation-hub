@@ -48,6 +48,31 @@ export interface ChannelMeta {
    *  coverage → always request it). Frame ids (not indices) so the FE can
    *  filter directly against the canvas / prefetch frame id. */
   frameIds?: string[];
+  /** True when this channel was added from a SINGLE source image stamped onto
+   *  every covered frame, rather than from a video/stack paired frame-by-frame.
+   *  Every covered frame therefore shows the SAME picture — a static IRM
+   *  snapshot laid over a time-lapse being the usual case.
+   *
+   *  Why it is worth recording. Segmenting such a channel frame-by-frame does
+   *  the identical work N times and then asks the tracker to rediscover that
+   *  the N results are the same objects. Observed in production: 299 frames,
+   *  30498 polylines, resolving to exactly 102 tracks — one detection set,
+   *  counted 299 times, at a cost that pushed the tracker past its timeout. A
+   *  channel flagged here is segmented ONCE and the result is projected onto
+   *  the rest, which makes cross-frame identity exact by construction instead
+   *  of inferred. */
+  staticSource?: boolean;
+  /** For a `staticSource` channel added WITH alignment: the (dy, dx) actually
+   *  applied to each covered frame's copy, keyed by frame Image id.
+   *
+   *  Alignment registers the one source image to each frame's own segmentation
+   *  channel, so the stored copies are translations of one another rather than
+   *  byte-identical. Recording the translation is what lets a single
+   *  segmentation be projected onto the other frames instead of re-run: the
+   *  geometry is the same shape moved by a known amount. Absent when the
+   *  channel was added without alignment, which is the same thing as every
+   *  shift being (0, 0). */
+  staticShifts?: Record<string, [number, number]>;
 }
 
 export interface ExtractionResult {

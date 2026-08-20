@@ -442,3 +442,39 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
     expect(byId.get('seg-1')).toBe('track-B');
   });
 });
+
+describe('trackerTimeoutMs', () => {
+  // The flat 60 s this replaces did not fail the tracker — it abandoned it. On
+  // 2026-08-20 a 299-frame container's answer arrived 35 s after the caller had
+  // stopped listening, so 95 s of work was computed, returned 200, and dropped,
+  // and the container silently went untracked.
+  const frames = (counts: number[]) =>
+    counts.map(n => ({ polylines: new Array(n).fill(null) }));
+
+  it('never waits less than a minute, however small the job', async () => {
+    const { trackerTimeoutMs } = await import('../trackerService');
+    expect(trackerTimeoutMs(frames([1]))).toBe(60_000);
+    expect(trackerTimeoutMs([])).toBe(60_000);
+  });
+
+  it('allows the real 30498-polyline container more than the 95 s it took', async () => {
+    const { trackerTimeoutMs } = await import('../trackerService');
+    const budget = trackerTimeoutMs(frames(new Array(299).fill(102)));
+    expect(budget).toBeGreaterThan(95_000);
+    expect(budget).toBe(30498 * 4);
+  });
+
+  it('scales with polylines, not with frame count', async () => {
+    const { trackerTimeoutMs } = await import('../trackerService');
+    // Same total polylines, very different frame counts → same budget, because
+    // the assignment problem is sized by detections, not by how they are split.
+    expect(trackerTimeoutMs(frames(new Array(100).fill(200)))).toBe(
+      trackerTimeoutMs(frames(new Array(200).fill(100)))
+    );
+  });
+
+  it('caps a runaway job so one call cannot hold a connection for ever', async () => {
+    const { trackerTimeoutMs } = await import('../trackerService');
+    expect(trackerTimeoutMs(frames(new Array(10_000).fill(500)))).toBe(15 * 60_000);
+  });
+});

@@ -10,6 +10,12 @@ import { batchProcessor } from '../utils/batchProcessor';
 import { SegmentationUpdateData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
 import { scheduleTrackingForContainer } from './tracking/trackerService';
+import {
+  findStaticChannel,
+  planStaticCollapse,
+  type StaticChannelLike,
+} from './staticChannelProjection';
+import { projectStaticChannelResult } from './staticChannelProjectionService';
 import type { KnownModelId } from '../constants/modelRegistry';
 
 export interface QueueStats {
@@ -230,6 +236,77 @@ export class QueueService {
   /**
    * Add multiple images to queue in batch
    */
+  /**
+   * Drop frames whose segmentation will be projected from a sibling.
+   *
+   * Only applies to a channel recorded as `staticSource` at add time — one
+   * source image stamped onto every covered frame. "The pixels currently look
+   * identical" is deliberately not accepted as evidence: that is a property of
+   * today's data, whereas the flag is a property of how the channel was built.
+   *
+   * Anything this cannot prove safe is left alone and segmented normally: a
+   * frame outside the channel's coverage, a frame whose alignment shift was
+   * never recorded, or any container whose metadata does not parse.
+   */
+  private async collapseStaticChannelFrames(
+    candidateIds: string[],
+    channel?: string
+  ): Promise<{ ids: string[]; skipped: number; containers: number }> {
+    if (!channel || candidateIds.length < 2) {
+      return { ids: candidateIds, skipped: 0, containers: 0 };
+    }
+
+    const frames = await this.prisma.image.findMany({
+      where: { id: { in: candidateIds } },
+      select: { id: true, frameIndex: true, parentVideoId: true },
+    });
+
+    const byContainer = new Map<string, typeof frames>();
+    const loose: string[] = [];
+    for (const f of frames) {
+      if (!f.parentVideoId) {
+        loose.push(f.id);
+        continue;
+      }
+      const list = byContainer.get(f.parentVideoId) ?? [];
+      list.push(f);
+      byContainer.set(f.parentVideoId, list);
+    }
+    if (byContainer.size === 0) {
+      return { ids: candidateIds, skipped: 0, containers: 0 };
+    }
+
+    const containers = await this.prisma.image.findMany({
+      where: { id: { in: [...byContainer.keys()] } },
+      select: { id: true, channels: true },
+    });
+    const channelsById = new Map(containers.map(c => [c.id, c.channels]));
+
+    const keep = new Set(loose);
+    let collapsedContainers = 0;
+    for (const [containerId, containerFrames] of byContainer) {
+      const meta = findStaticChannel(
+        channelsById.get(containerId) as unknown as StaticChannelLike[] | null,
+        channel
+      );
+      if (!meta) {
+        containerFrames.forEach(f => keep.add(f.id));
+        continue;
+      }
+      const plan = planStaticCollapse(meta, containerFrames);
+      plan.segment.forEach(f => keep.add(f.id));
+      if (plan.projectFrom.size > 0) collapsedContainers++;
+    }
+
+    const ids = candidateIds.filter(id => keep.has(id));
+    return {
+      ids,
+      skipped: candidateIds.length - ids.length,
+      containers: collapsedContainers,
+    };
+  }
+
+
   async addBatchToQueue(
     imageIds: string[],
     projectId: string,
@@ -311,7 +388,25 @@ export class QueueService {
             .map(img => img.id)
         : [];
 
-      if (candidateIds.length === 0) {
+      // A channel built from ONE image shows the same picture on every frame it
+      // covers, so queueing every frame asks for the identical segmentation N
+      // times and then leaves the tracker to rediscover that the N answers are
+      // the same objects. Queue one frame per container instead; the rest are
+      // filled in from its result once it lands.
+      const collapsed = await this.collapseStaticChannelFrames(
+        candidateIds,
+        channel
+      );
+      const queueableIds = collapsed.ids;
+      if (collapsed.skipped > 0) {
+        logger.info(
+          `Static channel '${channel}': queueing ${queueableIds.length} frame(s) instead of ${candidateIds.length} — the other ${collapsed.skipped} show the same image and will be projected from it`,
+          'QueueService',
+          { batchId, channel, containers: collapsed.containers }
+        );
+      }
+
+      if (queueableIds.length === 0) {
         logger.info(
           'Batch added to segmentation queue (no eligible images)',
           'QueueService',
@@ -330,7 +425,7 @@ export class QueueService {
         }
 
         await tx.segmentationQueue.createMany({
-          data: candidateIds.map(imageId => ({
+          data: queueableIds.map(imageId => ({
             imageId,
             projectId,
             userId,
@@ -345,7 +440,7 @@ export class QueueService {
         });
 
         await tx.image.updateMany({
-          where: { id: { in: candidateIds } },
+          where: { id: { in: queueableIds } },
           data: { segmentationStatus: 'queued' },
         });
 
@@ -889,7 +984,19 @@ export class QueueService {
               select: { parentVideoId: true },
             });
             if (imageMeta?.parentVideoId) {
-              scheduleTrackingForContainer(imageMeta.parentVideoId);
+              // A static channel needs no tracker: the other frames get this
+              // frame's polylines verbatim, trackId included, so identity is
+              // exact by construction. Running the tracker over them would be
+              // paying to rediscover it — and on a 299-frame container that is
+              // what overran its timeout and lost the answer entirely.
+              const projected = await projectStaticChannelResult({
+                containerId: imageMeta.parentVideoId,
+                sourceImageId: item.imageId,
+                channel: item.channel ?? null,
+              });
+              if (!projected.applied) {
+                scheduleTrackingForContainer(imageMeta.parentVideoId);
+              }
             }
           } catch (trackErr) {
             logger.error(
