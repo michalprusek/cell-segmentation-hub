@@ -48,6 +48,8 @@ import {
   frameCacheKey,
   getOrDecode,
 } from '@/lib/decodedFrameCache';
+import { FRAME_PREFETCH_WINDOW } from '../../hooks/useFrameWindowPrefetch';
+import { DECODE_AHEAD_FRAMES } from '../../hooks/useDecodeAhead';
 import { speculativeFrameRequests } from '@/lib/requestThrottle';
 import { buildLut } from '@/lib/windowLevel';
 import {
@@ -373,6 +375,24 @@ export default function MultiChannelCanvas({
               decodeGrayPngPooled(blob)
             );
             if (decoded) {
+              // Now that a real frame's size is known, size the cache to the
+              // working set instead of a constant. The pipeline holds the
+              // prefetch window for EVERY visible channel at once, and a fixed
+              // budget that comfortably fits two channels does not fit three:
+              // the window then evicts itself, every frame becomes a miss, and
+              // playback stalls while the counter keeps counting.
+              // Residents are the prefetch window PLUS whatever decode-ahead
+              // is running past it — counted explicitly rather than left to the
+              // safety margin, because getting this wrong is invisible until
+              // playback stalls.
+              decodedFrameCache.reserveFor(
+                decoded.data.byteLength,
+                (FRAME_PREFETCH_WINDOW.back +
+                  FRAME_PREFETCH_WINDOW.ahead +
+                  DECODE_AHEAD_FRAMES +
+                  1) *
+                  Math.max(1, visibleChannels.length)
+              );
               return {
                 channel,
                 width: decoded.width,
