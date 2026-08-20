@@ -205,6 +205,48 @@ function rowReason(row: AlignShiftRow): {
 }
 
 /**
+ * Write each aligned frame's applied shift onto the static channel it belongs
+ * to, keyed by frame Image id.
+ *
+ * Exported for testing: the positional correspondence between the helper's
+ * `shifts` rows and the jobs that produced them is the whole contract, and it
+ * is the kind of thing that breaks silently when either side is reordered.
+ * A row the helper did not return (short array) leaves that frame without a
+ * recorded shift, which downstream must treat as "unknown", NOT as zero —
+ * projecting a segmentation by an assumed zero shift would put filaments in
+ * the wrong place.
+ */
+export function recordStaticShifts(
+  shifts: ReadonlyArray<AlignShiftRow> | undefined,
+  owners: ReadonlyArray<{
+    containerId: string;
+    channelIndex: number;
+    frameId: string;
+  }>,
+  channelsByContainer: Map<string, ChannelMeta[]>,
+  onMissingContainer?: (containerId: string) => void
+): void {
+  const rows = shifts ?? [];
+  for (let i = 0; i < owners.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const owner = owners[i];
+    const metas = channelsByContainer.get(owner.containerId);
+    if (!metas) {
+      onMissingContainer?.(owner.containerId);
+      continue;
+    }
+    const meta = metas[owner.channelIndex];
+    if (!meta?.staticSource) continue;
+    const dy = Number(row[0]);
+    const dx = Number(row[1]);
+    if (!Number.isFinite(dy) || !Number.isFinite(dx)) continue;
+    (meta.staticShifts ??= {})[owner.frameId] = [dy, dx];
+  }
+}
+
+
+/**
  * Turn the helper's raw per-frame shifts into a summary of what happened.
  * Pure, and exported so the reporting can be tested without running Python.
  */
@@ -612,6 +654,16 @@ export async function addChannelToFrames(
     // 7. Write PNGs (copy, or collect alignment jobs) + build ChannelMeta per
     //    container. Names are resolved against each container's existing set.
     const alignJobs: ChannelAlignJob[] = [];
+    /** Parallel to `alignJobs`: which (container, channel, frame) each job
+     *  belongs to. The helper returns shifts positionally, and jobs from every
+     *  container and channel share one batched call, so without this the rows
+     *  cannot be attributed back — and a static channel needs its per-frame
+     *  shift to project one segmentation onto the other frames. */
+    const alignJobOwner: Array<{
+      containerId: string;
+      channelIndex: number;
+      frameId: string;
+    }> = [];
     const newChannelsByContainer = new Map<string, ChannelMeta[]>();
     const addedChannelNames = new Set<string>();
     let framesWritten = 0;
@@ -661,6 +713,12 @@ export async function addChannelToFrames(
           type: 'fluorescent',
           isSegmentationSource: false,
           pngBacked: true,
+          // A single source image stamped onto every covered frame: every
+          // frame shows the SAME picture, so segmenting it per frame repeats
+          // one piece of work N times. Recorded here rather than re-derived
+          // later, because after the PNGs are written the two cases are
+          // indistinguishable without comparing pixels.
+          ...(source.frameCount === 1 ? { staticSource: true } : {}),
           ...(coverageIds ? { frameIds: coverageIds } : {}),
           wavelengthNm: srcMeta.wavelengthNm,
           displayColor:
@@ -706,6 +764,11 @@ export async function addChannelToFrames(
               ),
               out: outAbs,
             });
+            alignJobOwner.push({
+              containerId,
+              channelIndex: ci,
+              frameId: target.id,
+            });
           } else {
             await fs.copyFile(moving, outAbs);
           }
@@ -729,6 +792,21 @@ export async function addChannelToFrames(
       );
       const res = await alignChannelFrames(manifestPath);
       alignment = summarizeAlignment(res.shifts);
+
+      // Attribute each shift back to the frame it moved, so a static channel
+      // can later project ONE segmentation onto its other frames instead of
+      // segmenting each. Only static channels need this: for a paired
+      // video/stack every frame carries different pixels anyway, and storing
+      // a shift per frame there would be a large map nothing reads.
+      recordStaticShifts(
+        res.shifts,
+        alignJobOwner,
+        newChannelsByContainer,
+        containerId => logger.warn(
+          `Add-channel: no channel metadata for container ${containerId} while recording static shifts`,
+          'AddChannelService'
+        )
+      );
 
       const logData = {
         jobs: alignJobs.length,

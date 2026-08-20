@@ -163,6 +163,44 @@ export async function runTrackingForContainer(
   }
 }
 
+/**
+ * How long to wait for the tracker, scaled to the work being asked of it.
+ *
+ * A flat 60 s threw away completed results. Observed in production
+ * (2026-08-20): a 299-frame container with 30498 polylines finished on the ML
+ * side at 05:56:16 and returned 200 — but the caller had already given up at
+ * 05:55:41, so a correct answer that cost 95 s of GPU-box CPU was discarded and
+ * the container silently went untracked. From the user's side that is
+ * indistinguishable from "tracking is broken", which is exactly how it was
+ * reported.
+ *
+ * The cost is driven by the polyline count, not the frame count: the tracker
+ * solves a linear assignment between consecutive frames, so it grows roughly
+ * with polylines per frame squared times frames. Rather than model that, budget
+ * generously per polyline and clamp. 4 ms per polyline puts the observed 30498
+ * at ~122 s, comfortably past the 95 s it actually took, and a container an
+ * order of magnitude larger still lands inside the ceiling.
+ *
+ * The ceiling exists so a genuinely stuck call cannot pin a connection for ever;
+ * it is not a performance target. If it is ever hit, the fix is to stop asking
+ * the tracker to re-derive identity that is already known — see the static
+ * channel path, where the same 102 objects were being rediscovered 299 times.
+ */
+const TRACKER_MS_PER_POLYLINE = 4;
+const TRACKER_MIN_TIMEOUT_MS = 60_000;
+const TRACKER_MAX_TIMEOUT_MS = 15 * 60_000;
+
+export function trackerTimeoutMs(
+  frames: ReadonlyArray<{ polylines: ReadonlyArray<unknown> }>
+): number {
+  const polylines = frames.reduce((n, f) => n + f.polylines.length, 0);
+  return Math.min(
+    TRACKER_MAX_TIMEOUT_MS,
+    Math.max(TRACKER_MIN_TIMEOUT_MS, polylines * TRACKER_MS_PER_POLYLINE)
+  );
+}
+
+
 async function _runTrackingForContainerInner(
   containerId: string
 ): Promise<void> {
@@ -207,16 +245,26 @@ async function _runTrackingForContainerInner(
 
   const mlUrl = `${config.SEGMENTATION_SERVICE_URL}/api/v1/track`;
   let assignments: Record<string, string> = {};
+  const timeoutMs = trackerTimeoutMs(trackPayload.frames);
   try {
-    const res = await axios.post(mlUrl, trackPayload, { timeout: 60_000 });
+    const res = await axios.post(mlUrl, trackPayload, { timeout: timeoutMs });
     const payload = res.data?.data ?? res.data ?? {};
     assignments = payload.assignments ?? {};
   } catch (err) {
+    const polylines = trackPayload.frames.reduce(
+      (n, f) => n + f.polylines.length,
+      0
+    );
     logger.error(
       `Tracker ML call failed: ${(err as Error).message}`,
       err as Error,
       'TrackerService',
-      { containerId }
+      {
+        containerId,
+        frames: trackPayload.frames.length,
+        polylines,
+        timeoutMs,
+      }
     );
     return;
   }
