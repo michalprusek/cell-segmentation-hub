@@ -5,10 +5,10 @@
   "_doNotEditByHand": true,
   "typescriptVersion": "5.9.3",
   "totals": {
-    "tsconfig.app.json": 495,
+    "tsconfig.app.json": 474,
     "tsconfig.node.json": 21,
     "tsconfig.test.json": 1418,
-    "all": 1934
+    "all": 1913
   },
   "projects": {
     "tsconfig.app.json": {
@@ -135,17 +135,9 @@
       "src/components/settings/UserProfileSection.tsx": {
         "TS2345: Argument of type '(key: string, options?: Record<string, unknown> | undefined) => string | string[]' is not assignable to parameter of type '(key: string) => string'.": 1
       },
-      "src/components/ui/animated-loader.tsx": {
-        "TS7030: Not all code paths return a value.": 1
-      },
       "src/components/ui/breadcrumb.tsx": {
         "TS2322: Type '<type elided by tsc>' is not assignable to type 'DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>'.": 1,
         "TS2322: Type '<type elided by tsc>' is not assignable to type 'DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>'.": 1
-      },
-      "src/components/ui/cancel-all-segmentations-button.tsx": {
-        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,
-        "TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.": 16,
-        "TS2554: Expected 1-2 arguments, but got 3.": 3
       },
       "src/components/ui/pagination.tsx": {
         "TS2322: Type '<type elided by tsc>' is not assignable to type 'AnchorHTMLAttributes<HTMLAnchorElement>'.": 2,
