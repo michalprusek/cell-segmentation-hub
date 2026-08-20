@@ -18,10 +18,38 @@
 
 import type { DecodedGray } from './png16';
 
-/** ~46 frames of a single 4 MB channel, or ~23 two-channel frames — comfortably
- *  more than the 5-back/10-ahead prefetch window, so a normal playback pass
- *  never evicts something it is about to want again. */
-const DEFAULT_BUDGET_BYTES = 192 * 1024 * 1024;
+/** Floor for the budget, and what it stays at until a caller reserves more.
+ *
+ *  This number used to be the WHOLE story, sized as "~46 frames of a single
+ *  4 MB channel, or ~23 two-channel frames — comfortably more than the
+ *  5-back/10-ahead prefetch window". That reasoning was right for one or two
+ *  channels and quietly wrong for three: a 1474x1412 16-bit frame is 3.97 MB
+ *  per channel, so three channels are 11.9 MB, and the 16-frame window alone
+ *  wants 190 MB of a 192 MB budget. The window then evicts itself. Every frame
+ *  becomes a miss, the decoders and request slots fill with re-decoding what
+ *  just fell out, and playback stops — while the frame counter, which is only
+ *  an index and waits for nothing, keeps advancing. Reported from production as
+ *  "the first 15 frames play, then it stalls".
+ *
+ *  So the budget is no longer a guess about frame sizes. `reserveFor` raises it
+ *  to fit the working set the pipeline is actually asked to hold. */
+const MIN_BUDGET_BYTES = 192 * 1024 * 1024;
+
+/** Never grow past a share of the device's memory, whatever is reserved.
+ *
+ *  `navigator.deviceMemory` is coarse (and absent on Safari/Firefox, hence the
+ *  conservative 4 GB assumption), but the point is only to keep a pathological
+ *  reservation — a huge frame times many channels — from evicting the rest of
+ *  the browser instead of itself. A quarter of reported RAM leaves room for the
+ *  page, the GPU textures and everything else the tab is holding. */
+function deviceCeilingBytes(): number {
+  const gb =
+    typeof navigator !== 'undefined' &&
+    typeof (navigator as { deviceMemory?: number }).deviceMemory === 'number'
+      ? (navigator as { deviceMemory?: number }).deviceMemory
+      : 4;
+  return Math.max(MIN_BUDGET_BYTES, Math.floor((gb ?? 4) * 1024 ** 3 * 0.25));
+}
 
 export function frameCacheKey(frameId: string, channel: string): string {
   return `${frameId}::${channel}`;
@@ -32,7 +60,39 @@ export class DecodedFrameCache {
   private readonly entries = new Map<string, DecodedGray>();
   private bytes = 0;
 
-  constructor(private readonly budgetBytes = DEFAULT_BUDGET_BYTES) {}
+  private budgetBytes: number;
+
+  constructor(budgetBytes: number = MIN_BUDGET_BYTES) {
+    this.budgetBytes = budgetBytes;
+  }
+
+  /** Current budget in bytes. */
+  get budget(): number {
+    return this.budgetBytes;
+  }
+
+  /**
+   * Grow the budget so `entries` items of `entryBytes` all stay resident.
+   *
+   * Callers know the working set the cache is about to be asked for — the
+   * prefetch window times the channel count — and the cache cannot guess it:
+   * from in here, one 12 MB three-channel frame and three 4 MB single-channel
+   * frames look the same. A 25% margin covers the frame being decoded ahead and
+   * the one being displayed, both of which sit outside the window arithmetic.
+   *
+   * Only ever grows. Shrinking on a channel being hidden would throw away
+   * frames that are about to be wanted again the moment it is shown.
+   */
+  reserveFor(entryBytes: number, entries: number): void {
+    if (!Number.isFinite(entryBytes) || !Number.isFinite(entries)) return;
+    if (entryBytes <= 0 || entries <= 0) return;
+    const needed = Math.ceil(entryBytes * entries * 1.25);
+    const target = Math.min(
+      Math.max(needed, MIN_BUDGET_BYTES),
+      deviceCeilingBytes()
+    );
+    if (target > this.budgetBytes) this.budgetBytes = target;
+  }
 
   get size(): number {
     return this.entries.size;

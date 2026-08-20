@@ -1663,12 +1663,12 @@
       "src/pages/segmentation/components/canvas/FrameLoadingGate.tsx": {
         "TS6307: File 'src/pages/segmentation/components/canvas/EditorFrameLoadingOverlay.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
-      "src/pages/segmentation/components/canvas/FrameWindowPrefetcher.tsx": {
-        "TS6307: File 'src/pages/segmentation/hooks/useFrameWindowPrefetch.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
       "src/pages/segmentation/components/canvas/ModeInstructions.tsx": {
         "TS2339: Property 'style' does not exist on type 'EventTarget'.": 2,
         "TS7030: Not all code paths return a value.": 1
+      },
+      "src/pages/segmentation/components/canvas/MultiChannelCanvas.tsx": {
+        "TS6307: File 'src/pages/segmentation/hooks/useFrameWindowPrefetch.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/components/canvas/PolygonVertices.tsx": {
         "TS6307: File 'src/pages/segmentation/components/canvas/CanvasVertex.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,

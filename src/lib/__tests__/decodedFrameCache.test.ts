@@ -169,3 +169,77 @@ describe('getOrDecode', () => {
     await expect(getOrDecode('k', ok)).resolves.toBeDefined();
   });
 });
+
+describe('reserveFor — the working set, not a guess about frame sizes', () => {
+  const MIN = 192 * 1024 * 1024;
+  const frame1474x1412 = 1474 * 1412 * 2; // 3.97 MB, the user's real geometry
+  // What the pipeline actually keeps resident: the 5-back/10-ahead window,
+  // the current frame, and the 3 frames decode-ahead runs past it.
+  const WINDOW = 5 + 10 + 1 + 3;
+
+  it('reproduces the stall: three channels do not fit the old fixed budget', () => {
+    // The regression this exists for. 16 frames x 3 channels is 190 MB of a
+    // 192 MB budget, so the window evicts itself and every frame becomes a
+    // miss — which is what stopped playback at ~15 frames.
+    const working = frame1474x1412 * 3 * WINDOW;
+    expect(working).toBeGreaterThan(MIN);
+
+    const cache = new DecodedFrameCache();
+    let evictedWhileStillWanted = 0;
+    for (let f = 0; f < WINDOW; f++) {
+      for (let c = 0; c < 3; c++) {
+        cache.set(`f${f}::c${c}`, frame(frame1474x1412));
+      }
+    }
+    for (let f = 0; f < WINDOW; f++) {
+      for (let c = 0; c < 3; c++) {
+        if (!cache.get(`f${f}::c${c}`)) evictedWhileStillWanted++;
+      }
+    }
+    expect(evictedWhileStillWanted).toBeGreaterThan(0);
+  });
+
+  it('keeps the whole three-channel window resident once reserved', () => {
+    const cache = new DecodedFrameCache();
+    cache.reserveFor(frame1474x1412, WINDOW * 3);
+    for (let f = 0; f < WINDOW; f++) {
+      for (let c = 0; c < 3; c++) {
+        cache.set(`f${f}::c${c}`, frame(frame1474x1412));
+      }
+    }
+    for (let f = 0; f < WINDOW; f++) {
+      for (let c = 0; c < 3; c++) {
+        expect(cache.get(`f${f}::c${c}`)).toBeDefined();
+      }
+    }
+  });
+
+  it('never shrinks below the floor, and never shrinks at all', () => {
+    const cache = new DecodedFrameCache();
+    cache.reserveFor(frame1474x1412, WINDOW * 3);
+    const grown = cache.budget;
+    expect(grown).toBeGreaterThan(MIN);
+    // A channel being hidden must not throw away frames it is about to want
+    // back the moment it is shown again.
+    cache.reserveFor(frame1474x1412, 1);
+    expect(cache.budget).toBe(grown);
+  });
+
+  it('ignores nonsense rather than corrupting the budget', () => {
+    const cache = new DecodedFrameCache();
+    const before = cache.budget;
+    cache.reserveFor(0, 10);
+    cache.reserveFor(-1, 10);
+    cache.reserveFor(frame1474x1412, 0);
+    cache.reserveFor(NaN, 10);
+    cache.reserveFor(frame1474x1412, Infinity);
+    expect(cache.budget).toBe(before);
+  });
+
+  it('refuses to grow without bound for an absurd reservation', () => {
+    const cache = new DecodedFrameCache();
+    cache.reserveFor(4 * 1024 * 1024 * 1024, 100);
+    // Whatever the device reports, one tab must not reserve everything.
+    expect(cache.budget).toBeLessThan(4 * 1024 ** 3);
+  });
+});
