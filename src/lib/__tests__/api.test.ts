@@ -291,6 +291,79 @@ describe('retryable-status backoff (429 / 502 / 503)', () => {
     (apiClient as any).instance = mockAxiosInstance;
   }, 30000);
 
+  /**
+   * The tests above hand the retry a mock that rejects DIRECTLY, which severs
+   * the loop that causes the bug: in a real axios instance every response
+   * error is piped back through this same interceptor, so a retried 429
+   * re-enters here and opens its OWN retryWithBackoff. The retries nest, and
+   * one click on Start Export produced ~1250 requests in production on
+   * 2026-08-20 instead of three.
+   *
+   * This mock behaves like axios does — it feeds each rejection back through
+   * the interceptor — so the nesting is reachable. The counter is the
+   * assertion; the runaway guard only stops the test from hanging when the
+   * guard under test is absent.
+   */
+  it('re-issues a persistent 429 a bounded number of times, not exponentially', async () => {
+    const RUNAWAY_GUARD = 60;
+    let calls = 0;
+
+    const callableMock = vi.fn(async (cfg: any) => {
+      calls += 1;
+      if (calls > RUNAWAY_GUARD) {
+        throw new Error(`runaway retry: ${calls} requests for one 429`);
+      }
+      // What axios does: route the failure through the response interceptor.
+      return responseErrorHandlerRef.value({
+        response: { status: 429 },
+        config: cfg,
+      });
+    });
+    Object.assign(callableMock, mockAxiosInstance);
+    (apiClient as any).instance = callableMock;
+
+    await expect(
+      responseErrorHandlerRef.value({
+        response: { status: 429 },
+        config: { url: '/always-429', headers: {} },
+      })
+    ).rejects.toBeDefined();
+
+    // RETRY_ATTEMPTS.API is 3, so at most three re-issues of the original.
+    expect(calls).toBeLessThanOrEqual(3);
+
+    (apiClient as any).instance = mockAxiosInstance;
+  }, 30000);
+
+  it('does not nest retries for a persistent 503 either', async () => {
+    const RUNAWAY_GUARD = 60;
+    let calls = 0;
+
+    const callableMock = vi.fn(async (cfg: any) => {
+      calls += 1;
+      if (calls > RUNAWAY_GUARD) {
+        throw new Error(`runaway retry: ${calls} requests for one 503`);
+      }
+      return responseErrorHandlerRef.value({
+        response: { status: 503 },
+        config: cfg,
+      });
+    });
+    Object.assign(callableMock, mockAxiosInstance);
+    (apiClient as any).instance = callableMock;
+
+    await expect(
+      responseErrorHandlerRef.value({
+        response: { status: 503 },
+        config: { url: '/always-503', headers: {} },
+      })
+    ).rejects.toBeDefined();
+
+    expect(calls).toBeLessThanOrEqual(3);
+
+    (apiClient as any).instance = mockAxiosInstance;
+  }, 30000);
+
   it('does not apply backoff to non-retryable status codes (500)', async () => {
     const serverError = {
       response: { status: 500 },
