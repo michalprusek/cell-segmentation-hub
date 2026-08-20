@@ -44,6 +44,28 @@ def _disk(radius: float) -> np.ndarray:
     return (yy ** 2 + xx ** 2) <= radius ** 2 + 1e-9
 
 
+
+def _group_coords_by_label(lab: np.ndarray, n_labels: int) -> list[np.ndarray]:
+    """``[np.argwhere(lab == i) for i in range(n_labels + 1)]`` in one pass.
+
+    Index 0 is a placeholder so callers can index by label id directly. Each
+    entry is (N, 2) int64 in row-major order, identical to what `np.argwhere`
+    would return for that label -- see the note at the call site for why the
+    order, not just the membership, has to match.
+    """
+    rr, cc = np.nonzero(lab)
+    if rr.size == 0:
+        return [np.empty((0, 2), dtype=np.intp) for _ in range(n_labels + 1)]
+    labels = lab[rr, cc]
+    order = np.argsort(labels, kind="stable")
+    rr, cc, labels = rr[order], cc[order], labels[order]
+    coords = np.stack([rr, cc], axis=1)
+    # One boundary per label id, so a label with no pixels yields an empty slice
+    # rather than being skipped.
+    starts = np.searchsorted(labels, np.arange(n_labels + 2), side="left")
+    return [coords[starts[i]:starts[i + 1]] for i in range(n_labels + 1)]
+
+
 def _component_path(coords: np.ndarray) -> np.ndarray:
     """Order one thin connected component into a path, dropping spurs.
 
@@ -98,11 +120,28 @@ def build_arc_graph(mask: np.ndarray, merge_radius: float = 3.0,
         grown = ndimage.binary_dilation(junction_px, structure=_disk(merge_radius))
         junction_labels, n_j = ndimage.label(grown & skel,
                                              structure=np.ones((3, 3), dtype=int))
+        # Group the labelled pixels in ONE pass. The obvious loop tested
+        # `junction_labels == jid` for every id, rescanning the whole frame each
+        # time -- O(n_junctions * frame), which on a dense IRM frame is the
+        # difference between milliseconds and seconds. A centroid does not care
+        # about ordering, so a plain bincount is enough here.
+        jrr, jcc = np.nonzero(junction_labels)
+        jlab = junction_labels[jrr, jcc]
+        jcore = junction_px[jrr, jcc]
+        counts_all = np.bincount(jlab, minlength=n_j + 1).astype(float)
+        counts_core = np.bincount(jlab[jcore], minlength=n_j + 1).astype(float)
+        sum_r_all = np.bincount(jlab, weights=jrr, minlength=n_j + 1)
+        sum_c_all = np.bincount(jlab, weights=jcc, minlength=n_j + 1)
+        sum_r_core = np.bincount(jlab[jcore], weights=jrr[jcore], minlength=n_j + 1)
+        sum_c_core = np.bincount(jlab[jcore], weights=jcc[jcore], minlength=n_j + 1)
         for jid in range(1, n_j + 1):
-            core = junction_px & (junction_labels == jid)
-            src = core if core.any() else (junction_labels == jid)
-            rr, cc = np.where(src)
-            graph.junctions.append(np.array([cc.mean(), rr.mean()], dtype=float))
+            # Same rule as before: prefer the true junction pixels, fall back to
+            # the whole grown label when this cluster has none.
+            if counts_core[jid]:
+                n, sr, sc = counts_core[jid], sum_r_core[jid], sum_c_core[jid]
+            else:
+                n, sr, sc = counts_all[jid], sum_r_all[jid], sum_c_all[jid]
+            graph.junctions.append(np.array([sc / n, sr / n], dtype=float))
     else:
         n_j = 0
 
@@ -121,8 +160,16 @@ def build_arc_graph(mask: np.ndarray, merge_radius: float = 3.0,
 
     attach_radius = merge_radius + 1.5
 
+    # Same rescan-per-label problem, and here ORDER is load-bearing:
+    # `_component_path` numbers its graph nodes by position in `coords`, so the
+    # replacement must reproduce `np.argwhere`'s row-major order exactly, not
+    # merely the same set of pixels. `np.nonzero` yields row-major, and a STABLE
+    # sort by label preserves that order within each group -- so
+    # `arc_coords[aid]` is elementwise equal to `np.argwhere(lab == aid)`.
+    arc_coords = _group_coords_by_label(lab, n_arc)
+
     for aid in range(1, n_arc + 1):
-        coords = np.argwhere(lab == aid)          # (row, col)
+        coords = arc_coords[aid]                  # (row, col), row-major
         if len(coords) < min_arc_len:
             continue
         path_rc = _component_path(coords)
