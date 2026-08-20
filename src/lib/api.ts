@@ -341,12 +341,32 @@ class ApiClient {
           return Promise.reject(error);
         }
 
-        // Handle retryable errors (429, 502, 503, 504) with unified retry system
+        // Handle retryable errors (429, 502, 503, 504) with unified retry system.
+        //
+        // `_retryingStatus` is load-bearing, not defensive. The retry below
+        // re-issues through `this.instance`, so the re-issued request's own
+        // failure comes back through THIS interceptor. Without a marker each
+        // retried 429 opened its own retryWithBackoff, and because a nested
+        // loop fires its first attempt with no delay, the recursion descended
+        // as fast as the network allowed before any backoff applied. One click
+        // on Start Export against an already-running export produced ~1250
+        // requests in about thirteen seconds (production, 2026-08-20) — an
+        // amplifier that fires precisely when the server has said "too many
+        // requests" or "unavailable".
+        //
+        // The marker rides on the request config, which axios carries across a
+        // re-issue; that is the same mechanism the 401 branch above uses for
+        // `_retry`. A marked request rejects straight through, so the ONE
+        // outer loop owns the schedule and the attempt count means what
+        // RETRY_ATTEMPTS.API says it means.
         const retryableStatuses = [429, 502, 503, 504];
         if (
           error.response?.status &&
-          retryableStatuses.includes(error.response.status)
+          retryableStatuses.includes(error.response.status) &&
+          originalRequest &&
+          !originalRequest._retryingStatus
         ) {
+          originalRequest._retryingStatus = true;
           const status = error.response.status;
           const result = await retryWithBackoff(
             () => this.instance(originalRequest),
