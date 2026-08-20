@@ -50,6 +50,26 @@ services:
       - PORT=3001
       - UPLOAD_DIR=/app/uploads
       - ENABLE_TRACING=false
+      # V8 old-space ceiling. NOT the same limit as `deploy.resources.limits.
+      # memory` below: the cgroup bounds RSS (native buffers, Cairo canvases,
+      # sharp), while this bounds the JavaScript heap. Node's default is ~2 GB
+      # regardless of how much the cgroup allows, so raising the cgroup to 12G
+      # (2026-08-19) did nothing for a heap OOM.
+      #
+      # A 300-frame microtubule export went from 60 MB to the 2 GB ceiling in
+      # ~16 s and killed the process (2026-08-20): every export task — image
+      # copies, visualizations, COCO/YOLO/JSON, MT metrics, kymographs, ImageJ
+      # RoiSets, CVAT — runs concurrently and each holds the whole image array.
+      # Smaller exports the same morning (70 frames) peaked at 150 MB, so this
+      # is not a leak; it is the concurrent fan-out over a large frame count.
+      # The same export re-run under this ceiling peaked at 1925 MB — i.e. it
+      # had been missing the old ceiling by under 200 MB — and completed.
+      #
+      # This is HEADROOM, not the fix — the same caveat as the cgroup limit
+      # below. The export is supposed to process frames in batches rather than
+      # hold all of them; until it does, this only decides how many frames it
+      # takes before the same crash returns.
+      - NODE_OPTIONS=--max-old-space-size=8192
       # Database password from shell environment
       - DB_PASSWORD=${DB_PASSWORD}
       # Queue processing — default 1 to prevent concurrent multipart request errors
