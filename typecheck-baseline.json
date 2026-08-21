@@ -1229,6 +1229,9 @@
       "src/lib/__tests__/segmentation.test.ts": {
         "TS18048: 'result.timestamp' is possibly 'undefined'.": 2
       },
+      "src/lib/__tests__/staticFrameChannels.test.ts": {
+        "TS6307: File 'src/pages/segmentation/hooks/segmentationPolygonCache.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
       "src/lib/__tests__/tiffConverter.test.ts": {
         "TS6307: File 'src/lib/tiffConverter.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
@@ -1266,7 +1269,8 @@
         "TS6307: File 'src/pages/segmentation/types.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/lib/decodedFrameCache.ts": {
-        "TS6307: File 'src/lib/png16.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS6307: File 'src/lib/png16.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/lib/staticFrameChannels.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/lib/imageProcessingService.ts": {
         "TS2339: Property 'polygons' does not exist on type 'SegmentationPolygon'.": 1,
@@ -1618,7 +1622,6 @@
         "TS6307: File 'src/pages/segmentation/components/KymographModal.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/components/__tests__/ChannelSwitcher.test.tsx": {
-        "TS2322: Type '{name: string; displayName: string; type?: \"fluorescent\" | \"irm\" | undefined; wavelengthNm?: number | undefined; displayColor: string; isSegmentationSource: boolean; pngBacked?: boolean | undefined; frameIds?: string[] | undefined; }' is not assignable to type 'VideoChannel'.": 1,
         "TS6307: File 'src/pages/segmentation/components/ChannelSwitcher.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/components/__tests__/EditorHelpTips.test.tsx": {
@@ -1775,9 +1778,6 @@
       },
       "src/pages/segmentation/hooks/__tests__/insertPointsBetweenVertices.test.ts": {
         "TS6307: File 'src/pages/segmentation/hooks/useAdvancedInteractions.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
-      "src/pages/segmentation/hooks/__tests__/segmentationPolygonCache.test.ts": {
-        "TS6307: File 'src/pages/segmentation/hooks/segmentationPolygonCache.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/hooks/__tests__/useDecodeAhead.test.ts": {
         "TS6307: File 'src/pages/segmentation/hooks/useDecodeAhead.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
