@@ -48,6 +48,27 @@ show anyway, plus mild lossy compression.
    per-channel range so the window/level sliders keep working unchanged. When the
    window narrows far enough that banding would show, the displayed frame is
    fetched at full depth.
+
+   > **Revised during implementation — the range is PER FRAME.** Deploying the
+   > per-channel version and looking at the numbers killed it: the measured
+   > container's three channels peak at 8984, 1177 and 29636, so one range
+   > across the container leaves the dimmest channel 9 of the 256 levels, and
+   > one range across a channel leaves that channel's dimmest frame 30 (its own
+   > maxima run 1950..8984). Per frame every frame gets all 256.
+   >
+   > The original objection to per-frame — each frame rescaled to its own
+   > brightest pixel makes brightness flicker — turned out to be an artefact of
+   > the other rejected design, drawing the 8-bit samples directly and rescaling
+   > the window to match. The client instead multiplies the samples back out at
+   > decode, which undoes the per-frame scaling exactly, so nothing flickers and
+   > the only thing varying between frames is the quantisation step. The range
+   > travels in the file name (`488_nm.p2047.webp`) and reaches the client as
+   > `X-Proxy-Range`.
+   >
+   > The container-wide figure survives, in `ChannelMeta.proxyRangeMax`, for the
+   > one thing it is still right for: judging whether the user's window is
+   > narrow enough to need full depth.
+
 3. **Generated lazily on first request and cached on disk.** Uploads do not slow
    down, space is spent only on videos someone actually plays, and existing
    projects need no backfill.

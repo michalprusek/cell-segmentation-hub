@@ -44,15 +44,38 @@ export function __resetRunningForTests(): void {
   running.clear();
 }
 
-/** The proxy that would stand in for this PNG. Pure path arithmetic. */
-export function proxyPathForPng(pngAbsPath: string): string {
-  return pngAbsPath.replace(/\.png$/i, '.webp');
+/**
+ * The range encoded in a proxy's file name, or null if this is not one.
+ *
+ * The converter names each frame's proxy `<channel>.p<range>.webp` — per frame,
+ * because one channel's maxima ran 1950..8984 on the measured container and a
+ * range fixed across the channel would leave its dimmest frame 30 of the 256
+ * levels. Carrying the number in the name means the server can answer with it
+ * without opening the file or keeping a side table that could fall out of step.
+ */
+export function proxyRangeFromName(
+  fileName: string,
+  channel: string
+): number | null {
+  const prefix = `${channel}.p`;
+  if (!fileName.startsWith(prefix) || !fileName.endsWith('.webp')) return null;
+  const digits = fileName.slice(prefix.length, -'.webp'.length);
+  // Digits only: `488_nm.p2047.webp` yes, `488_nm.pXX.webp` no, and — the case
+  // that matters — `488_nm_extra.p2047.webp` never matches channel `488_nm`,
+  // because the prefix check already required the dot straight after the name.
+  if (!/^\d+$/.test(digits)) return null;
+  const value = Number(digits);
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export interface FrameRepresentation {
   path: string;
   contentType: string;
   isProxy: boolean;
+  /** The value this proxy's 255 stands for; null for the original PNG, whose
+   *  samples are already in the data's units. Travels to the client, which
+   *  multiplies it back out at decode. */
+  rangeMax: number | null;
 }
 
 /**
@@ -71,16 +94,32 @@ export async function resolveFrameRepresentation(
     path: pngAbsPath,
     contentType: 'image/png',
     isProxy: false,
+    rangeMax: null,
   };
   if (!wantProxy) return png;
 
-  const webp = proxyPathForPng(pngAbsPath);
+  const dir = path.dirname(pngAbsPath);
+  const channel = path.basename(pngAbsPath).replace(/\.png$/i, '');
+  let names: string[];
   try {
-    await fs.access(webp);
-    return { path: webp, contentType: 'image/webp', isProxy: true };
+    names = await fs.readdir(dir);
   } catch {
     return png;
   }
+  // A frame directory holds one file per channel plus their proxies — a
+  // handful of entries — so listing it costs about what stat-ing one would.
+  for (const name of names) {
+    const rangeMax = proxyRangeFromName(name, channel);
+    if (rangeMax !== null) {
+      return {
+        path: path.join(dir, name),
+        contentType: 'image/webp',
+        isProxy: true,
+        rangeMax,
+      };
+    }
+  }
+  return png;
 }
 
 /** Channel metadata as it is stored on the container row. */
@@ -197,7 +236,7 @@ export function ensureChannelProxies(
         );
         return;
       }
-      await runConverter(framesDir, channel, rangeMax);
+      await runConverter(framesDir, channel);
     } catch (err) {
       logger.error(
         `Playback proxy batch failed for ${channel} of ${containerId}`,
@@ -210,11 +249,7 @@ export function ensureChannelProxies(
   })();
 }
 
-function runConverter(
-  framesDir: string,
-  channel: string,
-  rangeMax: number
-): Promise<void> {
+function runConverter(framesDir: string, channel: string): Promise<void> {
   const interpreter = process.env.PYTHON_BIN || 'python3';
   const script = path.join(HELPERS_DIR, 'make_playback_proxy.py');
   return new Promise<void>((resolve, reject) => {
@@ -224,8 +259,6 @@ function runConverter(
       framesDir,
       '--channel',
       channel,
-      '--range-max',
-      String(rangeMax),
     ]);
     let written = 0;
     let overRange = 0;

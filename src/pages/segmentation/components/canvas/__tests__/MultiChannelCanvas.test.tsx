@@ -84,6 +84,7 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     windowMin: mockWindowMin,
     windowMax: mockWindowMax,
     windowRangeMax: mockWindowRangeMax,
+    proxyRangeMax: null,
     brightness: mockBrightness,
     contrast: mockContrast,
     channelOpacities: mockChannelOpacities,
@@ -118,6 +119,9 @@ function makeSuccessfulFetch() {
     mockBitmap,
     fetchImpl: vi.fn().mockResolvedValue({
       ok: true,
+      // A real Response always has headers; the canvas reads `X-Proxy-Range`
+      // off them to learn what an 8-bit proxy's 255 stands for.
+      headers: new Headers(),
       blob: vi.fn().mockResolvedValue(mockBlob),
     } as unknown as Response),
   };
@@ -151,6 +155,9 @@ function makePartialFailureFetch(failChannel: string) {
     }
     return Promise.resolve({
       ok: true,
+      // A real Response always has headers; the canvas reads `X-Proxy-Range`
+      // off them to learn what an 8-bit proxy's 255 stands for.
+      headers: new Headers(),
       blob: vi.fn().mockResolvedValue(mockBlob),
     } as unknown as Response);
   });

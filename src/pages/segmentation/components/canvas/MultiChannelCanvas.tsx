@@ -365,7 +365,7 @@ export default function MultiChannelCanvas({
             // so speculative work backs off while it runs and the shared
             // budget stays honest. Peak concurrency is the cap plus one
             // mounted canvas's channel count, not unbounded.
-            const blob = await speculativeFrameRequests.runImmediate(
+            const fetched = await speculativeFrameRequests.runImmediate(
               async () => {
                 const res = await fetch(url, { signal: controller.signal });
                 if (!res.ok) {
@@ -374,10 +374,25 @@ export default function MultiChannelCanvas({
                   );
                   return null;
                 }
-                return res.blob();
+                // Present only on a proxy, and specific to THIS frame — the
+                // converter maps each frame against its own maximum. Absent
+                // means the server answered with the original PNG, whose
+                // samples are already in the data's units.
+                const header = res.headers.get('X-Proxy-Range');
+                const rangeMax = header === null ? null : Number(header);
+                return {
+                  blob: await res.blob(),
+                  rangeMax:
+                    rangeMax !== null &&
+                    Number.isFinite(rangeMax) &&
+                    rangeMax > 0
+                      ? rangeMax
+                      : null,
+                };
               }
             );
-            if (!blob) return null;
+            if (!fetched) return null;
+            const { blob, rangeMax: frameRangeMax } = fetched;
             // Off the main thread, and in parallel across channels. Decoding
             // one 1474x1412 16-bit channel is ~15 ms of native inflate plus
             // ~10 ms of JavaScript un-filtering; doing that inline for two
@@ -387,7 +402,7 @@ export default function MultiChannelCanvas({
             // starting a second 4 MB decode that occupies a worker the NEXT
             // frame is about to need. It stores the result in the cache too.
             const decoded = await getOrDecode(cacheKey, () =>
-              decodeGrayPngPooled(blob)
+              decodeGrayPngPooled(blob, frameRangeMax)
             );
             if (decoded) {
               // Now that a real frame's size is known, size the cache to the

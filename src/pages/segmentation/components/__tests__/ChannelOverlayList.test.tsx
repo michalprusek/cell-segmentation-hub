@@ -90,6 +90,7 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     toggleChannelVisibility: mockToggle,
     setVisibleChannels: mockSetVisible,
     setChannelCoverage: mockSetCoverage,
+    setProxyRangeMax: vi.fn(),
     setChannelColor: mockSetColor,
     seedChannelColors: mockSeedColors,
     setChannelOpacity: mockSetOpacity,

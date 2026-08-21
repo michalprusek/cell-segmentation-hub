@@ -76,6 +76,10 @@ export interface UseFrameWindowPrefetchOptions {
    *  cover, so a partial channel is never prefetched for a frame it lacks
    *  (no 404 noise). */
   channelCoverage?: Record<string, string[]>;
+  /** `'proxy'` warms the 8-bit playback proxy instead of the 16-bit PNG. Must
+   *  match what the canvas asks for: warming the other representation fills the
+   *  HTTP cache with bytes nothing goes on to read. */
+  repr?: 'proxy';
   /** Override window. Default is 5 back / 10 ahead. */
   windowBack?: number;
   windowAhead?: number;
@@ -97,6 +101,7 @@ export function useFrameWindowPrefetch({
   channels,
   enabled,
   channelCoverage = EMPTY_COVERAGE,
+  repr,
   windowBack = FRAME_PREFETCH_WINDOW.back,
   windowAhead = FRAME_PREFETCH_WINDOW.ahead,
 }: UseFrameWindowPrefetchOptions): UseFrameWindowPrefetchResult {
@@ -145,7 +150,7 @@ export function useFrameWindowPrefetch({
     for (const frame of windowFrames) {
       for (const channel of channelList) {
         if (!covers(channel, frame.id)) continue;
-        urls.push(buildFrameImageUrl(frame.id, channel));
+        urls.push(buildFrameImageUrl(frame.id, channel, repr));
       }
     }
     return urls;
@@ -226,7 +231,7 @@ export function useFrameWindowPrefetch({
     for (const frame of windowFrames) {
       for (const channel of channelList) {
         if (channel === null || !covers(channel, frame.id)) continue;
-        inWindow.add(buildFrameImageUrl(frame.id, channel));
+        inWindow.add(buildFrameImageUrl(frame.id, channel, repr));
       }
     }
     for (const [url, controller] of pendingWarms) {
@@ -239,7 +244,7 @@ export function useFrameWindowPrefetch({
     for (const frame of windowFrames) {
       for (const channel of channelList) {
         if (!covers(channel, frame.id)) continue;
-        const url = buildFrameImageUrl(frame.id, channel);
+        const url = buildFrameImageUrl(frame.id, channel, repr);
         if (prefetchedRef.current.has(url)) continue;
         prefetchedRef.current.add(url);
 

@@ -480,6 +480,13 @@ export class VideoController {
 
       res.setHeader('Content-Type', representation.contentType);
       res.setHeader('Cache-Control', 'private, max-age=3600');
+      if (representation.rangeMax !== null) {
+        // The client multiplies the 8-bit samples back out by this, so it must
+        // arrive WITH the frame rather than being looked up per container: a
+        // proxy is mapped against its own frame's maximum, and neighbouring
+        // frames of one channel legitimately differ.
+        res.setHeader('X-Proxy-Range', String(representation.rangeMax));
+      }
       res.sendFile(representation.path);
     } catch (err) {
       logger.error(

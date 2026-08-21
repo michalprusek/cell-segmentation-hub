@@ -12,6 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from make_playback_proxy import (  # noqa: E402
     convert_frame,
+    derive_range_max,
+    existing_proxy,
     frame_dirs,
     main,
     map_to_8bit,
@@ -48,47 +50,80 @@ class TestMapTo8Bit:
             map_to_8bit(np.array([1], dtype=np.uint16), 0)
 
 
+class TestDeriveRangeMax:
+    def test_rounds_up_to_a_power_of_two(self):
+        assert derive_range_max(1566) == 2047
+        assert derive_range_max(8984) == 16383
+        assert derive_range_max(29636) == 32767
+
+    def test_never_narrows_below_eight_bits(self):
+        assert derive_range_max(0) == 255
+        assert derive_range_max(12) == 255
+
+    def test_matches_the_typescript_side_at_the_boundaries(self):
+        assert derive_range_max(2047) == 2047
+        assert derive_range_max(2048) == 4095
+        assert derive_range_max(65535) == 65535
+
+
 class TestConvertFrame:
-    def test_writes_a_webp_next_to_the_png(self, tmp_path):
-        png = str(tmp_path / "0000" / "488_nm.png")
-        webp = str(tmp_path / "0000" / "488_nm.webp")
+    def test_writes_a_proxy_naming_its_own_range(self, tmp_path):
+        frame_dir = str(tmp_path / "0000")
+        png = os.path.join(frame_dir, "488_nm.png")
         write_png(png, np.full((32, 32), 1000))
 
-        result = convert_frame(png, webp, 2047)
+        result = convert_frame(png, frame_dir, "488_nm")
 
         assert result["status"] == "written"
-        assert os.path.exists(webp)
-        assert result["bytes"] == os.path.getsize(webp)
+        assert result["rangeMax"] == 1023
+        assert os.path.exists(os.path.join(frame_dir, "488_nm.p1023.webp"))
+
+    def test_a_dim_frame_gets_its_own_narrow_range(self, tmp_path):
+        # The point of per-frame: this frame would have had 30 of 256 levels
+        # under a range covering the channel's brightest frame (8984).
+        frame_dir = str(tmp_path / "0000")
+        png = os.path.join(frame_dir, "488_nm.png")
+        write_png(png, np.full((16, 16), 1950))
+
+        assert convert_frame(png, frame_dir, "488_nm")["rangeMax"] == 2047
 
     def test_leaves_no_partial_file_behind(self, tmp_path):
-        png = str(tmp_path / "0000" / "488_nm.png")
-        webp = str(tmp_path / "0000" / "488_nm.webp")
+        frame_dir = str(tmp_path / "0000")
+        png = os.path.join(frame_dir, "488_nm.png")
         write_png(png, np.full((32, 32), 1000))
 
-        convert_frame(png, webp, 2047)
+        convert_frame(png, frame_dir, "488_nm")
 
-        assert not os.path.exists(webp + ".partial")
+        assert not any(n.endswith(".partial") for n in os.listdir(frame_dir))
 
-    def test_refuses_to_clip_a_frame_brighter_than_the_range(self, tmp_path):
-        # The whole point of the guard: this frame's brightest structures would
-        # be flattened to 255 and become unmeasurable. Serve the original.
-        png = str(tmp_path / "0000" / "488_nm.png")
-        webp = str(tmp_path / "0000" / "488_nm.webp")
-        write_png(png, np.full((32, 32), 2601))
-
-        result = convert_frame(png, webp, 2047)
-
-        assert result["status"] == "over-range"
-        assert result["max"] == 2601
-        assert not os.path.exists(webp)
-
-    def test_does_not_redo_work(self, tmp_path):
-        png = str(tmp_path / "0000" / "488_nm.png")
-        webp = str(tmp_path / "0000" / "488_nm.webp")
+    def test_does_not_redo_work_whatever_range_the_existing_one_used(
+        self, tmp_path
+    ):
+        frame_dir = str(tmp_path / "0000")
+        png = os.path.join(frame_dir, "488_nm.png")
         write_png(png, np.full((32, 32), 1000))
-        convert_frame(png, webp, 2047)
+        convert_frame(png, frame_dir, "488_nm")
 
-        assert convert_frame(png, webp, 2047)["status"] == "skipped-exists"
+        assert (
+            convert_frame(png, frame_dir, "488_nm")["status"] == "skipped-exists"
+        )
+
+    def test_finds_an_existing_proxy_by_prefix_not_exact_name(self, tmp_path):
+        frame_dir = str(tmp_path / "0000")
+        os.makedirs(frame_dir)
+        open(os.path.join(frame_dir, "488_nm.p4095.webp"), "w").close()
+
+        assert existing_proxy(frame_dir, "488_nm") is not None
+        assert existing_proxy(frame_dir, "640_nm") is None
+
+    def test_does_not_mistake_another_channel_for_this_one(self, tmp_path):
+        frame_dir = str(tmp_path / "0000")
+        os.makedirs(frame_dir)
+        open(os.path.join(frame_dir, "488_nm_extra.p2047.webp"), "w").close()
+
+        assert existing_proxy(frame_dir, "488_nm_extra") is not None
+        # A channel whose name is a PREFIX of another must not match it.
+        assert existing_proxy(frame_dir, "488_nm") is None
 
 
 class TestMain:
@@ -96,7 +131,9 @@ class TestMain:
         self, tmp_path, capsys
     ):
         for i, value in enumerate([500, 900, 2601]):
-            write_png(str(tmp_path / f"{i:04d}" / "488_nm.png"), np.full((16, 16), value))
+            write_png(
+                str(tmp_path / f"{i:04d}" / "488_nm.png"), np.full((16, 16), value)
+            )
         # A frame the channel does not cover at all.
         os.makedirs(tmp_path / "0003", exist_ok=True)
 
@@ -106,14 +143,14 @@ class TestMain:
                 str(tmp_path),
                 "--channel",
                 "488_nm",
-                "--range-max",
-                "2047",
             ]
         )
 
         lines = [json.loads(l) for l in capsys.readouterr().out.strip().splitlines()]
         assert [l["frame"] for l in lines] == ["0000", "0001", "0002"]
-        assert [l["status"] for l in lines] == ["written", "written", "over-range"]
+        assert [l["status"] for l in lines] == ["written"] * 3
+        # Each frame carries the range it was mapped against.
+        assert [l["rangeMax"] for l in lines] == [511, 1023, 4095]
 
     def test_frame_dirs_are_returned_in_frame_order(self, tmp_path):
         for name in ["0010", "0002", "0001"]:

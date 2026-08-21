@@ -46,21 +46,3 @@ export function windowNeedsFullDepth(
   if (width <= 0) return true;
   return (width / rangeMax) * PROXY_LEVELS < MIN_LEVELS_IN_WINDOW;
 }
-
-/**
- * The container's proxy range, for the decode path.
- *
- * A module-level registry for the same reason `staticFrameChannels` has one:
- * the decoder is reached through `decodeGrayPngPooled` from two places that do
- * not share React state, and threading a number through both would leave the
- * one that forgot silently decoding proxies as if they were full-depth.
- */
-let containerProxyRange: number | null = null;
-
-export function setProxyRange(rangeMax: number | null): void {
-  containerProxyRange = rangeMax;
-}
-
-export function proxyRange(): number | null {
-  return containerProxyRange;
-}

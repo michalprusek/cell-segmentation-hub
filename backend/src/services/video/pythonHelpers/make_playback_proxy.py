@@ -15,30 +15,38 @@ WHY PYTHON AND NOT SHARP. `sharp` is already a backend dependency and its WebP
 encoder is fine, but it CANNOT read these files: its pixel pipeline narrows
 16-bit to 8-bit, so a sample of 1566 reads back as 6, with or without
 `pipelineColourspace`, `toColourspace` or `extractChannel`. (`sharp.stats()`
-does report true maxima, which is why the backend still uses it to derive the
-range.) Frame extraction already runs through Python helpers, and PIL reads
-16-bit PNGs correctly, so the conversion lives here.
+does report true maxima, which is why the backend still uses it elsewhere.)
+Frame extraction already runs through Python helpers, and PIL reads 16-bit PNGs
+correctly, so the conversion lives here.
 
-THE RANGE IS NOT DERIVED HERE. `--range-max` is decided once per container and
-channel by `playbackProxyRange.deriveRangeMax` and passed in. Deriving it per
-frame would rescale each frame to its own brightest pixel, so a passing bright
-object would darken the whole series and playback would flicker — a worse defect
-than the stutter this removes.
+THE RANGE IS PER FRAME, AND TRAVELS IN THE FILE NAME. Each frame is mapped onto
+its own maximum rounded up to a power of two, and written as
+``<channel>.p<range>.webp`` so the backend can read the range back without
+opening the file or keeping a side table, and hand it to the client — which
+multiplies it back out. Nothing downstream ever sees an 8-bit number.
 
-A FRAME BRIGHTER THAN THE RANGE IS NOT CLIPPED. It is reported `over-range` and
-no file is written, so the backend serves its original PNG. Clipping would
-silently erase the brightest structures in a measurement tool.
+Per-frame would be WRONG if the client drew the proxy directly: each frame
+rescaled to its own brightest pixel means a passing bright object darkens the
+whole series, and playback flickers. It is right BECAUSE the client undoes the
+mapping. The samples it composites are the original values either way, so the
+only thing that varies between frames is the quantisation step.
+
+And that matters here. Measured on the container this was written for, one
+channel's frame maxima run 1950, 2473, 8984 — a 4.6x spread — while another
+channel of the same container sits at 29636. One range fixed across the
+container would leave the dimmest channel 9 of the 256 levels; fixed across a
+channel would leave that channel's dimmest frame 30. Per frame, every frame
+gets all 256, and nothing can fall outside its own range.
 
 Invoked by the backend as::
 
-    python3 make_playback_proxy.py --frames-dir DIR --channel NAME --range-max N
+    python3 make_playback_proxy.py --frames-dir DIR --channel NAME
 
-It walks ``DIR/<NNNN>/<channel>.png`` and writes ``<channel>.webp`` beside each,
-printing one JSON line per frame on stdout::
+It walks ``DIR/<NNNN>/<channel>.png`` and writes ``<channel>.p<range>.webp``
+beside each, printing one JSON line per frame on stdout::
 
-    {"frame": "0004", "status": "written", "bytes": 144211}
+    {"frame": "0004", "status": "written", "bytes": 144211, "rangeMax": 2047}
     {"frame": "0005", "status": "skipped-exists"}
-    {"frame": "0006", "status": "over-range", "max": 2601}
     {"frame": "0007", "status": "error", "message": "..."}
 
 Progress is a line per frame rather than one summary at the end so a caller can
@@ -61,6 +69,23 @@ from PIL import Image
 WEBP_QUALITY = 90
 
 
+def derive_range_max(peak: int) -> int:
+    """The value that maps to 255: ``peak`` rounded up to a power of two.
+
+    Rounding rather than using the peak directly keeps the number to a handful
+    of distinct values across a series, which keeps the file names — and
+    anything caching by them — stable while frames wobble by a few counts.
+
+    Mirrors ``playbackProxyRange.deriveRangeMax`` on the TypeScript side, which
+    still decides the container-wide figure the client uses to judge whether
+    8 bits are enough for the window the user has set.
+    """
+    bits = 8
+    while (1 << bits) - 1 < peak and bits < 16:
+        bits += 1
+    return min((1 << bits) - 1, 65535)
+
+
 def map_to_8bit(samples: np.ndarray, range_max: int) -> np.ndarray:
     """Linearly map ``[0, range_max]`` onto ``[0, 255]``.
 
@@ -74,17 +99,32 @@ def map_to_8bit(samples: np.ndarray, range_max: int) -> np.ndarray:
     return np.clip(scaled, 0, 255).astype(np.uint8)
 
 
-def convert_frame(png_path: str, webp_path: str, range_max: int) -> dict:
-    """Convert one frame, or explain why it was left alone."""
-    if os.path.exists(webp_path):
+def proxy_path(frame_dir: str, channel: str, range_max: int) -> str:
+    """Where this frame's proxy goes, range included in the name."""
+    return os.path.join(frame_dir, f"{channel}.p{range_max}.webp")
+
+
+def existing_proxy(frame_dir: str, channel: str) -> str | None:
+    """Any already-written proxy for this channel, whatever range it used."""
+    prefix, suffix = f"{channel}.p", ".webp"
+    try:
+        for name in sorted(os.listdir(frame_dir)):
+            if name.startswith(prefix) and name.endswith(suffix):
+                return os.path.join(frame_dir, name)
+    except OSError:
+        pass
+    return None
+
+
+def convert_frame(png_path: str, frame_dir: str, channel: str) -> dict:
+    """Convert one frame, or say it was already done."""
+    if existing_proxy(frame_dir, channel):
         return {"status": "skipped-exists"}
 
     samples = np.array(Image.open(png_path))
     peak = int(samples.max()) if samples.size else 0
-    if peak > range_max:
-        # Out of the range the whole channel was mapped against. Writing it
-        # would clip; the backend serves the original for this frame instead.
-        return {"status": "over-range", "max": peak}
+    range_max = derive_range_max(peak)
+    webp_path = proxy_path(frame_dir, channel, range_max)
 
     out = map_to_8bit(samples, range_max)
     # Write beside the source, then rename, so a killed process never leaves a
@@ -92,7 +132,11 @@ def convert_frame(png_path: str, webp_path: str, range_max: int) -> dict:
     tmp_path = webp_path + ".partial"
     Image.fromarray(out).save(tmp_path, "WEBP", quality=WEBP_QUALITY)
     os.replace(tmp_path, webp_path)
-    return {"status": "written", "bytes": os.path.getsize(webp_path)}
+    return {
+        "status": "written",
+        "bytes": os.path.getsize(webp_path),
+        "rangeMax": range_max,
+    }
 
 
 def frame_dirs(frames_dir: str) -> list[str]:
@@ -110,7 +154,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--frames-dir", required=True)
     parser.add_argument("--channel", required=True)
-    parser.add_argument("--range-max", required=True, type=int)
     parser.add_argument(
         "--limit",
         type=int,
@@ -124,13 +167,13 @@ def main(argv: list[str] | None = None) -> int:
         names = names[: args.limit]
 
     for name in names:
-        png_path = os.path.join(args.frames_dir, name, f"{args.channel}.png")
+        frame_dir = os.path.join(args.frames_dir, name)
+        png_path = os.path.join(frame_dir, f"{args.channel}.png")
         if not os.path.exists(png_path):
             # A channel that covers only some frames — normal, not an error.
             continue
-        webp_path = os.path.join(args.frames_dir, name, f"{args.channel}.webp")
         try:
-            result = convert_frame(png_path, webp_path, args.range_max)
+            result = convert_frame(png_path, frame_dir, args.channel)
         except Exception as exc:  # noqa: BLE001 - reported per frame, never fatal
             result = {"status": "error", "message": str(exc)}
         print(json.dumps({"frame": name, **result}), flush=True)

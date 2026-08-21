@@ -31,6 +31,9 @@ beforeEach(() => {
   decodedFrameCache.clear();
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,
+    // A real Response always has headers; the hook reads `X-Proxy-Range` off
+    // them to learn what an 8-bit proxy's 255 stands for.
+    headers: new Headers(),
     blob: async () => new Blob(['png']),
   }) as unknown as typeof fetch;
   vi.spyOn(client, 'decodeGrayPngPooled').mockResolvedValue(DECODED);
