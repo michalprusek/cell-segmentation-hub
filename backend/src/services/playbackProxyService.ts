@@ -91,8 +91,14 @@ interface StoredChannel {
 }
 
 /**
- * The value that maps to 255 for this channel, deriving and persisting it the
- * first time.
+ * The value that maps to 255, deriving and persisting it the first time.
+ *
+ * ONE range for the whole CONTAINER, not one per channel, and stored on every
+ * channel so any of them can be asked. The compositor draws all visible
+ * channels through a single window (`draw(channels, compositorWindow)`), so
+ * per-channel ranges would need per-channel window arithmetic that the shader
+ * has no way to express — two channels scaled differently would be composited
+ * as if they were scaled alike, and the dimmer one would be drawn wrong.
  *
  * `sharp.stats()` is used rather than a Python round-trip because it reports
  * TRUE 16-bit maxima — it is only sharp's pixel PIPELINE that narrows 16-bit to
@@ -134,30 +140,32 @@ async function ensureRangeMax(
     names[names.length - 1],
   ].slice(0, RANGE_SAMPLE_FRAMES);
 
+  // Every channel, not just the one being requested: the range has to cover
+  // the brightest of them or that channel would clip when its own turn came.
   const maxima: number[] = [];
   for (const name of new Set(picks)) {
-    const file = path.join(framesDir, name, `${channel}.png`);
-    try {
-      const stats = await sharp(file).stats();
-      const peak = stats.channels[0]?.max;
-      if (typeof peak === 'number') maxima.push(peak);
-    } catch {
-      // A frame this channel does not cover, or an unreadable one. Sampling
-      // is best-effort; the power-of-two rounding absorbs a missed frame.
+    for (const c of channels) {
+      const file = path.join(framesDir, name, `${c.name}.png`);
+      try {
+        const stats = await sharp(file).stats();
+        const peak = stats.channels[0]?.max;
+        if (typeof peak === 'number') maxima.push(peak);
+      } catch {
+        // A frame this channel does not cover, or an unreadable one. Sampling
+        // is best-effort; the power-of-two rounding absorbs a missed frame.
+      }
     }
   }
   if (maxima.length === 0) return null;
 
   const rangeMax = deriveRangeMax(maxima);
-  const updated = channels.map(c =>
-    c.name === channel ? { ...c, proxyRangeMax: rangeMax } : c
-  );
+  const updated = channels.map(c => ({ ...c, proxyRangeMax: rangeMax }));
   await prisma.image.update({
     where: { id: containerId },
     data: { channels: updated as unknown as object },
   });
   logger.info(
-    `Playback proxy range for ${channel} of ${containerId}: ${rangeMax}`,
+    `Playback proxy range for ${containerId}: ${rangeMax} (from ${maxima.length} samples across ${channels.length} channels)`,
     'PlaybackProxy'
   );
   return rangeMax;

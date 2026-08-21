@@ -50,6 +50,8 @@ import {
 } from '@/lib/decodedFrameCache';
 import { FRAME_PREFETCH_WINDOW } from '../../hooks/useFrameWindowPrefetch';
 import { DECODE_AHEAD_FRAMES } from '../../hooks/useDecodeAhead';
+import { buildFrameImageUrl } from '../../hooks/segmentationPolygonCache';
+import { windowNeedsFullDepth } from '@/lib/playbackProxyWindow';
 import { speculativeFrameRequests } from '@/lib/requestThrottle';
 import { buildLut } from '@/lib/windowLevel';
 import {
@@ -191,6 +193,7 @@ export default function MultiChannelCanvas({
     windowMin,
     windowMax,
     windowRangeMax,
+    proxyRangeMax,
     brightness,
     contrast,
     channelOpacities,
@@ -247,6 +250,15 @@ export default function MultiChannelCanvas({
     [channelsKey, frameId, coverageKey]
   );
   const fetchChannelsKey = fetchChannels.join('|');
+
+  // Draw from the 8-bit playback proxy unless the window has narrowed far
+  // enough that its 256 levels would band — see `windowNeedsFullDepth`. The
+  // server may still answer with the original PNG (batch not finished, or the
+  // frame too bright to map); `decodeWebpGray` expands proxy samples back into
+  // the data's own units, so both answers reach the compositor alike and this
+  // flag never has to be right about what actually arrived.
+  const useProxy = !windowNeedsFullDepth(windowMin, windowMax, proxyRangeMax);
+  const repr = useProxy ? ('proxy' as const) : undefined;
 
   // --- Render-path selection: ask the CURRENT canvas element for WebGL2 once.
   // Declared BEFORE the decode and composite effects so that on every commit
@@ -320,7 +332,7 @@ export default function MultiChannelCanvas({
     (async () => {
       const results = await Promise.all(
         fetchChannels.map(async channel => {
-          const cacheKey = frameCacheKey(frameId, channel);
+          const cacheKey = frameCacheKey(frameId, channel, repr);
           const cached = decodedFrameCache.get(cacheKey);
           if (cached) {
             // Already decoded — stepping back a frame, replaying a clip, or a
@@ -338,7 +350,10 @@ export default function MultiChannelCanvas({
             } as ChannelSamples;
           }
           try {
-            const url = `/api/images/${frameId}/frame-data?channel=${encodeURIComponent(channel)}`;
+            // Through the shared builder, not hand-rolled: that is what
+            // applies the static-channel anchor (one fetch for a channel that
+            // is the same picture on every frame) and the proxy parameter.
+            const url = buildFrameImageUrl(frameId, channel, repr);
             // EXEMPT from the speculative queue, not merely ranked ahead of it:
             // `runImmediate` issues now and never waits. This is the frame the
             // user is looking at, and a priority slot in a queue is still a
@@ -505,6 +520,10 @@ export default function MultiChannelCanvas({
     frameId,
     containerId,
     channelsKey,
+    // Not cosmetic: when the window narrows past the banding threshold this
+    // flips, and the effect has to re-run to refetch the frame at full depth.
+    // Without it the fallback would only take effect on the next frame change.
+    repr,
     fetchChannels,
     fetchChannelsKey,
     reportDataRange,

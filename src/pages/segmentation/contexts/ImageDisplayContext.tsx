@@ -47,6 +47,12 @@ interface ImageDisplayState {
    *  default). Lets the canvas + prefetcher skip requesting a channel for
    *  frames it doesn't cover, so a partial channel produces no 404 noise. */
   channelCoverage: Record<string, string[]>;
+  /** The sample value that maps to 255 in this container's 8-bit playback
+   *  proxies, or null when the container has none. ONE value for the whole
+   *  container: the compositor draws every visible channel through a single
+   *  window, so per-channel ranges could not be expressed. Null disables the
+   *  proxy path entirely and the canvas draws 16-bit PNGs as it always did. */
+  proxyRangeMax: number | null;
   /** Lower window cutoff (0..windowRangeMax) — pixels at/below this map to
    *  black. Same units as the source samples: 0..255 for 8-bit, 0..65535
    *  for 16-bit microscopy frames. */
@@ -82,6 +88,7 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   /** Seed the per-channel frame coverage map (from container metadata).
    *  Only PNG-backed partial channels appear here. */
   setChannelCoverage: (coverage: Record<string, string[]>) => void;
+  setProxyRangeMax: (rangeMax: number | null) => void;
   /** Set the display colour (hex `#RRGGBB`) for a single channel. Marks the
    *  channel as user-edited so a persisted pref cannot later overwrite it. */
   setChannelColor: (channel: string, color: string) => void;
@@ -119,6 +126,7 @@ const DEFAULT_STATE: ImageDisplayState = {
   channelColors: {},
   channelOpacities: {},
   channelCoverage: {},
+  proxyRangeMax: null,
   windowMin: 0,
   windowMax: 255,
   windowRangeMax: 255,
@@ -308,6 +316,10 @@ export function ImageDisplayProvider({
     []
   );
 
+  const setProxyRangeMax = useCallback((rangeMax: number | null) => {
+    setState(s => ({ ...s, proxyRangeMax: rangeMax }));
+  }, []);
+
   const setChannelColor = useCallback((channel: string, color: string) => {
     userEditedColorsRef.current.add(channel);
     setState(s => ({
@@ -438,6 +450,7 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelCoverage,
+      setProxyRangeMax,
       setChannelColor,
       seedChannelColors,
       setChannelOpacity,
@@ -458,6 +471,7 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelCoverage,
+      setProxyRangeMax,
       setChannelColor,
       seedChannelColors,
       setChannelOpacity,

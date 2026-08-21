@@ -55,11 +55,20 @@ function deviceCeilingBytes(): number {
   return Math.max(MIN_BUDGET_BYTES, Math.floor((gb ?? 4) * 1024 ** 3 * 0.25));
 }
 
-export function frameCacheKey(frameId: string, channel: string): string {
+export function frameCacheKey(
+  frameId: string,
+  channel: string,
+  /** The representation these samples came from. An 8-bit proxy decode and a
+   *  16-bit decode of the same frame are DIFFERENT samples and must not share
+   *  an entry — a window narrow enough to force full depth would otherwise be
+   *  answered from the proxy that is already cached. */
+  repr?: 'proxy'
+): string {
   // A STATIC channel resolves every frame to one anchor, so 300 frames share a
   // single decoded entry instead of evicting each other with copies of one
   // picture. See `staticFrameChannels`.
-  return `${resolveFrameId(frameId, channel)}::${channel}`;
+  const base = `${resolveFrameId(frameId, channel)}::${channel}`;
+  return repr === 'proxy' ? `${base}::proxy` : base;
 }
 
 export class DecodedFrameCache {

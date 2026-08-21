@@ -30,6 +30,7 @@ import {
   setStaticChannelAnchors,
   clearStaticChannelAnchors,
 } from '@/lib/staticFrameChannels';
+import { setProxyRange } from '@/lib/playbackProxyWindow';
 
 interface ChannelOverlayListProps {
   channels: VideoChannel[] | null | undefined;
@@ -54,6 +55,7 @@ export function ChannelOverlayList({
     toggleChannelVisibility,
     setVisibleChannels,
     setChannelCoverage,
+    setProxyRangeMax,
     setChannelColor,
     seedChannelColors,
     setChannelOpacity,
@@ -97,6 +99,15 @@ export function ChannelOverlayList({
     // and in the same pass as the coverage above, so the two derived views
     // cannot drift; the registry itself declines the aligned case.
     setStaticChannelAnchors(channels);
+    // One range for the whole container. The backend writes the same number to
+    // every channel, so the first one that has it answers for all of them;
+    // null until the first playback has caused any proxies to be built.
+    const withRange = channels.find(c => typeof c.proxyRangeMax === 'number');
+    setProxyRangeMax(withRange?.proxyRangeMax ?? null);
+    // The decode path reads it from a module registry rather than React state:
+    // `decodeGrayPngPooled` is reached from the canvas and from the
+    // decode-ahead walk, and neither shares a context with the other.
+    setProxyRange(withRange?.proxyRangeMax ?? null);
     return () => clearStaticChannelAnchors();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels]);
