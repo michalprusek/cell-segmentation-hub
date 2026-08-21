@@ -53,6 +53,10 @@ interface UseDecodeAheadOptions {
   /** channel → frame ids it covers. Absent means "covers every frame". */
   channelCoverage?: Record<string, string[]>;
   lookahead?: number;
+  /** `'proxy'` warms the 8-bit playback proxy. Must match what the canvas asks
+   *  for, or this hook fills the cache with entries the canvas never looks up
+   *  and the decode it was meant to save happens anyway. */
+  repr?: 'proxy';
 }
 
 export function useDecodeAhead({
@@ -62,6 +66,7 @@ export function useDecodeAhead({
   enabled,
   channelCoverage = {},
   lookahead = DECODE_AHEAD_FRAMES,
+  repr,
 }: UseDecodeAheadOptions): void {
   const channelsKey = channels.join('|');
   // Read inside the effect without making it a dependency: a new object
@@ -93,7 +98,7 @@ export function useDecodeAhead({
           if (cancelled) return;
           const covers = coverage[channel];
           if (covers && !covers.includes(frame.id)) continue;
-          const key = frameCacheKey(frame.id, channel);
+          const key = frameCacheKey(frame.id, channel, repr);
           if (decodedFrameCache.get(key)) continue;
           try {
             // Through the SHARED throttle. The fetch and the body read are
@@ -101,19 +106,35 @@ export function useDecodeAhead({
             // and what bounds the issue rate; the DECODE deliberately is not —
             // it is worker CPU, not a request, and holding a request slot
             // during it would starve the window prefetcher for no reason.
-            const blob = await speculativeFrameRequests.schedule(async () => {
-              const res = await fetch(buildFrameImageUrl(frame.id, channel), {
-                signal: controller.signal,
-              });
-              if (!res.ok) return null;
-              return res.blob();
-            }, controller.signal);
+            const fetched = await speculativeFrameRequests.schedule(
+              async () => {
+                const res = await fetch(
+                  buildFrameImageUrl(frame.id, channel, repr),
+                  { signal: controller.signal }
+                );
+                if (!res.ok) return null;
+                // Per-frame, so it has to be read from THIS response — see
+                // `make_playback_proxy.py`. Absent on the original PNG.
+                const header = res.headers.get('X-Proxy-Range');
+                const parsed = header === null ? null : Number(header);
+                return {
+                  blob: await res.blob(),
+                  rangeMax:
+                    parsed !== null && Number.isFinite(parsed) && parsed > 0
+                      ? parsed
+                      : null,
+                };
+              },
+              controller.signal
+            );
             if (cancelled) return;
-            if (!blob) continue;
+            if (!fetched) continue;
             // Shared entry point with MultiChannelCanvas: if the playhead has
             // just arrived at this frame and started its own decode, we join it
             // instead of duplicating it.
-            await getOrDecode(key, () => decodeGrayPngPooled(blob));
+            await getOrDecode(key, () =>
+              decodeGrayPngPooled(fetched.blob, fetched.rangeMax)
+            );
             if (cancelled) return;
           } catch (err) {
             if (controller.signal.aborted) return;
@@ -136,5 +157,5 @@ export function useDecodeAhead({
     // depending on the array identity restarted (and re-fetched) the walk on
     // every unrelated parent render. Reading it through `channelsRef` is what
     // keeps exhaustive-deps satisfied without lying to it.
-  }, [enabled, currentIndex, channelsKey, lookahead]);
+  }, [enabled, currentIndex, channelsKey, lookahead, repr]);
 }

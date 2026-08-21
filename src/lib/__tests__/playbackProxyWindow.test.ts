@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   windowNeedsFullDepth,
-  setProxyRange,
-  proxyRange,
   PROXY_LEVELS,
   MIN_LEVELS_IN_WINDOW,
 } from '../playbackProxyWindow';
@@ -50,14 +48,5 @@ describe('windowNeedsFullDepth', () => {
     // wider than the range, so the proxy is plainly good enough — this is the
     // case the whole feature is for.
     expect(windowNeedsFullDepth(104, 29636, RANGE)).toBe(false);
-  });
-});
-
-describe('the container proxy range registry', () => {
-  it('remembers what was set, and forgets on null', () => {
-    setProxyRange(2047);
-    expect(proxyRange()).toBe(2047);
-    setProxyRange(null);
-    expect(proxyRange()).toBeNull();
   });
 });
