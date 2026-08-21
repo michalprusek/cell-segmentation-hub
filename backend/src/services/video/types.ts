@@ -73,6 +73,13 @@ export interface ChannelMeta {
    *  channel was added without alignment, which is the same thing as every
    *  shift being (0, 0). */
   staticShifts?: Record<string, [number, number]>;
+  /** The sample value that maps to 255 in this channel's 8-bit playback proxy.
+   *
+   *  Derived once from three sampled frames and rounded up to a power of two
+   *  (`deriveRangeMax`), then reused for every frame — a per-frame range would
+   *  rescale each frame to its own brightest pixel and make playback flicker.
+   *  Absent until the first proxy request for the channel. */
+  proxyRangeMax?: number;
 }
 
 export interface ExtractionResult {
