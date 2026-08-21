@@ -16,6 +16,7 @@
 
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
+import { resolveFrameId } from '@/lib/staticFrameChannels';
 
 export interface CachedSegmentationData {
   polygons: SegmentationPolygon[] | null;
@@ -100,7 +101,11 @@ export function buildFrameImageUrl(
   channel: string | null
 ): string {
   if (channel) {
-    return `/api/images/${frameId}/frame-data?channel=${encodeURIComponent(channel)}`;
+    // A STATIC channel is one picture stamped onto every frame, so all of them
+    // resolve to one URL — which is what lets the HTTP cache, the prefetch
+    // window and the decode cache each hold it once. See `staticFrameChannels`.
+    const id = resolveFrameId(frameId, channel);
+    return `/api/images/${id}/frame-data?channel=${encodeURIComponent(channel)}`;
   }
   return `/api/images/${frameId}/display`;
 }

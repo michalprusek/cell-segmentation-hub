@@ -13,10 +13,14 @@
  *
  * NOT a correctness layer: entries are keyed by frame id AND channel, and the
  * server's frame PNGs are immutable for a given id, so a stale hit is not a
- * thing that can happen. Adding a channel writes new frames with new ids.
+ * thing that can happen. Adding a channel writes new frames with new ids. The
+ * one id that stands for several is a STATIC channel's anchor, and that is
+ * sound for the same reason: those frames hold byte-identical copies, and the
+ * registry refuses to collapse the aligned case where they do not.
  */
 
 import type { DecodedGray } from './png16';
+import { resolveFrameId } from './staticFrameChannels';
 
 /** Floor for the budget, and what it stays at until a caller reserves more.
  *
@@ -52,7 +56,10 @@ function deviceCeilingBytes(): number {
 }
 
 export function frameCacheKey(frameId: string, channel: string): string {
-  return `${frameId}::${channel}`;
+  // A STATIC channel resolves every frame to one anchor, so 300 frames share a
+  // single decoded entry instead of evicting each other with copies of one
+  // picture. See `staticFrameChannels`.
+  return `${resolveFrameId(frameId, channel)}::${channel}`;
 }
 
 export class DecodedFrameCache {

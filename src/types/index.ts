@@ -594,6 +594,16 @@ export interface VideoChannel {
    *  frames. Omitted => full coverage. The editor uses this to skip requesting
    *  the channel for frames it doesn't cover (avoids 404 noise). */
   frameIds?: string[];
+  /** True when the channel is ONE source image stamped onto every frame it
+   *  covers — a fixed IRM snapshot over a time-lapse. Recorded by
+   *  `addChannelService` and passed through verbatim by the images endpoint;
+   *  the editor reads it to fetch and decode the picture once instead of once
+   *  per frame. See `staticFrameChannels`. */
+  staticSource?: boolean;
+  /** Per-frame (dy, dx) applied when a `staticSource` channel was added WITH
+   *  alignment. Present ⇒ the copies are translations of one another, NOT
+   *  duplicates, and must not be shared between frames. */
+  staticShifts?: Record<string, [number, number]>;
 }
 
 // Metric types for XLSX export
