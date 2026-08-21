@@ -479,7 +479,16 @@ export class VideoController {
       }
 
       res.setHeader('Content-Type', representation.contentType);
-      res.setHeader('Cache-Control', 'private, max-age=3600');
+      // An hour is right for a frame that is what it will stay. It is WRONG for
+      // a PNG standing in for a proxy that is still being built: the browser
+      // would hold 2 MB at the proxy's URL and not revalidate, so every frame
+      // touched during the first playthrough stays on the slow representation
+      // for an hour after the fast one exists.
+      const stillBuilding = wantProxy && !representation.isProxy;
+      res.setHeader(
+        'Cache-Control',
+        stillBuilding ? 'no-cache' : 'private, max-age=3600'
+      );
       if (representation.rangeMax !== null) {
         // The client multiplies the 8-bit samples back out by this, so it must
         // arrive WITH the frame rather than being looked up per container: a
