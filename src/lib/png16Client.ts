@@ -24,6 +24,8 @@
 import { decodeGrayPng, type DecodedGray } from './png16';
 import type { DecodeRequest, DecodeResponse } from './png16Protocol';
 import { logger } from '@/lib/logger';
+import { decodeWebpGray, canDecodeWebpGray } from './webpGray';
+import { proxyRange } from './playbackProxyWindow';
 
 /** Upper bound on workers. Two visible channels is the common case and the
  *  reason the pool exists at all; beyond four the decode is no longer the
@@ -143,6 +145,19 @@ function ensurePool(): PoolWorker[] | null {
 export async function decodeGrayPngPooled(
   blob: Blob
 ): Promise<DecodedGray | null> {
+  // A playback proxy is an 8-bit WebP, and the browser's own decoder handles
+  // it natively — faster than this pool's JS inflate, and without occupying a
+  // worker the next 16-bit frame needs. Routed here rather than in the two
+  // callers so the canvas and the decode-ahead walk both inherit it.
+  if (blob.type === 'image/webp' && canDecodeWebpGray()) {
+    try {
+      return await decodeWebpGray(blob, proxyRange());
+    } catch (err) {
+      // Fall through to the PNG path, which will fail loudly on WebP bytes —
+      // better than silently drawing nothing if a browser surprises us.
+      logger.warn('decodeGrayPngPooled: WebP decode failed', err);
+    }
+  }
   const workers = ensurePool();
   if (!workers || workers.length === 0) return decodeGrayPng(blob);
 

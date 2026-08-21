@@ -604,6 +604,10 @@ export interface VideoChannel {
    *  alignment. Present ⇒ the copies are translations of one another, NOT
    *  duplicates, and must not be shared between frames. */
   staticShifts?: Record<string, [number, number]>;
+  /** The sample value that maps to 255 in this container's 8-bit playback
+   *  proxy. Written by the backend on the first proxy request, identical on
+   *  every channel of a container. Absent ⇒ no proxies exist yet. */
+  proxyRangeMax?: number;
 }
 
 // Metric types for XLSX export

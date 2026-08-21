@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 474,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1418,
-    "all": 1913
+    "tsconfig.test.json": 1420,
+    "all": 1915
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1204,6 +1204,9 @@
       "src/lib/__tests__/performanceUtils.test.ts": {
         "TS6307: File 'src/lib/performanceUtils.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
+      "src/lib/__tests__/playbackProxyWindow.test.ts": {
+        "TS6307: File 'src/lib/playbackProxyWindow.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
       "src/lib/__tests__/png16.test.ts": {
         "TS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.": 1
       },
@@ -1283,7 +1286,8 @@
         "TS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.": 1
       },
       "src/lib/png16Client.ts": {
-        "TS6307: File 'src/lib/png16Protocol.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS6307: File 'src/lib/png16Protocol.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/lib/webpGray.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/lib/polygonGeometry.ts": {
         "TS2353: Object literal may only specify known properties, and 'color' does not exist in type 'Polygon'.": 1
