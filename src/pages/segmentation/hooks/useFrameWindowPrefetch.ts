@@ -155,7 +155,7 @@ export function useFrameWindowPrefetch({
     }
     return urls;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowFrames, channelsKey, coverageKey]);
+  }, [windowFrames, channelsKey, coverageKey, repr]);
 
   // Track the set of URLs we've already kicked off so a window
   // shift fires `prefetch()` only for the NEW URLs at the leading
@@ -355,7 +355,7 @@ export function useFrameWindowPrefetch({
     // the primitive prevents re-fires on parent-provided fresh
     // arrays with identical content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, windowFrames, channelsKey, coverageKey, queryClient]);
+  }, [enabled, windowFrames, channelsKey, coverageKey, queryClient, repr]);
 
   const readyCount = frameImageCache.readyCount(windowImageUrls);
   const isWindowReady =

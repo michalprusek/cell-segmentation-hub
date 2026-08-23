@@ -43,6 +43,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { decodeGrayPngPooled } from '@/lib/png16Client';
+import { canDecodeWebpGray } from '@/lib/webpGray';
 import {
   decodedFrameCache,
   frameCacheKey,
@@ -51,7 +52,10 @@ import {
 import { FRAME_PREFETCH_WINDOW } from '../../hooks/useFrameWindowPrefetch';
 import { DECODE_AHEAD_FRAMES } from '../../hooks/useDecodeAhead';
 import { buildFrameImageUrl } from '../../hooks/segmentationPolygonCache';
-import { windowNeedsFullDepth } from '@/lib/playbackProxyWindow';
+import {
+  windowNeedsFullDepth,
+  noteProxyRange,
+} from '@/lib/playbackProxyWindow';
 import { speculativeFrameRequests } from '@/lib/requestThrottle';
 import { buildLut } from '@/lib/windowLevel';
 import {
@@ -150,6 +154,17 @@ function hexToRgb(hex: string): [number, number, number] {
 
 /** Fallback for non-grayscale PNGs: decode 8-bit via createImageBitmap. */
 async function decode8Bit(blob: Blob): Promise<ChannelSamples | null> {
+  // NOT for a playback proxy. This returns samples exactly as decoded, which
+  // for an 8-bit WebP means 0..255 where the window and the LUT expect the
+  // data's own units — the frame would be drawn `rangeMax/255` too dark, which
+  // is 8x to 116x on the measured container, with nothing to show it is wrong.
+  // A proxy that could not be decoded properly must not be decoded improperly.
+  if (blob.type === 'image/webp') {
+    logger.warn(
+      'MultiChannelCanvas: refusing to 8-bit-decode a playback proxy; it would lose its range'
+    );
+    return null;
+  }
   const bitmap = await createImageBitmap(blob);
   const w = bitmap.width;
   const h = bitmap.height;
@@ -257,7 +272,12 @@ export default function MultiChannelCanvas({
   // frame too bright to map); `decodeWebpGray` expands proxy samples back into
   // the data's own units, so both answers reach the compositor alike and this
   // flag never has to be right about what actually arrived.
-  const useProxy = !windowNeedsFullDepth(windowMin, windowMax, proxyRangeMax);
+  // Gated on being able to DECODE one, not just on wanting one: a browser
+  // without OffscreenCanvas would otherwise spend the bandwidth on bytes it
+  // then cannot turn into samples, and draw those channels blank.
+  const useProxy =
+    canDecodeWebpGray() &&
+    !windowNeedsFullDepth(windowMin, windowMax, proxyRangeMax, visibleChannels);
   const repr = useProxy ? ('proxy' as const) : undefined;
 
   // --- Render-path selection: ask the CURRENT canvas element for WebGL2 once.
@@ -380,15 +400,15 @@ export default function MultiChannelCanvas({
                 // samples are already in the data's units.
                 const header = res.headers.get('X-Proxy-Range');
                 const rangeMax = header === null ? null : Number(header);
-                return {
-                  blob: await res.blob(),
-                  rangeMax:
-                    rangeMax !== null &&
-                    Number.isFinite(rangeMax) &&
-                    rangeMax > 0
-                      ? rangeMax
-                      : null,
-                };
+                const valid =
+                  rangeMax !== null && Number.isFinite(rangeMax) && rangeMax > 0
+                    ? rangeMax
+                    : null;
+                // Teaches the banding guard what this channel is really
+                // encoded against, so it stops judging a dim channel by the
+                // brightest one in the container.
+                if (valid !== null) noteProxyRange(channel, valid);
+                return { blob: await res.blob(), rangeMax: valid };
               }
             );
             if (!fetched) return null;

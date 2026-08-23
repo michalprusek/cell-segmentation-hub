@@ -68,26 +68,42 @@ describe('decodeWebpGray', () => {
   it('takes one sample per pixel out of the RGBA quads', async () => {
     installStubs(2, 2, [0, 64, 128, 255]);
 
-    const out = await decodeWebpGray(new Blob());
+    const out = await decodeWebpGray(new Blob(), 255);
 
+    // Range 255 is the identity mapping, so this isolates the RGBA stride
+    // from the expansion arithmetic tested further down.
     expect(Array.from(out.data)).toEqual([0, 64, 128, 255]);
     expect(out.width).toBe(2);
     expect(out.height).toBe(2);
   });
 
-  it('reports 8-bit depth, so the compositor uploads it as bytes', async () => {
+  it('always reports data units, never raw proxy samples', async () => {
     installStubs(1, 1, [7]);
 
-    const out = await decodeWebpGray(new Blob());
+    const out = await decodeWebpGray(new Blob(), 2047);
 
-    expect(out.bitDepth).toBe(8);
-    expect(out.data).toBeInstanceOf(Uint8Array);
+    // The old signature let a caller omit the range and get 0..255 back. Those
+    // samples reaching the compositor draw the frame rangeMax/255 too dark —
+    // 8x here, 128x on the brightest channel — with nothing to show it.
+    expect(out.bitDepth).toBe(16);
+    expect(out.data).toBeInstanceOf(Uint16Array);
   });
 
-  it('reports the real min and max for auto-contrast', async () => {
+  it('refuses a proxy whose range was lost', async () => {
+    installStubs(1, 1, [7]);
+
+    await expect(decodeWebpGray(new Blob(), Number.NaN)).rejects.toThrow(
+      /needs its range/
+    );
+    await expect(decodeWebpGray(new Blob(), 0)).rejects.toThrow(
+      /needs its range/
+    );
+  });
+
+  it('reports min and max in data units, for auto-contrast', async () => {
     installStubs(2, 2, [30, 200, 45, 90]);
 
-    const out = await decodeWebpGray(new Blob());
+    const out = await decodeWebpGray(new Blob(), 255);
 
     expect(out.min).toBe(30);
     expect(out.max).toBe(200);
@@ -96,7 +112,7 @@ describe('decodeWebpGray', () => {
   it('does not report an inverted window for an empty frame', async () => {
     installStubs(0, 0, []);
 
-    const out = await decodeWebpGray(new Blob());
+    const out = await decodeWebpGray(new Blob(), 2047);
 
     expect(out.min).toBe(0);
     expect(out.max).toBe(0);
@@ -105,7 +121,7 @@ describe('decodeWebpGray', () => {
   it('closes the bitmap, which holds pixels off the JS heap', async () => {
     const { close } = installStubs(1, 1, [1]);
 
-    await decodeWebpGray(new Blob());
+    await decodeWebpGray(new Blob(), 2047);
 
     expect(close).toHaveBeenCalledOnce();
   });
@@ -121,7 +137,9 @@ describe('decodeWebpGray', () => {
       }
     );
 
-    await expect(decodeWebpGray(new Blob())).rejects.toThrow(/2d context/);
+    await expect(decodeWebpGray(new Blob(), 2047)).rejects.toThrow(
+      /2d context/
+    );
     expect(close).toHaveBeenCalledOnce();
   });
 });

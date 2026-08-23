@@ -5,9 +5,8 @@
  * WHY THIS IS CHEAPER THAN THE PNG PATH. `decodeGrayPngPooled` un-filters and
  * inflates a 16-bit PNG in JavaScript — about 25 ms per channel, which is why a
  * worker pool exists at all. `createImageBitmap` hands the same job to the
- * browser's own image decoder, which is native and, for WebP, hardware-assisted
- * on most machines. Faster decoding is a side effect here; the reason the proxy
- * exists is that it is a fifteenth of the bytes.
+ * browser's own native image decoder instead. Faster decoding is a side effect
+ * here; the reason the proxy exists is that it is a fifteenth of the bytes.
  *
  * WHY THE SAMPLES COME BACK THROUGH A CANVAS. There is no API that yields a
  * decoded image's raw bytes directly. Painting the bitmap and reading it back
@@ -41,17 +40,24 @@ export function canDecodeWebpGray(): boolean {
  * `[0, 255]`, so drawing it directly would need the window — expressed in the
  * data's own units — rescaled to match, everywhere it is used. That works right
  * up until the server answers a `repr=proxy` request with the ORIGINAL PNG,
- * which it does for every frame the batch has not reached yet and for every
- * frame too bright to map: the canvas would then be holding 16-bit samples
- * while believing they were 8-bit, and would draw them far too dark. Undoing
- * the map here instead costs one pass over the samples (~5 ms against the
- * ~2000 ms these bytes spent on the wire) and leaves every consumer — window
- * arithmetic, LUT, compositor, cache accounting — reading one kind of number.
+ * which it does for every frame the batch has not reached yet: the canvas would
+ * then be holding 16-bit samples while believing they were 8-bit, and would
+ * draw them far too dark. Undoing the map here instead costs one pass over the
+ * samples — against the hundreds of milliseconds even a proxy spends on the
+ * wire — and leaves every consumer, window arithmetic, LUT, compositor and
+ * cache accounting alike, reading one kind of number.
  */
 export async function decodeWebpGray(
   blob: Blob,
-  rangeMax: number | null = null
+  rangeMax: number
 ): Promise<DecodedGray> {
+  // No default, and no "just hand back the 8-bit samples" branch. Raw proxy
+  // samples are 0..255 where every consumer expects the data's own units, so a
+  // caller that lost the range must get nothing rather than something 256x too
+  // dark — a wrong picture in a measurement tool is worse than a missing one.
+  if (!Number.isFinite(rangeMax) || rangeMax <= 0) {
+    throw new Error(`webpGray: a proxy needs its range, got ${rangeMax}`);
+  }
   const bitmap = await createImageBitmap(blob);
   try {
     const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
@@ -79,17 +85,6 @@ export async function decodeWebpGray(
     if (pixels === 0) {
       min = 0;
       max = 0;
-    }
-
-    if (rangeMax === null) {
-      return {
-        width: bitmap.width,
-        height: bitmap.height,
-        bitDepth: 8,
-        data,
-        min,
-        max,
-      };
     }
 
     // Back into the units the sliders and the LUT speak. The step is

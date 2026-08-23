@@ -28,7 +28,7 @@ top out at **1.3×**. The frames are microscopy noise, and noise does not compre
 
 **The headroom is elsewhere: we ship 11 bits at 1474 px to a canvas that shows
 8 bits at ~600 px.** The data occupies 126–1566 — 526 distinct values in a 16-bit
-container. Measured on one real frame:
+container. Measured on one real frame (the 265 kB first estimated for WebP came from mapping onto the frame's min..max; mapping onto its power-of-two range, which is what shipped, gives 141 kB):
 
 |                              | Per frame  | 2 dynamic channels | fps at 35 Mbit/s |
 | ---------------------------- | ---------- | ------------------ | ---------------- |
@@ -84,25 +84,21 @@ as today — the 16-bit PNG — so every existing caller is unaffected.
 Cached at `…/frames/<NNNN>/<channel>.webp`, beside the PNG it derives from. Same
 `framePngCache` headers: these files are as immutable as their source.
 
-### The mapping range is per CONTAINER and CHANNEL
+### The mapping range is per FRAME
 
-`value8 = round(value16 / rangeMax * 255)`, and `rangeMax` is fixed for the whole
-channel. Deriving it per frame would make brightness flicker frame to frame, which
-is the one failure mode that would make this feature worse than the problem.
-
-Derived once, on the first proxy request for a channel: read the max of three
-frames (first, middle, last) and round **up to the next power of two minus one**.
-For the container measured here, max 1566 → range 0–2047, using 180 of the 256
-available levels. Stored in the channel's metadata next to `staticSource`, so it is
-computed once and is identical for every frame.
-
-**A frame that exceeds the stored range is NOT clipped.** The server returns its
-16-bit PNG instead. Clipping would silently destroy the brightest structures in a
-measurement tool; serving one slow correct frame is the right trade.
-
-The mapping itself is a pure function over a raw buffer — `sharp` is used to read
-the 16-bit PNG as raw and to encode the resulting 8-bit buffer to WebP, but the
-arithmetic lives in testable code rather than in a chain of image-library calls.
+> Superseded twice. The original design fixed the range per container and
+> channel; deploying it showed why that fails (see the revision note above).
+> What shipped: `make_playback_proxy.py` maps each frame onto its own peak
+> rounded up to a power of two, names the file `<channel>.p<range>.webp`, and
+> the range reaches the client as `X-Proxy-Range`. `value8 = value16 * 255 //
+range` — integer floor, in a widened type so bright samples cannot wrap.
+>
+> `ChannelMeta.proxyRangeMax` survives as an upper bound over the container,
+> used by the client's banding guard as a starting point and widened by
+> `runConverter` from the ranges frames were actually encoded against. The
+> guard switches to each channel's real range as soon as frames arrive, because
+> judging a dim channel by the brightest one in the container turned the
+> feature off in its main use case.
 
 ### Client
 

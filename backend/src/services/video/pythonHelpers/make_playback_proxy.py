@@ -31,12 +31,14 @@ whole series, and playback flickers. It is right BECAUSE the client undoes the
 mapping. The samples it composites are the original values either way, so the
 only thing that varies between frames is the quantisation step.
 
-And that matters here. Measured on the container this was written for, one
-channel's frame maxima run 1950, 2473, 8984 — a 4.6x spread — while another
-channel of the same container sits at 29636. One range fixed across the
-container would leave the dimmest channel 9 of the 256 levels; fixed across a
-channel would leave that channel's dimmest frame 30. Per frame, every frame
-gets all 256, and nothing can fall outside its own range.
+And that matters here. Measured on the container this was written for, the
+three channels peak at 8984, 1177 and 29636, and within the first of those the
+frame maxima run 1950, 2473, 8984 — a 4.6x spread. One range fixed across the
+container (32767) would leave the 1177 channel 9 of the 256 levels; fixed
+across a channel (16383) would leave that channel's dimmest frame 30. Per
+frame, nothing can fall outside its own range, and every frame gets at least
+half the 256 levels — the range is rounded UP to a power of two, so a peak
+lands somewhere in 128..255 rather than exactly at the top.
 
 Invoked by the backend as::
 
@@ -128,8 +130,13 @@ def convert_frame(png_path: str, frame_dir: str, channel: str) -> dict:
 
     out = map_to_8bit(samples, range_max)
     # Write beside the source, then rename, so a killed process never leaves a
-    # truncated .webp that later looks complete and gets served.
-    tmp_path = webp_path + ".partial"
+    # truncated .webp that later looks complete and gets served. The pid is in
+    # the temp name because the in-flight guard that stops two converters
+    # running is per backend PROCESS: a restart mid-batch, or a second replica,
+    # can put two of them on the same frame. Sharing one temp path would let
+    # them interleave writes and rename an interleaved file into place, where
+    # it would be served under an hour-long cache and simply fail to decode.
+    tmp_path = f"{webp_path}.{os.getpid()}.partial"
     Image.fromarray(out).save(tmp_path, "WEBP", quality=WEBP_QUALITY)
     os.replace(tmp_path, webp_path)
     return {

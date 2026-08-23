@@ -47,11 +47,10 @@ interface ImageDisplayState {
    *  default). Lets the canvas + prefetcher skip requesting a channel for
    *  frames it doesn't cover, so a partial channel produces no 404 noise. */
   channelCoverage: Record<string, string[]>;
-  /** The sample value that maps to 255 in this container's 8-bit playback
-   *  proxies, or null when the container has none. ONE value for the whole
-   *  container: the compositor draws every visible channel through a single
-   *  window, so per-channel ranges could not be expressed. Null disables the
-   *  proxy path entirely and the canvas draws 16-bit PNGs as it always did. */
+  /** Upper bound on the container's sample values, or null before the backend
+   *  has derived one. NOT the value that maps to 255 — that is per frame and
+   *  arrives in `X-Proxy-Range`. It is the starting point for the banding
+   *  guard, which switches to each channel's real range as frames arrive. */
   proxyRangeMax: number | null;
   /** Lower window cutoff (0..windowRangeMax) — pixels at/below this map to
    *  black. Same units as the source samples: 0..255 for 8-bit, 0..65535

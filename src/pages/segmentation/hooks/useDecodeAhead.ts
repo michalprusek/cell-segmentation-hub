@@ -33,6 +33,7 @@ import {
 import { buildFrameImageUrl } from './segmentationPolygonCache';
 import { speculativeFrameRequests } from '@/lib/requestThrottle';
 import { logger } from '@/lib/logger';
+import { noteProxyRange } from '@/lib/playbackProxyWindow';
 
 /** Frames to run ahead of the playhead. Three covers the decode latency of a
  *  frame at playback rates without turning the cache over faster than the
@@ -117,13 +118,15 @@ export function useDecodeAhead({
                 // `make_playback_proxy.py`. Absent on the original PNG.
                 const header = res.headers.get('X-Proxy-Range');
                 const parsed = header === null ? null : Number(header);
-                return {
-                  blob: await res.blob(),
-                  rangeMax:
-                    parsed !== null && Number.isFinite(parsed) && parsed > 0
-                      ? parsed
-                      : null,
-                };
+                const valid =
+                  parsed !== null && Number.isFinite(parsed) && parsed > 0
+                    ? parsed
+                    : null;
+                // Teaches the banding guard what this channel is really
+                // encoded against, so it stops judging a dim channel by the
+                // brightest one in the container.
+                if (valid !== null) noteProxyRange(channel, valid);
+                return { blob: await res.blob(), rangeMax: valid };
               },
               controller.signal
             );
