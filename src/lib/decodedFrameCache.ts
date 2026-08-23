@@ -93,8 +93,9 @@ export class DecodedFrameCache {
    * Callers know the working set the cache is about to be asked for — the
    * prefetch window times the channel count — and the cache cannot guess it:
    * from in here, one 12 MB three-channel frame and three 4 MB single-channel
-   * frames look the same. A 25% margin covers the frame being decoded ahead and
-   * the one being displayed, both of which sit outside the window arithmetic.
+   * frames look the same. The only caller counts the decode-ahead frames and
+   * the displayed one explicitly, so the 25% margin is slack on top of an
+   * already-complete count rather than a stand-in for them.
    *
    * Only ever grows. Shrinking on a channel being hidden would throw away
    * frames that are about to be wanted again the moment it is shown.

@@ -10,6 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-21-playback-proxy-design.md`
 
+> **This plan is a historical record and is stale in its details.** It was
+> written before two things changed under it: the mapping range moved from
+> per-container to per-frame (so the `--range-max` argument below does not
+> exist, the file name carries the range, and there is no over-range case), and
+> the range seeding was split from the conversion so the feature can bootstrap.
+> The spec carries the revision notes; the code and its tests are the authority.
+> Kept unedited because what a plan got wrong is worth being able to read.
+
 ## Global Constraints
 
 - `rangeMax` is per CONTAINER and CHANNEL, never per frame — a per-frame range makes brightness flicker.

@@ -20,7 +20,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../db/prismaClient';
 import {
   resolveFrameRepresentation,
-  ensureChannelProxies,
+  ensureProxySupport,
 } from '../../services/playbackProxyService';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
@@ -470,12 +470,16 @@ export class VideoController {
         wantProxy
       );
 
-      // Asked for a proxy and got the original back: this channel has not been
-      // converted yet. Serve the PNG now — correct, just bigger — and start the
-      // batch so the next pass over these frames is the fast one. Never awaited:
-      // a container takes minutes and a frame request must not wait for it.
-      if (wantProxy && !representation.isProxy && framesDir && containerId) {
-        ensureChannelProxies(containerId, channelName as string, framesDir);
+      // Seed the container's proxy range on ANY multi-channel frame request,
+      // and build the proxies only when one was actually asked for. Seeding
+      // unconditionally is what lets the feature start at all: the client asks
+      // for a proxy only once a range is stored, so gating the seeding on the
+      // request that needs it was a closed loop. Never awaited — a container
+      // takes minutes and a frame request must not wait for it.
+      if (framesDir && containerId) {
+        ensureProxySupport(containerId, channelName as string, framesDir, {
+          convert: wantProxy && representation.kind === 'png',
+        });
       }
 
       res.setHeader('Content-Type', representation.contentType);
@@ -484,16 +488,17 @@ export class VideoController {
       // would hold 2 MB at the proxy's URL and not revalidate, so every frame
       // touched during the first playthrough stays on the slow representation
       // for an hour after the fast one exists.
-      const stillBuilding = wantProxy && !representation.isProxy;
+      const stillBuilding = wantProxy && representation.kind === 'png';
       res.setHeader(
         'Cache-Control',
         stillBuilding ? 'no-cache' : 'private, max-age=3600'
       );
-      if (representation.rangeMax !== null) {
+      if (representation.kind === 'proxy') {
         // The client multiplies the 8-bit samples back out by this, so it must
         // arrive WITH the frame rather than being looked up per container: a
         // proxy is mapped against its own frame's maximum, and neighbouring
-        // frames of one channel legitimately differ.
+        // frames of one channel legitimately differ. The union is what
+        // guarantees a WebP body cannot leave here without it.
         res.setHeader('X-Proxy-Range', String(representation.rangeMax));
       }
       res.sendFile(representation.path);

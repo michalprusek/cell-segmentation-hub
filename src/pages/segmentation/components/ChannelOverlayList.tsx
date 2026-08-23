@@ -30,6 +30,7 @@ import {
   setStaticChannelAnchors,
   clearStaticChannelAnchors,
 } from '@/lib/staticFrameChannels';
+import { clearProxyRanges } from '@/lib/playbackProxyWindow';
 
 interface ChannelOverlayListProps {
   channels: VideoChannel[] | null | undefined;
@@ -103,7 +104,11 @@ export function ChannelOverlayList({
     // null until the first playback has caused any proxies to be built.
     const withRange = channels.find(c => typeof c.proxyRangeMax === 'number');
     setProxyRangeMax(withRange?.proxyRangeMax ?? null);
-    return () => clearStaticChannelAnchors();
+    return () => {
+      clearStaticChannelAnchors();
+      // Ranges learned from headers describe THIS container's encodes.
+      clearProxyRanges();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels]);
 

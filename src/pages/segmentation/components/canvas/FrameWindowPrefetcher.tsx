@@ -17,6 +17,7 @@ import {
 } from '../../hooks/useFrameWindowPrefetch';
 import { useDecodeAhead } from '../../hooks/useDecodeAhead';
 import { windowNeedsFullDepth } from '@/lib/playbackProxyWindow';
+import { canDecodeWebpGray } from '@/lib/webpGray';
 
 interface FrameWindowPrefetcherProps {
   frames: readonly FrameMinimal[];
@@ -40,9 +41,11 @@ export default function FrameWindowPrefetcher({
   // The same decision the canvas makes. Warming the representation the canvas
   // will not ask for is worse than not warming at all: it spends the request
   // budget and the HTTP cache on bytes nothing reads.
-  const repr = windowNeedsFullDepth(windowMin, windowMax, proxyRangeMax)
-    ? undefined
-    : ('proxy' as const);
+  const repr =
+    canDecodeWebpGray() &&
+    !windowNeedsFullDepth(windowMin, windowMax, proxyRangeMax, visibleChannels)
+      ? ('proxy' as const)
+      : undefined;
 
   // The single-channel fallback uses `/display` (encoded as `null`
   // channel in `buildFrameImageUrl`). Multi-channel mode prefetches

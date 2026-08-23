@@ -73,12 +73,15 @@ export interface ChannelMeta {
    *  channel was added without alignment, which is the same thing as every
    *  shift being (0, 0). */
   staticShifts?: Record<string, [number, number]>;
-  /** The sample value that maps to 255 in this channel's 8-bit playback proxy.
+  /** Upper bound on the sample values this container holds, rounded up to a
+   *  power of two.
    *
-   *  Derived once from three sampled frames and rounded up to a power of two
-   *  (`deriveRangeMax`), then reused for every frame — a per-frame range would
-   *  rescale each frame to its own brightest pixel and make playback flicker.
-   *  Absent until the first proxy request for the channel. */
+   *  NOT the value that maps to 255 — that is chosen per FRAME by
+   *  `make_playback_proxy.py` from the frame's own peak, and travels with the
+   *  frame in `X-Proxy-Range`. This figure has one job: the client's banding
+   *  guard needs something to judge against before it has seen any frame of a
+   *  container. Absent until a multi-channel frame of the container has been
+   *  requested at least once. */
   proxyRangeMax?: number;
 }
 

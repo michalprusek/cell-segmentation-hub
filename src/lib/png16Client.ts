@@ -153,13 +153,27 @@ export async function decodeGrayPngPooled(
   // it natively — faster than this pool's JS inflate, and without occupying a
   // worker the next 16-bit frame needs. Routed here rather than in the two
   // callers so the canvas and the decode-ahead walk both inherit it.
-  if (blob.type === 'image/webp' && canDecodeWebpGray()) {
+  if (blob.type === 'image/webp') {
+    // Never falls through to the PNG path. That path does not fail loudly on
+    // WebP bytes — `decodeGrayPng` returns null by contract — and the canvas's
+    // null-handler is an 8-bit decoder that would hand the compositor raw
+    // 0..255 proxy samples as if they were data units. Returning null here
+    // means the frame does not draw, which is visible and honest.
+    if (!canDecodeWebpGray()) {
+      logger.warn(
+        'decodeGrayPngPooled: this browser cannot decode a playback proxy'
+      );
+      return null;
+    }
+    if (proxyRangeMax === null) {
+      logger.warn('decodeGrayPngPooled: proxy arrived without X-Proxy-Range');
+      return null;
+    }
     try {
       return await decodeWebpGray(blob, proxyRangeMax);
     } catch (err) {
-      // Fall through to the PNG path, which will fail loudly on WebP bytes —
-      // better than silently drawing nothing if a browser surprises us.
       logger.warn('decodeGrayPngPooled: WebP decode failed', err);
+      return null;
     }
   }
   const workers = ensurePool();
