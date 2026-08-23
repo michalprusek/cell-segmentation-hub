@@ -216,6 +216,14 @@ async function ensureRangeMax(
  * Failures are logged and dropped on purpose: a container with no proxies plays
  * exactly as it did before this feature existed, so there is nothing here worth
  * failing a frame request over.
+ *
+ * WHY THE RANGE GATES THE CONVERSION, when the converter does not use it. It is
+ * the CLIENT that needs `proxyRangeMax`: without it `windowNeedsFullDepth`
+ * answers "use full depth" for every window, so the editor never asks for a
+ * proxy and anything built here would be minutes of CPU and 85 MB of disk that
+ * nothing reads. Converting first and hoping is strictly worse than not
+ * converting. (The converter itself derives a range per frame and needs nothing
+ * passed in — do not reintroduce that argument.)
  */
 export function ensureChannelProxies(
   containerId: string,
@@ -230,8 +238,13 @@ export function ensureChannelProxies(
     try {
       const rangeMax = await ensureRangeMax(containerId, channel, framesDir);
       if (rangeMax === null) {
+        // Deliberate, and permanent for this container until whatever made the
+        // range underivable is fixed — most likely a container row whose
+        // `channels` metadata does not list this channel, which also means the
+        // editor is not in multi-channel mode for it. Playback keeps working at
+        // full depth, which is what it did before this feature existed.
         logger.warn(
-          `No playback proxy range for ${channel} of ${containerId}; skipping`,
+          `No playback proxy range for ${channel} of ${containerId}; not converting — the editor could not use the result`,
           'PlaybackProxy'
         );
         return;

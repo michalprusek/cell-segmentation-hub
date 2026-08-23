@@ -10,18 +10,22 @@
  */
 
 /**
- * The value that maps to 255, for a whole channel.
+ * The brightest value the CONTAINER holds, rounded up to a power of two.
  *
- * MUST be derived per container and channel, never per frame: a per-frame range
- * would rescale every frame to its own brightest pixel, so a passing bright
- * object would darken the whole series and playback would flicker. That would
- * be a worse defect than the stutter this feature exists to remove.
+ * NOT the range a proxy is encoded against. Each frame is mapped onto its own
+ * maximum by `make_playback_proxy.py`, which names the result
+ * `<channel>.p<range>.webp` and lets the client multiply it back out — see the
+ * revision note in the design doc for why per-frame won and why it does not
+ * make brightness flicker.
  *
- * Rounded up to a power of two so the value is stable under resampling: taking
- * the maxima of three frames rather than all three hundred is only safe if a
- * slightly brighter frame elsewhere still lands inside the range. A frame that
- * exceeds it anyway is served at full depth rather than clipped — see
- * `make_playback_proxy.py`, which reports such frames instead of writing them.
+ * What this figure IS for: the client's `windowNeedsFullDepth`, which has to
+ * decide whether the user's window is narrow enough that 256 levels would band.
+ * That judgement needs one number for the whole container, and taking the
+ * largest is the conservative direction — it can ask for full depth where a
+ * dimmer channel's own proxy would have been fine, never the reverse.
+ *
+ * Rounded up to a power of two so sampling three frames instead of three
+ * hundred is safe: a slightly brighter frame elsewhere still lands inside it.
  */
 export function deriveRangeMax(maxima: readonly number[]): number {
   if (maxima.length === 0) {
