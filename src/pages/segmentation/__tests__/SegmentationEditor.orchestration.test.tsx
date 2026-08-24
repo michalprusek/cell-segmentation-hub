@@ -12,7 +12,13 @@
  * be ≥4096 MB when running this file directly.
  */
 import React from 'react';
-import { render, screen, act, cleanup } from '@testing-library/react';
+import {
+  render,
+  screen,
+  act,
+  cleanup,
+  fireEvent,
+} from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -280,8 +286,26 @@ vi.mock('../components/canvas/FrameLoadingGate', () => ({
   default: () => null,
 }));
 
+// Stubbed to a button rather than null so the microtubule type-label callback
+// is reachable. `onChangeMtType` is the ONLY route from the orchestrator to a
+// user gesture (SegmentationEditorLayout -> CanvasPolygon -> PolygonContextMenu),
+// and with a null stub a full revert of the untracked-label fix passes the
+// whole suite. The layout's real `polylineKind === 'microtubule'` gate still
+// runs — this only replaces the leaf.
 vi.mock('../components/canvas/CanvasPolygon', () => ({
-  default: () => null,
+  default: ({
+    polygon,
+    onChangeMtType,
+  }: {
+    polygon: { id: string };
+    onChangeMtType?: (id: string, mtType: string | null) => void;
+  }) =>
+    onChangeMtType ? (
+      <button
+        data-testid={`mt-type-${polygon.id}`}
+        onClick={() => onChangeMtType(polygon.id, 'mt_type_brain')}
+      />
+    ) : null,
 }));
 
 vi.mock('../components/canvas/CanvasSvgFilters', () => ({
@@ -633,7 +657,7 @@ describe('effectiveResegmentModel — project-type gating', () => {
 
     const btn = screen.getByTestId('resegment-btn');
     await act(async () => {
-      btn.click();
+      fireEvent.click(btn);
     });
 
     await act(async () => {
@@ -655,7 +679,7 @@ describe('effectiveResegmentModel — project-type gating', () => {
 
     const btn = screen.getByTestId('resegment-btn');
     await act(async () => {
-      btn.click();
+      fireEvent.click(btn);
     });
 
     await act(async () => {
@@ -677,7 +701,7 @@ describe('effectiveResegmentModel — project-type gating', () => {
 
     const btn = screen.getByTestId('resegment-btn');
     await act(async () => {
-      btn.click();
+      fireEvent.click(btn);
     });
 
     await act(async () => {
@@ -699,7 +723,7 @@ describe('effectiveResegmentModel — project-type gating', () => {
 
     const btn = screen.getByTestId('resegment-btn');
     await act(async () => {
-      btn.click();
+      fireEvent.click(btn);
     });
 
     await act(async () => {
@@ -885,5 +909,163 @@ describe('Image name normalization', () => {
     renderEditor();
     const hdr = screen.getByTestId('editor-header');
     expect(hdr.getAttribute('data-name')).toBe('');
+  });
+});
+
+// ─── microtubule type labels ─────────────────────────────────────────────────
+//
+// The two halves of the fix — an untracked polyline must be a valid target, and
+// the label must be stamped into editor state rather than fetched back by an
+// abortable reload — live in handleChangeMtType, not in the pure helpers. Both
+// were reverted here to check: with CanvasPolygon stubbed to null, a full revert
+// of either passed the entire suite. These tests are the ones that fail.
+
+describe('microtubule type labels', () => {
+  const polyline = (over: Record<string, unknown> = {}) => ({
+    id: 'poly-1',
+    points: [
+      { x: 0, y: 0 },
+      { x: 10, y: 10 },
+    ],
+    geometry: 'polyline',
+    type: 'external',
+    class: 'spheroid',
+    ...over,
+  });
+
+  beforeEach(() => {
+    mockProjectData.projectType = 'microtubules';
+    mockProjectData.images = [{ id: 'img-1', name: 'f.tif' }];
+    mockVideo.container = { id: 'vid-1', channels: [] };
+  });
+
+  const setPolygons = (polys: unknown[]) => {
+    mockEditor.polygons = polys as never[];
+    mockEditor.getPolygons.mockReturnValue(polys as never[]);
+  };
+
+  it('types an UNTRACKED polyline without any cross-frame write', async () => {
+    setPolygons([polyline()]);
+    renderEditor();
+    const btn = await screen.findByTestId('mt-type-poly-1');
+
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+
+    const { toast } = await import('sonner');
+    // The whole bug: this used to abort with "no track yet" before doing
+    // anything, because the polyline has no trackId.
+    expect(mockApiClient.setTrackType).not.toHaveBeenCalled();
+    expect(mockEditor.updatePolygons).toHaveBeenCalledTimes(1);
+    const [stamped] = mockEditor.updatePolygons.mock.calls[0] as [
+      Array<{ id: string; mtType?: string }>,
+    ];
+    expect(stamped.find(p => p.id === 'poly-1')?.mtType).toBe('mt_type_brain');
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps an untracked stamp undoable, since it is the whole change', async () => {
+    setPolygons([polyline()]);
+    renderEditor();
+    const target = await screen.findByTestId('mt-type-poly-1');
+    await act(async () => {
+      fireEvent.click(target);
+    });
+
+    expect(mockEditor.updatePolygons.mock.calls[0][1]).toBe(true);
+  });
+
+  it('writes across frames for a TRACKED polyline and stamps this frame too', async () => {
+    setPolygons([polyline({ trackId: 'track-9' })]);
+    mockApiClient.setTrackType.mockResolvedValue({ framesAffected: 7 });
+    renderEditor();
+
+    const target = await screen.findByTestId('mt-type-poly-1');
+    await act(async () => {
+      fireEvent.click(target);
+    });
+
+    expect(mockApiClient.setTrackType).toHaveBeenCalledWith(
+      'vid-1',
+      ['track-9'],
+      'mt_type_brain'
+    );
+    // …and the local stamp must NOT be undoable: the backend write already
+    // landed on every frame, so an undo would desync this frame from its track.
+    expect(mockEditor.updatePolygons).toHaveBeenCalledTimes(1);
+    expect(mockEditor.updatePolygons.mock.calls[0][1]).toBe(false);
+  });
+
+  it('does not dirty the frame when the label is already the one asked for', async () => {
+    setPolygons([polyline({ mtType: 'mt_type_brain' })]);
+    renderEditor();
+
+    const target = await screen.findByTestId('mt-type-poly-1');
+    await act(async () => {
+      fireEvent.click(target);
+    });
+
+    const { toast } = await import('sonner');
+    // No write, no undo entry — but the user still gets a success, because the
+    // MT does carry the label they asked for.
+    expect(mockEditor.updatePolygons).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('reports failure when the polygon is no longer on the frame', async () => {
+    // The context menu holds the id it was opened with; a resegment or a
+    // background reload can replace the frame's polygons underneath it.
+    setPolygons([polyline()]);
+    renderEditor();
+    const btn = await screen.findByTestId('mt-type-poly-1');
+    setPolygons([polyline({ id: 'poly-fresh' })]);
+
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+
+    const { toast } = await import('sonner');
+    expect(mockApiClient.setTrackType).not.toHaveBeenCalled();
+    expect(mockEditor.updatePolygons).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a failed cross-frame write and stamps nothing', async () => {
+    setPolygons([polyline({ trackId: 'track-9' })]);
+    mockApiClient.setTrackType.mockRejectedValue(new Error('boom'));
+    renderEditor();
+
+    const target = await screen.findByTestId('mt-type-poly-1');
+    await act(async () => {
+      fireEvent.click(target);
+    });
+
+    const { toast } = await import('sonner');
+    expect(mockEditor.updatePolygons).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('refuses a tracked target when the container is not resolved yet', async () => {
+    setPolygons([polyline({ trackId: 'track-9' })]);
+    mockVideo.container = null;
+    renderEditor();
+
+    const target = await screen.findByTestId('mt-type-poly-1');
+    await act(async () => {
+      fireEvent.click(target);
+    });
+
+    const { toast } = await import('sonner');
+    // Stamping only this frame and calling it success would leave the rest of
+    // the track quietly unlabelled.
+    expect(mockApiClient.setTrackType).not.toHaveBeenCalled();
+    expect(mockEditor.updatePolygons).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

@@ -142,3 +142,39 @@ describe('applyMtTypeToPolygons', () => {
     expect(input[0].mtType).toBe('brain');
   });
 });
+
+describe('applyMtTypeToPolygons — matched vs changed', () => {
+  const set = (...ids: string[]) => new Set(ids);
+
+  it('reports matched=0 when the target is not on this frame', () => {
+    // The right-clicked id goes stale when a resegment or a background reload
+    // replaces the frame's polygons while the type submenu is open. Without a
+    // separate `matched`, that is indistinguishable from a no-op re-assign and
+    // the caller reports success for a write that reached nothing.
+    const { changed, matched } = applyMtTypeToPolygons(
+      polys,
+      set('ghost'),
+      set(),
+      'brain'
+    );
+    expect(matched).toBe(0);
+    expect(changed).toBe(0);
+  });
+
+  it('reports matched>0 with changed=0 for a benign no-op re-assign', () => {
+    const typed: TypeablePolygon[] = [{ id: 'x', mtType: 'brain' }];
+    const { changed, matched } = applyMtTypeToPolygons(
+      typed,
+      set('x'),
+      set(),
+      'brain'
+    );
+    expect(matched).toBe(1);
+    expect(changed).toBe(0);
+  });
+
+  it('counts every same-track sibling as matched', () => {
+    const { matched } = applyMtTypeToPolygons(polys, set('a'), set('t1'), 'x');
+    expect(matched).toBe(2); // 'a' and 'c' share t1
+  });
+});

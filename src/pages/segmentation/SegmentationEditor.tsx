@@ -1123,24 +1123,49 @@ const SegmentationEditor = () => {
       // updates. Commit only when something actually changed — a no-op
       // reassignment (or a mid-await frame scrub that leaves no matching polygon)
       // must not dirty the frame or push an empty undo entry.
-      const { polygons: updated, changed } = applyMtTypeToPolygons(
+      const {
+        polygons: updated,
+        changed,
+        matched,
+      } = applyMtTypeToPolygons(
         editorRef.current.getPolygons(),
         targetPolygonIds,
         new Set(trackIds),
         mtType
       );
       if (changed > 0) {
-        editorRef.current.updatePolygons(updated);
+        // A TRACKED target is already durable — setTrackType wrote every frame
+        // above — so its stamp must not enter the undo stack: undoing would
+        // revert this frame alone and the next autosave would persist a frame
+        // whose label disagrees with the rest of its own track. An UNTRACKED
+        // target's stamp IS the whole change, so it stays undoable.
+        editorRef.current.updatePolygons(updated, trackIds.length === 0);
       }
 
-      // Genuine cross-frame desync: the current frame carries the track (we just
-      // changed it) yet the whole-track write matched 0 frames — the track's
-      // other frames are now stale. `framesAffected === 0` with `changed === 0`
-      // is only a no-op re-assignment, not a desync, so it is intentionally not
-      // warned.
+      // Nothing was written anywhere: no track to write across, and the
+      // right-clicked polygon is not on this frame. That happens when the
+      // polygons are replaced while the type submenu is open (a resegment, a
+      // background reload) or across the await in "New label…", which creates
+      // the label and then assigns it. Reporting success there would be a lie.
+      if (trackIds.length === 0 && matched === 0) {
+        logger.warn(
+          `Microtubule type change hit no target: polygon ${polygonId} is not on the current frame`
+        );
+        toast.error(t('microtubule.type.updateFailed'));
+        return;
+      }
+
+      // The backend counts a frame only when its polygons actually CHANGED, so
+      // `framesAffected === 0` alongside a local change means one of two very
+      // different things: the track's other frames are stale (a real desync),
+      // or they already carried the requested label while this frame's copy had
+      // been undone. The two are not separable from here — the response carries
+      // no "matched" count — so this stays a log line rather than something
+      // shown to the user. If it ever needs to be actionable, the backend has
+      // both numbers already and should return the second one too.
       if (framesAffected === 0 && changed > 0) {
         logger.warn(
-          `setTrackType matched no frames for track(s) ${trackIds.join(', ')} on video ${videoId}`
+          `setTrackType wrote no frames for track(s) ${trackIds.join(', ')} on video ${videoId} — either the other frames already carried this label, or they are now stale`
         );
       }
 

@@ -41,6 +41,7 @@ import {
   type CompositorChannel,
 } from '@/lib/webglCompositor';
 import { createMockCanvasContext } from '@/test-utils/canvasTestUtils';
+import { buildLut } from '@/lib/windowLevel';
 import MultiChannelCanvas from '../MultiChannelCanvas';
 import {
   MAX_SPECULATIVE_REQUESTS,
@@ -98,6 +99,17 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     reportChannelRanges: mockReportChannelRanges,
   }),
 }));
+
+// Real implementation, but observable: the CPU composite path builds one LUT
+// per channel and the only other markers it leaves are putImageData call
+// counts, so without this a regression to a single shared table is invisible.
+vi.mock('@/lib/windowLevel', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/windowLevel')>(
+      '@/lib/windowLevel'
+    );
+  return { ...actual, buildLut: vi.fn(actual.buildLut) };
+});
 
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -603,7 +615,7 @@ describe('MultiChannelCanvas', () => {
       // Mutate the context mock's window state directly (module-level var)
       // and force a re-render — this is the perf-critical guarantee: the
       // decode effect's deps are
-      // [frameId, containerId, channelsKey, reportDataRange, onLoad, t,
+      // [frameId, containerId, channelsKey, reportChannelRanges, onLoad, t,
       // visibleChannels]. windowMin/windowMax are NOT in that list, so a
       // slider drag re-runs only the (cheap) windowing/composite effect.
       // A regression that re-adds windowMin/windowMax to the decode deps
@@ -623,6 +635,18 @@ describe('MultiChannelCanvas', () => {
 
   describe('reportChannelRanges', () => {
     it('reports every channel separately, not one combined range', async () => {
+      // The channels MUST decode to different values here. With the default
+      // all-zero fixture this assertion pins only the argument shape, and a
+      // regression that computes the union and writes that one pair under every
+      // channel key passes it — i.e. the original bug wearing the new API.
+      const ctx = installSharedCanvasContext();
+      let call = 0;
+      ctx.getImageData = vi.fn((_x, _y, w: number, h: number) => {
+        const data = new Uint8ClampedArray(w * h * 4);
+        data.fill(call++ === 0 ? 10 : 200);
+        return { data, width: w, height: h };
+      }) as unknown as typeof ctx.getImageData;
+
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;
 
@@ -631,15 +655,13 @@ describe('MultiChannelCanvas', () => {
         await new Promise(r => setTimeout(r, 50));
       });
 
-      // The fake-blob 8-bit decode path produces all-zero samples (jsdom's
-      // mocked getImageData returns a zeroed Uint8ClampedArray), so every
-      // channel's min and max collapse to 0 — but each still arrives under its
-      // OWN key, which is what lets the context window them independently.
-      // `containerId` is undefined in DEFAULT_PROPS, so the key is ''.
+      // Decode order follows the fetchChannels array, so ch1 sees 10 and ch2
+      // sees 200. `containerId` is undefined in DEFAULT_PROPS, so the key is
+      // null — which the context reads as "always a new container".
       await waitFor(() => {
         expect(mockReportChannelRanges).toHaveBeenCalledWith(
-          { ch1: { min: 0, max: 0 }, ch2: { min: 0, max: 0 } },
-          ''
+          { ch1: { min: 10, max: 10 }, ch2: { min: 200, max: 200 } },
+          null
         );
       });
     });
@@ -815,7 +837,12 @@ describe('MultiChannelCanvas', () => {
       expect(fake.draw).toHaveBeenCalledTimes(1);
 
       // Simulate a Min/Max slider drag on ONE channel: context state changes,
-      // props don't. Only that channel's window moves.
+      // props don't. Only that channel's window moves. The scalar fallback is
+      // moved OFF 0/255 so the ch2 assertion below cannot pass by coincidence —
+      // with the defaults, "identity window" and "borrowed shared window" are
+      // numerically the same thing and a regression to borrowing survives.
+      mockWindowMin = 7;
+      mockWindowMax = 199;
       mockChannelWindows = {
         ch1: { min: 10, max: 200, rangeMax: 255, dataMin: 0 },
       };
@@ -914,5 +941,40 @@ describe('MultiChannelCanvas', () => {
       expect(screen.getByTestId('multi-channel-canvas')).toBeInTheDocument();
       expect(onLoad).toHaveBeenCalledWith(400, 300, 'ch1|ch2');
     });
+  });
+});
+
+// ── CPU composite path: one LUT per channel ─────────────────────────────────
+//
+// This path runs whenever WebGL2 is unavailable or the context is lost. It is
+// the half of the per-channel window fix that no pixel assertion covers, so a
+// regression to a single shared table here would silently restore the exact
+// bug — a narrow channel drawn through a wide channel's window — on every
+// machine without WebGL2.
+
+describe('MultiChannelCanvas — CPU composite windows', () => {
+  it("builds one LUT per channel, each from that channel's own window", async () => {
+    installSharedCanvasContext();
+    // No compositor => the component falls back to the 2-D path.
+    vi.mocked(createCompositor).mockReturnValue(null);
+    mockChannelWindows = {
+      ch1: { min: 2941, max: 4145, rangeMax: 4145, dataMin: 2941 },
+      ch2: { min: 489, max: 53927, rangeMax: 53927, dataMin: 489 },
+    };
+    const { fetchImpl } = makeSuccessfulFetch();
+    global.fetch = fetchImpl;
+    vi.mocked(buildLut).mockClear();
+
+    await act(async () => {
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      await new Promise(r => setTimeout(r, 50));
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(buildLut).mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    const calls = vi.mocked(buildLut).mock.calls;
+    expect(calls).toContainEqual([2941, 4145, 4145]);
+    expect(calls).toContainEqual([489, 53927, 53927]);
   });
 });
