@@ -110,8 +110,14 @@ let _hookState: {
 };
 
 function overrideHookState(
-  patch: Partial<typeof _hookState> & {
-    exportOptions?: Partial<typeof baseExportOptions>;
+  // `Omit` first: intersecting with a bare `Partial<typeof _hookState>` still
+  // declares `exportOptions` as the WHOLE options object, so the intersection
+  // demands both shapes at once and every partial patch is a type error. Tests
+  // patch one or two fields at a time; that is the whole point of the helper.
+  patch: Omit<Partial<typeof _hookState>, 'exportOptions'> & {
+    exportOptions?: Partial<typeof baseExportOptions> & {
+      pixelToMicrometerScale?: number;
+    };
   }
 ) {
   const { exportOptions: optsPatch, ...rest } = patch;
@@ -923,6 +929,43 @@ describe('AdvancedExportDialog', () => {
   // ── scale input validation ─────────────────────────────────────────────────
 
   describe('scale input validation', () => {
+    it('does not leave the box showing a value that is not the one exported', async () => {
+      // Driving the input from raw text is what makes "0.07" reachable on the
+      // way to "0.072", but it also means an out-of-range entry is KEPT on
+      // screen while the committed value stays behind. Without a blur that
+      // reconciles the two, the user reads 0 and exports 0.5, with nothing
+      // shown to say so.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: 0.5 },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+
+      await user.clear(input);
+      await user.type(input, '0'); // below SCALE_MIN_UM_PER_PX — never committed
+      expect(input.value).toBe('0');
+
+      await user.tab(); // leave the field
+
+      // Back to the truth: whatever the export will actually use.
+      expect(input.value).toBe('0.5');
+    });
+
+    it('keeps a partial entry on screen while it is still being typed', async () => {
+      // The blur reconciliation must not fire mid-typing, or "0." and "0.07"
+      // become unreachable again — the original bug.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+
+      await user.type(input, '0.07');
+      expect(input.value).toBe('0.07');
+    });
+
     it('clears the scale when input is emptied', async () => {
       overrideHookState({
         exportOptions: { pixelToMicrometerScale: 0.5 },
@@ -985,6 +1028,107 @@ describe('AdvancedExportDialog', () => {
         c => c[0].pixelToMicrometerScale > 1000
       );
       expect(outOfRangeCalls).toHaveLength(0);
+    });
+  });
+
+  // ── what the box actually SHOWS ────────────────────────────────────────────
+  //
+  // The tests above only ever inspected the calls the input made upward, which
+  // is why the field could be completely untypable without any of them failing.
+  // These assert the rendered value — the thing the user is looking at.
+
+  describe('scale input is typable', () => {
+    it('keeps a typed µm/px value in the box', async () => {
+      // THE reported bug. `value` was derived from the parsed number, so "0"
+      // (below the 0.001 minimum) was rejected and the field snapped back to
+      // empty — and every µm/px scale starts with a zero. Each accepted
+      // keystroke also re-rendered a new string, dropping the caret to the end,
+      // so characters typed at the front came out reversed.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.type(input, '0.072');
+      expect(input.value).toBe('0.072');
+    });
+
+    it('survives a lone leading zero mid-entry', async () => {
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.type(input, '0');
+      expect(input.value).toBe('0');
+    });
+
+    it('holds an out-of-range entry instead of erasing it', async () => {
+      // 0.0001 is below the minimum, but erasing it as the user types makes
+      // "0.00012" unreachable. Hold the text; simply do not commit the value.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.type(input, '0.0001');
+      expect(input.value).toBe('0.0001');
+    });
+
+    it('shows a scale that arrived from auto-fill', async () => {
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: 0.065 },
+      });
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await waitFor(() => expect(input.value).toBe('0.065'));
+    });
+
+    it('clears the box when the scale is cleared', async () => {
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: 0.5 },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.clear(input);
+      expect(input.value).toBe('');
+    });
+  });
+
+  describe('scale precision', () => {
+    it('keeps six decimals of a real ND2 calibration', async () => {
+      // Auto-fill writes calibration at full precision (a Nikon ND2 reports
+      // 0.0722222 µm/px). Rounding typed input to 3 decimals turned that into
+      // 0.072 the moment the user touched the field — a 0.3 % systematic error
+      // on every exported length, applied silently.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      await user.type(input, '0.072222');
+
+      const committed = _mockUpdateExportOptions.mock.calls
+        .map(c => c[0]?.pixelToMicrometerScale)
+        .filter((v): v is number => typeof v === 'number');
+      expect(committed.at(-1)).toBeCloseTo(0.072222, 6);
+      expect(input.value).toBe('0.072222');
+    });
+
+    it('does not advertise a step that rejects real calibrations', () => {
+      // step="0.001" makes 0.072222 a step mismatch, so the browser marks a
+      // correct calibration invalid.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      expect(input.getAttribute('step')).toBe('any');
     });
   });
 });
