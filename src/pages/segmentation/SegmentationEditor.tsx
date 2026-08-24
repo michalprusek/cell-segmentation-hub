@@ -1066,11 +1066,13 @@ const SegmentationEditor = () => {
   //     save wiped the label back out of the DB.
   //
   // An UNTRACKED, hand-drawn polyline has no trackId, and on a one-frame
-  // "snapshot" container it can never acquire one: the cross-frame tracker only
-  // births ids for polylines that existed at segmentation time, and the other
-  // source — forward propagation — has no later frame to write to. It is a valid
-  // target: its label lives on this frame and persists through the normal save,
-  // so drawing an MT by hand and typing it must NOT error with "no track".
+  // "snapshot" container no flow the UI triggers gives it one: the cross-frame
+  // tracker only births ids for polylines that existed at segmentation time,
+  // and the other source — forward propagation — has no later frame to write
+  // to. It is a valid target: its label lives on this frame and persists
+  // through the normal save (`mtType` survives every stage of the polygon
+  // validator), so drawing an MT by hand and typing it must NOT error with
+  // "no track".
   const handleChangeMtType = useCallback(
     async (polygonId: string, mtType: string | null) => {
       // Snapshot the target selection ONCE, before the await. A frame scrub or
@@ -1091,9 +1093,10 @@ const SegmentationEditor = () => {
       if (trackIds.length > 0) {
         // A tracked target needs the container id to reach its other frames.
         // `video.container` is null for a beat during a container switch —
-        // useVideoFrames keeps the PREVIOUS container's data until the new id
-        // matches — and the context menu is gated on `isPolyline` alone, so
-        // this is reachable. Stamping only the current frame and then reporting
+        // useVideoFrames derives it as `data.id === videoContainerId ? data
+        // : null`, and the query cache serves the previous container's data
+        // until the new id lands — and the context menu is gated on
+        // `isPolyline` alone, so this is reachable. Stamping only the current frame and then reporting
         // success would leave the rest of the track quietly unlabelled.
         if (!videoId) {
           logger.error(
@@ -1134,19 +1137,31 @@ const SegmentationEditor = () => {
         mtType
       );
       if (changed > 0) {
-        // A TRACKED target is already durable — setTrackType wrote every frame
-        // above — so its stamp must not enter the undo stack: undoing would
-        // revert this frame alone and the next autosave would persist a frame
-        // whose label disagrees with the rest of its own track. An UNTRACKED
-        // target's stamp IS the whole change, so it stays undoable.
-        editorRef.current.updatePolygons(updated, trackIds.length === 0);
+        // Always into the history — no `addToHistory: false` here, on either
+        // path. The editor has TWO save paths reading TWO different sources:
+        // the manual save sends `polygons`, but the image-switch autosave sends
+        // `history[historyIndex]`. A stamp kept out of the history therefore
+        // survives Save and is destroyed by the next frame scrub, which
+        // autosaves the pre-stamp snapshot over a row `setTrackType` has
+        // already labelled — every frame of the track ends up labelled except
+        // the one the user was looking at.
+        //
+        // The cost is on the tracked path: an Undo reverts this frame's copy
+        // while the backend's cross-frame write stands, so the frame disagrees
+        // with its own track until re-applied. That is a worse trade to take
+        // the other way round — it needs a deliberate Undo, whereas the
+        // autosave hazard fires on ordinary navigation. Undoing the backend
+        // write properly means re-issuing the inverse setTrackType, which the
+        // generic undo stack has no way to express.
+        editorRef.current.updatePolygons(updated);
       }
 
       // Nothing was written anywhere: no track to write across, and the
       // right-clicked polygon is not on this frame. That happens when the
-      // polygons are replaced while the type submenu is open (a resegment, a
-      // background reload) or across the await in "New label…", which creates
-      // the label and then assigns it. Reporting success there would be a lie.
+      // polygons are replaced while the type submenu is open — a resegment or a
+      // background reload — including across the await in "New label…", which
+      // persists the palette entry before assigning it and so widens the window
+      // for one. Reporting success there would be a lie.
       if (trackIds.length === 0 && matched === 0) {
         logger.warn(
           `Microtubule type change hit no target: polygon ${polygonId} is not on the current frame`
@@ -1161,8 +1176,9 @@ const SegmentationEditor = () => {
       // or they already carried the requested label while this frame's copy had
       // been undone. The two are not separable from here — the response carries
       // no "matched" count — so this stays a log line rather than something
-      // shown to the user. If it ever needs to be actionable, the backend has
-      // both numbers already and should return the second one too.
+      // shown to the user. Making it actionable means teaching the backend to
+      // count matches as well as writes — `setPolygonsTrackType` returns only
+      // `changed` today, so the FE and BE twins have diverged on exactly this.
       if (framesAffected === 0 && changed > 0) {
         logger.warn(
           `setTrackType wrote no frames for track(s) ${trackIds.join(', ')} on video ${videoId} — either the other frames already carried this label, or they are now stale`

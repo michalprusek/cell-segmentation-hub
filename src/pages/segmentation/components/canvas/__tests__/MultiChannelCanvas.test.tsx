@@ -78,17 +78,22 @@ let mockChannelOpacities: Record<string, number> = {};
 // Must be a STABLE reference: it sits in the decode effect's dependency
 // array, so a fresh fn each render would re-trigger the fetch effect forever.
 const mockReportChannelRanges = vi.fn();
-// Per-channel windows, keyed by channel name. Empty by default: the component
-// falls back to the 8-bit identity window for a channel it has no entry for,
-// which is what these fixtures' all-zero samples want.
+// Per-channel windows, keyed by channel name. Defaulted for both fixture
+// channels because that is the production invariant: the decode's
+// `setDecodeVersion` and `reportChannelRanges` land in ONE React commit, so a
+// channel being composited always has a window. A channel WITHOUT one is now
+// skipped rather than drawn, so an empty default would mean the fixtures paint
+// nothing at all.
+const EIGHT_BIT = { min: 0, max: 255, rangeMax: 255, dataMin: 0 };
 let mockChannelWindows: Record<
   string,
   { min: number; max: number; rangeMax: number; dataMin: number }
-> = {};
+> = { ch1: EIGHT_BIT, ch2: EIGHT_BIT };
 
 vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
   useImageDisplay: () => ({
     channelWindows: mockChannelWindows,
+    fallbackWindow: { min: 0, max: 255, rangeMax: 255, dataMin: 0 },
     windowMin: mockWindowMin,
     windowMax: mockWindowMax,
     windowRangeMax: mockWindowRangeMax,
@@ -247,7 +252,7 @@ describe('MultiChannelCanvas', () => {
     mockBrightness = 100;
     mockContrast = 100;
     mockChannelOpacities = {};
-    mockChannelWindows = {};
+    mockChannelWindows = { ch1: EIGHT_BIT, ch2: EIGHT_BIT };
     originalFetch = global.fetch;
     originalCreateImageBitmap = global.createImageBitmap;
     // clearAllMocks wipes calls, not implementations — without this a fake
@@ -858,13 +863,10 @@ describe('MultiChannelCanvas', () => {
         max: 200,
         rangeMax: 255,
       });
-      // ch2 has no window yet, so it draws through the 8-bit identity rather
-      // than borrowing ch1's — the borrowing IS the bug.
-      expect(channels.find(c => c.channel === 'ch2')?.window).toEqual({
-        min: 0,
-        max: 255,
-        rangeMax: 255,
-      });
+      // ch2 has no window, so it is not drawn at all — it must never borrow
+      // ch1's (the borrowing IS the bug), and drawing it through an 8-bit
+      // identity would blow a 16-bit channel to white under `lighter`.
+      expect(channels.find(c => c.channel === 'ch2')).toBeUndefined();
       // No refetch (decode cache reused) and no new canvas element, so no new
       // GL context: a drag is a uniform update, nothing more.
       expect(fetchImpl).toHaveBeenCalledTimes(2);
