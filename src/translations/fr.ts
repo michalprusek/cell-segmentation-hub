@@ -2180,8 +2180,6 @@ export default {
       deleteFailed: 'Échec de la suppression du label',
       loadFailed: 'Échec du chargement des labels de type',
       duplicateName: 'Un label portant ce nom existe déjà',
-      noTrack:
-        'Ce microtubule n’a pas encore de piste — lancez d’abord le suivi.',
     },
     color: {
       label: 'Couleur :',
@@ -2306,6 +2304,7 @@ export default {
     },
     windowLevel: {
       title: 'Affichage',
+      channel: 'Canal',
       min: 'Min',
       max: 'Max',
       brightness: 'Luminosité',
