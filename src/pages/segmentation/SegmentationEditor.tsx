@@ -22,7 +22,11 @@ import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
 import { transformSegmentationPolygons } from './utils/transformSegmentationPolygons';
-import { resolveTargetTrackIds } from './utils/mtTypeTargets';
+import {
+  resolveTargetTrackIds,
+  resolveTargetPolygonIds,
+  applyMtTypeToPolygons,
+} from './utils/mtTypeTargets';
 import { usePolygonHandlers } from './hooks/usePolygonHandlers';
 import { useSegmentationLoader } from './hooks/useSegmentationLoader';
 import { useResegment } from './hooks/useResegment';
@@ -1046,37 +1050,144 @@ const SegmentationEditor = () => {
     [toggleMultiSelect, clearMultiSelect]
   );
 
-  // Assign (or clear) a microtubule type label. Whole-track semantics: resolves
-  // the target polygons' trackIds and sets `mtType` on every frame via the
-  // backend, then reloads so the current frame recolours. When ≥2 MTs are
-  // multi-selected the label applies to all of them; otherwise just the
-  // right-clicked polyline's track. Reads the selection through the ref so this
-  // callback stays identity-stable for the CanvasPolygon memo comparator.
+  // Assign (or clear) a microtubule type label. When ≥2 MTs are multi-selected
+  // the label applies to all of them; otherwise just the right-clicked polyline.
+  // Reads the selection through the ref so this callback stays identity-stable
+  // for the CanvasPolygon memo comparator.
+  //
+  // Two-part write:
+  //  1. Tracked MTs (have a `trackId`) → whole-track, cross-frame persistence via
+  //     the backend, so every frame of the track carries the label.
+  //  2. The current frame's polygons are stamped OPTIMISTICALLY in the editor
+  //     state. This is what makes the panel/canvas recolour immediately AND keeps
+  //     `mtType` in the polygons a later save serialises. The old code relied on a
+  //     network reload for this — but that reload is abortable (a race cancels the
+  //     GET), so the canvas kept the stale, type-less polygons and a subsequent
+  //     save wiped the label back out of the DB.
+  //
+  // An UNTRACKED, hand-drawn polyline has no trackId, and on a one-frame
+  // "snapshot" container no flow the UI triggers gives it one: the cross-frame
+  // tracker only births ids for polylines that existed at segmentation time,
+  // and the other source — forward propagation — has no later frame to write
+  // to. It is a valid target: its label lives on this frame and persists
+  // through the normal save (`mtType` survives every stage of the polygon
+  // validator), so drawing an MT by hand and typing it must NOT error with
+  // "no track".
   const handleChangeMtType = useCallback(
     async (polygonId: string, mtType: string | null) => {
-      const videoId = video.container?.id;
-      if (!videoId) return;
-      const polys = editorRef.current.getPolygons();
+      // Snapshot the target selection ONCE, before the await. A frame scrub or
+      // selection change during setTrackType must not skew which polygons we
+      // stamp — the cross-frame trackIds and the current-frame ids have to come
+      // from the same instant.
+      const selection = new Set(selectedPolygonIdsRef.current);
       const trackIds = resolveTargetTrackIds(
         polygonId,
-        selectedPolygonIdsRef.current,
-        polys
+        selection,
+        editorRef.current.getPolygons()
       );
-      if (trackIds.length === 0) {
-        toast.error(t('microtubule.type.noTrack'));
+      const targetPolygonIds = resolveTargetPolygonIds(polygonId, selection);
+      const videoId = video.container?.id;
+
+      // Cross-frame whole-track persistence — only for tracked targets.
+      let framesAffected: number | null = null;
+      if (trackIds.length > 0) {
+        // A tracked target needs the container id to reach its other frames.
+        // `video.container` is null for a beat during a container switch —
+        // useVideoFrames derives it as `data.id === videoContainerId ? data
+        // : null`, and the query cache serves the previous container's data
+        // until the new id lands — and the context menu is gated on
+        // `isPolyline` alone, so this is reachable. Stamping only the current frame and then reporting
+        // success would leave the rest of the track quietly unlabelled.
+        if (!videoId) {
+          logger.error(
+            'Cannot set microtubule type: no video container for a tracked polyline'
+          );
+          toast.error(t('microtubule.type.updateFailed'));
+          return;
+        }
+        try {
+          ({ framesAffected } = await apiClient.setTrackType(
+            videoId,
+            trackIds,
+            mtType
+          ));
+          evictVideoFrameSegmentationCaches();
+        } catch (error) {
+          logger.error('Failed to set microtubule type', error);
+          toast.error(t('microtubule.type.updateFailed'));
+          return;
+        }
+      }
+
+      // Optimistically stamp the current frame's target polygons (re-read for the
+      // latest geometry, but with the pre-await target sets). Match by polygon id
+      // OR trackId, so a tracked MT's current-frame polyline recolours in
+      // lock-step with the cross-frame write above and an untracked one still
+      // updates. Commit only when something actually changed — a no-op
+      // reassignment (or a mid-await frame scrub that leaves no matching polygon)
+      // must not dirty the frame or push an empty undo entry.
+      const {
+        polygons: updated,
+        changed,
+        matched,
+      } = applyMtTypeToPolygons(
+        editorRef.current.getPolygons(),
+        targetPolygonIds,
+        new Set(trackIds),
+        mtType
+      );
+      if (changed > 0) {
+        // Always into the history — no `addToHistory: false` here, on either
+        // path. The editor has TWO save paths reading TWO different sources:
+        // the manual save sends `polygons`, but the image-switch autosave sends
+        // `history[historyIndex]`. A stamp kept out of the history therefore
+        // survives Save and is destroyed by the next frame scrub, which
+        // autosaves the pre-stamp snapshot over a row `setTrackType` has
+        // already labelled — every frame of the track ends up labelled except
+        // the one the user was looking at.
+        //
+        // The cost is on the tracked path: an Undo reverts this frame's copy
+        // while the backend's cross-frame write stands, so the frame disagrees
+        // with its own track until re-applied. That is a worse trade to take
+        // the other way round — it needs a deliberate Undo, whereas the
+        // autosave hazard fires on ordinary navigation. Undoing the backend
+        // write properly means re-issuing the inverse setTrackType, which the
+        // generic undo stack has no way to express.
+        editorRef.current.updatePolygons(updated);
+      }
+
+      // Nothing was written anywhere: no track to write across, and the
+      // right-clicked polygon is not on this frame. That happens when the
+      // polygons are replaced while the type submenu is open — a resegment or a
+      // background reload — including across the await in "New label…", which
+      // persists the palette entry before assigning it and so widens the window
+      // for one. Reporting success there would be a lie.
+      if (trackIds.length === 0 && matched === 0) {
+        logger.warn(
+          `Microtubule type change hit no target: polygon ${polygonId} is not on the current frame`
+        );
+        toast.error(t('microtubule.type.updateFailed'));
         return;
       }
-      try {
-        await apiClient.setTrackType(videoId, trackIds, mtType);
-        evictVideoFrameSegmentationCaches();
-        await reloadSegmentation();
-        toast.success(t('microtubule.type.updated'));
-      } catch (error) {
-        logger.error('Failed to set microtubule type', error);
-        toast.error(t('microtubule.type.updateFailed'));
+
+      // The backend counts a frame only when its polygons actually CHANGED, so
+      // `framesAffected === 0` alongside a local change means one of two very
+      // different things: the track's other frames are stale (a real desync),
+      // or they already carried the requested label while this frame's copy had
+      // been undone. The two are not separable from here — the response carries
+      // no "matched" count — so this stays a log line rather than something
+      // shown to the user. Making it actionable means teaching the backend to
+      // count matches as well as writes — `setPolygonsTrackType` returns only
+      // `changed` today, so the FE and BE twins have diverged on exactly this.
+      if (framesAffected === 0 && changed > 0) {
+        logger.warn(
+          `setTrackType wrote no frames for track(s) ${trackIds.join(', ')} on video ${videoId} — either the other frames already carried this label, or they are now stale`
+        );
       }
+
+      toast.success(t('microtubule.type.updated'));
     },
-    [video.container, reloadSegmentation, evictVideoFrameSegmentationCaches, t]
+    [video.container, evictVideoFrameSegmentationCaches, t]
   );
 
   // Delete a label: the backend nulls every `mtType` reference to it, so evict

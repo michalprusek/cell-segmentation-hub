@@ -63,6 +63,13 @@ export interface CompositorChannel {
   color: [number, number, number];
   /** 0-1. Multiplies the tinted result, matching the CPU path's `scale`. */
   opacity: number;
+  /** THIS channel's window/level. Per channel, not per draw: channels in one
+   *  composite differ in dynamic range by more than an order of magnitude (an
+   *  IRM channel spanning ~1200 counts beside a fluorescence channel spanning
+   *  53000), and a single shared window renders the narrow one as a flat field.
+   *  The loop in draw() already derived uniforms per channel; only the window
+   *  it read them from was global. */
+  window: CompositorWindow;
 }
 
 /** Window/level, in RAW SAMPLE UNITS (not normalised). Identical meaning to
@@ -87,7 +94,7 @@ export interface Compositor {
    * path's `globalCompositeOperation = 'lighter'`, so their order is
    * irrelevant. Safe to call on every frame and on every slider tick.
    */
-  draw(channels: CompositorChannel[], window: CompositorWindow): void;
+  draw(channels: CompositorChannel[]): void;
 
   /** Release textures, buffers, programs and the GL context. */
   dispose(): void;
@@ -582,7 +589,7 @@ export const createCompositor: CreateCompositor = (
       if (!contextLost) gl.viewport(0, 0, w, h);
     },
 
-    draw(channels: CompositorChannel[], win: CompositorWindow): void {
+    draw(channels: CompositorChannel[]): void {
       if (disposed || contextLost) return;
 
       gl.viewport(0, 0, canvas.width, canvas.height);
@@ -601,7 +608,7 @@ export const createCompositor: CreateCompositor = (
         const channel = channels[i];
         const texture = uploadChannel(channel);
         if (!texture) continue;
-        computeChannelUniforms(win, channel, scratch);
+        computeChannelUniforms(channel.window, channel, scratch);
         gl.uniform1f(uLo, scratch.lo);
         gl.uniform1f(uHi, scratch.hi);
         gl.uniform1f(uRange, scratch.range);

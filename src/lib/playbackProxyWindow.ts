@@ -68,10 +68,13 @@ export function observedProxyRanges(): Readonly<Record<string, number>> {
  * user narrowed the window to SEE into bands — exactly the detail a microtubule
  * measurement is looking for.
  *
- * Judged against the widest range among the VISIBLE channels, since one window
- * is applied to all of them and the coarsest decides. Only used once every
- * visible channel's real range is known; until then the container figure
- * stands in, which errs toward full depth.
+ * Judged against the widest range among the channels named in `channels`. Since
+ * windows are per channel now, production always names exactly one (or none, for
+ * an image with no channel set); the reduction stays because the answer for a
+ * SET still has to be its coarsest member — that is what
+ * {@link anyWindowNeedsFullDepth} composes. Only used once every named channel's
+ * real range is known; until then the container figure stands in, which errs
+ * toward full depth.
  *
  * Deliberately conservative at the edges: a zero-width window, and a container
  * with no range at all, both answer "use the original", because neither can be
@@ -100,4 +103,61 @@ export function windowNeedsFullDepth(
   const width = hi - lo;
   if (width <= 0) return true;
   return (width / rangeMax) * PROXY_LEVELS < MIN_LEVELS_IN_WINDOW;
+}
+
+/**
+ * Whether ANY visible channel's own window forces the original 16-bit PNG.
+ *
+ * One frame carries every channel, so the strictest channel decides: if the
+ * user has narrowed the IRM window to bring up faint filaments, the frame must
+ * arrive at full depth even though the fluorescence channels are still wide
+ * open. Each channel is judged against ITS OWN window and ITS OWN range.
+ *
+ * WHICH range, and why it matters. `observed` is the truth once a proxy has
+ * been fetched, because a proxy's encode range can sit BELOW the channel's data
+ * max and that is what quantises. But `observed` is filled ONLY from the
+ * `X-Proxy-Range` header, which arrives only on a response to a `repr=proxy`
+ * request — which this gate has to allow first. So on a cold registry the
+ * fallback has to be something a dim channel can actually pass, or the loop
+ * never closes. The container-wide figure is not: it is the BRIGHTEST channel's
+ * number, and judged against it any channel dimmer than an eighth of the
+ * container can never clear MIN_LEVELS_IN_WINDOW, no matter what the user does
+ * — the slider ceiling is that channel's own rangeMax. So the channel's own
+ * range is the fallback. (`rangeMax` is optional in the signature for tests
+ * only; a real `ChannelWindow` always carries one, and a channel that has
+ * reported nothing has no entry and is caught above.) The backend hits the same
+ * failure one granularity up — its container-wide `proxyRangeMax` bootstraps
+ * off the same request — and describes it in playbackProxyService.ts.
+ *
+ * With no visible channels there is nothing per-channel to judge, so the
+ * caller's fallback window — the one kept for images with no channel set — is
+ * measured against the container figure instead.
+ */
+export function anyWindowNeedsFullDepth(
+  windows: Readonly<
+    Partial<Record<string, { min: number; max: number; rangeMax?: number }>>
+  >,
+  containerRangeMax: number | null,
+  visibleChannels: readonly string[],
+  fallbackWindow: { min: number; max: number }
+): boolean {
+  if (visibleChannels.length === 0) {
+    return windowNeedsFullDepth(
+      fallbackWindow.min,
+      fallbackWindow.max,
+      containerRangeMax
+    );
+  }
+  return visibleChannels.some(channel => {
+    const win = windows[channel];
+    // A channel whose window has not been reported yet cannot be reasoned
+    // about; err toward the original, as every other edge case here does.
+    if (!win) return true;
+    return windowNeedsFullDepth(
+      win.min,
+      win.max,
+      win.rangeMax ?? containerRangeMax,
+      [channel]
+    );
+  });
 }

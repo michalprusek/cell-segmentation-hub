@@ -2190,8 +2190,6 @@ export default {
       deleteFailed: 'Label konnte nicht gelöscht werden',
       loadFailed: 'Typ-Labels konnten nicht geladen werden',
       duplicateName: 'Ein Label mit diesem Namen existiert bereits',
-      noTrack:
-        'Dieser Mikrotubulus hat noch keinen Track — führen Sie zuerst das Tracking aus.',
     },
     color: {
       label: 'Farbe:',
@@ -2316,6 +2314,7 @@ export default {
     },
     windowLevel: {
       title: 'Anzeige',
+      channel: 'Kanal',
       min: 'Min',
       max: 'Max',
       brightness: 'Helligkeit',
