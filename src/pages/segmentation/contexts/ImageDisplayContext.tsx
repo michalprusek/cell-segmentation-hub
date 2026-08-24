@@ -89,7 +89,7 @@ interface ImageDisplayState {
    *  were invisible underneath their own polylines. Channels differ in dynamic
    *  range by more than an order of magnitude, so each needs its own window;
    *  this is also what ImageJ does for a composite stack. */
-  channelWindows: Record<string, ChannelWindow>;
+  channelWindows: Readonly<Partial<Record<string, ChannelWindow>>>;
   /** Which channel the Display panel's Min/Max sliders edit, and which one the
    *  scalar `window*` fields below project. Null = {@link FALLBACK_CHANNEL}. */
   activeWindowChannel: string | null;
@@ -106,12 +106,10 @@ interface ImageDisplayContextValue extends ImageDisplayState {
    *  ever need one at a time (the Display panel's sliders, and the proxy gate's
    *  no-channel fallback). A VIEW of `channelWindows[windowChannel]`, never a
    *  second copy: every write goes through `channelWindows`. */
-  windowMin: number;
-  windowMax: number;
+  readonly windowMin: number;
+  readonly windowMax: number;
   /** Slider ceiling for the active channel = its brightest sample so far. */
-  windowRangeMax: number;
-  /** Slider floor for the active channel = its dimmest sample so far. */
-  dataMin: number;
+  readonly windowRangeMax: number;
   setFrameIndex: (frameIndex: number) => void;
   setChannel: (channel: string | null) => void;
   /** Toggle whether `channel` is composited onto the canvas. The order
@@ -146,7 +144,7 @@ interface ImageDisplayContextValue extends ImageDisplayState {
    *  leaves the others exactly where the user put them. */
   reportChannelRanges: (
     ranges: Record<string, { min: number; max: number }>,
-    containerKey: string
+    containerKey: string | null
   ) => void;
   /** Choose which channel the Min/Max sliders edit. Null restores the default
    *  pick (the segmentation source). */
@@ -191,7 +189,16 @@ const DEFAULT_STATE: ImageDisplayState = {
  */
 function resolveWindowChannel(s: ImageDisplayState): string {
   const { activeWindowChannel, channelWindows, visibleChannels, channel } = s;
-  if (activeWindowChannel && activeWindowChannel in channelWindows) {
+  // The pick must still be VISIBLE, not merely still have a window. Hiding a
+  // channel leaves its window in the map (only a container switch sweeps
+  // those), so without this test the sliders stayed bound to a channel nothing
+  // draws: no tab read as selected, and once one channel was left the tab row
+  // disappeared entirely while the sliders went on editing the hidden one.
+  if (
+    activeWindowChannel &&
+    visibleChannels.includes(activeWindowChannel) &&
+    activeWindowChannel in channelWindows
+  ) {
     return activeWindowChannel;
   }
   if (
@@ -206,11 +213,11 @@ function resolveWindowChannel(s: ImageDisplayState): string {
 
 /** Every window back to its channel's own [dataMin, rangeMax]. */
 function refitAllWindows(
-  windows: Record<string, ChannelWindow>
-): Record<string, ChannelWindow> {
-  const out: Record<string, ChannelWindow> = {};
+  windows: Readonly<Partial<Record<string, ChannelWindow>>>
+): Partial<Record<string, ChannelWindow>> {
+  const out: Partial<Record<string, ChannelWindow>> = {};
   for (const [channel, w] of Object.entries(windows)) {
-    out[channel] = { ...w, min: w.dataMin, max: w.rangeMax };
+    if (w) out[channel] = { ...w, min: w.dataMin, max: w.rangeMax };
   }
   return out;
 }
@@ -235,7 +242,7 @@ function applyRanges(
   refitAll: boolean,
   dropUnlisted: boolean
 ): ImageDisplayState {
-  const next: Record<string, ChannelWindow> = dropUnlisted
+  const next: Partial<Record<string, ChannelWindow>> = dropUnlisted
     ? {}
     : { ...s.channelWindows };
   let changed = dropUnlisted
@@ -262,6 +269,21 @@ function applyRanges(
     }
     const rangeMax = Math.max(current.rangeMax, hi);
     const dataMin = Math.min(current.dataMin, lo);
+    // A first frame that decoded flat (an unilluminated channel of a
+    // multi-channel stack reports min === max) fits to the sanitisation floor,
+    // 0..1. The widening branch below only moves the BOUNDS, so that window
+    // would stand for the rest of the container and clamp every later frame to
+    // white. Re-fit it once a frame arrives with real range — but only while it
+    // is still the untouched full extent, so a window the user deliberately
+    // collapsed on real data is never overwritten.
+    const untouched =
+      current.min === current.dataMin && current.max === current.rangeMax;
+    const noRealRangeYet = current.rangeMax - current.dataMin <= 1;
+    if (untouched && noRealRangeYet && hi > lo) {
+      next[channel] = { min: lo, max: hi, rangeMax, dataMin };
+      changed = true;
+      continue;
+    }
     if (rangeMax === current.rangeMax && dataMin === current.dataMin) continue;
     next[channel] = { ...current, rangeMax, dataMin };
     changed = true;
@@ -563,9 +585,15 @@ export function ImageDisplayProvider({
   const reportChannelRanges = useCallback(
     (
       ranges: Record<string, { min: number; max: number }>,
-      containerKey: string
+      containerKey: string | null
     ) => {
-      const isNewContainer = lastContainerKeyRef.current !== containerKey;
+      // A null key means "no container id to compare", which has to read as a
+      // NEW container every time. Folding it to '' instead made two different
+      // id-less videos share one key, so the second inherited the first's
+      // window over data it does not describe — the same flat-field failure
+      // this per-channel work exists to remove.
+      const isNewContainer =
+        containerKey === null || lastContainerKeyRef.current !== containerKey;
       lastContainerKeyRef.current = containerKey;
       setState(s => applyRanges(s, ranges, isNewContainer, isNewContainer));
     },
@@ -616,7 +644,6 @@ export function ImageDisplayProvider({
       windowMin: activeWindow.min,
       windowMax: activeWindow.max,
       windowRangeMax: activeWindow.rangeMax,
-      dataMin: activeWindow.dataMin,
       windowChannel,
       setFrameIndex,
       setChannel,

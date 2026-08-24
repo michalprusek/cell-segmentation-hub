@@ -76,7 +76,7 @@ describe('ImageDisplayProvider + useImageDisplay', () => {
       expect(result.current.windowMin).toBe(0);
       expect(result.current.windowMax).toBe(255);
       expect(result.current.windowRangeMax).toBe(255);
-      expect(result.current.dataMin).toBe(0);
+      expect(result.current.channelWindows['']?.dataMin).toBe(0);
       expect(result.current.brightness).toBe(100);
       expect(result.current.contrast).toBe(100);
     });
@@ -763,6 +763,7 @@ describe('per-channel window/level', () => {
     });
 
     act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
       result.current.reportChannelRanges(ranges, 'container-1');
     });
     act(() => {
@@ -788,6 +789,7 @@ describe('per-channel window/level', () => {
     });
 
     act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
       result.current.reportChannelRanges(ranges, 'container-1');
       result.current.setActiveWindowChannel('WD_LED_IRM');
     });
@@ -795,11 +797,11 @@ describe('per-channel window/level', () => {
       result.current.setWindow(3000, 3800);
     });
 
-    expect(result.current.channelWindows.WD_LED_IRM.min).toBe(3000);
-    expect(result.current.channelWindows.WD_LED_IRM.max).toBe(3800);
+    expect(result.current.channelWindows.WD_LED_IRM?.min).toBe(3000);
+    expect(result.current.channelWindows.WD_LED_IRM?.max).toBe(3800);
     // Untouched — this is the whole point.
-    expect(result.current.channelWindows.TIRF_491.min).toBe(489);
-    expect(result.current.channelWindows.TIRF_491.max).toBe(53927);
+    expect(result.current.channelWindows.TIRF_491?.min).toBe(489);
+    expect(result.current.channelWindows.TIRF_491?.max).toBe(53927);
   });
 
   it('clamps an edit to the ACTIVE channel bound, not to some global one', () => {
@@ -808,6 +810,7 @@ describe('per-channel window/level', () => {
     });
 
     act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
       result.current.reportChannelRanges(ranges, 'container-1');
       result.current.setActiveWindowChannel('WD_LED_IRM');
     });
@@ -815,7 +818,7 @@ describe('per-channel window/level', () => {
       result.current.setWindowMax(99999); // far past IRM's own ceiling
     });
 
-    expect(result.current.channelWindows.WD_LED_IRM.max).toBe(4145);
+    expect(result.current.channelWindows.WD_LED_IRM?.max).toBe(4145);
   });
 
   it('keeps a user window on a same-container scrub but widens that channel bound', () => {
@@ -824,6 +827,7 @@ describe('per-channel window/level', () => {
     });
 
     act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
       result.current.reportChannelRanges(ranges, 'container-1');
       result.current.setActiveWindowChannel('WD_LED_IRM');
     });
@@ -838,10 +842,10 @@ describe('per-channel window/level', () => {
       );
     });
 
-    expect(result.current.channelWindows.WD_LED_IRM.min).toBe(3000);
-    expect(result.current.channelWindows.WD_LED_IRM.max).toBe(3800);
-    expect(result.current.channelWindows.WD_LED_IRM.rangeMax).toBe(4400);
-    expect(result.current.channelWindows.WD_LED_IRM.dataMin).toBe(2900);
+    expect(result.current.channelWindows.WD_LED_IRM?.min).toBe(3000);
+    expect(result.current.channelWindows.WD_LED_IRM?.max).toBe(3800);
+    expect(result.current.channelWindows.WD_LED_IRM?.rangeMax).toBe(4400);
+    expect(result.current.channelWindows.WD_LED_IRM?.dataMin).toBe(2900);
   });
 
   it('auto-fits a channel switched on mid-session without disturbing the others', () => {
@@ -850,6 +854,7 @@ describe('per-channel window/level', () => {
     });
 
     act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
       result.current.reportChannelRanges(
         { WD_LED_IRM: ranges.WD_LED_IRM },
         'container-1'
@@ -864,10 +869,10 @@ describe('per-channel window/level', () => {
       result.current.reportChannelRanges(ranges, 'container-1');
     });
 
-    expect(result.current.channelWindows.TIRF_491.min).toBe(489);
-    expect(result.current.channelWindows.TIRF_491.max).toBe(53927);
-    expect(result.current.channelWindows.WD_LED_IRM.min).toBe(3000);
-    expect(result.current.channelWindows.WD_LED_IRM.max).toBe(3800);
+    expect(result.current.channelWindows.TIRF_491?.min).toBe(489);
+    expect(result.current.channelWindows.TIRF_491?.max).toBe(53927);
+    expect(result.current.channelWindows.WD_LED_IRM?.min).toBe(3000);
+    expect(result.current.channelWindows.WD_LED_IRM?.max).toBe(3800);
   });
 
   it('re-fits everything when the container changes', () => {
@@ -876,6 +881,7 @@ describe('per-channel window/level', () => {
     });
 
     act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
       result.current.reportChannelRanges(ranges, 'container-1');
       result.current.setActiveWindowChannel('WD_LED_IRM');
     });
@@ -905,6 +911,7 @@ describe('per-channel window/level', () => {
     });
 
     act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
       result.current.reportChannelRanges(ranges, 'container-1');
       result.current.setActiveWindowChannel('WD_LED_IRM');
     });
@@ -919,10 +926,10 @@ describe('per-channel window/level', () => {
       result.current.resetWindow();
     });
 
-    expect(result.current.channelWindows.WD_LED_IRM.min).toBe(2941);
-    expect(result.current.channelWindows.WD_LED_IRM.max).toBe(4145);
-    expect(result.current.channelWindows.TIRF_491.min).toBe(489);
-    expect(result.current.channelWindows.TIRF_491.max).toBe(53927);
+    expect(result.current.channelWindows.WD_LED_IRM?.min).toBe(2941);
+    expect(result.current.channelWindows.WD_LED_IRM?.max).toBe(4145);
+    expect(result.current.channelWindows.TIRF_491?.min).toBe(489);
+    expect(result.current.channelWindows.TIRF_491?.max).toBe(53927);
   });
 
   it('falls back to the pseudo-channel window when there are no channels', () => {
@@ -1030,5 +1037,204 @@ describe('which channel the sliders act on', () => {
 
     expect(result.current.windowChannel).toBe('DIC');
     expect(result.current.windowMax).toBe(900);
+  });
+});
+
+describe('a pick that stops being visible', () => {
+  const ranges = {
+    WD_LED_IRM: { min: 2941, max: 4145 },
+    TIRF_491: { min: 489, max: 53927 },
+  };
+
+  it('stops editing a channel the user has hidden', () => {
+    // Reported by review: the explicit-pick branch checked only that the
+    // channel still had a window, so hiding it left the Min/Max sliders bound
+    // to a channel nothing draws — with no tab highlighted, and with the tab
+    // row gone entirely once only one channel was left.
+    const { result } = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
+      result.current.setChannel('WD_LED_IRM');
+      result.current.reportChannelRanges(ranges, 'container-1');
+    });
+    act(() => {
+      result.current.setActiveWindowChannel('TIRF_491');
+    });
+    expect(result.current.windowChannel).toBe('TIRF_491');
+
+    act(() => {
+      result.current.toggleChannelVisibility('TIRF_491');
+    });
+
+    // Falls back to the segmentation source, which IS visible.
+    expect(result.current.windowChannel).toBe('WD_LED_IRM');
+    expect(result.current.windowMax).toBe(4145);
+  });
+
+  it('writes to the visible channel after the pick is dropped', () => {
+    const { result } = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
+      result.current.setChannel('WD_LED_IRM');
+      result.current.reportChannelRanges(ranges, 'container-1');
+      result.current.setActiveWindowChannel('TIRF_491');
+    });
+    act(() => {
+      result.current.toggleChannelVisibility('TIRF_491');
+    });
+    act(() => {
+      result.current.setWindowMax(3500);
+    });
+
+    expect(result.current.channelWindows.WD_LED_IRM?.max).toBe(3500);
+    // The hidden channel must not absorb the edit.
+    expect(result.current.channelWindows.TIRF_491?.max).toBe(53927);
+  });
+
+  it('restores the pick when the channel comes back', () => {
+    const { result } = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => {
+      result.current.setVisibleChannels(['WD_LED_IRM', 'TIRF_491']);
+      result.current.setChannel('WD_LED_IRM');
+      result.current.reportChannelRanges(ranges, 'container-1');
+      result.current.setActiveWindowChannel('TIRF_491');
+    });
+    act(() => {
+      result.current.toggleChannelVisibility('TIRF_491');
+    });
+    act(() => {
+      result.current.toggleChannelVisibility('TIRF_491');
+    });
+
+    expect(result.current.windowChannel).toBe('TIRF_491');
+  });
+});
+
+describe('a container that reports no id', () => {
+  it('never treats two id-less containers as the same one', () => {
+    // `containerId` is optional on the canvas, and keying an absent id as ''
+    // made two different videos share one key — so the second inherited the
+    // first's window over data it does not describe, which is the very failure
+    // this per-channel work exists to remove.
+    const { result } = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => {
+      result.current.setVisibleChannels(['ch1']);
+      result.current.reportChannelRanges({ ch1: { min: 200, max: 400 } }, null);
+    });
+    act(() => {
+      result.current.setWindow(250, 300);
+    });
+    act(() => {
+      // A different video, also without an id.
+      result.current.reportChannelRanges(
+        { ch1: { min: 5000, max: 60000 } },
+        null
+      );
+    });
+
+    expect(result.current.channelWindows.ch1).toEqual({
+      min: 5000,
+      max: 60000,
+      rangeMax: 60000,
+      dataMin: 5000,
+    });
+  });
+});
+
+describe('bounds only ever widen', () => {
+  it('does not shrink a channel ceiling or floor on a dimmer later frame', () => {
+    // Lost when the reportDataRange block was deleted; the behaviour survived
+    // in the code with nothing pinning it. Without this, scrubbing a long video
+    // to a dim frame collapses that channel's slider ceiling to the dim frame's
+    // max, so the next Max drag clamps against the collapsed value and Reset
+    // refits the composite to the dimmest frame ever seen.
+    const { result } = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => {
+      result.current.setVisibleChannels(['irm']);
+      result.current.reportChannelRanges(
+        { irm: { min: 2900, max: 4400 } },
+        'c'
+      );
+    });
+    act(() => {
+      result.current.setWindow(3000, 3800); // user takes control
+    });
+    act(() => {
+      // A dimmer, narrower frame of the same video.
+      result.current.reportChannelRanges(
+        { irm: { min: 3200, max: 3900 } },
+        'c'
+      );
+    });
+
+    expect(result.current.channelWindows.irm?.rangeMax).toBe(4400);
+    expect(result.current.channelWindows.irm?.dataMin).toBe(2900);
+  });
+});
+
+describe('a channel whose first frame decodes flat', () => {
+  it('re-fits it once a frame with real range arrives', () => {
+    // An unilluminated channel of a multi-channel stack reports min === max on
+    // its first frame. The widening branch moves only the bounds, so that
+    // zero-width window would stand for the whole container and clamp every
+    // later frame to white.
+    const { result } = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => {
+      result.current.setVisibleChannels(['dark']);
+      result.current.reportChannelRanges({ dark: { min: 0, max: 0 } }, 'c');
+    });
+    expect(result.current.channelWindows.dark?.max).toBe(1);
+
+    act(() => {
+      result.current.reportChannelRanges({ dark: { min: 40, max: 9000 } }, 'c');
+    });
+
+    expect(result.current.channelWindows.dark).toEqual({
+      min: 40,
+      max: 9000,
+      rangeMax: 9000,
+      dataMin: 0,
+    });
+  });
+
+  it('leaves a window the user deliberately collapsed alone', () => {
+    const { result } = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => {
+      result.current.setVisibleChannels(['irm']);
+      result.current.reportChannelRanges({ irm: { min: 0, max: 9000 } }, 'c');
+    });
+    act(() => {
+      result.current.setWindow(500, 500); // deliberate, and non-degenerate data
+    });
+    act(() => {
+      result.current.reportChannelRanges({ irm: { min: 0, max: 9500 } }, 'c');
+    });
+
+    // Re-fitting is only for a channel that never had a usable window; a user
+    // who collapsed one on real data keeps it.
+    expect(result.current.channelWindows.irm?.min).toBe(500);
+    expect(result.current.channelWindows.irm?.max).toBe(500);
+    expect(result.current.channelWindows.irm?.rangeMax).toBe(9500);
   });
 });

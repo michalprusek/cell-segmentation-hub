@@ -111,15 +111,30 @@ export function windowNeedsFullDepth(
  * One frame carries every channel, so the strictest channel decides: if the
  * user has narrowed the IRM window to bring up faint filaments, the frame must
  * arrive at full depth even though the fluorescence channels are still wide
- * open. Each channel is judged against ITS OWN window and ITS OWN proxy range —
- * the two things that determine how many levels it actually has.
+ * open. Each channel is judged against ITS OWN window and ITS OWN range.
+ *
+ * WHICH range, and why it matters. `observed` is the truth once a proxy has
+ * been fetched, because a proxy's encode range can sit BELOW the channel's data
+ * max and that is what quantises. But `observed` is filled ONLY from the
+ * `X-Proxy-Range` header, which arrives only on a response to a `repr=proxy`
+ * request — which this gate has to allow first. So on a cold registry the
+ * fallback has to be something a dim channel can actually pass, or the loop
+ * never closes. The container-wide figure is not: it is the BRIGHTEST channel's
+ * number, and judged against it any channel dimmer than an eighth of the
+ * container can never clear MIN_LEVELS_IN_WINDOW, no matter what the user does
+ * — the slider ceiling is that channel's own rangeMax. So the channel's own
+ * range is the fallback, and the container figure only stands in for a channel
+ * that has reported no range at all. (The backend describes the same handshake
+ * from its side in playbackProxyService.ts.)
  *
  * With no visible channels there is nothing per-channel to judge, so the
- * caller's fallback window (the one `reportDataRange` maintains for images that
- * have no channel set) is measured against the container figure instead.
+ * caller's fallback window — the one kept for images with no channel set — is
+ * measured against the container figure instead.
  */
 export function anyWindowNeedsFullDepth(
-  windows: Readonly<Record<string, { min: number; max: number }>>,
+  windows: Readonly<
+    Partial<Record<string, { min: number; max: number; rangeMax?: number }>>
+  >,
   containerRangeMax: number | null,
   visibleChannels: readonly string[],
   fallbackWindow: { min: number; max: number }
@@ -136,6 +151,11 @@ export function anyWindowNeedsFullDepth(
     // A channel whose window has not been reported yet cannot be reasoned
     // about; err toward the original, as every other edge case here does.
     if (!win) return true;
-    return windowNeedsFullDepth(win.min, win.max, containerRangeMax, [channel]);
+    return windowNeedsFullDepth(
+      win.min,
+      win.max,
+      win.rangeMax ?? containerRangeMax,
+      [channel]
+    );
   });
 }

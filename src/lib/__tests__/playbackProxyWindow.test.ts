@@ -185,3 +185,54 @@ describe('anyWindowNeedsFullDepth', () => {
     ).toBe(true);
   });
 });
+
+describe('the cold registry must not lock the proxy off', () => {
+  beforeEach(() => {
+    clearProxyRanges();
+  });
+
+  it('judges an un-observed channel by its own range, not the container union', () => {
+    // The closed loop this pins: `observed` is filled ONLY from the
+    // X-Proxy-Range header, which arrives only on a response to a repr=proxy
+    // request, which this gate has to allow first. Judging a dim channel's
+    // narrow window against the container-wide figure refuses the proxy
+    // forever, and the user cannot widen past that channel's own ceiling.
+    //
+    // Marika's container: IRM spans 2941..4145 while the container figure is
+    // 65535. 1204/65535*256 = 4.7 levels -> refused. Against IRM's own 4145:
+    // 1204/4145*256 = 74 levels -> fine, and it is 74 levels in truth.
+    const windows = {
+      WD_LED_IRM: { min: 2941, max: 4145, rangeMax: 4145 },
+      TIRF_491: { min: 489, max: 53927, rangeMax: 53927 },
+    };
+    expect(
+      anyWindowNeedsFullDepth(windows, 65535, ['WD_LED_IRM', 'TIRF_491'], {
+        min: 0,
+        max: 65535,
+      })
+    ).toBe(false);
+  });
+
+  it('still demands the original once a channel is genuinely narrowed', () => {
+    const windows = {
+      // A tenth of its own range — really would band.
+      WD_LED_IRM: { min: 3000, max: 3120, rangeMax: 4145 },
+    };
+    expect(
+      anyWindowNeedsFullDepth(windows, 65535, ['WD_LED_IRM'], {
+        min: 0,
+        max: 65535,
+      })
+    ).toBe(true);
+  });
+
+  it('prefers a real observed encode range over the channel range', () => {
+    // Once a proxy has actually been fetched, its header is the truth: the
+    // encode range can sit BELOW the data max, and that is what quantises.
+    noteProxyRange('dim', 1023);
+    const windows = { dim: { min: 0, max: 1177, rangeMax: 1177 } };
+    expect(
+      anyWindowNeedsFullDepth(windows, 65535, ['dim'], { min: 0, max: 65535 })
+    ).toBe(false);
+  });
+});

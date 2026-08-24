@@ -232,7 +232,7 @@ export default function MultiChannelCanvas({
   // and depending on it directly would recomposite the canvas for changes that
   // cannot affect the tone curve.
   const windowsKey = Object.entries(channelWindows)
-    .map(([c, w]) => `${c}:${w.min}:${w.max}:${w.rangeMax}`)
+    .map(([c, w]) => (w ? `${c}:${w.min}:${w.max}:${w.rangeMax}` : `${c}:-`))
     .join('|');
   const windowFor = useCallback(
     (channel: string): CompositorWindow => {
@@ -568,16 +568,27 @@ export default function MultiChannelCanvas({
       // from the parent-supplied reportChannelRanges/onLoad can't leave the
       // canvas blank. The key is the CONTAINER, not the channel set: ticking a
       // channel on must auto-fit that channel alone and leave the windows the
-      // user has already tuned on the others exactly where they are.
+      // user has already tuned on the others exactly where they are. An absent
+      // containerId stays NULL rather than being folded to '': two different
+      // id-less videos are not the same container, and treating them as one
+      // hands the second the first's window.
       setDecodeVersion(v => v + 1);
+      // Two try/catches, not one: a throw from reportChannelRanges leaves the
+      // decode committed but the windows not, so the frame paints through the
+      // 8-bit identity — worth naming separately from an onLoad failure, which
+      // costs only the parent's size bookkeeping.
       try {
-        reportChannelRanges(ranges, containerId ?? '');
-        onLoad?.(loaded[0].width, loaded[0].height, channelsKey);
+        reportChannelRanges(ranges, containerId ?? null);
       } catch (err) {
         logger.error(
-          'MultiChannelCanvas: onLoad/reportChannelRanges callback threw',
+          'MultiChannelCanvas: reportChannelRanges threw — this frame will paint through the default window',
           err
         );
+      }
+      try {
+        onLoad?.(loaded[0].width, loaded[0].height, channelsKey);
+      } catch (err) {
+        logger.error('MultiChannelCanvas: onLoad callback threw', err);
       }
     })().catch(err => {
       if (!controller.signal.aborted) {

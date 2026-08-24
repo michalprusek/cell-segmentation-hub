@@ -58,12 +58,17 @@ export interface TypeablePolygon extends TrackedPolygon {
  * polylines) OR by belonging to one of the target tracks (keeps a tracked MT's
  * current-frame polyline in lock-step with the cross-frame backend write).
  *
- * Returns the new array plus how many polygons actually changed, mirroring the
- * backend twin `setPolygonsTrackType`: a target already carrying the requested
- * value is a no-op (`changed` not incremented, reference preserved), so the
- * caller can skip `updatePolygons` and avoid dirtying the frame / pushing an
- * empty undo entry / tripping the CanvasPolygon memo. Pure — never mutates its
- * input; only genuinely changed polygons are shallow-copied.
+ * Returns the new array plus two counts. `changed` mirrors the backend twin
+ * `setPolygonsTrackType`: a target already carrying the requested value is a
+ * no-op (not counted, reference preserved), so the caller can skip
+ * `updatePolygons` and avoid dirtying the frame / pushing an empty undo entry /
+ * tripping the CanvasPolygon memo. `matched` counts targets that were FOUND at
+ * all, which is what separates "already had that label" (matched, unchanged —
+ * benign) from "the target is not on this frame" (nothing matched — the caller
+ * must not report success). The right-clicked id can go stale across an await:
+ * a resegment or a background reload replaces the frame's polygons while the
+ * type submenu is open. Pure — never mutates its input; only genuinely changed
+ * polygons are shallow-copied.
  *
  * This optimistic stamp is what recolours the canvas + panel immediately and —
  * crucially — keeps `mtType` in the polygons a later save serialises, instead of
@@ -74,9 +79,10 @@ export function applyMtTypeToPolygons<T extends TypeablePolygon>(
   targetPolygonIds: ReadonlySet<string>,
   targetTrackIds: ReadonlySet<string>,
   mtType: string | null
-): { polygons: T[]; changed: number } {
+): { polygons: T[]; changed: number; matched: number } {
   const next = mtType ?? undefined;
   let changed = 0;
+  let matched = 0;
   const updated = polygons.map(p => {
     const isTarget =
       targetPolygonIds.has(p.id) ||
@@ -84,6 +90,7 @@ export function applyMtTypeToPolygons<T extends TypeablePolygon>(
         p.trackId.length > 0 &&
         targetTrackIds.has(p.trackId));
     if (!isTarget) return p;
+    matched++;
     const current = typeof p.mtType === 'string' ? p.mtType : undefined;
     if (current === next) return p; // already that value — no-op
     changed++;
@@ -92,5 +99,5 @@ export function applyMtTypeToPolygons<T extends TypeablePolygon>(
     else copy.mtType = next;
     return copy;
   });
-  return { polygons: updated, changed };
+  return { polygons: updated, changed, matched };
 }
