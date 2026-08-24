@@ -45,6 +45,22 @@ import { MicrotubuleKymographsSection } from './components/MicrotubuleKymographs
 import { projectCanBuildKymograph } from './utils/kymographGating';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 
+/** Accepted range for the pixel→µm scale, in µm per pixel.
+ *  0.001 is 1 nm/px, finer than any light microscope resolves; 1000 is a
+ *  millimetre per pixel, coarser than any objective in use here. */
+const SCALE_MIN_UM_PER_PX = 0.001;
+const SCALE_MAX_UM_PER_PX = 1000;
+
+/** Reciprocal of the retained precision for a typed scale (1e6 = 6 decimals).
+ *
+ *  Was 1e3. Auto-fill writes the calibration straight from the image metadata
+ *  at full precision — a Nikon ND2 reports 0.0722222 µm/px — but typing in the
+ *  box rounded to 3 decimals, so merely touching the field silently degraded
+ *  that to 0.072: a 0.3 % systematic error on every exported length, applied
+ *  without a word to the user. Six decimals holds the calibrations these
+ *  instruments actually produce. */
+const SCALE_PRECISION = 1e6;
+
 interface AdvancedExportDialogProps {
   open: boolean;
   onClose: () => void;
@@ -126,6 +142,33 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       // explicitly keeps the auto-fill safe to re-run when `images`
       // resolves after the dialog has already opened.
       const hasUserTouchedScaleRef = useRef(false);
+
+      // The scale box is driven by the RAW TEXT the user typed, not by the
+      // parsed number.
+      //
+      // Deriving `value` from the number made the field unusable. Every µm/px
+      // scale starts with "0", but "0" parses to 0, which fails the >= 0.001
+      // guard, so the keystroke was discarded and the controlled value snapped
+      // back to '' — you could not type a leading zero at all. And each
+      // keystroke that WAS accepted re-rendered a different string, so the
+      // browser dropped the caret to the end of the field and further typing
+      // landed there: entering a digit at the front produced the number
+      // backwards.
+      //
+      // Keeping the text verbatim lets intermediate states ("0", "0.", "0.07")
+      // exist while only committing a value once it parses and is in range.
+      const [scaleText, setScaleText] = useState('');
+      // The last value THIS input pushed upward, so the adopt-effect below can
+      // tell an external change (auto-fill) from its own echo and leave the
+      // caret alone.
+      const lastPushedScaleRef = useRef<number | undefined>(undefined);
+
+      useEffect(() => {
+        const value = exportOptions.pixelToMicrometerScale;
+        if (value === lastPushedScaleRef.current) return;
+        lastPushedScaleRef.current = value;
+        setScaleText(value == null ? '' : String(value));
+      }, [exportOptions.pixelToMicrometerScale]);
 
       // Notify parent component when export state changes
       useEffect(() => {
@@ -304,44 +347,70 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                         <Input
                           id="scale-input"
                           type="number"
-                          step="0.001"
-                          min="0.001"
-                          max="1000"
+                          // "any", not "0.001": a real calibration is
+                          // 0.072222 µm/px, which a 0.001 step reports as a
+                          // step mismatch.
+                          step="any"
+                          min={SCALE_MIN_UM_PER_PX}
+                          max={SCALE_MAX_UM_PER_PX}
                           placeholder={t('export.scalePlaceholder')}
-                          value={exportOptions.pixelToMicrometerScale || ''}
+                          value={scaleText}
+                          // Leaving the field reconciles what is DISPLAYED with
+                          // what will actually be exported. Driving the box from
+                          // raw text is what makes "0.", "0.07" reachable on the
+                          // way to "0.072", but it also means an entry that never
+                          // commits — out of range, or still unparseable — stays
+                          // on screen indefinitely while the committed value sits
+                          // behind it. Typing `0` over an auto-filled 0.0724 left
+                          // the user reading 0 and exporting 0.0724, with nothing
+                          // to say so. Only on blur, never during typing, or the
+                          // partial entries become unreachable again.
+                          onBlur={() => {
+                            const committed =
+                              exportOptions.pixelToMicrometerScale;
+                            setScaleText(
+                              committed == null ? '' : String(committed)
+                            );
+                          }}
                           onChange={e => {
                             // Any interaction disables further auto-fill —
                             // including clearing the field, so a user who
                             // wipes the auto-suggested value doesn't get it
                             // silently re-applied on the next image refresh.
                             hasUserTouchedScaleRef.current = true;
-                            const value = e.target.value;
+                            const raw = e.target.value;
+                            // Always keep what was typed, even when it is not
+                            // yet a committable number — that is what makes
+                            // "0", "0." and "0.07" reachable on the way to
+                            // "0.072".
+                            setScaleText(raw);
 
-                            // Handle empty string
-                            if (value === '') {
+                            if (raw.trim() === '') {
+                              lastPushedScaleRef.current = undefined;
                               updateExportOptions({
                                 pixelToMicrometerScale: undefined,
                               });
                               return;
                             }
 
-                            const numValue = parseFloat(value);
-
-                            // Handle NaN case by not updating
-                            if (isNaN(numValue)) {
+                            const numValue = Number(raw);
+                            // Not a number yet ("-", "1e"): hold the text and
+                            // leave the committed value untouched.
+                            if (!Number.isFinite(numValue)) return;
+                            if (
+                              numValue < SCALE_MIN_UM_PER_PX ||
+                              numValue > SCALE_MAX_UM_PER_PX
+                            ) {
                               return;
                             }
 
-                            // Round to 3 decimal places to match input precision
                             const roundedValue =
-                              Math.round(numValue * 1000) / 1000;
-
-                            // Validate rounded value: enforce min 0.001 and max 1000
-                            if (roundedValue >= 0.001 && roundedValue <= 1000) {
-                              updateExportOptions({
-                                pixelToMicrometerScale: roundedValue,
-                              });
-                            }
+                              Math.round(numValue * SCALE_PRECISION) /
+                              SCALE_PRECISION;
+                            lastPushedScaleRef.current = roundedValue;
+                            updateExportOptions({
+                              pixelToMicrometerScale: roundedValue,
+                            });
                           }}
                           className="w-full"
                         />
