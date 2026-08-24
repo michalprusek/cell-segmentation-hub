@@ -16,7 +16,7 @@ import {
   type FrameMinimal,
 } from '../../hooks/useFrameWindowPrefetch';
 import { useDecodeAhead } from '../../hooks/useDecodeAhead';
-import { windowNeedsFullDepth } from '@/lib/playbackProxyWindow';
+import { anyWindowNeedsFullDepth } from '@/lib/playbackProxyWindow';
 import { canDecodeWebpGray } from '@/lib/webpGray';
 
 interface FrameWindowPrefetcherProps {
@@ -34,6 +34,7 @@ export default function FrameWindowPrefetcher({
     visibleChannels,
     channel,
     channelCoverage,
+    channelWindows,
     windowMin,
     windowMax,
     proxyRangeMax,
@@ -43,7 +44,10 @@ export default function FrameWindowPrefetcher({
   // budget and the HTTP cache on bytes nothing reads.
   const repr =
     canDecodeWebpGray() &&
-    !windowNeedsFullDepth(windowMin, windowMax, proxyRangeMax, visibleChannels)
+    !anyWindowNeedsFullDepth(channelWindows, proxyRangeMax, visibleChannels, {
+      min: windowMin,
+      max: windowMax,
+    })
       ? ('proxy' as const)
       : undefined;
 

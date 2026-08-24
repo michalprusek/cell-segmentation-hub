@@ -71,6 +71,7 @@ function makeChannel(
     height: 3,
     color: [255, 255, 255],
     opacity: 1,
+    window: { min: 0, max: 65535, rangeMax: 65535 },
     ...overrides,
   };
 }
@@ -577,19 +578,47 @@ describe('createCompositor — initialisation', () => {
 });
 
 describe('createCompositor — draw', () => {
+  it('gives each channel ITS OWN window uniforms in a single draw', () => {
+    // The bug this pins: one window shared by every channel. An IRM channel
+    // spanning 2941..4145 composited with a fluorescence channel spanning
+    // 489..53927 was drawn through the union, 489..53927, so the IRM content
+    // occupied ~2 % of the display range and read as a flat grey field.
+    const gl = createFakeGl();
+    const compositor = createCompositor(attachContext(gl))!;
+    gl.calls.length = 0;
+
+    compositor.draw([
+      makeChannel({
+        channel: 'WD_LED_IRM',
+        window: { min: 2941, max: 4145, rangeMax: 4145 },
+      }),
+      makeChannel({
+        channel: 'TIRF_491',
+        window: { min: 489, max: 53927, rangeMax: 53927 },
+      }),
+    ]);
+
+    // uniform1f writes arrive in draw order: 4 window uniforms per channel.
+    const los = named(gl, 'uniform1f')
+      .filter(c => (c.args[0] as { name: string }).name === 'uLo')
+      .map(c => c.args[1]);
+    const his = named(gl, 'uniform1f')
+      .filter(c => (c.args[0] as { name: string }).name === 'uHi')
+      .map(c => c.args[1]);
+    expect(los).toEqual([2941, 489]);
+    expect(his).toEqual([4145, 53927]);
+  });
+
   it('clears once, then issues exactly one draw call per channel', () => {
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
     gl.calls.length = 0;
 
-    compositor.draw(
-      [
-        makeChannel({ channel: 'DAPI' }),
-        makeChannel({ channel: 'GFP' }),
-        makeChannel({ channel: 'RFP' }),
-      ],
-      WINDOW
-    );
+    compositor.draw([
+      makeChannel({ channel: 'DAPI' }),
+      makeChannel({ channel: 'GFP' }),
+      makeChannel({ channel: 'RFP' }),
+    ]);
 
     expect(countOf(gl, 'clear')).toBe(1);
     expect(countOf(gl, 'drawArrays')).toBe(3);
@@ -605,7 +634,7 @@ describe('createCompositor — draw', () => {
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
     gl.calls.length = 0;
-    compositor.draw([makeChannel()], WINDOW);
+    compositor.draw([makeChannel()]);
 
     expect(named(gl, 'enable')[0].args).toEqual([GL_ENUMS.BLEND]);
     // ONE/ONE for RGB accumulates ('lighter'); ONE/ZERO for alpha keeps it at
@@ -626,11 +655,13 @@ describe('createCompositor — draw', () => {
     const compositor = createCompositor(attachContext(gl))!;
     gl.calls.length = 0;
 
-    compositor.draw([makeChannel({ color: [255, 0, 128], opacity: 0.5 })], {
-      min: 900,
-      max: 100,
-      rangeMax: 100000,
-    });
+    compositor.draw([
+      makeChannel({
+        color: [255, 0, 128],
+        opacity: 0.5,
+        window: { min: 900, max: 100, rangeMax: 100000 },
+      }),
+    ]);
 
     expect(floatUniforms(gl)).toEqual({
       uLo: 100,
@@ -652,12 +683,12 @@ describe('createCompositor — draw', () => {
     const compositor = createCompositor(attachContext(gl))!;
     const channel = makeChannel();
 
-    compositor.draw([channel], WINDOW);
+    compositor.draw([channel]);
     expect(countOf(gl, 'createTexture')).toBe(1);
     expect(countOf(gl, 'texImage2D')).toBe(1);
     expect(countOf(gl, 'texSubImage2D')).toBe(0);
 
-    compositor.draw([channel], WINDOW);
+    compositor.draw([channel]);
     expect(countOf(gl, 'createTexture')).toBe(1);
     expect(countOf(gl, 'texImage2D')).toBe(1);
     expect(countOf(gl, 'texSubImage2D')).toBe(0);
@@ -670,9 +701,9 @@ describe('createCompositor — draw', () => {
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
 
-    compositor.draw([makeChannel()], WINDOW);
+    compositor.draw([makeChannel()]);
     const nextFrame = makeChannel();
-    compositor.draw([nextFrame], WINDOW);
+    compositor.draw([nextFrame]);
 
     // makeChannel() builds a fresh array each call, so the second draw uploads
     // into the SAME texture rather than allocating another.
@@ -696,17 +727,14 @@ describe('createCompositor — draw', () => {
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
 
-    compositor.draw([makeChannel({ width: 4, height: 3 })], WINDOW);
-    compositor.draw(
-      [
-        makeChannel({
-          width: 8,
-          height: 6,
-          data: new Uint16Array(8 * 6),
-        }),
-      ],
-      WINDOW
-    );
+    compositor.draw([makeChannel({ width: 4, height: 3 })]);
+    compositor.draw([
+      makeChannel({
+        width: 8,
+        height: 6,
+        data: new Uint16Array(8 * 6),
+      }),
+    ]);
 
     expect(countOf(gl, 'texImage2D')).toBe(2);
     expect(countOf(gl, 'createTexture')).toBe(2);
@@ -720,9 +748,9 @@ describe('createCompositor — draw', () => {
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
 
-    compositor.draw([makeChannel({ data: new Uint16Array(4 * 3) })], WINDOW);
+    compositor.draw([makeChannel({ data: new Uint16Array(4 * 3) })]);
     gl.calls.length = 0;
-    compositor.draw([makeChannel({ data: new Uint8Array(4 * 3) })], WINDOW);
+    compositor.draw([makeChannel({ data: new Uint8Array(4 * 3) })]);
 
     expect(countOf(gl, 'deleteTexture')).toBe(1);
     expect(countOf(gl, 'texImage2D')).toBe(1);
@@ -736,10 +764,7 @@ describe('createCompositor — draw', () => {
     (_bits, makeData, internalFormat, type) => {
       const gl = createFakeGl();
       const compositor = createCompositor(attachContext(gl))!;
-      compositor.draw(
-        [makeChannel({ data: makeData() as Uint16Array })],
-        WINDOW
-      );
+      compositor.draw([makeChannel({ data: makeData() as Uint16Array })]);
       const args = named(gl, 'texImage2D')[0].args;
       expect(args[2]).toBe(internalFormat);
       expect(args[6]).toBe(GL_ENUMS.RED_INTEGER);
@@ -750,7 +775,7 @@ describe('createCompositor — draw', () => {
   it('sets NEAREST/CLAMP_TO_EDGE (integer textures are not filterable)', () => {
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
-    compositor.draw([makeChannel()], WINDOW);
+    compositor.draw([makeChannel()]);
     const params = named(gl, 'texParameteri').map(c => c.args.slice(1));
     expect(params).toEqual([
       [GL_ENUMS.TEXTURE_MIN_FILTER, GL_ENUMS.NEAREST],
@@ -768,7 +793,7 @@ describe('createCompositor — draw', () => {
       makeChannel({ channel: 'GFP' }),
     ];
 
-    for (let frame = 0; frame < 5; frame++) compositor.draw(channels, WINDOW);
+    for (let frame = 0; frame < 5; frame++) compositor.draw(channels);
 
     // Program/buffer/VAO built once; two textures total; 5 frames x 2 draws.
     expect(countOf(gl, 'createProgram')).toBe(1);
@@ -790,7 +815,7 @@ describe('createCompositor — draw', () => {
     compositor.setSize(100, 100);
     gl.calls.length = 0;
 
-    compositor.draw([makeChannel({ width: 4, height: 3 })], WINDOW);
+    compositor.draw([makeChannel({ width: 4, height: 3 })]);
 
     // The quad always maps the whole texture to the whole canvas; a mismatch
     // is a scale, not a crash.
@@ -802,7 +827,7 @@ describe('createCompositor — draw', () => {
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
     gl.calls.length = 0;
-    expect(() => compositor.draw([], WINDOW)).not.toThrow();
+    expect(() => compositor.draw([])).not.toThrow();
     expect(countOf(gl, 'clear')).toBe(1);
     expect(countOf(gl, 'drawArrays')).toBe(0);
   });
@@ -814,7 +839,7 @@ describe('createCompositor — draw', () => {
     gl.state.textureOk = false;
     gl.calls.length = 0;
 
-    expect(() => compositor.draw([makeChannel()], WINDOW)).not.toThrow();
+    expect(() => compositor.draw([makeChannel()])).not.toThrow();
     expect(countOf(gl, 'drawArrays')).toBe(0);
     expect(logger.error).toHaveBeenCalled();
   });
@@ -896,7 +921,7 @@ describe('createCompositor — context loss', () => {
     expect(compositor.isAlive()).toBe(false);
 
     gl.calls.length = 0;
-    expect(() => compositor.draw([makeChannel()], WINDOW)).not.toThrow();
+    expect(() => compositor.draw([makeChannel()])).not.toThrow();
     expect(gl.calls).toHaveLength(0);
   });
 
@@ -942,10 +967,10 @@ describe('createCompositor — dispose', () => {
     const canvas = attachContext(gl);
     const onContextLost = vi.fn();
     const compositor = createCompositor(canvas, onContextLost)!;
-    compositor.draw(
-      [makeChannel({ channel: 'DAPI' }), makeChannel({ channel: 'GFP' })],
-      WINDOW
-    );
+    compositor.draw([
+      makeChannel({ channel: 'DAPI' }),
+      makeChannel({ channel: 'GFP' }),
+    ]);
 
     compositor.dispose();
 
@@ -964,7 +989,7 @@ describe('createCompositor — dispose', () => {
   it('is safe to call twice and deletes nothing a second time', () => {
     const gl = createFakeGl();
     const compositor = createCompositor(attachContext(gl))!;
-    compositor.draw([makeChannel()], WINDOW);
+    compositor.draw([makeChannel()]);
 
     compositor.dispose();
     const after = {
@@ -988,7 +1013,7 @@ describe('createCompositor — dispose', () => {
     compositor.dispose();
     gl.calls.length = 0;
 
-    expect(() => compositor.draw([makeChannel()], WINDOW)).not.toThrow();
+    expect(() => compositor.draw([makeChannel()])).not.toThrow();
     expect(() => compositor.setSize(800, 600)).not.toThrow();
     expect(gl.calls).toHaveLength(0);
     expect(canvas.width).not.toBe(800);

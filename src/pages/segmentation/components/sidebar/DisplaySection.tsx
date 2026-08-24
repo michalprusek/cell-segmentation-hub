@@ -2,14 +2,20 @@
  * Sidebar card with four image-display sliders: Min, Max, Brightness,
  * Contrast. Each row is a Radix Slider paired with a numeric Input
  * (Input ↔ Slider sync follows the FrameSlider pattern). Brightness/
- * Contrast persist across frame and channel changes; Min/Max persist
- * across frame scrubs (fixing the old min/max-resets-per-frame annoyance)
- * but auto-refit to the new data range when the channel set changes.
+ * Contrast are global and persist across frame and channel changes.
  *
- * Min/Max are the ImageJ-style window/level cutoffs: MultiChannelCanvas
- * remaps the true (16-bit-aware) sample values through a LUT, and the
- * slider range auto-scales to each channel set's data range. Brightness/
- * Contrast apply via CSS `filter`. The two compose at draw time.
+ * Min/Max are the ImageJ-style window/level cutoffs and belong to ONE CHANNEL
+ * at a time — the tabs above them pick which. Channels in a composite differ in
+ * dynamic range by more than an order of magnitude, and a shared window makes
+ * the narrow one unreadable: an IRM channel spanning 2941..4145 shown through
+ * the 489..53927 its TIRF siblings need is a flat grey field, which is how a
+ * correct segmentation came to look like "MTs drawn where there is nothing".
+ * The tabs default to the segmentation source, so the channel the model ran on
+ * is the one the user is adjusting unless they say otherwise.
+ *
+ * MultiChannelCanvas remaps each channel's true (16-bit-aware) samples through
+ * its own LUT; Brightness/Contrast apply once, via CSS `filter`, on the
+ * composite. The two compose at draw time.
  */
 
 import { RotateCcw } from 'lucide-react';
@@ -80,14 +86,22 @@ export default function DisplaySection() {
     windowMin,
     windowMax,
     windowRangeMax,
+    windowChannel,
+    visibleChannels,
+    channelColors,
     brightness,
     contrast,
     setWindowMin,
     setWindowMax,
+    setActiveWindowChannel,
     setBrightness,
     setContrast,
     resetDisplay,
   } = useImageDisplay();
+
+  // Only worth the row when there is a choice to make. One channel (or none,
+  // for a plain image) means the sliders can only mean that channel anyway.
+  const showChannelTabs = visibleChannels.length > 1;
 
   return (
     <div className="w-full shrink-0 bg-white dark:bg-gray-800 border-l border-b border-gray-200 dark:border-gray-700">
@@ -107,6 +121,47 @@ export default function DisplaySection() {
         </Button>
       </div>
       <div className="p-4 space-y-3">
+        {showChannelTabs && (
+          <div className="space-y-1">
+            <span className="text-xs text-gray-700 dark:text-gray-300">
+              {t('editor.windowLevel.channel')}
+            </span>
+            <div
+              role="tablist"
+              aria-label={String(t('editor.windowLevel.channel'))}
+              className="flex flex-wrap gap-1"
+            >
+              {visibleChannels.map(ch => {
+                const active = ch === windowChannel;
+                return (
+                  <button
+                    key={ch}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setActiveWindowChannel(ch)}
+                    title={ch}
+                    className={
+                      'flex items-center gap-1 rounded px-2 py-1 text-xs max-w-full ' +
+                      (active
+                        ? 'bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-100'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700')
+                    }
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 shrink-0 rounded-full border border-gray-400"
+                      style={{
+                        backgroundColor: channelColors[ch] ?? '#FFFFFF',
+                      }}
+                    />
+                    <span className="truncate">{ch}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <DisplaySliderRow
           label={t('editor.windowLevel.min')}
           value={windowMin}
