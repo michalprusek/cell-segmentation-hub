@@ -2047,7 +2047,6 @@ export default {
       deleteFailed: '删除标签失败',
       loadFailed: '加载类型标签失败',
       duplicateName: '已存在同名标签',
-      noTrack: '该微管尚无轨迹 — 请先运行追踪。',
     },
     color: {
       label: '颜色：',
@@ -2162,6 +2161,7 @@ export default {
     },
     windowLevel: {
       title: '显示',
+      channel: '通道',
       min: '最小值',
       max: '最大值',
       brightness: '亮度',

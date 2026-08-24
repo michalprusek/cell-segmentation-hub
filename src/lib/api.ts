@@ -1901,13 +1901,22 @@ class ApiClient {
     videoId: string,
     trackIds: string[],
     mtType: string | null
-  ): Promise<{ framesAffected: number }> {
+  ): Promise<{ framesAffected: number | null }> {
     const response = await this.instance.patch(
       `/segmentation/videos/${videoId}/tracks/type`,
       { trackIds, mtType }
     );
     const data = this.extractData(response);
-    return { framesAffected: Number(data?.framesAffected ?? 0) };
+    // NULL, not 0, when the response carries no usable count. The caller reads
+    // 0 as "the backend wrote nothing", which is a real and diagnosable state;
+    // coercing an absent field to 0 would report that for every write the
+    // moment the response shape changed, and a non-numeric value coerced to NaN
+    // would silently disable the check instead (NaN === 0 is false).
+    const raw = (data as { framesAffected?: unknown } | null)?.framesAffected;
+    return {
+      framesAffected:
+        typeof raw === 'number' && Number.isFinite(raw) ? raw : null,
+    };
   }
 
   /** Read the project's microtubule type-label palette. */
