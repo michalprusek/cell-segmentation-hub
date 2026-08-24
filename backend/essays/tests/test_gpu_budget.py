@@ -1,8 +1,8 @@
 """The GPU cap must clear the model's working set — the setting that lost data.
 
 Until 2026-08-13 the worker capped its ``evaluate.py`` subprocess at 0.6 of the
-24 GB A5000 (14.13 GiB) while a v7 forward pass on a 2048x2048 well wants
-**16.36 GiB**. Sitting under the working set does not make a batch a lighter
+24 GB A5000 (14.13 GiB) while a v7 forward pass on a 2048x2048 well wanted
+16.36 GiB. Sitting under the working set does not make a batch a lighter
 neighbour: torch hit the ceiling on every position, released ~3.7 GiB of cached
 blocks back to the driver, and then had to win them back from a card it shares
 with the ml service and Maptimize. Losing that race raises OutOfMemoryError, and
@@ -10,13 +10,22 @@ the field saw one folder lose 255 wells in one run and 68 in the next.
 
 The failure is invisible to every other check — the config parses, the container
 is healthy, the run exits 0, and the results look like results. So the invariant
-is asserted here instead. These are measurements, not preferences; if the model
-or the card changes, re-measure and update the constants deliberately rather
-than letting a "safer-looking" smaller number quietly reintroduce the bug.
+is asserted here instead.
 
-Re-measure with: 6 consecutive predicts on a 2048x2048 frame inside the essays
-container, reading torch.cuda.max_memory_reserved() per position. The working
-set is flat once the cap clears it (identical at 16.49 / 17.67 / 20.02 GiB).
+**The model changed on 2026-08-17.** v5H needs a 1.41 GiB working set where v7
+needed 16.36, so the cap came down 0.75 -> 0.12 and the start gate 17 -> 4 GB.
+The invariant is unchanged and still the point of this file: the cap must sit
+ABOVE the working set with headroom, and must not creep back up to reserving a
+card three tenants share. These are measurements, not preferences — if the model
+or the card changes again, re-measure and move the constants deliberately rather
+than letting either a "safer-looking" smaller number or an "it worked before"
+larger one drift back in.
+
+Re-measure with: a real ``evaluate.py`` run over a multi-position 2048x2048 well
+inside the essays container, reading ``torch.cuda.max_memory_reserved()`` at the
+end. Sweep several caps: the working set is flat once the cap clears it (v5H
+measured identical at 17.99 / 4.80 / 2.88 / 1.92 GiB, with byte-identical
+results.csv and runtime within 1 s).
 
 Run with: pytest tests/ (no GPU needed — this reads configuration, not hardware).
 """
@@ -71,6 +80,34 @@ def test_cap_clears_the_working_set():
 def test_start_gate_clears_the_working_set():
     """Admitting a job with less free than it needs restarts the same churn."""
     assert essays_api.GPU_MIN_FREE_GB >= essays_api.GPU_WORKING_SET_GB
+
+
+def test_cap_keeps_real_headroom_over_the_working_set():
+    """Clearing the working set by a hair is not clearing it.
+
+    The cap sizes cuDNN's workspace, and a cap that only just exceeds the
+    measured demand leaves nothing for a well that runs slightly heavier than
+    the one that was measured. The deployed value is ~2x the working set;
+    this pins that intent so a later "optimisation" cannot shave it to 1.42.
+    """
+    assert _cap_gb() >= essays_api.GPU_WORKING_SET_GB * 1.5, (
+        f"cap {_cap_gb():.2f} GiB leaves under 50% headroom over the "
+        f"{essays_api.GPU_WORKING_SET_GB} GiB working set"
+    )
+
+
+def test_start_gate_covers_the_cap_plus_cuda_context():
+    """The gate admits a job; the cap then bounds it.
+
+    A gate below the cap admits a batch into less memory than it is licensed to
+    take, which is the same release-and-re-acquire race by another route. The
+    CUDA context (~0.4 GiB) sits outside the torch caching allocator and so
+    outside the cap, hence the margin.
+    """
+    assert essays_api.GPU_MIN_FREE_GB >= _cap_gb() + 0.4, (
+        f"start gate {essays_api.GPU_MIN_FREE_GB} GB does not cover the "
+        f"{_cap_gb():.2f} GiB cap plus its CUDA context"
+    )
 
 
 def test_cap_leaves_room_for_interactive_segmentation():

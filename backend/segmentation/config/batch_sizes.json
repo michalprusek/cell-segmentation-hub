@@ -60,7 +60,7 @@
         "memory_per_user_mb": 1500,
         "expected_concurrent_throughput": 80.0
       },
-      "note": "SegFormer-B0 SpheroMix model (1024x1024 input, 3.71M params). Vendor reports ~13ms / 79 img/s on L40S FP16; A5000 budget ~2x slower → ~30ms p95, ~40 img/s. Small encoder → low ~1.5GB footprint. Estimates pending A5000 benchmarking."
+      "note": "SegFormer-B0 SpheroMix model (1024x1024 input, 3.71M params). Vendor reports ~13ms / 79 img/s on L40S FP16; A5000 budget ~2x slower \u2192 ~30ms p95, ~40 img/s. Small encoder \u2192 low ~1.5GB footprint. Estimates pending A5000 benchmarking."
     },
     "mamba_unet": {
       "optimal_batch_size": 1,
@@ -102,21 +102,21 @@
         "memory_per_user_mb": 5500,
         "expected_concurrent_throughput": 40.0
       },
-      "note": "U-Net + MiT-B5 wound-healing model (256x256 input). Vendor reports 27.7ms / 100 img/s on L40S FP16; A5000 budget ~2x slower → ~75ms p95, ~35 img/s throughput. Memory bumped to 5500MB to cover MiT-B5's larger encoder footprint vs the prior ResNeXt-50 model."
+      "note": "U-Net + MiT-B5 wound-healing model (256x256 input). Vendor reports 27.7ms / 100 img/s on L40S FP16; A5000 budget ~2x slower \u2192 ~75ms p95, ~35 img/s throughput. Memory bumped to 5500MB to cover MiT-B5's larger encoder footprint vs the prior ResNeXt-50 model."
     },
     "microtubule": {
       "optimal_batch_size": 1,
       "max_safe_batch_size": 1,
-      "expected_throughput": 0.2,
-      "memory_limit_mb": 6500,
-      "p95_latency_ms": 8000.0,
+      "expected_throughput": 0.22,
+      "memory_limit_mb": 1500,
+      "p95_latency_ms": 9000.0,
       "production_optimized": false,
       "concurrent_processing": {
         "max_concurrent_users": 1,
-        "memory_per_user_mb": 6500,
-        "expected_concurrent_throughput": 0.2
+        "memory_per_user_mb": 1500,
+        "expected_concurrent_throughput": 0.22
       },
-      "note": "Microtubule v7 (DINOv3-L ViT-L/16 + DPT decoder + PySOAX postprocessing). DINOv3-L backbone is ~300M params and PySOAX is iterative (up to 5000 snake-evolution iterations per frame). Budget ~5-8s per frame on A5000 once warm; ~6.5 GB peak memory dominated by frozen DINOv3 activations at 448x448 FOV. Batch size pinned to 1 — frame-parallelism happens upstream via the queue."
+      "note": "Microtubule v5H (nnU-Net ResEnc-M + curvature-bounded instancer). Measured 2026-08-17 on an A5000: 4.0-4.4 s for a 1024x1024 frame carrying 65 microtubules, and 0.73 GiB peak VRAM -- FLAT at 2048x2048, because the network tiles at 512x512 instead of running a ViT over the whole frame. The 1500 MB here is that peak plus headroom for the CUDA context. Runtime is dominated by the single-threaded numpy instancer, so it scales with MT count rather than frame area. Batch size pinned to 1 -- frame-parallelism happens upstream via the queue. These numbers are SERVED over GET /api/v1/models and are what a VRAM-budget decision reads; the previous entry still described v7 (DINOv3-L + PySOAX, 6500 MB)."
     },
     "microcapsule": {
       "optimal_batch_size": 1,

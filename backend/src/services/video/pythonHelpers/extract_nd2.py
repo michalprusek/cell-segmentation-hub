@@ -30,6 +30,8 @@ import json
 import os
 import re
 import sys
+import threading
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -54,6 +56,40 @@ def _extract_workers() -> int:
     if env > 0:
         return env
     return min(4, os.cpu_count() or 2)
+
+
+def _registration_workers(workers: int) -> int:
+    """How many channel registrations may run CONCURRENTLY (<= ``workers``).
+
+    Registration is the memory hog of the extract: one ``estimate_translation``
+    allocates 6 full-frame float64 planes' worth of workspace (6*Y*X*8 bytes,
+    measured constant across 512², 1024² and 2048²) — 290 MB of RSS for a
+    single 2048x2048 frame, ~36x the 8 MB uint16 plane it is aligning, because
+    the phase correlation runs in float64 and complex128 at full frame size.
+    Running that on every encoder thread multiplies it by ``workers``, which is
+    what pushed the extract past a 4 GiB cgroup limit: with the gate removed,
+    peak RSS on a 2048² 2-channel stack measures 1.88 GB at ``workers=4`` and
+    2.90 GB at ``workers=8``, versus 0.43 GB for the same extract with
+    registration off.
+
+    PNG encoding, by contrast, is cheap in memory and is the reason the thread
+    pool exists, so it keeps all ``workers`` threads. Capping only the
+    registrations trades a little wall time for a bound that does not grow with
+    the core count of whatever host the container lands on. 2 keeps the FFTs
+    overlapped with encoding without stacking workspaces.
+
+    Purely a concurrency limit: the estimator, its thresholds and its per-frame
+    output are untouched, so results are identical at any value. Override with
+    ``ND2_REGISTER_WORKERS`` (clamped to ``1..workers``) if a host has memory to
+    spare and wants the throughput back.
+    """
+    try:
+        env = int(os.getenv("ND2_REGISTER_WORKERS", "0"))
+    except ValueError:
+        env = 0
+    if env > 0:
+        return max(1, min(env, workers))
+    return max(1, min(workers, 2))
 
 
 # A 1536-well plate is the practical ceiling for microscopy; anything past
@@ -414,13 +450,14 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
     """Write one PNG per (frame, channel) under ``frames_root/<TTTT>/``.
 
     ``arr_tcyx`` is a dask OR numpy ``(T, C, Y, X)`` array. Frames are streamed
-    one chunk at a time so peak memory is ~chunk frames rather than the whole
-    video (the dask path stays lazy until here), and the CPU-bound PNG encoding
-    is fanned across a thread pool (PIL releases the GIL during zlib). Each
-    chunk's frames are materialised SEQUENTIALLY — one dask compute at a time,
-    since the nd2-backed reader is not assumed thread-safe — then their PNGs are
-    encoded in parallel. ``on_frame()`` is called once per written frame for
-    progress accounting.
+    with a BOUNDED number in flight so peak memory is a small constant,
+    independent of ``T`` (the dask path stays lazy until here), and the
+    CPU-bound PNG encoding is fanned across a thread pool (PIL releases the GIL
+    during zlib). Frames are materialised SEQUENTIALLY in the calling thread —
+    one dask compute at a time, since the nd2-backed reader is not assumed
+    thread-safe — then their PNGs are encoded in parallel. ``on_frame()`` is
+    called once per written frame, in ascending frame order, for progress
+    accounting.
 
     When ``register`` is set and there is more than one channel, each channel
     is aligned to **channel 0** of the same frame by an integer translation
@@ -430,15 +467,47 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
     ``_save_position_tiff`` still archives the raw original). Returns
     ``{frameIndex: [[dy, dx] per channel]}`` (all-zero when ``register`` is off)
     for the caller to persist as a registration sidecar.
+
+    MEMORY BUDGET — this function OOM-killed a 4 GiB container on a 2-channel
+    2048x2048 ND2, so the bound is explicit and pinned by
+    ``tests/test_extract_nd2_memory.py``. Peak above interpreter baseline is
+
+        peak  ~=  (W + 1) * C * Y * X * 2 bytes        # frames in flight
+                + R * 6 * Y * X * 8 bytes              # registration workspace
+                + W * (PNG encode buffer ~ 2 * Y * X * 2 bytes)
+
+    At the geometry that caused the incident (C=2, Y=X=2048, W=4, R=2) that is
+    80 MB + 400 MB + ~65 MB; measured peak RSS is 0.76-0.81 GB against 1.88 GB
+    for the previous version, and 0.88 GB instead of 2.90 GB on an 8-worker
+    host.
+
+    with ``W = _extract_workers()`` and ``R = _registration_workers(W)``. NOTHING
+    in it scales with ``T``, ``C`` only multiplies the (small) frame term, and
+    the dominant term is the registration workspace — one ``estimate_translation``
+    call needs 6 full-frame float64 planes at once (measured 290 MB RSS at
+    2048²), which is ~36x the uint16 frame it is aligning. Two rules keep that
+    from multiplying out of control:
+
+    1. **At most ``W`` frames are ever materialised.** The previous version built
+       a whole ``max(W*2, 4)``-frame batch list before submitting any of it, and
+       the outgoing list stayed alive while the next was built — up to ``4*W``
+       frames (256 MB at W=4, C=2, 2048²). Frames are now submitted one at a
+       time and the reference is dropped at submit, so a frame is freed as soon
+       as its PNGs are on disk.
+    2. **At most ``R`` registrations run concurrently** (``_registration_workers``,
+       default 2). PNG encoding still uses all ``W`` threads; only the
+       FFT-heavy estimate is gated. This is a concurrency limit, not an
+       algorithm change — the estimator, its thresholds and its output are
+       untouched, so the PNGs and ``registration.json`` are byte-identical.
     """
     T = int(arr_tcyx.shape[0])
     C = int(arr_tcyx.shape[1])
     do_register = register and C > 1
     workers = max(1, min(_extract_workers(), T))
-    chunk = max(workers * 2, 4)
+    # Only the registration workspace is gated; see rule 2 above.
+    reg_gate = threading.Semaphore(_registration_workers(workers))
 
-    def _write_one(item):
-        t, frame_cyx = item
+    def _write_one(t: int, frame_cyx) -> tuple[int, list]:
         frame_dir = frames_root / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         offset_row = [[0, 0] for _ in range(C)]
@@ -446,7 +515,8 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
         for c in range(C):
             plane = frame_cyx[c]
             if do_register and c > 0:
-                dy, dx, _conf = estimate_translation(ref, plane)
+                with reg_gate:
+                    dy, dx, _conf = estimate_translation(ref, plane)
                 if dy or dx:
                     plane = shift_frame(plane, dy, dx)  # new array — no mutation
                 offset_row[c] = [dy, dx]
@@ -454,15 +524,27 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
         return t, offset_row
 
     offsets: dict[int, list] = {}
+    # FIFO queue of submitted-but-unfinished frames. Its length is what caps the
+    # number of materialised frames alive at once; draining in submission order
+    # keeps ``on_frame`` (and therefore the PROGRESS cadence) in frame order.
+    in_flight: deque = deque()
+
+    def _drain_one() -> None:
+        t, offset_row = in_flight.popleft().result()
+        offsets[t] = offset_row
+        if on_frame is not None:
+            on_frame()
+
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        for start in range(0, T, chunk):
-            stop = min(start + chunk, T)
-            # Sequential per-frame materialisation (read), parallel encode/write.
-            batch = [(t, np.asarray(arr_tcyx[t])) for t in range(start, stop)]
-            for t, offset_row in pool.map(_write_one, batch):
-                offsets[t] = offset_row
-                if on_frame is not None:
-                    on_frame()
+        for t in range(T):
+            if len(in_flight) >= workers:
+                _drain_one()
+            # The materialised frame is passed straight into submit(): no local
+            # name holds it, so the executor's work item is its only owner and
+            # it is freed the moment that item finishes.
+            in_flight.append(pool.submit(_write_one, t, np.asarray(arr_tcyx[t])))
+        while in_flight:
+            _drain_one()
     return offsets
 
 

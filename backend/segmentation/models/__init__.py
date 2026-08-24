@@ -16,9 +16,10 @@ try:
 except ImportError:
     WoundModel = None
 
-# Microtubule v7 model: optional import. The package brings in DINOv3 (gated,
-# needs HF_TOKEN) plus PySOAX postprocessing; ImportError here means transformers
-# isn't installed or the weights aren't downloaded yet.
+# Microtubule v5H model: optional import. The package is self-contained (an
+# nnU-Net ResEnc-M network with dynamic_network_architectures vendored beside
+# it), so an ImportError here means the vendored library or the instancer
+# failed to import — not a missing HuggingFace token.
 try:
     from .microtubule import MicrotubuleModel
 except ImportError:

@@ -3,7 +3,7 @@
 
 Point this at a folder of ``.nd2`` well recordings (one file per well, several
 positions, channels IRM / 488-in-solution / TIRF 488). Microtubules are
-**segmented on the IRM channel** — the one the v7 checkpoint was trained on —
+**segmented on the IRM channel** — the one the checkpoint was trained on —
 and the intensities are then **read off the TIRF channel** along the resulting
 centerlines. Per microtubule it produces a row in ``results.csv`` with:
 
@@ -21,12 +21,11 @@ Quick start
     pip install -r requirements.txt
     python evaluate.py --data /path/to/well_recordings --out results/
 
-The bundled v7 checkpoint is fully self-contained (it carries the DINOv3
-backbone weights), so **no HuggingFace token or download is required** — the
-backbone is rebuilt from the bundled config at ``config/dinov3_vitl16``.
+The v5H checkpoint is a complete ``state_dict`` with no frozen backbone, so
+**no HuggingFace token, download or network access is required** at any point.
 
-The 1.2 GB checkpoint itself is not stored in git; it is fetched once from the
-repository's GitHub Release on first run (or pass ``--weights /path/to.pt``).
+The 535 MB checkpoint itself is not stored in git; stage it once with
+``scripts/download-microtubule-weights.sh`` (or pass ``--weights /path/to.pth``).
 """
 from __future__ import annotations
 
@@ -50,7 +49,6 @@ from _mt_package import (  # noqa: E402  (needs _HERE on sys.path)
 )
 
 DEFAULT_WEIGHTS = default_weights()
-BUNDLED_BACKBONE_CONFIG = _HERE / "config" / "dinov3_vitl16"
 
 # A position that fails on the GPU is usually a passing squall rather than a
 # verdict on the data. Measured in production (RTX A5000, 2026-08): one
@@ -201,11 +199,13 @@ def build_args() -> argparse.Namespace:
     ap.add_argument("--out", type=Path, default=Path("results"),
                     help="Output directory (results.csv, overlays/, annotations/).")
     ap.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS,
-                    help="Path to microtubule_v7.pt (auto-downloaded if missing).")
+                    help="Path to microtubule_v5h.pth (staged out-of-band; see README).")
     ap.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu", "mps"],
                     help="Compute device.")
-    ap.add_argument("--threshold", type=float, default=0.5,
-                    help="Seed-probability threshold for the segmentation model.")
+    ap.add_argument("--threshold", type=float, default=None,
+                    help="Foreground probability cut. Default: the fitted value "
+                         "from params_v5h.json (0.97). The generic 0.5 other "
+                         "models use would flood the instancer.")
     # Measurement geometry. Shared with the project export's /mt-metrics
     # endpoint (models/mt_measure.py), so these two flags mean exactly what
     # ``thickness_px`` and ``margin_multiplier`` mean there. The former
@@ -232,25 +232,15 @@ def build_args() -> argparse.Namespace:
     ap.add_argument("--no-json", action="store_true", help="Skip annotation JSON.")
     ap.add_argument("--limit-wells", type=int, default=0,
                     help="Process at most N wells (0 = all). Useful for a test run.")
-    ap.add_argument("--online-backbone", action="store_true",
-                    help="Download the gated DINOv3 backbone from HuggingFace "
-                         "instead of rebuilding it offline from the bundled config "
-                         "(needs HF_TOKEN). Not normally required.")
     return ap.parse_args()
 
 
 def main() -> int:
     args = build_args()
 
-    # Default to the fully-offline, no-token backbone path.
-    if not args.online_backbone:
-        if not BUNDLED_BACKBONE_CONFIG.exists():
-            print(f"[error] bundled backbone config missing at "
-                  f"{BUNDLED_BACKBONE_CONFIG}", file=sys.stderr)
-            return 2
-        os.environ["MT_BACKBONE_CONFIG"] = str(BUNDLED_BACKBONE_CONFIG)
-        os.environ.setdefault("HF_HUB_OFFLINE", "1")
-        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    # v5H's checkpoint is a complete state_dict with no frozen backbone, so
+    # there is nothing to fetch and no token to supply. The --online-backbone
+    # flag and the bundled DINOv3 config it guarded went with the v7 model.
 
     from mt_pipeline import (iter_positions, find_nd2_files, measure_frame,
                              CsvWriter, FailureLog, parse_well_id, save_overlay,
@@ -273,7 +263,8 @@ def main() -> int:
         print(f"[error] {exc}", file=sys.stderr)
         return 2
     device = resolve_device(args.device)
-    print(f"[info] device={device}  threshold={args.threshold}  "
+    thr_label = "fitted (params_v5h.json)" if args.threshold is None else args.threshold
+    print(f"[info] device={device}  threshold={thr_label}  "
           f"mt_width={args.mt_width} bg_margin={args.bg_margin}")
     # Say out loud which channel plays which role. A run that segments the wrong
     # channel produces plausible-looking numbers, so the log has to be the place
@@ -321,9 +312,10 @@ def main() -> int:
         for pos in positions:
             ti = time.time()
             solution_median = float(np.median(pos.solution))
-            # IRM, not TIRF: the v7 checkpoint was trained on IRM frames
-            # (see microtubule/segment_mt.py). Feeding it TIRF produced
-            # confident, wrong centerlines for every run before 2026-08.
+            # IRM, not TIRF: the checkpoint was trained and validated on IRM
+            # frames (TIRF is architecturally supported but unvalidated).
+            # Feeding it TIRF produced confident, wrong centerlines for every
+            # run before 2026-08.
             attempt = _predict_with_retry(model, pos.irm, args.threshold,
                                           f"{well} pos{pos.position}", budget)
             if attempt.error is not None:

@@ -25,7 +25,10 @@ HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
 from channel_registration import (  # noqa: E402
+    _MAX_SHIFT_FRACTION,
+    _MIN_CONFIDENCE,
     estimate_translation,
+    estimate_translation_detailed,
     shift_frame,
     register_stack_to_first_channel,
     write_registration_sidecar,
@@ -160,6 +163,84 @@ def test_sidecar_noop_for_single_channel():
     d = tempfile.mkdtemp()
     write_registration_sidecar(d, ["only"], {0: [[0, 0]]})
     assert not (_P(d) / "registration.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# Outcome reasons. estimate_translation returns (0, 0, conf) for two opposite
+# outcomes — a genuine zero shift and a peak rejected as implausible — so the
+# 3-tuple alone cannot separate a success from a silent failure. The detailed
+# variant names the branch that produced the shift.
+# ---------------------------------------------------------------------------
+
+
+def test_detailed_reports_ok_for_an_applied_shift():
+    ref = _synthetic_frame(10)
+    est = estimate_translation_detailed(ref, shift_frame(ref, 7, -4))
+    assert (est.dy, est.dx) == (-7, 4)
+    assert est.reason == "ok"
+    assert est.confidence >= _MIN_CONFIDENCE
+    # On an accepted estimate the raw peak IS the applied shift.
+    assert (est.peak_dy, est.peak_dx) == (est.dy, est.dx)
+
+
+def test_detailed_reports_ok_for_a_genuine_zero_shift():
+    # Already aligned: a zero shift that is a SUCCESS, not a rejection.
+    ref = _synthetic_frame(11)
+    est = estimate_translation_detailed(ref, ref.copy())
+    assert (est.dy, est.dx) == (0, 0)
+    assert est.reason == "ok"
+    assert est.confidence >= _MIN_CONFIDENCE
+
+
+def test_detailed_reports_implausible_shift_with_high_confidence():
+    # A real, sharply-correlating offset that merely exceeds the plausibility
+    # cap. Zero shift + high confidence — byte-for-byte the same 3-tuple as
+    # "already aligned" above, which is why the reason has to exist.
+    ref = _synthetic_frame(12)
+    true_dy = int(_MAX_SHIFT_FRACTION * min(ref.shape)) + 20
+    est = estimate_translation_detailed(ref, shift_frame(ref, true_dy, 0))
+    assert (est.dy, est.dx) == (0, 0)
+    assert est.reason == "implausible_shift"
+    assert est.confidence >= _MIN_CONFIDENCE
+    # The discarded candidate survives so a caller can report WHAT was refused.
+    assert (est.peak_dy, est.peak_dx) == (-true_dy, 0)
+
+
+def test_detailed_reports_low_confidence_on_a_flat_frame():
+    ref = _synthetic_frame(13)
+    flat = np.full_like(ref, 200.0)
+    est = estimate_translation_detailed(ref, flat)
+    assert (est.dy, est.dx) == (0, 0)
+    assert est.reason == "low_confidence"
+    assert est.confidence < _MIN_CONFIDENCE
+
+
+def test_implausible_beats_low_confidence_when_both_would_fire():
+    # Branch ORDER is part of the contract: the plausibility guard runs first,
+    # so an estimate that is both far-out AND weak reports implausible_shift.
+    # Two unrelated scenes whose peak lands outside the cap.
+    a = np.random.RandomState(3).rand(128, 128) * 1000
+    b = np.random.RandomState(99).rand(128, 128) * 1000
+    est = estimate_translation_detailed(a, b)
+    assert (est.dy, est.dx) == (0, 0)
+    if abs(est.peak_dy) > _MAX_SHIFT_FRACTION * 128 or abs(
+        est.peak_dx
+    ) > _MAX_SHIFT_FRACTION * 128:
+        assert est.reason == "implausible_shift", (est.reason, est.confidence)
+    else:
+        assert est.reason == "low_confidence", (est.reason, est.confidence)
+
+
+def test_wrapper_returns_exactly_the_detailed_numbers():
+    # estimate_translation is a thin projection of the detailed result, so the
+    # shifts every existing caller sees cannot drift from the reported ones.
+    ref = _synthetic_frame(14)
+    for dy0, dx0 in [(6, -4), (0, 0), (40, 0)]:
+        mov = shift_frame(ref, dy0, dx0)
+        triple = estimate_translation(ref, mov)
+        est = estimate_translation_detailed(ref, mov)
+        assert triple == (est.dy, est.dx, est.confidence)
+        assert repr(triple[2]) == repr(est.confidence)
 
 
 if __name__ == "__main__":

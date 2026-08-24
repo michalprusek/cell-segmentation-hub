@@ -513,9 +513,9 @@ export default {
             'U-Net with MiT-B5 (SegFormer) encoder for binary wound segmentation in scratch-assay microscopy (~32 ms on A5000, 90% IoU on external test set)',
         },
         microtubule: {
-          name: 'Microtubule (DINOv3 + PySOAX)',
+          name: 'Microtubule (ResEnc-M + curvature instancer)',
           description:
-            'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT fusion produces per-instance polyline centerlines plus a 32-d per-pixel embedding that drives cross-frame tracking and kymograph generation. ~8 s/frame; the only model in the platform with native polyline output.',
+            'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation. ~4.5 s/frame; the only model in the platform with native polyline output.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -552,7 +552,7 @@ export default {
       wound:
         'U-Net + MiT-B5 (SegFormer encoder) model for wound segmentation in scratch-assay microscopy. Single binary wound region per image; ideal for healing-rate timelapses.',
       microtubule:
-        'Microtubule instance segmentation for IRM/TIRF microscopy. DINOv3-L + DPT encoder, PySOAX postprocessing, native polyline output with embedding-based cross-frame tracking.',
+        'Microtubule instance segmentation for IRM microscopy. nnU-Net ResEnc-M network, curvature-bounded instancer, native polyline output with geometric cross-frame tracking.',
       microcapsule:
         'Compact U-Net (distilled from Meta SAM 3) for microcapsule instance segmentation — area, perimeter and compactness per capsule, with border-cut capsules excluded from metrics.',
     },
@@ -1182,6 +1182,12 @@ export default {
     deleteAnnotations: 'Delete Annotations',
     addChannel: 'Add channel',
     addChannelSuccess: 'Added channel {{channels}} to {{frames}} frame(s)',
+    addChannelAlignWarning:
+      'Alignment failed on {{failed}} of {{frames}} frame(s) — only {{shifted}} were registered. The channels could not be correlated (no shared structure); the frames were added unshifted.',
+    addChannelAlignWarningImplausible:
+      'Alignment failed on {{failed}} of {{frames}} frame(s) — only {{shifted}} were registered. A clear offset was found but it was too large to be plausible, so it was discarded and the frames were added unshifted. Check that the added channel comes from the same field of view and is not cropped or shifted relative to the target video.',
+    addChannelAlignWarningShape:
+      'Alignment failed on {{failed}} of {{frames}} frame(s) — only {{shifted}} were registered. The added channel and the target frames have different pixel dimensions, so they could not be aligned; the frames were added unshifted.',
     addChannelFailed: 'Failed to add channel',
     addChannelDialog: {
       title: 'Add channel',
@@ -2255,7 +2261,6 @@ export default {
       deleteFailed: 'Failed to delete label',
       loadFailed: 'Failed to load type labels',
       duplicateName: 'A label with this name already exists',
-      noTrack: 'This microtubule has no track yet — run tracking first.',
     },
     color: {
       label: 'Colour:',
@@ -2378,6 +2383,7 @@ export default {
     },
     windowLevel: {
       title: 'Display',
+      channel: 'Channel',
       min: 'Min',
       max: 'Max',
       brightness: 'Brightness',

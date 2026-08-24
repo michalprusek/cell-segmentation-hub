@@ -290,8 +290,8 @@ type-check:
 # legacy editor tests). Including it here would render `make ci` unusable
 # until the suite is healed. Use `make ci-test` to run vitest separately.
 ci:
-	@echo "🔍 [1/4] TypeScript (frontend)"
-	@npx tsc --noEmit
+	@echo "🔍 [1/4] TypeScript (frontend — baseline gate)"
+	@npm run type-check
 	@echo "🔍 [2/4] TypeScript (backend)"
 	@cd backend && npm run type-check
 	@echo "🔍 [3/4] ESLint (strict — 0 warnings)"
@@ -508,7 +508,7 @@ optimize-all: optimize-batch test-production
 # Download ML model weights
 download-weights:
 	@echo "📥 Downloading ML model weights..."
-	@echo "This will download ~3.0 GB of model weights (incl. microtubule v7)"
+	@echo "This will download ~2.3 GB of model weights (incl. microtubule v5H)"
 	@if [ \! -d "backend/segmentation/weights" ]; then mkdir -p backend/segmentation/weights; fi
 	@cd backend/segmentation && python scripts/download_weights.py
 	@./scripts/download-microtubule-weights.sh
@@ -524,10 +524,10 @@ check-weights:
 		echo "   Run: make download-weights"; \
 		exit 1; \
 	fi
-	@if [ -f "backend/segmentation/weights/microtubule_v7.pt" ]; then \
-		echo "✅ Microtubule v7 weights found ($$(du -h backend/segmentation/weights/microtubule_v7.pt | cut -f1))"; \
+	@if [ -f "backend/segmentation/weights/microtubule_v5h.pth" ]; then \
+		echo "✅ Microtubule v5H weights found ($$(du -h backend/segmentation/weights/microtubule_v5h.pth | cut -f1))"; \
 	else \
-		echo "⚠️  Microtubule v7 weights missing (microtubule_v7.pt)"; \
+		echo "⚠️  Microtubule v5H weights missing (microtubule_v5h.pth)"; \
 		echo "   Run: ./scripts/download-microtubule-weights.sh"; \
 	fi
 	@echo ""

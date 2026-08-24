@@ -1,9 +1,8 @@
-"""Microtubule instance segmentation model wrapper.
+"""Microtubule instance segmentation model wrapper (v5H).
 
-Wraps the v7 DINOv3-L + DPT + PySOAX pipeline (sources copied from
-``microtubules_v7_pysoax/`` at repo root) so the ModelLoader can drive it
-through the same ``load_weights`` / ``predict`` surface used by the other
-models.
+Wraps the v5H package -- an nnU-Net ResEnc-M semantic stage plus a
+curvature-bounded instancer -- so the ModelLoader can drive it through the same
+``load_weights`` / ``predict`` surface used by the other models.
 
 TWO callers share this package, so it is not free to change:
 
@@ -11,387 +10,261 @@ TWO callers share this package, so it is not free to change:
 - the Automated Essays batch assay (``backend/essays/module``), which imports
   it via ``_mt_package.ensure_on_path()`` rather than keeping its own copy.
 
-They used to be separate copies that silently drifted apart. Re-verify both
-paths when changing ``predict``, ``segment_mt`` or ``pysoax``.
+They used to be separate copies that silently drifted apart. Re-verify BOTH
+paths when changing this file or anything under ``instance/``.
 
-The microtubule pipeline differs from the other registered models:
+How this differs from the v7 wrapper it replaces
+------------------------------------------------
+- **No frozen backbone.** v7 was DINOv3-L + DPT and fetched a gated backbone
+  from HuggingFace on first use. This checkpoint is a complete state_dict, so
+  there is no ``HF_TOKEN``, no download, and no network access at run time.
+- **One output channel, not a seed map plus a 32-d embedding field.** Nothing
+  downstream receives ``embedding_samples`` any more. Cross-frame identity is
+  established geometrically in ``api/mt_geometry_cost.py``.
+- **The postprocessor is the instancer, not PySOAX.** Junction clusters are
+  contracted, tangents fitted over a window, and each junction resolved by a
+  min-cost perfect matching over its arms with a priced "leave this arm open"
+  option. Every join is constrained by ``kappa <= 0.25 rad/px`` as a HARD
+  constraint -- derived, not tuned: just above the 0.239 rad/px maximum over
+  957 human-annotated microtubules at an 8 px baseline. Microtubules bend;
+  they do not kink.
 
-- DINOv3 ViT-L/16 backbone is gated on HuggingFace — the first run needs
-  ``HF_TOKEN`` set or available at ``~/.cache/huggingface/token``.
-- The DPT decoder has two output heads: a seed-probability map (used by
-  PySOAX as the binary foreground for snake initialisation) and a
-  32-channel L2-normalised embedding that disambiguates crossings and
-  later powers cross-frame MT tracking.
-- PySOAX is an iterative stretching-open-active-contour postprocessor;
-  it produces per-instance centerlines (open polylines), not closed masks.
-- We sample the 32-d embedding at each centerline pixel and persist it as
-  float16 so the tracking pipeline can run as pure CPU postprocessing.
+Inference runs at 1.5x upscale internally because that is the scale the model
+was trained and evaluated at. Output coordinates are mapped back, so callers
+never see the 1.5x.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
 from pathlib import Path
 from typing import Any, Optional
 
+import numpy as np
+
 logger = logging.getLogger(__name__)
 
-# Directory holding the copied microtubule sources (segment_mt, pysoax, synth_irm/).
-# segment_mt.py uses absolute imports of ``synth_irm.training.*`` and ``pysoax``
-# so this directory must be on sys.path before either is imported.
-_MICROTUBULE_PKG_DIR: Path = Path(__file__).resolve().parent
+_PKG_DIR: Path = Path(__file__).resolve().parent
+
+# ``instance.*`` and ``dynamic_network_architectures.*`` are absolute imports
+# inside the vendored code, kept verbatim so the package can be re-synced from
+# upstream without carrying a patch. They resolve only once these are on
+# sys.path, so the insert happens at import time rather than inside predict().
+for _extra_path in (_PKG_DIR, _PKG_DIR / "vendor"):
+    if str(_extra_path) not in sys.path:
+        sys.path.insert(0, str(_extra_path))
+
+#: Internal working scale. Fixed by training; not a tunable.
+UP = 1.5
+
+#: Hard curvature bound, rad/px. Derived from data, never read from the params
+#: file -- see the module docstring.
+KAPPA_MAX = 0.25
+
+DEFAULT_PARAMS_PATH = _PKG_DIR / "params_v5h.json"
+
+
+def _normalize(a: np.ndarray, p: tuple[float, float] = (1.0, 99.0)) -> np.ndarray:
+    """Percentile stretch over the whole frame -- exactly what training used.
+
+    An FOV-restricted variant was tested upstream and lost on validation
+    (0.412 vs 0.438). Do not "improve" this without re-measuring: the model was
+    fitted to this input distribution.
+    """
+    lo, hi = np.percentile(a, p)
+    return np.clip((a - lo) / (hi - lo + 1e-6), 0.0, 1.0)
 
 
 class MicrotubuleModel:
-    """Wrapper around ``segment_microtubules`` for the ML service.
+    """Semantic stage + instancer. Load once, then predict many frames.
 
     Unlike HRNet / UNet / CBAM (pure ``nn.Module`` networks), this class is a
-    thin orchestrator: the actual network is :class:`FilamentInstanceModelV4`
-    and the postprocessing is :func:`pysoax.extract_soax_instances`.
+    thin orchestrator: the network is a ``ResidualEncoderUNet`` and the
+    postprocessing is :func:`instance.instancer_a.instance_a`, which has no
+    learned weights at all.
     """
 
-    DEFAULT_SEED_THRESHOLD: float = 0.5
+    #: Foreground cut. The shipped params vector carries 0.97, fitted to this
+    #: model's (very confident) foreground; the ModelLoader's generic 0.5
+    #: default would flood the instancer with noise.
+    DEFAULT_SEED_THRESHOLD: float = 0.97
 
     def __init__(self) -> None:
         self._model: Optional[Any] = None
         self._device: Optional[str] = None
         self._ckpt_path: Optional[Path] = None
-        logger.info("MicrotubuleModel wrapper initialized")
+        self._params: Optional[dict] = None
 
-    def load_weights(self, weights_path: str | os.PathLike,
-                     device: str | Any) -> "MicrotubuleModel":
-        """Load the v7 checkpoint and prepare the model for inference.
+    @property
+    def params(self) -> dict:
+        """Instancer hyperparameters, fitted to THIS model's foreground.
 
-        Args:
-            weights_path: Path to ``microtubule_v7.pt`` (~1.2 GB). Must exist
-                — first run also downloads ~1.1 GB DINOv3 backbone to the HF
-                cache, requiring ``HF_TOKEN`` to be set.
-            device: ``"cuda"``, ``"cpu"`` or a ``torch.device`` instance.
-
-        Raises:
-            FileNotFoundError: if the checkpoint is missing.
+        A large junction-contraction radius suits a shattered mask and damages
+        a clean one, so v4b's vector would actively penalise this foreground.
         """
-        ckpt_path = Path(weights_path)
-        if not ckpt_path.exists():
+        if self._params is None:
+            params = json.loads(DEFAULT_PARAMS_PATH.read_text())
+            params.pop("kappa_max", None)   # derived, never read from a file
+            self._params = params
+        return self._params
+
+    def load_weights(
+        self,
+        weights_path: str | os.PathLike,
+        device: Optional[str] = None,
+    ) -> "MicrotubuleModel":
+        """Build the ResEnc-M network and load the checkpoint into it.
+
+        The head width is read OFF the checkpoint rather than assumed. Upstream,
+        a hard-coded default happened to match the models tested first, so the
+        detection went unexercised until a 1-channel checkpoint reached it.
+        """
+        import torch
+
+        from net import build, head_width
+
+        path = Path(weights_path)
+        if not path.is_file():
             raise FileNotFoundError(
-                f"Microtubule v7 checkpoint missing at {ckpt_path}. "
-                "Run scripts/download-microtubule-weights.sh to fetch it."
+                f"microtubule v5H checkpoint not found at {path} (~535 MB). "
+                "Stage it with scripts/download-microtubule-weights.sh."
             )
 
-        # HF_TOKEN is required to download the gated DINOv3 backbone. The
-        # checkpoint itself does not contain backbone weights — transformers
-        # downloads them on the first call to AutoModel.from_pretrained.
-        if "HF_TOKEN" not in os.environ:
-            token_file = os.path.expanduser("~/.cache/huggingface/token")
-            if os.path.exists(token_file):
-                with open(token_file) as fh:
-                    os.environ["HF_TOKEN"] = fh.read().strip()
+        self._device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        state = torch.load(str(path), map_location=self._device)
+        width = head_width(state)
+        model = build(width).to(self._device).eval()
+        model.load_state_dict(state)
 
-        # Add our package dir to sys.path BEFORE importing segment_mt — the
-        # upstream module uses absolute imports of synth_irm.training.*.
-        if str(_MICROTUBULE_PKG_DIR) not in sys.path:
-            sys.path.insert(0, str(_MICROTUBULE_PKG_DIR))
-
-        from .segment_mt import load_v7_model
-
-        device_str = str(device) if not isinstance(device, str) else device
-        self._model = load_v7_model(ckpt_path, device=device_str)
-        self._device = device_str
-        self._ckpt_path = ckpt_path
-        logger.info(f"Microtubule v7 loaded from {ckpt_path} on {device_str}")
+        self._model = model
+        self._ckpt_path = path
+        logger.info(
+            "Loaded microtubule v5H from %s on %s (head width %d)",
+            path,
+            self._device,
+            width,
+        )
         return self
 
-    # Warm-start defaults. When a previous frame's centerlines are supplied,
-    # the seed threshold is lowered to ``PRIOR_SEED_THRESHOLD`` *only* along
-    # those centerlines (dilated by ``PRIOR_DILATE_PX``). A microtubule that
-    # was solid last frame but faded just under the 0.5 seed cut this frame is
-    # then still skeletonised, so a temporary detection dropout — the single
-    # biggest cause of a broken track — is recovered at the source instead of
-    # relying on the tracker to bridge a gap that may exceed max_gap.
-    PRIOR_SEED_THRESHOLD: float = 0.30
-    PRIOR_DILATE_PX: int = 2
-    # Recovered prior pixels within this many px of an already-detected MT are
-    # discarded. Warm start must ONLY fill genuine dropouts in empty regions:
-    # adding prior foreground next to a detected filament bridges the two in
-    # the skeleton graph, so the path tracer merges them and an instance is
-    # LOST. The guard confines recovery to regions the current frame detected
-    # nothing, so warm start is additive at the seed-mask level and, for
-    # guard > 0, non-bridging in the skeleton graph (recovered pixels stay
-    # >= guard px from any detection, forming their own components).
-    PRIOR_MERGE_GUARD_PX: int = 3
+    def _channels(self, img01: np.ndarray) -> np.ndarray:
+        """Tiled prediction over an already-upscaled, already-normalised frame.
 
-    def predict(self, image_np, seed_threshold: Optional[float] = None,
-                pysoax_params: Optional[dict] = None,
-                prev_centerlines: Optional[list] = None,
-                prior_seed_threshold: Optional[float] = None,
-                prior_dilate_px: Optional[int] = None,
-                prior_merge_guard_px: Optional[int] = None) -> dict:
-        """Run v7 + PySOAX on a single 2D grayscale frame.
+        Returns ``(C, H, W)`` in [0, 1]; C is 1 for this checkpoint. Tiles
+        overlap and are averaged, so a filament crossing a tile seam is not cut
+        in two. The tile is 512 because the eight-stage plan downsamples seven
+        times and the residual adds need the input divisible by 128 -- the v4b
+        package's 518 (DINOv2's /14 patch grid) is not, and would fail at run
+        time rather than at load time.
+        """
+        import torch
+
+        from net import IMA_M, IMA_S, TILE
+
+        mean = torch.tensor(IMA_M).view(3, 1, 1)
+        std = torch.tensor(IMA_S).view(3, 1, 1)
+        stride = int(round(TILE * 0.757))
+        height, width = img01.shape
+
+        def _starts(extent: int) -> list[int]:
+            starts = list(range(0, max(1, extent - TILE + 1), stride)) or [0]
+            if starts[-1] != max(0, extent - TILE):
+                starts.append(max(0, extent - TILE))
+            return starts
+
+        acc = cnt = None
+        with torch.no_grad():
+            for y in _starts(height):
+                for x in _starts(width):
+                    tile = img01[y : y + TILE, x : x + TILE]
+                    th, tw = tile.shape
+                    t = torch.from_numpy(tile.astype(np.float32))[None].repeat(3, 1, 1)
+                    t = ((t - mean) / std)[None].to(self._device)
+                    out = self._model(t)
+                    if isinstance(out, (tuple, list)):
+                        out = out[0]   # deep supervision off, but be defensive
+                    out = torch.sigmoid(out)[0].float().cpu().numpy()
+                    if acc is None:
+                        acc = np.zeros((out.shape[0], height, width), dtype=np.float32)
+                        cnt = np.zeros((height, width), dtype=np.float32)
+                    acc[:, y : y + th, x : x + tw] += out[:, :th, :tw]
+                    cnt[y : y + th, x : x + tw] += 1
+        return acc / np.maximum(cnt, 1)[None]
+
+    def predict(
+        self,
+        image_np: np.ndarray,
+        seed_threshold: Optional[float] = None,
+        params: Optional[dict] = None,
+    ) -> dict:
+        """Run v5H on a single 2D grayscale frame.
 
         Args:
-            image_np: numpy ndarray of shape (H, W) — IRM/TIRF intensity frame.
-                Higher-dimension arrays are reduced to grayscale (mean over
-                channel axis) for convenience.
-            seed_threshold: Override for binarising ``seed_prob`` before the
-                PySOAX snakes are initialised. Defaults to 0.5.
-            pysoax_params: Override of the production
-                ``PYSOAX_PARAMS_DEFAULT`` hyperparameters (Optuna-tuned).
-            prev_centerlines: Optional list of ``(M_i, 2)`` row,col centerlines
-                from the temporally-previous frame, in this frame's pixel
-                space (same H, W). When given, they seed a temporal prior:
-                the seed threshold is lowered to ``prior_seed_threshold`` along
-                the dilated previous centerlines so a faded continuation of a
-                known MT survives binarisation. ``None`` (the default, and
-                always the case for the first frame) reproduces the exact
-                stateless behaviour — so a cold start never regresses.
-            prior_seed_threshold: Lowered seed cut applied only under the
-                prior. Defaults to ``PRIOR_SEED_THRESHOLD`` (0.30).
-            prior_dilate_px: Half-width (px) of the rasterised prior band.
-                Defaults to ``PRIOR_DILATE_PX`` (2).
-            prior_merge_guard_px: Recovered prior pixels within this many px of
-                an already-detected MT are discarded, so warm start never
-                bridges two detected filaments. Defaults to
-                ``PRIOR_MERGE_GUARD_PX`` (3); 0 disables the guard.
+            image_np: numpy ndarray of shape ``(H, W)`` -- an IRM/TIRF intensity
+                frame. Higher-dimension arrays are reduced to grayscale (mean
+                over the channel axis) for convenience.
+            seed_threshold: Foreground cut applied to the probability map before
+                instancing. ``None`` uses the shipped params vector's
+                ``prob_thr`` (0.97), which is what the model was tuned with.
+            params: Overrides of the instancer hyperparameters.
 
         Returns:
             ``{
-                'centerlines_rc': list[(M_i, 2) float64],  # row, col px coords
-                'seed_prob':       (H, W) float32,         # sigmoid output
-                'embedding_samples': list[(M_i, 32) float16],
+                'centerlines_rc': list[(M_i, 2) float64],  # row, col, INPUT px
+                'prob':           (H, W) float32,          # foreground prob
             }``
+
+            Note the absence of ``embedding_samples``: it is gone rather than
+            empty, so a consumer that was not updated fails loudly instead of
+            silently tracking on zeros.
         """
         if self._model is None:
             raise RuntimeError("Model not loaded. Call load_weights() first.")
 
-        import numpy as np
+        from scipy.ndimage import zoom
 
-        if str(_MICROTUBULE_PKG_DIR) not in sys.path:
-            sys.path.insert(0, str(_MICROTUBULE_PKG_DIR))
+        from instance.instancer_a import instance_a
 
-        from .segment_mt import (
-            PYSOAX_PARAMS_DEFAULT,
-            _normalize,
-            predict_seed_embed,
-        )
+        img = np.asarray(image_np)
+        if img.ndim == 3:
+            img = img.mean(axis=-1)
+        if img.ndim != 2:
+            raise ValueError(f"expected 2D image, got shape {img.shape}")
 
-        if image_np.ndim == 3:
-            image_np = image_np.mean(axis=-1)
-        if image_np.ndim != 2:
-            raise ValueError(f"expected 2D image, got shape {image_np.shape}")
-
-        norm = (
-            _normalize(image_np)
-            if image_np.dtype != np.float32 or image_np.max() > 2
-            else image_np.astype(np.float32)
-        )
-
-        seed_prob, embed = predict_seed_embed(
-            self._model, norm, device=self._device or "cuda"
-        )
-
-        thresh = (
+        height, width = img.shape
+        merged = {**self.params, **(params or {})}
+        thr = (
             seed_threshold
             if seed_threshold is not None
-            else self.DEFAULT_SEED_THRESHOLD
+            else merged.get("prob_thr", self.DEFAULT_SEED_THRESHOLD)
         )
-        seed_fg = seed_prob > thresh
-        # Temporal seed prior: admit sub-threshold pixels that sit on last
-        # frame's filaments, so a briefly-faded MT is not dropped. Confined
-        # both spatially (only along the dilated previous centerlines) and to
-        # EMPTY regions (a merge guard drops recovery pixels adjacent to an
-        # already-detected MT), so warm start fills true dropouts without
-        # bridging two detected filaments at a crossing.
-        if prev_centerlines:
-            from scipy.ndimage import binary_dilation
 
-            H0, W0 = seed_prob.shape
-            prior = self._rasterize_centerlines(
-                prev_centerlines, H0, W0,
-                prior_dilate_px if prior_dilate_px is not None
-                else self.PRIOR_DILATE_PX,
-            )
-            low = (
-                prior_seed_threshold if prior_seed_threshold is not None
-                else self.PRIOR_SEED_THRESHOLD
-            )
-            guard = (
-                prior_merge_guard_px if prior_merge_guard_px is not None
-                else self.PRIOR_MERGE_GUARD_PX
-            )
-            recover = prior & (seed_prob > low) & ~seed_fg
-            if guard > 0 and recover.any():
-                near_existing = binary_dilation(seed_fg, iterations=int(guard))
-                recover = recover & ~near_existing
-            elif guard <= 0 and recover.any():
-                # Guard disabled: recovery may bridge two detected MTs and the
-                # tracer can then LOSE an instance. Left as an explicit escape
-                # hatch, but never silent.
-                logger.warning(
-                    "microtubule warm-start: merge guard disabled (guard=%d); "
-                    "recovered pixels may bridge detected filaments", guard,
-                )
-            n_recovered = int(recover.sum())
-            seed_fg = seed_fg | recover
-            # Observability: a coordinate/size mismatch in prev_centerlines
-            # rasterises the prior off the real filaments and silently recovers
-            # nothing. Logging the count turns that into an explicit
-            # "recovered 0 px from N priors" instead of a no-op that looks like
-            # success.
-            logger.debug(
-                "microtubule warm-start: recovered %d seed px from %d prior "
-                "centerlines", n_recovered, len(prev_centerlines),
-            )
-        binary = seed_fg.astype(np.uint8) * 255
+        img01 = zoom(_normalize(img.astype(np.float64)), UP, order=1)
+        chans = self._channels(img01)
+        prob_up = chans.max(axis=0)
 
-        from pysoax import extract_soax_instances  # absolute import via sys.path
+        polylines, _ = instance_a(
+            prob_up > thr, KAPPA_MAX, merged, channels=chans, prob=prob_up
+        )
 
-        params = pysoax_params or PYSOAX_PARAMS_DEFAULT
-        instances = extract_soax_instances(binary, params, embeddings=embed)
+        # instance_a returns (x=col, y=row) at the 1.5x working scale. Every
+        # downstream consumer -- mt_measure, mt_metrics, the essays adapter --
+        # reads (row, col) at INPUT scale, so transpose and rescale here. A
+        # silent flip is the single most expensive bug this pipeline has
+        # shipped, twice; test_microtubule_model.py pins the orientation.
+        centerlines_rc = [
+            np.asarray(pl, dtype=np.float64)[:, ::-1] / UP for pl in polylines
+        ]
 
-        import cv2
+        # Map the probability map back so callers see the frame they passed in.
+        prob = zoom(prob_up, 1.0 / UP, order=1).astype(np.float32)
+        if prob.shape != (height, width):
+            fitted = np.zeros((height, width), dtype=np.float32)
+            rows = min(height, prob.shape[0])
+            cols = min(width, prob.shape[1])
+            fitted[:rows, :cols] = prob[:rows, :cols]
+            prob = fitted
 
-        centerlines_rc: list = []
-        embedding_samples: list = []
-        H, W = norm.shape
-        # Ramer-Douglas-Peucker tolerance: density at curves (where it
-        # matters for tracking + visual fidelity) without flooding
-        # straight runs with redundant vertices. Tune empirically on
-        # real MT projects — values < 1 produce visible clutter, > 2
-        # truncate sharp bends and degrade embedding sampling.
-        polyline_eps_px = 1.0
-        for inst in instances:
-            cl = np.asarray(inst["centerline"], dtype=np.float64)
-            if cl.ndim != 2 or cl.shape[0] < 2 or cl.shape[1] != 2:
-                continue
-
-            if cl.shape[0] > 3:
-                try:
-                    cv_pts = cl.astype(np.float32).reshape(-1, 1, 2)
-                    simplified = cv2.approxPolyDP(
-                        cv_pts, polyline_eps_px, closed=False
-                    )
-                    cl_simp = simplified.reshape(-1, 2).astype(np.float64)
-                    if cl_simp.shape[0] >= 2:
-                        cl = cl_simp
-                    else:
-                        # RDP over-simplified (eps too large for this curve).
-                        # Keep the original so the MT isn't dropped from the
-                        # output; surface the tuning issue via log.
-                        logger.warning(
-                            "RDP collapsed centerline to %d pts (eps=%.2f); "
-                            "keeping original (%d pts)",
-                            cl_simp.shape[0],
-                            polyline_eps_px,
-                            cl.shape[0],
-                        )
-                except cv2.error as exc:
-                    # One malformed centerline must not abort the whole
-                    # inference (would lose every other MT in the frame).
-                    logger.warning(
-                        "approxPolyDP failed on centerline shape=%s: %s; "
-                        "using unsimplified",
-                        cl.shape,
-                        exc,
-                    )
-
-            centerlines_rc.append(cl)
-
-            # Nearest-pixel sampling — cosine similarity is robust to a
-            # single-pixel offset, and bilinear interpolation would be
-            # ~3x slower for negligible quality gain on tracking.
-            rows = np.clip(cl[:, 0].astype(np.int32), 0, H - 1)
-            cols = np.clip(cl[:, 1].astype(np.int32), 0, W - 1)
-            emb_samples = embed[:, rows, cols].T.astype(np.float16)
-            embedding_samples.append(emb_samples)
-
-        return {
-            "centerlines_rc": centerlines_rc,
-            "seed_prob": seed_prob,
-            "embedding_samples": embedding_samples,
-        }
-
-    @staticmethod
-    def _rasterize_centerlines(centerlines, H: int, W: int,
-                              dilate_px: int):
-        """Rasterise a list of (M, 2) row,col centerlines into a bool mask,
-        each drawn as a polyline of half-width ``dilate_px``.
-
-        Used to build the temporal seed prior. cv2 works in (x, y) = (col,
-        row), so the row/col columns are swapped before drawing.
-        """
-        import cv2
-        import numpy as np
-
-        mask = np.zeros((H, W), dtype=np.uint8)
-        thickness = max(1, 2 * int(dilate_px) + 1)
-        drawn = 0
-        for cl in centerlines:
-            arr = np.asarray(cl, dtype=np.float64)
-            if arr.ndim != 2 or arr.shape[0] < 2 or arr.shape[1] != 2:
-                continue
-            if not np.isfinite(arr).all():
-                # A NaN/Inf coord rounds to INT32_MIN and cv2 would paint a
-                # stray band across the frame → spurious recovery. Skip it.
-                continue
-            # (row, col) -> (x=col, y=row) integer pixels for cv2.
-            pts = np.round(arr[:, ::-1]).astype(np.int32)
-            cv2.polylines(mask, [pts], isClosed=False, color=1,
-                          thickness=thickness)
-            drawn += 1
-        if centerlines and drawn == 0:
-            # Nothing rasterised despite being given priors: usually a wrong
-            # shape/coordinate convention. Surface it rather than return an
-            # empty prior that silently recovers nothing.
-            logger.warning(
-                "microtubule warm-start: rasterised 0 of %d prior centerlines "
-                "(wrong shape/space?); prior is empty", len(centerlines),
-            )
-        return mask.astype(bool)
-
-    def predict_sequence(self, frames, seed_threshold: Optional[float] = None,
-                         pysoax_params: Optional[dict] = None,
-                         propagate: bool = True,
-                         prior_seed_threshold: Optional[float] = None,
-                         prior_dilate_px: Optional[int] = None,
-                         prior_merge_guard_px: Optional[int] = None) -> list:
-        """Segment an ordered list of frames, propagating each frame's
-        centerlines forward as the next frame's temporal seed prior.
-
-        This is the warm-start path: because the per-frame segmentation queue
-        processes frames independently (and out of order), a frame can only
-        see its predecessor's result when the whole video is walked in
-        sequence here. The first frame runs cold (``prev_centerlines=None``),
-        every subsequent frame is seed-primed by the one before it.
-
-        Args:
-            frames: ordered list of 2D grayscale ndarrays (all same H, W).
-            propagate: when False, every frame runs cold — identical to
-                looping :meth:`predict` — so callers can A/B the warm start.
-
-        Returns:
-            list of per-frame result dicts (same shape as :meth:`predict`),
-            in input order.
-        """
-        results: list = []
-        prev_cl = None
-        for img in frames:
-            res = self.predict(
-                img,
-                seed_threshold=seed_threshold,
-                pysoax_params=pysoax_params,
-                prev_centerlines=prev_cl if propagate else None,
-                prior_seed_threshold=prior_seed_threshold,
-                prior_dilate_px=prior_dilate_px,
-                prior_merge_guard_px=prior_merge_guard_px,
-            )
-            results.append(res)
-            # Carry the last NON-EMPTY prior forward: a frame that detects
-            # nothing must not blank the prior, or a multi-frame dropout — the
-            # very case warm-start targets — would run cold on the next frame.
-            if propagate:
-                prev_cl = res["centerlines_rc"] or prev_cl
-            else:
-                prev_cl = None
-        return results
+        return {"centerlines_rc": centerlines_rc, "prob": prob}

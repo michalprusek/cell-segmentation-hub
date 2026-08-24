@@ -84,9 +84,9 @@ const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
-        <AlertDialogHeader>
+        <AlertDialogHeader className="min-w-0">
           <AlertDialogTitle>{t('folders.deleteFolder')}</AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogDescription className="break-words">
             {previewLoading ? t('common.loading') : description}
           </AlertDialogDescription>
         </AlertDialogHeader>

@@ -169,6 +169,55 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
     expect(errors).toMatch(/malformed polygons JSON/i);
   });
 
+  it('sends only geometry to the ML tracker, never an embedding payload', async () => {
+    // Stored rows written by the microtubule v7 model still carry a
+    // several-KB `_embedding` each. The v5H tracker matches on geometry and
+    // never decodes one, so forwarding it would ship tens of MB per video for
+    // a payload nothing reads.
+    prismaImageFindMany.mockImplementation(async (args: unknown) => {
+      const select = (args as { select?: Record<string, unknown> }).select;
+      if (select && 'segmentationStatus' in select) {
+        return [{ segmentationStatus: 'segmented' }];
+      }
+      return [
+        {
+          id: 'img-0',
+          frameIndex: 0,
+          segmentation: {
+            id: 'seg-0',
+            imageId: 'img-0',
+            polygons: JSON.stringify([
+              {
+                id: 'p0',
+                geometry: 'polyline',
+                points: [
+                  { x: 1, y: 1 },
+                  { x: 2, y: 2 },
+                ],
+                // A legacy v7 blob, present on real rows.
+                _embedding: 'ZmFrZS1lbWJlZGRpbmc=',
+                _embedding_dim: 32,
+              },
+            ]),
+          },
+        },
+      ];
+    });
+    axiosPostMock.mockResolvedValue({
+      data: { assignments: { '0::p0': 'track-A' } },
+    });
+
+    await runTrackingForContainer('vid-emb');
+
+    const postBody = axiosPostMock.mock.calls[0]?.[1] as {
+      frames: Array<{ polylines: Array<Record<string, unknown>> }>;
+    };
+    const polyline = postBody.frames[0]?.polylines[0] as Record<string, unknown>;
+    expect(polyline).toBeDefined();
+    expect(Object.keys(polyline).sort()).toEqual(['id', 'points_rc']);
+    expect(JSON.stringify(postBody)).not.toContain('ZmFrZS1lbWJlZGRpbmc=');
+  });
+
   it('proceeds when a mix of segmented / no_segmentation / failed reaches final states', async () => {
     // Regression: previously isBatchComplete required strict
     // 'segmented' across all frames, so one no_segmentation or failed
@@ -391,5 +440,41 @@ describe('trackerService.runTrackingForContainer (round-2 GAP-5)', () => {
     );
     expect(byId.get('seg-0')).toBe('track-A');
     expect(byId.get('seg-1')).toBe('track-B');
+  });
+});
+
+describe('trackerTimeoutMs', () => {
+  // The flat 60 s this replaces did not fail the tracker — it abandoned it. On
+  // 2026-08-20 a 299-frame container's answer arrived 35 s after the caller had
+  // stopped listening, so 95 s of work was computed, returned 200, and dropped,
+  // and the container silently went untracked.
+  const frames = (counts: number[]) =>
+    counts.map(n => ({ polylines: new Array(n).fill(null) }));
+
+  it('never waits less than a minute, however small the job', async () => {
+    const { trackerTimeoutMs } = await import('../trackerService');
+    expect(trackerTimeoutMs(frames([1]))).toBe(60_000);
+    expect(trackerTimeoutMs([])).toBe(60_000);
+  });
+
+  it('allows the real 30498-polyline container more than the 95 s it took', async () => {
+    const { trackerTimeoutMs } = await import('../trackerService');
+    const budget = trackerTimeoutMs(frames(new Array(299).fill(102)));
+    expect(budget).toBeGreaterThan(95_000);
+    expect(budget).toBe(30498 * 4);
+  });
+
+  it('scales with polylines, not with frame count', async () => {
+    const { trackerTimeoutMs } = await import('../trackerService');
+    // Same total polylines, very different frame counts → same budget, because
+    // the assignment problem is sized by detections, not by how they are split.
+    expect(trackerTimeoutMs(frames(new Array(100).fill(200)))).toBe(
+      trackerTimeoutMs(frames(new Array(200).fill(100)))
+    );
+  });
+
+  it('caps a runaway job so one call cannot hold a connection for ever', async () => {
+    const { trackerTimeoutMs } = await import('../trackerService');
+    expect(trackerTimeoutMs(frames(new Array(10_000).fill(500)))).toBe(15 * 60_000);
   });
 });

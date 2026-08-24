@@ -1,10 +1,9 @@
 """Segmentation reads IRM, the intensity readout reads TIRF — and never swap.
 
 Reported from the field 2026-07-31: every run since the pipeline existed had
-segmented the **TIRF** channel. The v7 checkpoint is trained on IRM
-(``microtubule/segment_mt.py``: "End-to-end IRM -> list of MT centerlines"), so
-TIRF input produced confident centerlines that were simply wrong — and because
-the QC overlay was *also* drawn on TIRF, they looked right.
+segmented the **TIRF** channel. The checkpoint is trained and validated on IRM,
+so TIRF input produced confident centerlines that were simply wrong — and
+because the QC overlay was *also* drawn on TIRF, they looked right.
 
 Nothing about that failure is visible in a shape or a dtype: both channels are
 (Y, X) uint16 frames of the same well. The only thing that distinguishes them is

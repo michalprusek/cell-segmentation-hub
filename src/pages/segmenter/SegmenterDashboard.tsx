@@ -245,11 +245,11 @@ const SegmenterDashboard: React.FC = () => {
         onOpenChange={open => !open && setDeleteTarget(null)}
       >
         <AlertDialogContent>
-          <AlertDialogHeader>
+          <AlertDialogHeader className="min-w-0">
             <AlertDialogTitle>
               {t('segmenter.dashboard.deleteConfirmTitle')}
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="break-words">
               {t('segmenter.dashboard.deleteConfirmDescription', {
                 name: deleteTarget?.name ?? '',
               })}
