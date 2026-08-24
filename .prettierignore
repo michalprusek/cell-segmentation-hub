@@ -85,3 +85,9 @@ mt-instance-seg/
 # shouldn't be formatted or linted.
 .remember/
 
+# Model benchmark data and exported predictions. Machine-generated JSON that
+# lives in the repo root as working data, not source — prettier --check walks
+# the whole tree in the pre-commit hook and 71 of these files blocked every
+# commit until they were listed here.
+mt34-benchmark/
+mt-instance-seg-v5H/
