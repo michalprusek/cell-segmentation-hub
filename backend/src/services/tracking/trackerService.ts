@@ -5,7 +5,7 @@
  * every frame of a video container with the ``microtubule`` model
  * reaches status ``segmented``, this service:
  *
- *   1. Reads every per-frame Segmentation row + its polyline embeddings.
+ *   1. Reads every per-frame Segmentation row's polyline geometry.
  *   2. POSTs the bundle to the ML service's /track endpoint.
  *   3. Receives an assignments map (polylineId → trackId).
  *   4. Patches each Segmentation's polygon JSON to inject ``trackId``.
@@ -25,6 +25,8 @@ interface PolygonRecord {
   geometry?: string;
   instanceId?: string;
   trackId?: string;
+  /** Legacy: written by the microtubule v7 model, never by v5H. Declared so
+   *  the type still describes rows already in the database; nothing reads it. */
   _embedding?: string;
   [k: string]: unknown;
 }
@@ -75,7 +77,10 @@ function asTrackerPolylines(
       points_rc: (p.points as Array<{ x: number; y: number }>).map(
         pt => [pt.y, pt.x] as [number, number]
       ),
-      embedding: typeof p._embedding === 'string' ? p._embedding : null,
+      // No `embedding`: the microtubule v5H model emits no embedding field,
+      // and the tracker matches on geometry. Rows written by v7 still carry a
+      // several-KB `_embedding` each; deliberately NOT forwarding it keeps
+      // tens of MB per video off the wire for a payload nothing reads.
     }));
   return { frame: frameIndex, polylines };
 }
@@ -158,6 +163,44 @@ export async function runTrackingForContainer(
   }
 }
 
+/**
+ * How long to wait for the tracker, scaled to the work being asked of it.
+ *
+ * A flat 60 s threw away completed results. Observed in production
+ * (2026-08-20): a 299-frame container with 30498 polylines finished on the ML
+ * side at 05:56:16 and returned 200 — but the caller had already given up at
+ * 05:55:41, so a correct answer that cost 95 s of GPU-box CPU was discarded and
+ * the container silently went untracked. From the user's side that is
+ * indistinguishable from "tracking is broken", which is exactly how it was
+ * reported.
+ *
+ * The cost is driven by the polyline count, not the frame count: the tracker
+ * solves a linear assignment between consecutive frames, so it grows roughly
+ * with polylines per frame squared times frames. Rather than model that, budget
+ * generously per polyline and clamp. 4 ms per polyline puts the observed 30498
+ * at ~122 s, comfortably past the 95 s it actually took, and a container an
+ * order of magnitude larger still lands inside the ceiling.
+ *
+ * The ceiling exists so a genuinely stuck call cannot pin a connection for ever;
+ * it is not a performance target. If it is ever hit, the fix is to stop asking
+ * the tracker to re-derive identity that is already known — see the static
+ * channel path, where the same 102 objects were being rediscovered 299 times.
+ */
+const TRACKER_MS_PER_POLYLINE = 4;
+const TRACKER_MIN_TIMEOUT_MS = 60_000;
+const TRACKER_MAX_TIMEOUT_MS = 15 * 60_000;
+
+export function trackerTimeoutMs(
+  frames: ReadonlyArray<{ polylines: ReadonlyArray<unknown> }>
+): number {
+  const polylines = frames.reduce((n, f) => n + f.polylines.length, 0);
+  return Math.min(
+    TRACKER_MAX_TIMEOUT_MS,
+    Math.max(TRACKER_MIN_TIMEOUT_MS, polylines * TRACKER_MS_PER_POLYLINE)
+  );
+}
+
+
 async function _runTrackingForContainerInner(
   containerId: string
 ): Promise<void> {
@@ -185,10 +228,10 @@ async function _runTrackingForContainerInner(
       ),
     // Max accepted filament-match cost for the two-step LAP tracker. The ML
     // side's filament-aware cost is a weighted sum of four [0,1] terms
-    // (embedding + endpoint + orientation + length), so 0.6 accepts
+    // (curve distance + endpoint + orientation + length), so 0.6 accepts
     // moderately-confident links. The remaining tracker params (motion_model,
-    // emb_template_alpha, max_gap=3, gap_penalty, term weights, image_hw
-    // fallback) use the ML defaults.
+    // max_gap=3, gap_penalty, term weights, image_hw fallback) use the ML
+    // defaults.
     cost_threshold: 0.6,
   };
 
@@ -202,16 +245,26 @@ async function _runTrackingForContainerInner(
 
   const mlUrl = `${config.SEGMENTATION_SERVICE_URL}/api/v1/track`;
   let assignments: Record<string, string> = {};
+  const timeoutMs = trackerTimeoutMs(trackPayload.frames);
   try {
-    const res = await axios.post(mlUrl, trackPayload, { timeout: 60_000 });
+    const res = await axios.post(mlUrl, trackPayload, { timeout: timeoutMs });
     const payload = res.data?.data ?? res.data ?? {};
     assignments = payload.assignments ?? {};
   } catch (err) {
+    const polylines = trackPayload.frames.reduce(
+      (n, f) => n + f.polylines.length,
+      0
+    );
     logger.error(
       `Tracker ML call failed: ${(err as Error).message}`,
       err as Error,
       'TrackerService',
-      { containerId }
+      {
+        containerId,
+        frames: trackPayload.frames.length,
+        polylines,
+        timeoutMs,
+      }
     );
     return;
   }
@@ -273,8 +326,8 @@ async function _runTrackingForContainerInner(
   // transactions in this overload), so the contract is: log the partial
   // commit count loudly and re-throw so the caller's error path runs.
   // Ops can then re-trigger tracking; the next pass overwrites trackIds
-  // idempotently using the same Hungarian output as long as embeddings
-  // are stable.
+  // idempotently, because the same centerlines produce the same geometric
+  // cost matrix and therefore the same Hungarian output.
   let chunksCommitted = 0;
   const totalChunks = Math.ceil(updates.length / TX_CHUNK_SIZE);
   try {

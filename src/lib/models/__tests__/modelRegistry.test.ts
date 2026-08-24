@@ -221,17 +221,19 @@ describe('model registry SSOT', () => {
       },
       microtubule: {
         id: 'microtubule',
-        name: 'Microtubule (v7)',
-        displayName: 'Microtubule (DINOv3 + PySOAX)',
+        name: 'Microtubule (v5H)',
+        displayName: 'Microtubule (ResEnc-M + curvature instancer)',
         description:
-          'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT-style fusion produces a per-pixel 32-d embedding that PySOAX uses to extract individual MT centerlines. The embedding also drives automatic cross-frame tracking for kymograph analysis. Slow (~8 s/frame) but the only model in the platform producing polyline output.',
+          'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
         size: 'large',
-        defaultThreshold: 0.5,
+        // NOT the generic 0.5: this model's foreground is very confident and
+        // the instancer's fitted vector cuts at 0.97.
+        defaultThreshold: 0.97,
         category: 'microtubule',
         performance: {
-          avgTimePerImage: 8.0,
-          throughput: 0.13,
-          p95Latency: 10.0,
+          avgTimePerImage: 4.5,
+          throughput: 0.22,
+          p95Latency: 9.0,
           batchSize: 1,
         },
       },

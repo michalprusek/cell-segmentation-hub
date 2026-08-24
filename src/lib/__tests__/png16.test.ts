@@ -253,6 +253,37 @@ describe('decodeGrayPng', () => {
       expect(result).not.toBeNull();
       expect(Array.from(result!.data)).toEqual(pixelRows.flat());
     });
+
+    it('unfilters all five filter types at 16 bits, with min/max', async () => {
+      // The 8-bit case above shares the filter branches but NOT the sample
+      // pack: 16-bit samples are assembled two bytes at a time, and the
+      // left-neighbour distance is 2 rather than 1, so a prologue that peels
+      // the wrong number of bytes goes wrong only here. Real frames are
+      // 16-bit, and the measured 2.27x restructuring of this loop touched
+      // both paths, so both are pinned.
+      const pixelRows = [
+        [640, 23480, 5000, 12345], // 0: None
+        [1, 65535, 32768, 7], // 1: Sub — wraps hard on both bytes
+        [12345, 300, 65535, 0], // 2: Up
+        [40000, 40001, 2, 65534], // 3: Average
+        [0, 65535, 1, 65534], // 4: Paeth
+      ];
+      const png = buildGrayPng({
+        width: 4,
+        height: 5,
+        bitDepth: 16,
+        pixelRows,
+        filterTypes: [0, 1, 2, 3, 4],
+      });
+
+      const result = await decodeGrayPng(toBlob(png));
+
+      expect(result).not.toBeNull();
+      expect(result!.data).toBeInstanceOf(Uint16Array);
+      expect(Array.from(result!.data)).toEqual(pixelRows.flat());
+      expect(result!.min).toBe(0);
+      expect(result!.max).toBe(65535);
+    });
   });
 
   describe('out-of-scope input (silent null, no logging — caller falls back to createImageBitmap)', () => {

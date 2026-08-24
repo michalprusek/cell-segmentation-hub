@@ -403,7 +403,10 @@ describe('SegmentationController', () => {
         .send({
           imageIds: ['a1b2c3d4-e5f6-7890-abcd-ef1234567890'],
           model: 'hrnet',
-          threshold: 0.99,
+          // 1.01, not 0.99: batchSegment accepts [0.1, 0.99] inclusive
+          // (segmentationController.ts) after the ceiling was raised
+          // 0.9 -> 0.99 in 719dfaf7, so 0.99 is the last VALID value.
+          threshold: 1.01,
         })
         .expect(400);
 

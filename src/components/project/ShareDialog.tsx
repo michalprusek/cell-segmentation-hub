@@ -338,12 +338,12 @@ export function ShareDialog({
           e.stopPropagation();
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="min-w-0">
           <DialogTitle className="flex items-center gap-2">
             <Share className="h-5 w-5" />
             {t('sharing.shareProject')}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="break-words">
             {t('sharing.shareDescription', { title: projectTitle })}
           </DialogDescription>
         </DialogHeader>
@@ -395,22 +395,30 @@ export function ShareDialog({
                   {acceptedEmailShares.map(share => (
                     <div
                       key={share.id}
-                      className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg"
+                      className="flex items-center justify-between gap-3 p-3 bg-green-50 border border-green-200 rounded-lg"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center font-semibold">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="w-10 h-10 flex-shrink-0 rounded-full bg-green-500 text-white flex items-center justify-center font-semibold">
                           {(share.sharedWith?.username ||
                             share.sharedWith?.email ||
                             share.email ||
                             '?')[0].toUpperCase()}
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <div className="min-w-0">
+                          <div
+                            className="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                            title={
+                              share.sharedWith?.username ||
+                              share.sharedWith?.email ||
+                              share.email ||
+                              undefined
+                            }
+                          >
                             {share.sharedWith?.username ||
                               share.sharedWith?.email ||
                               share.email}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="truncate text-xs text-gray-500">
                             {t('sharing.joinedOn')}:{' '}
                             {new Date(share.createdAt).toLocaleDateString()}
                           </div>
@@ -419,6 +427,7 @@ export function ShareDialog({
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="flex-shrink-0"
                         onClick={() => handleRevokeShare(share.id)}
                         disabled={loading}
                         title={t('sharing.revokeAccess')}
@@ -445,23 +454,26 @@ export function ShareDialog({
                   {pendingEmailShares.map(share => (
                     <div
                       key={share.id}
-                      className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
+                      className="flex items-center justify-between gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-yellow-500 text-white flex items-center justify-center">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="w-10 h-10 flex-shrink-0 rounded-full bg-yellow-500 text-white flex items-center justify-center">
                           <Mail className="h-5 w-5" />
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <div className="min-w-0">
+                          <div
+                            className="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                            title={share.email ?? undefined}
+                          >
                             {share.email}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="truncate text-xs text-gray-500">
                             {t('sharing.sentOn')}:{' '}
                             {new Date(share.createdAt).toLocaleDateString()}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-shrink-0 items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -531,11 +543,12 @@ export function ShareDialog({
                       <Input
                         value={generatedLink}
                         readOnly
-                        className="flex-1"
+                        className="flex-1 min-w-0"
                       />
                       <Button
                         variant="outline"
                         size="sm"
+                        className="flex-shrink-0"
                         onClick={() => handleCopyLink(generatedLink)}
                       >
                         <Copy className="h-4 w-4" />
@@ -559,18 +572,24 @@ export function ShareDialog({
                   {acceptedLinkShares.map(share => (
                     <div
                       key={share.id}
-                      className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg"
+                      className="flex items-center justify-between gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold">
                           <Link className="h-5 w-5" />
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <div className="min-w-0">
+                          <div
+                            className="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                            title={
+                              share.sharedWith?.username ||
+                              share.sharedWith?.email
+                            }
+                          >
                             {share.sharedWith?.username ||
                               share.sharedWith?.email}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="truncate text-xs text-gray-500">
                             {t('sharing.joinedViaLinkOn')}:{' '}
                             {new Date(share.createdAt).toLocaleDateString()}
                           </div>
@@ -579,6 +598,7 @@ export function ShareDialog({
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="flex-shrink-0"
                         onClick={() => handleRevokeShare(share.id)}
                         disabled={loading}
                         title={t('sharing.revokeAccess')}

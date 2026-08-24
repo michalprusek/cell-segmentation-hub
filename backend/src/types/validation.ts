@@ -51,7 +51,7 @@ export const queuePrioritySchema = z
 export const thresholdSchema = z
   .number()
   .min(0.1, 'Threshold musí být nejméně 0.1')
-  .max(0.9, 'Threshold může být maximálně 0.9');
+  .max(0.99, 'Threshold může být maximálně 0.99');
 
 // ============================================================================
 // Queue validation schemas

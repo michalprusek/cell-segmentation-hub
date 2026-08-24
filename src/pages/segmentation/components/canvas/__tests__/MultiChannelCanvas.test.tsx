@@ -12,6 +12,16 @@
  *  - onLoad called with natural dimensions after first channel resolves
  *  - Failed channel fetch is swallowed; canvas still renders
  *  - Empty visibleChannels → no fetch, canvas still renders
+ *  - Render-path selection: the WebGL2 compositor when `createCompositor`
+ *    yields one, the CPU per-pixel path when it returns null, and the flip
+ *    back to the CPU path on context loss / `isAlive() === false`
+ *
+ * `@/lib/webglCompositor` is mocked for every test here and DEFAULTS to
+ * `() => null` (no WebGL2), so the CPU path — which is also what really
+ * happens in jsdom, where `getContext('webgl2')` returns null — stays the
+ * path the pre-existing tests exercise. Tests that want the GPU path opt in
+ * with `makeFakeCompositor()`. `beforeEach` restores the null default because
+ * `vi.clearAllMocks()` clears call records but NOT implementations.
  *
  * Skipped (raster / pixel-level):
  *  - Actual pixel values produced by the per-channel LUT + tint pipeline
@@ -25,7 +35,25 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { toast } from 'sonner';
+import {
+  createCompositor,
+  type Compositor,
+  type CompositorChannel,
+} from '@/lib/webglCompositor';
+import { createMockCanvasContext } from '@/test-utils/canvasTestUtils';
+import { buildLut } from '@/lib/windowLevel';
 import MultiChannelCanvas from '../MultiChannelCanvas';
+import {
+  MAX_SPECULATIVE_REQUESTS,
+  speculativeFrameRequests,
+} from '@/lib/requestThrottle';
+
+// The compositor is the unit under test's collaborator, not its subject: stub
+// it so the render-path decision is observable without a GPU. Default is null
+// (= "no WebGL2"), which is also what the real factory does under jsdom.
+vi.mock('@/lib/webglCompositor', () => ({
+  createCompositor: vi.fn(() => null),
+}));
 
 // sonner isn't mocked anywhere for this component tree (no <Toaster/>), so
 // without this mock `toast.error` would hit the real module. That's harmless
@@ -49,19 +77,44 @@ let mockContrast = 100;
 let mockChannelOpacities: Record<string, number> = {};
 // Must be a STABLE reference: it sits in the decode effect's dependency
 // array, so a fresh fn each render would re-trigger the fetch effect forever.
-const mockReportDataRange = vi.fn();
+const mockReportChannelRanges = vi.fn();
+// Per-channel windows, keyed by channel name. Defaulted for both fixture
+// channels because that is the production invariant: the decode's
+// `setDecodeVersion` and `reportChannelRanges` land in ONE React commit, so a
+// channel being composited always has a window. A channel WITHOUT one is now
+// skipped rather than drawn, so an empty default would mean the fixtures paint
+// nothing at all.
+const EIGHT_BIT = { min: 0, max: 255, rangeMax: 255, dataMin: 0 };
+let mockChannelWindows: Record<
+  string,
+  { min: number; max: number; rangeMax: number; dataMin: number }
+> = { ch1: EIGHT_BIT, ch2: EIGHT_BIT };
 
 vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
   useImageDisplay: () => ({
+    channelWindows: mockChannelWindows,
+    fallbackWindow: { min: 0, max: 255, rangeMax: 255, dataMin: 0 },
     windowMin: mockWindowMin,
     windowMax: mockWindowMax,
     windowRangeMax: mockWindowRangeMax,
+    proxyRangeMax: null,
     brightness: mockBrightness,
     contrast: mockContrast,
     channelOpacities: mockChannelOpacities,
-    reportDataRange: mockReportDataRange,
+    reportChannelRanges: mockReportChannelRanges,
   }),
 }));
+
+// Real implementation, but observable: the CPU composite path builds one LUT
+// per channel and the only other markers it leaves are putImageData call
+// counts, so without this a regression to a single shared table is invisible.
+vi.mock('@/lib/windowLevel', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/windowLevel')>(
+      '@/lib/windowLevel'
+    );
+  return { ...actual, buildLut: vi.fn(actual.buildLut) };
+});
 
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -90,6 +143,9 @@ function makeSuccessfulFetch() {
     mockBitmap,
     fetchImpl: vi.fn().mockResolvedValue({
       ok: true,
+      // A real Response always has headers; the canvas reads `X-Proxy-Range`
+      // off them to learn what an 8-bit proxy's 255 stands for.
+      headers: new Headers(),
       blob: vi.fn().mockResolvedValue(mockBlob),
     } as unknown as Response),
   };
@@ -123,11 +179,55 @@ function makePartialFailureFetch(failChannel: string) {
     }
     return Promise.resolve({
       ok: true,
+      // A real Response always has headers; the canvas reads `X-Proxy-Range`
+      // off them to learn what an 8-bit proxy's 255 stands for.
+      headers: new Headers(),
       blob: vi.fn().mockResolvedValue(mockBlob),
     } as unknown as Response);
   });
 
   return { fetchImpl, mockBitmap };
+}
+
+/**
+ * Makes `createCompositor` hand back a live fake compositor, and returns it.
+ * `overrides` lets a test weaken one method (e.g. a dead `isAlive`).
+ */
+function makeFakeCompositor(overrides: Partial<Compositor> = {}) {
+  const fake: Compositor = {
+    setSize: vi.fn(),
+    draw: vi.fn(),
+    dispose: vi.fn(),
+    isAlive: vi.fn(() => true),
+    ...overrides,
+  };
+  vi.mocked(createCompositor).mockImplementation(() => fake);
+  return fake as {
+    [K in keyof Compositor]: ReturnType<typeof vi.fn>;
+  };
+}
+
+/** The `onContextLost` callback the component handed to `createCompositor`. */
+function capturedOnContextLost(): () => void {
+  const cb = vi.mocked(createCompositor).mock.calls[0]?.[1];
+  if (!cb) throw new Error('createCompositor was not given an onContextLost');
+  return cb;
+}
+
+/**
+ * Replaces the per-canvas `getContext` mock with one that hands the SAME 2D
+ * context object to every canvas. The component's CPU composite writes through
+ * an internal offscreen canvas we hold no handle on, so a shared context is the
+ * only way one spy can see `putImageData` — the per-pixel path's signature
+ * call, which no other code path in this component makes (`decode8Bit` only
+ * reads, via `getImageData`).
+ */
+function installSharedCanvasContext() {
+  const ctx = createMockCanvasContext();
+  HTMLCanvasElement.prototype.getContext = vi.fn((type: string) =>
+    type === '2d' ? ctx : null
+  ) as unknown as HTMLCanvasElement['getContext'];
+  return ctx;
 }
 
 const DEFAULT_PROPS = {
@@ -143,6 +243,7 @@ const DEFAULT_PROPS = {
 describe('MultiChannelCanvas', () => {
   let originalFetch: typeof global.fetch;
   let originalCreateImageBitmap: typeof global.createImageBitmap;
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -151,13 +252,19 @@ describe('MultiChannelCanvas', () => {
     mockBrightness = 100;
     mockContrast = 100;
     mockChannelOpacities = {};
+    mockChannelWindows = { ch1: EIGHT_BIT, ch2: EIGHT_BIT };
     originalFetch = global.fetch;
     originalCreateImageBitmap = global.createImageBitmap;
+    // clearAllMocks wipes calls, not implementations — without this a fake
+    // compositor installed by one test would silently keep every LATER test on
+    // the GPU path.
+    vi.mocked(createCompositor).mockImplementation(() => null);
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
     global.createImageBitmap = originalCreateImageBitmap;
+    HTMLCanvasElement.prototype.getContext = originalGetContext;
   });
 
   // ── rendering ─────────────────────────────────────────────────────────────
@@ -262,6 +369,32 @@ describe('MultiChannelCanvas', () => {
   // ── fetch calls ───────────────────────────────────────────────────────────
 
   describe('fetch behaviour', () => {
+    it('issues the DISPLAYED frame immediately, never behind speculative warms', async () => {
+      // The window prefetcher fills every slot of the shared throttle during
+      // playback. The frame the user is actually looking at is exempt from the
+      // queue — a priority slot in a queue is still a queue, and waiting for
+      // one of four multi-megabyte warms to finish is latency the user sees.
+      const release: Array<() => void> = [];
+      for (let i = 0; i < MAX_SPECULATIVE_REQUESTS; i++) {
+        void speculativeFrameRequests
+          .schedule(() => new Promise<void>(r => release.push(r)))
+          .catch(() => undefined);
+      }
+      expect(speculativeFrameRequests.inFlight).toBe(MAX_SPECULATIVE_REQUESTS);
+
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} frameId="exempt-1" />);
+
+      // Synchronously, in the same tick as the effect — not one microtask of
+      // waiting for a slot.
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+      release.forEach(r => r());
+      await waitFor(() => expect(speculativeFrameRequests.inFlight).toBe(0));
+    });
+
     it('fetches one URL per visible channel with correct query string', async () => {
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;
@@ -487,7 +620,7 @@ describe('MultiChannelCanvas', () => {
       // Mutate the context mock's window state directly (module-level var)
       // and force a re-render — this is the perf-critical guarantee: the
       // decode effect's deps are
-      // [frameId, containerId, channelsKey, reportDataRange, onLoad, t,
+      // [frameId, containerId, channelsKey, reportChannelRanges, onLoad, t,
       // visibleChannels]. windowMin/windowMax are NOT in that list, so a
       // slider drag re-runs only the (cheap) windowing/composite effect.
       // A regression that re-adds windowMin/windowMax to the decode deps
@@ -503,10 +636,22 @@ describe('MultiChannelCanvas', () => {
     });
   });
 
-  // ── reportDataRange is scoped to containerId::channelsKey ─────────────────
+  // ── reportChannelRanges: one range PER CHANNEL, keyed by container ────────
 
-  describe('reportDataRange container-scoped key', () => {
-    it('reports the combined sample range with an empty containerId prefix by default', async () => {
+  describe('reportChannelRanges', () => {
+    it('reports every channel separately, not one combined range', async () => {
+      // The channels MUST decode to different values here. With the default
+      // all-zero fixture this assertion pins only the argument shape, and a
+      // regression that computes the union and writes that one pair under every
+      // channel key passes it — i.e. the original bug wearing the new API.
+      const ctx = installSharedCanvasContext();
+      let call = 0;
+      ctx.getImageData = vi.fn((_x, _y, w: number, h: number) => {
+        const data = new Uint8ClampedArray(w * h * 4);
+        data.fill(call++ === 0 ? 10 : 200);
+        return { data, width: w, height: h };
+      }) as unknown as typeof ctx.getImageData;
+
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;
 
@@ -515,16 +660,18 @@ describe('MultiChannelCanvas', () => {
         await new Promise(r => setTimeout(r, 50));
       });
 
-      // The fake-blob 8-bit decode path produces all-zero samples (jsdom's
-      // mocked getImageData returns a zeroed Uint8ClampedArray), so both
-      // cmin and cmax collapse to 0. `containerId` is undefined in
-      // DEFAULT_PROPS, so the key's prefix is the empty string.
+      // Decode order follows the fetchChannels array, so ch1 sees 10 and ch2
+      // sees 200. `containerId` is undefined in DEFAULT_PROPS, so the key is
+      // null — which the context reads as "always a new container".
       await waitFor(() => {
-        expect(mockReportDataRange).toHaveBeenCalledWith(0, 0, '::ch1|ch2');
+        expect(mockReportChannelRanges).toHaveBeenCalledWith(
+          { ch1: { min: 10, max: 10 }, ch2: { min: 200, max: 200 } },
+          null
+        );
       });
     });
 
-    it('scopes the range key to containerId when the prop is provided', async () => {
+    it('keys the report on containerId when the prop is provided', async () => {
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;
 
@@ -534,7 +681,10 @@ describe('MultiChannelCanvas', () => {
       });
 
       await waitFor(() => {
-        expect(mockReportDataRange).toHaveBeenCalledWith(0, 0, 'vidA::ch1|ch2');
+        expect(mockReportChannelRanges).toHaveBeenCalledWith(
+          { ch1: { min: 0, max: 0 }, ch2: { min: 0, max: 0 } },
+          'vidA'
+        );
       });
     });
   });
@@ -566,5 +716,267 @@ describe('MultiChannelCanvas', () => {
       expect(screen.getByTestId('multi-channel-canvas')).toBeInTheDocument();
       expect(onLoad).toHaveBeenCalledWith(400, 300, 'ch1|ch2');
     });
+  });
+
+  // ── WebGL2 compositor vs. the CPU fallback ────────────────────────────────
+  //
+  // A canvas yields ONE context type for its lifetime, so the component has to
+  // commit to WebGL2 at mount and, when that fails or the context is lost,
+  // remount a fresh element (React `key`) for the CPU path. These tests pin
+  // both directions of that decision. `putImageData` is the marker for "the
+  // per-pixel CPU loop ran": nothing else in the component calls it.
+
+  describe('render path selection', () => {
+    it('renders through the CPU path when createCompositor returns null (no WebGL2)', async () => {
+      const ctx = installSharedCanvasContext();
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      const onLoad = vi.fn();
+
+      await act(async () => {
+        render(<MultiChannelCanvas {...DEFAULT_PROPS} onLoad={onLoad} />);
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      expect(createCompositor).toHaveBeenCalled();
+      // One composite pass, one putImageData per channel.
+      expect(ctx.putImageData).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId('multi-channel-canvas')).toBeInTheDocument();
+      expect(onLoad).toHaveBeenCalledWith(400, 300, 'ch1|ch2');
+    });
+
+    it('renders and reports onLoad with the REAL compositor factory under jsdom', async () => {
+      // Integration check against the actual module: jsdom has no WebGL, so
+      // `getContext('webgl2')` returns null there. Deliberately asserts only
+      // the user-visible outcome — whether the factory returns null or throws
+      // is the compositor's business; either way the component must paint.
+      const actual = await vi.importActual<
+        typeof import('@/lib/webglCompositor')
+      >('@/lib/webglCompositor');
+      vi.mocked(createCompositor).mockImplementation(actual.createCompositor);
+
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      const onLoad = vi.fn();
+
+      await act(async () => {
+        render(<MultiChannelCanvas {...DEFAULT_PROPS} onLoad={onLoad} />);
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      expect(screen.getByTestId('multi-channel-canvas')).toBeInTheDocument();
+      expect(onLoad).toHaveBeenCalledWith(400, 300, 'ch1|ch2');
+    });
+
+    it('draws via the compositor with each channel carrying its OWN window', async () => {
+      const ctx = installSharedCanvasContext();
+      const fake = makeFakeCompositor();
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+      mockChannelOpacities = { ch2: 40 };
+      // The shape of Marika's data: a narrow channel beside a wide one. Sharing
+      // one window is what made the narrow channel render as a flat field.
+      mockChannelWindows = {
+        ch1: { min: 2941, max: 4145, rangeMax: 4145, dataMin: 2941 },
+        ch2: { min: 489, max: 53927, rangeMax: 53927, dataMin: 489 },
+      };
+
+      const onLoad = vi.fn();
+
+      await act(async () => {
+        render(<MultiChannelCanvas {...DEFAULT_PROPS} onLoad={onLoad} />);
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      expect(fake.setSize).toHaveBeenCalledWith(400, 300);
+      expect(fake.draw).toHaveBeenCalledTimes(1);
+
+      const [channels] = fake.draw.mock.calls[0] as [CompositorChannel[]];
+      expect(channels.map(c => c.channel).sort()).toEqual(['ch1', 'ch2']);
+      // Windows are per channel, in RAW SAMPLE UNITS, exactly as buildLut took
+      // them — and each channel gets its own, not the union of the two.
+      expect(channels.find(c => c.channel === 'ch1')?.window).toEqual({
+        min: 2941,
+        max: 4145,
+        rangeMax: 4145,
+      });
+      expect(channels.find(c => c.channel === 'ch2')?.window).toEqual({
+        min: 489,
+        max: 53927,
+        rangeMax: 53927,
+      });
+
+      const ch1 = channels.find(c => c.channel === 'ch1');
+      expect(ch1?.color).toEqual([255, 0, 0]); // '#FF0000' via hexToRgb
+      expect(ch1?.opacity).toBe(1); // absent from channelOpacities ⇒ 100 %
+      expect(ch1?.width).toBe(400);
+      expect(ch1?.height).toBe(300);
+      // The sample view IS the depth — there is no separate bitDepth field to
+      // disagree with it.
+      expect(ch1?.data).toBeInstanceOf(Uint8Array);
+      expect(ch1?.data.length).toBe(400 * 300);
+
+      const ch2 = channels.find(c => c.channel === 'ch2');
+      expect(ch2?.color).toEqual([0, 255, 0]); // '#00FF00'
+      expect(ch2?.opacity).toBeCloseTo(0.4); // 40 / 100
+
+      // The whole point of the change: no per-pixel JS work on this path.
+      expect(ctx.putImageData).not.toHaveBeenCalled();
+      expect(ctx.clearRect).not.toHaveBeenCalled();
+      expect(onLoad).toHaveBeenCalledWith(400, 300, 'ch1|ch2');
+    });
+
+    it('re-draws on a window (slider) change without refetching or remounting', async () => {
+      const fake = makeFakeCompositor();
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      const { rerender } = render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      await act(async () => {
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(fake.draw).toHaveBeenCalledTimes(1);
+
+      // Simulate a Min/Max slider drag on ONE channel: context state changes,
+      // props don't. Only that channel's window moves. The scalar fallback is
+      // moved OFF 0/255 so the ch2 assertion below cannot pass by coincidence —
+      // with the defaults, "identity window" and "borrowed shared window" are
+      // numerically the same thing and a regression to borrowing survives.
+      mockWindowMin = 7;
+      mockWindowMax = 199;
+      mockChannelWindows = {
+        ch1: { min: 10, max: 200, rangeMax: 255, dataMin: 0 },
+      };
+      rerender(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      await act(async () => {
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      expect(fake.draw).toHaveBeenCalledTimes(2);
+      const [channels] = fake.draw.mock.calls[1] as [CompositorChannel[]];
+      expect(channels.find(c => c.channel === 'ch1')?.window).toEqual({
+        min: 10,
+        max: 200,
+        rangeMax: 255,
+      });
+      // ch2 has no window, so it is not drawn at all — it must never borrow
+      // ch1's (the borrowing IS the bug), and drawing it through an 8-bit
+      // identity would blow a 16-bit channel to white under `lighter`.
+      expect(channels.find(c => c.channel === 'ch2')).toBeUndefined();
+      // No refetch (decode cache reused) and no new canvas element, so no new
+      // GL context: a drag is a uniform update, nothing more.
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(createCompositor).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to a FRESH canvas on the CPU path after context loss', async () => {
+      const ctx = installSharedCanvasContext();
+      const fake = makeFakeCompositor();
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      await act(async () => {
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      expect(fake.draw).toHaveBeenCalledTimes(1);
+      expect(ctx.putImageData).not.toHaveBeenCalled();
+      const canvasBefore = screen.getByTestId('multi-channel-canvas');
+
+      await act(async () => {
+        capturedOnContextLost()();
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      // A NEW element — the lost one is stuck in WebGL context mode and could
+      // never yield a 2D context.
+      const canvasAfter = screen.getByTestId('multi-channel-canvas');
+      expect(canvasAfter).not.toBe(canvasBefore);
+      expect(fake.dispose).toHaveBeenCalledTimes(1);
+      // Repainted on the CPU from the cached samples: not blank, not refetched.
+      expect(ctx.putImageData).toHaveBeenCalledTimes(2);
+      expect(fake.draw).toHaveBeenCalledTimes(1);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back to the CPU path when the compositor reports isAlive() === false', async () => {
+      const ctx = installSharedCanvasContext();
+      const fake = makeFakeCompositor({ isAlive: vi.fn(() => false) });
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      const onLoad = vi.fn();
+
+      await act(async () => {
+        render(<MultiChannelCanvas {...DEFAULT_PROPS} onLoad={onLoad} />);
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      // Never drawn through a dead context; painted on the CPU instead.
+      expect(fake.draw).not.toHaveBeenCalled();
+      expect(fake.dispose).toHaveBeenCalledTimes(1);
+      expect(ctx.putImageData).toHaveBeenCalledTimes(2);
+      expect(onLoad).toHaveBeenCalledWith(400, 300, 'ch1|ch2');
+    });
+
+    it('falls back to the CPU path when createCompositor throws', async () => {
+      const ctx = installSharedCanvasContext();
+      vi.mocked(createCompositor).mockImplementation(() => {
+        throw new Error('WebGL2 init exploded');
+      });
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      const onLoad = vi.fn();
+
+      await act(async () => {
+        render(<MultiChannelCanvas {...DEFAULT_PROPS} onLoad={onLoad} />);
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      expect(ctx.putImageData).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId('multi-channel-canvas')).toBeInTheDocument();
+      expect(onLoad).toHaveBeenCalledWith(400, 300, 'ch1|ch2');
+    });
+  });
+});
+
+// ── CPU composite path: one LUT per channel ─────────────────────────────────
+//
+// This path runs whenever WebGL2 is unavailable or the context is lost. It is
+// the half of the per-channel window fix that no pixel assertion covers, so a
+// regression to a single shared table here would silently restore the exact
+// bug — a narrow channel drawn through a wide channel's window — on every
+// machine without WebGL2.
+
+describe('MultiChannelCanvas — CPU composite windows', () => {
+  it("builds one LUT per channel, each from that channel's own window", async () => {
+    installSharedCanvasContext();
+    // No compositor => the component falls back to the 2-D path.
+    vi.mocked(createCompositor).mockReturnValue(null);
+    mockChannelWindows = {
+      ch1: { min: 2941, max: 4145, rangeMax: 4145, dataMin: 2941 },
+      ch2: { min: 489, max: 53927, rangeMax: 53927, dataMin: 489 },
+    };
+    const { fetchImpl } = makeSuccessfulFetch();
+    global.fetch = fetchImpl;
+    vi.mocked(buildLut).mockClear();
+
+    await act(async () => {
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      await new Promise(r => setTimeout(r, 50));
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(buildLut).mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    const calls = vi.mocked(buildLut).mock.calls;
+    expect(calls).toContainEqual([2941, 4145, 4145]);
+    expect(calls).toContainEqual([489, 53927, 53927]);
   });
 });

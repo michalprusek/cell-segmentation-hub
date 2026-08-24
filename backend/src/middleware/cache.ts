@@ -12,8 +12,14 @@ export interface CacheOptions {
   noCache?: boolean;
   mustRevalidate?: boolean;
   staleWhileRevalidate?: number;
-  namespace?: string; // Cache namespace
-  keyGenerator?: (req: Request) => string; // Custom key generation
+  /** NOT READ. Both of these existed only to seed the ETag this middleware
+   *  used to generate, and that generation is gone — see createCacheMiddleware
+   *  for why. They are kept so the existing call sites still type-check, but
+   *  nothing namespaces or keys anything on them today; passing a value has no
+   *  effect. */
+  namespace?: string;
+  /** NOT READ — see `namespace`. */
+  keyGenerator?: (req: Request) => string;
 }
 
 /**
@@ -37,15 +43,24 @@ export function createCacheMiddleware(options: CacheOptions) {
           res.setHeader('Expires', expires.toUTCString());
         }
 
-        // Add ETag support for better caching
-        if (maxAge > 0 && !options.noCache) {
-          const etag = options.keyGenerator
-            ? generateCustomETag(req, options.keyGenerator)
-            : generateETag(req);
-          if (etag) {
-            res.setHeader('ETag', etag);
-          }
-        }
+        // NO ETag IS SET HERE, DELIBERATELY. This middleware runs BEFORE the
+        // handler, so the response body does not exist yet and anything it
+        // could hash would describe the REQUEST, not the content — which is
+        // what an ETag has to identify.
+        //
+        // It used to hash `${url}-${timestamp}` and truncate to 16 base64
+        // characters. Sixteen base64 characters encode twelve bytes, and the
+        // first twelve bytes of every URL on this router are `/api/images/`,
+        // so every response carried the SAME ETag: "L2FwaS9pbWFnZXMv". The
+        // server honoured it too — a request for any frame with that
+        // If-None-Match got a 304, whatever its content or length.
+        //
+        // Worse, it suppressed the correct one. `res.sendFile` sets an ETag
+        // from the file's size and mtime, but only `if (!res.getHeader('ETag'))`
+        // (send/index.js:763), and `res.json`/`res.send` likewise generate a
+        // body-derived ETag only when none is present. Setting a placeholder
+        // here is exactly what stopped both. Leaving the header alone gives
+        // every route a content-derived ETag from Express itself.
       }
 
       next();
@@ -87,39 +102,7 @@ function buildCacheControlHeader(options: CacheOptions): string {
   return directives.join(', ');
 }
 
-/**
- * Generate ETag for request
- */
-function generateETag(req: Request): string | null {
-  try {
-    // Simple ETag generation based on URL and query parameters
-    const url = req.originalUrl || req.url;
-    const timestamp = Math.floor(Date.now() / 1000); // Round to seconds
-    const hash = Buffer.from(`${url}-${timestamp}`).toString('base64');
-    return `"${hash.slice(0, 16)}"`;
-  } catch (error) {
-    logger.warn('Failed to generate ETag:', error);
-    return null;
-  }
-}
 
-/**
- * Generate custom ETag using key generator
- */
-function generateCustomETag(
-  req: Request,
-  keyGenerator: (req: Request) => string
-): string | null {
-  try {
-    const key = keyGenerator(req);
-    const timestamp = Math.floor(Date.now() / 1000); // Round to seconds
-    const hash = Buffer.from(`${key}-${timestamp}`).toString('base64');
-    return `"${hash.slice(0, 16)}"`;
-  } catch (error) {
-    logger.warn('Failed to generate custom ETag:', error);
-    return null;
-  }
-}
 
 /**
  * No-cache middleware - prevents caching

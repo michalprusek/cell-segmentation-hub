@@ -16,6 +16,7 @@
 
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
+import { resolveFrameId } from '@/lib/staticFrameChannels';
 
 export interface CachedSegmentationData {
   polygons: SegmentationPolygon[] | null;
@@ -97,10 +98,18 @@ export function setCachedSegmentationPolygons(
  *  encoding). */
 export function buildFrameImageUrl(
   frameId: string,
-  channel: string | null
+  channel: string | null,
+  /** `'proxy'` asks for the 8-bit WebP playback proxy; omitted means the
+   *  original 16-bit PNG, which is what every measurement path wants. */
+  repr?: 'proxy'
 ): string {
   if (channel) {
-    return `/api/images/${frameId}/frame-data?channel=${encodeURIComponent(channel)}`;
+    // A STATIC channel is one picture stamped onto every frame, so all of them
+    // resolve to one URL — which is what lets the HTTP cache, the prefetch
+    // window and the decode cache each hold it once. See `staticFrameChannels`.
+    const id = resolveFrameId(frameId, channel);
+    const base = `/api/images/${id}/frame-data?channel=${encodeURIComponent(channel)}`;
+    return repr === 'proxy' ? `${base}&repr=proxy` : base;
   }
   return `/api/images/${frameId}/display`;
 }

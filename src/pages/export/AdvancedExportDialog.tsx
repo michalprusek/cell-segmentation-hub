@@ -880,9 +880,13 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
               {/* Export Progress */}
               {isExporting && (
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>{exportStatus}</span>
-                    <span>{Math.round(exportProgress)}%</span>
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate" title={exportStatus}>
+                      {exportStatus}
+                    </span>
+                    <span className="flex-shrink-0">
+                      {Math.round(exportProgress)}%
+                    </span>
                   </div>
                   <Progress value={exportProgress} className="w-full" />
                 </div>
@@ -891,9 +895,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
               {/* Completed Export - Manual Download */}
               {completedJobId && !isExporting && !isDownloading && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg relative">
-                  <AlertCircle className="h-4 w-4 text-green-600" />
-                  <div className="flex-1">
-                    <span className="text-sm text-green-800">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 text-green-600" />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm text-green-800 break-words">
                       {exportStatus ||
                         "Export completed successfully! Click below to download if it didn't start automatically."}
                     </span>
@@ -901,7 +905,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                   <Button
                     size="sm"
                     onClick={triggerDownload}
-                    className="ml-2"
+                    className="ml-2 flex-shrink-0"
                     title={
                       isDownloading
                         ? 'Click to stop animation when download completes'
@@ -924,7 +928,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     size="sm"
                     variant="ghost"
                     onClick={dismissExport}
-                    className="ml-1 h-6 w-6 p-0"
+                    className="ml-1 h-6 w-6 flex-shrink-0 p-0"
                     title="Dismiss"
                   >
                     <X className="h-4 w-4" />
@@ -935,8 +939,8 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
               {/* Failed Export */}
               {currentJob?.status === 'failed' && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <span className="text-sm text-red-800">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-600" />
+                  <span className="min-w-0 text-sm text-red-800 break-words">
                     Export failed: {currentJob.message || 'Unknown error'}
                   </span>
                 </div>

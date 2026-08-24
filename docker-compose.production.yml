@@ -50,6 +50,26 @@ services:
       - PORT=3001
       - UPLOAD_DIR=/app/uploads
       - ENABLE_TRACING=false
+      # V8 old-space ceiling. NOT the same limit as `deploy.resources.limits.
+      # memory` below: the cgroup bounds RSS (native buffers, Cairo canvases,
+      # sharp), while this bounds the JavaScript heap. Node's default is ~2 GB
+      # regardless of how much the cgroup allows, so raising the cgroup to 12G
+      # (2026-08-19) did nothing for a heap OOM.
+      #
+      # A 300-frame microtubule export went from 60 MB to the 2 GB ceiling in
+      # ~16 s and killed the process (2026-08-20): every export task — image
+      # copies, visualizations, COCO/YOLO/JSON, MT metrics, kymographs, ImageJ
+      # RoiSets, CVAT — runs concurrently and each holds the whole image array.
+      # Smaller exports the same morning (70 frames) peaked at 150 MB, so this
+      # is not a leak; it is the concurrent fan-out over a large frame count.
+      # The same export re-run under this ceiling peaked at 1925 MB — i.e. it
+      # had been missing the old ceiling by under 200 MB — and completed.
+      #
+      # This is HEADROOM, not the fix — the same caveat as the cgroup limit
+      # below. The export is supposed to process frames in batches rather than
+      # hold all of them; until it does, this only decides how many frames it
+      # takes before the same crash returns.
+      - NODE_OPTIONS=--max-old-space-size=8192
       # Database password from shell environment
       - DB_PASSWORD=${DB_PASSWORD}
       # Queue processing — default 1 to prevent concurrent multipart request errors
@@ -67,7 +87,20 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          # 12G, not 4G. The service idles around 130 MB; the limit exists only
+          # for the one job that can genuinely need gigabytes — decoding an
+          # uploaded ND2 in `extract_nd2.py`. At 4G a real two-channel
+          # well-plate acquisition was OOM-killed by the cgroup after a
+          # 27-minute upload (2026-08-19), with the host itself holding 35 GB
+          # free: the cap, not the machine, was the wall. Matched to the ml
+          # service's 12G because a decode's working set scales with the user's
+          # file, not with anything we control.
+          #
+          # This is HEADROOM, not the fix. The extractor is supposed to stream
+          # frames rather than hold a stack, and a limit is not a substitute for
+          # that — it only decides how large a file has to be before the same
+          # failure returns.
+          memory: 12G
           cpus: '2.0'
         reservations:
           memory: 1G
@@ -194,9 +227,16 @@ services:
       - ML_INFERENCE_WORKERS=${ML_INFERENCE_WORKERS:-1}
       - ML_ENABLE_PARALLEL_INFERENCE=${ML_ENABLE_PARALLEL_INFERENCE:-false}
       - ML_MAX_CONCURRENT_USERS=${ML_MAX_CONCURRENT_USERS:-1}
-      # Microtubule v7 (DINOv3-L + DPT) needs ~7-8 GB for a single 1024x1024
-      # forward pass; the previous 8 GB cap tripped CUDA OOM. 14 GB leaves
-      # room on the shared A5000 (24 GB total) for the other tenant.
+      # Sized for the heaviest interactive model. This was microtubule v7
+      # (DINOv3-L + DPT), which held ~7-8 GB for a single 1024x1024 forward
+      # pass and tripped CUDA OOM under the previous 8 GB cap.
+      #
+      # Microtubule v5H replaced it and peaks at 0.73 GiB, flat across
+      # 1024x1024 and 2048x2048 (it tiles at 512x512 instead of running a ViT
+      # over the whole frame). The cap is therefore now sized by the OTHER
+      # models, and has NOT been re-measured for them -- lowering it would
+      # hand VRAM back to the essays worker on this shared A5000, but only
+      # after measuring hrnet / cbam / sperm peaks.
       - ML_MEMORY_LIMIT_GB=${ML_MEMORY_LIMIT_GB:-14}
       - ML_ENABLE_CUDA_STREAMS=true
       - GPU_MEMORY_WARNING_THRESHOLD=90
@@ -207,18 +247,23 @@ services:
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
       - CUDA_LAUNCH_BLOCKING=0
       - ML_GPU_PRIORITY=high
-      # Microtubule v7 requires a HuggingFace token to download the gated
-      # DINOv3 ViT-L/16 backbone (~1.1 GB) on first model load. Read from
-      # .env.production at compose time so the token isn't baked into the
-      # image. Absent token → microtubule model fails to load (other
-      # models unaffected).
+      # HuggingFace token, read from .env.production at compose time so it is
+      # not baked into the image.
+      #
+      # NO LONGER for microtubule: v5H's checkpoint is a complete state_dict
+      # with no frozen backbone, so MT segmentation needs neither a token nor
+      # network access. Kept because SegFormer and the sperm model still call
+      # from_pretrained() -- neither repo is gated today, so the token is
+      # belt-and-braces, but the cache mount below is load-bearing for them.
       - HF_TOKEN=${HF_TOKEN}
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ./backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro
       - ./backend/uploads/blue:/app/uploads
-      # Persist HuggingFace cache across container restarts so the 1.1 GB
-      # DINOv3 backbone download survives `docker compose down`.
+      # Persist the HuggingFace cache across container restarts. It held the
+      # 1.1 GB DINOv3 backbone for microtubule v7; that model is gone, but
+      # SegFormer and sperm still resolve configs/weights through this cache,
+      # so removing it would put a network fetch on their first load.
       - ./backend/segmentation/.hf-cache:/home/app/.cache/huggingface
     restart: always
     deploy:
@@ -284,30 +329,39 @@ services:
       - PYTHONUNBUFFERED=1
       - HOME=/tmp
       - MPLCONFIGDIR=/tmp/mpl
-      # GPU guard, measured on the 24 GB A5000 against a real well recording
-      # (2026-08-13). A v7 forward pass on a 2048x2048 well wants a 16.36 GiB
-      # working set, and that figure is FLAT — identical at caps of 16.49, 17.67
-      # and 20.02 GiB, so the process is not simply growing to fill whatever it
-      # is given.
+      # GPU guard, measured on the 24 GB A5000 against a real well recording.
       #
-      # The old 0.6 (14.13 GiB) sat BELOW that working set, so every position
-      # hit the ceiling, released ~3.7 GiB of cached blocks back to the driver
-      # and then had to win them back. On a card shared with the ml service and
-      # Maptimize that re-acquisition is a race, and losing it is an
-      # OutOfMemoryError — which is how one folder lost 255 wells in one run and
-      # 68 in the next (see backend/essays/module/tests/test_failure_resilience.py).
-      # 0.75 clears the working set with 1.31 GiB to spare; higher buys nothing
-      # because the demand does not grow.
+      # RE-MEASURED 2026-08-17 for microtubule v5H (3 positions of a 2048x2048
+      # IRM well, 162 microtubules): the working set is **1.41 GiB reserved**
+      # (1.05 GiB allocated), and FLAT — identical at caps of 17.99, 4.80, 2.88
+      # and 1.92 GiB, so the process does not grow to fill what it is given.
+      # Runtime was flat too (43.0 / 43.6 / 44.0 / 43.9 s) and `results.csv` came
+      # out BYTE-IDENTICAL at all four caps, because 1.41 GiB sits far below
+      # every one of them and cuDNN's workspace is never constrained.
       #
-      # The start gate rises with it: a batch admitted with only 13 GB free
-      # would resume exactly the release-and-re-acquire cycle the cap now avoids.
-      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-17}
-      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.75}
+      # 0.12 (2.88 GiB) is TWICE the measured working set. The cardinal rule is
+      # that the cap must sit ABOVE the working set: the old 0.6 (14.13 GiB) sat
+      # below v7's 16.36 GiB, so every position hit the ceiling, released
+      # ~3.7 GiB of cached blocks back to the driver and had to win them back.
+      # On a card shared with the ml service and Maptimize that re-acquisition
+      # is a race, and losing it is an OutOfMemoryError — which is how one
+      # folder lost 255 wells in one run and 68 in the next (see
+      # backend/essays/module/tests/test_failure_resilience.py).
+      #
+      # The previous 0.75 / 17 GB pair was sized for v7 and reserved ~17.7 GiB
+      # for a model that needs under 1.5. Do not raise these again without
+      # re-measuring: 17 GB of start-gate meant the batch waited for memory it
+      # was never going to use, on a card three tenants share.
+      #
+      # The start gate tracks the cap: it only has to cover the cap plus the
+      # CUDA context (~0.4 GiB), not the whole card.
+      - ESSAYS_GPU_MIN_FREE_GB=${ESSAYS_GPU_MIN_FREE_GB:-4}
+      - ESSAYS_GPU_MEM_FRACTION=${ESSAYS_GPU_MEM_FRACTION:-0.12}
       - ESSAYS_GPU_WAIT_TIMEOUT_S=${ESSAYS_GPU_WAIT_TIMEOUT_S:-1800}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
-      # Reuse the byte-identical microtubule_v7.pt already on disk (no download).
+      # Reuse the byte-identical microtubule_v5h.pth already on disk (no download).
       - ./backend/segmentation/weights:/app/mt_weights:ro
       # Same host uploads dir the backend writes to — the FS handoff for job I/O.
       - ./backend/uploads/blue:/app/uploads
