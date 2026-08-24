@@ -2230,8 +2230,6 @@ export default {
       deleteFailed: 'No se pudo eliminar la etiqueta',
       loadFailed: 'No se pudieron cargar las etiquetas de tipo',
       duplicateName: 'Ya existe una etiqueta con este nombre',
-      noTrack:
-        'Este microtúbulo aún no tiene seguimiento — ejecute primero el seguimiento.',
     },
     color: {
       label: 'Color:',
@@ -2356,6 +2354,7 @@ export default {
     },
     windowLevel: {
       title: 'Visualización',
+      channel: 'Canal',
       min: 'Mín',
       max: 'Máx',
       brightness: 'Brillo',
