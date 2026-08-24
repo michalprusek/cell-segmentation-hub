@@ -334,7 +334,7 @@ export function isAddImageToQueueData(
   }
   if (
     d.threshold !== undefined &&
-    (typeof d.threshold !== 'number' || d.threshold < 0.1 || d.threshold > 0.9)
+    (typeof d.threshold !== 'number' || d.threshold < 0.1 || d.threshold > 0.99)
   ) {
     return false;
   }

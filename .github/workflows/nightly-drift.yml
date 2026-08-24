@@ -38,8 +38,12 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: TypeScript (frontend)
-        run: npx tsc --noEmit
+      # Baseline gate (scripts/type-check-baseline.mjs) — checks the real
+      # project configs and fails on errors absent from typecheck-baseline.json.
+      # Was `npx tsc --noEmit` on the root solution-style tsconfig, which
+      # resolved 0 input files and therefore always passed.
+      - name: TypeScript (frontend, baseline gate)
+        run: npm run type-check
 
       - name: TypeScript (backend)
         working-directory: backend

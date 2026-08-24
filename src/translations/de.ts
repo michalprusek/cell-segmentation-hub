@@ -518,9 +518,9 @@ export default {
             'U-Net mit MiT-B5-Encoder (SegFormer) für binäre Wundsegmentierung in Scratch-Assay-Mikroskopie (~32 ms auf A5000, 90 % IoU auf externem Testdatensatz)',
         },
         microtubule: {
-          name: 'Mikrotubuli (DINOv3 + PySOAX)',
+          name: 'Mikrotubuli (ResEnc-M + krümmungsbegrenzter Instancer)',
           description:
-            'Instanz-Segmentierung für IRM/TIRF-Mikrotubuli-Zeitrafferaufnahmen. DINOv3-L ViT-L/16 + DPT-Fusion liefert eine Centerline-Polylinie pro MT plus ein 32-d Embedding pro Pixel, das frameübergreifendes Tracking und Kymograph-Erzeugung ermöglicht. ~8 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
+            'Instanz-Segmentierung für IRM-Mikrotubuli-Zeitrafferaufnahmen. Ein nnU-Net-ResEnc-M-Netz sagt den Filament-Vordergrund vorher, ein krümmungsbegrenzter Instancer trennt ihn in einzelne Centerlines und löst jede Kreuzung unter einer harten Schranke von 0,25 rad/px. Ausschließlich auf synthetischen Bildern trainiert — ohne menschliche Annotation. ~4,5 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -557,7 +557,7 @@ export default {
       wound:
         'U-Net + MiT-B5 (SegFormer-Encoder) Modell für die Wundsegmentierung in Scratch-Assay-Mikroskopie. Eine binäre Wundregion pro Bild; ideal für Heilungsverlauf-Timelapses.',
       microtubule:
-        'Instanz-Segmentierung für Mikrotubuli in der IRM/TIRF-Mikroskopie. DINOv3-L + DPT-Encoder, PySOAX-Postprocessing, native Polylinien-Ausgabe mit Embedding-basiertem Tracking.',
+        'Instanz-Segmentierung für Mikrotubuli in der IRM-Mikroskopie. nnU-Net-ResEnc-M-Netz, krümmungsbegrenzter Instancer, native Polylinien-Ausgabe mit geometrischem frameübergreifendem Tracking.',
       microcapsule:
         'Kompaktes U-Net (destilliert aus Meta SAM 3) zur Instanz-Segmentierung von Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen.',
     },
@@ -1203,6 +1203,12 @@ export default {
     deleteAnnotations: 'Anmerkungen löschen',
     addChannel: 'Kanal hinzufügen',
     addChannelSuccess: 'Kanal {{channels}} zu {{frames}} Bild(ern) hinzugefügt',
+    addChannelAlignWarning:
+      'Ausrichtung bei {{failed}} von {{frames}} Bild(ern) fehlgeschlagen — nur {{shifted}} wurden registriert. Die Kanäle konnten nicht korreliert werden (keine gemeinsame Struktur); die Bilder wurden unverschoben hinzugefügt.',
+    addChannelAlignWarningImplausible:
+      'Ausrichtung bei {{failed}} von {{frames}} Bild(ern) fehlgeschlagen — nur {{shifted}} wurden registriert. Ein deutlicher Versatz wurde gefunden, war aber zu groß, um plausibel zu sein, und wurde verworfen; die Bilder wurden unverschoben hinzugefügt. Prüfen Sie, ob der hinzugefügte Kanal aus demselben Sichtfeld stammt und gegenüber dem Zielvideo nicht beschnitten oder verschoben ist.',
+    addChannelAlignWarningShape:
+      'Ausrichtung bei {{failed}} von {{frames}} Bild(ern) fehlgeschlagen — nur {{shifted}} wurden registriert. Der hinzugefügte Kanal und die Zielbilder haben unterschiedliche Pixelmaße und konnten daher nicht ausgerichtet werden; die Bilder wurden unverschoben hinzugefügt.',
     addChannelFailed: 'Kanal konnte nicht hinzugefügt werden',
     addChannelDialog: {
       title: 'Kanal hinzufügen',
@@ -2184,8 +2190,6 @@ export default {
       deleteFailed: 'Label konnte nicht gelöscht werden',
       loadFailed: 'Typ-Labels konnten nicht geladen werden',
       duplicateName: 'Ein Label mit diesem Namen existiert bereits',
-      noTrack:
-        'Dieser Mikrotubulus hat noch keinen Track — führen Sie zuerst das Tracking aus.',
     },
     color: {
       label: 'Farbe:',
@@ -2310,6 +2314,7 @@ export default {
     },
     windowLevel: {
       title: 'Anzeige',
+      channel: 'Kanal',
       min: 'Min',
       max: 'Max',
       brightness: 'Helligkeit',

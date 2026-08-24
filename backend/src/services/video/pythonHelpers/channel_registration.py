@@ -33,7 +33,9 @@ Runs inside the backend container (numpy only — no scipy / skimage / cv2).
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -46,6 +48,47 @@ _MAX_SHIFT_FRACTION = 0.10
 # trusted. A dark/low-signal frame produces a flat surface with no clear peak;
 # below this the estimate is discarded so noise can't inject jitter.
 _MIN_CONFIDENCE = 3.0
+
+# --------------------------------------------------------------------------
+# Per-frame outcome vocabulary.
+#
+# Every estimate ends on exactly one of these, one per *branch* of
+# :func:`estimate_translation_detailed`. Without them a rejected estimate is
+# indistinguishable from a successful one: both a genuine "already aligned"
+# result and an implausible peak that was discarded surface as (0, 0) with a
+# high confidence, so a caller counting zero shifts cannot tell a no-op success
+# from a silent failure.
+#
+# NOTE on branch ORDER: the plausibility guard runs BEFORE the confidence
+# guard, so an estimate that is both implausibly large AND weak is reported as
+# ``implausible_shift``. That is what the code does; the reason names the
+# branch actually taken, not a priority ranking.
+REASON_OK = "ok"  # estimate accepted and returned as-is (may be a real (0, 0))
+REASON_LOW_CONFIDENCE = "low_confidence"  # peak-to-background < _MIN_CONFIDENCE
+REASON_IMPLAUSIBLE_SHIFT = "implausible_shift"  # peak beyond _MAX_SHIFT_FRACTION
+# Not produced here — :func:`estimate_translation_detailed` RAISES on a shape
+# mismatch. It exists for callers that catch that case up-front and degrade to
+# an unshifted copy rather than aborting a batch (``add_channel_align.py``), so
+# that the vocabulary consumers see is complete.
+REASON_SHAPE_MISMATCH = "shape_mismatch"
+
+
+class TranslationEstimate(NamedTuple):
+    """One frame's registration outcome: the shift that was APPLIED, how much
+    the correlation was trusted, WHY the shift is what it is, and the raw
+    correlation peak before the guards ran.
+
+    ``(dy, dx)`` is zero whenever ``reason`` is not ``ok``; ``(peak_dy,
+    peak_dx)`` still carries the discarded candidate, which is what turns
+    "20 frames rejected" into the actionable "20 frames wanted (-87, 3)".
+    """
+
+    dy: int
+    dx: int
+    confidence: float
+    reason: str
+    peak_dy: int
+    peak_dx: int
 
 
 def _to_float_gray(arr: np.ndarray) -> np.ndarray:
@@ -63,18 +106,37 @@ def _gradient_magnitude(a: np.ndarray) -> np.ndarray:
     Using the gradient (not raw intensity) is what makes the correlation
     *multimodal*-robust — it depends on where edges are, not on how bright or
     which way round the contrast runs.
+
+    ``np.hypot`` writes into the ``gx`` buffer rather than allocating a third
+    full-frame float64 array (elementwise, so the aliasing is safe and the
+    values are bit-identical to the out-of-place form). At 2048² that is one
+    32 MB allocation saved per gradient, and this runs twice per estimate on
+    every (frame, channel) — see the memory note on
+    :func:`estimate_translation_detailed`.
     """
     gy, gx = np.gradient(a)
-    return np.hypot(gx, gy)
+    np.hypot(gx, gy, out=gx)
+    return gx
 
 
+@lru_cache(maxsize=2)
 def _hann2d(shape: tuple[int, int]) -> np.ndarray:
     """Separable 2-D Hann window; tapers the borders to zero so the FFT's
     implicit periodicity doesn't create a false correlation ridge at the edges.
+
+    Cached per shape and returned READ-ONLY. The window depends only on the
+    frame geometry, which is constant for a whole acquisition, so rebuilding it
+    on every (frame, channel) estimate allocated a full-frame float64 array
+    (32 MB at 2048²) per call for an identical result. ``maxsize=2`` bounds the
+    retained cache at 2·Y·X·8 bytes — one live shape plus one in transition —
+    which is strictly less than the per-call allocation it replaces. The array
+    is frozen so a caller cannot mutate the shared instance.
     """
     wy = np.hanning(shape[0])
     wx = np.hanning(shape[1])
-    return np.outer(wy, wx)
+    win = np.outer(wy, wx)
+    win.flags.writeable = False
+    return win
 
 
 def estimate_translation(
@@ -88,7 +150,55 @@ def estimate_translation(
     ``moving``'s features on top of ``reference``'s.
 
     Returns ``(0, 0, confidence)`` when the estimate is implausibly large or
-    the correlation peak is too weak to trust — a safe no-op.
+    the correlation peak is too weak to trust — a safe no-op. Those two
+    outcomes are NOT distinguishable from this 3-tuple; call
+    :func:`estimate_translation_detailed` when you need to report *why*.
+
+    Kept as a thin wrapper so existing 3-tuple call sites are untouched: the
+    numbers are produced by exactly the same code path, so the shifts this
+    returns are identical to what it returned before the reason field existed.
+    """
+    est = estimate_translation_detailed(reference, moving)
+    return est.dy, est.dx, est.confidence
+
+
+def estimate_translation_detailed(
+    reference: np.ndarray, moving: np.ndarray
+) -> TranslationEstimate:
+    """:func:`estimate_translation` plus the outcome ``reason`` and the raw
+    correlation peak.
+
+    The registration math and both guards are unchanged — this only *names*
+    the branch that produced the returned shift:
+
+    * ``ok`` — the peak passed both guards and is returned. A returned
+      ``(0, 0)`` here is a genuine success: the channels are already aligned.
+    * ``implausible_shift`` — a peak was found but sits further than
+      ``_MAX_SHIFT_FRACTION`` of the smaller dimension from the origin, so it
+      was discarded. Zeroed shift, confidence untouched — this is the silent
+      failure that used to be indistinguishable from "already aligned".
+    * ``low_confidence`` — the peak-to-background ratio is below
+      ``_MIN_CONFIDENCE`` (a flat, no-match correlation surface).
+
+    A shape mismatch raises, as before; it is not a reason this function can
+    return (see ``REASON_SHAPE_MISMATCH``).
+
+    Memory: every intermediate here is a FULL-FRAME float64 (or complex128
+    half-spectrum) array — 32 MB apiece at 2048² — and the naive out-of-place
+    form kept a dozen of them alive at once: a measured **386 MB of RSS per
+    call** for a single 2048² frame. Run from N encoder threads that is 386·N,
+    which is what OOM-killed a 4 GiB container on a 2-channel 2048²
+    acquisition. The steps below therefore reuse buffers in place and ``del``
+    each array at its last use, which brings the traced peak to exactly
+    **6·Y·X·8 bytes** (measured 6.00 full-frame float64 planes at 512², 1024²
+    and 2048² alike) and the RSS peak to ~290 MB at 2048² once allocator slack
+    and pocketfft's internal buffers are counted.
+
+    Every rewrite is elementwise with exact aliasing, so the arithmetic and the
+    returned numbers are BIT-IDENTICAL to the out-of-place form — verified over
+    84 frame/dtype/shift combinations and pinned by
+    ``test_channel_registration.py``. The algorithm, both guards and their
+    thresholds are untouched.
     """
     ref = _to_float_gray(reference)
     mov = _to_float_gray(moving)
@@ -98,16 +208,36 @@ def estimate_translation(
         )
     if ref.ndim != 2:
         raise ValueError(f"expected 2-D frames, got ndim={ref.ndim}")
+    shape = ref.shape
 
-    win = _hann2d(ref.shape)
-    rg = _gradient_magnitude(ref) * win
-    mg = _gradient_magnitude(mov) * win
+    win = _hann2d(shape)  # cached + read-only; see _hann2d
+    rg = _gradient_magnitude(ref)
+    rg *= win  # in place: same values as `_gradient_magnitude(ref) * win`
+    del ref  # gradient map supersedes the float copy
+    mg = _gradient_magnitude(mov)
+    mg *= win
+    del mov
 
     fr = np.fft.rfft2(rg)
+    del rg
     fm = np.fft.rfft2(mg)
+    del mg
+    # NOTE: written exactly as `fr * np.conj(fm)` on purpose. numpy dispatches
+    # this expression to a different complex-multiply loop than the buffer-
+    # reusing `np.conjugate(fm, out=fm); np.multiply(fr, fm, out=fm)` form, and
+    # the two disagree in the last ULP — enough to move `confidence` and, at a
+    # threshold boundary, the accepted shift. The 33 MB that rewrite would have
+    # saved is not worth an output change, so only the *lifetimes* are
+    # tightened here: fr and fm are dropped the moment the product exists,
+    # instead of staying live to the end of the function.
     cross = fr * np.conj(fm)
-    cross /= np.abs(cross) + 1e-8  # whiten → pure phase correlation
-    corr = np.fft.irfft2(cross, s=ref.shape)
+    del fr, fm
+    mag = np.abs(cross)
+    mag += 1e-8
+    cross /= mag  # whiten → pure phase correlation
+    del mag
+    corr = np.fft.irfft2(cross, s=shape)
+    del cross
 
     peak = np.unravel_index(int(np.argmax(corr)), corr.shape)
     peak_val = float(corr[peak])
@@ -118,18 +248,21 @@ def estimate_translation(
 
     # Fold the periodic FFT index into a signed shift in [-N/2, N/2).
     dy, dx = int(peak[0]), int(peak[1])
-    if dy > ref.shape[0] // 2:
-        dy -= ref.shape[0]
-    if dx > ref.shape[1] // 2:
-        dx -= ref.shape[1]
+    if dy > shape[0] // 2:
+        dy -= shape[0]
+    if dx > shape[1] // 2:
+        dx -= shape[1]
 
-    max_shift = _MAX_SHIFT_FRACTION * min(ref.shape)
+    max_shift = _MAX_SHIFT_FRACTION * min(shape)
     if abs(dy) > max_shift or abs(dx) > max_shift:
-        return 0, 0, confidence  # implausible → reject
+        # Implausible → reject. The candidate peak survives in peak_dy/peak_dx
+        # so the caller can report WHAT was rejected, not just that something
+        # was.
+        return TranslationEstimate(0, 0, confidence, REASON_IMPLAUSIBLE_SHIFT, dy, dx)
     if confidence < _MIN_CONFIDENCE:
-        return 0, 0, confidence  # too weak → reject
+        return TranslationEstimate(0, 0, confidence, REASON_LOW_CONFIDENCE, dy, dx)
 
-    return dy, dx, confidence
+    return TranslationEstimate(dy, dx, confidence, REASON_OK, dy, dx)
 
 
 def shift_frame(arr: np.ndarray, dy: int, dx: int, fill: int = 0) -> np.ndarray:

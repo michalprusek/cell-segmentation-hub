@@ -26,5 +26,14 @@ paths-ignore:
   - '**/coverage/**'
   - '**/node_modules/**'
 
+  # Vendored third-party sources. These are copied verbatim so they can be
+  # re-synced from upstream without carrying a patch, which means their
+  # findings are neither actionable here nor fixable without breaking that
+  # property. `security-and-quality` flags 23 of them in nnU-Net's network
+  # library alone — redundant assignments, unreachable branches and unused
+  # imports, mostly in architectures this project never instantiates — which
+  # is enough noise to bury a genuine finding in our own code.
+  - '**/vendor/**'
+
 queries:
   - uses: security-and-quality

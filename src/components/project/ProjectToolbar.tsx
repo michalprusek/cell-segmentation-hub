@@ -39,6 +39,13 @@ interface ProjectToolbarProps {
   projectName?: string;
   projectType?: string | null;
   images?: unknown[];
+  /** How many images the select-all checkbox actually acts on — the SEARCH-
+   *  FILTERED count, which is not `images.length` whenever a search is active.
+   *  The checkbox has always selected the filtered set (ProjectDetail's
+   *  handleSelectAll and isAllSelected both read filteredImages); only this
+   *  label was counting the unfiltered list, so filtering to 11 of 20 and
+   *  ticking the box selected the right 11 under a label promising 20. */
+  selectableCount?: number;
   selectedImageIds?: string[];
   // Selection props
   selectedCount?: number;
@@ -81,6 +88,7 @@ const ProjectToolbar = ({
   projectName = 'Project',
   projectType,
   images = [],
+  selectableCount,
   selectedImageIds,
   selectedCount = 0,
   isAllSelected = false,
@@ -170,8 +178,12 @@ const ProjectToolbar = ({
             />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none">
               {isAllSelected
-                ? t('export.allSelected', { count: images.length })
-                : t('export.selectAllProject', { count: images.length })}
+                ? t('export.allSelected', {
+                    count: selectableCount ?? images.length,
+                  })
+                : t('export.selectAllProject', {
+                    count: selectableCount ?? images.length,
+                  })}
             </span>
           </label>
         )}

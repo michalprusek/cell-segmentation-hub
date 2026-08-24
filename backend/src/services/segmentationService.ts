@@ -63,10 +63,13 @@ export interface SegmentationPolygon {
 /**
  * Editor-omitted polygon fields: stripped at the serve boundary
  * (`getSegmentationResults` / `getBatchSegmentationResults`) before sending to
- * the frontend. `_embedding` is a several-KB-per-polyline blob used only
- * server-side by the tracker + kymograph routes; omitting it saves ~30-40 MB
- * on a 100-frame microtubule video. It still round-trips through save/update
- * (DB <-> internal) — it is only the response to the editor that drops it.
+ * the frontend. `_embedding` is a several-KB-per-polyline blob written by the
+ * microtubule **v7** model; omitting it saves ~30-40 MB on a 100-frame video.
+ *
+ * v5H writes no such field and the tracker no longer reads one, so this is now
+ * purely about rows already in the database. It stays because those rows are
+ * still served: dropping the strip would start shipping a dead payload to the
+ * editor for every pre-existing microtubule video.
  */
 export const EDITOR_OMITTED_POLYGON_FIELDS = ['_embedding'] as const;
 
@@ -1552,8 +1555,8 @@ export class SegmentationService {
     // Convert Polygon[] to SegmentationPolygon[] by adding required properties
     // toApiPolygon spreads every stored field through (so future metadata
     // passes automatically), promotes parent_id -> parentIds[], and strips
-    // EDITOR_OMITTED_POLYGON_FIELDS (_embedding) — the ~30-40 MB saving on a
-    // 100-frame microtubule video.
+    // EDITOR_OMITTED_POLYGON_FIELDS (_embedding, legacy v7 rows) — the
+    // ~30-40 MB saving on a 100-frame microtubule video.
     const segmentationPolygons: SegmentationPolygon[] = polygons.map(polygon =>
       toApiPolygon(polygon as unknown as Record<string, unknown>, uuidv4)
     );

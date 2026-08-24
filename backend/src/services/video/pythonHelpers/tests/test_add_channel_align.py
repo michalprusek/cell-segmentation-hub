@@ -8,7 +8,14 @@ refactor could silently break:
   - the recovered shift is the exact inverse of a known translation,
   - the written output is lossless (16-bit preserved, overlap identical),
   - a shape mismatch degrades to an unshifted copy rather than aborting,
-  - a single-image source (one job) round-trips.
+  - a single-image source (one job) round-trips,
+  - every per-frame ``reason`` the helper can emit is REACHED by a real image
+    pair, not merely by unit-testing the classifier on hand-written tuples: a
+    correctable shift and an already-aligned pair (``ok``), a structureless
+    pair (``low_confidence``), a pair whose true offset exceeds the
+    plausibility cap (``implausible_shift`` — and with a HIGH confidence, which
+    is exactly the outcome a zero shift alone cannot be told apart from a
+    success), and a shape mismatch (``shape_mismatch``).
 
 Pure numpy + PIL + subprocess — no pytest/scipy/skimage — so it runs in the
 backend container with a plain interpreter:
@@ -34,7 +41,11 @@ HERE = os.path.dirname(__file__)
 HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
-from channel_registration import shift_frame  # noqa: E402
+from channel_registration import (  # noqa: E402
+    _MAX_SHIFT_FRACTION,
+    _MIN_CONFIDENCE,
+    shift_frame,
+)
 
 SCRIPT = os.path.join(HELPERS_DIR, "add_channel_align.py")
 
@@ -46,6 +57,18 @@ def _reference(seed: int = 0) -> np.ndarray:
     ref = (rng.rand(128, 160) * 4000).astype(np.uint16)
     ref[40:70, 50:90] += 30000
     return np.clip(ref, 0, 65535).astype(np.uint16)
+
+
+def _one(ref: np.ndarray, mov: np.ndarray) -> list:
+    """Write a (reference, moving) pair to a temp dir, run the helper on it and
+    return the single shift row ``[dy, dx, conf, reason, peak_dy, peak_dx]``."""
+    d = tempfile.mkdtemp()
+    ref_p = os.path.join(d, "ref.png")
+    mov_p = os.path.join(d, "mov.png")
+    out_p = os.path.join(d, "out.png")
+    Image.fromarray(ref).save(ref_p)
+    Image.fromarray(mov).save(mov_p)
+    return _run([{"moving": mov_p, "reference": ref_p, "out": out_p}])["shifts"][0]
 
 
 def _run(jobs: list[dict]) -> dict:
@@ -77,9 +100,12 @@ def test_recovers_and_corrects_known_shift():
     report = _run([{"moving": mov_p, "reference": ref_p, "out": out_p}])
     # The estimate is the inverse translation that puts moving back on reference.
     assert report["aligned"] == 1
-    est_dy, est_dx, conf = report["shifts"][0]
+    est_dy, est_dx, conf, reason, peak_dy, peak_dx = report["shifts"][0]
     assert (est_dy, est_dx) == (-dy, -dx), report["shifts"]
     assert conf > 1.0
+    assert reason == "ok", report["shifts"]
+    # On an accepted estimate the raw peak IS the applied shift.
+    assert (peak_dy, peak_dx) == (est_dy, est_dx)
 
     # Lossless: 16-bit dtype preserved and the overlap region matches exactly.
     out = np.asarray(Image.open(out_p))
@@ -99,8 +125,9 @@ def test_shape_mismatch_writes_unshifted_copy():
     Image.fromarray(mov).save(mov_p)
 
     report = _run([{"moving": mov_p, "reference": ref_p, "out": out_p}])
-    # Mismatched shapes → no shift estimated, moving copied verbatim.
-    assert report["shifts"][0] == [0, 0, 0.0]
+    # Mismatched shapes → no shift estimated, moving copied verbatim. No
+    # correlation ran, so there is no candidate peak either.
+    assert report["shifts"][0] == [0, 0, 0.0, "shape_mismatch", 0, 0]
     out = np.asarray(Image.open(out_p))
     assert np.array_equal(out, mov)
 
@@ -119,6 +146,82 @@ def test_single_image_zero_shift_roundtrip():
     assert report["shifts"][0][:2] == [0, 0]
     out = np.asarray(Image.open(out_p))
     assert np.array_equal(out, ref)
+
+
+# ---------------------------------------------------------------------------
+# Reason vocabulary. Each test builds an image pair that actually DRIVES the
+# helper down the branch under test — the point is to prove the pipeline can
+# reach every reason, which asserting on hand-made tuples would not.
+# ---------------------------------------------------------------------------
+
+
+def test_reason_ok_on_a_correctable_shift():
+    ref = _reference(seed=7)
+    row = _one(ref, shift_frame(ref, 6, -4).astype(np.uint16))
+    assert row[3] == "ok", row
+    assert (row[0], row[1]) == (-6, 4), row
+    assert row[2] >= _MIN_CONFIDENCE, row
+
+
+def test_reason_ok_on_an_already_aligned_pair():
+    # A genuine zero shift: nothing to correct, and it must NOT be confused
+    # with a rejection. This is the success half of the old ambiguity.
+    ref = _reference(seed=8)
+    row = _one(ref, ref.copy())
+    assert row[:2] == [0, 0], row
+    assert row[3] == "ok", row
+    assert row[2] >= _MIN_CONFIDENCE, row
+
+
+def test_reason_low_confidence_on_a_pair_with_no_shared_structure():
+    # A flat, featureless moving frame: the correlation surface has no peak to
+    # speak of, so the estimate is discarded as untrustworthy.
+    ref = _reference(seed=9)
+    flat = np.full(ref.shape, 200, dtype=np.uint16)
+    row = _one(ref, flat)
+    assert row[:2] == [0, 0], row
+    assert row[3] == "low_confidence", row
+    assert row[2] < _MIN_CONFIDENCE, row
+
+
+def test_reason_implausible_shift_keeps_a_high_confidence():
+    # A REAL, cleanly correlatable offset that is simply larger than the
+    # plausibility cap (10% of 128 rows = 12.8 px). The peak is found and is
+    # sharp — the confidence stays high — but the shift is discarded.
+    #
+    # This is precisely the row that used to be indistinguishable from
+    # "already aligned": zero shift, good confidence. Asserting the high
+    # confidence here is deliberate — without it the fixture could silently
+    # decay into just another low-confidence pair and this branch would go
+    # untested.
+    ref = _reference(seed=10)
+    true_dy = int(_MAX_SHIFT_FRACTION * min(ref.shape)) + 25  # 37 px, way over
+    row = _one(ref, shift_frame(ref, true_dy, 0).astype(np.uint16))
+    assert row[:2] == [0, 0], row  # nothing applied
+    assert row[3] == "implausible_shift", row
+    assert row[2] >= _MIN_CONFIDENCE, row  # ...yet the peak was trusted-sharp
+    # The discarded candidate is reported, so the log can say WHAT was refused.
+    assert (row[4], row[5]) == (-true_dy, 0), row
+
+
+def test_reason_shape_mismatch_is_labelled():
+    ref = _reference(seed=11)
+    row = _one(ref, _reference(seed=12)[:64, :64])
+    assert row == [0, 0, 0.0, "shape_mismatch", 0, 0], row
+
+
+def test_row_is_the_legacy_triple_plus_a_tail():
+    # Wire compatibility, from the helper's side: the first three entries are
+    # exactly the historical [dy, dx, confidence] row and keep their meaning,
+    # with the reason appended. A backend that destructures three elements
+    # reads these rows unchanged.
+    ref = _reference(seed=13)
+    row = _one(ref, shift_frame(ref, 3, 2).astype(np.uint16))
+    assert len(row) == 6, row
+    dy, dx, conf = row[:3]
+    assert isinstance(dy, int) and isinstance(dx, int)
+    assert isinstance(conf, float)
+    assert isinstance(row[3], str)
 
 
 if __name__ == "__main__":

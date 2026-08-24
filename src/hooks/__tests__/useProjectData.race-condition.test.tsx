@@ -252,5 +252,37 @@ describe('useProjectData - Race Condition Handling', () => {
         'no_segmentation'
       );
     }, 15000);
+
+    it('does NOT retry an image that was never segmented', async () => {
+      // The retry above exists for one race: the image was JUST marked
+      // segmented and the results row is not readable yet. An image whose
+      // status says it has no segmentation is not in that race — a 404 is the
+      // final answer. Retrying anyway cost 3 extra requests over 3.5 s PER
+      // FRAME, which on a 300-frame video is ~1200 doomed requests and is what
+      // made the editor stall on the loading gate during playback.
+      (apiClient.getProject as any).mockResolvedValue(mockProject);
+      (apiClient.getProjectImagesWithThumbnails as any).mockResolvedValue({
+        images: [makeMockImage('no_segmentation')],
+        total: 1,
+      });
+      (apiClient.getSegmentationResults as any).mockResolvedValue(null);
+
+      const { result } = renderHook(() =>
+        useProjectData(mockProjectId, mockUserId)
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false), {
+        timeout: 5000,
+      });
+
+      (apiClient.getSegmentationResults as any).mockClear();
+      const startedAt = Date.now();
+      await act(async () => {
+        await result.current.refreshImageSegmentation(mockImageId);
+      });
+
+      // Exactly one attempt, and it returns without waiting out the backoff.
+      expect(apiClient.getSegmentationResults).toHaveBeenCalledTimes(1);
+      expect(Date.now() - startedAt).toBeLessThan(500);
+    }, 15000);
   });
 });

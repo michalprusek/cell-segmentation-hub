@@ -327,11 +327,11 @@ const SegmenterDatasetDetail: React.FC = () => {
         onOpenChange={open => !open && setDeleteTarget(null)}
       >
         <AlertDialogContent>
-          <AlertDialogHeader>
+          <AlertDialogHeader className="min-w-0">
             <AlertDialogTitle>
               {t('segmenter.datasetDetail.deleteConfirmTitle')}
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="break-words">
               {t('segmenter.datasetDetail.deleteConfirmDescription', {
                 name: deleteTarget?.name ?? '',
               })}
