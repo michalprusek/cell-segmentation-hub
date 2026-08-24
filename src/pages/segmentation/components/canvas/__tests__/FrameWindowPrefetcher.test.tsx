@@ -33,15 +33,33 @@ vi.mock('../../../hooks/useFrameWindowPrefetch', () => ({
   ) => mockUseFrameWindowPrefetch(...args),
 }));
 
-// Control visibleChannels / channel from the test.
+// Control visibleChannels / channel / windows from the test.
 let mockVisibleChannels: string[] = [];
 let mockChannel: string | null = null;
+let mockChannelWindows: Record<
+  string,
+  { min: number; max: number; rangeMax: number; dataMin: number }
+> = {};
+let mockProxyRangeMax: number | null = null;
 
 vi.mock('../../../contexts/ImageDisplayContext', () => ({
   useImageDisplay: () => ({
     visibleChannels: mockVisibleChannels,
     channel: mockChannel,
+    channelWindows: mockChannelWindows,
+    fallbackWindow: { min: 0, max: 255, rangeMax: 255, dataMin: 0 },
+    proxyRangeMax: mockProxyRangeMax,
+    channelCoverage: {},
   }),
+}));
+
+// Not mocked before, so `canDecodeWebpGray()` returned false in jsdom and the
+// `&&` short-circuited: the proxy decision — the whole reason this component
+// reads the display context — was never reached by any test, and the context
+// mock could stay incomplete without anything noticing.
+let mockCanDecode = true;
+vi.mock('@/lib/webpGray', () => ({
+  canDecodeWebpGray: () => mockCanDecode,
 }));
 
 // -----------------------------------------------------------------------
@@ -169,5 +187,55 @@ describe('FrameWindowPrefetcher', () => {
         expect.objectContaining({ channels: [] })
       );
     });
+  });
+});
+
+// -----------------------------------------------------------------------
+// Representation choice — must match the canvas, or the prefetcher warms
+// bytes the canvas will not ask for.
+// -----------------------------------------------------------------------
+
+describe('FrameWindowPrefetcher — proxy vs original', () => {
+  beforeEach(() => {
+    mockCanDecode = true;
+    mockVisibleChannels = ['irm'];
+    mockChannel = null;
+    mockProxyRangeMax = 65535;
+    mockChannelWindows = {};
+  });
+
+  it('asks for the proxy when a channel is windowed to its own full range', () => {
+    // The regression this pins: judged against the container-wide 65535 this
+    // narrow channel can never clear the threshold, so the prefetcher would
+    // warm full-depth PNGs for ever — and because the same gate drives the
+    // canvas, no proxy would ever be fetched to teach the gate otherwise.
+    mockChannelWindows = {
+      irm: { min: 2941, max: 4145, rangeMax: 4145, dataMin: 2941 },
+    };
+    renderPrefetcher();
+    expect(mockUseFrameWindowPrefetch).toHaveBeenCalledWith(
+      expect.objectContaining({ repr: 'proxy' })
+    );
+  });
+
+  it('asks for the original once that channel is genuinely narrowed', () => {
+    mockChannelWindows = {
+      irm: { min: 3000, max: 3120, rangeMax: 4145, dataMin: 2941 },
+    };
+    renderPrefetcher();
+    expect(mockUseFrameWindowPrefetch).toHaveBeenCalledWith(
+      expect.objectContaining({ repr: undefined })
+    );
+  });
+
+  it('asks for the original when the browser cannot decode a proxy', () => {
+    mockCanDecode = false;
+    mockChannelWindows = {
+      irm: { min: 2941, max: 4145, rangeMax: 4145, dataMin: 2941 },
+    };
+    renderPrefetcher();
+    expect(mockUseFrameWindowPrefetch).toHaveBeenCalledWith(
+      expect.objectContaining({ repr: undefined })
+    );
   });
 });

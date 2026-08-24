@@ -1,17 +1,28 @@
 /**
- * Pure resolution of which microtubule *tracks* a "change type" action targets.
+ * The pure half of assigning a microtubule type label: who the action targets,
+ * and what the frame looks like afterwards.
  *
- * The context-menu action can fire on a single polygon (right-clicked) or on a
- * multi-selection. For a *tracked* MT the type is a whole-track property, so we
- * map the affected polygons to their `trackId`s and dedupe. Polylines without a
- * `trackId` (never tracked, or a hand-drawn draw) contribute nothing — an empty
- * result just means there is no cross-frame write to do; the caller still stamps
- * the label onto the current frame's polygon(s) by id (see
- * {@link resolveTargetPolygonIds} + {@link applyMtTypeToPolygons}).
+ * Three exports, in the order the caller uses them:
+ *  - {@link resolveTargetPolygonIds} — the single-vs-multi-selection rule, and
+ *    the only place the "a selection counts from 2" threshold lives.
+ *  - {@link resolveTargetTrackIds} — those polygons' `trackId`s, deduped. For a
+ *    *tracked* MT the type is a whole-track property, so this is what the
+ *    cross-frame backend write is given. Polylines without a `trackId` (never
+ *    tracked, or hand-drawn) contribute nothing, and an empty result simply
+ *    means there is no cross-frame write to do.
+ *  - {@link applyMtTypeToPolygons} — the current frame's polygons with the
+ *    label stamped on, which is what makes an untracked polyline typeable at
+ *    all and what keeps the label in the array a save serialises.
  */
-export interface TrackedPolygon {
-  id: string;
-  trackId?: string | null;
+import type { Polygon } from '@/lib/segmentation';
+
+export interface TrackedPolygon extends Pick<Polygon, 'id'> {
+  /** Bound to the model, then widened by `| null`: these polygons arrive from
+   *  parsed JSON, and the guards below test for a non-empty string rather than
+   *  trusting the declaration. Binding to `Polygon` rather than re-declaring
+   *  `string` is what keeps this from drifting — it is one of several
+   *  structural re-declarations of the polygon shape in this codebase. */
+  trackId?: Polygon['trackId'] | null;
 }
 
 /**
@@ -49,7 +60,7 @@ export function resolveTargetTrackIds(
 }
 
 export interface TypeablePolygon extends TrackedPolygon {
-  mtType?: string;
+  mtType?: Polygon['mtType'];
 }
 
 /**
@@ -62,8 +73,9 @@ export interface TypeablePolygon extends TrackedPolygon {
  * `setPolygonsTrackType`: a target already carrying the requested value is a
  * no-op (not counted, reference preserved), so the caller can skip
  * `updatePolygons` and avoid dirtying the frame / pushing an empty undo entry /
- * tripping the CanvasPolygon memo. `matched` counts targets that were FOUND at
- * all, which is what separates "already had that label" (matched, unchanged —
+ * tripping the CanvasPolygon memo. `matched` counts target POLYGONS that were
+ * found at all (a track with two polylines on this frame counts twice), which
+ * is what separates "already had that label" (matched, unchanged —
  * benign) from "the target is not on this frame" (nothing matched — the caller
  * must not report success). The right-clicked id can go stale across an await:
  * a resegment or a background reload replaces the frame's polygons while the

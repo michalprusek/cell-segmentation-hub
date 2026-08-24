@@ -16,7 +16,8 @@
 export const MAX_LUT_INDEX = 65535;
 
 /** Window/level LUT over the sample domain [0, rangeMax] → 8-bit display.
- *  Sized to the current channel set's brightest value, so a 16-bit frame
+ *  Sized to ONE channel's brightest value — the caller builds a table per
+ *  channel, because channels are windowed independently — so a 16-bit channel
  *  gets up to a 65536-entry table. Values ≤ windowMin map to black,
  *  ≥ windowMax to white; an inverted window is swapped, and a zero-width one
  *  divides by 1 rather than by 0. */

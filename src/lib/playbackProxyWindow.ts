@@ -123,9 +123,11 @@ export function windowNeedsFullDepth(
  * number, and judged against it any channel dimmer than an eighth of the
  * container can never clear MIN_LEVELS_IN_WINDOW, no matter what the user does
  * — the slider ceiling is that channel's own rangeMax. So the channel's own
- * range is the fallback, and the container figure only stands in for a channel
- * that has reported no range at all. (The backend describes the same handshake
- * from its side in playbackProxyService.ts.)
+ * range is the fallback. (`rangeMax` is optional in the signature for tests
+ * only; a real `ChannelWindow` always carries one, and a channel that has
+ * reported nothing has no entry and is caught above.) The backend hits the same
+ * failure one granularity up — its container-wide `proxyRangeMax` bootstraps
+ * off the same request — and describes it in playbackProxyService.ts.
  *
  * With no visible channels there is nothing per-channel to judge, so the
  * caller's fallback window — the one kept for images with no channel set — is

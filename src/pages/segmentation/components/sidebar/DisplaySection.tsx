@@ -6,12 +6,11 @@
  *
  * Min/Max are the ImageJ-style window/level cutoffs and belong to ONE CHANNEL
  * at a time — the tabs above them pick which. Channels in a composite differ in
- * dynamic range by more than an order of magnitude, and a shared window makes
- * the narrow one unreadable: an IRM channel spanning 2941..4145 shown through
- * the 489..53927 its TIRF siblings need is a flat grey field, which is how a
- * correct segmentation came to look like "MTs drawn where there is nothing".
- * The tabs default to the segmentation source, so the channel the model ran on
- * is the one the user is adjusting unless they say otherwise.
+ * dynamic range by more than an order of magnitude, and one shared window makes
+ * the narrow one an unreadable flat field; `ImageDisplayContext`'s
+ * `channelWindows` records what that cost. The tabs default to the segmentation
+ * source, so the channel the model ran on is the one being adjusted unless the
+ * user says otherwise.
  *
  * MultiChannelCanvas remaps each channel's true (16-bit-aware) samples through
  * its own LUT; Brightness/Contrast apply once, via CSS `filter`, on the

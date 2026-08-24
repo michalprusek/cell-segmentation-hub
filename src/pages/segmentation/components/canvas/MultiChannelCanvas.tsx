@@ -11,9 +11,10 @@
  *      createImageBitmap path would silently crush them to 8-bit). Non-
  *      grayscale PNGs fall back to an 8-bit createImageBitmap decode.
  *   3. Apply the user's min/max window-level LUT remap on the true sample
- *      values — ImageJ-style. The window range auto-scales to each channel
- *      set's real min/max (reported to ImageDisplayContext) so a 16-bit
- *      frame opens with a sensible contrast and the sliders span the data.
+ *      values — ImageJ-style. Each channel carries its OWN window, auto-scaled
+ *      to that channel's real min/max (reported to ImageDisplayContext), so a
+ *      dim channel stays legible beside a bright one instead of collapsing
+ *      into a few grey levels of the brighter one's range.
  *   4. Tint the grayscale by the channel's display colour and additively
  *      composite (canvas `globalCompositeOperation = 'lighter'`), mimicking
  *      multi-channel fluorescence emission.
@@ -212,8 +213,7 @@ export default function MultiChannelCanvas({
 }: MultiChannelCanvasProps) {
   const {
     channelWindows,
-    windowMin,
-    windowMax,
+    fallbackWindow,
     proxyRangeMax,
     brightness,
     contrast,
@@ -222,27 +222,33 @@ export default function MultiChannelCanvas({
   } = useImageDisplay();
   const { t } = useLanguage();
 
-  // Per-channel window/level. Declared here — above every effect that reads it
-  // — because a hook placed before the `const` it captures throws
-  // "Cannot access before initialization" at runtime, which the type checker
-  // does not catch and the minified bundle reports as a single letter.
+  // Per-channel window/level. Must sit AFTER `channelWindows` above and before
+  // the composite effect that reads it — a hook placed before a `const` it
+  // captures throws "Cannot access before initialization" at runtime, which the
+  // type checker does not catch and the minified bundle reports as a single
+  // letter (CLAUDE.md failure pattern #11). Anywhere in between is fine.
   //
-  // `windowsKey` is what the composite effect depends on: the windows object is
-  // a fresh reference on every context write (opacity, colour, frame index),
-  // and depending on it directly would recomposite the canvas for changes that
-  // cannot affect the tone curve.
+  // `windowsKey` is a VALUE fingerprint, so the composite effect re-runs only
+  // when a window's numbers actually move. The object's identity is stable
+  // across unrelated context writes (every setter spreads `...s`), but the
+  // reducers do hand back a new map whenever any channel's bounds widen — which
+  // happens on frame scrubs, where the tone curve has not changed.
   const windowsKey = Object.entries(channelWindows)
     .map(([c, w]) => (w ? `${c}:${w.min}:${w.max}:${w.rangeMax}` : `${c}:-`))
     .join('|');
   const windowFor = useCallback(
-    (channel: string): CompositorWindow => {
+    (channel: string): CompositorWindow | null => {
       const w = channelWindows[channel];
-      // A channel decoded before its range has been folded into state draws
-      // once through the 8-bit identity window; the next commit has its real
-      // one. Better than skipping the channel, which would flash a gap.
-      return w
-        ? { min: w.min, max: w.max, rangeMax: w.rangeMax }
-        : { min: 0, max: 255, rangeMax: 255 };
+      // NULL, not an 8-bit identity window. React batches the decode's
+      // `setDecodeVersion` and `reportChannelRanges` into one commit, so in the
+      // normal path every composited channel already has a window and this
+      // never fires. If it ever does, drawing is the wrong answer: a 16-bit
+      // channel through a 0..255 window is not mis-toned, it is FULL WHITE —
+      // buildLut caps at index 255 and the shader clamps to the same maxIndex,
+      // and under `lighter` blending that saturated channel wipes out the
+      // others too. A missing channel is honest; a white field looks like
+      // signal, which is the exact confusion this whole change exists to end.
+      return w ? { min: w.min, max: w.max, rangeMax: w.rangeMax } : null;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [windowsKey]
@@ -309,10 +315,12 @@ export default function MultiChannelCanvas({
   // then cannot turn into samples, and draw those channels blank.
   const useProxy =
     canDecodeWebpGray() &&
-    !anyWindowNeedsFullDepth(channelWindows, proxyRangeMax, visibleChannels, {
-      min: windowMin,
-      max: windowMax,
-    });
+    !anyWindowNeedsFullDepth(
+      channelWindows,
+      proxyRangeMax,
+      visibleChannels,
+      fallbackWindow
+    );
   const repr = useProxy ? ('proxy' as const) : undefined;
 
   // --- Render-path selection: ask the CURRENT canvas element for WebGL2 once.
@@ -549,11 +557,9 @@ export default function MultiChannelCanvas({
       // auto-scale + slider bounds in ImageDisplayContext. These scalars are
       // carried out of the decoders, NOT rescanned from the samples.
       //
-      // This used to be reduced to a single min/max pair across all channels,
-      // which is the bug Marika reported as "model segments MTs where there is
-      // nothing": an IRM channel spanning 2941..4145 shared a window with TIRF
-      // channels reaching 53927, so it was drawn through 2 % of the display
-      // range and its filaments vanished under their own polylines.
+      // Reducing these to a single min/max pair across all channels is what
+      // made a narrow channel unreadable beside a wide one; the full account is
+      // on `channelWindows` in ImageDisplayContext.
       const ranges: Record<string, { min: number; max: number }> = {};
       for (const cs of loaded) {
         ranges[cs.channel] = {
@@ -581,7 +587,7 @@ export default function MultiChannelCanvas({
         reportChannelRanges(ranges, containerId ?? null);
       } catch (err) {
         logger.error(
-          'MultiChannelCanvas: reportChannelRanges threw — this frame will paint through the default window',
+          'MultiChannelCanvas: reportChannelRanges threw — channels with no window yet will be skipped this pass',
           err
         );
       }
@@ -645,16 +651,26 @@ export default function MultiChannelCanvas({
         setRenderPath('2d');
         return;
       }
-      const channels: CompositorChannel[] = loaded.map(cs => ({
-        channel: cs.channel,
-        data: cs.data,
-        width: cs.width,
-        height: cs.height,
-        color: hexToRgb(channelColors[cs.channel] ?? '#FFFFFF'),
-        opacity: (channelOpacities[cs.channel] ?? 100) / 100,
+      const channels: CompositorChannel[] = [];
+      for (const cs of loaded) {
         // Raw sample units — the same three numbers buildLut() takes below.
-        window: windowFor(cs.channel),
-      }));
+        const window = windowFor(cs.channel);
+        if (!window) {
+          logger.warn(
+            `MultiChannelCanvas: no window for channel ${cs.channel}; skipping it this pass rather than drawing it white`
+          );
+          continue;
+        }
+        channels.push({
+          channel: cs.channel,
+          data: cs.data,
+          width: cs.width,
+          height: cs.height,
+          color: hexToRgb(channelColors[cs.channel] ?? '#FFFFFF'),
+          opacity: (channelOpacities[cs.channel] ?? 100) / 100,
+          window,
+        });
+      }
       compositor.setSize(w, h);
       compositor.draw(channels);
       return;
@@ -705,9 +721,17 @@ export default function MultiChannelCanvas({
       const opacity = (channelOpacities[cs.channel] ?? 100) / 100;
       const scale = opacity >= 1 ? 1 : opacity;
       // One table per channel: they are windowed independently, so they cannot
-      // share one. Built inside the loop, which runs once per channel per
-      // composite — the same cadence the single table was built at.
+      // share one. This does move the build inside the loop — N tables per
+      // composite where there was one — but `buildLut` is O(rangeMax) against a
+      // per-pixel loop that already ran per channel in this same body, so it is
+      // a few percent of a pass that only runs when WebGL2 is unavailable.
       const cw = windowFor(cs.channel);
+      if (!cw) {
+        logger.warn(
+          `MultiChannelCanvas: no window for channel ${cs.channel}; skipping it this pass rather than drawing it white`
+        );
+        continue;
+      }
       const lut = buildLut(cw.min, cw.max, cw.rangeMax);
       const maxIdx = lut.length - 1;
       const src = cs.data;

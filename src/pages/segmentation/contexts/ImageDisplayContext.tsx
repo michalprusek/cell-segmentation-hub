@@ -6,9 +6,10 @@
  * brightness/contrast values applied via a CSS filter on the rendered
  * canvas. None of it is persisted across reloads. Brightness/Contrast
  * persist across both frame and channel changes; the Min/Max window
- * persists across frame scrubs (so scrubbing a 300-frame video keeps the
- * user's adjustment) but auto-refits to the new data range whenever the
- * visible-channel set or video changes, ImageJ-style.
+ * is held PER CHANNEL: it persists across frame scrubs (so scrubbing a
+ * 300-frame video keeps the user's adjustment) and each channel auto-refits to
+ * its own data the first time that channel is seen, or whenever the video
+ * changes, ImageJ-style.
  */
 
 import {
@@ -110,6 +111,12 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   readonly windowMax: number;
   /** Slider ceiling for the active channel = its brightest sample so far. */
   readonly windowRangeMax: number;
+  /** The window for images with no channel set. Exposed so the playback-proxy
+   *  gate can ask for it directly instead of reaching into `channelWindows`
+   *  with the pseudo-key, or — worse — reading it off the scalar projection,
+   *  which only happens to be the fallback because of how the slider-focus
+   *  resolver orders its last branch. */
+  readonly fallbackWindow: ChannelWindow;
   setFrameIndex: (frameIndex: number) => void;
   setChannel: (channel: string | null) => void;
   /** Toggle whether `channel` is composited onto the canvas. The order
@@ -180,8 +187,8 @@ const DEFAULT_STATE: ImageDisplayState = {
 /**
  * Which channel's window the Min/Max sliders read and write.
  *
- * An explicit pick wins for as long as that channel still has a window. With no
- * pick we default to the SEGMENTATION SOURCE (`state.channel`, seeded from the
+ * An explicit pick wins for as long as that channel is still VISIBLE and still
+ * has a window. With no pick we default to the SEGMENTATION SOURCE (`state.channel`, seeded from the
  * container's `isSegmentationSource`): it is the channel the model actually ran
  * on, so it is the one whose window decides whether the user can see what was
  * segmented. Falling back further: the first visible channel, then the
@@ -230,7 +237,13 @@ function refitAllWindows(
  * on opening a 16-bit image. A channel already carrying a window keeps the
  * user's cutoffs and only widens its bounds, so scrubbing to a brighter or
  * dimmer frame never yanks the view but also never leaves the new extremes
- * unreachable by the sliders.
+ * unreachable by the sliders. The one exception is a channel that has never had
+ * a usable range to fit to; see the re-fit branch below.
+ *
+ * `refitAll` and `dropUnlisted` are not independent in practice: `dropUnlisted`
+ * clears `current`, which already forces the fit, and the sole caller passes
+ * the same flag to both. They are separate parameters only so the two effects
+ * are named where they happen.
  *
  * `dropUnlisted` removes windows for channels not in `ranges`; it is set only
  * on a container switch, where a same-named channel of a different video would
@@ -269,13 +282,19 @@ function applyRanges(
     }
     const rangeMax = Math.max(current.rangeMax, hi);
     const dataMin = Math.min(current.dataMin, lo);
-    // A first frame that decoded flat (an unilluminated channel of a
-    // multi-channel stack reports min === max) fits to the sanitisation floor,
-    // 0..1. The widening branch below only moves the BOUNDS, so that window
+    // A frame that decoded flat (an unilluminated channel reports min === max,
+    // at 0 or at whatever baseline offset the camera adds) fits to a zero-width
+    // window. The widening branch below moves only the BOUNDS, so that window
     // would stand for the rest of the container and clamp every later frame to
-    // white. Re-fit it once a frame arrives with real range — but only while it
-    // is still the untouched full extent, so a window the user deliberately
-    // collapsed on real data is never overwritten.
+    // white. Re-fit it once a frame arrives with real range.
+    //
+    // `noRealRangeYet` is what identifies that state — a window collapsed on
+    // REAL data has wide bounds and never reaches here. `untouched` does
+    // something else, and is the deliberate part: if the user moved the sliders
+    // while the channel was still flat, they own the window from then on and it
+    // is never auto-recovered, even though that leaves the channel white until
+    // they widen it themselves. Silently overruling an explicit adjustment is
+    // the worse surprise.
     const untouched =
       current.min === current.dataMin && current.max === current.rangeMax;
     const noRealRangeYet = current.rangeMax - current.dataMin <= 1;
@@ -644,6 +663,8 @@ export function ImageDisplayProvider({
       windowMin: activeWindow.min,
       windowMax: activeWindow.max,
       windowRangeMax: activeWindow.rangeMax,
+      fallbackWindow:
+        state.channelWindows[FALLBACK_CHANNEL] ?? DEFAULT_CHANNEL_WINDOW,
       windowChannel,
       setFrameIndex,
       setChannel,

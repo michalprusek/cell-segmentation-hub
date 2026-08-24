@@ -35,8 +35,7 @@ export default function FrameWindowPrefetcher({
     channel,
     channelCoverage,
     channelWindows,
-    windowMin,
-    windowMax,
+    fallbackWindow,
     proxyRangeMax,
   } = useImageDisplay();
   // The same decision the canvas makes. Warming the representation the canvas
@@ -44,10 +43,12 @@ export default function FrameWindowPrefetcher({
   // budget and the HTTP cache on bytes nothing reads.
   const repr =
     canDecodeWebpGray() &&
-    !anyWindowNeedsFullDepth(channelWindows, proxyRangeMax, visibleChannels, {
-      min: windowMin,
-      max: windowMax,
-    })
+    !anyWindowNeedsFullDepth(
+      channelWindows,
+      proxyRangeMax,
+      visibleChannels,
+      fallbackWindow
+    )
       ? ('proxy' as const)
       : undefined;
 

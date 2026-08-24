@@ -966,15 +966,32 @@ describe('microtubule type labels', () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it('keeps an untracked stamp undoable, since it is the whole change', async () => {
+  it('puts the stamp in the undo history on BOTH paths', async () => {
+    // Not a style choice. The image-switch autosave saves
+    // `history[historyIndex]`, NOT `polygons` (useEnhancedSegmentationEditor
+    // ~line 293), while the manual save uses `polygons`. A stamp kept out of
+    // history therefore survives Save but is wiped by the very next frame
+    // scrub, which autosaves the pre-stamp snapshot over a row the backend had
+    // just labelled. Passing no second argument takes the default, which is
+    // what puts it in history.
     setPolygons([polyline()]);
     renderEditor();
-    const target = await screen.findByTestId('mt-type-poly-1');
+    const untracked = await screen.findByTestId('mt-type-poly-1');
     await act(async () => {
-      fireEvent.click(target);
+      fireEvent.click(untracked);
     });
+    expect(mockEditor.updatePolygons.mock.calls[0][1]).toBeUndefined();
 
-    expect(mockEditor.updatePolygons.mock.calls[0][1]).toBe(true);
+    mockEditor.updatePolygons.mockClear();
+    setPolygons([polyline({ trackId: 'track-9' })]);
+    mockApiClient.setTrackType.mockResolvedValue({ framesAffected: 7 });
+    cleanup();
+    renderEditor();
+    const tracked = await screen.findByTestId('mt-type-poly-1');
+    await act(async () => {
+      fireEvent.click(tracked);
+    });
+    expect(mockEditor.updatePolygons.mock.calls[0][1]).toBeUndefined();
   });
 
   it('writes across frames for a TRACKED polyline and stamps this frame too', async () => {
@@ -992,10 +1009,7 @@ describe('microtubule type labels', () => {
       ['track-9'],
       'mt_type_brain'
     );
-    // …and the local stamp must NOT be undoable: the backend write already
-    // landed on every frame, so an undo would desync this frame from its track.
     expect(mockEditor.updatePolygons).toHaveBeenCalledTimes(1);
-    expect(mockEditor.updatePolygons.mock.calls[0][1]).toBe(false);
   });
 
   it('does not dirty the frame when the label is already the one asked for', async () => {
