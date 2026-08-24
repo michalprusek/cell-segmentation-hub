@@ -18,7 +18,13 @@ class ModelType(str, Enum):
 
 class SegmentationRequest(BaseModel):
     model: ModelType = Field(default=ModelType.HRNET, description="Model to use for segmentation")
-    threshold: float = Field(default=0.5, ge=0.1, le=0.9, description="Segmentation threshold")
+    # Ceiling 0.99, not 0.9. The microtubule v5H model ships a FITTED
+    # foreground cut of 0.97, so a 0.9 bound rejected every request the
+    # frontend made for it. Kept in step with the Node API's
+    # thresholdSchema (backend/src/types/validation.ts) — the two validate
+    # the same value one hop apart, and only the second one is visible to
+    # the user as a queue job that silently fails.
+    threshold: float = Field(default=0.5, ge=0.1, le=0.99, description="Segmentation threshold")
 
 class Point(BaseModel):
     x: float

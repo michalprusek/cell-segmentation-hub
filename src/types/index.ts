@@ -374,8 +374,9 @@ type KnownModelId = RegistryModelType;
  * - `spheroid_invasive` is locked to `spheroid_disintegration` because core
  *   detection is tied to that model's postprocessing path.
  * - `wound`, `sperm` and `microtubules` use their dedicated specialised
- *   models only. `microtubules` ships with the v7 DINOv3 + DPT + PySOAX
- *   pipeline producing per-instance polyline centerlines.
+ *   models only. `microtubules` ships with the v5H nnU-Net ResEnc-M network
+ *   plus a curvature-bounded instancer, producing per-instance polyline
+ *   centerlines.
  * - Standard `spheroid` projects can use any of the general spheroid
  *   models, with `spheroid_disintegration` excluded so users wanting core
  *   detection are nudged toward marking the project disintegrated.
@@ -593,6 +594,20 @@ export interface VideoChannel {
    *  frames. Omitted => full coverage. The editor uses this to skip requesting
    *  the channel for frames it doesn't cover (avoids 404 noise). */
   frameIds?: string[];
+  /** True when the channel is ONE source image stamped onto every frame it
+   *  covers — a fixed IRM snapshot over a time-lapse. Recorded by
+   *  `addChannelService` and passed through verbatim by the images endpoint;
+   *  the editor reads it to fetch and decode the picture once instead of once
+   *  per frame. See `staticFrameChannels`. */
+  staticSource?: boolean;
+  /** Per-frame (dy, dx) applied when a `staticSource` channel was added WITH
+   *  alignment. Present ⇒ the copies are translations of one another, NOT
+   *  duplicates, and must not be shared between frames. */
+  staticShifts?: Record<string, [number, number]>;
+  /** Upper bound on the container's sample values, identical on every channel.
+   *  NOT the value that maps to 255 — that is per frame and arrives in
+   *  `X-Proxy-Range`. Feeds the client's banding guard only. */
+  proxyRangeMax?: number;
 }
 
 // Metric types for XLSX export

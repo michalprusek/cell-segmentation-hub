@@ -21,6 +21,20 @@ const sanitizeFilename = (filename: string): string => {
 };
 
 /**
+ * How many consecutive 404s from the export-status poll prove the job is
+ * really gone rather than momentarily unreachable. Export jobs live only in
+ * the backend's memory, so a restart — including the process being killed
+ * mid-export — makes the job vanish and every later poll 404s forever. Three
+ * in a row is proof, not a race: the backend registers the job before it
+ * returns the id the client polls with.
+ */
+const EXPORT_STATUS_NOT_FOUND_LIMIT = 3;
+
+/** Shown when the backend has forgotten a job the UI is still waiting on. */
+const EXPORT_LOST_MESSAGE =
+  'The server no longer knows about this export — it was most likely interrupted by a restart. Please start it again.';
+
+/**
  * Trigger a native browser download by creating a hidden anchor and
  * clicking it. The browser streams the response straight to disk —
  * no Blob, no axios timeout, and (crucially) the download cannot
@@ -134,9 +148,25 @@ export const useSharedAdvancedExport = (
   const [createdBlobUrls, _setCreatedBlobUrls] = useState<string[]>([]);
   const downloadedJobIds = useRef<Set<string>>(new Set());
   const downloadInProgress = useRef<boolean>(false);
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(
-    null
-  );
+  const consecutiveStatusNotFound = useRef<number>(0);
+  /** The live status-poll interval.
+   *
+   *  A ref, not state, and deliberately so: this used to be `useState` AND a
+   *  dependency of the effect that assigns it, so every `setPollingInterval`
+   *  re-ran the effect, which cleared the timer and started another one, which
+   *  set state again. Production logs from 2026-08-20 show the result — two
+   *  independent pollers hitting `/status` 200 ms apart instead of one every
+   *  two seconds. Keeping the handle out of the render cycle breaks the loop.
+   */
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  /** Clear the live poll, if any. Safe to call when nothing is running. */
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
   const [wsConnected, setWsConnected] = useState(false);
   const [currentProjectName, setCurrentProjectName] = useState<
     string | undefined
@@ -426,11 +456,9 @@ export const useSharedAdvancedExport = (
       createdBlobUrls.forEach(url => {
         window.URL.revokeObjectURL(url);
       });
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
+      stopPolling();
     };
-  }, [createdBlobUrls, pollingInterval]);
+  }, [createdBlobUrls, stopPolling]);
 
   // Monitor WebSocket connection
   useEffect(() => {
@@ -551,13 +579,15 @@ export const useSharedAdvancedExport = (
 
     // Only start polling if WebSocket is not connected or after a timeout
     const startPolling = () => {
-      if (pollingInterval) clearInterval(pollingInterval);
+      stopPolling();
+      consecutiveStatusNotFound.current = 0;
 
       const interval = setInterval(async () => {
         try {
           const response = await apiClient.get(
             `/projects/${projectId}/export/${currentJob.id}/status`
           );
+          consecutiveStatusNotFound.current = 0;
           const status = response.data;
           if (status) {
             updateState({
@@ -574,8 +604,7 @@ export const useSharedAdvancedExport = (
                 isExporting: false,
                 completedJobId: currentJob.id,
               });
-              clearInterval(interval);
-              setPollingInterval(null);
+              stopPolling();
             } else if (status.status === 'failed') {
               updateState({
                 currentJob: currentJob
@@ -584,17 +613,43 @@ export const useSharedAdvancedExport = (
                 exportStatus: `Export failed: ${status.message || 'Unknown error'}`,
                 isExporting: false,
               });
-              clearInterval(interval);
-              setPollingInterval(null);
+              stopPolling();
             }
           }
         } catch (error) {
           logger.error('Failed to poll export status', error);
-          // Continue polling unless we get consecutive errors
+          const httpStatus = (error as { response?: { status?: number } })
+            ?.response?.status;
+          if (httpStatus !== 404) {
+            // Network blips and 5xx are transient — the job is still there.
+            return;
+          }
+          consecutiveStatusNotFound.current += 1;
+          if (
+            consecutiveStatusNotFound.current < EXPORT_STATUS_NOT_FOUND_LIMIT
+          ) {
+            return;
+          }
+          // The job is gone and no completion event is ever coming. Surface a
+          // failure instead of spinning forever on a progress bar that will
+          // never move.
+          updateState({
+            currentJob: currentJob
+              ? {
+                  ...currentJob,
+                  status: 'failed',
+                  message: EXPORT_LOST_MESSAGE,
+                }
+              : null,
+            exportStatus: `Export failed: ${EXPORT_LOST_MESSAGE}`,
+            isExporting: false,
+          });
+          stopPolling();
+          ExportStateManager.clearExportState(projectId);
         }
       }, 2000); // Poll every 2 seconds
 
-      setPollingInterval(interval);
+      pollingIntervalRef.current = interval;
     };
 
     // Start polling immediately if WebSocket is not connected
@@ -612,19 +667,15 @@ export const useSharedAdvancedExport = (
     }
 
     return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        // Don't set state during cleanup to prevent infinite loop
-        // The state will be cleaned up when component unmounts
-      }
+      stopPolling();
     };
   }, [
     currentJob,
     isExporting,
     wsConnected,
-    pollingInterval,
     projectId,
     updateState,
+    stopPolling,
   ]);
 
   // Auto-download when export completes - FIXED VERSION with persistent tracking

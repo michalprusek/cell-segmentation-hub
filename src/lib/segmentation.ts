@@ -44,12 +44,15 @@ export interface Polygon {
    *  video container's batch finishes segmentation. Equal across frames
    *  for sibling polylines representing the same MT over time. */
   trackId?: string;
-  /** Base64-encoded float16 (M × 32) embedding sampled at each polyline
-   *  point during microtubule inference. Internal — used by the tracker
-   *  and kymograph services on the backend. Read paths SHOULD strip this
-   *  field before serving to the editor (it's a several-KB-per-polyline
-   *  blob with no UI consumer). Field name starts with ``_`` to signal
-   *  "internal" in JSON dumps. */
+  /** LEGACY. Base64-encoded float16 (M × 32) embedding sampled at each
+   *  polyline point by the microtubule **v7** model, which the tracker used
+   *  to establish cross-frame identity.
+   *
+   *  Nothing produces or reads it since the v5H swap — the model emits no
+   *  embedding field and the tracker matches geometrically. The declaration
+   *  stays because rows written by v7 are still in the database and still
+   *  served; read paths strip it before it reaches the editor (a
+   *  several-KB-per-polyline blob with no UI consumer). */
   _embedding?: string;
   /** User-assigned microtubule type-label id. Resolved to a class
    *  name/colour via the project's `mtTypeLabels` palette. Microtubule

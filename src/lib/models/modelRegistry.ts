@@ -220,21 +220,25 @@ export const MODEL_REGISTRY = {
   },
   microtubule: {
     size: 'large',
-    defaultThreshold: 0.5,
+    // The instancer's own fitted foreground cut. This model's foreground is
+    // very confident, so the generic 0.5 other models use would flood it.
+    defaultThreshold: 0.97,
     category: 'microtubule',
     performance: {
-      // DINOv3-L (~300M params) + PySOAX iterative snake evolver. Numbers
-      // are conservative estimates on A5000; first call is much slower
-      // because of the gated HuggingFace download of the backbone weights.
-      avgTimePerImage: 8.0,
-      throughput: 0.13,
-      p95Latency: 10.0,
+      // nnU-Net ResEnc-M (140M params) + a pure-numpy curvature-bounded
+      // instancer. Measured on an A5000: 4.0-4.4 s for a 1024x1024 frame
+      // carrying 65 microtubules. Runtime is dominated by the instancer and
+      // therefore scales with MT count, not just frame size. No backbone
+      // download, so the first call is no slower than the rest.
+      avgTimePerImage: 4.5,
+      throughput: 0.22,
+      p95Latency: 9.0,
       batchSize: 1,
     },
-    name: 'Microtubule (v7)',
-    displayName: 'Microtubule (DINOv3 + PySOAX)',
+    name: 'Microtubule (v5H)',
+    displayName: 'Microtubule (ResEnc-M + curvature instancer)',
     description:
-      'Instance segmentation for IRM/TIRF microtubule time-lapses. DINOv3-L ViT-L/16 backbone + DPT-style fusion produces a per-pixel 32-d embedding that PySOAX uses to extract individual MT centerlines. The embedding also drives automatic cross-frame tracking for kymograph analysis. Slow (~8 s/frame) but the only model in the platform producing polyline output.',
+      'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
     i18nKey: 'microtubule',
     compatibleProjectTypes: ['microtubules'],
   },

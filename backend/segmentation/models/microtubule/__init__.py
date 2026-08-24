@@ -1,4 +1,4 @@
-"""Microtubule v7 (DINOv3-L + DPT + PySOAX) instance segmentation."""
+"""Microtubule v5H (nnU-Net ResEnc-M + curvature-bounded instancer)."""
 
 from .wrapper import MicrotubuleModel
 

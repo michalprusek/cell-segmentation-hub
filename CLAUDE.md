@@ -59,6 +59,38 @@ Deploys are autonomous — build the changed service, recreate it, restart nginx
 
 **A change is "done" only when the runtime path that uses it has been observed working.** For user-facing changes, that means a real browser. For API changes, a real curl. For DB changes, a real query. No exceptions.
 
+### The test account — there is no excuse for stopping at the login page
+
+Production has a dedicated verification account. Credentials live OUTSIDE every
+repo, in `~/.claude/spheroseg-e2e-account.txt` (mode 600):
+
+```
+email: claude.e2e.test@example.com
+```
+
+Sign-up is open and e-mail verification is off, so a fresh account can be
+created the same way if that one is ever removed. Use it for every browser
+check; never verify against the user's own account or data.
+
+If the flow needs data the account does not have, MAKE the data rather than
+handing the check back: create a project, and synthesise an input. A multi-page
+16-bit TIFF is accepted as a video and is enough to exercise the multi-channel
+editor —
+
+```python
+import numpy as np, tifffile
+tifffile.imwrite('stack.tif', np.stack([...]), photometric='minisblack')
+```
+
+Playwright can only upload from inside the repo root, so stage the file in
+`.playwright-mcp/` first.
+
+This section exists because the rule above it was ignored for a whole session:
+a decode pipeline was rewritten, measured in Node, deployed, and handed over —
+and the user opened the editor to a console full of 404s that one
+`browser_console_messages` call would have shown. Server logs, unit tests and
+`curl` all looked clean. None of them run the app.
+
 ### Verification gates per change category
 
 The mandatory verification depends on what changed. Apply **every** gate that matches; ignoring "minor" UI tweaks is how regressions slip in.
@@ -232,6 +264,8 @@ Each of these shipped to production at least once in 2026 despite green pre-comm
 
 16. **Yanked or load-bearing dependency pins**. A pinned `requirements.txt` version can be **yanked** from PyPI — pip warns `Reason for being yanked` but still installs the explicit pin — so bump to a non-yanked patch in the same minor (e.g. `transformers` 4.57.0 → 4.57.6, which preserves DINOv3). Do NOT casually bump `torch`/`torchvision`/`transformers` majors: they are load-bearing (mamba-ssm + causal-conv1d CUDA kernels are source-built against torch 2.6.0+cu124; DINOv3 needs transformers ≥4.57). Full bump = recompile kernels + re-pair torchvision + re-verify all 7 models. See memory `reference_dependency_pin_constraints`.
 
+17. **Cross-frame MT identity is geometric since v5H (2026-08-17).** The model no longer emits 32-d embeddings; `/api/v1/track` matches on symmetric curve distance plus an overlap gate, with common-mode stage drift removed by normal-flow least squares. A `trackId` regression therefore shows up as a _geometry_ problem — gate too tight, drift misestimated on a field of parallel filaments — not a decode problem. Check `api/mt_geometry_cost.py` first. Two gates interact and both are hard (`inf`, not merely expensive): `GATE_MAX_SHIFT` (25 px, curve distance) and `GATE_MIN_OVERLAP` (0.35 of BOTH curves, measured with `OVERLAP_TOL` = 12 px). Note `OVERLAP_TOL` doubles as the effective _perpendicular_ displacement gate — set it small and it silently overrides `GATE_MAX_SHIFT`. The request's `embedding` and `emb_template_alpha` fields are accepted-and-ignored, and `corrupt_count` / `degraded` are pinned to `0` / `false`; rows written by v7 still carry an `_embedding` and `extra="forbid"` would 400 them otherwise.
+
 ---
 
 ## Do NOT hand back unverified fixes
@@ -314,15 +348,15 @@ There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / 
 
 ## Tech Stack
 
-| Layer      | Technology                                                                            |
-| ---------- | ------------------------------------------------------------------------------------- |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                           |
-| Backend    | Node.js + Express + TypeScript + Prisma                                               |
-| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm, Wound, Microtubule v7) |
-| Database   | PostgreSQL (dev + prod via Docker compose)                                            |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff                                   |
-| Auth       | JWT access + refresh tokens                                                           |
-| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via i18next                                      |
+| Layer      | Technology                                                                             |
+| ---------- | -------------------------------------------------------------------------------------- |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                            |
+| Backend    | Node.js + Express + TypeScript + Prisma                                                |
+| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm, Wound, Microtubule v5H) |
+| Database   | PostgreSQL (dev + prod via Docker compose)                                             |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff                                    |
+| Auth       | JWT access + refresh tokens                                                            |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via i18next                                       |
 
 ---
 
@@ -360,22 +394,24 @@ Controllers → Services → Prisma ORM → Storage (local FS / S3)
 ### ML service (`/backend/segmentation/`)
 
 - FastAPI + PyTorch, CUDA with CPU fallback
-- Models: HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Sperm, Microtubule v7 (DINOv3-L + DPT + PySOAX, ~8 s/frame)
-- Weights from Google Drive; `make check-weights`. Microtubule v7: `scripts/download-microtubule-weights.sh` + `HF_TOKEN` for DINOv3 backbone.
-- Cross-frame routes: `/api/v1/track` (Hungarian matching on 32-d embeddings) + `/api/v1/kymograph` (line-profile + viridis) in `api/tracker_kymograph.py`.
+- Models: HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Sperm, Microtubule v5H (nnU-Net ResEnc-M + curvature-bounded instancer, ~4.5 s/frame, 0.73 GiB peak)
+- Weights from Google Drive; `make check-weights`. Microtubule v5H: `scripts/download-microtubule-weights.sh`. **No `HF_TOKEN`** — the checkpoint is a complete `state_dict` with no frozen backbone, so MT segmentation needs no network at run time. (`HF_TOKEN` and the `.hf-cache` mount stay for SegFormer and sperm, which still call `from_pretrained`.)
+- **Microtubule v5H is IRM-only, and its threshold is NOT a user setting.** The `/segment` route deliberately passes no threshold for `microtubule`; the model applies `prob_thr` from `params_v5h.json` (0.97). Do not "fix" a low detection count by lowering it. Measured 2026-08-17 by sampling background-flattened image contrast along every detected centerline against the same curve translated elsewhere (a real MT in IRM is darker than its surround): on a pure IRM frame, 0.97 gives 128 MTs at **−1.73 SD** separation, and dropping to 0.35 gives 155 at only −1.44 SD — more detections, worse evidence. On a **TIRF** frame separation is ~**−0.02 SD at every threshold**, i.e. the output does not track image content at all, so lowering the threshold there manufactures hundreds of false positives. Symptom of feeding it TIRF: plenty of confident-looking polylines with no contrast under them. Check the project's `channels` JSON — IRM auto-detection defaults every channel to `type: "irm"`, so a TIRF-only video can silently be marked as the segmentation source (the 3-frame `DNA_origami` test fixture is exactly this).
+- Cross-frame routes: `/api/v1/track` (Hungarian matching on **geometry** — symmetric curve distance + overlap gate, with common-mode stage drift removed via normal-flow least squares; see `api/mt_geometry_cost.py`) + `/api/v1/kymograph` (line-profile + viridis) in `api/tracker_kymograph.py`.
 
 ### Automated Essays worker (`/backend/essays/`)
 
 Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runner that shells out to `module/evaluate.py`; the `essays` image is built `FROM` the ml image so it inherits the exact validated stack (torch 2.6.0+cu124, transformers 4.57.1 — see the pin warning in [Deploy Gotchas](#deploy-gotchas)).
 
 - **The module is vendored at `backend/essays/module`** (it was a separate private repo cloned at image build until 2026-08-11 — no more git clone, build secret, or network at build time).
-- **The v7 model code has ONE copy**, in `backend/segmentation/models/microtubule`. The essays module imports it via `_mt_package.ensure_on_path()` (`MT_PACKAGE_DIR=/app/models` in the image, populated by a `COPY` from the repo — _not_ inherited from the ml base image, so a stale ml image can never make the worker run older model code). Before this, the two copies drifted in opposite directions for months — the ML copy grew warm-start seeding, the module copy grew the offline backbone path — and neither side got the other's fix. **Do not re-introduce a second copy**; a change to `pysoax.py`, `segment_mt.py` or `wrapper.py` now reaches both callers, so re-verify BOTH the essays batch run and interactive MT segmentation when touching them.
-- **The metrics have ONE copy too**, in `backend/segmentation/models/mt_measure.py` — band rasterisation (ImageJ `Roi.convertLineToArea`), the per-MT background ring, and the ImageJ statistics (histogram-tie median, `ddof=1`). Both `api/mt_metrics.py` (project export) and `module/mt_pipeline/measure.py` (essays batch) import that one file; the essays adapter only swaps `(row,col)`→`(x,y)` and names CSV columns. Before 2026-08-13 they were separate implementations and had drifted: the export was aligned to ImageJ in 2026-07 (PRs #301, #304) while the essays module was still a private repo, so on one real frame with identical centerlines the two disagreed on band area by −7.8 %…+26.5 %, on ring area by 2.2×, and on the **net signal by a median of +9.9 % (max +33.2 %)** — only length agreed. **Do not re-introduce a local band/ring/statistic**; `test_metrics_match_export.py` asserts the adapter defines nothing but `measure_frame`, and `test_mt_metrics_band.py` asserts the export's helpers _are_ the shared objects. Note `mt_measure.py` sits BESIDE the `microtubule` package, not inside it: importing that package loads the v7 wrapper and therefore torch, which measuring pixels does not need (and which would make the export's tests skip on a driverless box).
+- **The model code has ONE copy**, in `backend/segmentation/models/microtubule` (`wrapper.py`, `net.py`, `instance/`, `vendor/dynamic_network_architectures/`, `params_v5h.json`). The essays module imports it via `_mt_package.ensure_on_path()` (`MT_PACKAGE_DIR=/app/models` in the image, populated by a `COPY` from the repo — _not_ inherited from the ml base image, so a stale ml image can never make the worker run older model code). Before this, the two copies drifted in opposite directions for months and neither side got the other's fix. **Do not re-introduce a second copy**; a change to `wrapper.py` or anything under `instance/` reaches both callers, so re-verify BOTH the essays batch run and interactive MT segmentation when touching them.
+- **The metrics have ONE copy too**, in `backend/segmentation/models/mt_measure.py` — band rasterisation (ImageJ `Roi.convertLineToArea`), the per-MT background ring, and the ImageJ statistics (histogram-tie median, `ddof=1`). Both `api/mt_metrics.py` (project export) and `module/mt_pipeline/measure.py` (essays batch) import that one file; the essays adapter only swaps `(row,col)`→`(x,y)` and names CSV columns. Before 2026-08-13 they were separate implementations and had drifted: the export was aligned to ImageJ in 2026-07 (PRs #301, #304) while the essays module was still a private repo, so on one real frame with identical centerlines the two disagreed on band area by −7.8 %…+26.5 %, on ring area by 2.2×, and on the **net signal by a median of +9.9 % (max +33.2 %)** — only length agreed. **Do not re-introduce a local band/ring/statistic**; `test_metrics_match_export.py` asserts the adapter defines nothing but `measure_frame`, and `test_mt_metrics_band.py` asserts the export's helpers _are_ the shared objects. Note `mt_measure.py` sits BESIDE the `microtubule` package, not inside it: importing that package loads the model wrapper and therefore torch, which measuring pixels does not need (and which would make the export's tests skip on a driverless box).
 - **Essays numbers from before 2026-08-13 are not comparable with later ones.** The geometry changed with the unification: `--bg-gap`/`--bg-width` (a 6 px ring with a 1 px guard) became `--bg-margin` (a multiple of `--mt-width`, default 2 → 10 px, excluding exactly the bands), matching the export's `margin_multiplier`. `results.csv` gained `mt_median_intensity` and `signal_minus_background` (mean − **median** background, the export's readout); `net_mean_intensity` still means mean − **mean** background.
-- `MT_BACKBONE_CONFIG=<dir>` builds the DINOv3 backbone offline from a bundled config with random weights (the v7 checkpoint then overwrites every weight), so the batch path needs no `HF_TOKEN`. Unset — the interactive path — still downloads the gated backbone.
+- **Nothing is downloaded at run time.** The v5H checkpoint carries every weight, so neither the batch nor the interactive path needs `HF_TOKEN`, a HuggingFace account, or network access. The `MT_BACKBONE_CONFIG` offline-backbone escape hatch and its bundled `config/dinov3_vitl16` directory were deleted with the v7 model — there is no gated download left to work around.
 - Checkpoint: staged once by `scripts/download-microtubule-weights.sh` into `backend/segmentation/weights/`, bind-mounted read-only at `/app/mt_weights`. Both callers run the byte-identical file.
 - **A capped run does not bit-match an uncapped one.** `sitecustomize.py` applies `set_per_process_memory_fraction` (`ESSAYS_APPLY_GPU_CAP=1`) to the `evaluate.py` subprocess, which shrinks cuDNN's workspace and changes convolution algorithm selection. The numbers stay valid and MT counts hold, but a filament endpoint can move ~1 px — and because a background ring excludes _neighbouring_ MTs, that shifts an adjacent MT's `bg_*` columns while its centerline is unchanged. So when diffing a local run against production, hold the cap constant or you will chase a phantom regression. (Measured 2026-08-11: identical output for capped-vs-capped and uncapped-vs-uncapped; 2 of 73 rows differ across the cap boundary. The cap's **value** matters the same way — 2026-08-13, 0.6 → 0.75 moved 2 of the same 73 rows.)
-- **Set the cap ABOVE the model's working set (16.36 GiB on a 2048² well), never below.** `ESSAYS_GPU_MEM_FRACTION` is `0.75` (17.67 GiB of the 24 GB A5000) and `ESSAYS_GPU_MIN_FREE_GB` is `17` since 2026-08-13. It was 0.6 / 13 GB, i.e. the cap sat _under_ the working set, so torch hit the ceiling on every position, released ~3.7 GiB of cached blocks back to the driver and had to re-win them from a card shared with `ml` and Maptimize. Losing that race is an `OutOfMemoryError`, which is why one folder lost 255 wells in one run and 68 in the next. The 16.36 GiB figure is flat across caps of 16.49 / 17.67 / 20.02 GiB — demand does not grow into the ceiling — so raising the cap past ~0.75 buys nothing and only takes room interactive segmentation needs. A cap below the working set protects nobody: it hands other tenants memory the batch immediately tries to take back.
+- **The GPU cap was re-measured for v5H on 2026-08-17 and lowered.** `ESSAYS_GPU_MEM_FRACTION` **0.75 → 0.12** (17.67 → 2.83 GiB) and `ESSAYS_GPU_MIN_FREE_GB` **17 → 4**. Measured on a real `evaluate.py` run over 3 positions of a 2048² IRM well (162 MTs): the working set is **1.41 GiB reserved** / 1.05 GiB allocated, and FLAT across caps of 17.99 / 4.80 / 2.88 / 1.92 GiB. Runtime was flat too (43.0 / 43.6 / 44.0 / 43.9 s) and `results.csv` came out **byte-identical at all four caps** — unlike v7, where the cap sized cuDNN's workspace and 0.6 → 0.75 moved a centerline by 1.10 px. The equivalence holds only because 1.41 GiB sits far below every cap tested, so the workspace is never constrained; re-check it if either number moves. This returned ~15 GiB of reservation and dropped the start gate from 17 GB to 4 GB — the gate mattered more in practice, because it made a batch _wait_ for memory it was never going to use.
+- **The rule that produced the old numbers still stands: set the cap ABOVE the model's working set, never below.** v7's was 16.36 GiB on a 2048² well; the cap was once 0.6 (14.13 GiB), i.e. _under_ it, so torch hit the ceiling on every position, released ~3.7 GiB of cached blocks back to the driver and had to re-win them from a card shared with `ml` and Maptimize. Losing that race is an `OutOfMemoryError`, which is why one folder lost 255 wells in one run and 68 in the next. Demand does not grow into the ceiling, so raising the cap past ~2× the working set buys nothing and only takes room interactive segmentation needs. A cap below the working set protects nobody: it hands other tenants memory the batch immediately tries to take back. `backend/essays/tests/test_gpu_budget.py` asserts both directions (cap ≥ 1.5× working set, cap ≤ working set + 2 GiB, start gate ≥ cap + CUDA context) and that the compose defaults match the module defaults.
 
 ### Video projects
 
@@ -437,7 +473,7 @@ The real PR gate is local: pre-commit hook + `make ci` + Playwright verification
 - **Bind-mounted configs need `--force-recreate`**, not just `nginx -s reload`. `sed -i` rewrites the inode; the running container holds the old one. Use `docker compose up -d --no-deps --force-recreate <service>`.
 - **HF cache bind-mount** (`backend/segmentation/.hf-cache`) must exist with `chown 999:999` before the ML container starts.
 - **Upload limits coupled across 3 layers** — images 20 MB (`FILE_LIMITS.MAX_FILE_SIZE_BYTES` + image multer + nginx). Videos/ND2 100 GB (`MAX_VIDEO_FILE_SIZE_BYTES` + separate `videoUpload` multer + `client_max_body_size 100G`). The smallest wins.
-- **`HF_TOKEN`** required for first microtubule load (DINOv3 backbone, ~1.1 GB). Lives in `.env.production` (gitignored).
+- **`HF_TOKEN`** is NO LONGER required for microtubule (v5H carries every weight). Kept in `.env.production` (gitignored) and on the `ml` service for SegFormer + sperm, which still call `from_pretrained`; the `.hf-cache` bind mount is load-bearing for them.
 - **Always `--env-file .env.production`** when running `docker compose` against production. Without it, env vars silently empty.
 - **After backend `--force-recreate`, restart nginx too** — DNS cache pins old container IP.
 - **GPU access is granted by `device_cgroup_rules`, not `devices:`** (ml + essays). `runtime: nvidia` alone injects the allowlist via a hook that runs _after_ the OCI spec is built, so `docker update` / `systemctl daemon-reload` / any systemd cgroup rewrite silently strips the GPU from a **running** container — `open('/dev/nvidiactl')` returns EPERM on a mode-0666 node and `torch.cuda.is_available()` flips to False while `/health` keeps saying it is fine. Do **not** "fix" this by switching to `devices:`: docker re-resolves those host paths on every `docker start`, and `/dev/nvidia-uvm` is created lazily by `nvidia-modprobe` — on the 2026-01-13 boot the toolkit hook logged `Could not locate /dev/nvidia-uvm` _while docker was restoring containers_, ~0.6 s before the node appeared. The hook warns and continues; an explicit `devices:` entry fails hard, so with `restart: always` that becomes a crash-loop instead of a degradation. (Wall-clock timestamps from that boot are unusable — the clock jumped +2 h at monotonic 4.65 s; use `journalctl -o short-monotonic`.) If a driver upgrade moves the **dynamic** nvidia-uvm major, `grep nvidia-uvm /proc/devices` and update the `236` rule; the symptom is silent CPU, not a hard failure.

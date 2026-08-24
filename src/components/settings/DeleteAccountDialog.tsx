@@ -70,7 +70,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="min-w-0 space-y-4 py-4">
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
             <h4 className="font-semibold text-red-800 mb-2">
               {t('settings.deleteAccountDialog.whatWillBeDeleted')}
@@ -90,7 +90,10 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirmation" className="text-sm font-medium">
+            <Label
+              htmlFor="confirmation"
+              className="text-sm font-medium break-words"
+            >
               {t('settings.deleteAccountDialog.confirmationLabel').replace(
                 '{0}',
                 userEmail

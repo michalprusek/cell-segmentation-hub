@@ -129,7 +129,9 @@ const MoveToFolderDialog: React.FC<MoveToFolderDialogProps> = ({
           onClick={() => !isDisabled && setSelected(node.id)}
         >
           <Folder className="h-4 w-4 flex-shrink-0 text-blue-500" />
-          <span className="truncate">{node.name}</span>
+          <span className="truncate" title={node.name}>
+            {node.name}
+          </span>
         </button>
         {node.children.length > 0 && (
           <ul>{node.children.map(c => renderNode(c, depth + 1))}</ul>

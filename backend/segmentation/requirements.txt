@@ -69,6 +69,13 @@ segmentation-models-pytorch==0.5.0
 # reads Nikon NIS-Elements proprietary files (Apache-2.0, pure Python).
 transformers==4.57.1
 tifffile>=2024.1.30
+# tifffile decodes Deflate natively but delegates LZW (and JPEG, PackBits, LZMA...)
+# to imagecodecs, which was NOT installed. LZW is the DEFAULT TIFF compression that
+# both ImageJ and NIS-Elements offer, so /api/v1/frap/targets rejected a perfectly
+# ordinary frame from the microscope with "Unreadable TIFF: <COMPRESSION.LZW: 5>
+# requires the 'imagecodecs' package" -- a 400 blaming the operator's file for a
+# missing server package. Verified in the shipped image before adding this.
+imagecodecs>=2024.1.1
 nd2>=0.10.0
 huggingface_hub>=0.20
 
