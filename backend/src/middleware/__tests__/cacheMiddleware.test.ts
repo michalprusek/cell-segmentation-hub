@@ -11,9 +11,7 @@
  *   - must-revalidate directive
  *   - stale-while-revalidate directive
  *   - sets Expires header when maxAge > 0
- *   - sets ETag header when maxAge > 0 and noCache is false
- *   - omits ETag when noCache is true
- *   - uses custom keyGenerator for ETag
+ *   - never sets an ETag itself (so the handler's content-derived one stands)
  *   - calls next() on success
  *   - calls next(error) on thrown error
  *
@@ -186,36 +184,32 @@ describe('createCacheMiddleware', () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
-  it('sets ETag header when maxAge > 0 and noCache is false', () => {
-    const mw = createCacheMiddleware({ maxAge: 300 });
-    const { req, res, headers, next } = makeReqRes();
-
-    mw(req, res, next);
-
-    expect(headers['ETag']).toMatch(/^"/);
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('omits ETag when noCache is true', () => {
-    const mw = createCacheMiddleware({ maxAge: 300, noCache: true });
-    const { req, res, headers, next } = makeReqRes();
-
-    mw(req, res, next);
-
-    expect(headers['ETag']).toBeUndefined();
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('uses the custom keyGenerator to derive ETag', () => {
-    const keyGenerator = vi.fn().mockReturnValue('my-key');
-    const mw = createCacheMiddleware({ maxAge: 60, keyGenerator });
-    const { req, res, headers, next } = makeReqRes();
-
-    mw(req, res, next);
-
-    expect(keyGenerator).toHaveBeenCalledWith(req);
-    expect(headers['ETag']).toBeDefined();
-    expect(next).toHaveBeenCalledOnce();
+  it('never sets an ETag, whatever the options', () => {
+    // THE BUG THIS REPLACES. This middleware runs before the handler, so it
+    // has no response body to identify and used to hash the URL and the clock
+    // instead, truncated to 16 base64 characters — twelve bytes, which on this
+    // router is always `/api/images/`. Every response therefore carried the
+    // same ETag and the server answered 304 to it regardless of content.
+    //
+    // The old tests here asserted only that an ETag EXISTED and matched /^"/,
+    // which a constant satisfies perfectly. That is why it survived.
+    //
+    // Setting one also suppressed the correct one: res.sendFile only sets its
+    // size+mtime ETag `if (!res.getHeader('ETag'))` (send/index.js:763), and
+    // res.json/res.send only generate a body-derived ETag when none is present.
+    for (const options of [
+      { maxAge: 3600 },
+      { maxAge: 3600, private: true },
+      { ttl: 600, namespace: 'project', keyGenerator: () => 'k' },
+      { maxAge: 0 },
+      { maxAge: 3600, noCache: true },
+    ]) {
+      const { req, res, headers, next } = makeReqRes(
+        '/api/images/abc-123/frame-data?channel=488_nm'
+      );
+      createCacheMiddleware(options)(req, res, next);
+      expect(headers['ETag']).toBeUndefined();
+    }
   });
 
   it('calls next(error) when res.setHeader throws', () => {

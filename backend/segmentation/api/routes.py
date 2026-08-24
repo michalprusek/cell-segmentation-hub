@@ -30,14 +30,19 @@ logger = logging.getLogger(__name__)
 # Initialize router
 router = APIRouter()
 
-# Microtubule v7 (DINOv3-L + DPT + PySOAX) holds ~7 GB of GPU activations
-# during a single 1024x1024 forward pass.  The per-process memory limit is
-# ML_MEMORY_LIMIT_GB; with multiple concurrent requests from the queue worker
-# (default parallel batches = 4) we'd try to allocate 4 * 7 GB simultaneously,
-# which fragments the allocator and trips OOM even when total free VRAM is
-# >15 GB.  Serialising microtubule inference at the request layer with a
-# threading.Lock keeps lighter models (hrnet, sperm, wound) parallel while
-# preventing the heavy model from racing itself.
+# Serialises microtubule inference at the request layer.
+#
+# This lock was introduced for v7 (DINOv3-L + DPT), which held ~7 GB of GPU
+# activations for a single 1024x1024 pass: four concurrent queue batches tried
+# to allocate 4 * 7 GB, fragmented the allocator and tripped OOM even with
+# >15 GB free.  v5H is far lighter — measured 0.73 GiB peak, and FLAT across
+# 1024^2 and 2048^2 because it tiles at 512^2 rather than running a ViT over
+# the whole frame — so the OOM argument no longer applies.
+#
+# The lock is kept anyway: it also bounds CPU contention, because the instancer
+# is single-threaded numpy/networkx and is the larger half of the ~4 s budget
+# on a dense frame (65 MTs).  Removing it is a throughput decision to make with
+# measurements, not a side effect of the model swap.
 _microtubule_inference_lock = threading.Lock()
 
 from fastapi import Request
@@ -73,7 +78,7 @@ async def health_check(request: Request):
         }
 
         # Surface models that failed to pre-load so deploy monitoring can detect
-        # missing weights or HF_TOKEN issues without reading log files.
+        # missing or unreadable weights without reading log files.
         models_failed = getattr(request.app.state, "models_failed", [])
 
         return {
@@ -125,7 +130,12 @@ async def get_status(loader = Depends(get_model_loader)):
 async def segment_image(
     file: UploadFile = File(...),
     model: str = Form("hrnet", description="Model to use for segmentation"),
-    threshold: float = Form(0.5, ge=0.1, le=0.9, description="Segmentation threshold"),
+    threshold: float = Form(
+        0.5,
+        ge=0.1,
+        le=0.99,  # v5H's fitted cut is 0.97 — see api/models.py
+        description="Segmentation threshold",
+    ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):
@@ -156,18 +166,25 @@ async def segment_image(
             # Wound model expects grayscale 512×512 — custom preprocessing lives in WoundModel
             result = loader.predict_wound(image, threshold, detect_holes)
         elif model == 'microtubule':
-            # Microtubule v7 takes the user threshold as the seed_prob cutoff
-            # (default 0.5). PySOAX hyperparameters are fixed to the production
-            # Optuna-tuned defaults; detect_holes is not meaningful for polylines.
+            # Microtubule v5H uses its OWN fitted foreground cut (0.97, from
+            # params_v5h.json), not the user's threshold — the same reason
+            # sperm ignores it above: it is calibrated differently.
             #
-            # Serialise on _microtubule_inference_lock: the model needs the full
-            # GPU memory budget for one forward pass and racing two of these
-            # OOMs even with empty_cache between.  Holding the lock across the
-            # entire predict_microtubule call is fine — FastAPI sync routes run
-            # on uvicorn's worker thread pool, so blocking here only blocks the
-            # worker thread, not the event loop.
+            # This is not merely a preference. `threshold` is declared
+            # `le=0.9`, so 0.97 is not even expressible on this endpoint:
+            # forwarding the user's value would silently cut this model's
+            # (very confident) foreground at 0.5 and flood the instancer with
+            # noise, and "fixing" that by sending 0.97 would 422. The cut
+            # belongs to the fitted parameter vector, so it travels with it.
+            #
+            # detect_holes is not meaningful for polylines.
+            #
+            # Serialise on _microtubule_inference_lock — see the comment at its
+            # definition. Holding it across the entire predict_microtubule call
+            # is fine: FastAPI sync routes run on uvicorn's worker thread pool,
+            # so blocking here only blocks the worker thread, not the event loop.
             with _microtubule_inference_lock:
-                result = loader.predict_microtubule(image, threshold)
+                result = loader.predict_microtubule(image)
         elif model == 'microcapsule':
             # Microcapsule distilled U-Net — the user threshold is forwarded as
             # the foreground cutoff. detect_holes is not meaningful: each capsule
@@ -259,7 +276,12 @@ async def segment_image(
 async def batch_segment_images(
     files: list[UploadFile] = File(..., description="List of images to segment"),
     model: str = Form("hrnet", description="Model to use for segmentation"),
-    threshold: float = Form(0.5, ge=0.1, le=0.9, description="Segmentation threshold"),
+    threshold: float = Form(
+        0.5,
+        ge=0.1,
+        le=0.99,  # v5H's fitted cut is 0.97 — see api/models.py
+        description="Segmentation threshold",
+    ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):

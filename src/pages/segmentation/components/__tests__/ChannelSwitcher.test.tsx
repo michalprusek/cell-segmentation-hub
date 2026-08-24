@@ -72,6 +72,9 @@ function makeChannel(
   return {
     name,
     displayName: undefined,
+    // `type` is required on VideoChannel; omitting it made this helper's
+    // declared return type a lie that the baseline had been carrying.
+    type: 'fluorescent',
     displayColor: '#888888',
     isSegmentationSource: false,
     ...overrides,

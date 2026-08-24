@@ -228,16 +228,18 @@ const PolygonContextMenu = ({
                         className="cursor-pointer"
                       >
                         <span
-                          className="mr-2 inline-block rounded-full"
+                          className="mr-2 inline-block flex-shrink-0 rounded-full"
                           style={{
                             width: 12,
                             height: 12,
                             backgroundColor: label.color,
                           }}
                         />
-                        <span className="truncate">{label.name}</span>
+                        <span className="min-w-0 truncate" title={label.name}>
+                          {label.name}
+                        </span>
                         {currentMtType === label.id && (
-                          <span className="ml-auto text-xs text-violet-500">
+                          <span className="ml-auto flex-shrink-0 text-xs text-violet-500">
                             ✓
                           </span>
                         )}
@@ -317,14 +319,17 @@ const PolygonContextMenu = ({
                       className={`cursor-pointer ${isCurrent ? 'bg-violet-50 dark:bg-violet-900/20 font-medium' : ''}`}
                     >
                       <span
-                        className={`mr-2 inline-block rounded-full ${isCurrent ? 'bg-violet-500' : 'bg-gray-400'}`}
+                        className={`mr-2 inline-block flex-shrink-0 rounded-full ${isCurrent ? 'bg-violet-500' : 'bg-gray-400'}`}
                         style={{ width: 8, height: 8 }}
                       />
-                      <span>
+                      <span
+                        className="min-w-0 truncate"
+                        title={`${t('sperm.instance') as string} ${label}`}
+                      >
                         {t('sperm.instance')} {label}
                       </span>
                       {isCurrent && (
-                        <span className="ml-auto text-violet-500 text-xs">
+                        <span className="ml-auto flex-shrink-0 text-violet-500 text-xs">
                           ✓
                         </span>
                       )}

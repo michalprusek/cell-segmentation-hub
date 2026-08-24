@@ -37,6 +37,12 @@ export const useProjectData = (
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
 
+  // Same pattern, for the retry decision below: refreshImageSegmentation is not
+  // memoised, so reading `images` through a ref keeps it from acting on a stale
+  // closure when several frames refresh in quick succession.
+  const imagesRef = useRef<ProjectImage[]>(images);
+  imagesRef.current = images;
+
   useEffect(() => {
     const fetchData = async () => {
       if (!projectId || !userId) {
@@ -240,9 +246,30 @@ export const useProjectData = (
       const firstFetchDuration = performance.now() - startTime;
 
       // If no data on first attempt and image was just marked as segmented,
-      // retry multiple times with increasing delays (race condition with backend update)
+      // retry multiple times with increasing delays (race condition with backend
+      // update).
+      //
+      // ONLY for that race. The retry costs 3 extra requests spread over 3.5 s,
+      // and it used to run for ANY image with no results — including images that
+      // have never been segmented and never will be until someone asks. Opening
+      // a 300-frame video with no segmentation therefore fired ~1200 requests
+      // that could only ever 404, each holding a timer, and the editor spent the
+      // playback stuttering and stalling on the loading gate. An image whose
+      // status says it was never segmented is not in a race with anything: a 404
+      // is the final answer, not a slow one.
+      //
+      // An unknown status (image not in the local list yet) keeps the retries —
+      // that is the conservative direction, and it is genuinely a race.
+      const knownStatus = imagesRef.current.find(
+        img => img.id === imageId
+      )?.segmentationStatus;
+      const couldBeRacing =
+        knownStatus === undefined ||
+        knownStatus === 'segmented' ||
+        knownStatus === 'completed';
+
       let retryCount = 0;
-      const maxRetries = 3;
+      const maxRetries = couldBeRacing ? 3 : 0;
       const retryDelays = [500, 1000, 2000]; // Increasing delays
 
       while (!segmentationData && retryCount < maxRetries) {

@@ -210,6 +210,53 @@ export interface BatchQueueResponse {
   message: string;
 }
 
+/**
+ * What "Add channel" alignment achieved, per frame handed to the aligner.
+ * Mirrors `ChannelAlignmentSummary` in the backend's `addChannelService.ts`.
+ *
+ * A frame is never dropped: an estimate the phase correlation cannot trust
+ * becomes a no-op and the frame is stored unshifted. So `frames` says how many
+ * were processed and only `shifted` says how many were actually registered.
+ */
+export type AlignReason =
+  | 'ok'
+  | 'low_confidence'
+  | 'implausible_shift'
+  | 'shape_mismatch'
+  | 'unreported';
+
+export interface ChannelAlignmentSummary {
+  /** Frames handed to the aligner (target frames × source channels). */
+  frames: number;
+  /** Frames that received a non-zero translation. */
+  shifted: number;
+  /** Frames with a zero shift whose confidence was too low to trust. Legacy
+   *  bucket — see `reasons`. */
+  rejected: number;
+  /** Frames with a trusted zero shift: already aligned, or a peak rejected as
+   *  implausibly large. Legacy bucket — `reasons` separates the two. */
+  zeroShift: number;
+  /** `rejected / frames`, 0..1. Legacy; prefer `failedFraction`. */
+  rejectedFraction: number;
+  /**
+   * How many frames ended on each outcome. OPTIONAL: a backend that predates
+   * the reason field omits this and every field below it, so a newer frontend
+   * talking to an older backend must fall back to the legacy counts.
+   */
+  reasons?: Record<AlignReason, number>;
+  /** Frames NOT registered (low confidence + implausible peak + shape
+   *  mismatch). */
+  failed?: number;
+  /** `failed / frames`, 0..1. Fall back to `rejectedFraction` when absent. */
+  failedFraction?: number;
+  /** Which failure dominated — drives the cause-specific warning. */
+  dominantFailure?: AlignReason | null;
+  /** Peak-to-background confidence spread across the frames. */
+  confidence: { min: number; median: number; max: number } | null;
+  /** Largest translation applied, per axis (absolute pixels). */
+  maxAbsShift: { dy: number; dx: number };
+}
+
 class ApiClient {
   private instance: AxiosInstance;
   private baseURL: string;
@@ -294,12 +341,32 @@ class ApiClient {
           return Promise.reject(error);
         }
 
-        // Handle retryable errors (429, 502, 503, 504) with unified retry system
+        // Handle retryable errors (429, 502, 503, 504) with unified retry system.
+        //
+        // `_retryingStatus` is load-bearing, not defensive. The retry below
+        // re-issues through `this.instance`, so the re-issued request's own
+        // failure comes back through THIS interceptor. Without a marker each
+        // retried 429 opened its own retryWithBackoff, and because a nested
+        // loop fires its first attempt with no delay, the recursion descended
+        // as fast as the network allowed before any backoff applied. One click
+        // on Start Export against an already-running export produced ~1250
+        // requests in about thirteen seconds (production, 2026-08-20) — an
+        // amplifier that fires precisely when the server has said "too many
+        // requests" or "unavailable".
+        //
+        // The marker rides on the request config, which axios carries across a
+        // re-issue; that is the same mechanism the 401 branch above uses for
+        // `_retry`. A marked request rejects straight through, so the ONE
+        // outer loop owns the schedule and the attempt count means what
+        // RETRY_ATTEMPTS.API says it means.
         const retryableStatuses = [429, 502, 503, 504];
         if (
           error.response?.status &&
-          retryableStatuses.includes(error.response.status)
+          retryableStatuses.includes(error.response.status) &&
+          originalRequest &&
+          !originalRequest._retryingStatus
         ) {
+          originalRequest._retryingStatus = true;
           const status = error.response.status;
           const result = await retryWithBackoff(
             () => this.instance(originalRequest),
@@ -1277,6 +1344,12 @@ class ApiClient {
    * set, each added frame is phase-correlation aligned to that frame's
    * segmentation-source channel. Routes to POST
    * /projects/:id/images/add-channel.
+   *
+   * Writing the frames always succeeds; alignment may not. When `align` was
+   * requested the response carries an `alignment` summary saying what the
+   * phase correlation actually achieved — a channel pair with no shared
+   * structure yields `shifted: 0` with every estimate `rejected`, and the
+   * frames are stored unshifted.
    */
   async addChannel(
     projectId: string,
@@ -1292,6 +1365,8 @@ class ApiClient {
     addedChannels: string[];
     affectedContainerIds: string[];
     framesWritten: number;
+    /** Present only when `align` was requested and frames were aligned. */
+    alignment?: ChannelAlignmentSummary;
   }> {
     const { file, channelName, align, imageIds } = params;
     const formData = new FormData();
@@ -1826,13 +1901,22 @@ class ApiClient {
     videoId: string,
     trackIds: string[],
     mtType: string | null
-  ): Promise<{ framesAffected: number }> {
+  ): Promise<{ framesAffected: number | null }> {
     const response = await this.instance.patch(
       `/segmentation/videos/${videoId}/tracks/type`,
       { trackIds, mtType }
     );
     const data = this.extractData(response);
-    return { framesAffected: Number(data?.framesAffected ?? 0) };
+    // NULL, not 0, when the response carries no usable count. The caller reads
+    // 0 as "the backend wrote nothing", which is a real and diagnosable state;
+    // coercing an absent field to 0 would report that for every write the
+    // moment the response shape changed, and a non-numeric value coerced to NaN
+    // would silently disable the check instead (NaN === 0 is false).
+    const raw = (data as { framesAffected?: unknown } | null)?.framesAffected;
+    return {
+      framesAffected:
+        typeof raw === 'number' && Number.isFinite(raw) ? raw : null,
+    };
   }
 
   /** Read the project's microtubule type-label palette. */

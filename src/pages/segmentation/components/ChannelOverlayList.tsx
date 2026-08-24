@@ -26,6 +26,11 @@ import apiClient from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useQueryClient } from '@tanstack/react-query';
 import type { VideoChannel } from '@/types';
+import {
+  setStaticChannelAnchors,
+  clearStaticChannelAnchors,
+} from '@/lib/staticFrameChannels';
+import { clearProxyRanges } from '@/lib/playbackProxyWindow';
 
 interface ChannelOverlayListProps {
   channels: VideoChannel[] | null | undefined;
@@ -50,6 +55,7 @@ export function ChannelOverlayList({
     toggleChannelVisibility,
     setVisibleChannels,
     setChannelCoverage,
+    setProxyRangeMax,
     setChannelColor,
     seedChannelColors,
     setChannelOpacity,
@@ -88,6 +94,21 @@ export function ChannelOverlayList({
       }
     }
     setChannelCoverage(coverage);
+    // A channel the backend recorded as ONE image stamped onto every frame is
+    // fetched and decoded once, not 299 times. Registered from the same list
+    // and in the same pass as the coverage above, so the two derived views
+    // cannot drift; the registry itself declines the aligned case.
+    setStaticChannelAnchors(channels);
+    // One range for the whole container. The backend writes the same number to
+    // every channel, so the first one that has it answers for all of them;
+    // null until the first playback has caused any proxies to be built.
+    const withRange = channels.find(c => typeof c.proxyRangeMax === 'number');
+    setProxyRangeMax(withRange?.proxyRangeMax ?? null);
+    return () => {
+      clearStaticChannelAnchors();
+      // Ranges learned from headers describe THIS container's encodes.
+      clearProxyRanges();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels]);
 

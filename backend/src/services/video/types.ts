@@ -48,6 +48,41 @@ export interface ChannelMeta {
    *  coverage → always request it). Frame ids (not indices) so the FE can
    *  filter directly against the canvas / prefetch frame id. */
   frameIds?: string[];
+  /** True when this channel was added from a SINGLE source image stamped onto
+   *  every covered frame, rather than from a video/stack paired frame-by-frame.
+   *  Every covered frame therefore shows the SAME picture — a static IRM
+   *  snapshot laid over a time-lapse being the usual case.
+   *
+   *  Why it is worth recording. Segmenting such a channel frame-by-frame does
+   *  the identical work N times and then asks the tracker to rediscover that
+   *  the N results are the same objects. Observed in production: 299 frames,
+   *  30498 polylines, resolving to exactly 102 tracks — one detection set,
+   *  counted 299 times, at a cost that pushed the tracker past its timeout. A
+   *  channel flagged here is segmented ONCE and the result is projected onto
+   *  the rest, which makes cross-frame identity exact by construction instead
+   *  of inferred. */
+  staticSource?: boolean;
+  /** For a `staticSource` channel added WITH alignment: the (dy, dx) actually
+   *  applied to each covered frame's copy, keyed by frame Image id.
+   *
+   *  Alignment registers the one source image to each frame's own segmentation
+   *  channel, so the stored copies are translations of one another rather than
+   *  byte-identical. Recording the translation is what lets a single
+   *  segmentation be projected onto the other frames instead of re-run: the
+   *  geometry is the same shape moved by a known amount. Absent when the
+   *  channel was added without alignment, which is the same thing as every
+   *  shift being (0, 0). */
+  staticShifts?: Record<string, [number, number]>;
+  /** Upper bound on the sample values this container holds, rounded up to a
+   *  power of two.
+   *
+   *  NOT the value that maps to 255 — that is chosen per FRAME by
+   *  `make_playback_proxy.py` from the frame's own peak, and travels with the
+   *  frame in `X-Proxy-Range`. This figure has one job: the client's banding
+   *  guard needs something to judge against before it has seen any frame of a
+   *  container. Absent until a multi-channel frame of the container has been
+   *  requested at least once. */
+  proxyRangeMax?: number;
 }
 
 export interface ExtractionResult {
@@ -139,13 +174,37 @@ export function defaultColorForWavelength(nm: number | undefined): string {
 }
 
 /** Heuristic: is this channel name + wavelength label-free / IRM-like?
- *  Looks for IRM, BF (brightfield), DIC (differential interference
- *  contrast), or TL (transmitted light) and treats null/zero wavelength
- *  as a strong hint (fluorescence channels always have an emission λ). */
+ *
+ *  Requires POSITIVE evidence: a label-free name (IRM, BF, DIC, TL, …) or an
+ *  explicitly zero emission wavelength.
+ *
+ *  This used to also return true for an *unknown* wavelength, on the premise
+ *  that "fluorescence channels always have an emission λ". Both halves of that
+ *  premise are false in practice:
+ *
+ *  - Multi-page TIFFs carry no wavelength at all, so EVERY channel of every
+ *    TIFF stack matched and the whole stack was typed `irm`. The 3-frame
+ *    microtubule test fixture is exactly this: three channels all labelled
+ *    `irm`, with a TIRF channel first in line and therefore chosen as the
+ *    segmentation source for an IRM-trained model.
+ *  - Real ND2 IRM channels report a NONZERO emission λ anyway (measured
+ *    2026-08-17: 525 nm and 510 nm on two production files), so the fallback
+ *    never identified a genuine IRM channel that the name did not already
+ *    catch. It only ever fired where there was no evidence.
+ *
+ *  Absence of metadata is not evidence. Callers must therefore cope with "no
+ *  IRM channel found" — see `buildChannelMeta`, which still nominates a
+ *  segmentation source so a stack of unidentifiable channels stays segmentable.
+ */
 export function isIrmChannel(name: string | undefined,
                               wavelengthNm: number | undefined): boolean {
-  if (!name) return wavelengthNm == null || wavelengthNm === 0;
-  const upper = name.toUpperCase();
-  if (/\b(IRM|BF|DIC|TL|BRIGHTFIELD|TRANSMITTED)\b/.test(upper)) return true;
-  return wavelengthNm == null || wavelengthNm === 0;
+  if (wavelengthNm === 0) return true;
+  if (!name) return false;
+  // Underscores are separators in microscopy channel names (`IRM_widefield`,
+  // `TIRF_488`), but `\b` counts `_` as a word character, so `\bIRM\b` does not
+  // match `IRM_WIDEFIELD`. Normalise them to spaces before matching; this only
+  // ever admits more label-free names, never a fluorescence one — none of the
+  // tokens below appear inside a fluorophore name.
+  const upper = name.toUpperCase().replace(/_/g, ' ');
+  return /\b(IRM|BF|DIC|TL|BRIGHTFIELD|TRANSMITTED)\b/.test(upper);
 }

@@ -26,32 +26,41 @@ const createLocalStorageMock = () => {
 
 const localStorageMock = createLocalStorageMock();
 
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-  writable: true,
-  configurable: true,
-});
+// Everything below stubs BROWSER globals, and this file is loaded by
+// backend/vitest.config.ts too, where the environment is 'node' and `window`
+// does not exist. Without this guard the very first statement threw
+// "ReferenceError: window is not defined" during setup, which vitest reports as
+// a failed SUITE with "no tests" — so every backend test file was unrunnable,
+// and had been for as long as the two configs shared this file. Guarding is
+// enough: a node suite has nothing to stub.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'localStorage', {
+    value: localStorageMock,
+    writable: true,
+    configurable: true,
+  });
 
-// Mock window.matchMedia for ThemeContext
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(), // Deprecated
-    removeListener: vi.fn(), // Deprecated
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
+  // Mock window.matchMedia for ThemeContext
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(), // Deprecated
+      removeListener: vi.fn(), // Deprecated
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 
-// Mock navigator.language for LanguageContext
-Object.defineProperty(navigator, 'language', {
-  writable: true,
-  value: 'en-US',
-});
+  // Mock navigator.language for LanguageContext
+  Object.defineProperty(navigator, 'language', {
+    writable: true,
+    value: 'en-US',
+  });
+}
 
 // Mock ImageData for Node.js test environment
 global.ImageData = class MockImageData {

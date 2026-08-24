@@ -11,12 +11,21 @@
  *      createImageBitmap path would silently crush them to 8-bit). Non-
  *      grayscale PNGs fall back to an 8-bit createImageBitmap decode.
  *   3. Apply the user's min/max window-level LUT remap on the true sample
- *      values — ImageJ-style. The window range auto-scales to each channel
- *      set's real min/max (reported to ImageDisplayContext) so a 16-bit
- *      frame opens with a sensible contrast and the sliders span the data.
+ *      values — ImageJ-style. Each channel carries its OWN window, auto-scaled
+ *      to that channel's real min/max (reported to ImageDisplayContext), so a
+ *      dim channel stays legible beside a bright one instead of collapsing
+ *      into a few grey levels of the brighter one's range.
  *   4. Tint the grayscale by the channel's display colour and additively
  *      composite (canvas `globalCompositeOperation = 'lighter'`), mimicking
  *      multi-channel fluorescence emission.
+ *
+ * Step 3+4 run on the GPU when the browser has WebGL2: `createCompositor`
+ * moves the window/level remap, the tint and the additive blend into a
+ * fragment shader, so a frame costs a texture upload and a slider tick costs a
+ * uniform update. The CPU implementation below stays as the fallback — it is
+ * what runs when WebGL2 is unavailable and what takes over after a lost GL
+ * context (see the render-path effect). Both produce the same image; only the
+ * per-pixel loop's location differs.
  *
  * Decoding is split from windowing: we fetch+decode once per frame/channel
  * set (cached in a ref) and re-run the cheap windowing+composite pass on any
@@ -31,10 +40,37 @@
  * the visible-channel list is non-empty.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { decodeGrayPng } from '@/lib/png16';
+import { decodeGrayPngPooled } from '@/lib/png16Client';
+import { canDecodeWebpGray } from '@/lib/webpGray';
+import {
+  decodedFrameCache,
+  frameCacheKey,
+  getOrDecode,
+} from '@/lib/decodedFrameCache';
+import { FRAME_PREFETCH_WINDOW } from '../../hooks/useFrameWindowPrefetch';
+import { DECODE_AHEAD_FRAMES } from '../../hooks/useDecodeAhead';
+import { buildFrameImageUrl } from '../../hooks/segmentationPolygonCache';
+import {
+  anyWindowNeedsFullDepth,
+  noteProxyRange,
+} from '@/lib/playbackProxyWindow';
+import { speculativeFrameRequests } from '@/lib/requestThrottle';
+import { buildLut } from '@/lib/windowLevel';
+import {
+  createCompositor,
+  type Compositor,
+  type CompositorChannel,
+  type CompositorWindow,
+} from '@/lib/webglCompositor';
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
 import { useLanguage } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
@@ -80,7 +116,27 @@ interface ChannelSamples {
   bitDepth: number;
   /** length = width*height, one grayscale sample per pixel. */
   data: Uint16Array | Uint8Array;
+  /** Min/max sample across this channel. Carried from the decoder rather than
+   *  recomputed: decodeGrayPng already found both inside the loop it had to
+   *  run anyway, and rescanning here cost a second full pass over every sample
+   *  of every channel — ~6.2 M iterations per frame at 1474x1412 x3, on the
+   *  main thread, for a number that was already known. */
+  min: number;
+  max: number;
 }
+
+/**
+ * Which implementation is driving the composite.
+ *
+ * `'webgl'` is the OPTIMISTIC initial value, not a confirmed capability: a
+ * canvas element yields only ONE context type for its whole lifetime, so the
+ * WebGL2 request has to happen before anything else draws — there is no way to
+ * try it and fall back on the same element. When the request fails (no WebGL2)
+ * or the context is later lost, we flip to `'2d'`; that value is part of the
+ * `<canvas>`'s React `key`, so the flip mounts a FRESH element which has never
+ * been asked for a WebGL2 context and can therefore still give us a 2D one.
+ */
+type RenderPath = 'webgl' | '2d';
 
 /** Parse `#RRGGBB` (or `#rgb`) into [r, g, b]. White is the grayscale
  *  identity — invalid inputs degrade to it rather than throwing. */
@@ -103,31 +159,19 @@ function hexToRgb(hex: string): [number, number, number] {
   return [255, 255, 255];
 }
 
-/** Window/level LUT over the sample domain [0, rangeMax] → 8-bit display.
- *  Sized to the current channel set's brightest value, so a 16-bit frame
- *  gets up to a 65536-entry table (64 KB, rebuilt on each windowing pass —
- *  Min/Max/colour/opacity change). Values ≤ windowMin map to black,
- *  ≥ windowMax to white. */
-function buildLut(
-  windowMin: number,
-  windowMax: number,
-  rangeMax: number
-): Uint8ClampedArray {
-  const size = Math.min(65535, Math.max(1, Math.round(rangeMax))) + 1;
-  const lut = new Uint8ClampedArray(size);
-  const lo = Math.min(windowMin, windowMax);
-  const hi = Math.max(windowMin, windowMax);
-  const range = Math.max(1, hi - lo);
-  for (let i = 0; i < size; i++) {
-    if (i <= lo) lut[i] = 0;
-    else if (i >= hi) lut[i] = 255;
-    else lut[i] = Math.round(((i - lo) * 255) / range);
-  }
-  return lut;
-}
-
 /** Fallback for non-grayscale PNGs: decode 8-bit via createImageBitmap. */
 async function decode8Bit(blob: Blob): Promise<ChannelSamples | null> {
+  // NOT for a playback proxy. This returns samples exactly as decoded, which
+  // for an 8-bit WebP means 0..255 where the window and the LUT expect the
+  // data's own units — the frame would be drawn `rangeMax/255` too dark, which
+  // is 8x to 116x on the measured container, with nothing to show it is wrong.
+  // A proxy that could not be decoded properly must not be decoded improperly.
+  if (blob.type === 'image/webp') {
+    logger.warn(
+      'MultiChannelCanvas: refusing to 8-bit-decode a playback proxy; it would lose its range'
+    );
+    return null;
+  }
   const bitmap = await createImageBitmap(blob);
   const w = bitmap.width;
   const h = bitmap.height;
@@ -144,8 +188,16 @@ async function decode8Bit(blob: Blob): Promise<ChannelSamples | null> {
   bitmap.close?.();
   const id = octx.getImageData(0, 0, w, h);
   const data = new Uint8Array(w * h);
-  for (let p = 0, i = 0; p < id.data.length; p += 4, i++) data[i] = id.data[p];
-  return { channel: '', width: w, height: h, bitDepth: 8, data };
+  let min = 255;
+  let max = 0;
+  // Range comes free here — the loop is already touching every sample.
+  for (let p = 0, i = 0; p < id.data.length; p += 4, i++) {
+    const v = id.data[p];
+    data[i] = v;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return { channel: '', width: w, height: h, bitDepth: 8, data, min, max };
 }
 
 export default function MultiChannelCanvas({
@@ -160,20 +212,66 @@ export default function MultiChannelCanvas({
   onLoad,
 }: MultiChannelCanvasProps) {
   const {
-    windowMin,
-    windowMax,
-    windowRangeMax,
+    channelWindows,
+    fallbackWindow,
+    proxyRangeMax,
     brightness,
     contrast,
     channelOpacities,
-    reportDataRange,
+    reportChannelRanges,
   } = useImageDisplay();
   const { t } = useLanguage();
+
+  // Per-channel window/level. Must sit AFTER `channelWindows` above and before
+  // the composite effect that reads it — a hook placed before a `const` it
+  // captures throws "Cannot access before initialization" at runtime, which the
+  // type checker does not catch and the minified bundle reports as a single
+  // letter (CLAUDE.md failure pattern #11). Anywhere in between is fine.
+  //
+  // `windowsKey` is a VALUE fingerprint, so the composite effect re-runs only
+  // when a window's numbers actually move. The object's identity is stable
+  // across unrelated context writes (every setter spreads `...s`), but the
+  // reducers do hand back a new map whenever any channel's bounds widen — which
+  // happens on frame scrubs, where the tone curve has not changed.
+  const windowsKey = Object.entries(channelWindows)
+    .map(([c, w]) => (w ? `${c}:${w.min}:${w.max}:${w.rangeMax}` : `${c}:-`))
+    .join('|');
+  const windowFor = useCallback(
+    (channel: string): CompositorWindow | null => {
+      const w = channelWindows[channel];
+      // NULL, not an 8-bit identity window. React batches the decode's
+      // `setDecodeVersion` and `reportChannelRanges` into one commit, so in the
+      // normal path every composited channel already has a window and this
+      // never fires. If it ever does, drawing is the wrong answer: a 16-bit
+      // channel through a 0..255 window is not mis-toned, it is FULL WHITE —
+      // buildLut caps at index 255 and the shader clamps to the same maxIndex,
+      // and under `lighter` blending that saturated channel wipes out the
+      // others too. A missing channel is honest; a white field looks like
+      // signal, which is the exact confusion this whole change exists to end.
+      return w ? { min: w.min, max: w.max, rangeMax: w.rangeMax } : null;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [windowsKey]
+  );
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Decoded samples for the current frame/channel set, reused across
   // window-slider re-renders so dragging never refetches.
   const decodedRef = useRef<ChannelSamples[]>([]);
   const dimsRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  // Live WebGL2 compositor, or null while on the CPU path. Held in a ref (not
+  // state) so the composite effect can read it without the extra render a
+  // state write would cost.
+  const compositorRef = useRef<Compositor | null>(null);
+  // Scratch canvas for the CPU composite, allocated once and resized in place.
+  // It used to be `document.createElement('canvas')` INSIDE the effect, i.e. a
+  // fresh width*height bitmap on every slider tick.
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  // Scratch pixel buffer for the CPU composite, kept alongside the canvas it is
+  // drawn into. createImageData allocates AND spec-mandates a zero fill —
+  // 8.3 MB at 1474x1412 — every call, and every byte of it is overwritten
+  // below before it is used, so paying for that per pass was pure waste.
+  const outImgRef = useRef<ImageData | null>(null);
+  const [renderPath, setRenderPath] = useState<RenderPath>('webgl');
   // Bumped after a successful decode to trigger the windowing/composite
   // effect (which reads decodedRef).
   const [decodeVersion, setDecodeVersion] = useState(0);
@@ -206,6 +304,71 @@ export default function MultiChannelCanvas({
   );
   const fetchChannelsKey = fetchChannels.join('|');
 
+  // Draw from the 8-bit playback proxy unless the window has narrowed far
+  // enough that its 256 levels would band — see `windowNeedsFullDepth`. The
+  // server may still answer with the original PNG (batch not finished, or the
+  // frame too bright to map); `decodeWebpGray` expands proxy samples back into
+  // the data's own units, so both answers reach the compositor alike and this
+  // flag never has to be right about what actually arrived.
+  // Gated on being able to DECODE one, not just on wanting one: a browser
+  // without OffscreenCanvas would otherwise spend the bandwidth on bytes it
+  // then cannot turn into samples, and draw those channels blank.
+  const useProxy =
+    canDecodeWebpGray() &&
+    !anyWindowNeedsFullDepth(
+      channelWindows,
+      proxyRangeMax,
+      visibleChannels,
+      fallbackWindow
+    );
+  const repr = useProxy ? ('proxy' as const) : undefined;
+
+  // --- Render-path selection: ask the CURRENT canvas element for WebGL2 once.
+  // Declared BEFORE the decode and composite effects so that on every commit
+  // the compositor is created (or torn down) before the composite pass looks
+  // for it. Re-runs only when `renderPath` changes, which — because that value
+  // is the canvas's key — always means a brand-new element to bind to. ---
+  useEffect(() => {
+    if (renderPath !== 'webgl') return; // already on the CPU fallback
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Guards the fallback against firing twice (a late onContextLost after we
+    // already gave up, or after this effect was cleaned up).
+    let released = false;
+    const fallBackTo2d = () => {
+      if (released) return;
+      released = true;
+      compositorRef.current = null;
+      setRenderPath('2d');
+    };
+
+    let created: Compositor | null = null;
+    try {
+      created = createCompositor(canvas, fallBackTo2d);
+    } catch (err) {
+      logger.warn(
+        'MultiChannelCanvas: WebGL2 compositor construction threw — using the 2D path',
+        err
+      );
+      created = null;
+    }
+    if (!created) {
+      // No WebGL2 (or it blew up). Remount as a fresh element and composite on
+      // the CPU; this element may already be in WebGL context mode.
+      fallBackTo2d();
+      return;
+    }
+
+    const compositor = created;
+    compositorRef.current = compositor;
+    return () => {
+      released = true;
+      compositorRef.current = null;
+      compositor.dispose();
+    };
+  }, [renderPath]);
+
   // --- Decode pass: fetch + decode all visible channels once per
   // frame/channel set. Deliberately does NOT depend on window/colour state
   // so slider drags re-window from the cache instead of refetching. ---
@@ -232,24 +395,105 @@ export default function MultiChannelCanvas({
     (async () => {
       const results = await Promise.all(
         fetchChannels.map(async channel => {
+          const cacheKey = frameCacheKey(frameId, channel, repr);
+          const cached = decodedFrameCache.get(cacheKey);
+          if (cached) {
+            // Already decoded — stepping back a frame, replaying a clip, or a
+            // channel toggle that re-runs this effect. The prefetcher warms the
+            // HTTP cache, but the decode is the expensive half and this is the
+            // only thing that keeps it.
+            return {
+              channel,
+              width: cached.width,
+              height: cached.height,
+              bitDepth: cached.bitDepth,
+              data: cached.data,
+              min: cached.min,
+              max: cached.max,
+            } as ChannelSamples;
+          }
           try {
-            const url = `/api/images/${frameId}/frame-data?channel=${encodeURIComponent(channel)}`;
-            const res = await fetch(url, { signal: controller.signal });
-            if (!res.ok) {
-              logger.warn(
-                `MultiChannelCanvas: channel '${channel}' frame ${frameId} HTTP ${res.status} ${res.statusText}`
-              );
-              return null;
-            }
-            const blob = await res.blob();
-            const decoded = await decodeGrayPng(blob);
+            // Through the shared builder, not hand-rolled: that is what
+            // applies the static-channel anchor (one fetch for a channel that
+            // is the same picture on every frame) and the proxy parameter.
+            const url = buildFrameImageUrl(frameId, channel, repr);
+            // EXEMPT from the speculative queue, not merely ranked ahead of it:
+            // `runImmediate` issues now and never waits. This is the frame the
+            // user is looking at, and a priority slot in a queue is still a
+            // queue — with 4 slots held by window warms, even a first-in-line
+            // displayed frame would wait for one of them to finish
+            // transferring several megabytes.
+            //
+            // It is not free, though: it OCCUPIES a slot for its whole cycle,
+            // so speculative work backs off while it runs and the shared
+            // budget stays honest. Peak concurrency is the cap plus one
+            // mounted canvas's channel count, not unbounded.
+            const fetched = await speculativeFrameRequests.runImmediate(
+              async () => {
+                const res = await fetch(url, { signal: controller.signal });
+                if (!res.ok) {
+                  logger.warn(
+                    `MultiChannelCanvas: channel '${channel}' frame ${frameId} HTTP ${res.status} ${res.statusText}`
+                  );
+                  return null;
+                }
+                // Present only on a proxy, and specific to THIS frame — the
+                // converter maps each frame against its own maximum. Absent
+                // means the server answered with the original PNG, whose
+                // samples are already in the data's units.
+                const header = res.headers.get('X-Proxy-Range');
+                const rangeMax = header === null ? null : Number(header);
+                const valid =
+                  rangeMax !== null && Number.isFinite(rangeMax) && rangeMax > 0
+                    ? rangeMax
+                    : null;
+                // Teaches the banding guard what this channel is really
+                // encoded against, so it stops judging a dim channel by the
+                // brightest one in the container.
+                if (valid !== null) noteProxyRange(channel, valid);
+                return { blob: await res.blob(), rangeMax: valid };
+              }
+            );
+            if (!fetched) return null;
+            const { blob, rangeMax: frameRangeMax } = fetched;
+            // Off the main thread, and in parallel across channels. Decoding
+            // one 1474x1412 16-bit channel is ~15 ms of native inflate plus
+            // ~10 ms of JavaScript un-filtering; doing that inline for two
+            // channels is what froze playback.
+            // getOrDecode, not decodeGrayPngPooled directly: decode-ahead may
+            // already be decoding this exact frame, and joining its work beats
+            // starting a second 4 MB decode that occupies a worker the NEXT
+            // frame is about to need. It stores the result in the cache too.
+            const decoded = await getOrDecode(cacheKey, () =>
+              decodeGrayPngPooled(blob, frameRangeMax)
+            );
             if (decoded) {
+              // Now that a real frame's size is known, size the cache to the
+              // working set instead of a constant. The pipeline holds the
+              // prefetch window for EVERY visible channel at once, and a fixed
+              // budget that comfortably fits two channels does not fit three:
+              // the window then evicts itself, every frame becomes a miss, and
+              // playback stalls while the counter keeps counting.
+              // Residents are the prefetch window PLUS whatever decode-ahead
+              // is running past it — counted explicitly rather than left to the
+              // safety margin, because getting this wrong is invisible until
+              // playback stalls.
+              decodedFrameCache.reserveFor(
+                decoded.data.byteLength,
+                (FRAME_PREFETCH_WINDOW.back +
+                  FRAME_PREFETCH_WINDOW.ahead +
+                  DECODE_AHEAD_FRAMES +
+                  1) *
+                  Math.max(1, visibleChannels.length)
+              );
               return {
                 channel,
                 width: decoded.width,
                 height: decoded.height,
                 bitDepth: decoded.bitDepth,
                 data: decoded.data,
+                min: decoded.min,
+                max: decoded.max,
               } as ChannelSamples;
             }
             const fallback = await decode8Bit(blob);
@@ -309,38 +553,48 @@ export default function MultiChannelCanvas({
         lastPartialFailKeyRef.current = null;
       }
 
-      // Combined sample range across visible channels → drives the ImageJ-
-      // style auto-scale + slider bounds in ImageDisplayContext.
-      let cmin = Infinity;
-      let cmax = -Infinity;
+      // Each channel's OWN sample range → drives the per-channel ImageJ-style
+      // auto-scale + slider bounds in ImageDisplayContext. These scalars are
+      // carried out of the decoders, NOT rescanned from the samples.
+      //
+      // Reducing these to a single min/max pair across all channels is what
+      // made a narrow channel unreadable beside a wide one; the full account is
+      // on `channelWindows` in ImageDisplayContext.
+      const ranges: Record<string, { min: number; max: number }> = {};
       for (const cs of loaded) {
-        const src = cs.data;
-        for (let i = 0; i < src.length; i++) {
-          const v = src[i];
-          if (v < cmin) cmin = v;
-          if (v > cmax) cmax = v;
-        }
+        ranges[cs.channel] = {
+          min: Number.isFinite(cs.min) ? cs.min : 0,
+          max: Number.isFinite(cs.max) ? cs.max : 255,
+        };
       }
 
       decodedRef.current = loaded;
       dimsRef.current = { w: loaded[0].width, h: loaded[0].height };
       // Trigger the composite BEFORE invoking external callbacks, so a throw
-      // from the parent-supplied reportDataRange/onLoad can't leave the canvas
-      // blank. The range key is scoped to the container so navigating to a
-      // different video with the same channel names still re-fits the window.
+      // from the parent-supplied reportChannelRanges/onLoad can't leave the
+      // canvas blank. The key is the CONTAINER, not the channel set: ticking a
+      // channel on must auto-fit that channel alone and leave the windows the
+      // user has already tuned on the others exactly where they are. An absent
+      // containerId stays NULL rather than being folded to '': two different
+      // id-less videos are not the same container, and treating them as one
+      // hands the second the first's window.
       setDecodeVersion(v => v + 1);
+      // Two try/catches, not one: a throw from reportChannelRanges leaves the
+      // decode committed but the windows not, so the frame paints through the
+      // 8-bit identity — worth naming separately from an onLoad failure, which
+      // costs only the parent's size bookkeeping.
       try {
-        reportDataRange(
-          Number.isFinite(cmin) ? cmin : 0,
-          Number.isFinite(cmax) ? cmax : 255,
-          `${containerId ?? ''}::${channelsKey}`
-        );
-        onLoad?.(loaded[0].width, loaded[0].height, channelsKey);
+        reportChannelRanges(ranges, containerId ?? null);
       } catch (err) {
         logger.error(
-          'MultiChannelCanvas: onLoad/reportDataRange callback threw',
+          'MultiChannelCanvas: reportChannelRanges threw — channels with no window yet will be skipped this pass',
           err
         );
+      }
+      try {
+        onLoad?.(loaded[0].width, loaded[0].height, channelsKey);
+      } catch (err) {
+        logger.error('MultiChannelCanvas: onLoad callback threw', err);
       }
     })().catch(err => {
       if (!controller.signal.aborted) {
@@ -356,9 +610,13 @@ export default function MultiChannelCanvas({
     frameId,
     containerId,
     channelsKey,
+    // Not cosmetic: when the window narrows past the banding threshold this
+    // flips, and the effect has to re-run to refetch the frame at full depth.
+    // Without it the fallback would only take effect on the next frame change.
+    repr,
     fetchChannels,
     fetchChannelsKey,
-    reportDataRange,
+    reportChannelRanges,
     onLoad,
     t,
     visibleChannels,
@@ -373,6 +631,52 @@ export default function MultiChannelCanvas({
     const canvas = canvasRef.current;
     const loaded = decodedRef.current;
     if (!canvas || loaded.length === 0) return;
+    const { w, h } = dimsRef.current;
+    if (w === 0 || h === 0) return;
+
+    // --- GPU path. Must return before ANY 2D use of this canvas: on a real
+    // browser `getContext('2d')` on a WebGL-mode canvas returns null, and
+    // writing canvas.width would clear the drawing buffer setSize() owns. ---
+    if (renderPath === 'webgl') {
+      const compositor = compositorRef.current;
+      // The render-path effect has not produced one yet, or has just torn it
+      // down. Skip this pass rather than touching the canvas 2D-wise; the
+      // pending setRenderPath('2d') re-runs us against a fresh element.
+      if (!compositor) return;
+      if (!compositor.isAlive()) {
+        // Context lost without onContextLost reaching us (or before it did).
+        // Remount as a 2D canvas; this effect re-runs and paints on the CPU,
+        // so the user never sees a blank frame.
+        compositorRef.current = null;
+        setRenderPath('2d');
+        return;
+      }
+      const channels: CompositorChannel[] = [];
+      for (const cs of loaded) {
+        // Raw sample units — the same three numbers buildLut() takes below.
+        const window = windowFor(cs.channel);
+        if (!window) {
+          logger.warn(
+            `MultiChannelCanvas: no window for channel ${cs.channel}; skipping it this pass rather than drawing it white`
+          );
+          continue;
+        }
+        channels.push({
+          channel: cs.channel,
+          data: cs.data,
+          width: cs.width,
+          height: cs.height,
+          color: hexToRgb(channelColors[cs.channel] ?? '#FFFFFF'),
+          opacity: (channelOpacities[cs.channel] ?? 100) / 100,
+          window,
+        });
+      }
+      compositor.setSize(w, h);
+      compositor.draw(channels);
+      return;
+    }
+
+    // --- CPU fallback: the original per-pixel composite, unchanged. ---
     const ctx = canvas.getContext('2d', { willReadFrequently: false });
     if (!ctx) {
       logger.warn(
@@ -380,35 +684,56 @@ export default function MultiChannelCanvas({
       );
       return;
     }
-    const { w, h } = dimsRef.current;
-    if (w === 0 || h === 0) return;
     // Setting canvas.width/height resets the bitmap; only do it when the size
     // actually changes so a slider tick doesn't pay a full-canvas reset every
     // frame (clearRect below handles the per-pass clear).
     if (canvas.width !== w) canvas.width = w;
     if (canvas.height !== h) canvas.height = h;
 
-    const lut = buildLut(windowMin, windowMax, windowRangeMax);
-    const maxIdx = lut.length - 1;
-
     ctx.clearRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'lighter';
 
-    const off = document.createElement('canvas');
-    off.width = w;
-    off.height = h;
+    // Reuse the scratch canvas across passes — a fresh one per pass meant a
+    // full width*height allocation on every slider tick. Every pixel of it is
+    // overwritten below (alpha included) before it is drawn, so there is no
+    // stale content to clear.
+    let off = offscreenRef.current;
+    if (!off) {
+      off = document.createElement('canvas');
+      offscreenRef.current = off;
+    }
+    if (off.width !== w) off.width = w;
+    if (off.height !== h) off.height = h;
     const offCtx = off.getContext('2d', { willReadFrequently: true });
     if (!offCtx) {
       logger.warn('MultiChannelCanvas: offscreen 2D context unavailable');
       return;
     }
-    const outImg = offCtx.createImageData(w, h);
+    let outImg = outImgRef.current;
+    if (!outImg || outImg.width !== w || outImg.height !== h) {
+      outImg = offCtx.createImageData(w, h);
+      outImgRef.current = outImg;
+    }
     const out = outImg.data;
 
     for (const cs of loaded) {
       const [cR, cG, cB] = hexToRgb(channelColors[cs.channel] ?? '#FFFFFF');
       const opacity = (channelOpacities[cs.channel] ?? 100) / 100;
       const scale = opacity >= 1 ? 1 : opacity;
+      // One table per channel: they are windowed independently, so they cannot
+      // share one. This does move the build inside the loop — N tables per
+      // composite where there was one — but `buildLut` is O(rangeMax) against a
+      // per-pixel loop that already ran per channel in this same body, so it is
+      // a few percent of a pass that only runs when WebGL2 is unavailable.
+      const cw = windowFor(cs.channel);
+      if (!cw) {
+        logger.warn(
+          `MultiChannelCanvas: no window for channel ${cs.channel}; skipping it this pass rather than drawing it white`
+        );
+        continue;
+      }
+      const lut = buildLut(cw.min, cw.max, cw.rangeMax);
+      const maxIdx = lut.length - 1;
       const src = cs.data;
       for (let i = 0, p = 0; i < src.length; i++, p += 4) {
         const s = src[i];
@@ -423,17 +748,22 @@ export default function MultiChannelCanvas({
     }
   }, [
     decodeVersion,
-    windowMin,
-    windowMax,
-    windowRangeMax,
+    windowsKey,
+    windowFor,
     colorsKey,
     opacitiesKey,
     channelColors,
     channelOpacities,
+    // A path flip remounts the <canvas> (new key ⇒ new element), so the last
+    // composite is gone and has to be replayed on the new one.
+    renderPath,
   ]);
 
   return (
     <canvas
+      // Part of the identity, not just a value: flipping to '2d' must give us
+      // a NEW element, because this one is stuck in WebGL context mode.
+      key={renderPath}
       ref={canvasRef}
       width={width}
       height={height}

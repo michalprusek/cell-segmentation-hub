@@ -510,9 +510,9 @@ export default {
             'U-Net avec encodeur MiT-B5 (SegFormer) pour la segmentation binaire des plaies en microscopie de scratch-assay (~32 ms sur A5000, 90 % IoU sur le jeu de test externe)',
         },
         microtubule: {
-          name: 'Microtubules (DINOv3 + PySOAX)',
+          name: 'Microtubules (ResEnc-M + instanceur par courbure)',
           description:
-            "Segmentation d'instances pour les time-lapses de microtubules IRM/TIRF. Le backbone DINOv3-L ViT-L/16 + fusion DPT produit des polylignes centerline par MT et un embedding 32-d par pixel qui alimente le tracking inter-trames et la génération de kymographe. ~8 s/image ; seul modèle de la plateforme à sortie polyligne native.",
+            "Segmentation d'instances pour les time-lapses de microtubules IRM. Un réseau nnU-Net ResEnc-M prédit l'avant-plan des filaments, puis un instanceur borné en courbure le sépare en centerlines individuelles, résolvant chaque croisement sous une borne dure de 0,25 rad/px. Entraîné uniquement sur des images synthétiques, sans annotation humaine. ~4,5 s/image ; seul modèle de la plateforme à sortie polyligne native.",
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -549,7 +549,7 @@ export default {
       wound:
         'Modèle U-Net + MiT-B5 (encodeur SegFormer) pour la segmentation des plaies en microscopie de scratch-assay. Une seule région de plaie binaire par image ; idéal pour les time-lapses de cicatrisation.',
       microtubule:
-        "Segmentation d'instances de microtubules pour la microscopie IRM/TIRF. Encodeur DINOv3-L + DPT, post-traitement PySOAX, sortie polyligne native avec tracking basé sur embedding.",
+        "Segmentation d'instances de microtubules pour la microscopie IRM. Réseau nnU-Net ResEnc-M, instanceur borné en courbure, sortie polyligne native avec tracking géométrique inter-trames.",
       microcapsule:
         "U-Net compact (distillé de Meta SAM 3) pour la segmentation d'instances de microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
     },
@@ -1193,6 +1193,12 @@ export default {
     deleteAnnotations: 'Supprimer les annotations',
     addChannel: 'Ajouter un canal',
     addChannelSuccess: 'Canal {{channels}} ajouté à {{frames}} image(s)',
+    addChannelAlignWarning:
+      "L'alignement a échoué sur {{failed}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Les canaux n'ont pas pu être corrélés (aucune structure commune) ; les images ont été ajoutées sans décalage.",
+    addChannelAlignWarningImplausible:
+      "L'alignement a échoué sur {{failed}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Un décalage net a été trouvé, mais trop grand pour être plausible ; il a été écarté et les images ont été ajoutées sans décalage. Vérifiez que le canal ajouté provient du même champ de vision et n'est ni rogné ni décalé par rapport à la vidéo cible.",
+    addChannelAlignWarningShape:
+      "L'alignement a échoué sur {{failed}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Le canal ajouté et les images cibles n'ont pas les mêmes dimensions en pixels, ils n'ont donc pas pu être alignés ; les images ont été ajoutées sans décalage.",
     addChannelFailed: "Échec de l'ajout du canal",
     addChannelDialog: {
       title: 'Ajouter un canal',
@@ -2174,8 +2180,6 @@ export default {
       deleteFailed: 'Échec de la suppression du label',
       loadFailed: 'Échec du chargement des labels de type',
       duplicateName: 'Un label portant ce nom existe déjà',
-      noTrack:
-        'Ce microtubule n’a pas encore de piste — lancez d’abord le suivi.',
     },
     color: {
       label: 'Couleur :',
@@ -2300,6 +2304,7 @@ export default {
     },
     windowLevel: {
       title: 'Affichage',
+      channel: 'Canal',
       min: 'Min',
       max: 'Max',
       brightness: 'Luminosité',
