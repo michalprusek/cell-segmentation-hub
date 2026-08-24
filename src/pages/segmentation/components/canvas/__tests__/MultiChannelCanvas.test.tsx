@@ -39,7 +39,6 @@ import {
   createCompositor,
   type Compositor,
   type CompositorChannel,
-  type CompositorWindow,
 } from '@/lib/webglCompositor';
 import { createMockCanvasContext } from '@/test-utils/canvasTestUtils';
 import MultiChannelCanvas from '../MultiChannelCanvas';
@@ -77,10 +76,18 @@ let mockContrast = 100;
 let mockChannelOpacities: Record<string, number> = {};
 // Must be a STABLE reference: it sits in the decode effect's dependency
 // array, so a fresh fn each render would re-trigger the fetch effect forever.
-const mockReportDataRange = vi.fn();
+const mockReportChannelRanges = vi.fn();
+// Per-channel windows, keyed by channel name. Empty by default: the component
+// falls back to the 8-bit identity window for a channel it has no entry for,
+// which is what these fixtures' all-zero samples want.
+let mockChannelWindows: Record<
+  string,
+  { min: number; max: number; rangeMax: number; dataMin: number }
+> = {};
 
 vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
   useImageDisplay: () => ({
+    channelWindows: mockChannelWindows,
     windowMin: mockWindowMin,
     windowMax: mockWindowMax,
     windowRangeMax: mockWindowRangeMax,
@@ -88,7 +95,7 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     brightness: mockBrightness,
     contrast: mockContrast,
     channelOpacities: mockChannelOpacities,
-    reportDataRange: mockReportDataRange,
+    reportChannelRanges: mockReportChannelRanges,
   }),
 }));
 
@@ -228,6 +235,7 @@ describe('MultiChannelCanvas', () => {
     mockBrightness = 100;
     mockContrast = 100;
     mockChannelOpacities = {};
+    mockChannelWindows = {};
     originalFetch = global.fetch;
     originalCreateImageBitmap = global.createImageBitmap;
     // clearAllMocks wipes calls, not implementations — without this a fake
@@ -611,10 +619,10 @@ describe('MultiChannelCanvas', () => {
     });
   });
 
-  // ── reportDataRange is scoped to containerId::channelsKey ─────────────────
+  // ── reportChannelRanges: one range PER CHANNEL, keyed by container ────────
 
-  describe('reportDataRange container-scoped key', () => {
-    it('reports the combined sample range with an empty containerId prefix by default', async () => {
+  describe('reportChannelRanges', () => {
+    it('reports every channel separately, not one combined range', async () => {
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;
 
@@ -624,15 +632,19 @@ describe('MultiChannelCanvas', () => {
       });
 
       // The fake-blob 8-bit decode path produces all-zero samples (jsdom's
-      // mocked getImageData returns a zeroed Uint8ClampedArray), so both
-      // cmin and cmax collapse to 0. `containerId` is undefined in
-      // DEFAULT_PROPS, so the key's prefix is the empty string.
+      // mocked getImageData returns a zeroed Uint8ClampedArray), so every
+      // channel's min and max collapse to 0 — but each still arrives under its
+      // OWN key, which is what lets the context window them independently.
+      // `containerId` is undefined in DEFAULT_PROPS, so the key is ''.
       await waitFor(() => {
-        expect(mockReportDataRange).toHaveBeenCalledWith(0, 0, '::ch1|ch2');
+        expect(mockReportChannelRanges).toHaveBeenCalledWith(
+          { ch1: { min: 0, max: 0 }, ch2: { min: 0, max: 0 } },
+          ''
+        );
       });
     });
 
-    it('scopes the range key to containerId when the prop is provided', async () => {
+    it('keys the report on containerId when the prop is provided', async () => {
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;
 
@@ -642,7 +654,10 @@ describe('MultiChannelCanvas', () => {
       });
 
       await waitFor(() => {
-        expect(mockReportDataRange).toHaveBeenCalledWith(0, 0, 'vidA::ch1|ch2');
+        expect(mockReportChannelRanges).toHaveBeenCalledWith(
+          { ch1: { min: 0, max: 0 }, ch2: { min: 0, max: 0 } },
+          'vidA'
+        );
       });
     });
   });
@@ -728,12 +743,18 @@ describe('MultiChannelCanvas', () => {
       expect(onLoad).toHaveBeenCalledWith(400, 300, 'ch1|ch2');
     });
 
-    it('draws via the compositor with mapped channels + window, skipping the CPU loop', async () => {
+    it('draws via the compositor with each channel carrying its OWN window', async () => {
       const ctx = installSharedCanvasContext();
       const fake = makeFakeCompositor();
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;
       mockChannelOpacities = { ch2: 40 };
+      // The shape of Marika's data: a narrow channel beside a wide one. Sharing
+      // one window is what made the narrow channel render as a flat field.
+      mockChannelWindows = {
+        ch1: { min: 2941, max: 4145, rangeMax: 4145, dataMin: 2941 },
+        ch2: { min: 489, max: 53927, rangeMax: 53927, dataMin: 489 },
+      };
 
       const onLoad = vi.fn();
 
@@ -745,13 +766,20 @@ describe('MultiChannelCanvas', () => {
       expect(fake.setSize).toHaveBeenCalledWith(400, 300);
       expect(fake.draw).toHaveBeenCalledTimes(1);
 
-      const [channels, win] = fake.draw.mock.calls[0] as [
-        CompositorChannel[],
-        CompositorWindow,
-      ];
-      // Window is passed in RAW SAMPLE UNITS, exactly as buildLut took it.
-      expect(win).toEqual({ min: 0, max: 255, rangeMax: 255 });
+      const [channels] = fake.draw.mock.calls[0] as [CompositorChannel[]];
       expect(channels.map(c => c.channel).sort()).toEqual(['ch1', 'ch2']);
+      // Windows are per channel, in RAW SAMPLE UNITS, exactly as buildLut took
+      // them — and each channel gets its own, not the union of the two.
+      expect(channels.find(c => c.channel === 'ch1')?.window).toEqual({
+        min: 2941,
+        max: 4145,
+        rangeMax: 4145,
+      });
+      expect(channels.find(c => c.channel === 'ch2')?.window).toEqual({
+        min: 489,
+        max: 53927,
+        rangeMax: 53927,
+      });
 
       const ch1 = channels.find(c => c.channel === 'ch1');
       expect(ch1?.color).toEqual([255, 0, 0]); // '#FF0000' via hexToRgb
@@ -786,20 +814,30 @@ describe('MultiChannelCanvas', () => {
       expect(fetchImpl).toHaveBeenCalledTimes(2);
       expect(fake.draw).toHaveBeenCalledTimes(1);
 
-      // Simulate a Min/Max slider drag: context state changes, props don't.
-      mockWindowMin = 10;
-      mockWindowMax = 200;
+      // Simulate a Min/Max slider drag on ONE channel: context state changes,
+      // props don't. Only that channel's window moves.
+      mockChannelWindows = {
+        ch1: { min: 10, max: 200, rangeMax: 255, dataMin: 0 },
+      };
       rerender(<MultiChannelCanvas {...DEFAULT_PROPS} />);
       await act(async () => {
         await new Promise(r => setTimeout(r, 50));
       });
 
       expect(fake.draw).toHaveBeenCalledTimes(2);
-      const [, win] = fake.draw.mock.calls[1] as [
-        CompositorChannel[],
-        CompositorWindow,
-      ];
-      expect(win).toEqual({ min: 10, max: 200, rangeMax: 255 });
+      const [channels] = fake.draw.mock.calls[1] as [CompositorChannel[]];
+      expect(channels.find(c => c.channel === 'ch1')?.window).toEqual({
+        min: 10,
+        max: 200,
+        rangeMax: 255,
+      });
+      // ch2 has no window yet, so it draws through the 8-bit identity rather
+      // than borrowing ch1's — the borrowing IS the bug.
+      expect(channels.find(c => c.channel === 'ch2')?.window).toEqual({
+        min: 0,
+        max: 255,
+        rangeMax: 255,
+      });
       // No refetch (decode cache reused) and no new canvas element, so no new
       // GL context: a drag is a uniform update, nothing more.
       expect(fetchImpl).toHaveBeenCalledTimes(2);

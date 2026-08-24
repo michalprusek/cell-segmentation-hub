@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   windowNeedsFullDepth,
+  anyWindowNeedsFullDepth,
   noteProxyRange,
   clearProxyRanges,
   observedProxyRanges,
@@ -74,12 +75,12 @@ describe('judging against the range a channel is really encoded at', () => {
     expect(windowNeedsFullDepth(0, 1177, CONTAINER, ['640_nm'])).toBe(false);
   });
 
-  it('takes the coarsest of the visible channels, since one window serves all', () => {
+  it('takes the coarsest of the channels it is given', () => {
     noteProxyRange('640_nm', 1023);
     noteProxyRange('irm', 32767);
 
-    // 1177 wide is fine for 640 nm and hopeless for irm; drawing both means
-    // the answer has to be the worse one.
+    // 1177 wide is fine for 640 nm and hopeless for irm; asked about both, the
+    // answer has to be the worse one.
     expect(windowNeedsFullDepth(0, 1177, CONTAINER, ['640_nm', 'irm'])).toBe(
       true
     );
@@ -117,5 +118,70 @@ describe('judging against the range a channel is really encoded at', () => {
 
     expect(observedProxyRanges()).toEqual({});
     expect(windowNeedsFullDepth(0, 1177, CONTAINER, ['640_nm'])).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// anyWindowNeedsFullDepth — one frame, per-channel windows
+// ---------------------------------------------------------------------------
+
+describe('anyWindowNeedsFullDepth', () => {
+  beforeEach(() => {
+    clearProxyRanges();
+  });
+
+  /** Same measured container as above: brightest channel encoded at 32767. */
+  const CONTAINER = 32767;
+  const FALLBACK = { min: 0, max: CONTAINER };
+
+  it('judges each channel by its OWN window and its OWN proxy range', () => {
+    noteProxyRange('640_nm', 1023);
+    noteProxyRange('irm', 32767);
+
+    // The exact case the shared window got wrong: 640 nm is narrowed to its
+    // own faint data (plenty of levels at range 1023) while irm stays wide
+    // open. Neither channel needs the original.
+    expect(
+      anyWindowNeedsFullDepth(
+        { '640_nm': { min: 0, max: 1177 }, irm: { min: 0, max: 32767 } },
+        CONTAINER,
+        ['640_nm', 'irm'],
+        FALLBACK
+      )
+    ).toBe(false);
+  });
+
+  it('demands the original as soon as ONE channel is narrowed too far', () => {
+    noteProxyRange('640_nm', 1023);
+    noteProxyRange('irm', 32767);
+
+    expect(
+      anyWindowNeedsFullDepth(
+        // irm narrowed to 1177 of its 32767 — under an eighth, so it bands.
+        { '640_nm': { min: 0, max: 1177 }, irm: { min: 0, max: 1177 } },
+        CONTAINER,
+        ['640_nm', 'irm'],
+        FALLBACK
+      )
+    ).toBe(true);
+  });
+
+  it('errs toward the original for a channel with no window yet', () => {
+    noteProxyRange('irm', 32767);
+    expect(
+      anyWindowNeedsFullDepth(
+        { irm: { min: 0, max: 32767 } },
+        CONTAINER,
+        ['irm', 'not_reported_yet'],
+        FALLBACK
+      )
+    ).toBe(true);
+  });
+
+  it('measures the fallback window when there are no channels at all', () => {
+    expect(anyWindowNeedsFullDepth({}, CONTAINER, [], FALLBACK)).toBe(false);
+    expect(
+      anyWindowNeedsFullDepth({}, CONTAINER, [], { min: 0, max: 10 })
+    ).toBe(true);
   });
 });

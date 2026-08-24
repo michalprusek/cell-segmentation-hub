@@ -39,7 +39,13 @@
  * the visible-channel list is non-empty.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { decodeGrayPngPooled } from '@/lib/png16Client';
@@ -53,7 +59,7 @@ import { FRAME_PREFETCH_WINDOW } from '../../hooks/useFrameWindowPrefetch';
 import { DECODE_AHEAD_FRAMES } from '../../hooks/useDecodeAhead';
 import { buildFrameImageUrl } from '../../hooks/segmentationPolygonCache';
 import {
-  windowNeedsFullDepth,
+  anyWindowNeedsFullDepth,
   noteProxyRange,
 } from '@/lib/playbackProxyWindow';
 import { speculativeFrameRequests } from '@/lib/requestThrottle';
@@ -205,16 +211,42 @@ export default function MultiChannelCanvas({
   onLoad,
 }: MultiChannelCanvasProps) {
   const {
+    channelWindows,
     windowMin,
     windowMax,
-    windowRangeMax,
     proxyRangeMax,
     brightness,
     contrast,
     channelOpacities,
-    reportDataRange,
+    reportChannelRanges,
   } = useImageDisplay();
   const { t } = useLanguage();
+
+  // Per-channel window/level. Declared here — above every effect that reads it
+  // — because a hook placed before the `const` it captures throws
+  // "Cannot access before initialization" at runtime, which the type checker
+  // does not catch and the minified bundle reports as a single letter.
+  //
+  // `windowsKey` is what the composite effect depends on: the windows object is
+  // a fresh reference on every context write (opacity, colour, frame index),
+  // and depending on it directly would recomposite the canvas for changes that
+  // cannot affect the tone curve.
+  const windowsKey = Object.entries(channelWindows)
+    .map(([c, w]) => `${c}:${w.min}:${w.max}:${w.rangeMax}`)
+    .join('|');
+  const windowFor = useCallback(
+    (channel: string): CompositorWindow => {
+      const w = channelWindows[channel];
+      // A channel decoded before its range has been folded into state draws
+      // once through the 8-bit identity window; the next commit has its real
+      // one. Better than skipping the channel, which would flash a gap.
+      return w
+        ? { min: w.min, max: w.max, rangeMax: w.rangeMax }
+        : { min: 0, max: 255, rangeMax: 255 };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [windowsKey]
+  );
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Decoded samples for the current frame/channel set, reused across
   // window-slider re-renders so dragging never refetches.
@@ -277,7 +309,10 @@ export default function MultiChannelCanvas({
   // then cannot turn into samples, and draw those channels blank.
   const useProxy =
     canDecodeWebpGray() &&
-    !windowNeedsFullDepth(windowMin, windowMax, proxyRangeMax, visibleChannels);
+    !anyWindowNeedsFullDepth(channelWindows, proxyRangeMax, visibleChannels, {
+      min: windowMin,
+      max: windowMax,
+    });
   const repr = useProxy ? ('proxy' as const) : undefined;
 
   // --- Render-path selection: ask the CURRENT canvas element for WebGL2 once.
@@ -510,34 +545,37 @@ export default function MultiChannelCanvas({
         lastPartialFailKeyRef.current = null;
       }
 
-      // Combined sample range across visible channels → drives the ImageJ-
-      // style auto-scale + slider bounds in ImageDisplayContext. Reduces over
-      // N per-channel scalars the decoders already produced, NOT over the
-      // samples themselves.
-      let cmin = Infinity;
-      let cmax = -Infinity;
+      // Each channel's OWN sample range → drives the per-channel ImageJ-style
+      // auto-scale + slider bounds in ImageDisplayContext. These scalars are
+      // carried out of the decoders, NOT rescanned from the samples.
+      //
+      // This used to be reduced to a single min/max pair across all channels,
+      // which is the bug Marika reported as "model segments MTs where there is
+      // nothing": an IRM channel spanning 2941..4145 shared a window with TIRF
+      // channels reaching 53927, so it was drawn through 2 % of the display
+      // range and its filaments vanished under their own polylines.
+      const ranges: Record<string, { min: number; max: number }> = {};
       for (const cs of loaded) {
-        if (cs.min < cmin) cmin = cs.min;
-        if (cs.max > cmax) cmax = cs.max;
+        ranges[cs.channel] = {
+          min: Number.isFinite(cs.min) ? cs.min : 0,
+          max: Number.isFinite(cs.max) ? cs.max : 255,
+        };
       }
 
       decodedRef.current = loaded;
       dimsRef.current = { w: loaded[0].width, h: loaded[0].height };
       // Trigger the composite BEFORE invoking external callbacks, so a throw
-      // from the parent-supplied reportDataRange/onLoad can't leave the canvas
-      // blank. The range key is scoped to the container so navigating to a
-      // different video with the same channel names still re-fits the window.
+      // from the parent-supplied reportChannelRanges/onLoad can't leave the
+      // canvas blank. The key is the CONTAINER, not the channel set: ticking a
+      // channel on must auto-fit that channel alone and leave the windows the
+      // user has already tuned on the others exactly where they are.
       setDecodeVersion(v => v + 1);
       try {
-        reportDataRange(
-          Number.isFinite(cmin) ? cmin : 0,
-          Number.isFinite(cmax) ? cmax : 255,
-          `${containerId ?? ''}::${channelsKey}`
-        );
+        reportChannelRanges(ranges, containerId ?? '');
         onLoad?.(loaded[0].width, loaded[0].height, channelsKey);
       } catch (err) {
         logger.error(
-          'MultiChannelCanvas: onLoad/reportDataRange callback threw',
+          'MultiChannelCanvas: onLoad/reportChannelRanges callback threw',
           err
         );
       }
@@ -561,7 +599,7 @@ export default function MultiChannelCanvas({
     repr,
     fetchChannels,
     fetchChannelsKey,
-    reportDataRange,
+    reportChannelRanges,
     onLoad,
     t,
     visibleChannels,
@@ -603,15 +641,11 @@ export default function MultiChannelCanvas({
         height: cs.height,
         color: hexToRgb(channelColors[cs.channel] ?? '#FFFFFF'),
         opacity: (channelOpacities[cs.channel] ?? 100) / 100,
+        // Raw sample units — the same three numbers buildLut() takes below.
+        window: windowFor(cs.channel),
       }));
-      // Raw sample units — the same three numbers buildLut() takes below.
-      const compositorWindow: CompositorWindow = {
-        min: windowMin,
-        max: windowMax,
-        rangeMax: windowRangeMax,
-      };
       compositor.setSize(w, h);
-      compositor.draw(channels, compositorWindow);
+      compositor.draw(channels);
       return;
     }
 
@@ -628,9 +662,6 @@ export default function MultiChannelCanvas({
     // frame (clearRect below handles the per-pass clear).
     if (canvas.width !== w) canvas.width = w;
     if (canvas.height !== h) canvas.height = h;
-
-    const lut = buildLut(windowMin, windowMax, windowRangeMax);
-    const maxIdx = lut.length - 1;
 
     ctx.clearRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'lighter';
@@ -662,6 +693,12 @@ export default function MultiChannelCanvas({
       const [cR, cG, cB] = hexToRgb(channelColors[cs.channel] ?? '#FFFFFF');
       const opacity = (channelOpacities[cs.channel] ?? 100) / 100;
       const scale = opacity >= 1 ? 1 : opacity;
+      // One table per channel: they are windowed independently, so they cannot
+      // share one. Built inside the loop, which runs once per channel per
+      // composite — the same cadence the single table was built at.
+      const cw = windowFor(cs.channel);
+      const lut = buildLut(cw.min, cw.max, cw.rangeMax);
+      const maxIdx = lut.length - 1;
       const src = cs.data;
       for (let i = 0, p = 0; i < src.length; i++, p += 4) {
         const s = src[i];
@@ -676,9 +713,8 @@ export default function MultiChannelCanvas({
     }
   }, [
     decodeVersion,
-    windowMin,
-    windowMax,
-    windowRangeMax,
+    windowsKey,
+    windowFor,
     colorsKey,
     opacitiesKey,
     channelColors,

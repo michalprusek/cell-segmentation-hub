@@ -68,10 +68,13 @@ export function observedProxyRanges(): Readonly<Record<string, number>> {
  * user narrowed the window to SEE into bands — exactly the detail a microtubule
  * measurement is looking for.
  *
- * Judged against the widest range among the VISIBLE channels, since one window
- * is applied to all of them and the coarsest decides. Only used once every
- * visible channel's real range is known; until then the container figure
- * stands in, which errs toward full depth.
+ * Judged against the widest range among the channels named in `channels`. Since
+ * windows are per channel now, production always names exactly one (or none, for
+ * an image with no channel set); the reduction stays because the answer for a
+ * SET still has to be its coarsest member — that is what
+ * {@link anyWindowNeedsFullDepth} composes. Only used once every named channel's
+ * real range is known; until then the container figure stands in, which errs
+ * toward full depth.
  *
  * Deliberately conservative at the edges: a zero-width window, and a container
  * with no range at all, both answer "use the original", because neither can be
@@ -100,4 +103,39 @@ export function windowNeedsFullDepth(
   const width = hi - lo;
   if (width <= 0) return true;
   return (width / rangeMax) * PROXY_LEVELS < MIN_LEVELS_IN_WINDOW;
+}
+
+/**
+ * Whether ANY visible channel's own window forces the original 16-bit PNG.
+ *
+ * One frame carries every channel, so the strictest channel decides: if the
+ * user has narrowed the IRM window to bring up faint filaments, the frame must
+ * arrive at full depth even though the fluorescence channels are still wide
+ * open. Each channel is judged against ITS OWN window and ITS OWN proxy range —
+ * the two things that determine how many levels it actually has.
+ *
+ * With no visible channels there is nothing per-channel to judge, so the
+ * caller's fallback window (the one `reportDataRange` maintains for images that
+ * have no channel set) is measured against the container figure instead.
+ */
+export function anyWindowNeedsFullDepth(
+  windows: Readonly<Record<string, { min: number; max: number }>>,
+  containerRangeMax: number | null,
+  visibleChannels: readonly string[],
+  fallbackWindow: { min: number; max: number }
+): boolean {
+  if (visibleChannels.length === 0) {
+    return windowNeedsFullDepth(
+      fallbackWindow.min,
+      fallbackWindow.max,
+      containerRangeMax
+    );
+  }
+  return visibleChannels.some(channel => {
+    const win = windows[channel];
+    // A channel whose window has not been reported yet cannot be reasoned
+    // about; err toward the original, as every other edge case here does.
+    if (!win) return true;
+    return windowNeedsFullDepth(win.min, win.max, containerRangeMax, [channel]);
+  });
 }
