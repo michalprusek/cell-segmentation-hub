@@ -355,6 +355,23 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           max={SCALE_MAX_UM_PER_PX}
                           placeholder={t('export.scalePlaceholder')}
                           value={scaleText}
+                          // Leaving the field reconciles what is DISPLAYED with
+                          // what will actually be exported. Driving the box from
+                          // raw text is what makes "0.", "0.07" reachable on the
+                          // way to "0.072", but it also means an entry that never
+                          // commits — out of range, or still unparseable — stays
+                          // on screen indefinitely while the committed value sits
+                          // behind it. Typing `0` over an auto-filled 0.0724 left
+                          // the user reading 0 and exporting 0.0724, with nothing
+                          // to say so. Only on blur, never during typing, or the
+                          // partial entries become unreachable again.
+                          onBlur={() => {
+                            const committed =
+                              exportOptions.pixelToMicrometerScale;
+                            setScaleText(
+                              committed == null ? '' : String(committed)
+                            );
+                          }}
                           onChange={e => {
                             // Any interaction disables further auto-fill —
                             // including clearing the field, so a user who

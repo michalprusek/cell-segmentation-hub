@@ -110,8 +110,14 @@ let _hookState: {
 };
 
 function overrideHookState(
-  patch: Partial<typeof _hookState> & {
-    exportOptions?: Partial<typeof baseExportOptions>;
+  // `Omit` first: intersecting with a bare `Partial<typeof _hookState>` still
+  // declares `exportOptions` as the WHOLE options object, so the intersection
+  // demands both shapes at once and every partial patch is a type error. Tests
+  // patch one or two fields at a time; that is the whole point of the helper.
+  patch: Omit<Partial<typeof _hookState>, 'exportOptions'> & {
+    exportOptions?: Partial<typeof baseExportOptions> & {
+      pixelToMicrometerScale?: number;
+    };
   }
 ) {
   const { exportOptions: optsPatch, ...rest } = patch;
@@ -923,6 +929,43 @@ describe('AdvancedExportDialog', () => {
   // ── scale input validation ─────────────────────────────────────────────────
 
   describe('scale input validation', () => {
+    it('does not leave the box showing a value that is not the one exported', async () => {
+      // Driving the input from raw text is what makes "0.07" reachable on the
+      // way to "0.072", but it also means an out-of-range entry is KEPT on
+      // screen while the committed value stays behind. Without a blur that
+      // reconciles the two, the user reads 0 and exports 0.5, with nothing
+      // shown to say so.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: 0.5 },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+
+      await user.clear(input);
+      await user.type(input, '0'); // below SCALE_MIN_UM_PER_PX — never committed
+      expect(input.value).toBe('0');
+
+      await user.tab(); // leave the field
+
+      // Back to the truth: whatever the export will actually use.
+      expect(input.value).toBe('0.5');
+    });
+
+    it('keeps a partial entry on screen while it is still being typed', async () => {
+      // The blur reconciliation must not fire mid-typing, or "0." and "0.07"
+      // become unreachable again — the original bug.
+      overrideHookState({
+        exportOptions: { pixelToMicrometerScale: undefined },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+
+      await user.type(input, '0.07');
+      expect(input.value).toBe('0.07');
+    });
+
     it('clears the scale when input is emptied', async () => {
       overrideHookState({
         exportOptions: { pixelToMicrometerScale: 0.5 },
