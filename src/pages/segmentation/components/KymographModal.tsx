@@ -399,8 +399,8 @@ export function KymographModal({
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="break-all">
             {t('editor.kymograph.title', { defaultValue: 'Kymograph' })}:{' '}
             {polylineId}
           </DialogTitle>
@@ -424,7 +424,12 @@ export function KymographModal({
                 <SelectContent>
                   {channels.map(c => (
                     <SelectItem key={c.name} value={c.name}>
-                      {c.displayName ?? c.name}
+                      <span
+                        className="block max-w-[280px] truncate"
+                        title={c.displayName ?? c.name}
+                      >
+                        {c.displayName ?? c.name}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -487,7 +492,11 @@ export function KymographModal({
               })}
             </div>
           )}
-          {error && <div className="text-destructive text-sm">{error}</div>}
+          {error && (
+            <div className="min-w-0 break-words text-destructive text-sm">
+              {error}
+            </div>
+          )}
           {!isLoading && !error && result && !validKymo && (
             <div className="text-sm text-muted-foreground">
               {t('editor.kymograph.empty', {

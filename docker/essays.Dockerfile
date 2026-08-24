@@ -36,8 +36,8 @@ COPY --chown=app:app backend/essays/essays_api.py /app/essays_api.py
 COPY --chown=app:app backend/segmentation/models/microtubule /app/models/microtubule
 # The shared band/background measurement, for the same reason and from the same
 # place the project export takes it. It sits BESIDE the package rather than
-# inside it so importing it does not drag in the v7 wrapper and therefore torch —
-# measuring pixels needs neither.
+# inside it so importing it does not drag in the model wrapper and therefore
+# torch — measuring pixels needs neither.
 COPY --chown=app:app backend/segmentation/models/mt_measure.py /app/models/mt_measure.py
 
 # Where that package lives in THIS image. Set explicitly rather than left to the
@@ -49,14 +49,20 @@ ENV MT_PACKAGE_DIR=/app/models
 # the shared microtubule package. Fails the build early if a dependency is
 # unexpectedly absent, or if MT_PACKAGE_DIR ever stops pointing at the model code
 # — which would otherwise surface only when a user's batch job dies mid-run.
-# The backbone config is checked explicitly: an import-only smoke passes without
-# it, and the failure would surface on a user's first batch job instead of here.
+# The vendored network library and the instancer params are checked explicitly:
+# an import-only smoke passes without them (the wrapper defers those imports to
+# load_weights/predict), and the failure would then surface on a user's first
+# batch job instead of here.
 RUN cd /app/essays_module \
     && python -c "import _mt_package; \
 pkg = _mt_package.ensure_on_path(); \
 import evaluate, mt_pipeline, microtubule, mt_measure; \
-assert evaluate.BUNDLED_BACKBONE_CONFIG.joinpath('config.json').is_file(), \
-    'offline backbone config missing: %s' % evaluate.BUNDLED_BACKBONE_CONFIG; \
+mt = pkg / 'microtubule'; \
+assert (mt / 'vendor' / 'dynamic_network_architectures' / 'architectures' / 'unet.py').is_file(), \
+    'vendored network library missing under %s' % mt; \
+assert (mt / 'params_v5h.json').is_file(), \
+    'instancer params missing under %s' % mt; \
+import net; assert net.TILE == 512, 'unexpected tile size %s' % net.TILE; \
 assert mt_pipeline.measure.mt_measure is mt_measure, \
     'the essays measurement is not the shared one'; \
 print('essays module import OK; microtubule from', microtubule.__file__); \
@@ -70,7 +76,7 @@ ENTRYPOINT []
 
 ENV PYTHONUNBUFFERED=1 \
     ESSAYS_MODULE_DIR=/app/essays_module \
-    ESSAYS_WEIGHTS=/app/mt_weights/microtubule_v7.pt
+    ESSAYS_WEIGHTS=/app/mt_weights/microtubule_v5h.pth
 
 EXPOSE 8000
 

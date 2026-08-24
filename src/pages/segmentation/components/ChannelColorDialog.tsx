@@ -55,10 +55,17 @@ export function ChannelColorDialog({
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>{t('editor.channels.colorDialog.title')}</span>
-            <span className="font-mono text-base">{channelName}</span>
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="flex min-w-0 items-center gap-2">
+            <span className="flex-shrink-0">
+              {t('editor.channels.colorDialog.title')}
+            </span>
+            <span
+              className="min-w-0 truncate font-mono text-base"
+              title={channelName}
+            >
+              {channelName}
+            </span>
           </DialogTitle>
           <DialogDescription>
             {t('editor.channels.colorDialog.description')}

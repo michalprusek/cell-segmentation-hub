@@ -328,6 +328,55 @@ describe('pythonExtractor', () => {
       );
     });
 
+    it('names the SIGNAL when the helper is killed, not a null exit code', async () => {
+      // The production failure this pins: a 27-minute ND2 upload died with
+      // "python helper extract_nd2.py exited null:" and an empty stderr tail.
+      // `close` reports (code, signal); a killed process has code === null and
+      // the whole cause in `signal`, which the handler used to drop. SIGKILL
+      // also leaves stderr empty by construction, so the dropped argument was
+      // the ONLY evidence available.
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+
+      process.nextTick(() => {
+        fake.child.emit('close', null, 'SIGKILL');
+      });
+
+      const err = await extractNd2('/file.nd2', '/dest').catch(e => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toContain('killed by SIGKILL');
+      expect(err.message).not.toContain('exited null');
+      // and it must point at the actual cause, not just rename the symptom
+      expect(err.message).toMatch(/out of memory/i);
+      expect(err.message).toMatch(/CONSTRAINT_MEMCG|journalctl/);
+    });
+
+    it('reports a non-OOM signal without claiming it was memory', async () => {
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+
+      process.nextTick(() => {
+        fake.child.emit('close', null, 'SIGTERM');
+      });
+
+      const err = await extractTiffStack('/a', '/b').catch(e => e);
+      expect(err.message).toContain('killed by SIGTERM');
+      expect(err.message).not.toMatch(/out of memory/i);
+    });
+
+    it('keeps the stderr tail when a killed helper managed to write one', async () => {
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+
+      process.nextTick(() => {
+        fake.stderr.emit('data', 'WARNING: ND2 to_dask failed');
+        fake.child.emit('close', null, 'SIGKILL');
+      });
+
+      const err = await extractNd2('/file.nd2', '/dest').catch(e => e);
+      expect(err.message).toContain('to_dask failed');
+    });
+
     it('rejects even when stdout has content if exit code is non-zero', async () => {
       const fake = makeFakeChild();
       setupSpawn(fake);

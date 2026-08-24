@@ -79,10 +79,11 @@ export interface Polygon {
  * `undefined` to drop it. Unknown/junk fields never appear here and are
  * therefore always discarded.
  *
- * NOTE: `_embedding` is deliberately ABSENT — it is a heavy server-only blob
- * that must never be admitted through this untrusted-input path. The 3 mappers
- * in `segmentationService.ts` operate on already-validated internal data and
- * spread it (so `_embedding` does pass through there) but the serve boundary
+ * NOTE: `_embedding` is deliberately ABSENT — a heavy blob written by the
+ * microtubule v7 model that must never be admitted through this untrusted-input
+ * path. Nothing produces or reads it since the v5H swap, but rows carrying one
+ * are still in the database: the 3 mappers in `segmentationService.ts` spread
+ * already-validated data (so it does pass through there) and the serve boundary
  * strips it again via `EDITOR_OMITTED_POLYGON_FIELDS`.
  */
 export interface OptionalPolygonField {

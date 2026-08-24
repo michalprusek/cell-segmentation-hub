@@ -6,10 +6,18 @@ name: CI
 # floor (frontend vitest.config.ts: 80%; backend/vitest.config.ts: 75%) fails
 # the check.
 #
-# NOTE: the frontend "TypeScript" step (`tsc --noEmit` on the root tsconfig,
-# which is `files: []` + project references) currently type-checks nothing —
-# it mirrors `make ci`. Making it real (`tsc -b`) first needs a batch of
-# pre-existing test-infra type errors fixed; tracked as follow-up.
+# The frontend "TypeScript" step runs `npm run type-check`, which is
+# scripts/type-check-baseline.mjs: it type-checks tsconfig.app.json,
+# tsconfig.node.json and tsconfig.test.json for real and fails on any error not
+# already recorded in the committed typecheck-baseline.json.
+#
+# It used to be a bare `tsc --noEmit` on the root tsconfig (`files: []` +
+# project references). `tsc -p` does not follow references, so that step
+# resolved 0 input files and passed unconditionally — it checked nothing. The
+# baseline exists because the real configs currently report ~1.9k pre-existing
+# errors; the gate blocks NEW ones without demanding they all be fixed first.
+# Regenerate the baseline with `npm run type-check:update` (reviewable: the
+# accepted errors show up as added lines in the diff).
 #
 # This check is NOT yet a required status check — to make it BLOCK merges, add
 # "CI / frontend" and "CI / backend" as required status checks in the repo's
@@ -49,8 +57,8 @@ jobs:
           cache: 'npm'
       - name: Install deps
         run: npm ci
-      - name: TypeScript
-        run: npx tsc --noEmit
+      - name: TypeScript (baseline gate)
+        run: npm run type-check
       - name: ESLint (0 warnings)
         run: npx eslint --max-warnings=0 src/
       - name: i18n completeness (6 locales)

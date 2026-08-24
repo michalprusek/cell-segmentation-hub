@@ -49,6 +49,15 @@ import {
   isMicrotubuleProject,
 } from '@/types';
 
+/**
+ * Fraction of add-channel frames whose alignment was rejected above which the
+ * user is warned that the channel went in UNREGISTERED. Matches
+ * `ALIGN_REJECTED_WARN_FRACTION` in the backend's `addChannelService.ts` — the
+ * odd dark frame failing is normal, a majority failing means the pair does not
+ * correlate.
+ */
+const ADD_CHANNEL_ALIGN_WARN_FRACTION = 0.5;
+
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -1312,6 +1321,41 @@ const ProjectDetail = () => {
             frames: result.framesWritten,
           })
         );
+        // Writing the frames always succeeds; REGISTERING them may not. When
+        // most estimates failed the frames are stored unshifted — previously
+        // indistinguishable from a clean run, which is what made "registration
+        // doesn't work" impossible to see.
+        //
+        // `failedFraction` counts EVERY non-ok outcome, not just weak
+        // correlations, so a run whose peaks were all discarded as implausible
+        // (a confident total failure) now warns too. It is optional on the
+        // wire: an older backend sends only `rejectedFraction`, and falling
+        // back to that keeps the warning working against one.
+        const alignment = result.alignment;
+        const failedFraction =
+          alignment?.failedFraction ?? alignment?.rejectedFraction ?? 0;
+        if (
+          alignment &&
+          alignment.frames > 0 &&
+          failedFraction >= ADD_CHANNEL_ALIGN_WARN_FRACTION
+        ) {
+          // Each cause needs a different fix, so name the one that dominated
+          // instead of always blaming a missing correlation.
+          const warningKey =
+            alignment.dominantFailure === 'implausible_shift'
+              ? 'project.addChannelAlignWarningImplausible'
+              : alignment.dominantFailure === 'shape_mismatch'
+                ? 'project.addChannelAlignWarningShape'
+                : 'project.addChannelAlignWarning';
+          toast.warning(
+            t(warningKey, {
+              failed: alignment.failed ?? alignment.rejected,
+              frames: alignment.frames,
+              shifted: alignment.shifted,
+            }),
+            { duration: 12000 }
+          );
+        }
         setShowAddChannelDialog(false);
       } catch (err) {
         // Surface the backend's validation detail (frame-count mismatch,
@@ -1640,6 +1684,9 @@ const ProjectDetail = () => {
               projectName={projectTitle}
               projectType={projectType}
               images={images}
+              // The export dialog below wants every image in the project, but
+              // the select-all label must count what the checkbox acts on.
+              selectableCount={filteredImages.length}
               selectedCount={selectedCount}
               isAllSelected={isAllSelected}
               isPartiallySelected={isPartiallySelected}

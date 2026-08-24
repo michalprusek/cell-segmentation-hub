@@ -1,16 +1,14 @@
 """Locate the shared ``microtubule`` package and put it on ``sys.path``.
 
-Single source of truth: the microtubule v7 model code (wrapper, segment_mt,
-pysoax, synth_irm) lives ONCE, in the ML service at
+Single source of truth: the microtubule v5H model code (wrapper, net, the
+instancer, the vendored network library) lives ONCE, in the ML service at
 ``backend/segmentation/models/microtubule``. Both the interactive segmentation
 service and this batch evaluator import that one package.
 
 Until this module was vendored into the app it shipped its own copy, and the two
-drifted in opposite directions without either side noticing: the ML copy grew
-warm-start seed priors (``predict_sequence``), this copy grew the offline
-backbone path (``MT_BACKBONE_CONFIG``). Both fixes now live in the single
-package, so a change to PySOAX or the checkpoint loader can no longer be applied
-to one caller and silently miss the other.
+drifted in opposite directions without either side noticing. Both fixes now live
+in the single package, so a change to the instancer or the checkpoint loader can
+no longer be applied to one caller and silently miss the other.
 
 The package's parent directory differs by context, so it is resolved in order:
 
@@ -82,13 +80,13 @@ def ensure_on_path() -> Path:
     )
 
 
-WEIGHTS_NAME = "microtubule_v7.pt"
+WEIGHTS_NAME = "microtubule_v5h.pth"
 
 
 def weights_candidates() -> list[Path]:
-    """Where the v7 checkpoint may be staged, most-specific first.
+    """Where the v5H checkpoint may be staged, most-specific first.
 
-    The checkpoint (~1.2 GB) is too large for git and is staged out-of-band by
+    The checkpoint (~535 MB) is too large for git and is staged out-of-band by
     ``scripts/download-microtubule-weights.sh`` into the ML service's weights
     directory. The essays container bind-mounts that same directory read-only at
     ``/app/mt_weights``, so both callers run the byte-identical file.
@@ -125,7 +123,7 @@ def missing_weights_message(weights: Path) -> str:
     download that 404s.
     """
     return (
-        f"microtubule v7 checkpoint not found at {weights}.\n"
+        f"microtubule v5H checkpoint not found at {weights}.\n"
         "Looked in: " + ", ".join(str(p) for p in weights_candidates()) + "\n"
         "Stage it with scripts/download-microtubule-weights.sh (writes "
         "backend/segmentation/weights/" + WEIGHTS_NAME + "), or pass an explicit "

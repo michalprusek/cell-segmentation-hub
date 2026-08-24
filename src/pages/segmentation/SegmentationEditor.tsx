@@ -188,9 +188,25 @@ const SegmentationEditor = () => {
           return;
         }
 
-        // First ensure current image is loaded
+        // First ensure current image is loaded — but only if it can HAVE a
+        // segmentation. `!segmentationResult` is true forever for an image
+        // that was never segmented, so without the status check this refetched
+        // on every re-render, and the queue-stats poll in useSegmentationQueue
+        // re-renders every 5 seconds. Opening a frame with no segmentation
+        // therefore produced an endless stream of 404s in the console — one
+        // every five seconds, for as long as the editor stayed open.
+        //
+        // The adjacent-image branch below has always had this guard. Only the
+        // current-image branch was missing it.
         const currentImage = projectImages[currentIndex];
-        if (currentImage && !currentImage.segmentationResult) {
+        const currentCanHaveResults =
+          currentImage?.segmentationStatus === 'completed' ||
+          currentImage?.segmentationStatus === 'segmented';
+        if (
+          currentImage &&
+          !currentImage.segmentationResult &&
+          currentCanHaveResults
+        ) {
           await refreshImageSegmentation(currentImage.id);
         }
 
@@ -386,8 +402,9 @@ const SegmentationEditor = () => {
         // Transform Polygon[] to SegmentationPolygon[] for API. Spread preserves
         // every wire-level field (trackId for MT, future additions); only
         // parent_id → parentIds[] needs explicit conversion. `_embedding` is a
-        // server-only blob (KB per polyline) — strip defensively even though
-        // backend already removes it before serving.
+        // legacy server-only blob written by the microtubule v7 model (KB per
+        // polyline) — nothing produces it any more, but rows carrying one are
+        // still served, so strip defensively.
         const polygonData: SegmentationPolygon[] = polygons.map(polygon => {
           const { parent_id, _embedding: _drop, ...rest } = polygon;
           return {

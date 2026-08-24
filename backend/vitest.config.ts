@@ -23,7 +23,19 @@ export default defineConfig({
 
     // Bring up env vars + global setup. vitest.env.ts is the single source of
     // truth for test env vars (loaded first, before any module evaluates).
-    setupFiles: ['./vitest.env.ts', './vitest.setup.ts', './src/test/setup.ts'],
+    // ABSOLUTE, not relative. Vitest resolved these against the repository
+    // root rather than this directory, so it loaded the FRONTEND's
+    // `vitest.setup.ts` and `src/test/setup.ts` — files of the same name one
+    // level up. The first thing the frontend setup does is stub `window`,
+    // which does not exist under `environment: 'node'`, so setup threw and
+    // vitest reported every backend file as a failed suite with "no tests".
+    // The whole backend suite was unrunnable. Vitest's own error message
+    // recommends exactly this: "Use absolute paths instead."
+    setupFiles: [
+      path.resolve(__dirname, './vitest.env.ts'),
+      path.resolve(__dirname, './vitest.setup.ts'),
+      path.resolve(__dirname, './src/test/setup.ts'),
+    ],
 
     testTimeout: 30000,
 
