@@ -12,6 +12,7 @@ import {
 import { ResponseHelper } from '../../utils/response';
 import { JOB_STATUSES } from '../../types';
 import { logger } from '../../utils/logger';
+import { contentDisposition } from '../../utils/contentDisposition';
 import { prisma } from '../../db/index';
 import { getStorageProvider } from '../../storage/index';
 import { ApiError } from '../../middleware/error';
@@ -1320,7 +1321,7 @@ export class ImageController {
         'Content-Length': imageData.buffer.length.toString(),
         'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
         ETag: `"${imageId}"`,
-        'Content-Disposition': `inline; filename="${imageData.filename}"`,
+        'Content-Disposition': contentDisposition('inline', imageData.filename),
       });
 
       // Send the image buffer
