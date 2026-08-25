@@ -67,7 +67,8 @@ class SelectionParams:
     f_mid: float = 0.5               # candidates come from the middle half
     kappa_spot: float = 0.05         # rad/px AT AN 8 PX BASELINE
     kappa_baseline_px: float = 8.0
-    snr_min: float = 2.0             # calibrate from a dry-run overlay
+    snr_min: float = 2.0             # sigma above the background ring; see _spot_snr
+    #                                  for the measurement that fixed the scale
     band_thickness_px: int = 5       # mt_measure defaults, kept identical
     margin_multiplier: float = 2.0
     step_px: float = 1.0             # resampling pitch
@@ -185,13 +186,39 @@ def _slice_window(pts: np.ndarray, i: int, half_px: float, step_px: float) -> np
     return pts[max(0, i - k): min(pts.shape[0], i + k + 1)]
 
 
+#: Smallest ring spread we will divide by, in digitiser counts.
+#:
+#: Only reachable on flat data — a synthetic fixture, or a saturated/blanked
+#: region — where the ring has literally zero variance and the ratio below would
+#: be infinite. One count is the quantisation floor of the integer frames this
+#: endpoint reads, so it is the smallest spread that can physically be
+#: distinguished, and it keeps ``snr`` a finite number that survives JSON.
+_MIN_RING_SPREAD = 1.0
+
+
 def _spot_snr(fluor: np.ndarray, window: np.ndarray, not_signal: np.ndarray,
               p: SelectionParams) -> float:
-    """Contrast of the observation window over its own background ring.
+    """How far the observation window rises above its own background ring, IN
+    UNITS OF THE RING'S SPREAD.
 
     Uses mt_measure's band and vicinity primitives so that "is this filament bright
     enough to bleach" is measured with the identical geometry that produces the
     assay's own numbers — one implementation, not two that drift apart.
+
+    The denominator is the ring's standard deviation, NOT its median. It divided
+    by the median until 2026-08-25, which made this a relative contrast, and
+    ``snr_min = 2.0`` then demanded a filament three times brighter than its own
+    background. Nothing real reaches that: measured over the 19 filaments of a
+    production IRM+TIRF frame, the relative contrast peaked at 1.45 on the
+    brightest channel, so the endpoint returned ZERO spots on every real field
+    while its unit tests passed on synthetic data an order of magnitude brighter
+    than any microscope produces.
+
+    In units of the ring's spread the same 19 filaments read a median of 3.8
+    sigma on TIRF_491 and 3.4 on TIRF_561, so a 2 sigma cut admits 15 of 19 —
+    and TIRF_642, which carries no filament signal at all, still reads 0.19
+    sigma and is still rejected 19 times out of 19. The criterion discriminates;
+    it was only ever on an unreachable scale.
     """
     h, w = fluor.shape[:2]
     band = mt_measure.rasterize_band(window.astype(np.float32), h, w, p.band_thickness_px)
@@ -199,14 +226,14 @@ def _spot_snr(fluor: np.ndarray, window: np.ndarray, not_signal: np.ndarray,
     ring = mt_measure.vicinity_mask(band, not_signal, margin_radius)
     b = mt_measure.region_stats(fluor, band)
     r = mt_measure.region_stats(fluor, ring)
-    if b.n == 0 or r.n == 0 or r.median <= 0.0:
+    if b.n == 0 or r.n == 0:
         # b.n == 0 is also what covers an empty or degenerate ``window`` (fewer than
         # two points): mt_measure.rasterize_band itself guards ``n < 2`` and returns
         # an all-zero band in that case, which makes b.n == 0 here — so a small
         # obs_len_um handing this a degenerate polyline is already the safe
         # direction (SNR reads 0.0, snr_min rejects it) with no extra check needed.
         return 0.0
-    return float((b.mean - r.median) / r.median)
+    return float((b.mean - r.median) / max(r.std, _MIN_RING_SPREAD))
 
 
 def select_spots(
