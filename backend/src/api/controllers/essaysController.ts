@@ -54,6 +54,7 @@ export class EssaysController {
     this.getDownloadToken = this.getDownloadToken.bind(this);
     this.downloadJob = this.downloadJob.bind(this);
     this.deleteJob = this.deleteJob.bind(this);
+    this.rerunJob = this.rerunJob.bind(this);
   }
 
   /** POST /api/essays/upload — stage a folder of .nd2 wells and start a job. */
@@ -242,6 +243,49 @@ export class EssaysController {
   }
 
   /** DELETE /api/essays/jobs/:jobId — remove a job and its artifacts. */
+  /** POST /api/essays/jobs/:jobId/rerun — run again from the input already on
+   *  disk, so a run that did not finish cleanly needs no re-upload. */
+  async rerunJob(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      const { jobId } = req.params;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
+        return;
+      }
+      const result = await this.service.rerunJob(userId, jobId);
+      if (result.ok === true) {
+        res.json({ success: true });
+        return;
+      }
+      // Distinct statuses, because the three refusals mean different things to
+      // the user: one is a wrong id, one is "wait", one is "the data is gone
+      // and you do have to upload it again".
+      if (result.reason === 'not_found') {
+        ResponseHelper.notFound(res, 'Essays job not found', CTX);
+      } else if (result.reason === 'in_flight') {
+        ResponseHelper.badRequest(
+          res,
+          'This job is still running; wait for it to finish',
+          CTX
+        );
+      } else {
+        ResponseHelper.badRequest(
+          res,
+          'The uploaded files for this job are no longer stored, so it cannot be re-run',
+          CTX
+        );
+      }
+    } catch (error) {
+      ResponseHelper.internalError(
+        res,
+        toErr(error),
+        'Failed to re-run essays job',
+        CTX
+      );
+    }
+  }
+
   async deleteJob(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.user?.id;

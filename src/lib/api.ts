@@ -2365,6 +2365,11 @@ class ApiClient {
     await this.instance.delete(`/essays/jobs/${jobId}`);
   }
 
+  /** Run a finished job again from the files already on the server. */
+  async rerunEssayJob(jobId: string): Promise<void> {
+    await this.instance.post(`/essays/jobs/${jobId}/rerun`);
+  }
+
   async getEssayDownloadToken(
     jobId: string
   ): Promise<{ token: string; expiresAt: number }> {

@@ -2429,6 +2429,15 @@ export default {
       'A folder cannot be moved into itself or its own subfolder',
   },
   automatedEssays: {
+    rerun: 'Run again',
+    rerunHint:
+      'Run this folder again using the files already on the server — no re-upload needed.',
+    rerunStarted: 'The run has been queued again.',
+    rerunFailed: 'Could not start the run again.',
+    rerunConfirm:
+      'Run this folder again? It uses the files already stored on the server.',
+    rerunConfirmReplace:
+      'Run this folder again? The current result will be replaced — download it first if you want to keep it.',
     navLabel: 'Automated Essays',
     title: 'Automated Essays',
     subtitle:

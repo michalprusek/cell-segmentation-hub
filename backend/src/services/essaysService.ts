@@ -117,6 +117,47 @@ export function sanitizeNd2Name(original: string): string {
  * timer (so runs progress even with no client polling), and zips the output on
  * completion. Job state lives in Postgres; the worker is a stateless GPU runner.
  */
+/** Days a not-cleanly-finished run's input is kept so it can be re-run.
+ *  0 or negative turns the TTL off and keeps them until the job is deleted. */
+export const ESSAYS_INPUT_RETENTION_DAYS = Number.parseInt(
+  process.env.ESSAYS_INPUT_RETENTION_DAYS ?? '7',
+  10
+);
+
+/**
+ * Whether a finished job's input .nd2 files are worth keeping for a re-run.
+ *
+ * A run that finished CLEANLY is deleted as it always was: the zip is the whole
+ * artifact and the input is tens of GB. Anything else is kept, because that is
+ * precisely the run someone will want to repeat.
+ *
+ * Note the condition is "did it finish cleanly", NOT "is the status failed".
+ * evaluate.py exits 0 even when individual wells failed to read or segment, so a
+ * PARTIAL run is stored as `completed` carrying an `error` — which is the case
+ * the user actually reported ("nebyla paměť na segmentaci všech jamek"). Keying
+ * on status alone would delete the input for exactly the runs worth repeating.
+ */
+export function shouldKeepInput(job: {
+  status: string;
+  error?: string | null;
+}): boolean {
+  if (job.status !== 'completed' && job.status !== 'failed') return false;
+  return job.status === 'failed' || Boolean(job.error);
+}
+
+/** Whether a kept input has outlived the retention window.
+ *  The boundary counts as still inside it — a TTL that fires early deletes the
+ *  input on the day the user comes back for it. */
+export function isRetentionExpired(
+  finishedAt: Date,
+  retentionDays: number,
+  now: Date = new Date()
+): boolean {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) return false;
+  const ageMs = now.getTime() - finishedAt.getTime();
+  return ageMs > retentionDays * 24 * 60 * 60 * 1000;
+}
+
 export class EssaysService {
   private static instance: EssaysService;
   private http: AxiosInstance;
@@ -146,6 +187,11 @@ export class EssaysService {
     const sweep = setInterval(() => {
       this.sweepStaging().catch((e) =>
         logger.warn(`essays staging sweep failed: ${String(e)}`, CTX)
+      );
+      // Inputs kept for a re-run are tens of GB each; without a TTL they only
+      // ever accumulate.
+      this.sweepExpiredInputs().catch((e) =>
+        logger.warn(`essays retention sweep failed: ${String(e)}`, CTX)
       );
     }, STAGING_SWEEP_INTERVAL_MS);
     if (typeof sweep.unref === 'function') sweep.unref();
@@ -252,12 +298,131 @@ export class EssaysService {
     return { jobId };
   }
 
-  async listJobs(userId: string): Promise<EssayJob[]> {
-    return prisma.essayJob.findMany({
+  /**
+   * Re-run a finished job from the input already on disk.
+   *
+   * The point of the feature: a run that did not finish cleanly used to leave
+   * nothing to repeat, so the same 9.9 GB folder was uploaded again. The input
+   * now survives such a run (see shouldKeepInput), and this hands it back to the
+   * worker under the SAME job id.
+   *
+   * Reusing the row rather than creating a new one is deliberate. A new row
+   * would have to point at another row's input directory, and then neither of
+   * them could safely delete it without reference counting — a lot of machinery
+   * for a button. The cost is that a partial run's existing zip is replaced by
+   * the new run's; the UI says so before asking.
+   *
+   * No options are stored or replayed because none are ever sent: the page
+   * posts files and a folder name only, so every run uses the worker's
+   * defaults and a re-run reproduces the original exactly. If an options UI is
+   * ever added, it must persist them on the row and pass them here, or a re-run
+   * will quietly differ from the run it repeats.
+   */
+  async rerunJob(
+    userId: string,
+    jobId: string
+  ): Promise<
+    { ok: true } | { ok: false; reason: 'not_found' | 'in_flight' | 'input_gone' }
+  > {
+    const job = await prisma.essayJob.findFirst({ where: { id: jobId, userId } });
+    if (!job) return { ok: false, reason: 'not_found' };
+    // Re-queueing a job the worker still holds would dispatch the same id twice
+    // and let two runs write one output dir.
+    if (job.status !== 'completed' && job.status !== 'failed') {
+      return { ok: false, reason: 'in_flight' };
+    }
+
+    const dir = this.jobDir(userId, jobId);
+    const inputDir = path.join(dir, 'input');
+    const outputDir = path.join(dir, 'output');
+    // Ask the disk, never infer from status: retention has a TTL and an operator
+    // can always delete a directory. Telling the user now beats a job that
+    // fails a minute later.
+    try {
+      await fs.access(inputDir);
+    } catch {
+      return { ok: false, reason: 'input_gone' };
+    }
+
+    await prisma.essayJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'queued',
+        progress: 0,
+        mtCount: 0,
+        error: null,
+        resultZipKey: null,
+        completedAt: null,
+      },
+    });
+
+    // A previous run's raw output would otherwise be zipped together with the
+    // new one's.
+    await fs
+      .rm(outputDir, { recursive: true, force: true })
+      .catch(() => {});
+    await fs.mkdir(outputDir, { recursive: true }).catch(() => {});
+
+    try {
+      await this.http.post('/process', {
+        jobId,
+        inputDir,
+        outDir: outputDir,
+        options: {},
+      });
+    } catch (e) {
+      const err = e as { code?: string; message?: string };
+      const isTimeout =
+        err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '');
+      if (isTimeout) {
+        // Same reasoning as submitJob: the worker enqueues before responding, so
+        // a lost response does not mean the job was dropped. Leave it queued for
+        // the reconciler; the staleness watchdog fails it if nothing happens.
+        logger.warn(
+          `essays /process POST timed out for rerun ${jobId}; leaving queued`,
+          CTX
+        );
+        return { ok: true };
+      }
+      const msg = err.message || String(e);
+      await prisma.essayJob.update({
+        where: { id: jobId },
+        data: { status: 'failed', error: `worker unreachable: ${msg}` },
+      });
+      throw new Error('Essays worker is unavailable; please try again later.');
+    }
+
+    logger.info(`essays job ${jobId} re-queued from existing input`, CTX);
+    return { ok: true };
+  }
+
+  async listJobs(userId: string): Promise<(EssayJob & { canRerun: boolean })[]> {
+    const jobs = await prisma.essayJob.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
+    // Answer from the DISK, not from the status. Retention has a TTL and an
+    // operator can delete a directory, so a button derived from status alone
+    // would offer a re-run that fails the moment it is clicked. Only terminal
+    // jobs are stat'd, which is a handful per page.
+    return Promise.all(
+      jobs.map(async (job) => ({
+        ...job,
+        canRerun:
+          (job.status === 'completed' || job.status === 'failed') &&
+          (await this.hasInput(job.userId, job.id)),
+      }))
+    );
+  }
+
+  private async hasInput(userId: string, jobId: string): Promise<boolean> {
+    try {
+      await fs.access(path.join(this.jobDir(userId, jobId), 'input'));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async getJob(userId: string, jobId: string): Promise<EssayJob | null> {
@@ -474,18 +639,38 @@ export class EssaysService {
       });
       logger.info(`essays job ${job.id} completed -> ${resultZipKey}`, CTX);
 
-      // Free the (potentially tens-of-GB) input .nd2 files + raw output now that
-      // the persisted zip is the sole download artifact — the raw job dir is no
-      // longer needed. The result zip lives outside it (essays-results/) and
+      // Free the raw OUTPUT now that the persisted zip is the sole download
+      // artifact. The result zip lives outside the job dir (essays-results/) and
       // stays until the user dismisses the job.
-      await fs
-        .rm(this.jobDir(job.userId, job.id), { recursive: true, force: true })
-        .catch((e) =>
-          logger.warn(
-            `essays job ${job.id}: post-zip cleanup failed: ${String(e)}`,
-            CTX
-          )
+      //
+      // The INPUT is a separate decision. Deleting it unconditionally is what
+      // forced a re-upload of the same 9.9 GB folder after every imperfect run,
+      // so it survives when the run did not finish cleanly — see
+      // shouldKeepInput, and note that a PARTIAL run is stored as 'completed'
+      // with an error, not as 'failed'. A TTL sweep drops it later.
+      const keepInput = shouldKeepInput({
+        status: 'completed',
+        error: ws.error ?? null,
+      });
+      const dir = this.jobDir(job.userId, job.id);
+      const toRemove = keepInput ? [path.join(dir, 'output')] : [dir];
+      for (const target of toRemove) {
+        await fs
+          .rm(target, { recursive: true, force: true })
+          .catch((e) =>
+            logger.warn(
+              `essays job ${job.id}: post-zip cleanup failed for ${target}: ${String(e)}`,
+              CTX
+            )
+          );
+      }
+      if (keepInput) {
+        logger.info(
+          `essays job ${job.id}: run was not clean, keeping input for re-run ` +
+            `(retention ${ESSAYS_INPUT_RETENTION_DAYS}d)`,
+          CTX
         );
+      }
     } catch (e) {
       // A zip failure must NOT loop forever (the job would stay 'running' and be
       // re-attempted every tick). Mark it failed so it reaches a terminal state
@@ -510,6 +695,40 @@ export class EssaysService {
   }
 
   /** Remove orphaned upload temp files older than STAGING_MAX_AGE_MS. */
+  /**
+   * Drop input directories kept for a re-run once they outlive the window.
+   *
+   * Only touches `input/` — the result zip lives outside the job dir and stays
+   * until the user dismisses the job, so expiry costs the download, not the
+   * record. A job whose input is gone simply stops offering the re-run.
+   */
+  private async sweepExpiredInputs(): Promise<void> {
+    if (ESSAYS_INPUT_RETENTION_DAYS <= 0) return;
+    const finished = await prisma.essayJob.findMany({
+      where: { status: { in: ['completed', 'failed'] } },
+      select: { id: true, userId: true, updatedAt: true },
+      orderBy: { updatedAt: 'asc' },
+      take: 200,
+    });
+    for (const job of finished) {
+      if (!isRetentionExpired(job.updatedAt, ESSAYS_INPUT_RETENTION_DAYS)) {
+        // Ordered by updatedAt, so the first unexpired row ends the sweep.
+        break;
+      }
+      const inputDir = path.join(this.jobDir(job.userId, job.id), 'input');
+      try {
+        await fs.access(inputDir);
+      } catch {
+        continue; // already gone
+      }
+      await fs.rm(inputDir, { recursive: true, force: true }).catch(() => {});
+      logger.info(
+        `essays job ${job.id}: input expired after ${ESSAYS_INPUT_RETENTION_DAYS}d, removed`,
+        CTX
+      );
+    }
+  }
+
   private async sweepStaging(): Promise<void> {
     const stagingDir = path.join(this.uploadDir, 'essays', '_staging');
     let entries: string[];
