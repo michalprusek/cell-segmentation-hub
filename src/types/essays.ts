@@ -18,6 +18,16 @@ export interface EssayJob {
   createdAt: string;
   updatedAt: string;
   completedAt?: string | null;
+  /**
+   * Whether the uploaded .nd2 files are still on the server, so the run can be
+   * repeated without uploading them again.
+   *
+   * Answered by the backend from the DISK, not derived from `status`: the input
+   * is only kept for a run that did not finish cleanly, and even then only for a
+   * retention window. A button driven by status alone would offer a re-run that
+   * fails the moment it is clicked.
+   */
+  canRerun?: boolean;
 }
 
 /** Optional module options the user can tune before running. */

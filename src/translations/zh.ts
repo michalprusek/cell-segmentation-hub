@@ -2205,6 +2205,13 @@ export default {
     cannotMoveIntoSelf: '无法将文件夹移动到自身或其子文件夹中',
   },
   automatedEssays: {
+    rerun: '重新运行',
+    rerunHint: '使用服务器上已有的文件重新运行该文件夹，无需重新上传。',
+    rerunStarted: '任务已重新排队。',
+    rerunFailed: '无法重新启动任务。',
+    rerunConfirm: '要重新运行该文件夹吗？将使用服务器上已存储的文件。',
+    rerunConfirmReplace:
+      '要重新运行该文件夹吗？当前结果将被替换 — 如需保留请先下载。',
     navLabel: '自动检测分析',
     title: '自动检测分析',
     subtitle: '上传包含 .nd2 孔位记录的文件夹，测量每个孔位的微管长度和强度。',

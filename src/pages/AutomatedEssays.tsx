@@ -1,7 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Download, Loader2, Trash2, FileText, AlertCircle } from 'lucide-react';
+import {
+  Download,
+  Loader2,
+  Trash2,
+  FileText,
+  AlertCircle,
+  RotateCcw,
+} from 'lucide-react';
 import DashboardHeader from '@/components/DashboardHeader';
 import { PageContainer } from '@/components/layout';
 import { Button } from '@/components/ui/button';
@@ -92,6 +99,24 @@ const AutomatedEssays: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['essay-jobs'] }),
     onError: () => toast.error(t('automatedEssays.deleteFailed')),
   });
+
+  const rerunMutation = useMutation({
+    mutationFn: (jobId: string) => apiClient.rerunEssayJob(jobId),
+    onSuccess: () => {
+      toast.success(t('automatedEssays.rerunStarted'));
+      queryClient.invalidateQueries({ queryKey: ['essay-jobs'] });
+    },
+    onError: () => toast.error(t('automatedEssays.rerunFailed')),
+  });
+
+  /** The re-run replaces this job's existing result, so say so before starting
+   *  one — a partial run's zip may be the only copy of what did come out. */
+  const confirmRerun = (job: EssayJob) => {
+    const warn = job.resultZipKey
+      ? String(t('automatedEssays.rerunConfirmReplace'))
+      : String(t('automatedEssays.rerunConfirm'));
+    if (window.confirm(warn)) rerunMutation.mutate(job.id);
+  };
 
   const handleDownload = async (job: EssayJob) => {
     try {
@@ -258,6 +283,18 @@ const AutomatedEssays: React.FC = () => {
                       >
                         <Download className="h-4 w-4 mr-1" />
                         {t('automatedEssays.download')}
+                      </Button>
+                    )}
+                    {job.canRerun && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={rerunMutation.isPending}
+                        onClick={() => confirmRerun(job)}
+                        title={String(t('automatedEssays.rerunHint'))}
+                      >
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        {t('automatedEssays.rerun')}
                       </Button>
                     )}
                     <Button

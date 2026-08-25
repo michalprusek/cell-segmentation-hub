@@ -73,6 +73,15 @@ router.get(
   essaysController.downloadJob
 );
 
+// Re-run a finished job from the input already on disk (no re-upload).
+router.post(
+  '/essays/jobs/:jobId/rerun',
+  authenticate,
+  [param('jobId').isUUID()],
+  validateRequest,
+  essaysController.rerunJob
+);
+
 // Delete a job and its artifacts.
 router.delete(
   '/essays/jobs/:jobId',
