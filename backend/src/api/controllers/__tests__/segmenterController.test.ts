@@ -782,8 +782,10 @@ describe('SegmenterController', () => {
       expect(res.headers['content-type']).toBe('image/png');
       expect(res.headers['content-length']).toBe(String(buffer.length));
       expect(res.headers['etag']).toBe(`"${IMAGE_ID}"`);
+      // RFC 6266: an ASCII filename plus the UTF-8 extended form beside it. A
+      // plain ASCII name is identical in both halves.
       expect(res.headers['content-disposition']).toBe(
-        'inline; filename="photo.png"'
+        'inline; filename="photo.png"; filename*=UTF-8\'\'photo.png'
       );
       expect(MockedSegmenterService.getImageFile).toHaveBeenCalledWith(
         USER.id,
@@ -791,7 +793,7 @@ describe('SegmenterController', () => {
       );
     });
 
-    it('strips quote/CR/LF characters from the filename before use in Content-Disposition', async () => {
+    it('cannot forge a header, and keeps the real name in the extended form', async () => {
       const buffer = Buffer.from('fake-png-bytes');
       MockedSegmenterService.getImageFile.mockResolvedValue({
         buffer,
@@ -802,8 +804,35 @@ describe('SegmenterController', () => {
       const app = buildApp(serveImageFile, path);
       const res = await request(app).get(url).expect(200);
 
-      expect(res.headers['content-disposition']).toBe(
-        'inline; filename="weird_name__.png"'
+      const value = res.headers['content-disposition'];
+      // The quoted fallback carries no quote, CR or LF — that is what stops a
+      // filename forging a header.
+      expect(value).toContain('filename="weird_name__.png"');
+      expect(value).not.toMatch(/[\r\n]/);
+      // ...and the real name survives, percent-encoded, for anything that can
+      // read it. Stripping used to be the whole answer, which also meant a
+      // filename above U+00FF was silently mangled rather than delivered.
+      expect(decodeURIComponent(value.split("UTF-8''")[1])).toBe(
+        'weird"name\r\n.png'
+      );
+    });
+
+    it('serves a filename Node would otherwise refuse to put in a header', async () => {
+      // The production failure this came from: an em dash (U+2014) in a
+      // multi-position ND2 frame name made setHeader throw ERR_INVALID_CHAR and
+      // the whole response 500.
+      MockedSegmenterService.getImageFile.mockResolvedValue({
+        buffer: Buffer.from('fake-png-bytes'),
+        mimeType: 'image/png',
+        filename: 'Well — pozice_0001.png',
+      });
+
+      const app = buildApp(serveImageFile, path);
+      const res = await request(app).get(url).expect(200);
+
+      const value = res.headers['content-disposition'];
+      expect(decodeURIComponent(value.split("UTF-8''")[1])).toBe(
+        'Well — pozice_0001.png'
       );
     });
 
