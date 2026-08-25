@@ -7,6 +7,7 @@ import type { EssayJob } from '@prisma/client';
 import { prisma } from '../db';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
+import { assertSafeStorageSegment } from '../utils/storagePath';
 import {
   createZipArchive,
   sanitizeFilename,
@@ -202,8 +203,24 @@ export class EssaysService {
     return EssaysService.instance;
   }
 
+  /**
+   * Where one job's files live.
+   *
+   * Both segments are guarded here rather than at the call sites. `submitJob`
+   * never needed it — it generates the jobId itself — but `rerunJob` and the
+   * listing take one straight off the URL, and a `..` there would walk out of
+   * the uploads volume. The route does validate `isUUID()`, but that lives in
+   * another file and a defence you cannot see from the call site is one a future
+   * edit can remove silently. This is the single funnel every essays path goes
+   * through, so guarding it covers all of them at once.
+   */
   private jobDir(userId: string, jobId: string): string {
-    return path.join(this.uploadDir, 'essays', userId, jobId);
+    return path.join(
+      this.uploadDir,
+      'essays',
+      assertSafeStorageSegment(userId, 'essays userId'),
+      assertSafeStorageSegment(jobId, 'essays jobId')
+    );
   }
 
   /** Stage the uploaded files, create the job row, dispatch to the worker. */

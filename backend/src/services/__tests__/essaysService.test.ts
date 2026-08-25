@@ -452,3 +452,53 @@ describe('listJobs canRerun', () => {
     ]);
   });
 });
+
+describe('jobDir path safety', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fsAccess.mockReset();
+  });
+
+  it('refuses a jobId that would walk out of the uploads volume', async () => {
+    // rerunJob takes the id straight off the URL. The route validates isUUID(),
+    // but that guard lives in another file; this one is at the funnel every
+    // essays path goes through, so removing the route's validator cannot
+    // silently open a traversal.
+    prismaMock.essayJob.findFirst.mockResolvedValue({
+      id: '../../etc',
+      userId: USER,
+      status: 'failed',
+      error: 'x',
+    });
+    await expect(
+      EssaysService.getInstance().rerunJob(USER, '../../etc')
+    ).rejects.toThrow();
+    expect(prismaMock.essayJob.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a userId containing a separator', async () => {
+    prismaMock.essayJob.findFirst.mockResolvedValue({
+      id: JOB,
+      userId: 'a/b',
+      status: 'failed',
+      error: 'x',
+    });
+    await expect(
+      EssaysService.getInstance().rerunJob('a/b', JOB)
+    ).rejects.toThrow();
+  });
+
+  it('still accepts an ordinary id', async () => {
+    prismaMock.essayJob.findFirst.mockResolvedValue({
+      id: JOB,
+      userId: USER,
+      status: 'failed',
+      error: 'x',
+    });
+    fsAccess.mockResolvedValue(undefined);
+    prismaMock.essayJob.update.mockResolvedValue({});
+    await expect(
+      EssaysService.getInstance().rerunJob(USER, JOB)
+    ).resolves.toEqual({ ok: true });
+  });
+});
