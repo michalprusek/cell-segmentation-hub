@@ -3,6 +3,7 @@ import * as SegmenterService from '../../services/segmenterService';
 import { SegmenterError } from '../../services/segmenterService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import { logger } from '../../utils/logger';
+import { contentDisposition } from '../../utils/contentDisposition';
 import type {
   CreateSegmenterDatasetData,
   CreateSegmenterClassData,
@@ -379,15 +380,12 @@ export const serveImageFile = asyncHandler(
     try {
       const { buffer, mimeType, filename } =
         await SegmenterService.getImageFile(req.user.id, req.params.imageId);
-      // Strip characters that would break the header (quotes / CR / LF) from the
-      // user-supplied filename before interpolating it into Content-Disposition.
-      const safeFilename = filename.replace(/["\r\n]/g, '_');
       res.set({
         'Content-Type': mimeType,
         'Content-Length': buffer.length.toString(),
         'Cache-Control': 'private, max-age=3600',
         ETag: `"${req.params.imageId}"`,
-        'Content-Disposition': `inline; filename="${safeFilename}"`,
+        'Content-Disposition': contentDisposition('inline', filename),
       });
       res.send(buffer);
     } catch (error) {
