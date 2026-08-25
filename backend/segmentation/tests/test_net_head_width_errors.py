@@ -15,11 +15,25 @@ import torch
 
 sys.path.insert(0, "/app/models/microtubule")
 
-from net import head_width  # noqa: E402
+
+def _head_width():
+    """Import inside the test, never at module scope.
+
+    At module scope this breaks COLLECTION of the whole suite — pytest imports
+    every test module up front, and importing `net` then drags in the model
+    package, whose import chain reaches mamba_ssm/Triton and dies before any
+    test runs. The file passes in isolation and takes the suite down with it,
+    which is the worst of both. `test_microtubule_small_frames.py` defers its
+    `from net import TILE` for the same reason.
+    """
+    from net import head_width
+
+    return head_width
 
 
 def test_a_valid_checkpoint_reports_its_head_width():
     state = {"decoder.seg_layers.0.weight": torch.zeros(1, 32, 1, 1)}
+    head_width = _head_width()
     assert head_width(state) == 1
     state = {"decoder.seg_layers.0.weight": torch.zeros(7, 32, 1, 1)}
     assert head_width(state) == 7
@@ -33,7 +47,7 @@ def test_a_checkpoint_without_seg_layers_raises_a_catchable_error():
     of a 500 naming the checkpoint.
     """
     with pytest.raises(Exception) as excinfo:
-        head_width({"encoder.stages.0.weight": torch.zeros(8, 3, 3, 3)})
+        _head_width()({"encoder.stages.0.weight": torch.zeros(8, 3, 3, 3)})
 
     assert not isinstance(excinfo.value, SystemExit), (
         "SystemExit is a BaseException and bypasses every service error handler"
@@ -45,7 +59,7 @@ def test_a_checkpoint_without_seg_layers_raises_a_catchable_error():
 def test_the_error_survives_a_plain_except_exception():
     """Exactly the shape model_loader.load_model uses."""
     try:
-        head_width({})
+        _head_width()({})
     except Exception as exc:  # noqa: BLE001 — mirrors the production handler
         assert "ResEnc" in str(exc) or "seg_layers" in str(exc)
     else:
