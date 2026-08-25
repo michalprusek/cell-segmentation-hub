@@ -180,6 +180,32 @@ class MicrotubuleModel:
                 for x in _starts(width):
                     tile = img01[y : y + TILE, x : x + TILE]
                     th, tw = tile.shape
+                    # The eight-stage ResEnc plan downsamples seven times, so its
+                    # residual adds need every side divisible by 128. A full tile
+                    # is 512 and satisfies that; a frame SMALLER than the tile
+                    # does not, and the last tile of a frame that is not a
+                    # multiple of the stride does not either. Unpadded, those
+                    # reached the network and died on a shape mismatch deep in
+                    # the decoder -- "size of tensor a (13) must match tensor b
+                    # (12)" for a 200 px frame -- which says nothing about the
+                    # image being too small. Measured before this: 200, 300 and
+                    # 341 px all failed, 384 and 512 passed, and non-square
+                    # failed per axis.
+                    #
+                    # Reflect, not zeros: after the percentile stretch the frame
+                    # is in [0, 1] and IRM microtubules are DARK, so a constant-0
+                    # border is precisely the thing the instancer is hunting for.
+                    # Reflection keeps the local statistics the network was
+                    # trained on. The output is cropped back to (th, tw) below,
+                    # so nothing found inside the padding can survive.
+                    pad_h = (-th) % 128
+                    pad_w = (-tw) % 128
+                    if pad_h or pad_w:
+                        # np.pad's reflect needs the pad to be smaller than the
+                        # extent; fall back to edge replication for a frame too
+                        # small to reflect (under 128 px on a side).
+                        mode = "reflect" if pad_h < th and pad_w < tw else "edge"
+                        tile = np.pad(tile, ((0, pad_h), (0, pad_w)), mode=mode)
                     t = torch.from_numpy(tile.astype(np.float32))[None].repeat(3, 1, 1)
                     t = ((t - mean) / std)[None].to(self._device)
                     out = self._model(t)
