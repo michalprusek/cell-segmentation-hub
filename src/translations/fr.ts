@@ -2350,6 +2350,15 @@ export default {
       'Un dossier ne peut pas être déplacé dans lui-même ou dans son propre sous-dossier',
   },
   automatedEssays: {
+    rerun: 'Relancer',
+    rerunHint:
+      'Relance ce dossier à partir des fichiers déjà présents sur le serveur — aucun nouvel envoi nécessaire.',
+    rerunStarted: "Le traitement a été remis en file d'attente.",
+    rerunFailed: 'Impossible de relancer le traitement.',
+    rerunConfirm:
+      'Relancer ce dossier ? Les fichiers déjà stockés sur le serveur seront utilisés.',
+    rerunConfirmReplace:
+      "Relancer ce dossier ? Le résultat actuel sera remplacé — téléchargez-le d'abord si vous souhaitez le conserver.",
     navLabel: 'Essais automatisés',
     title: 'Essais automatisés',
     subtitle:

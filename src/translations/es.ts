@@ -2400,6 +2400,15 @@ export default {
       'Una carpeta no se puede mover dentro de sí misma o de su propia subcarpeta',
   },
   automatedEssays: {
+    rerun: 'Ejecutar de nuevo',
+    rerunHint:
+      'Vuelve a ejecutar esta carpeta con los archivos ya almacenados en el servidor: no hace falta volver a subirlos.',
+    rerunStarted: 'La ejecución se ha vuelto a poner en cola.',
+    rerunFailed: 'No se ha podido volver a iniciar la ejecución.',
+    rerunConfirm:
+      '¿Ejecutar esta carpeta de nuevo? Se usarán los archivos ya almacenados en el servidor.',
+    rerunConfirmReplace:
+      '¿Ejecutar esta carpeta de nuevo? El resultado actual se reemplazará: descárguelo primero si quiere conservarlo.',
     navLabel: 'Ensayos automatizados',
     title: 'Ensayos automatizados',
     subtitle:

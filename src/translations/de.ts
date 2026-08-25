@@ -2360,6 +2360,15 @@ export default {
       'Ein Ordner kann nicht in sich selbst oder einen eigenen Unterordner verschoben werden',
   },
   automatedEssays: {
+    rerun: 'Erneut ausführen',
+    rerunHint:
+      'Führt diesen Ordner erneut mit den bereits auf dem Server gespeicherten Dateien aus — kein erneutes Hochladen nötig.',
+    rerunStarted: 'Der Lauf wurde erneut in die Warteschlange gestellt.',
+    rerunFailed: 'Der Lauf konnte nicht erneut gestartet werden.',
+    rerunConfirm:
+      'Diesen Ordner erneut ausführen? Es werden die bereits auf dem Server gespeicherten Dateien verwendet.',
+    rerunConfirmReplace:
+      'Diesen Ordner erneut ausführen? Das aktuelle Ergebnis wird ersetzt — laden Sie es zuerst herunter, wenn Sie es behalten möchten.',
     navLabel: 'Automatisierte Assays',
     title: 'Automatisierte Assays',
     subtitle:
