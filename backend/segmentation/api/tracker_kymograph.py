@@ -55,7 +55,6 @@ from api.kymograph_velocity import (
 from api.mt_geometry_cost import (
     CURVE_SCALE_PX,
     build_tree,
-    curve_distance,
     curve_distance_prebuilt,
     estimate_drift,
     resample,
