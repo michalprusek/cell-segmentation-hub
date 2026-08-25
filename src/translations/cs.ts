@@ -2363,6 +2363,15 @@ export default {
     cannotMoveIntoSelf: 'Složku nelze přesunout do sebe nebo do své podsložky',
   },
   automatedEssays: {
+    rerun: 'Spustit znovu',
+    rerunHint:
+      'Spustí tuto složku znovu ze souborů, které už jsou na serveru — není potřeba nic nahrávat.',
+    rerunStarted: 'Běh byl znovu zařazen do fronty.',
+    rerunFailed: 'Běh se nepodařilo spustit znovu.',
+    rerunConfirm:
+      'Spustit tuto složku znovu? Použijí se soubory, které už jsou na serveru.',
+    rerunConfirmReplace:
+      'Spustit tuto složku znovu? Stávající výsledek bude nahrazen — pokud si ho chcete nechat, nejdřív si ho stáhněte.',
     navLabel: 'Automatické eseje',
     title: 'Automatické eseje',
     subtitle:
