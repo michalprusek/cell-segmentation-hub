@@ -56,5 +56,16 @@ def head_width(state_dict) -> int:
     seg = [v for k, v in state_dict.items()
            if "decoder.seg_layers." in k and k.endswith(".weight")]
     if not seg:
-        raise SystemExit("checkpoint has no decoder.seg_layers.*.weight -- not a ResEnc U-Net?")
+        # RuntimeError, NOT SystemExit. This runs inside the FastAPI service, on
+        # the first request that loads the model -- not in a CLI. SystemExit is a
+        # BaseException, so it is caught by none of the handlers that exist for
+        # exactly this: model_loader's `except Exception`, the /segment route's,
+        # or the app-wide exception handler. A mis-staged or truncated checkpoint
+        # would escape the whole error path instead of producing a 500, and the
+        # health endpoint's `models_failed` degradation -- which exists for "one
+        # model's weights are bad" -- would never fire. Every sibling model in
+        # this loader signals the same condition with ValueError/RuntimeError.
+        raise RuntimeError(
+            "checkpoint has no decoder.seg_layers.*.weight -- not a ResEnc U-Net?"
+        )
     return int(seg[0].shape[0])
