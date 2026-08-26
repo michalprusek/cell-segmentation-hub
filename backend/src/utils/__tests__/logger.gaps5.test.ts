@@ -209,3 +209,41 @@ describe('Logger log-injection sanitization', () => {
     spy.mockRestore();
   });
 });
+
+
+describe('Logger -- the `data` field is sanitized too', () => {
+  // `data` was the last field appended to the record without going through
+  // `sanitize`. It is attacker-shaped in practice: every controller logs
+  // request ids, project ids, filenames and channel names through it.
+  it('strips DEL, which JSON.stringify does NOT escape', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // JSON.stringify escapes C0 controls per spec, so a raw newline inside a
+    // string value cannot forge a record. It leaves DEL (\u007f) alone -- and DEL
+    // can repaint or hide part of a line in a terminal.
+    logger.error('op failed', undefined, 'Ctx', {
+      projectId: 'proj-1\u007fadmin granted',
+    });
+
+    const out = spy.mock.calls[0][0] as string;
+    expect(out).not.toContain('\u007f');
+    expect(out).toContain('proj-1admin granted');
+    spy.mockRestore();
+  });
+
+  it('keeps the pretty-printed structure, indenting continuation lines', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    logger.error('op failed', undefined, 'Ctx', { a: 1, b: 2 });
+
+    const out = spy.mock.calls[0][0] as string;
+    const lines = out.split('\n');
+    // Still multi-line JSON (readability preserved), and no continuation line
+    // starts at column 0 where it could pass for a new record.
+    expect(lines.length).toBeGreaterThan(2);
+    for (const line of lines.slice(2)) {
+      expect(line.startsWith(' ')).toBe(true);
+    }
+    spy.mockRestore();
+  });
+});
