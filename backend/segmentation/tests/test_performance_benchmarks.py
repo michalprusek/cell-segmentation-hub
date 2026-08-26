@@ -31,8 +31,13 @@ import sqlite3
 import json
 import os
 
-# Import modules under test
-from backend.segmentation.ml.inference_executor import (
+# Import modules under test.
+#
+# NOTE: `ml.*`, not `backend.segmentation.ml.*` — the ML container test
+# recipe bind-mounts `backend/segmentation` directly onto `/app`, so `backend`
+# is never an importable package from inside the test run (matches every
+# other test module in this suite; see tests/test_microtubule_model.py).
+from ml.inference_executor import (
     InferenceExecutor,
     InferenceError,
     InferenceTimeoutError,
