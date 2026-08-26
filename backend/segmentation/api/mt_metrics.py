@@ -49,6 +49,8 @@ if str(_MODELS_DIR) not in sys.path:
     sys.path.append(str(_MODELS_DIR))
 import mt_measure  # noqa: E402  (needs the path set above)
 
+from ._log_safe import scrub  # noqa: E402
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -59,8 +61,15 @@ router = APIRouter()
 _UPLOAD_ROOT = Path(os.getenv("UPLOAD_DIR", "/app/uploads")).resolve()
 
 
-def _assert_safe_path(p: Path, label: str) -> None:
-    """Raise HTTPException(400) if *p* resolves outside _UPLOAD_ROOT."""
+def _safe_path(p: Path, label: str) -> Path:
+    """Return *p* resolved, or raise HTTPException(400) if it leaves _UPLOAD_ROOT.
+
+    The RESOLVED path is what comes back and what callers must open. The
+    previous form checked one path and returned nothing, so every caller went
+    on to use the unresolved argument -- which is a different path whenever a
+    symlink on the way is swapped between the check and the open, and which
+    leaves no trace at the call site that a check happened at all.
+    """
     try:
         resolved = p.resolve()
     except Exception:
@@ -70,6 +79,7 @@ def _assert_safe_path(p: Path, label: str) -> None:
             status_code=400,
             detail=f"Path for {label} is outside the allowed storage root",
         )
+    return resolved
 
 
 # ----------------------------------------------------------------------------
@@ -355,8 +365,7 @@ def _load_png_frame(
         raise HTTPException(
             status_code=400, detail=f"Invalid png channel name: {name}"
         )
-    p = frames_dir / f"{t:04d}" / f"{name}.png"
-    _assert_safe_path(p, "png channel frame")
+    p = _safe_path(frames_dir / f"{t:04d}" / f"{name}.png", "png channel frame")
     if not p.exists():
         return None
     from PIL import Image
@@ -367,7 +376,7 @@ def _load_png_frame(
     if arr.shape != (height, width):
         logger.warning(
             "mt-metrics: png channel %s frame %d shape %s != (%d, %d); skipping",
-            name, t, arr.shape, height, width,
+            scrub(name), t, arr.shape, height, width,
         )
         return None
     return arr.astype(np.float64)
@@ -452,8 +461,7 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             detail="channel_indices and channel_names length mismatch",
         )
 
-    path = Path(req.original_path)
-    _assert_safe_path(path, "original_path")
+    path = _safe_path(Path(req.original_path), "original_path")
     if not path.exists():
         raise HTTPException(
             status_code=404,
@@ -465,7 +473,7 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
     logger.info(
         "mt-metrics: %s loaded T=%d C=%d H=%d W=%d "
         "(thickness=%d, margin=%.2f, frames=%d, channels=%d)",
-        path.name, T, C, H, W,
+        scrub(path.name), T, C, H, W,
         req.thickness_px, req.margin_multiplier,
         len(req.frames), len(req.channel_indices),
     )

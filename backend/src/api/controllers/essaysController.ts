@@ -65,7 +65,13 @@ export class EssaysController {
         ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
-      const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+      // `req.files` is typed loosely and its runtime shape follows the multer
+      // mode the route wired up; a cast asserts an array without checking for
+      // one. Narrow by test so a wrong-shaped value becomes an empty list (and
+      // a 400 below) rather than something whose `.length` means nothing.
+      const files: Express.Multer.File[] = Array.isArray(req.files)
+        ? (req.files as Express.Multer.File[])
+        : [];
       if (files.length === 0) {
         ResponseHelper.badRequest(
           res,

@@ -20,6 +20,7 @@ vi.mock('../../utils/logger', () => ({
 }));
 vi.mock('fs/promises', () => ({
   mkdir: vi.fn(),
+  mkdtemp: vi.fn(),
   copyFile: vi.fn(),
   writeFile: vi.fn(),
   rm: vi.fn(),
@@ -70,6 +71,11 @@ const baseParams = {
  *  `restoreMocks` above. */
 beforeEach(() => {
   (fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  // The service creates its scratch dir with mkdtemp (atomic, 0700), so the
+  // double has to hand back the path the real call would have created.
+  (fs.mkdtemp as ReturnType<typeof vi.fn>).mockImplementation(
+    async (prefix: string) => `${prefix}test`
+  );
   (fs.copyFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   (fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   (fs.rm as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -319,19 +325,19 @@ describe('summarizeAlignment reason breakdown', () => {
 
 describe('addChannelToFrames validation', () => {
   it('rejects a non-microtubule project', async () => {
-    mockProject.mockResolvedValue({ type: 'spheroid' });
+    mockProject.mockResolvedValue({ id: 'p1', type: 'spheroid' });
     await expect(addChannelToFrames(baseParams)).rejects.toThrow(/microtubule/i);
   });
 
   it('rejects an empty selection', async () => {
-    mockProject.mockResolvedValue({ type: 'microtubules' });
+    mockProject.mockResolvedValue({ id: 'p1', type: 'microtubules' });
     await expect(
       addChannelToFrames({ ...baseParams, imageIds: [] })
     ).rejects.toThrow(/No images selected/i);
   });
 
   it('rejects a selection with no video frames', async () => {
-    mockProject.mockResolvedValue({ type: 'microtubules' });
+    mockProject.mockResolvedValue({ id: 'p1', type: 'microtubules' });
     mockImageFindMany.mockResolvedValueOnce([
       { id: 'f1', parentVideoId: null, frameIndex: null, isVideoContainer: false },
     ]);
@@ -341,7 +347,7 @@ describe('addChannelToFrames validation', () => {
   });
 
   it('rejects a dimension mismatch', async () => {
-    mockProject.mockResolvedValue({ type: 'microtubules' });
+    mockProject.mockResolvedValue({ id: 'p1', type: 'microtubules' });
     mockDetectKind.mockReturnValue(null); // single image path → 512x512 (sharp mock)
     mockImageFindMany
       .mockResolvedValueOnce([
@@ -357,7 +363,7 @@ describe('addChannelToFrames validation', () => {
   });
 
   it('rejects a multi-frame source spanning multiple videos', async () => {
-    mockProject.mockResolvedValue({ type: 'microtubules' });
+    mockProject.mockResolvedValue({ id: 'p1', type: 'microtubules' });
     mockDetectKind.mockReturnValue('tiff-stack');
     mockExtract.mockResolvedValue({
       kind: 'single',
@@ -378,7 +384,7 @@ describe('addChannelToFrames validation', () => {
   });
 
   it('adds a single-image channel to the selected frames (partial coverage)', async () => {
-    mockProject.mockResolvedValue({ type: 'microtubules' });
+    mockProject.mockResolvedValue({ id: 'p1', type: 'microtubules' });
     mockDetectKind.mockReturnValue(null); // image path
     mockImageFindMany
       .mockResolvedValueOnce([
@@ -425,7 +431,7 @@ describe('addChannelToFrames alignment reporting', () => {
     frameIds: string[],
     shifts: Array<[number, number, number, ...unknown[]]>
   ) => {
-    mockProject.mockResolvedValue({ type: 'microtubules' });
+    mockProject.mockResolvedValue({ id: 'p1', type: 'microtubules' });
     mockDetectKind.mockReturnValue(null); // single image source
     mockImageFindMany
       .mockResolvedValueOnce(
