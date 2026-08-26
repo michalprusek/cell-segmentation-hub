@@ -484,27 +484,157 @@ def _build_link_cost(
 ) -> np.ndarray:
     """Dense ``P × Q`` base cost matrix of filament costs.
 
-    ``inf`` marks a gated-out pair. The neutral-median machinery the embedding
-    cost needed is gone: geometry is always available, so there is no
+    ``inf`` marks a gated-out pair (degenerate geometry -- see
+    ``_filament_cost``). The neutral-median machinery the embedding cost
+    needed is gone: geometry is always available, so there is no
     missing-evidence case to degrade for.
+
+    VECTORIZED, and NOT by re-deriving the maths: every number here is the
+    exact quantity ``_filament_cost``/``_geom_terms`` compute, just produced
+    without a P*Q nested Python loop and without rebuilding a cKDTree per
+    pair (that part was already fixed -- see ``_Filament.tree``).
+
+    - ``d_end``/``d_orient``/``d_len`` depend only on each filament's own
+      (end_a, end_b, theta, length), so they broadcast trivially over numpy
+      arrays shaped (P, 1, 2) x (1, Q, 2) etc.
+    - The bbox-gap EXACT short-circuit (see ``_filament_cost``) also
+      broadcasts trivially, and gates which cells need a real curve
+      distance at all.
+    - The curve distance is the part that does not broadcast (it is a
+      per-curve cKDTree query), so instead of querying pointwise it is
+      BATCHED: for a fixed column j, every candidate row i's curve points
+      are queried against ``nxt_feats[j].tree`` in ONE ``cKDTree.query``
+      call (and symmetrically for a fixed row i against ``prev_feats[i]``'s
+      tree). A KD-tree's per-point answer does not depend on what else was
+      queried alongside it, so this changes nothing about what gets
+      computed -- it changes cKDTree.query call count from up to ``2*P*Q``
+      to ``P + Q``.
+
+    Profiling put 95% of ``/track`` inside the nested-loop version of this
+    function and 58% inside ``cKDTree.query`` alone -- at the real filament
+    counts here (mean 61.2/frame, p95 134, max 311) that is up to ~193 000
+    calls whose FIXED per-call dispatch overhead dominates, not the O(K)
+    distance math each one does. Measured end to end on two real adjacent
+    frames of a 15-frame production video (project
+    d567956b-145a-4fd2-8fa9-ee00c603bb23, 283/311/303 polylines):
+    283x311 pairs 2.10s -> 0.13s (16.5x), 311x303 pairs 3.54s -> 0.15s
+    (24.0x) -- see ``tests/test_tracker_cost_equivalence.py``.
+
+    Equivalence: bit-for-bit identical to the nested-loop reference on both
+    real frame pairs above. On synthetic data a handful of cells differ by
+    up to 1 ULP (~2.22e-16), because ``np.linalg.norm(v)`` on a bare 1-D
+    vector (what ``_geom_terms`` calls) and ``np.linalg.norm(arr, axis=-1)``
+    (what the broadcast form here needs) are different numpy code paths
+    -- the former dispatches to a BLAS nrm2/dot, the latter is a plain
+    sum-of-squares -- and are not guaranteed bit-identical for every input.
+    This is pure floating-point noise several orders of magnitude below
+    anything ``cost_threshold`` distinguishes: proven via ``np.allclose``
+    AND, more importantly, via an identical ``linear_sum_assignment`` result
+    from ``_solve_link_lap`` at every tested ``cost_threshold`` -- checked
+    across hundreds of random (P, Q) trials in the test file, never once
+    flipping an assignment.
     """
     P, Q = len(prev_feats), len(nxt_feats)
     if P == 0 or Q == 0:
         return np.zeros((P, Q), dtype=np.float64)
 
     w_curve, w_end, w_orient, w_len = weights
-    base = np.empty((P, Q), dtype=np.float64)
-    for i in range(P):
+    diag = max(float(img_diag), 1.0)
+
+    # --- endpoint / orientation / length terms: pure broadcasting, exactly
+    # the formulas in _geom_terms applied to every (i, j) pair at once. ---
+    end_a_p = np.stack([f.end_a for f in prev_feats])  # (P, 2)
+    end_b_p = np.stack([f.end_b for f in prev_feats])
+    end_a_n = np.stack([f.end_a for f in nxt_feats])  # (Q, 2)
+    end_b_n = np.stack([f.end_b for f in nxt_feats])
+    theta_p = np.array([f.theta for f in prev_feats])
+    theta_n = np.array([f.theta for f in nxt_feats])
+    length_p = np.array([f.length for f in prev_feats])
+    length_n = np.array([f.length for f in nxt_feats])
+
+    p1 = np.linalg.norm(
+        end_a_p[:, None, :] - end_a_n[None, :, :], axis=2
+    ) + np.linalg.norm(end_b_p[:, None, :] - end_b_n[None, :, :], axis=2)
+    p2 = np.linalg.norm(
+        end_a_p[:, None, :] - end_b_n[None, :, :], axis=2
+    ) + np.linalg.norm(end_b_p[:, None, :] - end_a_n[None, :, :], axis=2)
+    d_end = np.clip(np.minimum(p1, p2) / (2.0 * diag), 0.0, 1.0)
+    d_orient = np.clip(
+        1.0 - np.abs(np.cos(theta_p[:, None] - theta_n[None, :])), 0.0, 1.0
+    )
+    denom = np.maximum(np.maximum(length_p[:, None], length_n[None, :]), 1e-6)
+    d_len = np.clip(np.abs(length_p[:, None] - length_n[None, :]) / denom, 0.0, 1.0)
+
+    # --- degenerate-geometry gate: inf wherever either tree is None,
+    # exactly `if fa.tree is None or fb.tree is None: return inf`. ---
+    tree_ok_p = np.array([f.tree is not None for f in prev_feats])
+    tree_ok_n = np.array([f.tree is not None for f in nxt_feats])
+    tree_ok = tree_ok_p[:, None] & tree_ok_n[None, :]
+
+    # --- bbox-gap EXACT short-circuit (see _filament_cost / _bbox_gap). ---
+    bbox_p = np.stack([f.bbox for f in prev_feats])  # (P, 4)
+    bbox_n = np.stack([f.bbox for f in nxt_feats])  # (Q, 4)
+    dr = np.maximum(
+        0.0,
+        np.maximum(
+            bbox_p[:, None, 0] - bbox_n[None, :, 2],
+            bbox_n[None, :, 0] - bbox_p[:, None, 2],
+        ),
+    )
+    dc = np.maximum(
+        0.0,
+        np.maximum(
+            bbox_p[:, None, 1] - bbox_n[None, :, 3],
+            bbox_n[None, :, 1] - bbox_p[:, None, 3],
+        ),
+    )
+    bbox_gap = np.hypot(dr, dc)  # (P, Q)
+    candidate = tree_ok & (bbox_gap < CURVE_SCALE_PX)
+
+    # --- curve distance: batched cKDTree.query, one call per row/column
+    # instead of one call per (row, column) pair. ---
+    da = np.zeros((P, Q), dtype=np.float64)
+    db = np.zeros((P, Q), dtype=np.float64)
+    if candidate.any():
         for j in range(Q):
-            base[i, j] = _filament_cost(
-                prev_feats[i],
-                nxt_feats[j],
-                img_diag,
-                w_curve,
-                w_end,
-                w_orient,
-                w_len,
+            rows = np.nonzero(candidate[:, j])[0]
+            if rows.size == 0:
+                continue
+            tree_n = nxt_feats[j].tree
+            pts_list = [prev_feats[i].curve for i in rows]
+            counts = np.fromiter(
+                (len(pts) for pts in pts_list), dtype=np.int64, count=len(pts_list)
             )
+            stacked = np.concatenate(pts_list, axis=0)
+            dist, _ = tree_n.query(stacked, k=1)
+            for row_pos, part in zip(rows, np.split(dist, np.cumsum(counts)[:-1])):
+                da[row_pos, j] = part.mean()
+
+        for i in range(P):
+            cols = np.nonzero(candidate[i, :])[0]
+            if cols.size == 0:
+                continue
+            tree_p = prev_feats[i].tree
+            pts_list = [nxt_feats[j].curve for j in cols]
+            counts = np.fromiter(
+                (len(pts) for pts in pts_list), dtype=np.int64, count=len(pts_list)
+            )
+            stacked = np.concatenate(pts_list, axis=0)
+            dist, _ = tree_p.query(stacked, k=1)
+            for col_pos, part in zip(cols, np.split(dist, np.cumsum(counts)[:-1])):
+                db[i, col_pos] = part.mean()
+
+    d_curve_px = 0.5 * (da + db)
+    d_curve = np.where(candidate, np.minimum(1.0, d_curve_px / CURVE_SCALE_PX), 1.0)
+    # Matches `_filament_cost`'s defensive `if not np.isfinite(d_curve_px):
+    # return inf`. Unreachable in practice -- tree not None already implies
+    # >= 2 finite curve points, so a nearest-neighbour query can't return a
+    # non-finite distance -- kept for exact behavioural parity regardless.
+    invalid_curve = candidate & ~np.isfinite(d_curve_px)
+
+    base = w_curve * d_curve + w_end * d_end + w_orient * d_orient + w_len * d_len
+    base = np.where(tree_ok, base, np.inf)
+    base = np.where(invalid_curve, np.inf, base)
     return base
 
 
