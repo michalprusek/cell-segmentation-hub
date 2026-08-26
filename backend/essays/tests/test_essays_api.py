@@ -307,3 +307,83 @@ def test_build_cmd_treats_bool_flags_as_presence_only():
     on = essays_api._build_cmd(_req(noOverlays=True, noJson=False), "cpu")
 
     assert "--no-overlays" in on and "--no-json" not in on
+
+
+# --- _confined: the worker has no auth, so the paths must confine themselves --
+#
+# `/process` takes inputDir and outDir as free-form strings and then mkdirs
+# them, writes status.json beside them and hands them to evaluate.py. The port
+# is loopback-only and unauthenticated by design (see the module docstring), so
+# "only the backend calls it" is the whole access control and these strings had
+# nothing checking them at all. Confinement is what makes reaching the port
+# stop being a write-anywhere primitive.
+
+@pytest.fixture
+def _root(monkeypatch, tmp_path):
+    root = tmp_path / "uploads"
+    (root / "essays" / "u1" / "j1").mkdir(parents=True)
+    monkeypatch.setattr(essays_api, "ESSAYS_ROOT", str(root.resolve()))
+    return root
+
+
+@pytest.mark.parametrize("raw", [
+    "essays/u1/j1/output",          # relative — taken as relative to the root
+    "{root}/essays/u1/j1/output",   # the absolute form the backend actually sends
+    "{root}",                       # the root itself
+])
+def test_confined_accepts_paths_inside_the_root(_root, raw):
+    resolved = essays_api._confined(raw.format(root=_root), "outDir")
+
+    assert resolved.startswith(str(_root))
+
+
+@pytest.mark.parametrize("raw", [
+    "/etc/cron.d",
+    "{root}/../../etc",
+    "essays/../../../../etc/cron.d",
+    "{root}/essays/../../../root",
+    "../../../../../../etc",
+    # The prefix trap: a sibling whose name merely STARTS with the root's.
+    # A `startswith(root)` without the separator would wave this through.
+    "{root}-not-really/x",
+])
+def test_confined_rejects_every_way_out(_root, raw):
+    with pytest.raises(essays_api.HTTPException) as exc:
+        essays_api._confined(raw.format(root=_root), "outDir")
+
+    assert exc.value.status_code == 400
+
+
+def test_confined_returns_the_resolved_path_not_the_argument(_root):
+    """Callers must use the return value: checking one path and opening another
+    is how a symlink swapped in between the two gets followed."""
+    link = _root / "essays" / "u1" / "link"
+    link.symlink_to(_root / "essays" / "u1" / "j1")
+
+    assert essays_api._confined(str(link), "outDir") == str(
+        (_root / "essays" / "u1" / "j1").resolve())
+
+
+def test_process_confines_both_directories_before_queueing(_root, monkeypatch):
+    """The endpoint is the boundary: what lands on the queue is already safe,
+    so no downstream caller has to remember to check."""
+    queued: list = []
+    monkeypatch.setattr(essays_api._work, "put", queued.append)
+
+    essays_api.process(essays_api.ProcessRequest(
+        jobId="j1", inputDir="essays/u1/j1/input", outDir="essays/u1/j1/output"))
+
+    assert queued[0].inputDir == str(_root / "essays" / "u1" / "j1" / "input")
+    assert queued[0].outDir == str(_root / "essays" / "u1" / "j1" / "output")
+
+
+def test_process_refuses_an_escaping_out_dir_without_queueing_anything(
+        _root, monkeypatch):
+    queued: list = []
+    monkeypatch.setattr(essays_api._work, "put", queued.append)
+
+    with pytest.raises(essays_api.HTTPException):
+        essays_api.process(essays_api.ProcessRequest(
+            jobId="j1", inputDir="essays/u1/j1/input", outDir="/etc/cron.d"))
+
+    assert queued == []

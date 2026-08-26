@@ -16,6 +16,17 @@ paths-ignore:
   - '**/*.spec.tsx'
   - 'tests/**'
   - 'backend/src/test/**'
+
+  # The Python halves of the same exclusion. The globs above are all
+  # TypeScript-shaped (`*.test.ts`, `__tests__/`), so the pytest suites were
+  # never covered by them and their fixtures alone account for the large
+  # majority of open `note` findings — unused imports kept for `importorskip`
+  # probes, deliberately-empty excepts around optional dependencies, lambdas
+  # passed to `monkeypatch.setattr`. Same rationale as above: none of it is
+  # actionable, and it buries real findings in production code.
+  - '**/tests/**'
+  - '**/test_*.py'
+  - '**/conftest.py'
   - 'scripts/**'
   - 'playwright.config.ts'
   - 'vitest.config.ts'

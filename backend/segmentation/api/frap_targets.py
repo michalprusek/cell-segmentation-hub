@@ -30,6 +30,7 @@ if _MODELS_DIR not in sys.path:
 import frap_select as FS  # noqa: E402
 
 from api import frap_render  # noqa: E402
+from api._log_safe import scrub  # noqa: E402
 from api.routes import (  # noqa: E402
     InferenceError,
     _microtubule_inference_lock,
@@ -350,8 +351,8 @@ def _page_array(tif, index: int, what: str) -> np.ndarray:
     except MemoryError as exc:
         # Ran out of memory decoding a page whose declared size we already accepted.
         # That is this server's problem, not a malformed frame.
-        logger.error("frap/targets: out of memory decoding %s page %d (shape %s)",
-                     what.lower(), index, shape)
+        logger.error("frap/targets: out of memory decoding %s page %s (shape %s)",
+                     what.lower(), scrub(index), scrub(shape))
         raise HTTPException(
             status_code=500,
             detail=f"The server ran out of memory decoding {what.lower()} page "
@@ -366,8 +367,10 @@ def _page_array(tif, index: int, what: str) -> np.ndarray:
         # problem. imagecodecs is now a declared dependency; this branch is what
         # happens if it goes missing again.
         if isinstance(exc, ImportError) or "imagecodecs" in str(exc):
-            logger.error("frap/targets: codec package missing for %s page %d: %s",
-                         what.lower(), index, exc)
+            # `exc` is the one value on this line that carries bytes from the
+            # uploaded frame -- a decoder's message quotes tags out of the file.
+            logger.error("frap/targets: codec package missing for %s page %s: %s",
+                         what.lower(), scrub(index), scrub(exc))
             raise HTTPException(
                 status_code=500,
                 detail=f"The server cannot decode this TIFF's compression ({exc}). "
@@ -623,16 +626,22 @@ def frap_targets(
     # The effective inputs go in the log line, not just the counts: a run that came
     # back empty cannot be reconstructed afterwards from "0 spots", and um_per_px and
     # params_json are the first two things to check.
+    # The request's own values are scrubbed before they go on the line. They
+    # are declared int/float on the endpoint and FastAPI has already coerced
+    # them, so none of them can actually carry a newline -- but that guarantee
+    # lives in a signature 250 lines away, and this is where it has to hold.
+    # Numbers are formatted first so the line reads exactly as it did.
     logger.info("frap/targets: %d polylines -> %d candidates -> %d spots "
-                "(um_per_px %.5g, k %d..%d, snr_evaluated %s, inference %.2fs, "
+                "(um_per_px %s, k %s..%s, snr_evaluated %s, inference %.2fs, "
                 "selection %.2fs, rejected %s, dropped %s)",
                 sel.n_polylines, sel.n_candidates, len(sel.spots),
-                um_per_px, k_min, k_max, snr_evaluated,
-                inference_s, selection_s, sel.rejected_by, sel.dropped_by)
+                scrub(f"{um_per_px:.5g}"), scrub(k_min), scrub(k_max),
+                snr_evaluated, inference_s, selection_s,
+                sel.rejected_by, sel.dropped_by)
     if params != FS.SelectionParams():
         logger.info("frap/targets: non-default selection params: %s", vars(params))
     if warning:
-        logger.warning("frap/targets: %s", warning)
+        logger.warning("frap/targets: %s", scrub(warning))
 
     body: Dict[str, Any] = {
         "success": True,

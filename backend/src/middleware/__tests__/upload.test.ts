@@ -5,6 +5,8 @@ import {
   uploadImages,
   handleUploadError,
   validateUploadedFiles,
+  safeUploadExtension,
+  tempUploadName,
 } from '../upload';
 import * as UploadMocksRaw from '../../test/utils/uploadMocks';
 
@@ -459,5 +461,81 @@ describe('Upload Middleware - Large Batch Support', () => {
       expect(sortedResults[2].fileCount).toBe(12);
       expect(sortedResults[3].fileCount).toBe(13);
     });
+  });
+});
+
+// ─── Temp filename construction (CWE-22 / js/path-injection regression) ──────
+//
+// Every diskStorage in this module names its temp file `<token><ext>` and takes
+// `<ext>` from the client-supplied filename. That string then becomes part of a
+// filesystem path the services open, copy and delete, so it is the one piece of
+// the temp path an uploader controls. These tests pin what is allowed through.
+
+describe('safeUploadExtension', () => {
+  it.each([
+    ['well_A1.nd2', '.nd2'],
+    ['stack.TIFF', '.tiff'],
+    ['clip.mp4', '.mp4'],
+    ['frame.png', '.png'],
+    ['a.b.c.jpeg', '.jpeg'],
+  ])('keeps the real extension of %j as %j', (name, expected) => {
+    expect(safeUploadExtension(name)).toBe(expected);
+  });
+
+  it.each([
+    ['no extension at all', 'README'],
+    ['a bare trailing dot', 'weird.'],
+    ['a traversal attempt in the extension', 'x.\u002e\u002e/\u002e\u002e/etc/passwd'],
+    ['a separator after the dot', 'x.tar/../../evil'],
+    ['a NUL byte inside the extension', 'x.nd\u00002'],
+    ['a newline', 'x.nd\n2'],
+    ['an extension longer than any real format', 'x.' + 'a'.repeat(40)],
+    ['a non-ASCII extension', 'x.\u00e9\u00e9'],
+    ['a non-string', 42],
+    ['undefined', undefined],
+  ])('yields no extension for %s', (_label, name) => {
+    expect(safeUploadExtension(name as unknown as string)).toBe('');
+  });
+
+  it('never returns a value containing a path separator or a control char', () => {
+    // Property check over the shapes an attacker would actually try. The
+    // allow-list is `^\.[A-Za-z0-9]{1,15}$`, so this can only fail if that
+    // regex is relaxed or the rebuild is replaced by a pass-through.
+    const hostile = [
+      'f.nd2/../../etc/passwd',
+      'f./../..',
+      'f.\\..\\..\\windows',
+      'f.a\u0000b',
+      'f.a\rb',
+      'f.a b',
+      'f."; rm -rf /',
+    ];
+    for (const name of hostile) {
+      const ext = safeUploadExtension(name);
+      expect(ext).not.toMatch(/[/\\\u0000-\u001f\s]/);
+    }
+  });
+});
+
+describe('tempUploadName', () => {
+  it('produces a single path component built only from safe characters', () => {
+    const name = tempUploadName('well_A1.nd2');
+    expect(name).toMatch(/^[a-z0-9]+-[a-z0-9]+\.nd2$/);
+  });
+
+  it('cannot be steered out of the temp directory by the client filename', () => {
+    const name = tempUploadName('../../../../etc/cron.d/pwn.sh');
+    expect(name).not.toContain('/');
+    expect(name).not.toContain('..');
+    // `.sh` is alphanumeric, so it survives as an extension — harmless, since
+    // the name is still a single component inside the temp dir.
+    expect(name.endsWith('.sh')).toBe(true);
+  });
+
+  it('is unique across calls so concurrent uploads cannot collide', () => {
+    const names = new Set(
+      Array.from({ length: 200 }, () => tempUploadName('a.nd2'))
+    );
+    expect(names.size).toBe(200);
   });
 });

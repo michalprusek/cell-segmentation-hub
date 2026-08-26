@@ -230,7 +230,13 @@ export class EssaysService {
     options: EssayJobOptions,
     folderName?: string
   ): Promise<{ jobId: string }> {
-    if (!files || files.length === 0) {
+    // Array.isArray, not a truthiness test: `files` originates in
+    // `req.files`, whose shape depends on which multer mode the route wired up
+    // (`.array()` gives an array, `.fields()` an object). Taking `.length` of
+    // anything else silently yields `undefined` — or, for a string, its
+    // character count, which would land in the `fileCount` column as a number
+    // that describes nothing. Reject the shape here rather than downstream.
+    if (!Array.isArray(files) || files.length === 0) {
       throw new Error('No .nd2 files provided');
     }
     const jobId = randomUUID();
@@ -349,7 +355,14 @@ export class EssaysService {
       return { ok: false, reason: 'in_flight' };
     }
 
-    const dir = this.jobDir(userId, jobId);
+    // Built from the ROW, not from the request: `job` was matched on both
+    // `id` and `userId`, so its columns are the pair whose ownership has just
+    // been proven. Passing the raw URL segments here instead would work
+    // identically on every valid request and would leave the only thing
+    // standing between a crafted `jobId` and the uploads volume a guard in
+    // another file. jobDir still asserts the segments — this just means the
+    // assertion can no longer be the sole defence.
+    const dir = this.jobDir(job.userId, job.id);
     const inputDir = path.join(dir, 'input');
     const outputDir = path.join(dir, 'output');
     // Ask the disk, never infer from status: retention has a TTL and an operator
@@ -460,9 +473,10 @@ export class EssaysService {
     const job = await prisma.essayJob.findFirst({ where: { id: jobId, userId } });
     if (!job) return false;
     // Raw job dir is usually already gone (freed on completion); remove it if a
-    // failed/in-progress job still has it.
+    // failed/in-progress job still has it. Addressed from the row, for the
+    // reason spelled out in rerunJob.
     await fs
-      .rm(this.jobDir(userId, jobId), { recursive: true, force: true })
+      .rm(this.jobDir(job.userId, job.id), { recursive: true, force: true })
       .catch(() => {});
     // Remove the persisted result zip (dismiss = delete the deliverable too).
     if (job.resultZipKey) {

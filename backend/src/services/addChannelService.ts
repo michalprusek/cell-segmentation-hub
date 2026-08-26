@@ -433,11 +433,18 @@ interface TargetFrame {
 
 /** Slugify a user label into a path-safe channel machine name. */
 export function slugifyChannelName(label: string): string {
+  // The 64-char cap comes BEFORE the leading/trailing-underscore trim, not
+  // after. `/^_+|_+$/` backtracks quadratically on a long run of underscores
+  // (the engine retries `_+$` from every position), and every character of
+  // `label` is user input; truncating first bounds that work to a constant no
+  // matter how long the label is. The result is unchanged for any label the
+  // cap does not truncate, and for one it does the trim still runs — so a
+  // truncated slug can never end in the underscore the trim exists to remove.
   const slug = label
     .trim()
     .replace(/[^A-Za-z0-9_-]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 64);
+    .slice(0, 64)
+    .replace(/^_+|_+$/g, '');
   if (!CHANNEL_NAME_RE.test(slug)) {
     throw new Error(
       'Channel name must contain at least one letter, digit, underscore or dash'
@@ -555,17 +562,30 @@ export async function addChannelToFrames(
   const baseSlug = slugifyChannelName(channelName);
   const displayBase = channelName.trim().slice(0, MAX_DISPLAY_NAME_LEN);
 
-  const tempDir = path.join(os.tmpdir(), `add-channel-${randomUUID()}`);
+  // mkdtemp, not join-then-mkdir: it creates the directory ATOMICALLY with
+  // mode 0700 and a name the caller cannot predict. `mkdir(recursive: true)`
+  // does neither — it succeeds against a path that already exists, including a
+  // symlink another user of the shared /tmp planted there, and everything the
+  // extraction writes would follow it. Created before the try/finally so the
+  // cleanup below can never run against a directory this call did not make.
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'add-channel-'));
 
   try {
     // 1. Project must be a microtubule project.
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      select: { type: true },
+      select: { id: true, type: true },
     });
-    if (!isMicrotubuleProject(project?.type)) {
+    if (!project || !isMicrotubuleProject(project.type)) {
       throw new Error('Add channel is only available for microtubule projects');
     }
+    // Storage paths are built from the ROW's id, never from the URL segment
+    // that found it. The two are equal on every legitimate request, so nothing
+    // observable changes — but a value that came back out of Postgres cannot
+    // carry a `../`, which means the traversal guard inside frameStorageKey is
+    // no longer the only thing standing between a crafted :id and the uploads
+    // volume. Same reasoning as EssaysService.rerunJob.
+    const storageProjectId = project.id;
 
     // 2. Load the selected frames (video-frame rows only) and group by video.
     if (!Array.isArray(imageIds) || imageIds.length === 0) {
@@ -607,8 +627,7 @@ export async function addChannelToFrames(
       list.sort((a, b) => a.frameIndex - b.frameIndex);
     }
 
-    // 3. Decode the uploaded source.
-    await fs.mkdir(tempDir, { recursive: true });
+    // 3. Decode the uploaded source. (tempDir already exists — see mkdtemp.)
     const source = await extractSource(originalName, tempFilePath, tempDir);
 
     // 4. Coverage rules for a multi-frame (video/stack) source.
@@ -746,7 +765,7 @@ export async function addChannelToFrames(
             `${srcName}.png`
           );
           const outAbs = frameChannelAbs(
-            projectId,
+            storageProjectId,
             containerId,
             target.frameIndex,
             finalName
@@ -757,7 +776,7 @@ export async function addChannelToFrames(
             alignJobs.push({
               moving,
               reference: frameChannelAbs(
-                projectId,
+                storageProjectId,
                 containerId,
                 target.frameIndex,
                 segSourceName
