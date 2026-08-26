@@ -28,6 +28,7 @@ import { ResponseHelper } from '../../utils/response';
 import { uploadVideoFromFile } from '../../services/videoUploadService';
 import { addChannelToFrames } from '../../services/addChannelService';
 import { isVideoFilename } from '../../services/video/videoExtractor';
+import { isSafeChannelName } from '../../services/video/types';
 
 interface ChannelDTO {
   name: string;
@@ -51,15 +52,6 @@ function isValidDisplayName(value: unknown): value is string {
   }
   // eslint-disable-next-line no-control-regex
   return !/[\x00-\x1f\x7f]/.test(value);
-}
-
-/** Allowed shape for channel names anywhere in the API surface. Filesystem-
- *  safe alnum + underscore + dash; bans dots so ``.png`` extension can't
- *  smuggle in, bans slashes so traversal is impossible. */
-const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
-
-function isSafeChannelName(name: unknown): name is string {
-  return typeof name === 'string' && CHANNEL_NAME_RE.test(name);
 }
 
 /** Assert the caller has access to ``projectId`` (owner or accepted share).
