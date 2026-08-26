@@ -23,6 +23,7 @@ import axios from 'axios';
 import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
+import { CHANNEL_NAME_RE } from './video/types';
 
 /** Net-velocity cut-off (µm/s): trajectories slower than this are dropped as
  *  non-processive (oscillatory / static blobs are not directed transport).
@@ -30,9 +31,6 @@ import { logger } from '../utils/logger';
  *  this µm/s threshold into px/frame. */
 const MIN_NET_VELOCITY_UM_S = 0.01;
 
-/** Same whitelist used by VideoController. Channel names must be alnum +
- *  underscore + dash so they can't escape the storage root. */
-const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /** Mirrors the pattern accepted by the ML KymographRequest. Defence in
  *  depth — the controller layer also validates. */
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;

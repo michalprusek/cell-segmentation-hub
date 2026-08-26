@@ -26,6 +26,7 @@ result-JSON object on its own line.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -133,12 +134,39 @@ def _save_png(arr: np.ndarray, path: Path) -> None:
     )
 
 
+# Mirrors `CHANNEL_NAME_RE` in `backend/src/services/video/types.ts` (the
+# ONE canonical definition of this pattern on the TypeScript side). ND2
+# channel names come from structured NIS-Elements metadata and are
+# normally short, so this path is latent/defense-in-depth rather than a
+# fix for an observed production incident — the TIFF extractor's
+# equivalent (`extract_tiff_stack.py`) is the one that actually shipped a
+# too-long name; see the 2026-08-26 Institut Curie incident notes there.
+_CHANNEL_NAME_MAX_LEN = 64
+
+
 def _sanitize_name(name: str | None, fallback: str) -> str:
+    """Reduce to alnum + underscore + dash, then cap at
+    ``_CHANNEL_NAME_MAX_LEN`` (64) so the result ALWAYS survives the
+    backend's ``CHANNEL_NAME_RE`` whitelist (``^[A-Za-z0-9_-]{1,64}$``,
+    ``backend/src/services/video/types.ts``). A name that already fits is
+    returned unchanged; a longer one is truncated with a short
+    deterministic hash suffix (derived from the full untruncated string)
+    so two names differing only past character 64 can't collapse onto the
+    same on-disk filename. See ``extract_tiff_stack._sanitize_name`` for
+    the identical contract and rationale — kept as two copies because
+    they're single-file scripts with no shared Python module between
+    them."""
     if not name:
         return fallback
     # Filesystem-safe: alnum + underscore + dash only.
     safe = re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_")
-    return safe or fallback
+    if not safe:
+        return fallback
+    if len(safe) <= _CHANNEL_NAME_MAX_LEN:
+        return safe
+    digest = hashlib.sha1(safe.encode("utf-8")).hexdigest()[:8]
+    keep = _CHANNEL_NAME_MAX_LEN - 1 - len(digest)
+    return f"{safe[:keep]}_{digest}"
 
 
 class UnsupportedND2(ValueError):
