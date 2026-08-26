@@ -5,6 +5,7 @@ import {
   getProject,
   updateProject,
   deleteProject,
+  setProjectVerified,
   getProjectStats,
   getMtTypeLabels,
   putMtTypeLabels,
@@ -29,6 +30,7 @@ import {
   projectIdSchema,
   projectLabelParamsSchema,
   mtTypeLabelsPutSchema,
+  setProjectVerifiedSchema,
 } from '../../types/validation';
 import imageRoutes from './imageRoutes';
 
@@ -99,6 +101,25 @@ router.delete(
     `stats:user:${req.user?.id}:*`,
   ]),
   deleteProject
+);
+
+/**
+ * PATCH /api/projects/:id/verified
+ * Toggle "all annotations reviewed and passed". Dedicated endpoint (not a
+ * widened PUT /:id) so owner-only editing of title/description/type is
+ * preserved: the owner AND an accepted-share annotator may both call this
+ * one (see ProjectService.setVerified — gated on share access, not
+ * ownership).
+ */
+router.patch(
+  '/:id/verified',
+  validateParams(projectIdSchema),
+  validateBody(setProjectVerifiedSchema),
+  cacheInvalidationMiddleware(req => [
+    `project:${req.params.id}:*`,
+    `projects:user:${req.user?.id}:*`,
+  ]),
+  setProjectVerified
 );
 
 /**

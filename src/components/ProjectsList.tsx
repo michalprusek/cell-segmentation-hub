@@ -23,6 +23,8 @@ export interface Project {
   sharedBy?: { email: string };
   owner?: { email: string; name?: string };
   shareId?: string;
+  // "All annotations in the project have been reviewed and passed."
+  verified?: boolean;
 }
 
 /**
@@ -157,6 +159,7 @@ const ProjectsList = ({
           isShared={project.isShared}
           owner={project.owner}
           shareId={project.shareId}
+          verified={project.verified}
           onProjectUpdate={onProjectUpdate}
           onRequestMove={onRequestProjectMove}
           hasAnyFolder={hasAnyFolder}
@@ -227,6 +230,7 @@ const ProjectsList = ({
         sharedBy={project.sharedBy}
         owner={project.owner}
         shareId={project.shareId}
+        verified={project.verified}
         onProjectUpdate={onProjectUpdate}
         onRequestMove={onRequestProjectMove}
         hasAnyFolder={hasAnyFolder}

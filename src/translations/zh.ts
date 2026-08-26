@@ -198,6 +198,11 @@ export default {
     changeProjectType: '更改项目类型',
     typeChangeSegmentationsWarning:
       '{{count}} 个现有分割可能不再符合 "{{type}}" 导出格式。重新分割以更新指标。',
+    verified: '已验证',
+    toggleVerified: '切换验证状态',
+    projectVerified: '项目已标记为已验证',
+    projectUnverified: '已取消项目验证标记',
+    failedToUpdateVerified: '无法更新验证状态',
     types: {
       spheroid: '球体（标准）',
       spheroid_invasive: '分解球体',
