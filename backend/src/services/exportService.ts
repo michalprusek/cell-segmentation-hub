@@ -41,6 +41,8 @@ import {
   sanitizeFilename,
   getProgressMessage,
   createZipArchive,
+  countExportSteps,
+  type ExportProgressStage,
 } from './export/exportFileOperations';
 import {
   computeMTMetrics,
@@ -487,13 +489,21 @@ export class ExportService {
       // Parallel export processing - run independent tasks concurrently
       const exportTasks: Promise<void>[] = [];
       let progressStep = 0;
-      const totalSteps = [
-        options.includeOriginalImages,
-        options.includeVisualizations,
-        options.annotationFormats?.length,
-        options.metricsFormats?.length,
-        options.includeDocumentation,
-      ].filter(Boolean).length;
+
+      // Whether this is a microtubule project — drives which exporters run
+      // (skip standard annotations/metrics, add MT-metrics/kymograph/ImageJ/CVAT).
+      // Declared HERE, above `totalSteps`, because the step count below depends
+      // on it. Reading it from its old position further down would be a TDZ
+      // crash at runtime that the type checker does not catch.
+      const isMicrotubuleProject = isMicrotubuleProjectType(project.type);
+
+      // SSOT: the denominator lives beside `getProgressMessage` so it can be
+      // unit-tested against the push sites it mirrors.
+      const totalSteps = countExportSteps(
+        options,
+        isMicrotubuleProject,
+        Boolean(project.images?.length)
+      );
 
       // Use 90% of progress for processing tasks, leaving 5% for ZIP creation
       const progressIncrement = totalSteps > 0 ? 90 / totalSteps : 0;
@@ -526,10 +536,6 @@ export class ExportService {
           })
         );
       }
-
-      // Whether this is a microtubule project — drives which exporters run
-      // (skip standard annotations/metrics, add MT-metrics/kymograph/ImageJ/CVAT).
-      const isMicrotubuleProject = isMicrotubuleProjectType(project.type);
 
       // Generate visualizations (can run in parallel)
       if (options.includeVisualizations && project.images) {
@@ -643,7 +649,14 @@ export class ExportService {
             exportDir,
             options,
             jobId
-          )
+          ).then(() => {
+            progressStep++;
+            this.updateJobProgress(
+              jobId,
+              5 + progressStep * progressIncrement,
+              'mt-metrics'
+            );
+          })
         );
       }
 
@@ -656,8 +669,32 @@ export class ExportService {
             options.mtKymographs,
             // Scope kymographs/profiles to the selected frames, like the other
             // MT exporters (which already scope via the filtered project.images).
-            options.selectedImageIds
-          )
+            options.selectedImageIds,
+            // Per-microtubule reporting. This stage is the export's long pole,
+            // so a single bump on completion would still leave the bar frozen
+            // for its whole duration. `progressStep` is read HERE rather than
+            // captured at push time: at push time nothing has completed yet, so
+            // every task would share the same base and they would fight over
+            // one band. Reading it live keeps the bar monotonic, because
+            // `progressStep` only ever grows.
+            (done, total) => {
+              const base = 5 + progressStep * progressIncrement;
+              const within = total > 0 ? (done / total) * progressIncrement : 0;
+              this.updateJobProgress(
+                jobId,
+                Math.min(95, Math.round(base + within)),
+                'kymographs',
+                { current: done, total }
+              );
+            }
+          ).then(() => {
+            progressStep++;
+            this.updateJobProgress(
+              jobId,
+              5 + progressStep * progressIncrement,
+              'kymographs'
+            );
+          })
         );
       }
 
@@ -707,6 +744,12 @@ export class ExportService {
                   job.warnings = [...(job.warnings ?? []), ...result.warnings];
                 }
               }
+              progressStep++;
+              this.updateJobProgress(
+                jobId,
+                5 + progressStep * progressIncrement,
+                'imagej-roi'
+              );
             })
             .catch(error => {
               // A real user cancellation should still fail the job.
@@ -748,6 +791,12 @@ export class ExportService {
                   job.warnings = [...(job.warnings ?? []), ...result.warnings];
                 }
               }
+              progressStep++;
+              this.updateJobProgress(
+                jobId,
+                5 + progressStep * progressIncrement,
+                'cvat'
+              );
             })
             .catch(error => {
               if (this.isJobCancelled(jobId)) {
@@ -1756,12 +1805,10 @@ export class ExportService {
   private updateJobProgress(
     jobId: string,
     progress: number,
-    stage?:
-      | 'images'
-      | 'visualizations'
-      | 'annotations'
-      | 'metrics'
-      | 'compression',
+    // Was a second, hand-maintained copy of this union. It drifted the moment
+    // the microtubule stages were added to `getProgressMessage`, so the stages
+    // could not be passed from here at all. One definition, imported.
+    stage?: ExportProgressStage,
     stageProgress?: { current: number; total: number; currentItem?: string }
   ): void {
     const job = this.exportJobs.get(jobId);

@@ -188,7 +188,18 @@ export async function exportMicrotubuleKymographs(
   projectId: string,
   exportDir: string,
   options: MTKymographOptions,
-  selectedImageIds?: string[] | null
+  selectedImageIds?: string[] | null,
+  /**
+   * Called once per finished (microtubule x channel) job, in completion order.
+   * Deliberately NOT part of `MTKymographOptions`: that object is deserialised
+   * straight off the wire, and a function has no business round-tripping
+   * through JSON. Kept optional so every existing caller and test is unchanged.
+   *
+   * This is the export's longest stage by far — one real 300-frame project
+   * spent ~20 min here — so it is the one place where per-item reporting is
+   * worth the plumbing rather than a single bump on completion.
+   */
+  onProgress?: (done: number, total: number) => void
 ): Promise<void> {
   // Normalise the mode: the controller casts req.body without validation, so an
   // older cached FE bundle (or a direct API caller) may omit it. Default to the
@@ -319,6 +330,11 @@ export async function exportMicrotubuleKymographs(
     // Capped per MT so a long time-lapse can't emit thousands of PNGs. --------
     if (mode === 'profiles') {
       let profileCount = 0;
+      let jobsDone = 0;
+      const reportDone = (): void => {
+        jobsDone++;
+        onProgress?.(jobsDone, jobs.length);
+      };
       await mapWithConcurrency(jobs, KYMOGRAPH_CONCURRENCY, async job => {
         try {
           const result = await buildKymograph({
@@ -368,6 +384,11 @@ export async function exportMicrotubuleKymographs(
             `Profile export failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${(err as Error).message}`,
             CTX
           );
+        } finally {
+          // `finally`, not the end of `try`: a microtubule whose profile export
+          // failed is still one job the user is no longer waiting on. Counting
+          // only successes would stall the bar short of 100% on any failure.
+          reportDone();
         }
       });
 
@@ -385,6 +406,11 @@ export async function exportMicrotubuleKymographs(
     // worksheet (channel = motor/protein) in velocity_metrics.xlsx.
     const rowsByChannel = new Map<string, VelocityRow[]>();
 
+    let jobsDone = 0;
+    const reportDone = (): void => {
+      jobsDone++;
+      onProgress?.(jobsDone, jobs.length);
+    };
     await mapWithConcurrency(jobs, KYMOGRAPH_CONCURRENCY, async job => {
       try {
         const result = await buildKymograph({
@@ -449,6 +475,8 @@ export async function exportMicrotubuleKymographs(
           `Kymograph failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${(err as Error).message}`,
           CTX
         );
+      } finally {
+        reportDone();
       }
     });
 
