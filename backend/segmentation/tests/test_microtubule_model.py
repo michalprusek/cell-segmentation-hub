@@ -21,7 +21,7 @@ for _p in (str(_PKG), str(_PKG / "vendor")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from models.microtubule.wrapper import MicrotubuleModel  # noqa: E402
+from models.microtubule.wrapper import MicrotubuleModel, _simplify_polyline  # noqa: E402
 
 
 class _StubNet:
@@ -118,3 +118,102 @@ def test_rgb_input_is_reduced_to_grayscale():
 def test_non_2d_input_is_rejected():
     with pytest.raises(ValueError, match="expected 2D image"):
         _loaded_model().predict(np.random.rand(4, 8, 8, 2).astype(np.float32))
+
+
+# ---------------------------------------------------------------------------
+# Post-instancer RDP simplification (polyline_eps_px).
+#
+# The instancer itself is NEVER touched by this: `ds` stays the working
+# resolution the instancer traces at (junction matching, curvature
+# enforcement, tangent windows all still see the dense grid). What changes is
+# only how densely the ALREADY-ACCEPTED geometry is stored on the way out.
+# ---------------------------------------------------------------------------
+
+
+def test_rdp_simplification_wired_into_predict_output():
+    """End-to-end through predict(), not a unit test of the helper alone.
+
+    The stub draws a near-straight horizontal band, so RDP should collapse
+    almost every interior sample, while an eps=0 override (RDP disabled)
+    must keep the instancer's full ds-spaced point count. This is the same
+    `predict()` return value both ModelLoader.predict_microtubule()
+    (interactive) and the essays batch worker (`infer.py` / `evaluate.py`)
+    consume -- there is no second copy of this geometry for either caller
+    to diverge from.
+    """
+    image = np.random.rand(256, 256).astype(np.float32)
+    model = _loaded_model()
+
+    unsimplified = model.predict(image, params={"polyline_eps_px": 0.0})["centerlines_rc"]
+    simplified = model.predict(image)["centerlines_rc"]  # shipped params_v5h.json eps (0.30)
+
+    assert unsimplified, "stub foreground produced no instance"
+    assert simplified
+    assert len(unsimplified) == len(simplified), "RDP must not change instance count"
+
+    for raw, simp in zip(unsimplified, simplified):
+        assert raw.shape[0] > 10, "fixture should have interior points to simplify"
+        assert simp.shape[0] <= 3, "a near-straight centerline must collapse to (near) its two endpoints"
+        np.testing.assert_allclose(raw[0], simp[0], atol=1e-9, err_msg="start point moved")
+        np.testing.assert_allclose(raw[-1], simp[-1], atol=1e-9, err_msg="end point moved")
+
+
+def test_vertices_count_reflects_simplified_geometry():
+    """model_loader.py stamps vertices_count = len(points) built straight from
+    centerlines_rc, so it automatically tracks whatever predict() emits --
+    guard that predict() is in fact emitting the SIMPLIFIED count."""
+    image = np.random.rand(256, 256).astype(np.float32)
+    model = _loaded_model()
+    simplified = model.predict(image)["centerlines_rc"]
+    unsimplified = model.predict(image, params={"polyline_eps_px": 0.0})["centerlines_rc"]
+    assert sum(len(c) for c in simplified) < sum(len(c) for c in unsimplified)
+
+
+def test_simplify_polyline_short_input_passthrough():
+    """<=2-point input is returned unchanged (nothing to simplify)."""
+    cl = np.array([[0.0, 0.0], [1.0, 1.0]])
+    np.testing.assert_array_equal(_simplify_polyline(cl, 0.3), cl)
+
+
+def test_simplify_polyline_zero_eps_is_noop():
+    cl = np.array([[0.0, 0.0], [0.0, 1.0], [0.0, 2.0], [5.0, 2.0]])
+    np.testing.assert_array_equal(_simplify_polyline(cl, 0.0), cl)
+
+
+def test_simplify_polyline_preserves_endpoints_on_curved_input():
+    """cv2.approxPolyDP(..., closed=False) always keeps the first and last
+    point of an open curve; pin that guarantee directly."""
+    theta = np.linspace(0, np.pi, 40)
+    cl = np.stack([10 * np.sin(theta), theta * 5.0], axis=1)
+    simp = _simplify_polyline(cl, 0.3)
+    assert simp.shape[0] < cl.shape[0], "a curved fixture should still simplify"
+    np.testing.assert_allclose(simp[0], cl[0])
+    np.testing.assert_allclose(simp[-1], cl[-1])
+
+
+def test_simplify_polyline_falls_back_when_cv2_raises(monkeypatch):
+    """One malformed centerline must degrade to the unsimplified curve, not
+    abort the whole frame's inference (mirrors commit 39b6493c's guard)."""
+    cl = np.array([[0.0, 0.0], [1.0, 0.5], [2.0, 0.0], [3.0, 0.5], [4.0, 0.0]])
+
+    class _BoomCv2:
+        @staticmethod
+        def approxPolyDP(*_args, **_kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setitem(sys.modules, "cv2", _BoomCv2())
+    np.testing.assert_array_equal(_simplify_polyline(cl, 0.3), cl)
+
+
+def test_simplify_polyline_falls_back_when_result_collapses(monkeypatch):
+    """eps too large for a short curve collapsing to <2 points must also
+    fall back to the original, not drop the microtubule."""
+    cl = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
+
+    class _CollapseCv2:
+        @staticmethod
+        def approxPolyDP(_cv_pts, _eps, _closed):
+            return np.zeros((1, 1, 2), dtype=np.float32)
+
+    monkeypatch.setitem(sys.modules, "cv2", _CollapseCv2())
+    np.testing.assert_array_equal(_simplify_polyline(cl, 0.3), cl)

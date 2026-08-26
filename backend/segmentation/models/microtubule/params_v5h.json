@@ -16,5 +16,6 @@
  "bridge_thr": 0.07121686958579185,
  "min_arc_len": 3,
  "ds": 2.0,
- "half_width": 1.0
+ "half_width": 1.0,
+ "polyline_eps_px": 0.30
 }
