@@ -25,13 +25,16 @@ import sharp from 'sharp';
 import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
-import { ChannelMeta, defaultColorForWavelength } from './video/types';
+import {
+  ChannelMeta,
+  CHANNEL_NAME_RE,
+  defaultColorForWavelength,
+} from './video/types';
 import { isMicrotubuleProject } from '../types/validation';
 import { detectVideoKind, extractVideoSafe } from './video/videoExtractor';
 import { alignChannelFrames, ChannelAlignJob } from './video/pythonExtractor';
 import { frameStorageKey } from './videoUploadService';
 
-const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_DISPLAY_NAME_LEN = 128;
 
 /**
