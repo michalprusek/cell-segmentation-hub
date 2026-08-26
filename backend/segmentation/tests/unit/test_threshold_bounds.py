@@ -20,7 +20,15 @@ from pydantic import ValidationError
 
 from api.models import SegmentationRequest
 
-REPO = Path(__file__).resolve().parents[4]
+# tests/unit/test_threshold_bounds.py -> tests/unit -> tests -> segmentation
+# package root. Deliberately NOT "parents[4]" (which assumed the fixed
+# `.../cell-segmentation-hub/backend/segmentation` nesting of a full repo
+# checkout): the ML container test recipe bind-mounts `backend/segmentation`
+# directly onto `/app`, so that nesting doesn't exist there and parents[4]
+# raises IndexError before a single test runs. `tests/` is always a direct
+# child of the segmentation package root in both layouts, so two hops up is
+# the layout-independent way to find it.
+SEG_ROOT = Path(__file__).resolve().parents[2]
 
 # The value the microtubule v5H model actually uses (params_v5h.json prob_thr),
 # and the one src/lib/models/modelRegistry.ts sends as its defaultThreshold.
@@ -46,7 +54,7 @@ def test_the_form_routes_declare_the_same_ceiling_as_the_model():
     """/segment and /batch-segment take threshold as a Form field, declared
     separately from SegmentationRequest. A ceiling raised in one place and not
     the other is exactly the failure this module is named for."""
-    src = (REPO / "backend/segmentation/api/routes.py").read_text()
+    src = (SEG_ROOT / "api/routes.py").read_text()
     ceilings = set(re.findall(r"le=(0\.\d+),?\s*#?[^\n]*\n?\s*description=\"Segmentation threshold\"", src))
     if not ceilings:  # formatting changed — fall back to every le= near a threshold Form
         ceilings = set(re.findall(r"threshold: float = Form\([^)]*?le=(0\.\d+)", src, re.S))
