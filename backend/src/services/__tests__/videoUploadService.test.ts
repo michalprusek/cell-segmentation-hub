@@ -160,6 +160,50 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     expect(prismaImageUpdate).toHaveBeenCalledOnce();
   });
 
+  it('rejects an unsafe channel name from the extractor instead of persisting an unreadable row (GAP-Curie)', async () => {
+    // Regression for the 2026-08-26 Institut Curie incident: a Fiji/
+    // Bio-Formats TIFF export embedded a ~140-char source filename into
+    // every channel's per-slice label. The Python extractor's
+    // `_sanitize_name` never truncated, so this long name reached
+    // `finalizeContainer` unchanged. Before the ingest-time guard, it was
+    // written straight into `Image.channels`, past `assertSafeStorageSegment`
+    // (which has no length/charset cap) — producing a row the read-side
+    // `isSafeChannelName` whitelist (64-char cap) could never serve back.
+    const longName = 'c'.repeat(140);
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: 300,
+        channels: [
+          { name: longName, type: 'irm', isSegmentationSource: true },
+        ],
+        width: 64,
+        height: 64,
+      },
+    });
+
+    await expect(
+      uploadVideoFromFile({
+        projectId: 'proj-1',
+        originalName: 'curie_export.tif',
+        mimeType: 'image/tiff',
+        tempFilePath: '/tmp/multer/curie.tif',
+      })
+    ).rejects.toThrow(/invalid channel name/i);
+
+    // Never reached the thumbnail/frame-row/channels-persist steps.
+    expect(sharpMock).not.toHaveBeenCalled();
+    expect(prismaImageCreateMany).not.toHaveBeenCalled();
+    // Rolled back like any other extraction failure.
+    expect(prismaImageUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'container-1' },
+        data: { segmentationStatus: 'extraction_failed' },
+      })
+    );
+  });
+
   it('multi-position ND2: fans out into one container per XY position', async () => {
     // Position 0 reuses the pre-created row; positions 1..N get fresh rows.
     let nextId = 0;

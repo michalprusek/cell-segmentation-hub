@@ -18,6 +18,7 @@ Stdout protocol:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -32,14 +33,46 @@ from channel_registration import (
     write_registration_sidecar,
 )
 
+# Mirrors `CHANNEL_NAME_RE` in `backend/src/services/video/types.ts` — the
+# ONE place that pattern is defined on the TypeScript side (every other
+# backend module imports it from there; see the 2026-08-26 Institut Curie
+# incident). `_sanitize_name` below enforces the length half of that
+# contract at the source, so an over-long metadata label can never reach
+# the DB unsanitized. Kept here only as a value the tests can assert
+# against — not a second source of truth for the shape, since Python and
+# TypeScript can't share one constant.
+_CHANNEL_NAME_MAX_LEN = 64
+
 
 def _sanitize_name(raw: str | None, fallback: str) -> str:
-    """Reduce to alnum + underscore + dash so the name is filesystem-safe
-    and survives the backend's CHANNEL_NAME_RE whitelist."""
+    """Reduce to alnum + underscore + dash, then cap at
+    ``_CHANNEL_NAME_MAX_LEN`` (64) so the result ALWAYS survives the
+    backend's ``CHANNEL_NAME_RE`` whitelist (``^[A-Za-z0-9_-]{1,64}$``,
+    ``backend/src/services/video/types.ts``) — every byte written here is
+    also a PNG filename on disk and a value round-tripped through the DB's
+    ``channels`` JSON, both of which enforce that same cap on read.
+
+    A name that already fits is returned unchanged. One that doesn't is
+    truncated and given a short deterministic hash suffix rather than a
+    bare truncation: two labels that differ only after character 64 (e.g.
+    a shared boilerplate prefix with the distinguishing part at the end)
+    would otherwise collapse into the same on-disk filename. The hash is
+    derived from the FULL untruncated sanitized string, so it stays
+    deterministic across repeated extractions of the same file — a repair
+    re-run reproduces the exact same name — while still depending on
+    every character the truncation drops.
+    """
     if not raw:
         return fallback
     safe = re.sub(r"[^A-Za-z0-9_-]+", "_", raw).strip("_")
-    return safe or fallback
+    if not safe:
+        return fallback
+    if len(safe) <= _CHANNEL_NAME_MAX_LEN:
+        return safe
+    digest = hashlib.sha1(safe.encode("utf-8")).hexdigest()[:8]
+    # 55 (kept prefix) + 1 (separator) + 8 (digest) == 64, the exact cap.
+    keep = _CHANNEL_NAME_MAX_LEN - 1 - len(digest)
+    return f"{safe[:keep]}_{digest}"
 
 
 def _imagej_channel_labels(tf, count: int) -> list[str | None]:
@@ -118,6 +151,59 @@ def _split_shared_label(labels: list[str | None], count: int) -> list[str] | Non
     return parts if len(parts) == count and _all_distinct(parts) else None
 
 
+_BIOFORMATS_LABEL_RE = re.compile(
+    r"^c:(\d+)/\d+\s+t:\d+/\d+\s*-\s*(.*)$", re.IGNORECASE
+)
+
+
+def _strip_bioformats_scaffold(
+    labels: list[str | None], count: int
+) -> list[str] | None:
+    """Recover per-channel names from Fiji/Bio-Formats' per-slice label
+    format ``"c:N/C t:T/TT - <tail>"``.
+
+    Bio-Formats (the engine behind Fiji's "Bio-Formats Importer" — the
+    real-world path a user takes to re-export an ND2 as TIFF) stamps every
+    slice with its ``(channel, timepoint)`` position followed by the
+    ORIGINAL SOURCE FILENAME, never a per-channel name. Every channel
+    therefore shares an IDENTICAL tail, differing only in the leading
+    ``c:N/C`` index — which is enough to pass ``_all_distinct`` upstream,
+    so without this step the caller accepts the label verbatim and embeds
+    the entire (often 100+ char) filename into every channel's stored
+    name. That filename can itself contain digit runs that misparse as an
+    emission wavelength (a date like ``20260803``) or substrings that
+    misparse as a modality (``..._IRM_...``) — see ``isIrmChannel`` /
+    ``_wavelength_from_name`` downstream, and the 2026-08-26 Institut
+    Curie incident this fixes.
+
+    When every channel's tail is IDENTICAL (the normal Bio-Formats case —
+    this label format carries no real channel name), returns
+    ``["c1", "c2", ...]`` built from the parsed index: the only genuinely
+    per-channel information the label carries. When the tails differ
+    (some pipelines append a real name after the standard prefix), the
+    tails are returned instead, since they carry more than the bare index
+    — this is what lets a real ``IRM``-labelled channel still be typed
+    ``irm`` after this step runs.
+
+    Returns ``None`` when fewer than ``count`` labels match the pattern,
+    so the caller falls through to the next, more permissive strategy —
+    this never fires on an ordinary short label like ``"EGFP"``.
+    """
+    if not labels or len(labels) < count:
+        return None
+    matches = [
+        _BIOFORMATS_LABEL_RE.match(lbl) if isinstance(lbl, str) else None
+        for lbl in labels[:count]
+    ]
+    if not all(matches):
+        return None
+    indices = [m.group(1) for m in matches]  # type: ignore[union-attr]
+    tails = [m.group(2).strip() for m in matches]  # type: ignore[union-attr]
+    if _all_distinct(tails):
+        return tails
+    return [f"c{idx}" for idx in indices]
+
+
 def _resolve_channel_names(tf, count: int) -> list[str | None]:
     """Best-effort DISTINCT per-channel names, tried most-reliable first.
 
@@ -125,7 +211,11 @@ def _resolve_channel_names(tf, count: int) -> list[str | None]:
     identity, the later ones are progressively more degenerate:
       1. MetaMorph ``WaveNameN`` from the ImageJ ``Info`` block.
       2. The shared ``"… - a/b"`` per-slice label split by ``"/"``.
-      3. Genuinely distinct per-slice ``Labels`` used verbatim.
+      3. Fiji/Bio-Formats' ``"c:N/C t:T/TT - <tail>"`` scaffold: keep the
+         tail if it genuinely differs per channel, else collapse to the
+         bare index (``"c1"``/``"c2"``/…) so a shared source filename in
+         the tail never leaks into the stored name.
+      4. Genuinely distinct per-slice ``Labels`` used verbatim.
     When none yields ``count`` distinct names (e.g. an ImageJ-registered
     stack whose only label is the source filename, repeated per channel)
     we return all-``None`` so the caller falls back to ``"Channel N"`` —
@@ -145,6 +235,9 @@ def _resolve_channel_names(tf, count: int) -> list[str | None]:
         split = _split_shared_label(labels, count)
         if split:
             return split
+        scaffold = _strip_bioformats_scaffold(labels, count)
+        if scaffold:
+            return scaffold
         if _all_distinct(labels):
             return labels
     except Exception as exc:
@@ -550,28 +643,34 @@ def _detect_frame_interval_ms(tf) -> float | None:
     return None
 
 
-def main() -> int:
-    argv = sys.argv[1:]
-    # Opt-in multimodal channel registration (translation-only); the backend
-    # passes this only when the user ticked it at upload for an MT project.
-    register = "--register-channels" in argv
-    positional = [a for a in argv if not a.startswith("--")]
-    if len(positional) < 2:
-        print(
-            "usage: extract_tiff_stack.py <src.tif> <dest_dir> "
-            "[--register-channels]",
-            file=sys.stderr,
-        )
-        return 2
-    src = Path(positional[0])
-    dest = Path(positional[1])
-    dest.mkdir(parents=True, exist_ok=True)
+class UnsupportedTiffAxes(ValueError):
+    """Raised by ``_load_and_resolve`` when the TIFF's axes string doesn't
+    match any recognized ``T[Z]CYX`` / ``TYX`` / ``CYX`` layout. ``main()``
+    converts this to the historical stderr message + exit code 4;
+    ``resolve_channels_for_file`` lets it propagate — there's no
+    PNG-writing fallback to preserve there."""
 
-    try:
-        import tifffile
-    except ImportError:
-        print("tifffile not installed in this Python env", file=sys.stderr)
-        return 3
+
+def _load_and_resolve(src: Path) -> tuple[np.ndarray, dict]:
+    """Open ``src``, resolve its TIFF axes to canonical ``(T, C, Y, X)``,
+    and derive the per-channel name/displayName/wavelengthNm metadata plus
+    calibration (pixel size, frame interval).
+
+    This is the ONE place both ``main()`` (real extraction — writes PNGs)
+    and ``resolve_channels_for_file()`` (read-only repair helper, see its
+    docstring below) resolve axes and channel names, so a channel-naming
+    fix can never apply to a fresh upload and not to a repair run of the
+    same file, or vice versa — the two callers cannot drift.
+
+    Returns ``(arr, meta)``: ``arr`` is the resolved ``(T, C, H, W)``
+    ndarray; ``meta`` has keys ``channels`` (a list of
+    ``{"name", "displayName", "wavelengthNm"}`` dicts), ``pixelSizeUm``
+    and ``frameIntervalMs``.
+
+    Raises ``ImportError`` if ``tifffile`` isn't installed, or
+    ``UnsupportedTiffAxes`` if the axes can't be interpreted.
+    """
+    import tifffile
 
     with tifffile.TiffFile(str(src)) as tf:
         arr = tf.asarray()
@@ -626,12 +725,10 @@ def main() -> int:
         T, C, H, W = 1, 1, arr.shape[0], arr.shape[1]
         arr = arr[None, None, :, :]
     else:
-        print(
+        raise UnsupportedTiffAxes(
             f"Cannot interpret TIFF axes='{axes}' shape={arr.shape}; "
-            "expected T[Z]CYX / TYX",
-            file=sys.stderr,
+            "expected T[Z]CYX / TYX"
         )
-        return 4
 
     # If `_C_for_meta` was guessed before C was known, align it now.
     if len(raw_channel_labels) != C:
@@ -653,15 +750,119 @@ def main() -> int:
     # `wavelengthNm` is parsed from the resolved name (e.g. "TIRF_491"→491)
     # so fluorescence channels type correctly downstream; label-free names
     # (IRM/BF) yield None and stay IRM.
-    channel_names: list[str] = []
-    display_names: list[str] = []
-    wavelengths: list[int | None] = []
+    channels: list[dict] = []
     for i in range(C):
         raw = raw_channel_labels[i]
         display = raw if (isinstance(raw, str) and raw.strip()) else f"Channel {i + 1}"
-        display_names.append(display)
-        channel_names.append(_sanitize_name(raw, f"Channel_{i + 1}"))
-        wavelengths.append(_wavelength_from_name(raw))
+        channels.append(
+            {
+                "name": _sanitize_name(raw, f"Channel_{i + 1}"),
+                "displayName": display,
+                "wavelengthNm": _wavelength_from_name(raw),
+            }
+        )
+
+    return arr, {
+        "channels": channels,
+        "pixelSizeUm": pixel_size_um,
+        "frameIntervalMs": frame_interval_ms,
+    }
+
+
+def resolve_channels_for_file(src: str | Path) -> list[dict]:
+    """Read-only repair helper: derive the per-channel
+    name/displayName/wavelengthNm metadata this extractor would produce
+    for ``src`` WITHOUT writing any frame PNGs or touching a destination
+    directory.
+
+    Goes through the exact same ``_load_and_resolve`` path ``main()`` uses
+    for a real extraction, so the output is byte-identical to what a fresh
+    upload of the same file would store in ``Image.channels`` — which is
+    what makes it safe for repairing rows written before this module's
+    channel-naming fix (2026-08-26 Institut Curie incident: a
+    Bio-Formats-exported TIFF's per-slice label embedded the whole source
+    filename into every channel name, producing names over the backend's
+    64-char cap).
+
+    IMPORTANT: run this against the container's actual archived ORIGINAL
+    file (``original.tif`` under its upload directory), not against the
+    already-corrupted name string stored in the DB. The old, unfixed
+    ``_sanitize_name`` already destroyed the label's structure (colons and
+    slashes became underscores), so the fixed scaffold-stripping logic in
+    ``_strip_bioformats_scaffold`` can no longer recognize the Bio-Formats
+    pattern in that mangled string — only the original TIFF still carries
+    the raw ImageJ metadata this function reads.
+
+    Invoke as a CLI, one file at a time:
+
+        python3 extract_tiff_stack.py --print-channels /path/to/original.tif
+
+    which prints ``{"channels": [{"name", "displayName", "wavelengthNm"}, ...]}``
+    to stdout — nothing else: no ``PROGRESS`` lines, no directory writes,
+    no PNGs. Or import and call directly from another script:
+
+        from extract_tiff_stack import resolve_channels_for_file
+        resolve_channels_for_file("/path/to/original.tif")
+    """
+    _arr, meta = _load_and_resolve(Path(src))
+    return meta["channels"]
+
+
+def main() -> int:
+    argv = sys.argv[1:]
+
+    # Read-only repair mode — see `resolve_channels_for_file` docstring.
+    # Takes exactly one positional arg (the source file) and never writes
+    # to a destination directory.
+    if "--print-channels" in argv:
+        positional = [a for a in argv if not a.startswith("--")]
+        if len(positional) != 1:
+            print(
+                "usage: extract_tiff_stack.py --print-channels <src.tif>",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            channels = resolve_channels_for_file(positional[0])
+        except ImportError:
+            print("tifffile not installed in this Python env", file=sys.stderr)
+            return 3
+        except UnsupportedTiffAxes as exc:
+            print(str(exc), file=sys.stderr)
+            return 4
+        print(json.dumps({"channels": channels}))
+        return 0
+
+    # Opt-in multimodal channel registration (translation-only); the backend
+    # passes this only when the user ticked it at upload for an MT project.
+    register = "--register-channels" in argv
+    positional = [a for a in argv if not a.startswith("--")]
+    if len(positional) < 2:
+        print(
+            "usage: extract_tiff_stack.py <src.tif> <dest_dir> "
+            "[--register-channels]",
+            file=sys.stderr,
+        )
+        return 2
+    src = Path(positional[0])
+    dest = Path(positional[1])
+    dest.mkdir(parents=True, exist_ok=True)
+
+    try:
+        arr, meta = _load_and_resolve(src)
+    except ImportError:
+        print("tifffile not installed in this Python env", file=sys.stderr)
+        return 3
+    except UnsupportedTiffAxes as exc:
+        print(str(exc), file=sys.stderr)
+        return 4
+
+    T, C, H, W = arr.shape
+    channel_names = [c["name"] for c in meta["channels"]]
+    display_names = [c["displayName"] for c in meta["channels"]]
+    wavelengths = [c["wavelengthNm"] for c in meta["channels"]]
+    pixel_size_um = meta["pixelSizeUm"]
+    frame_interval_ms = meta["frameIntervalMs"]
 
     # Opt-in: align each channel to channel 0 per frame (multimodal, integer
     # translation — see channel_registration). Applied to a fresh array so the

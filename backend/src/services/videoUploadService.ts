@@ -38,6 +38,7 @@ import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { assertSafeStorageSegment } from '../utils/storagePath';
 import { extractVideoSafe } from './video/videoExtractor';
+import { isSafeChannelName } from './video/types';
 import type {
   ChannelMeta,
   ExtractedPosition,
@@ -221,6 +222,28 @@ async function finalizeContainer(params: {
   mimeType?: string;
 }): Promise<void> {
   const { containerId, baseDir, projectId, displayName, result } = params;
+
+  // Every channel name lands in the DB's `channels` JSON — read back and
+  // whitelisted against `isSafeChannelName` by videoController's read/PATCH
+  // gates — and becomes a PNG filename on disk. `assertSafeStorageSegment`
+  // below only guards the DEFAULT channel against path traversal; it has no
+  // length or charset cap, so it happily accepts a name the read gate will
+  // later reject with 400. Validate EVERY channel here, before any of them
+  // reach a thumbnail read, a frame storage key, or the DB, and fail the
+  // upload loudly rather than persist a container the read side can never
+  // serve back (see the 2026-08-26 Institut Curie incident: a Fiji/
+  // Bio-Formats TIFF export embedded a ~140-char source filename in every
+  // channel's per-slice label; nine containers, 148 frames, went silently
+  // unreadable).
+  for (const ch of result.channels) {
+    if (!isSafeChannelName(ch.name)) {
+      throw new Error(
+        `Extractor produced an invalid channel name: "${ch.name}" — must be ` +
+          '1-64 chars of [A-Za-z0-9_-]. Refusing to persist a container the ' +
+          'read gate could never serve back.'
+      );
+    }
+  }
 
   // Channel names originate in source metadata (ND2/OME-TIFF); guard before
   // they reach the thumbnail read-path and the frame storage keys.
