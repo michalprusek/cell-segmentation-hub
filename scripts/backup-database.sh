@@ -132,17 +132,41 @@ except Exception as e:
     echo "$DB_HOST:$DB_PORT:$DB_NAME:$DB_USER:$POSTGRES_PASSWORD" > "$PGPASS_FILE"
     chmod 600 "$PGPASS_FILE"
     
-    # Perform backup with compression
-    PGPASSFILE="$PGPASS_FILE" pg_dump \
-        -h $DB_HOST \
-        -p $DB_PORT \
-        -U $DB_USER \
-        -d $DB_NAME \
-        --no-owner \
-        --no-acl \
-        --clean \
-        --if-exists \
-        | gzip > $BACKUP_FILE
+    # Perform backup with compression.
+    #
+    # Prefer running pg_dump INSIDE the postgres container. On this deployment
+    # a host-side pg_dump cannot work at all: 5432 is not published to the
+    # host, DB_HOST is "postgres" (a docker-network DNS name that does not
+    # resolve outside it), and no postgres-client is installed. Silently
+    # scheduling that would have produced a timer that failed every night.
+    #
+    # The container's pg_hba.conf grants `local ... trust`, so the socket path
+    # needs no password at all -- nothing to leak into `ps` or `docker
+    # inspect`, and no version skew between a host client and the server.
+    PG_CONTAINER="${PG_CONTAINER:-spheroseg-postgres}"
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$PG_CONTAINER"; then
+        log "${YELLOW}Dumping via container $PG_CONTAINER (local socket)${NC}"
+        docker exec "$PG_CONTAINER" pg_dump \
+            -U $DB_USER \
+            -d $DB_NAME \
+            --no-owner \
+            --no-acl \
+            --clean \
+            --if-exists \
+            | gzip > $BACKUP_FILE
+    else
+        log "${YELLOW}Container $PG_CONTAINER not running; using host pg_dump${NC}"
+        PGPASSFILE="$PGPASS_FILE" pg_dump \
+            -h $DB_HOST \
+            -p $DB_PORT \
+            -U $DB_USER \
+            -d $DB_NAME \
+            --no-owner \
+            --no-acl \
+            --clean \
+            --if-exists \
+            | gzip > $BACKUP_FILE
+    fi
     
     # Remove temporary pgpass file
     rm -f "$PGPASS_FILE"
