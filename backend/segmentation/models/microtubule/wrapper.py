@@ -78,6 +78,48 @@ def _normalize(a: np.ndarray, p: tuple[float, float] = (1.0, 99.0)) -> np.ndarra
     return np.clip((a - lo) / (hi - lo + 1e-6), 0.0, 1.0)
 
 
+def _simplify_polyline(cl: np.ndarray, eps_px: float) -> np.ndarray:
+    """Ramer-Douglas-Peucker simplification of one centerline, INPUT-px space.
+
+    This is output formatting, not instancing: it runs after the instancer's
+    ``ds``-spaced grid has already been traced and junction-matched, so it
+    changes only how densely the accepted geometry is stored, never which
+    filaments are found. ``cv2.approxPolyDP(..., closed=False)`` always keeps
+    the first and last point of an open curve, so endpoints survive.
+
+    Mirrors the fallback commit 39b6493c used for the v7-era wrapper: a
+    centerline too short to simplify, or one that collapses to under 2 points
+    (eps too large for its extent), or a `cv2` failure on a malformed
+    centerline, all degrade to the ORIGINAL (unsimplified) curve rather than
+    dropping the microtubule from the frame.
+    """
+    if eps_px <= 0 or cl.shape[0] <= 2:
+        return cl
+    try:
+        import cv2
+
+        cv_pts = cl.astype(np.float32).reshape(-1, 1, 2)
+        simplified = cv2.approxPolyDP(cv_pts, float(eps_px), closed=False)
+        cl_simp = simplified.reshape(-1, 2).astype(np.float64)
+        if cl_simp.shape[0] >= 2:
+            return cl_simp
+        logger.warning(
+            "RDP collapsed centerline to %d pts (eps=%.2f px); keeping "
+            "original (%d pts)",
+            cl_simp.shape[0],
+            eps_px,
+            cl.shape[0],
+        )
+    except Exception as exc:  # noqa: BLE001 -- one bad centerline must not
+        # abort the whole inference and lose every other MT in the frame.
+        logger.warning(
+            "polyline simplification failed on shape=%s: %s; using unsimplified",
+            cl.shape,
+            exc,
+        )
+    return cl
+
+
 class MicrotubuleModel:
     """Semantic stage + instancer. Load once, then predict many frames.
 
@@ -234,7 +276,11 @@ class MicrotubuleModel:
             seed_threshold: Foreground cut applied to the probability map before
                 instancing. ``None`` uses the shipped params vector's
                 ``prob_thr`` (0.97), which is what the model was tuned with.
-            params: Overrides of the instancer hyperparameters.
+            params: Overrides of the instancer hyperparameters. Also accepts
+                ``polyline_eps_px`` (default from params_v5h.json), the RDP
+                tolerance applied to the OUTPUT geometry -- see
+                :func:`_simplify_polyline`. It is not read by ``instance_a``;
+                the instancer's working resolution stays ``ds``, unaffected.
 
         Returns:
             ``{
@@ -283,6 +329,18 @@ class MicrotubuleModel:
         centerlines_rc = [
             np.asarray(pl, dtype=np.float64)[:, ::-1] / UP for pl in polylines
         ]
+
+        # RDP simplification, in INPUT-px space (after the /UP rescale above,
+        # so `polyline_eps_px` means what it says: pixels of the frame that
+        # was passed in, not the 1.5x working scale). This is the ONE
+        # chokepoint both callers share -- interactive segmentation via
+        # ModelLoader.predict_microtubule() and the essays batch worker via
+        # `evaluate.py` / `infer.py` -- both consume `centerlines_rc` from
+        # this method and neither has its own copy of the geometry. See
+        # _simplify_polyline for the endpoint-preserving, fail-open contract.
+        eps_px = float(merged.get("polyline_eps_px", 0.0) or 0.0)
+        if eps_px > 0:
+            centerlines_rc = [_simplify_polyline(cl, eps_px) for cl in centerlines_rc]
 
         # Map the probability map back so callers see the frame they passed in.
         prob = zoom(prob_up, 1.0 / UP, order=1).astype(np.float32)
