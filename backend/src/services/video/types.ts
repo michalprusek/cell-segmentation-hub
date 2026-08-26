@@ -8,6 +8,25 @@
  * consumes.
  */
 
+/**
+ * SINGLE canonical definition of the channel-name whitelist. Filesystem-
+ * safe alnum + underscore + dash; bans dots so a `.png` extension can't be
+ * smuggled in, bans slashes so path traversal is impossible. Every layer
+ * that reads, writes or validates a channel name — the upload pipeline
+ * (`videoUploadService`), the read/PATCH gates (`videoController`), the
+ * "add channel" flow, the MT metrics/kymograph exporters — must import
+ * this rather than redeclaring the pattern, so the write side and the
+ * read side can never drift out of sync again (see the 2026-08-26 Institut
+ * Curie incident: the TIFF extractor emitted names up to ~140 chars, the
+ * read gate enforced 64, and nine containers became permanently
+ * unreadable because the two copies of this regex disagreed).
+ */
+export const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+export function isSafeChannelName(name: unknown): name is string {
+  return typeof name === 'string' && CHANNEL_NAME_RE.test(name);
+}
+
 export type ChannelType = 'irm' | 'fluorescent';
 
 export interface ChannelMeta {
