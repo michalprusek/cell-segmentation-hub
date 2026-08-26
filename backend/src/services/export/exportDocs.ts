@@ -199,25 +199,37 @@ The microtubule model produces **open polyline centerlines** (one polyline
 per microtubule instance), not closed polygons — so the standard
 closed-polygon report (area / perimeter) does not apply. Instead the metrics
 file is a **long-format table with one row per (frame, polyline, channel)**.
-Microtubule **length** is always present; the per-channel **intensity**
-columns are filled only when a channel was selected in the export dialog
-(otherwise they are blank and \`channel\` is empty).
+Microtubule **length** is pure geometry and never depends on a channel.
+Per-channel **intensity** is ALWAYS computed too, for **every** channel the
+video has — there is no channel picker in the export dialog any more, and no
+opt-in. The intensity columns are only blank (and \`channel\` empty) on the
+rare **geometry-only fallback**: if the original ND2/TIFF couldn't be
+re-read or the ML service failed, the export still ships microtubule length
+rather than nothing. When that happens it is stamped directly into the
+archive — see "Geometry-only fallback" below — rather than left for you to
+notice a missing column.
 
 ### Columns
 - **frameIndex** — 0-based frame index within the source video.
-- **imageId** — frame image id.
+- **imageName** — the frame's human-readable name (not its internal id).
+- **label** — the per-frame instance badge drawn on the visualisation image
+  (\`MT1\`, \`MT2\`, …); blank when the polyline has no badge.
+- **mtType** — the user-assigned tubulin type class name, when one was set;
+  blank for untyped polylines.
 - **instanceId** — unique per polyline (one MT = one instance).
 - **trackId** — stable across frames for the same MT when cross-frame
   tracking ran; blank otherwise.
-- **channel** — sampled channel machine name; blank on length-only rows.
+- **channel** — sampled channel machine name; blank only on a geometry-only
+  fallback row.
 - **lengthPx / lengthUm** — centerline arc length, Sum_i ||p_{i+1} - p_i||
   (the ${lengthUnit} column is filled when a pixel→µm scale was supplied).
 - **areaPx / areaUm2** — area of the thickness-wide sampling band around the
-  centerline (intensity exports only).
-- **pixelCount** — number of pixels in the sampling band (intensity exports
-  only).
-- **sumIntensity / meanIntensity / stdIntensity** — raw 16-bit signal
-  statistics inside the band for this channel (intensity exports only).
+  centerline (blank on a geometry-only fallback row).
+- **pixelCount** — number of pixels in the sampling band (blank on a
+  geometry-only fallback row).
+- **sumIntensity / meanIntensity / medianIntensity / stdIntensity** — raw
+  16-bit signal statistics inside the band for this channel (blank on a
+  geometry-only fallback row).
 - **medianBackground / meanBackground** — median resp. mean signal in THIS
   microtubule's own LOCAL vicinity ring: the band within
   \`thickness * margin\` of its centerline, excluding every microtubule's signal
@@ -230,6 +242,29 @@ columns are filled only when a channel was selected in the export dialog
 Intensity is derived from the **raw 16-bit** ND2/TIFF signal, not the 8-bit
 display-normalised per-channel PNGs. The sampling band width (\`thickness\`)
 and the background margin are set in the export dialog.
+
+### Channel totals (\`metrics_channel_totals.csv\` / \`.json\`, or the
+"Channel Totals" sheet in \`metrics.xlsx\`)
+
+One row per (video, channel): the sum/mean of **every** pixel of that
+channel across the whole video, independent of the microtubules — a global
+"how bright is this channel overall" measure, distinct from the per-MT band
+sums above. Present whenever intensity was computed; absent on a
+geometry-only fallback (there is no raster read to total).
+
+### Geometry-only fallback
+
+If per-channel intensity could not be computed for the video(s) in this
+export (the original ND2/TIFF was unreadable, or the ML service failed or
+timed out), the export does not fail — it re-emits this same table with
+microtubule length only, all intensity columns blank, and \`channel\` empty.
+This is rare, and it is always self-describing: a companion
+\`metrics/metrics_status.json\` is written next to \`metrics.*\` with an
+\`intensityIncluded\` boolean and a \`reason\` string, and — when
+"include documentation" was checked — \`metadata.json\`'s
+\`microtubuleIntensity\` field and a warning banner at the top of this file
+carry the same information. Check \`metrics_status.json\` first if a
+downloaded sheet's intensity columns look empty.
 
 ## JSON export
 
