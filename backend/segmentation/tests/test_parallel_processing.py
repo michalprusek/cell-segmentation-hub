@@ -23,16 +23,27 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
 
-# Import the modules we're testing
-from backend.segmentation.ml.inference_executor import (
+# Import the modules we're testing.
+#
+# NOTE: these are imported as top-level packages (`ml.*`), not
+# `backend.segmentation.ml.*`. The ML container test recipe bind-mounts
+# `backend/segmentation` directly onto `/app`, so `backend` is never an
+# importable package from inside the test run — matching every other test
+# module in this suite (see tests/test_microtubule_model.py, tests/conftest.py).
+#
+# `InferenceService` (`services/inference.py`) was deleted in the 2026-06-17
+# dead-code cleanup (commit 85fb78ca) — model loading and inference were
+# merged into `ml.model_loader.ModelLoader`. It is not referenced anywhere in
+# this file, so the import is dropped rather than pointed at a module that no
+# longer exists.
+from ml.inference_executor import (
     InferenceExecutor,
     InferenceError,
     InferenceTimeoutError,
     InferenceResourceError,
     InferenceStatus
 )
-from backend.segmentation.ml.model_loader import ModelLoader
-from backend.segmentation.services.inference import InferenceService
+from ml.model_loader import ModelLoader
 
 
 @dataclass
@@ -647,7 +658,7 @@ class TestMLServiceIntegration:
         """Test concurrent access to model loading and inference"""
         # This would test actual model loading in a real scenario
         # For now, we mock the behavior
-        with patch('backend.segmentation.ml.model_loader.ModelLoader') as mock_loader:
+        with patch('ml.model_loader.ModelLoader') as mock_loader:
             # Mock model loader with concurrent access
             mock_loader.return_value.load_model.return_value = Mock()
             mock_loader.return_value.get_model.return_value = Mock()

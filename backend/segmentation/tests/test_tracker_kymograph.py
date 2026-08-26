@@ -28,6 +28,7 @@ SEG_ROOT = Path(__file__).resolve().parents[1]
 if str(SEG_ROOT) not in sys.path:
     sys.path.insert(0, str(SEG_ROOT))
 
+from api import tracker_kymograph  # noqa: E402
 from api.tracker_kymograph import router as tracker_kymograph_router  # noqa: E402
 from api.tracker_kymograph import (  # noqa: E402
     PolylineInput,
@@ -502,13 +503,21 @@ def _write_gradient_png(path: Path, height: int = 16, width: int = 64) -> None:
     PILImage.fromarray(arr, mode="L").save(path)
 
 
-def test_kymograph_samples_intensity_in_row_col_order(client):
+def test_kymograph_samples_intensity_in_row_col_order(client, monkeypatch):
     """A horizontal polyline through a column-index gradient should
     produce monotonically-increasing intensity in the output CSV. Catches
     accidental row/col swap (would produce uniform output for a
     horizontal line through that gradient)."""
     with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
+        td_path = Path(td).resolve()
+        # /kymograph rejects any image_path outside the configured upload
+        # storage root (api.tracker_kymograph._UPLOAD_ROOT, a CodeQL
+        # path-injection guard — see memory project_codeql_pathinjection_guard).
+        # The default root is /app/uploads, which this test's OS temp dir is
+        # never a descendant of, and which may not even exist in a test
+        # container. Point the guard at this test's own temp dir instead of
+        # writing fixtures into the real production uploads directory.
+        monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
         png0 = td_path / "frame0.png"
         png1 = td_path / "frame1.png"
         _write_gradient_png(png0)
