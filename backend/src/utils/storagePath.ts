@@ -68,5 +68,13 @@ export function assertSafeStorageSegment(
       `${label} must be a single path component, got "${segment}"`
     );
   }
-  return segment;
+  // Return a value the guard CONSTRUCTS, not the argument it was handed. The
+  // checks above have already proven the two are identical — a non-empty string
+  // with no separator and no drive prefix is its own basename — so no accepted
+  // value changes (storagePath.test.ts pins that as an invariant). What changes
+  // is that the returned value provably has the property callers depend on:
+  // any directory part has been stripped from it. That makes the guarantee
+  // structural rather than a claim in a comment, which is what a static
+  // analyser (and a reader at the call site) can actually check.
+  return path.basename(segment);
 }

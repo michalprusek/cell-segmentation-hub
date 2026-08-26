@@ -155,6 +155,50 @@ describe('Logger log-injection sanitization', () => {
     spy.mockRestore();
   });
 
+  it('strips CR/LF from an Error message, which is where request values land', () => {
+    // The realistic vector: a throw that interpolates an uploaded filename,
+    // e.g. upload.ts's `Only .nd2 well recordings are accepted (got "...")`.
+    // `message` and `context` were sanitized from the start; `error.message`
+    // was appended raw, so it was the field that could actually forge a line.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const err = new Error(
+      'rejected evil.nd2\n2026-08-25T00:00:00.000Z ERROR [Auth] admin granted'
+    );
+    err.stack = undefined; // isolate the message field
+    logger.error('upload failed', err, 'Ctx');
+
+    const out = spy.mock.calls[0][0] as string;
+    const lines = out.split('\n');
+    // Exactly two lines: the record, and the intentional "Error:" separator.
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toBe(
+      'Error: rejected evil.nd2 2026-08-25T00:00:00.000Z ERROR [Auth] admin granted'
+    );
+    spy.mockRestore();
+  });
+
+  it('keeps a stack readable but indents every line so none can pass for a record', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const err = new Error('boom');
+    err.stack =
+      'Error: boom\u000d\u000a2026-08-25T00:00:00.000Z ERROR [Auth] forged\n' +
+      '    at real (/app/src/a.ts:1:1)';
+    logger.error('op failed', err, 'Ctx');
+
+    const out = spy.mock.calls[0][0] as string;
+    // The genuine frame is still on its own line (readability preserved)...
+    expect(out).toContain('at real (/app/src/a.ts:1:1)');
+    // ...but no line of the output starts where a real record starts.
+    const forgeable = out
+      .split('\n')
+      .slice(1)
+      .filter(l => /^\d{4}-\d{2}-\d{2}T/.test(l));
+    expect(forgeable).toEqual([]);
+    spy.mockRestore();
+  });
+
   it('preserves the intentional newline before the structured Data section', () => {
     const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
 

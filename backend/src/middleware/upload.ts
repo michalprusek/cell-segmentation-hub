@@ -29,6 +29,39 @@ import { logger } from '../utils/logger';
 // Get environment-specific upload limits
 const uploadLimits = getUploadLimitsForEnvironment();
 
+/**
+ * The extension a streamed temp file may carry, derived from the client's
+ * filename but never trusted verbatim.
+ *
+ * Every ``diskStorage`` below names its temp file ``<random token><ext>`` and
+ * keeps the original extension so the downstream format sniffers (mp4 vs nd2
+ * vs tiff stack) still work off the temp path. ``path.extname`` alone is not a
+ * sanitiser: it happily returns whatever followed the last dot — control
+ * characters, a NUL, 200 bytes of padding — and that string is then part of a
+ * filesystem path the service later opens, copies and deletes.
+ *
+ * So the extension is REBUILT from an allow-list rather than passed through:
+ * a leading dot plus up to 15 ASCII alphanumerics. Anything else yields the
+ * empty string, which is a temp file with no extension — the sniffers fall
+ * back to content detection, which is what they do for an extensionless
+ * upload anyway. Every real format this project accepts (.nd2, .tif, .tiff,
+ * .mp4, .avi, .mov, .mkv, .webm, .png, .jpg, .jpeg, .bmp) survives unchanged.
+ */
+export function safeUploadExtension(originalName: unknown): string {
+  if (typeof originalName !== 'string') return '';
+  const ext = path.extname(path.basename(originalName));
+  return /^\.[A-Za-z0-9]{1,15}$/.test(ext) ? ext.toLowerCase() : '';
+}
+
+/** ``<time><random><ext>`` — collision-free across concurrent uploads, and
+ *  built only from characters this module chose. Shared by every diskStorage
+ *  below so one definition of "safe temp name" covers all of them. */
+export function tempUploadName(originalName: unknown): string {
+  const token =
+    Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  return `${token}${safeUploadExtension(originalName)}`;
+}
+
 // Videos / microscopy stacks dwarf single images — a tile-scan ND2 or a
 // long timelapse can easily reach 50 GB. Use the existing chunked-upload
 // pipeline for images (20 MB cap stays tight) but expose a separate
@@ -125,14 +158,7 @@ const VIDEO_UPLOAD_TMP_DIR =
 const videoUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, VIDEO_UPLOAD_TMP_DIR),
-    filename: (_req, file, cb) => {
-      // Preserve the original extension so the extractor's format detection
-      // (mp4 vs nd2 vs tiff stack) works against the temp path. Prefix
-      // with a random token to avoid collisions across concurrent uploads.
-      const ext = path.extname(file.originalname);
-      const token = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-      cb(null, `${token}${ext}`);
-    },
+    filename: (_req, file, cb) => cb(null, tempUploadName(file.originalname)),
   }),
   limits: {
     fileSize: VIDEO_UPLOAD_MAX_BYTES,
@@ -198,12 +224,7 @@ try {
 const feedbackUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, FEEDBACK_ATTACHMENT_TMP_DIR),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      const token =
-        Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-      cb(null, `${token}${ext}`);
-    },
+    filename: (_req, file, cb) => cb(null, tempUploadName(file.originalname)),
   }),
   limits: {
     fileSize: FEEDBACK_ATTACHMENT_MAX_BYTES,
@@ -258,12 +279,7 @@ const nd2OnlyFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
 const essaysUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, ESSAYS_UPLOAD_TMP_DIR),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      const token =
-        Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-      cb(null, `${token}${ext}`);
-    },
+    filename: (_req, file, cb) => cb(null, tempUploadName(file.originalname)),
   }),
   limits: {
     fileSize: ESSAYS_UPLOAD_MAX_BYTES,

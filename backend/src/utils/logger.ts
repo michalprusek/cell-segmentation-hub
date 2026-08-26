@@ -33,9 +33,34 @@ class Logger {
   /** Strip CR/LF and control chars from user-controlled log fields so an
    *  attacker-set value (e.g. an uploaded filename or image name) can't forge
    *  extra log lines (CWE-117). The intentional `\nData:`/`\nError:`/`\nStack:`
-   *  separators below are added after this and are preserved. */
+   *  separators below are added after this and are preserved.
+   *
+   *  CR/LF first and on its own: a newline is a *record* separator, so it is
+   *  the character that turns one field into two log lines. The second pass
+   *  removes the remaining C0 controls and DEL, which do not forge a record
+   *  but do let a value repaint or hide part of the line in a terminal. */
   private sanitize(value: string): string {
-    return value.replace(/[\r\n]/g, ' ');
+    return (
+      value
+        .replace(/[\r\n]/g, ' ')
+        // eslint-disable-next-line no-control-regex -- stripping controls is the point
+        .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
+    );
+  }
+
+  /** Sanitize a value that is *meant* to span several lines (a stack trace).
+   *
+   *  Folding a stack onto one line would make it unreadable, so instead each
+   *  line is sanitized individually and the block is re-joined with our own
+   *  newline plus an indent. Two things follow: a CR/LF the attacker put
+   *  inside the error message cannot introduce an un-indented line, and every
+   *  continuation line is visibly a continuation rather than something that
+   *  could pass for a new record. Only V8's own frame separators survive. */
+  private sanitizeBlock(value: string): string {
+    return value
+      .split(/\r?\n/)
+      .map(line => this.sanitize(line))
+      .join('\n    ');
   }
 
   private formatMessage(entry: LogEntry): string {
@@ -54,9 +79,17 @@ class Logger {
     }
 
     if (entry.error) {
-      message += `\nError: ${entry.error.message}`;
+      // An Error's message and stack are NOT trusted text. Half the throws in
+      // this codebase interpolate a request value into the message (an
+      // uploaded filename, a channel name, a rejected MIME type), and a
+      // library's exception can quote bytes straight out of a user's file. Up
+      // to now those two fields were the only parts of a record appended
+      // without going through `sanitize`, which made them the way to forge a
+      // log line — while `entry.message` and `entry.context`, which are
+      // usually OUR literals, were the parts that got sanitized.
+      message += `\nError: ${this.sanitize(entry.error.message)}`;
       if (entry.error.stack) {
-        message += `\nStack: ${entry.error.stack}`;
+        message += `\nStack: ${this.sanitizeBlock(entry.error.stack)}`;
       }
     }
 

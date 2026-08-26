@@ -26,10 +26,24 @@ import traceback
 from pathlib import Path
 from typing import Literal, NamedTuple
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 MODULE_DIR = Path(os.environ.get("ESSAYS_MODULE_DIR", "/app/essays_module"))
+# Every path this worker is allowed to read or write lives under one root: the
+# shared uploads volume the backend stages jobs onto (`./backend/uploads/blue`
+# on the host, `/app/uploads` in both containers).
+#
+# The worker has no auth layer -- it is reachable on loopback and over the
+# docker network, and that is the whole access control (see the module
+# docstring). So `inputDir` and `outDir` arrive as free-form strings that this
+# process then mkdirs, writes status.json beside, and hands to `evaluate.py`
+# as --data/--out. Nothing checked they pointed anywhere in particular, which
+# made a request that reached this port a write primitive anywhere uid 1001
+# can write. Confining them is cheap and removes the primitive; it does not
+# make the endpoint authenticated, and is not a substitute for keeping the
+# port off the public interface.
+ESSAYS_ROOT = os.path.realpath(os.environ.get("ESSAYS_ROOT", "/app/uploads"))
 WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v5h.pth")
 # Measured on the 24 GB A5000 against a real 2048x2048 IRM well. Under
 # microtubule **v7** a forward pass wanted a 16.36 GiB working set; the cap was
@@ -137,6 +151,23 @@ class ProcessRequest(BaseModel):
     inputDir: str
     outDir: str
     options: dict | None = None
+
+
+def _confined(raw: str, label: str) -> str:
+    """Resolve *raw* under ESSAYS_ROOT, or 400.
+
+    Returns the RESOLVED path, and callers must use the return value rather
+    than the string they passed in: checking one path and then opening another
+    is how a symlink swapped in between the two gets followed. Relative input
+    is taken as relative to the root, so a bare "essays/<uid>/<job>/output" is
+    accepted and means what it looks like.
+    """
+    resolved = os.path.realpath(os.path.join(ESSAYS_ROOT, raw))
+    if resolved != ESSAYS_ROOT and not resolved.startswith(ESSAYS_ROOT + os.sep):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{label} resolves outside the essays storage root")
+    return resolved
 
 
 def _status_path(out_dir: str) -> Path:
@@ -478,6 +509,14 @@ def health() -> dict:
 
 @app.post("/process", status_code=202)
 def process(req: ProcessRequest) -> dict:
+    # Confine BOTH directories here, at the one place a request enters the
+    # worker, and carry the resolved values forward on the request object --
+    # so `_run_job`, `_build_cmd` and `_set_status` cannot be reached with
+    # anything else, and no future call site has to remember to check.
+    req = req.model_copy(update={
+        "inputDir": _confined(req.inputDir, "inputDir"),
+        "outDir": _confined(req.outDir, "outDir"),
+    })
     _set_status(req.jobId, req.outDir, state="queued", progress=0, error=None)
     _work.put(req)
     return {"jobId": req.jobId, "state": "queued", "queuePosition": _work.qsize()}
