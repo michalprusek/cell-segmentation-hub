@@ -28,7 +28,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { sanitizeFilename, getProgressMessage } from '../exportFileOperations';
+import {
+  sanitizeFilename,
+  getProgressMessage,
+  countExportSteps,
+} from '../exportFileOperations';
 
 // ---------------------------------------------------------------------------
 // sanitizeFilename
@@ -253,5 +257,72 @@ describe('getProgressMessage', () => {
       expect(msg).toContain('1/2');
       expect(msg).toContain('55%');
     });
+  });
+});
+
+/**
+ * Regression guard for the "export is stuck" report (2026-08-25).
+ *
+ * A 300-frame microtubule export sat at 95% for ~20 minutes. It was not stuck:
+ * the four microtubule-only exporters were pushed into the same `Promise.all`
+ * as the generic ones but were neither counted in the denominator nor reported
+ * on, so the bar ran out of steps while the longest stage had not started.
+ */
+describe('countExportSteps', () => {
+  const generic = {
+    includeOriginalImages: true,
+    includeVisualizations: true,
+    annotationFormats: ['coco'],
+    metricsFormats: ['xlsx'],
+    includeDocumentation: true,
+  };
+
+  it('counts only the generic tasks for a non-microtubule project', () => {
+    expect(countExportSteps(generic, false, true)).toBe(5);
+  });
+
+  it('counts the four microtubule exporters for an MT project', () => {
+    // THE REGRESSION: this returned 5 before the fix, so the bar hit
+    // 5 + 5*(90/5) = 95% and froze for the whole kymograph stage.
+    expect(
+      countExportSteps({ ...generic, mtKymographs: { enabled: true } }, true, true)
+    ).toBe(9);
+  });
+
+  it('omits the kymograph step when kymographs are disabled', () => {
+    expect(
+      countExportSteps({ ...generic, mtKymographs: { enabled: false } }, true, true)
+    ).toBe(8);
+  });
+
+  it('omits every image-gated MT step when the project has no images', () => {
+    // mt-metrics, ImageJ RoiSet and CVAT are all gated on images.
+    expect(
+      countExportSteps({ ...generic, mtKymographs: { enabled: true } }, true, false)
+    ).toBe(6);
+  });
+
+  it('omits MT metrics when no metrics format was requested', () => {
+    const noMetrics = { ...generic, metricsFormats: [], mtKymographs: { enabled: true } };
+    // loses the generic metrics step AND the MT metrics step
+    expect(countExportSteps(noMetrics, true, true)).toBe(7);
+  });
+
+  it('never returns 0 for an MT project with images, so the divisor is safe', () => {
+    expect(countExportSteps({}, true, true)).toBeGreaterThan(0);
+  });
+});
+
+describe('getProgressMessage — microtubule stages', () => {
+  it.each([
+    ['mt-metrics', 'Measuring microtubules'],
+    ['kymographs', 'Building kymographs'],
+    ['imagej-roi', 'Writing ImageJ ROI sets'],
+    ['cvat', 'Writing CVAT annotations'],
+  ] as const)('labels the %s stage', (stage, expected) => {
+    expect(getProgressMessage(50, stage)).toContain(expected);
+    expect(getProgressMessage(50, stage, { current: 3, total: 10 })).toContain(
+      `${expected} (3/10)`
+    );
   });
 });

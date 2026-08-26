@@ -72,7 +72,55 @@ export type ExportProgressStage =
   | 'visualizations'
   | 'annotations'
   | 'metrics'
+  // Microtubule-only stages. They run inside the same `Promise.all` as the
+  // generic ones above, but on an MT project they are the long pole by a wide
+  // margin — a 300-frame export spent ~20 min in `kymographs` alone while the
+  // bar sat frozen at 95%, because none of these four reported anything.
+  | 'mt-metrics'
+  | 'kymographs'
+  | 'imagej-roi'
+  | 'cvat'
   | 'compression';
+
+/**
+ * How many parallel tasks the export will push into its `Promise.all`.
+ *
+ * This is the denominator of the progress bar, and it is a contract with
+ * `exportService.generateExport`: every `exportTasks.push(...)` there must be
+ * represented by exactly one entry here, under the same condition.
+ *
+ * It exists as a pure function because the bug it encodes was invisible inside
+ * the 1300-line method: the four microtubule exporters were pushed but never
+ * counted, so a 300-frame MT export drove the bar to 5 + 5*(90/5) = 95% as the
+ * generic tasks finished and then froze there for the ~20 minutes the
+ * kymographs actually took. Users reported it as "the export is stuck".
+ */
+export function countExportSteps(
+  options: {
+    includeOriginalImages?: boolean;
+    includeVisualizations?: boolean;
+    annotationFormats?: unknown[] | null;
+    metricsFormats?: unknown[] | null;
+    includeDocumentation?: boolean;
+    mtKymographs?: { enabled?: boolean } | null;
+  },
+  isMicrotubuleProject: boolean,
+  hasImages: boolean
+): number {
+  return [
+    options.includeOriginalImages,
+    options.includeVisualizations,
+    options.annotationFormats?.length,
+    options.metricsFormats?.length,
+    options.includeDocumentation,
+    // Microtubule-only exporters. ImageJ RoiSet and CVAT are always-on for MT
+    // projects (no toggle), so they are gated on images alone.
+    isMicrotubuleProject && options.metricsFormats?.length && hasImages,
+    isMicrotubuleProject && options.mtKymographs?.enabled,
+    isMicrotubuleProject && hasImages,
+    isMicrotubuleProject && hasImages,
+  ].filter(Boolean).length;
+}
 
 export interface ExportProgressDetail {
   current: number;
@@ -102,6 +150,14 @@ export function getProgressMessage(
         return `Creating annotation files (${current}/${total})${itemSuffix}... ${progress}%`;
       case 'metrics':
         return `Calculating metrics (${current}/${total})${itemSuffix}... ${progress}%`;
+      case 'mt-metrics':
+        return `Measuring microtubules (${current}/${total})${itemSuffix}... ${progress}%`;
+      case 'kymographs':
+        return `Building kymographs (${current}/${total})${itemSuffix}... ${progress}%`;
+      case 'imagej-roi':
+        return `Writing ImageJ ROI sets (${current}/${total})${itemSuffix}... ${progress}%`;
+      case 'cvat':
+        return `Writing CVAT annotations (${current}/${total})${itemSuffix}... ${progress}%`;
       case 'compression':
         return `Creating archive... ${progress}%`;
       default:
@@ -117,6 +173,14 @@ export function getProgressMessage(
         return `Creating annotation files... ${progress}%`;
       case 'metrics':
         return `Calculating metrics... ${progress}%`;
+      case 'mt-metrics':
+        return `Measuring microtubules... ${progress}%`;
+      case 'kymographs':
+        return `Building kymographs... ${progress}%`;
+      case 'imagej-roi':
+        return `Writing ImageJ ROI sets... ${progress}%`;
+      case 'cvat':
+        return `Writing CVAT annotations... ${progress}%`;
       case 'compression':
         return `Creating archive... ${progress}%`;
       default:
