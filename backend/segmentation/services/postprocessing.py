@@ -3,9 +3,8 @@
 import logging
 import cv2
 import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Tuple
 from skimage import measure
-from scipy import ndimage
 
 logger = logging.getLogger(__name__)
 

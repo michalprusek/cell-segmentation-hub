@@ -32,7 +32,7 @@ export const useImageCentering = (
       const containerRatio = containerWidth / containerHeight;
 
       // Výpočet nové velikosti s ohledem na zachování poměru stran
-      let newZoom = 1;
+      let newZoom: number;
 
       // Vždy fit to container, aby se celý obrázek vešel do plátna
       if (imgRatio > containerRatio) {

@@ -3,7 +3,7 @@ GPU Monitoring API Endpoints
 Provides REST endpoints for GPU metrics and monitoring data
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from typing import Dict, Any, Optional
 import logging
 import sys
@@ -14,7 +14,7 @@ from api._errors import internal_error
 # Add monitoring module to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from monitoring.gpu_monitor import get_gpu_monitor, cleanup_gpu_monitor
+    from monitoring.gpu_monitor import get_gpu_monitor
     gpu_monitor_available = True
 except ImportError:
     gpu_monitor_available = False

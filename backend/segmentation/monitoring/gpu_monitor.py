@@ -7,11 +7,10 @@ import torch
 import time
 import threading
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
 import json
-import os
 
 logger = logging.getLogger(__name__)
 

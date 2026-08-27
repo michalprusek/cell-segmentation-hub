@@ -6,7 +6,7 @@ Adapted from:
 """
 
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
