@@ -48,6 +48,11 @@ import {
 } from './imagejColor';
 import axios from 'axios';
 import { config } from '../../utils/config';
+import { Semaphore, runGated } from '../../utils/concurrency';
+import {
+  estimateMlRequestTimeoutMs,
+  megapixelsFromFrames,
+} from './mlRequestBudget';
 
 // ---------------------------------------------------------------------------
 //  Low-level encoder
@@ -234,6 +239,10 @@ export interface RoiFrameInput {
   frameIndex?: number | null;
   isVideoContainer?: boolean;
   segmentation?: { polygons?: string | null } | null;
+  /** Frame pixel dimensions, when known. Used only to size the ML request
+   *  timeout to the actual workload (see `mlRequestBudget.ts`). */
+  width?: number | null;
+  height?: number | null;
 }
 
 export interface ImageJRoiExportResult {
@@ -672,12 +681,18 @@ interface MtBgResponse {
  * ``\`${frameIndex}:${itemIndex}\``` line up with the encoder. Returns an empty
  * map when there are no polylines; the caller treats a THROWN error as
  * "fall back to the wide stroke band".
+ *
+ * @param mlGate  Optional shared semaphore bounding how many ML-bound
+ *                requests this export job has in flight at once, across ALL
+ *                of its ML-bound stages (mt-metrics, mt-background-rois,
+ *                kymograph) — not just this one. Omitted in unit tests.
  */
 async function fetchMtBackgroundRois(
   frames: RoiFrameInput[],
   labelById: Map<string, RoiTypeLabel> | undefined,
   thicknessPx: number,
-  marginMultiplier: number
+  marginMultiplier: number,
+  mlGate?: Semaphore
 ): Promise<Map<string, Buffer>> {
   const ordered = [...frames].sort(
     (a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0)
@@ -710,15 +725,31 @@ async function fetchMtBackgroundRois(
   const requested = reqFrames.reduce((n, f) => n + f.polylines.length, 0);
   if (requested === 0) return map;
 
+  // This endpoint is geometry-only (no raster read) so it's intrinsically
+  // cheap — but it runs CONCURRENTLY with mt-metrics + kymograph requests
+  // from the same export, all sharing one single-worker ML process, so its
+  // real bottleneck is queueing behind them rather than its own compute.
+  // `channels: 1` (no channel dimension applies here) still yields a
+  // generously large budget via the same workload-scaled formula
+  // mt-metrics uses — see `mlRequestBudget.ts`.
+  const megapixels = megapixelsFromFrames(frames);
+  const timeoutMs = estimateMlRequestTimeoutMs({
+    frames: reqFrames.length,
+    channels: 1,
+    megapixels,
+  });
+
   const url = `${config.SEGMENTATION_SERVICE_URL}/api/v1/mt-background-rois`;
-  const res = await axios.post<MtBgResponse>(
-    url,
-    {
-      frames: reqFrames,
-      thickness_px: thicknessPx,
-      margin_multiplier: marginMultiplier,
-    },
-    { timeout: 5 * 60 * 1000 }
+  const res = await runGated(mlGate, () =>
+    axios.post<MtBgResponse>(
+      url,
+      {
+        frames: reqFrames,
+        thickness_px: thicknessPx,
+        margin_multiplier: marginMultiplier,
+      },
+      { timeout: timeoutMs }
+    )
   );
 
   // Validate each entry before trusting it: a response-shape drift (renamed /
@@ -807,6 +838,10 @@ export async function exportImageJRoiSets(
     /** Vicinity margin multiplier (× thickness) for the background ring, matching
      *  the metrics request. Defaults to 2 when `thicknessPx` is set. */
     marginMultiplier?: number;
+    /** Shared semaphore bounding how many ML-bound requests this export job
+     *  has in flight at once, across ALL of its ML-bound stages (mt-metrics,
+     *  mt-background-rois, kymograph) — not just this one. */
+    mlGate?: Semaphore;
   } = {}
 ): Promise<ImageJRoiExportResult> {
   const baseDir = path.join(exportDir, 'annotations', 'imagej');
@@ -863,7 +898,8 @@ export async function exportImageJRoiSets(
           videoFrames,
           labelById,
           options.thicknessPx,
-          options.marginMultiplier ?? 2
+          options.marginMultiplier ?? 2,
+          options.mlGate
         );
       } catch (error) {
         logger.warn(
