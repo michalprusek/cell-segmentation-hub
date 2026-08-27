@@ -34,7 +34,6 @@ import gc
 import os
 import sys
 import time
-import traceback
 from pathlib import Path
 from typing import NamedTuple
 

@@ -67,7 +67,10 @@ export function getErrorMessage(
   if (typeof error === 'object' && error !== null) {
     const apiError = error as ApiError & { config?: { url?: string } };
     statusCode = apiError.response?.status || apiError.status;
-    message = apiError.response?.data?.message || apiError.message;
+    // `|| message` matters: an Error is also `typeof 'object'`, so this branch
+    // runs for one too and used to overwrite the `error.message` captured above
+    // -- with undefined, whenever the response carried no message of its own.
+    message = apiError.response?.data?.message || apiError.message || message;
     url = apiError.config?.url;
 
     // Special handling for authentication endpoints

@@ -11,7 +11,6 @@ import {
 import {
   loginSchema,
   registerSchema,
-  resetPasswordRequestSchema,
   resetPasswordConfirmSchema,
   changePasswordSchema,
   resendVerificationSchema,

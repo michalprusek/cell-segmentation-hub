@@ -111,7 +111,6 @@ export async function extractWithFfmpeg(
   const channelName = options.channelName ?? 'video';
 
   const probed = await probeFrameCount(sourcePath);
-  const totalFrames = probed?.frameCount ?? -1;
 
   // ffmpeg can't easily write into per-frame subdirectories in one pass,
   // so we extract flat first then move into the per-frame layout.

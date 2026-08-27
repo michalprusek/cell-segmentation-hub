@@ -1,7 +1,7 @@
 """Central configuration for the DINOv2 + Mask2Former training pipeline."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 
 # Class mapping (same as existing codebase)

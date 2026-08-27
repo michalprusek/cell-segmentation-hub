@@ -336,7 +336,7 @@ export function isRetryableError(error: unknown): boolean {
   }
 
   // Timeout errors
-  if (error && typeof error === 'object' && 'name' in error) {
+  if (typeof error === 'object' && 'name' in error) {
     const errorName = (error as { name?: string }).name;
     if (errorName === 'TimeoutError' || errorName === 'NetworkError') {
       return true;
@@ -344,7 +344,7 @@ export function isRetryableError(error: unknown): boolean {
   }
 
   // HTTP errors that are retryable
-  if (error && typeof error === 'object' && 'status' in error) {
+  if (typeof error === 'object' && 'status' in error) {
     const status = (error as { status?: number }).status;
     // Retry on rate limit, bad gateway, service unavailable, gateway timeout
     if (

@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
 import * as EmailService from './emailService';
-import { User, ProjectShare, Project, Profile } from '@prisma/client';
+import { User, ProjectShare, Project } from '@prisma/client';
 import { ShareByEmailData, ShareByLinkData } from '../types/validation';
 import {
   generateShareInvitationSimpleHTML,

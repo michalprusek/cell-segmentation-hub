@@ -2027,7 +2027,6 @@ class ApiClient {
                         (point: unknown) =>
                           point &&
                           typeof point === 'object' &&
-                          point !== null &&
                           typeof (point as Record<string, unknown>).x ===
                             'number' &&
                           typeof (point as Record<string, unknown>).y ===
