@@ -205,6 +205,19 @@ class MTMetricsResponse(BaseModel):
 # keep the endpoint's own vocabulary (and its tests) while making the delegation
 # explicit: rebinding one of them here would NOT change the essays batch, which
 # is exactly the drift this arrangement exists to prevent.
+# Re-exported deliberately: `test_mt_metrics_band.py` reaches for these by name
+# to assert the endpoint's helpers ARE the shared objects, so an `__all__` entry
+# states "unused here, used by the contract test" instead of leaving a reader to
+# infer it from an unused-global warning.
+__all__ = [
+    "_dilate",
+    "_fill_convex_polygon",
+    "_imagej_median",
+    "_polyline_length",
+    "_rasterize_band",
+    "_vicinity_mask",
+]
+
 _polyline_length = mt_measure.polyline_length
 _imagej_median = mt_measure.imagej_median
 _fill_convex_polygon = mt_measure.fill_convex_polygon

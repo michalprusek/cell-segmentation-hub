@@ -88,12 +88,20 @@ def read_acquisition_time(f: "nd2.ND2File") -> str | None:
                     .isoformat()
                     .replace("+00:00", "Z"))
     except Exception:
+        # acquired_at is optional metadata: ND2 files from different NIS-Elements
+        # versions expose it in different places, or not at all. Each reader is
+        # tried in turn and the caller gets None if none of them work -- a well
+        # without a timestamp is still a well worth measuring.
         pass
     try:
         raw = (f.text_info or {}).get("date")
         if isinstance(raw, str) and raw.strip():
             return raw.strip()
     except Exception:
+        # acquired_at is optional metadata: ND2 files from different NIS-Elements
+        # versions expose it in different places, or not at all. Each reader is
+        # tried in turn and the caller gets None if none of them work -- a well
+        # without a timestamp is still a well worth measuring.
         pass
     return None
 

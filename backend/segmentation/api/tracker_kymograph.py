@@ -1279,7 +1279,7 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
             img = np.array(pil_frame, dtype=np.float32)
         else:
             img = np.array(pil_frame.convert("L"), dtype=np.float32)
-        H, W = img.shape
+        _, _ = img.shape
         pts = np.asarray(frame.polyline_rc, dtype=np.float32)
         if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
             logger.warning(

@@ -340,7 +340,6 @@ def _detect_pixel_size_um(tf) -> float | None:
     try:
         ome = getattr(tf, "ome_metadata", None)
         if isinstance(ome, str) and "<Pixels" in ome:
-            import re
             m = re.search(r'PhysicalSizeX="([0-9.eE+-]+)"', ome)
             unit_m = re.search(r'PhysicalSizeXUnit="([^"]+)"', ome)
             if m:
@@ -373,8 +372,7 @@ def _detect_pixel_size_um(tf) -> float | None:
                         return converted
             info = meta.get("info") or meta.get("Info")
             if isinstance(info, str):
-                import re
-                # Look for an inline unit on the same line as the value.
+                    # Look for an inline unit on the same line as the value.
                 for pat in (
                     r"PixelWidth\s*[:=]\s*([0-9.eE+-]+)\s*([A-Za-zµ]*)",
                     r"pixel_width\s*[:=]\s*([0-9.eE+-]+)\s*([A-Za-zµ]*)",
@@ -702,7 +700,7 @@ def _load_and_resolve(src: Path) -> tuple[np.ndarray, dict]:
         arr = arr.transpose(3, 0, 1, 2)
         T, C, H, W = arr.shape
     elif axes == "TYX" and arr.ndim == 3:
-        T, H, W = arr.shape
+        # Only C is bound; T/H/W are re-derived from arr.shape further down.
         C = 1
         arr = arr[:, None, :, :]
     elif axes == "CYX" and arr.ndim == 3:
