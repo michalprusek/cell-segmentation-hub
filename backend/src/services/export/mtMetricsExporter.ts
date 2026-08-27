@@ -30,6 +30,11 @@ import {
   buildInstanceLabelMap,
   MICROTUBULE_LABEL_PREFIX,
 } from '../../utils/instanceLabels';
+import { Semaphore, runGated } from '../../utils/concurrency';
+import {
+  estimateMlRequestTimeoutMs,
+  megapixelsFromFrames,
+} from './mlRequestBudget';
 
 // ----------------------------------------------------------------------------
 //  Types (mirror the Python Pydantic models — keep in sync if either changes)
@@ -198,6 +203,11 @@ interface FrameImageInput {
   frameIndex: number | null;
   isVideoContainer?: boolean;
   segmentation?: { polygons?: string | null } | null;
+  /** Frame pixel dimensions, when known. Used only to size the ML request
+   *  timeout to the actual workload (see `mlRequestBudget.ts`) — never
+   *  required, and absent entirely in most callers' minimal test fixtures. */
+  width?: number | null;
+  height?: number | null;
 }
 
 interface RawPolyline {
@@ -311,6 +321,12 @@ function resolveChannelIndices(
  * @param projectId    For logging context only.
  * @param options      User-supplied MT metric controls from the export
  *                     modal.
+ * @param mlGate       Optional shared semaphore bounding how many ML-bound
+ *                     requests this export job has in flight at once, across
+ *                     ALL of its ML-bound stages (mt-metrics,
+ *                     mt-background-rois, kymograph) — not just this one.
+ *                     Omitted in unit tests, which call this function
+ *                     directly against a mocked axios.
  * @returns Long-format rows ready to write to CSV / XLSX / JSON, plus
  *          a list of human-readable skip reasons for videos that could
  *          not be processed. The caller should surface these as job
@@ -319,7 +335,8 @@ function resolveChannelIndices(
 export async function computeMTMetrics(
   frameImages: FrameImageInput[],
   projectId: string,
-  options: MTMetricsOptions
+  options: MTMetricsOptions,
+  mlGate?: Semaphore
 ): Promise<{
   rows: MTMetricsRow[];
   skipped: string[];
@@ -581,6 +598,19 @@ export async function computeMTMetrics(
       png_channels: pngChannelNames.length ? pngChannelNames : undefined,
     };
 
+    // Scale the timeout to this request's actual workload (frames x channels,
+    // adjusted for frame resolution) rather than a fixed number — see
+    // `mlRequestBudget.ts` for the measured rate + headroom this is built
+    // from. `channels` counts every channel actually being sampled (volume +
+    // PNG-backed), matching what the ML side has to read.
+    const requestChannelCount = indices.length + pngChannelNames.length;
+    const megapixels = megapixelsFromFrames(frames);
+    const timeoutMs = estimateMlRequestTimeoutMs({
+      frames: framesPayload.length,
+      channels: requestChannelCount,
+      megapixels,
+    });
+
     logger.info(
       'MT metrics: requesting ML computation',
       'mtMetricsExporter',
@@ -591,17 +621,22 @@ export async function computeMTMetrics(
         frames: framesPayload.length,
         channels: indices.length,
         pngChannels: pngChannelNames.length,
+        megapixels,
+        timeoutMs,
       }
     );
 
     let mlResponse: MLMTMetricsResponse;
     try {
-      // 5 minutes — covers a long video × multiple channels with full
-      // ND2 / TIFF reads. Failures bubble up so the export job fails
-      // visibly rather than silently emitting an empty sheet.
-      const res = await axios.post<MLMTMetricsResponse>(mlUrl, body, {
-        timeout: 5 * 60 * 1000,
-      });
+      // Failures bubble up so the export job fails visibly rather than
+      // silently emitting an empty sheet. `mlGate` serialises this request
+      // against the export's other ML-bound stages so it never has to queue
+      // behind them AND its own timeout at once (see `Semaphore` in
+      // `utils/concurrency.ts`) — the timeout clock only starts once the
+      // request is actually sent.
+      const res = await runGated(mlGate, () =>
+        axios.post<MLMTMetricsResponse>(mlUrl, body, { timeout: timeoutMs })
+      );
       mlResponse = res.data;
     } catch (err) {
       logger.error(

@@ -21,7 +21,7 @@ import {
 import { WebSocketService } from './websocketService';
 import * as SharingService from './sharingService';
 import { batchProcessor } from '../utils/batchProcessor';
-import { mapWithConcurrency } from '../utils/concurrency';
+import { mapWithConcurrency, Semaphore } from '../utils/concurrency';
 import type { CancellableJobStatus } from '../types';
 import {
   generateReadme,
@@ -158,6 +158,19 @@ type ImageWithSegmentation = Prisma.ImageGetPayload<{
 
 // Define type for visualizationOptions parameter
 type VisualizationOptions = ExportOptions['visualizationOptions'];
+
+/**
+ * Outcome of the microtubule per-channel intensity computation for one
+ * export job. `generateDocumentation` stamps this into `metadata.json` /
+ * `metrics_guide.md` so a downloaded geometry-only (hollow) metrics sheet is
+ * self-describing, rather than indistinguishable from a full one once it has
+ * left the job's in-memory `warnings` list behind.
+ */
+interface MtIntensityStatus {
+  intensityIncluded: boolean;
+  /** Human-readable reason, set only when `intensityIncluded` is false. */
+  degradedReason: string | null;
+}
 
 export interface ExportJob {
   id: string;
@@ -497,6 +510,29 @@ export class ExportService {
       // crash at runtime that the type checker does not catch.
       const isMicrotubuleProject = isMicrotubuleProjectType(project.type);
 
+      // The microtubule export's ML-bound stages (mt-metrics,
+      // mt-background-rois, kymograph) are each internally bounded, but all
+      // three run CONCURRENTLY against each other via `Promise.all` below —
+      // and the ML service is a single `uvicorn --workers 1` process, so
+      // concurrent requests only queue there, they never run in parallel.
+      // Production evidence: one export produced 893 "Exceeded concurrency
+      // limit" warnings, and the `mt-metrics` request sat queued ~7 minutes
+      // behind `mt-background-rois` from the SAME export before ML even
+      // opened the file. One shared semaphore, threaded through every
+      // ML-bound call this job makes, serialises them at the source instead —
+      // there is no parallelism to give up with a single ML worker, only
+      // queueing to avoid.
+      const mlRequestGate = isMicrotubuleProject ? new Semaphore(1) : undefined;
+
+      // Resolves to the MT intensity outcome once `generateMicrotubuleMetrics`
+      // finishes (undefined for non-MT projects, or if that stage never runs).
+      // `generateDocumentation` below awaits this SAME promise before writing
+      // `metadata.json` / `metrics_guide.md`, so a downloaded hollow
+      // (geometry-only) metrics sheet is always accompanied by documentation
+      // that says so — never a race between the two concurrent stages.
+      let mtIntensityStatusPromise: Promise<MtIntensityStatus | undefined> =
+        Promise.resolve(undefined);
+
       // SSOT: the denominator lives beside `getProgressMessage` so it can be
       // unit-tested against the push sites it mirrors.
       const totalSteps = countExportSteps(
@@ -643,13 +679,15 @@ export class ExportService {
         options.metricsFormats?.length &&
         project.images?.length
       ) {
+        mtIntensityStatusPromise = this.generateMicrotubuleMetrics(
+          project.images as ImageWithSegmentation[],
+          exportDir,
+          options,
+          jobId,
+          mlRequestGate
+        );
         exportTasks.push(
-          this.generateMicrotubuleMetrics(
-            project.images as ImageWithSegmentation[],
-            exportDir,
-            options,
-            jobId
-          ).then(() => {
+          mtIntensityStatusPromise.then(() => {
             progressStep++;
             this.updateJobProgress(
               jobId,
@@ -686,7 +724,8 @@ export class ExportService {
                 'kymographs',
                 { current: done, total }
               );
-            }
+            },
+            mlRequestGate
           ).then(() => {
             progressStep++;
             this.updateJobProgress(
@@ -735,6 +774,7 @@ export class ExportService {
               // fallback band if that request fails.
               thicknessPx: mtThicknessPx,
               marginMultiplier: mtMarginMultiplier,
+              mlGate: mlRequestGate,
             }
           )
             .then(result => {
@@ -819,13 +859,23 @@ export class ExportService {
         );
       }
 
-      // Generate documentation (can run in parallel)
+      // Generate documentation (can run in parallel with everything EXCEPT MT
+      // metrics: it awaits `mtIntensityStatusPromise` first — see that
+      // variable's declaration above — so a geometry-only fallback is always
+      // reflected in metadata.json / metrics_guide.md rather than racing
+      // ahead of the (possibly very slow) metrics stage and writing "success"
+      // documentation before the outcome is even known. For non-MT projects
+      // that promise is already resolved (undefined), so this adds no delay.
       if (options.includeDocumentation) {
         exportTasks.push(
-          this.generateDocumentation(project, exportDir, options).then(() => {
-            progressStep++;
-            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement);
-          })
+          mtIntensityStatusPromise
+            .then(mtStatus =>
+              this.generateDocumentation(project, exportDir, options, mtStatus)
+            )
+            .then(() => {
+              progressStep++;
+              this.updateJobProgress(jobId, 5 + progressStep * progressIncrement);
+            })
         );
       }
 
@@ -1653,8 +1703,9 @@ export class ExportService {
     images: ImageWithSegmentation[],
     exportDir: string,
     options: ExportOptions,
-    jobId?: string
-  ): Promise<void> {
+    jobId?: string,
+    mlGate?: Semaphore
+  ): Promise<MtIntensityStatus> {
     if (jobId && this.isJobCancelled(jobId)) {
       throw new Error('Export cancelled by user');
     }
@@ -1673,6 +1724,8 @@ export class ExportService {
       segmentation: i.segmentation
         ? { polygons: i.segmentation.polygons }
         : null,
+      width: i.width ?? null,
+      height: i.height ?? null,
     }));
     // Per-channel intensity (incl. the integrated sum) is ALWAYS computed for
     // MT exports — there is no opt-in. An empty channel list means "all
@@ -1696,20 +1749,36 @@ export class ExportService {
     // companion file. Empty on the geometry-only fallback.
     let channelSummaries: MTChannelSummaryRow[] = [];
     let intensityIncluded = false;
+    // Set on every path that degrades to geometry-only, so the stamp written
+    // below (and metadata.json / metrics_guide.md, via `mtIntensityStatus`)
+    // can tell the user WHY the intensity columns are empty, not just that
+    // they are.
+    let degradedReason: string | null = null;
 
     try {
-      const mtResult = await computeMTMetrics(frameInputs, projectId, {
-        thicknessPx,
-        marginMultiplier,
-        channels,
-        pixelToMicrometerScale: scale,
-      });
+      const mtResult = await computeMTMetrics(
+        frameInputs,
+        projectId,
+        {
+          thicknessPx,
+          marginMultiplier,
+          channels,
+          pixelToMicrometerScale: scale,
+        },
+        mlGate
+      );
       rows = mtResult.rows;
       channelSummaries = mtResult.channelSummaries ?? [];
       for (const reason of mtResult.skipped) {
         addWarning(`MT intensity metrics skipped: ${reason}`);
       }
       intensityIncluded = rows.length > 0;
+      if (!intensityIncluded) {
+        degradedReason =
+          mtResult.skipped.length > 0
+            ? `No per-channel intensity data was available: ${mtResult.skipped.join('; ')}`
+            : 'No per-channel intensity data was available for the selected videos.';
+      }
     } catch (err) {
       logger.error(
         'MT intensity metrics failed; falling back to length-only',
@@ -1717,9 +1786,9 @@ export class ExportService {
         'ExportService',
         { jobId, projectId }
       );
-      addWarning(
-        'Per-channel signal-intensity metrics could not be computed (the original ND2/TIFF was unreadable or the ML service failed). The metrics file contains microtubule length only.'
-      );
+      degradedReason =
+        'Per-channel signal-intensity metrics could not be computed (the original ND2/TIFF was unreadable or the ML service failed). The metrics file contains microtubule length only.';
+      addWarning(degradedReason);
       rows = [];
     }
 
@@ -1745,11 +1814,35 @@ export class ExportService {
       addWarning(
         'No microtubule annotations were found in the selected images, so no metrics file was produced.'
       );
-      return;
+      return {
+        intensityIncluded: false,
+        degradedReason:
+          'No microtubule annotations were found in the selected images.',
+      };
     }
 
     const metricsDir = path.join(exportDir, 'metrics');
     await writeMTMetrics(rows, metricsDir, formats, channelSummaries);
+
+    // ALWAYS stamp the outcome directly beside metrics.* — durable and
+    // self-describing even when the user didn't enable "include
+    // documentation" (metadata.json / metrics_guide.md below only exist when
+    // they did). This is the file a downloaded hollow sheet can be checked
+    // against without having to notice a missing toast.
+    await fs.writeFile(
+      path.join(metricsDir, 'metrics_status.json'),
+      JSON.stringify(
+        {
+          intensityIncluded,
+          reason: intensityIncluded ? null : degradedReason,
+          rows: rows.length,
+          generatedAt: new Date().toISOString(),
+        },
+        null,
+        2
+      )
+    );
+
     logger.info(
       'MT metrics: wrote files',
       'ExportService',
@@ -1762,12 +1855,22 @@ export class ExportService {
         formats,
       }
     );
+    return { intensityIncluded, degradedReason: intensityIncluded ? null : degradedReason };
   }
 
   private async generateDocumentation(
     project: ProjectWithImages,
     exportDir: string,
-    options: ExportOptions
+    options: ExportOptions,
+    /**
+     * MT intensity outcome, when this export ran `generateMicrotubuleMetrics`
+     * — undefined for non-MT projects or when that stage never ran. The
+     * CALLER awaits `generateMicrotubuleMetrics`'s own promise before invoking
+     * this method (see the `mtIntensityStatusPromise` wiring above), so this
+     * is never a stale/racy read even though both stages are otherwise
+     * independent, concurrently-scheduled export tasks.
+     */
+    mtStatus?: MtIntensityStatus
   ): Promise<void> {
     const docDir = path.join(exportDir, 'documentation');
 
@@ -1778,7 +1881,11 @@ export class ExportService {
     // Generate annotation format guides
     await generateAnnotationGuides(exportDir, options);
 
-    // Generate metadata
+    // Generate metadata. `microtubuleIntensity` is present only for MT
+    // projects that ran the metrics stage, so a downloaded archive with
+    // "include documentation" checked is self-describing about a
+    // geometry-only (hollow) metrics sheet — not just a toast the user may
+    // have missed during a long export.
     const metadata = {
       projectId: project.id,
       projectName: project.title,
@@ -1786,6 +1893,14 @@ export class ExportService {
       imageCount: project.images?.length || 0,
       exportOptions: options,
       version: '1.0.0',
+      ...(mtStatus
+        ? {
+            microtubuleIntensity: {
+              included: mtStatus.intensityIncluded,
+              reason: mtStatus.degradedReason,
+            },
+          }
+        : {}),
     };
     await fs.writeFile(
       path.join(docDir, 'metadata.json'),
@@ -1795,10 +1910,21 @@ export class ExportService {
     // Generate metrics guide. Project type drives the layout: sperm gets
     // head/midpiece/tail morphology, spheroid_invasive the DI sheet,
     // wound area + time-series, spheroid the full polygon catalogue.
-    const metricsGuide = generateMetricsGuide(
+    let metricsGuide = generateMetricsGuide(
       coerceProjectType(project.type),
       options
     );
+    if (mtStatus && !mtStatus.intensityIncluded) {
+      // Loud + durable: a banner at the very top of the guide the user opens
+      // to understand the columns, not buried in job.warnings (a WebSocket
+      // toast easy to miss on a multi-hour export).
+      metricsGuide =
+        `> **⚠ Per-channel intensity is NOT included in this export.** ` +
+        `${mtStatus.degradedReason ?? 'The ML service could not compute it.'} ` +
+        `Only microtubule length (geometry) is present in metrics.* below. ` +
+        `See \`metrics/metrics_status.json\` for machine-readable detail.\n\n` +
+        metricsGuide;
+    }
     await fs.writeFile(path.join(docDir, 'metrics_guide.md'), metricsGuide);
   }
 
