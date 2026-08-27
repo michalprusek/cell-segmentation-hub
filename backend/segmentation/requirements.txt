@@ -1,18 +1,57 @@
+# Python version floor/ceiling for this requirements file.
+#
+# The images are built `FROM python:3.10-slim`, and Dependabot has no other way
+# to know that: a requirements.txt carries no `python_requires`, so it happily
+# proposes releases that cannot install here. It did exactly that on 2026-08-27
+# -- scipy 1.18.1 (needs >=3.12), scikit-image 0.26.0 and matplotlib 3.11.1 --
+# and the ML build died at `pip wheel` with "No matching distribution found".
+#
+# With this file present Dependabot resolves against 3.10 and stops proposing
+# the impossible. If the base image moves, move this with it.
+#
+# numpy is a second, independent ceiling and .python-version cannot express
+# it. numpy is pinned at 1.26.4 because that is what the pinned torch 2.6.0
+# was built against, and torch cannot move while mamba-ssm and causal-conv1d
+# ship CUDA kernels compiled against it. So anything requiring numpy>=2 is
+# out regardless of Python: opencv-python-headless stops at 4.11.0.86 here,
+# not the 4.14 Dependabot offered, and pip fails the build outright rather
+# than resolving around it. Check `requires_dist` for a numpy bound before
+# raising any of the numeric pins below.
+
 # Core dependencies
+# fastapi/uvicorn are HELD at 0.104.1 / 0.24.0, deliberately.
+#
+# Dependabot offered 0.141.1, and it installs fine -- then every POST to
+# /api/v1/segment returns 500. FastAPI 0.141 puts `_IncludedRouter` objects into
+# `app.routes`, and prometheus-fastapi-instrumentator 6.1.0 walks that list
+# doing `route.path`:
+#
+#   File "prometheus_fastapi_instrumentator/routing.py", line 55
+#     route_name = route.path
+#   AttributeError: '_IncludedRouter' object has no attribute 'path'
+#
+# The instrumentator middleware runs before the endpoint, so nothing segments at
+# all. Note the shape of this: the service still starts, /health still answers
+# 200, all 5 models still pre-load. Only the actual work fails.
+#
+# Fixing it is a cascade, not a bump: instrumentator >= 8 is required, which
+# needs starlette >= 1.0, which needs a different fastapi again. That is a
+# deliberate coordinated upgrade with its own verification, not something to
+# fold into a weekly group PR -- so the two stay pinned until someone does it.
 fastapi==0.104.1
 uvicorn==0.24.0
-pydantic==2.5.0
+pydantic==2.13.4
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
 # later session-redirect advisory.
-requests==2.33.0
+requests==2.34.2
 # python-multipart 0.0.30 fixes CVE-2024-24762 (Content-Type header ReDoS),
 # CVE-2024-53981 (multipart boundary DoS), CVE-2026-24486 (arbitrary file
 # write), and the later high-severity multipart-parsing advisory. 0.0.31 adds
 # the negative Content-Length parse_form buffer fix (GHSA, low). In-range
 # patch; FastAPI 0.104.1 only requires python-multipart>=0.0.5.
-python-multipart==0.0.31
-psutil==5.9.5
+python-multipart==0.0.32
+psutil==5.9.8
 
 # ML dependencies (CUDA variant specified in Dockerfiles)
 # torch 2.6.0+ fixes CVE-2025-32434 (torch.load RCE even with
@@ -23,14 +62,14 @@ torch==2.6.0
 torchvision==0.21.0
 
 # Image processing
-opencv-python-headless==4.8.1.78
+opencv-python-headless==4.11.0.86
 # Pillow 12.2.0 fixes the earlier ImageMath.eval RCE / c_memcpy overflow plus
 # the later high-severity decoder advisories. ML code uses no removed PIL APIs
 # (only the Image.NEAREST alias + ImageDraw, both still valid in Pillow 12).
 Pillow==12.3.0
 numpy==1.26.4
-scipy==1.11.4
-scikit-image==0.22.0
+scipy==1.15.3
+scikit-image==0.25.2
 # roifile encodes the ImageJ .roi background ROIs for the MT export as COMPOSITE
 # (ShapeRoi) shapes — an outer band with the microtubule signal cut out, which a
 # plain stroke-width polyline cannot represent. Pure-Python, numpy-only; used by
@@ -39,7 +78,7 @@ roifile==2025.12.12
 # matplotlib renders the per-frame intensity-profile plots for the "intensity
 # profiles" export mode (/kymograph render_profiles). 3.9.x supports Python 3.10
 # + numpy 1.26. Imported lazily with the Agg backend — no runtime display needed.
-matplotlib==3.9.2
+matplotlib==3.10.9
 # Sperm model dependencies (Mask2Former + graph assembly)
 # ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
 networkx>=3.0
