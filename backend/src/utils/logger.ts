@@ -36,15 +36,48 @@ class Logger {
    *  separators below are added after this and are preserved.
    *
    *  CR/LF first and on its own: a newline is a *record* separator, so it is
-   *  the character that turns one field into two log lines. The second pass
-   *  removes the remaining C0 controls and DEL, which do not forge a record
-   *  but do let a value repaint or hide part of the line in a terminal. */
+   *  the character that turns one field into two log lines. The middle pass
+   *  removes the remaining C0 controls, DEL, and the C1 block, which do not
+   *  forge a record but do let a value repaint or hide part of the line in a
+   *  terminal.
+   *
+   *  C1 (U+0080-U+009F) is in that range for a concrete reason, not for
+   *  completeness: U+009B is CSI, the single-character form of `ESC[`, so a
+   *  bare U+009B + `2K` erases the line on a terminal that decodes C1 -- the
+   *  same attack the C0 pass already blocks in its `ESC[` spelling. U+0085 is
+   *  NEL, which some consumers treat as a line break. Stripping the block
+   *  costs nothing: all 32 codepoints in it are Unicode category Cc, so no
+   *  legitimate text can contain one (accented Latin, CJK and µ all sit above
+   *  it and are untouched).
+   *
+   *  A separator becomes a SPACE, not nothing: `a\nb` has to read `a b`, never
+   *  `ab`, or two unrelated fields silently fuse into one word. That is done
+   *  in two steps -- put a space in front of every separator, then delete the
+   *  separator -- for a reason that is not cosmetic. CodeQL only credits a log
+   *  sanitizer through `StringReplaceSanitizer` in `LogInjectionQuery.qll`:
+   *
+   *      exists(string s | this.(StringReplaceCall).replaces(s, "") and
+   *                        s.regexpMatch("\\n"))
+   *
+   *  -- a newline replaced by the EMPTY string, and nothing else. Written as
+   *  the single `.replace(/[\r\n]/g, ' ')` this used to be, the value is just
+   *  as safe but the query cannot see it, so taint ran straight through here
+   *  and `js/log-injection` stayed open on every `console.*` branch in `log()`
+   *  (alerts #314/#315/#316) -- and any branch added later would raise a new
+   *  one. Splitting the substitution keeps the output identical and makes the
+   *  barrier visible. Verify with the two-step algebra, not by eye:
+   *  `a\nb` -> `a \nb` -> `a b`, and `a\r\nb` -> `a \n \nb` -> `a  b`, which
+   *  is what the one-step form produced. `logger.sanitize.test.ts` pins both.
+   *
+   *  The `\n`-to-empty pass is LAST so the barrier node is the value actually
+   *  returned. Keep it there, and keep the replacement string empty. */
   private sanitize(value: string): string {
     return (
       value
-        .replace(/[\r\n]/g, ' ')
+        .replace(/[\r\n]/g, ' \n')
         // eslint-disable-next-line no-control-regex -- stripping controls is the point
-        .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
+        .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+        .replace(/\n/g, '')
     );
   }
 
