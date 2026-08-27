@@ -5,21 +5,23 @@
 #   python3 -m venv .venv && source .venv/bin/activate
 #   pip install -r requirements.txt
 #
-# torch / transformers pins are LOAD-BEARING: transformers >= 4.57 is required
-# for the DINOv3 backbone. Pin transformers to 4.57.1 — the LAST version whose
-# DINOv3-ViT-L forward output matches the v7 checkpoint. 4.57.2 silently changed
-# the DINOv3 forward (no error, no failed load): the ViT features degrade into
-# low-frequency blobs, so the seed map fills ~50% of the frame and PySOAX emits
-# random microtubules (bisected on a reference frame: 4.57.0/.1 -> 303 MTs
-# tracing real filaments; 4.57.2-4.57.6 -> 76 scattered). 4.57.0 also worked but
-# PyPI YANKED it for a setup/install defect, so 4.57.1 is the safe floor. DO NOT
-# bump into 4.57.2+ or 5.x without re-verifying MT output against a known-good
-# frame — a green install proves nothing here.
+# torch is LOAD-BEARING and pinned at 2.6.0: mamba-ssm and causal-conv1d ship
+# CUDA kernels source-built against it, so moving torch means recompiling both
+# and re-pairing torchvision.
+#
+# transformers is NOT used by this worker at all any more. The old 4.57.1 pin
+# was for the microtubule v7 DINOv3 backbone, where 4.57.2 silently degraded the
+# ViT features. v5H (2026-08-17) replaced v7 with an nnU-Net whose checkpoint
+# carries every weight, so the MT path imports no transformers and needs no
+# HF_TOKEN. The pin is kept only to stay identical to the ml image this worker is
+# built FROM, so the two can never resolve different versions of a shared stack.
+# It tracks backend/segmentation/requirements.txt -- change both together, and
+# read the CEILING note there before crossing a transformers minor.
 
 # --- Deep learning core ---
 torch==2.6.0
 torchvision==0.21.0
-transformers==4.57.1
+transformers==5.5.4
 huggingface_hub>=0.20
 
 # --- Numerics / classical CV (PySOAX postprocessing) ---
