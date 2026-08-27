@@ -1,0 +1,98 @@
+# Dependency update automation.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Before 2026-08-27 the repo carried patched transitive versions by hand, via
+# `overrides` blocks in the two package.json files. The mechanism worked, but
+# the pins were refreshed manually: `"tar": "^7.5.13"` had floated nowhere and
+# package-lock.json still held 7.5.16 while 7.5.21 was the patched release, so
+# a critical advisory sat open. 82 Dependabot alerts had accumulated the same
+# way. Opening the PRs automatically is what keeps that from recurring.
+#
+# Grouping is deliberate: one PR per ecosystem per week for the patch/minor
+# stream, so routine bumps arrive as a single reviewable change rather than as
+# a dozen. Majors stay ungrouped — each one needs its own verification.
+version: 2
+
+updates:
+  # ---------------------------------------------------------------- frontend
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      frontend-patch-minor:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      # vite 6 -> 7/8 relays the whole build: manualChunks, chunk splitting and
+      # the production bundle all change shape. Failure pattern #14 in
+      # CLAUDE.md is exactly this class of break, so it is done deliberately,
+      # never as part of a routine weekly batch.
+      - dependency-name: vite
+        update-types: [version-update:semver-major]
+
+  # ----------------------------------------------------------------- backend
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      backend-patch-minor:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  # -------------------------------------------------------------- ML service
+  - package-ecosystem: pip
+    directory: /backend/segmentation
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    ignore:
+      # LOAD-BEARING PINS — see CLAUDE.md "Deploy Gotchas" and failure
+      # pattern #16. These are held on purpose, so an automated PR for them is
+      # noise that can never be merged as-is:
+      #
+      #  torch / torchvision  mamba-ssm and causal-conv1d ship CUDA kernels
+      #                       source-built against torch 2.6.0+cu124. Moving
+      #                       torch means recompiling both kernels, re-pairing
+      #                       torchvision, and re-verifying all 7 models.
+      #  transformers         4.57.1 backs SegFormer and the sperm Dinov2
+      #                       backbone; 4.57.6 already broke DINOv3 once.
+      #                       A 5.x bump needs its own inference verification.
+      #  numpy                1.26.4 is what the pinned torch was built against.
+      - dependency-name: torch
+      - dependency-name: torchvision
+      - dependency-name: transformers
+      - dependency-name: numpy
+
+  # ------------------------------------------------------------ essays worker
+  # Built FROM the ml image, so it inherits that validated stack and carries
+  # the same pins for the same reasons.
+  - package-ecosystem: pip
+    directory: /backend/essays/module
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: torch
+      - dependency-name: torchvision
+      - dependency-name: transformers
+      - dependency-name: numpy
+
+  # --------------------------------------------------------- GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ['*']
