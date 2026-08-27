@@ -18,7 +18,44 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-from mamba_ssm import Mamba
+
+# --- mamba_ssm 2.2.4 vs transformers 5.x -------------------------------------
+# `from mamba_ssm import Mamba` is not the narrow import it looks like:
+# mamba_ssm/__init__.py also pulls in MambaLMHeadModel, which pulls in
+# mamba_ssm/utils/generation.py, which does
+#
+#     from transformers.generation import (
+#         GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput, TextStreamer)
+#
+# transformers 4.42 merged those two output dataclasses into
+# `GenerateDecoderOnlyOutput` and kept the old names as aliases; 5.x removed the
+# aliases. mamba_ssm 2.2.4 predates that, so the import raises ImportError and
+# the guard one level up quietly disables Mamba-UNet -- the service stays
+# healthy and simply reports one model fewer, which is exactly the kind of
+# regression that goes unnoticed.
+#
+# Nothing here wants that code: those dataclasses describe autoregressive TEXT
+# generation, and this file uses `Mamba` as a sequence block inside a
+# segmentation bottleneck. Aliasing the removed names to their successor lets
+# the package finish importing without touching what we actually run.
+#
+# Delete this once mamba_ssm ships a release that targets transformers 5.
+def _alias_removed_generation_outputs() -> None:
+    try:
+        import transformers.generation as _gen
+    except Exception:  # transformers absent -> mamba import will fail anyway
+        return
+    successor = getattr(_gen, "GenerateDecoderOnlyOutput", None)
+    if successor is None:
+        return
+    for removed in ("GreedySearchDecoderOnlyOutput", "SampleDecoderOnlyOutput"):
+        if not hasattr(_gen, removed):
+            setattr(_gen, removed, successor)
+
+
+_alias_removed_generation_outputs()
+
+from mamba_ssm import Mamba  # noqa: E402  -- must follow the alias shim above
 
 
 def get_norm_layer(num_features: int, use_instance_norm: bool = True) -> nn.Module:
