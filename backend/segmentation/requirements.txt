@@ -89,7 +89,7 @@ tifffile>=2024.1.30
 # requires the 'imagecodecs' package" -- a 400 blaming the operator's file for a
 # missing server package. Verified in the shipped image before adding this.
 imagecodecs>=2024.1.1
-nd2>=0.10.0
+nd2>=0.11.3
 huggingface_hub>=0.20
 
 # Mamba-UNet dependency. einops is a pure-Python runtime dep of mamba_ssm and is
