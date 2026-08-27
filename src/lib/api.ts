@@ -77,11 +77,7 @@ export interface ProjectImageDTO {
   segmentationThumbnailPath?: string;
   segmentationThumbnailUrl?: string; // New field for segmentation thumbnails
   segmentation_status:
-    | 'pending'
-    | 'processing'
-    | 'completed'
-    | 'failed'
-    | 'no_segmentation';
+    'pending' | 'processing' | 'completed' | 'failed' | 'no_segmentation';
   created_at: string;
   updated_at: string;
 }
@@ -779,8 +775,7 @@ class ApiClient {
 
     // Get segmentation thumbnail fields
     const segmentationThumbnailPath = image.segmentationThumbnailPath as
-      | string
-      | undefined;
+      string | undefined;
     const segmentationThumbnailUrl = segmentationThumbnailPath
       ? ensureAbsoluteUrl(segmentationThumbnailPath)
       : (image.segmentationThumbnailUrl as string | undefined);

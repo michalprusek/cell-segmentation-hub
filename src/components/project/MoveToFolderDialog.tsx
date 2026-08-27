@@ -19,8 +19,7 @@ import {
 import { useLanguage } from '@/contexts/useLanguage';
 
 export type MoveSubject =
-  | { kind: 'project'; ids: string[] }
-  | { kind: 'folder'; id: string };
+  { kind: 'project'; ids: string[] } | { kind: 'folder'; id: string };
 
 export interface MoveToFolderDialogProps {
   open: boolean;

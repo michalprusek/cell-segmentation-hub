@@ -32,11 +32,7 @@ export type ModelSize = 'small' | 'medium' | 'large';
 
 /** Catalogue category used to group models in settings. */
 export type ModelCategory =
-  | 'spheroid'
-  | 'sperm'
-  | 'wound'
-  | 'microtubule'
-  | 'microcapsule';
+  'spheroid' | 'sperm' | 'wound' | 'microtubule' | 'microcapsule';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds

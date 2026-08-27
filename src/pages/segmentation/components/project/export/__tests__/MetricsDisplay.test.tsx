@@ -59,9 +59,8 @@ const makeSegmentation = (overrides?: object) => ({
 beforeEach(async () => {
   vi.clearAllMocks();
   // Re-apply implementations cleared by clearAllMocks
-  const { calculateMetrics } = await import(
-    '@/pages/segmentation/utils/metricCalculations'
-  );
+  const { calculateMetrics } =
+    await import('@/pages/segmentation/utils/metricCalculations');
   vi.mocked(calculateMetrics).mockReturnValue({
     Area: 1234.56,
     Perimeter: 150.2,
@@ -139,9 +138,8 @@ describe('MetricsDisplay', () => {
   });
 
   it('filters out polylines — calculateMetrics is not called for polyline polygons', async () => {
-    const { calculateMetrics } = await import(
-      '@/pages/segmentation/utils/metricCalculations'
-    );
+    const { calculateMetrics } =
+      await import('@/pages/segmentation/utils/metricCalculations');
     const segWithPolyline = {
       id: 'seg-3',
       imageWidth: 800,

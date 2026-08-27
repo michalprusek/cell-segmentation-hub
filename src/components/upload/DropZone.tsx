@@ -19,12 +19,7 @@ const DropZone: React.FC<DropZoneProps> = ({ disabled, onDrop }) => {
   const handleDrop = (acceptedFiles: File[], rejectedFiles: any[]) => {
     // Get current language from localStorage or default to 'en'
     const currentLang = (localStorage.getItem('language') || 'en') as
-      | 'cs'
-      | 'en'
-      | 'es'
-      | 'de'
-      | 'fr'
-      | 'zh';
+      'cs' | 'en' | 'es' | 'de' | 'fr' | 'zh';
 
     // Check for files that exceed size limit
     const oversizedFiles: File[] = [];
