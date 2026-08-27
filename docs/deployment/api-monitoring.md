@@ -366,9 +366,11 @@ services:
 
   # Prometheus
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.10.0 # pin, never :latest
     ports:
-      - '9090:9090'
+      # Loopback only -- Prometheus has no auth and serves /debug/pprof.
+      # Publishing as '9090:9090' binds 0.0.0.0 (CESNET finding, 2026-08-26).
+      - '127.0.0.1:9090:9090'
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml
@@ -378,22 +380,25 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
+      # --web.enable-lifecycle and --web.enable-admin-api are deliberately
+      # NOT set: the first registers POST /-/quit (remote shutdown), the
+      # second allows deleting metric history. Reload with a container restart.
     networks:
       - monitoring
 
   # Grafana
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.4.9 # pin; >= 12.4.4 for the 2026-08 CVEs
     ports:
-      - '3000:3000'
+      # Loopback only. Reach the UI with `ssh -L 3000:127.0.0.1:3000`.
+      - '127.0.0.1:3000:3000'
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Never hardcode. Read from .env (gitignored); ':?' aborts compose if unset.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set it in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
     networks:
       - monitoring
