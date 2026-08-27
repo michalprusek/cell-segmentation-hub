@@ -121,19 +121,54 @@ const onUploadComplete = vi.fn();
 // the project type). The query is only enabled once a projectId is known.
 function renderUploader() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return rtlRender(
+  const utils = rtlRender(
     <QueryClientProvider client={qc}>
       <ImageUploader onUploadComplete={onUploadComplete} />
     </QueryClientProvider>
   );
+  // The client is returned so `renderAndSettle` can wait on the cache itself.
+  return { ...utils, qc };
 }
 
 // Render, then flush the project-type query so `isMicrotubuleProject` is
 // resolved before we trigger the drop (onDrop closes over it).
 async function renderAndSettle() {
-  renderUploader();
+  const { qc } = renderUploader();
+  // Wait on the QUERY CACHE, not on a promise or a tick count.
+  //
+  // `isMicrotubuleProject` reads `useQuery({queryKey: ['project', id]}).data`.
+  // Earlier versions of this helper awaited one microtask, then the exact
+  // promise `getProject` returned -- both still flaked, because neither says
+  // anything about when React Query commits the result. Until it does,
+  // `project` is undefined, the drop takes the non-MT path and uploads
+  // directly, and the prompt assertion fails in ~8 ms. Fast, not a timeout:
+  // that is what separates this from the CI-latency flake it resembled.
+  //
+  // Cache occupancy is the actual precondition, so wait for exactly that, then
+  // flush the re-render it triggers.
   await waitFor(() => expect(mockGetProject).toHaveBeenCalledWith('p1'));
+  await waitFor(() => expect(qc.getQueryData(['project', 'p1'])).toBeDefined());
   await act(async () => {
+    await Promise.resolve();
+  });
+}
+
+/** Drop files and flush the resulting state update before returning.
+ *
+ *  The tests below used `act(() => capturedOnDrop(files))` and then waited for
+ *  the prompt with `findByText`, whose default timeout is 1000 ms. Dropping is
+ *  synchronous but the prompt it opens is a state update, so the assertion was
+ *  racing a React flush against a wall-clock budget -- fine locally at ~170 ms,
+ *  marginal in CI where this file runs alongside 5 400 other tests on two
+ *  forks. Both observed failures took 1014 ms and 1030 ms: not a wrong
+ *  expectation, just one that ran out of time, and a different test in the
+ *  block lost the race each run.
+ *
+ *  Awaiting an async `act` flushes the update here, so callers can assert
+ *  synchronously with `getByText` and no timeout is involved at all. */
+async function dropAndSettle() {
+  await act(async () => {
+    capturedOnDrop!(files);
     await Promise.resolve();
   });
 }
@@ -185,16 +220,16 @@ describe('ImageUploader — register-channels prompt', () => {
     await renderAndSettle();
     // No persistent checkbox in the uploader anymore.
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-    act(() => capturedOnDrop!(files));
-    expect(await screen.findByText(PROMPT)).toBeInTheDocument();
+    await dropAndSettle();
+    expect(screen.getByText(PROMPT)).toBeInTheDocument();
     // Not uploaded yet — waiting for the answer.
     expect(mockStartUpload).not.toHaveBeenCalled();
   });
 
   it('confirm → startUpload WITH registration', async () => {
     await renderAndSettle();
-    act(() => capturedOnDrop!(files));
-    await screen.findByText(PROMPT);
+    await dropAndSettle();
+    expect(screen.getByText(PROMPT)).toBeInTheDocument();
     fireEvent.click(screen.getByText('images.registerChannels.confirm'));
     expect(mockStartUpload).toHaveBeenCalledWith(
       'p1',
@@ -207,8 +242,8 @@ describe('ImageUploader — register-channels prompt', () => {
 
   it('decline → startUpload WITHOUT registration', async () => {
     await renderAndSettle();
-    act(() => capturedOnDrop!(files));
-    await screen.findByText(PROMPT);
+    await dropAndSettle();
+    expect(screen.getByText(PROMPT)).toBeInTheDocument();
     fireEvent.click(screen.getByText('images.registerChannels.decline'));
     expect(mockStartUpload).toHaveBeenCalledWith(
       'p1',
@@ -221,8 +256,8 @@ describe('ImageUploader — register-channels prompt', () => {
 
   it('cancel → nothing is uploaded', async () => {
     await renderAndSettle();
-    act(() => capturedOnDrop!(files));
-    await screen.findByText(PROMPT);
+    await dropAndSettle();
+    expect(screen.getByText(PROMPT)).toBeInTheDocument();
     fireEvent.click(screen.getByText('common.cancel'));
     expect(mockStartUpload).not.toHaveBeenCalled();
   });
@@ -230,7 +265,7 @@ describe('ImageUploader — register-channels prompt', () => {
   it('non-MT project → uploads directly, no prompt', async () => {
     mockProjectType = 'spheroid';
     await renderAndSettle();
-    act(() => capturedOnDrop!(files));
+    await dropAndSettle();
     expect(screen.queryByText(PROMPT)).not.toBeInTheDocument();
     expect(mockStartUpload).toHaveBeenCalledWith(
       'p1',
