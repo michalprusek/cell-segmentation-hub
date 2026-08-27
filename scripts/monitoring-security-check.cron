@@ -1,0 +1,14 @@
+# Denní kontrola monitoring stacku (Grafana/Prometheus) po hlášení CESNET 2026-08-26.
+# Hlídá hlavně regresi vazby portů; podrobnosti v scripts/monitoring-security-check.sh.
+#
+# Instalace:  crontab -l | grep -v monitoring-security-check > /tmp/ct; \
+#             cat scripts/monitoring-security-check.cron >> /tmp/ct; crontab /tmp/ct
+#
+# Poznámky:
+#   - Absolutní cesta: cron startuje v $HOME, ne v repu.
+#   - `date -Is` místo formátovacího řetězce: nekomentovaný '%' crontab převádí
+#     na nový řádek a zbytek řádku posílá příkazu na stdin.
+#   - Log se ořezává na 2000 řádků, ať neroste bez omezení.
+#   - Skript navíc zapisuje jednořádkový stav do ~/.monitoring-check-status,
+#     takže poslední výsledek se dá zjistit jedním `cat` bez čtení logu.
+30 5 * * * { echo "=== $(date -Is) ==="; /home/cvat/cell-segmentation-hub/scripts/monitoring-security-check.sh; echo "exit=$?"; } >> /home/cvat/monitoring_security_check.log 2>&1; tail -n 2000 /home/cvat/monitoring_security_check.log > /home/cvat/.msc.tmp && mv /home/cvat/.msc.tmp /home/cvat/monitoring_security_check.log
