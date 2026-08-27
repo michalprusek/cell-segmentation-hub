@@ -114,6 +114,9 @@ def existing_proxy(frame_dir: str, channel: str) -> str | None:
             if name.startswith(prefix) and name.endswith(suffix):
                 return os.path.join(frame_dir, name)
     except OSError:
+        # The frame directory may not exist yet, or may be mid-write while the
+        # extractor is still running. Either way there is no frame to return and
+        # None is the answer; the caller retries on the next poll.
         pass
     return None
 

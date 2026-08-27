@@ -751,7 +751,7 @@ def predict_full_image_tta(
     Averages soft masks across augmentations before thresholding.
     Typically gives +1-2% IoU improvement.
     """
-    C, H, W = image_tensor.shape
+    # Shape unpacked but unused here; the other two call sites do use it.
 
     # Define augmentations: (transform_fn, inverse_fn)
     augmentations = [
