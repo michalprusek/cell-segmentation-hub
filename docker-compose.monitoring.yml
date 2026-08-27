@@ -28,10 +28,20 @@ services:
 
   # Prometheus metrics collector
   prometheus:
-    image: prom/prometheus:latest
+    # Pinned, not ':latest'. CESNET flagged this stack on 2026-08-26 and a
+    # floating tag makes "which version is actually running" unanswerable.
+    image: prom/prometheus:v3.10.0
     container_name: spheroseg-prometheus
     ports:
-      - '9090:9090'
+      # Loopback ONLY. Prometheus has no authentication and serves
+      # /debug/pprof (heap, goroutine, cmdline) to anyone who can reach it.
+      # Grafana queries it over the docker network (http://prometheus:9090),
+      # so the app never needs a host port. Publishing it as '9090:9090'
+      # binds 0.0.0.0 and puts the whole metrics API on the public internet.
+      # A published port is DNAT'd in nat/PREROUTING and then traverses
+      # FORWARD (where DOCKER-USER hangs) -- it never reaches INPUT, so ufw
+      # rules in INPUT do not see it. This bind is the control that works.
+      - '127.0.0.1:9090:9090'
     volumes:
       - ./monitoring/production-prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_monitoring_data:/prometheus
@@ -41,7 +51,10 @@ services:
       - '--storage.tsdb.retention.time=30d'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
+      # --web.enable-lifecycle is deliberately NOT enabled: it registers
+      # POST /-/quit and POST /-/reload, i.e. an unauthenticated remote
+      # shutdown of the monitoring stack. Reload config with
+      # `docker compose -f docker-compose.monitoring.yml restart prometheus`.
     depends_on:
       node-exporter:
         condition: service_healthy
@@ -63,15 +76,39 @@ services:
 
   # Grafana dashboard and visualization
   grafana:
-    image: grafana/grafana:latest
+    # >= 12.4.3+security-02 closes the ten CVEs CESNET reported on
+    # 2026-08-26; see
+    # https://github.com/grafana/grafana/releases/tag/v12.4.3%2Bsecurity-02
+    # 12.4.9 stays inside 12.4.x, so no dashboard/plugin breakage. Note the
+    # floor is 12.4.4, not 12.4.3: the +security-02 release is cut ON TOP of
+    # plain 12.4.3, so plain 12.4.3 is older than the fix and still exposed.
+    image: grafana/grafana:12.4.9
     container_name: spheroseg-grafana
     ports:
-      - '3030:3000'
+      # Loopback ONLY — reachable from the host (and via `ssh -L`), never
+      # from the internet. See the prometheus block above for the rationale.
+      - '127.0.0.1:3030:3000'
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=SpH3r0s3g_M0n!t0r
+      # Read from .env (gitignored). The ':?' form makes compose ABORT if the
+      # variable is missing, rather than silently starting with an empty
+      # password. The previous hardcoded value leaked via the public repo.
+      #
+      # BEWARE: Grafana applies this ONLY when it first creates the admin
+      # account. Editing it and running --force-recreate does NOT change the
+      # password of an existing install -- that lives in grafana.db inside the
+      # spheroseg_grafana_data volume and survives the recreate. Rotating for
+      # real needs `grafana cli admin reset-admin-password` or
+      # PUT /api/admin/users/<id>/password. Check 6 in
+      # scripts/monitoring-security-check.sh catches the drift if you forget.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD chybi v .env}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_USERS_ALLOW_ORG_CREATE=false
+      # Kept on the public hostname even though the port is now loopback-only:
+      # root_url opens nothing, it only builds links. Grafana puts it in alert
+      # e-mails (SMTP below, 7 provisioned rules), and 127.0.0.1 there would
+      # point the recipient at their own machine. Neither URL is clickable from
+      # outside any more -- reach the UI with `ssh -L 3030:127.0.0.1:3030`.
       - GF_SERVER_ROOT_URL=http://cvat2.utia.cas.cz:3030
       - GF_SERVER_SERVE_FROM_SUB_PATH=false
       - GF_LOG_MODE=console
