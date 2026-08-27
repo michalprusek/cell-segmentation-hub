@@ -84,8 +84,7 @@ def test_channel_count_survives_every_branch(
     out, info = _load_and_resolve(src)
 
     assert out.shape[1] == expected_channels
-    channels = info.get("channels") or []
-    if channels:
-        assert len(channels) == expected_channels, (
-            f"{name}: {len(channels)} channel labels for {expected_channels} channels"
-        )
+    channels = info["channels"]
+    assert len(channels) == expected_channels, (
+        f"{name}: {len(channels)} channel labels for {expected_channels} channels"
+    )
