@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs/promises';
-import archiver from 'archiver';
 import sharp from 'sharp';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
@@ -38,7 +37,6 @@ import {
 } from '../utils/instanceLabels';
 import { polylineSemanticsForProjectType } from '../utils/polylineSemantics';
 import {
-  sanitizeFilename,
   getProgressMessage,
   createZipArchive,
   countExportSteps,

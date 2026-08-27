@@ -11,8 +11,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from sperm_final.config import ID_TO_CLASS, NUM_CLASSES
-from sperm_final.data.dataset import IMAGENET_MEAN, IMAGENET_STD
+from sperm_final.config import NUM_CLASSES
 
 logger = logging.getLogger(__name__)
 

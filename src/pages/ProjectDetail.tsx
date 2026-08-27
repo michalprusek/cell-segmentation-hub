@@ -246,7 +246,7 @@ const ProjectDetail = () => {
             }
 
             const existingById = new Map(images.map(i => [i.id, i]));
-            const formattedImages = (allImages || []).map(img => {
+            const formattedImages = allImages.map(img => {
               let segmentationStatus =
                 img.segmentationStatus || img.segmentation_status;
               if (segmentationStatus === 'segmented') {
@@ -329,7 +329,7 @@ const ProjectDetail = () => {
       }
 
       const existingById = new Map(images.map(i => [i.id, i]));
-      const formattedImages = (allImages || []).map(img => {
+      const formattedImages = allImages.map(img => {
         let segmentationStatus =
           img.segmentationStatus || img.segmentation_status;
         if (segmentationStatus === 'segmented') {
@@ -533,7 +533,7 @@ const ProjectDetail = () => {
       }
 
       const existingById = new Map(images.map(i => [i.id, i]));
-      const formattedImages = (allImages || []).map(img => {
+      const formattedImages = allImages.map(img => {
         let segmentationStatus =
           img.segmentationStatus || img.segmentation_status;
         if (segmentationStatus === 'segmented') {

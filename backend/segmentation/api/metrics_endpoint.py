@@ -1,6 +1,4 @@
 import logging
-import os
-import sys
 from typing import Any, Dict, List, Optional
 
 import cv2
@@ -172,7 +170,12 @@ async def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[Metric
             metrics = await calculate_metrics(polygon_request)
             results.append(metrics)
         except Exception as e:
-            # Return default values on error
+            # Returning zeros keeps one bad polygon from failing the whole batch,
+            # but doing it silently meant a caller could not tell "area is 0"
+            # from "this one blew up". Log which, and why.
+            logger.warning(
+                "Metrics failed for one polygon in batch; returning zeros: %s", e
+            )
             results.append(MetricsResponse(
                 Area=0,
                 Perimeter=0,

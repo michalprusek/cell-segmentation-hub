@@ -3,12 +3,11 @@
 Model Weight Download Script for SpheroSeg
 Downloads model weights from Google Drive with resume capability and integrity verification
 """
-import os
 import sys
 import hashlib
 import argparse
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 import urllib.request
 import urllib.error
 import re
@@ -134,9 +133,6 @@ def download_from_gdrive(file_id: str, dest: Path, expected_size: int, model_nam
 
         print(f"  📥 {model_name}: Starting download from Google Drive...")
 
-        # Session for cookies
-        session_cookies = {}
-
         # First request to get confirmation token
         request = urllib.request.Request(url)
 
@@ -231,7 +227,6 @@ def download_file(url: str, dest: Path, expected_size: int, model_name: str) -> 
             mode = 'ab' if start_pos > 0 else 'wb'
 
             # Create progress reporter
-            remaining_size = expected_size - start_pos
             progress = ProgressReporter(expected_size, model_name)
             progress.downloaded = start_pos
 
