@@ -243,7 +243,6 @@ class TransformerDecoder(nn.Module):
         # Flatten multi-scale features for cross-attention
         memory_list = []
         for feat in multi_scale_features:
-            b, c, h, w = feat.shape
             memory_list.append(feat.flatten(2).permute(0, 2, 1))  # (B, H*W, C)
 
         aux_outputs = []

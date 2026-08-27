@@ -11,7 +11,11 @@ This module provides a production-ready inference execution system with:
 import logging
 import time
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import (
+    ThreadPoolExecutor,
+    TimeoutError as FutureTimeoutError,
+    wait as futures_wait,
+)
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
@@ -550,8 +554,7 @@ class InferenceExecutor:
             
             if pending_futures:
                 # Wait for futures with timeout
-                import concurrent.futures
-                done, not_done = concurrent.futures.wait(
+                done, not_done = futures_wait(
                     pending_futures, 
                     timeout=timeout,
                     return_when=concurrent.futures.ALL_COMPLETED

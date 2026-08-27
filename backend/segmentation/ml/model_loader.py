@@ -808,7 +808,6 @@ class ModelLoader:
             # If detect_holes is False, fill all holes in the binary mask
             if not detect_holes:
                 # Create filled mask by flood-filling from edges
-                h, w = binary_mask.shape
                 filled_mask = binary_mask.copy()
                 
                 # Find all contours

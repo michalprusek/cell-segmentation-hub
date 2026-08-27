@@ -122,12 +122,20 @@ class GPUMonitor:
                 try:
                     temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
                 except pynvml.NVMLError:
+                    # Feature-detection, not error handling: temperature and
+                    # power draw are unsupported on some cards and in some
+                    # driver/container combinations. The reading stays at its
+                    # default and the rest of the GPU metrics are still valid.
                     pass
 
                 # Get power draw if available
                 try:
                     power_draw = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0  # Convert to watts
                 except pynvml.NVMLError:
+                    # Feature-detection, not error handling: temperature and
+                    # power draw are unsupported on some cards and in some
+                    # driver/container combinations. The reading stays at its
+                    # default and the rest of the GPU metrics are still valid.
                     pass
                     
                 pynvml.nvmlShutdown()

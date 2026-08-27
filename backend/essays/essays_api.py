@@ -470,6 +470,10 @@ def _worker() -> None:
                 _set_status(req.jobId, req.outDir, state="failed",
                             error=f"worker error: {e}")
             except Exception:
+                # Best-effort: we are already inside the handler for the failure
+                # this status write was meant to record, and the original error
+                # is on stderr above. Re-raising here would replace a useful
+                # traceback with a bookkeeping one.
                 pass
         finally:
             _work.task_done()
