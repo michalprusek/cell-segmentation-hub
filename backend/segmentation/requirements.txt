@@ -105,7 +105,7 @@ einops>=0.7.0
 # download at runtime (SAM 3 was used only offline as a distillation teacher).
 
 # Prometheus metrics
-prometheus-fastapi-instrumentator==6.1.0
+prometheus-fastapi-instrumentator==8.1.0
 
 # Test infrastructure (not used at runtime; installed separately in test envs)
 # asgi-lifespan: enables FastAPI lifespan in async httpx test clients
