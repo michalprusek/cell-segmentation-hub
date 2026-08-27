@@ -45,6 +45,10 @@ interface ValidatedShare {
       id: string;
       email: string;
     };
+    // "All annotations reviewed and passed" — surfaced on the pre-acceptance
+    // preview too, so an invited annotator can see review status before
+    // accepting the share.
+    verified: boolean;
   };
   sharedBy: {
     id: string;
@@ -479,6 +483,10 @@ export const getSharedProjects = asyncHandler(
             image_count: share.project._count?.images || 0,
             images: share.project.images || [],
             updated_at: share.project.updatedAt,
+            // "All annotations reviewed and passed" — owner AND accepted-share
+            // annotators can both toggle it (PATCH …/verified), so it must
+            // survive this DTO for the shared-projects list to show it too.
+            verified: share.project.verified,
           },
           sharedBy: {
             id: share.sharedBy.id,
@@ -556,6 +564,7 @@ export const validateShareToken = asyncHandler(
             title: share.project.title,
             description: share.project.description,
             owner: share.project.user, // Include the project owner
+            verified: share.project.verified,
           },
           sharedBy: {
             email: share.sharedBy.email,
@@ -621,6 +630,7 @@ export const acceptShareInvitation = asyncHandler(
               title: result.share.project.title,
               description: result.share.project.description,
               owner: result.share.project.user, // Include the project owner
+              verified: result.share.project.verified,
             },
             sharedBy: {
               email: result.share.sharedBy.email,
@@ -640,6 +650,7 @@ export const acceptShareInvitation = asyncHandler(
             title: result.share.project.title,
             description: result.share.project.description,
             owner: result.share.project.user, // Include the project owner
+            verified: result.share.project.verified,
           },
           shareId: result.share.id,
           sharedWithId: result.share.sharedWithId,

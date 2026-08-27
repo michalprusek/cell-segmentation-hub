@@ -50,6 +50,7 @@ import {
   updateProject,
   deleteProject,
   getProjectStats,
+  setProjectVerified,
 } from '../projectController';
 
 const MockProjectService = projectService as Mocked<typeof projectService>;
@@ -93,6 +94,7 @@ function makeApp(injectUser = true) {
   app.post('/projects', mockAuth, createProject);
   app.get('/projects/:id', mockAuth, getProject);
   app.put('/projects/:id', mockAuth, updateProject);
+  app.patch('/projects/:id/verified', mockAuth, setProjectVerified);
   app.delete('/projects/:id', mockAuth, deleteProject);
   app.get('/projects/:id/stats', mockAuth, getProjectStats);
 
@@ -366,5 +368,83 @@ describe('projectController — uncovered branches', () => {
         deletedImagesCount: 7,
       });
     });
+  });
+});
+
+/**
+ * PATCH /projects/:id/verified — the annotator-facing verification toggle.
+ * Its 404 is load-bearing: `setVerified` returns null both when the project
+ * does not exist AND when the caller has no share on it, and the controller
+ * must not distinguish the two (doing so would let a stranger probe which
+ * project ids exist).
+ */
+describe('PATCH /projects/:id/verified', () => {
+  it('returns 401 and does not touch the service when req.user is absent', async () => {
+    const noAuthApp = makeApp(false);
+    const res = await request(noAuthApp)
+      .patch('/projects/proj-abc/verified')
+      .send({ verified: true })
+      .expect(401);
+    expect(res.body.success).toBe(false);
+    expect(MockProjectService.setVerified).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the service reports no project or no access', async () => {
+    MockProjectService.setVerified.mockResolvedValueOnce(null);
+    const res = await request(makeApp())
+      .patch('/projects/proj-abc/verified')
+      .send({ verified: true })
+      .expect(404);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('sets the flag and defeats the 10-minute GET cache on the way out', async () => {
+    MockProjectService.setVerified.mockResolvedValueOnce({
+      ...mockProject,
+      verified: true,
+    } as never);
+
+    const res = await request(makeApp())
+      .patch('/projects/proj-abc/verified')
+      .send({ verified: true })
+      .expect(200);
+
+    expect(MockProjectService.setVerified).toHaveBeenCalledWith(
+      'proj-abc',
+      'user-123',
+      true
+    );
+    // GET /projects/:id is served with `public, max-age=600`; without this
+    // override a browser would keep showing the pre-toggle value.
+    expect(res.headers['cache-control']).toContain('no-store');
+    expect(res.body.data.verified).toBe(true);
+  });
+
+  it('reports the un-verify case distinctly', async () => {
+    MockProjectService.setVerified.mockResolvedValueOnce({
+      ...mockProject,
+      verified: false,
+    } as never);
+
+    const res = await request(makeApp())
+      .patch('/projects/proj-abc/verified')
+      .send({ verified: false })
+      .expect(200);
+
+    expect(MockProjectService.setVerified).toHaveBeenCalledWith(
+      'proj-abc',
+      'user-123',
+      false
+    );
+    expect(res.body.message).not.toBe(undefined);
+  });
+
+  it('returns 500 when the service throws rather than reporting success', async () => {
+    MockProjectService.setVerified.mockRejectedValueOnce(new Error('db down'));
+    const res = await request(makeApp())
+      .patch('/projects/proj-abc/verified')
+      .send({ verified: true })
+      .expect(500);
+    expect(res.body.success).toBe(false);
   });
 });

@@ -211,6 +211,12 @@ export default {
     changeProjectType: 'Projekttyp ändern',
     typeChangeSegmentationsWarning:
       '{{count}} bestehende Segmentierungen entsprechen möglicherweise nicht mehr dem Exportformat "{{type}}". Erneut segmentieren, um Metriken zu aktualisieren.',
+    verified: 'Verifiziert',
+    toggleVerified: 'Verifizierung umschalten',
+    projectVerified: 'Projekt als verifiziert markiert',
+    projectUnverified: 'Verifizierung des Projekts wurde entfernt',
+    failedToUpdateVerified:
+      'Verifizierungsstatus konnte nicht aktualisiert werden',
     types: {
       spheroid: 'Sphäroide (Standard)',
       spheroid_invasive: 'Zerfallene Sphäroide',
