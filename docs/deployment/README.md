@@ -715,7 +715,7 @@ services:
   load-balancer:
     image: nginx:alpine
     ports:
-      - "80:80"
+      - '80:80'
     depends_on:
       - backend-1
       - backend-2

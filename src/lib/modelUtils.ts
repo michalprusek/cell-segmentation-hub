@@ -31,11 +31,7 @@ export type SpheroidPresetTier = 'fast' | 'accurate' | 'robust' | 'additional';
  *  its own section). `satisfies Record<SpheroidModelId, …>` makes forgetting to
  *  classify a newly-added spheroid model a compile error. */
 type SpheroidModelId =
-  | 'hrnet'
-  | 'cbam_resunet'
-  | 'unet_spherohq'
-  | 'segformer'
-  | 'mamba_unet';
+  'hrnet' | 'cbam_resunet' | 'unet_spherohq' | 'segformer' | 'mamba_unet';
 
 export const SPHEROID_PRESETS = {
   segformer: 'fast',

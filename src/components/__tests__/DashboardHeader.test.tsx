@@ -149,9 +149,8 @@ describe('DashboardHeader', () => {
     const { useAuth } = await import('@/contexts/AuthContext');
     const { useAuth: useAuthHook } = await import('@/contexts/useAuth');
     const { useLocalizedModels } = await import('@/hooks/useLocalizedModels');
-    const { useSegmentationQueue } = await import(
-      '@/hooks/useSegmentationQueue'
-    );
+    const { useSegmentationQueue } =
+      await import('@/hooks/useSegmentationQueue');
     const { fetchWithRetry } = await import('@/lib/httpUtils');
 
     const mockUserValue = {
@@ -312,9 +311,8 @@ describe('DashboardHeader', () => {
       json: () => Promise.resolve({ status: 'processing' }),
     });
 
-    const { useSegmentationQueue } = await import(
-      '@/hooks/useSegmentationQueue'
-    );
+    const { useSegmentationQueue } =
+      await import('@/hooks/useSegmentationQueue');
     vi.mocked(useSegmentationQueue).mockReturnValue({
       ...mockQueueContext,
       queueStats: { processing: 2, waiting: 1 },
@@ -327,9 +325,8 @@ describe('DashboardHeader', () => {
   });
 
   it('shows error status when ML service is disconnected', async () => {
-    const { useSegmentationQueue } = await import(
-      '@/hooks/useSegmentationQueue'
-    );
+    const { useSegmentationQueue } =
+      await import('@/hooks/useSegmentationQueue');
     vi.mocked(useSegmentationQueue).mockReturnValue({
       ...mockQueueContext,
       isConnected: false,

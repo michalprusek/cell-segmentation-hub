@@ -259,9 +259,8 @@ describe('AbortController Race Condition Fix - Unit Tests', () => {
 
   describe('Error handling integration', () => {
     it('should properly integrate with error handling utilities', async () => {
-      const { isCancelledError, handleCancelledError } = await import(
-        '@/lib/errorUtils'
-      );
+      const { isCancelledError, handleCancelledError } =
+        await import('@/lib/errorUtils');
 
       // Simulate an API call being cancelled
       const controller = new AbortController();

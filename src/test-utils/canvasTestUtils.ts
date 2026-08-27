@@ -7,8 +7,7 @@ import { vi } from 'vitest';
 import type { Point } from '@/lib/segmentation';
 
 // Mock canvas rendering context with comprehensive method tracking
-export interface MockCanvasRenderingContext2D
-  extends Partial<CanvasRenderingContext2D> {
+export interface MockCanvasRenderingContext2D extends Partial<CanvasRenderingContext2D> {
   // Drawing state tracking
   __mockState: {
     fillStyle: string | CanvasGradient | CanvasPattern;

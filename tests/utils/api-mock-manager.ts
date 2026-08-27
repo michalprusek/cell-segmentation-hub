@@ -16,8 +16,7 @@ export interface MockRule {
   method?: string;
   url: string | RegExp;
   response:
-    | MockResponse
-    | ((req: Request) => MockResponse | Promise<MockResponse>);
+    MockResponse | ((req: Request) => MockResponse | Promise<MockResponse>);
   times?: number;
   priority?: number;
 }

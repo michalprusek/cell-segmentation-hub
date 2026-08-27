@@ -63,9 +63,8 @@ describe('SpermExcelExporter', () => {
       createBlob: vi.fn(() => new Blob()),
       downloadFile: vi.fn(),
     });
-    const { calculatePolylineLength } = await import(
-      '@/pages/segmentation/utils/metricCalculations'
-    );
+    const { calculatePolylineLength } =
+      await import('@/pages/segmentation/utils/metricCalculations');
     vi.mocked(calculatePolylineLength).mockReturnValue(50.5);
   });
 

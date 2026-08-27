@@ -470,10 +470,7 @@ export interface UpdateProfile {
  * stays consistent and a future status addition is one edit, not seven.
  */
 export type SegmentationStatus =
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'failed';
+  'pending' | 'processing' | 'completed' | 'failed';
 
 /**
  * Status union for cancellable jobs (e.g. exports). Superset of

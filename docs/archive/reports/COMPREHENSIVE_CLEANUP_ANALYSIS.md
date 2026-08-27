@@ -257,27 +257,27 @@ docker/ml-gpu.Dockerfile                 # 2,228 bytes - GPU support (may merge 
 
 ```yaml
 # docker-compose.yml (DEVELOPMENT)
-frontend: docker/frontend.Dockerfile         # ❌ Should use optimized
-backend: docker/backend.optimized.Dockerfile  # ✅ Correct
-ml: docker/ml.Dockerfile                     # ❌ Should use optimized
+frontend: docker/frontend.Dockerfile # ❌ Should use optimized
+backend: docker/backend.optimized.Dockerfile # ✅ Correct
+ml: docker/ml.Dockerfile # ❌ Should use optimized
 
 # docker-compose.blue.yml (PRODUCTION - ACTIVE)
-frontend: docker/frontend.prod.Dockerfile    # ❌ DEPRECATED - using old file!
-backend: docker/backend.prod.Dockerfile      # ❌ DEPRECATED - using old file!
-ml: docker/ml.Dockerfile                     # ❌ Should use optimized
+frontend: docker/frontend.prod.Dockerfile # ❌ DEPRECATED - using old file!
+backend: docker/backend.prod.Dockerfile # ❌ DEPRECATED - using old file!
+ml: docker/ml.Dockerfile # ❌ Should use optimized
 
 # docker-compose.green.yml (STAGING)
-frontend: docker/frontend.optimized.Dockerfile  # ✅ Correct
-backend: docker/backend.optimized.Dockerfile    # ✅ Correct
-ml: docker/ml.optimized.Dockerfile             # ✅ Correct
+frontend: docker/frontend.optimized.Dockerfile # ✅ Correct
+backend: docker/backend.optimized.Dockerfile # ✅ Correct
+ml: docker/ml.optimized.Dockerfile # ✅ Correct
 
 # docker-compose.test.yml (TESTING)
-frontend: docker/frontend.optimized.Dockerfile  # ✅ Correct
-backend: docker/backend.optimized.Dockerfile    # ✅ Correct
-ml: docker/ml.optimized.Dockerfile             # ✅ Correct
+frontend: docker/frontend.optimized.Dockerfile # ✅ Correct
+backend: docker/backend.optimized.Dockerfile # ✅ Correct
+ml: docker/ml.optimized.Dockerfile # ✅ Correct
 
 # docker-compose.minimal.yml (MINIMAL)
-frontend: docker/frontend.Dockerfile         # ❌ Should use optimized
+frontend: docker/frontend.Dockerfile # ❌ Should use optimized
 ```
 
 ### 2.3 Critical Issues Found

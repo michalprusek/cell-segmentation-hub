@@ -11,12 +11,7 @@ import React from 'react';
 // Types for cancel operations
 export type OperationType = 'upload' | 'segmentation' | 'export';
 export type OperationStatus =
-  | 'idle'
-  | 'active'
-  | 'cancelling'
-  | 'cancelled'
-  | 'completed'
-  | 'failed';
+  'idle' | 'active' | 'cancelling' | 'cancelled' | 'completed' | 'failed';
 
 export interface CancelOperation {
   id: string;
