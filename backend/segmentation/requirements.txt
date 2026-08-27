@@ -1,18 +1,18 @@
 # Core dependencies
-fastapi==0.104.1
-uvicorn==0.24.0
-pydantic==2.5.0
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.4
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
 # later session-redirect advisory.
-requests==2.33.0
+requests==2.34.2
 # python-multipart 0.0.30 fixes CVE-2024-24762 (Content-Type header ReDoS),
 # CVE-2024-53981 (multipart boundary DoS), CVE-2026-24486 (arbitrary file
 # write), and the later high-severity multipart-parsing advisory. 0.0.31 adds
 # the negative Content-Length parse_form buffer fix (GHSA, low). In-range
 # patch; FastAPI 0.104.1 only requires python-multipart>=0.0.5.
-python-multipart==0.0.31
-psutil==5.9.5
+python-multipart==0.0.32
+psutil==5.9.8
 
 # ML dependencies (CUDA variant specified in Dockerfiles)
 # torch 2.6.0+ fixes CVE-2025-32434 (torch.load RCE even with
@@ -23,14 +23,14 @@ torch==2.6.0
 torchvision==0.21.0
 
 # Image processing
-opencv-python-headless==4.8.1.78
+opencv-python-headless==4.14.0.94
 # Pillow 12.2.0 fixes the earlier ImageMath.eval RCE / c_memcpy overflow plus
 # the later high-severity decoder advisories. ML code uses no removed PIL APIs
 # (only the Image.NEAREST alias + ImageDraw, both still valid in Pillow 12).
 Pillow==12.3.0
 numpy==1.26.4
-scipy==1.11.4
-scikit-image==0.22.0
+scipy==1.18.1
+scikit-image==0.26.0
 # roifile encodes the ImageJ .roi background ROIs for the MT export as COMPOSITE
 # (ShapeRoi) shapes — an outer band with the microtubule signal cut out, which a
 # plain stroke-width polyline cannot represent. Pure-Python, numpy-only; used by
@@ -39,7 +39,7 @@ roifile==2025.12.12
 # matplotlib renders the per-frame intensity-profile plots for the "intensity
 # profiles" export mode (/kymograph render_profiles). 3.9.x supports Python 3.10
 # + numpy 1.26. Imported lazily with the Agg backend — no runtime display needed.
-matplotlib==3.9.2
+matplotlib==3.11.1
 # Sperm model dependencies (Mask2Former + graph assembly)
 # ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
 networkx>=3.0
