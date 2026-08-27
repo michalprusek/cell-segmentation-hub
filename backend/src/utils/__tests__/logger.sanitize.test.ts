@@ -25,11 +25,16 @@
  *   - revert to the ONE-STEP `/[\r\n]/g -> ' '`     -> 0 fail
  *
  * That last row is the point. The three-step form was chosen for the
- * ANALYSER, and it is byte-for-byte identical in behaviour to the one-step
- * form (verified over 39 398 inputs), so no behavioural test can tell them
- * apart — these tests pin the SEMANTICS, and CodeQL pins the SHAPE by
+ * ANALYSER, and for the SEPARATOR it is byte-for-byte identical to the
+ * one-step form — compared over 62 695 inputs, holding the control class
+ * equal on both sides, 0 differences. So no behavioural test can tell them
+ * apart: these tests pin the SEMANTICS, and CodeQL pins the SHAPE by
  * reopening the alert. If you simplify `sanitize` and CI stays green, check
  * the Security tab before concluding nothing broke.
+ *
+ * The C1 strip is the one deliberate behaviour CHANGE in that same commit,
+ * and is NOT covered by the equivalence above — it is pinned separately by
+ * the CSI/NEL test, which goes red if the range is narrowed back to DEL.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -42,6 +47,8 @@ const NUL = '\u0000';
 const BEL = '\u0007';
 const ESC = '\u001b';
 const DEL = '\u007f';
+const CSI = '\u009b'; // C1: single-character form of ESC[
+const NEL = '\u0085'; // C1: next line
 const TAB = '\t';
 
 /** Capture whatever the logger handed to `console.info`. */
@@ -92,6 +99,23 @@ describe('Logger.sanitize — record forging (CWE-117)', () => {
       logger.info(`a${NUL}b${BEL}c${DEL}${ESC}[2Kdef`)
     );
     expect(body(line)).toBe('abc[2Kdef');
+  });
+
+  it('strips the C1 block, which C0-only sanitizing let through', () => {
+    // U+009B is CSI: on a terminal that decodes C1, a bare U+009B + '2K'
+    // erases the line exactly as ESC[2K does, so C0-only stripping left the
+    // repainting attack open in its other spelling.
+    expect(body(capture(() => logger.info(`a${CSI}2Kb`)))).toBe('a2Kb');
+    // U+0085 is NEL, which some log consumers treat as a line break.
+    expect(body(capture(() => logger.info(`a${NEL}b`)))).toBe('ab');
+  });
+
+  it('leaves legitimate non-ASCII alone', () => {
+    // The C1 strip must not reach printable text: every codepoint it removes
+    // is Unicode category Cc, and these all sit above the block.
+    for (const text of ['éclair', '漢字', 'naïve', 'µm']) {
+      expect(body(capture(() => logger.info(text)))).toBe(text);
+    }
   });
 
   it('keeps TAB, which cannot forge a record', () => {

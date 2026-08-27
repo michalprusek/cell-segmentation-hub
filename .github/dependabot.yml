@@ -11,7 +11,16 @@
 #
 # Grouping is deliberate: one PR per ecosystem per week for the patch/minor
 # stream, so routine bumps arrive as a single reviewable change rather than as
-# a dozen. Majors stay ungrouped — each one needs its own verification.
+# a dozen. Every npm and pip ecosystem below carries such a group.
+#
+# Majors are deliberately left OUT of those groups so each arrives as its own
+# PR and gets its own verification — with one exception. The github-actions
+# group has no `update-types` filter, so it batches majors too. That is not an
+# oversight: `update-types` restricting a group to minor/patch has been
+# reported to SUPPRESS the matching majors rather than open them individually
+# (dependabot-core#14202), and a silently-withheld `actions/checkout` major is
+# worse than a slightly larger Actions PR. Workflow pins are also the cheapest
+# thing here to review and revert.
 version: 2
 
 updates:
@@ -53,6 +62,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    groups:
+      ml-patch-minor:
+        patterns: ['*']
+        update-types: [minor, patch]
     ignore:
       # LOAD-BEARING PINS — see CLAUDE.md "Deploy Gotchas" and failure
       # pattern #16. These are held on purpose, so an automated PR for them is
@@ -80,6 +93,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    groups:
+      essays-patch-minor:
+        patterns: ['*']
+        update-types: [minor, patch]
     ignore:
       - dependency-name: torch
       - dependency-name: torchvision

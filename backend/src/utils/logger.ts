@@ -37,8 +37,18 @@ class Logger {
    *
    *  CR/LF first and on its own: a newline is a *record* separator, so it is
    *  the character that turns one field into two log lines. The middle pass
-   *  removes the remaining C0 controls and DEL, which do not forge a record
-   *  but do let a value repaint or hide part of the line in a terminal.
+   *  removes the remaining C0 controls, DEL, and the C1 block, which do not
+   *  forge a record but do let a value repaint or hide part of the line in a
+   *  terminal.
+   *
+   *  C1 (U+0080-U+009F) is in that range for a concrete reason, not for
+   *  completeness: U+009B is CSI, the single-character form of `ESC[`, so a
+   *  bare U+009B + `2K` erases the line on a terminal that decodes C1 -- the
+   *  same attack the C0 pass already blocks in its `ESC[` spelling. U+0085 is
+   *  NEL, which some consumers treat as a line break. Stripping the block
+   *  costs nothing: all 32 codepoints in it are Unicode category Cc, so no
+   *  legitimate text can contain one (accented Latin, CJK and µ all sit above
+   *  it and are untouched).
    *
    *  A separator becomes a SPACE, not nothing: `a\nb` has to read `a b`, never
    *  `ab`, or two unrelated fields silently fuse into one word. That is done
@@ -66,7 +76,7 @@ class Logger {
       value
         .replace(/[\r\n]/g, ' \n')
         // eslint-disable-next-line no-control-regex -- stripping controls is the point
-        .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
+        .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
         .replace(/\n/g, '')
     );
   }
