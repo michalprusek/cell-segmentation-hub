@@ -20,12 +20,7 @@ interface UniversalCancelButtonProps {
   title?: string;
   size?: 'sm' | 'default' | 'lg';
   variant?:
-    | 'default'
-    | 'destructive'
-    | 'outline'
-    | 'secondary'
-    | 'ghost'
-    | 'link';
+    'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
 }
 
 /**

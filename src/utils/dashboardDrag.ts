@@ -20,8 +20,7 @@
 // in from the desktop (e.g. text/plain, Files).
 
 export type DragItem =
-  | { type: 'project'; id: string }
-  | { type: 'folder'; id: string };
+  { type: 'project'; id: string } | { type: 'folder'; id: string };
 
 export const PROJECT_MIME = 'application/x-spheroseg-project';
 export const FOLDER_MIME = 'application/x-spheroseg-folder';

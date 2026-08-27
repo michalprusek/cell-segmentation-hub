@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type Transition } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { ReactNode } from 'react';
 
@@ -50,7 +50,11 @@ const pageVariants = {
   },
 };
 
-const pageTransition = (duration: number) => ({
+// Annotated rather than inferred: framer-motion 12.43 narrowed `Transition`,
+// so a bare object literal widens `type` and `ease` to `string` and no longer
+// matches the easing/type unions. The return annotation gives the literals a
+// contextual type, which is also what keeps a typo in them an error.
+const pageTransition = (duration: number): Transition => ({
   type: 'tween',
   ease: 'anticipate',
   duration,

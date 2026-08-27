@@ -49,8 +49,7 @@ global.FileReader = class MockFileReader {
   onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null =
     null;
   onprogress:
-    | ((this: FileReader, ev: ProgressEvent<FileReader>) => any)
-    | null = null;
+    ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null = null;
 
   readAsDataURL(_file: Blob) {
     setTimeout(() => {

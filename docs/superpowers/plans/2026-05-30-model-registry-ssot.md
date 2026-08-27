@@ -115,11 +115,7 @@ describe('model registry (backend)', () => {
 ```ts
 /** Single source of truth for backend model facts. Add/remove a model HERE. */
 export type ProjectTypeKey =
-  | 'spheroid'
-  | 'spheroid_invasive'
-  | 'wound'
-  | 'sperm'
-  | 'microtubules';
+  'spheroid' | 'spheroid_invasive' | 'wound' | 'sperm' | 'microtubules';
 
 interface BackendModelSpec {
   /** project types whose picker offers this model */

@@ -29,18 +29,18 @@
 
 ## File structure
 
-| File                                                              | Responsibility |
+| File | Responsibility |
 | ----------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------- |
-| `backend/src/services/video/pythonHelpers/make_playback_proxy.py` | create         | one channel's frames → WebP; prints per-frame outcome as JSON lines           |
-| `backend/src/services/playbackProxyRange.ts`                      | create         | pure: derive `rangeMax` from sampled maxima; decide PNG-vs-proxy for a window |
-| `backend/src/services/playbackProxyService.ts`                    | create         | locate/queue/serve proxies; owns the lazy batch                               |
-| `backend/src/api/controllers/videoController.ts`                  | modify         | honour `?repr=proxy`                                                          |
-| `backend/src/services/video/types.ts`                             | modify         | `proxyRangeMax?: number` on `ChannelMeta`                                     |
-| `src/lib/webpGray.ts`                                             | create         | WebP blob → `DecodedGray` (bitDepth 8)                                        |
-| `src/lib/png16Client.ts`                                          | modify         | route a WebP blob to `webpGray`                                               |
-| `src/pages/segmentation/hooks/segmentationPolygonCache.ts`        | modify         | `repr=proxy` in the URL when the proxy is wanted                              |
-| `src/pages/segmentation/components/canvas/MultiChannelCanvas.tsx` | modify         | pass `rangeMax` to the compositor; ask for full depth on a narrow window      |
-| `src/types/index.ts`                                              | modify         | `proxyRangeMax` on `VideoChannel`                                             |
+| `backend/src/services/video/pythonHelpers/make_playback_proxy.py` | create | one channel's frames → WebP; prints per-frame outcome as JSON lines |
+| `backend/src/services/playbackProxyRange.ts` | create | pure: derive `rangeMax` from sampled maxima; decide PNG-vs-proxy for a window |
+| `backend/src/services/playbackProxyService.ts` | create | locate/queue/serve proxies; owns the lazy batch |
+| `backend/src/api/controllers/videoController.ts` | modify | honour `?repr=proxy` |
+| `backend/src/services/video/types.ts` | modify | `proxyRangeMax?: number` on `ChannelMeta` |
+| `src/lib/webpGray.ts` | create | WebP blob → `DecodedGray` (bitDepth 8) |
+| `src/lib/png16Client.ts` | modify | route a WebP blob to `webpGray` |
+| `src/pages/segmentation/hooks/segmentationPolygonCache.ts` | modify | `repr=proxy` in the URL when the proxy is wanted |
+| `src/pages/segmentation/components/canvas/MultiChannelCanvas.tsx` | modify | pass `rangeMax` to the compositor; ask for full depth on a narrow window |
+| `src/types/index.ts` | modify | `proxyRangeMax` on `VideoChannel` |
 
 ---
 

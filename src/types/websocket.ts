@@ -311,8 +311,7 @@ export interface WebSocketConnectionOptions {
 /**
  * WebSocket manager interface
  */
-export interface IWebSocketManager
-  extends TypedEventEmitter<WebSocketEventMap> {
+export interface IWebSocketManager extends TypedEventEmitter<WebSocketEventMap> {
   connect(options?: WebSocketConnectionOptions): void;
   disconnect(): void;
   isConnected(): boolean;
