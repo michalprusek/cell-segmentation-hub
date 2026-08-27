@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 import torch
 
-from sperm_final.config import ModelConfig, GraphAssemblyConfig, ID_TO_CLASS
+from sperm_final.config import ModelConfig, GraphAssemblyConfig
 from sperm_final.data.dataset import IMAGENET_MEAN, IMAGENET_STD
 from sperm_final.models.mask2former import Mask2FormerModel
 from sperm_final.inference.predict import predict_full_image_for_graph

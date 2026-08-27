@@ -122,11 +122,7 @@ export const getStatusDisplay = (status: ImageStatus, t: TranslateFn) => {
 
 ```typescript
 // ❌ No type safety
-window.dispatchEvent(
-  new CustomEvent('project-image-deleted', {
-    /* ... */
-  })
-);
+window.dispatchEvent(new CustomEvent('project-image-deleted', {/* ... */}));
 
 // ❌ Easy to misspell
 window.addEventListener('project-image-delted', handler); // Typo!

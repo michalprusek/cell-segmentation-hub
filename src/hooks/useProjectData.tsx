@@ -120,7 +120,7 @@ export const useProjectData = (
           }
         }
 
-        const formattedImages: ProjectImage[] = (allImages || []).map(img => {
+        const formattedImages: ProjectImage[] = allImages.map(img => {
           // Normalize segmentation status from different backend field names
           let segmentationStatus =
             img.segmentationStatus || img.segmentation_status;

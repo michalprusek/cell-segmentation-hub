@@ -76,9 +76,8 @@ describe('ExcelExporter', () => {
       createBlob: vi.fn(() => new Blob()),
       downloadFile: vi.fn(),
     });
-    const { calculateMetrics } = await import(
-      '@/pages/segmentation/utils/metricCalculations'
-    );
+    const { calculateMetrics } =
+      await import('@/pages/segmentation/utils/metricCalculations');
     vi.mocked(calculateMetrics).mockReturnValue({
       Area: 1000,
       Perimeter: 120,
@@ -175,9 +174,8 @@ describe('ExcelExporter', () => {
 
   it('calls isPolygonInsidePolygon to associate holes with external polygons', async () => {
     const { isPolygonInsidePolygon } = await import('@/lib/polygonGeometry');
-    const { calculateMetrics } = await import(
-      '@/pages/segmentation/utils/metricCalculations'
-    );
+    const { calculateMetrics } =
+      await import('@/pages/segmentation/utils/metricCalculations');
     const user = userEvent.setup();
 
     const segWithInternal = {

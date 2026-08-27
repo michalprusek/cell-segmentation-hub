@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -713,16 +712,19 @@ def _load_and_resolve(src: Path) -> tuple[np.ndarray, dict]:
         # C separate time frames — destroying the channel split and turning
         # a still into a bogus "video" the browser can't display.
         C, H, W = arr.shape
-        T = 1
         arr = arr[None, :, :, :]
     elif arr.ndim == 3 and arr.shape[0] > 1 and arr.shape[-1] not in (3, 4):
-        # Heuristic: leading axis is time, single channel.
-        T, H, W = arr.shape
+        # Heuristic: leading axis is time, single channel. Only C is bound: it is
+        # read below to reconcile `raw_channel_labels`, whereas naming T/H/W here
+        # just to discard them read as an assertion that never asserted --
+        # `arr.ndim == 3` in this branch's own guard already fixes the shape.
         C = 1
         arr = arr[:, None, :, :]
     elif arr.ndim == 2:
-        # Single image masquerading as a stack — treat as one frame.
-        T, C, H, W = 1, 1, arr.shape[0], arr.shape[1]
+        # Single image masquerading as a stack — treat as one frame. Same as the
+        # branch above: only C is bound, because T/H/W are re-derived from
+        # `arr.shape` further down before anything reads them.
+        C = 1
         arr = arr[None, None, :, :]
     else:
         raise UnsupportedTiffAxes(

@@ -962,7 +962,14 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
               )}
 
               {/* Completed Export - Manual Download */}
-              {completedJobId && !isExporting && !isDownloading && (
+              {/* `!isDownloading` used to be part of this guard, which made the
+                  isDownloading branches on the button below unreachable: the
+                  whole panel unmounted the moment a download started, so the
+                  "Downloading..." spinner it renders could never appear and the
+                  user just watched the box vanish. Both the guard and the
+                  spinner arrived in the same commit, so the spinner is the
+                  intent and the guard was the slip. */}
+              {completedJobId && !isExporting && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg relative">
                   <AlertCircle className="h-4 w-4 flex-shrink-0 text-green-600" />
                   <div className="min-w-0 flex-1">

@@ -5,17 +5,15 @@ Loads pretrained models and provides inference functionality with batch processi
 import os
 import json
 import torch
-import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
 import cv2
-from typing import Dict, List, Tuple, Any, Optional, Union
+from typing import Dict, List, Tuple, Any, Optional
 import logging
 import threading
 from pathlib import Path
 import time
-import uuid
 import sys
 
 # Add monitoring module to path
@@ -1614,6 +1612,7 @@ class ModelLoader:
                         _dropped_sizes = []
                 
                 # Perform batch inference with GPU OOM handling
+                timeout_error: Optional[InferenceTimeoutError] = None
                 try:
                     batch_output = executor.execute_inference(
                         model=model,
@@ -1649,10 +1648,19 @@ class ModelLoader:
                             f"GPU out of memory even with batch size 1 for {model_name}: {str(e)}"
                         ) from e
                     
-                except InferenceTimeoutError as e:
+                # Built here, raised BELOW, outside the handler. Dropping `as e`
+                # and `from e` is not enough on its own: raising inside an
+                # `except` block makes Python attach the active exception as
+                # `__context__` implicitly, and that keeps the failed
+                # `execute_inference` frame -- and its `input_tensor` local --
+                # reachable. On CUDA that pins the very allocation this loop is
+                # shrinking the batch to free. Once the handler exits the
+                # exception is no longer active, so the raise below carries no
+                # context and the frame is collectable.
+                except InferenceTimeoutError:
                     self.is_processing = False
                     self.current_model = None
-                    raise InferenceTimeoutError(
+                    timeout_error = InferenceTimeoutError(
                         model_name=model_name,
                         timeout=timeout,
                         image_size=f"batch_{current_batch_size}_images"
@@ -1662,7 +1670,11 @@ class ModelLoader:
                     self.is_processing = False
                     self.current_model = None
                     raise InferenceError(f"Batch inference failed for {model_name}: {str(e)}") from e
-                
+
+                # Outside every handler -- see the InferenceTimeoutError branch.
+                if timeout_error is not None:
+                    raise timeout_error
+
                 # Check memory after inference and record metrics
                 if self.device.type == 'cuda':
                     memory_after = torch.cuda.memory_allocated()

@@ -11,9 +11,8 @@ import { logger } from './logger';
  */
 export const lazyLoadMetricCalculations = async () => {
   try {
-    const module = await import(
-      '@/pages/segmentation/utils/metricCalculations'
-    );
+    const module =
+      await import('@/pages/segmentation/utils/metricCalculations');
     return module;
   } catch (error) {
     logger.error('Failed to load metric calculations:', error);

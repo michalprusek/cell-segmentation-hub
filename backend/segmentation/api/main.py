@@ -3,7 +3,6 @@
 import logging
 import sys
 import os
-from pathlib import Path
 from datetime import datetime
 import torch
 
@@ -148,6 +147,17 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down segmentation microservice...")
     if hasattr(app.state, "model_loader"):
         delattr(app.state, "model_loader")
+
+    # `get_gpu_monitor()` auto-starts a polling thread the first time /monitoring
+    # is hit, and nothing ever stopped it -- the import of this cleanup sat
+    # unused in api/monitoring.py, which is how it was found. Shutdown is where
+    # it belongs, beside the model_loader teardown above.
+    try:
+        from monitoring.gpu_monitor import cleanup_gpu_monitor
+        cleanup_gpu_monitor()
+    except Exception as exc:  # never let teardown fail the shutdown path
+        logger.warning(f"GPU monitor cleanup skipped: {exc}")
+
     logger.info("Segmentation microservice shut down")
 
 # Create FastAPI app
@@ -287,19 +297,12 @@ async def health():
         # Determine device info
         gpu_available = cuda_available or mps_available
         
-        if cuda_available:
-            device_count = torch.cuda.device_count()
-            try:
-                device_name = torch.cuda.get_device_name(0)
-            except Exception:
-                device_name = "CUDA (unknown)"
-        elif mps_available:
-            device_count = 1
-            device_name = "Apple MPS"
-        else:
-            device_count = 0
-            device_name = "CPU"
-        
+        # HealthResponse carries only `gpu_available` and `models_loaded`, so the
+        # per-device name/count this block used to compute went straight into the
+        # bin. Removed rather than reported: `torch.cuda.get_device_name` is a
+        # driver call, and paying for one on every health poll to discard the
+        # answer is worse than not knowing.
+
         # Count loaded models
         models_loaded = 0
         if hasattr(app.state, 'model_loader') and hasattr(app.state.model_loader, 'loaded_models'):
