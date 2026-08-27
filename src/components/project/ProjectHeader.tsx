@@ -2,7 +2,8 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -38,6 +39,12 @@ interface ProjectHeaderProps {
   loading: boolean;
   projectType?: ProjectType;
   onTypeChange?: (type: ProjectType) => void;
+  // "All annotations in the project have been reviewed and passed." Owner OR
+  // an accepted-share annotator may toggle it — the handler is passed
+  // unconditionally by ProjectDetail (same shape as onTypeChange); the
+  // backend is the actual authorization boundary.
+  verified?: boolean;
+  onVerifiedChange?: (verified: boolean) => void;
 }
 
 const ProjectHeader = ({
@@ -46,6 +53,8 @@ const ProjectHeader = ({
   loading,
   projectType,
   onTypeChange,
+  verified,
+  onVerifiedChange,
 }: ProjectHeaderProps) => {
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -117,6 +126,42 @@ const ProjectHeader = ({
                     )}
                   >
                     {t(`projects.types.${projectType}`)}
+                  </Badge>
+                )}
+              </div>
+            )}
+            {(onVerifiedChange || verified) && (
+              <div className="hidden sm:flex items-center gap-2">
+                {onVerifiedChange ? (
+                  // Editable: owner OR an accepted-share annotator may toggle
+                  // this — the backend, not this component, is the
+                  // authorization boundary (see ProjectService.setVerified).
+                  <label
+                    className={cn(
+                      'flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs font-medium cursor-pointer select-none whitespace-nowrap',
+                      verified
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 border-green-300 dark:border-green-700'
+                        : 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'
+                    )}
+                  >
+                    <Checkbox
+                      checked={!!verified}
+                      onCheckedChange={checked =>
+                        onVerifiedChange(checked === true)
+                      }
+                      aria-label={String(t('projects.toggleVerified'))}
+                    />
+                    {t('projects.verified')}
+                  </label>
+                ) : (
+                  // Read-only: only rendered when true (same convention as
+                  // the "shared" badge elsewhere — nothing to show for false).
+                  <Badge
+                    variant="outline"
+                    className="h-8 px-3 text-xs font-medium border bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 border-green-300 dark:border-green-700"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                    {t('projects.verified')}
                   </Badge>
                 )}
               </div>

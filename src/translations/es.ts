@@ -211,6 +211,11 @@ export default {
     changeProjectType: 'Cambiar tipo de proyecto',
     typeChangeSegmentationsWarning:
       '{{count}} segmentaciones existentes pueden no coincidir con el formato de exportación "{{type}}". Vuelva a segmentar para actualizar las métricas.',
+    verified: 'Verificado',
+    toggleVerified: 'Alternar verificación',
+    projectVerified: 'Proyecto marcado como verificado',
+    projectUnverified: 'Se ha eliminado la verificación del proyecto',
+    failedToUpdateVerified: 'Error al actualizar el estado de verificación',
     types: {
       spheroid: 'Esferoides (estándar)',
       spheroid_invasive: 'Esferoides desintegrados',

@@ -669,6 +669,37 @@ describe('field mapping', () => {
       const result = await apiClient.getProject('proj-1');
       expect(result.type).toBe('spheroid');
     });
+
+    // Regression: "verified" is the #1 documented strip point in this
+    // codebase (mapProjectFields is a hand-built object literal) — an
+    // annotator-set "all annotations reviewed and passed" flag must survive
+    // the FE mapper, not just the backend response.
+    it('preserves verified=true', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, verified: true })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(result.verified).toBe(true);
+    });
+
+    it('preserves verified=false explicitly (not omitted as falsy)', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, verified: false })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(Object.prototype.hasOwnProperty.call(result, 'verified')).toBe(
+        true
+      );
+      expect(result.verified).toBe(false);
+    });
+
+    it('omits verified entirely when the backend did not send it', async () => {
+      mockAxiosInstance.get.mockResolvedValue(wrap({ ...baseProject }));
+      const result = await apiClient.getProject('proj-1');
+      expect(Object.prototype.hasOwnProperty.call(result, 'verified')).toBe(
+        false
+      );
+    });
   });
 
   // dtoToProjectImage pure mapper ─────────────────────────────────────────────

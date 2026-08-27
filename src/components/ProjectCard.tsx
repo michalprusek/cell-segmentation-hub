@@ -5,7 +5,7 @@ import ProjectThumbnail from '@/components/project/ProjectThumbnail';
 import ProjectActions from '@/components/project/ProjectActions';
 import ProjectMetadata from '@/components/project/ProjectMetadata';
 import { Badge } from '@/components/ui/badge';
-import { Share2, Users, User } from 'lucide-react';
+import { Share2, Users, User, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dragSourceProps } from '@/utils/dashboardDrag';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -23,6 +23,8 @@ interface ProjectCardProps {
   sharedBy?: { email: string };
   owner?: { email: string; name?: string };
   shareId?: string;
+  /** "All annotations in the project have been reviewed and passed." */
+  verified?: boolean;
   onProjectUpdate?: (projectId: string, action: string) => void;
   /** When true, opens the move-to-folder dialog for this project. */
   onRequestMove?: (projectId: string) => void;
@@ -43,6 +45,7 @@ const ProjectCard = React.memo(
     sharedBy: _sharedBy,
     owner,
     shareId,
+    verified = false,
     onProjectUpdate,
     onRequestMove,
     hasAnyFolder,
@@ -122,9 +125,18 @@ const ProjectCard = React.memo(
             <h3 className="font-medium text-lg truncate pr-2" title={title}>
               {title}
             </h3>
-            {isShared && (
-              <Share2 className="h-4 w-4 text-blue-500 flex-shrink-0" />
-            )}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {verified && (
+                <Badge
+                  variant="outline"
+                  className="h-5 px-1.5 text-[10px] font-medium border bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 border-green-300 dark:border-green-700"
+                >
+                  <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                  {t('projects.verified')}
+                </Badge>
+              )}
+              {isShared && <Share2 className="h-4 w-4 text-blue-500" />}
+            </div>
           </div>
 
           {/* Owner information */}

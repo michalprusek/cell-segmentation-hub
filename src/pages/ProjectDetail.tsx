@@ -102,6 +102,8 @@ const ProjectDetail = () => {
     projectTitle,
     projectType,
     setProjectType,
+    projectVerified,
+    setProjectVerified,
     images,
     projectChannels,
     loading,
@@ -140,6 +142,32 @@ const ProjectDetail = () => {
       }
     },
     [id, setProjectType, t, images]
+  );
+
+  const handleVerifiedChange = useCallback(
+    async (verified: boolean) => {
+      if (!id) return;
+      // Optimistic: PATCH …/verified is settable by the owner AND an
+      // accepted-share annotator, and GET /projects/:id is browser-cached
+      // for 10 minutes, so we update local state directly rather than
+      // relying on a refetch.
+      try {
+        await apiClient.setProjectVerified(id, verified);
+        setProjectVerified(verified);
+        toast.success(
+          verified
+            ? t('projects.projectVerified')
+            : t('projects.projectUnverified')
+        );
+      } catch (err) {
+        logger.error('Failed to update project verified flag', err);
+        toast.error(
+          getErrorMessage(err, key => String(t(key))) ||
+            t('projects.failedToUpdateVerified')
+        );
+      }
+    },
+    [id, setProjectVerified, t]
   );
 
   // Handle cancellation events from WebSocket - define early for useSegmentationQueue
@@ -1651,6 +1679,8 @@ const ProjectDetail = () => {
         loading={loading}
         projectType={projectType}
         onTypeChange={handleProjectTypeChange}
+        verified={projectVerified}
+        onVerifiedChange={handleVerifiedChange}
       />
 
       <div className="container mx-auto px-4 py-8">

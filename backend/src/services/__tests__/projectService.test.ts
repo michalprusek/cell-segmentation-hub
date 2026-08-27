@@ -510,3 +510,69 @@ describe('ProjectService', () => {
     });
   });
 });
+
+/**
+ * `setVerified` is the write half of the annotator-facing verification flag.
+ * Its authorization gate is deliberately DIFFERENT from every other mutation
+ * on a project: it goes through `hasProjectAccess` (owner OR accepted share)
+ * rather than `checkProjectOwnership`, so that an annotator can mark a project
+ * reviewed without also gaining the ability to rename or retype it. That
+ * distinction is the whole feature, so it is pinned here.
+ */
+describe('ProjectService.setVerified', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasProjectAccess.mockResolvedValue({ hasAccess: true, isOwner: true });
+  });
+
+  it('returns null and writes nothing when the caller has no access', async () => {
+    mockHasProjectAccess.mockResolvedValueOnce({
+      hasAccess: false,
+      isOwner: false,
+    });
+
+    const result = await projectService.setVerified('proj-1', 'stranger', true);
+
+    expect(result).toBeNull();
+    // The important half: a denied caller must not reach the write at all.
+    expect(prismaMock.project.update).not.toHaveBeenCalled();
+  });
+
+  it('stamps verifiedAt and verifiedBy with the ACTING user when set to true', async () => {
+    // Not the owner — an accepted-share annotator. The audit columns must
+    // record who actually reviewed it, not who owns the project.
+    mockHasProjectAccess.mockResolvedValueOnce({
+      hasAccess: true,
+      isOwner: false,
+    });
+    prismaMock.project.update.mockResolvedValueOnce({ id: 'proj-1' });
+
+    await projectService.setVerified('proj-1', 'annotator-9', true);
+
+    const arg = prismaMock.project.update.mock.calls[0][0];
+    expect(arg.where).toEqual({ id: 'proj-1' });
+    expect(arg.data.verified).toBe(true);
+    expect(arg.data.verifiedBy).toBe('annotator-9');
+    expect(arg.data.verifiedAt).toBeInstanceOf(Date);
+  });
+
+  it('clears both audit columns when set to false', async () => {
+    prismaMock.project.update.mockResolvedValueOnce({ id: 'proj-1' });
+
+    await projectService.setVerified('proj-1', 'annotator-9', false);
+
+    const arg = prismaMock.project.update.mock.calls[0][0];
+    expect(arg.data.verified).toBe(false);
+    expect(arg.data.verifiedAt).toBeNull();
+    expect(arg.data.verifiedBy).toBeNull();
+  });
+
+  it('rethrows a database failure rather than reporting success', async () => {
+    const boom = new Error('db down');
+    prismaMock.project.update.mockRejectedValueOnce(boom);
+
+    await expect(
+      projectService.setVerified('proj-1', 'user-1', true)
+    ).rejects.toBe(boom);
+  });
+});

@@ -212,6 +212,11 @@ export default {
     changeProjectType: 'Změnit typ projektu',
     typeChangeSegmentationsWarning:
       '{{count}} existujících segmentací nemusí odpovídat exportnímu formátu "{{type}}". Re-segmentujte pro aktualizaci metrik.',
+    verified: 'Ověřeno',
+    toggleVerified: 'Přepnout ověření',
+    projectVerified: 'Projekt byl označen jako ověřený',
+    projectUnverified: 'Označení ověření projektu bylo zrušeno',
+    failedToUpdateVerified: 'Nepodařilo se aktualizovat stav ověření',
     types: {
       spheroid: 'Sféroidy (standardní)',
       spheroid_invasive: 'Rozprsknuté sféroidy',

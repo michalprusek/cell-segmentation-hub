@@ -193,6 +193,14 @@ export const getProject = asyncHandler(
         return;
       }
 
+      // The route applies `cacheMiddleware` (Cache-Control: public,
+      // max-age=600) so a browser can serve a stale `verified` flag for up
+      // to 10 minutes after PATCH …/verified. Override it here, the same way
+      // getProjects() already does, rather than relying on a refetch.
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+
       ResponseHelper.success(res, project, 'Projekt byl úspěšně načten');
     } catch (error) {
       logger.error(
@@ -350,6 +358,80 @@ export const updateProject = asyncHandler(
         res,
         error as Error,
         'Nepodařilo se aktualizovat projekt',
+        'ProjectController'
+      );
+    }
+  }
+);
+
+/**
+ * PATCH /api/projects/:id/verified — toggle the "all annotations reviewed
+ * and passed" flag. Deliberately NOT gated the same way as `updateProject`:
+ * the owner AND an accepted-share annotator may both set it (see
+ * ProjectService.setVerified), which is why this is its own dedicated
+ * endpoint rather than a widened PUT /:id.
+ */
+export const setProjectVerified = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    if (!req.user) {
+      ResponseHelper.unauthorized(
+        res,
+        'Uživatel není autentizován',
+        'ProjectController'
+      );
+      return;
+    }
+
+    const projectId = req.params.id;
+    if (!projectId) {
+      ResponseHelper.badRequest(res, 'Project ID is required');
+      return;
+    }
+
+    const { verified } = req.body as { verified: boolean };
+
+    try {
+      const project = await ProjectService.setVerified(
+        projectId,
+        req.user.id,
+        verified
+      );
+
+      if (!project) {
+        ResponseHelper.notFound(
+          res,
+          'Projekt nebyl nalezen nebo k němu nemáte oprávnění',
+          'ProjectController'
+        );
+        return;
+      }
+
+      // GET /api/projects/:id is cached for 10 minutes (Cache-Control:
+      // public, max-age=600) — override here so a browser can't serve a
+      // stale `verified` right after this toggles it.
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+
+      ResponseHelper.success(
+        res,
+        project,
+        verified
+          ? 'Projekt byl označen jako ověřený'
+          : 'Označení ověření projektu bylo zrušeno'
+      );
+    } catch (error) {
+      logger.error(
+        'Failed to set project verified flag:',
+        error as Error,
+        'ProjectController',
+        { userId: req.user.id, projectId, verified }
+      );
+
+      ResponseHelper.internalError(
+        res,
+        error as Error,
+        'Nepodařilo se aktualizovat stav ověření projektu',
         'ProjectController'
       );
     }

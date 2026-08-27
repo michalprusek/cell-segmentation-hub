@@ -20,6 +20,9 @@ export const useProjectData = (
   const [projectType, setProjectType] = useState<
     import('@/types').ProjectType | undefined
   >(undefined);
+  // "All annotations reviewed and passed." Owner OR an accepted-share
+  // annotator may toggle it (PATCH /projects/:id/verified).
+  const [projectVerified, setProjectVerified] = useState<boolean>(false);
   const [images, setImages] = useState<ProjectImage[]>([]);
   // Distinct channel names across all video containers in this project,
   // sourced from the BE response metadata. Used by the Segment-All channel
@@ -62,6 +65,7 @@ export const useProjectData = (
 
         setProjectTitle(project.name);
         setProjectType(project.type);
+        setProjectVerified(project.verified ?? false);
 
         // Fetch all images by making multiple requests if needed.
         // Backend max is 100 per request; we use lod: 'low' which
@@ -347,6 +351,8 @@ export const useProjectData = (
     projectTitle,
     projectType,
     setProjectType,
+    projectVerified,
+    setProjectVerified,
     images,
     projectChannels,
     loading,

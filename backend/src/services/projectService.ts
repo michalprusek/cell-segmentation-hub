@@ -445,6 +445,59 @@ export async function updateProject(
 }
 
 /**
+ * Set the project's "verified" flag — all annotations in the project have
+ * been reviewed and passed. Deliberately gated on SHARE access
+ * (SharingService.hasProjectAccess), NOT ownership: the owner AND any
+ * accepted-share annotator may toggle it, unlike title/description/type
+ * which stay owner-only (see updateProject / checkProjectOwnership above).
+ *
+ * Stamps verifiedAt/verifiedBy for later auditability when marking verified;
+ * clears both when un-marking so they never describe a stale reviewer.
+ * Returns null when the caller has no access to the project (mapped to a
+ * 404 by the controller, matching getProjectById's convention).
+ */
+export async function setVerified(
+  projectId: string,
+  userId: string,
+  verified: boolean
+): Promise<Project | null> {
+  try {
+    const accessCheck = await SharingService.hasProjectAccess(
+      projectId,
+      userId
+    );
+    if (!accessCheck.hasAccess) {
+      return null;
+    }
+
+    const updatedProject = await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        verified,
+        verifiedAt: verified ? new Date() : null,
+        verifiedBy: verified ? userId : null,
+      },
+    });
+
+    logger.info(`Project verified flag set: ${projectId}`, 'ProjectService', {
+      projectId,
+      userId,
+      verified,
+    });
+
+    return updatedProject;
+  } catch (error) {
+    logger.error(
+      'Failed to set project verified flag:',
+      error as Error,
+      'ProjectService',
+      { projectId, userId, verified }
+    );
+    throw error;
+  }
+}
+
+/**
  * Delete a project (with ownership check - only owners can delete)
  */
 export async function deleteProject(

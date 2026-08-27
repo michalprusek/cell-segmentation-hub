@@ -75,7 +75,17 @@ class Logger {
     )}`;
 
     if (entry.data) {
-      message += `\nData: ${JSON.stringify(entry.data, null, 2)}`;
+      // `data` is the last field that reached the sink unsanitized. Its
+      // string values are already JSON-escaped, so a newline inside one
+      // cannot forge a record -- but the object is attacker-shaped
+      // (request ids, filenames, channel names), and JSON escaping is not a
+      // control-character filter: it leaves C1 and DEL alone, which can still
+      // repaint a terminal line. Run it through the same block sanitizer the
+      // stack trace uses, so the pretty-printed structure survives while every
+      // continuation line stays visibly a continuation.
+      message += `\nData: ${this.sanitizeBlock(
+        JSON.stringify(entry.data, null, 2)
+      )}`;
     }
 
     if (entry.error) {

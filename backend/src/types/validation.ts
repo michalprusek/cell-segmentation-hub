@@ -286,6 +286,11 @@ export const mtTypeLabelsPutSchema = z.object({
   labels: z.array(z.unknown()).max(500),
 });
 
+// PATCH …/verified body — toggles the project "verified" flag.
+export const setProjectVerifiedSchema = z.object({
+  verified: z.boolean(),
+});
+
 // Image validation schemas
 
 /**
