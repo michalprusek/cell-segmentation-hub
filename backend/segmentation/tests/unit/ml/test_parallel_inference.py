@@ -8,6 +8,7 @@ import torch
 import threading
 import time
 import concurrent.futures
+import itertools
 from unittest.mock import Mock, patch, MagicMock
 import numpy as np
 
@@ -279,11 +280,25 @@ class TestParallelInferenceExecutor:
         """Benchmark test for concurrent inference performance"""
         input_tensor = torch.randn(4, 3, 256, 256)  # Batch of 4
 
+        # Unique model_name per call. `get_model_lock()` returns one RLock per
+        # name and `execute_inference` holds it around the actual inference, so
+        # a shared name made these four calls run strictly one after another --
+        # the "concurrent" leg was never concurrent.
+        #
+        # The assertion below nevertheless passed, for a reason worth recording:
+        # `_check_resources()` runs BEFORE the lock is taken, and it used to
+        # block ~100 ms in `psutil.cpu_percent(interval=0.1)`. That block was
+        # the only part of the call that overlapped across threads, so the test
+        # was measuring the parallelisation of a performance BUG. Removing the
+        # blocking probe left nothing outside the lock to overlap, and the test
+        # correctly started reporting no speedup.
+        counter = itertools.count()
+
         def run_single_inference():
             return executor.execute_inference(
                 model=mock_model,
                 input_tensor=input_tensor,
-                model_name="benchmark_model",
+                model_name=f"benchmark_model_{next(counter)}",
                 timeout=10.0
             )
 
