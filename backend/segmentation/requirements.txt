@@ -51,23 +51,36 @@ networkx>=3.0
 # encoder is architecturally unchanged) and builds the microcapsule U-Net.
 segmentation-models-pytorch==0.5.0
 
-# Microtubule v7 dependencies (DINOv3 ViT-L/16 backbone via HuggingFace)
-# transformers 4.57+ is required to recognise the DINOv3 model config. Pinned to
-# 4.57.1 — the LAST version whose DINOv3-ViT-L forward output matches the v7
-# checkpoint. 4.57.2 silently changed the DINOv3 forward (no error, no failed
-# load): the ViT features degrade into low-frequency blobs, so the seed map
-# fills ~50% of the frame and PySOAX emits random microtubules. Verified by
-# bisection on a reference frame (4.57.0/.1 → 303 MTs tracing real filaments;
-# 4.57.2–4.57.6 → 76 scattered). 4.57.0 also worked but PyPI YANKED it for a
-# setup/install defect, so 4.57.1 is the safe floor. DO NOT bump into 4.57.2+
-# or 5.x without re-verifying MT output against a known-good frame — a green
-# build proves nothing here. The arbitrary-code-exec advisory is unfixed across
-# all of 4.57.x (only patched in the 5.0 pre-release), so this pin forfeits no
-# security fix that 4.57.6 had. DINOv3 is gated — HF_TOKEN must be set before
-# first load. tifffile is used by both the model's percentile normalisation
-# reference and the video extractor (multi-page TIFF microscopy stacks). nd2
-# reads Nikon NIS-Elements proprietary files (Apache-2.0, pure Python).
-transformers==4.57.1
+# transformers backs exactly TWO things in this repo, and neither is
+# microtubule any more:
+#
+#   models/segformer.py                 SegformerConfig / SegformerForSemanticSegmentation
+#   sperm_final/models/backbone.py      Dinov2Model.from_pretrained("facebook/dinov2-large")
+#
+# The old pin here was 4.57.1 for the microtubule v7 DINOv3 backbone, where
+# 4.57.2 silently degraded the ViT features (303 real MTs -> 76 scattered, no
+# error, no failed load). That reason is GONE: v5H (2026-08-17) replaced v7 with
+# an nnU-Net whose checkpoint carries every weight, so MT imports no transformers
+# and needs no HF_TOKEN. Only SegFormer and sperm still call `from_pretrained`.
+#
+# 5.5.4 was verified against BOTH survivors by loading their real checkpoints and
+# hashing a fixed-input forward. Output is BIT-IDENTICAL to 4.57.1:
+#
+#   segformer (segformer_b0_spheroseg.pth)  sha 3527093be5a0632e
+#   Dinov2Model facebook/dinov2-large       sha 15460fff556f45a6
+#   sperm DINOv2Backbone layer_11/layer_17  sha a463aacc545d8f6c / 8cf462a9cdbfa640
+#
+# This clears 3 advisories (2 high, 1 medium) that are unfixed across ALL of
+# 4.57.x. 5.5.4 needs only torch>=2.4, so it does NOT disturb the torch 2.6.0
+# pin the mamba-ssm / causal-conv1d CUDA kernels are built against.
+#
+# CEILING, measured, not guessed: transformers 5.16.1 BREAKS SegFormer. The
+# module layout was renamed (`segformer.encoder.block.N.M` -> `segformer.stages.
+# N.blocks.M`, `decode_head.linear_c` -> `linear_projections`), so our checkpoint
+# no longer load_state_dicts. 5.5.4 and 5.6.0 are both clean; the break is above
+# 5.6. dependabot.yml therefore allows PATCH updates here and blocks minor/major.
+# Re-run the probe against both checkpoints before crossing a minor.
+transformers==5.5.4
 tifffile>=2024.1.30
 # tifffile decodes Deflate natively but delegates LZW (and JPEG, PackBits, LZMA...)
 # to imagecodecs, which was NOT installed. LZW is the DEFAULT TIFF compression that
