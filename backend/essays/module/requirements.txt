@@ -26,9 +26,9 @@ huggingface_hub>=0.20
 
 # --- Numerics / classical CV (PySOAX postprocessing) ---
 numpy==1.26.4
-scipy==1.11.4
-scikit-image==0.22.0
-opencv-python-headless==4.8.1.78
+scipy==1.18.1
+scikit-image==0.26.0
+opencv-python-headless==4.14.0.94
 
 # --- Image I/O ---
 Pillow==12.3.0
