@@ -52,6 +52,8 @@ export interface Project {
   updated_at: string;
   user_id: string;
   image_count?: number;
+  // "All annotations in the project have been reviewed and passed."
+  verified?: boolean;
 }
 
 /**
@@ -700,6 +702,15 @@ class ApiClient {
       result.folderId = (project.folderId as string | null) ?? null;
     }
 
+    // Annotation-review flag, set by the owner OR by any annotator the
+    // project is shared with. Same tri-state contract as `folderId` above:
+    // an explicit `false` is copied (a project deliberately un-verified),
+    // while an absent field stays absent, so a caller can tell "not
+    // verified" from "this response surface doesn't carry the field yet".
+    if (project.verified !== undefined) {
+      result.verified = project.verified as boolean;
+    }
+
     return result;
   }
 
@@ -924,6 +935,19 @@ class ApiClient {
 
   async deleteProject(id: string): Promise<void> {
     await this.instance.delete(`/projects/${id}`);
+  }
+
+  /**
+   * Toggle "all annotations reviewed and passed". Dedicated endpoint (not
+   * `updateProject`) — the owner AND an accepted-share annotator may both
+   * call this, unlike title/description/type which stay owner-only.
+   */
+  async setProjectVerified(id: string, verified: boolean): Promise<Project> {
+    const response = await this.instance.patch(`/projects/${id}/verified`, {
+      verified,
+    });
+    const project = this.extractData(response);
+    return this.mapProjectFields(project);
   }
 
   // ---- Project folders --------------------------------------------------

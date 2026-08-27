@@ -1,8 +1,10 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Share2, User } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ArrowRight, Share2, User, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/useLanguage';
 import { dragSourceProps } from '@/utils/dashboardDrag';
 import ProjectThumbnail from '@/components/project/ProjectThumbnail';
 import ProjectActions from '@/components/project/ProjectActions';
@@ -19,6 +21,8 @@ interface ProjectListItemProps {
   isShared?: boolean;
   owner?: { email: string; name?: string };
   shareId?: string;
+  /** "All annotations in the project have been reviewed and passed." */
+  verified?: boolean;
   onProjectUpdate?: (projectId: string, action: string) => void;
   onRequestMove?: (projectId: string) => void;
   hasAnyFolder?: boolean;
@@ -36,10 +40,12 @@ const ProjectListItem = React.memo(
     isShared = false,
     owner,
     shareId,
+    verified = false,
     onProjectUpdate,
     onRequestMove,
     hasAnyFolder,
   }: ProjectListItemProps) => {
+    const { t } = useLanguage();
     const drag = dragSourceProps({ type: 'project', id });
 
     const handleCardClick = () => {
@@ -75,6 +81,15 @@ const ProjectListItem = React.memo(
               <h3 className="text-lg font-medium truncate dark:text-white">
                 {title}
               </h3>
+              {verified && (
+                <Badge
+                  variant="outline"
+                  className="h-5 px-1.5 text-[10px] font-medium border bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 border-green-300 dark:border-green-700 flex-shrink-0"
+                >
+                  <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                  {t('projects.verified')}
+                </Badge>
+              )}
               {isShared && (
                 <Share2 className="h-4 w-4 text-blue-500 flex-shrink-0" />
               )}

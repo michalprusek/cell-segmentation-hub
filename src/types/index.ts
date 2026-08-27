@@ -407,6 +407,10 @@ export interface Project {
   // the caller's root level. Two users can see different folderId values for
   // the same shared project — see backend ProjectFolderItem model.
   folderId?: string | null;
+  // "All annotations in the project have been reviewed and passed." Settable
+  // by the owner OR an accepted-share annotator via PATCH /projects/:id/verified
+  // — unlike title/description/type, which stay owner-only.
+  verified?: boolean;
 }
 
 export interface ProjectFolder {

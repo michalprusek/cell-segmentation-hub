@@ -77,6 +77,15 @@ model Project {
   // Per-project microtubule type-label palette (SSOT for name + colour):
   // [{ id: string, name: string, color: string }]. Microtubule projects only.
   mtTypeLabels      Json?
+  // "All annotations reviewed and passed." Settable by the owner OR any
+  // accepted-share annotator (see SharingService.hasProjectAccess) — unlike
+  // title/description/type, which stay owner-only. verifiedAt/verifiedBy are
+  // stamped for later auditability but are NOT surfaced in the UI today.
+  // verifiedBy is a bare user id with no FK, matching mtTypeLabels-style loose
+  // metadata elsewhere in this model.
+  verified          Boolean             @default(false)
+  verifiedAt        DateTime?
+  verifiedBy        String?
   images            Image[]
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   segmentationQueue SegmentationQueue[]
