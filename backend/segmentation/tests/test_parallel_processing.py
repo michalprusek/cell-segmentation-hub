@@ -77,6 +77,9 @@ class TestMLServiceParallelProcessing:
         """Setup test environment with proper cleanup"""
         # Mock GPU availability
         self.original_cuda_available = torch.cuda.is_available
+        self.original_memory_allocated = torch.cuda.memory_allocated
+        self.original_memory_reserved = torch.cuda.memory_reserved
+        self.original_empty_cache = torch.cuda.empty_cache
         torch.cuda.is_available = Mock(return_value=True)
 
         # Mock GPU memory functions
@@ -93,8 +96,15 @@ class TestMLServiceParallelProcessing:
 
         yield
 
-        # Cleanup
+        # Cleanup — restore every torch.cuda attribute this fixture patched.
+        # Leaving memory_allocated/memory_reserved/empty_cache mocked (as the
+        # original version of this fixture did) leaks into every test that
+        # runs later in the same pytest session, since nothing else in the
+        # suite re-patches them before using the real functions.
         torch.cuda.is_available = self.original_cuda_available
+        torch.cuda.memory_allocated = self.original_memory_allocated
+        torch.cuda.memory_reserved = self.original_memory_reserved
+        torch.cuda.empty_cache = self.original_empty_cache
 
     @pytest.fixture
     def mock_model(self):
@@ -102,7 +112,21 @@ class TestMLServiceParallelProcessing:
         model = Mock(spec=torch.nn.Module)
         model.eval = Mock()
         model.forward = Mock(return_value=torch.randn(1, 1, 512, 512))
-        model.__call__ = model.forward
+        # NOTE: `model.__call__ = model.forward` looks like it would make
+        # `model(x)` route to `model.forward`, but it doesn't: special
+        # methods invoked via the call syntax are looked up on the *type*,
+        # not the instance, so Python never sees this attribute — `model(x)`
+        # still runs Mock's own default `__call__`, and every test below
+        # that sets `mock_model.forward.side_effect = ...` or asserts on
+        # `mock_model.forward.call_count` is silently checking a mock that
+        # was never invoked (product code calls `model(input_tensor)`, see
+        # ml/inference_executor.py's `_run_inference`, not `model.forward(...)`).
+        # `side_effect` IS a plain instance attribute that Mock's `__call__`
+        # (inherited from the class, so still triggered normally) reads at
+        # call time — routing it to `model.forward` makes `model(x)` actually
+        # invoke `model.forward(x)`, so every later `.forward.side_effect` /
+        # `.forward.call_count` set on this fixture takes effect for real.
+        model.side_effect = model.forward
         return model
 
     @pytest.fixture
@@ -248,10 +272,17 @@ class TestMLServiceParallelProcessing:
                     self.stream_index = (self.stream_index + 1) % len(self.cuda_streams)
                     return stream
 
+            # enable_cuda_streams=False: without this, InferenceExecutor's
+            # own __init__ (which this subclass calls via super().__init__())
+            # already creates `max_workers` streams via torch.cuda.Stream(),
+            # consuming the whole 4-item side_effect list before the
+            # subclass's own stream-creation line gets to run — its first
+            # call then raises StopIteration with an exhausted iterator.
             stream_executor = StreamIsolatedInferenceExecutor(
                 max_workers=4,
                 default_timeout=30.0,
-                memory_limit_gb=20.0
+                memory_limit_gb=20.0,
+                enable_cuda_streams=False
             )
 
             # Track which streams are used
@@ -394,7 +425,18 @@ class TestMLServiceParallelProcessing:
             return concurrent_executor.execute_inference(
                 model=mock_model,
                 input_tensor=image_tensor,
-                model_name="hrnet",
+                # Unique per call: get_model_lock(model_name) hands out one
+                # RLock per name and execute_inference serializes access to
+                # it (by design, for CUDA thread safety — see
+                # ml/inference_executor.py). Reusing the literal "hrnet" for
+                # all 4 concurrent calls (as this used to) makes them
+                # contend for the very same lock, so they run one at a time
+                # no matter how many workers the executor has — measuring
+                # "sequential vs itself under thread overhead" instead of
+                # "sequential vs parallel", and hiding the very speedup this
+                # test exists to check for behind a lock the test never
+                # meant to hold across calls that don't share a model.
+                model_name=f"hrnet_{image_idx}",
                 timeout=5.0
             )
 
@@ -447,7 +489,15 @@ class TestMLServiceParallelProcessing:
                 return inference_executor_4_workers.execute_inference(
                     model=mock_model,
                     input_tensor=image_tensor,
-                    model_name="hrnet",
+                    # Unique per call — see the comment in
+                    # test_performance_4_concurrent_vs_sequential. With a
+                    # shared name, the 3 fast calls queue up on the same
+                    # per-model lock behind whichever call drew the 5s slow
+                    # path, so their own 1s timeout budget gets eaten by
+                    # queueing rather than by the (fast) work they actually
+                    # have to do — everything times out, not just the one
+                    # call this test means to.
+                    model_name=f"hrnet_{image_idx}",
                     timeout=1.0,  # 1 second timeout
                     image_size=(512, 512)
                 )
@@ -491,11 +541,20 @@ class TestMLServiceParallelProcessing:
 
         # Create separate inference tasks for each "user"
         def run_user_inference(user_id):
-            mock_model.forward.side_effect = track_user_inference(user_id)
+            # A per-user model. The original built ONE shared mock and had
+            # every thread overwrite `mock_model.forward.side_effect` with its
+            # own tracker, so whichever thread assigned last won and all four
+            # inferences recorded times for that single user -- which is why
+            # `len(processing_times)` came out as 1 instead of 4. The product
+            # was running all four inferences correctly the whole time.
+            user_model = Mock(spec=torch.nn.Module)
+            user_model.eval = Mock()
+            user_model.forward = Mock(side_effect=track_user_inference(user_id))
+            user_model.side_effect = user_model.forward
             image_tensor = self.test_images[user_id].to_tensor()
 
             return inference_executor_4_workers.execute_inference(
-                model=mock_model,
+                model=user_model,
                 input_tensor=image_tensor,
                 model_name=f"hrnet_user_{user_id}",
                 timeout=5.0,
@@ -609,7 +668,14 @@ class TestMLServiceParallelProcessing:
                 result = inference_executor_4_workers.execute_inference(
                     model=mock_model,
                     input_tensor=image_tensor,
-                    model_name="hrnet",
+                    # Unique per image: get_model_lock() hands out one RLock
+                    # per model_name and execute_inference holds it for the
+                    # whole call, so a shared name serializes the four threads
+                    # and each measured `duration` then includes the time spent
+                    # queueing behind the others -- which pushed it past the
+                    # 0.3 s bound below by a fraction of a millisecond. This
+                    # test is about concurrent execution, so give each its own.
+                    model_name=f"hrnet_metrics_{image_idx}",
                     timeout=5.0,
                     image_size=(512, 512)
                 )
@@ -648,6 +714,34 @@ class TestMLServiceParallelProcessing:
         avg_duration = sum(m.duration for m in all_metrics) / len(all_metrics)
         assert avg_duration < 0.2, f"Average inference time should be <200ms (was {avg_duration:.3f}s)"
         assert total_time < 0.3, f"Total parallel execution should be <300ms (was {total_time:.3f}s)"
+
+    def test_resource_check_does_not_block_the_hot_path(self, inference_executor_4_workers):
+        """_check_resources() runs before EVERY inference; it must not sleep.
+
+        Regression guard for a real production defect. The CPU probe used
+        `psutil.cpu_percent(interval=0.1)`, whose documented behaviour is to
+        BLOCK the calling thread for that interval. Sitting ahead of every
+        execute_inference() call, it added a mandatory ~100 ms to each
+        segmentation request -- roughly 50% on top of a ~200 ms HRNet
+        inference, paid whether or not the machine was busy. The non-blocking
+        form (`interval=None`, the documented idiom for repeated polling)
+        compares against the previous call and returns in microseconds.
+        """
+        # The first non-blocking cpu_percent() call in a process has no
+        # previous sample and returns 0.0, so warm up and then measure the
+        # steady-state cost production actually pays.
+        inference_executor_4_workers._check_resources()
+
+        start = time.perf_counter()
+        for _ in range(5):
+            inference_executor_4_workers._check_resources()
+        per_call = (time.perf_counter() - start) / 5
+
+        assert per_call < 0.02, (
+            f"_check_resources() takes {per_call * 1000:.1f} ms per call. It runs "
+            f"ahead of every inference, so anything near psutil's 100 ms blocking "
+            f"interval is a latency tax on every segmentation request."
+        )
 
 
 @pytest.mark.integration
@@ -700,7 +794,11 @@ class TestPerformanceBenchmarks:
             return torch.randn(1, 1, 512, 512)
 
         mock_model.forward = mock_inference
-        mock_model.__call__ = mock_inference
+        # `model(x)` invokes the mock's own `__call__` machinery (a dunder
+        # set on an instance is never consulted for the call syntax), which
+        # honors `side_effect` — routing it to the plain function is what
+        # actually makes `model(x)` run `mock_inference`.
+        mock_model.side_effect = mock_inference
 
         # Measure throughput
         num_images = 8
@@ -711,7 +809,11 @@ class TestPerformanceBenchmarks:
             return executor.execute_inference(
                 model=mock_model,
                 input_tensor=image_tensor,
-                model_name="hrnet",
+                # Unique per image. With a shared name every call serialized on
+                # the same per-model RLock, so measured throughput was ~4.9
+                # img/s (== 1 / base_inference_time) for BOTH 2 and 4 workers
+                # -- the test could never observe the scaling it asserts.
+                model_name=f"hrnet_scale_{image_idx}",
                 timeout=10.0
             )
 

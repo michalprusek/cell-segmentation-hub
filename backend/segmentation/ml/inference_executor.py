@@ -387,13 +387,32 @@ class InferenceExecutor:
         memory_usage = self._get_memory_usage()
 
         if memory_usage > self.memory_limit_bytes:
+            # Mirror the cleanup every other resource-error path in this
+            # class performs (_run_inference's OOM handler, the
+            # `except InferenceError` branch around future.result(), and
+            # both memory-pressure checks below) before raising the same
+            # exception type. This early, proactive check was the one path
+            # that raised InferenceResourceError without giving the caller a
+            # chance at the cache reclaim the others always attempt.
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             raise InferenceResourceError(
                 f"Memory usage ({memory_usage / 1024**3:.2f}GB) exceeds limit "
                 f"({self.memory_limit_bytes / 1024**3:.2f}GB)"
             )
 
-        # Check CPU usage
-        cpu_percent = psutil.cpu_percent(interval=0.1)
+        # Check CPU usage. `interval=None` asks psutil for a non-blocking
+        # comparison against the last call (the documented idiom for polling
+        # cpu_percent() repeatedly from a long-running process) rather than
+        # `interval=0.1`, which blocks the calling thread for a real 100ms on
+        # *every single inference request* — this call sits ahead of every
+        # execute_inference() call in production (see ml/model_loader.py),
+        # so it was adding a mandatory, unconditional ~100ms tax to every
+        # segmentation request regardless of model or GPU load: a ~50%
+        # latency regression on the fastest models (~200ms baseline). The
+        # first call in the process returns a meaningless 0.0 (documented
+        # psutil behavior), which only affects this warning-only log line.
+        cpu_percent = psutil.cpu_percent(interval=None)
         if cpu_percent > 95:
             logger.warning(f"High CPU usage detected: {cpu_percent}%")
 
