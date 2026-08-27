@@ -26,6 +26,7 @@ import { prisma } from '../../db/prismaClient';
 import { getLabels as getMtTypeLabels } from '../mtTypeLabelService';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
+import { CHANNEL_NAME_RE } from '../video/types';
 import {
   buildInstanceLabelMap,
   MICROTUBULE_LABEL_PREFIX,
@@ -222,7 +223,6 @@ interface RawPolyline {
 //  Helpers
 // ----------------------------------------------------------------------------
 
-const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 function safeParsePolygons(json: string | null | undefined): RawPolyline[] {
   if (!json) return [];
