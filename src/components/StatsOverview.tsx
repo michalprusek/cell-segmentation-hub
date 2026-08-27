@@ -192,7 +192,7 @@ const StatsOverview = () => {
           if (signal.aborted) return;
 
           // Format storage used based on size
-          let formattedStorage = '0 MB';
+          let formattedStorage: string;
           if (storageStats.totalStorageGB >= 1) {
             formattedStorage = `${storageStats.totalStorageGB} GB`;
           } else {

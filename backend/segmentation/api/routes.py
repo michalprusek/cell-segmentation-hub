@@ -4,16 +4,10 @@ import time
 import logging
 import threading
 from datetime import datetime
-from typing import Optional
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Query, Form
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 import torch
 
 from ._errors import internal_error
-from .models import (
-    SegmentationResponse, ModelsResponse, HealthResponse, 
-    ErrorResponse, ModelType, ModelInfo
-)
 from PIL import Image
 import io
 

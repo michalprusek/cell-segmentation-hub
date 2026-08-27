@@ -192,10 +192,6 @@ export const constrainTransform = (
   const scaledWidth = imageWidth * zoom;
   const scaledHeight = imageHeight * zoom;
 
-  // With the new coordinate system (transformOrigin at 0 0 and centering)
-  let translateX = transform.translateX;
-  let translateY = transform.translateY;
-
   // When zoomed in (>= 1x), allow unlimited panning
   // so the user can freely navigate to any part of the image
   if (zoom >= 1.0) {
@@ -206,35 +202,10 @@ export const constrainTransform = (
     };
   }
 
-  // For zoom levels 1x to 2x, apply very generous constraints
-  if (zoom >= 1.0) {
-    const veryGenerousMargin = Math.max(canvasWidth, canvasHeight) * 3.0;
-    const minVisibleSize = 10; // Very small minimum visibility requirement
-
-    // For X axis - allow very generous panning
-    const maxTranslateX = veryGenerousMargin - scaledWidth / 2;
-    const minTranslateX =
-      -scaledWidth / 2 - veryGenerousMargin + minVisibleSize;
-    translateX = Math.max(
-      minTranslateX,
-      Math.min(maxTranslateX, transform.translateX)
-    );
-
-    // For Y axis - allow very generous panning
-    const maxTranslateY = veryGenerousMargin - scaledHeight / 2;
-    const minTranslateY =
-      -scaledHeight / 2 - veryGenerousMargin + minVisibleSize;
-    translateY = Math.max(
-      minTranslateY,
-      Math.min(maxTranslateY, transform.translateY)
-    );
-
-    return {
-      zoom,
-      translateX,
-      translateY,
-    };
-  }
+  // Everything below is the zoom < 1 path. The `zoom >= 1.0` branch that
+  // used to sit here was unreachable -- the early return above already
+  // took every zoom >= 1 case -- so its "very generous" constraints never
+  // ran and the panning they described was simply unbounded.
 
   // For zoom levels < 1x (zoomed out), apply moderate constraints to prevent complete loss
   const moderateMargin = Math.max(canvasWidth, canvasHeight) * 0.8;
@@ -243,7 +214,7 @@ export const constrainTransform = (
   // For X axis - moderate constraints for zoomed out images
   const maxTranslateX = moderateMargin - scaledWidth / 2;
   const minTranslateX = -scaledWidth / 2 - moderateMargin + minVisibleSize;
-  translateX = Math.max(
+  const translateX = Math.max(
     minTranslateX,
     Math.min(maxTranslateX, transform.translateX)
   );
@@ -251,7 +222,7 @@ export const constrainTransform = (
   // For Y axis - moderate constraints for zoomed out images
   const maxTranslateY = moderateMargin - scaledHeight / 2;
   const minTranslateY = -scaledHeight / 2 - moderateMargin + minVisibleSize;
-  translateY = Math.max(
+  const translateY = Math.max(
     minTranslateY,
     Math.min(maxTranslateY, transform.translateY)
   );

@@ -5,17 +5,15 @@ Loads pretrained models and provides inference functionality with batch processi
 import os
 import json
 import torch
-import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
 import cv2
-from typing import Dict, List, Tuple, Any, Optional, Union
+from typing import Dict, List, Tuple, Any, Optional
 import logging
 import threading
 from pathlib import Path
 import time
-import uuid
 import sys
 
 # Add monitoring module to path
@@ -1649,7 +1647,11 @@ class ModelLoader:
                             f"GPU out of memory even with batch size 1 for {model_name}: {str(e)}"
                         ) from e
                     
-                except InferenceTimeoutError as e:
+                # No `as e` and no `from e`: this sits inside the OOM
+                # batch-shrinking retry loop, and a chained exception keeps the
+                # failed forward pass's frames alive, which pins the CUDA memory
+                # the retry is trying to free.
+                except InferenceTimeoutError:
                     self.is_processing = False
                     self.current_model = None
                     raise InferenceTimeoutError(

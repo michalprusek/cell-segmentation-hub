@@ -277,7 +277,7 @@ export function ChannelOverlayList({
 
       {editingColor && (
         <ChannelColorDialog
-          open={editingColor !== null}
+          open
           channelName={
             channels.find(c => c.name === editingColor)?.displayName ??
             editingColor
