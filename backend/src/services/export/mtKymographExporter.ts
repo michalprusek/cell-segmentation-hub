@@ -24,7 +24,7 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import { prisma } from '../../db/prismaClient';
 import { logger } from '../../utils/logger';
-import { mapWithConcurrency } from '../../utils/concurrency';
+import { mapWithConcurrency, runGated, type Semaphore } from '../../utils/concurrency';
 import { buildKymograph } from '../kymographService';
 
 const CTX = 'MTKymographExporter';
@@ -33,8 +33,11 @@ const CTX = 'MTKymographExporter';
  *  Anything dropped is logged (never silently truncated). */
 const MAX_MT_PER_CONTAINER = 60;
 
-/** Parallel ML kymograph builds. The ML service has finite capacity, so keep
- *  this small — it bounds export wall-clock without overrunning inference. */
+/** Parallel kymograph JOB ORCHESTRATION (DB-free local prep + file writes
+ *  around each ML call) — NOT the ML request concurrency itself, which is
+ *  bounded separately by the shared `mlGate` (see `exportMicrotubuleKymographs`
+ *  below) across the whole export, not just this stage. Kept > 1 so local
+ *  I/O for one job can overlap the (gated) network call for another. */
 const KYMOGRAPH_CONCURRENCY = 3;
 
 /** Per (microtubule × channel) cap on the number of frame profiles written in
@@ -199,7 +202,15 @@ export async function exportMicrotubuleKymographs(
    * spent ~20 min here — so it is the one place where per-item reporting is
    * worth the plumbing rather than a single bump on completion.
    */
-  onProgress?: (done: number, total: number) => void
+  onProgress?: (done: number, total: number) => void,
+  /**
+   * Shared semaphore bounding how many ML-bound requests this export job has
+   * in flight at once, across ALL of its ML-bound stages (mt-metrics,
+   * mt-background-rois, kymograph) — not just this one. Every `buildKymograph`
+   * call below (the actual ML request) is routed through it. Omitted in unit
+   * tests, which mock `buildKymograph` directly.
+   */
+  mlGate?: Semaphore
 ): Promise<void> {
   // Normalise the mode: the controller casts req.body without validation, so an
   // older cached FE bundle (or a direct API caller) may omit it. Default to the
@@ -337,15 +348,17 @@ export async function exportMicrotubuleKymographs(
       };
       await mapWithConcurrency(jobs, KYMOGRAPH_CONCURRENCY, async job => {
         try {
-          const result = await buildKymograph({
-            videoContainerId: job.containerId,
-            polylineId: job.polylineId,
-            frameIndex: job.frameIndex,
-            sourceChannel: job.sourceChannel,
-            detectVelocity: false,
-            renderProfiles: true,
-            frameFilter: job.frameFilter,
-          });
+          const result = await runGated(mlGate, () =>
+            buildKymograph({
+              videoContainerId: job.containerId,
+              polylineId: job.polylineId,
+              frameIndex: job.frameIndex,
+              sourceChannel: job.sourceChannel,
+              detectVelocity: false,
+              renderProfiles: true,
+              frameFilter: job.frameFilter,
+            })
+          );
 
           const stem = `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}`;
 
@@ -413,15 +426,17 @@ export async function exportMicrotubuleKymographs(
     };
     await mapWithConcurrency(jobs, KYMOGRAPH_CONCURRENCY, async job => {
       try {
-        const result = await buildKymograph({
-          videoContainerId: job.containerId,
-          polylineId: job.polylineId,
-          frameIndex: job.frameIndex,
-          sourceChannel: job.sourceChannel,
-          detectVelocity: true,
-          renderOverlay: options.includeSegmentedImages,
-          frameFilter: job.frameFilter,
-        });
+        const result = await runGated(mlGate, () =>
+          buildKymograph({
+            videoContainerId: job.containerId,
+            polylineId: job.polylineId,
+            frameIndex: job.frameIndex,
+            sourceChannel: job.sourceChannel,
+            detectVelocity: true,
+            renderOverlay: options.includeSegmentedImages,
+            frameFilter: job.frameFilter,
+          })
+        );
 
         // buildKymograph degrades a velocity-detection crash to empty tracks
         // (it does NOT throw), so the per-job catch below would never see it.
