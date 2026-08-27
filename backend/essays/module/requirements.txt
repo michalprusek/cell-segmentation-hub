@@ -1,3 +1,23 @@
+# Python version floor/ceiling for this requirements file.
+#
+# The images are built `FROM python:3.10-slim`, and Dependabot has no other way
+# to know that: a requirements.txt carries no `python_requires`, so it happily
+# proposes releases that cannot install here. It did exactly that on 2026-08-27
+# -- scipy 1.18.1 (needs >=3.12), scikit-image 0.26.0 and matplotlib 3.11.1 --
+# and the ML build died at `pip wheel` with "No matching distribution found".
+#
+# With this file present Dependabot resolves against 3.10 and stops proposing
+# the impossible. If the base image moves, move this with it.
+#
+# numpy is a second, independent ceiling and .python-version cannot express
+# it. numpy is pinned at 1.26.4 because that is what the pinned torch 2.6.0
+# was built against, and torch cannot move while mamba-ssm and causal-conv1d
+# ship CUDA kernels compiled against it. So anything requiring numpy>=2 is
+# out regardless of Python: opencv-python-headless stops at 4.11.0.86 here,
+# not the 4.14 Dependabot offered, and pip fails the build outright rather
+# than resolving around it. Check `requires_dist` for a numpy bound before
+# raising any of the numeric pins below.
+
 # Microtubule v7 standalone inference — pinned to the versions the
 # cell-segmentation-hub ML service runs in production (Python 3.10).
 # All have macOS arm64 (Apple Silicon) wheels, so this installs on a MacBook.
@@ -26,9 +46,9 @@ huggingface_hub>=0.20
 
 # --- Numerics / classical CV (PySOAX postprocessing) ---
 numpy==1.26.4
-scipy==1.11.4
-scikit-image==0.22.0
-opencv-python-headless==4.8.1.78
+scipy==1.15.3
+scikit-image==0.25.2
+opencv-python-headless==4.11.0.86
 
 # --- Image I/O ---
 Pillow==12.3.0
