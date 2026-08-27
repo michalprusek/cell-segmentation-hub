@@ -70,6 +70,44 @@ jobs:
           # instrumented full-suite run doesn't OOM.
           NODE_OPTIONS: --max-old-space-size=5120
 
+  pins:
+    name: pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # backend/essays/module/requirements.txt is NEVER pip-installed: the
+      # essays image is `FROM ${ML_IMAGE}` and inherits the ML service's stack
+      # verbatim. The file is documentation of what the module expects, so a
+      # drift between it and the ML pin is currently cosmetic -- but it stops
+      # being cosmetic the moment someone adds a `pip install -r` to
+      # docker/essays.Dockerfile, which is an entirely reasonable-looking
+      # change to make. This guard is what makes that change safe instead of
+      # silently divergent.
+      #
+      # transformers specifically: the ML pin was verified by loading the real
+      # SegFormer and sperm DINOv2 checkpoints and hashing a fixed-input
+      # forward. Two different pins would mean the essays worker is documented
+      # against a version nobody ran that probe on.
+      - name: ML and essays pins agree
+        run: |
+          set -euo pipefail
+          fail=0
+          for pkg in torch torchvision transformers numpy; do
+            ml=$(grep -iE "^${pkg}==" backend/segmentation/requirements.txt | head -1 || true)
+            es=$(grep -iE "^${pkg}==" backend/essays/module/requirements.txt | head -1 || true)
+            if [ -z "$ml" ] || [ -z "$es" ]; then
+              echo "::error::${pkg} pin missing (ml='${ml}' essays='${es}')"; fail=1; continue
+            fi
+            if [ "$ml" != "$es" ]; then
+              echo "::error::${pkg} pin drift -- ml='${ml}' essays='${es}'"; fail=1
+            else
+              echo "ok  ${ml}"
+            fi
+          done
+          exit $fail
+
   backend:
     name: backend
     runs-on: ubuntu-latest

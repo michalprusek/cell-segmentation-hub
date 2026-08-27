@@ -75,14 +75,34 @@ updates:
       #                       source-built against torch 2.6.0+cu124. Moving
       #                       torch means recompiling both kernels, re-pairing
       #                       torchvision, and re-verifying all 7 models.
-      #  transformers         4.57.1 backs SegFormer and the sperm Dinov2
-      #                       backbone; 4.57.6 already broke DINOv3 once.
-      #                       A 5.x bump needs its own inference verification.
+      #  transformers         pinned at 5.5.4, and only MINOR/MAJOR are
+      #                       ignored -- patches still flow. 5.16.1 renames the
+      #                       SegFormer module layout so our checkpoint stops
+      #                       loading; 5.5.4 and 5.6.0 are bit-identical to the
+      #                       old 4.57.1.
+      #
+      #                       READ THIS BEFORE MERGING A TRANSFORMERS PR, patch
+      #                       included: CI cannot verify this dependency. The
+      #                       only real check loads the SegFormer and sperm
+      #                       DINOv2 checkpoints and hashes a fixed-input
+      #                       forward, and it needs weights that are not in the
+      #                       repo. A green build here proves nothing about the
+      #                       models -- run the probe by hand.
+      #
+      #                       Patch PRs are allowed to OPEN anyway because they
+      #                       cannot merge themselves: allow_auto_merge is off
+      #                       and the main-protection ruleset requires review.
+      #                       So the PR is a notification carrying a diff, not
+      #                       an applied change, and suppressing it would cost
+      #                       visibility without buying safety.
       #  numpy                1.26.4 is what the pinned torch was built against.
       - dependency-name: torch
       - dependency-name: torchvision
-      - dependency-name: transformers
       - dependency-name: numpy
+      - dependency-name: transformers
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
 
   # ------------------------------------------------------------ essays worker
   # Built FROM the ml image, so it inherits that validated stack and carries
@@ -100,8 +120,11 @@ updates:
     ignore:
       - dependency-name: torch
       - dependency-name: torchvision
-      - dependency-name: transformers
       - dependency-name: numpy
+      - dependency-name: transformers
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
 
   # --------------------------------------------------------- GitHub Actions
   - package-ecosystem: github-actions

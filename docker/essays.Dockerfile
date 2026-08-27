@@ -2,13 +2,26 @@
 #
 # Wraps the essays module (a *script* tree, not a pip package) as a thin FastAPI
 # job runner. It is based on the already-built ML image, so it inherits the EXACT
-# validated model stack: torch 2.6.0+cu124 and transformers 4.57.1. This is
-# load-bearing — the module's own requirements.txt pins transformers 4.57.6,
-# which silently degrades the DINOv3 backbone into low-frequency blobs (303 real
-# MTs -> 76 garbage). Inheriting the ML image means we NEVER install that pin,
-# and every other module dependency (nd2, scikit-image, scipy, opencv, tifffile,
-# Pillow, huggingface_hub) is already present at the same version, so nothing is
+# validated model stack: torch 2.6.0+cu124 and transformers 5.5.4.
+#
+# That inheritance is the point: `backend/essays/module/requirements.txt` is
+# NEVER pip-installed here. It documents what the module expects; the versions
+# that actually run are whatever the ML image was built with. Every module
+# dependency (nd2, scikit-image, scipy, opencv, tifffile, Pillow,
+# huggingface_hub) is already present at the same version, so nothing is
 # reinstalled or recompiled.
+#
+# Because the file is documentation rather than input, a drift between it and
+# backend/segmentation/requirements.txt would be silent. The `pins` job in
+# .github/workflows/ci.yml fails the build if the two disagree on torch,
+# torchvision, transformers or numpy — which is what makes adding a
+# `pip install -r` here a safe change rather than a divergent one.
+#
+# (The warning this comment used to carry — that the module pinned a
+# transformers version which degraded the DINOv3 backbone into low-frequency
+# blobs, 303 real MTs -> 76 garbage — described microtubule v7. v5H replaced it
+# on 2026-08-17 with an nnU-Net that imports no transformers at all, so the
+# hazard is gone along with the backbone it applied to.)
 #
 # The module used to live in a separate private repo cloned at build time; it is
 # now vendored at backend/essays/module and copied in like any other first-party
