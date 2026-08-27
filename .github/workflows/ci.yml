@@ -90,6 +90,24 @@ jobs:
       # SegFormer and sperm DINOv2 checkpoints and hashing a fixed-input
       # forward. Two different pins would mean the essays worker is documented
       # against a version nobody ran that probe on.
+      # A NameError inside a function body is invisible to everything else this
+      # repo runs: the module still imports, /health still answers 200, and the
+      # failure only surfaces when that branch executes. One shipped on
+      # 2026-08-27 -- removing an `import concurrent.futures` while a
+      # `concurrent.futures.ALL_COMPLETED` reference remained, on the executor
+      # shutdown path. Ruff catches it statically in under a second.
+      #
+      # Deliberately F821 only. It is the rule with no judgement in it: an
+      # undefined name is a runtime crash, never a style opinion, so this gate
+      # cannot start arguing with the codebase. Vendored third-party code is
+      # excluded because we do not edit it.
+      - name: Python undefined names (F821)
+        run: |
+          pipx install ruff 2>/dev/null || pip install --quiet ruff
+          ruff check --isolated --select F821 --no-cache --output-format concise \
+            --exclude backend/segmentation/models/microtubule/vendor \
+            backend/segmentation backend/essays backend/src
+
       - name: ML and essays pins agree
         run: |
           set -euo pipefail

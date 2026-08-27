@@ -210,11 +210,11 @@ class MTMetricsResponse(BaseModel):
 # states "unused here, used by the contract test" instead of leaving a reader to
 # infer it from an unused-global warning.
 __all__ = [
-    "_polyline_length",
-    "_imagej_median",
-    "_fill_convex_polygon",
-    "_rasterize_band",
     "_dilate",
+    "_fill_convex_polygon",
+    "_imagej_median",
+    "_polyline_length",
+    "_rasterize_band",
     "_vicinity_mask",
 ]
 

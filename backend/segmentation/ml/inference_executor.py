@@ -12,6 +12,7 @@ import logging
 import time
 import threading
 from concurrent.futures import (
+    ALL_COMPLETED,
     ThreadPoolExecutor,
     TimeoutError as FutureTimeoutError,
     wait as futures_wait,
@@ -557,7 +558,7 @@ class InferenceExecutor:
                 done, not_done = futures_wait(
                     pending_futures, 
                     timeout=timeout,
-                    return_when=concurrent.futures.ALL_COMPLETED
+                    return_when=ALL_COMPLETED
                 )
                 
                 # Cancel any remaining futures
