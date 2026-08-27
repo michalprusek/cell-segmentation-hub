@@ -11,7 +11,6 @@ import numpy as np
 from scipy.interpolate import splprep, splev
 from skimage.morphology import skeletonize
 
-from sperm_final.config import TARGET_POINTS
 
 
 def mask_to_skeleton(mask01: np.ndarray) -> np.ndarray:

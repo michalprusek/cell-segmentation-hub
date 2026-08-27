@@ -120,7 +120,6 @@ const Profile = () => {
             const projects = allProjectsResponse.projects || [];
 
             if (projects.length === 0) {
-              hasMoreProjects = false;
               break;
             }
 
