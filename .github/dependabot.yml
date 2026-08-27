@@ -36,12 +36,19 @@ updates:
         patterns: ['*']
         update-types: [minor, patch]
     ignore:
-      # vite 6 -> 7/8 relays the whole build: manualChunks, chunk splitting and
-      # the production bundle all change shape. Failure pattern #14 in
-      # CLAUDE.md is exactly this class of break, so it is done deliberately,
-      # never as part of a routine weekly batch.
-      - dependency-name: vite
-        update-types: [version-update:semver-major]
+      # Majors are never routine here. This repo's dependency story is a set of
+      # deliberate, verified pins -- tailwindcss 3->4 restyles every surface,
+      # zod 3->4 changes the validation API the whole backend is written
+      # against, opencv 4->5 sits under the ML stack. Adding this file opened 16
+      # such PRs in one go, none of them mergeable without a project behind it.
+      #
+      # Suppressing the PR does NOT suppress the alert: if a major ever carries
+      # a security fix, it still shows up in the Dependabot alert list, where a
+      # human decides. What this removes is the weekly reminder that a major
+      # exists, which is not news.
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
 
   # ----------------------------------------------------------------- backend
   - package-ecosystem: npm
@@ -54,6 +61,20 @@ updates:
       backend-patch-minor:
         patterns: ['*']
         update-types: [minor, patch]
+    ignore:
+      # Majors are never routine here. This repo's dependency story is a set of
+      # deliberate, verified pins -- tailwindcss 3->4 restyles every surface,
+      # zod 3->4 changes the validation API the whole backend is written
+      # against, opencv 4->5 sits under the ML stack. Adding this file opened 16
+      # such PRs in one go, none of them mergeable without a project behind it.
+      #
+      # Suppressing the PR does NOT suppress the alert: if a major ever carries
+      # a security fix, it still shows up in the Dependabot alert list, where a
+      # human decides. What this removes is the weekly reminder that a major
+      # exists, which is not news.
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
 
   # -------------------------------------------------------------- ML service
   - package-ecosystem: pip
@@ -103,6 +124,9 @@ updates:
         update-types:
           - version-update:semver-minor
           - version-update:semver-major
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
 
   # ------------------------------------------------------------ essays worker
   # Built FROM the ml image, so it inherits that validated stack and carries
@@ -124,6 +148,9 @@ updates:
       - dependency-name: transformers
         update-types:
           - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: '*'
+        update-types:
           - version-update:semver-major
 
   # --------------------------------------------------------- GitHub Actions
