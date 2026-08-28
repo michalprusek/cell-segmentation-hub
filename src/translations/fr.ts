@@ -8,6 +8,9 @@ export default {
     dismiss: 'Fermer',
     delete: 'Supprimer',
     edit: 'Modifier',
+    actions: 'Actions',
+    show: 'Afficher',
+    hide: 'Masquer',
     create: 'Créer',
     search: 'Rechercher',
     error: 'Erreur',
@@ -916,6 +919,7 @@ export default {
       undo: 'Annuler',
       redo: 'Rétablir',
       deleteSelected: 'Supprimer le polygone sélectionné',
+      finishShape: 'Terminer la forme en cours',
 
       // View shortcuts
       zoom: 'Zoomer/Dézoomer',

@@ -10,6 +10,9 @@ export default {
     dismiss: 'Dismiss',
     delete: 'Delete',
     edit: 'Edit',
+    actions: 'Actions',
+    show: 'Show',
+    hide: 'Hide',
     create: 'Create',
     search: 'Search',
     error: 'Error',
@@ -701,6 +704,7 @@ export default {
       undo: 'Undo',
       redo: 'Redo',
       deleteSelected: 'Delete selected polygon',
+      finishShape: 'Finish the current shape',
 
       // View shortcuts
       zoom: 'Zoom in/out',

@@ -47,6 +47,17 @@ interface MicrotubuleInstancePanelProps {
   onDeleteLabel?: (id: string) => Promise<void>;
 }
 
+const ICON_BUTTON =
+  'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100';
+
+/** Same geometry, destructive hue — red is reserved for delete. */
+const ICON_BUTTON_DESTRUCTIVE =
+  'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-gray-400 dark:hover:bg-red-950/50 dark:hover:text-red-400';
+
+/** Small text link in a section header (show all / new label). */
+const HEADER_LINK =
+  'flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
 const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   polygons,
   selectedPolygonId,
@@ -153,8 +164,8 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
 
   return (
     <div className="shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
-      <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-200 p-2 dark:border-gray-700">
+        <div className="flex min-w-0 items-center gap-2">
           {/* Select-all: toggles every MT into the multi-select set (also
               driven by Shift+left-click on the canvas). */}
           {multiSelectEnabled && sorted.length > 0 && (
@@ -185,7 +196,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
           <button
             type="button"
             onClick={handleToggleAll}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            className={`${HEADER_LINK} text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200`}
             title={
               allHidden ? t('microtubule.showAll') : t('microtubule.hideAll')
             }
@@ -205,7 +216,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
       {/* Colour-by toggle: Instance (per-trackId hash) vs Label (semantic). A
           view preference only — it does not change stored data. */}
       {onSetColorMode && (
-        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+        <div className="flex items-center gap-2 border-b border-gray-200 px-2 py-2 dark:border-gray-700">
           <span className="text-xs text-gray-500 dark:text-gray-400">
             {t('microtubule.color.label')}
           </span>
@@ -215,10 +226,11 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                 key={mode}
                 type="button"
                 onClick={() => onSetColorMode(mode)}
-                className={`px-2 py-0.5 text-xs transition-colors ${
+                aria-pressed={colorMode === mode}
+                className={`px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                   colorMode === mode
-                    ? 'bg-violet-500 text-white'
-                    : 'bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    ? 'bg-violet-600 font-medium text-white'
+                    : 'bg-transparent text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                 }`}
               >
                 {mode === 'instance'
@@ -230,7 +242,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
         </div>
       )}
 
-      <div className="max-h-64 overflow-y-auto">
+      <div className="max-h-64 min-h-[6rem] overflow-y-auto">
         {sorted.map((mt, idx) => {
           // trackId is the cross-frame stable key. Same MT keeps the same
           // color when the user scrubs to the next frame.
@@ -249,10 +261,10 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
           return (
             <div
               key={mt.id}
-              className={`flex items-center gap-2 px-3 py-2 text-xs transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0 ${
+              className={`flex items-center gap-1 border-b border-l-2 border-gray-100 px-2 py-1.5 text-xs transition-colors last:border-b-0 dark:border-gray-700 ${
                 isSelected
-                  ? 'bg-violet-50 dark:bg-violet-900/20'
-                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  ? 'border-l-violet-500 bg-violet-50 dark:bg-violet-900/30'
+                  : 'border-l-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'
               }`}
             >
               {multiSelectEnabled && (
@@ -293,7 +305,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
               ) : (
                 <button
                   type="button"
-                  className={`flex flex-1 items-center gap-2 text-left ${isHidden ? 'opacity-50' : ''}`}
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isHidden ? 'opacity-50' : ''}`}
                   onClick={() => onSelectPolygon(isSelected ? null : mt.id)}
                 >
                   <span
@@ -316,7 +328,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                     </span>
                   )}
                   <span className="flex-1" />
-                  <span className="text-gray-400 whitespace-nowrap">
+                  <span className="whitespace-nowrap text-[11px] tabular-nums text-gray-500 dark:text-gray-400">
                     {Math.round(calculatePolylineLength(mt.points))} px
                   </span>
                 </button>
@@ -329,9 +341,9 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                     setRenamingId(mt.id);
                     setRenameValue(mt.name ?? '');
                   }}
-                  className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex-shrink-0"
-                  aria-label={t('microtubule.renameInstance')}
-                  title={t('microtubule.renameInstance')}
+                  className={ICON_BUTTON}
+                  aria-label={String(t('microtubule.renameInstance'))}
+                  title={String(t('microtubule.renameInstance'))}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -343,17 +355,17 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                     e.stopPropagation();
                     onToggleVisibility(mt.id);
                   }}
-                  className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex-shrink-0"
-                  aria-label={
+                  className={ICON_BUTTON}
+                  aria-label={String(
                     isHidden
                       ? t('microtubule.showInstance')
                       : t('microtubule.hideInstance')
-                  }
-                  title={
+                  )}
+                  title={String(
                     isHidden
                       ? t('microtubule.showInstance')
                       : t('microtubule.hideInstance')
-                  }
+                  )}
                 >
                   {isHidden ? (
                     <EyeOff className="h-3.5 w-3.5" />
@@ -369,9 +381,9 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                     e.stopPropagation();
                     onDeletePolygon(mt.id);
                   }}
-                  className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0"
-                  aria-label={t('common.delete')}
-                  title={t('common.delete')}
+                  className={ICON_BUTTON_DESTRUCTIVE}
+                  aria-label={String(t('common.delete'))}
+                  title={String(t('common.delete'))}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -395,8 +407,8 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
               <button
                 type="button"
                 onClick={() => setEditingLabel('new')}
-                className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 transition-colors"
-                title={t('microtubule.type.newLabel')}
+                className={`${HEADER_LINK} text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-950/40`}
+                title={String(t('microtubule.type.newLabel'))}
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>{t('microtubule.type.newLabel')}</span>
@@ -420,9 +432,9 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                     <button
                       type="button"
                       onClick={() => setEditingLabel(label)}
-                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex-shrink-0"
-                      aria-label={t('microtubule.type.renameLabel')}
-                      title={t('microtubule.type.renameLabel')}
+                      className={ICON_BUTTON}
+                      aria-label={String(t('microtubule.type.renameLabel'))}
+                      title={String(t('microtubule.type.renameLabel'))}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
@@ -431,9 +443,9 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                     <button
                       type="button"
                       onClick={() => onDeleteLabel(label.id)}
-                      className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0"
-                      aria-label={t('microtubule.type.deleteLabel')}
-                      title={t('microtubule.type.deleteLabel')}
+                      className={ICON_BUTTON_DESTRUCTIVE}
+                      aria-label={String(t('microtubule.type.deleteLabel'))}
+                      title={String(t('microtubule.type.deleteLabel'))}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
