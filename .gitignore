@@ -142,10 +142,30 @@ real-*-measurements-*.json
 .vscode/settings.json
 
 .eslintcache
-.github/workflows/ci-cd.yml
 
-# Serena AI memory files (development artifacts)
-.serena/memories/
+# Serena MCP tool state. The whole directory is local editor/agent config, not
+# project source — `project.yml` and the nested `/cache` ignore were tracked by
+# accident. (`.serena/memories/` alone used to be listed here, which left the
+# config file itself committable.)
+/.serena/
+
+# Report emitted by scripts/code-quality-check.js, which .lintstagedrc.json runs
+# on every commit — so without this rule the artifact lands in `git status`
+# after any staged change. Anchored: only the one at the repo root is generated.
+/code-quality-report.json
+
+# Local "remember" skill scratch state: ~2 MB of free-form session notes that
+# are private to the machine and must never be published. Like the model
+# packages below it is currently protected only by its own nested `.gitignore`
+# holding `*` — untracked host state, one `rm` from silently publishing the lot.
+# (.prettierignore has asserted "gitignored, never shipped" about this directory
+# for months; this is the rule that finally makes that true.)
+/.remember/
+
+# ACME HTTP-01 webroot for Let's Encrypt renewal. Server-side TLS state that
+# happens to sit in the repo root, not repository content. Anchored so a real
+# `docker/nginx/certbot/` config directory could still be committed.
+/certbot/
 
 # Debug/test artifacts
 screenshots/
@@ -159,8 +179,27 @@ scripts/certbot-logs/
 # Local-only env (Grafana admin password)
 .env.monitoring
 
-# External / scratch model artifacts dropped at repo root
+# External / scratch model artifacts dropped at repo root. These are training
+# and validation packages staged by hand on the box (3.5 GB combined), not
+# repository content. Each currently carries its own nested `.gitignore` holding
+# a single `*`, but that file is itself untracked host state: delete it, or
+# re-stage the directory from a copy that never had one, and the next
+# `git add -A` starts committing gigabytes. The rules below live in the repo, so
+# the protection travels with a clone.
+#
+# `mt-instance-seg-v5H/` in particular is load-bearing on this host: it is the
+# default source for scripts/download-microtubule-weights.sh. Ignore it; do not
+# delete it.
+#
+# All anchored with a leading `/`. Unanchored, git matches the name at every
+# depth, so a future `backend/segmentation/models/mt-instance-seg/` of real
+# source would be dropped from `git add` with no warning — the very failure
+# these rules exist to prevent.
 path_c_v24c/
+/mt34-benchmark/
+/mt-instance-seg/
+/mt-instance-seg-v5H/
+/neurite-soma-seg/
 
 # HuggingFace model cache (transformers + DINOv3 backbone downloads)
 backend/segmentation/.hf-cache/
