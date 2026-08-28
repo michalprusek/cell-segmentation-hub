@@ -2748,6 +2748,7 @@ export default {
       frame: 'Snímek',
       play: 'Přehrát',
       pause: 'Pauza',
+      buffering: 'Načítání…',
     },
   },
 

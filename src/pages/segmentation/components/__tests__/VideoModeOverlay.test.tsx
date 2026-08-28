@@ -2,8 +2,9 @@
  * VideoModeOverlay — behavioral unit tests
  *
  * Covered behaviours:
- *  - Renders null (no visible output) when container is null (video not loaded)
- *  - Renders null when container exists but kymograph is not open
+ *  - Renders null (no visible output) until the kymograph is opened
+ *  - Drives the EDITOR's playback state (props), not a second useVideoFrames
+ *    instance of its own — the private one made every key press a no-op
  *  - Keyboard ← dispatched on document calls step(-1)
  *  - Keyboard → dispatched on document calls step(1)
  *  - Keyboard Space dispatched on document calls toggle()
@@ -35,27 +36,6 @@ import { VideoModeOverlay } from '../VideoModeOverlay';
 let mockStep = vi.fn();
 let mockToggle = vi.fn();
 let mockSetDisplayFrame = vi.fn();
-
-// Defaults for useVideoFrames — overridden per test via mockVideoFrames
-const defaultVideoFramesMock = {
-  container: null as object | null,
-  frameIndex: 0,
-  currentFrame: null as object | null,
-  step: mockStep,
-  toggle: mockToggle,
-  isLoading: false,
-  error: null,
-  setFrameIndex: vi.fn(),
-  isPlaying: false,
-  play: vi.fn(),
-  pause: vi.fn(),
-};
-
-let videoFramesMock = { ...defaultVideoFramesMock };
-
-vi.mock('../../hooks/useVideoFrames', () => ({
-  useVideoFrames: () => videoFramesMock,
-}));
 
 vi.mock('../../contexts/ImageDisplayContext', () => ({
   useImageDisplay: () => ({
@@ -98,18 +78,20 @@ vi.mock('../KymographModal', () => ({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeContainer(overrides = {}) {
-  return {
-    id: 'vid-1',
-    name: 'test.tiff',
-    frameCount: 3,
-    width: 512,
-    height: 512,
-    videoDurationMs: 300,
-    channels: [],
-    frames: [],
-    ...overrides,
-  };
+/** The playback slice the editor hands down, with per-test overrides. */
+function renderOverlay(
+  props: Partial<React.ComponentProps<typeof VideoModeOverlay>> = {}
+) {
+  return render(
+    <VideoModeOverlay
+      videoContainerId="vid-1"
+      frameIndex={0}
+      step={mockStep}
+      toggle={mockToggle}
+      channels={[]}
+      {...props}
+    />
+  );
 }
 
 function fireDocumentKey(key: string, code: string, target?: EventTarget) {
@@ -130,11 +112,6 @@ describe('VideoModeOverlay', () => {
     mockStep = vi.fn();
     mockToggle = vi.fn();
     mockSetDisplayFrame = vi.fn();
-    videoFramesMock = {
-      ...defaultVideoFramesMock,
-      step: mockStep,
-      toggle: mockToggle,
-    };
   });
 
   afterEach(() => {
@@ -146,19 +123,13 @@ describe('VideoModeOverlay', () => {
   // -------------------------------------------------------------------------
 
   describe('rendering', () => {
-    it('renders nothing when container is null', () => {
-      videoFramesMock.container = null;
-      const { container } = render(
-        <VideoModeOverlay videoContainerId="vid-1" />
-      );
+    it('renders nothing before a kymograph is opened', () => {
+      const { container } = renderOverlay();
       expect(container).toBeEmptyDOMElement();
     });
 
-    it('renders nothing when container exists but no kymograph is open', () => {
-      videoFramesMock.container = makeContainer();
-      const { container } = render(
-        <VideoModeOverlay videoContainerId="vid-1" projectType="microtubules" />
-      );
+    it('renders nothing on a microtubule project either, until then', () => {
+      const { container } = renderOverlay({ projectType: 'microtubules' });
       expect(container).toBeEmptyDOMElement();
     });
   });
@@ -169,29 +140,25 @@ describe('VideoModeOverlay', () => {
 
   describe('keyboard navigation', () => {
     it('calls step(-1) when ArrowLeft is dispatched on document', () => {
-      videoFramesMock.container = makeContainer();
-      render(<VideoModeOverlay videoContainerId="vid-1" />);
+      renderOverlay();
       fireDocumentKey('ArrowLeft', 'ArrowLeft');
       expect(mockStep).toHaveBeenCalledWith(-1);
     });
 
     it('calls step(1) when ArrowRight is dispatched on document', () => {
-      videoFramesMock.container = makeContainer();
-      render(<VideoModeOverlay videoContainerId="vid-1" />);
+      renderOverlay();
       fireDocumentKey('ArrowRight', 'ArrowRight');
       expect(mockStep).toHaveBeenCalledWith(1);
     });
 
     it('calls toggle() when Space is dispatched on document', () => {
-      videoFramesMock.container = makeContainer();
-      render(<VideoModeOverlay videoContainerId="vid-1" />);
+      renderOverlay();
       fireDocumentKey(' ', 'Space');
       expect(mockToggle).toHaveBeenCalledTimes(1);
     });
 
     it('ignores ArrowLeft when target is INPUT', () => {
-      videoFramesMock.container = makeContainer();
-      render(<VideoModeOverlay videoContainerId="vid-1" />);
+      renderOverlay();
       const input = document.createElement('input');
       // Dispatch directly on the input element so target is correct
       const event = new KeyboardEvent('keydown', {
@@ -206,8 +173,7 @@ describe('VideoModeOverlay', () => {
     });
 
     it('ignores ArrowRight when target is TEXTAREA', () => {
-      videoFramesMock.container = makeContainer();
-      render(<VideoModeOverlay videoContainerId="vid-1" />);
+      renderOverlay();
       const textarea = document.createElement('textarea');
       document.body.appendChild(textarea);
       const event = new KeyboardEvent('keydown', {
@@ -226,8 +192,7 @@ describe('VideoModeOverlay', () => {
       // and toggle IS called in the test environment. This is a jsdom limitation:
       // the guard works correctly in real browsers (E2E covers it).
       // We verify the handler at least runs without throwing.
-      videoFramesMock.container = makeContainer();
-      render(<VideoModeOverlay videoContainerId="vid-1" />);
+      renderOverlay();
       const div = document.createElement('div');
       div.contentEditable = 'true';
       document.body.appendChild(div);
@@ -241,8 +206,7 @@ describe('VideoModeOverlay', () => {
     });
 
     it('cleans up document keydown listener on unmount', () => {
-      videoFramesMock.container = makeContainer();
-      const { unmount } = render(<VideoModeOverlay videoContainerId="vid-1" />);
+      const { unmount } = renderOverlay();
       unmount();
       fireDocumentKey('ArrowLeft', 'ArrowLeft');
       // After unmount the handler should be removed — step not called
@@ -255,11 +219,8 @@ describe('VideoModeOverlay', () => {
   // -------------------------------------------------------------------------
 
   describe('frame change propagation', () => {
-    it('calls setFrameIndex (display context) with frameIndex on mount', () => {
-      videoFramesMock.container = makeContainer();
-      videoFramesMock.frameIndex = 2;
-
-      render(<VideoModeOverlay videoContainerId="vid-1" />);
+    it("mirrors the editor's frameIndex into the display context", () => {
+      renderOverlay({ frameIndex: 2 });
       expect(mockSetDisplayFrame).toHaveBeenCalledWith(2);
     });
   });
@@ -270,10 +231,7 @@ describe('VideoModeOverlay', () => {
 
   describe('kymograph modal', () => {
     it('does not render KymographModal for projectType != microtubules even after event', async () => {
-      videoFramesMock.container = makeContainer();
-      render(
-        <VideoModeOverlay videoContainerId="vid-1" projectType="spheroid" />
-      );
+      renderOverlay({ projectType: 'spheroid' });
 
       await act(async () => {
         document.dispatchEvent(
@@ -287,10 +245,7 @@ describe('VideoModeOverlay', () => {
     });
 
     it('renders KymographModal for microtubules projectType after event', async () => {
-      videoFramesMock.container = makeContainer();
-      render(
-        <VideoModeOverlay videoContainerId="vid-1" projectType="microtubules" />
-      );
+      renderOverlay({ projectType: 'microtubules' });
 
       await act(async () => {
         document.dispatchEvent(
@@ -304,10 +259,7 @@ describe('VideoModeOverlay', () => {
     });
 
     it('passes the correct polylineId to KymographModal', async () => {
-      videoFramesMock.container = makeContainer();
-      render(
-        <VideoModeOverlay videoContainerId="vid-1" projectType="microtubules" />
-      );
+      renderOverlay({ projectType: 'microtubules' });
 
       await act(async () => {
         document.dispatchEvent(
@@ -322,10 +274,7 @@ describe('VideoModeOverlay', () => {
     });
 
     it('ignores events with missing polylineId in detail', async () => {
-      videoFramesMock.container = makeContainer();
-      render(
-        <VideoModeOverlay videoContainerId="vid-1" projectType="microtubules" />
-      );
+      renderOverlay({ projectType: 'microtubules' });
 
       await act(async () => {
         document.dispatchEvent(
@@ -339,10 +288,7 @@ describe('VideoModeOverlay', () => {
     });
 
     it('cleans up kymograph event listener on unmount', async () => {
-      videoFramesMock.container = makeContainer();
-      const { unmount } = render(
-        <VideoModeOverlay videoContainerId="vid-1" projectType="microtubules" />
-      );
+      const { unmount } = renderOverlay({ projectType: 'microtubules' });
       unmount();
 
       // Dispatching after unmount should not cause React state-update errors

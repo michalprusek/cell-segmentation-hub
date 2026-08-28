@@ -2777,6 +2777,7 @@ export default {
       frame: 'Cuadro',
       play: 'Reproducir',
       pause: 'Pausar',
+      buffering: 'Almacenando en búfer…',
     },
   },
 
