@@ -12,14 +12,23 @@
  *     at Sharp.toBuffer (.../sharp/dist/output.mjs:159:17)
  *     at ImageService.getBrowserCompatibleImage (imageService.ts:1495)
  *
- * The fix passes `{ failOn: 'truncated' }` to the sharp() constructor in
+ * The fix passes `{ failOn: 'error' }` to the sharp() constructor in
  * getBrowserCompatibleImage, which tolerates that class of warning while
- * still failing on genuinely truncated/incomplete pixel data.
+ * still throwing on real decode errors (including truncated pixel data).
+ *
+ * `failOn: 'truncated'` looks like the natural choice but is WRONG:
+ * libvips orders severity none < truncated < error < warning, so
+ * 'truncated' also disables the 'error' tier. Measured against this
+ * repo's sharp/libvips: a TIFF whose StripByteCounts overstates the bytes
+ * actually present decodes *successfully* under 'truncated' to a
+ * silently-wrong (black) image instead of throwing — and that bad PNG
+ * would get cached forever by the code a few lines below. Both cases are
+ * covered here so a future "simplify this to 'truncated'" edit is caught.
  *
  * This suite deliberately does NOT mock `sharp` (unlike the sibling
  * imageService.display.test.ts) — it exercises the real libvips decode
- * path against a hand-crafted TIFF buffer carrying the exact malformed tag,
- * so it fails before the fix and passes after it.
+ * path against hand-crafted TIFF buffers, so it fails before the fix and
+ * passes after it, without needing any real user data.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -99,15 +108,32 @@ const prismaMock = {
   image: { findFirst: vi.fn() },
 };
 
+interface TiffFixtureOptions {
+  /** Declared StripByteCounts (279) value. */
+  stripByteCountsValue: number;
+  /** Bytes of strip data actually written after the IFD. */
+  actualStripBytes: number;
+  /**
+   * When true, adds a Software (305) ASCII tag whose count equals the
+   * string length — i.e. no null terminator — matching the real
+   * production malformation.
+   */
+  asciiSoftwareBug: boolean;
+}
+
 /**
- * Hand-crafts a minimal, valid, uncompressed 2x2 grayscale TIFF whose
- * Software (tag 305) ASCII value is exactly as long as its declared count —
- * i.e. it has no trailing null terminator. This is the exact malformation
- * libtiff warns about ("ASCII value for tag \"Software\" does not end in
- * null byte") on the real production file that triggered the 500. No real
- * user data is used or needed to reproduce the bug.
+ * Hand-crafts a minimal, uncompressed 2x2 grayscale TIFF for exercising
+ * the real sharp/libvips decode path. No real user data is used or needed.
+ *
+ * The 4 source pixel values are 0x00, 0x40, 0x80, 0xff (top-left to
+ * bottom-right, row-major) when `actualStripBytes >= 4`; fewer bytes
+ * simulate a genuinely truncated strip (data cut short mid-write).
  */
-function buildTiffWithUnterminatedAsciiTag(): Buffer {
+function buildTiffFixture({
+  stripByteCountsValue,
+  actualStripBytes,
+  asciiSoftwareBug,
+}: TiffFixtureOptions): Buffer {
   const width = 2;
   const height = 2;
   const tags: Array<{
@@ -125,10 +151,12 @@ function buildTiffWithUnterminatedAsciiTag(): Buffer {
     { tag: 273, type: 4, count: 1, value: 0 }, // StripOffsets (patched below)
     { tag: 277, type: 3, count: 1, value: 1 }, // SamplesPerPixel
     { tag: 278, type: 4, count: 1, value: height }, // RowsPerStrip
-    { tag: 279, type: 4, count: 1, value: 4 }, // StripByteCounts
-    // Software tag: ASCII, count === string length (no null terminator).
-    { tag: 305, type: 2, count: 4, ascii: 'V1.0' },
+    { tag: 279, type: 4, count: 1, value: stripByteCountsValue }, // StripByteCounts
   ];
+  if (asciiSoftwareBug) {
+    // Software tag: ASCII, count === string length (no null terminator).
+    tags.push({ tag: 305, type: 2, count: 4, ascii: 'V1.0' });
+  }
 
   const ifdOffset = 8;
   const ifdSize = 2 + tags.length * 12 + 4;
@@ -140,7 +168,7 @@ function buildTiffWithUnterminatedAsciiTag(): Buffer {
   }
   stripOffsetsTag.value = pixelDataOffset;
 
-  const buf = Buffer.alloc(pixelDataOffset + 4);
+  const buf = Buffer.alloc(pixelDataOffset + actualStripBytes);
 
   buf.write('II', 0, 'ascii');
   buf.writeUInt16LE(42, 2);
@@ -161,12 +189,23 @@ function buildTiffWithUnterminatedAsciiTag(): Buffer {
   }
   buf.writeUInt32LE(0, entryOffset); // next IFD offset = none
 
-  buf.writeUInt8(0x00, pixelDataOffset);
-  buf.writeUInt8(0x40, pixelDataOffset + 1);
-  buf.writeUInt8(0x80, pixelDataOffset + 2);
-  buf.writeUInt8(0xff, pixelDataOffset + 3);
+  const sourcePixels = [0x00, 0x40, 0x80, 0xff];
+  for (let i = 0; i < actualStripBytes; i++) {
+    buf.writeUInt8(sourcePixels[i] ?? 0, pixelDataOffset + i);
+  }
 
   return buf;
+}
+
+function mockImageRow() {
+  prismaMock.image.findFirst.mockResolvedValueOnce({
+    id: 'img-1',
+    name: 'weird.tiff',
+    originalPath: 'projects/p/img-1/weird.tiff',
+    mimeType: 'image/tiff',
+    isVideoContainer: false,
+    parentVideoId: null,
+  });
 }
 
 describe('ImageService — TIFF display 500 regression (real sharp/libvips)', () => {
@@ -175,28 +214,56 @@ describe('ImageService — TIFF display 500 regression (real sharp/libvips)', ()
     mockReadFile.mockReset();
   });
 
-  it('converts a TIFF with a non-null-terminated ASCII tag instead of throwing', async () => {
+  it('converts a TIFF with a non-null-terminated ASCII tag, preserving the exact pixel data', async () => {
     const service = new ImageService(prismaMock as never);
-    prismaMock.image.findFirst.mockResolvedValueOnce({
-      id: 'img-1',
-      name: 'weird.tiff',
-      originalPath: 'projects/p/img-1/weird.tiff',
-      mimeType: 'image/tiff',
-      isVideoContainer: false,
-      parentVideoId: null,
-    });
-    mockReadFile.mockResolvedValueOnce(buildTiffWithUnterminatedAsciiTag());
+    mockImageRow();
+    mockReadFile.mockResolvedValueOnce(
+      buildTiffFixture({
+        stripByteCountsValue: 4,
+        actualStripBytes: 4,
+        asciiSoftwareBug: true,
+      })
+    );
 
     const result = await service.getBrowserCompatibleImage('img-1');
 
     expect(result.mimeType).toBe('image/png');
     expect(result.buffer.length).toBeGreaterThan(0);
 
-    // Round-trip the produced PNG through real sharp to confirm the pixel
-    // data actually decoded (not just that no exception was thrown).
+    // Round-trip the produced PNG through real sharp and check the actual
+    // pixel bytes — not just dimensions — so a decode option that
+    // "succeeds" by silently producing wrong pixels (e.g. failOn:
+    // 'truncated' on genuinely bad data, see the test below) can't pass
+    // this test by accident.
     const sharp = (await import('sharp')).default;
     const meta = await sharp(result.buffer).metadata();
     expect(meta.width).toBe(2);
     expect(meta.height).toBe(2);
+    const raw = await sharp(result.buffer).raw().toBuffer();
+    // Grayscale source values, replicated across the palette's RGB
+    // channels: 0x00, 0x40, 0x80, 0xff for the 4 pixels in row-major order.
+    expect(Array.from(raw)).toEqual([
+      0x00, 0x00, 0x00, 0x40, 0x40, 0x40, 0x80, 0x80, 0x80, 0xff, 0xff, 0xff,
+    ]);
+  });
+
+  it('still rejects a genuinely truncated TIFF instead of silently producing a corrupted image', async () => {
+    const service = new ImageService(prismaMock as never);
+    mockImageRow();
+    // StripByteCounts declares 4 bytes but only 1 is actually present —
+    // a real interrupted-write truncation, not a cosmetic tag warning.
+    mockReadFile.mockResolvedValueOnce(
+      buildTiffFixture({
+        stripByteCountsValue: 4,
+        actualStripBytes: 1,
+        asciiSoftwareBug: false,
+      })
+    );
+
+    // Must throw — NOT resolve with a silently-black/wrong image that
+    // would then get cached to converted/<id>.png and served forever.
+    await expect(
+      service.getBrowserCompatibleImage('img-1')
+    ).rejects.toThrow(/Error converting image/);
   });
 });
