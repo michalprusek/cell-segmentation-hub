@@ -72,6 +72,10 @@ const ModelSettingsSection = () => {
     () => availableModels.filter(m => m.category === 'microcapsule'),
     [availableModels]
   );
+  const neuriteModels = useMemo(
+    () => availableModels.filter(m => m.category === 'neurite'),
+    [availableModels]
+  );
 
   const handleModelChange = (modelId: string) => {
     setSelectedModel(modelId as ModelType);
@@ -238,6 +242,17 @@ const ModelSettingsSection = () => {
                   </h4>
                 </div>
                 {microcapsuleModels.map(renderModelCard)}
+              </>
+            )}
+
+            {neuriteModels.length > 0 && (
+              <>
+                <div className="pt-2">
+                  <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    {t('settings.modelSelection.sections.neurite')}
+                  </h4>
+                </div>
+                {neuriteModels.map(renderModelCard)}
               </>
             )}
           </div>

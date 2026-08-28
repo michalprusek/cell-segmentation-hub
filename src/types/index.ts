@@ -348,6 +348,7 @@ export const PROJECT_TYPES = [
   'sperm',
   'microtubules',
   'microcapsule',
+  'neurite',
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 

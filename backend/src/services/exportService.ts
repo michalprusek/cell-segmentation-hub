@@ -1636,8 +1636,10 @@ export class ExportService {
             options?.pixelToMicrometerScale
           );
         } else {
-          // 'spheroid' (standard) and 'wound': emit the comprehensive
-          // per-polygon metrics report (Polygon Metrics + Summary sheets).
+          // 'spheroid' (standard), 'wound' and 'neurite': emit the
+          // comprehensive per-polygon metrics report (Polygon Metrics +
+          // Summary sheets). Neurite/soma output is ordinary closed polygons
+          // with no extra per-instance fields, so it needs no focused branch.
           await this.metricsCalculator.exportPolygonMetricsToExcel(
             allMetrics,
             excelPath,
