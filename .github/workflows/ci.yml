@@ -126,6 +126,39 @@ jobs:
           done
           exit $fail
 
+  python-tests:
+    name: python-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: backend/requirements-pytest-ci.txt
+
+      - name: Install
+        run: pip install -r backend/requirements-pytest-ci.txt
+
+      # 213 tests that ran nowhere before this job existed. `make ci` covers
+      # TypeScript, ESLint and i18n only, so every Python suite in the repo was
+      # unguarded -- which is how a NameError on an executor shutdown path and
+      # an order-dependent memory assertion both survived to 2026-08-27.
+      #
+      # The third suite, backend/segmentation/tests, is absent on purpose and
+      # not because it is slow: it cannot be COLLECTED without a GPU, since
+      # models/__init__ imports mamba_ssm -> Triton, which raises "0 active
+      # drivers" at import on a runner with no CUDA. It needs a real card --
+      # `make test-ml`. See backend/requirements-pytest-ci.txt for the full
+      # reasoning.
+      - name: pytest (video helpers + essays)
+        run: |
+          python -m pytest -q -p no:cacheprovider \
+            backend/src/services/video/pythonHelpers/tests \
+            backend/essays/tests
+
   backend:
     name: backend
     runs-on: ubuntu-latest

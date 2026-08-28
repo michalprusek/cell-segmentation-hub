@@ -1,0 +1,45 @@
+# Dependencies for the Python test suites that CI can actually run.
+#
+# WHICH SUITES, AND WHY NOT THE THIRD
+# -----------------------------------
+# Three pytest suites live in this repo:
+#
+#   backend/src/services/video/pythonHelpers/tests   163 tests   <- CI runs it
+#   backend/essays/tests                              50 tests   <- CI runs it
+#   backend/segmentation/tests                       469 tests   <- CI cannot
+#
+# The segmentation suite is not excluded for being slow or flaky. It cannot be
+# collected at all without a GPU: `models/__init__` imports mamba_ssm, which
+# imports Triton, which raises at import time on a machine with no CUDA driver:
+#
+#     triton/runtime/driver.py:8
+#       RuntimeError: 0 active drivers ([]). There should only be one.
+#
+# GitHub-hosted runners have no GPU, so that suite needs a real card. Run it
+# with `make test-ml`, which uses the recipe in
+# backend/segmentation/requirements-test.txt. It was 469 passed / 1 skipped as
+# of 2026-08-28.
+#
+# WHY THESE VERSIONS
+# ------------------
+# fastapi/starlette/pydantic are pinned to the same versions the ML image ships
+# (see backend/segmentation/requirements.txt). The essays tests import the real
+# `essays_api` module, so a mismatch here would test a stack nothing runs.
+#
+# Everything else is left unpinned: these are the imaging libraries the helper
+# modules use, and the tests assert on behaviour that is stable across their
+# versions. If one of them ever breaks a test, pin it here with the reason.
+pytest>=7.4
+
+# essays_api is a FastAPI app; its tests import it directly.
+fastapi==0.141.1
+starlette==1.6.0
+pydantic==2.13.4
+
+# The video helpers: TIFF/ND2 decoding, PNG writing, the resampling and
+# morphology used by channel registration and the playback proxy.
+numpy
+pillow
+tifffile
+scipy
+scikit-image

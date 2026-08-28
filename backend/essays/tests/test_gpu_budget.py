@@ -120,6 +120,36 @@ def test_cap_leaves_room_for_interactive_segmentation():
     assert float(essays_api.GPU_MEM_FRACTION) < 0.8
 
 
+def test_sitecustomize_default_matches_the_module_default():
+    """The file that APPLIES the cap must default to the one the tests police.
+
+    There are three copies of this number: essays_api.GPU_MEM_FRACTION (which
+    every assertion above is written against), the compose default (checked
+    below), and a third in sitecustomize.py -- which is the one that actually
+    calls `set_per_process_memory_fraction` on the evaluate.py subprocess.
+
+    In normal operation essays_api passes ESSAYS_GPU_MEM_FRACTION down in the
+    subprocess env, so sitecustomize's literal never fires. It fires when
+    evaluate.py is run directly, which is exactly the debugging path where a
+    silently different cap is hardest to notice -- the run simply behaves
+    unlike production and nothing says why.
+
+    Found by mutating sitecustomize's literal from 0.12 to 0.02 and watching
+    the whole suite stay green.
+    """
+    src = (Path(__file__).resolve().parents[1] / "sitecustomize.py").read_text()
+    m = re.search(
+        r'os\.environ\.get\(\s*["\']ESSAYS_GPU_MEM_FRACTION["\']\s*,\s*["\']([^"\']+)["\']',
+        src,
+    )
+    assert m, "sitecustomize.py no longer reads ESSAYS_GPU_MEM_FRACTION with a default"
+    assert float(m.group(1)) == float(essays_api.GPU_MEM_FRACTION), (
+        f"sitecustomize defaults to {m.group(1)} but essays_api uses "
+        f"{essays_api.GPU_MEM_FRACTION}; a direct evaluate.py run would cap "
+        "differently from production"
+    )
+
+
 @pytest.mark.skipif(COMPOSE is None, reason="compose file not in this tree")
 @pytest.mark.parametrize(
     "var, attr, cast",
