@@ -5,7 +5,7 @@
 # Three pytest suites live in this repo:
 #
 #   backend/src/services/video/pythonHelpers/tests   163 tests   <- CI runs it
-#   backend/essays/tests                              50 tests   <- CI runs it
+#   backend/essays/tests                              51 tests   <- CI runs it
 #   backend/segmentation/tests                       469 tests   <- CI cannot
 #
 # The segmentation suite is not excluded for being slow or flaky. It cannot be

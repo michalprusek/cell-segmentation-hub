@@ -264,10 +264,14 @@ test-ml:
 	@echo "🧠 ML suite (needs a GPU and the built ml image)"
 	@docker image inspect cell-segmentation-hub-ml:latest >/dev/null 2>&1 || \
 	  { echo "❌ build it first: make build-service SERVICE=ml"; exit 1; }
-	@docker run --rm --gpus all --entrypoint sh \
+	@# HF_TOKEN is exported into the command's environment and passed by NAME.
+	@# Writing `-e HF_TOKEN="$$(grep ...)"` would expand the secret into the
+	@# docker argument list, where any user on the box can read it out of ps.
+	@HF_TOKEN="$$(grep -E '^HF_TOKEN=' .env.production | cut -d= -f2-)" \
+	docker run --rm --gpus all --entrypoint sh \
 	  -v "$$PWD/backend/segmentation":/app -w /app \
 	  -v "$$PWD/backend/segmentation/.hf-cache":/home/app/.cache/huggingface \
-	  -e HF_TOKEN="$$(grep -E '^HF_TOKEN=' .env.production | cut -d= -f2-)" \
+	  -e HF_TOKEN \
 	  cell-segmentation-hub-ml:latest -c '\
 	    pip install -q -r requirements-test.txt && \
 	    python -m pytest tests/ -q -p no:cacheprovider --asyncio-mode=auto \
@@ -317,14 +321,16 @@ type-check:
 # legacy editor tests). Including it here would render `make ci` unusable
 # until the suite is healed. Use `make ci-test` to run vitest separately.
 ci:
-	@echo "🔍 [1/4] TypeScript (frontend — baseline gate)"
+	@echo "🔍 [1/5] TypeScript (frontend — baseline gate)"
 	@npm run type-check
-	@echo "🔍 [2/4] TypeScript (backend)"
+	@echo "🔍 [2/5] TypeScript (backend)"
 	@cd backend && npm run type-check
-	@echo "🔍 [3/4] ESLint (strict — 0 warnings)"
+	@echo "🔍 [3/5] ESLint (strict — 0 warnings)"
 	@npx eslint --max-warnings=0 src/
-	@echo "🔍 [4/4] i18n completeness (6 locales)"
+	@echo "🔍 [4/5] i18n completeness (6 locales)"
 	@node scripts/check-i18n.cjs
+	@echo "🔍 [5/5] Python suites (same 214 tests CI runs)"
+	@$(MAKE) --no-print-directory test-py
 	@echo "✅ All local CI checks passed"
 
 # Optional: run the Vitest suite. Currently has known pre-existing

@@ -76,6 +76,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # backend/essays/module/requirements.txt is NEVER pip-installed: the
       # essays image is `FROM ${ML_IMAGE}` and inherits the ML service's stack
@@ -132,6 +134,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # This job executes repository Python. Checkout would otherwise leave
+          # GITHUB_TOKEN in .git/config, readable by anything the suites run.
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -142,7 +148,7 @@ jobs:
       - name: Install
         run: pip install -r backend/requirements-pytest-ci.txt
 
-      # 213 tests that ran nowhere before this job existed. `make ci` covers
+      # 214 tests that ran nowhere before this job existed. `make ci` covers
       # TypeScript, ESLint and i18n only, so every Python suite in the repo was
       # unguarded -- which is how a NameError on an executor shutdown path and
       # an order-dependent memory assertion both survived to 2026-08-27.
