@@ -243,7 +243,15 @@ These are real properties of the implementation, not hypotheticals.
 8. **The microcapsule sheet's `Compactness` column contains circularity**, and
    `Ovality` is the Feret aspect ratio.
 9. **Border-clipped microcapsules are excluded** from every microcapsule metric.
-10. **Essays numbers from before 2026-08-13 are not comparable** with later ones
+10. **Neurite/soma output carries no per-class metric.** Both classes land in
+    the generic `Polygon Metrics` sheet as plain polygons, and the sheet has no
+    column saying which is which. To split soma from neurite you need the
+    **COCO or custom-JSON** export, where they are separate categories — the
+    YOLO writer emits class id `0` for every polygon and loses the split.
+11. **Neurite/soma soma counts are only validated at ~0.180 µm/px.** At about
+    half that pixel size each soma tends to be returned split into two pieces,
+    which inflates any count or per-soma average taken from it.
+12. **Essays numbers from before 2026-08-13 are not comparable** with later ones
     — the band and ring geometry changed with the unification.
 
 ## Related

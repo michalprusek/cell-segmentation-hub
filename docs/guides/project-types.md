@@ -4,7 +4,7 @@ Every project has a **type**, chosen when you create it. The type decides which
 models you may run, what geometry they produce, which panels the editor shows,
 which metrics are computed, and which export artifacts you get.
 
-There are six. Pick the one that matches your specimen — the type is not a
+There are seven. Pick the one that matches your specimen — the type is not a
 label, it changes behaviour end to end.
 
 | Type (in the dialog)        | Guide                                                   | Specimen                                            |
@@ -15,6 +15,7 @@ label, it changes behaviour end to end.
 | **Sperm**                   | [sperm](project-types/sperm.md)                         | Spermatozoa, per-part morphology                    |
 | **Microtubules**            | [microtubules](project-types/microtubules.md)           | IRM microtubule time-lapses                         |
 | **Microcapsules**           | [microcapsule](project-types/microcapsule.md)           | Round microcapsules in bright field                 |
+| **Neurites & somas**        | [neurite](project-types/neurite.md)                     | Cultured neurons in fluorescence, tubulin channel   |
 
 ---
 
@@ -30,22 +31,31 @@ model stay on disk but cannot be re-run.
 
 ## Side by side
 
-|                                    | spheroid                      | spheroid_invasive           | wound                                 | sperm                     | microtubules                             | microcapsule                       |
-| ---------------------------------- | ----------------------------- | --------------------------- | ------------------------------------- | ------------------------- | ---------------------------------------- | ---------------------------------- |
-| **Models available**               | 5                             | 1                           | 1                                     | 1                         | 1                                        | 1                                  |
-| **Model choice honoured**          | yes                           | forced                      | forced                                | forced                    | forced                                   | forced                             |
-| **Threshold user-settable**        | yes                           | yes (default 0.2)           | yes                                   | yes                       | **no — fixed at 0.97**                   | yes                                |
-| **Output geometry**                | closed polygons + holes       | closed polygons, core class | closed polygons                       | open polylines, 3 parts   | **open polylines**                       | closed polygons                    |
-| **Per-shape fields**               | —                             | `partClass: core`           | —                                     | `partClass`, `instanceId` | `trackId`, `mtType`                      | `complete`                         |
-| **Video / multi-channel**          | supported                     | supported                   | typical                               | supported                 | **central**                              | supported                          |
-| **Cross-frame tracking**           | no                            | no                          | no                                    | no                        | **yes, automatic**                       | no                                 |
-| **Type-specific editor panel**     | —                             | core drawn green            | —                                     | Sperm Instances           | Microtubule Instances + type labels      | —                                  |
-| **"Add channel"**                  | no                            | no                          | no                                    | no                        | **yes**                                  | no                                 |
-| **Channel registration at upload** | no                            | no                          | no                                    | no                        | **yes**                                  | no                                 |
-| **Metrics sheet**                  | `Polygon Metrics` + `Summary` | `Image Metrics` (DI)        | `Polygon Metrics` + `WoundTimeSeries` | `Sperm Metrics`           | `Microtubule Metrics` + `Channel Totals` | `Microcapsule Metrics` + `Summary` |
-| **COCO / YOLO / JSON**             | yes                           | yes                         | yes                                   | yes                       | **no**                                   | yes                                |
-| **ImageJ ROI + CVAT**              | no                            | no                          | no                                    | no                        | **yes, always**                          | no                                 |
-| **Kymographs**                     | no                            | no                          | no                                    | no                        | **yes**                                  | no                                 |
+|                                    | spheroid                      | spheroid_invasive           | wound                                 | sperm                     | microtubules                             | microcapsule                       | neurite                              |
+| ---------------------------------- | ----------------------------- | --------------------------- | ------------------------------------- | ------------------------- | ---------------------------------------- | ---------------------------------- | ------------------------------------ |
+| **Models available**               | 5                             | 1                           | 1                                     | 1                         | 1                                        | 1                                  | 1                                    |
+| **Model choice honoured**          | yes                           | forced                      | forced                                | forced                    | forced                                   | forced                             | forced                               |
+| **Threshold**                      | 0.5                           | 0.2                         | 0.5                                   | 0.5 (model overrides it)  | **0.97**                                 | 0.5                                | **none — the decision is an argmax** |
+| **Output geometry**                | closed polygons + holes       | closed polygons, core class | closed polygons                       | open polylines, 3 parts   | **open polylines**                       | closed polygons                    | closed polygons, two classes         |
+| **Per-shape fields**               | —                             | `partClass: core`           | —                                     | `partClass`, `instanceId` | `trackId`, `mtType`                      | `complete`                         | `partClass: neurite \| soma`         |
+| **Video / multi-channel**          | supported                     | supported                   | typical                               | supported                 | **central**                              | supported                          | supported                            |
+| **Cross-frame tracking**           | no                            | no                          | no                                    | no                        | **yes, automatic**                       | no                                 | no                                   |
+| **Type-specific editor panel**     | —                             | core drawn green            | —                                     | Sperm Instances           | Microtubule Instances + type labels      | —                                  | class colours in the shape list      |
+| **"Add channel"**                  | no                            | no                          | no                                    | no                        | **yes**                                  | no                                 | no                                   |
+| **Channel registration at upload** | no                            | no                          | no                                    | no                        | **yes**                                  | no                                 | no                                   |
+| **Metrics sheet**                  | `Polygon Metrics` + `Summary` | `Image Metrics` (DI)        | `Polygon Metrics` + `WoundTimeSeries` | `Sperm Metrics`           | `Microtubule Metrics` + `Channel Totals` | `Microcapsule Metrics` + `Summary` | `Polygon Metrics` + `Summary`        |
+| **COCO / YOLO / JSON**             | yes                           | yes                         | yes                                   | yes                       | **no**                                   | yes                                | yes — but YOLO loses the class       |
+| **ImageJ ROI + CVAT**              | no                            | no                          | no                                    | no                        | **yes, always**                          | no                                 | no                                   |
+| **Kymographs**                     | no                            | no                          | no                                    | no                        | **yes**                                  | no                                 | no                                   |
+
+---
+
+## Thresholds are not a setting
+
+The threshold row above lists a **per-model constant**, not something you can
+dial. `ModelContext` derives it read-only from the model registry, and no screen
+renders a control for it — Settings offers the model and hole detection only. To
+change a threshold you change the model, or the registry.
 
 ---
 

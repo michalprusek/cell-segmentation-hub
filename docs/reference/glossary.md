@@ -68,8 +68,11 @@ inference.
 **Position** — one stage location in a multi-position ND2. Each becomes its own
 container.
 
-**`partClass`** — which part of an object a shape is: `head`, `midpiece` or
-`tail` for sperm, `core` for a disintegrating spheroid.
+**`partClass`** — which part of an object a shape is, or which class of object
+it is: `head`, `midpiece` or `tail` for sperm, `core` for a disintegrating
+spheroid, `neurite` or `soma` for a neuron. The neuron values are the odd ones
+out — a soma and a neurite are two different objects rather than parts of one,
+so neither is nested inside the other.
 
 **Registration** — aligning a container's channels to the first one by a
 whole-pixel translation, optionally applied at upload. Microtubule projects

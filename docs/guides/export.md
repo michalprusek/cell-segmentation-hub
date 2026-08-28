@@ -106,6 +106,12 @@ documentation/              README.md, metadata.json, metrics_guide.md
   carrying `geometry: "polyline"`, the polyline `length`, and — for sperm —
   `partClass` and `instanceId`. The category is named after the project:
   `sperm`, `microtubule`, or `polyline`.
+- **Neuron polygons** (neurite projects) are the exception to the first rule:
+  they are closed polygons, but they get **their own categories** —
+  `category_id: 3` (`neurite`) and `category_id: 4` (`soma`) — rather than
+  riding along as an attribute of `cell`, because a soma and a neurite are two
+  different objects rather than parts of one. Only the classes actually present
+  in the export are emitted.
 - Sperm polylines with a missing or invalid `partClass` are dropped, as are
   polylines with fewer than two points.
 
@@ -144,7 +150,7 @@ regardless of interface language.
 Units follow the pixel-size field: `px` / `px^2` without a scale, `um` / `um^2`
 with one.
 
-### Spheroid and wound — sheet `Polygon Metrics`
+### Spheroid, wound and neurite — sheet `Polygon Metrics`
 
 One row per polygon:
 
@@ -156,6 +162,11 @@ One row per polygon:
 
 Plus a **`Summary`** sheet with counts and averages over **external polygons
 only**.
+
+**Neurite** projects use this sheet unchanged: soma and neurite polygons are
+ordinary closed polygons with no extra per-instance columns, so each one is a
+row like any other. The class itself is not a column — read it from the
+annotation export.
 
 **Wound** projects additionally get a **`WoundTimeSeries`** sheet — `Order`,
 `Image Name`, `Wound Area (%)`, `Polygons`, `Created At (UTC)` — with the

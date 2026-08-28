@@ -1,8 +1,8 @@
 # SpheroSeg / Cell Segmentation Hub — Documentation
 
 SpheroSeg is a web platform for AI-assisted segmentation and measurement of
-microscopy images and time-lapse videos. It ships **six project types** backed
-by **ten segmentation models**, a polygon/polyline editor, cross-frame
+microscopy images and time-lapse videos. It ships **seven project types** backed
+by **eleven segmentation models**, a polygon/polyline editor, cross-frame
 microtubule tracking, and a batch export pipeline.
 
 Live instance: <https://spherosegapp.utia.cas.cz> · Developed at
@@ -48,7 +48,7 @@ Written for the person in front of the browser. No code knowledge assumed.
 | Page                                                             | Covers                                                                                               |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | [User guide](guides/user-guide.md)                               | Account, projects, folders, the full upload → segment → edit → export loop                           |
-| [Project types](guides/project-types.md)                         | All six types side by side: models, geometry, metrics, exports                                       |
+| [Project types](guides/project-types.md)                         | All seven types side by side: models, geometry, metrics, exports                                     |
 | [Uploading data](guides/uploading-data.md)                       | Accepted formats, size limits, what becomes an image vs a video, calibration metadata                |
 | [Videos, frames and channels](guides/videos-and-channels.md)     | Video containers, ND2/TIFF stacks, multi-channel display, window/level, registration, playback proxy |
 | [Segmentation editor](guides/segmentation-editor.md)             | Every edit mode, every keyboard shortcut, polygons vs polylines, tracks                              |
@@ -67,18 +67,19 @@ Written for the person in front of the browser. No code knowledge assumed.
 | `sperm`             | [Sperm morphology](guides/project-types/sperm.md)              | Sperm Morphology                                            | Per-part polygons + skeleton |
 | `microtubules`      | [Microtubules](guides/project-types/microtubules.md)           | Microtubule v5H (nnU-Net ResEnc-M + curvature instancer)    | **Open polylines**           |
 | `microcapsule`      | [Microcapsules](guides/project-types/microcapsule.md)          | Microcapsule (distilled U-Net + watershed)                  | Closed polygons              |
+| `neurite`           | [Neurites and somas](guides/project-types/neurite.md)          | Neurite / Soma (nnU-Net ResEnc-M, 3-fold)                   | Closed polygons, two classes |
 
 ---
 
 ## Reference
 
-| Page                                                  | Covers                                                                 |
-| ----------------------------------------------------- | ---------------------------------------------------------------------- |
-| [ML models](reference/ml-models.md)                   | All ten models: architecture, training data, speed, thresholds, limits |
-| [Metrics](reference/metrics.md)                       | Exact formula and convention behind every measured number              |
-| [Keyboard shortcuts](reference/keyboard-shortcuts.md) | One table, whole app                                                   |
-| [Database schema](reference/database-schema.md)       | Every Prisma model, column, index and its purpose                      |
-| [Glossary](reference/glossary.md)                     | Container, frame, channel, track, polyline, IRM, DI, …                 |
+| Page                                                  | Covers                                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------------------- |
+| [ML models](reference/ml-models.md)                   | All eleven models: architecture, training data, speed, thresholds, limits |
+| [Metrics](reference/metrics.md)                       | Exact formula and convention behind every measured number                 |
+| [Keyboard shortcuts](reference/keyboard-shortcuts.md) | One table, whole app                                                      |
+| [Database schema](reference/database-schema.md)       | Every Prisma model, column, index and its purpose                         |
+| [Glossary](reference/glossary.md)                     | Container, frame, channel, track, polyline, IRM, DI, …                    |
 
 ## API
 

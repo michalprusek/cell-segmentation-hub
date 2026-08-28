@@ -101,7 +101,7 @@ export default {
         'Biomedical image segmentation · ÚTIA, Czech Academy of Sciences',
       title: 'Segmentation for every specimen you image.',
       subtitle:
-        'Spheroids and their disintegration, scratch-assay wounds, sperm morphology, microtubule filaments, microcapsules — a trained model for each, one editor for all of them, and exports that ImageJ, COCO and YOLO already understand.',
+        'Spheroids and their disintegration, scratch-assay wounds, sperm morphology, microtubule filaments, microcapsules, neurons and their processes — a trained model for each, one editor for all of them, and exports that ImageJ, COCO and YOLO already understand.',
       getStarted: 'Get started',
       learnMore: 'See what it handles',
     },
@@ -143,6 +143,12 @@ export default {
           'Bright-field, 1280 × 1024. Two whole capsules are outlined in red — those are the ones that get an area, a perimeter and a compactness. The capsules the frame cuts off carry no red outline: the model flags them and the statistics leave them out.',
         alt: 'Bright-field micrograph of microcapsules, the two whole ones outlined in red and the ones cut off by the frame edge left without an outline.',
       },
+      neurite: {
+        label: 'Neurites & somas',
+        detail:
+          'Confocal fluorescence, tubulin channel — a 1400 × 1400 region of a 6657 × 6664 frame. Every neuron is split in two: the cell body in magenta, each process it puts out in cyan, so soma count and process length are measured as separate things rather than as one blob.',
+        alt: 'Confocal fluorescence micrograph of cultured neurons, each cell body outlined in magenta and the processes radiating from it outlined in cyan.',
+      },
     },
     about: {
       badge: 'Who builds it',
@@ -152,7 +158,7 @@ export default {
       description2:
         'This project is a collaboration with the group of Ing. Silvie Rimpelová, Ph.D. from the Institute of Biochemistry and Microbiology at UCT Prague (VŠCHT Praha).',
       description3:
-        'It began with tumour spheroids and grew with the experiments our collaborators brought us: disintegration assays, scratch-assay wounds, sperm morphology, microtubule time-lapses and microcapsules. Each specimen type has its own trained model, its own metrics and its own export — behind one editor.',
+        'It began with tumour spheroids and grew with the experiments our collaborators brought us: disintegration assays, scratch-assay wounds, sperm morphology, microtubule time-lapses, microcapsules and cultured neurons. Each specimen type has its own trained model, its own metrics and its own export — behind one editor.',
       contactText: 'For inquiries, please contact us at',
     },
     acknowledgments: {
@@ -1452,7 +1458,7 @@ export default {
     badge: 'Documentation',
     title: 'SpheroSeg Documentation',
     subtitle:
-      'Everything the platform does, for all six project types — searchable',
+      'Everything the platform does, for all seven project types — searchable',
     backTo: 'Back to {{page}}',
 
     // Search
@@ -1489,11 +1495,11 @@ export default {
       title: 'Introduction',
       whatIs: 'What is SpheroSeg?',
       description:
-        'SpheroSeg is a platform for AI-assisted segmentation and measurement of microscopy images and time-lapse videos. It ships six project types backed by ten segmentation models, a polygon and polyline editor, cross-frame microtubule tracking, and a batch export pipeline.',
+        'SpheroSeg is a platform for AI-assisted segmentation and measurement of microscopy images and time-lapse videos. It ships seven project types backed by eleven segmentation models, a polygon and polyline editor, cross-frame microtubule tracking, and a batch export pipeline.',
       developedBy:
         'The platform was developed by Bc. Michal Průšek at the Faculty of Nuclear Sciences and Physical Engineering, Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D., in collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
       addresses:
-        'It began with the hard problem of delineating spheroid boundaries in microscopy, and now covers disintegrating spheroids, wound-healing assays, sperm morphology, microtubule time-lapses and microcapsules — each with its own model, measurements and export format.',
+        'It began with the hard problem of delineating spheroid boundaries in microscopy, and now covers disintegrating spheroids, wound-healing assays, sperm morphology, microtubule time-lapses, microcapsules and cultured neurons — each with its own model, measurements and export format.',
     },
 
     // Getting started
@@ -1567,6 +1573,13 @@ export default {
             'For: round microcapsules in bright field, including capsules that touch each other.',
           output:
             'Output: one closed polygon per capsule. Capsules cut off by the image border are excluded from the metrics.',
+        },
+        neurite: {
+          name: 'Neurites & somas',
+          bestFor:
+            'For: cultured neurons in fluorescence microscopy, read from the tubulin channel. The question is how much of a cell is body and how much is process.',
+          output:
+            'Output: closed polygons in two classes — soma (the cell body) and neurite (the processes) — drawn magenta and cyan.',
         },
       },
       note: 'Pick the type before you upload.',
@@ -1659,7 +1672,7 @@ export default {
     modelSelection: {
       title: 'Models',
       description:
-        'Ten models, each locked to the project types it was trained for. The picker only offers compatible models, and only standard spheroid projects have a real choice — every other type has exactly one.',
+        'Eleven models, each locked to the project types it was trained for. The picker only offers compatible models, and only standard spheroid projects have a real choice — every other type has exactly one.',
       spheroidModels: 'Spheroid models — choose one',
       specialisedModels: 'Specialised models — one per project type',
       models: {
@@ -1737,6 +1750,15 @@ export default {
           bestFor: 'Used by: Microcapsule projects.',
           description:
             'A compact U-Net distilled from Meta SAM 3, with a watershed to separate touching capsules. Capsules cut off by the image border are flagged and left out of the metrics.',
+        },
+        neuriteSoma: {
+          name: 'Neurite / Soma',
+          inferenceTime:
+            'About 12 s for a 2048 × 2048 frame · no threshold — the decision is an argmax',
+          bestFor:
+            'Used by: Neurite & soma projects. Fluorescence, tubulin channel only.',
+          description:
+            'An nnU-Net v2 ResEnc-M ensemble of three folds, averaged in logit space with mirroring test-time augmentation and a clDice topology term that keeps thin processes connected rather than beaded. Held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at about 0.180 µm/px — at half that pixel size each soma tends to come back split in two, so validate soma counts first.',
         },
       },
       howToSelect: 'Choosing a model',
@@ -1960,6 +1982,8 @@ export default {
           'Microtubule Metrics + Channel Totals — length and per-channel intensity, one row per frame, filament and channel',
         microcapsule:
           'Microcapsule Metrics + Summary — one row per complete capsule; border-cut capsules are excluded',
+        neurite:
+          'Polygon Metrics + Summary — the same per-shape report standard spheroid projects get, one row per neurite or soma polygon',
       },
       scaleTitle: 'Pixel size and units',
       scaleText:
@@ -2499,7 +2523,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Microscopy segmentation and analysis platform for biomedical researchers — spheroids, wounds, sperm, microcapsules and microtubules, with AI-powered tools for every stage from image to measurement.',
+      'Microscopy segmentation and analysis platform for biomedical researchers — spheroids, wounds, sperm, microcapsules, microtubules and neurons, with AI-powered tools for every stage from image to measurement.',
     contact: 'Contact',
     institution: 'Institution',
     institutionName: 'ÚTIA AV ČR',

@@ -103,7 +103,8 @@ A second surface over the same data, used by the settings pages.
 | GET    | `/api/projects/:id/stats`    | Image and segmentation counts                                       |
 
 `type` must be one of `spheroid`, `spheroid_invasive`, `wound`, `sperm`,
-`microtubules`, `microcapsule`. See [Project types](../guides/project-types.md).
+`microtubules`, `microcapsule`, `neurite`. See
+[Project types](../guides/project-types.md).
 
 ### Microtubule type-label palette
 

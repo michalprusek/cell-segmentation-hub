@@ -95,7 +95,7 @@ export default {
         "Segmentation d'images biomédicales · ÚTIA, Académie tchèque des sciences",
       title: 'La segmentation pour chaque échantillon que vous imagez.',
       subtitle:
-        "Sphéroïdes et leur désintégration, plaies de test de rayure, morphologie des spermatozoïdes, filaments de microtubules, microcapsules : un modèle entraîné pour chaque type, un seul éditeur pour tous, et des exports qu'ImageJ, COCO et YOLO comprennent déjà.",
+        "Sphéroïdes et leur désintégration, plaies de test de rayure, morphologie des spermatozoïdes, filaments de microtubules, microcapsules, neurones et leurs prolongements : un modèle entraîné pour chaque type, un seul éditeur pour tous, et des exports qu'ImageJ, COCO et YOLO comprennent déjà.",
       getStarted: 'Commencer',
       learnMore: 'Voir ce que la plateforme traite',
     },
@@ -137,6 +137,12 @@ export default {
           "Fond clair, 1280 × 1024. Deux capsules entières sont détourées en rouge : ce sont celles qui reçoivent une surface, un périmètre et une compacité. Les capsules que le bord de l'image coupe n'ont pas de contour rouge ; le modèle les signale et les statistiques les écartent.",
         alt: "Micrographie en fond clair de microcapsules : les deux capsules entières détourées en rouge, celles coupées par le bord de l'image sans contour.",
       },
+      neurite: {
+        label: 'Neurites et somas',
+        detail:
+          "Fluorescence confocale, canal tubuline : une vignette de 1400 × 1400 issue d'une image de 6657 × 6664. Chaque neurone est scindé en deux : le corps cellulaire en magenta, chacun de ses prolongements en cyan, si bien que le nombre de somas et la longueur des prolongements se mesurent séparément, et non comme une seule tache.",
+        alt: 'Micrographie de fluorescence confocale de neurones en culture, chaque corps cellulaire détouré en magenta et les prolongements qui en partent détourés en cyan.',
+      },
     },
     about: {
       badge: 'Qui la développe',
@@ -146,7 +152,7 @@ export default {
       description2:
         "Ce projet est une collaboration avec le groupe d'Ing. Silvie Rimpelová, Ph.D. de l'Institut de Biochimie et de Microbiologie de l'UCT Prague (VŠCHT Praha).",
       description3:
-        "Tout a commencé par les sphéroïdes tumoraux, puis la plateforme a grandi avec les expériences que nos collaborateurs nous ont apportées : tests de désintégration, plaies de test de rayure, morphologie des spermatozoïdes, séries temporelles de microtubules et microcapsules. Chaque type d'échantillon a son modèle entraîné, ses métriques et son export — et derrière eux, un seul éditeur.",
+        "Tout a commencé par les sphéroïdes tumoraux, puis la plateforme a grandi avec les expériences que nos collaborateurs nous ont apportées : tests de désintégration, plaies de test de rayure, morphologie des spermatozoïdes, séries temporelles de microtubules, microcapsules et neurones en culture. Chaque type d'échantillon a son modèle entraîné, ses métriques et son export — et derrière eux, un seul éditeur.",
       contactText: 'Pour toute demande, veuillez nous contacter à',
     },
     acknowledgments: {
@@ -1453,7 +1459,7 @@ export default {
     badge: 'Documentation',
     title: 'Documentation SpheroSeg',
     subtitle:
-      'Tout ce que fait la plateforme, pour les six types de projet — avec recherche',
+      'Tout ce que fait la plateforme, pour les sept types de projet — avec recherche',
     backTo: 'Retour à {{page}}',
 
     // Recherche
@@ -1490,11 +1496,11 @@ export default {
       title: 'Introduction',
       whatIs: 'Qu’est-ce que SpheroSeg ?',
       description:
-        'SpheroSeg est une plateforme de segmentation et de mesure assistées par IA d’images de microscopie et de vidéos accélérées. Elle propose six types de projet appuyés sur dix modèles de segmentation, un éditeur de polygones et de polylignes, un suivi des microtubules d’une image à l’autre et une chaîne d’export par lots.',
+        'SpheroSeg est une plateforme de segmentation et de mesure assistées par IA d’images de microscopie et de vidéos accélérées. Elle propose sept types de projet appuyés sur onze modèles de segmentation, un éditeur de polygones et de polylignes, un suivi des microtubules d’une image à l’autre et une chaîne d’export par lots.',
       developedBy:
         'La plateforme a été développée par Bc. Michal Průšek à la Faculté des sciences nucléaires et de génie physique de l’Université technique tchèque de Prague, sous la direction de l’Ing. Adam Novozámský, Ph.D., en collaboration avec des chercheurs de l’Institut de biochimie et de microbiologie de l’UCT Prague.',
       addresses:
-        'Tout est parti du problème difficile de délimiter les contours des sphéroïdes en microscopie ; la plateforme couvre aujourd’hui aussi les sphéroïdes en désagrégation, les tests de cicatrisation, la morphologie des spermatozoïdes, les séquences de microtubules et les microcapsules — chacun avec son modèle, ses mesures et son format d’export.',
+        'Tout est parti du problème difficile de délimiter les contours des sphéroïdes en microscopie ; la plateforme couvre aujourd’hui aussi les sphéroïdes en désagrégation, les tests de cicatrisation, la morphologie des spermatozoïdes, les séquences de microtubules, les microcapsules et les neurones en culture — chacun avec son modèle, ses mesures et son format d’export.',
     },
 
     // Premiers pas
@@ -1568,6 +1574,13 @@ export default {
             'Pour : microcapsules rondes en fond clair, y compris lorsqu’elles se touchent.',
           output:
             'Résultat : un polygone fermé par capsule. Les capsules coupées par le bord de l’image sont exclues des mesures.',
+        },
+        neurite: {
+          name: 'Neurites et somas',
+          bestFor:
+            'Pour : neurones en culture en microscopie de fluorescence, lus dans le canal tubuline. La question est de savoir quelle part de la cellule est le corps et quelle part les prolongements.',
+          output:
+            'Sortie : polygones fermés en deux classes — soma (le corps cellulaire) et neurite (les prolongements) — tracés en magenta et en cyan.',
         },
       },
       note: 'Choisissez le type avant d’importer.',
@@ -1661,7 +1674,7 @@ export default {
     modelSelection: {
       title: 'Modèles',
       description:
-        'Dix modèles, chacun rattaché aux types de projet pour lesquels il a été entraîné. Le sélecteur ne propose que des modèles compatibles, et seuls les projets sphéroïdes standard offrent un vrai choix : tous les autres types n’en ont qu’un.',
+        'Onze modèles, chacun rattaché aux types de projet pour lesquels il a été entraîné. Le sélecteur ne propose que des modèles compatibles, et seuls les projets sphéroïdes standard offrent un vrai choix : tous les autres types n’en ont qu’un.',
       spheroidModels: 'Modèles pour sphéroïdes — à vous de choisir',
       specialisedModels: 'Modèles spécialisés — un par type de projet',
       models: {
@@ -1741,6 +1754,15 @@ export default {
           bestFor: 'Utilisé par : les projets microcapsules.',
           description:
             'Un U-Net compact distillé de Meta SAM 3, avec une ligne de partage des eaux pour séparer les capsules qui se touchent. Les capsules coupées par le bord de l’image sont signalées et écartées des mesures.',
+        },
+        neuriteSoma: {
+          name: 'Neurite / soma',
+          inferenceTime:
+            'Environ 12 s pour une image de 2048 × 2048 · pas de seuil : la décision est un argmax',
+          bestFor:
+            'Utilisé par : les projets neurites et somas. Fluorescence uniquement, canal tubuline.',
+          description:
+            "Un ensemble de trois plis de nnU-Net v2 ResEnc-M, moyennés dans l'espace des logits, avec augmentation par miroir à l'inférence et un terme topologique clDice qui maintient les prolongements fins connectés plutôt que fragmentés. Dice sur données réservées : 0,832 neurite / 0,915 soma. Entraîné sur des données confocales Leica à environ 0,180 µm/px ; à la moitié de cette taille de pixel, chaque soma revient généralement coupé en deux, validez donc d'abord les comptages de somas.",
         },
       },
       howToSelect: 'Choisir un modèle',
@@ -1966,6 +1988,8 @@ export default {
           'Microtubule Metrics + Channel Totals — longueur et intensité par canal, une ligne par image, filament et canal',
         microcapsule:
           'Microcapsule Metrics + Summary — une ligne par capsule complète ; celles coupées par le bord sont exclues',
+        neurite:
+          'Polygon Metrics + Summary — le même rapport par forme que pour les projets sphéroïdes standard, une ligne par polygone de neurite ou de soma',
       },
       scaleTitle: 'Taille du pixel et unités',
       scaleText:
@@ -2587,7 +2611,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      "Plateforme de segmentation et d'analyse d'images de microscopie pour les chercheurs biomédicaux — sphéroïdes, cicatrisation, spermatozoïdes, microcapsules et microtubules, avec des outils alimentés par IA de l'image à la mesure.",
+      "Plateforme de segmentation et d'analyse d'images de microscopie pour les chercheurs biomédicaux — sphéroïdes, cicatrisation, spermatozoïdes, microcapsules, microtubules et neurones, avec des outils alimentés par IA de l'image à la mesure.",
     contact: 'Contact',
     institution: 'Institution',
     institutionName: 'ÚTIA AV ČR',

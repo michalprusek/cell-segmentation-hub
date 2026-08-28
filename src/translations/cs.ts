@@ -94,7 +94,7 @@ export default {
       eyebrow: 'Segmentace biomedicínských obrazů · ÚTIA AV ČR',
       title: 'Segmentace pro každý vzorek, který nasnímáte.',
       subtitle:
-        'Sféroidy a jejich rozpad, rány ze scratch assay, morfologie spermií, vlákna mikrotubulů, mikrokapsle — pro každý typ natrénovaný model, pro všechny jeden editor a export, kterému ImageJ, COCO i YOLO rozumí.',
+        'Sféroidy a jejich rozpad, rány ze scratch assay, morfologie spermií, vlákna mikrotubulů, mikrokapsle, neurony a jejich výběžky — pro každý typ natrénovaný model, pro všechny jeden editor a export, kterému ImageJ, COCO i YOLO rozumí.',
       getStarted: 'Začít',
       learnMore: 'Co všechno zvládne',
     },
@@ -136,6 +136,12 @@ export default {
           'Světlé pole, 1280 × 1024. Dvě celé kapsle jsou obtaženy červeně — právě u nich se počítá plocha, obvod a kompaktnost. Kapsle uříznuté okrajem snímku červený obrys nemají: model je označí a do statistik nevstupují.',
         alt: 'Snímek mikrokapslí ve světlém poli, dvě celé kapsle obtažené červeně, kapsle uříznuté okrajem snímku bez obrysu.',
       },
+      neurite: {
+        label: 'Neurity a somata',
+        detail:
+          'Konfokální fluorescence, tubulinový kanál — výřez 1400 × 1400 ze snímku 6657 × 6664. Každý neuron se dělí na dvě třídy: tělo buňky purpurově, každý jeho výběžek azurově, takže počet somat i délka výběžků se měří odděleně, ne jako jedna skvrna.',
+        alt: 'Konfokální fluorescenční snímek kultivovaných neuronů, tělo každé buňky obtažené purpurově a výběžky z něj vycházející azurově.',
+      },
     },
     about: {
       badge: 'Kdo za tím stojí',
@@ -145,7 +151,7 @@ export default {
       description2:
         'Tento projekt je ve spolupráci se skupinou Ing. Silvie Rimpelové, Ph.D. z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       description3:
-        'Začalo to u nádorových sféroidů a rostlo to s experimenty, které nám naši spolupracovníci nosili: rozpadové testy, rány ze scratch assay, morfologie spermií, časosběry mikrotubulů a mikrokapsle. Každý typ vzorku má vlastní natrénovaný model, vlastní metriky a vlastní export — a za nimi jeden editor.',
+        'Začalo to u nádorových sféroidů a rostlo to s experimenty, které nám naši spolupracovníci nosili: rozpadové testy, rány ze scratch assay, morfologie spermií, časosběry mikrotubulů, mikrokapsle a kultivované neurony. Každý typ vzorku má vlastní natrénovaný model, vlastní metriky a vlastní export — a za nimi jeden editor.',
       contactText: 'Pro dotazy nás prosím kontaktujte na',
     },
     acknowledgments: {
@@ -1426,7 +1432,7 @@ export default {
     badge: 'Dokumentace',
     title: 'Dokumentace SpheroSeg',
     subtitle:
-      'Vše, co platforma umí, pro všech šest typů projektů — s vyhledáváním',
+      'Vše, co platforma umí, pro všech sedm typů projektů — s vyhledáváním',
     backTo: 'Zpět na {{page}}',
 
     // Vyhledávání
@@ -1463,11 +1469,11 @@ export default {
       title: 'Úvod',
       whatIs: 'Co je SpheroSeg?',
       description:
-        'SpheroSeg je platforma pro segmentaci a měření mikroskopických snímků a časosběrných videí s pomocí umělé inteligence. Nabízí šest typů projektů opřených o deset segmentačních modelů, editor polygonů a polyline, sledování mikrotubulů napříč snímky a dávkový export.',
+        'SpheroSeg je platforma pro segmentaci a měření mikroskopických snímků a časosběrných videí s pomocí umělé inteligence. Nabízí sedm typů projektů opřených o jedenáct segmentačních modelů, editor polygonů a polyline, sledování mikrotubulů napříč snímky a dávkový export.',
       developedBy:
         'Platformu vyvinul Bc. Michal Průšek z Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze pod vedením Ing. Adama Novozámského, Ph.D., ve spolupráci s výzkumníky z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       addresses:
-        'Začalo to obtížnou úlohou vymezit hranice sferoidů v mikroskopii. Dnes platforma pokrývá i rozpadající se sferoidy, testy hojení ran, morfologii spermií, časosběrná videa mikrotubulů a mikrokapsle — každý typ s vlastním modelem, měřeními i formátem exportu.',
+        'Začalo to obtížnou úlohou vymezit hranice sferoidů v mikroskopii. Dnes platforma pokrývá i rozpadající se sferoidy, testy hojení ran, morfologii spermií, časosběrná videa mikrotubulů, mikrokapsle a kultivované neurony — každý typ s vlastním modelem, měřeními i formátem exportu.',
     },
 
     // Začínáme
@@ -1541,6 +1547,13 @@ export default {
             'Pro: kulaté mikrokapsle ve světlém poli, včetně kapslí, které se dotýkají.',
           output:
             'Výstup: jeden uzavřený polygon na kapsli. Kapsle useknuté okrajem snímku se do metrik nezapočítávají.',
+        },
+        neurite: {
+          name: 'Neurity a somata',
+          bestFor:
+            'Pro: kultivované neurony ve fluorescenční mikroskopii, čtené z tubulinového kanálu. Otázkou je, kolik z buňky je tělo a kolik výběžky.',
+          output:
+            'Výstup: uzavřené polygony ve dvou třídách — soma (tělo buňky) a neurit (výběžky) — kreslené purpurově a azurově.',
         },
       },
       note: 'Typ zvolte ještě před nahráním dat.',
@@ -1633,7 +1646,7 @@ export default {
     modelSelection: {
       title: 'Modely',
       description:
-        'Deset modelů, každý svázaný s typy projektů, pro které byl trénován. Výběr nabízí jen kompatibilní modely a skutečnou volbu mají pouze standardní sferoidové projekty — ostatní typy mají právě jeden.',
+        'Jedenáct modelů, každý svázaný s typy projektů, pro které byl trénován. Výběr nabízí jen kompatibilní modely a skutečnou volbu mají pouze standardní sferoidové projekty — ostatní typy mají právě jeden.',
       spheroidModels: 'Sferoidové modely — vyberte si',
       specialisedModels: 'Specializované modely — jeden na typ projektu',
       models: {
@@ -1712,6 +1725,15 @@ export default {
           bestFor: 'Používá: projekty s mikrokapslemi.',
           description:
             'Kompaktní U-Net destilovaný z Meta SAM 3, doplněný watershedem pro oddělení dotýkajících se kapslí. Kapsle useknuté okrajem snímku se označí a z metrik vynechají.',
+        },
+        neuriteSoma: {
+          name: 'Neurit / soma',
+          inferenceTime:
+            'Přibližně 12 s na snímek 2048 × 2048 · bez prahu — rozhoduje argmax',
+          bestFor:
+            'Používají: projekty s neurity a somaty. Jen fluorescence, tubulinový kanál.',
+          description:
+            'Ansámbl tří foldů nnU-Net v2 ResEnc-M, průměrovaný v prostoru logitů, s mirroring augmentací při inferenci a topologickým členem clDice, který drží tenké výběžky spojité místo přerušované. Na odložených datech Dice 0,832 pro neurity a 0,915 pro somata. Trénováno na konfokálních datech z Leiky při zhruba 0,180 µm/px — při poloviční velikosti pixelu se soma obvykle vrací rozdělená na dva kusy, takže si počty somat nejdřív ověřte.',
         },
       },
       howToSelect: 'Výběr modelu',
@@ -1934,6 +1956,8 @@ export default {
           'Microtubule Metrics + Channel Totals — délka a intenzita po kanálech, jeden řádek na snímek, vlákno a kanál',
         microcapsule:
           'Microcapsule Metrics + Summary — jeden řádek na celou kapsli; kapsle useknuté okrajem se vynechávají',
+        neurite:
+          'Polygon Metrics + Summary — stejný report na tvar jako u standardních sferoidových projektů, jeden řádek na polygon neuritu nebo somatu',
       },
       scaleTitle: 'Velikost pixelu a jednotky',
       scaleText:
@@ -2451,7 +2475,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Platforma pro segmentaci a analýzu mikroskopických snímků pro biomedicínské výzkumníky — sféroidy, hojení ran, spermie, mikrokapsle a mikrotubuly, s nástroji AI od snímku až po měření.',
+      'Platforma pro segmentaci a analýzu mikroskopických snímků pro biomedicínské výzkumníky — sféroidy, hojení ran, spermie, mikrokapsle, mikrotubuly a neurony, s nástroji AI od snímku až po měření.',
     contact: 'Kontakt',
     institution: 'Instituce',
     institutionName: 'ÚTIA AV ČR',
