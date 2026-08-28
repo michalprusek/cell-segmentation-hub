@@ -156,9 +156,9 @@ describe('StatsOverview', () => {
       expect(threeElements.length).toBeGreaterThanOrEqual(1); // At least projects count
     });
 
-    expect(screen.getByText('Active spheroid studies')).toBeInTheDocument();
+    expect(screen.getByText('Active studies')).toBeInTheDocument();
     expect(screen.getByText('Successfully segmented')).toBeInTheDocument();
-    expect(screen.getByText('Spheroid images')).toBeInTheDocument();
+    expect(screen.getByText('Microscopy images')).toBeInTheDocument();
   });
 
   it('calculates completed images correctly', async () => {
