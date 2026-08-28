@@ -15,15 +15,6 @@
  *   - calls next() on success
  *   - calls next(error) on thrown error
  *
- *  Preset middlewares (noCache, shortCache, mediumCache, longCache, staticCache, apiCache)
- *   - each sets the expected Cache-Control directives
- *
- *  bustCache
- *   - sets no-cache, no-store, must-revalidate + Pragma + Expires:0
- *
- *  createVaryMiddleware
- *   - sets Vary header with provided header names
- *
  *  conditionalCache
  *   - picks development options in dev, production options in prod
  *

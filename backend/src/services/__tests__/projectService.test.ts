@@ -465,7 +465,7 @@ describe('ProjectService', () => {
  * `setVerified` is the write half of the annotator-facing verification flag.
  * Its authorization gate is deliberately DIFFERENT from every other mutation
  * on a project: it goes through `hasProjectAccess` (owner OR accepted share)
- * rather than `checkProjectOwnership`, so that an annotator can mark a project
+ * rather than an owner-only `userId` match, so that an annotator can mark a project
  * reviewed without also gaining the ability to rename or retype it. That
  * distinction is the whole feature, so it is pinned here.
  */

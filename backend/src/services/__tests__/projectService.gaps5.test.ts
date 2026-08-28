@@ -26,12 +26,6 @@
  *  E. getProjectStats — uncovered branches
  *     - returns null when project not found
  *     - error catch re-throws
- *
- *  F. checkProjectOwnership — error catch
- *     - throws when findFirst throws
- *
- *  G. canModifyProject — error → returns false
- *     - when checkProjectOwnership throws, returns false
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -293,8 +287,3 @@ describe('projectService.getProjectStats', () => {
     ).rejects.toThrow('DB timeout');
   });
 });
-
-// ─── F. checkProjectOwnership — error catch ───────────────────────────────────
-
-// ─── G. canModifyProject — error → returns false ─────────────────────────────
-

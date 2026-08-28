@@ -453,7 +453,7 @@ export async function updateProject(
  * been reviewed and passed. Deliberately gated on SHARE access
  * (SharingService.hasProjectAccess), NOT ownership: the owner AND any
  * accepted-share annotator may toggle it, unlike title/description/type
- * which stay owner-only (see updateProject / checkProjectOwnership above).
+ * which stay owner-only (see updateProject's own userId check above).
  *
  * Stamps verifiedAt/verifiedBy for later auditability when marking verified;
  * clears both when un-marking so they never describe a stale reviewer.
