@@ -43,6 +43,12 @@ interface PythonResult {
     name: string;
     displayName?: string | null;
     wavelengthNm?: number | null;
+    /** Gap frame index -> the frame index it reads from, emitted by
+     *  `plane_coverage.py` only for a channel the acquisition left holes in.
+     *  Absent (the overwhelmingly common case) = this channel is real on every
+     *  frame. String keys because that is what JSON does to Python's integer
+     *  keys. Frames that are neither keys nor values were acquired normally. */
+    fillFrames?: Record<string, number>;
   }>;
 }
 
@@ -191,16 +197,28 @@ function buildChannelMeta(
   // default. The difference is that the choice is no longer dressed up as a
   // positive identification, and the user can override it per batch via
   // SegmentChannelDialog.
-  return raw.map((r, i) => ({
-    name: r.name,
-    displayName: r.displayName ?? undefined,
-    type: isIrmChannel(r.name, r.wavelengthNm ?? undefined)
-      ? 'irm'
-      : 'fluorescent',
-    wavelengthNm: r.wavelengthNm ?? undefined,
-    displayColor: defaultColorForWavelength(r.wavelengthNm ?? undefined),
-    isSegmentationSource: preferIrmSource && i === irmIndex,
-  }));
+  return raw.map((r, i) => {
+    // A channel the acquisition only refreshed every N-th frame. `frameIds` /
+    // `sparseFillFrameIds` cannot be filled in here — frame Image rows do not
+    // exist until `videoUploadService.finalizeContainer` creates them — so the
+    // index-space map travels alone and that function mirrors it into id space.
+    const gaps = r.fillFrames;
+    const sparse =
+      gaps && Object.keys(gaps).length > 0
+        ? { sparseSource: true as const, sparseFill: gaps }
+        : {};
+    return {
+      name: r.name,
+      displayName: r.displayName ?? undefined,
+      type: isIrmChannel(r.name, r.wavelengthNm ?? undefined)
+        ? 'irm'
+        : 'fluorescent',
+      wavelengthNm: r.wavelengthNm ?? undefined,
+      displayColor: defaultColorForWavelength(r.wavelengthNm ?? undefined),
+      isSegmentationSource: preferIrmSource && i === irmIndex,
+      ...sparse,
+    };
+  });
 }
 
 export async function extractTiffStack(

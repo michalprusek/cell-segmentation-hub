@@ -2156,6 +2156,13 @@ class ApiClient {
       // flag + partial-frame coverage survive (see addChannelService).
       pngBacked?: boolean;
       frameIds?: string[];
+      // Likewise for a channel the microscope only refreshed every N-th frame:
+      // dropping these would un-fill every gap in the video. The server also
+      // carries them over from the stored row, so this type is the second line
+      // of defence rather than the only one.
+      sparseSource?: boolean;
+      sparseFill?: Record<string, number>;
+      sparseFillFrameIds?: Record<string, string>;
     }>
   ): Promise<void> {
     await this.instance.patch(`/images/${imageId}/channels`, { channels });

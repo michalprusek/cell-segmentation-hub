@@ -394,4 +394,45 @@ describe('ChannelOverlayList', () => {
       });
     });
   });
+
+  describe('frame coverage seeding', () => {
+    it('publishes coverage for a PNG-backed channel that covers only some frames', () => {
+      setup([
+        TWO_CHANNELS[0],
+        makeChannel({
+          name: 'ch2',
+          pngBacked: true,
+          frameIds: ['frame-0', 'frame-3'],
+        }),
+      ]);
+
+      expect(mockSetCoverage).toHaveBeenCalledWith({
+        ch2: ['frame-0', 'frame-3'],
+      });
+    });
+
+    it('publishes NO coverage for a sparse channel — it is served on every frame', () => {
+      // Coverage means "do not request this channel here", which is right for a
+      // channel the user added to a subset of frames and wrong for one the
+      // microscope merely refreshed every N-th frame: every frame HAS an answer
+      // (the previous real frame's pixels), and skipping is exactly what left the
+      // gaps blank in the first place.
+      setup([
+        TWO_CHANNELS[0],
+        makeChannel({
+          name: 'ch2',
+          sparseSource: true,
+          frameIds: ['frame-0', 'frame-3'],
+          sparseFillFrameIds: { 'frame-1': 'frame-0', 'frame-2': 'frame-0' },
+        }),
+      ]);
+
+      expect(mockSetCoverage).toHaveBeenCalledWith({});
+    });
+
+    it('publishes nothing for a container of ordinary full-coverage channels', () => {
+      setup(TWO_CHANNELS);
+      expect(mockSetCoverage).toHaveBeenCalledWith({});
+    });
+  });
 });
