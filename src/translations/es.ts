@@ -1507,8 +1507,7 @@ export default {
         step1: 'Vaya a la página de registro',
         step2: 'Introduzca su correo electrónico y elija una contraseña',
         step3: 'Complete su perfil con su nombre y su institución',
-        step4:
-          'En Configuración, elija modelo preferido, umbral predeterminado, idioma y tema',
+        step4: 'En Configuración, elija modelo preferido, idioma y tema',
       },
       firstProject: 'Su primer proyecto',
       projectDescription:
@@ -1760,16 +1759,16 @@ export default {
       howToSelect: 'Elegir un modelo',
       selectionSteps: {
         step1:
-          'Fije su modelo y umbral predeterminados en Configuración: se usan allí donde el tipo de proyecto permite elegir',
+          'Fije su modelo predeterminado en Configuración: se usa allí donde el tipo de proyecto permite elegir',
         step2: 'Abra un proyecto y seleccione las imágenes a procesar',
         step3: 'Pulse Segmentar; el diálogo solo ofrece modelos compatibles',
         step4:
-          'Ajuste el umbral de confianza para equilibrar el número de detecciones frente a la evidencia',
+          'Cada modelo lleva su propio umbral de detección, fijado al validarlo: no hay nada que ajustar en cada ejecución',
         step5: 'En un vídeo multicanal, elija qué canal debe leer el modelo',
       },
-      thresholdNote: 'El umbral de los microtúbulos es fijo a propósito.',
+      thresholdNote: 'Los umbrales de detección son fijos para cada modelo.',
       thresholdNoteText:
-        'Ese modelo aplica su propio corte ajustado de 0,97 e ignora el deslizador. Bajarlo no encuentra más filamentos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida no sigue a la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
+        'No hay ningún control de umbral en la interfaz: cada modelo aplica el corte con el que fue validado, y el de microtúbulos es 0,97. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
       tip: 'Consejo:',
       tipText:
         'Empiece con el modelo predeterminado. Recurra a CBAM-ResUNet cuando los bordes importen más que la velocidad, y a Mamba-UNet cuando sus imágenes no se parezcan al conjunto de entrenamiento de nadie.',
@@ -1796,7 +1795,7 @@ export default {
         step1: 'Suba sus imágenes o vídeos a un proyecto',
         step2:
           'Seleccione las imágenes a procesar, o ninguna para procesarlas todas',
-        step3: 'Elija el modelo y el umbral de confianza',
+        step3: 'Elija el modelo',
         step4: 'En un vídeo multicanal, elija el canal que debe leer el modelo',
         step5: 'Siga el progreso en los indicadores de estado',
         step6:

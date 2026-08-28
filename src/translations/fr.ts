@@ -1514,7 +1514,7 @@ export default {
         step2: 'Saisissez votre adresse e-mail et choisissez un mot de passe',
         step3: 'Complétez votre profil avec votre nom et votre établissement',
         step4:
-          'Dans les Paramètres, réglez le modèle préféré, le seuil par défaut, la langue et le thème',
+          'Dans les Paramètres, réglez le modèle préféré, la langue et le thème',
       },
       firstProject: 'Votre premier projet',
       projectDescription:
@@ -1768,18 +1768,18 @@ export default {
       howToSelect: 'Choisir un modèle',
       selectionSteps: {
         step1:
-          'Définissez votre modèle et votre seuil par défaut dans les Paramètres : ils s’appliquent partout où le type de projet laisse le choix',
+          'Définissez votre modèle par défaut dans les Paramètres : il s’applique partout où le type de projet laisse le choix',
         step2: 'Ouvrez un projet et sélectionnez les images à traiter',
         step3:
           'Cliquez sur Segmenter ; la boîte de dialogue ne propose que des modèles compatibles',
         step4:
-          'Ajustez le seuil de confiance pour arbitrer entre nombre de détections et solidité des indices',
+          'Chaque modèle porte son propre seuil de détection, fixé lors de sa validation : il n’y a rien à régler à chaque exécution',
         step5:
           'Sur une vidéo multicanale, choisissez le canal que le modèle doit lire',
       },
-      thresholdNote: 'Le seuil des microtubules est délibérément fixe.',
+      thresholdNote: 'Les seuils de détection sont fixes pour chaque modèle.',
       thresholdNoteText:
-        'Ce modèle applique sa propre coupure ajustée de 0,97 et ignore le curseur. L’abaisser ne trouve pas davantage de filaments réels : il en trouve davantage sur des indices plus faibles, et sur un canal autre qu’IRM la sortie ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
+        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle applique la coupure avec laquelle il a été validé, celle des microtubules étant 0,97. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
       tip: 'Astuce :',
       tipText:
         'Commencez par le modèle par défaut. Passez à CBAM-ResUNet quand les contours comptent plus que la vitesse, et à Mamba-UNet quand vos images ne ressemblent au jeu d’entraînement de personne.',
@@ -1806,7 +1806,7 @@ export default {
         step1: 'Importez vos images ou vidéos dans un projet',
         step2:
           'Sélectionnez les images à traiter, ou aucune pour toutes les traiter',
-        step3: 'Choisissez le modèle et le seuil de confiance',
+        step3: 'Choisissez le modèle',
         step4:
           'Sur une vidéo multicanale, choisissez le canal que le modèle doit lire',
         step5: 'Suivez la progression sur les indicateurs d’état',
