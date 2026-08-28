@@ -62,7 +62,6 @@ export default {
     light: 'Clair',
     dark: 'Sombre',
     system: 'Système',
-    welcome: 'Bienvenue sur la plateforme de segmentation de sphéroïdes',
     account: 'Compte',
     notifications: 'Notifications',
     passwordConfirm: 'Confirmer le mot de passe',
@@ -227,11 +226,11 @@ export default {
     status: 'Statut',
     stats: {
       totalProjects: 'Total des projets',
-      totalProjectsDesc: 'Études actives de sphéroïdes',
+      totalProjectsDesc: 'Études actives',
       processedImages: 'Images traitées',
       processedImagesDesc: 'Segmentées avec succès',
       uploadedToday: "Téléchargées aujourd'hui",
-      uploadedTodayDesc: 'Images de sphéroïdes',
+      uploadedTodayDesc: 'Images de microscopie',
       storageUsed: 'Stockage utilisé',
       totalSpaceUsed: 'Espace total utilisé',
       incompleteWarning:
@@ -246,7 +245,7 @@ export default {
   projects: {
     createProject: 'Créer un nouveau projet',
     createProjectDesc:
-      'Ajoutez un nouveau projet pour organiser vos images de sphéroïdes et analyses.',
+      'Ajoutez un nouveau projet pour organiser vos images de microscopie et vos analyses.',
     projectType: 'Type de projet',
     projectTypeUpdated: 'Type de projet mis à jour',
     failedToUpdateProject: 'Impossible de mettre à jour le projet',
@@ -268,9 +267,8 @@ export default {
       microcapsule: 'Microcapsules',
       neurite: 'Neurites et somas',
     },
-    projectNamePlaceholder: 'ex. : Sphéroïdes de cellules HeLa',
-    projectDescPlaceholder:
-      'ex. : Analyse des sphéroïdes tumoraux pour les études de résistance aux médicaments',
+    projectNamePlaceholder: 'ex. : Cellules HeLa, plaque 3',
+    projectDescPlaceholder: 'ex. : Criblage de résistance, cinétique 48 h',
     creatingProject: 'Création...',
     duplicateProject: 'Dupliquer',
     shareProject: 'Partager',
@@ -705,7 +703,8 @@ export default {
     loadingAccount: 'Chargement de votre compte...',
     processingRequest: 'Traitement de votre demande...',
     signInToAccount: 'Connectez-vous à votre compte',
-    accessPlatform: 'Accédez à la plateforme de segmentation de sphéroïdes',
+    accessPlatform:
+      'Accédez à la plateforme de segmentation d’images de microscopie',
     emailAddress: 'Adresse e-mail',
     emailPlaceholder: 'vous@exemple.com',
     password: 'Mot de passe',
@@ -718,7 +717,8 @@ export default {
     registrationFailed: "Échec de l'inscription",
     logoutFailed: 'Échec de la déconnexion',
     profileUpdateFailed: 'Échec de la mise à jour du profil',
-    welcomeMessage: 'Bienvenue sur la plateforme de segmentation de sphéroïdes',
+    welcomeMessage:
+      'Bienvenue sur la plateforme de segmentation d’images de microscopie',
     confirmationRequired:
       'Le texte de confirmation est requis et doit correspondre à votre adresse e-mail',
     agreeToTerms: 'En vous connectant, vous acceptez nos',
@@ -727,7 +727,7 @@ export default {
     privacyPolicy: 'Politique de confidentialité',
     createAccount: 'Créez votre compte',
     signUpPlatform:
-      'Inscrivez-vous pour utiliser la plateforme de segmentation de sphéroïdes',
+      'Inscrivez-vous pour utiliser la plateforme de segmentation d’images de microscopie',
     confirmPassword: 'Confirmer le mot de passe',
     passwordsMatch: 'Les mots de passe correspondent',
     passwordsDoNotMatch: 'Les mots de passe ne correspondent pas',
@@ -2234,7 +2234,7 @@ export default {
         introduction: {
           title: '1. Introduction',
           content:
-            'Cette Politique de Confidentialité explique comment SpheroSeg ("nous", "notre") collecte, utilise, protège et partage vos informations lorsque vous utilisez notre plateforme pour la segmentation et l\'analyse de sphéroïdes. En utilisant notre service, vous consentez aux pratiques de données décrites dans cette politique.',
+            'Cette Politique de Confidentialité explique comment SpheroSeg ("nous", "notre") collecte, utilise, protège et partage vos informations lorsque vous utilisez notre plateforme pour la segmentation et l’analyse d’images de microscopie. En utilisant notre service, vous consentez aux pratiques de données décrites dans cette politique.',
         },
         informationCollected: {
           title: '2. Informations que Nous Collectons',

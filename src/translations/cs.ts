@@ -62,7 +62,6 @@ export default {
     light: 'Světlý',
     dark: 'Tmavý',
     system: 'Systémový',
-    welcome: 'Vítejte v platformě pro segmentaci sféroidů',
     account: 'Účet',
     notifications: 'Oznámení',
     passwordConfirm: 'Potvrdit heslo',
@@ -226,11 +225,11 @@ export default {
     status: 'Stav',
     stats: {
       totalProjects: 'Celkem projektů',
-      totalProjectsDesc: 'Aktivní studie sféroidů',
+      totalProjectsDesc: 'Aktivní studie',
       processedImages: 'Zpracované obrázky',
       processedImagesDesc: 'Úspěšně segmentovány',
       uploadedToday: 'Nahrané dnes',
-      uploadedTodayDesc: 'Obrázky sféroidů',
+      uploadedTodayDesc: 'Mikroskopické snímky',
       storageUsed: 'Využité úložiště',
       totalSpaceUsed: 'Celkem využitého místa',
       incompleteWarning:
@@ -245,7 +244,7 @@ export default {
   projects: {
     createProject: 'Vytvořit nový projekt',
     createProjectDesc:
-      'Přidat nový projekt pro organizaci vašich sféroidních snímků a analýz.',
+      'Přidat nový projekt pro organizaci vašich mikroskopických snímků a analýz.',
     projectType: 'Typ projektu',
     projectTypeUpdated: 'Typ projektu byl aktualizován',
     failedToUpdateProject: 'Nepodařilo se aktualizovat projekt',
@@ -266,9 +265,9 @@ export default {
       microcapsule: 'Mikrokapsle',
       neurite: 'Neurity a somata',
     },
-    projectNamePlaceholder: 'např. HeLa buněčné sferoidy',
+    projectNamePlaceholder: 'např. Buňky HeLa, destička 3',
     projectDescPlaceholder:
-      'např. Analýza nádorových sféroidů pro studie rezistence na léky',
+      'např. Screening rezistence na léčiva, 48h časosběr',
     creatingProject: 'Vytváření...',
     duplicateProject: 'Duplikovat',
     shareProject: 'Sdílet',
@@ -958,7 +957,7 @@ export default {
     loadingAccount: 'Načítání vašeho účtu...',
     processingRequest: 'Zpracování vašeho požadavku...',
     signInToAccount: 'Přihlaste se ke svému účtu',
-    accessPlatform: 'Přístup k platformě pro segmentaci sféroidů',
+    accessPlatform: 'Přístup k platformě pro segmentaci mikroskopických snímků',
     emailAddress: 'E-mailová adresa',
     emailPlaceholder: 'vas@email.com',
     password: 'Heslo',
@@ -975,7 +974,8 @@ export default {
     tokenMissing: 'Chybí autentizační token',
     tokenExpired: 'Platnost tokenu vypršela',
     pleaseSignInAgain: 'Prosím přihlaste se znovu',
-    welcomeMessage: 'Vítejte na platformě pro segmentaci sféroidů',
+    welcomeMessage:
+      'Vítejte na platformě pro segmentaci mikroskopických snímků',
     confirmationRequired:
       'Potvrzovací text je povinný a musí se shodovat s vaší e-mailovou adresou',
     agreeToTerms: 'Přihlášením souhlasíte s našimi',
@@ -984,7 +984,7 @@ export default {
     privacyPolicy: 'Zásadami ochrany osobních údajů',
     createAccount: 'Vytvořte svůj účet',
     signUpPlatform:
-      'Zaregistrujte se pro použití platformy pro segmentaci sféroidů',
+      'Zaregistrujte se pro použití platformy pro segmentaci mikroskopických snímků',
     confirmPassword: 'Potvrdit heslo',
     passwordsMatch: 'Hesla se shodují',
     passwordsDoNotMatch: 'Hesla se neshodují',
@@ -2197,7 +2197,7 @@ export default {
         introduction: {
           title: '1. Úvod',
           content:
-            'Tyto Zásady ochrany osobních údajů vysvětlují, jak SpheroSeg ("my", "nás", "naše") shromažďuje, používá, chrání a sdílí vaše informace při používání naší platformy pro segmentaci a analýzu sféroidů. Používáním naší služby souhlasíte s praktikami týkajícími se dat popsanými v těchto zásadách.',
+            'Tyto Zásady ochrany osobních údajů vysvětlují, jak SpheroSeg ("my", "nás", "naše") shromažďuje, používá, chrání a sdílí vaše informace při používání naší platformy pro segmentaci a analýzu mikroskopických snímků. Používáním naší služby souhlasíte s praktikami týkajícími se dat popsanými v těchto zásadách.',
         },
         informationCollected: {
           title: '2. Informace, které shromažďujeme',

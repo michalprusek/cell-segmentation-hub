@@ -67,7 +67,7 @@ vi.mock('@/contexts/useLanguage', () => ({
         'projects.createProject': 'Create New Project',
         'projects.createProjectDesc': 'Fill in the details below.',
         'common.projectName': 'Project Name',
-        'projects.projectNamePlaceholder': 'e.g., HeLa Cell Spheroids',
+        'projects.projectNamePlaceholder': 'e.g., HeLa cells, plate 3',
         'projects.descriptionOptional': 'Description (Optional)',
         'projects.projectDescPlaceholder': 'Optional description',
         'projects.projectType': 'Project Type',
@@ -286,7 +286,7 @@ function clickTrigger() {
 }
 
 function fillName(value: string) {
-  fireEvent.change(screen.getByPlaceholderText('e.g., HeLa Cell Spheroids'), {
+  fireEvent.change(screen.getByPlaceholderText('e.g., HeLa cells, plate 3'), {
     target: { value },
   });
 }
@@ -501,7 +501,7 @@ describe('NewProject — successful creation', () => {
     // Reopening the dialog shows cleared inputs (state reset to '').
     clickTrigger();
     expect(
-      screen.getByPlaceholderText('e.g., HeLa Cell Spheroids')
+      screen.getByPlaceholderText('e.g., HeLa cells, plate 3')
     ).toHaveValue('');
     expect(screen.getByPlaceholderText('Optional description')).toHaveValue('');
   });

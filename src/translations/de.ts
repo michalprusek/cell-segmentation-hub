@@ -62,7 +62,6 @@ export default {
     light: 'Hell',
     dark: 'Dunkel',
     system: 'System',
-    welcome: 'Willkommen bei der Sphäroid-Segmentierungsplattform',
     account: 'Konto',
     notifications: 'Benachrichtigungen',
     passwordConfirm: 'Passwort bestätigen',
@@ -227,11 +226,11 @@ export default {
     status: 'Status',
     stats: {
       totalProjects: 'Projekte gesamt',
-      totalProjectsDesc: 'Aktive Sphäroid-Studien',
+      totalProjectsDesc: 'Aktive Studien',
       processedImages: 'Verarbeitete Bilder',
       processedImagesDesc: 'Erfolgreich segmentiert',
       uploadedToday: 'Heute hochgeladen',
-      uploadedTodayDesc: 'Sphäroid-Bilder',
+      uploadedTodayDesc: 'Mikroskopiebilder',
       storageUsed: 'Genutzter Speicher',
       totalSpaceUsed: 'Gesamt genutzter Speicher',
       incompleteWarning:
@@ -246,7 +245,7 @@ export default {
   projects: {
     createProject: 'Neues Projekt erstellen',
     createProjectDesc:
-      'Fügen Sie ein neues Projekt hinzu, um Ihre Sphäroid-Bilder und Analysen zu organisieren.',
+      'Fügen Sie ein neues Projekt hinzu, um Ihre Mikroskopiebilder und Analysen zu organisieren.',
     projectType: 'Projekttyp',
     projectTypeUpdated: 'Projekttyp aktualisiert',
     failedToUpdateProject: 'Projekt konnte nicht aktualisiert werden',
@@ -268,9 +267,8 @@ export default {
       microcapsule: 'Mikrokapseln',
       neurite: 'Neuriten und Somata',
     },
-    projectNamePlaceholder: 'z.B. HeLa-Zell-Sphäroide',
-    projectDescPlaceholder:
-      'z.B. Analyse von Tumor-Sphäroiden für Arzneimittelresistenz-Studien',
+    projectNamePlaceholder: 'z.B. HeLa-Zellen, Platte 3',
+    projectDescPlaceholder: 'z.B. Resistenz-Screening, 48-h-Zeitreihe',
     creatingProject: 'Erstelle...',
     duplicateProject: 'Duplizieren',
     shareProject: 'Teilen',
@@ -709,7 +707,7 @@ export default {
     loadingAccount: 'Ihr Konto wird geladen...',
     processingRequest: 'Ihre Anfrage wird bearbeitet...',
     signInToAccount: 'Bei Ihrem Konto anmelden',
-    accessPlatform: 'Zugang zur Sphäroid-Segmentierungsplattform',
+    accessPlatform: 'Zugang zur Mikroskopie-Segmentierungsplattform',
     emailAddress: 'E-Mail-Adresse',
     emailPlaceholder: 'sie@beispiel.com',
     password: 'Passwort',
@@ -722,7 +720,7 @@ export default {
     registrationFailed: 'Registrierung fehlgeschlagen',
     logoutFailed: 'Abmeldung fehlgeschlagen',
     profileUpdateFailed: 'Profilaktualisierung fehlgeschlagen',
-    welcomeMessage: 'Willkommen bei der Sphäroid-Segmentierungsplattform',
+    welcomeMessage: 'Willkommen bei der Mikroskopie-Segmentierungsplattform',
     confirmationRequired:
       'Bestätigungstext ist erforderlich und muss Ihrer E-Mail-Adresse entsprechen',
     agreeToTerms: 'Durch die Anmeldung stimmen Sie unseren',
@@ -731,7 +729,7 @@ export default {
     privacyPolicy: 'Datenschutzrichtlinie',
     createAccount: 'Erstellen Sie Ihr Konto',
     signUpPlatform:
-      'Registrieren Sie sich, um die Sphäroid-Segmentierungsplattform zu nutzen',
+      'Registrieren Sie sich, um die Mikroskopie-Segmentierungsplattform zu nutzen',
     confirmPassword: 'Passwort bestätigen',
     passwordsMatch: 'Passwörter stimmen überein',
     passwordsDoNotMatch: 'Passwörter stimmen nicht überein',
@@ -2244,7 +2242,7 @@ export default {
         introduction: {
           title: '1. Einführung',
           content:
-            'Diese Datenschutzrichtlinie erklärt, wie SpheroSeg ("wir", "uns", "unser") Ihre Informationen sammelt, verwendet, schützt und teilt, wenn Sie unsere Plattform für Sphäroid-Segmentierung und -Analyse nutzen. Durch die Nutzung unseres Dienstes stimmen Sie den in dieser Richtlinie beschriebenen Datenpraktiken zu.',
+            'Diese Datenschutzrichtlinie erklärt, wie SpheroSeg ("wir", "uns", "unser") Ihre Informationen sammelt, verwendet, schützt und teilt, wenn Sie unsere Plattform für Mikroskopie-Segmentierung und -Analyse nutzen. Durch die Nutzung unseres Dienstes stimmen Sie den in dieser Richtlinie beschriebenen Datenpraktiken zu.',
         },
         informationCollected: {
           title: '2. Informationen, die Wir Sammeln',
