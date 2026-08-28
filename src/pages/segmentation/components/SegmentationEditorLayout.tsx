@@ -478,8 +478,16 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                             isMicrotubuleProject(projectType) &&
                             mtColorMode === 'semantic'
                               ? resolveMtColor(polygon.mtType, mtColorById, {
+                                  // Multi-selection darkens the label colour
+                                  // exactly like a single selection — this is
+                                  // the semantic-mode half of the parity
+                                  // CanvasPolygon's `isEffectivelySelected`
+                                  // enforces for every other colour branch.
+                                  // Without it a Shift+selected MT in
+                                  // colour-by-label mode kept the idle colour.
                                   selected:
-                                    polygon.id === editor.selectedPolygonId,
+                                    polygon.id === editor.selectedPolygonId ||
+                                    selectedPolygonIds.has(polygon.id),
                                 })
                               : undefined
                           }

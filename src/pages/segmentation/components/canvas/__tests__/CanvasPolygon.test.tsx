@@ -171,6 +171,145 @@ describe('CanvasPolygon', () => {
     });
   });
 
+  // Regression guard for the multi-select style unification (2026-08-28).
+  // A Shift+click multi-selection must render EXACTLY like a single selection.
+  // Multi-select used to paint a dash-dot `6 3` stroke at 2.2x width and skip
+  // the selected colour, the glow filter and the `.polygon-selected`
+  // drop-shadow entirely, so it read as a different kind of selection.
+  //
+  // The parity assertion compares the polygon group's whole rendered markup,
+  // so it covers the stroke attributes, the inline `style` the core branch
+  // sets, and the polyline endpoint markers in one shot — and it fails if
+  // `isEffectivelySelected` is reverted to `isSelected` in ANY of the eight
+  // colour branches, not just the two a hand-picked example would exercise.
+  describe('Multi-selection styling parity with single selection', () => {
+    const renderOnce = (props: Record<string, unknown>) => {
+      const { container, unmount } = render(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} {...props} />
+        </svg>
+      );
+      const group = container.querySelector('g.polygon-group');
+      expect(group).not.toBeNull();
+      const path = group!.querySelector('path.polygon-path');
+      expect(path).not.toBeNull();
+      const result = {
+        html: group!.innerHTML,
+        cls: path!.getAttribute('class') ?? '',
+        dash: path!.getAttribute('stroke-dasharray'),
+        strokeWidth: path!.getAttribute('stroke-width'),
+        filter: path!.getAttribute('filter'),
+        // Fixed endpoint markers are the group's own <circle> children; the
+        // draggable vertices live inside the PolygonVertices child <g>.
+        markers: group!.querySelectorAll(':scope > circle').length,
+      };
+      unmount();
+      return result;
+    };
+
+    const polyline = (extra: Record<string, unknown> = {}) =>
+      createMockPolygon({
+        id: 'test-polyline',
+        geometry: 'polyline',
+        points: [
+          { x: 10, y: 10 },
+          { x: 40, y: 20 },
+          { x: 70, y: 15 },
+        ],
+        ...extra,
+      });
+
+    // One case per branch of `pathColor`, since the diff rewrote all of them.
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ['external polygon', {}],
+      ['internal polygon', { polygon: { ...mockPolygon, type: 'internal' } }],
+      [
+        'incomplete microcapsule',
+        { polygon: { ...mockPolygon, complete: false } },
+      ],
+      ['spheroid core', { polygon: { ...mockPolygon, partClass: 'core' } }],
+      ['sperm head', { polygon: polyline({ partClass: 'head' }) }],
+      ['sperm midpiece', { polygon: polyline({ partClass: 'midpiece' }) }],
+      ['sperm tail', { polygon: polyline({ partClass: 'tail' }) }],
+      [
+        'microtubule (instance colour)',
+        { polygon: polyline({ trackId: 'track-7' }) },
+      ],
+      [
+        'microtubule (semantic colour)',
+        {
+          polygon: polyline({ trackId: 'track-7', mtType: 'label-1' }),
+          colorMode: 'semantic',
+          semanticColor: '#1e2ba5',
+        },
+      ],
+    ];
+
+    it.each(cases)(
+      'renders a multi-selected %s exactly like a selected one',
+      (_name, props) => {
+        const idle = renderOnce(props);
+        const selected = renderOnce({ ...props, isSelected: true });
+        const multi = renderOnce({ ...props, isMultiSelected: true });
+        const both = renderOnce({
+          ...props,
+          isSelected: true,
+          isMultiSelected: true,
+        });
+
+        expect(multi.html).toBe(selected.html);
+        expect(both.html).toBe(selected.html);
+        // Guards against the equality above passing on two identical *idle*
+        // renders — the shared markup must really be the selected one.
+        expect(selected.cls).toContain('polygon-selected');
+        expect(idle.cls).not.toContain('polygon-selected');
+        expect(multi.html).not.toBe(idle.html);
+      }
+    );
+
+    it.each(cases)('never dashes the stroke of a %s', (_name, props) => {
+      for (const flags of [
+        {},
+        { isSelected: true },
+        { isMultiSelected: true },
+        { isSelected: true, isMultiSelected: true },
+      ]) {
+        expect(renderOnce({ ...props, ...flags }).dash).toBeNull();
+      }
+    });
+
+    it('does not thicken the stroke of a multi-selected polygon', () => {
+      // The old style multiplied the stroke width by 2.2 on top of the hover
+      // multiplier; single-select never did.
+      expect(renderOnce({ isMultiSelected: true }).strokeWidth).toBe(
+        renderOnce({ isSelected: true }).strokeWidth
+      );
+      expect(renderOnce({ isMultiSelected: true }).strokeWidth).toBe(
+        renderOnce({}).strokeWidth
+      );
+    });
+
+    it('hides the polyline endpoint markers when multi-selected, as when selected', () => {
+      // An unselected sperm polyline draws two fixed endpoint dots. A selected
+      // one drops them because PolygonVertices paints draggable circles at the
+      // same coordinates; a multi-selected one gets those same draggable
+      // circles (PolygonVertices treats both flags alike), so it must drop the
+      // markers too or they show through as stuck dots while dragging.
+      const props = { polygon: polyline({ partClass: 'head' }) };
+      expect(renderOnce(props).markers).toBe(2);
+      expect(renderOnce({ ...props, isSelected: true }).markers).toBe(0);
+      expect(renderOnce({ ...props, isMultiSelected: true }).markers).toBe(0);
+    });
+
+    it('gives a multi-selected polygon the same glow filter as a selected one', () => {
+      expect(renderOnce({ isMultiSelected: true }).filter).toBe(
+        renderOnce({ isSelected: true }).filter
+      );
+      expect(renderOnce({ isMultiSelected: true }).filter).toBeTruthy();
+      expect(renderOnce({}).filter).toBe('');
+    });
+  });
+
   describe('Interaction', () => {
     it('calls onSelectPolygon when polygon is clicked', () => {
       const onSelectPolygon = vi.fn();
