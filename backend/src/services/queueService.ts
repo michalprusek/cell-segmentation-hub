@@ -11,7 +11,9 @@ import { SegmentationUpdateData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
 import { scheduleTrackingForContainer } from './tracking/trackerService';
 import {
+  findSparseChannel,
   findStaticChannel,
+  planSparseCollapse,
   planStaticCollapse,
   type StaticChannelLike,
 } from './staticChannelProjection';
@@ -239,14 +241,25 @@ export class QueueService {
   /**
    * Drop frames whose segmentation will be projected from a sibling.
    *
-   * Only applies to a channel recorded as `staticSource` at add time — one
-   * source image stamped onto every covered frame. "The pixels currently look
-   * identical" is deliberately not accepted as evidence: that is a property of
-   * today's data, whereas the flag is a property of how the channel was built.
+   * Applies to two recorded facts, never to an inference from the pixels:
+   *
+   * - `staticSource` — one source image stamped onto every covered frame, so
+   *   the whole container collapses to a single anchor.
+   * - `sparseSource` — the microscope only refreshed this channel every N-th
+   *   frame, so the frames in between hold a constant fill the acquisition
+   *   software wrote for a timepoint it never imaged. Those collapse onto the
+   *   last real frame before each of them. Segmenting one is not merely
+   *   wasteful, it is wrong: the model would be fed a blank image and whatever
+   *   came back would then be tracked against the real frames around it.
+   *
+   * "The pixels currently look identical" is deliberately not accepted as
+   * evidence for either: that is a property of today's data, whereas the flags
+   * are properties of how the channel was built and measured.
    *
    * Anything this cannot prove safe is left alone and segmented normally: a
-   * frame outside the channel's coverage, a frame whose alignment shift was
-   * never recorded, or any container whose metadata does not parse.
+   * frame outside a static channel's coverage, a frame whose alignment shift
+   * was never recorded, a gap whose anchor is not in this batch, or any
+   * container whose metadata does not parse.
    */
   private async collapseStaticChannelFrames(
     candidateIds: string[],
@@ -285,15 +298,22 @@ export class QueueService {
     const keep = new Set(loose);
     let collapsedContainers = 0;
     for (const [containerId, containerFrames] of byContainer) {
-      const meta = findStaticChannel(
-        channelsById.get(containerId) as unknown as StaticChannelLike[] | null,
-        channel
-      );
-      if (!meta) {
+      const declared = channelsById.get(
+        containerId
+      ) as unknown as StaticChannelLike[] | null;
+      // Two ways a frame's pixels can already be somewhere else: the whole
+      // channel is one stamped image (`staticSource`), or the microscope only
+      // refreshed it every N-th frame and the rest are gaps (`sparseSource`).
+      // The plans differ only in how many anchors there are.
+      const staticMeta = findStaticChannel(declared, channel);
+      const sparseMeta = staticMeta ? null : findSparseChannel(declared, channel);
+      if (!staticMeta && !sparseMeta) {
         containerFrames.forEach(f => keep.add(f.id));
         continue;
       }
-      const plan = planStaticCollapse(meta, containerFrames);
+      const plan = staticMeta
+        ? planStaticCollapse(staticMeta, containerFrames)
+        : planSparseCollapse(sparseMeta!, containerFrames);
       plan.segment.forEach(f => keep.add(f.id));
       if (plan.projectFrom.size > 0) collapsedContainers++;
     }

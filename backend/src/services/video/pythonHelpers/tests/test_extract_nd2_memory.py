@@ -107,11 +107,12 @@ def _run(T, C=2, Y=128, X=128, workers=2, register=False):
     prev = os.environ.get("ND2_EXTRACT_WORKERS")
     os.environ["ND2_EXTRACT_WORKERS"] = str(workers)
     try:
-        offsets = _write_frames(
+        offsets, blanks = _write_frames(
             stack, dest / "frames", [f"ch{c}" for c in range(C)],
             register=register,
         )
         assert len(offsets) == T, f"expected {T} offset rows, got {len(offsets)}"
+        assert len(blanks) == T, f"expected {T} blank rows, got {len(blanks)}"
         assert stack.reads == T, f"expected {T} frame reads, got {stack.reads}"
     finally:
         if prev is None:

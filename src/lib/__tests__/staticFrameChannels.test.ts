@@ -3,6 +3,7 @@ import {
   setStaticChannelAnchors,
   clearStaticChannelAnchors,
   staticChannelAnchors,
+  sparseChannelFills,
   resolveFrameId,
 } from '../staticFrameChannels';
 import { frameCacheKey } from '../decodedFrameCache';
@@ -89,5 +90,84 @@ describe('staticFrameChannels', () => {
     setStaticChannelAnchors([IRM]);
     expect(resolveFrameId('frame-7', null)).toBe('frame-7');
     expect(buildFrameImageUrl('frame-7', null)).toContain('frame-7');
+  });
+});
+
+/** A channel the microscope refreshed every 3rd frame. `sparseFillFrameIds` is
+ *  written by `videoUploadService` once the frame rows exist; its keys are the
+ *  gaps and its values the real frame each one is served from. */
+const SPARSE = {
+  name: 'irm',
+  sparseSource: true as const,
+  sparseFillFrameIds: {
+    'frame-1': 'frame-0',
+    'frame-2': 'frame-0',
+    'frame-4': 'frame-3',
+    'frame-5': 'frame-3',
+  },
+};
+
+describe('staticFrameChannels — sparse channels', () => {
+  it('points a gap frame at the real frame it is served from', () => {
+    setStaticChannelAnchors([SPARSE, DYNAMIC]);
+
+    expect(resolveFrameId('frame-1', 'irm')).toBe('frame-0');
+    expect(resolveFrameId('frame-2', 'irm')).toBe('frame-0');
+    expect(resolveFrameId('frame-4', 'irm')).toBe('frame-3');
+    expect(resolveFrameId('frame-5', 'irm')).toBe('frame-3');
+  });
+
+  it('leaves the REAL frames as themselves', () => {
+    // A sparse channel is not a static one: frames 0 and 3 are different
+    // pictures and must not collapse onto each other.
+    setStaticChannelAnchors([SPARSE]);
+
+    expect(resolveFrameId('frame-0', 'irm')).toBe('frame-0');
+    expect(resolveFrameId('frame-3', 'irm')).toBe('frame-3');
+    expect(resolveFrameId('frame-6', 'irm')).toBe('frame-6');
+  });
+
+  it('collapses each RUN of gaps onto one URL and one decode entry', () => {
+    setStaticChannelAnchors([SPARSE]);
+
+    const urls = new Set(
+      ['frame-0', 'frame-1', 'frame-2'].map(id => buildFrameImageUrl(id, 'irm'))
+    );
+    const keys = new Set(
+      ['frame-0', 'frame-1', 'frame-2'].map(id => frameCacheKey(id, 'irm'))
+    );
+    expect(urls.size).toBe(1);
+    expect(keys.size).toBe(1);
+
+    // ...but a DIFFERENT one from the next run.
+    expect(buildFrameImageUrl('frame-4', 'irm')).not.toBe(
+      buildFrameImageUrl('frame-1', 'irm')
+    );
+  });
+
+  it('leaves other channels of the same container alone', () => {
+    setStaticChannelAnchors([SPARSE, DYNAMIC]);
+    expect(resolveFrameId('frame-1', '488_nm')).toBe('frame-1');
+  });
+
+  it('ignores a sparse channel whose id map never arrived', () => {
+    // The backend still serves the right pixels from `sparseFill` (which is
+    // index-keyed and never leaves the server), so an absent map costs a
+    // duplicate download, not a wrong picture.
+    setStaticChannelAnchors([{ name: 'irm', sparseSource: true }]);
+    expect(resolveFrameId('frame-1', 'irm')).toBe('frame-1');
+  });
+
+  it('is cleared with the static anchors when the editor unmounts', () => {
+    setStaticChannelAnchors([SPARSE]);
+    clearStaticChannelAnchors();
+    expect(resolveFrameId('frame-1', 'irm')).toBe('frame-1');
+    expect(sparseChannelFills()).toEqual({});
+  });
+
+  it('replaces the registry, so the next video cannot inherit these gaps', () => {
+    setStaticChannelAnchors([SPARSE]);
+    setStaticChannelAnchors([{ name: 'irm' }]);
+    expect(resolveFrameId('frame-1', 'irm')).toBe('frame-1');
   });
 });
