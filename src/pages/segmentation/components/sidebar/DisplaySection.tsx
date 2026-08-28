@@ -44,7 +44,7 @@ function DisplaySliderRow({
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="min-w-0 truncate text-gray-700 dark:text-gray-300">
+        <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-300">
           {label}
         </span>
         <div className="flex items-center gap-1 shrink-0">
@@ -58,7 +58,7 @@ function DisplaySliderRow({
               if (!Number.isFinite(next)) return;
               onChange(Math.max(min, Math.min(max, next)));
             }}
-            className="w-28 shrink-0 h-7 px-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="h-7 w-20 shrink-0 px-1 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
           {suffix && (
             <span className="text-gray-500 dark:text-gray-400 text-xs">
@@ -141,9 +141,9 @@ export default function DisplaySection() {
                     onClick={() => setActiveWindowChannel(ch)}
                     title={ch}
                     className={
-                      'flex items-center gap-1 rounded px-2 py-1 text-xs max-w-full ' +
+                      'flex max-w-full items-center gap-1 rounded px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
                       (active
-                        ? 'bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-100'
+                        ? 'bg-blue-100 font-medium text-blue-900 ring-1 ring-inset ring-blue-300 dark:bg-blue-900 dark:text-blue-100 dark:ring-blue-700'
                         : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700')
                     }
                   >

@@ -8,6 +8,9 @@ export default {
     dismiss: '关闭',
     delete: '删除',
     edit: '编辑',
+    actions: '操作',
+    show: '显示',
+    hide: '隐藏',
     create: '创建',
     search: '搜索',
     error: '错误',
@@ -833,6 +836,7 @@ export default {
       undo: '撤销',
       redo: '重做',
       deleteSelected: '删除选中的多边形',
+      finishShape: '完成当前形状',
 
       // View shortcuts
       zoom: '放大/缩小',

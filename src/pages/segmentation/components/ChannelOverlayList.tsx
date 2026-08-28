@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Palette } from 'lucide-react';
+import { Palette, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -199,7 +199,7 @@ export function ChannelOverlayList({
                   title={t('editor.channels.editColor', {
                     defaultValue: 'Edit colour',
                   })}
-                  className="relative inline-flex h-5 w-5 items-center justify-center rounded-sm border border-gray-300 dark:border-gray-600 hover:ring-2 hover:ring-blue-400 transition flex-shrink-0"
+                  className="relative inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-gray-300 transition hover:ring-2 hover:ring-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-gray-600"
                   style={{ backgroundColor: color }}
                 >
                   <Palette
@@ -223,24 +223,42 @@ export function ChannelOverlayList({
                     className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0.5 text-sm text-gray-700 dark:text-gray-200"
                   />
                 ) : (
-                  <button
-                    type="button"
-                    onDoubleClick={() => {
-                      if (!containerId) return;
-                      setRenameValue(ch.displayName ?? ch.name);
-                      setRenamingChannel(ch.name);
-                    }}
-                    title={
-                      containerId
-                        ? t('editor.channels.renameHint', {
-                            defaultValue: 'Double-click to rename',
-                          })
-                        : undefined
-                    }
-                    className="flex-1 min-w-0 text-left truncate text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
-                  >
-                    {ch.displayName ?? ch.name}
-                  </button>
+                  <div className="group/name flex min-w-0 flex-1 items-center gap-1">
+                    <button
+                      type="button"
+                      onDoubleClick={() => {
+                        if (!containerId) return;
+                        setRenameValue(ch.displayName ?? ch.name);
+                        setRenamingChannel(ch.name);
+                      }}
+                      title={
+                        containerId
+                          ? String(
+                              t('editor.channels.renameHint', {
+                                defaultValue: 'Double-click to rename',
+                              })
+                            )
+                          : undefined
+                      }
+                      className="min-w-0 flex-1 truncate rounded text-left text-gray-700 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-gray-300 dark:hover:text-gray-100"
+                    >
+                      {ch.displayName ?? ch.name}
+                    </button>
+                    {containerId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRenameValue(ch.displayName ?? ch.name);
+                          setRenamingChannel(ch.name);
+                        }}
+                        aria-label={String(t('common.rename'))}
+                        title={String(t('common.rename'))}
+                        className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/name:opacity-100 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                      >
+                        <Pencil className="h-3 w-3" aria-hidden />
+                      </button>
+                    )}
+                  </div>
                 )}
                 {ch.isSegmentationSource && (
                   <span
@@ -266,7 +284,11 @@ export function ChannelOverlayList({
                     defaultValue: 'Channel opacity',
                   })}
                 />
-                <span className="w-9 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400 flex-shrink-0">
+                <span
+                  className={`w-9 flex-shrink-0 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400 ${
+                    visible ? '' : 'opacity-50'
+                  }`}
+                >
                   {opacity}%
                 </span>
               </div>

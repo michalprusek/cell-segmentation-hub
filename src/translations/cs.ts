@@ -8,6 +8,9 @@ export default {
     dismiss: 'Zavřít',
     delete: 'Smazat',
     edit: 'Upravit',
+    actions: 'Akce',
+    show: 'Zobrazit',
+    hide: 'Skrýt',
     create: 'Vytvořit',
     search: 'Hledat',
     error: 'Chyba',
@@ -744,6 +747,7 @@ export default {
       undo: 'Zpět',
       redo: 'Znovu',
       deleteSelected: 'Smazat vybraný polygon',
+      finishShape: 'Dokončit rozpracovaný tvar',
 
       // View shortcuts
       zoom: 'Přiblížit/oddálit',

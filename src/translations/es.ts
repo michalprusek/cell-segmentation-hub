@@ -8,6 +8,9 @@ export default {
     dismiss: 'Descartar',
     delete: 'Eliminar',
     edit: 'Editar',
+    actions: 'Acciones',
+    show: 'Mostrar',
+    hide: 'Ocultar',
     create: 'Crear',
     search: 'Buscar',
     error: 'Error',
@@ -898,6 +901,7 @@ export default {
       undo: 'Deshacer',
       redo: 'Rehacer',
       deleteSelected: 'Eliminar polígono seleccionado',
+      finishShape: 'Finalizar la forma actual',
 
       // View shortcuts
       zoom: 'Acercar/Alejar',
