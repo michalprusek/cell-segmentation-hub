@@ -64,7 +64,12 @@ const ProjectHeader = ({
       <DashboardHeader />
       <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 dark:bg-gray-900">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
-          <div className="flex items-center gap-2 sm:gap-4">
+          {/* The type picker and the Verified toggle used to be `hidden
+              sm:flex`, which removed the only way to change either one below
+              640px. They now wrap onto a second line instead of disappearing:
+              the title row keeps `basis-full` up to `sm`, so the controls fall
+              underneath rather than crushing the heading. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:gap-x-4">
             <Button
               variant="ghost"
               size="sm"
@@ -74,7 +79,11 @@ const ProjectHeader = ({
               <ArrowLeft className="mr-1 sm:mr-2 h-4 w-4" />
               <span className="hidden sm:inline">{t('common.back')}</span>
             </Button>
-            <div className="min-w-0 flex-1">
+            {/* `min-w-[10rem]` is what makes the wrap above actually happen:
+                a `truncate` heading has zero min-content width, so without a
+                floor it would shrink to nothing and the controls would stay
+                crushed on line one instead of moving to line two. */}
+            <div className="min-w-[10rem] flex-1">
               <h1 className="text-lg sm:text-xl font-semibold dark:text-white truncate">
                 {projectTitle}
               </h1>
@@ -85,8 +94,8 @@ const ProjectHeader = ({
               </p>
             </div>
             {projectType && (
-              <div className="hidden sm:flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="hidden text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap sm:inline">
                   {t('projects.projectType')}:
                 </span>
                 {onTypeChange ? (
@@ -100,7 +109,11 @@ const ProjectHeader = ({
                     <SelectTrigger
                       aria-label={t('projects.changeProjectType')}
                       className={cn(
-                        'h-8 min-w-[200px] text-xs font-medium border rounded-md pl-3 pr-2',
+                        // `min-w-[200px]` could not shrink, so at 640-760px it
+                        // forced the whole header row past the viewport right
+                        // where it first became visible. A flexible width with
+                        // a floor keeps the pill readable and lets the row fit.
+                        'h-9 w-auto min-w-[9rem] max-w-[14rem] rounded-md border pl-3 pr-2 text-xs font-medium sm:h-8',
                         PROJECT_TYPE_BADGE[projectType]
                       )}
                     >
@@ -131,14 +144,14 @@ const ProjectHeader = ({
               </div>
             )}
             {(onVerifiedChange || verified) && (
-              <div className="hidden sm:flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {onVerifiedChange ? (
                   // Editable: owner OR an accepted-share annotator may toggle
                   // this — the backend, not this component, is the
                   // authorization boundary (see ProjectService.setVerified).
                   <label
                     className={cn(
-                      'flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs font-medium cursor-pointer select-none whitespace-nowrap',
+                      'flex h-9 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-xs font-medium transition-colors sm:h-8',
                       verified
                         ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 border-green-300 dark:border-green-700'
                         : 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'

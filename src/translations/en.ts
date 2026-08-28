@@ -5,6 +5,7 @@ export default {
     save: 'Save',
     cancel: 'Cancel',
     cancelling: 'Cancelling...',
+    deleting: 'Deleting...',
     apply: 'Apply',
     dismiss: 'Dismiss',
     delete: 'Delete',
@@ -889,6 +890,7 @@ export default {
     successfulSignUp: 'Registration successful',
     verifyEmail: 'Please check your email to confirm your account',
     successfulSignOut: 'Signed out successfully',
+    signOutFailed: 'Could not sign out. Please try again.',
     checkingAuthentication: 'Checking authentication...',
     loadingAccount: 'Loading your account...',
     processingRequest: 'Processing your request...',
@@ -2121,7 +2123,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Advanced spheroid segmentation and analysis platform for biomedical researchers, providing AI-powered tools for microscopic cell image analysis.',
+      'Microscopy segmentation and analysis platform for biomedical researchers — spheroids, wounds, sperm, microcapsules and microtubules, with AI-powered tools for every stage from image to measurement.',
     contact: 'Contact',
     institution: 'Institution',
     institutionName: 'ÚTIA AV ČR',

@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 // import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -86,7 +87,15 @@ export function ShareDialog({
   const [expiryHours, setExpiryHours] = useState<number | undefined>(undefined);
   const [generatedLink, setGeneratedLink] = useState<string>('');
 
+  // `loadShares` used to set no flag at all — the component's `loading` state
+  // belongs to the mutations. Because every share list is rendered behind a
+  // `shares.length > 0` guard, an opening dialog showed an empty body and then
+  // popped rows in, which reads as "nobody has access" for as long as the
+  // request takes. That is the one wrong answer a sharing dialog can give.
+  const [sharesLoading, setSharesLoading] = useState(true);
+
   const loadShares = useCallback(async () => {
+    setSharesLoading(true);
     try {
       const data = await apiClient.getProjectShares(projectId);
       setShares(data);
@@ -97,6 +106,8 @@ export function ShareDialog({
         description: t('sharing.failedToLoadShares'),
         variant: 'destructive',
       });
+    } finally {
+      setSharesLoading(false);
     }
   }, [projectId, t]);
 
@@ -382,8 +393,19 @@ export function ShareDialog({
               </Button>
             </div>
 
+            {sharesLoading && (
+              <div
+                className="space-y-2"
+                role="status"
+                aria-label={String(t('common.loading'))}
+              >
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-14 w-full rounded-lg" />
+              </div>
+            )}
+
             {/* Accepted Users */}
-            {acceptedEmailShares.length > 0 && (
+            {!sharesLoading && acceptedEmailShares.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -441,7 +463,7 @@ export function ShareDialog({
             )}
 
             {/* Pending Invitations */}
-            {pendingEmailShares.length > 0 && (
+            {!sharesLoading && pendingEmailShares.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">

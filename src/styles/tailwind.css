@@ -2,70 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+/*
+ * NO DESIGN TOKENS HERE. `src/index.css` is the single source of truth for
+ * `:root` / `.dark`.
+ *
+ * This file used to redeclare the entire shadcn token set. `main.tsx` imports
+ * index.css first and this file second, so — same layer, same specificity —
+ * every token here silently won, and index.css's block was dead. The two
+ * copies had drifted (zinc vs slate neutrals, `--radius` 0.5rem vs 0.75rem),
+ * so neither file described what the app actually rendered. The effective
+ * values were moved into index.css unchanged; do not reintroduce them here.
+ *
+ * What remains below is this file's own content: animation keyframes and the
+ * utility classes built on them — plus one rule that has to stay here.
+ */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.75rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-  }
-}
-
+/*
+ * This looks like a duplicate of the identical rule in index.css. It is not,
+ * and removing it is a real dark-mode regression.
+ *
+ * Both files start with `@tailwind base`, so Tailwind's Preflight — which
+ * includes `*, ::before, ::after { border-color: #e5e7eb }` — is emitted
+ * twice. `main.tsx` imports index.css first, so THIS file's Preflight is the
+ * last `*` rule in the cascade and beats index.css's `border-border`
+ * override. The rule below must therefore sit after this file's own Preflight
+ * to win it back.
+ *
+ * Without it every bare `border` utility falls back to gray-200: Card,
+ * DialogContent, AlertDialogContent, DropdownMenuContent and SheetContent all
+ * declare `border` with no colour, so in dark mode each one draws a bright
+ * light-gray outline instead of the dark slate `--border`. Measured with
+ * getComputedStyle, not guessed.
+ *
+ * The honest fix is to stop emitting `@tailwind base` twice, but the `@layer`
+ * blocks in this file need their matching directives, so that is a larger
+ * change than this pass should make.
+ */
 @layer base {
   * {
     @apply border-border;

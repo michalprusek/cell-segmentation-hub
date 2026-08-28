@@ -31,6 +31,7 @@ export default {
     createYourFirst: '创建您的第一个项目开始使用',
     tryAgain: '重试',
     cancelling: '正在取消...',
+    deleting: '正在删除...',
     retry: '重试',
     retrying: '重试中...',
     retryAttempt: '第 {{attempt}} 次重试，共 {{max}} 次',
@@ -593,6 +594,7 @@ export default {
     successfulSignUp: '注册成功',
     verifyEmail: '请检查您的邮箱以确认您的账户',
     successfulSignOut: '退出登录成功',
+    signOutFailed: '退出登录失败，请重试。',
     checkingAuthentication: '验证身份中...',
     loadingAccount: '加载您的账户...',
     processingRequest: '处理您的请求...',
@@ -2007,7 +2009,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      '为生物医学研究者提供的先进球状细胞分割和分析平台，提供由AI驱动的显微细胞图像分析工具。',
+      '面向生物医学研究者的显微图像分割与分析平台——涵盖球状体、伤口愈合、精子、微胶囊与微管，提供从图像到测量的 AI 工具。',
     contact: '联系方式',
     institution: '机构',
     institutionName: 'ÚTIA AV ČR',
