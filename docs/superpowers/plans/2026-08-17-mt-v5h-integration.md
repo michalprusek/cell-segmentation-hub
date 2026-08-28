@@ -1656,7 +1656,7 @@ docker exec spheroseg-ml env | grep -c HF_TOKEN    # expect 0
 
 - [ ] **Step 3: Playwright — segment a single MT frame**
 
-Account `12bprusek@gym-nymburk.cz` / `***REMOVED-CREDENTIAL***`, the MT project with the
+Account `12bprusek@gym-nymburk.cz` (password in `~/.claude/spheroseg-e2e-account.txt`), the MT project with the
 3-frame TIFF fixture (`project_test_video_fixture`). Sign in by injecting the
 JWT — the React form ignores programmatic input
 (`feedback_react_form_input_in_playwright`).
