@@ -269,6 +269,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
           frames={video.container.frames}
           currentIndex={video.frameIndex}
           enabled={isVideoMode}
+          registerBufferProbe={video.registerBufferProbe}
         />
       )}
       <EditorLayout>
@@ -295,6 +296,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
           videoFrameIndex={isVideoMode ? video.frameIndex : undefined}
           onVideoFrameChange={isVideoMode ? video.setFrameIndex : undefined}
           videoIsPlaying={isVideoMode ? video.isPlaying : undefined}
+          videoIsBuffering={isVideoMode ? video.isBuffering : undefined}
           onVideoToggle={isVideoMode ? video.toggle : undefined}
         />
 

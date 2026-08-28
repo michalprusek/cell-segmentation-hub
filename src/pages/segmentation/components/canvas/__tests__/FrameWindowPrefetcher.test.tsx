@@ -73,11 +73,7 @@ const FRAMES: FrameMinimal[] = [
 ];
 
 function renderPrefetcher(
-  overrides: Partial<{
-    frames: readonly FrameMinimal[];
-    currentIndex: number;
-    enabled: boolean;
-  }> = {}
+  overrides: Partial<React.ComponentProps<typeof FrameWindowPrefetcher>> = {}
 ) {
   return render(
     <FrameWindowPrefetcher
@@ -104,6 +100,61 @@ describe('FrameWindowPrefetcher', () => {
     it('renders nothing (returns null)', () => {
       const { container } = renderPrefetcher();
       expect(container.firstChild).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Playback buffer probe
+  //
+  // This is the WIRING the playback gate depends on: this component is the only
+  // place that knows which cache keys the canvas will read, so if it stops
+  // handing the probe up, `useVideoFrames` silently reverts to the free-running
+  // timer that skipped frames in the first place.
+  // -----------------------------------------------------------------------
+
+  describe('Buffer probe registration', () => {
+    it('registers a probe while enabled and unregisters on unmount', () => {
+      const registerBufferProbe = vi.fn();
+      const { unmount } = renderPrefetcher({ registerBufferProbe });
+
+      expect(registerBufferProbe).toHaveBeenCalledWith(expect.any(Function));
+
+      registerBufferProbe.mockClear();
+      unmount();
+      expect(registerBufferProbe).toHaveBeenCalledWith(null);
+    });
+
+    it('registers null when disabled, so a non-video editor never gates', () => {
+      const registerBufferProbe = vi.fn();
+      renderPrefetcher({ registerBufferProbe, enabled: false });
+      expect(registerBufferProbe).toHaveBeenCalledWith(null);
+      expect(registerBufferProbe).not.toHaveBeenCalledWith(
+        expect.any(Function)
+      );
+    });
+
+    it('keeps one stable probe identity across re-renders', () => {
+      // A fresh identity every render would re-run the register effect at the
+      // rate the window-level slider ticks.
+      const registerBufferProbe = vi.fn();
+      const { rerender } = renderPrefetcher({ registerBufferProbe });
+      const first = registerBufferProbe.mock.calls[0][0];
+
+      mockVisibleChannels = ['irm'];
+      rerender(
+        <FrameWindowPrefetcher
+          frames={FRAMES}
+          currentIndex={2}
+          enabled={true}
+          registerBufferProbe={registerBufferProbe}
+        />
+      );
+
+      const registered = registerBufferProbe.mock.calls
+        .map(c => c[0])
+        .filter(Boolean);
+      expect(new Set(registered).size).toBe(1);
+      expect(registered[0]).toBe(first);
     });
   });
 

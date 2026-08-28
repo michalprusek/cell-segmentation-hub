@@ -8,6 +8,7 @@ import {
   Home,
   FolderOpen,
   Image as ImageIcon,
+  Loader2,
   Pause,
   Play,
   Wifi,
@@ -45,6 +46,10 @@ interface EditorHeaderProps {
   videoFrameIndex?: number;
   onVideoFrameChange?: (frameIndex: number) => void;
   videoIsPlaying?: boolean;
+  /** Playing, but held on the current frame while the next one loads. Shown as
+   *  a spinner in place of the Pause glyph — a Pause icon over a frozen picture
+   *  reads as "the user paused this", which is the opposite of what happened. */
+  videoIsBuffering?: boolean;
   onVideoToggle?: () => void;
 }
 
@@ -66,6 +71,7 @@ const EditorHeader = ({
   videoFrameIndex,
   onVideoFrameChange,
   videoIsPlaying,
+  videoIsBuffering,
   onVideoToggle,
 }: EditorHeaderProps) => {
   const navigate = useNavigate();
@@ -314,13 +320,23 @@ const EditorHeader = ({
               size="icon"
               onClick={onVideoToggle}
               aria-label={String(
-                videoIsPlaying
-                  ? t('editor.frameNavigation.pause')
-                  : t('editor.frameNavigation.play')
+                videoIsBuffering
+                  ? t('editor.frameNavigation.buffering')
+                  : videoIsPlaying
+                    ? t('editor.frameNavigation.pause')
+                    : t('editor.frameNavigation.play')
               )}
+              title={
+                videoIsBuffering
+                  ? String(t('editor.frameNavigation.buffering'))
+                  : undefined
+              }
+              data-testid={videoIsBuffering ? 'video-buffering' : undefined}
               className="h-9 w-9"
             >
-              {videoIsPlaying ? (
+              {videoIsBuffering ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : videoIsPlaying ? (
                 <Pause className="h-4 w-4" />
               ) : (
                 <Play className="h-4 w-4" />
