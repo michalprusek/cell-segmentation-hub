@@ -9,10 +9,17 @@ vi.mock('../../../utils/logger', () => ({
   },
 }));
 
+import { readFileSync } from 'fs';
+import path from 'path';
+
 import {
   FormatConverter,
+  buildYoloClassMap,
+  buildYoloClassesFile,
+  buildYoloDataYaml,
   type ImageData,
   type Polygon,
+  type YOLOConversionResult,
 } from '../formatConverter';
 import { logger } from '../../../utils/logger';
 
@@ -651,5 +658,172 @@ describe('FormatConverter — non-sperm (generic/microtubule) polylines', () => 
     expect(seg?.polylines?.[0].partClass).toBeUndefined();
     expect(seg?.spermInstances).toBeUndefined();
     expect(seg?.statistics.totalSpermInstances).toBeUndefined();
+  });
+});
+
+// ─── YOLO class ids ──────────────────────────────────────────────────────────
+//
+// `convertToYOLO` used to hardcode `0` on every line, so a two-class project
+// exported as one undifferentiated class and nothing errored. These tests pin
+// both halves of the fix: the ids are real, and a single-class project's bytes
+// did not move.
+//
+// The polygons in `fixtures/yolo_real_polygons.json` are REAL — captured
+// read-only from the production database, not hand-written — and
+// `fixtures/yolo_real_golden.json` is the output of the PRE-FIX converter over
+// them, so the byte-identity assertion compares against what production
+// actually shipped.
+
+describe('convertToYOLO class ids', () => {
+  const real = JSON.parse(
+    readFileSync(
+      path.join(__dirname, 'fixtures', 'yolo_real_polygons.json'),
+      'utf8'
+    )
+  ) as Record<
+    string,
+    {
+      projectType: string;
+      imageWidth: number;
+      imageHeight: number;
+      polygons: Polygon[];
+    }
+  >;
+  const golden = JSON.parse(
+    readFileSync(
+      path.join(__dirname, 'fixtures', 'yolo_real_golden.json'),
+      'utf8'
+    )
+  ) as Record<string, string>;
+
+  const convertReal = async (
+    key: string,
+    projectTypeOverride?: string,
+    polygons?: Polygon[]
+  ): Promise<YOLOConversionResult> => {
+    const f = real[key];
+    return new FormatConverter().convertToYOLO(
+      JSON.stringify(polygons ?? f.polygons),
+      f.imageWidth,
+      f.imageHeight,
+      projectTypeOverride ?? f.projectType
+    );
+  };
+
+  it('leaves a real single-class export byte-identical to the pre-fix output', async () => {
+    for (const key of ['spheroidInvasive', 'spheroidWithHole']) {
+      const result = await convertReal(key);
+      expect(result.content).toBe(golden[key]);
+      expect(result.warnings).toEqual([]);
+    }
+  });
+
+  it('keeps the spheroid `core` class folded into `cell`, as COCO does', async () => {
+    // The real spheroid_invasive row carries one plain external and one
+    // `partClass: 'core'` external. COCO gives neither its own category, so
+    // neither gets its own YOLO id — the two formats must agree on what a
+    // class is.
+    const f = real.spheroidInvasive;
+    expect(f.polygons.map(p => p.partClass)).toEqual([undefined, 'core']);
+
+    const { content } = await convertReal('spheroidInvasive');
+    const labelLines = content.split('\n').filter(l => !l.startsWith('#'));
+    expect(labelLines).toHaveLength(2);
+    expect(labelLines.every(l => l.startsWith('0 '))).toBe(true);
+    expect(buildYoloClassMap('spheroid_invasive').names).toEqual(['cell']);
+  });
+
+  it('emits a distinct id per neuron class, matching the names it ships', async () => {
+    // Real geometry, relabelled: the neurite model landed without production
+    // data (PR #371), so the coordinates are real and only the classes are
+    // assigned here.
+    const [first, second] = real.spheroidInvasive.polygons;
+    const polygons: Polygon[] = [
+      { ...first, partClass: undefined },
+      { ...first, id: 'n1', partClass: 'neurite' },
+      { ...second, id: 's1', partClass: 'soma' },
+    ];
+
+    const { content, warnings } = await convertReal(
+      'spheroidInvasive',
+      'neurite',
+      polygons
+    );
+    const ids = content
+      .split('\n')
+      .filter(l => !l.startsWith('#'))
+      .map(l => Number(l.split(' ')[0]));
+    expect(ids).toEqual([0, 1, 2]);
+    expect(new Set(ids).size).toBe(3);
+    expect(warnings).toEqual([]);
+
+    // The comment line carries the same id as its label line.
+    const commentIds = content
+      .split('\n')
+      .filter(l => l.startsWith('# Segmentation:'))
+      .map(l => Number(l.split(' ')[2]));
+    expect(commentIds).toEqual(ids);
+
+    // …and the ids name the classes the export ships beside the labels.
+    const names = buildYoloClassMap('neurite').names;
+    expect(names).toEqual(['cell', 'neurite', 'soma']);
+    expect(names[ids[1]]).toBe('neurite');
+    expect(names[ids[2]]).toBe('soma');
+  });
+
+  it('warns instead of silently relabelling a class the project does not declare', async () => {
+    const [first] = real.spheroidInvasive.polygons;
+    const { content, warnings } = await convertReal(
+      'spheroidInvasive',
+      'spheroid',
+      [{ ...first, partClass: 'soma' }]
+    );
+    expect(content.split('\n')[0]).toMatch(/^0 /);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('soma');
+    expect(warnings[0]).toContain('class 0 (cell)');
+  });
+
+  it('orders YOLO ids by COCO category id, skipping the polyline category', async () => {
+    // COCO: 1 cell, 2 polyline (no YOLO representation), 3 neurite, 4 soma.
+    const { data: coco } = await new FormatConverter().convertToCOCO(
+      [
+        buildImageData([
+          { ...closedPolygon, id: 'c1', partClass: 'neurite' },
+          { ...closedPolygon, id: 'c2', partClass: 'soma' },
+        ]),
+      ],
+      'neurite'
+    );
+    const cocoOrder = [...coco.categories]
+      .sort((a, b) => a.id - b.id)
+      .map(c => c.name);
+    expect(cocoOrder).toEqual(['cell', 'neurite', 'soma']);
+    expect(buildYoloClassMap('neurite').names).toEqual(cocoOrder);
+  });
+});
+
+describe('YOLO class files', () => {
+  it('classes.txt lists one name per line, the index being the id', () => {
+    const map = buildYoloClassMap('neurite');
+    const lines = buildYoloClassesFile(map).split('\n');
+    expect(lines).toEqual(['cell', 'neurite', 'soma', '']);
+    lines.slice(0, -1).forEach((name, index) => {
+      expect(map.idFor(name === 'cell' ? undefined : name)).toBe(index);
+    });
+  });
+
+  it('classes.txt for a single-class project is just `cell`', () => {
+    expect(buildYoloClassesFile(buildYoloClassMap('spheroid'))).toBe('cell\n');
+  });
+
+  it('data.yaml names every id and omits `path` so the archive stays portable', () => {
+    const yaml = buildYoloDataYaml(buildYoloClassMap('neurite'));
+    expect(yaml).toContain('names:\n  0: cell\n  1: neurite\n  2: soma\n');
+    expect(yaml).toContain('train: ../../images');
+    expect(yaml).toContain('val: ../../images');
+    // A relative `path:` would resolve against ultralytics' global datasets
+    // directory, not this file — absent is the portable choice.
+    expect(yaml.split('\n').some(l => l.startsWith('path:'))).toBe(false);
   });
 });

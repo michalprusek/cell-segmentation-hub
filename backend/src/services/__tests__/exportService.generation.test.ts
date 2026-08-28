@@ -111,10 +111,21 @@ vi.mock('../metrics/metricsCalculator', () => ({
   MetricsCalculator: vi.fn(),
 }));
 
-vi.mock('../export/formatConverter', () => ({
-  FormatConverter: vi.fn(),
-  resolveImageDimensions: vi.fn().mockReturnValue({ width: 100, height: 100 }),
-}));
+// The class-list helpers are pure and shared with `exportDocs`; keeping them
+// real is what makes "the ids and the names come from one place" testable.
+vi.mock('../export/formatConverter', async () => {
+  const actual =
+    await vi.importActual<typeof import('../export/formatConverter')>(
+      '../export/formatConverter'
+    );
+  return {
+    ...actual,
+    FormatConverter: vi.fn(),
+    resolveImageDimensions: vi
+      .fn()
+      .mockReturnValue({ width: 100, height: 100 }),
+  };
+});
 
 vi.mock('../export/mtMetricsExporter', () => ({
   computeMTMetrics: vi.fn().mockResolvedValue({ rows: [], skipped: [] }),
@@ -1001,14 +1012,31 @@ describe('ExportService — generateAnnotations', () => {
     expect(mockConvertToYOLO).not.toHaveBeenCalled();
   });
 
-  it('YOLO: writes a .txt file when segmentation exists', async () => {
+  it('YOLO: writes a label file per image, named after the image', async () => {
     await callGenerateAnnotations(service, ['yolo'], [makeImage()]);
     expect(mockConvertToYOLO).toHaveBeenCalledOnce();
     const yoloCall = vi
       .mocked(fs.writeFile)
-      .mock.calls.find(([p]) => String(p).endsWith('.txt'));
+      .mock.calls.find(([p]) => String(p).endsWith('image.txt'));
     expect(yoloCall).toBeDefined();
     expect(yoloCall?.[1]).toBe('yolo content');
+  });
+
+  it('YOLO: ships classes.txt + data.yaml so the class ids have names', async () => {
+    // The label lines are integers; without these two files nothing in the
+    // archive says what the integers mean.
+    await callGenerateAnnotations(service, ['yolo'], [makeImage()]);
+    const written = new Map(
+      vi.mocked(fs.writeFile).mock.calls.map(([p, c]) => [String(p), c])
+    );
+    const classesPath = [...written.keys()].find(p =>
+      p.endsWith('classes.txt')
+    );
+    const yamlPath = [...written.keys()].find(p => p.endsWith('data.yaml'));
+    expect(classesPath).toBeDefined();
+    expect(yamlPath).toBeDefined();
+    expect(written.get(classesPath as string)).toBe('cell\n');
+    expect(written.get(yamlPath as string)).toContain('names:\n  0: cell\n');
   });
 
   it('YOLO: skips when resolveImageDimensions returns zero dimensions', async () => {
