@@ -31,6 +31,11 @@ from channel_registration import (
     shift_frame,
     write_registration_sidecar,
 )
+from plane_coverage import (
+    coverage_payload,
+    is_blank_plane,
+    plan_sparse_channels,
+)
 
 # Mirrors `CHANNEL_NAME_RE` in `backend/src/services/video/types.ts` — the
 # ONE place that pattern is defined on the TypeScript side (every other
@@ -869,20 +874,33 @@ def main() -> int:
     # source ``arr`` is never mutated; offsets are recorded for the sidecar.
     do_register = register and C > 1
     offsets: dict[int, list] = {}
+    # {frameIndex: [bool per channel]} — True where the plane carries no
+    # acquisition. A stack can declare the full (T, C) grid while the microscope
+    # only refreshed a channel every N-th frame; those planes are written as a
+    # constant fill and used to reach the editor as black PNGs indistinguishable
+    # from data. See ``plane_coverage``.
+    blanks: dict[int, list[bool]] = {}
     for t in range(T):
         frame_dir = dest / "frames" / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         offset_row = [[0, 0] for _ in range(C)]
+        blank_row = [is_blank_plane(arr[t, c]) for c in range(C)]
         ref = arr[t, 0] if do_register else None
+        # Skipping registration when either plane is blank changes no output:
+        # `estimate_translation` already returns (0, 0) for a constant plane
+        # (zero gradient -> flat correlation surface -> its `low_confidence`
+        # guard). This just declines to spend the FFT to learn that.
+        ref_usable = do_register and not blank_row[0]
         for c in range(C):
             plane = arr[t, c]
-            if do_register and c > 0:
+            if do_register and c > 0 and ref_usable and not blank_row[c]:
                 dy, dx, _conf = estimate_translation(ref, plane)
                 if dy or dx:
                     plane = shift_frame(plane, dy, dx)  # new array — no mutation
                 offset_row[c] = [dy, dx]
             _save_png(plane, frame_dir / f"{channel_names[c]}.png")
         offsets[t] = offset_row
+        blanks[t] = blank_row
         if t % 5 == 0 or t == T - 1:
             sys.stdout.write(f"PROGRESS {(t + 1) / T:.4f}\n")
             sys.stdout.flush()
@@ -899,6 +917,25 @@ def main() -> int:
         else None
     )
 
+    # Channels the acquisition only refreshed every N-th frame come back with
+    # `coveredFrames` + `fillFrames`; a fully-covered channel gets neither, so a
+    # dense stack produces the exact result JSON it always did.
+    sparse = plan_sparse_channels(blanks, C)
+    for i in range(C):
+        if T and all(row[i] for row in blanks.values()):
+            print(
+                f"WARNING: channel '{channel_names[i]}' carries no acquisition "
+                f"on ANY of its {T} frames; leaving it as-is",
+                file=sys.stderr,
+            )
+        elif i in sparse:
+            print(
+                f"INFO: channel '{channel_names[i]}' is sparse — real on "
+                f"{len(sparse[i]['coveredFrames'])}/{T} frames; the gaps will "
+                f"read from the previous real frame",
+                file=sys.stderr,
+            )
+
     result = {
         "frameCount": int(T),
         "durationMs": duration_ms,
@@ -911,6 +948,7 @@ def main() -> int:
                 "name": channel_names[i],
                 "displayName": display_names[i],
                 "wavelengthNm": wavelengths[i],
+                **coverage_payload(sparse.get(i)),
             }
             for i in range(C)
         ],

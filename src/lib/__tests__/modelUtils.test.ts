@@ -61,6 +61,7 @@ describe('getSpheroidPreset', () => {
     'wound',
     'microtubule',
     'microcapsule',
+    'neurite_soma',
     'spheroid_disintegration',
   ];
   for (const id of nonSpheroidModels) {
@@ -116,9 +117,10 @@ describe('BASIC_MODEL_INFO', () => {
     'wound',
     'microtubule',
     'microcapsule',
+    'neurite_soma',
   ];
 
-  it('contains all 10 model ids', () => {
+  it('contains all 11 model ids', () => {
     for (const id of allModelIds) {
       expect(BASIC_MODEL_INFO[id]).toBeDefined();
       expect(BASIC_MODEL_INFO[id].id).toBe(id);
@@ -209,14 +211,19 @@ describe('BASIC_MODEL_INFO', () => {
       );
     });
 
-    it('microtubule has the slowest avgTimePerImage', () => {
+    it('neurite_soma has the slowest avgTimePerImage', () => {
+      // 3-fold ensemble x 4-way mirroring TTA over a sliding window — the
+      // heaviest inference in the platform, ahead of microtubule.
       const times = allModelIds.map(
         id => BASIC_MODEL_INFO[id].performance!.avgTimePerImage
       );
       const maxTime = Math.max(...times);
-      expect(BASIC_MODEL_INFO.microtubule.performance!.avgTimePerImage).toBe(
+      expect(BASIC_MODEL_INFO.neurite_soma.performance!.avgTimePerImage).toBe(
         maxTime
       );
+      expect(
+        BASIC_MODEL_INFO.microtubule.performance!.avgTimePerImage
+      ).toBeLessThan(maxTime);
     });
 
     it('wound has the fastest throughput (scratch assay is cheap)', () => {
@@ -295,8 +302,8 @@ describe('getLocalizedModelInfo', () => {
 describe('getAllLocalizedModels', () => {
   const passthroughT = (key: string) => key;
 
-  it('returns 10 models', () => {
-    expect(getAllLocalizedModels(passthroughT)).toHaveLength(10);
+  it('returns 11 models', () => {
+    expect(getAllLocalizedModels(passthroughT)).toHaveLength(11);
   });
 
   it('contains all model ids exactly once', () => {
@@ -312,17 +319,18 @@ describe('getAllLocalizedModels', () => {
       'wound',
       'microtubule',
       'microcapsule',
+      'neurite_soma',
     ];
     for (const id of expectedIds) {
       expect(ids).toContain(id);
     }
     // No duplicates
-    expect(new Set(ids).size).toBe(10);
+    expect(new Set(ids).size).toBe(11);
   });
 
-  it('preserves order: hrnet first, microcapsule last', () => {
+  it('preserves order: hrnet first, neurite_soma last', () => {
     const models = getAllLocalizedModels(passthroughT);
     expect(models[0].id).toBe('hrnet');
-    expect(models[models.length - 1].id).toBe('microcapsule');
+    expect(models[models.length - 1].id).toBe('neurite_soma');
   });
 });

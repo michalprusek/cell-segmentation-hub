@@ -228,6 +228,12 @@ describe('CanvasPolygon', () => {
         { polygon: { ...mockPolygon, complete: false } },
       ],
       ['spheroid core', { polygon: { ...mockPolygon, partClass: 'core' } }],
+      // Neuron classes arrived on main while this branch was open, so their
+      // stroke branch was written against `isSelected` and merged cleanly
+      // without conflicting — leaving the one pathColor branch that did NOT
+      // honour a multi-selection. Covered here so the next such merge fails.
+      ['neurite', { polygon: { ...mockPolygon, partClass: 'neurite' } }],
+      ['soma', { polygon: { ...mockPolygon, partClass: 'soma' } }],
       ['sperm head', { polygon: polyline({ partClass: 'head' }) }],
       ['sperm midpiece', { polygon: polyline({ partClass: 'midpiece' }) }],
       ['sperm tail', { polygon: polyline({ partClass: 'tail' }) }],

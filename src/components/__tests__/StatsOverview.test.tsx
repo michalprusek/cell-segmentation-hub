@@ -139,8 +139,12 @@ describe('StatsOverview', () => {
   it('shows loading state initially', () => {
     render(<StatsOverview />);
 
-    const loadingElements = screen.getAllByText('...');
-    expect(loadingElements).toHaveLength(4);
+    // Each card renders a shimmer placeholder in place of its value while the
+    // stats request is in flight. This used to be the literal text '...',
+    // which reads as a hung request rather than one in progress.
+    const shimmers = document.querySelectorAll('.animate-pulse');
+    expect(shimmers).toHaveLength(4);
+    expect(screen.queryByText('...')).not.toBeInTheDocument();
   });
 
   it('displays correct stats after loading', async () => {
@@ -266,10 +270,15 @@ describe('StatsOverview', () => {
   it('applies correct responsive grid classes', () => {
     render(<StatsOverview />);
 
+    // 2-up on phones rather than one full-width card per row: four stacked
+    // cards pushed the project gallery roughly four screens down. tailwind-merge
+    // resolves StatsGrid's own `grid-cols-1` in favour of the `grid-cols-2`
+    // override, so the mobile class is 2 and `grid-cols-1` must be absent.
     const gridContainer = document.querySelector(
-      '.grid.grid-cols-1.md\\:grid-cols-2.lg\\:grid-cols-4'
+      '.grid.grid-cols-2.md\\:grid-cols-2.lg\\:grid-cols-4'
     );
     expect(gridContainer).toBeInTheDocument();
+    expect(document.querySelector('.grid-cols-1')).not.toBeInTheDocument();
   });
 
   it('does not fetch stats when user is not available', async () => {

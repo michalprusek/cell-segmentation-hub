@@ -85,9 +85,14 @@ describe('CanvasContainer - Core Functionality', () => {
       let container = screen.getByTestId('canvas-container');
       expect(container).toHaveClass('border-purple-500');
 
+      // Amber, not red: red is reserved for the destructive Delete tool on
+      // every surface (rail, canvas border, instruction card). Slice used to
+      // be red here while Delete was red on the toolbar, so the same colour
+      // meant two different tools depending on where the user looked.
       rerender(<CanvasContainer {...defaultProps} editMode={EditMode.Slice} />);
       container = screen.getByTestId('canvas-container');
-      expect(container).toHaveClass('border-red-500');
+      expect(container).toHaveClass('border-amber-500');
+      expect(container).not.toHaveClass('border-red-500');
 
       rerender(
         <CanvasContainer {...defaultProps} editMode={EditMode.AddPoints} />
@@ -105,7 +110,8 @@ describe('CanvasContainer - Core Functionality', () => {
         <CanvasContainer {...defaultProps} editMode={EditMode.DeletePolygon} />
       );
       container = screen.getByTestId('canvas-container');
-      expect(container).toHaveClass('border-orange-500');
+      expect(container).toHaveClass('border-red-500');
+      expect(container).not.toHaveClass('border-orange-500');
     });
   });
 
@@ -255,7 +261,10 @@ describe('CanvasContainer - Core Functionality', () => {
       render(<CanvasContainer {...defaultProps} />);
 
       const container = screen.getByTestId('canvas-container');
-      expect(container).toHaveClass('bg-gray-50', 'dark:bg-gray-800');
+      // Only dark:bg-gray-900 is asserted: the element used to carry BOTH
+      // dark:bg-gray-800 and dark:bg-gray-900, and gray-900 won in the
+      // cascade, so the gray-800 this test pinned never painted anything.
+      expect(container).toHaveClass('bg-gray-50', 'dark:bg-gray-900');
       expect(container).toHaveClass('rounded-lg', 'border-4');
     });
 

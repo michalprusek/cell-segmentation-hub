@@ -348,6 +348,7 @@ export const PROJECT_TYPES = [
   'sperm',
   'microtubules',
   'microcapsule',
+  'neurite',
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
@@ -608,6 +609,17 @@ export interface VideoChannel {
    *  alignment. Present ⇒ the copies are translations of one another, NOT
    *  duplicates, and must not be shared between frames. */
   staticShifts?: Record<string, [number, number]>;
+  /** True when the microscope only refreshed this channel every N-th frame —
+   *  an IRM reference over a continuously imaged fluorescence series. The
+   *  frames in between hold no acquisition; the backend serves each of them
+   *  from the last real frame before it, so the channel is requestable on EVERY
+   *  frame and must NOT be added to the coverage map (which means "skip"). */
+  sparseSource?: boolean;
+  /** Gap frame Image id -> the frame Image id its pixels actually come from.
+   *  Lets the editor collapse a run of gaps onto one URL and one decode-cache
+   *  entry instead of downloading the same picture N times. See
+   *  `staticFrameChannels`. */
+  sparseFillFrameIds?: Record<string, string>;
   /** Upper bound on the container's sample values, identical on every channel.
    *  NOT the value that maps to 255 — that is per frame and arrives in
    *  `X-Proxy-Range`. Feeds the client's banding guard only. */

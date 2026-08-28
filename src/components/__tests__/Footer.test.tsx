@@ -24,8 +24,10 @@ describe('Footer', () => {
   it('displays the company description', () => {
     render(<Footer />);
 
+    // The tagline covers all six project types, not just spheroids — the
+    // product name "SpheroSeg" stays, the description does not narrow to it.
     expect(
-      screen.getByText(/Advanced spheroid segmentation and analysis platform/)
+      screen.getByText(/Microscopy segmentation and analysis platform/)
     ).toBeInTheDocument();
   });
 

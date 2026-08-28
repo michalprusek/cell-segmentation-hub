@@ -657,6 +657,8 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
             selectedPolygonId={editor.selectedPolygonId}
             visiblePolygonsCount={visiblePolygonsCount}
             hiddenPolygonsCount={hiddenPolygonsCount}
+            hasUnsavedChanges={editor.hasUnsavedChanges}
+            isSaving={editor.isSaving}
           />
         </div>
       </EditorLayout>

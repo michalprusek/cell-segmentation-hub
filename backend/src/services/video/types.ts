@@ -92,6 +92,43 @@ export interface ChannelMeta {
    *  channel was added without alignment, which is the same thing as every
    *  shift being (0, 0). */
   staticShifts?: Record<string, [number, number]>;
+  /** True when the SOURCE VOLUME only carries this channel on some frames — a
+   *  microscope that refreshes IRM every N-th timepoint while imaging
+   *  fluorescence continuously. The un-acquired planes are written by the
+   *  acquisition software as a constant fill, and both extractors used to turn
+   *  them into black PNGs indistinguishable from data.
+   *
+   *  Detected at extraction (`plane_coverage.py`: a plane is absent iff
+   *  `min == max`, which no real exposure can be) and NOT inferred later —
+   *  the same reason `staticSource` is a recorded fact rather than a guess.
+   *
+   *  A sparse channel is served on EVERY frame, so it does NOT use `frameIds`:
+   *  `sparseFill` names the gaps and what each reads from, and every frame not
+   *  in it is served from its own plane. Contrast `pngBacked` partial coverage,
+   *  where the user picked a subset of frames on purpose and a frame outside it
+   *  genuinely has no channel — those keep being skipped. The pixels are never
+   *  duplicated on disk; only the read path redirects. */
+  sparseSource?: boolean;
+  /** For a `sparseSource` channel: gap frameIndex -> the frameIndex whose PNG
+   *  stands in for it. Keys are stringified indices (JSON has no integer keys).
+   *  Used by the frame-data route and the segmentation collapse, both of which
+   *  hold a `frameIndex` and would otherwise need a second query to resolve an
+   *  id. Frames absent from this map AND from `frameIds` were never acquired at
+   *  all (every channel blank — an aborted run leaves a tail of them) and are
+   *  deliberately left alone rather than back-filled with fabricated data. */
+  sparseFill?: Record<string, number>;
+  /** The same map keyed by frame Image id, for the editor: it resolves a gap
+   *  frame to its anchor's URL and decode-cache key, so N frames sharing one
+   *  picture cost one download and one decode instead of N. See
+   *  `src/lib/staticFrameChannels.ts`.
+   *
+   *  PURELY A RENDERING OPTIMISATION, and deliberately so. Nothing on the
+   *  correctness path may read it: the frame-data route and the segmentation
+   *  collapse both resolve through `sparseFill` above, so a container that is
+   *  missing this map (or has it only partially — a gap with no Image row is
+   *  omitted rather than guessed) still shows the right pixels and still gets
+   *  its gaps filled in. It just pays for the bytes more than once. */
+  sparseFillFrameIds?: Record<string, string>;
   /** Upper bound on the sample values this container holds, rounded up to a
    *  power of two.
    *
@@ -215,8 +252,10 @@ export function defaultColorForWavelength(nm: number | undefined): string {
  *  IRM channel found" — see `buildChannelMeta`, which still nominates a
  *  segmentation source so a stack of unidentifiable channels stays segmentable.
  */
-export function isIrmChannel(name: string | undefined,
-                              wavelengthNm: number | undefined): boolean {
+export function isIrmChannel(
+  name: string | undefined,
+  wavelengthNm: number | undefined
+): boolean {
   if (wavelengthNm === 0) return true;
   if (!name) return false;
   // Underscores are separators in microscopy channel names (`IRM_widefield`,

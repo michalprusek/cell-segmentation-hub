@@ -17,6 +17,12 @@
  * The ML side intentionally does not handle unit conversion so the
  * user's pixel-scale entry on the modal remains the sole source of
  * truth — preventing drift between metric formats.
+ *
+ * On write, the same rows are ALSO emitted pivoted (`metrics_wide.*` /
+ * a second XLSX sheet): one row per (frame, microtubule) with one column set
+ * per channel, so e.g. IRM and TIRF intensities of the same MT sit side by
+ * side. See {@link pivotMTMetricsWide}. The long format is unchanged — it
+ * stays the canonical `metrics.*`.
  */
 
 import * as path from 'path';
@@ -103,6 +109,72 @@ export interface MTChannelSummaryRow {
   meanIntensity: number;
   pixelCount: number;
   frames: number;
+}
+
+/**
+ * The measures that genuinely differ between channels — everything the raw
+ * raster feeds. In the wide output each of these becomes one column PER
+ * channel, named ``<channel>_<measure>``.
+ *
+ * Deliberately excludes ``lengthPx`` / ``areaPx`` / ``pixelCount``: the ML side
+ * builds the band + vicinity masks ONCE per frame and reuses them for every
+ * channel (`mt_metrics.py` → `mt_measure.frame_geometry`), so those are
+ * channel-independent and appear once in {@link WIDE_SHARED_HEADERS}.
+ */
+export const WIDE_CHANNEL_MEASURES = [
+  'sumIntensity',
+  'meanIntensity',
+  'medianIntensity',
+  'stdIntensity',
+  'medianBackground',
+  'meanBackground',
+  'signalMinusBackground',
+] as const;
+
+export type MTChannelMeasure = (typeof WIDE_CHANNEL_MEASURES)[number];
+
+/** Identity + geometry columns of the wide output — emitted once per row. */
+export const WIDE_SHARED_HEADERS = [
+  'frameIndex',
+  'imageName',
+  'label',
+  'mtType',
+  'instanceId',
+  'trackId',
+  'lengthPx',
+  'lengthUm',
+  'areaPx',
+  'areaUm2',
+  'pixelCount',
+] as const;
+
+/**
+ * One row of the WIDE (pivoted) output: one row per (frame, microtubule), with
+ * every channel's measures side by side instead of on separate rows.
+ *
+ * The long format (one row per (frame, polyline, channel), see
+ * {@link MTMetricsRow}) stays the primary `metrics.*` file — existing pipelines
+ * depend on it. This is an additional `metrics_wide.*` view for people who want
+ * to compare channels on one line (e.g. IRM vs TIRF for the same MT).
+ */
+export interface MTMetricsWideRow {
+  frameIndex: number;
+  imageName: string;
+  label: string;
+  mtType: string;
+  instanceId: string;
+  trackId: string | null;
+  lengthPx: number;
+  lengthUm: number | null;
+  areaPx: number | null;
+  areaUm2: number | null;
+  pixelCount: number | null;
+  /**
+   * Channel machine name → its per-channel measures. A channel MISSING from
+   * this map produced no measurement for this microtubule (e.g. a PNG-backed
+   * channel whose frame PNG is absent), and its columns are written blank.
+   */
+  channels: Record<string, Record<MTChannelMeasure, number | null>>;
 }
 
 interface VideoChannelMeta {
@@ -802,6 +874,187 @@ export function computeMTGeometry(
 }
 
 // ----------------------------------------------------------------------------
+//  Long → wide pivot
+// ----------------------------------------------------------------------------
+
+/**
+ * Identity of one microtubule ON one frame — the pivot key. Channel is
+ * deliberately absent: collapsing a microtubule's per-channel rows onto one
+ * line is the whole point.
+ *
+ * `imageName` is part of the key because `frameIndex` alone is not unique
+ * across videos (every video restarts at 0) and an export can span several
+ * containers; frame names are container-prefixed (`"<video>.nd2 (frame 3)"`),
+ * so together they identify the frame.
+ */
+function wideIdentityKey(row: MTMetricsRow): string {
+  return `${row.imageName}\u0000${row.frameIndex}\u0000${row.instanceId}`;
+}
+
+/**
+ * Pivot the long-format rows to one row per (frame, microtubule), with each
+ * channel's measures in its own set of columns.
+ *
+ * Row order follows first appearance in `rows`, which (after the frame sort in
+ * {@link computeMTMetrics}) means frame-ascending, polyline order — i.e. the
+ * same reading order as `metrics.csv`. Channel column order follows first
+ * appearance too, which is the container's own channel order.
+ *
+ * Two guarantees this relies on, both from the ML side:
+ *  - the band / vicinity geometry is built once per frame and shared across
+ *    channels, so `lengthPx` / `areaPx` / `pixelCount` do not vary by channel;
+ *  - `instanceId` is unique per polyline within a frame. Where it is NOT — the
+ *    `mt_<frameId>_<nPoints>` fallback for polylines with no `instanceId` can
+ *    collide — repeated ids are disambiguated positionally (the k-th row with
+ *    that id in a given channel belongs to the k-th such polyline), so two
+ *    colliding microtubules stay two rows instead of silently merging.
+ *
+ * Geometry-only rows (`channel === ''`, the no-raster fallback) contribute a
+ * row with no channel columns at all rather than a bogus `''`-named channel.
+ *
+ * @returns `channels` — every non-empty channel name seen, in column order —
+ *          and the pivoted rows.
+ */
+export function pivotMTMetricsWide(rows: readonly MTMetricsRow[]): {
+  channels: string[];
+  rows: MTMetricsWideRow[];
+} {
+  const channels: string[] = [];
+  const channelSeen = new Set<string>();
+  const byKey = new Map<string, MTMetricsWideRow>();
+  // `${channel}\u0000${identity}` → how many rows with that identity this
+  // channel has already contributed. Disambiguates colliding instance ids.
+  const occurrences = new Map<string, number>();
+  let geometryDrift = 0;
+
+  for (const row of rows) {
+    const identity = wideIdentityKey(row);
+    const occKey = `${row.channel}\u0000${identity}`;
+    const occ = occurrences.get(occKey) ?? 0;
+    occurrences.set(occKey, occ + 1);
+    const key = `${identity}\u0000${occ}`;
+
+    let wide = byKey.get(key);
+    if (!wide) {
+      wide = {
+        frameIndex: row.frameIndex,
+        imageName: row.imageName,
+        label: row.label,
+        mtType: row.mtType,
+        instanceId: row.instanceId,
+        trackId: row.trackId,
+        lengthPx: row.lengthPx,
+        lengthUm: row.lengthUm,
+        areaPx: row.areaPx,
+        areaUm2: row.areaUm2,
+        pixelCount: row.pixelCount,
+        // Null-prototype: channel names come from file metadata / user input
+        // and `CHANNEL_NAME_RE` happily accepts `__proto__`, which on a plain
+        // object would set the prototype instead of a key.
+        channels: Object.create(null) as MTMetricsWideRow['channels'],
+      };
+      byKey.set(key, wide);
+    } else {
+      // Geometry is channel-independent by construction. Fill any column the
+      // first row left null, and flag a genuine disagreement rather than
+      // silently keeping whichever channel happened to come first.
+      if (Math.abs(wide.lengthPx - row.lengthPx) > 1e-6) geometryDrift++;
+      if (wide.areaPx == null) wide.areaPx = row.areaPx;
+      else if (row.areaPx != null && wide.areaPx !== row.areaPx) geometryDrift++;
+      if (wide.areaUm2 == null) wide.areaUm2 = row.areaUm2;
+      if (wide.pixelCount == null) wide.pixelCount = row.pixelCount;
+      else if (row.pixelCount != null && wide.pixelCount !== row.pixelCount) {
+        geometryDrift++;
+      }
+    }
+
+    if (!row.channel) continue; // geometry-only row: no per-channel columns
+    if (!channelSeen.has(row.channel)) {
+      channelSeen.add(row.channel);
+      channels.push(row.channel);
+    }
+    wide.channels[row.channel] = {
+      sumIntensity: row.sumIntensity,
+      meanIntensity: row.meanIntensity,
+      medianIntensity: row.medianIntensity,
+      stdIntensity: row.stdIntensity,
+      medianBackground: row.medianBackground,
+      meanBackground: row.meanBackground,
+      signalMinusBackground: row.signalMinusBackground,
+    };
+  }
+
+  if (geometryDrift) {
+    logger.warn(
+      'MT metrics (wide): geometry columns differ between channels of the same microtubule — the wide sheet keeps the first non-null value',
+      'mtMetricsExporter',
+      { mismatches: geometryDrift }
+    );
+  }
+
+  return { channels, rows: Array.from(byKey.values()) };
+}
+
+/** Wide column name for one channel's measure, e.g. ``IRM_meanIntensity``. */
+function wideChannelColumn(channel: string, measure: MTChannelMeasure): string {
+  return `${channel}_${measure}`;
+}
+
+/**
+ * Full wide header row: the shared identity/geometry columns once, then seven
+ * columns per channel. Column count is `11 + 7 * channels` — Excel's
+ * 16 384-column ceiling is only reached past ~2 300 distinct channel names, so
+ * no cap is applied.
+ */
+function wideHeaders(channels: readonly string[]): string[] {
+  const headers: string[] = [...WIDE_SHARED_HEADERS];
+  for (const channel of channels) {
+    for (const measure of WIDE_CHANNEL_MEASURES) {
+      headers.push(wideChannelColumn(channel, measure));
+    }
+  }
+  return headers;
+}
+
+/** Values of one wide row, positionally aligned with {@link wideHeaders}. */
+function wideRowValues(
+  row: MTMetricsWideRow,
+  channels: readonly string[]
+): Array<string | number | null> {
+  const values: Array<string | number | null> = WIDE_SHARED_HEADERS.map(
+    h => row[h]
+  );
+  for (const channel of channels) {
+    const measures = row.channels[channel];
+    for (const measure of WIDE_CHANNEL_MEASURES) {
+      values.push(measures ? measures[measure] : null);
+    }
+  }
+  return values;
+}
+
+/**
+ * Flat JSON objects for the wide rows — same keys as the CSV header, so all
+ * three formats agree. The header array is built ONCE for the whole set: on a
+ * 600-frame video this loop runs 100 000+ times and rebuilding the
+ * ``<channel>_<measure>`` strings per row is pure garbage.
+ */
+function wideToJSONRows(
+  rows: readonly MTMetricsWideRow[],
+  channels: readonly string[]
+): Array<Record<string, string | number | null>> {
+  const headers = wideHeaders(channels);
+  return rows.map(row => {
+    const values = wideRowValues(row, channels);
+    const obj: Record<string, string | number | null> = {};
+    headers.forEach((h, i) => {
+      obj[h] = values[i];
+    });
+    return obj;
+  });
+}
+
+// ----------------------------------------------------------------------------
 //  Output writers
 // ----------------------------------------------------------------------------
 
@@ -852,6 +1105,17 @@ function rowsToCSV(rows: MTMetricsRow[]): string {
   return lines.join('\n') + '\n';
 }
 
+function wideToCSV(
+  rows: readonly MTMetricsWideRow[],
+  channels: readonly string[]
+): string {
+  const lines: string[] = [wideHeaders(channels).map(csvCell).join(',')];
+  for (const row of rows) {
+    lines.push(wideRowValues(row, channels).map(csvCell).join(','));
+  }
+  return lines.join('\n') + '\n';
+}
+
 /** Column order for the whole-video per-channel totals summary. */
 const CHANNEL_SUMMARY_HEADERS: readonly (keyof MTChannelSummaryRow)[] = [
   'video',
@@ -870,10 +1134,54 @@ function channelSummariesToCSV(rows: MTChannelSummaryRow[]): string {
   return lines.join('\n') + '\n';
 }
 
+/**
+ * Excel sheet name for the wide view. Kept under Excel's 31-character sheet
+ * name limit (26 characters).
+ */
+const WIDE_SHEET_NAME = 'Microtubule Metrics (wide)';
+
+/**
+ * Cell budget for the wide XLSX sheet.
+ *
+ * exceljs is not a streaming writer here: every cell is a live object held
+ * until `xlsx.writeFile`. The long sheet alone is already the export's biggest
+ * in-memory structure — a 620-frame ND2 with ~300 microtubules and 2 channels
+ * is ~370 000 rows x 19 columns — and this export came within 200 MB of an OOM
+ * in August 2026 (see the NODE_OPTIONS comment in
+ * `docker-compose.production.yml`). The wide sheet would add another ~66 %.
+ *
+ * Past this budget the SHEET is dropped, but the data is not: `writeMTMetrics`
+ * falls back to writing `metrics_wide.csv` beside the workbook (a plain string,
+ * an order of magnitude cheaper). Documented in `exportDocs.ts`.
+ *
+ * Overridable with `MT_WIDE_XLSX_MAX_CELLS` so the ceiling can be retuned
+ * without a deploy (and so the fallback branch is testable without building a
+ * two-million-cell workbook).
+ */
+const DEFAULT_MAX_WIDE_XLSX_CELLS = 2_000_000;
+
+function maxWideXlsxCells(): number {
+  const raw = Number.parseInt(process.env.MT_WIDE_XLSX_MAX_CELLS ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_WIDE_XLSX_CELLS;
+}
+
+/** Cells the wide sheet would occupy, header row included. */
+export function wideCellCount(wide: {
+  channels: readonly string[];
+  rows: readonly MTMetricsWideRow[];
+}): number {
+  const columns =
+    WIDE_SHARED_HEADERS.length +
+    WIDE_CHANNEL_MEASURES.length * wide.channels.length;
+  return (wide.rows.length + 1) * columns;
+}
+
 async function writeXLSX(
   rows: MTMetricsRow[],
   channelSummaries: MTChannelSummaryRow[],
-  filePath: string
+  filePath: string,
+  wide: { channels: string[]; rows: MTMetricsWideRow[] },
+  includeWideSheet: boolean
 ): Promise<void> {
   // exceljs is CJS; mirror the dynamic-import idiom used by exportService.
   const excelMod = (await import('exceljs')) as unknown as {
@@ -890,7 +1198,22 @@ async function writeXLSX(
   // Bold header row.
   sheet.getRow(1).font = { bold: true };
 
-  // Second sheet: whole-video per-channel totals (independent of the MTs).
+  // Second sheet: the same numbers pivoted to one row per (frame, MT) with the
+  // channels side by side. Rows are added positionally (not by key) so a
+  // channel name can never clash with a column key.
+  if (includeWideSheet) {
+    const wideSheet = workbook.addWorksheet(WIDE_SHEET_NAME);
+    wideSheet.columns = wideHeaders(wide.channels).map(header => ({
+      header,
+      width: 20,
+    }));
+    for (const row of wide.rows) {
+      wideSheet.addRow(wideRowValues(row, wide.channels));
+    }
+    wideSheet.getRow(1).font = { bold: true };
+  }
+
+  // Third sheet: whole-video per-channel totals (independent of the MTs).
   if (channelSummaries.length) {
     const summary = workbook.addWorksheet('Channel Totals');
     summary.columns = CHANNEL_SUMMARY_HEADERS.map(h => ({
@@ -910,11 +1233,22 @@ async function writeXLSX(
 /**
  * Persist the metric rows to disk in any subset of {excel, csv, json}.
  *
+ * Alongside the long-format `metrics.*`, a WIDE view is written
+ * (`metrics_wide.*` / a second XLSX sheet): the same numbers pivoted to one row
+ * per (frame, microtubule) with one column set per channel, so two channels of
+ * the same MT can be compared on one line. It is skipped when no channel was
+ * sampled at all (the geometry-only fallback) — there would be nothing to
+ * widen, and `metrics.*` already carries every column.
+ *
+ * On a very large export the wide XLSX *sheet* is dropped for memory
+ * ({@link MAX_WIDE_XLSX_CELLS}) and `metrics_wide.csv` is written beside the
+ * workbook instead, so the pivoted numbers are always available.
+ *
  * @param rows              Output from {@link computeMTMetrics}.
  * @param destDir           Target directory (created if absent).
  * @param formats           Same formats list the user picked for general metrics.
  * @param channelSummaries  Whole-video per-channel totals. In Excel these go on
- *                          a second "Channel Totals" sheet; in CSV/JSON they get
+ *                          a "Channel Totals" sheet; in CSV/JSON they get
  *                          a companion `metrics_channel_totals.*` file.
  */
 export async function writeMTMetrics(
@@ -925,6 +1259,25 @@ export async function writeMTMetrics(
 ): Promise<void> {
   if (!rows.length || !formats.length) return;
   await fs.mkdir(destDir, { recursive: true });
+
+  const wide = pivotMTMetricsWide(rows);
+  const writeWide = wide.channels.length > 0;
+  // Too big to hold as exceljs cells → keep the numbers, drop only the sheet.
+  const budget = maxWideXlsxCells();
+  const cells = writeWide ? wideCellCount(wide) : 0;
+  const wideSheetTooBig = writeWide && cells > budget;
+  if (wideSheetTooBig) {
+    logger.warn(
+      'MT metrics (wide): too large for an Excel sheet; writing metrics_wide.csv instead',
+      'mtMetricsExporter',
+      {
+        rows: wide.rows.length,
+        channels: wide.channels.length,
+        cells,
+        budget,
+      }
+    );
+  }
 
   // For microtubule projects these ARE the standard metrics files — the
   // closed-polygon report is skipped upstream (see exportService
@@ -937,6 +1290,13 @@ export async function writeMTMetrics(
         rowsToCSV(rows),
         'utf8'
       );
+      if (writeWide) {
+        await fs.writeFile(
+          path.join(destDir, 'metrics_wide.csv'),
+          wideToCSV(wide.rows, wide.channels),
+          'utf8'
+        );
+      }
       if (channelSummaries.length) {
         await fs.writeFile(
           path.join(destDir, 'metrics_channel_totals.csv'),
@@ -950,6 +1310,13 @@ export async function writeMTMetrics(
         JSON.stringify(rows, null, 2),
         'utf8'
       );
+      if (writeWide) {
+        await fs.writeFile(
+          path.join(destDir, 'metrics_wide.json'),
+          JSON.stringify(wideToJSONRows(wide.rows, wide.channels), null, 2),
+          'utf8'
+        );
+      }
       if (channelSummaries.length) {
         await fs.writeFile(
           path.join(destDir, 'metrics_channel_totals.json'),
@@ -958,7 +1325,20 @@ export async function writeMTMetrics(
         );
       }
     } else if (fmt === 'excel') {
-      await writeXLSX(rows, channelSummaries, path.join(destDir, 'metrics.xlsx'));
+      await writeXLSX(
+        rows,
+        channelSummaries,
+        path.join(destDir, 'metrics.xlsx'),
+        wide,
+        writeWide && !wideSheetTooBig
+      );
+      if (wideSheetTooBig) {
+        await fs.writeFile(
+          path.join(destDir, 'metrics_wide.csv'),
+          wideToCSV(wide.rows, wide.channels),
+          'utf8'
+        );
+      }
     }
   }
 }

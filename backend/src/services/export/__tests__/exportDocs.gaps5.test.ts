@@ -118,6 +118,38 @@ describe('generateMetricsGuide — microtubules', () => {
     const guide = generateMetricsGuide('microtubules', {} as ExportOptions);
     expect(guide).toContain('pixel');
   });
+
+  it('answers "which channel is the intensity from" and documents the wide view', () => {
+    const guide = generateMetricsGuide('microtubules', {} as ExportOptions);
+    // The question users actually ask about MT metrics.
+    expect(guide).toContain('Which channel do the intensity numbers come from?');
+    expect(guide).toContain('raw 16-bit');
+    expect(guide).toContain('metrics_wide.csv');
+    expect(guide).toContain('Microtubule Metrics (wide)');
+    expect(guide).toContain('<channel>_<measure>');
+  });
+
+  it('keeps every markdown heading on a single line', () => {
+    // A heading wrapped across two source lines renders as a truncated heading
+    // plus a stray paragraph. Easy to introduce when wrapping long file names.
+    const guide = generateMetricsGuide('microtubules', {} as ExportOptions);
+    const headings = guide
+      .split('\n')
+      .filter(line => /^#{1,6} /.test(line))
+      .map(line => line.trim());
+    expect(headings.length).toBeGreaterThan(3);
+    for (const heading of headings) {
+      // Balanced parentheses and backticks are the tell-tale of a split line.
+      const open = (heading.match(/\(/g) ?? []).length;
+      const close = (heading.match(/\)/g) ?? []).length;
+      expect({ heading, open, close }).toEqual({
+        heading,
+        open,
+        close: open,
+      });
+      expect((heading.match(/`/g) ?? []).length % 2).toBe(0);
+    }
+  });
 });
 
 // ─── C. generateAnnotationGuides ──────────────────────────────────────────────

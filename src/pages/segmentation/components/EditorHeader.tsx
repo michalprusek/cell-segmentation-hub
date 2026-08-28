@@ -141,52 +141,59 @@ const EditorHeader = ({
 
   return (
     <motion.header
-      className="w-full h-12 px-6 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between z-20 shadow-sm"
+      className="z-20 flex h-12 w-full items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 shadow-sm sm:px-6 dark:border-gray-700 dark:bg-gray-900"
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
       {/* Left section - Breadcrumb Navigation */}
-      <div className="flex items-center space-x-3">
+      <div className="flex min-w-0 items-center gap-1 sm:gap-2">
         <Button
           variant="ghost"
           size="sm"
-          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 dark:bg-gray-900"
+          aria-label={String(t('common.dashboard'))}
+          className="shrink-0 px-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
           onClick={handleHomeClick}
         >
           <Home className="h-4 w-4" />
         </Button>
 
-        <ChevronRight className="h-4 w-4 text-slate-400" />
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
 
         <Button
           variant="ghost"
           size="sm"
-          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 max-w-32 sm:max-w-48 dark:bg-gray-900"
+          className="min-w-0 max-w-24 shrink px-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 sm:max-w-48 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
           onClick={handleBackClick}
         >
-          <FolderOpen className="h-4 w-4 mr-2" />
+          <FolderOpen className="mr-2 h-4 w-4 shrink-0" />
           <span className="truncate text-sm font-medium">{projectTitle}</span>
         </Button>
 
-        <ChevronRight className="h-4 w-4 text-slate-400" />
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
 
-        <div className="flex items-center space-x-2">
-          <ImageIcon className="h-4 w-4 text-blue-500" />
-          <span className="text-sm font-medium text-slate-900 dark:text-white truncate max-w-32 sm:max-w-48">
+        <div className="flex min-w-0 items-center gap-2">
+          <ImageIcon className="h-4 w-4 shrink-0 text-blue-500" />
+          <span
+            className="truncate text-sm font-medium text-slate-900 dark:text-white"
+            title={imageName}
+          >
             {imageName}
           </span>
         </div>
       </div>
 
       {/* Right section - Navigation and Progress */}
-      <div className="flex items-center space-x-4">
-        {/* WebSocket Connection Status */}
+      <div className="flex shrink-0 items-center gap-3">
+        {/* WebSocket Connection Status. Deliberately not a live region: the
+            editor socket flaps in some sessions, and re-announcing
+            "Online"/"Offline" on every flip is noise. The colour and the
+            title carry it. */}
         <div
-          className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs ${
+          className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs ${
             isWebSocketConnected
-              ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
-              : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
+              ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+              : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
           }`}
           title={
             isWebSocketConnected
@@ -204,22 +211,34 @@ const EditorHeader = ({
           </span>
         </div>
 
-        {/* Segmentation Status Indicator */}
+        {/* Segmentation Status Indicator. Width-capped and `lg`-gated: this
+            is the only variable-width item on this side, and an uncapped
+            localized phrase (cs/de are long) used to push Back/Play/Next past
+            the header edge. Measured with a phrase longer than any real
+            translation, the header now overflows by 0 px at 768/1024/1440.
+            Below `lg` the status yields to the frame controls — a transient
+            state that toasts also report, versus the only way to change
+            frame. */}
         {imageId && (
-          <SegmentationStatusIndicator
-            imageId={imageId}
-            segmentationStatus={segmentationStatus}
-            lastUpdate={lastUpdate}
-            queuePosition={queueStats?.position}
-          />
+          <div className="hidden min-w-0 max-w-[10rem] overflow-hidden lg:block">
+            <SegmentationStatusIndicator
+              imageId={imageId}
+              segmentationStatus={segmentationStatus}
+              lastUpdate={lastUpdate}
+              queuePosition={queueStats?.position}
+            />
+          </div>
         )}
 
         {/* Progress indicator — in video mode the frame # becomes an
             editable input and the progress gradient is replaced with a
             real scrubber slider; standalone images keep the original
             "X / Y" label + gradient bar. */}
-        <div className="hidden md:flex items-center space-x-3">
-          <div className="text-sm text-slate-600 dark:text-slate-300 flex items-center space-x-2">
+        <div className="hidden shrink-0 items-center gap-3 md:flex">
+          {/* `tabular-nums` + a min width: without them the counter's pixel
+              width changes with every digit while scrubbing, so the slider
+              beside it jitters left and right under the cursor. */}
+          <div className="flex items-center gap-2 text-sm tabular-nums text-slate-600 dark:text-slate-300">
             {isVideoMode ? (
               <Input
                 type="number"
@@ -236,32 +255,37 @@ const EditorHeader = ({
                     )
                   );
                 }}
-                aria-label={t('editor.frameNavigation.frame')}
-                className="w-16 h-8 text-center text-lg font-bold text-blue-600 dark:text-blue-400"
+                aria-label={String(t('editor.frameNavigation.frame'))}
+                className="h-8 w-16 px-1 text-center text-base font-semibold tabular-nums text-blue-600 dark:text-blue-400"
               />
             ) : (
-              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              <span className="min-w-[2ch] text-right text-base font-semibold tabular-nums text-blue-600 dark:text-blue-400">
                 {currentImageIndex + 1}
               </span>
             )}
             <span className="text-slate-400">/</span>
-            <span>{isVideoMode ? videoFrameCount : totalImages}</span>
+            <span className="min-w-[2ch]">
+              {isVideoMode ? videoFrameCount : totalImages}
+            </span>
           </div>
 
           {isVideoMode ? (
+            // A 600-frame scrubber in 160 px gives ~4 frames per pixel. The
+            // track grows with the viewport so the frame you aim at is the
+            // frame you land on.
             <Slider
-              className="w-40"
+              className="w-36 lg:w-52 xl:w-72"
               min={0}
               max={(videoFrameCount as number) - 1}
               step={1}
               value={[videoFrameIndex as number]}
               onValueChange={v => onVideoFrameChange?.(v[0])}
-              aria-label={t('editor.frameNavigation.frame')}
+              aria-label={String(t('editor.frameNavigation.frame'))}
             />
           ) : (
-            <div className="w-24 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
               <div
-                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
+                className="h-full bg-blue-600 transition-all duration-300"
                 style={{
                   width: `${((currentImageIndex + 1) / totalImages) * 100}%`,
                 }}
@@ -273,15 +297,15 @@ const EditorHeader = ({
         {/* Navigation buttons — in video mode the Play/Pause button
             sits between Back and Next so frame nav becomes a 3-button
             tactile group (Back ⏵ ⏸ Next). */}
-        <div className="flex items-center space-x-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           <Button
             variant="outline"
             size="sm"
             onClick={() => onNavigate('prev')}
             disabled={currentImageIndex <= 0}
-            className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700 dark:bg-gray-900"
+            className="h-9"
           >
-            <ChevronLeft className="h-4 w-4 mr-1" />
+            <ChevronLeft className="mr-1 h-4 w-4" />
             <span className="hidden sm:inline">{t('common.back')}</span>
           </Button>
           {isVideoMode && onVideoToggle && (
@@ -289,12 +313,12 @@ const EditorHeader = ({
               variant="outline"
               size="icon"
               onClick={onVideoToggle}
-              aria-label={
+              aria-label={String(
                 videoIsPlaying
                   ? t('editor.frameNavigation.pause')
                   : t('editor.frameNavigation.play')
-              }
-              className="h-9 w-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700 dark:bg-gray-900"
+              )}
+              className="h-9 w-9"
             >
               {videoIsPlaying ? (
                 <Pause className="h-4 w-4" />
@@ -308,10 +332,10 @@ const EditorHeader = ({
             size="sm"
             onClick={() => onNavigate('next')}
             disabled={currentImageIndex >= totalImages - 1}
-            className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700 dark:bg-gray-900"
+            className="h-9"
           >
             <span className="hidden sm:inline">{t('common.next')}</span>
-            <ChevronRight className="h-4 w-4 ml-1" />
+            <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
       </div>
