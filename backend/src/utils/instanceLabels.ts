@@ -57,9 +57,13 @@ export function buildInstanceLabelMap(
   // same order the visualization uses when it groups polylines by `instanceId`.
   const drawableByInstance = new Map<string, boolean>();
   for (const p of polygons) {
-    if (p.geometry !== 'polyline') continue;
+    if (p.geometry !== 'polyline') {
+      continue;
+    }
     const id = p.instanceId;
-    if (!id) continue;
+    if (!id) {
+      continue;
+    }
     if (!drawableByInstance.has(id)) {
       drawableByInstance.set(id, false);
     }

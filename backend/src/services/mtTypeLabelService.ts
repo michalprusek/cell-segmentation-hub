@@ -27,22 +27,30 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
  * the same visible name.
  */
 export function sanitizeLabels(raw: unknown): MTTypeLabel[] {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const byId = new Map<string, MTTypeLabel>();
   for (const e of raw) {
-    if (!e || typeof e !== 'object') continue;
+    if (!e || typeof e !== 'object') {
+      continue;
+    }
     const r = e as Record<string, unknown>;
     const id = typeof r.id === 'string' ? r.id.trim() : '';
     const name = typeof r.name === 'string' ? r.name.trim() : '';
     const color = typeof r.color === 'string' ? r.color.trim() : '';
-    if (!id || !name || !HEX.test(color)) continue;
+    if (!id || !name || !HEX.test(color)) {
+      continue;
+    }
     byId.set(id, { id, name, color });
   }
   const seenNames = new Set<string>();
   const out: MTTypeLabel[] = [];
   for (const label of byId.values()) {
     const key = label.name.toLowerCase();
-    if (seenNames.has(key)) continue;
+    if (seenNames.has(key)) {
+      continue;
+    }
     seenNames.add(key);
     out.push(label);
   }
@@ -65,7 +73,9 @@ function parseFramePolygons(
   json: string | null | undefined,
   ctx?: { segmentationId?: string; projectId?: string }
 ): unknown[] {
-  if (!json) return [];
+  if (!json) {
+    return [];
+  }
   try {
     const parsed = JSON.parse(json);
     return Array.isArray(parsed) ? parsed : [];
@@ -92,7 +102,9 @@ export function clearMtTypesByIds(
   let changed = 0;
   const polygons = polys.map(p => {
     const rec = p as Record<string, unknown>;
-    if (typeof rec.mtType !== 'string' || !idSet.has(rec.mtType)) return p;
+    if (typeof rec.mtType !== 'string' || !idSet.has(rec.mtType)) {
+      return p;
+    }
     changed++;
     const copy = { ...rec };
     delete copy.mtType;
@@ -120,7 +132,9 @@ async function clearLabelReferences(
   labelIds: string[]
 ): Promise<number> {
   const idSet = new Set(labelIds.filter(Boolean));
-  if (idSet.size === 0) return 0;
+  if (idSet.size === 0) {
+    return 0;
+  }
   const frames = await prisma.image.findMany({
     where: { projectId },
     select: {
@@ -131,7 +145,9 @@ async function clearLabelReferences(
   const ops: Prisma.PrismaPromise<unknown>[] = [];
   let framesCleaned = 0;
   for (const frame of frames) {
-    if (!frame.segmentation) continue;
+    if (!frame.segmentation) {
+      continue;
+    }
     const parsed = parseFramePolygons(frame.segmentation.polygons, {
       segmentationId: frame.segmentation.id,
       projectId,
@@ -147,7 +163,9 @@ async function clearLabelReferences(
       );
     }
   }
-  if (ops.length > 0) await prisma.$transaction(ops);
+  if (ops.length > 0) {
+    await prisma.$transaction(ops);
+  }
   return framesCleaned;
 }
 

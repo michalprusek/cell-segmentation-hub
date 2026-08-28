@@ -94,6 +94,38 @@ else
     echo "⏭️  Skipping ESLint (missing dependencies - Docker-first project)"
 fi
 
+# 7b. Backend ESLint (baseline gate)
+#
+# The ESLint step above runs the ROOT eslint.config.js, which explicitly
+# ignores `backend/**`. Nothing else covered that tree either, so a hard
+# ESLint error in backend/src passed a fully green `make ci` on 2026-08-28.
+#
+# scripts/eslint-baseline.mjs lints backend/src for real and compares the
+# result against the committed eslint-baseline.json: pre-existing problems do
+# not block commits, anything NEW does. Accepting a new one is a deliberate,
+# reviewable act — `npm run lint:backend:update` rewrites the committed
+# baseline, so it shows up as added lines in the diff.
+if command -v node >/dev/null 2>&1 && [ -d "backend/node_modules/eslint" ]; then
+    echo "⏳ Running backend ESLint (baseline gate)..."
+    set +e  # Temporarily disable exit on error
+    node scripts/eslint-baseline.mjs
+    BACKEND_LINT_EXIT=$?
+    set -e  # Re-enable exit on error
+    if [ $BACKEND_LINT_EXIT -eq 1 ]; then
+        echo -e "${RED}❌ Error: new backend ESLint problems introduced (see above)${NC}"
+        echo -e "${YELLOW}💡 Fix them, or — if deliberate — run 'npm run lint:backend:update'${NC}"
+        exit 1
+    elif [ $BACKEND_LINT_EXIT -ne 0 ]; then
+        # Exit 2 = the gate itself could not run. Fail closed: a check that
+        # cannot run must never be reported as a check that passed.
+        echo -e "${RED}❌ Error: the backend ESLint gate could not run (exit $BACKEND_LINT_EXIT)${NC}"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠️  Warning: Skipping backend ESLint gate (backend/node_modules not installed)${NC}"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
 if command -v npx >/dev/null 2>&1 && [ -f "package.json" ] && [ -d "node_modules/prettier" ]; then
     echo "⏳ Checking code formatting..."
     if ! npx prettier --check .; then

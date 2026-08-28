@@ -188,5 +188,20 @@ jobs:
         run: npx prisma generate
       - name: TypeScript
         run: npm run type-check
+      # backend/src had NO lint gate before this step: the frontend job's
+      # `npx eslint src/` is the frontend tree only (the root config ignores
+      # `backend/**`), and this job ran TypeScript and Vitest but never ESLint.
+      # A hard ESLint error therefore shipped through a fully green PR.
+      #
+      # It is a baseline gate (scripts/eslint-baseline.mjs against the
+      # committed eslint-baseline.json) rather than `--max-warnings=0`, because
+      # backend/src still carries pre-existing problems. It fails on anything
+      # NOT in the baseline. The script needs no root node_modules — it spawns
+      # backend/node_modules/.bin/eslint — so it runs fine in this job, which
+      # only installs backend deps; `working-directory` is overridden because
+      # the script and its baseline live at the repo root.
+      - name: ESLint (baseline gate)
+        working-directory: ${{ github.workspace }}
+        run: node scripts/eslint-baseline.mjs
       - name: Vitest + coverage (enforces threshold)
         run: npx vitest run --coverage

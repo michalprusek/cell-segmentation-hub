@@ -43,7 +43,9 @@ export interface FeedbackEmailData {
 
 /** Human-readable byte size (1 decimal place above KB). */
 function humanizeBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
+  if (n < 1024) {
+    return `${n} B`;
+  }
   const units = ['KB', 'MB', 'GB', 'TB'];
   let value = n / 1024;
   let i = 0;

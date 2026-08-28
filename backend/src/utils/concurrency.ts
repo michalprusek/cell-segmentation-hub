@@ -20,7 +20,9 @@ export const mapWithConcurrency = async <T>(
   } = {}
 ): Promise<void> => {
   const total = items.length;
-  if (total === 0) return;
+  if (total === 0) {
+    return;
+  }
 
   const limit = Math.max(1, Math.min(concurrency, total));
   let nextIndex = 0;
@@ -30,13 +32,17 @@ export const mapWithConcurrency = async <T>(
 
   const worker = async (): Promise<void> => {
     while (true) {
-      if (firstError !== undefined || aborted) return;
+      if (firstError !== undefined || aborted) {
+        return;
+      }
       if (options.shouldAbort?.()) {
         aborted = true;
         return;
       }
       const i = nextIndex++;
-      if (i >= total) return;
+      if (i >= total) {
+        return;
+      }
       try {
         await task(items[i] as T, i);
       } catch (err) {
@@ -58,7 +64,9 @@ export const mapWithConcurrency = async <T>(
 
   await Promise.all(Array.from({ length: limit }, () => worker()));
 
-  if (firstError !== undefined) throw firstError;
+  if (firstError !== undefined) {
+    throw firstError;
+  }
   if (aborted) {
     throw new Error(options.abortMessage ?? 'Operation aborted');
   }

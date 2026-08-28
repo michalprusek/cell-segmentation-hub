@@ -330,7 +330,9 @@ export class QueueService {
         ? planStaticCollapse(staticMeta, containerFrames)
         : planSparseCollapse(sparseMeta!, containerFrames);
       plan.segment.forEach(f => keep.add(f.id));
-      if (plan.projectFrom.size > 0) collapsedContainers++;
+      if (plan.projectFrom.size > 0) {
+        collapsedContainers++;
+      }
     }
 
     const ids = candidateIds.filter(id => keep.has(id));
@@ -403,7 +405,9 @@ export class QueueService {
       // The same set drives both queue inserts and the status updateMany.
       const candidateIds = accessibleImages
         .filter(img => {
-          if (forceResegment) return true;
+          if (forceResegment) {
+            return true;
+          }
           return (
             img.segmentationStatus !== 'queued' &&
             img.segmentationStatus !== 'processing'

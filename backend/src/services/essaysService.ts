@@ -93,10 +93,18 @@ export const coerceDevice = (
   device: unknown,
   reason: unknown
 ): 'cuda' | 'cpu' | 'cpu-degraded' | 'cpu-busy' | undefined => {
-  if (device !== 'cuda' && device !== 'cpu') return undefined;
-  if (device !== 'cpu') return device;
-  if (reason === 'fault') return 'cpu-degraded';
-  if (reason === 'busy') return 'cpu-busy';
+  if (device !== 'cuda' && device !== 'cpu') {
+    return undefined;
+  }
+  if (device !== 'cpu') {
+    return device;
+  }
+  if (reason === 'fault') {
+    return 'cpu-degraded';
+  }
+  if (reason === 'busy') {
+    return 'cpu-busy';
+  }
   return 'cpu';
 };
 
@@ -142,7 +150,9 @@ export function shouldKeepInput(job: {
   status: string;
   error?: string | null;
 }): boolean {
-  if (job.status !== 'completed' && job.status !== 'failed') return false;
+  if (job.status !== 'completed' && job.status !== 'failed') {
+    return false;
+  }
   return job.status === 'failed' || Boolean(job.error);
 }
 
@@ -154,7 +164,9 @@ export function isRetentionExpired(
   retentionDays: number,
   now: Date = new Date()
 ): boolean {
-  if (!Number.isFinite(retentionDays) || retentionDays <= 0) return false;
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    return false;
+  }
   const ageMs = now.getTime() - finishedAt.getTime();
   return ageMs > retentionDays * 24 * 60 * 60 * 1000;
 }
@@ -181,7 +193,9 @@ export class EssaysService {
         logger.warn(`essays reconcile failed: ${String(e)}`, CTX)
       );
     }, RECONCILE_INTERVAL_MS);
-    if (typeof timer.unref === 'function') timer.unref();
+    if (typeof timer.unref === 'function') {
+      timer.unref();
+    }
 
     // Sweep orphaned upload temp files (aborted/rejected uploads never reach
     // submitJob's rename) so the shared volume can't fill up unbounded.
@@ -195,11 +209,15 @@ export class EssaysService {
         logger.warn(`essays retention sweep failed: ${String(e)}`, CTX)
       );
     }, STAGING_SWEEP_INTERVAL_MS);
-    if (typeof sweep.unref === 'function') sweep.unref();
+    if (typeof sweep.unref === 'function') {
+      sweep.unref();
+    }
   }
 
   static getInstance(): EssaysService {
-    if (!EssaysService.instance) EssaysService.instance = new EssaysService();
+    if (!EssaysService.instance) {
+      EssaysService.instance = new EssaysService();
+    }
     return EssaysService.instance;
   }
 
@@ -262,7 +280,9 @@ export class EssaysService {
         // Only fall back to copy on a genuine cross-device move (EXDEV) —
         // staging is same-fs by design. Any other error (EACCES/ENOSPC) is real
         // and must not be masked by a second, more confusing copyFile error.
-        if ((e as { code?: string }).code !== 'EXDEV') throw e;
+        if ((e as { code?: string }).code !== 'EXDEV') {
+          throw e;
+        }
         await fs.copyFile(f.path, dest);
         await fs.unlink(f.path).catch(() => {});
       }
@@ -348,7 +368,9 @@ export class EssaysService {
     { ok: true } | { ok: false; reason: 'not_found' | 'in_flight' | 'input_gone' }
   > {
     const job = await prisma.essayJob.findFirst({ where: { id: jobId, userId } });
-    if (!job) return { ok: false, reason: 'not_found' };
+    if (!job) {
+      return { ok: false, reason: 'not_found' };
+    }
     // Re-queueing a job the worker still holds would dispatch the same id twice
     // and let two runs write one output dir.
     if (job.status !== 'completed' && job.status !== 'failed') {
@@ -457,7 +479,9 @@ export class EssaysService {
 
   async getJob(userId: string, jobId: string): Promise<EssayJob | null> {
     const job = await prisma.essayJob.findFirst({ where: { id: jobId, userId } });
-    if (!job) return null;
+    if (!job) {
+      return null;
+    }
     // Opportunistic reconcile so a direct GET reflects the latest worker state
     // even between background ticks.
     if (job.status === 'queued' || job.status === 'running') {
@@ -471,7 +495,9 @@ export class EssaysService {
 
   async deleteJob(userId: string, jobId: string): Promise<boolean> {
     const job = await prisma.essayJob.findFirst({ where: { id: jobId, userId } });
-    if (!job) return false;
+    if (!job) {
+      return false;
+    }
     // Raw job dir is usually already gone (freed on completion); remove it if a
     // failed/in-progress job still has it. Addressed from the row, for the
     // reason spelled out in rerunJob.
@@ -496,13 +522,17 @@ export class EssaysService {
     jobId: string
   ): Promise<{ filePath: string; downloadName: string } | null> {
     const job = await prisma.essayJob.findFirst({ where: { id: jobId, userId } });
-    if (!job || job.status !== 'completed' || !job.resultZipKey) return null;
+    if (!job || job.status !== 'completed' || !job.resultZipKey) {
+      return null;
+    }
     // resultZipKey is relative to the persistent uploads volume (essays-results/
     // <jobId>.zip) so the download survives a backend restart and is available
     // until the user dismisses the job.
     const base = path.resolve(this.uploadDir);
     const filePath = path.resolve(base, job.resultZipKey);
-    if (!filePath.startsWith(base + path.sep)) return null;
+    if (!filePath.startsWith(base + path.sep)) {
+      return null;
+    }
     try {
       await fs.access(filePath);
     } catch {
@@ -573,7 +603,9 @@ export class EssaysService {
   /** Returns true iff it advanced the row (used by the staleness watchdog). */
   private async reconcileJob(job: EssayJob): Promise<boolean> {
     const ws = await this.readWorkerStatus(job.userId, job.id);
-    if (!ws || typeof ws.state !== 'string') return false;
+    if (!ws || typeof ws.state !== 'string') {
+      return false;
+    }
 
     if (ws.state === 'completed') {
       await this.finalize(job, ws);
@@ -623,13 +655,17 @@ export class EssaysService {
   }
 
   private async finalize(job: EssayJob, ws: WorkerStatus): Promise<void> {
-    if (this.zipping.has(job.id)) return;
+    if (this.zipping.has(job.id)) {
+      return;
+    }
     this.zipping.add(job.id);
     try {
       // Re-read inside the guard — the captured `job` is a snapshot and both the
       // timer and getJob can reach finalize; bail if another path already zipped.
       const fresh = await prisma.essayJob.findUnique({ where: { id: job.id } });
-      if (!fresh || (fresh.status === 'completed' && fresh.resultZipKey)) return;
+      if (!fresh || (fresh.status === 'completed' && fresh.resultZipKey)) {
+        return;
+      }
 
       const outputDir = path.join(this.jobDir(job.userId, job.id), 'output');
       const zipBase = `${sanitizeFilename(job.name)}_${job.id.slice(0, 8)}`;
@@ -734,7 +770,9 @@ export class EssaysService {
    * record. A job whose input is gone simply stops offering the re-run.
    */
   private async sweepExpiredInputs(): Promise<void> {
-    if (ESSAYS_INPUT_RETENTION_DAYS <= 0) return;
+    if (ESSAYS_INPUT_RETENTION_DAYS <= 0) {
+      return;
+    }
     const finished = await prisma.essayJob.findMany({
       where: { status: { in: ['completed', 'failed'] } },
       select: { id: true, userId: true, updatedAt: true },

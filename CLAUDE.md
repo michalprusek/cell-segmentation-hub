@@ -297,7 +297,20 @@ make ci                          # Full local CI gate: TS + ESLint(0) + i18n. ~3
 make ci-test                     # Vitest run (currently 31% broken — informational only)
 npx tsc --noEmit                 # Frontend type check
 make lint                        # ESLint in Docker
+npm run lint:backend             # backend/src ESLint baseline gate (step 4 of `make ci`)
+npm run lint:backend:update      # Accept new backend lint debt (rewrites the committed baseline)
+npm run lint:backend:self-test   # Prove the gate still fails on a new problem
 ```
+
+**`npx eslint src/` is the FRONTEND only.** The root `eslint.config.js` ignores
+`backend/**`, so for a long time nothing linted `backend/src` — not `make ci`,
+not CI, not lint-staged (its `*.{ts,tsx}` entry hands backend files to the root
+config, which ignores them). A hard ESLint error shipped through a green
+`make ci` that way. `scripts/eslint-baseline.mjs` now gates that tree against a
+committed `eslint-baseline.json`, the same design as
+`scripts/type-check-baseline.mjs`: pre-existing problems are recorded and
+tolerated, anything new fails. Backend **test** files are still unlinted —
+`backend/eslint.config.js` ignores `**/*.test.ts` and `**/__tests__/**`.
 
 ### Database (inside `make shell-be`)
 
@@ -441,7 +454,8 @@ Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runn
 `.husky/pre-commit` validates every commit:
 
 - No `console.log` / `debugger`
-- ESLint **0 warnings** (strict)
+- ESLint **0 warnings** (strict) on the frontend
+- ESLint baseline gate on `backend/src` — fails on any problem not in `eslint-baseline.json`
 - Prettier formatting
 - Frontend + backend TypeScript check
 - Conventional commits required (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`)

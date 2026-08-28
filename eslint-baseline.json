@@ -1,0 +1,72 @@
+{
+  "_comment": "Committed baseline of PRE-EXISTING ESLint problems in backend/src. The gate (scripts/eslint-baseline.mjs, run by `npm run lint:backend` and by `make ci`) fails on any problem not listed here. Problems are keyed by file + severity + rule + normalised message (NOT line number, which churns on every unrelated edit) and stored with a count, so fixing one problem and introducing another cannot cancel out. Warnings are gated as well as errors. Every line below is a problem someone chose to accept; the file shrinking over time is the point.",
+  "_regenerateWith": "npm run lint:backend:update",
+  "_selfTest": "npm run lint:backend:self-test",
+  "_doNotEditByHand": true,
+  "eslintVersion": "9.37.0",
+  "totals": {
+    "backend": 38,
+    "all": 38
+  },
+  "targets": {
+    "backend": {
+      "filesLinted": 141,
+      "files": {
+        "backend/src/api/controllers/authController.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 1,
+          "error @typescript-eslint/explicit-module-boundary-types: Missing return type on function.": 1
+        },
+        "backend/src/api/controllers/imageController.ts": {
+          "error @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 1
+        },
+        "backend/src/api/controllers/videoController.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 2,
+          "error @typescript-eslint/no-extraneous-class: Unexpected class with only static properties.": 1,
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/constants/modelRegistry.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 1
+        },
+        "backend/src/db/index.ts": {
+          "error @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 1
+        },
+        "backend/src/server.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 1
+        },
+        "backend/src/services/addChannelService.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/services/export/imagejRoiEncoder.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/services/export/mtKymographExporter.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/services/export/mtMetricsExporter.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 8
+        },
+        "backend/src/services/queueService.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/services/segmentationService.ts": {
+          "error @typescript-eslint/no-dynamic-delete: Do not delete dynamically computed property keys.": 1
+        },
+        "backend/src/services/tracking/trackerService.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 1
+        },
+        "backend/src/services/visualization/visualizationGenerator.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/test/utils/jwtTestUtils.ts": {
+          "warning @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 2
+        },
+        "backend/src/test/utils/testFactories.ts": {
+          "warning @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 10
+        },
+        "backend/src/test/utils/uploadMocks.ts": {
+          "warning @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 1
+        }
+      }
+    }
+  }
+}

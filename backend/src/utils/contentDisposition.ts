@@ -20,7 +20,6 @@
  *  non-ASCII, replaced by `_` in the fallback. Control characters are excluded
  *  because they terminate or forge headers, `"` and `\` because they escape the
  *  quoted string. */
-// eslint-disable-next-line no-control-regex
 const UNSAFE_IN_QUOTED_ASCII = /[^\x20-\x7E]|["\\]/g;
 
 export type DispositionType = 'inline' | 'attachment';

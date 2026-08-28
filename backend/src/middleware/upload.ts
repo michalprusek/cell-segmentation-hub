@@ -48,7 +48,9 @@ const uploadLimits = getUploadLimitsForEnvironment();
  * .mp4, .avi, .mov, .mkv, .webm, .png, .jpg, .jpeg, .bmp) survives unchanged.
  */
 export function safeUploadExtension(originalName: unknown): string {
-  if (typeof originalName !== 'string') return '';
+  if (typeof originalName !== 'string') {
+    return '';
+  }
   const ext = path.extname(path.basename(originalName));
   return /^\.[A-Za-z0-9]{1,15}$/.test(ext) ? ext.toLowerCase() : '';
 }

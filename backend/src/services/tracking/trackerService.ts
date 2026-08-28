@@ -108,7 +108,9 @@ async function isBatchComplete(containerId: string): Promise<boolean> {
     where: { parentVideoId: containerId },
     select: { segmentationStatus: true },
   });
-  if (frames.length === 0) return false;
+  if (frames.length === 0) {
+    return false;
+  }
   return frames.every(
     f =>
       f.segmentationStatus != null &&
@@ -279,7 +281,9 @@ async function _runTrackingForContainerInner(
 
   const updates: Array<{ segmentationId: string; polygonsJson: string }> = [];
   for (const f of frames) {
-    if (!f.segmentation || f.frameIndex == null) continue;
+    if (!f.segmentation || f.frameIndex == null) {
+      continue;
+    }
     const seg = f.segmentation as SegmentationRecord;
     let polygons: PolygonRecord[];
     try {

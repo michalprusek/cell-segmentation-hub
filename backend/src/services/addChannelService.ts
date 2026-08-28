@@ -232,7 +232,9 @@ export function recordStaticShifts(
   const rows = shifts ?? [];
   for (let i = 0; i < owners.length; i++) {
     const row = rows[i];
-    if (!row) continue;
+    if (!row) {
+      continue;
+    }
     const owner = owners[i];
     const metas = channelsByContainer.get(owner.containerId);
     if (!metas) {
@@ -240,10 +242,14 @@ export function recordStaticShifts(
       continue;
     }
     const meta = metas[owner.channelIndex];
-    if (!meta?.staticSource) continue;
+    if (!meta?.staticSource) {
+      continue;
+    }
     const dy = Number(row[0]);
     const dx = Number(row[1]);
-    if (!Number.isFinite(dy) || !Number.isFinite(dx)) continue;
+    if (!Number.isFinite(dy) || !Number.isFinite(dx)) {
+      continue;
+    }
     (meta.staticShifts ??= {})[owner.frameId] = [dy, dx];
   }
 }
@@ -458,10 +464,14 @@ export function slugifyChannelName(label: string): string {
 
 /** First unique ``base``/``base_2``/``base_3`` … not already in ``used``. */
 export function uniqueName(base: string, used: Set<string>): string {
-  if (!used.has(base)) return base;
+  if (!used.has(base)) {
+    return base;
+  }
   for (let i = 2; i < 1000; i++) {
     const candidate = `${base}_${i}`.slice(0, 64);
-    if (!used.has(candidate)) return candidate;
+    if (!used.has(candidate)) {
+      return candidate;
+    }
   }
   // Practically unreachable; fall back to a random suffix.
   return `${base}_${randomUUID().slice(0, 6)}`.slice(0, 64);
@@ -692,7 +702,9 @@ export async function addChannelToFrames(
 
     for (const [containerId, frames] of byContainer) {
       const container = containerById.get(containerId);
-      if (!container) continue;
+      if (!container) {
+        continue;
+      }
       const existing: ChannelMeta[] = Array.isArray(container.channels)
         ? (container.channels as unknown as ChannelMeta[])
         : [];

@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { apiLimiter } from '../../middleware/rateLimiter';
@@ -14,7 +14,7 @@ const router = Router();
 router.get(
   '/status',
   apiLimiter,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response) => {
     try {
       logger.info('🔍 ML: Checking service status');
 
@@ -69,7 +69,7 @@ router.get(
 router.get(
   '/health',
   apiLimiter,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response) => {
     try {
       logger.info('🏥 ML: Health check requested');
 

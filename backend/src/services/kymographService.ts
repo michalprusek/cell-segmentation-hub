@@ -173,7 +173,9 @@ function framePngPath(
 }
 
 function parsePolygons(json: string | null | undefined): PolylineRecord[] {
-  if (!json) return [];
+  if (!json) {
+    return [];
+  }
   try {
     const parsed = JSON.parse(json) as PolylineRecord[];
     return Array.isArray(parsed) ? parsed : [];
@@ -272,9 +274,13 @@ export async function buildKymograph(
   }> = [];
 
   for (const f of allFrames) {
-    if (f.frameIndex == null) continue;
+    if (f.frameIndex == null) {
+      continue;
+    }
     // Restrict to the selected frames when the export passed a filter.
-    if (frameFilterSet && !frameFilterSet.has(f.frameIndex)) continue;
+    if (frameFilterSet && !frameFilterSet.has(f.frameIndex)) {
+      continue;
+    }
     let geometry: Array<{ x: number; y: number }> | null = null;
     if (trackedMode) {
       const polygons = parsePolygons(f.segmentation?.polygons ?? null);

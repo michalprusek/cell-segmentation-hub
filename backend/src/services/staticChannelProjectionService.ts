@@ -55,7 +55,9 @@ const NOT_APPLIED: ProjectStaticChannelOutcome = {
 function parsePolygons(raw: string): ProjectablePolygon[] | null {
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
     // A polygon without points cannot be translated; rather than silently
     // dropping it, refuse the whole projection so the frames get segmented
     // properly instead of receiving a partial copy.
@@ -73,7 +75,9 @@ export async function projectStaticChannelResult(
   args: ProjectStaticChannelArgs
 ): Promise<ProjectStaticChannelOutcome> {
   const { containerId, sourceImageId, channel } = args;
-  if (!channel) return NOT_APPLIED;
+  if (!channel) {
+    return NOT_APPLIED;
+  }
 
   try {
     const container = await prisma.image.findUnique({
@@ -85,7 +89,9 @@ export async function projectStaticChannelResult(
     const meta =
       findStaticChannel(declared, channel) ??
       findSparseChannel(declared, channel);
-    if (!meta) return NOT_APPLIED;
+    if (!meta) {
+      return NOT_APPLIED;
+    }
     // A sparse channel has an anchor per RUN of gaps, not one for the whole
     // container, so its real frames still differ from each other over time and
     // the tracker still has work to do. Only the all-frames-identical static
@@ -103,7 +109,9 @@ export async function projectStaticChannelResult(
         imageHeight: true,
       },
     });
-    if (!source) return NOT_APPLIED;
+    if (!source) {
+      return NOT_APPLIED;
+    }
 
     const polygons = parsePolygons(source.polygons);
     if (!polygons) {
@@ -143,7 +151,9 @@ export async function projectStaticChannelResult(
       : meta.frameIds
         ? siblings.filter(f => meta.frameIds?.includes(f.id))
         : siblings;
-    if (covered.length === 0) return NOT_APPLIED;
+    if (covered.length === 0) {
+      return NOT_APPLIED;
+    }
 
     let projected = 0;
     let skipped = 0;
@@ -188,7 +198,9 @@ export async function projectStaticChannelResult(
       projected++;
     }
 
-    if (projected === 0) return NOT_APPLIED;
+    if (projected === 0) {
+      return NOT_APPLIED;
+    }
 
     logger.info(
       `${isSparse ? 'Sparse' : 'Static'} channel '${channel}': projected ${polygons.length} polyline(s) from frame ${sourceImageId} onto ${projected} frame(s)` +

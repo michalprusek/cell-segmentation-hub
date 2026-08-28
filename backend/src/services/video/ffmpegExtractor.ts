@@ -34,7 +34,9 @@ async function probeFrameCount(
   width: number;
   height: number;
 } | null> {
-  if (!ffmpegPath) return null;
+  if (!ffmpegPath) {
+    return null;
+  }
   const ffprobeBinary = ffmpegPath.replace(/ffmpeg(\.exe)?$/i, 'ffprobe$1');
 
   return new Promise(resolve => {
@@ -58,11 +60,15 @@ async function probeFrameCount(
     child.stdout.on('data', chunk => (stdout += chunk.toString()));
     child.on('error', () => resolve(null));
     child.on('close', code => {
-      if (code !== 0) return resolve(null);
+      if (code !== 0) {
+        return resolve(null);
+      }
       try {
         const parsed = JSON.parse(stdout);
         const stream = parsed?.streams?.[0];
-        if (!stream) return resolve(null);
+        if (!stream) {
+          return resolve(null);
+        }
         const width = parseInt(String(stream.width), 10);
         const height = parseInt(String(stream.height), 10);
         const durationS = parseFloat(String(stream.duration ?? 'NaN'));

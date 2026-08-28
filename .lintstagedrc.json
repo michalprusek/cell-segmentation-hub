@@ -13,7 +13,7 @@
     "eslint --fix --cache --max-warnings=0 --format=stylish --no-warn-ignored",
     "prettier --write"
   ],
-  "backend/src/**/*.{ts,tsx}": [],
+  "_comment_backend_lint": "backend/src is NOT linted here. The `*.{ts,tsx}` entry above does match backend files, but it runs the ROOT eslint config, which ignores `backend/**` (--no-warn-ignored hides even that), so it only ever prettier-formats them. Backend linting is a whole-tree baseline gate instead: .husky/pre-commit runs `node scripts/eslint-baseline.mjs` once per commit. Whole-tree rather than staged-files-only because the gate compares against a committed baseline of the entire tree; a staged subset cannot tell a fixed problem from an unlinted one.",
   "*.{css,scss}": ["prettier --write"],
   "*.{json,md,html,yml,yaml}": ["prettier --write"],
   "package.json": [

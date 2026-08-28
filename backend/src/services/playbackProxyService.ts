@@ -73,13 +73,17 @@ export function proxyRangeFromName(
   channel: string
 ): number | null {
   const prefix = `${channel}.p`;
-  if (!fileName.startsWith(prefix) || !fileName.endsWith('.webp')) return null;
+  if (!fileName.startsWith(prefix) || !fileName.endsWith('.webp')) {
+    return null;
+  }
   const digits = fileName.slice(prefix.length, -'.webp'.length);
   // Digits only: `488_nm.p2047.webp` yes, `488_nm.pXX.webp` no, and — the case
   // that matters — `488_nm_extra.p2047.webp` never matches channel `488_nm`,
   // because the prefix check already required the dot straight after the name.
   // Channel names ban dots (`CHANNEL_NAME_RE`), so that dot is unambiguous.
-  if (!/^\d+$/.test(digits)) return null;
+  if (!/^\d+$/.test(digits)) {
+    return null;
+  }
   const value = Number(digits);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
@@ -121,7 +125,9 @@ export async function resolveFrameRepresentation(
     path: pngAbsPath,
     contentType: 'image/png',
   };
-  if (!wantProxy) return png;
+  if (!wantProxy) {
+    return png;
+  }
 
   const dir = path.dirname(pngAbsPath);
   const channel = path.basename(pngAbsPath).replace(/\.png$/i, '');
@@ -183,8 +189,12 @@ async function ensureRangeMax(
     ? (container.channels as unknown as StoredChannel[])
     : [];
   const meta = channels.find(c => c.name === channel);
-  if (!meta) return null;
-  if (typeof meta.proxyRangeMax === 'number') return meta.proxyRangeMax;
+  if (!meta) {
+    return null;
+  }
+  if (typeof meta.proxyRangeMax === 'number') {
+    return meta.proxyRangeMax;
+  }
 
   let names: string[];
   try {
@@ -195,7 +205,9 @@ async function ensureRangeMax(
   } catch {
     return null;
   }
-  if (names.length === 0) return null;
+  if (names.length === 0) {
+    return null;
+  }
 
   // First, middle and last: a time-lapse drifts, so the ends and the centre
   // between them say more about it than any three neighbours would.
@@ -214,14 +226,18 @@ async function ensureRangeMax(
       try {
         const stats = await sharp(file).stats();
         const peak = stats.channels[0]?.max;
-        if (typeof peak === 'number') maxima.push(peak);
+        if (typeof peak === 'number') {
+          maxima.push(peak);
+        }
       } catch {
         // A frame this channel does not cover, or an unreadable one. Sampling
         // is best-effort, and `runConverter` widens the result if it was low.
       }
     }
   }
-  if (maxima.length === 0) return null;
+  if (maxima.length === 0) {
+    return null;
+  }
 
   const rangeMax = deriveRangeMax(maxima);
   await storeRangeMax(containerId, rangeMax);
@@ -244,7 +260,9 @@ async function storeRangeMax(
   const channels = Array.isArray(container?.channels)
     ? (container.channels as unknown as StoredChannel[])
     : [];
-  if (channels.length === 0) return;
+  if (channels.length === 0) {
+    return;
+  }
   const updated = channels.map(c => ({
     ...c,
     proxyRangeMax: Math.max(rangeMax, c.proxyRangeMax ?? 0),
@@ -287,12 +305,16 @@ export function ensureProxySupport(
   { convert }: EnsureProxySupportOptions
 ): void {
   const key = `${containerId}::${channel}`;
-  if (inFlight.has(key)) return;
+  if (inFlight.has(key)) {
+    return;
+  }
   const failedAt = lastFailedAt.get(key);
-  if (failedAt !== undefined && Date.now() - failedAt < RETRY_AFTER_MS) return;
+  if (failedAt !== undefined && Date.now() - failedAt < RETRY_AFTER_MS) {
+    return;
+  }
   inFlight.add(key);
 
-  void (async () => {
+  void (async (): Promise<void> => {
     let failed = false;
     try {
       const rangeMax = await ensureRangeMax(containerId, channel, framesDir);
@@ -304,7 +326,9 @@ export function ensureProxySupport(
         );
         return;
       }
-      if (convert) await runConverter(containerId, framesDir, channel);
+      if (convert) {
+        await runConverter(containerId, framesDir, channel);
+      }
     } catch (err) {
       failed = true;
       logger.error(
@@ -313,8 +337,11 @@ export function ensureProxySupport(
         'PlaybackProxy'
       );
     } finally {
-      if (failed) lastFailedAt.set(key, Date.now());
-      else lastFailedAt.delete(key);
+      if (failed) {
+        lastFailedAt.set(key, Date.now());
+      } else {
+        lastFailedAt.delete(key);
+      }
       inFlight.delete(key);
     }
   })();
@@ -357,7 +384,9 @@ function runConverter(
     let stderr = '';
     child.stdout.on('data', chunk => {
       for (const line of chunk.toString().split('\n')) {
-        if (!line.trim()) continue;
+        if (!line.trim()) {
+          continue;
+        }
         let row: ConverterLine;
         try {
           row = JSON.parse(line) as ConverterLine;

@@ -240,7 +240,7 @@ export class VisualizationGenerator {
             `Cleaned up temp PNG file: ${tempPngPath}`,
             'VisualizationGenerator'
           );
-        } catch (error) {
+        } catch {
           logger.warn(
             `Failed to clean up temp PNG file: ${tempPngPath}`,
             'VisualizationGenerator'
@@ -295,7 +295,7 @@ export class VisualizationGenerator {
             `Cleaned up temp PNG file after error: ${tempPngPath}`,
             'VisualizationGenerator'
           );
-        } catch (cleanupError) {
+        } catch {
           logger.warn(
             `Failed to clean up temp PNG file after error: ${tempPngPath}`,
             'VisualizationGenerator'

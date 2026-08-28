@@ -73,7 +73,9 @@ function xmlEscape(s: string): string {
 
 /** Lenient parse of a frame's polygons JSON to an array (empty on null/corrupt). */
 function parseFramePolygons(json: string | null | undefined): RawPolygon[] {
-  if (!json) return [];
+  if (!json) {
+    return [];
+  }
   try {
     const parsed = JSON.parse(json);
     return Array.isArray(parsed) ? (parsed as RawPolygon[]) : [];
@@ -93,7 +95,7 @@ function isFinitePoint(p: unknown): p is { x: number; y: number } {
 
 /** Format a point list as CVAT's `x1,y1;x2,y2` (6 dp, trailing zeros trimmed). */
 function formatPoints(points: Array<{ x: number; y: number }>): string {
-  const fmt = (n: number) =>
+  const fmt = (n: number): string =>
     Number.isInteger(n) ? String(n) : n.toFixed(6).replace(/\.?0+$/, '');
   return points.map(p => `${fmt(p.x)},${fmt(p.y)}`).join(';');
 }
@@ -129,7 +131,9 @@ export function buildCvatXml(
   let polylines = 0;
 
   for (const frame of ordered) {
-    if (frame.isVideoContainer) continue;
+    if (frame.isVideoContainer) {
+      continue;
+    }
     const parsed = parseFramePolygons(frame.segmentation?.polygons);
     const polys = parsed
       .filter(p => (p.geometry ?? 'polyline') === 'polyline')
@@ -139,7 +143,9 @@ export function buildCvatXml(
         trackId: p.trackId ?? null,
       }))
       .filter(p => p.points.length >= 2);
-    if (polys.length === 0) continue;
+    if (polys.length === 0) {
+      continue;
+    }
 
     const frameId =
       typeof frame.frameIndex === 'number' ? frame.frameIndex : images;
@@ -219,16 +225,23 @@ export async function exportCvatAnnotations(
 
   const containerNames = new Map<string, string>();
   for (const f of frameImages) {
-    if (f.isVideoContainer && f.name) containerNames.set(f.id, f.name);
+    if (f.isVideoContainer && f.name) {
+      containerNames.set(f.id, f.name);
+    }
   }
 
   const byVideo = new Map<string, CvatFrameInput[]>();
   for (const f of frameImages) {
-    if (f.isVideoContainer || !f.segmentation?.polygons) continue;
+    if (f.isVideoContainer || !f.segmentation?.polygons) {
+      continue;
+    }
     const key = f.parentVideoId ?? NO_VIDEO_KEY;
     const arr = byVideo.get(key);
-    if (arr) arr.push(f);
-    else byVideo.set(key, [f]);
+    if (arr) {
+      arr.push(f);
+    } else {
+      byVideo.set(key, [f]);
+    }
   }
 
   let files = 0;
@@ -247,7 +260,9 @@ export async function exportCvatAnnotations(
         : `video_${videoKey.slice(0, 8)}`;
 
     const build = buildCvatXml(videoFrames, label, labelById);
-    if (build.polylines === 0) continue;
+    if (build.polylines === 0) {
+      continue;
+    }
 
     let fileName = `${label}.xml`;
     let extra = 2;

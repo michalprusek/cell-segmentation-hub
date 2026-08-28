@@ -94,7 +94,9 @@ function parsePolylines(
   json: string | null | undefined,
   containerId: string
 ): PolylineRecord[] {
-  if (!json) return [];
+  if (!json) {
+    return [];
+  }
   try {
     const parsed = JSON.parse(json) as PolylineRecord[];
     return Array.isArray(parsed) ? parsed : [];
@@ -114,11 +116,15 @@ function parsePolylines(
  *  others); fall back to the segmentation source / first channel when the
  *  upload has no fluorescent channels. */
 export function pickSourceChannels(channels: ChannelMeta[]): string[] {
-  if (channels.length === 0) return [];
+  if (channels.length === 0) {
+    return [];
+  }
   const fluorescent = channels
     .filter(c => c.type === 'fluorescent')
     .map(c => c.name);
-  if (fluorescent.length > 0) return fluorescent;
+  if (fluorescent.length > 0) {
+    return fluorescent;
+  }
   const source = channels.find(c => c.isSegmentationSource);
   return [source?.name ?? channels[0].name];
 }
@@ -182,7 +188,9 @@ async function writeVelocityWorkbook(
   for (const channel of [...rowsByChannel.keys()].sort()) {
     const sheet = workbook.addWorksheet(safeSheetName(channel, used));
     sheet.addRow(VELOCITY_HEADER);
-    for (const row of rowsByChannel.get(channel) ?? []) sheet.addRow(row);
+    for (const row of rowsByChannel.get(channel) ?? []) {
+      sheet.addRow(row);
+    }
   }
   await workbook.xlsx.writeFile(filePath);
 }
@@ -228,7 +236,9 @@ export async function exportMicrotubuleKymographs(
   // Nothing to produce → skip the (expensive) builds entirely. In kymograph
   // mode, both sub-options off = no output. Profiles mode always writes plots +
   // CSV, so it has no such short-circuit.
-  if (!options.enabled) return;
+  if (!options.enabled) {
+    return;
+  }
   if (
     mode === 'kymograph' &&
     !options.includeVelocityMetrics &&
@@ -242,7 +252,9 @@ export async function exportMicrotubuleKymographs(
       where: { projectId, isVideoContainer: true },
       select: { id: true, name: true, channels: true },
     });
-    if (containers.length === 0) return;
+    if (containers.length === 0) {
+      return;
+    }
 
     const outDir = path.join(
       exportDir,
@@ -293,12 +305,16 @@ export async function exportMicrotubuleKymographs(
         : undefined;
       // A selection that excludes every segmented frame of this container ⇒
       // nothing to export for it.
-      if (hasSelection && (!frameFilter || frameFilter.length === 0)) continue;
+      if (hasSelection && (!frameFilter || frameFilter.length === 0)) {
+        continue;
+      }
 
       let seedFrameIndex: number | null = null;
       let polylines: PolylineRecord[] = [];
       for (const f of segmentedFrames) {
-        if (f.frameIndex == null) continue;
+        if (f.frameIndex == null) {
+          continue;
+        }
         const usable = parsePolylines(
           f.segmentation?.polygons ?? null,
           container.id
@@ -309,7 +325,9 @@ export async function exportMicrotubuleKymographs(
           break;
         }
       }
-      if (seedFrameIndex == null || polylines.length === 0) continue;
+      if (seedFrameIndex == null || polylines.length === 0) {
+        continue;
+      }
 
       const safeVideo = container.name.replace(/[^A-Za-z0-9_-]+/g, '_');
       const selected = polylines.slice(0, MAX_MT_PER_CONTAINER);
@@ -481,8 +499,11 @@ export async function exportMicrotubuleKymographs(
             result.frameIntervalMs,
           ]);
           const existing = rowsByChannel.get(job.sourceChannel);
-          if (existing) existing.push(...rows);
-          else rowsByChannel.set(job.sourceChannel, rows);
+          if (existing) {
+            existing.push(...rows);
+          } else {
+            rowsByChannel.set(job.sourceChannel, rows);
+          }
         }
       } catch (err) {
         // One bad microtubule/channel must not abort the whole export.

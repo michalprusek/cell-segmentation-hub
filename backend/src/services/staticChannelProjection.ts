@@ -82,10 +82,14 @@ export function projectionDelta(
   targetFrameId: string
 ): Shift | null {
   const shifts = channel.staticShifts;
-  if (!shifts) return [0, 0];
+  if (!shifts) {
+    return [0, 0];
+  }
   const ref = shifts[refFrameId];
   const target = shifts[targetFrameId];
-  if (!ref || !target) return null;
+  if (!ref || !target) {
+    return null;
+  }
   return [target[0] - ref[0], target[1] - ref[1]];
 }
 
@@ -144,18 +148,24 @@ export function planStaticCollapse<
     projectFrom: new Map(),
     unknownShift: [],
   };
-  if (ordered.length <= 1) return empty;
+  if (ordered.length <= 1) {
+    return empty;
+  }
 
   const shifts = channel.staticShifts;
-  const hasShift = (f: TFrame) => !shifts || shifts[f.id] !== undefined;
+  const hasShift = (f: TFrame): boolean => !shifts || shifts[f.id] !== undefined;
 
   const reference = ordered.find(hasShift);
-  if (!reference) return empty;
+  if (!reference) {
+    return empty;
+  }
 
   const followers: TFrame[] = [];
   const unknownShift: TFrame[] = [];
   for (const f of ordered) {
-    if (f.id === reference.id) continue;
+    if (f.id === reference.id) {
+      continue;
+    }
     (hasShift(f) ? followers : unknownShift).push(f);
   }
 
@@ -183,9 +193,13 @@ export function findSparseChannel(
   channels: readonly StaticChannelLike[] | null | undefined,
   channelName: string | null | undefined
 ): StaticChannelLike | null {
-  if (!channelName || !Array.isArray(channels)) return null;
+  if (!channelName || !Array.isArray(channels)) {
+    return null;
+  }
   const meta = channels.find(c => c?.name === channelName);
-  if (meta?.sparseSource !== true) return null;
+  if (meta?.sparseSource !== true) {
+    return null;
+  }
   // An EMPTY map is not a sparse channel. It would drop nothing from the queue
   // (correct) while still taking the sparse branch in the projection service
   // (wrong), so a channel with no gaps at all would lose the static
@@ -215,7 +229,9 @@ export function sparseFollowers<
   frames: readonly TFrame[]
 ): TFrame[] {
   const fill = channel.sparseFill;
-  if (!fill) return [];
+  if (!fill) {
+    return [];
+  }
   return frames.filter(
     f =>
       f.frameIndex !== null && fill[String(f.frameIndex)] === anchorFrameIndex
@@ -252,11 +268,15 @@ export function planSparseCollapse<
     projectFrom: new Map(),
     unknownShift: [],
   };
-  if (!fill) return empty;
+  if (!fill) {
+    return empty;
+  }
 
   const byIndex = new Map<number, TFrame>();
   for (const f of frames) {
-    if (f.frameIndex !== null) byIndex.set(f.frameIndex, f);
+    if (f.frameIndex !== null) {
+      byIndex.set(f.frameIndex, f);
+    }
   }
 
   const segment: TFrame[] = [];
@@ -277,8 +297,11 @@ export function planSparseCollapse<
       continue;
     }
     const followers = projectFrom.get(anchor.id);
-    if (followers) followers.push(f);
-    else projectFrom.set(anchor.id, [f]);
+    if (followers) {
+      followers.push(f);
+    } else {
+      projectFrom.set(anchor.id, [f]);
+    }
   }
 
   // A gap whose anchor is present but which the anchor never reaches (the
@@ -298,7 +321,9 @@ export function findStaticChannel(
   channels: readonly StaticChannelLike[] | null | undefined,
   channelName: string | null | undefined
 ): StaticChannelLike | null {
-  if (!channelName || !Array.isArray(channels)) return null;
+  if (!channelName || !Array.isArray(channels)) {
+    return null;
+  }
   const meta = channels.find(c => c?.name === channelName);
   return meta?.staticSource === true ? meta : null;
 }

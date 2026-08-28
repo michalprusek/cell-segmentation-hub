@@ -1140,7 +1140,9 @@ export class ImageService {
           const remaining = await tx.image.count({
             where: { parentVideoId: parentId, projectId },
           });
-          if (remaining > 0) continue;
+          if (remaining > 0) {
+            continue;
+          }
 
           const container = await tx.image.findFirst({
             where: { id: parentId, projectId },
@@ -1152,7 +1154,9 @@ export class ImageService {
               isVideoContainer: true,
             },
           });
-          if (!container || !container.isVideoContainer) continue;
+          if (!container || !container.isVideoContainer) {
+            continue;
+          }
 
           await storage.delete(container.originalPath);
           if (container.thumbnailPath) {
@@ -1600,7 +1604,9 @@ export class ImageService {
     const containerId = image.isVideoContainer
       ? image.id
       : image.parentVideoId;
-    if (!containerId) return null;
+    if (!containerId) {
+      return null;
+    }
 
     const frameIndex = image.isVideoContainer ? 0 : (image.frameIndex ?? 0);
 
@@ -1608,7 +1614,9 @@ export class ImageService {
     const container = image.isVideoContainer
       ? image
       : await this.prisma.image.findUnique({ where: { id: containerId } });
-    if (!container) return null;
+    if (!container) {
+      return null;
+    }
 
     const channels = Array.isArray(container.channels)
       ? (container.channels as unknown as Array<{
@@ -1620,11 +1628,15 @@ export class ImageService {
       channels.find(c => c.isSegmentationSource)?.name ??
       channels[0]?.name ??
       null;
-    if (!sourceChannel) return null;
+    if (!sourceChannel) {
+      return null;
+    }
 
     // Defence in depth: alnum/underscore/dot/dash only — same regex the
     // /frame-data controller uses to keep this path 1:1 with that one.
-    if (!/^[A-Za-z0-9._-]+$/.test(sourceChannel)) return null;
+    if (!/^[A-Za-z0-9._-]+$/.test(sourceChannel)) {
+      return null;
+    }
 
     const framePath = path.join(
       'projects',

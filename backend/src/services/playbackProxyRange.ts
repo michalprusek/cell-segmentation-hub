@@ -40,6 +40,8 @@ export function deriveRangeMax(maxima: readonly number[]): number {
   // Never below 8 bits: a narrower range would map distinct samples onto the
   // same proxy level for no gain, since the proxy has 256 levels regardless.
   let bits = 8;
-  while ((1 << bits) - 1 < peak && bits < 16) bits++;
+  while ((1 << bits) - 1 < peak && bits < 16) {
+    bits++;
+  }
   return Math.min((1 << bits) - 1, 65535);
 }
