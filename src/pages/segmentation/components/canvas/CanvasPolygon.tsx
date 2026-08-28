@@ -185,6 +185,16 @@ const CanvasPolygon = React.memo(
     // Determine if polygon is internal based on parent_id or type
     const isInternal = parent_id || type === 'internal';
 
+    // A Shift+click multi-selection renders EXACTLY like a single selection.
+    // Every "is this polygon selected?" decision below (stroke colour, glow
+    // filter, `.polygon-selected` drop-shadow, endpoint-marker suppression)
+    // reads this flag rather than `isSelected`, so the two states are visually
+    // indistinguishable. Multi-select used to draw a dash-dot `6 3` stroke at
+    // 2.2x width instead, which read as a different kind of selection; that
+    // divergence is gone. `isSelected` and `isMultiSelected` are independent
+    // (see SegmentationEditorLayout), so a polygon can be both.
+    const isEffectivelySelected = isSelected || isMultiSelected;
+
     // Determine path color based on polygon type, polyline partClass, and selection status
     const pathColor = useMemo(() => {
       // Microcapsules cut off by the image border (complete === false) render
@@ -192,11 +202,11 @@ const CanvasPolygon = React.memo(
       // distinct from the whole capsules that ARE measured (mirrors the model
       // overlay's grey treatment).
       if (polygon.complete === false) {
-        return isSelected ? '#737373' : '#969696';
+        return isEffectivelySelected ? '#737373' : '#969696';
       }
       // Spheroid 'core' (closed polygon, dense central region from the disintegration model)
       if (!isPolyline && polygon.partClass === 'core') {
-        return isSelected ? '#16a34a' : '#22c55e'; // green
+        return isEffectivelySelected ? '#16a34a' : '#22c55e'; // green
       }
       // Neuron classes (closed polygons from the neurite/soma model). The fill
       // comes from the CSS class below; this is the stroke.
@@ -204,16 +214,18 @@ const CanvasPolygon = React.memo(
         ? undefined
         : neuronClassStyle(polygon.partClass);
       if (neuronStyle) {
-        return isSelected ? neuronStyle.strokeSelected : neuronStyle.stroke;
+        return isEffectivelySelected
+          ? neuronStyle.strokeSelected
+          : neuronStyle.stroke;
       }
       if (isPolyline) {
         switch (polygon.partClass) {
           case 'head':
-            return isSelected ? '#16a34a' : '#22c55e'; // green
+            return isEffectivelySelected ? '#16a34a' : '#22c55e'; // green
           case 'midpiece':
-            return isSelected ? '#d97706' : '#f59e0b'; // orange
+            return isEffectivelySelected ? '#d97706' : '#f59e0b'; // orange
           case 'tail':
-            return isSelected ? '#0891b2' : '#06b6d4'; // cyan
+            return isEffectivelySelected ? '#0891b2' : '#06b6d4'; // cyan
         }
         // Semantic (by-label) mode: colour the microtubule by its assigned type
         // label. `semanticColor` is pre-resolved by the parent (label colour, or
@@ -232,12 +244,14 @@ const CanvasPolygon = React.memo(
             ? polygon.instanceId
             : null) ||
           polygon.id;
-        return colorFromInstanceId(colorKey, { selected: isSelected });
+        return colorFromInstanceId(colorKey, {
+          selected: isEffectivelySelected,
+        });
       }
       if (isInternal) {
-        return isSelected ? '#0b84da' : '#0ea5e9';
+        return isEffectivelySelected ? '#0b84da' : '#0ea5e9';
       } else {
-        return isSelected ? '#e11d48' : '#ef4444';
+        return isEffectivelySelected ? '#e11d48' : '#ef4444';
       }
     }, [
       isPolyline,
@@ -246,7 +260,7 @@ const CanvasPolygon = React.memo(
       polygon.instanceId,
       polygon.trackId,
       polygon.complete,
-      isSelected,
+      isEffectivelySelected,
       isInternal,
       colorMode,
       semanticColor,
@@ -263,10 +277,10 @@ const CanvasPolygon = React.memo(
 
     // Compute SVG filter for glow effects
     const pathFilter = (() => {
-      if (isSelected && !isPolyline) {
+      if (isEffectivelySelected && !isPolyline) {
         return `url(#${type === 'internal' ? 'blue' : 'red'}-glow)`;
       }
-      if (isPolyline && (isSelected || isHovered)) {
+      if (isPolyline && (isEffectivelySelected || isHovered)) {
         return 'url(#blue-glow)';
       }
       return '';
@@ -417,7 +431,7 @@ const CanvasPolygon = React.memo(
                   ? 'polygon-core'
                   : (neuronClassStyle(polygon.partClass)?.cssClass ??
                     (isInternal ? 'polygon-internal' : 'polygon-external')),
-              isSelected && 'polygon-selected'
+              isEffectivelySelected && 'polygon-selected'
             )}
             fill={
               isPolyline
@@ -431,11 +445,7 @@ const CanvasPolygon = React.memo(
                       : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
-            strokeWidth={Math.max(
-              strokeWidth * hoverStrokeMultiplier * (isMultiSelected ? 2.2 : 1),
-              0.5
-            )}
-            strokeDasharray={isMultiSelected ? '6 3' : undefined}
+            strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}
             strokeOpacity={pathString ? 1 : 0}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -447,15 +457,16 @@ const CanvasPolygon = React.memo(
           />
 
           {/* Polyline endpoint markers — render ONLY when no draggable
-              vertices are on top (i.e. polyline not selected). When
-              selected, the `PolygonVertices` layer below paints the
-              draggable circles AT the same coordinates, and a fixed
-              marker underneath surfaces as a coloured dot when the
-              user drags the vertex — visual noise. MT projects stay
-              clutter-free in the unselected state too (no markers);
-              sperm keeps the head/tail orientation cue when idle. */}
+              vertices are on top (i.e. polyline neither singly nor
+              multi-selected; `PolygonVertices` paints the draggable
+              circles for both). When selected, that layer paints the
+              circles AT the same coordinates, and a fixed marker
+              underneath surfaces as a coloured dot when the user drags
+              the vertex — visual noise. MT projects stay clutter-free in
+              the unselected state too (no markers); sperm keeps the
+              head/tail orientation cue when idle. */}
           {isPolyline &&
-            !isSelected &&
+            !isEffectivelySelected &&
             validPoints.length >= 2 &&
             !isMicrotubuleProject(projectType) && (
               <>
