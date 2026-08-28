@@ -1,18 +1,15 @@
 /**
- * Index (landing page) tests — 0% → covered.
+ * Index (landing page).
  *
  * Behaviors tested:
- *  - About section renders with badge, title and contact email link.
- *  - Acknowledgments section renders badge and contributor name.
- *  - CTA section renders title and "Create Account" / "Get Started" link.
- *  - Navbar and Footer stubs mount.
- *  - Hero and Features stubs mount.
- *  - Segmented-spheroid image renders with alt text.
+ *  - Navbar / Hero / Features / Footer are composed onto the page.
+ *  - About section renders its badge, heading and the contact email link.
+ *  - Acknowledgments render the contributor's name and both links to their
+ *    page — these are a real attribution, so the test pins them.
+ *  - The sign-up band renders its heading and the link into /sign-in.
  *
  * NOT tested:
- *  - useScrollAnimation side effects (DOM scroll events, timing).
- *  - Animation CSS class application (visual-only).
- *  - Navbar/Footer/Hero/Features internals (mocked).
+ *  - Hero / Features internals (mocked here, covered by their own suites).
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -36,10 +33,6 @@ vi.mock('@/components/Hero', () => ({
 vi.mock('@/components/Features', () => ({
   default: () => <section data-testid="features" />,
 }));
-// useScrollAnimation attaches DOM events — stub it to a no-op
-vi.mock('@/hooks/useScrollAnimation', () => ({
-  useScrollAnimation: () => undefined,
-}));
 
 // useLanguage: needed because Index renders the About/Ack/CTA sections that
 // call t(). Without LanguageProvider in tests, it throws.
@@ -47,9 +40,8 @@ vi.mock('@/contexts/useLanguage', () => ({
   useLanguage: () => ({
     t: (key: string) => {
       const map: Record<string, string> = {
-        'landing.about.badge': 'Our Mission',
-        'landing.about.title':
-          'Advancing Biomedical Research Through Technology',
+        'landing.about.badge': 'Who builds it',
+        'landing.about.title': 'Where the platform comes from',
         'landing.about.description1': 'Description 1.',
         'landing.about.description2': 'Description 2.',
         'landing.about.description3': 'Description 3.',
@@ -61,11 +53,10 @@ vi.mock('@/contexts/useLanguage', () => ({
         'landing.acknowledgments.lukasContribution':
           'for contributing the wound module.',
         'landing.acknowledgments.visitPage': 'Visit page',
-        'landing.cta.title': 'Ready to Transform Your Cell Analysis Workflow?',
-        'landing.cta.subtitle': 'Join leading researchers.',
-        'landing.cta.cardTitle': 'Get Started Today',
-        'landing.cta.cardDescription': 'Sign up for a free account.',
-        'landing.cta.createAccount': 'Create Account',
+        'landing.cta.title': 'Bring your own images.',
+        'landing.cta.subtitle': 'Create a project and upload a stack.',
+        'landing.cta.cardDescription': 'Sign-up is open',
+        'landing.cta.createAccount': 'Create your account',
       };
       return map[key] ?? key;
     },
@@ -96,18 +87,22 @@ describe('Index (landing) page', () => {
       expect(screen.getByTestId('features')).toBeInTheDocument();
       expect(screen.getByTestId('footer')).toBeInTheDocument();
     });
+
+    it('resolves every translation key it renders', () => {
+      const { container } = renderPage();
+      expect(container.textContent).not.toMatch(/landing\./);
+    });
   });
 
   describe('About section', () => {
-    it('renders the "Our Mission" badge', () => {
+    it('renders the badge and heading', () => {
       renderPage();
-      expect(screen.getByText('Our Mission')).toBeInTheDocument();
-    });
-
-    it('renders the about section heading', () => {
-      renderPage();
+      expect(screen.getByText('Who builds it')).toBeInTheDocument();
       expect(
-        screen.getByText('Advancing Biomedical Research Through Technology')
+        screen.getByRole('heading', {
+          level: 2,
+          name: 'Where the platform comes from',
+        })
       ).toBeInTheDocument();
     });
 
@@ -118,11 +113,6 @@ describe('Index (landing) page', () => {
       });
       expect(emailLink).toBeInTheDocument();
       expect(emailLink).toHaveAttribute('href', 'mailto:prusek@utia.cas.cz');
-    });
-
-    it('renders the spheroid image with alt text', () => {
-      renderPage();
-      expect(screen.getByAltText('Segmented spheroid')).toBeInTheDocument();
     });
   });
 
@@ -154,23 +144,25 @@ describe('Index (landing) page', () => {
     });
   });
 
-  describe('CTA section', () => {
-    it('renders the CTA heading', () => {
+  describe('Sign-up band', () => {
+    it('renders the heading and standfirst', () => {
       renderPage();
       expect(
-        screen.getByText('Ready to Transform Your Cell Analysis Workflow?')
+        screen.getByRole('heading', {
+          level: 2,
+          name: 'Bring your own images.',
+        })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Create a project and upload a stack.')
       ).toBeInTheDocument();
     });
 
-    it('renders the CTA card title', () => {
+    it('renders the sign-up link', () => {
       renderPage();
-      expect(screen.getByText('Get Started Today')).toBeInTheDocument();
-    });
-
-    it('renders a "Create Account" / sign-in link', () => {
-      renderPage();
-      // The link uses t('landing.cta.createAccount') = 'Create Account'
-      const ctaLink = screen.getByRole('link', { name: /create account/i });
+      const ctaLink = screen.getByRole('link', {
+        name: /create your account/i,
+      });
       expect(ctaLink).toBeInTheDocument();
       expect(ctaLink).toHaveAttribute('href', '/sign-in');
     });
