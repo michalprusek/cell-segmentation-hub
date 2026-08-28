@@ -46,6 +46,21 @@ export interface BatchConfig {
   cbam_resunet: number;
 }
 
+/**
+ * Retries a queue item gets before it is declared permanently failed — so 4
+ * attempts in total. Was an inline `item.retryCount < 3` in two places that
+ * had to agree.
+ */
+const MAX_QUEUE_RETRIES = 3;
+
+/**
+ * How long an image must have been sitting on 'processing' with no queue row
+ * before the stuck-item sweep declares it dead. Sized above the worst-case
+ * POST /segmentation/batch run, which segments without a queue row: 50 images
+ * (the controller's cap) x ~4.5 s for microtubule is under four minutes.
+ */
+const ORPHAN_IMAGE_MIN_AGE_MS = 5 * 60 * 1000;
+
 export interface QueueItem {
   id: string;
   imageId: string;
@@ -804,59 +819,70 @@ export class QueueService {
       itemIds: batch.map(item => item.id),
     });
 
-    // Batch update all items to processing status
-    const batchIds = batch.map(item => item.id);
-    const imageIds = batch.map(item => item.imageId);
-    const startedAt = new Date();
+    // Queue-item ids that have already reached a terminal state. The
+    // batch-level catch below must not touch these again: their rows are
+    // usually already deleted, and the P2025 from updating a deleted row used
+    // to escape the recovery loop and leave every *later* item pinned to
+    // 'processing'.
+    const settledItemIds = new Set<string>();
 
-    // Use batch update for better performance
-    await this.prisma.segmentationQueue.updateMany({
-      where: { id: { in: batchIds } },
-      data: {
-        status: 'processing',
-        startedAt: startedAt,
-      },
-    });
-
-    // Batch update image statuses
-    await this.prisma.image.updateMany({
-      where: { id: { in: imageIds } },
-      data: { segmentationStatus: 'processing' },
-    });
-
-    // Batch emit WebSocket notifications
-    if (this.websocketService) {
-      const notifications = batch.map(item => ({
-        userId: item.userId,
-        data: {
-          imageId: item.imageId,
-          projectId: item.projectId,
-          status: 'processing' as QueueStatus,
-          queueId: item.id,
-        },
-      }));
-
-      // Group notifications by userId for efficient emission
-      const groupedNotifications = notifications.reduce(
-        (acc, notif) => {
-          if (!acc[notif.userId]) {
-            acc[notif.userId] = [];
-          }
-          acc[notif.userId].push(notif.data);
-          return acc;
-        },
-        {} as Record<string, SegmentationUpdateData[]>
-      );
-
-      for (const [userId, updates] of Object.entries(groupedNotifications)) {
-        // Emit all updates for this user at once
-        updates.forEach(update => {
-          this.websocketService?.emitSegmentationUpdate(userId, update);
-        });
-      }
-    }
-
+    // The try starts HERE, above the claim, and not after it. The claim is what
+    // writes 'processing' to both tables; a throw in it (or in the WebSocket
+    // fan-out right after) used to escape with no recovery at all, which is the
+    // very stall this method is guarding against.
     try {
+      // Batch update all items to processing status
+      const batchIds = batch.map(item => item.id);
+      const imageIds = batch.map(item => item.imageId);
+      const startedAt = new Date();
+
+      // Use batch update for better performance
+      await this.prisma.segmentationQueue.updateMany({
+        where: { id: { in: batchIds } },
+        data: {
+          status: 'processing',
+          startedAt: startedAt,
+        },
+      });
+
+      // Batch update image statuses
+      await this.prisma.image.updateMany({
+        where: { id: { in: imageIds } },
+        data: { segmentationStatus: 'processing' },
+      });
+
+      // Batch emit WebSocket notifications
+      if (this.websocketService) {
+        const notifications = batch.map(item => ({
+          userId: item.userId,
+          data: {
+            imageId: item.imageId,
+            projectId: item.projectId,
+            status: 'processing' as QueueStatus,
+            queueId: item.id,
+          },
+        }));
+
+        // Group notifications by userId for efficient emission
+        const groupedNotifications = notifications.reduce(
+          (acc, notif) => {
+            if (!acc[notif.userId]) {
+              acc[notif.userId] = [];
+            }
+            acc[notif.userId].push(notif.data);
+            return acc;
+          },
+          {} as Record<string, SegmentationUpdateData[]>
+        );
+
+        for (const [userId, updates] of Object.entries(groupedNotifications)) {
+          // Emit all updates for this user at once
+          updates.forEach(update => {
+            this.websocketService?.emitSegmentationUpdate(userId, update);
+          });
+        }
+      }
+
       // Check if this batch will empty the queue (making it the last batch)
       const remainingQueuedCount = await this.prisma.segmentationQueue.count({
         where: { status: 'queued' },
@@ -922,191 +948,259 @@ export class QueueService {
         );
       }
 
-      // Process results for each item
+      // Process results for each item.
+      //
+      // Two rules hold for every iteration, and both exist because breaking
+      // them stranded rows in 'processing' forever:
+      //
+      //  1. Every item reaches a terminal state exactly once. Skipping an
+      //     index (the old `continue`) left BOTH segmentationQueue.status and
+      //     image.segmentationStatus on 'processing' with nothing left to
+      //     drive them, so the card spun forever.
+      //  2. One item's failure never strands the rest. The loop body is
+      //     wrapped per item; without that, a throw at index k skipped
+      //     k+1..N entirely.
+      let failedItemCount = 0;
       for (let i = 0; i < batch.length; i++) {
         const item = batch[i];
-        const result = results[i];
-        const image = imageData[i];
-
-        if (!item || !image || !result) {
+        if (!item) {
+          // Nothing addressable — there is no row id to settle.
           logger.warn(
-            `Batch processing: skipping index ${i} - missing ${!item ? 'item' : !image ? 'image' : 'result'}`
+            `Batch processing: no queue item at index ${i}`,
+            'QueueService'
           );
           continue;
         }
 
-        // Merge polylines into polygons (sperm model returns both)
-        const allPolygons = [
-          ...(result.polygons || []),
-          ...(result.polylines || []),
-        ];
+        try {
+          const result = results[i];
+          const image = imageData[i];
 
-        if (allPolygons.length > 0) {
-          // Success - save results and update image status
-          // Prioritize image dimensions from ML service result, fallback to database
-          const imageWidth = result.image_size?.width || image.width || null;
-          const imageHeight = result.image_size?.height || image.height || null;
-
-          await this.segmentationService.saveSegmentationResults(
-            item.imageId,
-            allPolygons,
-            model,
-            threshold,
-            result.confidence || null,
-            result.processing_time || null,
-            imageWidth,
-            imageHeight,
-            item.userId,
-            isLastBatch
-          );
-
-          // Update image status to segmented
-          await this.imageService.updateSegmentationStatus(
-            item.imageId,
-            'segmented',
-            item.userId
-          );
-
-          // Delete completed item from queue to prevent confusion
-          await this.prisma.segmentationQueue.delete({
-            where: { id: item.id },
-          });
-
-          // If this image is a video frame and its container's batch is
-          // now fully segmented, run cross-frame tracking. Best-effort,
-          // fire-and-forget. The split on error category matters: a DB
-          // failure is real and gets logger.error; the scheduler itself
-          // is fire-and-forget (no await) so its rejections are caught
-          // inside scheduleTrackingForContainer.
-          try {
-            const imageMeta = await this.prisma.image.findUnique({
-              where: { id: item.imageId },
-              select: { parentVideoId: true },
-            });
-            if (imageMeta?.parentVideoId) {
-              // A static channel needs no tracker: the other frames get this
-              // frame's polylines verbatim, trackId included, so identity is
-              // exact by construction. Running the tracker over them would be
-              // paying to rediscover it — and on a 299-frame container that is
-              // what overran its timeout and lost the answer entirely.
-              const projected = await projectStaticChannelResult({
-                containerId: imageMeta.parentVideoId,
-                sourceImageId: item.imageId,
-                channel: item.channel ?? null,
-              });
-              if (!projected.applied) {
-                scheduleTrackingForContainer(imageMeta.parentVideoId);
-              }
-            }
-          } catch (trackErr) {
-            logger.error(
-              `Failed to look up parentVideoId for tracking dispatch: ${(trackErr as Error).message}`,
-              trackErr as Error,
-              'QueueService',
-              { imageId: item.imageId }
+          if (!image || !result) {
+            // A short/misaligned result array. Settle the item as a failure
+            // rather than walking away from it.
+            throw new Error(
+              !image
+                ? `Image data missing for ${item.imageId}`
+                : 'ML service returned no result for this image'
             );
           }
 
-          // Emit success notification via WebSocket
-          if (this.websocketService) {
-            this.websocketService.emitSegmentationUpdate(item.userId, {
-              imageId: item.imageId,
-              projectId: item.projectId,
-              status: 'segmented', // Changed from 'completed' to match database status
-              queueId: item.id,
-            });
+          // An explicit per-item failure from the ML service is a failure, not
+          // an empty detection. `success === false` carries an `error`; the
+          // shapes are empty only because nothing ran. Falling through to the
+          // "0 polygons" branch below would have recorded it as a clean
+          // `no_segmentation` and deleted the queue row without a retry.
+          if (result.success === false) {
+            throw new Error(
+              result.error || 'ML service reported a failure for this image'
+            );
+          }
 
-            this.websocketService.emitSegmentationComplete(
-              item.userId,
+          // Merge polylines into polygons (sperm + microtubule return both)
+          const allPolygons = [
+            ...(result.polygons || []),
+            ...(result.polylines || []),
+          ];
+
+          if (allPolygons.length > 0) {
+            // Success - save results and update image status
+            // Prioritize image dimensions from ML service result, fallback to database
+            const imageWidth = result.image_size?.width || image.width || null;
+            const imageHeight =
+              result.image_size?.height || image.height || null;
+
+            await this.segmentationService.saveSegmentationResults(
               item.imageId,
-              item.projectId,
-              allPolygons.length
-            );
-          }
-
-          logger.info(
-            'Batch item processed successfully and removed from queue',
-            'QueueService',
-            {
-              queueId: item.id,
-              imageId: item.imageId,
-              polygonCount: allPolygons.length,
-            }
-          );
-        } else {
-          // No polygons found - save empty results but mark as no_segmentation, not segmented
-          logger.warn(
-            'ML service returned no polygons - marking as no_segmentation',
-            'QueueService',
-            {
-              queueId: item.id,
-              imageId: item.imageId,
+              allPolygons,
               model,
               threshold,
-              result,
-            }
-          );
-
-          // Save empty segmentation results to database so frontend can read them
-          // Prioritize image dimensions from ML service result, fallback to database
-          const imageWidth = result?.image_size?.width || image.width || null;
-          const imageHeight =
-            result?.image_size?.height || image.height || null;
-
-          await this.segmentationService.saveSegmentationResults(
-            item.imageId,
-            [], // Empty polygons array
-            model,
-            threshold,
-            result?.confidence || null,
-            result?.processing_time || null,
-            imageWidth,
-            imageHeight,
-            item.userId,
-            isLastBatch
-          );
-
-          // Update image status to no_segmentation (not segmented) since no polygons were detected
-          await this.imageService.updateSegmentationStatus(
-            item.imageId,
-            'no_segmentation',
-            item.userId
-          );
-
-          // Delete completed item from queue to prevent confusion
-          await this.prisma.segmentationQueue.delete({
-            where: { id: item.id },
-          });
-
-          if (this.websocketService) {
-            this.websocketService.emitSegmentationUpdate(item.userId, {
-              imageId: item.imageId,
-              projectId: item.projectId,
-              status: 'no_segmentation',
-              queueId: item.id,
-            });
-
-            this.websocketService.emitSegmentationComplete(
+              result.confidence || null,
+              result.processing_time || null,
+              imageWidth,
+              imageHeight,
               item.userId,
+              isLastBatch
+            );
+
+            // Update image status to segmented
+            await this.imageService.updateSegmentationStatus(
               item.imageId,
-              item.projectId,
-              0 // 0 polygons found
+              'segmented',
+              item.userId
+            );
+
+            // Delete completed item from queue to prevent confusion
+            await this.prisma.segmentationQueue.delete({
+              where: { id: item.id },
+            });
+            // Terminal from here on. Everything below is best-effort
+            // notification work, and a throw in it must not roll the item
+            // back to 'queued' — the result is already saved.
+            settledItemIds.add(item.id);
+
+            // If this image is a video frame and its container's batch is
+            // now fully segmented, run cross-frame tracking. Best-effort,
+            // fire-and-forget. The split on error category matters: a DB
+            // failure is real and gets logger.error; the scheduler itself
+            // is fire-and-forget (no await) so its rejections are caught
+            // inside scheduleTrackingForContainer.
+            try {
+              const imageMeta = await this.prisma.image.findUnique({
+                where: { id: item.imageId },
+                select: { parentVideoId: true },
+              });
+              if (imageMeta?.parentVideoId) {
+                // A static channel needs no tracker: the other frames get this
+                // frame's polylines verbatim, trackId included, so identity is
+                // exact by construction. Running the tracker over them would be
+                // paying to rediscover it — and on a 299-frame container that is
+                // what overran its timeout and lost the answer entirely.
+                const projected = await projectStaticChannelResult({
+                  containerId: imageMeta.parentVideoId,
+                  sourceImageId: item.imageId,
+                  channel: item.channel ?? null,
+                });
+                if (!projected.applied) {
+                  scheduleTrackingForContainer(imageMeta.parentVideoId);
+                }
+              }
+            } catch (trackErr) {
+              logger.error(
+                `Failed to look up parentVideoId for tracking dispatch: ${(trackErr as Error).message}`,
+                trackErr as Error,
+                'QueueService',
+                { imageId: item.imageId }
+              );
+            }
+
+            // Emit success notification via WebSocket
+            if (this.websocketService) {
+              this.websocketService.emitSegmentationUpdate(item.userId, {
+                imageId: item.imageId,
+                projectId: item.projectId,
+                status: 'segmented', // Changed from 'completed' to match database status
+                queueId: item.id,
+              });
+
+              this.websocketService.emitSegmentationComplete(
+                item.userId,
+                item.imageId,
+                item.projectId,
+                allPolygons.length
+              );
+            }
+
+            logger.info(
+              'Batch item processed successfully and removed from queue',
+              'QueueService',
+              {
+                queueId: item.id,
+                imageId: item.imageId,
+                polygonCount: allPolygons.length,
+              }
+            );
+          } else {
+            // No polygons found - save empty results but mark as no_segmentation, not segmented
+            logger.warn(
+              'ML service returned no polygons - marking as no_segmentation',
+              'QueueService',
+              {
+                queueId: item.id,
+                imageId: item.imageId,
+                model,
+                threshold,
+                result,
+              }
+            );
+
+            // Save empty segmentation results to database so frontend can read them
+            // Prioritize image dimensions from ML service result, fallback to database
+            const imageWidth = result?.image_size?.width || image.width || null;
+            const imageHeight =
+              result?.image_size?.height || image.height || null;
+
+            await this.segmentationService.saveSegmentationResults(
+              item.imageId,
+              [], // Empty polygons array
+              model,
+              threshold,
+              result?.confidence || null,
+              result?.processing_time || null,
+              imageWidth,
+              imageHeight,
+              item.userId,
+              isLastBatch
+            );
+
+            // Update image status to no_segmentation (not segmented) since no polygons were detected
+            await this.imageService.updateSegmentationStatus(
+              item.imageId,
+              'no_segmentation',
+              item.userId
+            );
+
+            // Delete completed item from queue to prevent confusion
+            await this.prisma.segmentationQueue.delete({
+              where: { id: item.id },
+            });
+            // Terminal from here on. Everything below is best-effort
+            // notification work, and a throw in it must not roll the item
+            // back to 'queued' — the result is already saved.
+            settledItemIds.add(item.id);
+
+            if (this.websocketService) {
+              this.websocketService.emitSegmentationUpdate(item.userId, {
+                imageId: item.imageId,
+                projectId: item.projectId,
+                status: 'no_segmentation',
+                queueId: item.id,
+              });
+
+              this.websocketService.emitSegmentationComplete(
+                item.userId,
+                item.imageId,
+                item.projectId,
+                0 // 0 polygons found
+              );
+            }
+
+            logger.info(
+              'Batch item completed with no polygons - empty result saved as no_segmentation and removed from queue',
+              'QueueService',
+              {
+                queueId: item.id,
+                imageId: item.imageId,
+              }
             );
           }
-
-          logger.info(
-            'Batch item completed with no polygons - empty result saved as no_segmentation and removed from queue',
+        } catch (itemError) {
+          // This item alone failed. Settling it here (rather than letting the
+          // throw escape to the batch-level catch) keeps the remaining items
+          // in this batch processing normally instead of stranding them.
+          logger.error(
+            'Batch item failed',
+            itemError instanceof Error ? itemError : undefined,
             'QueueService',
-            {
-              queueId: item.id,
-              imageId: item.imageId,
-            }
+            { queueId: item.id, imageId: item.imageId, model, threshold }
           );
+          failedItemCount++;
+          if (!settledItemIds.has(item.id)) {
+            // If this throws in turn, the id stays OUT of settledItemIds on
+            // purpose: the batch-level catch is then the one that has to
+            // finish the job.
+            await this.settleFailedItem(item, itemError);
+            settledItemIds.add(item.id);
+          }
         }
       }
 
-      logger.info('Batch processing completed successfully', 'QueueService', {
+      // "Every item was settled", not "every item succeeded" — per-item
+      // failures no longer abort the batch, so the count has to be reported or
+      // this line would read as a clean run over a batch that partly failed.
+      logger.info('Batch processing completed', 'QueueService', {
         batchSize: batch.length,
+        failedItemCount,
         model,
         threshold,
       });
@@ -1150,62 +1244,133 @@ export class QueueService {
         }
       );
 
-      // Mark all items as failed and handle retries
+      // The batch as a whole failed (before or around the per-item loop).
+      // Settle every item that has not already reached a terminal state —
+      // skipping the settled ones is what keeps a P2025 ("record to update
+      // not found") from aborting the recovery of the items after it.
       for (const item of batch) {
-        if (item && item.retryCount < 3) {
-          // Increment retry count and reset to queued for retry
-          await this.prisma.segmentationQueue.update({
-            where: { id: item.id },
-            data: {
-              status: 'queued',
-              retryCount: item.retryCount + 1, // INCREMENT RETRY COUNT
-              error:
-                error instanceof Error ? error.message : 'Processing failed',
-              startedAt: null,
-              completedAt: null,
-            },
-          });
-
-          await this.imageService.updateSegmentationStatus(
-            item.imageId,
-            'no_segmentation',
-            item.userId
-          );
-
-          if (this.websocketService) {
-            this.websocketService.emitSegmentationUpdate(item.userId, {
-              imageId: item.imageId,
-              projectId: item.projectId,
-              status: 'queued',
-              queueId: item.id,
-            });
-          }
-        } else {
-          // Max retries exceeded - mark as permanently failed and remove from queue
-          await this.imageService.updateSegmentationStatus(
-            item.imageId,
-            'failed',
-            item.userId
-          );
-
-          // Delete failed item from queue after max retries
-          await this.prisma.segmentationQueue.delete({
-            where: { id: item.id },
-          });
-
-          if (this.websocketService) {
-            this.websocketService.emitSegmentationUpdate(item.userId, {
-              imageId: item.imageId,
-              projectId: item.projectId,
-              status: 'failed',
-              error: error instanceof Error ? error.message : 'Unknown error',
-              queueId: item.id,
-            });
-          }
+        if (!item || settledItemIds.has(item.id)) {
+          continue;
         }
+        try {
+          await this.settleFailedItem(item, error);
+        } catch (settleError) {
+          // This loop is the last thing standing between a failed batch and a
+          // row stuck on 'processing', so nothing is allowed to abort it.
+          logger.error(
+            'Failed to settle a queue item during batch recovery',
+            settleError instanceof Error ? settleError : undefined,
+            'QueueService',
+            { queueId: item.id, imageId: item.imageId }
+          );
+        }
+        settledItemIds.add(item.id);
       }
 
       // Don't re-throw - we've handled all items appropriately
+    }
+  }
+
+  /**
+   * Bring a single queue item to a terminal state after a failure: requeue it
+   * for another attempt, or mark it permanently failed once the attempts run
+   * out. Either way the item stops being 'processing'.
+   *
+   * Every DB call is guarded individually and on purpose. The row may already
+   * be gone (deleted by the success path, or by a concurrent cancel), and a
+   * Prisma P2025 thrown out of here used to abort the caller's recovery loop
+   * and strand the remaining items of the batch in 'processing' forever — the
+   * exact symptom this method exists to prevent.
+   */
+  private async settleFailedItem(
+    item: SegmentationQueue,
+    error: unknown
+  ): Promise<void> {
+    const message =
+      error instanceof Error ? error.message : 'Processing failed';
+    const canRetry = item.retryCount < MAX_QUEUE_RETRIES;
+
+    let queueRowSettled = true;
+    try {
+      if (canRetry) {
+        await this.prisma.segmentationQueue.update({
+          where: { id: item.id },
+          data: {
+            status: 'queued',
+            retryCount: item.retryCount + 1, // INCREMENT RETRY COUNT
+            error: message,
+            startedAt: null,
+            completedAt: null,
+          },
+        });
+      } else {
+        // Max retries exceeded - remove from queue
+        await this.prisma.segmentationQueue.delete({
+          where: { id: item.id },
+        });
+      }
+    } catch (dbError) {
+      queueRowSettled = false;
+      logger.warn(
+        'Could not update queue row while settling a failed item',
+        'QueueService',
+        {
+          queueId: item.id,
+          imageId: item.imageId,
+          canRetry,
+          reason: dbError instanceof Error ? dbError.message : String(dbError),
+        }
+      );
+    }
+
+    // 'queued' only when the row was really put back. With no row there is
+    // nothing left to run a retry, and 'queued' has no owner — resetStuckItems
+    // sweeps 'processing', not 'queued', so the card would sit on "queued"
+    // forever. 'queued' rather than 'no_segmentation' on the normal retry
+    // matters for the opposite reason: "no segmentation" is what a finished,
+    // empty run writes, so it made a pending retry look like a completed one.
+    const status: QueueStatus =
+      canRetry && queueRowSettled ? 'queued' : 'failed';
+
+    let statusWritten = true;
+    try {
+      if (queueRowSettled) {
+        await this.imageService.updateSegmentationStatus(
+          item.imageId,
+          status,
+          item.userId
+        );
+      } else {
+        // The row usually vanished because something else took this item over
+        // — cancelBatch deletes the row and sets the image status itself. Only
+        // correct an image still pinned to 'processing', which nothing else
+        // would ever move.
+        const { count } = await this.prisma.image.updateMany({
+          where: { id: item.imageId, segmentationStatus: 'processing' },
+          data: { segmentationStatus: status },
+        });
+        statusWritten = count > 0;
+      }
+    } catch (statusError) {
+      statusWritten = false;
+      logger.error(
+        'Failed to update image status while settling a failed item',
+        statusError instanceof Error ? statusError : undefined,
+        'QueueService',
+        { queueId: item.id, imageId: item.imageId, status }
+      );
+    }
+
+    // No event for an image somebody else already settled — the emit would
+    // fight whatever status they wrote.
+    if (this.websocketService && statusWritten) {
+      this.websocketService.emitSegmentationUpdate(item.userId, {
+        imageId: item.imageId,
+        projectId: item.projectId,
+        status,
+        ...(status === 'failed' ? { error: message } : {}),
+        queueId: item.id,
+      });
     }
   }
 
@@ -1537,22 +1702,38 @@ export class QueueService {
         },
       });
 
-      // Also reset images stuck in 'processing' that have no active queue entry
+      // Also reset images stuck in 'processing' that have no active queue
+      // entry. The age filter is required and has its OWN floor rather than
+      // reusing cutoffTime: POST /segmentation/batch segments directly, with no
+      // queue row, so a run that started a second ago matches every other term
+      // here — and the worker's deadlock path calls this with
+      // maxProcessingMinutes = 0, which would put cutoffTime at "now" and sweep
+      // a healthy in-flight run out from under itself. That call is aggressive
+      // on purpose about the QUEUE rows above; these images are not its target.
+      const orphanCutoff = new Date(
+        Math.min(cutoffTime.getTime(), Date.now() - ORPHAN_IMAGE_MIN_AGE_MS)
+      );
       const stuckImages = await this.prisma.image.findMany({
         where: {
           segmentationStatus: 'processing',
+          updatedAt: { lt: orphanCutoff },
           queueEntries: { none: { status: { in: ['processing', 'queued'] } } },
         },
         select: { id: true, project: { select: { userId: true } } },
       });
       for (const img of stuckImages) {
+        // 'failed', not 'no_segmentation'. This image's run never finished, and
+        // 'no_segmentation' is exactly what a *successful* run over a blank
+        // frame writes — reusing it here made a dead worker indistinguishable
+        // from an image that genuinely has nothing on it, for both the user and
+        // for us reading the table afterwards.
         await this.imageService.updateSegmentationStatus(
           img.id,
-          'no_segmentation',
+          'failed',
           img.project.userId
         );
         logger.warn(
-          'Reset orphaned image from processing to no_segmentation',
+          'Reset orphaned image from processing to failed',
           'QueueService',
           { imageId: img.id }
         );
@@ -1562,7 +1743,7 @@ export class QueueService {
       let failedCount = 0;
 
       for (const item of stuckItems) {
-        if (item.retryCount >= 3) {
+        if (item.retryCount >= MAX_QUEUE_RETRIES) {
           // Max retries exceeded - mark as failed and remove
           await this.prisma.segmentationQueue.delete({
             where: { id: item.id },
