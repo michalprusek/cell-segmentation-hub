@@ -1,5 +1,4 @@
 import React from 'react';
-import { shouldPreventCanvasDeselection } from '../config/modeConfig';
 import { generateSafePolygonKey } from '@/lib/polygonIdUtils';
 import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
 import { isMicrotubuleProject } from '@/types';
@@ -38,6 +37,7 @@ import { ImageDisplayProvider } from '../contexts/ImageDisplayContext';
 import type { MTTypeLabel } from '@/lib/api';
 import type { useEnhancedSegmentationEditor } from '../hooks/useEnhancedSegmentationEditor';
 import type { useVideoFrames } from '../hooks/useVideoFrames';
+import type { CanvasBackgroundDeselectHandlers } from '../hooks/useCanvasBackgroundDeselect';
 import type { usePolygonRenderProps } from '../hooks/usePolygonRenderProps';
 import type { usePolygonHandlers } from '../hooks/usePolygonHandlers';
 
@@ -98,6 +98,11 @@ export interface SegmentationEditorLayoutProps {
   loadedFrameKey: React.ComponentProps<
     typeof FrameLoadingGate
   >['loadedFrameKey'];
+  /** Press/release pair for the SVG background: clears the selection on a real
+   *  click and ignores the release that ends a pan. Built in the orchestrator
+   *  (it needs `handleCanvasSelect` and the edit mode); this component only
+   *  spreads it, staying free of state and refs. */
+  canvasBackground: CanvasBackgroundDeselectHandlers;
   handleImageLoad: React.ComponentProps<typeof VideoFrameImage>['onLoad'];
 
   // Loading flags
@@ -133,7 +138,9 @@ export interface SegmentationEditorLayoutProps {
   handleToggleSelectedInList: (id: string) => void;
   /** Sidebar "select all" — pass the listed current-frame polygon ids. */
   handleSelectAllInList: (ids: string[]) => void;
-  /** Sidebar "deselect all" — clear both selection sets. */
+  /** Clear both selection sets (and the persisted cross-frame trackId).
+   *  Driven by the sidebar's "deselect all" AND, via `canvasBackground`, by a
+   *  click on empty canvas. */
   handleClearSelectionInList: () => void;
   handleSlicePolygonFromContextMenu: PolygonHandlers['handleSlicePolygonFromContextMenu'];
   handleEditPolygonFromContextMenu: PolygonHandlers['handleEditPolygonFromContextMenu'];
@@ -205,6 +212,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   canvasWidth,
   canvasHeight,
   loadedFrameKey,
+  canvasBackground,
   handleImageLoad,
   projectLoading,
   isReloading,
@@ -398,16 +406,12 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                         pointerEvents: 'auto',
                         zIndex: 10,
                       }}
-                      onClick={e => {
-                        // Unselect polygon when clicking on empty canvas area
-                        // BUT skip deselection when in modes that require point placement (centralized SSOT config)
-                        if (
-                          e.target === e.currentTarget &&
-                          !shouldPreventCanvasDeselection(editor.editMode)
-                        ) {
-                          handleSelectPolygon(null);
-                        }
-                      }}
+                      // Clearing the selection on an empty-canvas click, with
+                      // the press remembered so the release that ends a PAN is
+                      // not mistaken for one. Both halves have to be on the
+                      // same element for that to work.
+                      onMouseDown={canvasBackground.onMouseDown}
+                      onClick={canvasBackground.onClick}
                       data-transform={JSON.stringify(editor.transform)}
                       data-image-dims={JSON.stringify(imageDimensions)}
                       data-polygon-count={editor.polygons.length}
