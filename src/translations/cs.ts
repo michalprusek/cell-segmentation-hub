@@ -62,7 +62,6 @@ export default {
     light: 'Světlý',
     dark: 'Tmavý',
     system: 'Systémový',
-    welcome: 'Vítejte v platformě pro segmentaci mikroskopických snímků',
     account: 'Účet',
     notifications: 'Oznámení',
     passwordConfirm: 'Potvrdit heslo',
@@ -268,7 +267,7 @@ export default {
     },
     projectNamePlaceholder: 'např. Buňky HeLa, destička 3',
     projectDescPlaceholder:
-      'např. Analýza kultur ošetřených léčivy pro studie rezistence',
+      'např. Screening rezistence na léčiva, 48h časosběr',
     creatingProject: 'Vytváření...',
     duplicateProject: 'Duplikovat',
     shareProject: 'Sdílet',

@@ -62,8 +62,6 @@ export default {
     light: 'Clair',
     dark: 'Sombre',
     system: 'Système',
-    welcome:
-      'Bienvenue sur la plateforme de segmentation d’images de microscopie',
     account: 'Compte',
     notifications: 'Notifications',
     passwordConfirm: 'Confirmer le mot de passe',
@@ -247,7 +245,7 @@ export default {
   projects: {
     createProject: 'Créer un nouveau projet',
     createProjectDesc:
-      'Ajoutez un nouveau projet pour organiser vos images de microscopie et analyses.',
+      'Ajoutez un nouveau projet pour organiser vos images de microscopie et vos analyses.',
     projectType: 'Type de projet',
     projectTypeUpdated: 'Type de projet mis à jour',
     failedToUpdateProject: 'Impossible de mettre à jour le projet',
@@ -270,8 +268,7 @@ export default {
       neurite: 'Neurites et somas',
     },
     projectNamePlaceholder: 'ex. : Cellules HeLa, plaque 3',
-    projectDescPlaceholder:
-      'ex. : Analyse de cultures traitées par médicament pour des études de résistance',
+    projectDescPlaceholder: 'ex. : Criblage de résistance, cinétique 48 h',
     creatingProject: 'Création...',
     duplicateProject: 'Dupliquer',
     shareProject: 'Partager',

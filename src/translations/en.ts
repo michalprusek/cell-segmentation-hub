@@ -50,7 +50,6 @@ export default {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    welcome: 'Welcome to the microscopy segmentation platform',
     account: 'Account',
     notifications: 'Notifications',
     passwordConfirm: 'Confirm Password',
@@ -276,8 +275,7 @@ export default {
       neurite: 'Neurites & somas',
     },
     projectNamePlaceholder: 'e.g., HeLa cells, plate 3',
-    projectDescPlaceholder:
-      'e.g., Analysis of drug-treated cultures for resistance studies',
+    projectDescPlaceholder: 'e.g., Drug-resistance screen, 48 h time course',
     creatingProject: 'Creating...',
     duplicateProject: 'Duplicate',
     shareProject: 'Share',
@@ -2226,7 +2224,7 @@ export default {
         introduction: {
           title: '1. Introduction',
           content:
-            'This Privacy Policy explains how SpheroSeg ("we", "us", "our") collects, uses, protects, and shares your information when you use our platform for microscopy image segmentation and analysis. By using our service, you consent to the data practices described in this policy.',
+            'This Privacy Policy explains how SpheroSeg ("we", "us", "our") collects, uses, protects, and shares your information when you use our platform for microscopy segmentation and analysis. By using our service, you consent to the data practices described in this policy.',
         },
         informationCollected: {
           title: '2. Information We Collect',

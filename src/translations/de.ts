@@ -62,7 +62,6 @@ export default {
     light: 'Hell',
     dark: 'Dunkel',
     system: 'System',
-    welcome: 'Willkommen bei der Mikroskopie-Segmentierungsplattform',
     account: 'Konto',
     notifications: 'Benachrichtigungen',
     passwordConfirm: 'Passwort bestätigen',
@@ -269,8 +268,7 @@ export default {
       neurite: 'Neuriten und Somata',
     },
     projectNamePlaceholder: 'z.B. HeLa-Zellen, Platte 3',
-    projectDescPlaceholder:
-      'z.B. Analyse wirkstoffbehandelter Kulturen für Resistenzstudien',
+    projectDescPlaceholder: 'z.B. Resistenz-Screening, 48-h-Zeitreihe',
     creatingProject: 'Erstelle...',
     duplicateProject: 'Duplizieren',
     shareProject: 'Teilen',
