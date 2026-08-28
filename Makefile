@@ -317,22 +317,32 @@ type-check:
 # real regressions in this codebase. Pre-commit hook already runs most of
 # this; `make ci` is the explicit end-to-end variant.
 #
+# Step 3 is the FRONTEND ESLint run: the root eslint.config.js ignores
+# `backend/**`, so for a long time `make ci` reported "ESLint clean" while
+# backend/src had never been linted by any gate at all — a hard error there
+# passed this target unnoticed. Step 4 closes that: it is a baseline gate
+# (scripts/eslint-baseline.mjs) rather than a plain `--max-warnings=0`,
+# because backend/src still carries pre-existing problems that would
+# otherwise block every commit. Regenerate with `npm run lint:backend:update`.
+#
 # Vitest is intentionally NOT in this target — the suite has ~31% pre-
 # existing failures from prior refactors (webSocketManager, ND2 helpers,
 # legacy editor tests). Including it here would render `make ci` unusable
 # until the suite is healed. Use `make ci-test` to run vitest separately.
 ci:
-	@echo "🔍 [1/6] TypeScript (frontend — baseline gate)"
+	@echo "🔍 [1/7] TypeScript (frontend — baseline gate)"
 	@npm run type-check
-	@echo "🔍 [2/6] TypeScript (backend)"
+	@echo "🔍 [2/7] TypeScript (backend)"
 	@cd backend && npm run type-check
-	@echo "🔍 [3/6] ESLint (strict — 0 warnings)"
+	@echo "🔍 [3/7] ESLint (frontend, strict — 0 warnings)"
 	@npx eslint --max-warnings=0 src/
-	@echo "🔍 [4/6] i18n completeness (6 locales)"
+	@echo "🔍 [4/7] ESLint (backend — baseline gate)"
+	@npm run --silent lint:backend
+	@echo "🔍 [5/7] i18n completeness (6 locales)"
 	@node scripts/check-i18n.cjs
-	@echo "🔍 [5/6] Documentation link integrity"
+	@echo "🔍 [6/7] Documentation link integrity"
 	@node scripts/check-doc-links.cjs
-	@echo "🔍 [6/6] Python suites (same 214 tests CI runs)"
+	@echo "🔍 [7/7] Python suites (same 214 tests CI runs)"
 	@$(MAKE) --no-print-directory test-py
 	@echo "✅ All local CI checks passed"
 

@@ -347,7 +347,9 @@ interface RawPolyline {
 
 
 function safeParsePolygons(json: string | null | undefined): RawPolyline[] {
-  if (!json) return [];
+  if (!json) {
+    return [];
+  }
   try {
     const parsed = JSON.parse(json) as RawPolyline[];
     return Array.isArray(parsed) ? parsed : [];
@@ -358,10 +360,18 @@ function safeParsePolygons(json: string | null | undefined): RawPolyline[] {
 
 function detectFileKind(mimeType: string | null, originalPath: string): 'nd2' | 'tiff' | null {
   const lower = originalPath.toLowerCase();
-  if (lower.endsWith('.nd2')) return 'nd2';
-  if (lower.endsWith('.tif') || lower.endsWith('.tiff')) return 'tiff';
-  if (mimeType?.toLowerCase().includes('nd2')) return 'nd2';
-  if (mimeType?.toLowerCase().includes('tiff')) return 'tiff';
+  if (lower.endsWith('.nd2')) {
+    return 'nd2';
+  }
+  if (lower.endsWith('.tif') || lower.endsWith('.tiff')) {
+    return 'tiff';
+  }
+  if (mimeType?.toLowerCase().includes('nd2')) {
+    return 'nd2';
+  }
+  if (mimeType?.toLowerCase().includes('tiff')) {
+    return 'tiff';
+  }
   return null;
 }
 
@@ -394,7 +404,9 @@ async function readRegistrationOffsets(
     // sanitised integers — never raw file data — reach the network request.
     const clean: Record<string, number[][]> = {};
     for (const [frame, rows] of Object.entries(parsed.frames)) {
-      if (!/^\d+$/.test(frame) || !Array.isArray(rows)) continue;
+      if (!/^\d+$/.test(frame) || !Array.isArray(rows)) {
+        continue;
+      }
       clean[frame] = rows.map(o => {
         const dy = Array.isArray(o) ? Math.trunc(Number(o[0])) : NaN;
         const dx = Array.isArray(o) ? Math.trunc(Number(o[1])) : NaN;
@@ -459,14 +471,22 @@ function buildSparseFillRequest(
   const out: Record<string, Record<string, number>> = {};
   for (const name of new Set(sampledNames)) {
     const meta = containerChannels.find(c => c.name === name);
-    if (meta?.sparseSource !== true || !meta.sparseFill) continue;
+    if (meta?.sparseSource !== true || !meta.sparseFill) {
+      continue;
+    }
     const clean: Record<string, number> = {};
     for (const [gap, anchor] of Object.entries(meta.sparseFill)) {
-      if (!/^\d+$/.test(gap)) continue;
-      if (!Number.isInteger(anchor) || anchor < 0) continue;
+      if (!/^\d+$/.test(gap)) {
+        continue;
+      }
+      if (!Number.isInteger(anchor) || anchor < 0) {
+        continue;
+      }
       clean[gap] = anchor;
     }
-    if (Object.keys(clean).length > 0) out[name] = clean;
+    if (Object.keys(clean).length > 0) {
+      out[name] = clean;
+    }
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
@@ -539,12 +559,21 @@ export async function computeMTMetrics(
   // === null) are excluded — MT projects are always video.
   const framesByVideo = new Map<string, FrameImageInput[]>();
   for (const img of frameImages) {
-    if (img.isVideoContainer) continue;
-    if (!img.parentVideoId) continue;
-    if (img.frameIndex == null) continue;
+    if (img.isVideoContainer) {
+      continue;
+    }
+    if (!img.parentVideoId) {
+      continue;
+    }
+    if (img.frameIndex == null) {
+      continue;
+    }
     const arr = framesByVideo.get(img.parentVideoId);
-    if (arr) arr.push(img);
-    else framesByVideo.set(img.parentVideoId, [img]);
+    if (arr) {
+      arr.push(img);
+    } else {
+      framesByVideo.set(img.parentVideoId, [img]);
+    }
   }
 
   if (framesByVideo.size === 0) {
@@ -561,7 +590,9 @@ export async function computeMTMetrics(
   // name back through this map.
   const frameNameById = new Map<string, string>();
   for (const img of frameImages) {
-    if (img.name) frameNameById.set(img.id, img.name);
+    if (img.name) {
+      frameNameById.set(img.id, img.name);
+    }
   }
 
   // Fetch all video container rows in a single query.
@@ -710,7 +741,9 @@ export async function computeMTMetrics(
             p.instanceId ? labelByInstanceId.get(p.instanceId) ?? '' : ''
           );
           const mtTypeId = (p as { mtType?: string }).mtType;
-          if (mtTypeId) sentIdToMtType.set(sentId, mtTypeId);
+          if (mtTypeId) {
+            sentIdToMtType.set(sentId, mtTypeId);
+          }
           return {
             image_id: fr.id,
             instance_id: sentId,
@@ -720,7 +753,9 @@ export async function computeMTMetrics(
         });
       labelBySentId.set(fr.id, sentIdToLabel);
       mtTypeBySentId.set(fr.id, sentIdToMtType);
-      if (!polylines.length) continue;
+      if (!polylines.length) {
+        continue;
+      }
       framesPayload.push({
         image_id: fr.id,
         frame_index: fr.frameIndex!,
@@ -864,7 +899,9 @@ export async function computeMTMetrics(
     // instead of the ML response's grouping. Videos stay grouped (each block is
     // appended whole) since rows carry no video id to sort across.
     videoRows.sort((a, b) => a.frameIndex - b.frameIndex);
-    for (const r of videoRows) allRows.push(r);
+    for (const r of videoRows) {
+      allRows.push(r);
+    }
 
     // Whole-image per-channel totals for this video (sum of every pixel of the
     // channel across all frames — independent of the microtubules). `?? []`
@@ -927,7 +964,9 @@ export function computeMTGeometry(
   const ordered = [...frameImages].sort((a, b) => {
     const va = a.parentVideoId ?? '';
     const vb = b.parentVideoId ?? '';
-    if (va !== vb) return va < vb ? -1 : 1;
+    if (va !== vb) {
+      return va < vb ? -1 : 1;
+    }
     return (a.frameIndex ?? 0) - (b.frameIndex ?? 0);
   });
   for (const fr of ordered) {
@@ -1061,17 +1100,27 @@ export function pivotMTMetricsWide(rows: readonly MTMetricsRow[]): {
       // Geometry is channel-independent by construction. Fill any column the
       // first row left null, and flag a genuine disagreement rather than
       // silently keeping whichever channel happened to come first.
-      if (Math.abs(wide.lengthPx - row.lengthPx) > 1e-6) geometryDrift++;
-      if (wide.areaPx == null) wide.areaPx = row.areaPx;
-      else if (row.areaPx != null && wide.areaPx !== row.areaPx) geometryDrift++;
-      if (wide.areaUm2 == null) wide.areaUm2 = row.areaUm2;
-      if (wide.pixelCount == null) wide.pixelCount = row.pixelCount;
-      else if (row.pixelCount != null && wide.pixelCount !== row.pixelCount) {
+      if (Math.abs(wide.lengthPx - row.lengthPx) > 1e-6) {
+        geometryDrift++;
+      }
+      if (wide.areaPx == null) {
+        wide.areaPx = row.areaPx;
+      } else if (row.areaPx != null && wide.areaPx !== row.areaPx) {
+        geometryDrift++;
+      }
+      if (wide.areaUm2 == null) {
+        wide.areaUm2 = row.areaUm2;
+      }
+      if (wide.pixelCount == null) {
+        wide.pixelCount = row.pixelCount;
+      } else if (row.pixelCount != null && wide.pixelCount !== row.pixelCount) {
         geometryDrift++;
       }
     }
 
-    if (!row.channel) continue; // geometry-only row: no per-channel columns
+    if (!row.channel) {
+      continue; // geometry-only row: no per-channel columns
+    }
     if (!channelSeen.has(row.channel)) {
       channelSeen.add(row.channel);
       channels.push(row.channel);
@@ -1193,9 +1242,13 @@ const CSV_HEADERS: readonly (keyof MTMetricsRow)[] = [
 ] as const;
 
 function csvCell(v: unknown): string {
-  if (v === null || v === undefined) return '';
+  if (v === null || v === undefined) {
+    return '';
+  }
   if (typeof v === 'number') {
-    if (!Number.isFinite(v)) return '';
+    if (!Number.isFinite(v)) {
+      return '';
+    }
     // Plenty of precision for fluorescence values without scientific notation
     // for typical-range numbers.
     return Number.isInteger(v) ? String(v) : v.toFixed(6).replace(/\.?0+$/, '');
@@ -1367,7 +1420,9 @@ export async function writeMTMetrics(
   formats: ReadonlyArray<'excel' | 'csv' | 'json'>,
   channelSummaries: MTChannelSummaryRow[] = []
 ): Promise<void> {
-  if (!rows.length || !formats.length) return;
+  if (!rows.length || !formats.length) {
+    return;
+  }
   await fs.mkdir(destDir, { recursive: true });
 
   const wide = pivotMTMetricsWide(rows);

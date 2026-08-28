@@ -29,9 +29,15 @@ export type SupportedVideoKind = 'mp4-like' | 'tiff-stack' | 'nd2';
  *  helper detect the page count and either succeed or fail). */
 export function detectVideoKind(filename: string): SupportedVideoKind | null {
   const ext = path.extname(filename).toLowerCase();
-  if (isFfmpegFormat(ext)) return 'mp4-like';
-  if (ext === '.nd2') return 'nd2';
-  if (ext === '.tif' || ext === '.tiff') return 'tiff-stack';
+  if (isFfmpegFormat(ext)) {
+    return 'mp4-like';
+  }
+  if (ext === '.nd2') {
+    return 'nd2';
+  }
+  if (ext === '.tif' || ext === '.tiff') {
+    return 'tiff-stack';
+  }
   return null;
 }
 

@@ -264,7 +264,9 @@ async function ensureProjectAccess(
 export const getMtTypeLabels = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const projectId = req.params.id;
-    if (!(await ensureProjectAccess(req, res, projectId))) return;
+    if (!(await ensureProjectAccess(req, res, projectId))) {
+      return;
+    }
     const labels = await MtTypeLabelService.getLabels(projectId);
     ResponseHelper.success(res, { labels }, 'Palette načtena');
   }
@@ -278,7 +280,9 @@ export const getMtTypeLabels = asyncHandler(
 export const putMtTypeLabels = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const projectId = req.params.id;
-    if (!(await ensureProjectAccess(req, res, projectId))) return;
+    if (!(await ensureProjectAccess(req, res, projectId))) {
+      return;
+    }
     const { labels, framesCleaned } = await MtTypeLabelService.putLabels(
       projectId,
       (req.body as { labels?: unknown })?.labels
@@ -294,7 +298,9 @@ export const putMtTypeLabels = asyncHandler(
 export const deleteMtTypeLabel = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const projectId = req.params.id;
-    if (!(await ensureProjectAccess(req, res, projectId))) return;
+    if (!(await ensureProjectAccess(req, res, projectId))) {
+      return;
+    }
     const { labels, framesCleaned } = await MtTypeLabelService.deleteLabel(
       projectId,
       req.params.labelId

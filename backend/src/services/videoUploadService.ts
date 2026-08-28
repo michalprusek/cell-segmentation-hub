@@ -226,7 +226,9 @@ async function withSparseFrameIds(
   const sparse = channels.filter(
     c => c.sparseSource === true && c.sparseFill !== undefined
   );
-  if (sparse.length === 0) return channels;
+  if (sparse.length === 0) {
+    return channels;
+  }
 
   const rows = await prisma.image.findMany({
     where: { parentVideoId: containerId },
@@ -234,11 +236,15 @@ async function withSparseFrameIds(
   });
   const idByIndex = new Map<number, string>();
   for (const r of rows) {
-    if (r.frameIndex !== null) idByIndex.set(r.frameIndex, r.id);
+    if (r.frameIndex !== null) {
+      idByIndex.set(r.frameIndex, r.id);
+    }
   }
 
   return channels.map(c => {
-    if (c.sparseSource !== true || !c.sparseFill) return c;
+    if (c.sparseSource !== true || !c.sparseFill) {
+      return c;
+    }
     const byFrameId: Record<string, string> = {};
     let unresolved = 0;
     for (const [gapIndex, anchorIndex] of Object.entries(c.sparseFill)) {

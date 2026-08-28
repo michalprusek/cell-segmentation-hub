@@ -1,0 +1,214 @@
+{
+  "_comment": "Committed baseline of PRE-EXISTING ESLint problems in backend/src. The gate (scripts/eslint-baseline.mjs, run by `npm run lint:backend` and by `make ci`) fails on any problem not listed here. Problems are keyed by file + severity + rule + normalised message (NOT line number, which churns on every unrelated edit) and stored with a count, so fixing one problem and introducing another cannot cancel out. Warnings are gated as well as errors. Every problem below is one someone chose to accept; the list shrinking over time is the point. `lintedFiles` records the gate's SCOPE: any file listed there that still exists but stops being linted fails the gate, so an over-broad `ignores` cannot quietly remove a third of the tree from the check.",
+  "_regenerateWith": "npm run lint:backend:update",
+  "_selfTest": "npm run lint:backend:self-test",
+  "_doNotEditByHand": true,
+  "eslintVersion": "9.37.0",
+  "totals": {
+    "backend": 38,
+    "all": 38
+  },
+  "targets": {
+    "backend": {
+      "lintedFiles": [
+        "backend/src/api/controllers/authController.ts",
+        "backend/src/api/controllers/essaysController.ts",
+        "backend/src/api/controllers/exportController.ts",
+        "backend/src/api/controllers/feedbackController.ts",
+        "backend/src/api/controllers/imageController.ts",
+        "backend/src/api/controllers/projectController.ts",
+        "backend/src/api/controllers/projectFolderController.ts",
+        "backend/src/api/controllers/queueController.ts",
+        "backend/src/api/controllers/segmentationController.ts",
+        "backend/src/api/controllers/segmenterController.ts",
+        "backend/src/api/controllers/sharingController.ts",
+        "backend/src/api/controllers/videoController.ts",
+        "backend/src/api/routes/authRoutes.ts",
+        "backend/src/api/routes/essaysRoutes.ts",
+        "backend/src/api/routes/exportRoutes.ts",
+        "backend/src/api/routes/feedbackRoutes.ts",
+        "backend/src/api/routes/healthRoutes.ts",
+        "backend/src/api/routes/imageRoutes.ts",
+        "backend/src/api/routes/index.ts",
+        "backend/src/api/routes/mlRoutes.ts",
+        "backend/src/api/routes/projectFolderRoutes.ts",
+        "backend/src/api/routes/projectRoutes.ts",
+        "backend/src/api/routes/queueRoutes.ts",
+        "backend/src/api/routes/segmentationRoutes.ts",
+        "backend/src/api/routes/segmenterRoutes.ts",
+        "backend/src/api/routes/sharingRoutes.ts",
+        "backend/src/api/routes/testEmailRoutes.ts",
+        "backend/src/api/routes/userRoutes.ts",
+        "backend/src/auth/jwt.ts",
+        "backend/src/auth/password.ts",
+        "backend/src/auth/validation.ts",
+        "backend/src/config/redis.ts",
+        "backend/src/config/uploadLimits.ts",
+        "backend/src/constants/email.ts",
+        "backend/src/constants/modelRegistry.ts",
+        "backend/src/constants/segmentationModels.ts",
+        "backend/src/db/index.ts",
+        "backend/src/db/prismaClient.ts",
+        "backend/src/db/prismaConfig.ts",
+        "backend/src/db/seed.ts",
+        "backend/src/middleware/accessLogger.ts",
+        "backend/src/middleware/auth.ts",
+        "backend/src/middleware/cache.ts",
+        "backend/src/middleware/error.ts",
+        "backend/src/middleware/monitoring.ts",
+        "backend/src/middleware/rateLimiter.ts",
+        "backend/src/middleware/swagger.ts",
+        "backend/src/middleware/upload.ts",
+        "backend/src/middleware/validation.ts",
+        "backend/src/monitoring/businessMetrics.ts",
+        "backend/src/server.ts",
+        "backend/src/services/addChannelService.ts",
+        "backend/src/services/authService.ts",
+        "backend/src/services/cacheService.ts",
+        "backend/src/services/emailRetryService.ts",
+        "backend/src/services/emailService.ts",
+        "backend/src/services/essaysService.ts",
+        "backend/src/services/export/cvatExporter.ts",
+        "backend/src/services/export/downloadTokenService.ts",
+        "backend/src/services/export/exportDocs.ts",
+        "backend/src/services/export/exportFileOperations.ts",
+        "backend/src/services/export/formatConverter.ts",
+        "backend/src/services/export/imagejColor.ts",
+        "backend/src/services/export/imagejRoiEncoder.ts",
+        "backend/src/services/export/mlRequestBudget.ts",
+        "backend/src/services/export/mtKymographExporter.ts",
+        "backend/src/services/export/mtMetricsExporter.ts",
+        "backend/src/services/export/woundChartRenderer.ts",
+        "backend/src/services/export/woundTimeSeries.ts",
+        "backend/src/services/exportService.ts",
+        "backend/src/services/feedbackService.ts",
+        "backend/src/services/healthCheckService.ts",
+        "backend/src/services/imageService.ts",
+        "backend/src/services/kymographService.ts",
+        "backend/src/services/metrics/geometricPrimitives.ts",
+        "backend/src/services/metrics/metricsCalculator.ts",
+        "backend/src/services/metrics/scaleConfig.ts",
+        "backend/src/services/mtTypeLabelService.ts",
+        "backend/src/services/playbackProxyRange.ts",
+        "backend/src/services/playbackProxyService.ts",
+        "backend/src/services/projectFolderService.ts",
+        "backend/src/services/projectService.ts",
+        "backend/src/services/queueService.ts",
+        "backend/src/services/segmentationService.ts",
+        "backend/src/services/segmentationThumbnailService.ts",
+        "backend/src/services/segmenterService.ts",
+        "backend/src/services/sessionService.ts",
+        "backend/src/services/sharingService.ts",
+        "backend/src/services/staticChannelProjection.ts",
+        "backend/src/services/staticChannelProjectionService.ts",
+        "backend/src/services/thumbnailManager.ts",
+        "backend/src/services/tracking/trackerService.ts",
+        "backend/src/services/userService.ts",
+        "backend/src/services/video/ffmpegExtractor.ts",
+        "backend/src/services/video/pythonExtractor.ts",
+        "backend/src/services/video/types.ts",
+        "backend/src/services/video/videoExtractor.ts",
+        "backend/src/services/videoUploadService.ts",
+        "backend/src/services/visualization/visualizationGenerator.ts",
+        "backend/src/services/websocketService.ts",
+        "backend/src/storage/index.ts",
+        "backend/src/storage/interface.ts",
+        "backend/src/storage/localStorage.ts",
+        "backend/src/templates/feedbackReceivedEmail.ts",
+        "backend/src/templates/passwordResetEmailMultilang.ts",
+        "backend/src/templates/shareInvitationEmailSimple.ts",
+        "backend/src/templates/verificationEmail.ts",
+        "backend/src/test/setup.integration.ts",
+        "backend/src/test/setup.ts",
+        "backend/src/test/utils/jwtTestUtils.ts",
+        "backend/src/test/utils/testFactories.ts",
+        "backend/src/test/utils/uploadMocks.ts",
+        "backend/src/types/auth.ts",
+        "backend/src/types/index.ts",
+        "backend/src/types/polygon.ts",
+        "backend/src/types/queue.ts",
+        "backend/src/types/validation.ts",
+        "backend/src/types/websocket.ts",
+        "backend/src/utils/authCookies.ts",
+        "backend/src/utils/batchProcessor.ts",
+        "backend/src/utils/channelPath.ts",
+        "backend/src/utils/concurrency.ts",
+        "backend/src/utils/concurrencyManager.ts",
+        "backend/src/utils/config.ts",
+        "backend/src/utils/contentDisposition.ts",
+        "backend/src/utils/database.ts",
+        "backend/src/utils/envValidator.ts",
+        "backend/src/utils/escapeHtml.ts",
+        "backend/src/utils/getBaseUrl.ts",
+        "backend/src/utils/initializeStorage.ts",
+        "backend/src/utils/instanceLabels.ts",
+        "backend/src/utils/logger.ts",
+        "backend/src/utils/mlFilename.ts",
+        "backend/src/utils/polygonGeometry.ts",
+        "backend/src/utils/polygonValidation.ts",
+        "backend/src/utils/polylineSemantics.ts",
+        "backend/src/utils/response.ts",
+        "backend/src/utils/retryService.ts",
+        "backend/src/utils/spermGrouping.ts",
+        "backend/src/utils/storagePath.ts",
+        "backend/src/workers/queueWorker.ts"
+      ],
+      "files": {
+        "backend/src/api/controllers/authController.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 1,
+          "error @typescript-eslint/explicit-module-boundary-types: Missing return type on function.": 1
+        },
+        "backend/src/api/controllers/imageController.ts": {
+          "error @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 1
+        },
+        "backend/src/api/controllers/videoController.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 2,
+          "error @typescript-eslint/no-extraneous-class: Unexpected class with only static properties.": 1,
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/constants/modelRegistry.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 1
+        },
+        "backend/src/db/index.ts": {
+          "error @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 1
+        },
+        "backend/src/server.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 1
+        },
+        "backend/src/services/addChannelService.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/services/export/imagejRoiEncoder.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/services/export/mtKymographExporter.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/services/export/mtMetricsExporter.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 8
+        },
+        "backend/src/services/queueService.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/services/segmentationService.ts": {
+          "error @typescript-eslint/no-dynamic-delete: Do not delete dynamically computed property keys.": 1
+        },
+        "backend/src/services/tracking/trackerService.ts": {
+          "error @typescript-eslint/explicit-function-return-type: Missing return type on function.": 1
+        },
+        "backend/src/services/visualization/visualizationGenerator.ts": {
+          "error @typescript-eslint/no-non-null-assertion: Forbidden non-null assertion.": 1
+        },
+        "backend/src/test/utils/jwtTestUtils.ts": {
+          "warning @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 2
+        },
+        "backend/src/test/utils/testFactories.ts": {
+          "warning @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 10
+        },
+        "backend/src/test/utils/uploadMocks.ts": {
+          "warning @typescript-eslint/no-explicit-any: Unexpected any. Specify a different type.": 1
+        }
+      }
+    }
+  }
+}

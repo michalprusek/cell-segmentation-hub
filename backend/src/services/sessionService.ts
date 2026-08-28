@@ -53,7 +53,9 @@ class SessionService {
     const key = `${this.REFRESH_TOKEN_PREFIX}${token}`;
 
     const data = await executeRedisCommand(async client => client.get(key));
-    if (!data) return null;
+    if (!data) {
+      return null;
+    }
 
     const tokenData = JSON.parse(data) as RefreshToken;
 
@@ -92,7 +94,9 @@ class SessionService {
     oldToken: string
   ): Promise<{ token: string; userId: string } | null> {
     const tokenData = await this.verifyRefreshToken(oldToken);
-    if (!tokenData) return null;
+    if (!tokenData) {
+      return null;
+    }
 
     await this.deleteRefreshToken(oldToken);
 

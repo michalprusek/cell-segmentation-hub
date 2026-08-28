@@ -1496,10 +1496,14 @@ export class ExportService {
       try {
         const buf = Buffer.alloc(26);
         await fh.read(buf, 0, 26, 0);
-        if (buf[0] !== 0x42 || buf[1] !== 0x4d) return null;
+        if (buf[0] !== 0x42 || buf[1] !== 0x4d) {
+          return null;
+        }
         const width = buf.readInt32LE(18);
         const height = Math.abs(buf.readInt32LE(22));
-        if (width <= 0 || height <= 0) return null;
+        if (width <= 0 || height <= 0) {
+          return null;
+        }
         return { width, height };
       } finally {
         await fh.close();
@@ -1507,7 +1511,9 @@ export class ExportService {
     };
 
     for (const image of images) {
-      if ((image.width && image.height) || !image.originalPath) continue;
+      if ((image.width && image.height) || !image.originalPath) {
+        continue;
+      }
 
       // Step 1: read dimensions from disk. Try BMP header first (microscopy
       // format, sharp doesn't support it in this build); fall back to sharp
@@ -1518,7 +1524,9 @@ export class ExportService {
       try {
         if (ext === '.bmp') {
           const bmp = await readBmpDims(filePath);
-          if (!bmp) continue;
+          if (!bmp) {
+            continue;
+          }
           meta = bmp;
         } else {
           meta = await sharp(filePath).metadata();
@@ -1531,7 +1539,9 @@ export class ExportService {
         );
         continue;
       }
-      if (!meta.width || !meta.height) continue;
+      if (!meta.width || !meta.height) {
+        continue;
+      }
 
       // Cache wins over DB so metrics calc can proceed even if persistence fails.
       dimsCache.set(image.id, { width: meta.width, height: meta.height });
@@ -1756,10 +1766,14 @@ export class ExportService {
       options.mtMetrics?.thicknessPx ?? DEFAULT_MT_ROI_THICKNESS_PX;
     const marginMultiplier = options.mtMetrics?.marginMultiplier ?? 2;
 
-    const addWarning = (msg: string) => {
-      if (!jobId) return;
+    const addWarning = (msg: string): void => {
+      if (!jobId) {
+        return;
+      }
       const job = this.exportJobs.get(jobId);
-      if (job) job.warnings = [...(job.warnings ?? []), msg];
+      if (job) {
+        job.warnings = [...(job.warnings ?? []), msg];
+      }
     };
 
     let rows: MTMetricsRow[] = [];

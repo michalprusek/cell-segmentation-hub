@@ -362,9 +362,13 @@ function videoZipLabel(
   videoKey: string,
   containerNames: Map<string, string>
 ): string {
-  if (videoKey === NO_VIDEO_KEY) return 'video';
+  if (videoKey === NO_VIDEO_KEY) {
+    return 'video';
+  }
   const name = containerNames.get(videoKey);
-  if (name) return sanitizeFilename(path.parse(name).name);
+  if (name) {
+    return sanitizeFilename(path.parse(name).name);
+  }
   return `video_${videoKey.slice(0, 8)}`;
 }
 
@@ -386,13 +390,19 @@ function buildMtNameByKey(
   const perTypeCount = new Map<string, number>();
   for (const frame of orderedFrames) {
     const parsed = parseFramePolygons(frame.segmentation?.polygons);
-    if (parsed.corrupt) continue;
+    if (parsed.corrupt) {
+      continue;
+    }
     for (const p of parsed.polygons) {
       const geometry = p.geometry === 'polygon' ? 'polygon' : 'polyline';
       const pts = validPoints(p.points);
-      if (pts.length < (geometry === 'polyline' ? 2 : 3)) continue;
+      if (pts.length < (geometry === 'polyline' ? 2 : 3)) {
+        continue;
+      }
       const key = p.trackId || p.instanceId || p.id;
-      if (!key || nameByKey.has(key)) continue;
+      if (!key || nameByKey.has(key)) {
+        continue;
+      }
       // A manual rename overrides the automatic scheme.
       const renamed = p.name?.trim();
       if (renamed) {
@@ -550,7 +560,9 @@ export function buildVideoRoiEntries(
     const items = planFrameItems(parsed.polygons, mtNameByKey, labelById);
 
     droppedPolygons += parsed.polygons.length - items.length;
-    if (items.length === 0) continue;
+    if (items.length === 0) {
+      continue;
+    }
 
     // Dedup labels within the frame first (distinct MTs that sanitise to the
     // same base must not collide), then suffix the unique frame label.
@@ -589,7 +601,9 @@ export function buildVideoRoiEntries(
       // composite map was supplied (ML skipped or failed) fall back to the wide
       // `<name>_bg` stroke polyline (a solid band; overstates the background but
       // keeps a visual indicator).
-      if (geometry !== 'polyline') continue;
+      if (geometry !== 'polyline') {
+        continue;
+      }
       const bgLabel = `${label}_bg`;
       let bgBuffer: Buffer | undefined;
       if (bgRoiBytes) {
@@ -612,7 +626,9 @@ export function buildVideoRoiEntries(
         frameRois++;
       }
     }
-    if (frameRois > 0) framesWithRois++;
+    if (frameRois > 0) {
+      framesWithRois++;
+    }
   }
 
   return { entries, framesWithRois, corruptFrames, droppedPolygons };
@@ -631,8 +647,10 @@ async function writeRoiSetZip(
     const output = createWriteStream(zipPath);
     const archive = archiver('zip', { zlib: { level: 9 } });
     let settled = false;
-    const fail = (err: unknown) => {
-      if (settled) return;
+    const fail = (err: unknown): void => {
+      if (settled) {
+        return;
+      }
       settled = true;
       reject(err instanceof Error ? err : new Error(String(err)));
     };
@@ -701,13 +719,19 @@ async function fetchMtBackgroundRois(
 
   const reqFrames: MtBgRequestFrame[] = [];
   for (const frame of ordered) {
-    if (typeof frame.frameIndex !== 'number') continue;
+    if (typeof frame.frameIndex !== 'number') {
+      continue;
+    }
     const parsed = parseFramePolygons(frame.segmentation?.polygons);
-    if (parsed.corrupt) continue;
+    if (parsed.corrupt) {
+      continue;
+    }
     const items = planFrameItems(parsed.polygons, mtNameByKey, labelById);
     const polylines: MtBgRequestPolyline[] = [];
     items.forEach((it, itemIndex) => {
-      if (it.geometry !== 'polyline') return;
+      if (it.geometry !== 'polyline') {
+        return;
+      }
       polylines.push({
         instance_id: String(itemIndex),
         points: it.points.map(p => [p.x, p.y] as [number, number]),
@@ -723,7 +747,9 @@ async function fetchMtBackgroundRois(
 
   const map = new Map<string, Buffer>();
   const requested = reqFrames.reduce((n, f) => n + f.polylines.length, 0);
-  if (requested === 0) return map;
+  if (requested === 0) {
+    return map;
+  }
 
   // This endpoint is geometry-only (no raster read) so it's intrinsically
   // cheap — but it runs CONCURRENTLY with mt-metrics + kymograph requests
@@ -867,11 +893,16 @@ export async function exportImageJRoiSets(
   // rows never hold polygons, so skip them.
   const byVideo = new Map<string, RoiFrameInput[]>();
   for (const f of frameImages) {
-    if (f.isVideoContainer || !f.segmentation?.polygons) continue;
+    if (f.isVideoContainer || !f.segmentation?.polygons) {
+      continue;
+    }
     const key = f.parentVideoId ?? NO_VIDEO_KEY;
     const arr = byVideo.get(key);
-    if (arr) arr.push(f);
-    else byVideo.set(key, [f]);
+    if (arr) {
+      arr.push(f);
+    } else {
+      byVideo.set(key, [f]);
+    }
   }
 
   let framesWritten = 0;
@@ -925,7 +956,9 @@ export async function exportImageJRoiSets(
     );
     corruptFrames += build.corruptFrames;
     droppedPolygons += build.droppedPolygons;
-    if (build.entries.length === 0) continue;
+    if (build.entries.length === 0) {
+      continue;
+    }
 
     const label = videoZipLabel(videoKey, containerNames);
     let zipName = `${label}_RoiSet.zip`;

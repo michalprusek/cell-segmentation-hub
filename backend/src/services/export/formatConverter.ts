@@ -18,10 +18,7 @@ import {
   findPart,
   type SpermPolylinePart,
 } from '../../utils/spermGrouping';
-import {
-  polylineSemanticsForProjectType,
-  type PolylineSemantics,
-} from '../../utils/polylineSemantics';
+import { polylineSemanticsForProjectType } from '../../utils/polylineSemantics';
 import type { BasePolygon, PolygonPoint } from '../../types/polygon';
 
 /** Local alias kept for the many call sites in this file that already
@@ -52,11 +49,17 @@ export const inferDimensionsFromPolygons = (
   for (const polygon of polygons) {
     for (const point of polygon.points) {
       hasPoints = true;
-      if (point.x > maxX) maxX = point.x;
-      if (point.y > maxY) maxY = point.y;
+      if (point.x > maxX) {
+        maxX = point.x;
+      }
+      if (point.y > maxY) {
+        maxY = point.y;
+      }
     }
   }
-  if (!hasPoints) return { width: 0, height: 0 };
+  if (!hasPoints) {
+    return { width: 0, height: 0 };
+  }
   return {
     width: Math.ceil(maxX) + 1,
     height: Math.ceil(maxY) + 1,

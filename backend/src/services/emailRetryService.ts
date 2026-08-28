@@ -41,7 +41,9 @@ function wasEmailAlreadySent(to: string, subject: string): boolean {
   const key = getEmailKey(to, subject);
   const record = sentEmails.get(key);
 
-  if (!record) return false;
+  if (!record) {
+    return false;
+  }
 
   const age = Date.now() - record.sentAt.getTime();
   if (age > EMAIL_RETRY.SENT_EMAIL_TTL) {
@@ -464,7 +466,9 @@ async function processEmailQueue(): Promise<void> {
   while (emailQueue.length > 0) {
     const queuedEmail = emailQueue.shift();
 
-    if (!queuedEmail) continue;
+    if (!queuedEmail) {
+      continue;
+    }
 
     // Check TTL - if email is too old, discard it
     const ageMs = Date.now() - queuedEmail.createdAt.getTime();
@@ -703,5 +707,5 @@ export const testHelpers = {
   wasEmailAlreadySent,
   recordEmailSent,
   getEmailKey,
-  clearSentEmails: () => sentEmails.clear(),
+  clearSentEmails: (): void => sentEmails.clear(),
 };

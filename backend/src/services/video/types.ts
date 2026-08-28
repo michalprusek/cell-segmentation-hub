@@ -220,12 +220,24 @@ export type ProgressCallback = (progress: ExtractionProgress) => void;
 
 /** Maps emission wavelength (nm) to a sensible default display color. */
 export function defaultColorForWavelength(nm: number | undefined): string {
-  if (!nm || nm <= 0) return '#cccccc'; // unknown / label-free → gray
-  if (nm < 430) return '#0000ff'; // violet/blue (e.g. DAPI 405)
-  if (nm < 490) return '#00aaff'; // blue (e.g. CFP 470)
-  if (nm < 530) return '#00ff00'; // green (e.g. GFP/Alexa-488)
-  if (nm < 580) return '#ffff00'; // yellow (e.g. YFP/Alexa-514)
-  if (nm < 620) return '#ff8800'; // orange (e.g. mCherry/Alexa-594)
+  if (!nm || nm <= 0) {
+    return '#cccccc'; // unknown / label-free → gray
+  }
+  if (nm < 430) {
+    return '#0000ff'; // violet/blue (e.g. DAPI 405)
+  }
+  if (nm < 490) {
+    return '#00aaff'; // blue (e.g. CFP 470)
+  }
+  if (nm < 530) {
+    return '#00ff00'; // green (e.g. GFP/Alexa-488)
+  }
+  if (nm < 580) {
+    return '#ffff00'; // yellow (e.g. YFP/Alexa-514)
+  }
+  if (nm < 620) {
+    return '#ff8800'; // orange (e.g. mCherry/Alexa-594)
+  }
   return '#ff0000'; // red/far-red
 }
 
@@ -256,8 +268,12 @@ export function isIrmChannel(
   name: string | undefined,
   wavelengthNm: number | undefined
 ): boolean {
-  if (wavelengthNm === 0) return true;
-  if (!name) return false;
+  if (wavelengthNm === 0) {
+    return true;
+  }
+  if (!name) {
+    return false;
+  }
   // Underscores are separators in microscopy channel names (`IRM_widefield`,
   // `TIRF_488`), but `\b` counts `_` as a word character, so `\bIRM\b` does not
   // match `IRM_WIDEFIELD`. Normalise them to spaces before matching; this only

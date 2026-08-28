@@ -144,7 +144,9 @@ export function extractTrackedPolys(
   const m = new Map<string, TrackedPolyMeta>();
   for (const p of polys) {
     const tid = (p as Record<string, unknown>).trackId;
-    if (typeof tid !== 'string' || tid === '') continue;
+    if (typeof tid !== 'string' || tid === '') {
+      continue;
+    }
     m.set(tid, {
       trackId: tid,
       name: (p as Record<string, unknown>).name as string | undefined,
@@ -185,7 +187,9 @@ export function parsePolygonsJsonForDiff(
 ): unknown[] {
   try {
     const raw = JSON.parse(json);
-    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw)) {
+      return raw;
+    }
     logger.warn(
       'Existing segmentation polygons not an array; cross-frame diff falls back to empty previous state',
       'SegmentationService',
@@ -286,14 +290,21 @@ export function setPolygonsTrackType(
   const polygons = polys.map(p => {
     const rec = p as Record<string, unknown>;
     const tid = rec.trackId;
-    if (typeof tid !== 'string' || !trackIds.has(tid)) return p;
+    if (typeof tid !== 'string' || !trackIds.has(tid)) {
+      return p;
+    }
     const current = typeof rec.mtType === 'string' ? rec.mtType : undefined;
     const next = mtType ?? undefined;
-    if (current === next) return p; // no-op
+    if (current === next) {
+      return p; // no-op
+    }
     changed++;
     const copy = { ...rec };
-    if (next === undefined) delete copy.mtType;
-    else copy.mtType = next;
+    if (next === undefined) {
+      delete copy.mtType;
+    } else {
+      copy.mtType = next;
+    }
     return copy;
   });
   return { polygons, changed };
@@ -332,10 +343,14 @@ export function upsertTrackPolyline(
     area: 0,
     confidence: 1,
   };
-  if (polyline.name) copy.name = polyline.name;
+  if (polyline.name) {
+    copy.name = polyline.name;
+  }
   // Carry the source instanceId so the export viz/metrics label the copy
   // (buildInstanceLabelMap keys on instanceId — a copy without one has no badge).
-  if (polyline.instanceId) copy.instanceId = polyline.instanceId;
+  if (polyline.instanceId) {
+    copy.instanceId = polyline.instanceId;
+  }
   polygons.push(copy);
   return polygons;
 }
@@ -510,7 +525,9 @@ export class SegmentationService {
         response => response,
         async error => {
           const retryConfig = error.config;
-          if (!retryConfig) throw error;
+          if (!retryConfig) {
+            throw error;
+          }
 
           retryConfig.__retryCount = retryConfig.__retryCount || 0;
 
@@ -519,7 +536,9 @@ export class SegmentationService {
             error.code === 'ETIMEDOUT' ||
             error.code === 'ENOTFOUND';
 
-          if (!isTransient || retryConfig.__retryCount >= 3) throw error;
+          if (!isTransient || retryConfig.__retryCount >= 3) {
+            throw error;
+          }
 
           retryConfig.__retryCount += 1;
           const delay = Math.pow(2, retryConfig.__retryCount) * 1000;
@@ -2169,19 +2188,23 @@ export class SegmentationService {
     previousPolygonsJson: string,
     newDbPolygons: Array<Record<string, unknown>>
   ): Promise<Prisma.PrismaPromise<unknown>[]> {
-    if (!parentVideoId) return []; // Standalone image — nothing to propagate.
+    if (!parentVideoId) {
+      return []; // Standalone image — nothing to propagate.
+    }
 
-    const previousParsed = parsePolygonsJsonForDiff(
-      previousPolygonsJson,
-      { currentImageId, parentVideoId }
-    );
+    const previousParsed = parsePolygonsJsonForDiff(previousPolygonsJson, {
+      currentImageId,
+      parentVideoId,
+    });
     const { renames, deletes } = diffTrackOps(
       previousParsed,
       newDbPolygons as unknown[]
     );
     // Fresh trackIds (in new but not previous) intentionally don't
     // propagate — they're user-painted on this frame only.
-    if (renames.size === 0 && deletes.size === 0) return [];
+    if (renames.size === 0 && deletes.size === 0) {
+      return [];
+    }
 
     // Pull every sibling frame's segmentation row in one query.
     const siblings = await this.prisma.image.findMany({
@@ -2197,7 +2220,9 @@ export class SegmentationService {
 
     const ops: Prisma.PrismaPromise<unknown>[] = [];
     for (const sib of siblings) {
-      if (!sib.segmentation) continue;
+      if (!sib.segmentation) {
+        continue;
+      }
       let parsed: unknown[];
       try {
         parsed = JSON.parse(sib.segmentation.polygons);
@@ -2239,15 +2264,25 @@ export class SegmentationService {
         })
         .map(p => {
           const tid = (p as Record<string, unknown>).trackId;
-          if (typeof tid !== 'string') return p;
+          if (typeof tid !== 'string') {
+            return p;
+          }
           const op = renames.get(tid);
-          if (!op) return p;
+          if (!op) {
+            return p;
+          }
           mutated = true;
           const out: Record<string, unknown> = { ...(p as object) };
-          if (op.name !== undefined) out.name = op.name;
-          else delete out.name;
-          if (op.partClass !== undefined) out.partClass = op.partClass;
-          else delete out.partClass;
+          if (op.name !== undefined) {
+            out.name = op.name;
+          } else {
+            delete out.name;
+          }
+          if (op.partClass !== undefined) {
+            out.partClass = op.partClass;
+          } else {
+            delete out.partClass;
+          }
           return out;
         });
 
@@ -2298,7 +2333,9 @@ export class SegmentationService {
     const ops: Prisma.PrismaPromise<unknown>[] = [];
     let framesAffected = 0;
     for (const frame of frames) {
-      if (!frame.segmentation) continue;
+      if (!frame.segmentation) {
+        continue;
+      }
       const parsed = parsePolygonsJsonForDiff(frame.segmentation.polygons, {
         currentImageId: frame.id,
         parentVideoId: videoId,
@@ -2365,7 +2402,9 @@ export class SegmentationService {
     const ops: Prisma.PrismaPromise<unknown>[] = [];
     let framesAffected = 0;
     for (const frame of frames) {
-      if (!frame.segmentation) continue;
+      if (!frame.segmentation) {
+        continue;
+      }
       const parsed = parsePolygonsJsonForDiff(frame.segmentation.polygons, {
         currentImageId: frame.id,
         parentVideoId: videoId,

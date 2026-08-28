@@ -35,7 +35,9 @@ const NEUTRAL_GRAY = Math.round(0.6 * 255); // 153
  * distinct-but-stable colour per microtubule across every frame.
  */
 export function colorKeyForRoi(p: RoiColorInput): string {
-  if (p.trackId) return p.trackId;
+  if (p.trackId) {
+    return p.trackId;
+  }
   if (typeof p.instanceId === 'string' && p.instanceId.startsWith('mt_')) {
     return p.instanceId;
   }
@@ -62,12 +64,19 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   let r = 0;
   let g = 0;
   let b = 0;
-  if (h < 60) [r, g, b] = [c, x, 0];
-  else if (h < 120) [r, g, b] = [x, c, 0];
-  else if (h < 180) [r, g, b] = [0, c, x];
-  else if (h < 240) [r, g, b] = [0, x, c];
-  else if (h < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
+  if (h < 60) {
+    [r, g, b] = [c, x, 0];
+  } else if (h < 120) {
+    [r, g, b] = [x, c, 0];
+  } else if (h < 180) {
+    [r, g, b] = [0, c, x];
+  } else if (h < 240) {
+    [r, g, b] = [0, x, c];
+  } else if (h < 300) {
+    [r, g, b] = [x, 0, c];
+  } else {
+    [r, g, b] = [c, 0, x];
+  }
   return [
     Math.round((r + m) * 255),
     Math.round((g + m) * 255),
@@ -105,7 +114,9 @@ export function imageJStrokeColor(colorKey: string): number {
  */
 export function imageJColorFromHex(hex: string): number {
   const m = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
-  if (!m) return imageJStrokeColor('');
+  if (!m) {
+    return imageJStrokeColor('');
+  }
   const n = parseInt(m[1], 16);
   return ((0xff << 24) | n) >>> 0;
 }

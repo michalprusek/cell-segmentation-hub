@@ -49,8 +49,15 @@ jobs:
         working-directory: backend
         run: npm run type-check
 
-      - name: ESLint
+      - name: ESLint (frontend)
         run: npx eslint --max-warnings=0 src/
+
+      # The root config ignores `backend/**`, so the step above is the frontend
+      # tree only. backend/src is gated by a committed baseline instead
+      # (scripts/eslint-baseline.mjs) because it still carries pre-existing
+      # problems; this fails on anything not already in eslint-baseline.json.
+      - name: ESLint (backend, baseline gate)
+        run: npm run lint:backend
 
       - name: i18n completeness
         run: node scripts/check-i18n.cjs

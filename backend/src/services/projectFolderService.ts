@@ -161,8 +161,11 @@ export async function getFolderContentsPreview(
   let ownedProjectCount = 0;
   let sharedProjectCount = 0;
   for (const item of items) {
-    if (item.project.userId === userId) ownedProjectCount += 1;
-    else sharedProjectCount += 1;
+    if (item.project.userId === userId) {
+      ownedProjectCount += 1;
+    } else {
+      sharedProjectCount += 1;
+    }
   }
 
   return { folderId, ownedProjectCount, sharedProjectCount, subfolderCount };
@@ -344,8 +347,11 @@ export async function deleteFolder(
   const ownedProjectIds: string[] = [];
   const unlinkedSharedProjectIds: string[] = [];
   for (const p of placements) {
-    if (p.project.userId === userId) ownedProjectIds.push(p.projectId);
-    else unlinkedSharedProjectIds.push(p.projectId);
+    if (p.project.userId === userId) {
+      ownedProjectIds.push(p.projectId);
+    } else {
+      unlinkedSharedProjectIds.push(p.projectId);
+    }
   }
 
   const results = await Promise.allSettled(

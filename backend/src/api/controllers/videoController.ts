@@ -53,7 +53,9 @@ const MAX_CHANNEL_DISPLAY_NAME_LEN = 128;
  *  is purely a UI label so the regex is much looser, but still
  *  rejects newlines / NUL / other terminal-mangling chars. */
 function isValidDisplayName(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
+  if (typeof value !== 'string') {
+    return false;
+  }
   if (value.length === 0 || value.length > MAX_CHANNEL_DISPLAY_NAME_LEN) {
     return false;
   }
@@ -145,9 +147,13 @@ async function loadAuthorisedContainer(
   imageId: string
 ) {
   const image = await loadImageById(req, res, imageId);
-  if (!image) return null;
+  if (!image) {
+    return null;
+  }
   const userId = await assertProjectAccess(req, res, image.projectId);
-  if (!userId) return null;
+  if (!userId) {
+    return null;
+  }
   return image;
 }
 
@@ -168,7 +174,7 @@ export class VideoController {
     // a disk-pressure DoS surface — every bail-out path now goes through
     // a single cleanup point.
     const file = req.file as Express.Multer.File | undefined;
-    const cleanupTmp = async () => {
+    const cleanupTmp = async (): Promise<void> => {
       if (file?.path) {
         await fs.rm(file.path, { force: true }).catch(() => undefined);
       }
@@ -262,7 +268,7 @@ export class VideoController {
    */
   static async addChannel(req: Request, res: Response): Promise<void> {
     const file = req.file as Express.Multer.File | undefined;
-    const cleanupTmp = async () => {
+    const cleanupTmp = async (): Promise<void> => {
       if (file?.path) {
         await fs.rm(file.path, { force: true }).catch(() => undefined);
       }
@@ -307,7 +313,9 @@ export class VideoController {
       } else if (typeof rawIds === 'string') {
         try {
           const parsed = JSON.parse(rawIds);
-          if (Array.isArray(parsed)) imageIds = parsed.map(String);
+          if (Array.isArray(parsed)) {
+            imageIds = parsed.map(String);
+          }
         } catch {
           imageIds = rawIds
             .split(',')
@@ -385,7 +393,9 @@ export class VideoController {
       }
 
       const image = await loadImageById(req, res, imageId);
-      if (!image) return;
+      if (!image) {
+        return;
+      }
 
       let absPath: string;
       let framesDir: string | null = null;
@@ -550,7 +560,9 @@ export class VideoController {
     try {
       const imageId = req.params.imageId;
       const container = await loadAuthorisedContainer(req, res, imageId);
-      if (!container) return;
+      if (!container) {
+        return;
+      }
       if (!container.isVideoContainer) {
         ResponseHelper.error(res, 'Not a video container', 404);
         return;
@@ -626,7 +638,9 @@ export class VideoController {
       }
 
       const image = await loadAuthorisedContainer(req, res, imageId);
-      if (!image) return;
+      if (!image) {
+        return;
+      }
       if (!image.isVideoContainer) {
         ResponseHelper.error(res, 'Not a video container', 400);
         return;
@@ -655,7 +669,9 @@ export class VideoController {
       );
       const merged = channels.map(c => {
         const prior = sparseByName.get(c.name);
-        if (!prior) return c;
+        if (!prior) {
+          return c;
+        }
         return {
           ...c,
           sparseSource: true,

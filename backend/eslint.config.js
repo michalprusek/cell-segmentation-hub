@@ -102,8 +102,26 @@ export default [
       'no-alert': 'error',
       'prefer-const': 'error',
       'no-var': 'error',
-      eqeqeq: 'error',
+      // `{ null: 'ignore' }` matches the frontend config (eslint.config.js at
+      // the repo root). Every one of the 36 `eqeqeq` violations this rule
+      // reported in backend/src was `x == null` / `x != null` — the deliberate
+      // nullish idiom, which is NOT equivalent to `=== null`: it matches
+      // `undefined` too. Mechanically "fixing" them would have been a silent
+      // behaviour change, and several are load-bearing (`frameIndex == null`
+      // must treat frame 0 as present, which is exactly why the code does not
+      // write `!frameIndex`). Baselining them instead would have left 36
+      // entries inviting precisely that wrong fix. Loose comparison against
+      // anything other than the `null` literal is still an error.
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
       curly: 'error',
+      // `no-undef` (from js.configs.recommended) does not understand TypeScript
+      // declaration space: it reported `Express.Multer.File` — a global
+      // namespace type contributed by @types/express-serve-static-core — as an
+      // undefined variable in 4 places. typescript-eslint's own guidance is to
+      // disable it on typed code, because tsc already reports undefined names
+      // and does so without false positives. The `globals` map above is kept:
+      // `no-global-assign` (also from js.configs.recommended) still reads it.
+      'no-undef': 'off',
     },
   },
   {
