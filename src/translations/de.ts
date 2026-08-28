@@ -1521,8 +1521,7 @@ export default {
         step1: 'Öffnen Sie die Registrierungsseite',
         step2: 'Geben Sie Ihre E-Mail-Adresse ein und wählen Sie ein Passwort',
         step3: 'Vervollständigen Sie Ihr Profil mit Name und Einrichtung',
-        step4:
-          'Legen Sie in den Einstellungen Modell, Standardschwellwert, Sprache und Design fest',
+        step4: 'Legen Sie in den Einstellungen Modell, Sprache und Design fest',
       },
       firstProject: 'Ihr erstes Projekt',
       projectDescription:
@@ -1776,19 +1775,19 @@ export default {
       howToSelect: 'Ein Modell wählen',
       selectionSteps: {
         step1:
-          'Legen Sie Standardmodell und Schwellwert in den Einstellungen fest — sie gelten überall dort, wo der Projekttyp eine Wahl zulässt',
+          'Legen Sie das Standardmodell in den Einstellungen fest — es gilt überall dort, wo der Projekttyp eine Wahl zulässt',
         step2:
           'Öffnen Sie ein Projekt und wählen Sie die zu verarbeitenden Bilder',
         step3:
           'Klicken Sie auf Segmentieren; der Dialog bietet nur kompatible Modelle an',
         step4:
-          'Passen Sie den Konfidenzschwellwert an und wägen Sie so Trefferzahl gegen Evidenz ab',
+          'Jedes Modell bringt seinen eigenen Erkennungsschwellwert mit, festgelegt bei der Validierung — pro Lauf gibt es nichts einzustellen',
         step5:
           'Wählen Sie bei einem Mehrkanalvideo, welchen Kanal das Modell lesen soll',
       },
-      thresholdNote: 'Der Mikrotubuli-Schwellwert ist bewusst fest.',
+      thresholdNote: 'Erkennungsschwellwerte sind je Modell fest.',
       thresholdNoteText:
-        'Dieses Modell verwendet seinen eigenen angepassten Schnitt von 0,97 und ignoriert den Regler. Ein niedrigerer Wert findet nicht mehr echte Filamente — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Ausgabe bei keiner Einstellung dem Bild. Fehlen Treffer, prüfen Sie stattdessen den Eingangskanal.',
+        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell verwendet den Schnitt, mit dem es validiert wurde, beim Mikrotubuli-Modell 0,97. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
       tip: 'Tipp:',
       tipText:
         'Beginnen Sie mit dem Standardmodell. Greifen Sie zu CBAM-ResUNet, wenn Ränder wichtiger sind als Geschwindigkeit, und zu Mamba-UNet, wenn Ihre Bilder niemandes Trainingsdaten ähneln.',
@@ -1815,7 +1814,7 @@ export default {
         step1: 'Laden Sie Bilder oder Videos in ein Projekt',
         step2:
           'Wählen Sie die zu verarbeitenden Bilder, oder keines, um alle zu verarbeiten',
-        step3: 'Wählen Sie Modell und Konfidenzschwellwert',
+        step3: 'Wählen Sie das Modell',
         step4:
           'Wählen Sie bei einem Mehrkanalvideo den Kanal, den das Modell lesen soll',
         step5: 'Verfolgen Sie den Fortschritt über die Statusanzeigen',
