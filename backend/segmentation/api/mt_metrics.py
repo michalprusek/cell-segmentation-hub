@@ -15,6 +15,11 @@ For each (frame, polyline, channel) it emits a long-format row with:
   OUTSIDE all bands dilated by ``thickness * margin_multiplier``, per
   channel)
 - signal_minus_background = mean_intensity - median_background
+- source_frame_index — the frame the intensity was actually read from.
+  Equal to frame_index except on a gap frame of a SPARSE channel (one the
+  microscope refreshed only every N-th timepoint, see ``sparse_fill``),
+  where it names the frame whose plane stood in, so a repeat never reads
+  as an independent observation.
 
 Unit conversion (px -> um) is intentionally done on the Node side so
 the user-supplied ``pixelToMicrometerScale`` from the export modal
@@ -139,6 +144,20 @@ class MTMetricsRequest(BaseModel):
     # some frames). No channel_offsets apply — the PNGs are already stored in the
     # registered/aligned space.
     png_channels: List[str] = Field(default_factory=list)
+    # Channels the microscope only refreshed every N-th timepoint (see
+    # ``ChannelMeta.sparseSource`` / ``sparseFill`` on the Node side, and
+    # ``plane_coverage.py`` which measures it at extraction). Channel machine
+    # name -> {gap frame index (string) -> the frame index whose plane stands in
+    # for it}.
+    #
+    # The un-acquired planes are still IN the original file — the acquisition
+    # software writes them as a constant fill — so without this map a gap frame's
+    # intensity is measured over that fill and reported as a real observation.
+    # With it, the gap reads the plane its anchor holds (the same picture the
+    # editor shows there) and every row says which frame it was measured on via
+    # ``source_frame_index``. Empty / absent = every channel covers every frame,
+    # which is every container extracted before 2026-08-28.
+    sparse_fill: Dict[str, Dict[str, int]] = Field(default_factory=dict)
 
 
 class MTMetricsRow(BaseModel):
@@ -149,6 +168,15 @@ class MTMetricsRow(BaseModel):
     instance_id: str
     track_id: Optional[str] = None
     channel: str
+    # The frame whose plane this row's intensity was ACTUALLY read from. Equal
+    # to ``frame_index`` for every ordinary row; the anchor's index on a gap
+    # frame of a sparse channel, where the microscope acquired nothing and the
+    # numbers are therefore a repeat of another frame's exposure rather than an
+    # independent observation. Usually an EARLIER frame, but not necessarily:
+    # gaps before the first exposure read forward from it, so consumers must
+    # compare the two for equality rather than assume an ordering. Geometry
+    # (``length_px``/``area_px``/``pixel_count``) is always this frame's own.
+    source_frame_index: int
     length_px: float
     area_px: int
     pixel_count: int
@@ -168,9 +196,22 @@ class MTMetricsRow(BaseModel):
 class MTChannelSummary(BaseModel):
     """Whole-video, whole-image total for one channel.
 
-    Sum / mean over EVERY pixel of the channel across ALL frames of the video —
-    independent of the microtubules. A global "how bright is this channel over
-    the whole recording" measure, distinct from the per-MT band sums.
+    Sum / mean over EVERY pixel of the channel across every frame not listed as
+    one of its gaps — independent of the microtubules. A global "how bright is
+    this channel over the whole recording" measure, distinct from the per-MT
+    band sums. ``frames`` says how many planes went into it.
+
+    For a sparse channel (``sparse_fill``) the gap planes are excluded: they
+    hold a constant fill, so counting them would divide the real signal by the
+    full frame count and report a mean the channel never had.
+
+    NOT excluded: a frame the microscope never took AT ALL (every channel
+    blank — an aborted run leaves a tail of them). ``plan_sparse_channels``
+    deliberately gives those neither coverage nor a fill entry, so they dilute
+    this total exactly as much as they always have, for a sparse channel and a
+    dense one alike. Deducting them here for sparse channels only would make one
+    channel's total incomparable with its neighbour's on the same file, which is
+    a worse answer than the one consistent bias.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -395,6 +436,71 @@ def _load_png_frame(
     return arr.astype(np.float64)
 
 
+def _sparse_gaps(
+    sparse_fill: Dict[str, Dict[str, int]], channel: str, frame_count: int
+) -> Dict[int, int]:
+    """One channel's gap frames -> the frame each reads its pixels from.
+
+    Empty for a channel the microscope acquired on every frame, which is the
+    only shape any container extracted before 2026-08-28 has.
+
+    Entries that do not name two frames of THIS file are dropped rather than
+    trusted: the map is recorded at extraction from the same original, so a gap
+    or anchor outside ``[0, frame_count)`` means the original was replaced since.
+    Falling back to the frame's own plane then reports the constant fill, which
+    is wrong but visible; reading some other frame's plane would be wrong and
+    indistinguishable from data.
+
+    An anchor that is itself a gap is dropped for that reason, and it is the one
+    rule the extractor cannot violate today (``plan_sparse_channels`` only ever
+    anchors on a covered frame) — but this is the last validator between a
+    ``channels`` JSON and a published number, and a chained map
+    (``{"2": 1, "1": 0}``) would otherwise have frame 2 measure frame 1's
+    constant fill and stamp it ``source_frame_index=1``: a blank presented as a
+    genuine measurement of another frame. It also guarantees at least one frame
+    is not a gap, so the whole-video totals below can never divide by zero
+    planes.
+    """
+    raw = sparse_fill.get(channel)
+    if not raw:
+        return {}
+    out: Dict[int, int] = {}
+    rejected = 0
+    for gap_key, anchor_value in raw.items():
+        try:
+            gap = int(gap_key)
+            anchor = int(anchor_value)
+        except (TypeError, ValueError):
+            rejected += 1
+            continue
+        if not (0 <= gap < frame_count and 0 <= anchor < frame_count):
+            rejected += 1
+            continue
+        if gap == anchor:
+            # A frame standing in for itself is not a gap; taking it as one
+            # would label a genuine observation a repeat.
+            continue
+        out[gap] = anchor
+    # Second pass: an anchor may not itself be a gap (see the docstring). Done
+    # after the first because the map is unordered — a chain's later link can be
+    # read before its earlier one.
+    chained = [gap for gap, anchor in out.items() if anchor in out]
+    for gap in chained:
+        del out[gap]
+    rejected += len(chained)
+    if rejected:
+        # Counted, not itemised: a map recorded against a different original
+        # can reject every one of several hundred entries, and one line per
+        # entry would bury the rest of the request's log.
+        logger.warning(
+            "mt-metrics: channel %s — %d of %d sparse_fill entries are not a "
+            "usable (gap -> acquired frame) pair for this %d-frame file and "
+            "were ignored (was the original replaced?)",
+            scrub(channel), rejected, len(raw), frame_count,
+        )
+    return out
+
+
 def _emit_channel_rows(
     frame_arr: np.ndarray,
     band_masks: List[np.ndarray],
@@ -403,6 +509,7 @@ def _emit_channel_rows(
     fr: "MTFrameInput",
     channel_name: str,
     rows: List["MTMetricsRow"],
+    source_frame_index: int,
 ) -> None:
     """Append one row per polyline for ``channel_name`` on frame ``fr``.
 
@@ -411,6 +518,11 @@ def _emit_channel_rows(
     raster already cast to float64 and (for volume channels) shifted into the
     registered space. Each microtubule's background is sampled from its OWN
     local vicinity ring (``vicinity_masks[pl_idx]``), not a frame-global region.
+
+    ``source_frame_index`` is the frame ``frame_arr`` was read from — ``fr``'s
+    own index except on a sparse channel's gap frame. It is carried on every row
+    rather than derived downstream so the sheet says, per measurement, whether
+    it is an independent observation.
     """
     for pl_idx, pl in enumerate(fr.polylines):
         sig = mt_measure.region_stats(frame_arr, band_masks[pl_idx])
@@ -434,6 +546,7 @@ def _emit_channel_rows(
             instance_id=pl.instance_id,
             track_id=pl.track_id,
             channel=channel_name,
+            source_frame_index=source_frame_index,
             length_px=polyline_lengths[pl_idx],
             area_px=sig.n,
             pixel_count=sig.n,
@@ -466,7 +579,8 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
            - median/mean_background = median resp. mean of the pixels in THAT
              microtubule's own vicinity ring (local, not frame-global).
            - pixel_count / sum / mean / median / std under its band.
-           - emit one row.
+           - emit one row, stamped with the frame the channel's pixels came
+             from (``source_frame_index``; see ``sparse_fill``).
     """
     if len(req.channel_indices) != len(req.channel_names):
         raise HTTPException(
@@ -501,21 +615,54 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
     # PNG-backed (added) channels live next to the original as per-frame PNGs.
     frames_dir = path.parent / "frames"
 
+    # Gap frames per channel, resolved once (the frame loop below is the outer
+    # one, so doing it per (frame, channel) would re-validate the same map on
+    # every frame). Empty for every channel of a dense container, which is what
+    # keeps this whole feature a no-op there.
+    gaps_by_channel: Dict[str, Dict[int, int]] = {
+        name: _sparse_gaps(req.sparse_fill, name, T)
+        for name in list(req.channel_names) + list(req.png_channels)
+    }
+
     # Whole-image per-channel totals over the whole video: sum of EVERY pixel of
-    # the channel across ALL frames (not just the MT bands). Uses the RAW file
-    # (no registration offset) — this is a global channel measure and the
-    # zero-filled borders of a shifted channel would understate its true total.
+    # the channel across every frame that ACQUIRED it (not just the MT bands).
+    # Uses the RAW file (no registration offset) — this is a global channel
+    # measure and the zero-filled borders of a shifted channel would understate
+    # its true total.
     channel_summaries: List[MTChannelSummary] = []
     for ci_idx, ci in enumerate(req.channel_indices):
-        chan = volume[:, ci].astype(np.float64)
-        pix = int(chan.size)
-        total = float(chan.sum())
+        name = req.channel_names[ci_idx]
+        gaps = gaps_by_channel.get(name) or {}
+        if gaps:
+            # Sparse: the gap planes are a constant fill the microscope never
+            # exposed. Summing them adds nothing (they are usually literal
+            # zeros) but divides by their pixels, so the reported mean would be
+            # the real mean scaled by the coverage fraction. Accumulate per
+            # covered plane instead of materialising a float64 copy of a subset.
+            total = 0.0
+            pix = 0
+            covered = 0
+            for t in range(T):
+                if t in gaps:
+                    continue
+                plane = volume[t, ci]
+                total += float(np.sum(plane, dtype=np.float64))
+                pix += int(plane.size)
+                covered += 1
+        else:
+            # Dense: unchanged from before sparse channels existed, deliberately
+            # kept as one reduction so a dense container's totals stay
+            # bit-identical.
+            chan = volume[:, ci].astype(np.float64)
+            pix = int(chan.size)
+            total = float(chan.sum())
+            covered = int(T)
         channel_summaries.append(MTChannelSummary(
-            channel=req.channel_names[ci_idx],
+            channel=name,
             total_intensity=total,
             mean_intensity=(total / pix) if pix else 0.0,
             pixel_count=pix,
-            frames=int(T),
+            frames=covered,
         ))
     # Whole-image totals for PNG-backed (added) channels: stream over every
     # frame that actually has a PNG (partial coverage → fewer frames). One PIL
@@ -524,7 +671,10 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
         total = 0.0
         pix = 0
         frames_present = 0
+        png_gaps = gaps_by_channel.get(name) or {}
         for t in range(T):
+            if t in png_gaps:
+                continue
             arr = _load_png_frame(frames_dir, t, name, H, W)
             if arr is None:
                 continue
@@ -567,13 +717,24 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
         vicinity_masks = geom.vicinities
 
         # 4. Per-channel computations.
-        # Per-frame registration offsets (channel-registration at upload), one
-        # [dy, dx] per C-axis channel index. None when the upload wasn't
-        # registered — then channels are sampled from the raw file unchanged.
-        frame_offsets = (req.channel_offsets or {}).get(str(t))
         for ci_idx, ci in enumerate(req.channel_indices):
             channel_name = req.channel_names[ci_idx]
-            raw = volume[t, ci]
+            # A gap frame of a sparse channel reads the plane its anchor holds —
+            # the same picture the editor shows there, and (since the gap's
+            # segmentation is projected from that anchor unchanged) under the
+            # same geometry. Sampling the frame's own plane would measure the
+            # constant fill the acquisition software wrote for a timepoint it
+            # never imaged.
+            src_t = (gaps_by_channel.get(channel_name) or {}).get(t, t)
+            raw = volume[src_t, ci]
+            # Per-frame registration offsets (channel-registration at upload),
+            # one [dy, dx] per C-axis channel index. None when the upload wasn't
+            # registered — then channels are sampled from the raw file
+            # unchanged. Keyed by the frame the PIXELS come from: registration
+            # skips blank planes, so a gap frame's own entry is [0, 0] and using
+            # it would leave the anchor's pixels unshifted while the polylines
+            # sit in registered space.
+            frame_offsets = (req.channel_offsets or {}).get(str(src_t))
             # Shift the raw channel into the registered (channel-0) space the
             # polylines live in, so intensity is sampled where the microtubule
             # actually is in this channel. Channel 0 / no-offset is a no-op.
@@ -586,19 +747,20 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
             frame_arr = raw.astype(np.float64)
             _emit_channel_rows(
                 frame_arr, band_masks, polyline_lengths,
-                vicinity_masks, fr, channel_name, rows,
+                vicinity_masks, fr, channel_name, rows, src_t,
             )
 
         # PNG-backed (added) channels: sampled from the per-frame PNG, already
         # in the stored/aligned space, so no registration offset is applied. A
         # frame whose PNG is absent (partial coverage) yields no rows.
         for name in req.png_channels:
-            frame_arr = _load_png_frame(frames_dir, t, name, H, W)
+            src_t = (gaps_by_channel.get(name) or {}).get(t, t)
+            frame_arr = _load_png_frame(frames_dir, src_t, name, H, W)
             if frame_arr is None:
                 continue
             _emit_channel_rows(
                 frame_arr, band_masks, polyline_lengths,
-                vicinity_masks, fr, name, rows,
+                vicinity_masks, fr, name, rows, src_t,
             )
 
     # Count rows whose per-MT vicinity ring came out empty (background nulled).
@@ -607,10 +769,15 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
     # ring), so surface it — otherwise scattered blank background cells look
     # like a bug rather than "no local background available".
     null_bg = sum(1 for r in rows if r.median_background is None)
+    # And how many were read off another frame's plane, so a sheet full of
+    # repeated intensities has a matching line in the log rather than looking
+    # like the measurement got stuck.
+    propagated = sum(1 for r in rows if r.source_frame_index != r.frame_index)
     logger.info(
         "mt-metrics: produced %d rows from %d frames (%d with empty local "
-        "background ring → null background)",
-        len(rows), len(req.frames), null_bg,
+        "background ring → null background; %d measured on a sparse channel's "
+        "stand-in plane)",
+        len(rows), len(req.frames), null_bg, propagated,
     )
     return MTMetricsResponse(
         rows=rows,
