@@ -321,17 +321,25 @@ type-check:
 # legacy editor tests). Including it here would render `make ci` unusable
 # until the suite is healed. Use `make ci-test` to run vitest separately.
 ci:
-	@echo "🔍 [1/5] TypeScript (frontend — baseline gate)"
+	@echo "🔍 [1/6] TypeScript (frontend — baseline gate)"
 	@npm run type-check
-	@echo "🔍 [2/5] TypeScript (backend)"
+	@echo "🔍 [2/6] TypeScript (backend)"
 	@cd backend && npm run type-check
-	@echo "🔍 [3/5] ESLint (strict — 0 warnings)"
+	@echo "🔍 [3/6] ESLint (strict — 0 warnings)"
 	@npx eslint --max-warnings=0 src/
-	@echo "🔍 [4/5] i18n completeness (6 locales)"
+	@echo "🔍 [4/6] i18n completeness (6 locales)"
 	@node scripts/check-i18n.cjs
-	@echo "🔍 [5/5] Python suites (same 214 tests CI runs)"
+	@echo "🔍 [5/6] Documentation link integrity"
+	@node scripts/check-doc-links.cjs
+	@echo "🔍 [6/6] Python suites (same 214 tests CI runs)"
 	@$(MAKE) --no-print-directory test-py
 	@echo "✅ All local CI checks passed"
+
+# Documentation link integrity on its own — every relative link under docs/
+# and in the root Markdown files must resolve. Run after renaming or deleting
+# a page; it is also step 5 of `make ci`.
+docs-links:
+	@node scripts/check-doc-links.cjs
 
 # Optional: run the Vitest suite. Currently has known pre-existing
 # failures (~31%). Use to investigate specific test files; don't treat

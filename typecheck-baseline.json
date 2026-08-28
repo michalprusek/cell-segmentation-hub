@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 474,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1420,
-    "all": 1915
+    "tsconfig.test.json": 1423,
+    "all": 1918
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1342,6 +1342,11 @@
         "TS6307: File 'src/components/project/RenameFolderDialog.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/hooks/useDashboardProjects.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS7030: Not all code paths return a value.": 1
+      },
+      "src/pages/Documentation.tsx": {
+        "TS6307: File 'src/pages/documentation/DocsBlocks.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/documentation/docsContent.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/documentation/useDocsSearch.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/ForgotPassword.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,

@@ -1,723 +1,164 @@
-# Backend Architecture
+# Backend architecture
 
-The backend is a Node.js API server built with Express and TypeScript, providing secure REST endpoints for user management, project handling, and ML service integration.
-
-## Technology Stack
-
-- **Runtime**: Node.js with TypeScript
-- **Framework**: Express.js
-- **Database**: SQLite with Prisma ORM
-- **Authentication**: JWT (access + refresh tokens)
-- **File Storage**: Local filesystem with Sharp image processing
-- **Validation**: Zod schemas + express-validator
-- **Security**: Helmet, CORS, rate limiting
-- **Logging**: Winston structured logging
-
-## Project Structure
+Node.js + Express + TypeScript, with Prisma over PostgreSQL. It owns
+authentication, the segmentation queue, all file storage, export, sharing and
+the WebSocket.
 
 ```
-backend/src/
-├── api/                    # API layer
-│   ├── controllers/        # Request handlers
-│   │   ├── authController.ts
-│   │   ├── projectController.ts
-│   │   ├── imageController.ts
-│   │   └── segmentationController.ts
-│   └── routes/            # Route definitions
-│       ├── authRoutes.ts
-│       ├── projectRoutes.ts
-│       ├── imageRoutes.ts
-│       └── segmentationRoutes.ts
-├── auth/                  # Authentication utilities
-│   ├── jwt.ts             # JWT token management
-│   ├── password.ts        # Password hashing
-│   └── validation.ts      # Auth validation schemas
-├── db/                    # Database utilities
-│   ├── index.ts           # Prisma client setup
-│   └── seed.ts            # Database seeding
-├── middleware/            # Express middleware
-│   ├── auth.ts            # JWT authentication
-│   ├── error.ts           # Error handling
-│   ├── upload.ts          # File upload handling
-│   └── validation.ts      # Request validation
-├── services/              # Business logic
-│   ├── authService.ts
-│   ├── projectService.ts
-│   ├── imageService.ts
-│   └── segmentationService.ts
-├── storage/               # File storage abstraction
-│   ├── interface.ts       # Storage interface
-│   ├── localStorage.ts    # Local file storage
-│   └── index.ts           # Storage factory
-├── types/                 # TypeScript definitions
-│   ├── index.ts           # Common types
-│   └── validation.ts      # Validation schemas
-├── utils/                 # Utilities
-│   ├── config.ts          # Configuration management
-│   ├── logger.ts          # Logging setup
-│   └── response.ts        # Response helpers
-└── server.ts              # Application entry point
+Routes → Controllers → Services → Prisma → PostgreSQL
+                            └────→ Filesystem (uploads, exports)
+                            └────→ ML service (HTTP)
 ```
 
-## Core Architecture Patterns
+---
 
-### Layered Architecture
+## Layout of `backend/src/`
 
-The backend follows a clean layered architecture:
+| Path                 | Contains                                                  |
+| -------------------- | --------------------------------------------------------- |
+| `api/routes/`        | One router per resource; `index.ts` mounts them           |
+| `api/controllers/`   | HTTP shape: validate, call a service, format the response |
+| `services/`          | The actual behaviour                                      |
+| `services/export/`   | Format converters, ImageJ/CVAT encoders, archiving        |
+| `services/metrics/`  | Shape metrics and the disintegration path                 |
+| `services/video/`    | Extraction, channels, registration, playback proxy        |
+| `services/tracking/` | The microtubule cross-frame tracker client                |
+| `middleware/`        | Auth, uploads, rate limiting, validation, caching         |
+| `constants/`         | The backend model registry                                |
+| `utils/`             | Config, auth cookies, geometry, storage-path guards       |
+
+Routers are mounted at `/api/health`, `/api/auth`, `/api/users`,
+`/api/projects`, `/api/images`, `/api/segmentation`, `/api/queue`, `/api/ml`,
+`/api/feedback`, `/api/folders`, `/api/segmenter`, plus export, sharing and
+essays routers mounted at `/api` because their paths are project-scoped. Full
+list: [REST API](../api/README.md).
+
+---
+
+## Authentication
+
+JWT access and refresh tokens carried in **httpOnly cookies**
+(`access_token`, `refresh_token`) with `sameSite: strict`, plus a
+non-secret, JS-readable `authenticated` flag so the client can tell whether a
+session _might_ exist without being able to read the tokens. XSS therefore
+cannot exfiltrate a token.
+
+Sessions are rows in the database, so refresh tokens can be invalidated
+server-side. Details: [Authentication](../api/authentication.md).
+
+---
+
+## The segmentation queue
+
+`SegmentationQueue` rows carry the image, the project, the user, the chosen
+model and threshold, hole detection, an optional channel override, a priority
+and a status.
+
+The worker:
+
+1. selects a batch, **deprioritising users who were recently served** so one
+   200-frame video cannot monopolise the GPU;
+2. **enforces model/project-type compatibility here**, not at enqueue — so a
+   `202` is not a promise that the item will run;
+3. rewrites the frame's path when a channel override is set;
+4. POSTs to the ML service and stores the result;
+5. emits WebSocket events.
+
+Two behaviours worth knowing:
+
+- **A static (single-image) channel is segmented once and projected** across
+  every covered frame, rather than being segmented per frame. One production
+  container of 299 frames otherwise produced 30 498 polylines resolving to 102
+  tracks — the same detections counted 299 times.
+- **Microtubule tracking is fire-and-forget.** It runs once every frame of a
+  container is in a final state; a timeout is logged and yields no assignments,
+  and a partial write-back leaves the container half-tracked.
+
+---
+
+## Storage
+
+Everything image-shaped is on disk, never in the database:
 
 ```
-┌─────────────────────┐
-│    Controllers      │  ← Handle HTTP requests/responses
-├─────────────────────┤
-│     Services        │  ← Business logic & orchestration
-├─────────────────────┤
-│   Data Access       │  ← Database operations (Prisma)
-├─────────────────────┤
-│     Storage         │  ← File system operations
-└─────────────────────┘
+uploads/projects/<projectId>/images/<containerId>/
+    original.<ext>
+    thumbnail.jpg
+    frames/<NNNN>/<channel>.png
+    frames/<NNNN>/<channel>.p<range>.webp
+    registration.json
 ```
 
-### Request Flow
+Every user-derived path segment goes through a safety assertion before it
+becomes part of a path, and channel names are restricted to
+`[A-Za-z0-9_-]{1,64}`. That cap is load-bearing: in August 2026 a
+Fiji/Bio-Formats export embedded a ~140-character source filename in every slice
+label, the read gate enforced 64, and nine containers became permanently
+unreadable. Uploads now fail loudly instead of persisting such a container.
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant M as Middleware
-    participant Ctrl as Controller
-    participant Svc as Service
-    participant DB as Database
-    participant FS as FileSystem
+---
 
-    C->>M: HTTP Request
-    M->>M: Auth, Validation, Rate Limit
-    M->>Ctrl: Validated Request
-    Ctrl->>Svc: Business Logic
-    Svc->>DB: Data Operations
-    Svc->>FS: File Operations
-    Svc-->>Ctrl: Result
-    Ctrl-->>M: Response
-    M-->>C: HTTP Response
-```
+## Video handling
 
-## Authentication System
+`services/video/` shells out to Python helpers for extraction: `nd2` for ND2,
+`tifffile` for TIFF stacks, `ffmpeg-static` for ordinary video. Progress is
+streamed back on stdout; a SIGKILL is diagnosed as an out-of-memory kill rather
+than reported as a generic failure.
 
-### JWT Token Strategy
+Bit depth is preserved — 8- and 16-bit data pass through unchanged into
+per-frame PNGs. The only narrowing is the playback proxy, which never feeds a
+measurement.
 
-```typescript
-// Dual token approach
-interface TokenPair {
-  accessToken: string; // Short-lived (15 minutes)
-  refreshToken: string; // Long-lived (7 days)
-}
+A multi-position ND2 fans out into one container per position, each with its own
+self-contained single-position OME-TIFF; the uploaded `.nd2` is then deleted.
 
-// Token generation
-const generateTokenPair = (userId: string): TokenPair => {
-  const accessToken = jwt.sign(
-    { userId, type: 'access' },
-    config.JWT_ACCESS_SECRET,
-    { expiresIn: '15m' }
-  );
+---
 
-  const refreshToken = jwt.sign(
-    { userId, type: 'refresh' },
-    config.JWT_REFRESH_SECRET,
-    { expiresIn: '7d' }
-  );
+## Export
 
-  return { accessToken, refreshToken };
-};
-```
+Asynchronous jobs with progress over both WebSocket and HTTP polling. **One
+active export per user.** The job builds a directory tree, runs each stage, and
+archives it.
 
-### Authentication Middleware
+Design points that came from production incidents:
 
-```typescript
-export const authenticateToken = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : null;
+- The stage count is a **pure function**, because four exporters were once
+  pushed but never counted and froze the bar at 95 % for twenty minutes.
+- ML calls are **serialised behind one semaphore** — the ML service has a single
+  worker, and one export once produced 893 concurrency-limit warnings and a
+  seven-minute head-of-line block.
+- ML timeouts are **workload-scaled**, not fixed; a hard-coded five minutes
+  silently degraded real exports to geometry-only sheets.
+- Non-fatal stages degrade to **warnings**, and a degraded microtubule metrics
+  run is additionally recorded in `metrics/metrics_status.json` and as a banner
+  in the metrics guide — a toast is missable on a multi-hour job.
 
-    if (!token) {
-      return ResponseHelper.unauthorized(res, 'Access token required');
-    }
+See [Export](../guides/export.md).
 
-    const decoded = jwt.verify(token, config.JWT_ACCESS_SECRET) as JWTPayload;
+---
 
-    if (decoded.type !== 'access') {
-      return ResponseHelper.unauthorized(res, 'Invalid token type');
-    }
+## Real-time
 
-    // Attach user to request
-    req.userId = decoded.userId;
-    next();
-  } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return ResponseHelper.unauthorized(res, 'Token expired');
-    }
-    return ResponseHelper.unauthorized(res, 'Invalid token');
-  }
-};
-```
+Socket.io with a `user:<id>` room joined on connect and `project:<id>` rooms
+joined on request. Segmentation updates go to the user room only, to avoid
+double delivery. Full event list: [WebSocket events](../api/websocket.md).
 
-### Password Security
+---
 
-```typescript
-// bcryptjs with salt rounds
-const SALT_ROUNDS = 12;
+## Operational notes
 
-export const hashPassword = async (password: string): Promise<string> => {
-  return bcrypt.hash(password, SALT_ROUNDS);
-};
+- **Migrations**: `prisma migrate dev` in development (creates files),
+  `prisma migrate deploy` in production (applies existing ones). Never the
+  former against a live database.
+- **Column types matter.** `Image.fileSize` is `BigInt` because ND2 and TIFF
+  stacks routinely exceed the 2 GB `Int4` ceiling.
+- **Heap**: the backend runs with an explicitly raised V8 heap. The 2 GB default
+  — not the container's memory limit — was the real cause of a "stuck" export.
+- **After recreating the backend container, restart nginx**: its upstream DNS
+  cache pins the old container IP and you get 502s otherwise.
 
-export const comparePasswords = async (
-  password: string,
-  hashedPassword: string
-): Promise<boolean> => {
-  return bcrypt.compare(password, hashedPassword);
-};
-```
+## Related
 
-## Database Layer
-
-### Prisma ORM Integration
-
-```typescript
-// Database client setup
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient({
-  log:
-    config.NODE_ENV === 'development' ? ['query', 'info', 'warn'] : ['error'],
-  errorFormat: 'pretty',
-});
-
-// Connection management
-export const initializeDatabase = async (): Promise<void> => {
-  try {
-    await prisma.$connect();
-    logger.info('Database connected successfully');
-  } catch (error) {
-    logger.error('Database connection failed:', error);
-    throw error;
-  }
-};
-
-export const disconnectDatabase = async (): Promise<void> => {
-  await prisma.$disconnect();
-  logger.info('Database disconnected');
-};
-```
-
-### Service Layer Pattern
-
-```typescript
-// Project service with transaction support
-export class ProjectService {
-  static async createProject(
-    userId: string,
-    projectData: CreateProjectData
-  ): Promise<Project> {
-    return prisma.$transaction(async tx => {
-      // Validate user exists
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        throw new AppError('User not found', 404);
-      }
-
-      // Create project
-      const project = await tx.project.create({
-        data: {
-          ...projectData,
-          userId,
-        },
-        include: {
-          user: {
-            select: { id: true, email: true },
-          },
-        },
-      });
-
-      logger.info(`Project created: ${project.id} by user: ${userId}`);
-      return project;
-    });
-  }
-
-  static async getUserProjects(userId: string): Promise<Project[]> {
-    return prisma.project.findMany({
-      where: { userId },
-      include: {
-        images: {
-          select: {
-            id: true,
-            name: true,
-            segmentationStatus: true,
-            createdAt: true,
-          },
-        },
-        _count: {
-          select: { images: true },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-  }
-}
-```
-
-## File Storage System
-
-### Storage Abstraction
-
-```typescript
-// Storage interface for flexibility
-export interface StorageInterface {
-  uploadFile(file: Express.Multer.File, path: string): Promise<string>;
-  deleteFile(path: string): Promise<void>;
-  getFileUrl(path: string): string;
-  generateThumbnail(originalPath: string, thumbnailPath: string): Promise<void>;
-}
-
-// Local filesystem implementation
-export class LocalStorage implements StorageInterface {
-  constructor(private baseDir: string) {}
-
-  async uploadFile(
-    file: Express.Multer.File,
-    relativePath: string
-  ): Promise<string> {
-    const fullPath = path.join(this.baseDir, relativePath);
-    await fs.ensureDir(path.dirname(fullPath));
-    await fs.move(file.path, fullPath);
-    return relativePath;
-  }
-
-  async generateThumbnail(
-    originalPath: string,
-    thumbnailPath: string
-  ): Promise<void> {
-    const fullOriginalPath = path.join(this.baseDir, originalPath);
-    const fullThumbnailPath = path.join(this.baseDir, thumbnailPath);
-
-    await sharp(fullOriginalPath)
-      .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 80 })
-      .toFile(fullThumbnailPath);
-  }
-}
-```
-
-### Image Processing Pipeline
-
-```typescript
-// Image service with processing
-export class ImageService {
-  static async uploadImages(
-    projectId: string,
-    files: Express.Multer.File[]
-  ): Promise<ImageWithMetadata[]> {
-    const results = await Promise.all(
-      files.map(async file => {
-        // Generate paths
-        const filename = `${uuid.v4()}-${file.originalname}`;
-        const originalPath = `projects/${projectId}/images/${filename}`;
-        const thumbnailPath = `projects/${projectId}/thumbnails/thumb_${filename}`;
-
-        // Upload original
-        await storage.uploadFile(file, originalPath);
-
-        // Get image metadata
-        const metadata = await sharp(file.path).metadata();
-
-        // Generate thumbnail
-        await storage.generateThumbnail(originalPath, thumbnailPath);
-
-        // Save to database
-        const image = await prisma.image.create({
-          data: {
-            name: file.originalname,
-            originalPath,
-            thumbnailPath,
-            projectId,
-            fileSize: file.size,
-            width: metadata.width,
-            height: metadata.height,
-            mimeType: file.mimetype,
-          },
-        });
-
-        return {
-          ...image,
-          url: storage.getFileUrl(originalPath),
-          thumbnailUrl: storage.getFileUrl(thumbnailPath),
-        };
-      })
-    );
-
-    return results;
-  }
-}
-```
-
-## API Integration
-
-### ML Service Communication
-
-```typescript
-// Segmentation service integration
-export class SegmentationService {
-  static async requestSegmentation(
-    imageId: string,
-    model: string = 'hrnet',
-    threshold: number = 0.5
-  ): Promise<SegmentationResult> {
-    const image = await prisma.image.findUnique({
-      where: { id: imageId },
-    });
-
-    if (!image) {
-      throw new AppError('Image not found', 404);
-    }
-
-    // Update status to processing
-    await prisma.image.update({
-      where: { id: imageId },
-      data: { segmentationStatus: 'processing' },
-    });
-
-    try {
-      // Call ML service
-      const formData = new FormData();
-      // Validate and sanitize the file path to prevent directory traversal
-      if (
-        !image.originalPath ||
-        image.originalPath.includes('..') ||
-        path.isAbsolute(image.originalPath)
-      ) {
-        throw new Error('Invalid file path');
-      }
-
-      const safePath = path.resolve(config.UPLOAD_DIR, image.originalPath);
-      const uploadDirResolved = path.resolve(config.UPLOAD_DIR);
-
-      // Ensure the resolved path is within the upload directory
-      if (!safePath.startsWith(uploadDirResolved)) {
-        throw new Error('Path traversal attempt detected');
-      }
-
-      const imageBuffer = await fs.readFile(safePath);
-      formData.append('file', imageBuffer, image.name);
-
-      const response = await axios.post(
-        `${config.SEGMENTATION_SERVICE_URL}/api/v1/segment`,
-        formData,
-        {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          params: { model, threshold },
-          timeout: 120000, // 2 minutes
-        }
-      );
-
-      // Save results
-      const segmentation = await prisma.segmentation.create({
-        data: {
-          imageId,
-          polygons: JSON.stringify(response.data.polygons),
-          model,
-          threshold,
-          confidence: response.data.confidence,
-          processingTime: response.data.processing_time,
-        },
-      });
-
-      // Update image status
-      await prisma.image.update({
-        where: { id: imageId },
-        data: { segmentationStatus: 'completed' },
-      });
-
-      return {
-        id: segmentation.id,
-        polygons: JSON.parse(segmentation.polygons),
-        confidence: segmentation.confidence,
-        processingTime: segmentation.processingTime,
-      };
-    } catch (error) {
-      // Update status to failed
-      await prisma.image.update({
-        where: { id: imageId },
-        data: { segmentationStatus: 'failed' },
-      });
-
-      throw error;
-    }
-  }
-}
-```
-
-## Error Handling
-
-### Structured Error System
-
-```typescript
-// Custom error types
-export class AppError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number = 500,
-    public code?: string
-  ) {
-    super(message);
-    this.name = 'AppError';
-  }
-}
-
-// Global error handler
-export const errorHandler = (
-  error: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  logger.error('Error occurred:', {
-    message: error.message,
-    stack: error.stack,
-    url: req.url,
-    method: req.method,
-    userId: req.userId,
-  });
-
-  if (error instanceof AppError) {
-    return ResponseHelper.error(res, error.message, error.statusCode);
-  }
-
-  if (error.name === 'ValidationError') {
-    return ResponseHelper.badRequest(res, error.message);
-  }
-
-  // Default server error
-  return ResponseHelper.internalServerError(res, 'Internal server error');
-};
-```
-
-### Response Helpers
-
-```typescript
-// Consistent response format
-export class ResponseHelper {
-  static success<T>(
-    res: Response,
-    data: T,
-    message?: string,
-    statusCode: number = 200
-  ) {
-    return res.status(statusCode).json({
-      success: true,
-      message,
-      data,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  static error(
-    res: Response,
-    message: string,
-    statusCode: number = 400,
-    errors?: any
-  ) {
-    return res.status(statusCode).json({
-      success: false,
-      error: message,
-      errors,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  static unauthorized(res: Response, message: string = 'Unauthorized') {
-    return this.error(res, message, 401);
-  }
-
-  static forbidden(res: Response, message: string = 'Forbidden') {
-    return this.error(res, message, 403);
-  }
-}
-```
-
-## Security Features
-
-### Request Validation
-
-```typescript
-// Zod schema validation
-export const createProjectSchema = z.object({
-  body: z.object({
-    title: z.string().min(1).max(255),
-    description: z.string().max(1000).optional(),
-  }),
-});
-
-// Validation middleware
-export const validateRequest = (schema: z.ZodSchema) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const validatedData = schema.parse({
-        body: req.body,
-        query: req.query,
-        params: req.params,
-      });
-
-      // Replace request data with validated data
-      req.body = validatedData.body || req.body;
-      req.query = validatedData.query || req.query;
-      req.params = validatedData.params || req.params;
-
-      next();
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return ResponseHelper.badRequest(res, 'Validation failed', {
-          issues: error.errors,
-        });
-      }
-      next(error);
-    }
-  };
-};
-```
-
-### Rate Limiting
-
-```typescript
-// Configurable rate limiting
-const createRateLimiter = (options: {
-  windowMs: number;
-  max: number;
-  message: string;
-}) => {
-  return rateLimit({
-    windowMs: options.windowMs,
-    max: options.max,
-    message: {
-      success: false,
-      error: options.message,
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    handler: (req, res) => {
-      return ResponseHelper.error(res, options.message, 429);
-    },
-  });
-};
-
-// Different limits for different endpoints
-app.use(
-  '/api/auth/login',
-  createRateLimiter({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // 5 attempts per window
-    message: 'Too many login attempts',
-  })
-);
-```
-
-## Logging & Monitoring
-
-### Structured Logging
-
-```typescript
-// Winston logger configuration
-const logger = winston.createLogger({
-  level: config.LOG_LEVEL,
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console({
-      format:
-        config.NODE_ENV === 'development'
-          ? winston.format.combine(
-              winston.format.colorize(),
-              winston.format.simple()
-            )
-          : winston.format.json(),
-    }),
-    new winston.transports.File({
-      filename: 'logs/error.log',
-      level: 'error',
-    }),
-    new winston.transports.File({
-      filename: 'logs/combined.log',
-    }),
-  ],
-});
-
-// Request logging middleware
-export const createRequestLogger = (serviceName: string) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const start = Date.now();
-
-    res.on('finish', () => {
-      const duration = Date.now() - start;
-
-      logger.info('HTTP Request', {
-        service: serviceName,
-        method: req.method,
-        url: req.url,
-        statusCode: res.statusCode,
-        duration,
-        userAgent: req.get('User-Agent'),
-        ip: req.ip,
-        userId: req.userId,
-      });
-    });
-
-    next();
-  };
-};
-```
-
-### Health Checks
-
-```typescript
-// Database health check
-export const checkDatabaseHealth = async () => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    return { healthy: true, message: 'Database connection successful' };
-  } catch (error) {
-    return {
-      healthy: false,
-      message: 'Database connection failed',
-      error: error.message,
-    };
-  }
-};
-
-// Comprehensive health endpoint
-app.get('/health', async (req, res) => {
-  const dbHealth = await checkDatabaseHealth();
-
-  const healthData = {
-    status: dbHealth.healthy ? 'healthy' : 'unhealthy',
-    timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0',
-    environment: config.NODE_ENV,
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    database: dbHealth,
-  };
-
-  return ResponseHelper.success(
-    res,
-    healthData,
-    dbHealth.healthy ? 'Service is healthy' : 'Service has issues'
-  );
-});
-```
-
-The backend architecture provides a robust, secure, and scalable foundation for the cell segmentation application, with clear separation of concerns and comprehensive error handling.
+- [REST API](../api/README.md)
+- [Database schema](../reference/database-schema.md)
+- [Deployment](../deployment/README.md)

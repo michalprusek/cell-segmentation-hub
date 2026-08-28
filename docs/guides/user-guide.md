@@ -1,479 +1,184 @@
-# User Guide
+# User guide
 
-Welcome to the Cell Segmentation Hub! This guide will help you get started with analyzing your cell images using our AI-powered segmentation tools.
+The end-to-end walkthrough: from an account to an exported result. Each step
+links to a detailed page.
 
-## Getting Started
+The same material, searchable and translated into six languages, is available
+inside the app at
+[`/documentation`](https://spherosegapp.utia.cas.cz/documentation).
 
-### 1. Account Setup
+---
 
-#### Registration
+## 1. Account
 
-1. Navigate to the application homepage
-2. Click "Request Access" or "Register"
-3. Fill in your information:
-   - **Email**: Your professional email address
-   - **Name**: Your full name
-   - **Institution**: Your organization or university
-   - **Purpose**: Brief description of your intended use
-4. Submit your request and wait for approval
+Sign-up is open — go to `/sign-up`, enter an e-mail and a password. There is no
+approval queue.
 
-#### First Login
+In **Settings** you can set:
 
-1. Once approved, you'll receive an email with login instructions
-2. Click "Login" and enter your credentials
-3. Complete your profile setup:
-   - Upload a profile picture (optional)
-   - Add a bio describing your research
-   - Choose your preferred segmentation model
-   - Set your default threshold value
-   - Select language and theme preferences
+- your **preferred model** and **default confidence threshold** (used wherever
+  the project type allows a choice);
+- **language** — English, Czech, Spanish, German, French or Chinese;
+- **theme**;
+- e-mail notification and data-use consent preferences.
 
-### 2. Dashboard Overview
+Your profile (username, organisation, bio, avatar) is optional and can be made
+public.
 
-The main dashboard provides an overview of your projects and recent activity:
+---
 
-- **Project Cards**: Visual summary of each project with image count and progress
-- **Recent Activity**: Latest uploads and segmentation results
-- **Quick Actions**: Create new project, upload images, access settings
-- **Statistics**: Overall usage statistics and storage information
+## 2. Projects and folders
 
-## Working with Projects
+A **project** is a set of images plus the segmentations made from them, and it
+has a **type** that decides how everything downstream behaves.
 
-### Creating a New Project
+Create one from the dashboard: title, optional description, and the **project
+type** — see [Project types](project-types.md) and pick carefully, because the
+type determines which models you can run.
 
-1. Click "New Project" from the dashboard
-2. Enter project details:
-   - **Title**: Descriptive name for your project
-   - **Description**: Optional detailed description
-3. Click "Create Project"
+Projects can be organised into a **folder tree** that is private to you: two
+users can file the same shared project in different folders. Folders nest
+arbitrarily; deleting one sweeps its subtree (your own projects are deleted,
+shared ones are only unlinked).
 
-Your new project will appear in the dashboard with an empty state.
+Each project card shows its image count, a thumbnail and progress. The owner can
+mark a project **verified** ("all annotations reviewed") — so can an
+accepted collaborator, unlike the title, description and type, which stay
+owner-only.
 
-### Project Management
+---
 
-#### Project Actions
+## 3. Upload
 
-- **View Details**: Click on project card to see all images and results
-- **Edit Project**: Update title and description
-- **Delete Project**: Permanently remove project and all data
-- **Export Results**: Download segmentation data in various formats
+Drag files onto the upload area, click to browse, or drop a whole folder.
 
-#### Project Statistics
+- **Images**: JPEG, PNG, TIFF, BMP — up to **20 MB** each.
+- **Videos and stacks**: MP4, AVI, MOV, MKV, WebM, Nikon ND2 and multi-page
+  TIFF — up to **100 GB**.
 
-Each project shows:
+Tick **Auto-segment images after upload** to queue everything as it lands.
 
-- Total number of images
-- Completed segmentations
-- Processing status
-- Creation and last modified dates
+A video, ND2 or multi-page TIFF becomes a **container** with one row per frame.
+An ND2 recorded at several stage positions becomes **one project entry per
+position**.
 
-## Image Upload and Management
+Full details, including how the platform decides whether a `.tif` is an image or
+a stack: [Uploading data](uploading-data.md) and
+[Videos, frames and channels](videos-and-channels.md).
 
-### Uploading Images
+---
 
-1. Navigate to a project or use the global upload
-2. Choose upload method:
-   - **Drag & Drop**: Drag image files directly onto the upload area
-   - **Click to Browse**: Select files from your computer
-   - **Batch Upload**: Select multiple images at once
+## 4. Segment
 
-#### Supported Formats
+Select images (or none, for all) and press **Segment**. You choose the model —
+where your project type offers a choice — and the confidence threshold. On a
+multi-channel video a **channel picker** appears first.
 
-- **JPEG/JPG**: Most common format, good compression
-- **PNG**: Lossless format, larger file sizes
-- **File Size Limit**: 50MB per image
-- **Batch Limit**: 20 images per upload
+Work is queued and processed in the background:
 
-#### Upload Options
+- progress arrives live over a WebSocket;
+- batches of up to **10 000 images** are supported;
+- the scheduler deprioritises users who were recently served, so one 200-frame
+  video cannot monopolise the GPU;
+- interrupted work is recovered rather than lost.
 
-- **Auto-Segmentation**: Automatically start segmentation after upload
-- **Model Selection**: Choose which AI model to use
-- **Threshold Setting**: Set confidence threshold for segmentation
+Model compatibility is enforced by the worker, not at submission, so an accepted
+job can still be rejected at dispatch if the model does not match the project
+type.
 
-### Image Management
+---
 
-#### Image Gallery
+## 5. Edit
 
-- **Thumbnail View**: Quick overview of all images
-- **List View**: Detailed information including status and metadata
-- **Filter Options**: Filter by processing status, upload date, or size
-- **Sort Options**: Sort by name, date, size, or status
+Open any image to enter the [segmentation editor](segmentation-editor.md).
 
-#### Image Actions
+The essentials:
 
-- **View Details**: See full-size image and metadata
-- **Start Segmentation**: Manually trigger AI processing
-- **View Results**: Examine segmentation polygons and statistics
-- **Download**: Get original image or processed results
-- **Delete**: Remove image and associated data
+- <kbd>V</kbd> view, <kbd>E</kbd> edit vertices, <kbd>A</kbd> add points,
+  <kbd>N</kbd> new polygon, <kbd>P</kbd> new polyline, <kbd>S</kbd> slice,
+  <kbd>D</kbd> delete;
+- <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> undo and redo;
+- <kbd>Ctrl</kbd>+<kbd>S</kbd> to save — **there is no continuous autosave**;
+- on videos, <kbd>←</kbd>/<kbd>→</kbd> step frames and <kbd>Space</kbd> plays.
 
-## AI Segmentation
+The full list is at [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
 
-### Available Models
+**Resegment frame** in the top toolbar re-runs the model on the current image and
+**replaces** its segmentation — manual edits to that frame are lost.
 
-#### HRNetV2 (Recommended)
+---
 
-- **Best for**: High-precision research applications
-- **Processing Time**: ~15-20 seconds per image
-- **Strengths**: Highest accuracy, excellent fine detail detection
-- **Use Cases**: Publication-quality analysis, detailed morphology studies
+## 6. Export
 
-#### ResUNet Advanced
+Open a project → **Export**. Choose what to include, enter a pixel size in
+µm/pixel if you have one (it is auto-filled from the file's own calibration when
+present), and start. The job runs in the background and downloads itself.
 
-- **Best for**: Balanced accuracy and processing time
-- **Processing Time**: ~6-8 seconds per image
-- **Strengths**: Good accuracy with attention mechanisms
-- **Use Cases**: Routine analysis, batch processing
+You get one ZIP with the original images, rendered visualisations, annotations
+(COCO / YOLO / custom JSON, or ImageJ ROIs and CVAT for microtubule projects),
+a metrics workbook whose sheets depend on the project type, and documentation.
 
-#### ResUNet Small
+Full breakdown: [Export](export.md). Every formula: [Metrics](../reference/metrics.md).
 
-- **Best for**: Fast processing of large batches
-- **Processing Time**: ~3-4 seconds per image
-- **Strengths**: Fastest processing, good general accuracy
-- **Use Cases**: Quick screening, large-scale studies
+---
 
-### Segmentation Process
+## 7. Share
 
-#### Automatic Segmentation
+Share a project by **e-mail invitation** or by a **link**. Recipients see the
+project in their own dashboard once they accept. See
+[Sharing and collaboration](sharing-and-collaboration.md).
 
-1. Upload images with "Auto-Segmentation" enabled
-2. AI processing begins automatically
-3. Monitor progress in the project view
-4. Review results when processing completes
+---
 
-#### Manual Segmentation
+## Beyond projects
 
-1. Navigate to an uploaded image
-2. Click "Start Segmentation"
-3. Select model and threshold settings
-4. Click "Process" to begin analysis
+Two tools sit outside the project system:
 
-#### Processing Status
+- **[Automated Essays](automated-essays.md)** — upload a folder of ND2 wells and
+  get one CSV row per microtubule. No project, no editor.
+- **[Segmenter](segmenter.md)** — a standalone class-based polygon annotation
+  tool with its own datasets.
 
-- **Pending**: Queued for processing
-- **Processing**: AI model is analyzing the image
-- **Completed**: Segmentation finished successfully
-- **Failed**: Error occurred during processing
+---
 
-### Understanding Results
+## Getting the best results
 
-#### Segmentation Data
+- **Contrast matters most.** For every model, the difference between the object
+  and its background dominates output quality.
+- **Match the modality.** The microtubule model is IRM-only; the wound model
+  expects scratch assays; the disintegration model expects a visible core.
+  Running a model on the wrong modality produces confident nonsense rather than
+  an error.
+- **Tune the threshold second, not first.** Where it is adjustable, a lower
+  threshold finds more objects with weaker evidence. For the microtubule model
+  it is not adjustable at all, deliberately.
+- **Calibrate.** If your files carry a pixel size it is used automatically; if
+  not, enter one at export so lengths and areas are in micrometres.
+- **Review before you export.** Segmentation is a starting point; the editor
+  exists because models get boundaries slightly wrong.
 
-Each processed image provides:
-
-- **Polygon Count**: Number of detected cells/objects
-- **Total Area**: Combined area of all detected objects
-- **Average Size**: Mean area per object
-- **Confidence Score**: AI model confidence (0-1)
-- **Processing Time**: Time taken for analysis
-
-#### Visual Results
-
-- **Overlay View**: Original image with colored polygon overlays
-- **Mask View**: Binary mask showing detected objects
-- **Individual Objects**: Click on polygons to see individual measurements
-- **Zoom Tools**: Detailed examination of results
-
-## Segmentation Editor
-
-### Advanced Editing Tools
-
-#### Edit Modes
-
-- **View Mode**: Navigate and examine results
-- **Edit Mode**: Modify existing polygons
-- **Add Mode**: Create new polygons manually
-- **Slice Mode**: Split polygons into multiple objects
-
-#### Polygon Operations
-
-- **Vertex Editing**: Add, remove, or move polygon vertices
-- **Polygon Deletion**: Remove incorrect detections
-- **Polygon Duplication**: Copy polygons to similar objects
-- **Merge Polygons**: Combine multiple polygons into one
-
-#### Navigation Tools
-
-- **Zoom**: Mouse wheel or zoom controls (40%-600%)
-- **Pan**: Click and drag to navigate large images
-- **Reset View**: Return to fit-to-screen view
-- **Minimap**: Overview of current viewport position
-
-### Keyboard Shortcuts
-
-#### Navigation
-
-- **Mouse Wheel**: Zoom in/out
-- **Middle Click + Drag**: Pan around image
-- **R**: Reset view to fit screen
-
-#### Editing
-
-- **E**: Toggle edit mode
-- **A**: Toggle point adding mode
-- **S**: Toggle slicing mode
-- **Delete/Backspace**: Delete selected polygon
-- **Escape**: Exit current mode
-
-#### History
-
-- **Ctrl+Z** (Cmd+Z): Undo last action
-- **Ctrl+Y** (Cmd+Shift+Z): Redo last undone action
-
-### Best Practices for Editing
-
-1. **Start with AI Results**: Let the AI do most of the work
-2. **Focus on Errors**: Only edit obvious mistakes
-3. **Use Zoom**: Zoom in for precise vertex placement
-4. **Save Frequently**: Changes are auto-saved, but be mindful
-5. **Consistent Criteria**: Apply same standards across your dataset
-
-## Data Export
-
-### Export Formats
-
-#### COCO Format (JSON)
-
-```json
-{
-  "images": [
-    { "id": 1, "width": 1024, "height": 768, "file_name": "cell_001.jpg" }
-  ],
-  "annotations": [
-    {
-      "id": 1,
-      "image_id": 1,
-      "category_id": 1,
-      "segmentation": [[12.5, 34.0, 56.2, 78.1, 90.0, 12.3, 45.6, 67.8]],
-      "area": 1250.5,
-      "bbox": [12.5, 12.0, 120.0, 100.0]
-    }
-  ],
-  "categories": [{ "id": 1, "name": "cell" }]
-}
-```
-
-#### Excel Spreadsheet
-
-- Image metadata (name, size, dimensions)
-- Polygon statistics (count, total area, average size)
-- Individual polygon measurements
-- Summary statistics per image
-
-#### CSV Data
-
-- Simplified tabular format
-- One row per detected object
-- Columns for image ID, polygon ID, area, coordinates
-- Easy import into analysis software
-
-### Export Options
-
-#### Project-Level Export
-
-1. Navigate to project overview
-2. Click "Export Results"
-3. Select desired format and options
-4. Download the generated file
-
-#### Image-Level Export
-
-1. Open specific image results
-2. Click "Export" in the toolbar
-3. Choose format and polygon selection
-4. Save to your computer
-
-#### Batch Export
-
-1. Select multiple images using checkboxes
-2. Use "Bulk Actions" menu
-3. Choose "Export Selected"
-4. Configure export settings
-
-## User Settings
-
-### Profile Management
-
-#### Personal Information
-
-- Update name and email
-- Change password
-- Upload profile picture
-- Edit bio and research interests
-
-#### Preferences
-
-- **Language**: Czech (Čeština) or English
-- **Theme**: Light or dark mode
-- **Default Model**: Preferred AI model for new segmentations
-- **Default Threshold**: Standard confidence threshold
-- **Email Notifications**: Control email alerts
-
-#### Storage and Quotas
-
-- View current storage usage
-- Monitor monthly processing limits
-- Request quota increases if needed
-
-### Account Security
-
-#### Password Requirements
-
-- Minimum 8 characters
-- Must include uppercase and lowercase letters
-- Must include numbers and special characters
-- Cannot reuse recent passwords
-
-#### Two-Factor Authentication (Future)
-
-- SMS-based verification
-- Authenticator app support
-- Backup codes for recovery
-
-## Data Privacy & Retention
-
-### Data Storage
-
-- **Primary Storage**: European Union (EU) data centers
-- **Backup Storage**: Encrypted backups in EU-compliant facilities
-- **Cloud Provider**: AWS EU-Central region with GDPR compliance
-
-### Data Retention Periods
-
-- **Active Account Data**: Retained while account is active
-- **Deleted Account Data**: Removed within 90 days of account deletion
-- **Image Data**: Automatically purged 180 days after last access
-- **Segmentation Results**: Retained for 1 year after creation
-- **Audit Logs**: Maintained for 365 days for security purposes
-
-### Data Deletion Process
-
-1. **Automated Deletion**: Data automatically removed per retention schedule
-2. **Manual Deletion**: Users can delete their data anytime via account settings
-3. **Complete Removal**: All data permanently erased within 30 days of request
-
-### Data Export & Portability
-
-- **Export Your Data**: Request full data export via Settings > Privacy
-- **Supported Formats**: JSON, CSV, ZIP archive with all images
-- **Processing Time**: Data package ready within 24-48 hours
-- **Download Period**: Available for 7 days after generation
-
-### Requesting Data Removal
-
-1. **Via Account Settings**: Settings > Privacy > Delete My Data
-2. **Email Request**: Send request to prusek@utia.cas.cz
-3. **Verification**: Identity verification required for security
-4. **Confirmation**: Email confirmation sent upon completion
-5. **Timeline**: Complete removal within 30 days
-
-### Legal Basis for Retention
-
-- **Contractual Necessity**: Data retained to provide service
-- **Legal Obligations**: Compliance with EU data protection laws
-- **Legitimate Interests**: Security and fraud prevention
-- **User Consent**: Optional data uses require explicit consent
-
-### Contact for Privacy Concerns
-
-- **Email**: prusek@utia.cas.cz
-- **Response Time**: Within 48 hours on business days
-- **Privacy Policy**: Full policy at [Privacy Policy](/privacy-policy)
+---
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom                              | Look at                                                                                               |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Upload rejected                      | [Uploading data → limits](uploading-data.md#limits-and-failure-modes-worth-knowing)                   |
+| 16-bit frames look black             | [Window and level](videos-and-channels.md#displaying-16-bit-data-window-and-level)                    |
+| Model finds nothing / finds nonsense | [Project types](project-types.md), then the model's section in [ML models](../reference/ml-models.md) |
+| Colours change between frames        | [Cross-frame tracking](videos-and-channels.md#segmenting-a-multi-channel-video)                       |
+| Export missing intensities           | [Export → partial failures](export.md#partial-failures-do-not-fail-the-export)                        |
+| Anything else                        | [Troubleshooting](../TROUBLESHOOTING.md)                                                              |
 
-#### Upload Problems
+## Privacy
 
-- **File too large**: Reduce image size or file format
-- **Unsupported format**: Convert to JPEG or PNG
-- **Network timeout**: Try uploading smaller batches
+Data handling, retention and deletion are described in the app's own
+**Privacy policy** and **Terms of service** pages, reachable from the footer.
+Your account and everything in it can be deleted from **Settings → Account**.
 
-#### Segmentation Issues
+## Related
 
-- **No objects detected**: Try lower threshold value
-- **Too many false positives**: Increase threshold value
-- **Poor quality results**: Check image quality, try different model
-
-#### Performance Issues
-
-- **Slow loading**: Check internet connection
-- **Browser freezing**: Try refreshing page, use latest browser
-- **Memory errors**: Close other browser tabs
-
-### Getting Help
-
-#### Documentation
-
-- Read relevant sections of this user guide
-- Check the FAQ section
-- Review video tutorials (if available)
-
-#### Support Channels
-
-- **Email Support**: prusek@utia.cas.cz
-- **User Forum**: community.cellsegmentation.com
-- **Bug Reports**: Use the in-app feedback form
-
-#### Feature Requests
-
-- Submit suggestions through the feedback form
-- Participate in user surveys
-- Join beta testing programs
-
-## Tips for Best Results
-
-### Image Quality
-
-1. **High Resolution**: Use images with sufficient detail
-2. **Good Contrast**: Ensure cells are clearly distinguishable
-3. **Even Lighting**: Avoid shadows and overexposure
-4. **Focus**: Keep objects of interest in sharp focus
-5. **Minimal Artifacts**: Reduce noise, dust, and bubbles
-
-### Model Selection
-
-- **HRNet**: Best for high-quality images with complex morphology
-- **ResUNet Advanced**: Good for standard microscopy images
-- **ResUNet Small**: Suitable for simple, well-contrasted images
-
-### Threshold Tuning
-
-- **Start with 0.5**: Default threshold works for most cases
-- **Lower values (0.3-0.4)**: Include more uncertain detections
-- **Higher values (0.6-0.8)**: Only high-confidence detections
-- **Test on sample**: Experiment with different values
-
-### Workflow Optimization
-
-1. **Organize Projects**: Group related images together
-2. **Batch Processing**: Upload and process multiple images at once
-3. **Consistent Settings**: Use same model and threshold for comparison
-4. **Regular Backups**: Export results periodically
-5. **Quality Control**: Spot-check AI results for accuracy
-
-## Advanced Features
-
-### Batch Operations
-
-- **Select Multiple**: Use checkboxes to select multiple images
-- **Bulk Segmentation**: Process multiple images with same settings
-- **Batch Export**: Export results from multiple images
-- **Batch Delete**: Remove multiple images at once
-
-### Collaboration (Future)
-
-- **Project Sharing**: Invite collaborators to projects
-- **Permission Levels**: Viewer, editor, or admin access
-- **Comments**: Add notes to images or results
-- **Version History**: Track changes and edits
-
-### API Access (Advanced Users)
-
-- **REST API**: Programmatic access to all features
-- **API Keys**: Generate tokens for authentication
-- **Batch Uploads**: Automated image processing
-- **Custom Integration**: Connect with your existing tools
-
-This user guide covers the core functionality of the Cell Segmentation Hub. For technical details, see the [API Documentation](../api/) or contact support for additional help.
+- [Project types](project-types.md)
+- [Segmentation editor](segmentation-editor.md)
+- [Export](export.md)
+- [Documentation index](../README.md)

@@ -1364,342 +1364,675 @@ export default {
     downloadJson: 'Stáhnout JSON',
   },
   docs: {
+    // Hlavička
     badge: 'Dokumentace',
     title: 'Dokumentace SpheroSeg',
     subtitle:
-      'Komplexní průvodce používáním naší platformy pro segmentaci sféroidů',
+      'Vše, co platforma umí, pro všech šest typů projektů — s vyhledáváním',
     backTo: 'Zpět na {{page}}',
+
+    // Vyhledávání
+    search: {
+      placeholder: 'Hledat v dokumentaci…',
+      hint: 'Stisknutím / začnete hledat. Odpovídající sekce se vyfiltrují a zvýrazní.',
+      results: 'Odpovídajících sekcí: {{count}}',
+      noResults: 'Hledání nic nenašlo',
+      noResultsHint:
+        'Zkuste kratší dotaz nebo pojem jako „kanál“, „kymograf“, „export“ či „práh“.',
+      clear: 'Zrušit hledání',
+    },
+
+    // Navigace
     navigation: 'Navigace',
     nav: {
       introduction: 'Úvod',
       gettingStarted: 'Začínáme',
-      uploadingImages: 'Nahrávání obrázků',
-      modelSelection: 'Výběr modelu',
-      segmentationProcess: 'Proces segmentace',
-      segmentationEditor: 'Editor segmentace',
-      exportFeatures: 'Funkce exportu',
-      sharedProjects: 'Sdílené projekty',
+      projectTypes: 'Typy projektů',
+      uploadingImages: 'Nahrávání dat',
+      videosChannels: 'Videa a kanály',
+      modelSelection: 'Modely',
+      segmentationProcess: 'Segmentace',
+      segmentationEditor: 'Editor',
+      exportFeatures: 'Export',
+      automatedEssays: 'Automatizované eseje',
+      segmenter: 'Segmenter',
+      sharedProjects: 'Sdílení',
+      troubleshooting: 'Řešení potíží',
     },
+
+    // Úvod
     introduction: {
       title: 'Úvod',
       whatIs: 'Co je SpheroSeg?',
       description:
-        'SpheroSeg je pokročilá platforma navržená speciálně pro segmentaci a analýzu buněčných sféroidů v mikroskopických snímcích. Náš nástroj kombinuje špičkové AI algoritmy s intuitivním rozhraním a poskytuje výzkumníkům přesnou detekci a analýzu hranic sféroidů.',
+        'SpheroSeg je platforma pro segmentaci a měření mikroskopických snímků a časosběrných videí s pomocí umělé inteligence. Nabízí šest typů projektů opřených o deset segmentačních modelů, editor polygonů a polyline, sledování mikrotubulů napříč snímky a dávkový export.',
       developedBy:
-        'Tato platforma byla vyvinuta Bc. Michalem Průškem, studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D. Projekt je spolupracující s výzkumníky z Ústavu biochemie a mikrobiologie UCT Praha.',
+        'Platformu vyvinul Bc. Michal Průšek z Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze pod vedením Ing. Adama Novozámského, Ph.D., ve spolupráci s výzkumníky z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       addresses:
-        'SpheroSeg řeší náročný úkol přesné identifikace a segmentace hranic sféroidů v mikroskopických snímcích, což je kritický krok v mnoha biomedicínských výzkumných pracovních postupech zahrnujících 3D kultury buněk.',
+        'Začalo to obtížnou úlohou vymezit hranice sferoidů v mikroskopii. Dnes platforma pokrývá i rozpadající se sferoidy, testy hojení ran, morfologii spermií, časosběrná videa mikrotubulů a mikrokapsle — každý typ s vlastním modelem, měřeními i formátem exportu.',
     },
+
+    // Začínáme
     gettingStarted: {
       title: 'Začínáme',
       accountCreation: 'Vytvoření účtu',
       accountDescription:
-        'K používání SpheroSeg budete potřebovat vytvořit účet. To nám umožní bezpečně ukládat vaše projekty a obrázky.',
+        'Registrace je otevřená, nic se neschvaluje. Účet drží pohromadě vaše projekty, snímky i výsledky.',
       accountSteps: {
         step1: 'Přejděte na stránku registrace',
-        step2:
-          'Zadejte svou institucionální e-mailovou adresu a vytvořte heslo',
-        step3: 'Vyplňte svůj profil jménem a institucí',
+        step2: 'Zadejte e-mailovou adresu a zvolte heslo',
+        step3: 'Doplňte profil se svým jménem a institucí',
         step4:
-          'Ověřte svou e-mailovou adresu prostřednictvím odkazu zaslaného do vaší schránky',
+          'V Nastavení zvolte preferovaný model, výchozí práh, jazyk a motiv',
       },
-      firstProject: 'Vytvoření vašeho prvního projektu',
+      firstProject: 'První projekt',
       projectDescription:
-        'Projekty vám pomáhají organizovat vaši práci. Každý projekt může obsahovat více obrázků a jejich odpovídající výsledky segmentace.',
+        'Projekt drží snímky a segmentace z nich vytvořené. Jeho typ určuje, jaké modely můžete spustit, co ukáže editor a jak se výsledky exportují — vybírejte tedy uvážlivě.',
       projectSteps: {
-        step1: 'Z vašeho přehledu klikněte na "Nový projekt"',
-        step2: 'Zadejte název a popis projektu',
-        step3: 'Vyberte typ projektu (výchozí: Analýza sféroidů)',
-        step4: 'Klikněte na "Vytvořit projekt" pro pokračování',
+        step1: 'Na nástěnce klikněte na „Nový projekt“',
+        step2: 'Zadejte název a volitelně popis',
+        step3:
+          'Zvolte typ projektu odpovídající vašemu vzorku (viz Typy projektů níže)',
+        step4: 'Klikněte na „Vytvořit projekt“ a nahrajte data',
       },
     },
-    uploadImages: {
-      title: 'Nahrávání obrázků',
+
+    // Typy projektů
+    projectTypes: {
+      title: 'Typy projektů',
       description:
-        'SpheroSeg podporuje různé formáty obrázků běžně používané v mikroskopii, včetně TIFF, PNG a JPEG.',
-      methods: 'Metody nahrávání',
-      methodsDescription: 'Existuje několik způsobů, jak nahrát vaše obrázky:',
-      methodsList: {
-        dragDrop: 'Přetáhněte soubory přímo do oblasti nahrávání',
-        browse:
-          'Klikněte na oblast nahrávání pro procházení a výběr souborů z vašeho počítače',
-        batch: 'Hromadné nahrání více obrázků najednou',
+        'Každý projekt má typ, který volíte při jeho založení. Není to jen štítek: určuje dostupné modely, tvar výstupní geometrie, panely v editoru i soubory, které dostanete při exportu.',
+      types: {
+        spheroid: {
+          name: 'Sferoidy (standardní)',
+          bestFor:
+            'Pro: buněčné sferoidy ve světlém poli nebo fázovém kontrastu. Jediný typ s výběrem modelu — hned z pěti.',
+          output: 'Výstup: uzavřené polygony s volitelnými otvory.',
+        },
+        spheroidInvasive: {
+          name: 'Rozpadající se sferoidy',
+          bestFor:
+            'Pro: sferoidy rozptylující se do matrice. Klíčovým číslem je index rozpadu ukotvený v jádře.',
+          output:
+            'Výstup: uzavřené polygony; husté jádro je predikováno jako vlastní třída a vykresleno zeleně.',
+        },
+        wound: {
+          name: 'Hojení ran',
+          bestFor:
+            'Pro: časosběrné snímky scratch testu. Přidává křivku uzavírání rány přes celou sérii.',
+          output:
+            'Výstup: uzavřené polygony pokrývající otevřenou ránu a list s plochou rány v čase včetně grafu.',
+        },
+        sperm: {
+          name: 'Spermie',
+          bestFor:
+            'Pro: morfologii spermií, měřenou po třech částech na buňku — hlavička, krček a bičík.',
+          output:
+            'Výstup: otevřené polyline s třídou části a identifikátorem instance, barevně odlišené zeleně, oranžově a azurově.',
+        },
+        microtubules: {
+          name: 'Mikrotubuly',
+          bestFor:
+            'Pro: časosběrné IRM snímky mikrotubulů, se sledováním napříč snímky, intenzitou po kanálech a kymografy.',
+          output:
+            'Výstup: otevřené polyline se stabilním ID stopy; exportuje se do ImageJ ROI a CVAT místo COCO či YOLO.',
+        },
+        microcapsule: {
+          name: 'Mikrokapsle',
+          bestFor:
+            'Pro: kulaté mikrokapsle ve světlém poli, včetně kapslí, které se dotýkají.',
+          output:
+            'Výstup: jeden uzavřený polygon na kapsli. Kapsle useknuté okrajem snímku se do metrik nezapočítávají.',
+        },
       },
-      note: 'Poznámka:',
+      note: 'Typ zvolte ještě před nahráním dat.',
       noteText:
-        'Pro optimální výsledky zajistěte, aby vaše mikroskopické snímky měly dobrý kontrast mezi sféroidem a pozadím.',
+        'Kompatibilita modelů se řídí typem projektu, takže pozdější změna znamená, že stávající výsledky už nelze přepočítat modelem, který je vytvořil.',
     },
-    modelSelection: {
-      title: 'Výběr modelu',
+
+    // Nahrávání dat
+    uploadImages: {
+      title: 'Nahrávání dat',
       description:
-        'SpheroSeg nabízí tři různé AI modely optimalizované pro různé případy použití. Vyberte model, který nejlépe vyhovuje vašim požadavkům na rychlost versus přesnost.',
+        'Platforma přijímá jak samostatné snímky, tak časosběrná data. Video, ND2 nebo vícestránkový TIFF se stane kontejnerem s jedním záznamem na snímek.',
+      formats: 'Podporované formáty a limity',
+      formatsTable: {
+        kind: 'Druh',
+        extensions: 'Formáty',
+        limit: 'Maximální velikost',
+        imagesLabel: 'Samostatné snímky',
+        imagesLimit: '20 MB na soubor',
+        videosLabel: 'Videa a stacky',
+        videosLimit: '100 GB na soubor',
+      },
+      methods: 'Jak nahrávat',
+      methodsDescription: 'Tři rovnocenné způsoby:',
+      methodsList: {
+        dragDrop: 'Přetáhněte soubory na plochu pro nahrávání',
+        browse: 'Klikněte na plochu a soubory vyberte v dialogu',
+        batch:
+          'Přetáhněte celou složku — projde se rekurzivně, až 10 000 souborů v jedné dávce',
+        autoSegment:
+          'Zaškrtněte „Segmentovat po nahrání“ a vše se rovnou zařadí do fronty',
+      },
+      tiffNote: 'TIFF může být obojí.',
+      tiffNoteText:
+        'TIFF se zpracuje jako stack, když je větší než 20 MB nebo skutečně obsahuje víc stránek — hlavička souboru se kontroluje, takže i malý vícekanálový TIFF se zpracuje správně.',
+      note: 'Pro nejlepší výsledky:',
+      noteText:
+        'dbejte na dobrý kontrast mezi objektem a pozadím a na to, aby soubor nesl kalibraci pixelu, chcete-li měření v mikrometrech. Nahrání videa je jeden dlouhý požadavek — přenos i extrakce snímků probíhají společně, takže velký ND2 chvíli trvá.',
+    },
+
+    // Videa a kanály
+    videosChannels: {
+      title: 'Videa, snímky a kanály',
+      description:
+        'Časosběrná a vícekanálová data mají vlastní zpracování: kontejner pro záznam, jeden záznam na snímek a seznam kanálů, který ovládáte z editoru.',
+      containers: 'Kontejnery a snímky',
+      containerFacts: {
+        frames:
+          'Z jednoho nahrání vznikne kontejner a jeden záznam na snímek; snímky se v rozhraní číslují od 1.',
+        hidden:
+          'Samotný kontejner se v galerii nezobrazuje a nikdy se nesegmentuje — segmentují se jen snímky.',
+        positions:
+          'ND2 nasnímaný na několika pozicích stolku se rozpadne na jeden záznam projektu pro každou pozici.',
+        calibration:
+          'Velikost pixelu a interval mezi snímky se načtou ze souboru, pokud tam jsou, a použijí se k automatickému převodu měření.',
+      },
+      channels: 'Kanály',
+      channelsDescription:
+        'Každý kanál je uložen jako vlastní obraz pro každý snímek. Právě jeden kanál může být zdrojem segmentace — ten, který model čte.',
+      channelControls: {
+        visibility: 'Zaškrtávátko přidá kanál do složeného zobrazení',
+        color: 'Barevný čtvereček nastaví jeho odstín v překryvu',
+        rename: 'Dvojklikem na název jej přejmenujete',
+        opacity: 'Posuvník nastaví krytí od 0 do 100 %',
+        source: 'Zdroj segmentace je označen „● src“',
+      },
+      sourceNote: 'Zkontrolujte zdroj segmentace.',
+      sourceNoteText:
+        'Pokud není žádný název kanálu rozpoznatelný, není označen žádný zdroj a použije se první kanál. U mikrotubulů to má následky: model pracuje jen s IRM, takže na fluorescenčním kanálu vytvoří přesvědčivé polyline, pod nimiž ale nic není.',
+      windowLevel: 'Zobrazení 16bitových dat',
+      windowLevelDescription:
+        'Snímky s vysokou bitovou hloubkou se pro zobrazení mapují posuvníky Min a Max, doplněnými o Jas a Kontrast. Okno je zvlášť pro každý kanál, nikoli sdílené: kanál se při prvním zobrazení automaticky přizpůsobí vlastním datům, poté si drží vaše meze a rozsah jen rozšiřuje, když přijdou jasnější snímky. Nastavení platí po dobu relace; barvy a krytí kanálů se pamatují.',
+      navigation: 'Pohyb po snímcích',
+      keys: {
+        step: 'Předchozí / další snímek',
+        play: 'Přehrát nebo pozastavit — pevných 10 snímků za sekundu, konec u posledního snímku',
+      },
+      mtExtras: 'Navíc pro projekty s mikrotubuly',
+      mtExtrasList: {
+        registration:
+          'Registrace kanálů při nahrávání: zarovná každý kanál k prvnímu posunem o celé pixely, takže se nic neinterpoluje.',
+        addChannel:
+          'Přidat kanál: dodatečně připojí další kanál k vybraným snímkům, buď jeden obrázek otisknutý na všechny, nebo video párované snímek po snímku.',
+        tracking:
+          'Sledování napříč snímky proběhne automaticky, jakmile jsou hotové všechny snímky, a dá každému vláknu stabilní identitu i barvu.',
+      },
+    },
+
+    // Modely
+    modelSelection: {
+      title: 'Modely',
+      description:
+        'Deset modelů, každý svázaný s typy projektů, pro které byl trénován. Výběr nabízí jen kompatibilní modely a skutečnou volbu mají pouze standardní sferoidové projekty — ostatní typy mají právě jeden.',
+      spheroidModels: 'Sferoidové modely — vyberte si',
+      specialisedModels: 'Specializované modely — jeden na typ projektu',
       models: {
         hrnet: {
-          name: 'HRNet (Malý)',
-          inferenceTime: 'Doba inference: ~0,18 sekundy (GPU akcelerace)',
-          bestFor: 'Nejlepší pro: Zpracování v reálném čase a rychlé výsledky',
+          name: 'HRNet (vyvážený)',
+          inferenceTime: 'Přibližně 0,20 s na snímek',
+          bestFor:
+            'Nejlepší pro: jeden model a žádné přemýšlení. Výchozí volba platformy.',
           description:
-            'Rychlý a efektivní model ideální pro rychlou segmentaci, když je rychlost upřednostňována před maximální přesností.',
+            'Udržuje větev s vysokým rozlišením napříč celou sítí místo kódování a dekódování, což zachovává detail hranic.',
         },
         cbam: {
-          name: 'CBAM-ResUNet (Střední)',
-          inferenceTime: 'Doba inference: ~0,20 sekundy (GPU akcelerace)',
-          bestFor: 'Nejlepší pro: Přesná segmentace s mechanismy pozornosti',
+          name: 'CBAM-ResUNet (přesný)',
+          inferenceTime: 'Přibližně 0,38 s na snímek',
+          bestFor:
+            'Nejlepší pro: obrázky do publikace a obtížné hranice, za zhruba dvojnásobek času HRNetu.',
           description:
-            'Přesný segmentační model s mechanismy pozornosti pro přesnou detekci hranic sféroidů.',
+            'Reziduální U-Net s kanálovou i prostorovou pozorností v každé úrovni — z pětice nejpřesnější hranice.',
         },
         unet: {
-          name: 'UNet (SpheroHQ)',
-          inferenceTime: 'E2E čas: ~286ms na obrázek (ML inference: 181ms)',
+          name: 'UNet (nejrychlejší)',
+          inferenceTime: 'Přibližně 0,18 s na snímek',
           bestFor:
-            'Nejlepší pro: Nejrychlejší zpracování, výborný pro real-time aplikace',
+            'Nejlepší pro: velké dávky, kde je průchodnost důležitější než poslední procento přesnosti.',
           description:
-            'Nejrychlejší model po optimalizacích! Ideální pro zpracování velkého objemu dat v reálném čase.',
+            'Prostý U-Net trénovaný na datasetu SpheroHQ a optimalizovaný na propustnost.',
+        },
+        segformer: {
+          name: 'SegFormer',
+          inferenceTime: 'Přibližně 0,20 s na snímek',
+          bestFor:
+            'Nejlepší pro: nejvyšší naměřenou přesnost na sferoidech ve světlém poli — 93 % IoU.',
+          description:
+            'Model založený na transformeru (SegFormer-B0): hierarchický enkodér s lehkým dekodérem z čistých MLP vrstev.',
+        },
+        mamba: {
+          name: 'Mamba-UNet',
+          inferenceTime: 'Přibližně 0,24 s na snímek',
+          bestFor:
+            'Nejlepší pro: snímky nepodobné trénovacím datům — jiná laboratoř, neznámá optika, ovlivnění léčivy či neobvyklé morfologie.',
+          description:
+            'U-Net s obousměrným stavovým (state-space) hrdlem, vybraný pro odolnost mimo trénovací distribuci.',
+        },
+        disintegration: {
+          name: 'Rozpad sferoidů',
+          inferenceTime: 'Přibližně 0,70 s na snímek · výchozí práh 0,2',
+          bestFor: 'Používá: projekty s rozpadajícími se sferoidy.',
+          description:
+            'UNet++ s enkodérem EfficientNet-B5 predikující tři třídy — pozadí, koronu a husté jádro. Jádro je predikováno přímo, nikoli odvozeno, což teprve dělá index rozpadu důvěryhodným.',
+        },
+        wound: {
+          name: 'Hojení ran',
+          inferenceTime: 'Přibližně 0,03 s na snímek',
+          bestFor: 'Používá: projekty hojení ran.',
+          description:
+            'U-Net s enkodérem MiT-B5 pro binární segmentaci rány, 90 % IoU na externí testovací sadě. Uvnitř pracuje v rozlišení 256×256 a výsledek zvětšuje, což vysvětluje jeho rychlost i vyhlazení jemných detailů okraje.',
+        },
+        sperm: {
+          name: 'Morfologie spermií',
+          inferenceTime: 'Přibližně 0,30 s na snímek',
+          bestFor: 'Používá: projekty se spermiemi.',
+          description:
+            'Víceklasová instanční segmentace, která hlavičku, krček i bičík rovnou vytváří jako polyline pomocí extrakce kostry, nikoli prahovaných skvrn.',
+        },
+        microtubule: {
+          name: 'Mikrotubuly (v5H)',
+          inferenceTime:
+            'Přibližně 4,5 s na snímek · práh je pevně 0,97 a uživatel jej nemění',
+          bestFor: 'Používá: projekty s mikrotubuly. Pouze snímky IRM.',
+          description:
+            'Síť nnU-Net ResEnc-M predikuje popředí vláken a pak instancer omezený křivostí rozdělí popředí na jednotlivé osy, přičemž každé křížení řeší pod pevnou mezí křivosti. Trénováno výhradně na syntetických snímcích. Doba běhu roste s počtem vláken, nejen s velikostí snímku.',
+        },
+        microcapsule: {
+          name: 'Mikrokapsle',
+          inferenceTime: 'Přibližně 0,30 s na snímek',
+          bestFor: 'Používá: projekty s mikrokapslemi.',
+          description:
+            'Kompaktní U-Net destilovaný z Meta SAM 3, doplněný watershedem pro oddělení dotýkajících se kapslí. Kapsle useknuté okrajem snímku se označí a z metrik vynechají.',
         },
       },
-      howToSelect: 'Jak vybrat model',
+      howToSelect: 'Výběr modelu',
       selectionSteps: {
-        step1: 'Otevřete svůj projekt a přejděte na jakýkoli obrázek',
-        step2:
-          'V nástrojové liště projektu najděte rozbalovací nabídku výběru modelu',
-        step3: 'Vyberte z HRNet, CBAM-ResUNet nebo UNet (SpheroHQ)',
+        step1:
+          'V Nastavení zvolte výchozí model a práh — použijí se všude, kde typ projektu dovoluje výběr',
+        step2: 'Otevřete projekt a vyberte snímky ke zpracování',
+        step3:
+          'Klikněte na Segmentovat; dialog nabídne jen kompatibilní modely',
         step4:
-          'Upravte práh spolehlivosti (0,0-1,0) pro jemné doladění citlivosti detekce',
-        step5: 'Váš výběr se automaticky uloží pro budoucí zpracování',
+          'Upravte práh spolehlivosti a vyvažte tak počet detekcí proti síle důkazu',
+        step5: 'U vícekanálového videa zvolte, který kanál má model číst',
       },
+      thresholdNote: 'Práh u mikrotubulů je záměrně pevný.',
+      thresholdNoteText:
+        'Tento model používá vlastní naměřený řez 0,97 a posuvník ignoruje. Snížení prahu nenajde více skutečných vláken — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup nesleduje obraz při žádném nastavení. Chybí-li detekce, zkontrolujte raději vstupní kanál.',
       tip: 'Tip:',
       tipText:
-        'Použijte UNet pro nejrychlejší zpracování s propustností 5,5 obrázků/sekundu. Vyberte CBAM-ResUNet pro maximální přesnost při výzkumné práci. Zvolte HRNet pro vyvážený výkon mezi rychlostí a kvalitou.',
+        'Začněte výchozím modelem. Po CBAM-ResUNetu sáhněte, když jsou hranice důležitější než rychlost, a po Mamba-UNetu, když vaše snímky nevypadají jako ničí trénovací data.',
     },
+
+    // Průběh segmentace
     segmentationProcess: {
-      title: 'Proces segmentace',
+      title: 'Průběh segmentace',
       description:
-        'Proces segmentace používá pokročilé AI modely k automatické detekci hranic sféroidů ve vašich mikroskopických snímcích. Systém podporuje jak automatické zpracování, tak manuální vylepšení.',
-      queueBased: 'Zpracování založené na frontě',
-      queueDescription:
-        'SpheroSeg používá systém zpracovací fronty pro efektivní zpracování více úloh segmentace:',
+        'Segmentace běží na pozadí ve frontě, takže během zpracování dávky můžete dál pracovat. Průběh vidíte živě.',
+      queueBased: 'Zpracování ve frontě',
+      queueDescription: 'Fronta je stavěná na velké dávky:',
       queueFeatures: {
         realTime:
-          'Stav v reálném čase: WebSocket oznámení poskytují živé aktualizace o průběhu zpracování',
-        batch: 'Hromadné zpracování: Zpracování více obrázků současně',
+          'Živý stav: průběh chodí přes WebSocket a zálohuje jej HTTP dotazování, takže výpadek spojení úlohu nezastaví',
+        batch: 'Dávkové zpracování: až 10 000 snímků v jednom odeslání',
         priority:
-          'Zpracování priority: Novější požadavky jsou zpracovány jako první',
+          'Spravedlivé řazení: uživatelé nedávno obsloužení jdou dozadu, takže jedno dlouhé video nezabere celou GPU',
         recovery:
-          'Obnova po chybě: Neúspěšné úlohy jsou automaticky opakovány s podrobným hlášením chyb',
+          'Zotavení: přerušená práce se zopakuje místo ztráty a chyba se vypíše',
       },
-      workflow: 'Pracovní postup automatické segmentace',
+      workflow: 'Postup',
       workflowSteps: {
-        step1: 'Nahrajte své mikroskopické snímky do projektu',
-        step2: 'Vyberte svůj preferovaný AI model (HRNet nebo CBAM-ResUNet)',
-        step3: 'V případě potřeby upravte práh spolehlivosti (výchozí: 0,5)',
-        step4:
-          'Klikněte na "Auto-segmentace" nebo použijte hromadné zpracování pro více obrázků',
-        step5:
-          'Sledujte průběh v reálném čase prostřednictvím stavových indikátorů',
+        step1: 'Nahrajte do projektu snímky nebo videa',
+        step2:
+          'Vyberte snímky ke zpracování, nebo nevybírejte nic a zpracují se všechny',
+        step3: 'Zvolte model a práh spolehlivosti',
+        step4: 'U vícekanálového videa zvolte kanál, který má model číst',
+        step5: 'Sledujte průběh na ukazatelích stavu',
         step6:
-          'Zkontrolujte výsledky v editoru segmentace po dokončení zpracování',
+          'Otevřete libovolný snímek v editoru a výsledek zkontrolujte či opravte',
       },
-      polygonTypes: 'Typy polygonů',
-      polygonDescription: 'Systém detekuje dva typy polygonů:',
+      polygonTypes: 'Co modely vytvářejí',
+      polygonDescription: 'Dva druhy geometrie podle modelu:',
       polygonTypesList: {
-        external:
-          'Externí polygony: Hlavní hranice sféroidů (zobrazeny ve výchozím stavu zeleně)',
+        external: 'Vnější polygony: obrys objektu — sferoidy, rány, kapsle',
         internal:
-          'Interní polygony: Díry nebo vnitřní struktury v sféroidech (zobrazeny ve výchozím stavu červeně)',
+          'Vnitřní polygony: otvory uvnitř objektu, odečtené od jeho plochy',
+        polyline:
+          'Polyline: otevřené křivky s délkou, ale bez plochy, které vytvářejí modely mikrotubulů a spermií',
       },
-      processingNote: 'Doby zpracování se liší podle modelu:',
+      processingNote: 'Doba zpracování závisí na modelu:',
       processingTimes:
-        'HRNet (~3s), CBAM-ResUNet (~7s). Vyberte podle vašich požadavků na přesnost a časová omezení.',
+        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 4,5 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
     },
+
+    // Editor
     segmentationEditor: {
-      title: 'Editor segmentace',
+      title: 'Segmentační editor',
       description:
-        'Editor segmentace je mocný nástroj pro vylepšování AI-generovaných segmentací a vytváření manuálních anotací. Obsahuje více režimů úprav, klávesové zkratky a pokročilé nástroje pro manipulaci s polygony.',
+        'Místo, kde výsledky kontrolujete a opravujete. Sedm režimů úprav, plné ovládání klávesnicí a panely, které se mění podle typu projektu.',
       editingModes: 'Režimy úprav',
       modes: {
         view: {
-          title: 'Režim zobrazení',
+          title: 'Prohlížení (V)',
           description:
-            'Navigujte a prohlížejte polygony bez provádění změn. Klikněte na polygony pro jejich výběr a zobrazení detailů.',
+            'Vybírání, posun a přiblížení. Kliknutí na tvar jej vybere a přepne do úpravy vrcholů.',
         },
         editVertices: {
-          title: 'Úprava vrcholů',
+          title: 'Úprava vrcholů (E)',
           description:
-            'Přetáhněte jednotlivé vrcholy pro vylepšení hranic polygonů. Přesná kontrola pro úpravy hranic.',
+            'Tažením vrcholů doladíte hranici. Pravým tlačítkem vrchol smažete. Vyžaduje vybraný tvar.',
         },
         addPoints: {
-          title: 'Přidání bodů',
+          title: 'Přidání bodů (A)',
           description:
-            'Vložte nové vrcholy mezi existující. Shift+klik pro automatické umístění bodu.',
+            'Vloží vrcholy, prodlouží polyline od bližšího konce nebo spojí dvě polyline koncem ke konci. Vyžaduje vybraný tvar.',
         },
         createPolygon: {
-          title: 'Vytvoření polygonu',
+          title: 'Nový polygon (N)',
           description:
-            'Nakreslete nové polygony od začátku. Klikněte pro přidání bodů, dvojklik pro dokončení.',
+            'Naklikáte uzavřený tvar; kliknutím poblíž prvního bodu jej uzavřete. Nejméně tři body.',
+        },
+        createPolyline: {
+          title: 'Nová polyline (P)',
+          description:
+            'Naklikáte otevřenou křivku pro mikrotubulus nebo část spermie. Ukončíte klávesou Enter nebo dvojklikem.',
         },
         sliceMode: {
-          title: 'Režim řezání',
-          description: 'Řežte polygony na více částí kreslením čar skrz ně.',
+          title: 'Řez (S)',
+          description:
+            'Rozdělí tvar čárou zadanou dvěma kliknutími. Funguje na uzavřených polygonech i na polyline.',
         },
         deletePolygon: {
-          title: 'Smazání polygonu',
+          title: 'Mazání (D)',
           description:
-            'Odstraňte nechtěné polygony kliknutím na ně. Užitečné pro eliminaci falešných detekcí.',
+            'Kliknutím tvary odstraníte. Režim zůstává aktivní a nic se nepotvrzuje.',
         },
       },
-      keyFeatures: 'Klíčové funkce',
+      keyFeatures: 'Co editor nabízí',
       features: {
         undoRedo:
-          'Systém zpět/vpřed: Kompletní sledování historie s podporou Ctrl+Z/Ctrl+Y',
-        autoSave:
-          'Automatické ukládání: Periodické ukládání s vizuálními indikátory zobrazujícími neuložené změny',
+          'Zpět a Znovu pro geometrii i vlastnosti tvarů. Historie je pro každý snímek zvlášť a při změně snímku se resetuje.',
+        saving:
+          'Ukládání na povel: tlačítkem Uložit, klávesou Ctrl+S, nebo automaticky při přechodu na jiný snímek.',
         zoomPan:
-          'Přiblížení a posouvání: Přiblížení kolečkem myši a navigace tažením',
+          'Přiblížení k ukazateli myši, posun tažením a přizpůsobení snímku klávesou R nebo 0.',
         polygonManagement:
-          'Správa polygonů: Zobrazit/skrýt, přejmenovat a hromadné operace',
+          'Seznam tvarů s vícenásobným výběrem, skrýváním, přejmenováním a mazáním.',
         keyboardShortcuts:
-          'Klávesové zkratky: Komplexní klávesové zkratky pro efektivní úpravy',
+          'Plné ovládání klávesnicí — seznam zobrazíte klávesou H nebo ?.',
         realTimeFeedback:
-          'Zpětná vazba v reálném čase: Živý náhled úprav a aktualizace stavu',
+          'Pokyny k aktuálnímu režimu přímo na plátně a průběžný počet tvarů a vrcholů.',
       },
-      shortcuts: 'Základní klávesové zkratky',
+      shortcuts: 'Klávesové zkratky',
       shortcutCategories: {
-        navigation: 'Navigace:',
-        actions: 'Akce:',
+        modes: 'Režimy',
+        actions: 'Akce',
+        view: 'Zobrazení',
       },
       shortcutsList: {
-        v: 'Režim zobrazení',
+        v: 'Režim prohlížení',
         e: 'Úprava vrcholů',
         a: 'Přidání bodů',
-        n: 'Vytvoření polygonu',
+        n: 'Nový polygon',
+        p: 'Nová polyline',
+        s: 'Řez',
+        d: 'Mazání tvarů',
+        tab: 'Procházení režimů',
         ctrlZ: 'Zpět',
-        ctrlY: 'Vpřed',
+        ctrlY: 'Znovu',
         ctrlS: 'Uložit',
-        delete: 'Odstranit vybrané',
+        delete: 'Smazat vybraný tvar',
+        enter: 'Dokončit rozpracovanou polyline',
+        escape: 'Zrušit a vrátit se do prohlížení',
+        zoom: 'Přiblížit a oddálit',
+        reset: 'Přizpůsobit snímek pohledu',
+        pan: 'Držte a táhněte pro posun v libovolném režimu',
+        help: 'Zobrazit seznam zkratek',
       },
-      workingWithPolygons: 'Práce s polygony',
+      workingWithPolygons: 'Práce s tvary',
       polygonSteps: {
-        step1: 'Vyberte polygon kliknutím na něj (zvýrazněn modře při výběru)',
-        step2: 'Přepněte na příslušný režim úprav pro váš úkol',
-        step3: 'Proveďte své úpravy pomocí interakcí myši',
+        step1: 'Kliknutím vyberte tvar',
+        step2: 'Přepněte do režimu odpovídajícího zamýšlené změně',
+        step3: 'Proveďte změnu myší',
         step4:
-          'Použijte panel polygonů napravo pro správu viditelnosti a vlastností',
-        step5:
-          'Uložte své změny periodicky nebo spoléhejte na automatické ukládání',
+          'V seznamu vpravo tvary skrývejte, přejmenovávejte, vybírejte hromadně nebo mažte',
+        step5: 'Uložte klávesou Ctrl+S',
       },
-      segmenting: 'Segmentování obrázku...',
-      waitingInQueue: 'Čekání ve frontě',
-      reloadingSegmentation: 'Obnovování dat segmentace...',
+      saveNote: 'Průběžné automatické ukládání neexistuje.',
+      saveNoteText:
+        'Práce se uloží po stisku Uložit nebo Ctrl+S a na pozadí při přechodu na jiný snímek. Kliknutí v drobečkové navigaci odejde okamžitě a uloží na pozadí, takže při rozsáhlejších úpravách stiskněte nejdřív Ctrl+S. U videa smazání sledovaného tvaru a uložení odstraní tvar ze všech snímků.',
+      typeSpecific: 'Co se mění podle typu projektu',
+      typeSpecificList: {
+        microtubules:
+          'Mikrotubuly: panel instancí se stabilními barvami podle stopy, vlastní typové štítky, přiřazení celé stopě, propagace a mazání stopy a zobrazení kymografu.',
+        sperm:
+          'Spermie: panel instancí, kde před kreslením zvolíte aktivní buňku a část, plus přeřazení z kontextové nabídky.',
+        disintegration:
+          'Rozpadající se sferoidy: husté jádro se vykresluje zeleně. Samotný index rozpadu se počítá až při exportu.',
+      },
     },
+
+    // Export
     exportFeatures: {
-      title: 'Funkce exportu',
+      title: 'Export',
       description:
-        'SpheroSeg poskytuje komplexní možnosti exportu pro integraci s vaším výzkumným pracovním postupem. Exportujte data segmentace v několika formátech vhodných pro frameworky strojového učení a analytické nástroje.',
-      packageContents: 'Obsah exportního balíčku',
+        'Exporty běží na pozadí a po dokončení se samy stáhnou. Na uživatele běží vždy jen jeden; výsledkem je jediný ZIP.',
+      packageContents: 'Co balíček obsahuje',
       contents: {
         originalImages: {
-          title: 'Původní obrázky',
-          description:
-            'Vysoce kvalitní původní mikroskopické snímky v jejich nativním formátu.',
+          title: 'Původní snímky',
+          description: 'Soubory, které jste nahráli, beze změny.',
         },
         visualizations: {
           title: 'Vizualizace',
           description:
-            'Anotované obrázky s číslovanými polygony a přizpůsobitelnými barvami.',
+            'Vykreslené překryvy s očíslovanými tvary, v barvách, tloušťce čar a průhlednosti podle vaší volby.',
+        },
+        annotations: {
+          title: 'Anotace',
+          description:
+            'Strojově čitelná geometrie ve zvolených formátech — a u projektů s mikrotubuly navíc soubory ImageJ a CVAT, které jsou vždy součástí.',
+        },
+        metrics: {
+          title: 'Metriky',
+          description:
+            'Sešit, jehož listy závisejí na typu projektu, ve formátu XLSX, CSV nebo JSON.',
         },
       },
       annotationFormats: 'Formáty anotací',
       formats: {
-        coco: 'Formát COCO: Common Objects in Context - standardní formát pro frameworky detekce objektů jako PyTorch a TensorFlow',
-        yolo: 'Formát YOLO: You Only Look Once - optimalizovaný formát pro modely detekce založené na YOLO',
-        json: 'Vlastní JSON: Strukturovaný JSON formát s podrobnými souřadnicemi polygonů a metadaty',
+        coco: 'COCO: standardní formát pro detekční frameworky. Polygony s otvory se exportují jako RLE masky.',
+        yolo: 'YOLO: ohraničující obdélníky, polygon je v komentářovém řádku. Otevřené polyline formát neumí, a proto se vynechávají.',
+        json: 'Vlastní JSON: úplné souřadnice a metadata, u projektů se spermiemi včetně seskupení po buňkách.',
+        imagej:
+          'ImageJ RoiSet: ZIP, který se otevře přímo ve správci ROI ve Fiji, jedno ROI na vlákno a řez, obarvené podle třídy nebo stopy. Jen projekty s mikrotubuly, vždy součástí.',
+        cvat: 'CVAT 1.1: polyline s identitou stopy jako atributem. Jen projekty s mikrotubuly, vždy součástí.',
       },
-      calculatedMetrics: 'Vypočítané metriky',
-      metricsDescription:
-        'SpheroSeg automaticky počítá komplexní morfologické metriky pro každý detekovaný sféroid:',
-      metricsCategories: {
-        basic: {
-          title: 'Základní měření:',
-          items: {
-            area: 'Plocha (pixely a škálované jednotky)',
-            perimeter: 'Obvod',
-            diameter: 'Ekvivalentní průměr',
-            circularity: 'Kruhovitost',
-          },
-        },
-        advanced: {
-          title: 'Pokročilé metriky:',
-          items: {
-            feret: 'Feretovy průměry (max, min, poměr stran)',
-            majorMinor: 'Hlavní/vedlejší průměr skrz těžiště',
-            compactness: 'Kompaktnost, konvexnost, solidita',
-            sphericity: 'Index sféricity',
-          },
-        },
+      calculatedMetrics: 'Metriky podle typu projektu',
+      metricsDescription: 'Podoba sešitu závisí na tom, co měříte:',
+      metricsTable: {
+        projectType: 'Typ projektu',
+        sheet: 'List a jeho obsah',
+        spheroid:
+          'Polygon Metrics + Summary — plocha, obvod, kruhovitost, Feretovy průměry, solidita a další, jeden řádek na tvar',
+        spheroidInvasive:
+          'Image Metrics — jeden řádek na snímek s indexem rozpadu, plochou jádra a invaze a panelem rozptylu',
+        wound:
+          'Polygon Metrics + Summary + WoundTimeSeries — křivka uzavírání rány s vloženým grafem',
+        sperm:
+          'Sperm Metrics — délka hlavičky, krčku, bičíku a celková, jeden řádek na buňku',
+        microtubules:
+          'Microtubule Metrics + Channel Totals — délka a intenzita po kanálech, jeden řádek na snímek, vlákno a kanál',
+        microcapsule:
+          'Microcapsule Metrics + Summary — jeden řádek na celou kapsli; kapsle useknuté okrajem se vynechávají',
       },
-      exportFormats: 'Formáty exportu metrik',
-      exportFormatsList: {
-        excel:
-          'Excel (.xlsx): Formátovaná tabulka se samostatnými listy pro souhrn a podrobná data',
-        csv: 'CSV: Hodnoty oddělené čárkami pro snadný import do statistického softwaru',
-        jsonExport: 'JSON: Strukturovaný datový formát pro programovou analýzu',
-      },
-      visualizationCustomization: 'Přizpůsobení vizualizace',
-      customizationOptions: {
-        colors:
-          'Barvy polygonů: Přizpůsobte externí (zelené) a interní (červené) barvy polygonů',
-        numbering: 'Číslování: Zobrazit/skrýt čísla polygonů pro identifikaci',
-        strokeWidth: 'Šířka čáry: Upravte tloušťku čáry (1-10px)',
-        fontSize:
-          'Velikost písma: Kontrolujte velikost textu pro čísla polygonů (10-30px)',
-        transparency:
-          'Průhlednost: Nastavte průhlednost výplně polygonů (0-100%)',
-      },
+      scaleTitle: 'Velikost pixelu a jednotky',
+      scaleText:
+        'Zadejte velikost pixelu v mikrometrech a všechny délky i plochy se převedou. Pole se předvyplní z kalibrace v souboru, pokud ji nese. Bez použitelné hodnoty se exportuje v pixelech, takže si zkontrolujte jednotky v záhlaví sloupců.',
       howToExport: 'Jak exportovat',
       exportSteps: {
-        step1: 'Přejděte na přehled vašeho projektu',
-        step2:
-          'Vyberte obrázky, které chcete exportovat (nebo exportujte všechny)',
-        step3: 'Klikněte na "Pokročilý export" pro otevření dialogu exportu',
-        step4:
-          'Nakonfigurujte nastavení exportu ve třech záložkách: Obecné, Vizualizace a Formáty',
-        step5: 'Zkontrolujte souhrn exportu',
-        step6:
-          'Klikněte na "Spustit export" pro vygenerování a stažení vašeho balíčku',
+        step1: 'Otevřete projekt a klikněte na Export',
+        step2: 'Zvolte, které snímky zahrnout, nebo vezměte všechny',
+        step3:
+          'Nastavte velikost pixelu, chcete-li mikrometry, a vyberte barvy vizualizací',
+        step4: 'Zaškrtněte potřebné formáty anotací a metrik',
+        step5: 'Spusťte export a nechte jej běžet — průběh vidíte živě',
+        step6: 'Po dokončení se ZIP stáhne sám',
       },
-      exportNote: 'Exportní balíčky jsou komplexní:',
+      exportNote: 'Neúspěch dílčí fáze export nezruší.',
       exportNoteText:
-        'Každý export obsahuje dokumentaci, metadata a všechny vybrané typy obsahu organizované v přehledné struktuře složek pro snadné použití.',
+        'Volitelné fáze skončí jen varováním a zbytek balíčku se vytvoří. U intenzit mikrotubulů se navíc omezený běh zapíše přímo do balíčku, do metrics_status.json a do záhlaví průvodce metrikami — než se na list spolehnete, podívejte se tam.',
     },
-    sharedProjects: {
-      title: 'Sdílené projekty',
+
+    // Automatizované eseje
+    automatedEssays: {
+      title: 'Automatizované eseje',
       description:
-        'SpheroSeg vám umožňuje spolupracovat s kolegy sdílením projektů. Sdílejte své segmentační výsledky a anotace s dalšími výzkumníky pro kontrolu a spolupráci.',
-      sharingFeatures: 'Funkce sdílení',
-      features: {
-        readOnly:
-          'Přístup pouze pro čtení: Příjemci mohou zobrazovat, ale nemohou měnit vaše data',
-        emailInvite:
-          'E-mailové pozvánky: Sdílení přes e-mail s automatickými notifikacemi',
-        revokeAccess:
-          'Odvolatelný přístup: Oprávnění ke sdílení lze kdykoli zrušit',
-        multipleCollaborators:
-          'Více spolupracovníků: Sdílejte s celými výzkumnými týmy',
+        'Dávkový test mikrotubulů, který stojí mimo systém projektů. Nahrajete složku záznamů jamek ve formátu Nikon ND2 a dostanete jeden řádek na vlákno: délku, intenzitu podél něj a jeho lokální pozadí.',
+      howTo: 'Spuštění dávky',
+      steps: {
+        step1: 'Otevřete Automatizované eseje v nabídce pod svým profilem',
+        step2:
+          'Přetáhněte složku se soubory .nd2 na stránku, nebo použijte tlačítko pro výběr složky',
+        step3:
+          'Vyčkejte — úlohy běží po jedné a seznam se sám obnovuje, dokud něco běží',
+        step4:
+          'Stáhněte ZIP, nebo tlačítkem Spustit znovu zpracujte tytéž soubory bez opětovného nahrávání',
       },
-      howToShare: 'Jak sdílet projekt',
+      results: 'Co dostanete zpět',
+      resultsList: {
+        csv: 'results.csv — jeden řádek na mikrotubulus s délkou, intenzitou podél něj a jeho pozadím',
+        failures:
+          'failures.csv — každá jamka či pozice, kterou nešlo zpracovat, a proč. Zapisuje se vždy, i když je prázdný',
+        overlays:
+          'Dva překryvné obrázky na pozici: jeden kontroluje segmentaci proti jejímu vlastnímu vstupu, druhý měřený pás proti signálu',
+        annotations:
+          'Soubor JSON pro každou pozici s vytrasovanými osami vláken a jejich délkami',
+      },
+      channelNote: 'Segmentuje se IRM, měří se fluorescence.',
+      channelNoteText:
+        'Model byl trénován na IRM, takže vlákna se trasují tam a fluorescenční kanál se čte jen podél těchto tras. Soubor bez kanálu IRM se ohlásí jako chyba, místo aby se segmentoval z něčeho jiného.',
+      retentionNote: 'Nahrané soubory se uklidí, výsledky ne.',
+      retentionNoteText:
+        'Vstupní soubory se smažou, jakmile běh čistě doběhne, a při potížích se drží týden — což je právě ten běh, který budete chtít zopakovat. Výsledek zůstává, dokud úlohu nesmažete.',
+    },
+
+    // Segmenter
+    segmenter: {
+      title: 'Segmenter',
+      description:
+        'Samostatný nástroj pro anotaci polygonů s vlastními datasety a paletou tříd, oddělený od projektů i od segmentačního editoru.',
+      features: {
+        datasets:
+          'Zakládejte datasety a nahrávejte do nich statické snímky; jsou soukromé jen pro vás.',
+        classes:
+          'Definujte vlastní třídy s názvy a barvami. Smazání třídy polygony zachová a jen jim třídu odebere.',
+        polygons:
+          'Kreslete, upravujte a mažte uzavřené polygony a přiřazujte jim třídy. Překrývající se polygony jsou plně podporovány.',
+        saving:
+          'Ukládá se výslovně — tlačítkem nebo Ctrl+S — a je zablokované, pokud se stávající anotaci nepodařilo načíst, aby prázdné plátno nikdy nepřepsalo skutečnou práci.',
+      },
+      scopeNote: 'Zatím jen ruční anotace.',
+      scopeNoteText:
+        'Segmenter zatím neobsahuje žádné strojové učení: žádné předznačování, žádné aktivní učení ani export. Dostupný je na adrese /segmenter.',
+    },
+
+    // Sdílení
+    sharedProjects: {
+      title: 'Sdílení a spolupráce',
+      description:
+        'Projekt sdílejte s kolegy e-mailem nebo odkazem. Po přijetí se jim objeví na vlastní nástěnce.',
+      sharingFeatures: 'Co sdílení umožňuje',
+      features: {
+        collaborative:
+          'Spolupracující přístup: spolupracovník může prohlížet, upravovat anotace, spouštět segmentaci, exportovat i označit projekt za zkontrolovaný',
+        emailInvite:
+          'E-mailové pozvánky: sdílení funguje, ať už e-mail dorazí, nebo ne — doručení může trvat i několik minut',
+        linkShare:
+          'Sdílení odkazem: odkaz se naváže na toho, kdo jej přijme, volitelně s platností do určitého data',
+        revokeAccess: 'Kdykoli odvolatelné, s okamžitým účinkem',
+        multipleCollaborators:
+          'Libovolný počet spolupracovníků, každý si projekt zařadí do vlastních složek',
+      },
+      howToShare: 'Jak sdílet',
       shareSteps: {
         step1: 'Otevřete projekt, který chcete sdílet',
-        step2: 'Klikněte na tlačítko "Sdílet" v nástrojové liště projektu',
-        step3: 'Zadejte e-mailové adresy svých spolupracovníků',
-        step4: 'Přidejte volitelnou zprávu vysvětlující sdílený obsah',
-        step5: 'Klikněte na "Odeslat pozvánky" a projekt bude sdílen',
+        step2: 'Klikněte na Sdílet v nástrojové liště projektu',
+        step3: 'Zadejte e-mail spolupracovníka, nebo vytvořte odkaz',
+        step4: 'Odešlete pozvánku',
+        step5:
+          'Ve stejném dialogu sdílení spravujte i rušte; u každého vidíte jeho stav',
       },
-      permissionsNote: 'Důležité:',
+      permissionsNote: 'Sdílení je pro spolupráci, ne jen pro čtení.',
       permissionsNoteText:
-        'Sdílené projekty jsou pro příjemce pouze ke čtení. Mohou prohlížet segmentace a exportovat data, ale nemohou měnit původní anotace. Tím je zajištěna integrita dat při spolupráci.',
+        'Spolupracovníci mohou anotace měnit a u videa mají jejich úpravy stejné důsledky napříč snímky jako ty vaše. Přejmenovat projekt, změnit jeho typ, sdílet jej dál nebo jej smazat může jen vlastník.',
     },
+
+    // Řešení potíží
+    troubleshooting: {
+      title: 'Řešení potíží',
+      description:
+        'Problémy, na které lidé skutečně narážejí, a co je způsobuje.',
+      table: {
+        symptom: 'Projev',
+        cause: 'Příčina a řešení',
+      },
+      items: {
+        uploadRejected: {
+          symptom: 'Soubor je odmítnut ještě před zahájením nahrávání',
+          cause:
+            'Samostatné snímky mají strop 20 MB. Větší TIFF se zpracuje jako stack a platí pro něj limit 100 GB. Názvy kanálů delší než 64 znaků se odmítají — vyexportujte data s kratšími popisky.',
+        },
+        darkFrames: {
+          symptom: 'Snímky vypadají skoro černé',
+          cause:
+            'Data s vysokou bitovou hloubkou potřebují nastavit okno. Použijte posuvníky Min a Max pro daný kanál; každý kanál má okno vlastní.',
+        },
+        noDetections: {
+          symptom: 'Model najde jen velmi málo',
+          cause:
+            'Nejdřív zkontrolujte kontrast a typ projektu. Práh spolehlivosti snižujte jen tam, kde jde nastavit — model mikrotubulů jej záměrně ignoruje.',
+        },
+        wrongChannel: {
+          symptom: 'Tvarů je dost, ale nesledují nic v obraze',
+          cause:
+            'Segmentuje se špatný kanál. Nastavte zdroj segmentace výslovně v seznamu kanálů; model mikrotubulů funguje jen na IRM.',
+        },
+        colorsChange: {
+          symptom: 'Barvy objektů se mezi snímky mění',
+          cause:
+            'Sledování napříč snímky u toho kontejneru nedoběhlo. Barvy se řídí identitou stopy, takže nesledovaný snímek dostane nové.',
+        },
+        exportSlow: {
+          symptom: 'Export stojí na 95 %',
+          cause:
+            'To je fáze komprese. U velkého projektu, zvlášť s kymografy, opravdu chvíli trvá.',
+        },
+        lostEdits: {
+          symptom: 'Úpravy zmizely',
+          cause:
+            'Opětovná segmentace nahradí segmentaci snímku a kliknutí v drobečkové navigaci odejde dřív, než uložení na pozadí nutně doběhne. Před odchodem stiskněte Ctrl+S.',
+        },
+      },
+      helpNote: 'Pořád nic?',
+      helpNoteText:
+        'Použijte tlačítko zpětné vazby a pošlete hlášení chyby nebo návrh — dorazí přímo ke správcům.',
+    },
+
+    // Navigace v patičce
     footer: {
-      backToHome: 'Zpět domů',
+      backToHome: 'Zpět na hlavní stránku',
       backToTop: 'Zpět nahoru',
     },
   },

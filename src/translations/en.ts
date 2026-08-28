@@ -1390,350 +1390,671 @@ export default {
     noImagesAvailable: 'No images are available',
   },
   docs: {
-    // Header section
+    // Header
     badge: 'Documentation',
     title: 'SpheroSeg Documentation',
-    subtitle: 'Comprehensive guide to using our spheroid segmentation platform',
+    subtitle:
+      'Everything the platform does, for all six project types — searchable',
     backTo: 'Back to {{page}}',
+
+    // Search
+    search: {
+      placeholder: 'Search the documentation…',
+      hint: 'Press / to search. Matching sections are filtered and highlighted.',
+      results: '{{count}} matching section(s)',
+      noResults: 'Nothing matches your search',
+      noResultsHint:
+        'Try a shorter query, or a term such as "channel", "kymograph", "export" or "threshold".',
+      clear: 'Clear search',
+    },
 
     // Navigation
     navigation: 'Navigation',
-
-    // Navigation items
     nav: {
       introduction: 'Introduction',
-      gettingStarted: 'Getting Started',
-      uploadingImages: 'Uploading Images',
-      modelSelection: 'Model Selection',
-      segmentationProcess: 'Segmentation Process',
-      segmentationEditor: 'Segmentation Editor',
-      exportFeatures: 'Export Features',
-      sharedProjects: 'Shared Projects',
+      gettingStarted: 'Getting started',
+      projectTypes: 'Project types',
+      uploadingImages: 'Uploading data',
+      videosChannels: 'Videos & channels',
+      modelSelection: 'Models',
+      segmentationProcess: 'Segmentation',
+      segmentationEditor: 'Editor',
+      exportFeatures: 'Export',
+      automatedEssays: 'Automated Essays',
+      segmenter: 'Segmenter',
+      sharedProjects: 'Sharing',
+      troubleshooting: 'Troubleshooting',
     },
 
-    // Introduction section
+    // Introduction
     introduction: {
       title: 'Introduction',
       whatIs: 'What is SpheroSeg?',
       description:
-        'SpheroSeg is an advanced platform designed specifically for the segmentation and analysis of cellular spheroids in microscopic images. Our tool combines cutting-edge AI algorithms with an intuitive interface to provide researchers with precise spheroid boundary detection and analysis capabilities.',
+        'SpheroSeg is a platform for AI-assisted segmentation and measurement of microscopy images and time-lapse videos. It ships six project types backed by ten segmentation models, a polygon and polyline editor, cross-frame microtubule tracking, and a batch export pipeline.',
       developedBy:
-        'This platform was developed by Bc. Michal Průšek, a student at the Faculty of Nuclear Sciences and Physical Engineering at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D. The project is a collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
+        'The platform was developed by Bc. Michal Průšek at the Faculty of Nuclear Sciences and Physical Engineering, Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D., in collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
       addresses:
-        'SpheroSeg addresses the challenging task of accurately identifying and segmenting spheroid boundaries in microscopic images, a critical step in many biomedical research workflows involving 3D cell culture models.',
+        'It began with the hard problem of delineating spheroid boundaries in microscopy, and now covers disintegrating spheroids, wound-healing assays, sperm morphology, microtubule time-lapses and microcapsules — each with its own model, measurements and export format.',
     },
 
-    // Getting Started section
+    // Getting started
     gettingStarted: {
-      title: 'Getting Started',
-      accountCreation: 'Account Creation',
+      title: 'Getting started',
+      accountCreation: 'Creating an account',
       accountDescription:
-        "To use SpheroSeg, you'll need to create an account. This allows us to store your projects and images securely.",
+        'Sign-up is open — there is no approval queue. An account keeps your projects, images and results together.',
       accountSteps: {
-        step1: 'Navigate to the sign-up page',
-        step2: 'Enter your institutional email address and create a password',
+        step1: 'Go to the sign-up page',
+        step2: 'Enter your email address and choose a password',
         step3: 'Complete your profile with your name and institution',
-        step4: 'Verify your email address through the link sent to your inbox',
+        step4:
+          'In Settings, set your preferred model, default threshold, language and theme',
       },
-      firstProject: 'Creating Your First Project',
+      firstProject: 'Creating your first project',
       projectDescription:
-        'Projects help you organize your work. Each project can contain multiple images and their corresponding segmentation results.',
+        'A project holds images and the segmentations made from them. Its type decides which models you can run, what the editor shows and how results are exported — so choose it deliberately.',
       projectSteps: {
         step1: 'From your dashboard, click "New Project"',
-        step2: 'Enter a project name and description',
-        step3: 'Select the project type (default: Spheroid Analysis)',
-        step4: 'Click "Create Project" to proceed',
+        step2: 'Enter a name and an optional description',
+        step3:
+          'Pick the project type that matches your specimen (see Project types below)',
+        step4: 'Click "Create Project", then upload your data',
       },
     },
 
-    // Upload Images section
-    uploadImages: {
-      title: 'Uploading Images',
+    // Project types
+    projectTypes: {
+      title: 'Project types',
       description:
-        'SpheroSeg supports various image formats commonly used in microscopy, including TIFF, PNG, and JPEG.',
-      methods: 'Upload Methods',
-      methodsDescription: 'There are multiple ways to upload your images:',
-      methodsList: {
-        dragDrop: 'Drag and drop files directly onto the upload area',
-        browse:
-          'Click the upload area to browse and select files from your computer',
-        batch: 'Batch upload multiple images at once',
+        'Every project has a type, chosen when you create it. The type is not a label: it decides which models are available, what geometry they produce, which panels the editor shows and which files you get on export.',
+      types: {
+        spheroid: {
+          name: 'Spheroids (standard)',
+          bestFor:
+            'For: cellular spheroids in bright field or phase contrast. The only type offering a choice of model — five of them.',
+          output: 'Output: closed polygons with optional holes.',
+        },
+        spheroidInvasive: {
+          name: 'Disintegrated spheroids',
+          bestFor:
+            'For: spheroids dispersing into a matrix. The headline number is the core-anchored Disintegration Index.',
+          output:
+            'Output: closed polygons, with the dense core predicted as its own class and drawn green.',
+        },
+        wound: {
+          name: 'Wound healing',
+          bestFor:
+            'For: scratch-assay time-lapses. Adds a closure curve over the whole series.',
+          output:
+            'Output: closed polygons covering the open wound, plus a wound-area-over-time sheet and chart.',
+        },
+        sperm: {
+          name: 'Sperm',
+          bestFor:
+            'For: sperm morphology, measured as three parts per cell — head, midpiece and tail.',
+          output:
+            'Output: open polylines carrying a part class and an instance id, colour-coded green, orange and cyan.',
+        },
+        microtubules: {
+          name: 'Microtubules',
+          bestFor:
+            'For: IRM microtubule time-lapses, with cross-frame tracking, per-channel intensity and kymographs.',
+          output:
+            'Output: open polylines with a stable track id; exported as ImageJ ROIs and CVAT rather than COCO or YOLO.',
+        },
+        microcapsule: {
+          name: 'Microcapsules',
+          bestFor:
+            'For: round microcapsules in bright field, including capsules that touch each other.',
+          output:
+            'Output: one closed polygon per capsule. Capsules cut off by the image border are excluded from the metrics.',
+        },
       },
-      note: 'Note:',
+      note: 'Pick the type before you upload.',
       noteText:
-        'For optimal results, ensure your microscopic images have good contrast between the spheroid and background.',
+        'Model compatibility follows the project type, so changing it later means existing results cannot be re-run with the model that produced them.',
     },
 
-    // Model Selection section
-    modelSelection: {
-      title: 'Model Selection',
+    // Uploading data
+    uploadImages: {
+      title: 'Uploading data',
       description:
-        'SpheroSeg offers two production-optimized AI models with dynamic batching. Choose the model that best fits your requirements for speed vs accuracy.',
+        'The platform accepts both still images and time-lapse data. A video, ND2 or multi-page TIFF becomes a container with one entry per frame.',
+      formats: 'Accepted formats and limits',
+      formatsTable: {
+        kind: 'Kind',
+        extensions: 'Formats',
+        limit: 'Maximum size',
+        imagesLabel: 'Still images',
+        imagesLimit: '20 MB per file',
+        videosLabel: 'Videos and stacks',
+        videosLimit: '100 GB per file',
+      },
+      methods: 'How to upload',
+      methodsDescription: 'Three equivalent ways:',
+      methodsList: {
+        dragDrop: 'Drag and drop files onto the upload area',
+        browse: 'Click the upload area to browse for files',
+        batch:
+          'Drop a whole folder — it is walked recursively, up to 10 000 files per batch',
+        autoSegment:
+          'Tick "Auto-segment images after upload" to queue everything as it lands',
+      },
+      tiffNote: 'A TIFF can be either.',
+      tiffNoteText:
+        'A TIFF is handled as a stack when it is larger than 20 MB or actually contains more than one page — the file header is inspected, so even a small multi-channel TIFF is handled correctly.',
+      note: 'For the best results:',
+      noteText:
+        'make sure your images have good contrast between the object and the background, and that the file carries its pixel calibration if you want measurements in micrometres. A video upload is one long request — transfer and frame extraction happen together, so a large ND2 takes time.',
+    },
+
+    // Videos & channels
+    videosChannels: {
+      title: 'Videos, frames and channels',
+      description:
+        'Time-lapse and multi-channel data get their own handling: a container row for the recording, one entry per frame, and a channel list you control from the editor.',
+      containers: 'Containers and frames',
+      containerFacts: {
+        frames:
+          'One upload becomes one container plus one entry per frame; frames are numbered from 1 in the interface.',
+        hidden:
+          'The container itself is never shown in the gallery and is never segmented — only frames are.',
+        positions:
+          'An ND2 recorded at several stage positions becomes one project entry per position.',
+        calibration:
+          'Pixel size and frame interval are read from the file when present and used to convert measurements automatically.',
+      },
+      channels: 'Channels',
+      channelsDescription:
+        'Each channel is stored as its own image per frame. Exactly one channel can be the segmentation source — the channel the model reads.',
+      channelControls: {
+        visibility: 'A checkbox includes the channel in the composite view',
+        color: 'A colour swatch sets its overlay tint',
+        rename: 'Double-click the name to rename it',
+        opacity: 'A slider sets its opacity from 0 to 100 %',
+        source: 'The segmentation source is marked with "● src"',
+      },
+      sourceNote: 'Check the segmentation source.',
+      sourceNoteText:
+        'When no channel name is recognisable, none is marked as the source and the first channel is used. For microtubule work that matters: the model is IRM-only, so pointing it at a fluorescence channel produces confident polylines with nothing underneath them.',
+      windowLevel: 'Displaying 16-bit data',
+      windowLevelDescription:
+        'High-bit-depth frames are windowed for display with Min and Max sliders, plus Brightness and Contrast. The window is per channel, not shared: a channel is auto-fitted to its own data the first time you see it, keeps your cutoffs afterwards, and only widens its range as brighter frames arrive. These settings last for the session; channel colours and opacities are remembered.',
+      navigation: 'Moving through frames',
+      keys: {
+        step: 'Previous / next frame',
+        play: 'Play or pause — a fixed 10 fps that stops at the last frame',
+      },
+      mtExtras: 'Extras for microtubule projects',
+      mtExtrasList: {
+        registration:
+          'Channel registration at upload: aligns every channel to the first by a whole-pixel translation, so nothing is interpolated.',
+        addChannel:
+          'Add channel: attach another channel to selected frames afterwards, either one image stamped onto every frame or a video paired frame by frame.',
+        tracking:
+          'Cross-frame tracking runs automatically once every frame is finished, giving each filament a stable identity and colour.',
+      },
+    },
+
+    // Models
+    modelSelection: {
+      title: 'Models',
+      description:
+        'Ten models, each locked to the project types it was trained for. The picker only offers compatible models, and only standard spheroid projects have a real choice — every other type has exactly one.',
+      spheroidModels: 'Spheroid models — choose one',
+      specialisedModels: 'Specialised models — one per project type',
       models: {
         hrnet: {
           name: 'HRNet (Balanced)',
-          inferenceTime: 'E2E time: ~309ms per image (ML inference: 204ms)',
-          bestFor: 'Best for: Balanced speed and quality (4.9 images/second)',
+          inferenceTime: 'About 0.20 s per image',
+          bestFor: 'Best for: one model, no thinking. The platform default.',
           description:
-            'Well-balanced model with batch processing of 8 images simultaneously. Good for high-volume processing with reliable quality.',
+            'Keeps a high-resolution branch throughout the network instead of encoding then decoding, which preserves boundary detail.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Precise)',
-          inferenceTime: 'E2E time: ~482ms per image (ML inference: 377ms)',
-          bestFor: 'Best for: Maximum accuracy (2.7 images/second throughput)',
+          inferenceTime: 'About 0.38 s per image',
+          bestFor:
+            'Best for: publication figures and difficult boundaries, at roughly twice HRNet’s cost.',
           description:
-            'Most precise model with attention mechanisms for highest accuracy. Batch processing of 2 images. Best for research requiring maximum precision.',
+            'Residual U-Net with channel and spatial attention at every stage — the most precise boundaries of the five.',
         },
         unet: {
           name: 'UNet (Fastest)',
-          inferenceTime: 'E2E time: ~286ms per image (ML inference: 181ms)',
+          inferenceTime: 'About 0.18 s per image',
           bestFor:
-            'Best for: Real-time processing (5.5 images/second throughput)',
+            'Best for: large batches where turnaround matters more than the last percent of accuracy.',
           description:
-            'Fastest model after optimizations! Excellent for real-time processing with batch size of 4. Now 36x faster than original implementation.',
+            'A plain U-Net trained on the SpheroHQ dataset and optimised for throughput.',
+        },
+        segformer: {
+          name: 'SegFormer',
+          inferenceTime: 'About 0.20 s per image',
+          bestFor:
+            'Best for: highest reported accuracy on bright-field spheroids — 93 % IoU.',
+          description:
+            'Transformer-based (SegFormer-B0): a hierarchical encoder with a lightweight all-MLP decoder.',
+        },
+        mamba: {
+          name: 'Mamba-UNet',
+          inferenceTime: 'About 0.24 s per image',
+          bestFor:
+            'Best for: images unlike the training data — another lab, unknown optics, drug-treated or unusual morphologies.',
+          description:
+            'U-Net with a bidirectional state-space bottleneck, chosen for out-of-distribution robustness.',
+        },
+        disintegration: {
+          name: 'Spheroid Disintegration',
+          inferenceTime: 'About 0.70 s per image · default threshold 0.2',
+          bestFor: 'Used by: Disintegrated spheroid projects.',
+          description:
+            'UNet++ with an EfficientNet-B5 encoder predicting three classes — background, corona and dense core. The core is predicted directly rather than inferred, which is what makes the Disintegration Index trustworthy.',
+        },
+        wound: {
+          name: 'Wound Healing',
+          inferenceTime: 'About 0.03 s per image',
+          bestFor: 'Used by: Wound healing projects.',
+          description:
+            'U-Net with a MiT-B5 encoder for binary wound segmentation, 90 % IoU on an external test set. It works at 256×256 internally and upsamples, which is why it is fast and why very fine edge detail is smoothed.',
+        },
+        sperm: {
+          name: 'Sperm Morphology',
+          inferenceTime: 'About 0.30 s per image',
+          bestFor: 'Used by: Sperm projects.',
+          description:
+            'Multi-class instance segmentation producing head, midpiece and tail as polylines natively, via skeleton extraction rather than thresholded blobs.',
+        },
+        microtubule: {
+          name: 'Microtubule (v5H)',
+          inferenceTime:
+            'About 4.5 s per frame · threshold fixed at 0.97 and not user-settable',
+          bestFor: 'Used by: Microtubule projects. IRM images only.',
+          description:
+            'An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard curvature bound. Trained entirely on synthetic frames. Runtime scales with the number of filaments, not just frame size.',
+        },
+        microcapsule: {
+          name: 'Microcapsule',
+          inferenceTime: 'About 0.30 s per image',
+          bestFor: 'Used by: Microcapsule projects.',
+          description:
+            'A compact U-Net distilled from Meta SAM 3, with a watershed to separate touching capsules. Capsules cut off by the image border are flagged and left out of the metrics.',
         },
       },
-      howToSelect: 'How to Select a Model',
+      howToSelect: 'Choosing a model',
       selectionSteps: {
-        step1: 'Open your project and navigate to any image',
-        step2: 'In the project toolbar, find the model selection dropdown',
-        step3: 'Choose from HRNet, CBAM-ResUNet, or UNet (SpheroHQ)',
+        step1:
+          'Set your default model and threshold in Settings — they are used wherever the project type allows a choice',
+        step2: 'Open a project and select the images you want to process',
+        step3: 'Click Segment; the dialog offers only compatible models',
         step4:
-          'Adjust the confidence threshold (0.0-1.0) to fine-tune detection sensitivity',
-        step5: 'Your selection is automatically saved for future processing',
+          'Adjust the confidence threshold to trade detections against evidence',
+        step5:
+          'On a multi-channel video, choose which channel the model should read',
       },
+      thresholdNote: 'The microtubule threshold is deliberately fixed.',
+      thresholdNoteText:
+        'That model applies its own fitted cut of 0.97 and ignores the slider. Lowering it does not find more real filaments — it finds more with weaker evidence, and on a non-IRM channel the output does not follow the image at any setting. If detections are missing, check the input channel instead.',
       tip: 'Tip:',
       tipText:
-        'Use UNet for fastest processing (286ms E2E). Choose HRNet for balanced speed/quality (309ms). Select CBAM-ResUNet for maximum accuracy (482ms).',
+        'Start with the default model. Reach for CBAM-ResUNet when boundaries matter more than speed, and for Mamba-UNet when your images do not look like anyone’s training set.',
     },
 
-    // Segmentation Process section
+    // Segmentation process
     segmentationProcess: {
-      title: 'Segmentation Process',
+      title: 'The segmentation process',
       description:
-        'The segmentation process uses advanced AI models to automatically detect spheroid boundaries in your microscopic images. The system supports both automatic processing and manual refinement.',
-      queueBased: 'Queue-based Processing',
-      queueDescription:
-        'SpheroSeg uses a processing queue system to handle multiple segmentation tasks efficiently:',
+        'Segmentation runs in the background on a queue, so you can keep working while a batch processes. Progress arrives live.',
+      queueBased: 'Queue-based processing',
+      queueDescription: 'The queue is built for large batches:',
       queueFeatures: {
         realTime:
-          'Real-time status: WebSocket notifications provide live updates on processing progress',
-        batch: 'Batch processing: Process multiple images simultaneously',
-        priority: 'Priority handling: More recent requests are processed first',
+          'Live status: progress arrives over a WebSocket, with an HTTP fallback so a dropped connection never strands a job',
+        batch: 'Batch processing: up to 10 000 images in one submission',
+        priority:
+          'Fair scheduling: users who were recently served are deprioritised, so one long video cannot monopolise the GPU',
         recovery:
-          'Error recovery: Failed jobs are automatically retried with detailed error reporting',
+          'Recovery: interrupted work is retried rather than lost, with the error reported',
       },
-      workflow: 'Automatic Segmentation Workflow',
+      workflow: 'The workflow',
       workflowSteps: {
-        step1: 'Upload your microscopic images to a project',
-        step2: 'Select your preferred AI model (HRNet or CBAM-ResUNet)',
-        step3: 'Adjust the confidence threshold if needed (default: 0.5)',
+        step1: 'Upload your images or videos into a project',
+        step2: 'Select the images to process, or none to process all of them',
+        step3: 'Choose the model and confidence threshold',
         step4:
-          'Click "Auto-Segment" or use batch processing for multiple images',
-        step5: 'Monitor real-time progress through the status indicators',
-        step6:
-          'Review results in the segmentation editor once processing completes',
+          'On a multi-channel video, pick the channel the model should read',
+        step5: 'Watch progress on the status indicators',
+        step6: 'Open any image in the editor to review and correct the result',
       },
-      polygonTypes: 'Polygon Types',
-      polygonDescription: 'The system detects two types of polygons:',
+      polygonTypes: 'What the models produce',
+      polygonDescription: 'Two kinds of geometry, depending on the model:',
       polygonTypesList: {
         external:
-          'External polygons: Main spheroid boundaries (shown in green by default)',
+          'External polygons: the object outline — spheroids, wounds, capsules',
         internal:
-          'Internal polygons: Holes or internal structures within spheroids (shown in red by default)',
+          'Internal polygons: holes inside an object, subtracted from its area',
+        polyline:
+          'Polylines: open paths with a length but no area, produced by the microtubule and sperm models',
       },
-      processingNote: 'Processing times vary by model:',
+      processingNote: 'Processing time depends on the model:',
       processingTimes:
-        'UNet (~286ms), HRNet (~309ms), CBAM-ResUNet (~482ms). All models now optimized for sub-second processing!',
+        'the wound model takes about 0.03 s per image and the spheroid models about 0.2–0.4 s, while the microtubule model takes around 4.5 s per frame because separating individual filaments is the expensive part.',
     },
 
-    // Segmentation Editor section
+    // Editor
     segmentationEditor: {
-      title: 'Segmentation Editor',
+      title: 'The segmentation editor',
       description:
-        'The segmentation editor is a powerful tool for refining AI-generated segmentations and creating manual annotations. It features multiple editing modes, keyboard shortcuts, and advanced polygon manipulation tools.',
-      editingModes: 'Editing Modes',
+        'Where you review and correct results. Seven edit modes, full keyboard control, and panels that change with the project type.',
+      editingModes: 'Edit modes',
       modes: {
         view: {
-          title: 'View Mode',
+          title: 'View (V)',
           description:
-            'Navigate and inspect polygons without making changes. Click polygons to select them and view details.',
+            'Select, pan and zoom. Clicking a shape selects it and switches to Edit vertices.',
         },
         editVertices: {
-          title: 'Edit Vertices',
+          title: 'Edit vertices (E)',
           description:
-            'Drag individual vertices to refine polygon boundaries. Precise control for boundary adjustments.',
+            'Drag vertices to refine a boundary. Right-click a vertex to delete it. Needs a shape selected.',
         },
         addPoints: {
-          title: 'Add Points',
+          title: 'Add points (A)',
           description:
-            'Insert new vertices between existing ones. Shift+click for automatic point placement.',
+            'Insert vertices, extend a polyline from its nearer end, or join two polylines end to end. Needs a shape selected.',
         },
         createPolygon: {
-          title: 'Create Polygon',
+          title: 'Create polygon (N)',
           description:
-            'Draw new polygons from scratch. Click to add points, double-click to complete.',
+            'Click out a closed shape; click near the first point to close it. Minimum three points.',
+        },
+        createPolyline: {
+          title: 'Create polyline (P)',
+          description:
+            'Click out an open path for a microtubule or a sperm part. Finish with Enter or a double-click.',
         },
         sliceMode: {
-          title: 'Slice Mode',
+          title: 'Slice (S)',
           description:
-            'Cut polygons into multiple parts by drawing lines through them.',
+            'Cut a shape with a two-click line. Works on closed polygons and on polylines.',
         },
         deletePolygon: {
-          title: 'Delete Polygon',
+          title: 'Delete polygon (D)',
           description:
-            'Remove unwanted polygons by clicking on them. Useful for eliminating false detections.',
+            'Click shapes to remove them. The mode stays active, and there is no confirmation.',
         },
       },
-      keyFeatures: 'Key Features',
+      keyFeatures: 'What the editor gives you',
       features: {
         undoRedo:
-          'Undo/Redo System: Full history tracking with Ctrl+Z/Ctrl+Y support',
-        autoSave:
-          'Auto-save: Periodic saving with visual indicators showing unsaved changes',
-        zoomPan: 'Zoom & Pan: Mouse wheel zooming and drag-to-pan navigation',
+          'Undo and redo over shape geometry and fields. History is per frame and resets when you change image.',
+        saving:
+          'Saving on demand: the Save button, Ctrl+S, or automatically when you move to another image.',
+        zoomPan:
+          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0.',
         polygonManagement:
-          'Polygon Management: Show/hide, rename, and batch operations',
+          'A shape list with multi-select, hide and show, rename and delete.',
         keyboardShortcuts:
-          'Keyboard Shortcuts: Comprehensive hotkeys for efficient editing',
+          'Full keyboard control — press H or ? for the in-app list.',
         realTimeFeedback:
-          'Real-time Feedback: Live preview of edits and status updates',
+          'Per-mode instructions on the canvas and a live count of shapes and vertices.',
       },
-      shortcuts: 'Essential Keyboard Shortcuts',
+      shortcuts: 'Keyboard shortcuts',
       shortcutCategories: {
-        navigation: 'Navigation:',
-        actions: 'Actions:',
+        modes: 'Modes',
+        actions: 'Actions',
+        view: 'View',
       },
       shortcutsList: {
         v: 'View mode',
         e: 'Edit vertices',
         a: 'Add points',
         n: 'Create polygon',
+        p: 'Create polyline',
+        s: 'Slice',
+        d: 'Delete polygon',
+        tab: 'Cycle through the modes',
         ctrlZ: 'Undo',
         ctrlY: 'Redo',
         ctrlS: 'Save',
-        delete: 'Remove selected',
+        delete: 'Delete the selected shape',
+        enter: 'Finish the polyline being drawn',
+        escape: 'Cancel and return to View',
+        zoom: 'Zoom in and out',
+        reset: 'Fit the image to the view',
+        pan: 'Hold and drag to pan in any mode',
+        help: 'Show the shortcut list',
       },
-      workingWithPolygons: 'Working with Polygons',
+      workingWithPolygons: 'Working with shapes',
       polygonSteps: {
-        step1:
-          'Select a polygon by clicking on it (highlighted in blue when selected)',
-        step2: 'Switch to the appropriate editing mode for your task',
-        step3: 'Make your modifications using mouse interactions',
+        step1: 'Click a shape to select it',
+        step2: 'Switch to the mode that matches what you want to change',
+        step3: 'Make the change with the mouse',
         step4:
-          'Use the polygon panel on the right to manage visibility and properties',
-        step5: 'Save your changes periodically or rely on auto-save',
+          'Use the list on the right to hide, rename, multi-select or delete shapes',
+        step5: 'Press Ctrl+S to save',
       },
-      segmenting: 'Segmenting image...',
-      waitingInQueue: 'Waiting in queue',
-      reloadingSegmentation: 'Refreshing segmentation data...',
+      saveNote: 'There is no continuous autosave.',
+      saveNoteText:
+        'Your work is saved when you press Save or Ctrl+S, and in the background when you move to another image or frame. Clicking a breadcrumb navigates immediately and saves in the background, so press Ctrl+S first if you have substantial edits. On a video, deleting a tracked shape and saving removes it from every frame.',
+      typeSpecific: 'What changes with the project type',
+      typeSpecificList: {
+        microtubules:
+          'Microtubules: an instance panel with stable per-track colours, your own type labels, whole-track assignment, propagate and delete-track, and a kymograph view.',
+        sperm:
+          'Sperm: an instance panel where you pick the active cell and part before drawing, plus reassignment from the right-click menu.',
+        disintegration:
+          'Disintegrated spheroids: the dense core is drawn green. The Disintegration Index itself is computed at export time.',
+      },
     },
 
-    // Export Features section
+    // Export
     exportFeatures: {
-      title: 'Export Features',
+      title: 'Export',
       description:
-        'SpheroSeg provides comprehensive export capabilities to integrate with your research workflow. Export segmentation data in multiple formats suitable for machine learning frameworks and analysis tools.',
-      packageContents: 'Export Package Contents',
+        'Exports run in the background and download themselves when finished. One export at a time per user; the result is a single ZIP.',
+      packageContents: 'What is in the package',
       contents: {
         originalImages: {
-          title: 'Original Images',
-          description:
-            'High-quality original microscopic images in their native format.',
+          title: 'Original images',
+          description: 'The files you uploaded, unchanged.',
         },
         visualizations: {
           title: 'Visualizations',
           description:
-            'Annotated images with numbered polygons and customizable colors.',
+            'Rendered overlays with numbered shapes, in colours, line widths and transparency you choose.',
+        },
+        annotations: {
+          title: 'Annotations',
+          description:
+            'Machine-readable geometry in the formats you tick — and, for microtubule projects, ImageJ and CVAT files that are always included.',
+        },
+        metrics: {
+          title: 'Metrics',
+          description:
+            'A workbook whose sheets depend on the project type, as XLSX, CSV or JSON.',
         },
       },
-      annotationFormats: 'Annotation Formats',
+      annotationFormats: 'Annotation formats',
       formats: {
-        coco: 'COCO Format: Common Objects in Context - standard format for object detection frameworks like PyTorch and TensorFlow',
-        yolo: 'YOLO Format: You Only Look Once - optimized format for YOLO-based detection models',
-        json: 'Custom JSON: Structured JSON format with detailed polygon coordinates and metadata',
+        coco: 'COCO: the standard format for detection frameworks. Polygons with holes are exported as run-length masks.',
+        yolo: 'YOLO: bounding boxes, with the polygon on a comment line. Open polylines cannot be represented and are skipped.',
+        json: 'Custom JSON: full coordinates and metadata, including per-cell grouping for sperm projects.',
+        imagej:
+          'ImageJ RoiSet: a ZIP that opens straight into Fiji’s ROI Manager, one ROI per filament per slice, coloured by class or track. Microtubule projects only, always included.',
+        cvat: 'CVAT 1.1: polylines with their track identity as an attribute. Microtubule projects only, always included.',
       },
-      calculatedMetrics: 'Calculated Metrics',
+      calculatedMetrics: 'Metrics by project type',
       metricsDescription:
-        'SpheroSeg automatically calculates comprehensive morphological metrics for each detected spheroid:',
-      metricsCategories: {
-        basic: {
-          title: 'Basic Measurements:',
-          items: {
-            area: 'Area (pixels and scaled units)',
-            perimeter: 'Perimeter',
-            diameter: 'Equivalent diameter',
-            circularity: 'Circularity',
-          },
-        },
-        advanced: {
-          title: 'Advanced Metrics:',
-          items: {
-            feret: 'Feret diameters (max, min, aspect ratio)',
-            majorMinor: 'Major/minor diameter through centroid',
-            compactness: 'Compactness, convexity, solidity',
-            sphericity: 'Sphericity index',
-          },
-        },
+        'The workbook you get depends on what you are measuring:',
+      metricsTable: {
+        projectType: 'Project type',
+        sheet: 'Sheet and contents',
+        spheroid:
+          'Polygon Metrics + Summary — area, perimeter, circularity, Feret diameters, solidity and more, one row per shape',
+        spheroidInvasive:
+          'Image Metrics — one row per image with the Disintegration Index, core and invasion areas, and the dispersion panel',
+        wound:
+          'Polygon Metrics + Summary + WoundTimeSeries — the closure curve, with the chart embedded',
+        sperm:
+          'Sperm Metrics — head, midpiece, tail and total length, one row per cell',
+        microtubules:
+          'Microtubule Metrics + Channel Totals — length and per-channel intensity, one row per frame, filament and channel',
+        microcapsule:
+          'Microcapsule Metrics + Summary — one row per complete capsule; border-cut capsules are excluded',
       },
-      exportFormats: 'Metrics Export Formats',
-      exportFormatsList: {
-        excel:
-          'Excel (.xlsx): Formatted spreadsheet with separate sheets for summary and detailed data',
-        csv: 'CSV: Comma-separated values for easy import into statistical software',
-        jsonExport: 'JSON: Structured data format for programmatic analysis',
-      },
-      visualizationCustomization: 'Visualization Customization',
-      customizationOptions: {
-        colors:
-          'Polygon colors: Customize external (green) and internal (red) polygon colors',
-        numbering: 'Numbering: Show/hide polygon numbers for identification',
-        strokeWidth: 'Stroke width: Adjust line thickness (1-10px)',
-        fontSize: 'Font size: Control text size for polygon numbers (10-30px)',
-        transparency: 'Transparency: Set polygon fill transparency (0-100%)',
-      },
-      howToExport: 'How to Export',
+      scaleTitle: 'Pixel size and units',
+      scaleText:
+        'Enter a pixel size in micrometres per pixel and every length and area is converted for you. The field is filled in automatically from the file’s own calibration when it has one. Without a usable value the export falls back to pixels, so check the units in the column headers.',
+      howToExport: 'How to export',
       exportSteps: {
-        step1: 'Navigate to your project dashboard',
-        step2: 'Select the images you want to export (or export all)',
-        step3: 'Click "Advanced Export" to open the export dialog',
-        step4:
-          'Configure your export settings across the three tabs: General, Visualization, and Formats',
-        step5: 'Review the export summary',
-        step6: 'Click "Start Export" to generate and download your package',
+        step1: 'Open the project and click Export',
+        step2: 'Choose which images to include, or all of them',
+        step3:
+          'Set the pixel size if you want micrometres, and pick your visualization colours',
+        step4: 'Tick the annotation and metrics formats you need',
+        step5: 'Start the export and let it run — progress is shown live',
+        step6: 'The ZIP downloads itself when it is finished',
       },
-      exportNote: 'Export packages are comprehensive:',
+      exportNote: 'A failed stage does not fail the export.',
       exportNoteText:
-        'Each export includes documentation, metadata, and all selected content types organized in a clear folder structure for easy use.',
+        'Optional stages degrade to a warning and the rest of the package is still produced. For microtubule intensity a degraded run is also recorded in the package itself, in metrics_status.json and at the top of the metrics guide — so check those before relying on a sheet.',
     },
 
-    // Shared Projects section
-    sharedProjects: {
-      title: 'Shared Projects',
+    // Automated Essays
+    automatedEssays: {
+      title: 'Automated Essays',
       description:
-        'SpheroSeg allows you to collaborate with colleagues by sharing projects. Share your segmentation results and annotations with other researchers for review and collaboration.',
-      sharingFeatures: 'Sharing Features',
-      features: {
-        readOnly:
-          'Read-only access: Recipients can view but not modify your data',
-        emailInvite:
-          'Email invitations: Share via email with automatic notifications',
-        revokeAccess:
-          'Revocable access: Remove sharing permissions at any time',
-        multipleCollaborators:
-          'Multiple collaborators: Share with entire research teams',
+        'A batch microtubule assay that lives outside the project system. Upload a folder of Nikon ND2 well recordings and get one row per filament back: length, intensity along it, and its local background.',
+      howTo: 'Running a batch',
+      steps: {
+        step1: 'Open Automated Essays from the menu under your profile picture',
+        step2:
+          'Drag the folder of .nd2 files onto the page, or use the Select folder button',
+        step3:
+          'Wait — jobs run one at a time and the list refreshes itself while anything is running',
+        step4:
+          'Download the ZIP, or use Run again to reprocess the same files without uploading them a second time',
       },
-      howToShare: 'How to Share a Project',
+      results: 'What you get back',
+      resultsList: {
+        csv: 'results.csv — one row per microtubule, with its length, the intensity along it and its background',
+        failures:
+          'failures.csv — every well or position that could not be produced, and why. It is always written, even when empty',
+        overlays:
+          'Two overlay images per position: one checking the segmentation against its own input, one checking the measured band against the signal',
+        annotations:
+          'A JSON file per position with the traced centerlines and their lengths',
+      },
+      channelNote: 'IRM is segmented, fluorescence is measured.',
+      channelNoteText:
+        'The model was trained on IRM, so the filaments are traced there and the fluorescence channel is only read along those traces. A file with no IRM channel is reported as a failure rather than segmented from something else.',
+      retentionNote: 'Uploads are cleaned up, results are not.',
+      retentionNoteText:
+        'Input files are removed once a run finishes cleanly, and kept for a week if it did not — which is exactly the run you may want to repeat. The result stays until you delete the job.',
+    },
+
+    // Segmenter
+    segmenter: {
+      title: 'Segmenter',
+      description:
+        'A standalone polygon annotation tool with its own datasets and class palette, separate from projects and from the segmentation editor.',
+      features: {
+        datasets:
+          'Create datasets and upload still images into them; they are private to you.',
+        classes:
+          'Define your own classes with names and colours. Deleting a class keeps its polygons and simply unassigns them.',
+        polygons:
+          'Draw, edit and delete closed polygons and assign each a class. Overlapping polygons are fully supported.',
+        saving:
+          'Saving is explicit — the Save button or Ctrl+S — and is blocked if the existing annotation failed to load, so an empty canvas can never overwrite real work.',
+      },
+      scopeNote: 'Manual annotation only, for now.',
+      scopeNoteText:
+        'The Segmenter has no machine learning in it yet: no pre-labelling, no active learning and no export. It is reachable by URL at /segmenter.',
+    },
+
+    // Sharing
+    sharedProjects: {
+      title: 'Sharing and collaboration',
+      description:
+        'Share a project with colleagues by email or by link. Recipients see it in their own dashboard once they accept.',
+      sharingFeatures: 'What sharing gives them',
+      features: {
+        collaborative:
+          'Collaborative access: a collaborator can view, edit annotations, run segmentation, export, and mark the project reviewed',
+        emailInvite:
+          'Email invitations: the share works whether or not the email arrives, since delivery can take several minutes',
+        linkShare:
+          'Link shares: a link that binds to whoever accepts it, optionally with an expiry',
+        revokeAccess: 'Revocable at any time, taking effect immediately',
+        multipleCollaborators:
+          'Any number of collaborators, each filing the project in their own folders',
+      },
+      howToShare: 'How to share',
       shareSteps: {
         step1: 'Open the project you want to share',
-        step2: 'Click the "Share" button in the project toolbar',
-        step3: 'Enter the email addresses of your collaborators',
-        step4: 'Add an optional message explaining the shared content',
-        step5: 'Click "Send Invitations" to share the project',
+        step2: 'Click Share in the project toolbar',
+        step3: 'Enter your collaborator’s email address, or create a link',
+        step4: 'Send the invitation',
+        step5:
+          'Manage or revoke shares from the same dialog, where each one shows its status',
       },
-      permissionsNote: 'Important:',
+      permissionsNote: 'Sharing is collaborative, not read-only.',
       permissionsNoteText:
-        'Shared projects are read-only for recipients. They can view segmentations, export data, but cannot modify the original annotations. This ensures data integrity while enabling collaboration.',
+        'Collaborators can change annotations, and on a video their edits carry the same cross-frame consequences as yours. Only the owner can rename a project, change its type, share it further or delete it.',
+    },
+
+    // Troubleshooting
+    troubleshooting: {
+      title: 'Troubleshooting',
+      description:
+        'The problems people actually run into, and what causes them.',
+      table: {
+        symptom: 'Symptom',
+        cause: 'Cause and fix',
+      },
+      items: {
+        uploadRejected: {
+          symptom: 'A file is rejected before the upload starts',
+          cause:
+            'Still images are capped at 20 MB. A larger TIFF is treated as a stack instead and gets the 100 GB limit. Channel names longer than 64 characters are refused outright — re-export with shorter labels.',
+        },
+        darkFrames: {
+          symptom: 'Frames look almost black',
+          cause:
+            'High-bit-depth data needs windowing. Use the Min and Max sliders for that channel; each channel has its own window.',
+        },
+        noDetections: {
+          symptom: 'The model finds very little',
+          cause:
+            'Check contrast and the project type first. Lower the confidence threshold only where it is adjustable — the microtubule model ignores it by design.',
+        },
+        wrongChannel: {
+          symptom:
+            'Plenty of shapes, but they do not follow anything in the image',
+          cause:
+            'The wrong channel is being segmented. Set the segmentation source explicitly in the channel list; the microtubule model only works on IRM.',
+        },
+        colorsChange: {
+          symptom: 'Object colours change between frames',
+          cause:
+            'Cross-frame tracking has not completed for that container. Colours follow the track identity, so an untracked frame gets new ones.',
+        },
+        exportSlow: {
+          symptom: 'An export sits at 95 %',
+          cause:
+            'That is the compression stage. On a large project, especially with kymographs, it genuinely takes a while.',
+        },
+        lostEdits: {
+          symptom: 'Edits disappeared',
+          cause:
+            'Resegmenting replaces the frame’s segmentation, and clicking a breadcrumb navigates before the background save necessarily finishes. Press Ctrl+S before leaving.',
+        },
+      },
+      helpNote: 'Still stuck?',
+      helpNoteText:
+        'Use the feedback button to send a bug report or a feature request — it reaches the maintainers directly.',
     },
 
     // Footer navigation

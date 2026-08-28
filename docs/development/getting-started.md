@@ -1,493 +1,213 @@
-# Development Setup Guide
+# Getting started
 
-This guide will help you set up the Cell Segmentation Hub for local development.
+Setting up a working development environment, and the two things about a fresh
+clone that will stop you if nobody tells you about them.
+
+---
 
 ## Prerequisites
 
-### Required Software
+| Tool                               | Notes                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| **Docker** + Compose v2            | The project is Docker-first. `docker compose` (not `docker-compose`).    |
+| **Node.js 20+**                    | Only for host-side tooling: `make ci`, ESLint, Vitest.                   |
+| **NVIDIA GPU + Container Toolkit** | Optional. Everything runs on CPU, one to two orders of magnitude slower. |
 
-- **Node.js**: Version 18.0 or higher
-- **Python**: Version 3.9 or higher
-- **Docker**: Version 20.10 or higher (optional, for containerized development)
-- **Git**: For version control
+---
 
-### Recommended Tools
+## Read this before you start
 
-- **VS Code**: With TypeScript, Python, and Docker extensions
-- **Postman**: For API testing
-- **Docker Desktop**: For container management
+Two facts about a fresh clone that are not obvious and are not currently
+handled for you:
 
-## Quick Start (Recommended)
+### 1. There is no `.env.development` in the repository
 
-The fastest way to get started is using Docker Compose:
+It is gitignored, and nothing generates it. Without it:
+
+- `make up` / `make dev` pass a non-existent env file to Compose;
+- the frontend throws at start-up —
+  `Missing required environment variable: VITE_API_BASE_URL or VITE_API_URL`
+  (`src/lib/config.ts`).
+
+**Create it from the template before anything else:**
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-org/cell-segmentation-hub.git
-cd cell-segmentation-hub
-
-# 2. Start all services with Docker
-npm run docker:dev
-
-# 3. Wait for services to start (may take a few minutes on first run)
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:3001
-# ML Service: http://localhost:8000
+cp .env.example .env.development
 ```
 
-## Manual Setup
+`.env.example` already contains working local values:
 
-For development with hot reloading and debugging:
-
-### 1. Clone and Setup Environment
-
-```bash
-# Clone repository
-git clone https://github.com/your-org/cell-segmentation-hub.git
-cd cell-segmentation-hub
-
-# Copy environment files
-cp .env.example .env
-cp backend/.env.example backend/.env
 ```
-
-### 2. Frontend Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Frontend will be available at http://localhost:3000
-```
-
-#### Frontend Environment Variables
-
-```bash
-# .env
-VITE_API_BASE_URL=http://localhost:3001/api
+VITE_API_URL=http://localhost:3001/api
 VITE_ML_SERVICE_URL=http://localhost:8000
+VITE_WS_URL=ws://localhost:3001
 ```
 
-### 3. Backend Setup
+The frontend accepts either `VITE_API_BASE_URL` or `VITE_API_URL`; production
+sets `VITE_API_BASE_URL=/api` at build time because everything is behind one
+nginx origin.
+
+The dev server has a second, separate problem worth knowing about: several files
+under `src/` read `process.env.NODE_ENV`, which Vite substitutes only in **build**
+mode. `npm run dev` therefore throws `ReferenceError: process is not defined`
+unless the config defines it. The production build is unaffected, which is why
+CI has never caught this.
+
+### 2. There is no development Compose file in the repository
+
+Only `docker-compose.production.yml`, `docker-compose.test.yml` and
+`docker-compose.monitoring.yml` are tracked. The `make` targets that take no
+`-f` argument (`up`, `down`, `dev`, `logs`, `shell-*`) therefore rely on a
+`docker-compose.yml` that a fresh clone does not have.
+
+Until that is fixed, you have two working routes:
+
+- **Run the production compose file locally.** It builds and runs the same five
+  services and is what deployment uses:
+
+  ```bash
+  docker compose -f docker-compose.production.yml --env-file .env.production up -d
+  ```
+
+  You will need a `.env.production` with database credentials and secrets.
+
+- **Run the services directly on the host.** Slower to set up, but the fastest
+  edit loop for frontend work — see below.
+
+If you add a development Compose file, please also fix this page.
+
+---
+
+## Ports
+
+| Service    | Development | Production                    |
+| ---------- | ----------- | ----------------------------- |
+| Frontend   | 3000        | 4000 (behind nginx on 80/443) |
+| Backend    | 3001        | 4001                          |
+| ML service | 8000        | 4008                          |
+| PostgreSQL | 5432        | internal                      |
+| Redis      | 6379        | internal                      |
+
+---
+
+## Running pieces on the host
+
+### Frontend
 
 ```bash
-# Navigate to backend directory
-cd backend
-
-# Install dependencies
 npm install
-
-# Setup database
-npm run db:push
-npm run db:generate
-
-# Seed database with test data (optional)
-npm run db:seed
-
-# Start development server
-npm run dev
-
-# Backend API will be available at http://localhost:3001
+npm run dev            # Vite on :3000
 ```
 
-#### Backend Environment Variables
+Requires `.env.development` (above) and a backend reachable at the URL it names.
+
+### Backend
 
 ```bash
-# backend/.env
-NODE_ENV=development
-PORT=3001
-HOST=localhost
-
-# Database
-DATABASE_URL=file:./dev.db
-
-# JWT Secrets (MUST be changed in production - these are example values only)
-JWT_ACCESS_SECRET=CHANGE_THIS_IN_PRODUCTION_32_CHAR_MIN
-JWT_REFRESH_SECRET=CHANGE_THIS_IN_PRODUCTION_32_CHAR_MIN
-
-# CORS Origins
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-
-# File Storage
-UPLOAD_DIR=./uploads
-STORAGE_TYPE=local
-
-# ML Service
-SEGMENTATION_SERVICE_URL=http://localhost:8000
-
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX=1000
+cd backend
+npm install
+npx prisma generate
+npx prisma migrate dev
+npm run dev            # Express on :3001
 ```
 
-### 4. ML Service Setup
+Needs a `DATABASE_URL` pointing at a PostgreSQL instance, plus JWT secrets. See
+`.env.example`.
+
+### ML service
 
 ```bash
-# Navigate to ML service directory
 cd backend/segmentation
-
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Download model weights (see ML Models section below)
-mkdir weights
-
-# Start development server
-python api/main.py
-
-# ML service will be available at http://localhost:8000
+uvicorn api.main:app --reload --port 8000
 ```
 
-#### ML Service Environment Variables
+Model checkpoints are **not** in the repository. Stage them with the scripts in
+`scripts/` and verify with `make check-weights` — see
+[Model weights setup](../MODEL_WEIGHTS_SETUP.md). Without them the service
+starts, but the affected models are absent from the catalogue rather than
+failing at inference time.
+
+---
+
+## The quality gate
 
 ```bash
-# backend/segmentation/.env
-PYTHONUNBUFFERED=1
-PYTHONDONTWRITEBYTECODE=1
-PORT=8000
+make ci
 ```
 
-## Database Setup
+Frontend TypeScript, backend TypeScript, ESLint at **zero** warnings, i18n
+completeness across six locales, documentation link integrity, and the GPU-free
+Python suites. About half a minute, and it is what you should run before opening
+a PR.
 
-### SQLite (Development)
-
-The application uses SQLite for development with Prisma ORM:
+Individually:
 
 ```bash
-# Navigate to backend
-cd backend
-
-# Generate Prisma client
-npm run db:generate
-
-# Apply schema to database
-npm run db:push
-
-# View database in Prisma Studio (optional)
-npm run db:studio
+npm run type-check                    # frontend TS
+cd backend && npm run type-check      # backend TS
+npx eslint --max-warnings=0 src/      # lint
+node scripts/check-i18n.cjs           # translations
+node scripts/check-doc-links.cjs      # docs links (make docs-links)
+make test-py                          # Python, no GPU needed
+make test-ml                          # full Python suite, needs a GPU
+make ci-test                          # Vitest — informational, see below
 ```
 
-### Database Migrations
+**Vitest is not a gate.** The suite has substantial pre-existing failures from
+earlier refactors, so a whole-suite run gives no clean signal. Run individual
+files instead:
 
 ```bash
-# Create new migration
-npm run db:migrate
-
-# Reset database (destructive)
-npm run db:reset
-
-# Seed with test data
-npm run db:seed
+npx vitest run src/lib/__tests__/polygonGeometry.test.ts
 ```
 
-## ML Models Setup
+See the [testing guide](../testing-guide.md) for the honest state of each
+suite.
 
-### Download Model Weights
+---
 
-Model weights are not included in the repository due to size. Download them separately:
+## Database work
+
+> **A fresh clone may have no migration history.** `backend/.gitignore`
+> currently excludes `prisma/migrations/`, so the migration files — including
+> `migration_lock.toml`, which pins the database provider — are not in the
+> repository. `prisma migrate deploy` has nothing to apply and no provider lock
+> in that state. Check whether that ignore rule is still present before
+> concluding your database is broken.
 
 ```bash
-# Create weights directory
-mkdir backend/segmentation/weights
-
-# Download weights (replace with actual download URLs)
-cd backend/segmentation/weights
-
-# HRNet weights (example)
-wget https://example.com/models/hrnet_w32_cell_segmentation.pth
-
-# ResUNet Advanced weights
-wget https://example.com/models/resunet_advanced_cell_segmentation.pth
-
-# ResUNet Small weights
-wget https://example.com/models/resunet_small_cell_segmentation.pth
+# Inside the backend container, or with DATABASE_URL set on the host
+npx prisma migrate dev --name <name>   # development: creates a migration file
+npx prisma migrate deploy              # production: applies existing files only
+npx prisma generate
+npx prisma studio                      # visual browser
 ```
 
-### Model Configuration
+**Never run `migrate dev` against production** — it creates new migration files
+against the live database. Schema reference:
+[database schema](../reference/database-schema.md).
 
-Models are configured in `backend/segmentation/ml/model_loader.py`:
+---
 
-```python
-# Available models
-AVAILABLE_MODELS = {
-    "hrnet": {
-        "class": HRNet,
-        "weights": "weights/hrnet_w32_cell_segmentation.pth",
-        "input_size": (1024, 1024)
-    },
-    "resunet_advanced": {
-        "class": ResUNetAdvanced,
-        "weights": "weights/resunet_advanced_cell_segmentation.pth",
-        "features": [64, 128, 256, 512]
-    },
-    "resunet_small": {
-        "class": ResUNetSmall,
-        "weights": "weights/resunet_small_cell_segmentation.pth",
-        "features": [48, 96, 192, 384, 512]
-    }
-}
-```
+## Committing
 
-## Development Workflow
+Pre-commit (Husky) enforces: no `console.log` or `debugger`, ESLint at zero
+warnings, Prettier formatting, frontend and backend TypeScript, and a
+Conventional Commit message. Direct commits to `main` are blocked — branch and
+open a PR. **Do not bypass the hook with `--no-verify`.**
 
-### 1. Start Development Environment
+See [Contributing](contributing.md).
 
-```bash
-# Terminal 1: Frontend
-npm run dev
+---
 
-# Terminal 2: Backend
-cd backend && npm run dev
+## Where to go next
 
-# Terminal 3: ML Service
-cd backend/segmentation && python api/main.py
-```
-
-### 2. Test the Setup
-
-```bash
-# Check service health
-curl http://localhost:3001/health    # Backend
-curl http://localhost:8000/health    # ML Service
-
-# Test frontend
-open http://localhost:3000
-```
-
-### 3. Create Test User
-
-```bash
-# Register via API
-curl -X POST http://localhost:3001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"TestPassword123!"}'
-
-# Or use the frontend registration form
-```
-
-## IDE Configuration
-
-### VS Code Settings
-
-Create `.vscode/settings.json`:
-
-```json
-{
-  "typescript.preferences.importModuleSpecifier": "relative",
-  "editor.formatOnSave": true,
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true
-  },
-  "python.defaultInterpreterPath": "./backend/segmentation/venv/bin/python",
-  "python.linting.enabled": true,
-  "python.linting.pylintEnabled": true
-}
-```
-
-### VS Code Extensions
-
-Recommended extensions:
-
-- TypeScript and JavaScript Language Features
-- Python
-- Prisma
-- Docker
-- ESLint
-- Prettier
-- GitLens
-
-## Common Development Tasks
-
-### Database Operations
-
-```bash
-# Reset database and apply fresh schema
-cd backend
-npm run db:reset
-
-# View database in browser
-npm run db:studio
-
-# Generate new migration
-npm run db:migrate
-```
-
-### Code Quality
-
-```bash
-# Frontend linting
-npm run lint
-
-# Backend linting
-cd backend && npm run lint
-
-# Type checking
-npx tsc --noEmit
-```
-
-### Testing Services
-
-```bash
-# Test backend endpoints
-curl -X GET http://localhost:3001/health
-
-# Test ML service
-curl -X GET http://localhost:8000/health
-
-# Test image segmentation
-curl -X POST http://localhost:8000/api/v1/segment \
-  -F "file=@test-image.jpg" \
-  -F "model=hrnet" \
-  -F "threshold=0.5"
-```
-
-### File Uploads
-
-Test file upload functionality:
-
-```bash
-# Create test project via API
-PROJECT_ID=$(curl -X POST http://localhost:3001/api/projects \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Test Project","description":"Test"}' | jq -r '.data.id')
-
-# Upload images
-curl -X POST http://localhost:3001/api/projects/$PROJECT_ID/images \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -F "images=@test-image1.jpg" \
-  -F "images=@test-image2.jpg"
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### Frontend not connecting to backend
-
-```bash
-# Check if backend is running
-curl http://localhost:3001/health
-
-# Check CORS configuration in backend/.env
-ALLOWED_ORIGINS=http://localhost:3000
-```
-
-#### ML Service connection issues
-
-```bash
-# Check Python dependencies
-cd backend/segmentation
-pip list | grep torch
-
-# Check model weights
-ls -la weights/
-```
-
-#### Database connection errors
-
-```bash
-# Regenerate Prisma client
-cd backend
-npm run db:generate
-
-# Check database file permissions
-ls -la dev.db
-```
-
-#### Port conflicts
-
-```bash
-# Check what's running on ports
-lsof -i :3001  # Backend
-lsof -i :3000  # Frontend
-lsof -i :8000  # ML Service
-
-# Kill processes if needed
-kill -9 PID
-```
-
-### Log Files
-
-Development logs are available at:
-
-- **Frontend**: Browser console
-- **Backend**: Terminal output + `backend/logs/`
-- **ML Service**: Terminal output
-
-### Performance Issues
-
-```bash
-# Monitor memory usage
-htop
-
-# Check disk space
-df -h
-
-# Monitor Python processes
-ps aux | grep python
-```
-
-## Hot Reloading
-
-All services support hot reloading in development:
-
-- **Frontend**: Vite HMR automatically reloads on file changes
-- **Backend**: `tsx watch` restarts server on TypeScript changes
-- **ML Service**: Manual restart required for model changes
-
-## Environment-Specific Configuration
-
-### Development
-
-- SQLite database
-- Local file storage
-- Verbose logging
-- Hot reloading enabled
-- CORS allows localhost origins
-
-### Testing
-
-- In-memory database
-- Mock file storage
-- Minimal logging
-- Fast test execution
-
-### Production
-
-- PostgreSQL database
-- Cloud storage (S3/GCS)
-- Structured logging
-- Optimized builds
-- Security headers
-
-## Next Steps
-
-Once your development environment is running:
-
-1. **Explore the API**: Visit `http://localhost:3001/health`
-2. **Test the Frontend**: Open `http://localhost:3000`
-3. **Review the Code**: Start with `src/App.tsx` and `backend/src/server.ts`
-4. **Read the Architecture**: See [Architecture Documentation](../architecture/)
-5. **Make Changes**: The hot reload will update automatically
-
-## Additional Resources
-
-- [API Documentation](../api/) - Complete API reference
-- [Architecture Guide](../architecture/) - System design details
-- [Deployment Guide](../deployment/) - Production deployment
-- [Testing Guide](./testing.md) - Testing procedures
-
-For questions or issues, check the troubleshooting section or create an issue in the repository.
+| You want to…          | Read                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| Understand the system | [Architecture overview](../architecture/README.md)                                                      |
+| Work on the editor    | [Frontend architecture](../architecture/frontend.md) + [editor guide](../guides/segmentation-editor.md) |
+| Work on the API       | [Backend architecture](../architecture/backend.md) + [REST API](../api/README.md)                       |
+| Work on a model       | [ML service architecture](../architecture/ml-service.md) + [ML models](../reference/ml-models.md)       |
+| Deploy                | [Deployment](../deployment/README.md)                                                                   |
+| Fix something broken  | [Troubleshooting](../TROUBLESHOOTING.md)                                                                |

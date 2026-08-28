@@ -1399,298 +1399,685 @@ export default {
     noImagesAvailable: 'Keine Bilder verfügbar',
   },
   docs: {
+    // Kopfbereich
     badge: 'Dokumentation',
-    title: 'SpheroSeg Dokumentation',
+    title: 'SpheroSeg-Dokumentation',
     subtitle:
-      'Umfassender Leitfaden für unsere Sphäroid-Segmentierungsplattform',
+      'Alles, was die Plattform kann, für alle sechs Projekttypen — durchsuchbar',
     backTo: 'Zurück zu {{page}}',
+
+    // Suche
+    search: {
+      placeholder: 'Dokumentation durchsuchen…',
+      hint: 'Drücken Sie /, um zu suchen. Passende Abschnitte werden gefiltert und hervorgehoben.',
+      results: '{{count}} passende(r) Abschnitt(e)',
+      noResults: 'Keine Treffer',
+      noResultsHint:
+        'Versuchen Sie eine kürzere Suchanfrage oder einen Begriff wie „Kanal“, „Kymograf“, „Export“ oder „Schwellwert“.',
+      clear: 'Suche zurücksetzen',
+    },
+
+    // Navigation
     navigation: 'Navigation',
     nav: {
       introduction: 'Einführung',
       gettingStarted: 'Erste Schritte',
-      uploadingImages: 'Bilder Hochladen',
-      modelSelection: 'Modellauswahl',
-      segmentationProcess: 'Segmentierungsprozess',
-      segmentationEditor: 'Segmentierungseditor',
-      exportFeatures: 'Export-Funktionen',
-      sharedProjects: 'Geteilte Projekte',
+      projectTypes: 'Projekttypen',
+      uploadingImages: 'Daten hochladen',
+      videosChannels: 'Videos & Kanäle',
+      modelSelection: 'Modelle',
+      segmentationProcess: 'Segmentierung',
+      segmentationEditor: 'Editor',
+      exportFeatures: 'Export',
+      automatedEssays: 'Automatisierte Assays',
+      segmenter: 'Segmenter',
+      sharedProjects: 'Freigabe',
+      troubleshooting: 'Fehlerbehebung',
     },
+
+    // Einführung
     introduction: {
       title: 'Einführung',
       whatIs: 'Was ist SpheroSeg?',
       description:
-        'SpheroSeg ist eine fortschrittliche Plattform für die Segmentierung und Analyse zellulärer Sphäroide in mikroskopischen Bildern.',
-      developedBy: 'Diese Plattform wurde von Bc. Michal Průšek entwickelt.',
+        'SpheroSeg ist eine Plattform für KI-gestützte Segmentierung und Vermessung mikroskopischer Bilder und Zeitrafferaufnahmen. Sie bietet sechs Projekttypen auf Basis von zehn Segmentierungsmodellen, einen Editor für Polygone und Polylinien, bildübergreifendes Mikrotubuli-Tracking und einen Stapel-Export.',
+      developedBy:
+        'Die Plattform wurde von Bc. Michal Průšek an der Fakultät für Nuklearwissenschaften und Physikalische Ingenieurwissenschaften der Tschechischen Technischen Universität Prag unter der Betreuung von Ing. Adam Novozámský, Ph.D. entwickelt, in Zusammenarbeit mit dem Institut für Biochemie und Mikrobiologie der UCT Prag.',
       addresses:
-        'SpheroSeg adressiert die herausfordernde Aufgabe der präzisen Identifikation und Segmentierung.',
+        'Ausgangspunkt war die schwierige Aufgabe, Sphäroidgrenzen in der Mikroskopie zu bestimmen. Heute deckt die Plattform auch zerfallende Sphäroide, Wundheilungsassays, Spermienmorphologie, Mikrotubuli-Zeitraffer und Mikrokapseln ab — jeweils mit eigenem Modell, eigenen Messgrößen und eigenem Exportformat.',
     },
+
+    // Erste Schritte
     gettingStarted: {
       title: 'Erste Schritte',
-      accountCreation: 'Konto Erstellen',
+      accountCreation: 'Konto anlegen',
       accountDescription:
-        'Um SpheroSeg zu verwenden, müssen Sie ein Konto erstellen.',
+        'Die Registrierung ist offen — es gibt keine Freigabewarteschlange. Ein Konto hält Ihre Projekte, Bilder und Ergebnisse zusammen.',
       accountSteps: {
-        step1: 'Zur Registrierungsseite navigieren',
-        step2: 'E-Mail-Adresse eingeben',
-        step3: 'Profil vervollständigen',
-        step4: 'E-Mail-Adresse verifizieren',
+        step1: 'Öffnen Sie die Registrierungsseite',
+        step2: 'Geben Sie Ihre E-Mail-Adresse ein und wählen Sie ein Passwort',
+        step3: 'Vervollständigen Sie Ihr Profil mit Name und Einrichtung',
+        step4:
+          'Legen Sie in den Einstellungen Modell, Standardschwellwert, Sprache und Design fest',
       },
-      firstProject: 'Erstes Projekt Erstellen',
-      projectDescription: 'Projekte helfen bei der Organisation.',
+      firstProject: 'Ihr erstes Projekt',
+      projectDescription:
+        'Ein Projekt enthält Bilder und die daraus erzeugten Segmentierungen. Sein Typ bestimmt, welche Modelle laufen, was der Editor zeigt und wie exportiert wird — wählen Sie ihn also bewusst.',
       projectSteps: {
-        step1: 'Auf "Neues Projekt" klicken',
-        step2: 'Name und Beschreibung eingeben',
-        step3: 'Projekttyp auswählen',
-        step4: 'Auf "Projekt Erstellen" klicken',
+        step1: 'Klicken Sie im Dashboard auf „Neues Projekt“',
+        step2: 'Geben Sie einen Namen und optional eine Beschreibung ein',
+        step3:
+          'Wählen Sie den zu Ihrer Probe passenden Projekttyp (siehe Projekttypen unten)',
+        step4:
+          'Klicken Sie auf „Projekt erstellen“ und laden Sie Ihre Daten hoch',
       },
     },
+
+    // Projekttypen
+    projectTypes: {
+      title: 'Projekttypen',
+      description:
+        'Jedes Projekt hat einen Typ, den Sie beim Anlegen wählen. Er ist keine bloße Bezeichnung: Er bestimmt die verfügbaren Modelle, die erzeugte Geometrie, die Panels im Editor und die Dateien, die Sie beim Export erhalten.',
+      types: {
+        spheroid: {
+          name: 'Sphäroide (Standard)',
+          bestFor:
+            'Für: Zellsphäroide in Hellfeld oder Phasenkontrast. Der einzige Typ mit Modellauswahl — gleich fünf davon.',
+          output: 'Ergebnis: geschlossene Polygone mit optionalen Löchern.',
+        },
+        spheroidInvasive: {
+          name: 'Zerfallende Sphäroide',
+          bestFor:
+            'Für: Sphäroide, die in eine Matrix auswandern. Die zentrale Kennzahl ist der kernverankerte Zerfallsindex.',
+          output:
+            'Ergebnis: geschlossene Polygone; der dichte Kern wird als eigene Klasse vorhergesagt und grün gezeichnet.',
+        },
+        wound: {
+          name: 'Wundheilung',
+          bestFor:
+            'Für: Zeitraffer von Scratch-Assays. Ergänzt eine Verschlusskurve über die gesamte Serie.',
+          output:
+            'Ergebnis: geschlossene Polygone über der offenen Wunde sowie ein Blatt mit der Wundfläche über die Zeit samt Diagramm.',
+        },
+        sperm: {
+          name: 'Spermien',
+          bestFor:
+            'Für: Spermienmorphologie, gemessen als drei Teile je Zelle — Kopf, Mittelstück und Schwanz.',
+          output:
+            'Ergebnis: offene Polylinien mit Teilklasse und Instanz-ID, farblich als Grün, Orange und Cyan unterschieden.',
+        },
+        microtubules: {
+          name: 'Mikrotubuli',
+          bestFor:
+            'Für: IRM-Zeitraffer von Mikrotubuli, mit bildübergreifendem Tracking, Intensität je Kanal und Kymografen.',
+          output:
+            'Ergebnis: offene Polylinien mit stabiler Track-ID; exportiert als ImageJ-ROIs und CVAT statt COCO oder YOLO.',
+        },
+        microcapsule: {
+          name: 'Mikrokapseln',
+          bestFor:
+            'Für: runde Mikrokapseln im Hellfeld, auch wenn sie einander berühren.',
+          output:
+            'Ergebnis: ein geschlossenes Polygon je Kapsel. Vom Bildrand angeschnittene Kapseln fließen nicht in die Messwerte ein.',
+        },
+      },
+      note: 'Wählen Sie den Typ vor dem Hochladen.',
+      noteText:
+        'Die Modellkompatibilität richtet sich nach dem Projekttyp; eine spätere Änderung bedeutet, dass vorhandene Ergebnisse nicht mehr mit dem Modell neu berechnet werden können, das sie erzeugt hat.',
+    },
+
+    // Daten hochladen
     uploadImages: {
-      title: 'Bilder Hochladen',
-      description: 'SpheroSeg unterstützt verschiedene Bildformate.',
-      methods: 'Upload-Methoden',
-      methodsDescription: 'Mehrere Wege zum Hochladen:',
-      methodsList: {
-        dragDrop: 'Dateien per Drag & Drop',
-        browse: 'Durchsuchen und auswählen',
-        batch: 'Batch-Upload',
+      title: 'Daten hochladen',
+      description:
+        'Die Plattform nimmt sowohl Einzelbilder als auch Zeitrafferdaten an. Ein Video, eine ND2-Datei oder ein mehrseitiges TIFF wird zu einem Container mit einem Eintrag je Einzelbild.',
+      formats: 'Unterstützte Formate und Grenzen',
+      formatsTable: {
+        kind: 'Art',
+        extensions: 'Formate',
+        limit: 'Maximale Größe',
+        imagesLabel: 'Einzelbilder',
+        imagesLimit: '20 MB pro Datei',
+        videosLabel: 'Videos und Stapel',
+        videosLimit: '100 GB pro Datei',
       },
-      note: 'Hinweis:',
-      noteText: 'Stellen Sie guten Kontrast sicher.',
+      methods: 'Wege zum Hochladen',
+      methodsDescription: 'Drei gleichwertige Möglichkeiten:',
+      methodsList: {
+        dragDrop: 'Dateien auf den Upload-Bereich ziehen',
+        browse: 'Auf den Upload-Bereich klicken und Dateien auswählen',
+        batch:
+          'Einen ganzen Ordner ablegen — er wird rekursiv durchlaufen, bis zu 10 000 Dateien je Stapel',
+        autoSegment:
+          'Mit „Nach dem Hochladen automatisch segmentieren“ wandert alles direkt in die Warteschlange',
+      },
+      tiffNote: 'Ein TIFF kann beides sein.',
+      tiffNoteText:
+        'Ein TIFF wird als Stapel behandelt, wenn es größer als 20 MB ist oder tatsächlich mehrere Seiten enthält — der Dateikopf wird geprüft, sodass auch ein kleines Mehrkanal-TIFF korrekt verarbeitet wird.',
+      note: 'Für beste Ergebnisse:',
+      noteText:
+        'achten Sie auf guten Kontrast zwischen Objekt und Hintergrund und darauf, dass die Datei ihre Pixelkalibrierung mitbringt, wenn Sie Messwerte in Mikrometern möchten. Ein Video-Upload ist eine einzige lange Anfrage — Übertragung und Einzelbildextraktion laufen gemeinsam, eine große ND2-Datei braucht also Zeit.',
     },
+
+    // Videos & Kanäle
+    videosChannels: {
+      title: 'Videos, Einzelbilder und Kanäle',
+      description:
+        'Zeitraffer- und Mehrkanaldaten werden eigens behandelt: ein Container für die Aufnahme, ein Eintrag je Einzelbild und eine Kanalliste, die Sie im Editor steuern.',
+      containers: 'Container und Einzelbilder',
+      containerFacts: {
+        frames:
+          'Ein Upload wird zu einem Container plus einem Eintrag je Einzelbild; in der Oberfläche werden Einzelbilder ab 1 gezählt.',
+        hidden:
+          'Der Container selbst erscheint nie in der Galerie und wird nie segmentiert — nur die Einzelbilder.',
+        positions:
+          'Eine an mehreren Tischpositionen aufgenommene ND2-Datei wird zu einem Projekteintrag je Position.',
+        calibration:
+          'Pixelgröße und Bildabstand werden aus der Datei gelesen, sofern vorhanden, und zur automatischen Umrechnung genutzt.',
+      },
+      channels: 'Kanäle',
+      channelsDescription:
+        'Jeder Kanal wird je Einzelbild als eigenes Bild gespeichert. Genau ein Kanal kann die Segmentierungsquelle sein — der Kanal, den das Modell liest.',
+      channelControls: {
+        visibility:
+          'Ein Kontrollkästchen nimmt den Kanal in die Überlagerung auf',
+        color: 'Ein Farbfeld legt seinen Farbton fest',
+        rename: 'Ein Doppelklick auf den Namen benennt ihn um',
+        opacity: 'Ein Regler stellt die Deckkraft von 0 bis 100 % ein',
+        source: 'Die Segmentierungsquelle ist mit „● src“ markiert',
+      },
+      sourceNote: 'Prüfen Sie die Segmentierungsquelle.',
+      sourceNoteText:
+        'Ist kein Kanalname erkennbar, wird keine Quelle markiert und der erste Kanal verwendet. Bei Mikrotubuli hat das Folgen: Das Modell arbeitet nur mit IRM, auf einem Fluoreszenzkanal erzeugt es überzeugend aussehende Polylinien, unter denen nichts liegt.',
+      windowLevel: '16-Bit-Daten darstellen',
+      windowLevelDescription:
+        'Bilder mit hoher Bittiefe werden über die Regler Min und Max dargestellt, ergänzt um Helligkeit und Kontrast. Das Fenster gilt je Kanal und nicht gemeinsam: Ein Kanal wird beim ersten Anzeigen automatisch an seine eigenen Daten angepasst, behält danach Ihre Grenzen und erweitert seinen Bereich nur, wenn hellere Bilder auftauchen. Diese Einstellungen gelten für die Sitzung; Kanalfarben und Deckkraft werden gespeichert.',
+      navigation: 'Durch Einzelbilder navigieren',
+      keys: {
+        step: 'Vorheriges / nächstes Einzelbild',
+        play: 'Abspielen oder anhalten — feste 10 Bilder pro Sekunde, Stopp beim letzten Bild',
+      },
+      mtExtras: 'Zusätzlich bei Mikrotubuli-Projekten',
+      mtExtrasList: {
+        registration:
+          'Kanalregistrierung beim Hochladen: richtet jeden Kanal per ganzzahliger Pixelverschiebung am ersten aus, sodass nichts interpoliert wird.',
+        addChannel:
+          'Kanal hinzufügen: hängt nachträglich einen weiteren Kanal an ausgewählte Einzelbilder an — entweder ein Bild auf alle geprägt oder ein Video Bild für Bild zugeordnet.',
+        tracking:
+          'Bildübergreifendes Tracking läuft automatisch, sobald alle Einzelbilder fertig sind, und gibt jedem Filament eine stabile Identität und Farbe.',
+      },
+    },
+
+    // Modelle
     modelSelection: {
-      title: 'Modellauswahl',
-      description: 'SpheroSeg bietet drei verschiedene KI-Modelle.',
+      title: 'Modelle',
+      description:
+        'Zehn Modelle, jedes an die Projekttypen gebunden, für die es trainiert wurde. Die Auswahl zeigt nur kompatible Modelle, und eine echte Wahl haben nur Standard-Sphäroidprojekte — alle anderen Typen haben genau eines.',
+      spheroidModels: 'Sphäroidmodelle — Sie haben die Wahl',
+      specialisedModels: 'Spezialmodelle — eines je Projekttyp',
       models: {
         hrnet: {
-          name: 'HRNet (Klein)',
-          inferenceTime: 'E2E-Zeit: ~309ms pro Bild (ML-Inferenz: 204ms)',
+          name: 'HRNet (ausgewogen)',
+          inferenceTime: 'Etwa 0,20 s pro Bild',
           bestFor:
-            'Am besten für: Ausgewogene Leistung zwischen Geschwindigkeit und Qualität',
-          description: 'Schnelles und effizientes Modell.',
+            'Am besten für: ein Modell, kein Nachdenken. Die Standardwahl der Plattform.',
+          description:
+            'Behält im gesamten Netz einen hochauflösenden Zweig bei, statt erst zu kodieren und dann zu dekodieren, und bewahrt so Randdetails.',
         },
         cbam: {
-          name: 'CBAM-ResUNet (Mittel)',
-          inferenceTime: 'E2E-Zeit: ~482ms pro Bild (ML-Inferenz: 377ms)',
-          bestFor: 'Am besten für: Maximale Präzision bei der Segmentierung',
+          name: 'CBAM-ResUNet (präzise)',
+          inferenceTime: 'Etwa 0,38 s pro Bild',
+          bestFor:
+            'Am besten für: Publikationsabbildungen und schwierige Ränder, bei rund doppeltem Aufwand gegenüber HRNet.',
           description:
-            'Präzises Segmentierungsmodell mit Aufmerksamkeitsmechanismen für genaue Sphäroid-Grenzerkennung.',
+            'Residual-U-Net mit Kanal- und Raumaufmerksamkeit auf jeder Stufe — die präzisesten Ränder der fünf.',
         },
         unet: {
-          name: 'UNet (SpheroHQ)',
-          inferenceTime: 'E2E-Zeit: ~286ms pro Bild (ML-Inferenz: 181ms)',
+          name: 'UNet (am schnellsten)',
+          inferenceTime: 'Etwa 0,18 s pro Bild',
           bestFor:
-            'Am besten für: Schnellste Verarbeitung, hervorragend für Echtzeitanwendungen',
+            'Am besten für: große Stapel, bei denen Durchsatz wichtiger ist als das letzte Prozent Genauigkeit.',
           description:
-            'Spezialisiertes Modell, das spezifisch für Sphäroid-Segmentierung mit dem SpheroHQ-Datensatz trainiert wurde. Bietet ausgewogene Geschwindigkeit und Genauigkeit.',
+            'Ein schlichtes U-Net, trainiert auf dem SpheroHQ-Datensatz und auf Durchsatz optimiert.',
+        },
+        segformer: {
+          name: 'SegFormer',
+          inferenceTime: 'Etwa 0,20 s pro Bild',
+          bestFor:
+            'Am besten für: die höchste gemessene Genauigkeit auf Hellfeld-Sphäroiden — 93 % IoU.',
+          description:
+            'Transformer-basiert (SegFormer-B0): hierarchischer Encoder mit leichtgewichtigem MLP-Decoder.',
+        },
+        mamba: {
+          name: 'Mamba-UNet',
+          inferenceTime: 'Etwa 0,24 s pro Bild',
+          bestFor:
+            'Am besten für: Bilder, die den Trainingsdaten nicht ähneln — anderes Labor, unbekannte Optik, wirkstoffbehandelt oder ungewöhnliche Morphologien.',
+          description:
+            'U-Net mit bidirektionalem State-Space-Flaschenhals, gewählt wegen seiner Robustheit außerhalb der Trainingsverteilung.',
+        },
+        disintegration: {
+          name: 'Sphäroid-Zerfall',
+          inferenceTime: 'Etwa 0,70 s pro Bild · Standardschwellwert 0,2',
+          bestFor: 'Verwendet von: Projekten mit zerfallenden Sphäroiden.',
+          description:
+            'UNet++ mit EfficientNet-B5-Encoder, das drei Klassen vorhersagt — Hintergrund, Korona und dichter Kern. Der Kern wird direkt vorhergesagt statt abgeleitet, und erst das macht den Zerfallsindex belastbar.',
+        },
+        wound: {
+          name: 'Wundheilung',
+          inferenceTime: 'Etwa 0,03 s pro Bild',
+          bestFor: 'Verwendet von: Wundheilungsprojekten.',
+          description:
+            'U-Net mit MiT-B5-Encoder für binäre Wundsegmentierung, 90 % IoU auf einem externen Testsatz. Intern arbeitet es mit 256×256 und skaliert hoch — daher die Geschwindigkeit und die Glättung feiner Randdetails.',
+        },
+        sperm: {
+          name: 'Spermienmorphologie',
+          inferenceTime: 'Etwa 0,30 s pro Bild',
+          bestFor: 'Verwendet von: Spermienprojekten.',
+          description:
+            'Mehrklassige Instanzsegmentierung, die Kopf, Mittelstück und Schwanz direkt als Polylinien erzeugt — über Skelettextraktion statt über geschwellte Flecken.',
+        },
+        microtubule: {
+          name: 'Mikrotubuli (v5H)',
+          inferenceTime:
+            'Etwa 4,5 s pro Bild · Schwellwert fest auf 0,97, nicht einstellbar',
+          bestFor: 'Verwendet von: Mikrotubuli-Projekten. Nur IRM-Bilder.',
+          description:
+            'Ein nnU-Net-ResEnc-M-Netz sagt den Filamentvordergrund vorher; ein krümmungsbegrenzter Instancer trennt ihn anschließend in einzelne Mittellinien und löst jede Kreuzung unter einer festen Krümmungsschranke auf. Ausschließlich auf synthetischen Bildern trainiert. Die Laufzeit skaliert mit der Zahl der Filamente, nicht nur mit der Bildgröße.',
+        },
+        microcapsule: {
+          name: 'Mikrokapseln',
+          inferenceTime: 'Etwa 0,30 s pro Bild',
+          bestFor: 'Verwendet von: Mikrokapselprojekten.',
+          description:
+            'Ein kompaktes U-Net, destilliert aus Meta SAM 3, mit Watershed zum Trennen sich berührender Kapseln. Vom Bildrand angeschnittene Kapseln werden markiert und aus den Messwerten ausgenommen.',
         },
       },
-      howToSelect: 'Modell Auswählen',
+      howToSelect: 'Ein Modell wählen',
       selectionSteps: {
-        step1: 'Projekt öffnen',
-        step2: 'Modellauswahl-Menü finden',
-        step3: 'Wählen Sie aus HRNet, CBAM-ResUNet oder UNet (SpheroHQ)',
-        step4: 'Konfidenzschwellwert anpassen',
-        step5: 'Auswahl wird gespeichert',
+        step1:
+          'Legen Sie Standardmodell und Schwellwert in den Einstellungen fest — sie gelten überall dort, wo der Projekttyp eine Wahl zulässt',
+        step2:
+          'Öffnen Sie ein Projekt und wählen Sie die zu verarbeitenden Bilder',
+        step3:
+          'Klicken Sie auf Segmentieren; der Dialog bietet nur kompatible Modelle an',
+        step4:
+          'Passen Sie den Konfidenzschwellwert an und wägen Sie so Trefferzahl gegen Evidenz ab',
+        step5:
+          'Wählen Sie bei einem Mehrkanalvideo, welchen Kanal das Modell lesen soll',
       },
+      thresholdNote: 'Der Mikrotubuli-Schwellwert ist bewusst fest.',
+      thresholdNoteText:
+        'Dieses Modell verwendet seinen eigenen angepassten Schnitt von 0,97 und ignoriert den Regler. Ein niedrigerer Wert findet nicht mehr echte Filamente — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Ausgabe bei keiner Einstellung dem Bild. Fehlen Treffer, prüfen Sie stattdessen den Eingangskanal.',
       tip: 'Tipp:',
       tipText:
-        'Verwenden Sie UNet für die schnellste Verarbeitung mit 5,5 Bildern/Sekunde Durchsatz. Wählen Sie CBAM-ResUNet für maximale Präzision bei Forschungsarbeiten. Wählen Sie HRNet für ausgewogene Leistung zwischen Geschwindigkeit und Qualität.',
+        'Beginnen Sie mit dem Standardmodell. Greifen Sie zu CBAM-ResUNet, wenn Ränder wichtiger sind als Geschwindigkeit, und zu Mamba-UNet, wenn Ihre Bilder niemandes Trainingsdaten ähneln.',
     },
+
+    // Segmentierungsablauf
     segmentationProcess: {
-      title: 'Segmentierungsprozess',
-      description: 'Der Prozess verwendet fortschrittliche KI-Modelle.',
-      queueBased: 'Warteschlangen-basierte Verarbeitung',
-      queueDescription: 'SpheroSeg verwendet ein Warteschlangensystem.',
+      title: 'Der Segmentierungsablauf',
+      description:
+        'Die Segmentierung läuft im Hintergrund über eine Warteschlange, sodass Sie während eines Stapels weiterarbeiten können. Den Fortschritt sehen Sie live.',
+      queueBased: 'Verarbeitung über eine Warteschlange',
+      queueDescription: 'Die Warteschlange ist für große Stapel gebaut:',
       queueFeatures: {
-        realTime: 'Echtzeit-Status mit WebSocket',
-        batch: 'Batch-Verarbeitung',
-        priority: 'Prioritätsverwaltung',
-        recovery: 'Automatische Fehlerwiederherstellung',
+        realTime:
+          'Live-Status: Der Fortschritt kommt über WebSocket, abgesichert durch HTTP-Abfragen, sodass ein Verbindungsabbruch keinen Auftrag hängen lässt',
+        batch: 'Stapelverarbeitung: bis zu 10 000 Bilder in einem Vorgang',
+        priority:
+          'Faire Reihenfolge: Kürzlich bediente Nutzer werden zurückgestuft, damit ein langes Video nicht die gesamte GPU belegt',
+        recovery:
+          'Wiederaufnahme: Unterbrochene Arbeit wird wiederholt statt verworfen, mit ausgewiesener Fehlermeldung',
       },
-      workflow: 'Automatischer Arbeitsablauf',
+      workflow: 'Der Ablauf',
       workflowSteps: {
-        step1: 'Bilder hochladen',
-        step2: 'KI-Modell auswählen',
-        step3: 'Konfidenzschwellwert anpassen',
-        step4: 'Auf "Auto-Segmentierung" klicken',
-        step5: 'Fortschritt in Echtzeit überwachen',
-        step6: 'Ergebnisse überprüfen',
+        step1: 'Laden Sie Bilder oder Videos in ein Projekt',
+        step2:
+          'Wählen Sie die zu verarbeitenden Bilder, oder keines, um alle zu verarbeiten',
+        step3: 'Wählen Sie Modell und Konfidenzschwellwert',
+        step4:
+          'Wählen Sie bei einem Mehrkanalvideo den Kanal, den das Modell lesen soll',
+        step5: 'Verfolgen Sie den Fortschritt über die Statusanzeigen',
+        step6:
+          'Öffnen Sie ein Bild im Editor, um das Ergebnis zu prüfen und zu korrigieren',
       },
-      polygonTypes: 'Polygon-Typen',
-      polygonDescription: 'Das System erkennt zwei Typen:',
+      polygonTypes: 'Was die Modelle erzeugen',
+      polygonDescription: 'Je nach Modell zwei Arten von Geometrie:',
       polygonTypesList: {
-        external: 'Externe Polygone (grün)',
-        internal: 'Interne Polygone (rot)',
+        external:
+          'Äußere Polygone: der Objektumriss — Sphäroide, Wunden, Kapseln',
+        internal:
+          'Innere Polygone: Löcher innerhalb eines Objekts, die von seiner Fläche abgezogen werden',
+        polyline:
+          'Polylinien: offene Pfade mit Länge, aber ohne Fläche, erzeugt von den Mikrotubuli- und Spermienmodellen',
       },
-      processingNote: 'Zeiten variieren je nach Modell:',
-      processingTimes: 'HRNet (~3s), CBAM-ResUNet (~7s).',
+      processingNote: 'Die Rechenzeit hängt vom Modell ab:',
+      processingTimes:
+        'Das Wundmodell braucht rund 0,03 s pro Bild und die Sphäroidmodelle 0,2–0,4 s, während das Mikrotubuli-Modell etwa 4,5 s pro Bild benötigt, weil das Trennen einzelner Filamente der teure Teil ist.',
     },
+
+    // Editor
     segmentationEditor: {
-      title: 'Segmentierungseditor',
-      description: 'Mächtiges Werkzeug zur Verfeinerung von Segmentierungen.',
+      title: 'Der Segmentierungseditor',
+      description:
+        'Hier prüfen und korrigieren Sie Ergebnisse. Sieben Bearbeitungsmodi, vollständige Tastatursteuerung und Panels, die sich mit dem Projekttyp ändern.',
       editingModes: 'Bearbeitungsmodi',
       modes: {
         view: {
-          title: 'Ansichtsmodus',
-          description: 'Navigieren und inspizieren ohne Änderungen.',
+          title: 'Ansicht (V)',
+          description:
+            'Auswählen, verschieben, zoomen. Ein Klick auf eine Form wählt sie aus und wechselt zur Knotenbearbeitung.',
         },
         editVertices: {
-          title: 'Eckpunkte Bearbeiten',
-          description: 'Einzelne Eckpunkte ziehen.',
+          title: 'Knoten bearbeiten (E)',
+          description:
+            'Ziehen Sie Knoten, um einen Rand zu verfeinern. Ein Rechtsklick löscht einen Knoten. Erfordert eine ausgewählte Form.',
         },
         addPoints: {
-          title: 'Punkte Hinzufügen',
-          description: 'Neue Eckpunkte einfügen.',
+          title: 'Punkte hinzufügen (A)',
+          description:
+            'Fügt Knoten ein, verlängert eine Polylinie am näheren Ende oder verbindet zwei Polylinien Ende an Ende. Erfordert eine ausgewählte Form.',
         },
         createPolygon: {
-          title: 'Polygon Erstellen',
-          description: 'Neue Polygone zeichnen.',
+          title: 'Polygon erstellen (N)',
+          description:
+            'Klicken Sie eine geschlossene Form; ein Klick nahe dem ersten Punkt schließt sie. Mindestens drei Punkte.',
+        },
+        createPolyline: {
+          title: 'Polylinie erstellen (P)',
+          description:
+            'Klicken Sie einen offenen Pfad für ein Mikrotubulus oder ein Spermienteil. Abschluss mit Enter oder Doppelklick.',
         },
         sliceMode: {
-          title: 'Schneidemodus',
-          description: 'Polygone in Teile schneiden.',
+          title: 'Schneiden (S)',
+          description:
+            'Teilt eine Form mit einer Linie aus zwei Klicks. Funktioniert bei geschlossenen Polygonen und bei Polylinien.',
         },
         deletePolygon: {
-          title: 'Polygon Löschen',
-          description: 'Unerwünschte Polygone entfernen.',
+          title: 'Polygon löschen (D)',
+          description:
+            'Klicken Sie Formen an, um sie zu entfernen. Der Modus bleibt aktiv, und es wird nichts bestätigt.',
         },
       },
-      keyFeatures: 'Hauptfunktionen',
+      keyFeatures: 'Was der Editor bietet',
       features: {
-        undoRedo: 'Rückgängig/Wiederholen-System',
-        autoSave: 'Automatisches Speichern',
-        zoomPan: 'Zoom und Schwenken',
-        polygonManagement: 'Polygon-Verwaltung',
-        keyboardShortcuts: 'Tastenkürzel',
-        realTimeFeedback: 'Echtzeit-Feedback',
+        undoRedo:
+          'Rückgängig und Wiederholen für Geometrie und Eigenschaften. Die Historie gilt je Einzelbild und wird beim Bildwechsel zurückgesetzt.',
+        saving:
+          'Speichern auf Zuruf: Schaltfläche Speichern, Strg+S, oder automatisch beim Wechsel zu einem anderen Bild.',
+        zoomPan:
+          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0.',
+        polygonManagement:
+          'Eine Formenliste mit Mehrfachauswahl, Ein- und Ausblenden, Umbenennen und Löschen.',
+        keyboardShortcuts:
+          'Vollständige Tastatursteuerung — H oder ? zeigt die Liste in der App.',
+        realTimeFeedback:
+          'Modusbezogene Hinweise auf der Zeichenfläche und eine laufende Zählung von Formen und Knoten.',
       },
-      shortcuts: 'Wichtige Tastenkürzel',
+      shortcuts: 'Tastenkürzel',
       shortcutCategories: {
-        navigation: 'Navigation:',
-        actions: 'Aktionen:',
+        modes: 'Modi',
+        actions: 'Aktionen',
+        view: 'Ansicht',
       },
       shortcutsList: {
         v: 'Ansichtsmodus',
-        e: 'Eckpunkte bearbeiten',
+        e: 'Knoten bearbeiten',
         a: 'Punkte hinzufügen',
         n: 'Polygon erstellen',
+        p: 'Polylinie erstellen',
+        s: 'Schneiden',
+        d: 'Polygon löschen',
+        tab: 'Durch die Modi blättern',
         ctrlZ: 'Rückgängig',
         ctrlY: 'Wiederholen',
         ctrlS: 'Speichern',
-        delete: 'Ausgewählte löschen',
+        delete: 'Ausgewählte Form löschen',
+        enter: 'Begonnene Polylinie abschließen',
+        escape: 'Abbrechen und zur Ansicht zurückkehren',
+        zoom: 'Vergrößern und verkleinern',
+        reset: 'Bild ins Fenster einpassen',
+        pan: 'Gedrückt halten und ziehen, um in jedem Modus zu verschieben',
+        help: 'Kürzelliste anzeigen',
       },
-      workingWithPolygons: 'Arbeiten mit Polygonen',
+      workingWithPolygons: 'Mit Formen arbeiten',
       polygonSteps: {
-        step1: 'Polygon auswählen',
-        step2: 'Zum entsprechenden Modus wechseln',
-        step3: 'Änderungen vornehmen',
-        step4: 'Rechtes Panel verwenden',
-        step5: 'Regelmäßig speichern',
+        step1: 'Klicken Sie eine Form an, um sie auszuwählen',
+        step2: 'Wechseln Sie in den Modus, der zu Ihrer Änderung passt',
+        step3: 'Nehmen Sie die Änderung mit der Maus vor',
+        step4:
+          'Blenden Sie Formen über die Liste rechts aus, benennen Sie sie um, wählen Sie mehrere aus oder löschen Sie sie',
+        step5: 'Speichern Sie mit Strg+S',
       },
-      segmenting: 'Bild wird segmentiert...',
-      waitingInQueue: 'Wartend in der Warteschlange',
-      reloadingSegmentation: 'Aktualisierung der Segmentierungsdaten...',
+      saveNote: 'Es gibt kein fortlaufendes automatisches Speichern.',
+      saveNoteText:
+        'Gespeichert wird beim Klick auf Speichern oder mit Strg+S sowie im Hintergrund beim Wechsel zu einem anderen Bild. Ein Klick in der Brotkrumennavigation wechselt sofort und speichert im Hintergrund — drücken Sie bei umfangreichen Änderungen also zuerst Strg+S. Bei einem Video entfernt das Löschen einer getrackten Form samt Speichern sie aus allen Einzelbildern.',
+      typeSpecific: 'Was sich je nach Projekttyp ändert',
+      typeSpecificList: {
+        microtubules:
+          'Mikrotubuli: ein Instanz-Panel mit stabilen Farben je Track, eigene Typbezeichnungen, Zuweisung für den ganzen Track, Fortschreiben und Löschen eines Tracks sowie eine Kymograf-Ansicht.',
+        sperm:
+          'Spermien: ein Instanz-Panel, in dem Sie vor dem Zeichnen aktive Zelle und Teil wählen, sowie Neuzuordnung über das Kontextmenü.',
+        disintegration:
+          'Zerfallende Sphäroide: Der dichte Kern wird grün gezeichnet. Der Zerfallsindex selbst wird beim Export berechnet.',
+      },
     },
+
+    // Export
     exportFeatures: {
-      title: 'Export-Funktionen',
-      description: 'Umfassende Export-Möglichkeiten.',
-      packageContents: 'Paket-Inhalte',
+      title: 'Export',
+      description:
+        'Exporte laufen im Hintergrund und laden sich nach Fertigstellung selbst herunter. Pro Nutzer läuft jeweils einer; das Ergebnis ist ein einzelnes ZIP.',
+      packageContents: 'Was im Paket steckt',
       contents: {
         originalImages: {
-          title: 'Original-Bilder',
-          description: 'Hochwertige mikroskopische Originalbilder.',
+          title: 'Originalbilder',
+          description: 'Die von Ihnen hochgeladenen Dateien, unverändert.',
         },
         visualizations: {
           title: 'Visualisierungen',
-          description: 'Annotierte Bilder mit nummerierten Polygonen.',
+          description:
+            'Gerenderte Überlagerungen mit nummerierten Formen, in Farben, Linienstärken und Transparenz Ihrer Wahl.',
+        },
+        annotations: {
+          title: 'Annotationen',
+          description:
+            'Maschinenlesbare Geometrie in den gewählten Formaten — bei Mikrotubuli-Projekten zusätzlich ImageJ- und CVAT-Dateien, die immer enthalten sind.',
+        },
+        metrics: {
+          title: 'Messwerte',
+          description:
+            'Eine Arbeitsmappe, deren Blätter vom Projekttyp abhängen, als XLSX, CSV oder JSON.',
         },
       },
-      annotationFormats: 'Annotations-Formate',
+      annotationFormats: 'Annotationsformate',
       formats: {
-        coco: 'COCO-Format: Standard für PyTorch und TensorFlow',
-        yolo: 'YOLO-Format: Optimiert für YOLO-Modelle',
-        json: 'Benutzerdefiniertes JSON: Strukturiertes detailliertes Format',
+        coco: 'COCO: das Standardformat für Detektions-Frameworks. Polygone mit Löchern werden als Lauflängenmasken exportiert.',
+        yolo: 'YOLO: Begrenzungsrahmen, das Polygon steht in einer Kommentarzeile. Offene Polylinien lassen sich nicht darstellen und werden übersprungen.',
+        json: 'Eigenes JSON: vollständige Koordinaten und Metadaten, bei Spermienprojekten mit Gruppierung je Zelle.',
+        imagej:
+          'ImageJ-RoiSet: ein ZIP, das sich direkt im ROI-Manager von Fiji öffnet, ein ROI je Filament und Schicht, eingefärbt nach Klasse oder Track. Nur Mikrotubuli-Projekte, immer enthalten.',
+        cvat: 'CVAT 1.1: Polylinien mit ihrer Track-Identität als Attribut. Nur Mikrotubuli-Projekte, immer enthalten.',
       },
-      calculatedMetrics: 'Berechnete Metriken',
-      metricsDescription: 'SpheroSeg berechnet automatisch Metriken.',
-      metricsCategories: {
-        basic: {
-          title: 'Basis-Messungen:',
-          items: {
-            area: 'Fläche',
-            perimeter: 'Umfang',
-            diameter: 'Äquivalenter Durchmesser',
-            circularity: 'Zirkularität',
-          },
-        },
-        advanced: {
-          title: 'Erweiterte Metriken:',
-          items: {
-            feret: 'Feret-Durchmesser',
-            majorMinor: 'Haupt-/Nebendurchmesser',
-            compactness: 'Kompaktheit, Konvexität',
-            sphericity: 'Sphärizitäts-Index',
-          },
-        },
+      calculatedMetrics: 'Messwerte je Projekttyp',
+      metricsDescription:
+        'Welche Arbeitsmappe Sie erhalten, hängt davon ab, was Sie messen:',
+      metricsTable: {
+        projectType: 'Projekttyp',
+        sheet: 'Blatt und Inhalt',
+        spheroid:
+          'Polygon Metrics + Summary — Fläche, Umfang, Rundheit, Feret-Durchmesser, Solidität und mehr, eine Zeile je Form',
+        spheroidInvasive:
+          'Image Metrics — eine Zeile je Bild mit Zerfallsindex, Kern- und Invasionsfläche sowie dem Dispersionspanel',
+        wound:
+          'Polygon Metrics + Summary + WoundTimeSeries — die Verschlusskurve mit eingebettetem Diagramm',
+        sperm:
+          'Sperm Metrics — Länge von Kopf, Mittelstück, Schwanz und gesamt, eine Zeile je Zelle',
+        microtubules:
+          'Microtubule Metrics + Channel Totals — Länge und Intensität je Kanal, eine Zeile je Einzelbild, Filament und Kanal',
+        microcapsule:
+          'Microcapsule Metrics + Summary — eine Zeile je vollständiger Kapsel; angeschnittene Kapseln entfallen',
       },
-      exportFormats: 'Metriken-Export-Formate',
-      exportFormatsList: {
-        excel: 'Excel (.xlsx): Formatierte Tabelle',
-        csv: 'CSV: Kommagetrennte Werte',
-        jsonExport: 'JSON: Strukturiertes Format',
-      },
-      visualizationCustomization: 'Visualisierungs-Anpassung',
-      customizationOptions: {
-        colors: 'Anpassbare Polygon-Farben',
-        numbering: 'Ein-/ausblendbare Nummerierung',
-        strokeWidth: 'Anpassbare Strichstärke',
-        fontSize: 'Kontrollierbare Schriftgröße',
-        transparency: 'Einstellbare Transparenz',
-      },
-      howToExport: 'So Exportieren',
+      scaleTitle: 'Pixelgröße und Einheiten',
+      scaleText:
+        'Geben Sie die Pixelgröße in Mikrometern an, dann werden alle Längen und Flächen umgerechnet. Das Feld wird aus der Kalibrierung der Datei vorbelegt, sofern vorhanden. Ohne brauchbaren Wert wird in Pixeln exportiert — prüfen Sie also die Einheiten in den Spaltenüberschriften.',
+      howToExport: 'So exportieren Sie',
       exportSteps: {
-        step1: 'Zum Dashboard navigieren',
-        step2: 'Bilder auswählen',
-        step3: 'Auf "Erweiterten Export" klicken',
-        step4: 'Einstellungen konfigurieren',
-        step5: 'Zusammenfassung überprüfen',
-        step6: 'Auf "Export Starten" klicken',
+        step1: 'Öffnen Sie das Projekt und klicken Sie auf Export',
+        step2: 'Wählen Sie die einzuschließenden Bilder oder alle',
+        step3:
+          'Setzen Sie die Pixelgröße, wenn Sie Mikrometer möchten, und wählen Sie die Farben der Visualisierungen',
+        step4: 'Haken Sie die benötigten Annotations- und Messwertformate an',
+        step5: 'Starten Sie den Export — der Fortschritt wird live angezeigt',
+        step6: 'Das ZIP lädt sich nach Fertigstellung selbst herunter',
       },
-      exportNote: 'Pakete sind umfassend:',
-      exportNoteText: 'Jeder Export enthält Dokumentation und Metadaten.',
+      exportNote: 'Eine fehlgeschlagene Teilstufe bricht den Export nicht ab.',
+      exportNoteText:
+        'Optionale Stufen enden mit einer Warnung, der Rest des Pakets entsteht trotzdem. Bei der Mikrotubuli-Intensität wird ein eingeschränkter Lauf zusätzlich im Paket selbst festgehalten — in metrics_status.json und am Anfang des Messwert-Leitfadens. Prüfen Sie das, bevor Sie sich auf ein Blatt verlassen.',
     },
-    sharedProjects: {
-      title: 'Geteilte Projekte',
+
+    // Automatisierte Assays
+    automatedEssays: {
+      title: 'Automatisierte Assays',
       description:
-        'SpheroSeg ermöglicht Ihnen die Zusammenarbeit mit Kollegen durch das Teilen von Projekten. Teilen Sie Ihre Segmentierungsergebnisse und Annotationen mit anderen Forschern zur Überprüfung und Zusammenarbeit.',
-      sharingFeatures: 'Sharing-Funktionen',
-      features: {
-        readOnly:
-          'Schreibgeschützter Zugriff: Empfänger können anzeigen, aber nicht ändern',
-        emailInvite:
-          'E-Mail-Einladungen: Teilen per E-Mail mit automatischen Benachrichtigungen',
-        revokeAccess:
-          'Widerrufbarer Zugriff: Sharing-Berechtigungen jederzeit entfernen',
-        multipleCollaborators:
-          'Mehrere Mitarbeiter: Mit ganzen Forschungsteams teilen',
-      },
-      howToShare: 'Wie man ein Projekt teilt',
-      shareSteps: {
-        step1: 'Öffnen Sie das Projekt, das Sie teilen möchten',
+        'Ein Stapel-Assay für Mikrotubuli außerhalb des Projektsystems. Laden Sie einen Ordner mit Nikon-ND2-Aufnahmen von Vertiefungen hoch und erhalten Sie eine Zeile je Filament: Länge, Intensität entlang des Filaments und dessen lokaler Hintergrund.',
+      howTo: 'Einen Stapel starten',
+      steps: {
+        step1:
+          'Öffnen Sie Automatisierte Assays über das Menü unter Ihrem Profilbild',
         step2:
-          'Klicken Sie auf den "Teilen"-Button in der Projekt-Symbolleiste',
-        step3: 'Geben Sie die E-Mail-Adressen Ihrer Mitarbeiter ein',
+          'Ziehen Sie den Ordner mit den .nd2-Dateien auf die Seite oder nutzen Sie die Schaltfläche zur Ordnerauswahl',
+        step3:
+          'Warten Sie — Aufträge laufen nacheinander, und die Liste aktualisiert sich selbst, solange etwas läuft',
         step4:
-          'Fügen Sie eine optionale Nachricht zur Erklärung des geteilten Inhalts hinzu',
-        step5: 'Klicken Sie auf "Einladungen senden", um das Projekt zu teilen',
+          'Laden Sie das ZIP herunter, oder verarbeiten Sie dieselben Dateien mit „Erneut ausführen“ ohne zweites Hochladen',
       },
-      permissionsNote: 'Wichtig:',
-      permissionsNoteText:
-        'Geteilte Projekte sind für Empfänger schreibgeschützt. Sie können Segmentierungen anzeigen und Daten exportieren, aber die ursprünglichen Annotationen nicht ändern. Dies gewährleistet Datenintegrität bei gleichzeitiger Zusammenarbeit.',
+      results: 'Was Sie zurückbekommen',
+      resultsList: {
+        csv: 'results.csv — eine Zeile je Mikrotubulus mit Länge, Intensität entlang des Filaments und dessen Hintergrund',
+        failures:
+          'failures.csv — jede Vertiefung oder Position, die nicht erzeugt werden konnte, und warum. Sie wird immer geschrieben, auch wenn sie leer ist',
+        overlays:
+          'Zwei Überlagerungsbilder je Position: eines prüft die Segmentierung gegen ihre eigene Eingabe, das andere das Messband gegen das Signal',
+        annotations:
+          'Eine JSON-Datei je Position mit den verfolgten Mittellinien und ihren Längen',
+      },
+      channelNote: 'IRM wird segmentiert, Fluoreszenz wird gemessen.',
+      channelNoteText:
+        'Das Modell wurde auf IRM trainiert, daher werden die Filamente dort verfolgt und der Fluoreszenzkanal nur entlang dieser Spuren gelesen. Eine Datei ohne IRM-Kanal wird als Fehler gemeldet statt aus etwas anderem segmentiert.',
+      retentionNote: 'Uploads werden aufgeräumt, Ergebnisse nicht.',
+      retentionNoteText:
+        'Eingabedateien werden entfernt, sobald ein Lauf sauber durchläuft, und eine Woche aufbewahrt, wenn nicht — genau der Lauf, den Sie wiederholen möchten. Das Ergebnis bleibt, bis Sie den Auftrag löschen.',
     },
+
+    // Segmenter
+    segmenter: {
+      title: 'Segmenter',
+      description:
+        'Ein eigenständiges Werkzeug zur Polygonannotation mit eigenen Datensätzen und einer eigenen Klassenpalette, getrennt von Projekten und vom Segmentierungseditor.',
+      features: {
+        datasets:
+          'Legen Sie Datensätze an und laden Sie Einzelbilder hinein; sie sind nur für Sie sichtbar.',
+        classes:
+          'Definieren Sie eigene Klassen mit Namen und Farben. Beim Löschen einer Klasse bleiben ihre Polygone erhalten und verlieren nur die Zuordnung.',
+        polygons:
+          'Zeichnen, bearbeiten und löschen Sie geschlossene Polygone und weisen Sie ihnen Klassen zu. Überlappende Polygone werden vollständig unterstützt.',
+        saving:
+          'Gespeichert wird ausdrücklich — Schaltfläche oder Strg+S — und gesperrt, wenn die vorhandene Annotation nicht geladen werden konnte, damit eine leere Zeichenfläche niemals echte Arbeit überschreibt.',
+      },
+      scopeNote: 'Vorerst nur manuelle Annotation.',
+      scopeNoteText:
+        'Der Segmenter enthält noch kein maschinelles Lernen: keine Vorannotation, kein Active Learning, kein Export. Erreichbar ist er unter /segmenter.',
+    },
+
+    // Freigabe
+    sharedProjects: {
+      title: 'Freigabe und Zusammenarbeit',
+      description:
+        'Geben Sie ein Projekt per E-Mail oder Link an Kolleginnen und Kollegen frei. Nach dem Annehmen erscheint es in deren eigenem Dashboard.',
+      sharingFeatures: 'Was die Freigabe erlaubt',
+      features: {
+        collaborative:
+          'Gemeinsamer Zugriff: Mitarbeitende können ansehen, Annotationen bearbeiten, segmentieren, exportieren und das Projekt als geprüft markieren',
+        emailInvite:
+          'E-Mail-Einladungen: Die Freigabe wirkt unabhängig davon, ob die E-Mail ankommt — die Zustellung kann einige Minuten dauern',
+        linkShare:
+          'Link-Freigaben: Der Link bindet sich an denjenigen, der ihn annimmt, optional mit Ablaufdatum',
+        revokeAccess: 'Jederzeit widerrufbar, mit sofortiger Wirkung',
+        multipleCollaborators:
+          'Beliebig viele Mitarbeitende, die das Projekt jeweils in ihre eigenen Ordner einsortieren',
+      },
+      howToShare: 'So geben Sie frei',
+      shareSteps: {
+        step1: 'Öffnen Sie das Projekt, das Sie freigeben möchten',
+        step2: 'Klicken Sie in der Projektleiste auf Freigeben',
+        step3: 'Geben Sie die E-Mail-Adresse ein oder erzeugen Sie einen Link',
+        step4: 'Senden Sie die Einladung',
+        step5:
+          'Im selben Dialog verwalten oder widerrufen Sie Freigaben; jede zeigt ihren Status',
+      },
+      permissionsNote:
+        'Die Freigabe dient der Zusammenarbeit, nicht nur dem Lesen.',
+      permissionsNoteText:
+        'Mitarbeitende können Annotationen ändern, und bei einem Video haben ihre Änderungen dieselben bildübergreifenden Folgen wie Ihre. Nur die Eigentümerin oder der Eigentümer kann ein Projekt umbenennen, seinen Typ ändern, es weitergeben oder löschen.',
+    },
+
+    // Fehlerbehebung
+    troubleshooting: {
+      title: 'Fehlerbehebung',
+      description:
+        'Die Probleme, auf die man tatsächlich stößt, und woran sie liegen.',
+      table: {
+        symptom: 'Symptom',
+        cause: 'Ursache und Abhilfe',
+      },
+      items: {
+        uploadRejected: {
+          symptom: 'Eine Datei wird schon vor dem Hochladen abgelehnt',
+          cause:
+            'Einzelbilder sind auf 20 MB begrenzt. Ein größeres TIFF gilt als Stapel und fällt unter die 100-GB-Grenze. Kanalnamen mit mehr als 64 Zeichen werden abgelehnt — exportieren Sie mit kürzeren Bezeichnungen neu.',
+        },
+        darkFrames: {
+          symptom: 'Bilder wirken fast schwarz',
+          cause:
+            'Daten mit hoher Bittiefe brauchen ein Fenster. Nutzen Sie die Regler Min und Max für diesen Kanal; jeder Kanal hat sein eigenes Fenster.',
+        },
+        noDetections: {
+          symptom: 'Das Modell findet sehr wenig',
+          cause:
+            'Prüfen Sie zuerst Kontrast und Projekttyp. Senken Sie den Konfidenzschwellwert nur dort, wo er einstellbar ist — das Mikrotubuli-Modell ignoriert ihn absichtlich.',
+        },
+        wrongChannel: {
+          symptom: 'Viele Formen, aber sie folgen nichts im Bild',
+          cause:
+            'Es wird der falsche Kanal segmentiert. Legen Sie die Segmentierungsquelle in der Kanalliste ausdrücklich fest; das Mikrotubuli-Modell funktioniert nur mit IRM.',
+        },
+        colorsChange: {
+          symptom: 'Objektfarben wechseln zwischen Einzelbildern',
+          cause:
+            'Das bildübergreifende Tracking ist für diesen Container nicht durchgelaufen. Farben folgen der Track-Identität, ein ungetracktes Bild bekommt daher neue.',
+        },
+        exportSlow: {
+          symptom: 'Ein Export bleibt bei 95 % stehen',
+          cause:
+            'Das ist die Kompressionsstufe. Bei einem großen Projekt, besonders mit Kymografen, dauert sie tatsächlich eine Weile.',
+        },
+        lostEdits: {
+          symptom: 'Änderungen sind verschwunden',
+          cause:
+            'Eine erneute Segmentierung ersetzt die Segmentierung des Bildes, und ein Klick in der Brotkrumennavigation wechselt, bevor das Speichern im Hintergrund zwingend abgeschlossen ist. Drücken Sie vor dem Verlassen Strg+S.',
+        },
+      },
+      helpNote: 'Immer noch nicht gelöst?',
+      helpNoteText:
+        'Nutzen Sie die Feedback-Schaltfläche für einen Fehlerbericht oder Wunsch — er erreicht die Betreuer direkt.',
+    },
+
+    // Fußzeilennavigation
     footer: {
       backToHome: 'Zurück zur Startseite',
-      backToTop: 'Nach Oben',
+      backToTop: 'Nach oben',
     },
   },
   legal: {
