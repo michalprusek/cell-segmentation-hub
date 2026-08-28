@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 400,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1213,
-    "all": 1634
+    "tsconfig.test.json": 1215,
+    "all": 1636
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1345,6 +1345,7 @@
         "TS2554: Expected 2-4 arguments, but got 5.": 1,
         "TS6307: File 'src/pages/segmentation/components/SegmentationEditorLayout.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/SegmentationErrorBoundary.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/segmentation/hooks/useCanvasBackgroundDeselect.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/hooks/useEnhancedSegmentationEditor.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/hooks/useSegmentationReload.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
@@ -1496,6 +1497,9 @@
       },
       "src/pages/segmentation/contexts/__tests__/ImageDisplayContext.test.tsx": {
         "TS2769: No overload matches this call.": 5
+      },
+      "src/pages/segmentation/hooks/__tests__/frameBufferProbe.test.ts": {
+        "TS6307: File 'src/pages/segmentation/hooks/frameBufferProbe.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/hooks/__tests__/insertPointsBetweenVertices.test.ts": {
         "TS6307: File 'src/pages/segmentation/hooks/useAdvancedInteractions.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1

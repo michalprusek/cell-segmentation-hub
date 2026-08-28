@@ -2792,6 +2792,7 @@ export default {
       frame: 'Image',
       play: 'Lecture',
       pause: 'Pause',
+      buffering: 'Mise en mémoire tampon…',
     },
   },
 

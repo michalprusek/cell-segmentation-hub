@@ -2799,6 +2799,7 @@ export default {
       frame: 'Bild',
       play: 'Abspielen',
       pause: 'Pause',
+      buffering: 'Puffern…',
     },
   },
 
