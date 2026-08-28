@@ -10,11 +10,19 @@
  * What remains here:
  *   1. Keyboard navigation (`←` / `→` step a frame, `Space` toggles
  *      playback). Mounted on `document` so it works regardless of focus.
- *   2. Sync of `frameIndex` from `useVideoFrames` into `ImageDisplayContext`
- *      so the canvas + sidebar consume one source of truth.
+ *   2. Sync of `frameIndex` into `ImageDisplayContext` so the canvas +
+ *      sidebar consume one source of truth.
  *   3. The kymograph modal mount (microtubule projects only) — opened
  *      via the global "segmentation:open-kymograph" CustomEvent from
  *      the polyline right-click menu.
+ *
+ * The playback state arrives as PROPS from the editor's single
+ * `useVideoFrames` instance. It used to call the hook a SECOND time, which
+ * gave it a private `frameIndex` that nothing rendered: `←`, `→` and `Space`
+ * moved an index the canvas never read, so keyboard frame navigation did
+ * nothing at all and Space quietly ran an invisible playback timer alongside
+ * the visible one — one that the buffer gate, which is fed by the editor's
+ * instance, could not slow down.
  *
  * The component renders nothing visible by itself.
  */
@@ -22,12 +30,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import { KymographModal } from './KymographModal';
 import { useImageDisplay } from '../contexts/ImageDisplayContext';
-import { useVideoFrames } from '../hooks/useVideoFrames';
-import { isMicrotubuleProject, type ProjectType } from '@/types';
+import {
+  isMicrotubuleProject,
+  type ProjectType,
+  type VideoChannel,
+} from '@/types';
 
 interface VideoModeOverlayProps {
   videoContainerId: string;
   projectType?: ProjectType;
+  /** From the editor's ONE `useVideoFrames` instance — the same state the
+   *  header, the canvas and the buffer-gated playback loop use. */
+  frameIndex: number;
+  step: (delta: number) => void;
+  toggle: () => void;
+  channels: VideoChannel[] | null;
 }
 
 /** Keyboard handler: ←/→ step frames, Space toggle playback. Mounted on
@@ -63,16 +80,17 @@ function useFrameNavigationKeys(
 export function VideoModeOverlay({
   videoContainerId,
   projectType,
+  frameIndex,
+  step,
+  toggle,
+  channels,
 }: VideoModeOverlayProps) {
-  const { container, frameIndex, step, toggle } =
-    useVideoFrames(videoContainerId);
   const { setFrameIndex: setDisplayFrame } = useImageDisplay();
 
   useFrameNavigationKeys(step, toggle);
 
-  // Sync the displayed frameIndex into ImageDisplayContext so the canvas +
-  // sidebar consume one source of truth. (The editor calls useVideoFrames too;
-  // both share the React Query cache but keep their own local frameIndex.)
+  // Mirror the displayed frameIndex into ImageDisplayContext so the canvas +
+  // sidebar consume one source of truth.
   useEffect(() => {
     setDisplayFrame(frameIndex);
   }, [frameIndex, setDisplayFrame]);
@@ -100,7 +118,6 @@ export function VideoModeOverlay({
       document.removeEventListener('segmentation:open-kymograph', handler);
   }, [openKymograph]);
 
-  if (!container) return null;
   if (!kymographFor || !isMicrotubuleProject(projectType)) return null;
 
   return (
@@ -110,7 +127,7 @@ export function VideoModeOverlay({
       videoContainerId={videoContainerId}
       polylineId={kymographFor}
       frameIndex={frameIndex}
-      channels={container.channels}
+      channels={channels}
     />
   );
 }

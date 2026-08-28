@@ -28,6 +28,8 @@ import {
   applyMtTypeToPolygons,
 } from './utils/mtTypeTargets';
 import { usePolygonHandlers } from './hooks/usePolygonHandlers';
+import { useCanvasBackgroundDeselect } from './hooks/useCanvasBackgroundDeselect';
+import { shouldPreventCanvasDeselection } from './config/modeConfig';
 import { useSegmentationLoader } from './hooks/useSegmentationLoader';
 import { useResegment } from './hooks/useResegment';
 import { usePolygonRenderProps } from './hooks/usePolygonRenderProps';
@@ -1248,6 +1250,23 @@ const SegmentationEditor = () => {
     clearMultiSelect();
   }, [clearMultiSelect, handleSelectPolygon]);
 
+  // Clicking empty canvas exits the selection — the Shift-built multi-selection
+  // as well as the single one. The background used to clear only the single
+  // selection, so a multi-selection had no way out but the sidebar's "deselect
+  // all"; that same handler is now what the background click runs, which is
+  // also what keeps `persistedSelectionTrackId` from re-selecting the MT on the
+  // next frame (a bare `setSelectedPolygonId(null)` does not, see above).
+  //
+  // MUST stay below `handleClearSelectionInList` — a hook placed above a
+  // `const` it captures throws `Cannot access '<letter>' before initialization`
+  // in the minified bundle (CLAUDE.md failure pattern 11).
+  const canvasBackground = useCanvasBackgroundDeselect({
+    onDeselect: handleClearSelectionInList,
+    // The point-placement modes treat a background click as "place a point";
+    // dropping the selection under them would undo the work in progress.
+    enabled: !shouldPreventCanvasDeselection(editor.editMode),
+  });
+
   // Right-click "Propagate selected MTs (N)": propagate every Shift-selected
   // microtubule forward. Loops the single-track endpoint so each keeps its own
   // trackId + colour; ids read via ref to keep this handler stable.
@@ -1440,6 +1459,7 @@ const SegmentationEditor = () => {
         imageDimensions={imageDimensions}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
+        canvasBackground={canvasBackground}
         loadedFrameKey={loadedFrameKey}
         handleImageLoad={handleImageLoad}
         projectLoading={projectLoading}

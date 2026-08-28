@@ -60,6 +60,22 @@ describe('DecodedFrameCache', () => {
     expect(c.byteSize).toBe(800);
   });
 
+  it('has() answers without touching the LRU order, unlike get()', () => {
+    // The playback buffer gate polls `has` over its lookahead twenty times a
+    // second while stalled. If that counted as a use, waiting would decide what
+    // survives eviction — so the two must differ, and the only way to see the
+    // difference is which key dies next.
+    const c = new DecodedFrameCache(1000);
+    c.set('a', frame(400));
+    c.set('b', frame(400));
+    c.has('a'); // a question, not a use
+    c.set('c', frame(400)); // 1200 > 1000, the oldest must go
+
+    expect(c.has('a')).toBe(false); // still the oldest, so still the victim
+    expect(c.has('b')).toBe(true);
+    expect(c.has('c')).toBe(true);
+  });
+
   it('never exceeds its budget, however many frames arrive', () => {
     const c = new DecodedFrameCache(1000);
     for (let i = 0; i < 50; i++) c.set(`f${i}`, frame(400));

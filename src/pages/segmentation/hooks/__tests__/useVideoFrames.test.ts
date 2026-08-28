@@ -11,6 +11,8 @@
  *  - step() moves frameIndex by delta, clamped
  *  - play / pause / toggle update isPlaying
  *  - Playback timer: interval advances frameIndex; stops at last frame
+ *  - Buffer gate: stalls instead of skipping, resumes by itself, re-buffers to
+ *    a watermark, and gives up on a frame that never arrives
  *  - error state exposed when API fails
  *  - currentFrame is null when container is null
  *
@@ -535,5 +537,289 @@ describe('useVideoFrames — play / pause / toggle', () => {
 
     expect(result.current.frameIndex).toBe(2); // last frame
     expect(result.current.isPlaying).toBe(false);
+  });
+});
+
+// ------------------------------------------------------------------
+// Buffer-aware playback (fake timers)
+//
+// The bug these cover: the loop used to advance on a bare interval whether or
+// not the frame it was moving onto existed yet, so on a slow link the playhead
+// ran away from the picture. Measured on the 621-frame ND2 through 400 kbps:
+// 254 frames traversed, 18 images actually delivered, the loading overlay up
+// 87% of the time. The gate makes the playhead wait for the buffer instead.
+// ------------------------------------------------------------------
+
+describe('useVideoFrames — buffer-gated playback', () => {
+  let qc: QueryClient;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    qc = makeQC();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    qc.clear();
+  });
+
+  /** Renders the hook over a seeded container and registers `probe`. */
+  function playWith(probe: (index: number, count: number) => number | null) {
+    const payload = makeContainerPayload('vid-1', 40);
+    qc.setQueryData(['video-frames', 'vid-1'], payload);
+    mockGet.mockResolvedValue({ data: { data: payload } });
+
+    const { result } = renderHook(() => useVideoFrames('vid-1'), {
+      wrapper: wrapQC(qc),
+    });
+    act(() => {
+      result.current.registerBufferProbe(probe);
+      result.current.play();
+    });
+    return result;
+  }
+
+  it('holds the playhead on the current frame while the next one is not buffered', () => {
+    const result = playWith(() => 0);
+
+    act(() => {
+      vi.advanceTimersByTime(1000); // ten frame times
+    });
+
+    expect(result.current.frameIndex).toBe(0);
+    // Stalled, NOT paused — the distinction the play button has to show.
+    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.isBuffering).toBe(true);
+  });
+
+  it('resumes on its own once the buffer fills, with no further input', () => {
+    let buffered = 0;
+    const result = playWith(() => buffered);
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(result.current.frameIndex).toBe(0);
+    expect(result.current.isBuffering).toBe(true);
+
+    // The prefetch window catches up. Nobody touches the play button.
+    buffered = 3;
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(result.current.isBuffering).toBe(false);
+    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.frameIndex).toBeGreaterThan(0);
+  });
+
+  it('needs a run of frames to resume, not just the next one', () => {
+    // Resuming on a single frame is what turns a stall into a stutter: advance
+    // once, find the frame after it missing, stall again.
+    let buffered = 0;
+    const result = playWith(() => buffered);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.isBuffering).toBe(true);
+
+    buffered = 1; // one frame is enough to KEEP flowing, not to resume
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.frameIndex).toBe(0);
+    expect(result.current.isBuffering).toBe(true);
+
+    buffered = 3;
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(result.current.frameIndex).toBe(1);
+  });
+
+  it('advances on a single ready frame while it is already flowing', () => {
+    // The low watermark. Demanding the resume depth on every tick would cap
+    // playback at whatever the decode-ahead walk happens to be holding.
+    const result = playWith(() => 1);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(result.current.frameIndex).toBe(3);
+    expect(result.current.isBuffering).toBe(false);
+  });
+
+  it('steps over a frame that never buffers rather than hanging for ever', () => {
+    const result = playWith(() => 0);
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(result.current.frameIndex).toBe(0);
+
+    // MAX_STALL_MS is 6 s of NO progress; past it the frame is presumed dead
+    // (404, decode error) and playback steps over it.
+    act(() => {
+      vi.advanceTimersByTime(6000);
+    });
+    expect(result.current.frameIndex).toBeGreaterThan(0);
+    expect(result.current.isPlaying).toBe(true);
+  });
+
+  it('keeps waiting while the buffer is still growing', () => {
+    // A slow-but-progressing link must not trip the give-up clock: it restarts
+    // whenever the probe reports more than it did before, so the budget is
+    // "time since the buffer last grew", not "time since the stall began".
+    let buffered = 0;
+    const result = playWith(() => buffered);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(result.current.isBuffering).toBe(true);
+
+    buffered = 1;
+    act(() => {
+      vi.advanceTimersByTime(1000); // under the budget, measured from the growth
+    });
+    expect(result.current.frameIndex).toBe(0);
+
+    buffered = 2; // grew again → the clock restarts
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(result.current.frameIndex).toBe(0);
+    expect(result.current.isBuffering).toBe(true);
+
+    buffered = 3; // the resume watermark
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(result.current.frameIndex).toBe(1);
+    expect(result.current.isBuffering).toBe(false);
+  });
+
+  it('does not gate when the probe cannot tell (single named channel)', () => {
+    const result = playWith(() => null);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(result.current.frameIndex).toBe(3);
+    expect(result.current.isBuffering).toBe(false);
+  });
+
+  it('does not leave the spinner stuck when the container object is replaced', () => {
+    // `container` is a fresh object on every ['video-frames', id] invalidation
+    // (a channel rename does exactly that), so the playback effect restarts
+    // mid-play. Stall bookkeeping that restarted with it would believe the
+    // spinner is off while the state still says on, and nothing would ever turn
+    // it back off.
+    const payload = makeContainerPayload('vid-1', 40);
+    qc.setQueryData(['video-frames', 'vid-1'], payload);
+    mockGet.mockResolvedValue({ data: { data: payload } });
+
+    let buffered = 0;
+    const { result } = renderHook(() => useVideoFrames('vid-1'), {
+      wrapper: wrapQC(qc),
+    });
+    act(() => {
+      result.current.registerBufferProbe(() => buffered);
+      result.current.play();
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.isBuffering).toBe(true);
+
+    // What a channel rename produces: same frames, a payload that differs. It
+    // has to actually differ — React Query's structural sharing keeps the old
+    // object when the new one is deeply equal, and then nothing restarts.
+    act(() => {
+      qc.setQueryData(['video-frames', 'vid-1'], {
+        ...payload,
+        name: 'renamed while playing',
+      });
+    });
+    // React Query's notify is scheduled, and fake timers hold it: without this
+    // flush the hook never sees the new container and the effect never restarts
+    // — the test would pass on a version that has the bug.
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(result.current.container?.name).toBe('renamed while playing');
+    buffered = 3;
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(result.current.frameIndex).toBeGreaterThan(0);
+    expect(result.current.isBuffering).toBe(false);
+  });
+
+  it('gives up on the resume DEPTH quickly when the next frame is ready', () => {
+    // One permanently dead frame inside the horizon caps the count below the
+    // watermark for ever. Charging the full no-progress budget for that would
+    // freeze 6 s at a time on frames that were decoded all along, so a stall
+    // that is only short of the DEPTH is bounded far tighter.
+    let buffered = 0;
+    const result = playWith(() => buffered);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(result.current.frameIndex).toBe(0);
+
+    buffered = 1; // enough to show, never enough to resume
+    act(() => {
+      vi.advanceTimersByTime(1300); // under REBUFFER_MAX_MS — still holding
+    });
+    expect(result.current.frameIndex).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(400); // past it, and far short of MAX_STALL_MS
+    });
+    expect(result.current.frameIndex).toBeGreaterThan(0);
+  });
+
+  it('clears the buffering flag when the user pauses mid-stall', () => {
+    const result = playWith(() => 0);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.isBuffering).toBe(true);
+
+    act(() => {
+      result.current.pause();
+    });
+    expect(result.current.isBuffering).toBe(false);
+    expect(result.current.isPlaying).toBe(false);
+  });
+
+  it('stops at the last frame even when the buffer is full', () => {
+    const payload = makeContainerPayload('vid-1', 3);
+    qc.setQueryData(['video-frames', 'vid-1'], payload);
+    mockGet.mockResolvedValue({ data: { data: payload } });
+
+    const { result } = renderHook(() => useVideoFrames('vid-1'), {
+      wrapper: wrapQC(qc),
+    });
+    act(() => {
+      result.current.registerBufferProbe(() => 3);
+      result.current.play();
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(result.current.frameIndex).toBe(2);
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.isBuffering).toBe(false);
   });
 });

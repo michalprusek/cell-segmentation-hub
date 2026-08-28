@@ -2801,6 +2801,7 @@ export default {
       frame: 'Frame',
       play: 'Play',
       pause: 'Pause',
+      buffering: 'Buffering…',
     },
   },
 

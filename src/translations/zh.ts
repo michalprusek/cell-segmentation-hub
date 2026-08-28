@@ -2618,6 +2618,7 @@ export default {
       frame: '帧',
       play: '播放',
       pause: '暂停',
+      buffering: '缓冲中…',
     },
   },
 

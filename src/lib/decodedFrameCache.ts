@@ -119,6 +119,21 @@ export class DecodedFrameCache {
     return this.bytes;
   }
 
+  /**
+   * Is `key` resident? Deliberately does NOT touch the LRU order, unlike
+   * {@link get}.
+   *
+   * A probe is a question, not a use. The playback buffer gate asks this about
+   * its whole lookahead twenty times a second while stalled, and answering with
+   * `get` would let mere polling reorder eviction: the frames AHEAD of the
+   * playhead would be pinned young in proportion to how long the gate waited,
+   * pushing out the frames behind it that a scrub back would want. What stays
+   * resident should reflect what was drawn.
+   */
+  has(key: string): boolean {
+    return this.entries.has(key);
+  }
+
   get(key: string): DecodedGray | undefined {
     const hit = this.entries.get(key);
     if (!hit) return undefined;

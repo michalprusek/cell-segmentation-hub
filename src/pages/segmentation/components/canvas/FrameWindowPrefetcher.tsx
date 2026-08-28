@@ -10,12 +10,17 @@
  * Returns null — all side effects live inside `useFrameWindowPrefetch`.
  */
 
+import { useCallback, useEffect, useRef } from 'react';
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
 import {
   useFrameWindowPrefetch,
   type FrameMinimal,
 } from '../../hooks/useFrameWindowPrefetch';
 import { useDecodeAhead } from '../../hooks/useDecodeAhead';
+import {
+  countBufferedFrames,
+  type FrameBufferProbe,
+} from '../../hooks/frameBufferProbe';
 import { anyWindowNeedsFullDepth } from '@/lib/playbackProxyWindow';
 import { canDecodeWebpGray } from '@/lib/webpGray';
 
@@ -23,12 +28,18 @@ interface FrameWindowPrefetcherProps {
   frames: readonly FrameMinimal[];
   currentIndex: number;
   enabled: boolean;
+  /** `useVideoFrames.registerBufferProbe`. This component is where the probe
+   *  has to be built: the playback loop lives above `ImageDisplayProvider` and
+   *  therefore cannot see the visible channels, the coverage map or the
+   *  representation that decide which cache entries the canvas will read. */
+  registerBufferProbe?: (probe: FrameBufferProbe | null) => void;
 }
 
 export default function FrameWindowPrefetcher({
   frames,
   currentIndex,
   enabled,
+  registerBufferProbe,
 }: FrameWindowPrefetcherProps) {
   const {
     visibleChannels,
@@ -81,6 +92,43 @@ export default function FrameWindowPrefetcher({
     enabled,
     channelCoverage,
   });
+
+  // Playback readiness. The probe is a STABLE callback reading the latest
+  // inputs through a ref: the playback loop keeps it across ticks, and giving
+  // it a new identity on every channel/window change would re-run the register
+  // effect at the rate the window slider ticks.
+  const probeInputsRef = useRef({
+    frames,
+    visibleChannels,
+    channel,
+    channelCoverage,
+    repr,
+  });
+  probeInputsRef.current = {
+    frames,
+    visibleChannels,
+    channel,
+    channelCoverage,
+    repr,
+  };
+  const bufferProbe = useCallback<FrameBufferProbe>((index, count) => {
+    const inputs = probeInputsRef.current;
+    return countBufferedFrames({
+      frames: inputs.frames,
+      index,
+      count,
+      channels: inputs.visibleChannels,
+      channelCoverage: inputs.channelCoverage,
+      repr: inputs.repr,
+      imgChannel: inputs.channel,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!registerBufferProbe) return;
+    registerBufferProbe(enabled ? bufferProbe : null);
+    return () => registerBufferProbe(null);
+  }, [registerBufferProbe, bufferProbe, enabled]);
 
   return null;
 }
