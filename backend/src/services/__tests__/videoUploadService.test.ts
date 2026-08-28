@@ -24,6 +24,7 @@ const {
   prismaImageUpdate,
   prismaImageCreateMany,
   prismaImageDeleteMany,
+  prismaImageFindMany,
   extractMock,
   fsStatMock,
   fsMkdirMock,
@@ -37,6 +38,7 @@ const {
   prismaImageUpdate: vi.fn(),
   prismaImageCreateMany: vi.fn(),
   prismaImageDeleteMany: vi.fn(),
+  prismaImageFindMany: vi.fn(),
   extractMock: vi.fn(),
   fsStatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
@@ -54,6 +56,7 @@ vi.mock('../../db/prismaClient', () => ({
       update: prismaImageUpdate,
       createMany: prismaImageCreateMany,
       deleteMany: prismaImageDeleteMany,
+      findMany: prismaImageFindMany,
     },
   },
 }));
@@ -123,6 +126,7 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     prismaImageUpdate.mockResolvedValue({});
     prismaImageCreateMany.mockResolvedValue({ count: 5 });
     prismaImageDeleteMany.mockResolvedValue({ count: 0 });
+    prismaImageFindMany.mockResolvedValue([]);
   });
 
   it('happy path: creates container row, renames tmp, creates frame rows', async () => {
@@ -412,5 +416,182 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     expect(
       errorMessages.some(m => m.includes('roll back containers'))
     ).toBe(true);
+  });
+});
+
+describe('videoUploadService — sparse channels', () => {
+  /** The extractor can only report INDICES: the frame rows a frame id would
+   *  name do not exist until `createMany` has run. This is the shape it emits
+   *  for a reference channel refreshed every 3rd frame. */
+  const SPARSE_RESULT = {
+    kind: 'single' as const,
+    result: {
+      frameCount: 6,
+      durationMs: 6000,
+      channels: [
+        {
+          name: 'irm',
+          type: 'irm',
+          isSegmentationSource: true,
+          sparseSource: true,
+          sparseFill: { '1': 0, '2': 0, '4': 3, '5': 3 },
+        },
+        { name: 'tirf', type: 'fluorescent', isSegmentationSource: false },
+      ],
+      width: 128,
+      height: 96,
+    },
+  };
+
+  const FRAME_ROWS = Array.from({ length: 6 }, (_, i) => ({
+    id: `frame-${i}`,
+    frameIndex: i,
+  }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fsStatMock.mockResolvedValue({ size: 1024 });
+    fsMkdirMock.mockResolvedValue(undefined);
+    fsRenameMock.mockResolvedValue(undefined);
+    fsRmMock.mockResolvedValue(undefined);
+    fsReaddirMock.mockResolvedValue(['irm.png']);
+    sharpMock.mockResolvedValue(undefined);
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageUpdate.mockResolvedValue({});
+    prismaImageCreateMany.mockResolvedValue({ count: 6 });
+    prismaImageDeleteMany.mockResolvedValue({ count: 0 });
+    prismaImageFindMany.mockResolvedValue(FRAME_ROWS);
+    extractMock.mockResolvedValue(SPARSE_RESULT);
+  });
+
+  function persistedChannels() {
+    const call = prismaImageUpdate.mock.calls[0]?.[0] as {
+      data: { channels: Array<Record<string, unknown>> };
+    };
+    return call.data.channels;
+  }
+
+  it('mirrors the index-space gap map into frame ids', async () => {
+    // The editor only ever holds ids — `resolveFrameId` is handed a frame id
+    // and a channel name and nothing else — so without this mirror it cannot
+    // de-duplicate a run of gaps, and each gap re-downloads the same picture.
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'sparse.nd2',
+      mimeType: 'image/tiff',
+      tempFilePath: '/tmp/multer/abc-sparse.nd2',
+    });
+
+    expect(persistedChannels()[0]?.sparseFillFrameIds).toEqual({
+      'frame-1': 'frame-0',
+      'frame-2': 'frame-0',
+      'frame-4': 'frame-3',
+      'frame-5': 'frame-3',
+    });
+  });
+
+  it('keeps the index map too — the frame-data route resolves from it', async () => {
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'sparse.nd2',
+      mimeType: 'image/tiff',
+      tempFilePath: '/tmp/multer/abc-sparse.nd2',
+    });
+
+    expect(persistedChannels()[0]?.sparseFill).toEqual({
+      '1': 0,
+      '2': 0,
+      '4': 3,
+      '5': 3,
+    });
+    expect(persistedChannels()[0]?.sparseSource).toBe(true);
+  });
+
+  it('leaves the dense channel of the same container untouched', async () => {
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'sparse.nd2',
+      mimeType: 'image/tiff',
+      tempFilePath: '/tmp/multer/abc-sparse.nd2',
+    });
+
+    expect(persistedChannels()[1]).not.toHaveProperty('sparseFillFrameIds');
+    expect(persistedChannels()[1]).not.toHaveProperty('sparseSource');
+  });
+
+  it('costs no extra query when nothing is sparse', async () => {
+    // Every existing upload takes this path; it must not grow a round-trip.
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 5,
+        durationMs: 5000,
+        channels: [{ name: 'irm', type: 'irm', isSegmentationSource: true }],
+        width: 128,
+        height: 96,
+      },
+    });
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'dense.mp4',
+      mimeType: 'video/mp4',
+      tempFilePath: '/tmp/multer/abc-dense.mp4',
+    });
+
+    expect(prismaImageFindMany).not.toHaveBeenCalled();
+  });
+
+  it('draws the thumbnail from the first REAL frame, not from a gap', async () => {
+    // A reference channel whose first acquisition is frame 2 would otherwise
+    // give the whole container a black thumbnail in the gallery.
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 6,
+        durationMs: 6000,
+        channels: [
+          {
+            name: 'irm',
+            type: 'irm',
+            isSegmentationSource: true,
+            sparseSource: true,
+            sparseFill: { '0': 2, '1': 2, '3': 2, '4': 2, '5': 2 },
+          },
+        ],
+        width: 128,
+        height: 96,
+      },
+    });
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'sparse.nd2',
+      mimeType: 'image/tiff',
+      tempFilePath: '/tmp/multer/abc-sparse.nd2',
+    });
+
+    expect(fsReaddirMock).toHaveBeenCalledWith(
+      expect.stringContaining('/frames/0002')
+    );
+  });
+
+  it('omits a gap it cannot name rather than guessing an id', async () => {
+    // The picture is still right — the frame-data route resolves from the
+    // index map — so a partial mirror costs a duplicate download, not a wrong
+    // frame. Inventing an id would cost the wrong frame.
+    prismaImageFindMany.mockResolvedValue(FRAME_ROWS.slice(0, 3));
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'sparse.nd2',
+      mimeType: 'image/tiff',
+      tempFilePath: '/tmp/multer/abc-sparse.nd2',
+    });
+
+    expect(persistedChannels()[0]?.sparseFillFrameIds).toEqual({
+      'frame-1': 'frame-0',
+      'frame-2': 'frame-0',
+    });
   });
 });

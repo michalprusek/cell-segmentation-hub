@@ -38,6 +38,15 @@ try:
 except ImportError:
     MicrocapsuleModel = None
 
+# Neurite/soma model: optional import. Like microtubule it is an nnU-Net
+# ResEnc-M, and it REUSES that package's vendored dynamic_network_architectures
+# rather than shipping a second copy — so an ImportError here most likely means
+# that vendored tree moved.
+try:
+    from .neurite_soma import NeuriteSomaModel
+except ImportError:
+    NeuriteSomaModel = None
+
 # Mamba-UNet spheroid model: optional import (requires mamba_ssm CUDA kernels).
 # Catch OSError too: a present-but-ABI-mismatched .so raises OSError/ImportError
 # on load, and we want that to disable only this model (with a log), not crash
@@ -54,4 +63,4 @@ except (ImportError, OSError) as _e:
 
 __all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'SpermModel',
            'WoundModel', 'MicrotubuleModel', 'SegFormerModel', 'UMamba',
-           'MicrocapsuleModel']
+           'MicrocapsuleModel', 'NeuriteSomaModel']

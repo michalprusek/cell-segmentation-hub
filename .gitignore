@@ -118,6 +118,12 @@ bun.lockb
 *.pkl
 *.model
 
+# Staged weight bundles (scripts/download-*-weights.sh). Nothing under here is
+# tracked. Named explicitly because the neurite/soma bundle is a DIRECTORY that
+# also carries plans.json + dataset.json beside its .pth files, and the *.pth
+# rule above does not cover those.
+backend/segmentation/weights/
+
 # Wound-healing model release archives (extracted to weights/ on deploy)
 wound_seg_v2.zip
 mitb5-wounds.zip

@@ -278,9 +278,10 @@ def test_write_frames_registers_channels_to_first():
     ch1 = shift_frame(ref, 5, -3)
     arr = np.stack([np.stack([ref, ch1])])  # (T=1, C=2, Y, X)
     d = Path(tempfile.mkdtemp())
-    offsets = _write_frames(arr, d, ["c0", "c1"], register=True)
+    offsets, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
     assert offsets[0][0] == [0, 0]  # reference never moves
     assert offsets[0][1] == [-5, 3]  # inverse of the injected shift
+    assert blanks[0] == [False, False]  # both planes carry real data
     assert (d / "0000" / "c0.png").exists()
     assert (d / "0000" / "c1.png").exists()
 
@@ -296,10 +297,79 @@ def test_write_frames_register_off_is_untouched():
     ch1[10, 8:28] = 9000
     arr = np.stack([np.stack([ref, ch1])])
     d = Path(tempfile.mkdtemp())
-    offsets = _write_frames(arr, d, ["c0", "c1"], register=False)
+    offsets, blanks = _write_frames(arr, d, ["c0", "c1"], register=False)
     assert offsets[0] == [[0, 0], [0, 0]]
+    assert blanks[0] == [False, False]
     got = np.asarray(Image.open(d / "0000" / "c1.png"))
     assert np.array_equal(got, ch1)  # written unchanged
+
+
+def test_blank_plane_registration_was_already_a_no_op():
+    # The premise of the skip below: `estimate_translation` ALREADY returns
+    # (0, 0) whenever either plane is constant, because a constant plane has
+    # zero gradient, so the correlation surface is flat and the existing
+    # `low_confidence` guard rejects the peak. Skipping the call is therefore a
+    # cost saving, not a behaviour change — and this is the assertion that keeps
+    # that claim true if the guard is ever retuned.
+    from channel_registration import estimate_translation, shift_frame
+
+    rng = np.random.RandomState(3)
+    real = (rng.rand(96, 96) * 400).astype(np.uint16)
+    for k in range(5):
+        real[10 + k * 16, 8:88] = 9000
+    moved = shift_frame(real, 5, -3)
+    blank = np.zeros((96, 96), np.uint16)
+    const = np.full((96, 96), 100, np.uint16)
+
+    # Sanity: the estimator does find a real shift when there is one.
+    assert estimate_translation(real, moved)[:2] == (-5, 3)
+
+    for ref, mov in ((real, blank), (real, const), (blank, moved), (const, moved)):
+        dy, dx, _conf = estimate_translation(ref, mov)
+        assert (dy, dx) == (0, 0)
+
+
+def test_write_frames_reports_blank_planes_and_skips_their_registration():
+    # A plane the acquisition never wrote is reported blank and skipped by
+    # registration. The recorded offset stays [0, 0] — which is exactly what the
+    # estimator would have returned (see the test above), so the sidecar is
+    # unchanged and only the FFT is saved.
+    from channel_registration import shift_frame
+
+    rng = np.random.RandomState(1)
+    ref = (rng.rand(96, 96) * 400).astype(np.uint16)
+    for k in range(5):
+        ref[10 + k * 16, 8:88] = 9000
+    moved = shift_frame(ref, 5, -3)
+    blank = np.zeros((96, 96), np.uint16)
+    # T=2: frame 0 has both channels, frame 1 only the reference.
+    arr = np.stack([np.stack([ref, moved]), np.stack([ref, blank])])
+    d = Path(tempfile.mkdtemp())
+
+    offsets, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
+
+    assert blanks[0] == [False, False]
+    assert blanks[1] == [False, True]
+    assert offsets[0][1] == [-5, 3]
+    assert offsets[1][1] == [0, 0], "a blank plane must not be 'aligned'"
+
+
+def test_write_frames_skips_registration_when_the_reference_is_blank():
+    # Channel 0 is the registration reference. A frame whose reference was never
+    # acquired cannot be registered to it by anyone, so the offset is [0, 0]
+    # either way; this only skips the FFT that would have said so.
+    rng = np.random.RandomState(2)
+    real = (rng.rand(96, 96) * 400).astype(np.uint16)
+    for k in range(5):
+        real[10 + k * 16, 8:88] = 9000
+    blank = np.zeros((96, 96), np.uint16)
+    arr = np.stack([np.stack([blank, real])])
+    d = Path(tempfile.mkdtemp())
+
+    offsets, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
+
+    assert blanks[0] == [True, False]
+    assert offsets[0][1] == [0, 0]
 
 
 if __name__ == "__main__":

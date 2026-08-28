@@ -224,6 +224,7 @@ export default {
       sperm: 'Spermie',
       microtubules: 'Mikrotubuly',
       microcapsule: 'Mikrokapsle',
+      neurite: 'Neurity a somata',
     },
     projectNamePlaceholder: 'např. HeLa buněčné sferoidy',
     projectDescPlaceholder:
@@ -449,6 +450,7 @@ export default {
         wound: 'Modely hojení ran',
         microtubule: 'Modely mikrotubulů',
         microcapsule: 'Modely mikrokapsulí',
+        neurite: 'Modely neuritů a somat',
       },
       presets: {
         fast: 'Rychlý',
@@ -512,6 +514,11 @@ export default {
           description:
             'Instanční segmentace mikrokapsulí (kulatých objektů) v mikroskopii světlého pole. Kompaktní U-Net destilovaný z Meta SAM 3 vrací jednu čistou hranici plného rozlišení na kapsuli a odděluje se dotýkající kapsule pomocí watershedu; kapsule přesahující okraj snímku jsou vyloučeny z metrik (plocha, obvod, kompaktnost).',
         },
+        neurite_soma: {
+          name: 'Neurit / Soma (nnU-Net ResEnc-M)',
+          description:
+            'Dvoutřídní sémantická segmentace neuronů ve fluorescenční mikroskopii — neurit (výběžky) a soma (tělo buňky) — pouze z tubulinového kanálu. nnU-Net v2 ResEnc-M, ansámbl 3 foldů se zrcadlovou TTA a topologickým členem clDice pro třídu neurit. Dice na testovací sadě 0,832 neurit / 0,915 soma.',
+        },
       },
     },
     detectHoles: 'Detekce Děr',
@@ -545,6 +552,8 @@ export default {
         'Instanční segmentace mikrotubulů pro IRM mikroskopii. Síť nnU-Net ResEnc-M, instancer s mezí zakřivení, nativní polyline výstup s geometrickým cross-frame trackingem.',
       microcapsule:
         'Kompaktní U-Net (destilovaný z Meta SAM 3) pro instanční segmentaci mikrokapsulí — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M (2D, ansámbl 3 foldů) pro segmentaci neuritů a somat ve fluorescenční mikroskopii. Čte tubulinový kanál; Dice na testovací sadě 0,832 neurit / 0,915 soma. Trénováno na konfokálních datech Leica při ~0,180 µm/px — u jiné velikosti pixelu ověřte počty somat.',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:
@@ -715,6 +724,12 @@ export default {
       external: 'Externí',
       internal: 'Interní',
       polyline: 'Polylajn',
+    },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurit',
+      soma: 'Soma',
     },
     shortcuts: {
       buttonText: 'Zkratky',
@@ -1257,6 +1272,8 @@ export default {
         'Délka, plocha a intenzita signálu pro každý MT z původního ND2/TIFF souboru. Odečteno median pozadí (mimo dilatovanou masku MT).',
       intensityNote:
         'Intenzita signálu podle kanálu — včetně součtové (integrované) intenzity — se vždy vypočítá pro každý kanál a zapíše do tabulky metrik. Není třeba nic vybírat.',
+      wideNote:
+        'Každý kanál má vlastní řádek v metrics.csv (viz sloupec „channel“). Doprovodný soubor metrics_wide.csv — a další list v metrics.xlsx — dá všechny kanály téhož mikrotubulu na jeden řádek, pro každý kanál jednu sadu sloupců.',
       thicknessLabel: 'Tloušťka MT (px)',
       thicknessHelp:
         'Šířka pásu podél polyline, ze kterého se sbírá signál. 5 px odpovídá běžnému průměru mikrotubulu při 100× widefield.',

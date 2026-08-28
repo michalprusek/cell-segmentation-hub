@@ -80,7 +80,11 @@ export async function getUserProfile(
       firstName: user.profile?.title?.split(' ')[0],
       lastName: user.profile?.title?.split(' ').slice(1).join(' '),
       isEmailVerified: user.emailVerified,
-      language: user.profile?.preferredLang || 'cs',
+      // Fallback for a legacy row with no profile at all. English, not
+      // Czech — the client treats whatever this endpoint returns as an
+      // explicit preference and pins it, so a Czech fallback silently
+      // overrode the browser language of every such account.
+      language: user.profile?.preferredLang || 'en',
       theme: user.profile?.preferredTheme || 'light',
       avatarUrl: user.profile?.avatarUrl || null, // Include avatar URL from profile
       createdAt: user.createdAt.toISOString(),
