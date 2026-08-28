@@ -1073,3 +1073,212 @@ describe('safeParsePolygons (via computeMTGeometry)', () => {
     expect(rows).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sparse channels (a channel the microscope refreshed every N-th frame)
+//
+// The forward fill from PR #377 redirects the READ path; the original ND2/TIFF
+// still holds the constant fill the acquisition software wrote for the frames
+// it never exposed. `mt_metrics.py` samples that original, so the export has to
+// tell it which frames are gaps — and label the rows it gets back, or a run of
+// repeated intensities reads as a genuine flat stretch of a time series.
+// ---------------------------------------------------------------------------
+
+describe('computeMTMetrics — sparse channels', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const sparseContainer = {
+    id: 'video-1',
+    name: 'sparse.nd2',
+    originalPath: 'projects/p1/video.nd2',
+    mimeType: null,
+    channels: [
+      {
+        name: 'IRM',
+        type: 'irm',
+        sparseSource: true,
+        // Acquired on 0 and 3; 1, 2 and 4 read from the previous real frame.
+        sparseFill: { '1': 0, '2': 0, '4': 3 },
+      },
+      { name: 'TIRF_488', type: 'fluorescent' },
+    ],
+  };
+
+  const denseContainer = {
+    id: 'video-1',
+    name: 'dense.nd2',
+    originalPath: 'projects/p1/video.nd2',
+    mimeType: null,
+    channels: [{ name: 'IRM' }, { name: 'TIRF_488' }],
+  };
+
+  const seg = polylineJson(
+    [
+      { x: 10, y: 20 },
+      { x: 30, y: 40 },
+    ],
+    { instanceId: 'inst-1', trackId: 'track-7' }
+  );
+
+  const emptyMlResponse = {
+    data: { rows: [], frames_processed: 0, frame_height: 5, frame_width: 5 },
+  };
+
+  /** One ML row; `source` defaults to the row's own frame (an ordinary row). */
+  const mlRow = (
+    frame: number,
+    channel: string,
+    source: number = frame
+  ): Record<string, unknown> => ({
+    frame_index: frame,
+    image_id: `frame-${frame}`,
+    instance_id: 'inst-1',
+    track_id: 'track-7',
+    channel,
+    source_frame_index: source,
+    length_px: 28.28,
+    area_px: 56,
+    pixel_count: 100,
+    sum_intensity: 5000,
+    mean_intensity: 50,
+    median_intensity: 48,
+    std_intensity: 5,
+    median_background: 10,
+    mean_background: 12,
+    signal_minus_background: 40,
+  });
+
+  const framesIn = (indices: number[]) =>
+    indices.map(i =>
+      makeFrame({
+        id: `frame-${i}`,
+        frameIndex: i,
+        segmentation: { polygons: seg },
+      })
+    );
+
+  const allChannels = { ...BASE_OPTIONS, channels: [] };
+
+  it('sends the gap→anchor map for a sparse channel', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([sparseContainer]);
+    axiosPostMock.mockResolvedValueOnce(emptyMlResponse);
+
+    await computeMTMetrics(framesIn([0, 1]), 'proj-1', allChannels);
+
+    const [, body] = axiosPostMock.mock.calls[0];
+    expect(body.sparse_fill).toEqual({ IRM: { '1': 0, '2': 0, '4': 3 } });
+  });
+
+  it('omits sparse_fill entirely for a dense container', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([denseContainer]);
+    axiosPostMock.mockResolvedValueOnce(emptyMlResponse);
+
+    await computeMTMetrics(framesIn([0, 1]), 'proj-1', allChannels);
+
+    const [, body] = axiosPostMock.mock.calls[0];
+    expect(body.sparse_fill).toBeUndefined();
+  });
+
+  it('drops malformed sparseFill entries rather than forwarding them', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([
+      {
+        ...sparseContainer,
+        channels: [
+          {
+            name: 'IRM',
+            sparseSource: true,
+            sparseFill: {
+              '1': 0,
+              // Not a frame index, and not a frame index target. `null` is the
+              // one that matters: a Number() coercion would send it as frame 0
+              // and invent a redirect nothing recorded.
+              'not-a-frame': 2,
+              '3': -1,
+              '5': 'nope',
+              '7': null,
+              '9': 1.5,
+            },
+          },
+        ],
+      },
+    ]);
+    axiosPostMock.mockResolvedValueOnce(emptyMlResponse);
+
+    await computeMTMetrics(framesIn([0, 1]), 'proj-1', allChannels);
+
+    const [, body] = axiosPostMock.mock.calls[0];
+    expect(body.sparse_fill).toEqual({ IRM: { '1': 0 } });
+  });
+
+  it('ignores sparseFill on a channel not flagged sparseSource', async () => {
+    // `sparseSource` is a fact the extractor measured on the source volume.
+    // A stray map without it must not silently redirect a real frame's read.
+    prismaMock.image.findMany.mockResolvedValueOnce([
+      {
+        ...sparseContainer,
+        channels: [{ name: 'IRM', sparseFill: { '1': 0 } }],
+      },
+    ]);
+    axiosPostMock.mockResolvedValueOnce(emptyMlResponse);
+
+    await computeMTMetrics(framesIn([0, 1]), 'proj-1', allChannels);
+
+    const [, body] = axiosPostMock.mock.calls[0];
+    expect(body.sparse_fill).toBeUndefined();
+  });
+
+  it('carries source_frame_index into channelFrameSource per channel', async () => {
+    prismaMock.image.findMany.mockResolvedValueOnce([sparseContainer]);
+    axiosPostMock.mockResolvedValueOnce({
+      data: {
+        rows: [
+          mlRow(0, 'IRM', 0),
+          mlRow(0, 'TIRF_488', 0),
+          // Frame 1 acquired TIRF but not IRM: only IRM is a repeat.
+          mlRow(1, 'IRM', 0),
+          mlRow(1, 'TIRF_488', 1),
+        ],
+        frames_processed: 2,
+        frame_height: 5,
+        frame_width: 5,
+      },
+    });
+
+    const { rows } = await computeMTMetrics(
+      framesIn([0, 1]),
+      'proj-1',
+      allChannels
+    );
+
+    expect(
+      rows.map(r => `${r.frameIndex}/${r.channel}=${r.channelFrameSource}`)
+    ).toEqual(['0/IRM=0', '0/TIRF_488=0', '1/IRM=0', '1/TIRF_488=1']);
+  });
+
+  it('carries a head gap forward: the stand-in can be a LATER frame', async () => {
+    // Gaps before a channel's first exposure read forward from it
+    // (`plan_sparse_channels`), so consumers must compare the two columns for
+    // equality rather than assume channelFrameSource < frameIndex.
+    prismaMock.image.findMany.mockResolvedValueOnce([sparseContainer]);
+    axiosPostMock.mockResolvedValueOnce({
+      data: {
+        rows: [mlRow(0, 'IRM', 2), mlRow(1, 'IRM', 2), mlRow(2, 'IRM', 2)],
+        frames_processed: 3,
+        frame_height: 5,
+        frame_width: 5,
+      },
+    });
+
+    const { rows } = await computeMTMetrics(
+      framesIn([0, 1, 2]),
+      'proj-1',
+      allChannels
+    );
+
+    expect(rows.map(r => r.channelFrameSource)).toEqual([2, 2, 2]);
+    expect(rows[0].channelFrameSource).toBeGreaterThan(rows[0].frameIndex);
+  });
+
+});

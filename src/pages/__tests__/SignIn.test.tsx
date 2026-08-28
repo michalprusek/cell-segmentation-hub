@@ -38,7 +38,7 @@ vi.mock('@/contexts/exports', () => ({
     t: (key: string) => {
       const map: Record<string, string> = {
         'auth.signInToAccount': 'Sign in to your account',
-        'auth.accessPlatform': 'Access the spheroid segmentation platform',
+        'auth.accessPlatform': 'Access the microscopy segmentation platform',
         'auth.emailAddress': 'Email address',
         'auth.emailPlaceholder': 'you@example.com',
         'auth.password': 'Password',

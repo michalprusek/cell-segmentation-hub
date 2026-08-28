@@ -50,7 +50,6 @@ export default {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    welcome: 'Welcome to the Spheroid Segmentation Platform',
     account: 'Account',
     notifications: 'Notifications',
     passwordConfirm: 'Confirm Password',
@@ -235,11 +234,11 @@ export default {
     // Stats overview
     stats: {
       totalProjects: 'Total Projects',
-      totalProjectsDesc: 'Active spheroid studies',
+      totalProjectsDesc: 'Active studies',
       processedImages: 'Processed Images',
       processedImagesDesc: 'Successfully segmented',
       uploadedToday: 'Uploaded Today',
-      uploadedTodayDesc: 'Spheroid images',
+      uploadedTodayDesc: 'Microscopy images',
       storageUsed: 'Storage Used',
       totalSpaceUsed: 'Total space used',
       incompleteWarning:
@@ -254,7 +253,7 @@ export default {
   projects: {
     createProject: 'Create New Project',
     createProjectDesc:
-      'Add a new project to organize your spheroid images and analyses.',
+      'Add a new project to organize your microscopy images and analyses.',
     projectType: 'Project Type',
     projectTypeUpdated: 'Project type updated',
     failedToUpdateProject: 'Failed to update project',
@@ -275,9 +274,8 @@ export default {
       microcapsule: 'Microcapsules',
       neurite: 'Neurites & somas',
     },
-    projectNamePlaceholder: 'e.g., HeLa Cell Spheroids',
-    projectDescPlaceholder:
-      'e.g., Analysis of tumor spheroids for drug resistance studies',
+    projectNamePlaceholder: 'e.g., HeLa cells, plate 3',
+    projectDescPlaceholder: 'e.g., Drug-resistance screen, 48 h time course',
     creatingProject: 'Creating...',
     duplicateProject: 'Duplicate',
     shareProject: 'Share',
@@ -953,7 +951,7 @@ export default {
     processingRequest: 'Processing your request...',
     // SignIn page specific
     signInToAccount: 'Sign in to your account',
-    accessPlatform: 'Access the spheroid segmentation platform',
+    accessPlatform: 'Access the microscopy segmentation platform',
     emailAddress: 'Email address',
     emailPlaceholder: 'you@example.com',
     password: 'Password',
@@ -971,7 +969,7 @@ export default {
     tokenMissing: 'Authentication token missing',
     tokenExpired: 'Authentication token expired',
     pleaseSignInAgain: 'Please sign in again',
-    welcomeMessage: 'Welcome to the Spheroid Segmentation Platform',
+    welcomeMessage: 'Welcome to the microscopy segmentation platform',
     confirmationRequired:
       'Confirmation text is required and must match your email address',
     agreeToTerms: 'By signing in, you agree to our',
@@ -980,7 +978,7 @@ export default {
     privacyPolicy: 'Privacy Policy',
     // SignUp page specific
     createAccount: 'Create your account',
-    signUpPlatform: 'Sign up to use the spheroid segmentation platform',
+    signUpPlatform: 'Sign up to use the microscopy segmentation platform',
     confirmPassword: 'Confirm Password',
     passwordsMatch: 'Passwords match',
     passwordsDoNotMatch: 'Passwords do not match',
@@ -2225,7 +2223,7 @@ export default {
         introduction: {
           title: '1. Introduction',
           content:
-            'This Privacy Policy explains how SpheroSeg ("we", "us", "our") collects, uses, protects, and shares your information when you use our platform for spheroid segmentation and analysis. By using our service, you consent to the data practices described in this policy.',
+            'This Privacy Policy explains how SpheroSeg ("we", "us", "our") collects, uses, protects, and shares your information when you use our platform for microscopy segmentation and analysis. By using our service, you consent to the data practices described in this policy.',
         },
         informationCollected: {
           title: '2. Information We Collect',
