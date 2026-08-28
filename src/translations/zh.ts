@@ -1348,285 +1348,638 @@ export default {
     noImagesAvailable: '无可用图像',
   },
   docs: {
+    // 页眉
     badge: '文档',
     title: 'SpheroSeg 文档',
-    subtitle: '我们球状体分割平台的综合使用指南',
-    backTo: '返回 {{page}}',
+    subtitle: '涵盖全部六种项目类型的完整说明 — 支持搜索',
+    backTo: '返回{{page}}',
+
+    // 搜索
+    search: {
+      placeholder: '搜索文档…',
+      hint: '按 / 键开始搜索。匹配的章节会被筛选并高亮显示。',
+      results: '匹配章节：{{count}} 个',
+      noResults: '没有找到匹配内容',
+      noResultsHint:
+        '请尝试更短的关键词，或使用「通道」「时空图」「导出」「阈值」等词。',
+      clear: '清除搜索',
+    },
+
+    // 导航
     navigation: '导航',
     nav: {
-      introduction: '介绍',
-      gettingStarted: '入门指南',
-      uploadingImages: '上传图像',
-      modelSelection: '模型选择',
-      segmentationProcess: '分割过程',
-      segmentationEditor: '分割编辑器',
-      exportFeatures: '导出功能',
-      sharedProjects: '共享项目',
+      introduction: '简介',
+      gettingStarted: '快速上手',
+      projectTypes: '项目类型',
+      uploadingImages: '上传数据',
+      videosChannels: '视频与通道',
+      modelSelection: '模型',
+      segmentationProcess: '分割流程',
+      segmentationEditor: '编辑器',
+      exportFeatures: '导出',
+      automatedEssays: '自动化实验',
+      segmenter: 'Segmenter',
+      sharedProjects: '共享',
+      troubleshooting: '疑难解答',
     },
+
+    // 简介
     introduction: {
-      title: '介绍',
-      whatIs: '什么是 SpheroSeg？',
+      title: '简介',
+      whatIs: 'SpheroSeg 是什么？',
       description:
-        'SpheroSeg 是专门为显微镜图像中细胞球状体的分割和分析而设计的先进平台。',
+        'SpheroSeg 是一个借助人工智能对显微图像与延时视频进行分割与测量的平台。它提供六种项目类型，背后是十个分割模型，并配有多边形与折线编辑器、跨帧微管追踪以及批量导出流程。',
       developedBy:
-        '该平台由布拉格捷克技术大学核科学与物理工程学院的学生 Bc. Michal Průšek 开发。',
+        '该平台由捷克布拉格捷克理工大学核科学与物理工程学院的 Michal Průšek 学士开发，指导教师为 Adam Novozámský 博士，并与布拉格化工大学生物化学与微生物学研究所的研究人员合作完成。',
       addresses:
-        'SpheroSeg 解决了在显微镜图像中准确识别和分割球状体边界的挑战性任务。',
+        '项目起源于显微图像中球体边界难以准确勾勒这一难题，如今已扩展到解体球体、划痕愈合实验、精子形态、微管延时序列与微胶囊 — 每一类都有各自的模型、测量指标与导出格式。',
     },
+
+    // 快速上手
     gettingStarted: {
-      title: '入门指南',
-      accountCreation: '创建账户',
-      accountDescription: '要使用 SpheroSeg，您需要创建一个账户。',
+      title: '快速上手',
+      accountCreation: '创建账号',
+      accountDescription:
+        '注册是开放的，无需等待审核。账号会把您的项目、图像与结果集中保存在一处。',
       accountSteps: {
-        step1: '转到注册页面',
-        step2: '输入您的机构电子邮件地址',
-        step3: '完善您的个人资料',
-        step4: '验证您的电子邮件地址',
+        step1: '打开注册页面',
+        step2: '填写电子邮箱并设置密码',
+        step3: '在个人资料中补充姓名与所属机构',
+        step4: '在「设置」中选择常用模型、默认阈值、界面语言与主题',
       },
-      firstProject: '创建您的第一个项目',
-      projectDescription: '项目帮助您组织工作。',
+      firstProject: '创建第一个项目',
+      projectDescription:
+        '项目保存图像以及由其生成的分割结果。项目类型决定了可用的模型、编辑器显示的内容以及结果的导出方式，因此请慎重选择。',
       projectSteps: {
-        step1: '点击"新建项目"',
-        step2: '输入项目名称和描述',
-        step3: '选择项目类型',
-        step4: '点击"创建项目"',
+        step1: '在仪表板中点击「新建项目」',
+        step2: '填写名称，并可选填描述',
+        step3: '选择与样本相符的项目类型（参见下方「项目类型」）',
+        step4: '点击「创建项目」，然后上传数据',
       },
     },
+
+    // 项目类型
+    projectTypes: {
+      title: '项目类型',
+      description:
+        '每个项目在创建时都要选定类型。它不只是一个标签：它决定了可用的模型、生成的几何形状、编辑器显示的面板，以及导出时得到的文件。',
+      types: {
+        spheroid: {
+          name: '球体（标准）',
+          bestFor:
+            '适用于：明场或相差显微镜下的细胞球体。唯一可以在多个模型之间选择的类型，共有五个。',
+          output: '输出：带可选孔洞的闭合多边形。',
+        },
+        spheroidInvasive: {
+          name: '解体球体',
+          bestFor:
+            '适用于：向基质中扩散的球体。核心指标是以致密核心为基准的解体指数。',
+          output:
+            '输出：闭合多边形；致密核心作为独立类别被预测，并以绿色绘制。',
+        },
+        wound: {
+          name: '划痕愈合',
+          bestFor:
+            '适用于：划痕实验的延时序列。会在整个序列上额外给出愈合曲线。',
+          output:
+            '输出：覆盖创面的闭合多边形，以及记录创面面积随时间变化的工作表与图表。',
+        },
+        sperm: {
+          name: '精子',
+          bestFor:
+            '适用于：精子形态分析，每个细胞按头部、中段与尾部三部分测量。',
+          output:
+            '输出：带部位类别与实例标识的开放折线，分别以绿色、橙色与青色表示。',
+        },
+        microtubules: {
+          name: '微管',
+          bestFor:
+            '适用于：IRM 微管延时序列，支持跨帧追踪、按通道计算强度以及时空图分析。',
+          output:
+            '输出：带稳定轨迹标识的开放折线；导出为 ImageJ ROI 与 CVAT，而非 COCO 或 YOLO。',
+        },
+        microcapsule: {
+          name: '微胶囊',
+          bestFor: '适用于：明场下的圆形微胶囊，包括彼此接触的胶囊。',
+          output:
+            '输出：每个胶囊一个闭合多边形。被图像边缘截断的胶囊不计入测量结果。',
+        },
+      },
+      note: '请在上传数据前先选定类型。',
+      noteText:
+        '模型的兼容性取决于项目类型，因此事后更改类型意味着已有结果无法再用生成它们的模型重新计算。',
+    },
+
+    // 上传数据
     uploadImages: {
-      title: '上传图像',
-      description: 'SpheroSeg 支持各种显微镜常用的图像格式。',
-      methods: '上传方法',
-      methodsDescription: '有多种上传图像的方式：',
-      methodsList: {
-        dragDrop: '拖放文件到上传区域',
-        browse: '点击浏览选择文件',
-        batch: '批量上传多张图像',
+      title: '上传数据',
+      description:
+        '平台既接受单张图像，也接受延时数据。视频、ND2 或多页 TIFF 会成为一个容器，其中每一帧对应一条记录。',
+      formats: '支持的格式与大小限制',
+      formatsTable: {
+        kind: '类别',
+        extensions: '格式',
+        limit: '最大尺寸',
+        imagesLabel: '单张图像',
+        imagesLimit: '每个文件 20 MB',
+        videosLabel: '视频与图像堆栈',
+        videosLimit: '每个文件 100 GB',
       },
-      note: '注意：',
-      noteText: '确保您的显微镜图像具有良好的对比度。',
+      methods: '上传方式',
+      methodsDescription: '三种等效的方式：',
+      methodsList: {
+        dragDrop: '把文件拖放到上传区域',
+        browse: '点击上传区域并在对话框中选择文件',
+        batch: '直接拖入整个文件夹 — 会递归遍历，单批最多 10 000 个文件',
+        autoSegment: '勾选「上传后自动分割」，文件一到即进入队列',
+      },
+      tiffNote: 'TIFF 两种情况都有可能。',
+      tiffNoteText:
+        '当 TIFF 超过 20 MB，或确实包含多页时，会按图像堆栈处理 — 系统会检查文件头，因此即使是体积很小的多通道 TIFF 也能被正确处理。',
+      note: '为获得最佳效果：',
+      noteText:
+        '请确保目标与背景之间有良好的对比度；若希望以微米为单位得到测量值，还需保证文件自带像素标定。上传视频是一次长请求 — 传输与逐帧提取同时进行，因此较大的 ND2 文件需要一些时间。',
     },
+
+    // 视频与通道
+    videosChannels: {
+      title: '视频、帧与通道',
+      description:
+        '延时数据与多通道数据有专门的处理方式：一条容器记录代表整段采集，每一帧对应一条记录，通道列表则由您在编辑器中控制。',
+      containers: '容器与帧',
+      containerFacts: {
+        frames:
+          '一次上传会生成一个容器加每帧一条记录；界面中帧号从 1 开始计数。',
+        hidden: '容器本身不会出现在图库中，也从不参与分割 — 只有帧才会。',
+        positions: '在多个载物台位置采集的 ND2 会按位置拆分为多个项目条目。',
+        calibration:
+          '若文件中含有像素尺寸与帧间隔，系统会读取并用于自动换算测量值。',
+      },
+      channels: '通道',
+      channelsDescription:
+        '每个通道在每一帧都单独存为一幅图像。其中只能有一个通道作为分割源，也就是模型读取的通道。',
+      channelControls: {
+        visibility: '复选框决定该通道是否参与叠加显示',
+        color: '颜色方块设定它在叠加图中的色调',
+        rename: '双击名称即可重命名',
+        opacity: '滑块可将不透明度设为 0 至 100 %',
+        source: '分割源以「● src」标记',
+      },
+      sourceNote: '请检查分割源。',
+      sourceNoteText:
+        '若没有可识别的通道名称，系统不会标记任何分割源，而是使用第一个通道。对微管来说这很关键：该模型只适用于 IRM，指向荧光通道会得到看似可信、底下却空无一物的折线。',
+      windowLevel: '显示 16 位数据',
+      windowLevelDescription:
+        '高位深图像需通过「最小值」「最大值」滑块映射后显示，另有「亮度」与「对比度」。窗宽窗位按通道分别设置，并不共用：某个通道首次显示时会自动适配其自身数据，之后保留您设定的上下限，仅在出现更亮的帧时扩展范围。这些设置仅在当前会话内有效；通道颜色与不透明度则会被记住。',
+      navigation: '在帧之间移动',
+      keys: {
+        step: '上一帧 / 下一帧',
+        play: '播放或暂停 — 固定 10 帧每秒，播放到最后一帧即停止',
+      },
+      mtExtras: '微管项目的额外功能',
+      mtExtrasList: {
+        registration:
+          '上传时配准通道：以整像素平移将每个通道对齐到第一个通道，因此不会产生任何插值。',
+        addChannel:
+          '添加通道：事后为选中的帧追加一个通道，既可以把一幅图像印到所有帧上，也可以用视频逐帧配对。',
+        tracking:
+          '所有帧处理完毕后会自动进行跨帧追踪，让每条纤维获得稳定的身份与颜色。',
+      },
+    },
+
+    // 模型
     modelSelection: {
-      title: '模型选择',
-      description: 'SpheroSeg 提供三种不同的AI模型。',
+      title: '模型',
+      description:
+        '共十个模型，每个都与其训练所针对的项目类型绑定。选择框只列出兼容的模型，真正可以挑选的只有标准球体项目 — 其他类型都各自对应唯一一个模型。',
+      spheroidModels: '球体模型 — 可自行选择',
+      specialisedModels: '专用模型 — 每种项目类型一个',
       models: {
         hrnet: {
-          name: 'HRNet（小型）',
-          inferenceTime: 'E2E时间：~309ms每张图像（ML推理：204ms）',
-          bestFor: '最适合：速度与质量之间的平衡性能',
-          description: '快速高效的模型。',
+          name: 'HRNet（均衡）',
+          inferenceTime: '每幅约 0.20 秒',
+          bestFor: '最适合：只想用一个模型、不必多想。平台的默认选择。',
+          description:
+            '在整个网络中始终保留一条高分辨率分支，而不是先编码再解码，因而能保留边界细节。',
         },
         cbam: {
-          name: 'CBAM-ResUNet（中型）',
-          inferenceTime: 'E2E时间：~482ms每张图像（ML推理：377ms）',
-          bestFor: '最适合：最大分割精度',
-          description: '具有注意力机制的精确分割模型，用于精确的球体边界检测。',
+          name: 'CBAM-ResUNet（精确）',
+          inferenceTime: '每幅约 0.38 秒',
+          bestFor: '最适合：论文插图与困难边界，代价约为 HRNet 的两倍。',
+          description:
+            '带通道注意力与空间注意力的残差 U-Net，每一层级都有 — 五个模型中边界最精确的一个。',
         },
         unet: {
-          name: 'UNet (SpheroHQ)',
-          inferenceTime: 'E2E时间：~286ms每张图像（ML推理：181ms）',
-          bestFor: '最适合：最快处理速度，非常适合实时应用',
+          name: 'UNet（最快）',
+          inferenceTime: '每幅约 0.18 秒',
+          bestFor: '最适合：大批量处理，吞吐量比最后一点精度更重要时。',
+          description: '在 SpheroHQ 数据集上训练、面向吞吐量优化的普通 U-Net。',
+        },
+        segformer: {
+          name: 'SegFormer',
+          inferenceTime: '每幅约 0.20 秒',
+          bestFor: '最适合：在明场球体上取得的最高实测精度 — 93 % IoU。',
           description:
-            '专门为SpheroHQ数据集的球体分割训练的专业模型。提供平衡的速度和精度。',
+            '基于 Transformer（SegFormer-B0）：分层编码器搭配轻量的全 MLP 解码器。',
+        },
+        mamba: {
+          name: 'Mamba-UNet',
+          inferenceTime: '每幅约 0.24 秒',
+          bestFor:
+            '最适合：与训练数据差异较大的图像 — 其他实验室、未知光路、经药物处理或形态异常的样本。',
+          description:
+            '带双向状态空间瓶颈层的 U-Net，专为分布外场景的稳健性而选。',
+        },
+        disintegration: {
+          name: '球体解体',
+          inferenceTime: '每幅约 0.70 秒 · 默认阈值 0.2',
+          bestFor: '用于：解体球体项目。',
+          description:
+            '采用 EfficientNet-B5 编码器的 UNet++，预测三个类别 — 背景、外围晕圈与致密核心。核心是直接预测而非推断得出，这正是解体指数得以可信的原因。',
+        },
+        wound: {
+          name: '划痕愈合',
+          inferenceTime: '每幅约 0.03 秒',
+          bestFor: '用于：划痕愈合项目。',
+          description:
+            '采用 MiT-B5 编码器的 U-Net，用于创面二值分割，在外部测试集上达到 90 % IoU。它在内部以 256×256 处理再放大，这既解释了它的速度，也说明了为什么细小的边缘细节会被平滑掉。',
+        },
+        sperm: {
+          name: '精子形态',
+          inferenceTime: '每幅约 0.30 秒',
+          bestFor: '用于：精子项目。',
+          description:
+            '多类别实例分割，通过骨架提取而非阈值化色块，直接把头部、中段与尾部输出为折线。',
+        },
+        microtubule: {
+          name: '微管（v5H）',
+          inferenceTime: '每帧约 4.5 秒 · 阈值固定为 0.97，用户不可更改',
+          bestFor: '用于：微管项目。仅限 IRM 图像。',
+          description:
+            '先由 nnU-Net ResEnc-M 网络预测纤维前景，再由受曲率约束的实例分离器将其拆分为一条条中心线，并在严格的曲率上限下解算每一处交叉。全部使用合成图像训练。运行时间随纤维数量增长，而不仅仅取决于图像尺寸。',
+        },
+        microcapsule: {
+          name: '微胶囊',
+          inferenceTime: '每幅约 0.30 秒',
+          bestFor: '用于：微胶囊项目。',
+          description:
+            '由 Meta SAM 3 蒸馏而来的紧凑型 U-Net，并用分水岭算法分开彼此接触的胶囊。被图像边缘截断的胶囊会被标记并排除在测量之外。',
         },
       },
       howToSelect: '如何选择模型',
       selectionSteps: {
-        step1: '打开您的项目',
-        step2: '找到模型选择菜单',
-        step3: '从 HRNet、CBAM-ResUNet 或 UNet (SpheroHQ) 中选择',
-        step4: '调整置信度阈值',
-        step5: '您的选择将被保存',
+        step1:
+          '在「设置」中指定默认模型与阈值 — 凡是项目类型允许选择之处都会沿用',
+        step2: '打开项目并选中要处理的图像',
+        step3: '点击「分割」；对话框只会列出兼容的模型',
+        step4: '调整置信度阈值，在检出数量与证据强度之间取得平衡',
+        step5: '若是多通道视频，请指定模型应读取哪个通道',
       },
+      thresholdNote: '微管模型的阈值是有意固定的。',
+      thresholdNoteText:
+        '该模型使用自身拟合得到的 0.97 阈值，并忽略滑块设置。调低阈值并不会找出更多真实纤维，只会找出更多证据薄弱的结果；而在非 IRM 通道上，无论怎样设置，输出都与图像内容无关。若检出偏少，请检查输入通道。',
       tip: '提示：',
       tipText:
-        '使用UNet获得最快的处理速度，吞吐量为5.5张图像/秒。选择CBAM-ResUNet以获得研究工作中的最大精度。选择HRNet以获得速度和质量之间的平衡性能。',
+        '先用默认模型。当边界比速度更重要时改用 CBAM-ResUNet；当您的图像不像任何人的训练数据时改用 Mamba-UNet。',
     },
+
+    // 分割流程
     segmentationProcess: {
-      title: '分割过程',
-      description: '该过程使用先进的AI模型。',
+      title: '分割流程',
+      description:
+        '分割在后台的队列中运行，因此批量处理期间您可以继续工作，进度会实时显示。',
       queueBased: '基于队列的处理',
-      queueDescription: 'SpheroSeg 使用处理队列系统。',
+      queueDescription: '队列是为大批量任务设计的：',
       queueFeatures: {
-        realTime: '使用 WebSocket 的实时状态',
-        batch: '批量处理',
-        priority: '优先级管理',
-        recovery: '自动错误恢复',
+        realTime:
+          '实时状态：进度通过 WebSocket 推送，并有 HTTP 轮询兜底，连接中断也不会让任务卡住',
+        batch: '批量处理：一次最多提交 10 000 幅图像',
+        priority:
+          '公平调度：刚被服务过的用户会被排到后面，避免一段长视频独占 GPU',
+        recovery: '故障恢复：中断的任务会重试而不是丢失，并给出具体错误',
       },
-      workflow: '自动分割工作流程',
+      workflow: '操作流程',
       workflowSteps: {
-        step1: '上传您的图像',
-        step2: '选择您的AI模型',
-        step3: '调整置信度阈值',
-        step4: '点击"自动分割"',
-        step5: '实时监控进度',
-        step6: '检查结果',
+        step1: '把图像或视频上传到项目中',
+        step2: '选中要处理的图像；不选则处理全部',
+        step3: '选择模型与置信度阈值',
+        step4: '若是多通道视频，指定模型读取的通道',
+        step5: '通过状态指示查看进度',
+        step6: '在编辑器中打开任意图像，检查并修正结果',
       },
-      polygonTypes: '多边形类型',
-      polygonDescription: '系统检测两种类型：',
+      polygonTypes: '模型输出的内容',
+      polygonDescription: '根据模型不同，有两类几何形状：',
       polygonTypesList: {
-        external: '外部多边形（红色）',
-        internal: '内部多边形（蓝色）',
+        external: '外部多边形：目标的轮廓 — 球体、创面、胶囊',
+        internal: '内部多边形：目标内部的孔洞，会从其面积中扣除',
+        polyline: '折线：只有长度而没有面积的开放路径，由微管与精子模型生成',
       },
       processingNote: '处理时间因模型而异：',
-      processingTimes: 'HRNet（约3秒），CBAM-ResUNet（约7秒）。',
+      processingTimes:
+        '创面模型每幅约 0.03 秒，球体模型约 0.2–0.4 秒，而微管模型每帧约 4.5 秒 — 因为把纤维一根根分离开才是耗时的部分。',
     },
+
+    // 编辑器
     segmentationEditor: {
       title: '分割编辑器',
-      description: '用于细化分割的强大工具。',
+      description:
+        '在这里检查并修正结果。七种编辑模式、完整的键盘操作，以及随项目类型变化的面板。',
       editingModes: '编辑模式',
       modes: {
         view: {
-          title: '查看模式',
-          description: '导航和检查而不进行更改。',
+          title: '浏览（V）',
+          description:
+            '选择、平移与缩放。点击某个形状会将其选中并切换到顶点编辑。',
         },
         editVertices: {
-          title: '编辑顶点',
-          description: '拖动单个顶点。',
+          title: '编辑顶点（E）',
+          description:
+            '拖动顶点以微调边界。右键点击顶点可将其删除。需要先选中一个形状。',
         },
         addPoints: {
-          title: '添加点',
-          description: '插入新顶点。',
+          title: '添加点（A）',
+          description:
+            '插入顶点、从较近的一端延长折线，或将两条折线首尾相接。需要先选中一个形状。',
         },
         createPolygon: {
-          title: '创建多边形',
-          description: '绘制新多边形。',
+          title: '新建多边形（N）',
+          description:
+            '逐点点出一个闭合形状；点击起点附近即可闭合。至少需要三个点。',
+        },
+        createPolyline: {
+          title: '新建折线（P）',
+          description:
+            '为微管或精子的某一部位点出一条开放路径。按回车键或双击结束。',
         },
         sliceMode: {
-          title: '切片模式',
-          description: '将多边形切成多个部分。',
+          title: '切分（S）',
+          description:
+            '用两次点击确定的直线切开形状。对闭合多边形与折线均有效。',
         },
         deletePolygon: {
-          title: '删除多边形',
-          description: '移除不需要的多边形。',
+          title: '删除多边形（D）',
+          description: '点击形状即可删除。该模式会保持激活，且没有确认提示。',
         },
       },
-      keyFeatures: '主要功能',
+      keyFeatures: '编辑器提供的功能',
       features: {
-        undoRedo: '撤销/重做系统',
-        autoSave: '自动保存',
-        zoomPan: '缩放和平移',
-        polygonManagement: '多边形管理',
-        keyboardShortcuts: '键盘快捷键',
-        realTimeFeedback: '实时反馈',
+        undoRedo:
+          '对形状的几何与属性支持撤销与重做。历史记录按帧独立保存，切换图像时会重置。',
+        saving:
+          '按需保存：点击「保存」、按 Ctrl+S，或在切换到其他图像时自动保存。',
+        zoomPan:
+          '以鼠标指针为中心缩放、拖动平移，并可用 R 或 0 让图像适应窗口。',
+        polygonManagement: '形状列表支持多选、显示与隐藏、重命名与删除。',
+        keyboardShortcuts: '完整的键盘操作 — 按 H 或 ? 可查看应用内列表。',
+        realTimeFeedback:
+          '画布上显示当前模式的操作提示，并实时统计形状与顶点数量。',
       },
-      shortcuts: '基本键盘快捷键',
+      shortcuts: '键盘快捷键',
       shortcutCategories: {
-        navigation: '导航：',
-        actions: '操作：',
+        modes: '模式',
+        actions: '操作',
+        view: '视图',
       },
       shortcutsList: {
-        v: '查看模式',
+        v: '浏览模式',
         e: '编辑顶点',
         a: '添加点',
-        n: '创建多边形',
+        n: '新建多边形',
+        p: '新建折线',
+        s: '切分',
+        d: '删除多边形',
+        tab: '在各模式间切换',
         ctrlZ: '撤销',
         ctrlY: '重做',
         ctrlS: '保存',
-        delete: '删除选中项',
+        delete: '删除选中的形状',
+        enter: '结束正在绘制的折线',
+        escape: '取消并返回浏览模式',
+        zoom: '放大与缩小',
+        reset: '让图像适应窗口',
+        pan: '按住并拖动即可在任意模式下平移',
+        help: '显示快捷键列表',
       },
-      workingWithPolygons: '处理多边形',
+      workingWithPolygons: '处理形状',
       polygonSteps: {
-        step1: '选择多边形',
-        step2: '切换到适当的模式',
-        step3: '进行修改',
-        step4: '使用右侧面板',
-        step5: '定期保存',
+        step1: '点击某个形状将其选中',
+        step2: '切换到与所需改动相匹配的模式',
+        step3: '用鼠标完成修改',
+        step4: '通过右侧列表隐藏、重命名、多选或删除形状',
+        step5: '按 Ctrl+S 保存',
       },
-      segmenting: '正在分割图像...',
-      waitingInQueue: '在队列中等待',
-      reloadingSegmentation: '刷新分割数据...',
+      saveNote: '没有持续的自动保存。',
+      saveNoteText:
+        '只有在点击「保存」或按 Ctrl+S 时才会保存，切换到其他图像或帧时也会在后台保存。点击面包屑导航会立即跳转并在后台保存，因此若改动较多，请先按 Ctrl+S。在视频中，删除一个已追踪的形状并保存，会将其从所有帧中一并移除。',
+      typeSpecific: '不同项目类型的差异',
+      typeSpecificList: {
+        microtubules:
+          '微管：实例面板按轨迹给出稳定的颜色，支持自定义类型标签、按整条轨迹赋值、轨迹传播与删除，以及时空图视图。',
+        sperm:
+          '精子：实例面板可在绘制前选定当前细胞与部位，并可通过右键菜单重新指派。',
+        disintegration:
+          '解体球体：致密核心以绿色绘制。解体指数本身是在导出时计算的。',
+      },
     },
+
+    // 导出
     exportFeatures: {
-      title: '导出功能',
-      description: '全面的导出功能。',
-      packageContents: '导出包内容',
+      title: '导出',
+      description:
+        '导出在后台运行，完成后会自动下载。每位用户同一时间只能有一个导出任务，结果是单个 ZIP 压缩包。',
+      packageContents: '压缩包中的内容',
       contents: {
         originalImages: {
           title: '原始图像',
-          description: '高质量的原始显微镜图像。',
+          description: '您上传的文件，保持原样。',
         },
         visualizations: {
-          title: '可视化',
-          description: '带编号多边形的注释图像。',
+          title: '可视化图',
+          description:
+            '带编号形状的叠加渲染图，颜色、线宽与透明度均可由您指定。',
+        },
+        annotations: {
+          title: '标注',
+          description:
+            '按您勾选的格式输出的机器可读几何数据 — 微管项目还会始终包含 ImageJ 与 CVAT 文件。',
+        },
+        metrics: {
+          title: '测量结果',
+          description:
+            '工作簿的表单取决于项目类型，可选 XLSX、CSV 或 JSON 格式。',
         },
       },
-      annotationFormats: '注释格式',
+      annotationFormats: '标注格式',
       formats: {
-        coco: 'COCO格式：PyTorch和TensorFlow的标准',
-        yolo: 'YOLO格式：为YOLO模型优化',
-        json: '自定义JSON：结构化详细格式',
+        coco: 'COCO：检测框架的标准格式。带孔洞的多边形会导出为游程编码掩码。',
+        yolo: 'YOLO：边界框，多边形写在注释行中。开放折线无法表示，会被跳过。',
+        json: '自定义 JSON：完整坐标与元数据，精子项目还会按细胞分组。',
+        imagej:
+          'ImageJ RoiSet：可直接在 Fiji 的 ROI 管理器中打开的压缩包，每根纤维在每个切片上一个 ROI，按类别或轨迹着色。仅限微管项目，始终包含。',
+        cvat: 'CVAT 1.1：折线，并以属性形式携带其轨迹身份。仅限微管项目，始终包含。',
       },
-      calculatedMetrics: '计算指标',
-      metricsDescription: 'SpheroSeg 自动计算指标。',
-      metricsCategories: {
-        basic: {
-          title: '基本测量：',
-          items: {
-            area: '面积',
-            perimeter: '周长',
-            diameter: '等效直径',
-            circularity: '圆形度',
-          },
-        },
-        advanced: {
-          title: '高级指标：',
-          items: {
-            feret: 'Feret直径',
-            majorMinor: '主/次直径',
-            compactness: '紧密度、凸性',
-            sphericity: '球形度指数',
-          },
-        },
+      calculatedMetrics: '按项目类型划分的测量结果',
+      metricsDescription: '您得到的工作簿取决于所测量的内容：',
+      metricsTable: {
+        projectType: '项目类型',
+        sheet: '表单及其内容',
+        spheroid:
+          'Polygon Metrics + Summary — 面积、周长、圆度、Feret 直径、实心度等，每个形状一行',
+        spheroidInvasive:
+          'Image Metrics — 每幅图像一行，含解体指数、核心与侵袭面积以及扩散指标面板',
+        wound:
+          'Polygon Metrics + Summary + WoundTimeSeries — 愈合曲线，并内嵌图表',
+        sperm: 'Sperm Metrics — 头部、中段、尾部与总长度，每个细胞一行',
+        microtubules:
+          'Microtubule Metrics + Channel Totals — 长度与各通道强度，按帧、纤维与通道各一行',
+        microcapsule:
+          'Microcapsule Metrics + Summary — 每个完整胶囊一行；被边缘截断的胶囊会被排除',
       },
-      exportFormats: '指标导出格式',
-      exportFormatsList: {
-        excel: 'Excel（.xlsx）：格式化电子表格',
-        csv: 'CSV：逗号分隔值',
-        jsonExport: 'JSON：结构化格式',
-      },
-      visualizationCustomization: '可视化自定义',
-      customizationOptions: {
-        colors: '可自定义的多边形颜色',
-        numbering: '可显示/隐藏的编号',
-        strokeWidth: '可调整的线条粗细',
-        fontSize: '可控制的字体大小',
-        transparency: '可设置的透明度',
-      },
+      scaleTitle: '像素尺寸与单位',
+      scaleText:
+        '填入以微米为单位的像素尺寸，所有长度与面积都会自动换算。若文件自带标定，该字段会自动填好。没有可用数值时导出会退回像素单位，请留意列标题中的单位。',
       howToExport: '如何导出',
       exportSteps: {
-        step1: '转到仪表板',
-        step2: '选择图像',
-        step3: '点击"高级导出"',
-        step4: '配置设置',
-        step5: '查看摘要',
-        step6: '点击"开始导出"',
+        step1: '打开项目并点击「导出」',
+        step2: '选择要包含的图像，或全部包含',
+        step3: '若需要微米单位请填写像素尺寸，并选择可视化配色',
+        step4: '勾选所需的标注与测量格式',
+        step5: '启动导出并等待 — 进度会实时显示',
+        step6: '完成后压缩包会自动下载',
       },
-      exportNote: '导出包是全面的：',
-      exportNoteText: '每个导出都包含文档和元数据。',
+      exportNote: '某个环节失败不会导致整个导出失败。',
+      exportNoteText:
+        '可选环节失败只会产生警告，压缩包的其余部分照常生成。对于微管强度，降级运行还会记录在压缩包内的 metrics_status.json 以及测量说明的开头 — 在依赖某张表单之前请先查看这两处。',
     },
-    sharedProjects: {
-      title: '共享项目',
+
+    // 自动化实验
+    automatedEssays: {
+      title: '自动化实验',
       description:
-        'SpheroSeg允许您通过共享项目与同事合作。与其他研究人员共享您的分割结果和注释，以便审查和合作。',
-      sharingFeatures: '共享功能',
-      features: {
-        readOnly: '只读访问：接收者可以查看但不能修改您的数据',
-        emailInvite: '电子邮件邀请：通过电子邮件共享，自动发送通知',
-        revokeAccess: '可撤销访问：随时移除共享权限',
-        multipleCollaborators: '多个协作者：与整个研究团队共享',
+        '一项独立于项目体系之外的微管批量实验。上传一个装有 Nikon ND2 孔位记录的文件夹，即可为每根纤维得到一行结果：长度、沿纤维的强度及其局部背景。',
+      howTo: '运行一个批次',
+      steps: {
+        step1: '从头像下方的菜单中打开「自动化实验」',
+        step2: '把装有 .nd2 文件的文件夹拖到页面上，或使用选择文件夹按钮',
+        step3: '等待 — 任务逐个执行，只要还有任务在运行，列表就会自动刷新',
+        step4:
+          '下载压缩包，或使用「重新运行」在不再次上传的情况下重新处理同一批文件',
       },
-      howToShare: '如何共享项目',
-      shareSteps: {
-        step1: '打开您要共享的项目',
-        step2: '在项目工具栏中点击"共享"按钮',
-        step3: '输入协作者的电子邮件地址',
-        step4: '添加解释共享内容的可选消息',
-        step5: '点击"发送邀请"以共享项目',
+      results: '您会得到什么',
+      resultsList: {
+        csv: 'results.csv — 每根微管一行，包含长度、沿纤维的强度及其背景',
+        failures:
+          'failures.csv — 每一个未能处理的孔位或视野及其原因。即使为空也始终会生成',
+        overlays:
+          '每个视野两张叠加图：一张用于核对分割与其输入是否吻合，另一张用于核对测量条带是否落在信号上',
+        annotations: '每个视野一个 JSON 文件，包含追踪出的中心线及其长度',
       },
-      permissionsNote: '重要提示：',
-      permissionsNoteText:
-        '共享项目对接收者是只读的。他们可以查看分割结果、导出数据，但不能修改原始注释。这确保了数据完整性，同时实现了协作。',
+      channelNote: 'IRM 用于分割，荧光用于测量。',
+      channelNoteText:
+        '模型是在 IRM 上训练的，因此纤维在 IRM 中追踪，荧光通道只沿这些轨迹读取。缺少 IRM 通道的文件会被记为失败，而不会改用其他通道分割。',
+      retentionNote: '上传的文件会被清理，结果则不会。',
+      retentionNoteText:
+        '运行顺利结束后输入文件会被删除；若运行不顺利则保留一周 — 而那恰恰是您可能想重跑的一次。结果会一直保留，直到您删除该任务。',
     },
+
+    // Segmenter
+    segmenter: {
+      title: 'Segmenter',
+      description:
+        '一个独立的多边形标注工具，拥有自己的数据集与类别调色板，与项目体系和分割编辑器彼此独立。',
+      features: {
+        datasets: '创建数据集并向其中上传静态图像；数据集仅您本人可见。',
+        classes:
+          '自定义类别的名称与颜色。删除类别时其多边形会保留，只是取消该类别的指派。',
+        polygons:
+          '绘制、编辑与删除闭合多边形，并为每个多边形指定类别。完全支持相互重叠的多边形。',
+        saving:
+          '保存必须显式触发 — 使用保存按钮或 Ctrl+S — 若已有标注加载失败则会禁用保存，以免空白画布覆盖掉真实成果。',
+      },
+      scopeNote: '目前仅支持手动标注。',
+      scopeNoteText:
+        'Segmenter 尚未引入任何机器学习：没有预标注、没有主动学习，也没有导出功能。可通过 /segmenter 访问。',
+    },
+
+    // 共享
+    sharedProjects: {
+      title: '共享与协作',
+      description:
+        '通过电子邮件或链接把项目共享给同事。对方接受后，项目会出现在他们自己的仪表板中。',
+      sharingFeatures: '共享所授予的权限',
+      features: {
+        collaborative:
+          '协作访问：协作者可以查看、修改标注、运行分割、导出，并把项目标记为已审核',
+        emailInvite:
+          '邮件邀请：无论邮件是否送达，共享都已生效 — 邮件投递可能需要数分钟',
+        linkShare: '链接共享：链接会绑定到接受它的人，可选设置有效期',
+        revokeAccess: '可随时撤销，立即生效',
+        multipleCollaborators: '协作者数量不限，各自可把项目归入自己的文件夹',
+      },
+      howToShare: '共享步骤',
+      shareSteps: {
+        step1: '打开要共享的项目',
+        step2: '在项目工具栏中点击「共享」',
+        step3: '输入协作者的电子邮箱，或创建一个链接',
+        step4: '发送邀请',
+        step5: '在同一个对话框中管理或撤销共享，每一条都会显示其状态',
+      },
+      permissionsNote: '共享意味着协作，而不仅仅是只读。',
+      permissionsNoteText:
+        '协作者可以修改标注；在视频中，他们的改动与您的改动一样会波及所有帧。只有所有者才能重命名项目、更改其类型、继续对外共享或删除它。',
+    },
+
+    // 疑难解答
+    troubleshooting: {
+      title: '疑难解答',
+      description: '用户真正会遇到的问题，以及它们的成因。',
+      table: {
+        symptom: '现象',
+        cause: '原因与处理',
+      },
+      items: {
+        uploadRejected: {
+          symptom: '文件在上传开始前就被拒绝',
+          cause:
+            '单张图像上限为 20 MB。更大的 TIFF 会按堆栈处理，适用 100 GB 的上限。通道名称超过 64 个字符会被直接拒绝 — 请用更短的标签重新导出。',
+        },
+        darkFrames: {
+          symptom: '画面几乎全黑',
+          cause:
+            '高位深数据需要设置窗宽窗位。请使用该通道的「最小值」「最大值」滑块；每个通道各有自己的窗口。',
+        },
+        noDetections: {
+          symptom: '模型几乎没有检出结果',
+          cause:
+            '请先检查对比度与项目类型。只在阈值可调之处才下调置信度阈值 — 微管模型按设计会忽略它。',
+        },
+        wrongChannel: {
+          symptom: '形状很多，却与图像中的任何结构都对不上',
+          cause:
+            '分割的是错误的通道。请在通道列表中明确设置分割源；微管模型只适用于 IRM。',
+        },
+        colorsChange: {
+          symptom: '目标的颜色在不同帧之间发生变化',
+          cause:
+            '该容器的跨帧追踪尚未完成。颜色取决于轨迹身份，因此未被追踪的帧会得到新颜色。',
+        },
+        exportSlow: {
+          symptom: '导出停在 95 %',
+          cause:
+            '那是压缩阶段。对于大型项目，尤其是包含时空图时，确实需要一些时间。',
+        },
+        lostEdits: {
+          symptom: '修改不见了',
+          cause:
+            '重新分割会替换该帧的分割结果；点击面包屑导航则会在后台保存尚未必然完成时就跳转。离开前请先按 Ctrl+S。',
+        },
+      },
+      helpNote: '仍未解决？',
+      helpNoteText:
+        '请使用反馈按钮提交缺陷报告或功能建议 — 它会直接送达维护者。',
+    },
+
+    // 页脚导航
     footer: {
       backToHome: '返回首页',
       backToTop: '返回顶部',

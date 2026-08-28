@@ -178,17 +178,39 @@ curl https://spherosegapp.utia.cas.cz/health
 
 ## Documentation
 
+**[Full documentation index →](docs/README.md)** · the in-app user manual is at
+[`/documentation`](https://spherosegapp.utia.cas.cz/documentation) and has a
+search box.
+
+### For users
+
+| Topic                       | Link                                                                     |
+| --------------------------- | ------------------------------------------------------------------------ |
+| User guide                  | [docs/guides/user-guide.md](docs/guides/user-guide.md)                   |
+| Project types (all six)     | [docs/guides/project-types.md](docs/guides/project-types.md)             |
+| Uploading data              | [docs/guides/uploading-data.md](docs/guides/uploading-data.md)           |
+| Videos, frames and channels | [docs/guides/videos-and-channels.md](docs/guides/videos-and-channels.md) |
+| Segmentation editor         | [docs/guides/segmentation-editor.md](docs/guides/segmentation-editor.md) |
+| Export and metrics          | [docs/guides/export.md](docs/guides/export.md)                           |
+| Automated Essays            | [docs/guides/automated-essays.md](docs/guides/automated-essays.md)       |
+
+### For developers
+
 | Topic                 | Link                                                                       |
 | --------------------- | -------------------------------------------------------------------------- |
 | Architecture Overview | [docs/architecture/README.md](docs/architecture/README.md)                 |
 | Frontend Architecture | [docs/architecture/frontend.md](docs/architecture/frontend.md)             |
 | Backend Architecture  | [docs/architecture/backend.md](docs/architecture/backend.md)               |
 | ML Service            | [docs/architecture/ml-service.md](docs/architecture/ml-service.md)         |
+| ML Models (all ten)   | [docs/reference/ml-models.md](docs/reference/ml-models.md)                 |
+| Metrics reference     | [docs/reference/metrics.md](docs/reference/metrics.md)                     |
 | Database Schema       | [docs/reference/database-schema.md](docs/reference/database-schema.md)     |
 | API Reference         | [docs/api/README.md](docs/api/README.md)                                   |
+| Contributing          | [docs/development/contributing.md](docs/development/contributing.md)       |
 | Testing Guide         | [docs/testing-guide.md](docs/testing-guide.md)                             |
 | i18n Guide            | [docs/i18n-guide.md](docs/i18n-guide.md)                                   |
 | Getting Started       | [docs/development/getting-started.md](docs/development/getting-started.md) |
+| Deployment            | [docs/deployment/README.md](docs/deployment/README.md)                     |
 
 ## About
 
