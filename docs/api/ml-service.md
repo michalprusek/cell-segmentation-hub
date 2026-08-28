@@ -113,6 +113,14 @@ along each centerline plus a background ring that excludes every other
 microtubule. Channels added after upload are read from their per-frame PNGs
 instead, since that is the only place their pixels exist.
 
+A channel the microscope refreshed only every N-th frame leaves the timepoints
+in between as a constant fill in the raw file, so the caller passes
+`sparse_fill` (gap frame → the frame it reads from) and those frames are
+measured on the plane that stands in for them rather than on the fill. Every row
+reports `source_frame_index`, the frame its intensity actually came from, so a
+repeat is never mistaken for an independent observation; the whole-video channel
+totals count only the frames that exposed the channel.
+
 ### `POST /api/v1/mt-background-rois`
 
 Returns the exact background region each measurement used, as an ImageJ

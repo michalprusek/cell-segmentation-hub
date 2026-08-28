@@ -243,6 +243,13 @@ notice a missing column.
   single frame-global background; older exports are not directly comparable).
 - **signalMinusBackground** — meanIntensity − medianBackground
   (background-corrected mean).
+- **channelFrameSource** — the frame this row's intensity was actually measured
+  on. It equals \`frameIndex\` on every ordinary row, and differs only for a
+  channel the microscope refreshed every N-th timepoint (see "Channels the
+  microscope did not refresh every frame" below), where it names the frame
+  whose exposure stood in. Blank on a geometry-only fallback row, where nothing
+  was measured. It is the **last** column so that the existing ones keep their
+  positions for scripts that read \`metrics.csv\` by column number.
 
 Intensity is derived from the **raw 16-bit** ND2/TIFF signal, not the 8-bit
 display-normalised per-channel PNGs. The sampling band width (\`thickness\`)
@@ -264,6 +271,35 @@ built once per frame and reused for every channel — so \`lengthPx\`,
 \`areaPx\` and \`pixelCount\` are identical across a microtubule's channel rows.
 Only the intensity/background columns differ.
 
+### Channels the microscope did not refresh every frame
+
+A time-lapse does not have to capture every channel on every timepoint. A
+common setup images the fluorescence continuously but refreshes the label-free
+IRM reference only every N-th frame, and the acquisition software still writes
+the un-acquired planes into the file (as a flat, constant fill). SpheroSeg
+detects those planes at upload and shows the nearest real exposure in their
+place, so the editor never displays a black frame — but a **measurement** taken
+there repeats another frame's exposure; it is not a new observation.
+
+The \`channelFrameSource\` column says which: it holds the frame the pixels came
+from, so a row where it differs from \`frameIndex\` is a repeat. In the wide
+view the same information is per channel (\`IRM_channelFrameSource\`), because
+only the sparse channel repeats — the fluorescent channels of the same frame
+are genuine.
+
+To reduce a per-frame time series to independent observations, keep the rows
+where \`channelFrameSource\` **equals** \`frameIndex\`. Test for equality, not
+for an ordering: the stand-in is usually an earlier frame, but frames before
+the channel's *first* exposure read forward from it, so a video whose IRM
+starts at frame 4 has \`channelFrameSource\` = 4 on frames 0-3.
+
+Nothing is dropped from the export: a missing row would read as "no data" when
+the truth is "no *new* data".
+
+The **Channel totals** below follow the same rule: such a channel's un-exposed
+planes are left out of them too, and the \`frames\` column says how many went
+in.
+
 ### Wide view — \`metrics_wide.csv\` / \`.json\`, or the "Microtubule Metrics (wide)" sheet
 
 The same numbers, pivoted: **one row per (frame, microtubule)**, with each
@@ -276,11 +312,11 @@ line without pivoting yourself.
   depend on the channel.
 - Every other column is named **\`<channel>_<measure>\`** — e.g.
   \`IRM_meanIntensity\`, \`TIRF_488_meanIntensity\`,
-  \`IRM_signalMinusBackground\`. The seven per-channel measures are
+  \`IRM_signalMinusBackground\`. The eight per-channel columns are
   \`sumIntensity\`, \`meanIntensity\`, \`medianIntensity\`, \`stdIntensity\`,
-  \`medianBackground\`, \`meanBackground\` and \`signalMinusBackground\`; they
-  mean exactly what the same-named columns in \`metrics.csv\` mean, and are
-  read from the same **raw 16-bit** source.
+  \`medianBackground\`, \`meanBackground\`, \`signalMinusBackground\` and
+  \`channelFrameSource\`; they mean exactly what the same-named columns in
+  \`metrics.csv\` mean, and are read from the same **raw 16-bit** source.
 - Columns follow each channel's first appearance, i.e. the video's own channel
   order; rows are in the same reading order as \`metrics.csv\`
   (frame-ascending).
@@ -307,6 +343,13 @@ channel across the whole video, independent of the microtubules — a global
 "how bright is this channel overall" measure, distinct from the per-MT band
 sums above. Present whenever intensity was computed; absent on a
 geometry-only fallback (there is no raster read to total).
+
+For a channel the microscope did not refresh every frame, its un-exposed planes
+are left out — the \`frames\` column says how many planes went in. Including
+them would divide the real signal by the full frame count and report a mean the
+channel never had. (A timepoint the microscope skipped **entirely**, every
+channel blank, still counts here — it dilutes every channel of that video
+equally, so the columns stay comparable with each other.)
 
 ### Geometry-only fallback
 

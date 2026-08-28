@@ -338,11 +338,14 @@ describe('writeMTMetrics — wide files alongside the long ones', () => {
     await writeMTMetrics(rows(), dir, ['csv'], summaries);
     const csv = await fsp.readFile(path.join(dir, 'metrics.csv'), 'utf8');
     const lines = csv.trimEnd().split('\n');
+    // `channelFrameSource` is APPENDED, not slotted in beside `channel`: the
+    // long format is the canonical file and is read by column number outside
+    // this repo, so every pre-existing column keeps its position.
     expect(lines[0]).toBe(
       'frameIndex,imageName,label,mtType,instanceId,trackId,channel,lengthPx,' +
         'lengthUm,areaPx,areaUm2,pixelCount,sumIntensity,meanIntensity,' +
         'medianIntensity,stdIntensity,medianBackground,meanBackground,' +
-        'signalMinusBackground'
+        'signalMinusBackground,channelFrameSource'
     );
     expect(lines).toHaveLength(93); // header + all 92 long rows
   });
@@ -431,7 +434,9 @@ describe('writeMTMetrics — wide files alongside the long ones', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('too large for an Excel sheet'),
       'mtMetricsExporter',
-      expect.objectContaining({ cells: 1175, budget: 100 })
+      // 47 rows (header + 46 microtubule-frames) x 27 columns
+      // (11 shared + 8 measures x 2 channels).
+      expect.objectContaining({ cells: 1269, budget: 100 })
     );
   });
 
@@ -459,6 +464,71 @@ describe('writeMTMetrics — wide files alongside the long ones', () => {
     // The long sheet is still first and still long-format.
     const long = workbook.getWorksheet('Microtubule Metrics')!;
     expect(long.rowCount).toBe(93);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sparse channels in the wide view.
+//
+// Sparseness is a property of ONE channel: on a video whose IRM is refreshed
+// every third frame, the IRM columns of the frames in between repeat the last
+// real measurement while the TIRF columns beside them are genuine. A single
+// per-row flag could not say that, which is why the provenance column is
+// per-channel.
+// ---------------------------------------------------------------------------
+
+describe('pivotMTMetricsWide — a sparse channel beside a dense one', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  /** The real rows with frame 1's IRM re-pointed at frame 0, i.e. the shape
+   *  the ML service returns for a container whose IRM was not re-exposed. */
+  const sparseRows = (): MTMetricsRow[] =>
+    rows().map(r =>
+      r.frameIndex === 1 && r.channel === 'IRM'
+        ? { ...r, channelFrameSource: 0 }
+        : r
+    );
+
+  it('marks only the sparse channel as propagated, per row', () => {
+    const wide = pivotMTMetricsWide(sparseRows());
+    const frame1 = wide.rows.filter(r => r.frameIndex === 1);
+    expect(frame1).toHaveLength(23);
+    for (const w of frame1) {
+      expect(w.channels.IRM.channelFrameSource).toBe(0);
+      expect(w.channels.TIRF_488.channelFrameSource).toBe(1);
+    }
+    for (const w of wide.rows.filter(r => r.frameIndex === 0)) {
+      expect(w.channels.IRM.channelFrameSource).toBe(0);
+      expect(w.channels.TIRF_488.channelFrameSource).toBe(0);
+    }
+  });
+
+  it('writes the per-channel provenance into metrics_wide.csv', async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'mt-wide-sparse-'));
+    try {
+      await writeMTMetrics(sparseRows(), dir, ['csv'], []);
+      const lines = (
+        await fsp.readFile(path.join(dir, 'metrics_wide.csv'), 'utf8')
+      )
+        .trimEnd()
+        .split('\n');
+      const header = lines[0].split(',');
+      const irmSrc = header.indexOf('IRM_channelFrameSource');
+      const tirfSrc = header.indexOf('TIRF_488_channelFrameSource');
+      const frameIdx = header.indexOf('frameIndex');
+      expect(irmSrc).toBeGreaterThan(-1);
+      expect(tirfSrc).toBeGreaterThan(-1);
+
+      // Every frame-1 row must disagree with its own frameIndex on IRM and
+      // agree on TIRF — that difference is the whole readable signal.
+      const body = lines.slice(1).map(l => l.split(','));
+      const frame1 = body.filter(c => c[frameIdx] === '1');
+      expect(frame1).toHaveLength(23);
+      expect(frame1.every(c => c[irmSrc] === '0')).toBe(true);
+      expect(frame1.every(c => c[tirfSrc] === '1')).toBe(true);
+    } finally {
+      await fsp.rm(dir, { recursive: true, force: true });
+    }
   });
 });
 
