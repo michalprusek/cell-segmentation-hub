@@ -1288,6 +1288,8 @@ export default {
         'Pro-MT-Länge, -Fläche und kanalweise Intensität aus der rohen ND2/TIFF-Datei. Hintergrundkorrektur über den Median außerhalb der dilatierten MT-Maske.',
       intensityNote:
         'Die kanalweise Signalintensität — einschließlich der summierten (integrierten) Intensität — wird immer für jeden Kanal berechnet und in die Metriktabelle geschrieben. Keine Auswahl erforderlich.',
+      wideNote:
+        'Jeder Kanal erhält in metrics.csv eine eigene Zeile (siehe Spalte „channel“). Die Begleitdatei metrics_wide.csv — ein zusätzliches Blatt in metrics.xlsx — stellt alle Kanäle desselben Mikrotubulus in eine Zeile, mit einem Spaltensatz pro Kanal.',
       thicknessLabel: 'MT-Dicke (px)',
       thicknessHelp:
         'Breite des Abtastbands entlang jeder Polyline. 5 px entspricht dem typischen Mikrotubulus-Durchmesser bei 100× Widefield.',

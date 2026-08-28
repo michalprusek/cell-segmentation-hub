@@ -1272,6 +1272,8 @@ export default {
         'Délka, plocha a intenzita signálu pro každý MT z původního ND2/TIFF souboru. Odečteno median pozadí (mimo dilatovanou masku MT).',
       intensityNote:
         'Intenzita signálu podle kanálu — včetně součtové (integrované) intenzity — se vždy vypočítá pro každý kanál a zapíše do tabulky metrik. Není třeba nic vybírat.',
+      wideNote:
+        'Každý kanál má vlastní řádek v metrics.csv (viz sloupec „channel“). Doprovodný soubor metrics_wide.csv — a další list v metrics.xlsx — dá všechny kanály téhož mikrotubulu na jeden řádek, pro každý kanál jednu sadu sloupců.',
       thicknessLabel: 'Tloušťka MT (px)',
       thicknessHelp:
         'Šířka pásu podél polyline, ze kterého se sbírá signál. 5 px odpovídá běžnému průměru mikrotubulu při 100× widefield.',
