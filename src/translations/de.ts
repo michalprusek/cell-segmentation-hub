@@ -95,7 +95,7 @@ export default {
         'Segmentierung biomedizinischer Bilder · ÚTIA, Tschechische Akademie der Wissenschaften',
       title: 'Segmentierung für jede Probe, die Sie aufnehmen.',
       subtitle:
-        'Sphäroide und ihr Zerfall, Wunden aus dem Scratch-Assay, Spermienmorphologie, Mikrotubuli-Filamente, Mikrokapseln — für jeden Typ ein trainiertes Modell, für alle ein Editor und ein Export, den ImageJ, COCO und YOLO bereits verstehen.',
+        'Sphäroide und ihr Zerfall, Wunden aus dem Scratch-Assay, Spermienmorphologie, Mikrotubuli-Filamente, Mikrokapseln, Neuronen und ihre Fortsätze — für jeden Typ ein trainiertes Modell, für alle ein Editor und ein Export, den ImageJ, COCO und YOLO bereits verstehen.',
       getStarted: 'Loslegen',
       learnMore: 'Was die Plattform kann',
     },
@@ -137,6 +137,12 @@ export default {
           'Hellfeld, 1280 × 1024. Zwei vollständige Kapseln sind rot umrissen — für genau diese gibt es Fläche, Umfang und Kompaktheit. Die vom Bildrand angeschnittenen Kapseln tragen keinen roten Umriss: das Modell markiert sie, und die Statistik lässt sie weg.',
         alt: 'Hellfeldaufnahme von Mikrokapseln, die zwei vollständigen rot umrissen, die vom Bildrand angeschnittenen ohne Umriss.',
       },
+      neurite: {
+        label: 'Neuriten & Somata',
+        detail:
+          'Konfokale Fluoreszenz, Tubulin-Kanal — ein Ausschnitt von 1400 × 1400 aus einer Aufnahme von 6657 × 6664. Jedes Neuron wird zweigeteilt: der Zellkörper in Magenta, jeder Fortsatz in Cyan, sodass Somazahl und Fortsatzlänge getrennt gemessen werden und nicht als ein einziger Fleck.',
+        alt: 'Konfokale Fluoreszenzaufnahme kultivierter Neuronen, jeder Zellkörper magenta umrissen und die davon ausgehenden Fortsätze cyan umrissen.',
+      },
     },
     about: {
       badge: 'Wer dahintersteht',
@@ -146,7 +152,7 @@ export default {
       description2:
         'Dieses Projekt ist eine Zusammenarbeit mit der Gruppe von Ing. Silvie Rimpelová, Ph.D. vom Institut für Biochemie und Mikrobiologie der UCT Prag (VŠCHT Praha).',
       description3:
-        'Es begann bei Tumorsphäroiden und wuchs mit den Experimenten, die unsere Kooperationspartner mitbrachten: Zerfallsassays, Wunden aus dem Scratch-Assay, Spermienmorphologie, Mikrotubuli-Zeitraffer und Mikrokapseln. Jeder Probentyp hat sein eigenes trainiertes Modell, seine eigenen Metriken und seinen eigenen Export — dahinter steht ein Editor.',
+        'Es begann bei Tumorsphäroiden und wuchs mit den Experimenten, die unsere Kooperationspartner mitbrachten: Zerfallsassays, Wunden aus dem Scratch-Assay, Spermienmorphologie, Mikrotubuli-Zeitraffer, Mikrokapseln und kultivierte Neuronen. Jeder Probentyp hat sein eigenes trainiertes Modell, seine eigenen Metriken und seinen eigenen Export — dahinter steht ein Editor.',
       contactText: 'Für Anfragen kontaktieren Sie uns bitte unter',
     },
     acknowledgments: {
@@ -1461,7 +1467,7 @@ export default {
     badge: 'Dokumentation',
     title: 'SpheroSeg-Dokumentation',
     subtitle:
-      'Alles, was die Plattform kann, für alle sechs Projekttypen — durchsuchbar',
+      'Alles, was die Plattform kann, für alle sieben Projekttypen — durchsuchbar',
     backTo: 'Zurück zu {{page}}',
 
     // Suche
@@ -1498,11 +1504,11 @@ export default {
       title: 'Einführung',
       whatIs: 'Was ist SpheroSeg?',
       description:
-        'SpheroSeg ist eine Plattform für KI-gestützte Segmentierung und Vermessung mikroskopischer Bilder und Zeitrafferaufnahmen. Sie bietet sechs Projekttypen auf Basis von zehn Segmentierungsmodellen, einen Editor für Polygone und Polylinien, bildübergreifendes Mikrotubuli-Tracking und einen Stapel-Export.',
+        'SpheroSeg ist eine Plattform für KI-gestützte Segmentierung und Vermessung mikroskopischer Bilder und Zeitrafferaufnahmen. Sie bietet sieben Projekttypen auf Basis von elf Segmentierungsmodellen, einen Editor für Polygone und Polylinien, bildübergreifendes Mikrotubuli-Tracking und einen Stapel-Export.',
       developedBy:
         'Die Plattform wurde von Bc. Michal Průšek an der Fakultät für Nuklearwissenschaften und Physikalische Ingenieurwissenschaften der Tschechischen Technischen Universität Prag unter der Betreuung von Ing. Adam Novozámský, Ph.D. entwickelt, in Zusammenarbeit mit dem Institut für Biochemie und Mikrobiologie der UCT Prag.',
       addresses:
-        'Ausgangspunkt war die schwierige Aufgabe, Sphäroidgrenzen in der Mikroskopie zu bestimmen. Heute deckt die Plattform auch zerfallende Sphäroide, Wundheilungsassays, Spermienmorphologie, Mikrotubuli-Zeitraffer und Mikrokapseln ab — jeweils mit eigenem Modell, eigenen Messgrößen und eigenem Exportformat.',
+        'Ausgangspunkt war die schwierige Aufgabe, Sphäroidgrenzen in der Mikroskopie zu bestimmen. Heute deckt die Plattform auch zerfallende Sphäroide, Wundheilungsassays, Spermienmorphologie, Mikrotubuli-Zeitraffer, Mikrokapseln und kultivierte Neuronen ab — jeweils mit eigenem Modell, eigenen Messgrößen und eigenem Exportformat.',
     },
 
     // Erste Schritte
@@ -1577,6 +1583,13 @@ export default {
             'Für: runde Mikrokapseln im Hellfeld, auch wenn sie einander berühren.',
           output:
             'Ergebnis: ein geschlossenes Polygon je Kapsel. Vom Bildrand angeschnittene Kapseln fließen nicht in die Messwerte ein.',
+        },
+        neurite: {
+          name: 'Neuriten & Somata',
+          bestFor:
+            'Für: kultivierte Neuronen in der Fluoreszenzmikroskopie, gelesen aus dem Tubulin-Kanal. Die Frage ist, wie viel einer Zelle Zellkörper und wie viel Fortsatz ist.',
+          output:
+            'Ausgabe: geschlossene Polygone in zwei Klassen — Soma (der Zellkörper) und Neurit (die Fortsätze) — in Magenta und Cyan gezeichnet.',
         },
       },
       note: 'Wählen Sie den Typ vor dem Hochladen.',
@@ -1670,7 +1683,7 @@ export default {
     modelSelection: {
       title: 'Modelle',
       description:
-        'Zehn Modelle, jedes an die Projekttypen gebunden, für die es trainiert wurde. Die Auswahl zeigt nur kompatible Modelle, und eine echte Wahl haben nur Standard-Sphäroidprojekte — alle anderen Typen haben genau eines.',
+        'Elf Modelle, jedes an die Projekttypen gebunden, für die es trainiert wurde. Die Auswahl zeigt nur kompatible Modelle, und eine echte Wahl haben nur Standard-Sphäroidprojekte — alle anderen Typen haben genau eines.',
       spheroidModels: 'Sphäroidmodelle — Sie haben die Wahl',
       specialisedModels: 'Spezialmodelle — eines je Projekttyp',
       models: {
@@ -1749,6 +1762,15 @@ export default {
           bestFor: 'Verwendet von: Mikrokapselprojekten.',
           description:
             'Ein kompaktes U-Net, destilliert aus Meta SAM 3, mit Watershed zum Trennen sich berührender Kapseln. Vom Bildrand angeschnittene Kapseln werden markiert und aus den Messwerten ausgenommen.',
+        },
+        neuriteSoma: {
+          name: 'Neurit / Soma',
+          inferenceTime:
+            'Etwa 12 s für ein Bild von 2048 × 2048 · kein Schwellenwert — entschieden wird per Argmax',
+          bestFor:
+            'Verwendet von: Neuriten- und Soma-Projekten. Nur Fluoreszenz, Tubulin-Kanal.',
+          description:
+            'Ein Ensemble aus drei Folds von nnU-Net v2 ResEnc-M, im Logit-Raum gemittelt, mit Spiegelungs-Augmentierung zur Inferenzzeit und einem clDice-Topologieterm, der dünne Fortsätze zusammenhängend statt perlenartig hält. Auf zurückgehaltenen Daten Dice 0,832 Neurit / 0,915 Soma. Trainiert auf Leica-Konfokaldaten bei etwa 0,180 µm/px — bei halber Pixelgröße kommt jedes Soma meist zweigeteilt zurück, prüfen Sie Somazahlen also zuerst.',
         },
       },
       howToSelect: 'Ein Modell wählen',
@@ -1976,6 +1998,8 @@ export default {
           'Microtubule Metrics + Channel Totals — Länge und Intensität je Kanal, eine Zeile je Einzelbild, Filament und Kanal',
         microcapsule:
           'Microcapsule Metrics + Summary — eine Zeile je vollständiger Kapsel; angeschnittene Kapseln entfallen',
+        neurite:
+          'Polygon Metrics + Summary — derselbe Bericht pro Form wie bei Standard-Sphäroidprojekten, eine Zeile je Neuriten- oder Soma-Polygon',
       },
       scaleTitle: 'Pixelgröße und Einheiten',
       scaleText:
@@ -2594,7 +2618,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Plattform für Segmentierung und Analyse mikroskopischer Aufnahmen für biomedizinische Forscher — Sphäroide, Wundheilung, Spermien, Mikrokapseln und Mikrotubuli, mit KI-gestützten Werkzeugen vom Bild bis zur Messung.',
+      'Plattform für Segmentierung und Analyse mikroskopischer Aufnahmen für biomedizinische Forscher — Sphäroide, Wundheilung, Spermien, Mikrokapseln, Mikrotubuli und Neuronen, mit KI-gestützten Werkzeugen vom Bild bis zur Messung.',
     contact: 'Kontakt',
     institution: 'Institution',
     institutionName: 'ÚTIA AV ČR',

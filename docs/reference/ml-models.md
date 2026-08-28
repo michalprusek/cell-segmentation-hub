@@ -3,7 +3,7 @@
 Every segmentation model the platform can run: what it is, what it was trained
 on, what it outputs, how fast it is, and what it will not do.
 
-There are **ten** models. Each one is locked to one or more project types — the
+There are **eleven** models. Each one is locked to one or more project types — the
 model picker only offers compatible models, and the backend rejects an
 incompatible pair with a 400 even if you post it directly.
 
@@ -30,6 +30,7 @@ incompatible pair with a 400 even if you post it directly.
 | `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5               | ~0.30 s              | medium      |
 | `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.97 (fixed)      | ~4.5 s (p95 9 s)     | large       |
 | `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5               | ~0.30 s              | small       |
+| `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | n/a (argmax)      | ~12 s at 2048²       | large       |
 
 Timings are the registry's recorded measurements on an NVIDIA A5000 and are
 end-to-end (pre-process → inference → post-process → polygon extraction), not
@@ -53,6 +54,7 @@ slower; see [GPU configuration](../GPU-CONFIGURATION.md).
 | `sperm`             | `sperm`                                                             |
 | `microtubules`      | `microtubule`                                                       |
 | `microcapsule`      | `microcapsule`                                                      |
+| `neurite`           | `neurite_soma`                                                      |
 
 `spheroid_disintegration` is deliberately **absent** from plain `spheroid`
 projects: core detection is tied to its post-processing path, so anyone who
@@ -271,6 +273,72 @@ Instance segmentation of round microcapsules in bright-field microscopy.
   **excluded from metrics** (area, perimeter, compactness) — a clipped capsule
   would otherwise drag every distribution down.
 - Requires `segmentation-models-pytorch` and `scikit-image`.
+
+---
+
+## `neurite_soma` — Neurite / Soma
+
+Two-class semantic segmentation of cultured neurons in fluorescence microscopy:
+**neurite** (the processes) and **soma** (the cell body), read from the tubulin
+channel alone.
+
+- Architecture: **nnU-Net v2 ResEnc-M**, 2D `ResidualEncoderUNet`, 8 stages,
+  features 32 → 512. Patch 512 × 512, sliding window at step 0.5 with Gaussian
+  tile weighting and mirroring TTA; **3 folds averaged in logit space**.
+- Loss: Dice + cross-entropy + a **clDice** topology term on the neurite class,
+  which is what keeps thin processes connected rather than beaded.
+- Checkpoint: `weights/neurite_soma/` (`fold_0.pth`, `fold_1.pth`, `fold_2.pth`
+  plus `plans.json` and `dataset.json`; the network is rebuilt from the plans).
+  Staged by `scripts/download-neurite-soma-weights.sh`. Nothing is downloaded at
+  run time and no `HF_TOKEN` is involved.
+- Does **not** require `nnunetv2`: the network definition is nnU-Net's own,
+  vendored unmodified, while normalisation, the sliding window, the tile
+  weighting, the TTA and the fold ensemble are reimplemented. Verified against
+  `nnUNetv2_predict` on the same weights: 99.9999 % identical pixels, neurite
+  IoU 0.999943, soma IoU 0.999965.
+- Held-out accuracy (grouped leave-one-condition-out over 9 annotated frames):
+  **Dice 0.832 neurite / 0.915 soma**.
+
+### Its threshold does not exist
+
+The decision is a **3-class argmax** over averaged logits (0 background,
+1 neurite, 2 soma). There is no probability cut to move. The registry carries a
+neutral `0.5` and the API echoes whatever you send, but
+`predict_neurite_soma()` ignores it — exactly as the held-out Dice was measured.
+No value you can send changes the output; if detections are wrong, the input
+channel or the pixel size is the thing to look at.
+
+### Input is the tubulin channel, and the stretch is part of the input
+
+The wrapper applies a **1–99.5 percentile stretch, then a z-score**, because the
+training polygons were drawn on frames that had already been through that
+stretch. Native bit depth is preserved on the way in — a 16-bit frame is read as
+16-bit rather than quantised to 8-bit first — so the stretch lands where it was
+fitted. A genuinely multi-channel frame is rejected rather than averaged into a
+mixture the model never saw.
+
+### Runtime scales with area, and it is slow
+
+Cost is a sliding window over the frame, so it grows with pixel count, not with
+the number of cells: roughly **3–4 s at 1024², 12–15 s at 2048², and ~150 s** on
+the 6657 × 6664 confocal frames the model was trained on. The spread is card
+load — the two in-repo measurements were taken at different loads, and a warm
+1400² request measured 7.9 s while the live service held the same GPU.
+Inference is serialised behind a lock in the ML service, so a large frame stalls
+that worker — including its health endpoint — for the duration.
+
+### Known limits
+
+- **Pixel size.** Trained at ~0.180 µm/px. On ~0.090 µm/px data each soma tends
+  to come back split into roughly two pieces — measured, not suspected. Validate
+  soma counts before trusting them at a different pixel size.
+- **One microscope.** Leica confocal, one run, nine annotated frames. It has
+  never seen spinning-disk or widefield data.
+- **Faint processes may be missed**; treat unusually low neurite coverage as a
+  flag rather than a result.
+- **Soma area runs slightly generous** against expert ground truth.
+
+More in [Neurite and soma projects](../guides/project-types/neurite.md).
 
 ---
 

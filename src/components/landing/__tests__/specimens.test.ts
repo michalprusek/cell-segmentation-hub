@@ -62,7 +62,8 @@ describe('landing specimens', () => {
       '#0ea5e9', // internal contour
       '#22c55e', // spheroid core / sperm head
       '#f59e0b', // sperm midpiece
-      '#06b6d4', // sperm tail
+      '#06b6d4', // sperm tail, and neurite processes
+      '#d946ef', // neurite soma (cell body)
       '#969696', // border-cut microcapsule, excluded from metrics
     ]);
     for (const specimen of SPECIMENS) {

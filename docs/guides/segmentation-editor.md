@@ -115,6 +115,13 @@ What the new polyline becomes depends on the project type, not on any guess:
 - **microtubules** — gets a new microtubule instance id, no part class;
 - anything else — a generic polyline instance id.
 
+Neurite projects produce **closed polygons**, so a shape you draw there is an
+ordinary polygon with no class. Segmented shapes carry one, and the canvas and
+the shape list colour them by it: **cyan** for `neurite` (the processes) and
+**magenta** for `soma` (the cell body), the same two colours the model's own
+overlay uses. Unlike the sperm part classes, there is no menu for changing a
+neuron class after the fact.
+
 ### Adding vertices
 
 <kbd>A</kbd> with a shape selected. Two behaviours:

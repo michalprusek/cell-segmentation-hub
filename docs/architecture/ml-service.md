@@ -63,8 +63,9 @@ least-recently-used when memory is tight.
 A wrapper whose optional dependency is missing resolves to `None` and the model
 simply **does not appear in the catalogue** rather than failing at inference
 time. That is why SegFormer disappears without `transformers`, Mamba-UNet
-without the `mamba_ssm`/`causal-conv1d` CUDA kernels, and the disintegration and
-microcapsule models without `segmentation-models-pytorch`.
+without the `mamba_ssm`/`causal-conv1d` CUDA kernels, the disintegration and
+microcapsule models without `segmentation-models-pytorch`, and Neurite / Soma
+without its own wrapper import.
 
 Model identity is mirrored in three registries (Python, backend, frontend) and a
 parity script fails CI on drift. Adding a model touches roughly nine files
