@@ -396,6 +396,45 @@ describe('VisualizationGenerator', () => {
       expect(strokeStyles).toContain('#22c55e');
     });
 
+    it('uses cyan (#06b6d4) for CLOSED polygons with partClass=neurite', async () => {
+      // The neuron classes tag closed polygons, not polylines, so this must
+      // route through the closed-polygon arm — a regression here means the
+      // class is painted as a plain external polygon.
+      await gen.generateVisualization(
+        '/img/test.png',
+        [{ ...makeExternalPolygon(), partClass: 'neurite' } as Polygon],
+        '/out/out.png'
+      );
+      const strokeStyles = allSetCalls('strokeStyle');
+      expect(strokeStyles).toContain('#06b6d4');
+      expect(strokeStyles).not.toContain('#FF0000');
+    });
+
+    it('uses magenta (#d946ef) for CLOSED polygons with partClass=soma', async () => {
+      await gen.generateVisualization(
+        '/img/test.png',
+        [{ ...makeExternalPolygon(), partClass: 'soma' } as Polygon],
+        '/out/out.png'
+      );
+      const strokeStyles = allSetCalls('strokeStyle');
+      expect(strokeStyles).toContain('#d946ef');
+      expect(strokeStyles).not.toContain('#FF0000');
+    });
+
+    it('leaves POLYLINES untouched by the neuron colours', async () => {
+      // Guards the `isPolyline ? undefined : NEURON_COLORS[...]` guard: a
+      // sperm tail must keep its own cyan-by-partClass path, and a neuron
+      // class on a polyline (which the model never emits) must not hijack the
+      // polyline default.
+      await gen.generateVisualization(
+        '/img/test.png',
+        [makePolyline({ partClass: 'neurite' } as never)],
+        '/out/out.png'
+      );
+      const strokeStyles = allSetCalls('strokeStyle');
+      expect(strokeStyles).toContain('#a855f7'); // polyline default
+    });
+
     it('uses head colour (#22c55e) for polylines with partClass=head', async () => {
       await gen.generateVisualization(
         '/img/test.png',

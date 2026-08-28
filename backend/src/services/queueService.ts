@@ -632,7 +632,7 @@ export class QueueService {
     // concurrent /api/v1/segment requests which OOM the ML container.  When the
     // first batch we picked is one of these, cap the dispatch to a single
     // batch and let the next tick pick up the rest.
-    const SERIAL_DISPATCH_MODELS = new Set(['microtubule']);
+    const SERIAL_DISPATCH_MODELS = new Set(['microtubule', 'neurite_soma']);
 
     for (let i = 0; i < maxBatches; i++) {
       const batchItems = await this.getNextBatchExcluding(processedImageIds);

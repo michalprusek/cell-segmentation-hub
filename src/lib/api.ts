@@ -98,7 +98,7 @@ export interface SegmentationRequest {
   threshold?: number;
 }
 
-import type { SpermPartClass } from '@/lib/segmentation';
+import type { PolygonPartClass } from '@/lib/segmentation';
 import type { EssayJob, EssayJobOptions } from '@/types/essays';
 
 /** One microtubule type-label in a project's palette (SSOT for name + colour).
@@ -118,9 +118,12 @@ export interface SegmentationPolygon {
   confidence?: number;
   area?: number;
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
-  /** Sperm polyline part — shared with editor's SpermPartClass to avoid
-   *  drift if the model's part vocabulary expands. */
-  partClass?: SpermPartClass;
+  /** Semantic class of the shape: a sperm polyline part, the spheroid
+   *  disintegration 'core', or a neurite/soma class. Shared with the editor's
+   *  `PolygonPartClass` so the wire type cannot narrow below what the backend
+   *  actually sends — it was `SpermPartClass` while 'core' was already on the
+   *  wire, and a neuron class would have been the second such mismatch. */
+  partClass?: PolygonPartClass;
   instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
   /** Cross-frame microtubule track ID populated by backend tracker after a
    *  video container's batch finishes segmentation. Sibling polylines for
