@@ -44,11 +44,7 @@ vi.mock('@/lib/retryUtils', async importOriginal => {
   return { ...original, retryWithBackoff: vi.fn() };
 });
 
-import {
-  lazyWithRetry,
-  LazyImportErrorBoundary,
-  LazyWithRetryWrapper,
-} from '@/lib/lazyWithRetry';
+import { lazyWithRetry, LazyImportErrorBoundary } from '@/lib/lazyWithRetry';
 import { retryWithBackoff } from '@/lib/retryUtils';
 import { toast } from 'sonner';
 
@@ -80,12 +76,6 @@ function makeBoomOnce(message: string): React.FC {
 function Fine() {
   return <div>fine</div>;
 }
-
-// A lazy component whose import never resolves — keeps a Suspense boundary in
-// its fallback state so the fallback UI can be asserted.
-const NeverResolves = React.lazy(
-  () => new Promise<{ default: React.FC }>(() => {})
-);
 
 // Install a real Map-backed sessionStorage (the global setup.ts mock is a no-op
 // stub) so the throttle read/write logic can be exercised. Returns a restore fn.
@@ -431,35 +421,3 @@ describe('LazyImportErrorBoundary UI', () => {
 });
 
 // ─── 5. LazyWithRetryWrapper — Suspense fallback ──────────────────────────────
-
-describe('LazyWithRetryWrapper', () => {
-  it('renders children when nothing suspends', () => {
-    render(
-      <LazyWithRetryWrapper componentName="TestComp">
-        <div>hello</div>
-      </LazyWithRetryWrapper>
-    );
-    expect(screen.getByText('hello')).toBeDefined();
-  });
-
-  it('shows the default spinner (with componentName) while a child suspends', () => {
-    render(
-      <LazyWithRetryWrapper componentName="Editor">
-        <NeverResolves />
-      </LazyWithRetryWrapper>
-    );
-    expect(screen.getByText(/Loading Editor/i)).toBeDefined();
-  });
-
-  it('shows a custom fallback instead of the default spinner', () => {
-    render(
-      <LazyWithRetryWrapper
-        fallback={<span>custom-loader</span>}
-        componentName="C"
-      >
-        <NeverResolves />
-      </LazyWithRetryWrapper>
-    );
-    expect(screen.getByText('custom-loader')).toBeDefined();
-  });
-});

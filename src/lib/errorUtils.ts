@@ -104,38 +104,6 @@ export function extractErrorMessage(
 }
 
 /**
- * Creates a user-friendly error message with optional details
- *
- * @param error - The error object
- * @param context - Context about where the error occurred
- * @param fallbackKey - Translation key for fallback message
- * @param t - Translation function
- * @returns Formatted error message
- */
-export function formatErrorMessage(
-  error: unknown,
-  context?: string,
-  fallbackKey?: string,
-  t?: (key: string) => string
-): string {
-  const { message, code } = extractErrorMessage(error, fallbackKey, t);
-
-  let formattedMessage = message;
-
-  // Add context if provided
-  if (context) {
-    formattedMessage = `${context}: ${message}`;
-  }
-
-  // Add error code for debugging (only in development)
-  if (code && process.env.NODE_ENV === 'development') {
-    formattedMessage += ` (${code})`;
-  }
-
-  return formattedMessage;
-}
-
-/**
  * Checks if an error is a network error
  */
 export function isNetworkError(error: unknown): boolean {
@@ -279,29 +247,5 @@ export function handleCancelledError(
     });
     return true;
   }
-  return false;
-}
-
-/**
- * Safe error handler that checks for cancellation first, then handles other errors
- * Returns true if the error was handled (cancelled or processed), false if it should bubble up
- */
-export function handleRequestError(
-  error: unknown,
-  context: string,
-  onError?: (error: unknown) => void
-): boolean {
-  // First check if it's a cancellation - these are expected and should be silent
-  if (handleCancelledError(error, context)) {
-    return true;
-  }
-
-  // Handle other errors
-  if (onError) {
-    onError(error);
-    return true;
-  }
-
-  // Error not handled
   return false;
 }

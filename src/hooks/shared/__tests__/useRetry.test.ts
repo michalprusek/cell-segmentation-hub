@@ -37,7 +37,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-import { useRetry, useRetryImport } from '../useRetry';
+import { useRetry } from '../useRetry';
 import { AllProviders } from '@/test/utils/test-providers';
 import { toast } from 'sonner';
 
@@ -765,31 +765,3 @@ describe('useRetry', () => {
 // ---------------------------------------------------------------------------
 // useRetryImport
 // ---------------------------------------------------------------------------
-
-describe('useRetryImport', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('returns the .default export of a resolved dynamic import', async () => {
-    const fakeDefault = { Component: 'FakeComponent' };
-    const importFn = vi.fn().mockResolvedValue({ default: fakeDefault });
-
-    const { result } = renderHook(() => useRetryImport(), { wrapper });
-
-    let value: typeof fakeDefault | undefined;
-    await act(async () => {
-      const promise = result.current(importFn);
-      await vi.runAllTimersAsync();
-      value = await promise;
-    });
-
-    expect(value).toBe(fakeDefault);
-    expect(importFn).toHaveBeenCalledTimes(1);
-  });
-});

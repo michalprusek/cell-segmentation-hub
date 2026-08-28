@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
-  applyThresholding,
-  findContours,
-  segmentImage,
   calculatePerimeter,
   polygonKey,
   type Point,
@@ -11,7 +8,6 @@ import {
 import { calculatePolygonArea } from '@/lib/polygonGeometry';
 import {
   createTestPolygons,
-  createMockImageData,
   measurePerformance,
 } from '@/test-utils/polygonTestUtils';
 
@@ -42,265 +38,6 @@ describe('Segmentation Algorithms', () => {
   beforeEach(() => {
     testPolygons = createTestPolygons();
     vi.clearAllMocks();
-  });
-
-  describe('applyThresholding', () => {
-    it('should apply binary thresholding correctly', async () => {
-      // Mock Image constructor and loading
-      const mockImg = {
-        crossOrigin: '',
-        width: 100,
-        height: 100,
-        onload: null as any,
-        onerror: null as any,
-        src: '',
-      };
-
-      const mockCanvas = document.createElement('canvas');
-      const mockCtx = {
-        drawImage: vi.fn(),
-        getImageData: vi
-          .fn()
-          .mockReturnValue(createMockImageData(100, 100, 'gradient')),
-      };
-
-      vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
-      vi.spyOn(mockCanvas, 'getContext').mockReturnValue(mockCtx as any);
-
-      // Create mock Image constructor
-      global.Image = vi.fn().mockImplementation(() => mockImg);
-
-      const thresholdPromise = applyThresholding('test-image.jpg', 128);
-
-      // Simulate image load
-      setTimeout(() => {
-        if (mockImg.onload) {
-          mockImg.onload({} as any);
-        }
-      }, 0);
-
-      const result = await thresholdPromise;
-
-      expect(result).toBeDefined();
-      expect(mockCtx.drawImage).toHaveBeenCalledWith(mockImg, 0, 0);
-      expect(mockCtx.getImageData).toHaveBeenCalledWith(0, 0, 100, 100);
-    });
-
-    it('should handle different threshold values', async () => {
-      const mockImg = {
-        crossOrigin: '',
-        width: 10,
-        height: 10,
-        onload: null as any,
-        onerror: null as any,
-        src: '',
-      };
-
-      const mockCanvas = document.createElement('canvas');
-      const imageData = createMockImageData(10, 10, 'gradient');
-      const mockCtx = {
-        drawImage: vi.fn(),
-        getImageData: vi.fn().mockReturnValue(imageData),
-      };
-
-      vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
-      vi.spyOn(mockCanvas, 'getContext').mockReturnValue(mockCtx as any);
-      global.Image = vi.fn().mockImplementation(() => mockImg);
-
-      const thresholdPromise = applyThresholding('test-image.jpg', 200); // High threshold
-
-      setTimeout(() => {
-        if (mockImg.onload) {
-          mockImg.onload({} as any);
-        }
-      }, 0);
-
-      const result = await thresholdPromise;
-      expect(result).toBeDefined();
-
-      // Check that data was modified (would be mostly black with high threshold)
-      const data = result.data;
-      let blackPixels = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i] === 0) blackPixels++; // Count black pixels
-      }
-      expect(blackPixels).toBeGreaterThan(0);
-    });
-
-    it('should reject on image load error', async () => {
-      const mockImg = {
-        crossOrigin: '',
-        width: 100,
-        height: 100,
-        onload: null as any,
-        onerror: null as any,
-        src: '',
-      };
-
-      global.Image = vi.fn().mockImplementation(() => mockImg);
-
-      const thresholdPromise = applyThresholding('invalid-image.jpg');
-
-      // Simulate image error
-      setTimeout(() => {
-        if (mockImg.onerror) {
-          mockImg.onerror({} as any);
-        }
-      }, 0);
-
-      await expect(thresholdPromise).rejects.toThrow('Failed to load image');
-    });
-
-    it('should reject when canvas context is unavailable', async () => {
-      const mockImg = {
-        crossOrigin: '',
-        width: 100,
-        height: 100,
-        onload: null as any,
-        onerror: null as any,
-        src: '',
-      };
-
-      const mockCanvas = document.createElement('canvas');
-      vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
-      vi.spyOn(mockCanvas, 'getContext').mockReturnValue(null); // Simulate failure
-
-      global.Image = vi.fn().mockImplementation(() => mockImg);
-
-      const thresholdPromise = applyThresholding('test-image.jpg');
-
-      setTimeout(() => {
-        if (mockImg.onload) {
-          mockImg.onload({} as any);
-        }
-      }, 0);
-
-      await expect(thresholdPromise).rejects.toThrow(
-        'Failed to get canvas context'
-      );
-    });
-
-    it('should apply correct grayscale conversion', async () => {
-      const mockImg = {
-        crossOrigin: '',
-        width: 2,
-        height: 2,
-        onload: null as any,
-        onerror: null as any,
-        src: '',
-      };
-
-      const mockCanvas = document.createElement('canvas');
-
-      // Create specific test image data
-      const testImageData = createMockImageData(2, 2);
-      // Set first pixel to white (255, 255, 255, 255)
-      testImageData.data[0] = 255; // R
-      testImageData.data[1] = 255; // G
-      testImageData.data[2] = 255; // B
-      testImageData.data[3] = 255; // A
-
-      // Set second pixel to black (0, 0, 0, 255)
-      testImageData.data[4] = 0; // R
-      testImageData.data[5] = 0; // G
-      testImageData.data[6] = 0; // B
-      testImageData.data[7] = 255; // A
-
-      const mockCtx = {
-        drawImage: vi.fn(),
-        getImageData: vi.fn().mockReturnValue(testImageData),
-      };
-
-      vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
-      vi.spyOn(mockCanvas, 'getContext').mockReturnValue(mockCtx as any);
-      global.Image = vi.fn().mockImplementation(() => mockImg);
-
-      const thresholdPromise = applyThresholding('test-image.jpg', 128);
-
-      setTimeout(() => {
-        if (mockImg.onload) {
-          mockImg.onload({} as any);
-        }
-      }, 0);
-
-      const result = await thresholdPromise;
-
-      // First pixel (white) should become white (255)
-      expect(result.data[0]).toBe(255);
-      expect(result.data[1]).toBe(255);
-      expect(result.data[2]).toBe(255);
-
-      // Second pixel (black) should become black (0)
-      expect(result.data[4]).toBe(0);
-      expect(result.data[5]).toBe(0);
-      expect(result.data[6]).toBe(0);
-    });
-  });
-
-  describe('findContours', () => {
-    it('should return empty array as documented', () => {
-      const mockImageData = createMockImageData(100, 100);
-      const contours = findContours(mockImageData);
-
-      expect(contours).toEqual([]);
-      expect(Array.isArray(contours)).toBe(true);
-    });
-
-    it('should handle different image sizes', () => {
-      const smallImage = createMockImageData(10, 10);
-      const largeImage = createMockImageData(1000, 1000);
-
-      expect(findContours(smallImage)).toEqual([]);
-      expect(findContours(largeImage)).toEqual([]);
-    });
-
-    it('should handle edge cases gracefully', () => {
-      const tinyImage = createMockImageData(1, 1);
-      const emptyImage = createMockImageData(0, 0);
-
-      expect(() => findContours(tinyImage)).not.toThrow();
-      expect(() => findContours(emptyImage)).not.toThrow();
-      expect(findContours(tinyImage)).toEqual([]);
-      expect(findContours(emptyImage)).toEqual([]);
-    });
-  });
-
-  describe('segmentImage', () => {
-    it('should return empty segmentation result', async () => {
-      const result = await segmentImage('test-image.jpg');
-
-      expect(result).toBeDefined();
-      expect(result.imageSrc).toBe('test-image.jpg');
-      expect(result.polygons).toEqual([]);
-      expect(result.imageWidth).toBe(0);
-      expect(result.imageHeight).toBe(0);
-      expect(result.timestamp).toBeInstanceOf(Date);
-    });
-
-    it('should handle different image sources', async () => {
-      const sources = [
-        'image1.png',
-        'path/to/image2.jpg',
-        'https://example.com/image3.gif',
-      ];
-
-      for (const src of sources) {
-        const result = await segmentImage(src);
-        expect(result.imageSrc).toBe(src);
-        expect(result.polygons).toEqual([]);
-      }
-    });
-
-    it('should create results with recent timestamps', async () => {
-      const before = new Date();
-      const result = await segmentImage('test.jpg');
-      const after = new Date();
-
-      expect(result.timestamp.getTime()).toBeGreaterThanOrEqual(
-        before.getTime()
-      );
-      expect(result.timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
-    });
   });
 
   describe('calculatePolygonArea', () => {
@@ -431,38 +168,6 @@ describe('Segmentation Algorithms', () => {
   });
 
   describe('Performance Tests', () => {
-    it('should apply thresholding efficiently for reasonable image sizes', async () => {
-      // Skip actual image loading in performance test
-      const mockImg = {
-        crossOrigin: '',
-        width: 500,
-        height: 500,
-        onload: null as any,
-        onerror: null as any,
-        src: '',
-      };
-
-      const mockCanvas = document.createElement('canvas');
-      const mockCtx = {
-        drawImage: vi.fn(),
-        getImageData: vi.fn().mockReturnValue(createMockImageData(500, 500)),
-      };
-
-      vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
-      vi.spyOn(mockCanvas, 'getContext').mockReturnValue(mockCtx as any);
-      global.Image = vi.fn().mockImplementation(() => mockImg);
-
-      const performance = await measurePerformance(async () => {
-        const promise = applyThresholding('test.jpg');
-        setTimeout(() => {
-          if (mockImg.onload) mockImg.onload({} as any);
-        }, 0);
-        await promise;
-      }, 10);
-
-      expect(performance.averageTime).toBeLessThan(500); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
-    });
-
     it('should calculate polygon metrics efficiently for large polygons', async () => {
       const performance = await measurePerformance(() => {
         calculatePolygonArea(testPolygons.large);
@@ -474,14 +179,6 @@ describe('Segmentation Algorithms', () => {
   });
 
   describe('Integration and Edge Cases', () => {
-    it('should handle malformed image data gracefully', () => {
-      // Create invalid ImageData
-      const invalidImageData = createMockImageData(1, 1);
-      invalidImageData.data[0] = NaN;
-
-      expect(() => findContours(invalidImageData)).not.toThrow();
-    });
-
     it('should handle very large coordinates', () => {
       const largePolygon: Point[] = [
         { x: 0, y: 0 },
@@ -555,16 +252,6 @@ describe('Segmentation Algorithms', () => {
   });
 
   describe('Type Safety and API Consistency', () => {
-    it('should maintain consistent return types', async () => {
-      const result = await segmentImage('test.jpg');
-
-      expect(typeof result.imageSrc).toBe('string');
-      expect(Array.isArray(result.polygons)).toBe(true);
-      expect(typeof result.imageWidth).toBe('number');
-      expect(typeof result.imageHeight).toBe('number');
-      expect(result.timestamp).toBeInstanceOf(Date);
-    });
-
     it('should handle null/undefined inputs consistently', () => {
       // These functions don't currently handle null gracefully - test actual behavior
       expect(() => calculatePolygonArea(null as any)).toThrow();

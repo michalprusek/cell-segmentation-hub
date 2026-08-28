@@ -9,11 +9,6 @@ import type {
   QueueStats,
   SegmentationCompletedMessage,
   SegmentationFailedMessage,
-  WebSocketEventMap as _WebSocketEventMap,
-  SegmentationStatusMessage as _SegmentationStatusMessage,
-  QueueStatsMessage as _QueueStatsMessage,
-  WebSocketConnectionOptions as _WebSocketConnectionOptions,
-  IWebSocketManager as _IWebSocketManager,
 } from '@/types/websocket';
 
 // Define internal message types for backward compatibility

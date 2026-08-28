@@ -410,31 +410,6 @@ class PerformanceMonitor {
 // Singleton instance
 export const performanceMonitor = new PerformanceMonitor();
 
-// Helper functions for common use cases
-export const measureThumbnailRender = (
-  polygonCount: number,
-  pointCount: number
-) => {
-  return performanceMonitor.measureRender('thumbnail', {
-    polygonCount,
-    pointCount,
-  });
-};
-
-export const measureApiCall = (
-  endpoint: string,
-  metadata?: Record<string, any>
-) => {
-  return performanceMonitor.measureApiCall(endpoint, metadata);
-};
-
-export const measureCanvasOperation = (
-  operation: string,
-  metadata?: Record<string, any>
-) => {
-  return performanceMonitor.measureCanvasDraw(operation, metadata);
-};
-
 // Automatic performance reporting (every 5 minutes in development)
 if (process.env.NODE_ENV === 'development') {
   setInterval(

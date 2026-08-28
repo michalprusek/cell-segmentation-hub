@@ -42,26 +42,6 @@ export const downloadBlob = (blob: Blob, options: DownloadOptions): void => {
 };
 
 /**
- * Downloads data from an Axios response
- * Handles both blob and arraybuffer response types
- */
-export const downloadFromResponse = async (
-  response: any,
-  filename: string
-): Promise<void> => {
-  try {
-    // Check if response.data is already a Blob
-    const blob =
-      response.data instanceof Blob ? response.data : new Blob([response.data]);
-
-    downloadBlob(blob, { filename });
-  } catch (error) {
-    logger.error('Failed to download from response', error);
-    throw error;
-  }
-};
-
-/**
  * Downloads JSON data as a formatted file
  */
 export const downloadJSON = (data: any, filename: string): void => {
@@ -87,46 +67,4 @@ export const downloadExcel = (blob: Blob, filename: string): void => {
     contentType:
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-};
-
-/**
- * Downloads CSV file from string content
- */
-export const downloadCSV = (content: string, filename: string): void => {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  downloadBlob(blob, {
-    filename: filename.endsWith('.csv') ? filename : `${filename}.csv`,
-    contentType: 'text/csv',
-  });
-};
-
-/**
- * Checks if the browser supports large file downloads
- * Some browsers have limits on blob URLs
- */
-export const canDownloadLargeFiles = (): boolean => {
-  // Most modern browsers support large blobs, but we check for specific cases
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isOldSafari =
-    userAgent.includes('safari') &&
-    !userAgent.includes('chrome') &&
-    parseInt(userAgent.match(/version\/(\d+)/)?.[1] || '0') < 14;
-
-  return !isOldSafari;
-};
-
-/**
- * Alternative download method using iframe for large files
- * Fallback for browsers that can't handle large blob URLs
- */
-export const downloadUsingIframe = (url: string): void => {
-  const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  iframe.src = url;
-  document.body.appendChild(iframe);
-
-  // Remove iframe after download starts
-  setTimeout(() => {
-    document.body.removeChild(iframe);
-  }, 5000);
 };

@@ -2,30 +2,6 @@
  * Performance utilities for smooth animations and optimized rendering
  */
 
-// RequestAnimationFrame wrapper for smooth updates
-export function rafSchedule<T extends unknown[]>(
-  callback: (...args: T) => void
-): (...args: T) => void {
-  let rafId: number | null = null;
-  let lastArgs: T | null = null;
-
-  return (...args: T) => {
-    lastArgs = args;
-
-    if (rafId !== null) {
-      return; // Already scheduled
-    }
-
-    rafId = requestAnimationFrame(() => {
-      if (lastArgs) {
-        callback(...lastArgs);
-        lastArgs = null;
-      }
-      rafId = null;
-    });
-  };
-}
-
 // Throttle function with requestAnimationFrame for smooth 60fps updates
 export function rafThrottle<T extends unknown[]>(
   callback: (...args: T) => void,
@@ -128,89 +104,5 @@ export class ProgressiveRenderer {
 
   get isInProgress() {
     return this.isAnimating;
-  }
-}
-
-// Spatial indexing for efficient viewport culling
-export class SpatialIndex {
-  private points: { x: number; y: number; index: number }[] = [];
-  private sortedByX: { x: number; y: number; index: number }[] = [];
-  private sortedByY: { x: number; y: number; index: number }[] = [];
-
-  updatePoints(points: { x: number; y: number }[]) {
-    this.points = points.map((point, index) => ({ ...point, index }));
-    this.sortedByX = [...this.points].sort((a, b) => a.x - b.x);
-    this.sortedByY = [...this.points].sort((a, b) => a.y - b.y);
-  }
-
-  getVisibleIndices(
-    viewportX: number,
-    viewportY: number,
-    viewportWidth: number,
-    viewportHeight: number,
-    buffer: number = 50
-  ): number[] {
-    const minX = viewportX - buffer;
-    const maxX = viewportX + viewportWidth + buffer;
-    const minY = viewportY - buffer;
-    const maxY = viewportY + viewportHeight + buffer;
-
-    // Binary search for X range
-    const xStart = this.binarySearch(this.sortedByX, minX, 'x');
-    const xEnd = this.binarySearchEnd(this.sortedByX, maxX, 'x');
-
-    // Get candidates from X range
-    const xCandidates = this.sortedByX.slice(xStart, xEnd + 1);
-
-    // Filter by Y range
-    const visible = xCandidates.filter(
-      point => point.y >= minY && point.y <= maxY
-    );
-
-    return visible.map(point => point.index);
-  }
-
-  private binarySearch(
-    arr: { x: number; y: number; index: number }[],
-    target: number,
-    key: 'x' | 'y'
-  ): number {
-    let left = 0;
-    let right = arr.length - 1;
-    let result = arr.length;
-
-    while (left <= right) {
-      const mid = Math.floor((left + right) / 2);
-      if (arr[mid][key] >= target) {
-        result = mid;
-        right = mid - 1;
-      } else {
-        left = mid + 1;
-      }
-    }
-
-    return result;
-  }
-
-  private binarySearchEnd(
-    arr: { x: number; y: number; index: number }[],
-    target: number,
-    key: 'x' | 'y'
-  ): number {
-    let left = 0;
-    let right = arr.length - 1;
-    let result = -1;
-
-    while (left <= right) {
-      const mid = Math.floor((left + right) / 2);
-      if (arr[mid][key] <= target) {
-        result = mid;
-        left = mid + 1;
-      } else {
-        right = mid - 1;
-      }
-    }
-
-    return result;
   }
 }

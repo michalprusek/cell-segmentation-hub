@@ -2,7 +2,6 @@ import { describe, test, expect, vi } from 'vitest';
 import type { AxiosError } from 'axios';
 import {
   extractErrorMessage,
-  formatErrorMessage,
   isNetworkError,
   isValidationError,
   isAuthError,
@@ -250,90 +249,6 @@ describe('Error Utils', () => {
       expect(result).toEqual({
         message: 'Valid error message',
       });
-    });
-  });
-
-  describe('formatErrorMessage', () => {
-    test('should format basic error message', () => {
-      const error = new Error('Test error');
-
-      const result = formatErrorMessage(error);
-
-      expect(result).toBe('Test error');
-    });
-
-    test('should add context to error message', () => {
-      const error = new Error('Test error');
-
-      const result = formatErrorMessage(error, 'Authentication');
-
-      expect(result).toBe('Authentication: Test error');
-    });
-
-    test('should add error code in development', () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
-
-      const axiosError: AxiosError = {
-        isAxiosError: true,
-        message: 'Request failed',
-        name: 'AxiosError',
-        config: {} as any,
-        toJSON: () => ({}),
-        response: {
-          status: 400,
-          statusText: 'Bad Request',
-          data: { error: 'Validation failed' },
-          headers: {},
-          config: {} as any,
-        },
-      };
-
-      const result = formatErrorMessage(axiosError, 'Validation');
-
-      expect(result).toBe('Validation: Validation failed (HTTP_400)');
-
-      process.env.NODE_ENV = originalEnv;
-    });
-
-    test('should not add error code in production', () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
-
-      const axiosError: AxiosError = {
-        isAxiosError: true,
-        message: 'Request failed',
-        name: 'AxiosError',
-        config: {} as any,
-        toJSON: () => ({}),
-        response: {
-          status: 400,
-          statusText: 'Bad Request',
-          data: { error: 'Validation failed' },
-          headers: {},
-          config: {} as any,
-        },
-      };
-
-      const result = formatErrorMessage(axiosError, 'Validation');
-
-      expect(result).toBe('Validation: Validation failed');
-
-      process.env.NODE_ENV = originalEnv;
-    });
-
-    test('should use translation function for fallback', () => {
-      const mockT = vi.fn().mockReturnValue('Localized error');
-
-      const result = formatErrorMessage(
-        null,
-        'Context',
-        'errors.general',
-        mockT
-      );
-
-      expect(result).toBe('Context: Localized error');
-      expect(mockT).toHaveBeenCalledWith('errors.general');
     });
   });
 

@@ -5,11 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  isCancelledError,
-  handleCancelledError,
-  handleRequestError,
-} from '../errorUtils';
+import { isCancelledError, handleCancelledError } from '../errorUtils';
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -105,45 +101,6 @@ describe('Race Condition Fix - Error Handling', () => {
       };
 
       const result = handleCancelledError(error, 'test context');
-
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('handleRequestError', () => {
-    it('should handle cancellation first and return true', () => {
-      const onError = vi.fn();
-      const error = {
-        name: 'CanceledError',
-        code: 'ERR_CANCELED',
-      };
-
-      const result = handleRequestError(error, 'test context', onError);
-
-      expect(result).toBe(true);
-      expect(onError).not.toHaveBeenCalled();
-    });
-
-    it('should call onError for non-cancelled errors', () => {
-      const onError = vi.fn();
-      const error = {
-        name: 'Error',
-        message: 'Network Error',
-      };
-
-      const result = handleRequestError(error, 'test context', onError);
-
-      expect(result).toBe(true);
-      expect(onError).toHaveBeenCalledWith(error);
-    });
-
-    it('should return false when no onError handler is provided for non-cancelled errors', () => {
-      const error = {
-        name: 'Error',
-        message: 'Network Error',
-      };
-
-      const result = handleRequestError(error, 'test context');
 
       expect(result).toBe(false);
     });

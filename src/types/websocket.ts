@@ -182,51 +182,6 @@ export type WebSocketMessage =
   | QueuePositionUpdateMessage;
 
 /**
- * Type guard functions for message type checking
- */
-export const isSegmentationStatusMessage = (
-  msg: WebSocketMessage
-): msg is SegmentationStatusMessage => msg.type === 'segmentationStatus';
-
-export const isQueueStatsMessage = (
-  msg: WebSocketMessage
-): msg is QueueStatsMessage => msg.type === 'queueStats';
-
-export const isSegmentationCompletedMessage = (
-  msg: WebSocketMessage
-): msg is SegmentationCompletedMessage => msg.type === 'segmentationCompleted';
-
-export const isSegmentationFailedMessage = (
-  msg: WebSocketMessage
-): msg is SegmentationFailedMessage => msg.type === 'segmentationFailed';
-
-export const isSegmentationProgressMessage = (
-  msg: WebSocketMessage
-): msg is SegmentationProgressMessage => msg.type === 'segmentationProgress';
-
-export const isConnectionStatusMessage = (
-  msg: WebSocketMessage
-): msg is ConnectionStatusMessage => msg.type === 'connectionStatus';
-
-export const isParallelProcessingStatusMessage = (
-  msg: WebSocketMessage
-): msg is ParallelProcessingStatusMessage =>
-  msg.type === 'parallelProcessingStatus';
-
-export const isConcurrentUserMessage = (
-  msg: WebSocketMessage
-): msg is ConcurrentUserMessage => msg.type === 'concurrentUsers';
-
-export const isProcessingStreamUpdateMessage = (
-  msg: WebSocketMessage
-): msg is ProcessingStreamUpdateMessage =>
-  msg.type === 'processingStreamUpdate';
-
-export const isQueuePositionUpdateMessage = (
-  msg: WebSocketMessage
-): msg is QueuePositionUpdateMessage => msg.type === 'queuePositionUpdate';
-
-/**
  * WebSocket event names mapped to their payload types
  */
 export interface WebSocketEventMap {
@@ -246,16 +201,6 @@ export interface WebSocketEventMap {
   disconnect: { reason?: string };
   error: Error;
   reconnect: { attemptNumber: number };
-}
-
-/**
- * Typed event emitter interface
- */
-export interface TypedEventEmitter<T extends Record<string, any>> {
-  on<K extends keyof T>(event: K, listener: (data: T[K]) => void): this;
-  off<K extends keyof T>(event: K, listener: (data: T[K]) => void): this;
-  emit<K extends keyof T>(event: K, data: T[K]): boolean;
-  once<K extends keyof T>(event: K, listener: (data: T[K]) => void): this;
 }
 
 /**
@@ -306,17 +251,4 @@ export interface WebSocketConnectionOptions {
   reconnectionDelayMax?: number;
   timeout?: number;
   autoConnect?: boolean;
-}
-
-/**
- * WebSocket manager interface
- */
-export interface IWebSocketManager extends TypedEventEmitter<WebSocketEventMap> {
-  connect(options?: WebSocketConnectionOptions): void;
-  disconnect(): void;
-  isConnected(): boolean;
-  send<K extends keyof WebSocketEventMap>(
-    event: K,
-    data: WebSocketEventMap[K]
-  ): void;
 }

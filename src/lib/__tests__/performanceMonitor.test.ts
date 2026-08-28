@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  performanceMonitor,
-  measureThumbnailRender,
-  measureApiCall,
-  measureCanvasOperation,
-} from '@/lib/performanceMonitor';
+import { performanceMonitor } from '@/lib/performanceMonitor';
 import { logger } from '@/lib/logger';
 
 // Mock logger (module-under-test only uses warn + debug)
@@ -272,48 +267,6 @@ describe('PerformanceMonitor', () => {
       expect(
         performanceMonitor.getStats('canvas-polygon-render')!.average
       ).toBe(5);
-    });
-
-    it('measures API call performance under an api- prefix', () => {
-      mockPerformanceNow.mockReturnValueOnce(0).mockReturnValueOnce(250);
-
-      performanceMonitor.measureApiCall('/api/projects', { method: 'GET' })();
-
-      expect(performanceMonitor.getStats('api-/api/projects')!.average).toBe(
-        250
-      );
-    });
-  });
-
-  describe('Exported Helper Functions', () => {
-    it('measureThumbnailRender records render-thumbnail with metadata', () => {
-      mockPerformanceNow.mockReturnValueOnce(0).mockReturnValueOnce(8);
-
-      measureThumbnailRender(10, 500)();
-
-      expect(performanceMonitor.getStats('render-thumbnail')!.average).toBe(8);
-      const recent = performanceMonitor.getRecentMetrics('render-thumbnail', 1);
-      expect(recent[0].metadata).toEqual({ polygonCount: 10, pointCount: 500 });
-    });
-
-    it('measureApiCall records under an api- prefix', () => {
-      mockPerformanceNow.mockReturnValueOnce(0).mockReturnValueOnce(120);
-
-      measureApiCall('/users/profile', { userId: '123' })();
-
-      expect(performanceMonitor.getStats('api-/users/profile')!.average).toBe(
-        120
-      );
-    });
-
-    it('measureCanvasOperation records under a canvas- prefix', () => {
-      mockPerformanceNow.mockReturnValueOnce(0).mockReturnValueOnce(15);
-
-      measureCanvasOperation('image-scale', { scale: 2.5 })();
-
-      expect(performanceMonitor.getStats('canvas-image-scale')!.average).toBe(
-        15
-      );
     });
   });
 

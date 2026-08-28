@@ -313,34 +313,6 @@ export function useRetry<T>(
 }
 
 /**
- * Hook for retrying failed dynamic imports
- */
-export function useRetryImport() {
-  const { execute } = useRetry({
-    preset: 'dynamicImport',
-    showToast: true,
-    errorMessage: 'Failed to load module. Retrying...',
-  });
-
-  const retryImport = useCallback(
-    async <T>(importFn: () => Promise<{ default: T }>): Promise<T> => {
-      const result = await execute(importFn);
-
-      if (result.success && result.data) {
-        return result.data.default;
-      }
-
-      // Fallback - reload the page
-      window.location.reload();
-      throw result.error;
-    },
-    [execute]
-  );
-
-  return retryImport;
-}
-
-/**
  * Hook for retrying image loads with fallback URLs
  */
 export function useRetryImage(urls: string[]) {

@@ -105,21 +105,6 @@ export const calculateCenteringTransform = (
 };
 
 /**
- * Calculate zoom factor for wheel events
- */
-export const calculateWheelZoom = (
-  currentZoom: number,
-  deltaY: number,
-  sensitivity: number = 0.001,
-  minZoom: number = 0.1,
-  maxZoom: number = 10
-): number => {
-  const zoomFactor = 1 - deltaY * sensitivity;
-  const newZoom = currentZoom * zoomFactor;
-  return Math.max(minZoom, Math.min(maxZoom, newZoom));
-};
-
-/**
  * Calculate zoom-in/out transform while keeping a point fixed
  */
 export const calculateFixedPointZoom = (
@@ -231,73 +216,5 @@ export const constrainTransform = (
     zoom,
     translateX,
     translateY,
-  };
-};
-
-/**
- * Check if a point is visible in the current viewport
- */
-export const isPointVisible = (
-  imagePoint: Point,
-  transform: TransformState,
-  canvasWidth: number,
-  canvasHeight: number,
-  margin: number = 50
-): boolean => {
-  const canvasPoint = imageToCanvasCoordinates(imagePoint, transform);
-
-  return (
-    canvasPoint.x >= -margin &&
-    canvasPoint.x <= canvasWidth + margin &&
-    canvasPoint.y >= -margin &&
-    canvasPoint.y <= canvasHeight + margin
-  );
-};
-
-/**
- * Check if a polygon is visible in the current viewport
- */
-export const isPolygonVisible = (
-  polygonPoints: Point[],
-  transform: TransformState,
-  canvasWidth: number,
-  canvasHeight: number,
-  margin: number = 50
-): boolean => {
-  // Simple approach: check if any vertex is visible
-  // For better performance with many polygons, could use bounding box intersection
-  return polygonPoints.some(point =>
-    isPointVisible(point, transform, canvasWidth, canvasHeight, margin)
-  );
-};
-
-/**
- * Get viewport bounds in image coordinates
- */
-export const getViewportBounds = (
-  transform: TransformState,
-  canvasWidth: number,
-  canvasHeight: number,
-  margin: number = 0
-): {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-} => {
-  const topLeft = canvasToImageCoordinates(
-    { x: -margin, y: -margin },
-    transform
-  );
-  const bottomRight = canvasToImageCoordinates(
-    { x: canvasWidth + margin, y: canvasHeight + margin },
-    transform
-  );
-
-  return {
-    minX: topLeft.x,
-    maxX: bottomRight.x,
-    minY: topLeft.y,
-    maxY: bottomRight.y,
   };
 };

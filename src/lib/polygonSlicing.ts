@@ -4,7 +4,6 @@ import {
   lineIntersection,
   lineRayIntersection,
   createPolygon,
-  calculatePolygonArea,
 } from './polygonGeometry';
 
 /**
@@ -581,100 +580,6 @@ export function validateSlicePolyline(
     };
   }
   return { isValid: true };
-}
-
-/**
- * Find suggested slice points that would create a valid slice
- * This can be used for UI hints or automatic slice suggestions
- */
-export function findSliceHints(polygon: Polygon, startPoint?: Point): Point[] {
-  const hints: Point[] = [];
-
-  if (!polygon.points || polygon.points.length < 4) {
-    return hints; // Need at least 4 points to slice meaningfully
-  }
-
-  if (startPoint) {
-    // Find points that would create valid slices from the start point
-    const points = polygon.points;
-
-    for (let i = 0; i < points.length; i++) {
-      const candidate = points[i];
-
-      // Skip if too close to start point
-      const dx = candidate.x - startPoint.x;
-      const dy = candidate.y - startPoint.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < 10) continue; // Minimum distance threshold
-
-      const validation = validateSliceLine(polygon, startPoint, candidate);
-      if (validation.isValid) {
-        hints.push(candidate);
-      }
-    }
-  }
-
-  return hints;
-}
-
-/**
- * Calculate the optimal slice line that would create two polygons with similar areas
- */
-export function findBalancedSlice(
-  polygon: Polygon,
-  precision: number = 10
-): { start: Point; end: Point } | null {
-  if (!polygon.points || polygon.points.length < 4) {
-    return null;
-  }
-
-  let bestSlice: { start: Point; end: Point; areaDifference: number } | null =
-    null;
-
-  // Sample points along polygon perimeter
-  const points = polygon.points;
-  const samplePoints: Point[] = [];
-
-  for (let i = 0; i < points.length; i++) {
-    samplePoints.push(points[i]);
-
-    // Add intermediate points along edges for better precision
-    const nextIndex = (i + 1) % points.length;
-    const edge = {
-      start: points[i],
-      end: points[nextIndex],
-    };
-
-    for (let t = 0.2; t < 1; t += 0.2) {
-      samplePoints.push({
-        x: edge.start.x + t * (edge.end.x - edge.start.x),
-        y: edge.start.y + t * (edge.end.y - edge.start.y),
-      });
-    }
-  }
-
-  // Try all combinations of sample points
-  for (let i = 0; i < samplePoints.length; i++) {
-    for (let j = i + precision; j < samplePoints.length; j++) {
-      const start = samplePoints[i];
-      const end = samplePoints[j];
-
-      const result = slicePolygon(polygon, start, end);
-      if (result) {
-        const [poly1, poly2] = result;
-        const area1 = calculatePolygonArea(poly1.points);
-        const area2 = calculatePolygonArea(poly2.points);
-        const areaDifference = Math.abs(area1 - area2);
-
-        if (!bestSlice || areaDifference < bestSlice.areaDifference) {
-          bestSlice = { start, end, areaDifference };
-        }
-      }
-    }
-  }
-
-  return bestSlice ? { start: bestSlice.start, end: bestSlice.end } : null;
 }
 
 // Note: calculatePolygonArea is now imported from polygonGeometry.ts to avoid code duplication

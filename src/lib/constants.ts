@@ -2,6 +2,18 @@
  * Centralized configuration constants for the Cell Segmentation Hub
  * Single Source of Truth (SSOT) for all magic numbers and configuration values
  *
+ * Reading env here: use `import.meta.env`, never `process.env`. There is no
+ * `process` global in the browser — Vite only substitutes the literal text
+ * `process.env.NODE_ENV`, so a `process.env.VITE_*` read survives into the
+ * served module and throws `ReferenceError: process is not defined` while the
+ * enclosing object literal is evaluated. That takes this module down, and with
+ * it `lib/api.ts` and `services/webSocketManager.ts`, which import it — the dev
+ * server rendered a blank page. Production escaped only because rollup
+ * tree-shook the offending object out of the bundle entirely; one new import of
+ * it would have shipped the crash. `import.meta.env.MODE` is the exact
+ * equivalent of a NODE_ENV compare ('development' under `vite dev`,
+ * 'production' under `vite build`, 'test' under vitest).
+ *
  * @module constants
  */
 
@@ -139,28 +151,6 @@ export const FILE_LIMITS = {
 } as const;
 
 /**
- * Rate limiting configurations (must match nginx settings)
- */
-export const RATE_LIMITS = {
-  /** General API requests per second */
-  GENERAL: 10,
-  /** API endpoint requests per second */
-  API: 30,
-  /** API burst capacity */
-  API_BURST: 80,
-  /** Segmentation requests per second */
-  SEGMENTATION: 100,
-  /** Segmentation burst capacity */
-  SEGMENTATION_BURST: 100,
-  /** Upload requests per second */
-  UPLOAD: 5,
-  /** Upload burst capacity */
-  UPLOAD_BURST: 10,
-  /** Download requests per second */
-  DOWNLOAD: 10,
-} as const;
-
-/**
  * Cache and storage configurations
  */
 export const STORAGE = {
@@ -176,52 +166,6 @@ export const STORAGE = {
   LOCAL_STORAGE_WARNING: 5 * 1024 * 1024,
   /** localStorage quota critical threshold (10MB) */
   LOCAL_STORAGE_CRITICAL: 10 * 1024 * 1024,
-} as const;
-
-/**
- * Pagination and list configurations
- */
-export const PAGINATION = {
-  /** Default page size for lists */
-  DEFAULT_PAGE_SIZE: 20,
-  /** Maximum page size allowed */
-  MAX_PAGE_SIZE: 100,
-  /** Default items per row in grid view */
-  GRID_COLUMNS: 4,
-  /** Items to preload for infinite scroll */
-  PRELOAD_THRESHOLD: 5,
-} as const;
-
-/**
- * WebSocket event names (must match backend)
- */
-export const WEBSOCKET_EVENTS = {
-  // Connection events
-  CONNECT: 'connect',
-  DISCONNECT: 'disconnect',
-  ERROR: 'error',
-
-  // Segmentation events
-  SEGMENTATION_STATUS: 'segmentationStatus',
-  SEGMENTATION_COMPLETED: 'segmentationCompleted',
-  SEGMENTATION_FAILED: 'segmentationFailed',
-  SEGMENTATION_PROGRESS: 'segmentationProgress',
-
-  // Queue events
-  QUEUE_STATS: 'queueStats',
-  QUEUE_UPDATE: 'queueUpdate',
-
-  // Export events
-  EXPORT_PROGRESS: 'exportProgress',
-  EXPORT_COMPLETED: 'exportCompleted',
-  EXPORT_FAILED: 'exportFailed',
-
-  // Upload events
-  UPLOAD_PROGRESS: 'uploadProgress',
-
-  // Project events
-  PROJECT_UPDATE: 'projectUpdate',
-  PROJECT_DELETE: 'projectDelete',
 } as const;
 
 /**
@@ -254,120 +198,10 @@ export const HTTP_STATUS = {
 } as const;
 
 /**
- * Test timeout configurations
- */
-export const TEST_TIMEOUTS = {
-  /** Unit test timeout */
-  UNIT: 1000,
-  /** Integration test timeout */
-  INTEGRATION: 5000,
-  /** End-to-end test timeout */
-  E2E: 30000,
-  /** Long-running test timeout */
-  LONG_RUNNING: 300000,
-} as const;
-
-/**
- * Animation and UI timing
- */
-export const UI_TIMING = {
-  /** Debounce delay for search inputs */
-  SEARCH_DEBOUNCE: 300,
-  /** Throttle delay for scroll handlers */
-  SCROLL_THROTTLE: 100,
-  /** Toast notification duration */
-  TOAST_DURATION: 5000,
-  /** Animation duration for transitions */
-  ANIMATION_DURATION: 200,
-  /** Delay before showing loading spinner */
-  LOADING_DELAY: 500,
-} as const;
-
-/**
- * Environment-specific configurations
- */
-// NOTE: this must read `import.meta.env`, not `process.env`. There is no
-// `process` global in the browser: Vite only substitutes the literal text
-// `process.env.NODE_ENV`, so every `process.env.VITE_*` read below used to
-// survive into the served module and throw `ReferenceError: process is not
-// defined` while this object literal was being evaluated. That took the whole
-// module down, and with it `lib/api.ts` and `services/webSocketManager.ts`,
-// which import it — the dev server rendered a blank page. Production happened
-// to escape only because rollup tree-shook `ENVIRONMENT` out of the bundle
-// entirely; one new import of it would have shipped the crash.
-// `import.meta.env.MODE` is the exact equivalent of the old NODE_ENV compare
-// ('development' under `vite dev`, 'production' under `vite build`, 'test'
-// under vitest).
-export const ENVIRONMENT = {
-  /** Check if running in development */
-  IS_DEVELOPMENT: import.meta.env.MODE === 'development',
-  /** Check if running in production */
-  IS_PRODUCTION: import.meta.env.MODE === 'production',
-  /** Check if running in test */
-  IS_TEST: import.meta.env.MODE === 'test',
-  /** API base URL */
-  API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001',
-  /** ML service URL */
-  ML_SERVICE_URL:
-    import.meta.env.VITE_ML_SERVICE_URL || 'http://localhost:8000',
-  /** WebSocket URL */
-  WS_URL: import.meta.env.VITE_WS_URL || 'ws://localhost:3001',
-} as const;
-
-/**
- * Validation patterns
- */
-export const VALIDATION = {
-  /** Email validation regex */
-  EMAIL_REGEX: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-  /** Password minimum length */
-  PASSWORD_MIN_LENGTH: 8,
-  /** Project name maximum length */
-  PROJECT_NAME_MAX_LENGTH: 100,
-  /** Description maximum length */
-  DESCRIPTION_MAX_LENGTH: 500,
-  /** Username pattern */
-  USERNAME_REGEX: /^[a-zA-Z0-9_-]{3,30}$/,
-} as const;
-
-/**
  * Export configuration type for use in other modules
  */
 export type TimeoutConfig = typeof TIMEOUTS;
 export type RetryConfig = typeof RETRY_ATTEMPTS;
 export type FileLimitConfig = typeof FILE_LIMITS;
-export type RateLimitConfig = typeof RATE_LIMITS;
 export type StorageConfig = typeof STORAGE;
-export type PaginationConfig = typeof PAGINATION;
-export type WebSocketEventConfig = typeof WEBSOCKET_EVENTS;
 export type HttpStatusConfig = typeof HTTP_STATUS;
-export type TestTimeoutConfig = typeof TEST_TIMEOUTS;
-export type UITimingConfig = typeof UI_TIMING;
-export type EnvironmentConfig = typeof ENVIRONMENT;
-export type ValidationConfig = typeof VALIDATION;
-
-/**
- * Helper function to get timeout with environment-specific overrides
- */
-export function getTimeout(
-  key: keyof TimeoutConfig,
-  environmentOverride?: number
-): number {
-  if (environmentOverride && ENVIRONMENT.IS_PRODUCTION) {
-    return environmentOverride;
-  }
-  return TIMEOUTS[key];
-}
-
-/**
- * Helper function to get retry attempts with environment-specific overrides
- */
-export function getRetryAttempts(
-  key: keyof RetryConfig,
-  environmentOverride?: number
-): number {
-  if (environmentOverride && ENVIRONMENT.IS_PRODUCTION) {
-    return environmentOverride;
-  }
-  return RETRY_ATTEMPTS[key];
-}
