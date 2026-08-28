@@ -302,8 +302,25 @@ class TestInferenceExecutor:
         
         input_tensor = torch.randn(1, 3, 256, 256)
         
-        # Test with CPU
-        with patch('ml.inference_executor.torch.cuda.is_available', return_value=False):
+        # Test with CPU.
+        #
+        # `_get_memory_usage` is patched alongside `cuda.is_available` on
+        # purpose. With CUDA reported absent it falls back to
+        # `psutil.Process(os.getpid()).memory_info().rss` -- the RSS of the
+        # whole pytest process, not of anything this test allocated. The
+        # fixture's limit is 2 GB, and by the time the full suite reaches here
+        # the process has loaded torch, several models and a lot of numpy, so
+        # the proactive resource check trips and the test fails with
+        # InferenceResourceError.
+        #
+        # It passes in isolation and fails in the suite, which is the signature
+        # of order dependence rather than a defect: the assertion is about
+        # device handling, and it was accidentally also asserting "this python
+        # process is under 2 GB". Pinning the reading keeps it measuring the
+        # thing it names.
+        with patch(
+            'ml.inference_executor.torch.cuda.is_available', return_value=False
+        ), patch.object(executor, '_get_memory_usage', return_value=0):
             result = executor.execute_inference(
                 model=model,
                 input_tensor=input_tensor,
