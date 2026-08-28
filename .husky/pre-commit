@@ -84,6 +84,13 @@ fi
 
 # 7. Run ESLint with strict settings (no auto-fix in pre-commit)
 # Docker-first project - skip if dependencies are broken
+#
+# NOTE: this block is ADVISORY, not a gate. `2>/dev/null` swallows the output
+# and a non-zero exit only bumps WARNINGS, so a real lint error is reported as
+# "check skipped (broken dependencies)" and the commit proceeds. Staged files
+# are still hard-gated by lint-staged (--max-warnings=0), and `make ci` + the
+# CI `frontend` job gate the whole tree. Step 7b below deliberately does NOT
+# copy this pattern.
 if command -v npx >/dev/null 2>&1 && [ -f "package.json" ] && [ -d "node_modules/eslint" ]; then
     echo "⏳ Running ESLint (strict mode)..."
     if ! npx eslint . --max-warnings 0 2>/dev/null; then

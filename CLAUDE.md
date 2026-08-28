@@ -454,8 +454,8 @@ Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runn
 `.husky/pre-commit` validates every commit:
 
 - No `console.log` / `debugger`
-- ESLint **0 warnings** (strict) on the frontend
-- ESLint baseline gate on `backend/src` — fails on any problem not in `eslint-baseline.json`
+- ESLint **0 warnings** (strict) on **staged** frontend files, via lint-staged. The hook's separate whole-tree `npx eslint .` (step 7) is **advisory only** — it swallows the output and increments a warning counter, so an unstaged frontend lint error does not block the commit. `make ci` and the CI `frontend` job do gate it.
+- ESLint baseline gate on `backend/src` (step 7b) — **blocks** on any problem not in `eslint-baseline.json`, and blocks when the gate itself cannot run
 - Prettier formatting
 - Frontend + backend TypeScript check
 - Conventional commits required (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`)

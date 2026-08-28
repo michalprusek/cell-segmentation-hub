@@ -398,21 +398,42 @@ function collect(targets) {
 
 /**
  * SECOND vacuous-gate guard. The `results.length === 0` check catches a total
- * collapse; this catches a partial one. Every file that carries a baselined
- * problem and STILL EXISTS on disk must appear in the current lint run. If it
- * does not, the tree stopped being linted where it used to be — an `ignores`
- * entry, a moved directory, an `--ext` change — and its problems would
- * otherwise be silently counted as "fixed".
+ * collapse; this catches a partial one. Every file the baseline records as
+ * linted and that STILL EXISTS on disk must appear in the current lint run. If
+ * it does not, the tree stopped being linted where it used to be — an
+ * `ignores` entry, a moved directory, an `--ext` change.
+ *
+ * This is why the baseline stores the whole `lintedFiles` LIST and not just a
+ * count. Checking only the files that carry a baselined problem is not enough,
+ * and that weaker version was in this script until review caught it: 122 of
+ * the 141 linted files are CLEAN, so adding `src/utils/**` (and two more) to
+ * the config's ignores dropped 47 files — a third of the tree — while the gate
+ * printed "no new problems" and exited 0. A count-only check is no better: it
+ * cannot tell a deleted file from a newly-ignored one, so it can only warn.
+ *
+ * Files that are simply gone pass (`existsSync`), so deleting code never trips
+ * this. New files are not required to be in the list, so adding code does not
+ * force a baseline regeneration either — the list is a floor, not an equality.
  */
-function assertScopeDidNotShrink(targetName, baselineByFile, linted) {
-  const missing = Object.keys(baselineByFile ?? {}).filter(
+export function missingFromLint(baselineFiles, linted) {
+  return (baselineFiles ?? []).filter(
     file => existsSync(resolve(REPO_ROOT, file)) && !linted.has(file)
   );
+}
+
+function assertScopeDidNotShrink(targetName, baselineFiles, linted) {
+  const missing = missingFromLint(baselineFiles, linted);
   if (missing.length > 0) {
     bail(
-      `${missing.length} file(s) with baselined problems in ${targetName} ` +
-        'still exist but are no longer linted — the lint scope shrank',
-      missing.map(f => `  ${f}`).join('\n')
+      `${missing.length} file(s) that the baseline records as linted in ` +
+        `${targetName} still exist but are no longer linted — the lint scope ` +
+        'shrank. Fix the ignores/patterns, or, if the narrowing is ' +
+        `deliberate, re-record it with:  ${UPDATE_CMD}`,
+      missing
+        .slice(0, 20)
+        .map(f => `  ${f}`)
+        .join('\n') +
+        (missing.length > 20 ? `\n  ... and ${missing.length - 20} more` : '')
     );
   }
 }
@@ -432,7 +453,9 @@ function eslintVersion(target) {
 function writeBaseline(results, carryOver = {}) {
   const targets = { ...carryOver };
   for (const [name, r] of Object.entries(results)) {
-    targets[name] = { filesLinted: r.filesLinted, files: r.byFile };
+    // lintedFiles is the gate's scope record, not decoration: see
+    // assertScopeDidNotShrink for why a count would not do.
+    targets[name] = { lintedFiles: [...r.linted].sort(), files: r.byFile };
   }
   const countOf = byFile =>
     Object.values(byFile)
@@ -452,8 +475,11 @@ function writeBaseline(results, carryOver = {}) {
       'keyed by file + severity + rule + normalised message (NOT line number, ' +
       'which churns on every unrelated edit) and stored with a count, so ' +
       'fixing one problem and introducing another cannot cancel out. Warnings ' +
-      'are gated as well as errors. Every line below is a problem someone ' +
-      'chose to accept; the file shrinking over time is the point.',
+      'are gated as well as errors. Every problem below is one someone chose ' +
+      'to accept; the list shrinking over time is the point. `lintedFiles` ' +
+      "records the gate's SCOPE: any file listed there that still exists but " +
+      'stops being linted fails the gate, so an over-broad `ignores` cannot ' +
+      'quietly remove a third of the tree from the check.',
     _regenerateWith: UPDATE_CMD,
     _selfTest: SELF_TEST_CMD,
     _doNotEditByHand: true,
@@ -566,21 +592,15 @@ function modeCheck(targets) {
   let anyRegression = false;
   let fixed = 0;
   const churn = [];
-  const shrunk = [];
+  const deleted = [];
   for (const target of targets) {
     const based = baseline.targets?.[target.name] ?? {};
     const cur = results[target.name];
-    assertScopeDidNotShrink(target.name, based.files, cur.linted);
-    if (
-      typeof based.filesLinted === 'number' &&
-      cur.filesLinted < based.filesLinted
-    ) {
-      shrunk.push({
-        name: target.name,
-        before: based.filesLinted,
-        after: cur.filesLinted,
-      });
-    }
+    assertScopeDidNotShrink(target.name, based.lintedFiles, cur.linted);
+    const gone = (based.lintedFiles ?? []).filter(
+      f => !cur.linted.has(f)
+    ).length;
+    if (gone > 0) deleted.push({ name: target.name, gone });
     const d = diffCounts(based.files, cur.byFile);
     perTarget[target.name] = d;
     if (d.regressions.length > 0) anyRegression = true;
@@ -605,14 +625,14 @@ function modeCheck(targets) {
         `Lock it in:  ${C.bold(UPDATE_CMD)}\n`
     );
   }
-  for (const s of shrunk) {
-    // Not a failure on its own: files get deleted. assertScopeDidNotShrink
-    // already failed the run if a file with baselined problems is still on
-    // disk but no longer linted, so what is left here is deletions — worth
-    // saying out loud so a shrinking lint surface is never silent.
+  for (const s of deleted) {
+    // assertScopeDidNotShrink has already failed the run for any baselined
+    // file that still exists but stopped being linted, so everything left here
+    // is a genuine deletion. Not a failure, but said out loud so a shrinking
+    // lint surface is never completely silent.
     process.stdout.write(
-      `${C.yellow('!')} ${s.name}: ${s.before - s.after} fewer file(s) linted ` +
-        `than the baseline records (${s.before} -> ${s.after}).\n`
+      `${C.yellow('!')} ${s.name}: ${s.gone} file(s) the baseline records are ` +
+        `gone from disk. Refresh with:  ${C.bold(UPDATE_CMD)}\n`
     );
   }
   if (churn.length > 0) {
@@ -814,6 +834,29 @@ function unitTests() {
     'rule-less directive reports get a stable pseudo-rule'
   );
 
+  process.stdout.write('Unit: missingFromLint() — the scope-shrink guard\n');
+  // Real paths, because the guard asks the filesystem whether a file is gone.
+  const onDisk = 'package.json';
+  const alsoOnDisk = 'scripts/eslint-baseline.mjs';
+  assert(
+    missingFromLint([onDisk, alsoOnDisk], new Set([onDisk, alsoOnDisk]))
+      .length === 0,
+    'every baselined file still linted -> no complaint'
+  );
+  assert(
+    missingFromLint([onDisk, alsoOnDisk], new Set([onDisk])).length === 1,
+    'a file that still EXISTS but stopped being linted -> caught, even though ' +
+      'it carries no baselined problem (a CLEAN file leaving the scope is ' +
+      'exactly how a third of backend/src silently left the gate before ' +
+      'review caught it — the check must not be limited to files with ' +
+      'baselined problems)'
+  );
+  assert(
+    missingFromLint(['backend/src/__deleted_by_a_real_commit__.ts'], new Set())
+      .length === 0,
+    'a DELETED file leaving the lint set is not a shrink'
+  );
+
   const withFatal = collectResults([
     {
       filePath: resolve(REPO_ROOT, 'backend/src/broken.ts'),
@@ -859,6 +902,19 @@ function endToEndTest() {
   }
 
   let planted;
+  // `finally` does NOT run on SIGINT/SIGTERM, and the planted file lives inside
+  // the compiled source tree — a Ctrl-C during the ~1 min of ESLint runs below
+  // would otherwise leave a stray .ts in backend/src that the next `tsc`
+  // compiles and the next `git add -A` commits.
+  const removeProbe = () => rmSync(probeAbs, { force: true });
+  const onSignal = signal => {
+    removeProbe();
+    process.exit(signal === 'SIGINT' ? 130 : 143);
+  };
+  const onSigint = () => onSignal('SIGINT');
+  const onSigterm = () => onSignal('SIGTERM');
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
   try {
     writeFileSync(
       probeAbs,
@@ -870,7 +926,9 @@ function endToEndTest() {
     );
     planted = runGate();
   } finally {
-    rmSync(probeAbs, { force: true });
+    removeProbe();
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
   }
 
   assert(
