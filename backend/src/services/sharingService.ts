@@ -569,12 +569,16 @@ export async function hasProjectAccess(
       userId,
     });
 
-    // Check if user is the owner
+    // Check if user is the owner. `select` matters here: this runs on
+    // effectively every authorized request and the row is only used as a
+    // boolean, so there is no reason to pull title, description and the rest
+    // of the metadata across the wire.
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
         userId,
       },
+      select: { id: true },
     });
 
     logger.debug('Owner check result', 'SharingService', {

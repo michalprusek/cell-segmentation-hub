@@ -13,7 +13,6 @@ import {
   type PolygonPartClass,
 } from '../utils/polygonValidation';
 import { ImageService } from './imageService';
-import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
 import { safeMlFilename } from '../utils/mlFilename';
@@ -414,7 +413,6 @@ export interface ImageForSegmentation {
 export class SegmentationService {
   private httpClient: AxiosInstance;
   private pythonServiceUrl: string;
-  private segmentationThumbnailService: SegmentationThumbnailService;
   private thumbnailManager: ThumbnailManager;
   private concurrentRequestsPool: Map<string, Promise<SegmentationResponse>> =
     new Map(); // Track concurrent requests
@@ -424,9 +422,6 @@ export class SegmentationService {
     private prisma: PrismaClient,
     private imageService: ImageService
   ) {
-    this.segmentationThumbnailService = new SegmentationThumbnailService(
-      prisma
-    );
     this.thumbnailManager = new ThumbnailManager(prisma);
     // Python microservice URL - can be configured via environment
     this.pythonServiceUrl = config.SEGMENTATION_SERVICE_URL;

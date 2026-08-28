@@ -1420,7 +1420,6 @@ export default {
     invalidSelection: 'Por favor seleccione al menos una imagen',
     noData: 'No hay datos disponibles para exportar',
     segmentationData: 'Datos de segmentación',
-    spheroidMetrics: 'Métricas de esferoides',
     spermMetrics: 'Métricas de espermatozoides',
     cocoFormat: 'Formato COCO',
     cocoFormatTitle: 'Exportación de formato COCO',
@@ -2418,7 +2417,6 @@ export default {
   },
   metrics: {
     info: 'Las métricas se evalúan solo para polígonos externos. Las áreas de polígonos internos (agujeros) se restan automáticamente de los polígonos externos correspondientes.',
-    spheroid: 'Esferoide',
     area: 'Área',
     perimeter: 'Perímetro',
     equivalentDiameter: 'Diámetro Equivalente',

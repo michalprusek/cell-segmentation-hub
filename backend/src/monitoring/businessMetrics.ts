@@ -112,23 +112,6 @@ export function trackFeatureUsage(
 }
 
 /**
- * Track image processing
- */
-export function trackImageProcessing(
-  type: string,
-  status: 'success' | 'failure'
-): void {
-  try {
-    imageProcessingCounter.inc({
-      type,
-      status,
-    });
-  } catch (error) {
-    logger.error('Failed to track image processing metric:', error);
-  }
-}
-
-/**
  * Update active users count
  */
 export function updateActiveUsers(tier: string, count: number): void {
@@ -140,34 +123,6 @@ export function updateActiveUsers(tier: string, count: number): void {
 }
 
 /**
- * Track project creation
- */
-export function trackProjectCreated(): void {
-  try {
-    projectsCreatedTotal.inc();
-  } catch (error) {
-    logger.error('Failed to track project creation metric:', error);
-  }
-}
-
-/**
- * Track segmentation job
- */
-export function trackSegmentationJob(
-  model: string,
-  status: 'started' | 'completed' | 'failed'
-): void {
-  try {
-    segmentationJobsTotal.inc({
-      model,
-      status,
-    });
-  } catch (error) {
-    logger.error('Failed to track segmentation job metric:', error);
-  }
-}
-
-/**
  * Update storage usage
  */
 export function updateStorageUsage(type: string, bytes: number): void {
@@ -175,38 +130,6 @@ export function updateStorageUsage(type: string, bytes: number): void {
     storageUsageGauge.set({ type }, bytes);
   } catch (error) {
     logger.error('Failed to update storage usage metric:', error);
-  }
-}
-
-/**
- * Track authentication attempt
- */
-export function trackAuthenticationAttempt(
-  type: string,
-  status: 'success' | 'failure'
-): void {
-  try {
-    authenticationAttempts.inc({
-      type,
-      status,
-    });
-  } catch (error) {
-    logger.error('Failed to track authentication attempt metric:', error);
-  }
-}
-
-/**
- * Record API response time
- */
-export function recordApiResponseTime(
-  endpoint: string,
-  method: string,
-  seconds: number
-): void {
-  try {
-    apiResponseTime.observe({ endpoint, method }, seconds);
-  } catch (error) {
-    logger.error('Failed to record API response time metric:', error);
   }
 }
 
@@ -243,50 +166,6 @@ export function initializeBusinessMetricsCollection(): void {
     logger.info('✅ Business metrics collection initialized');
   } catch (error) {
     logger.error('Failed to initialize business metrics collection:', error);
-  }
-}
-
-/**
- * Get business metrics summary
- */
-export async function getBusinessMetricsSummary(): Promise<{
-  totalApiErrors: number;
-  totalFeatureUsage: number;
-  totalImagesProcessed: number;
-  totalProjects: number;
-  totalSegmentationJobs: number;
-  totalAuthAttempts: number;
-}> {
-  try {
-    const metrics = await businessMetricsRegistry.getMetricsAsJSON();
-
-    const getMetricValue = (name: string): number => {
-      const metric = metrics.find(m => m.name === name);
-      if (!metric || !metric.values) {
-        return 0;
-      }
-
-      return metric.values.reduce((sum, v) => sum + (v.value || 0), 0);
-    };
-
-    return {
-      totalApiErrors: getMetricValue('api_errors_total'),
-      totalFeatureUsage: getMetricValue('feature_usage_total'),
-      totalImagesProcessed: getMetricValue('images_processed_total'),
-      totalProjects: getMetricValue('projects_created_total'),
-      totalSegmentationJobs: getMetricValue('segmentation_jobs_total'),
-      totalAuthAttempts: getMetricValue('authentication_attempts_total'),
-    };
-  } catch (error) {
-    logger.error('Failed to get business metrics summary:', error);
-    return {
-      totalApiErrors: 0,
-      totalFeatureUsage: 0,
-      totalImagesProcessed: 0,
-      totalProjects: 0,
-      totalSegmentationJobs: 0,
-      totalAuthAttempts: 0,
-    };
   }
 }
 

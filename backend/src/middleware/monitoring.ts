@@ -153,28 +153,6 @@ export function getMetricsEndpoint(): (
   };
 }
 
-// Funkce pro trackování ML modelů
-export function trackMLModelInference(
-  modelName: string,
-  duration: number,
-  success: boolean
-): void {
-  const status = success ? 'success' : 'error';
-  mlModelInferenceTime.observe({ model_name: modelName, status }, duration);
-  mlModelRequests.inc({ model_name: modelName, status });
-}
-
-// Funkce pro trackování uploadů
-export function trackFileUpload(fileType: string, success: boolean): void {
-  const status = success ? 'success' : 'error';
-  uploadedFiles.inc({ file_type: fileType, status });
-}
-
-// Funkce pro aktualizaci databázových spojení
-export function updateDatabaseConnections(count: number): void {
-  databaseConnections.set(count);
-}
-
 // Health check pro monitoring systém
 export function getMonitoringHealth(): {
   healthy: boolean;
@@ -254,20 +232,11 @@ function getFeatureNameFromRoute(route: string, method: string): string | null {
 }
 
 // Initialize business metrics collection when the module loads
-let metricsCollectionInterval: NodeJS.Timeout | null = null;
-
 export function initializeMetricsCollection(): void {
-  if (metricsCollectionInterval) {
-    clearInterval(metricsCollectionInterval);
-  }
-
-  initializeBusinessMetricsCollection(); // Initialize metrics collection
-  metricsCollectionInterval = setInterval(
-    () => {
-      // Business metrics collection every 5 minutes
-    },
-    5 * 60 * 1000
-  );
+  // Seeds the business gauges. There used to be a 5-minute setInterval here
+  // too, but its callback body was empty — a timer that kept the event loop
+  // referenced for the process's lifetime to do nothing.
+  initializeBusinessMetricsCollection();
   logger.info('Business metrics collection initialized');
 }
 

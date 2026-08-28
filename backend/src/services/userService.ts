@@ -1,7 +1,5 @@
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
-import * as _fs from 'fs/promises';
-import * as _path from 'path';
 
 export interface UserStats {
   totalProjects: number;
@@ -114,61 +112,40 @@ export async function getUserProfile(
  */
 export async function getUserStats(userId: string): Promise<UserStats> {
   try {
-    // Get project count (owned projects only)
-    const totalProjects = await prisma.project.count({
-      where: { userId },
-    });
-
-    // Get total images across all user projects
-    const totalImages = await prisma.image.count({
-      where: {
-        project: {
-          userId,
-        },
-      },
-    });
-
-    // Get total segmentations for user's images
-    const totalSegmentations = await prisma.segmentation.count({
-      where: {
-        image: {
-          project: {
-            userId,
-          },
-        },
-      },
-    });
-
-    // Get processed images (completed segmentations)
-    const processedImages = await prisma.image.count({
-      where: {
-        project: {
-          userId,
-        },
-        segmentationStatus: 'completed',
-      },
-    });
-
-    // Get images uploaded today
+    // Images uploaded today — computed before the queries so the window is
+    // one consistent boundary for all of them.
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const imagesUploadedToday = await prisma.image.count({
-      where: {
-        project: {
-          userId,
+    // Six independent queries. Awaited one at a time this cost their sum on
+    // the profile and dashboard path.
+    const [
+      totalProjects,
+      totalImages,
+      totalSegmentations,
+      processedImages,
+      imagesUploadedToday,
+      storageStats,
+    ] = await Promise.all([
+      // Owned projects only
+      prisma.project.count({ where: { userId } }),
+      prisma.image.count({ where: { project: { userId } } }),
+      prisma.segmentation.count({
+        where: { image: { project: { userId } } },
+      }),
+      prisma.image.count({
+        where: { project: { userId }, segmentationStatus: 'completed' },
+      }),
+      prisma.image.count({
+        where: {
+          project: { userId },
+          createdAt: { gte: today, lt: tomorrow },
         },
-        createdAt: {
-          gte: today,
-          lt: tomorrow,
-        },
-      },
-    });
-
-    // Calculate storage usage
-    const storageStats = await calculateUserStorage(userId);
+      }),
+      calculateUserStorage(userId),
+    ]);
 
     return {
       totalProjects,

@@ -1414,7 +1414,6 @@ export default {
     invalidSelection: 'Please select at least one image',
     noData: 'No data available for export',
     segmentationData: 'Segmentation Data',
-    spheroidMetrics: 'Spheroid Metrics',
     spermMetrics: 'Sperm Metrics',
     cocoFormat: 'COCO Format',
     cocoFormatTitle: 'COCO Format Export',
@@ -2426,7 +2425,6 @@ export default {
   // Metrics display
   metrics: {
     info: 'Metrics are evaluated only for external polygons. Areas of internal polygons (holes) are automatically subtracted from the corresponding external polygons.',
-    spheroid: 'Spheroid',
     area: 'Area',
     perimeter: 'Perimeter',
     equivalentDiameter: 'Equivalent Diameter',

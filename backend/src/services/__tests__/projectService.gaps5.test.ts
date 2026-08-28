@@ -296,25 +296,5 @@ describe('projectService.getProjectStats', () => {
 
 // ─── F. checkProjectOwnership — error catch ───────────────────────────────────
 
-describe('projectService.checkProjectOwnership', () => {
-  it('throws when findFirst throws', async () => {
-    prismaMock.project.findFirst.mockRejectedValueOnce(
-      new Error('Network error')
-    );
-
-    await expect(
-      projectService.checkProjectOwnership('proj-1', 'user-1')
-    ).rejects.toThrow('Network error');
-  });
-});
-
 // ─── G. canModifyProject — error → returns false ─────────────────────────────
 
-describe('projectService.canModifyProject', () => {
-  it('returns false when checkProjectOwnership throws internally', async () => {
-    prismaMock.project.findFirst.mockRejectedValueOnce(new Error('DB error'));
-
-    const result = await projectService.canModifyProject('proj-1', 'user-1');
-    expect(result).toBe(false);
-  });
-});

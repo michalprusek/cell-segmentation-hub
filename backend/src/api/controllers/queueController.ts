@@ -9,22 +9,11 @@ import { prisma } from '../../db';
 
 // Import validation types (some types for future use)
 import {
-  AddImageToQueueData as _AddImageToQueueData,
-  BatchQueueData as _BatchQueueData,
-  CleanupQueueData as _CleanupQueueData,
-  ResetStuckItemsData as _ResetStuckItemsData,
 } from '../../types/validation';
 
 // Import queue-specific types (some types for future use)
 import {
-  ImageIdParams as _ImageIdParams,
-  ProjectIdParams as _ProjectIdParams,
-  QueueIdParams as _QueueIdParams,
   BatchQueueResponse,
-  QueueStatsResponse as _QueueStatsResponse,
-  QueueHealthResponse as _QueueHealthResponse,
-  ResetStuckItemsResponse as _ResetStuckItemsResponse,
-  CleanupResponse as _CleanupResponse,
   AddImageToQueueRequest,
   BatchQueueRequest,
   GetQueueStatsRequest,
@@ -32,9 +21,6 @@ import {
   RemoveFromQueueRequest,
   ResetStuckItemsRequest,
   CleanupQueueRequest,
-  QueueError as _QueueError,
-  QueueTimeoutError as _QueueTimeoutError,
-  MLServiceUnavailableError as _MLServiceUnavailableError,
   QueuePriority,
   QueueStatus,
   QueueEntryResponse,

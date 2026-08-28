@@ -30,10 +30,6 @@ import {
 import { WebSocketService } from './services/websocketService';
 import { initializeStorageDirectories } from './utils/initializeStorage';
 import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
-import {
-  initializeRateLimitingSystem,
-  cleanupRateLimitingSystem,
-} from './monitoring/rateLimitingInitialization';
 
 // JSON.stringify throws on BigInt by default; Image.fileSize is now
 // BigInt (PostgreSQL BIGINT) to support files > 2 GB (ND2 stacks).
@@ -167,8 +163,11 @@ setupSwagger(app);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
-  const dbHealth = await checkDatabaseHealth();
-  const redisHealth = await redisHealthCheck();
+  // Independent probes — awaited in sequence /health cost their sum.
+  const [dbHealth, redisHealth] = await Promise.all([
+    checkDatabaseHealth(),
+    redisHealthCheck(),
+  ]);
   const monitoringHealth = getMonitoringHealth();
 
   const isHealthy =
@@ -314,17 +313,6 @@ const startServer = async (): Promise<void> => {
       logger.warn('Application continuing without Redis caching');
     }
 
-    // Initialize comprehensive rate limiting system
-    try {
-      await initializeRateLimitingSystem();
-      logger.info('⚡ Comprehensive rate limiting system initialized');
-    } catch (error) {
-      logger.error(
-        'Failed to initialize rate limiting system:',
-        error as Error
-      );
-      logger.warn('Application continuing with basic rate limiting');
-    }
 
     // Initialize storage directories
     try {
@@ -459,16 +447,6 @@ const startServer = async (): Promise<void> => {
       server.close(async () => {
         logger.info('HTTP server closed');
 
-        // Cleanup rate limiting system
-        try {
-          await cleanupRateLimitingSystem();
-          logger.info('Rate limiting system cleaned up');
-        } catch (error) {
-          logger.error(
-            'Error cleaning up rate limiting system:',
-            error as Error
-          );
-        }
 
         // Close Redis connection
         try {
