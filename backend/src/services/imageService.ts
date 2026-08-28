@@ -1486,8 +1486,24 @@ export class ImageService {
     try {
       const originalBuffer = await this.getImageBuffer(image.originalPath);
 
-      // Convert using Sharp
-      const convertedBuffer = await sharp(originalBuffer)
+      // Convert using Sharp.
+      // failOn: 'error' (libvips default is 'warning', its strictest tier)
+      // — some TIFF writers emit a non-fatal libtiff warning (e.g. an
+      // ASCII tag, such as "Software", that isn't null-terminated).
+      // Sharp's default escalates ANY warning to a hard decode error
+      // ("vips2png: unable to write to target target"), aborting
+      // conversion of an otherwise perfectly intact image. 'error'
+      // tolerates that class of warning while still throwing on real
+      // decode errors, including truncated/incomplete pixel data.
+      // Do NOT relax this to 'truncated': libvips orders severity
+      // none < truncated < error < warning, so 'truncated' also disables
+      // the 'error' tier — measured against this repo's sharp/libvips, a
+      // TIFF whose StripByteCounts overstates the bytes actually present
+      // then decodes *successfully* to a silently-wrong (black) image
+      // instead of throwing, and that bad PNG would get cached forever.
+      const convertedBuffer = await sharp(originalBuffer, {
+        failOn: 'error',
+      })
         .png({
           quality: 90,
           compressionLevel: 6,
