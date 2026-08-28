@@ -15,6 +15,7 @@ import {
   isMicrotubuleProject,
   type ProjectType,
 } from '../../types/validation';
+import { buildYoloClassMap } from './formatConverter';
 
 export function generateReadme(
   project: ProjectWithImages,
@@ -50,7 +51,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 * visualizations/ - Images with numbered polygons
 * annotations/ - Annotation files in various formats
 * coco/ - COCO format annotations
-* yolo/ - YOLO format annotations
+* yolo/ - YOLO format annotations, plus classes.txt / data.yaml naming the class ids
 * json/ - Custom JSON format
 ${
   isMicrotubuleProject(project.type)
@@ -978,7 +979,9 @@ distance is symmetric), but the source-of-truth for which vertex is
 
 export async function generateAnnotationGuides(
   exportDir: string,
-  options: ExportOptions
+  options: ExportOptions,
+  /** Selects the YOLO class list quoted in that format's guide. */
+  projectType?: string | null
 ): Promise<void> {
   const annotationsDir = path.join(exportDir, 'annotations');
 
@@ -988,7 +991,7 @@ export async function generateAnnotationGuides(
   }
 
   if (options.annotationFormats?.includes('yolo')) {
-    await generateYoloGuide(path.join(annotationsDir, 'yolo'));
+    await generateYoloGuide(path.join(annotationsDir, 'yolo'), projectType);
   }
 
   if (options.annotationFormats?.includes('json')) {
@@ -1039,36 +1042,63 @@ For detailed instructions, see the full README.md in this directory.
   await fs.writeFile(path.join(cocoDir, 'QUICK_SETUP.md'), guide);
 }
 
-export async function generateYoloGuide(yoloDir: string): Promise<void> {
+export async function generateYoloGuide(
+  yoloDir: string,
+  projectType?: string | null
+): Promise<void> {
+  // Same call the label writer makes, so the guide can never quote a class
+  // list the .txt files disagree with.
+  const classNames = buildYoloClassMap(projectType).names;
   const guide = `# YOLO Format - Quick Setup Guide
 
-## Convert to COCO for CVAT
+## What is in this directory
 
-Since CVAT doesn't directly import YOLO segmentation format:
+- \`<image>.txt\` — one label file per image. Each line is
+  \`class_id x_center y_center width height\`, normalised to 0–1. The polygon
+  for the same annotation follows on a \`# Segmentation: class_id x1 y1 …\`
+  comment line, which trainers ignore.
+- \`classes.txt\` — the class names, one per line; the line index is the id.
+- \`data.yaml\` — the same mapping as an ultralytics dataset descriptor.
 
-1. **Use conversion script** (see README.md in this directory)
-2. **Generate COCO file** from YOLO annotations
-3. **Import COCO file** to CVAT following COCO guide
+Only closed polygons are exported: open polylines have no YOLO
+representation, and interior holes are not emitted as annotations.
 
-## Training with YOLOv8
-
-\`\`\`bash
-# Install YOLOv8
-pip install ultralytics
-
-# Train model
-yolo train data=data.yaml model=yolov8n-seg.pt epochs=100
-\`\`\`
-
-## Classes Configuration
+## Classes in this export
 
 \`\`\`
 # classes.txt content:
-cell
-cell_hole
+${classNames.join('\n')}
 \`\`\`
 
-For detailed conversion scripts and training setup, see the full README.md.
+${
+  classNames.length === 1
+    ? 'This project type has a single class, so every label line starts with `0`.'
+    : 'The ids above are what the first field of every label line refers to.'
+}
+
+## Training with YOLO
+
+Ultralytics finds a label file by swapping the \`images\` path segment of the
+image for \`labels\`, which this archive does not lay out that way. From the
+extracted archive root:
+
+\`\`\`bash
+pip install ultralytics
+
+# stage the labels beside the images, once
+mkdir -p labels && cp annotations/yolo/*.txt labels/
+
+yolo train data=annotations/yolo/data.yaml model=yolo11n.pt epochs=100
+\`\`\`
+
+\`train\` and \`val\` in \`data.yaml\` point at the same folder — an export is a
+single labelled set, not a split. Split it before training.
+
+## Convert to COCO for CVAT
+
+CVAT does not import YOLO segmentation format directly. Import
+\`../coco/annotations.json\` instead: it carries the same annotations, plus the
+open polylines this format cannot represent.
 `;
 
   await fs.writeFile(path.join(yoloDir, 'QUICK_SETUP.md'), guide);
