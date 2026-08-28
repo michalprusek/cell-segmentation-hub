@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: 'Sphäroid-Segmentierung',
+    appName: 'SpheroSeg',
     loading: 'Laden...',
     save: 'Speichern',
     cancel: 'Abbrechen',
@@ -92,22 +92,62 @@ export default {
   },
   landing: {
     hero: {
-      badge: 'Fortschrittliche Sphäroid-Segmentierungsplattform',
-      title: 'KI-gestützte Zellanalyse für biomedizinische Forschung',
+      eyebrow:
+        'Segmentierung biomedizinischer Bilder · ÚTIA, Tschechische Akademie der Wissenschaften',
+      title: 'Segmentierung für jede Probe, die Sie aufnehmen.',
       subtitle:
-        'Verbessern Sie Ihre mikroskopische Zellbildanalyse mit unserer hochmodernen Sphäroid-Segmentierungsplattform. Entwickelt für Forscher, die Präzision und Effizienz suchen.',
+        'Sphäroide und ihr Zerfall, Wunden aus dem Scratch-Assay, Spermienmorphologie, Mikrotubuli-Filamente, Mikrokapseln — für jeden Typ ein trainiertes Modell, für alle ein Editor und ein Export, den ImageJ, COCO und YOLO bereits verstehen.',
       getStarted: 'Loslegen',
-      learnMore: 'Mehr erfahren',
+      learnMore: 'Was die Plattform kann',
+    },
+    specimens: {
+      trayLabel: 'Probe wählen',
+      spheroid: {
+        label: 'Sphäroid',
+        detail:
+          'Hellfeld, 2048 × 2048. Ein Tumorsphäroid, von HRNet rot umrissen — genau die Kontur, die Ihnen der Editor zur Korrektur übergibt.',
+        alt: 'Hellfeldaufnahme eines einzelnen Tumorsphäroids, dessen Segmentierungskontur rot eingezeichnet ist.',
+      },
+      disintegration: {
+        label: 'Zerfallendes Sphäroid',
+        detail:
+          'Hellfeld, 2048 × 2048, 48 Stunden nach Beginn eines Zerfallsassays. Der dichte Kern ist grün, jede abgelöste Zelle rot. Genau aus dieser Trennung wird der Zerfallsindex berechnet.',
+        alt: 'Hellfeldaufnahme eines zerfallenden Sphäroids: der dichte Kern grün umrissen, jede abgelöste Zelle rot.',
+      },
+      wound: {
+        label: 'Wunde aus dem Scratch-Assay',
+        detail:
+          'Scratch-Assay, 2048 × 2048. Die offene Wunde ist die rote Grenze; die Zellinseln darin sind blau und werden von der Wundfläche abgezogen.',
+        alt: 'Scratch-Assay-Aufnahme mit rot umrissener offener Wunde und vier blau umrissenen Zellinseln darin.',
+      },
+      sperm: {
+        label: 'Spermienmorphologie',
+        detail:
+          'Hellfeld, 1360 × 1024. Jede Zelle wird als drei Polylinien statt als eine Fläche geführt — Kopf grün, Mittelstück bernsteinfarben, Schwanz cyan — damit sich jeder Abschnitt einzeln vermessen lässt.',
+        alt: 'Hellfeldaufnahme zweier Spermien, jedes nachgezeichnet von drei farbigen Polylinien: grüner Kopf, bernsteinfarbenes Mittelstück, cyanfarbener Schwanz.',
+      },
+      microtubule: {
+        label: 'Mikrotubuli-Filamente',
+        detail:
+          'IRM-Zeitraffer, Bild 30. Jedes Filament bekommt seine eigene Mittellinie, und seine Farbe stammt aus der Track-ID — die es über die gesamte Aufnahme behält, sodass ein Kymograph einem bestimmten Filament folgt und nicht dem gerade nächstgelegenen.',
+        alt: 'Aufnahme von Mikrotubuli im Interferenz-Reflexions-Kontrast, jedes Filament durch eine Mittellinie in eigener Farbe nachgezeichnet.',
+      },
+      microcapsule: {
+        label: 'Mikrokapseln',
+        detail:
+          'Hellfeld, 1280 × 1024. Zwei vollständige Kapseln sind rot umrissen — für genau diese gibt es Fläche, Umfang und Kompaktheit. Die vom Bildrand angeschnittenen Kapseln tragen keinen roten Umriss: das Modell markiert sie, und die Statistik lässt sie weg.',
+        alt: 'Hellfeldaufnahme von Mikrokapseln, die zwei vollständigen rot umrissen, die vom Bildrand angeschnittenen ohne Umriss.',
+      },
     },
     about: {
-      badge: 'Unsere Mission',
-      title: 'Biomedizinische Forschung durch Technologie vorantreiben',
+      badge: 'Wer dahintersteht',
+      title: 'Woher die Plattform kommt',
       description1:
         'Unsere Plattform wurde von Bc. Michal Průšek, Student an der Fakultät für Kernwissenschaften und Physikalisches Ingenieurwesen (FJFI) an der Tschechischen Technischen Universität Prag, unter der Leitung von Ing. Adam Novozámský, Ph.D. entwickelt.',
       description2:
         'Dieses Projekt ist eine Zusammenarbeit mit der Gruppe von Ing. Silvie Rimpelová, Ph.D. vom Institut für Biochemie und Mikrobiologie der UCT Prag (VŠCHT Praha).',
       description3:
-        'Wir kombinieren modernste KI-Modelle mit einer intuitiven Benutzeroberfläche, um Forschern leistungsstarke Werkzeuge für die mikroskopische Bildanalyse zur Verfügung zu stellen, mit Fokus auf Sphäroid-Segmentierung mit unvergleichlicher Präzision.',
+        'Es begann bei Tumorsphäroiden und wuchs mit den Experimenten, die unsere Kooperationspartner mitbrachten: Zerfallsassays, Wunden aus dem Scratch-Assay, Spermienmorphologie, Mikrotubuli-Zeitraffer und Mikrokapseln. Jeder Probentyp hat sein eigenes trainiertes Modell, seine eigenen Metriken und seinen eigenen Export — dahinter steht ein Editor.',
       contactText: 'Für Anfragen kontaktieren Sie uns bitte unter',
     },
     acknowledgments: {
@@ -120,49 +160,47 @@ export default {
       visitPage: 'Seite besuchen',
     },
     cta: {
-      title: 'Bereit, Ihren Zellanalyse-Workflow zu transformieren?',
+      title: 'Bringen Sie Ihre eigenen Bilder mit.',
       subtitle:
-        'Schließen Sie sich führenden Forschern an, die unsere Plattform bereits nutzen, um ihre Entdeckungen zu beschleunigen.',
-      cardTitle: 'Heute beginnen',
-      cardDescription:
-        'Melden Sie sich für ein kostenloses Konto an und erleben Sie die Kraft der KI-gesteuerten Sphäroid-Segmentierung.',
+        'Legen Sie ein Projekt an, wählen Sie den Probentyp und laden Sie eine Bildserie hoch. Das Modell läuft auf der GPU, und das Ergebnis öffnet sich direkt im Editor, bereit zur Korrektur.',
+      cardDescription: 'Die Registrierung ist offen — keine Einladung nötig',
       createAccount: 'Konto erstellen',
     },
     features: {
-      badge: 'Leistungsstarke Funktionen',
-      title: 'Fortgeschrittene Tools für die biomedizinische Forschung',
+      badge: 'Was sie leistet',
+      title: 'Ein Editor, egal was auf dem Objektträger liegt',
       subtitle:
-        'Unsere Plattform bietet eine umfassende Suite von Funktionen, die darauf ausgelegt sind, Ihren Sphäroid-Segmentierungs-Workflow zu optimieren.',
+        'Jeder Probentyp bekommt sein eigenes Modell und seine eigenen Metriken. Alles danach — Bearbeiten, Verfolgen, Exportieren — ist derselbe Arbeitsablauf.',
       cards: {
-        advancedSegmentation: {
-          title: 'Erweiterte Segmentierung',
+        models: {
+          title: 'Ein Modell je Probentyp',
           description:
-            'Präzise Sphäroid-Erkennung mit Grenzanalyse für genaue Zellmessungen.',
+            'Sie wählen den Probentyp beim Anlegen des Projekts, und es werden nur die passenden Modelle angeboten. Allein Sphäroide haben fünf, vom 200-ms-U-Net bis zum Mamba-Bottleneck für Bilder aus einem unbekannten Mikroskop.',
         },
-        aiPowered: {
-          title: 'KI-gestützte Analyse',
+        stacks: {
+          title: 'Zeitraffer und Stapel, nicht nur Einzelbilder',
           description:
-            'Nutzen Sie Deep-Learning-Algorithmen für automatische Zellerkennung und -klassifizierung.',
+            'MP4, AVI, MOV, MKV und WebM, mehrseitige TIFFs und Nikon ND2 werden als ein Element hochgeladen und in Einzelbilder aufgefaltet. Mehrkanalige Aufnahmen behalten ihre Kanäle, und Sie bestimmen, aus welchem das Modell liest.',
         },
-        effortlessUploads: {
-          title: 'Müheloses Hochladen',
+        tracking: {
+          title: 'Identität, die den Bildregler übersteht',
           description:
-            'Ziehen Sie Ihre mikroskopischen Bilder per Drag & Drop für sofortige Verarbeitung und Analyse.',
+            'Mikrotubuli werden von Bild zu Bild über die Kurvengeometrie zugeordnet, sodass ein Filament ID und Farbe über die gesamte Aufnahme behält — und ein Kymograph genau dieses Filament vermisst, nicht das gerade nächstgelegene.',
         },
-        statisticalInsights: {
-          title: 'Statistische Einblicke',
+        corrections: {
+          title: 'Alles von Hand korrigierbar',
           description:
-            'Umfassende Metriken und Visualisierungen zur Extraktion bedeutsamer Datenmuster.',
+            'Stützpunkte ziehen, ein verschmolzenes Objekt teilen, Punkte auf einer Kontur ergänzen, zwei Polylinien verbinden, eine Klasse umbenennen. Änderungen werden beim Bild gespeichert, nicht nur im Browser gehalten.',
         },
-        collaboration: {
-          title: 'Kollaborationswerkzeuge',
+        measurements: {
+          title: 'Zahlen, in Dateien, die andere Werkzeuge öffnen',
           description:
-            'Teilen Sie Projekte mit Kollegen und arbeiten Sie in Echtzeit an Forschungsergebnissen zusammen.',
+            'Fläche, Umfang, Feret-Durchmesser, Polylinienlänge und Intensität pro Kanal — exportiert als XLSX sowie als COCO, YOLO, ImageJ-ROI-Sets und CVAT-Annotationen.',
         },
-        processingPipeline: {
-          title: 'Verarbeitungspipeline',
+        batch: {
+          title: 'Auf ein ganzes Experiment ausgelegt',
           description:
-            'Automatisierter Workflow von der Vorverarbeitung bis zur finalen Analyse mit anpassbaren Parametern.',
+            'Stapel von bis zu 10 000 Bildern laufen auf der GPU, und die Warteschlange stellt zurück, wen sie gerade bedient hat — so blockiert ein 600-Bilder-Zeitraffer nicht alle anderen.',
         },
       },
     },

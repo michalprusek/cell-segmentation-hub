@@ -1,137 +1,74 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import {
-  Sparkles,
+  Film,
   Microscope,
-  Share2,
-  LineChart,
-  Upload,
-  Brain,
+  PenLine,
+  Server,
+  Table2,
+  Waypoints,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/exports';
 
-interface FeatureCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  delay: number;
-}
+/**
+ * The mono tag on each capability is the object that capability operates on —
+ * the same vocabulary the editor and the API use (`polygon`, `frame`, `track`,
+ * `vertex`, `roi`, `queue`). It carries information; it is not a decorative
+ * 01/02/03 counter.
+ */
+const CAPABILITIES = [
+  { id: 'models', tag: 'polygon', Icon: Microscope },
+  { id: 'stacks', tag: 'frame', Icon: Film },
+  { id: 'tracking', tag: 'track', Icon: Waypoints },
+  { id: 'corrections', tag: 'vertex', Icon: PenLine },
+  { id: 'measurements', tag: 'roi', Icon: Table2 },
+  { id: 'batch', tag: 'queue', Icon: Server },
+] as const;
 
-const FeatureCard = ({ icon, title, description, delay }: FeatureCardProps) => (
-  <div
-    className="glass-morphism p-6 rounded-xl transition-all duration-300 hover:shadow-glass-lg"
-    style={{ transitionDelay: `${delay}ms` }}
-  >
-    <div className="w-14 h-14 mb-6 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
-      {icon}
-    </div>
-    <h3 className="text-xl font-semibold mb-2">{title}</h3>
-    <p className="text-gray-600">{description}</p>
-  </div>
-);
-
-const Features = () => {
+function Features() {
   const { t } = useLanguage();
-  const featuresRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('active');
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    const currentRef = featuresRef.current;
-    if (currentRef) {
-      observer.observe(currentRef);
-    }
-
-    return () => {
-      if (currentRef) {
-        observer.unobserve(currentRef);
-      }
-    };
-  }, []);
-
-  const features = [
-    {
-      icon: <Microscope size={28} />,
-      title: t('landing.features.cards.advancedSegmentation.title'),
-      description: t('landing.features.cards.advancedSegmentation.description'),
-      delay: 100,
-    },
-    {
-      icon: <Brain size={28} />,
-      title: t('landing.features.cards.aiPowered.title'),
-      description: t('landing.features.cards.aiPowered.description'),
-      delay: 200,
-    },
-    {
-      icon: <Upload size={28} />,
-      title: t('landing.features.cards.effortlessUploads.title'),
-      description: t('landing.features.cards.effortlessUploads.description'),
-      delay: 300,
-    },
-    {
-      icon: <LineChart size={28} />,
-      title: t('landing.features.cards.statisticalInsights.title'),
-      description: t('landing.features.cards.statisticalInsights.description'),
-      delay: 400,
-    },
-    {
-      icon: <Share2 size={28} />,
-      title: t('landing.features.cards.collaboration.title'),
-      description: t('landing.features.cards.collaboration.description'),
-      delay: 500,
-    },
-    {
-      icon: <Sparkles size={28} />,
-      title: t('landing.features.cards.processingPipeline.title'),
-      description: t('landing.features.cards.processingPipeline.description'),
-      delay: 600,
-    },
-  ];
 
   return (
-    <section id="features" className="py-20 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-background to-transparent -z-10"></div>
-
-      <div
-        ref={featuresRef}
-        className="container mx-auto px-4 staggered-fade-in"
-      >
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-block bg-blue-100 px-4 py-2 rounded-full mb-4">
-            <span className="text-sm font-medium text-blue-700">
-              {t('landing.features.badge')}
-            </span>
-          </div>
-          <h2 className="text-3xl md:text-4xl font-bold mb-6">
+    <section
+      id="features"
+      className="border-t border-gray-200 py-20 dark:border-gray-800"
+    >
+      <div className="container mx-auto px-4">
+        <div className="max-w-2xl">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
+            {t('landing.features.badge')}
+          </p>
+          <h2 className="mt-4 text-3xl font-semibold tracking-[-0.025em] text-gray-900 md:text-4xl dark:text-gray-50">
             {t('landing.features.title')}
           </h2>
-          <p className="text-lg text-gray-600">
+          <p className="mt-4 text-lg leading-relaxed text-gray-600 dark:text-gray-300">
             {t('landing.features.subtitle')}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((feature, index) => (
-            <FeatureCard
-              key={index}
-              icon={feature.icon}
-              title={feature.title}
-              description={feature.description}
-              delay={feature.delay}
-            />
+        <ul className="mt-14 grid grid-cols-1 gap-x-10 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
+          {CAPABILITIES.map(({ id, tag, Icon }) => (
+            <li
+              key={id}
+              className="border-t border-gray-200 pt-5 dark:border-gray-800"
+            >
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                <span className="font-mono text-[11px] uppercase tracking-[0.14em]">
+                  {tag}
+                </span>
+              </div>
+              <h3 className="mt-3 text-lg font-semibold text-gray-900 dark:text-gray-50">
+                {t(`landing.features.cards.${id}.title`)}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+                {t(`landing.features.cards.${id}.description`)}
+              </p>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </section>
   );
-};
+}
 
 export default Features;
