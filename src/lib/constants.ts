@@ -286,19 +286,32 @@ export const UI_TIMING = {
 /**
  * Environment-specific configurations
  */
+// NOTE: this must read `import.meta.env`, not `process.env`. There is no
+// `process` global in the browser: Vite only substitutes the literal text
+// `process.env.NODE_ENV`, so every `process.env.VITE_*` read below used to
+// survive into the served module and throw `ReferenceError: process is not
+// defined` while this object literal was being evaluated. That took the whole
+// module down, and with it `lib/api.ts` and `services/webSocketManager.ts`,
+// which import it — the dev server rendered a blank page. Production happened
+// to escape only because rollup tree-shook `ENVIRONMENT` out of the bundle
+// entirely; one new import of it would have shipped the crash.
+// `import.meta.env.MODE` is the exact equivalent of the old NODE_ENV compare
+// ('development' under `vite dev`, 'production' under `vite build`, 'test'
+// under vitest).
 export const ENVIRONMENT = {
   /** Check if running in development */
-  IS_DEVELOPMENT: process.env.NODE_ENV === 'development',
+  IS_DEVELOPMENT: import.meta.env.MODE === 'development',
   /** Check if running in production */
-  IS_PRODUCTION: process.env.NODE_ENV === 'production',
+  IS_PRODUCTION: import.meta.env.MODE === 'production',
   /** Check if running in test */
-  IS_TEST: process.env.NODE_ENV === 'test',
+  IS_TEST: import.meta.env.MODE === 'test',
   /** API base URL */
-  API_BASE_URL: process.env.VITE_API_BASE_URL || 'http://localhost:3001',
+  API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001',
   /** ML service URL */
-  ML_SERVICE_URL: process.env.VITE_ML_SERVICE_URL || 'http://localhost:8000',
+  ML_SERVICE_URL:
+    import.meta.env.VITE_ML_SERVICE_URL || 'http://localhost:8000',
   /** WebSocket URL */
-  WS_URL: process.env.VITE_WS_URL || 'ws://localhost:3001',
+  WS_URL: import.meta.env.VITE_WS_URL || 'ws://localhost:3001',
 } as const;
 
 /**

@@ -9,8 +9,10 @@ const Footer = () => {
   return (
     <footer className="bg-gray-50 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-12 md:py-16">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div className="col-span-1 md:col-span-2">
+        {/* 1 → 4 columns with nothing in between left tablets with a single
+            very wide column of short link lists. */}
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4">
+          <div className="col-span-1 sm:col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-6">
               <div className="w-10 h-10 rounded-md bg-blue-500 flex items-center justify-center">
                 <Microscope className="text-white w-6 h-6" />
@@ -27,7 +29,7 @@ const Footer = () => {
                 <strong>{t('footer.contact')}:</strong>{' '}
                 <a
                   href="mailto:prusek@utia.cas.cz"
-                  className="text-blue-600 hover:underline"
+                  className="break-all text-blue-600 hover:underline dark:text-blue-400"
                 >
                   prusek@utia.cas.cz
                 </a>
@@ -51,7 +53,7 @@ const Footer = () => {
               <li>
                 <Link
                   to="/documentation"
-                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
+                  className="text-base text-gray-600 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   {t('footer.documentation')}
                 </Link>
@@ -67,7 +69,7 @@ const Footer = () => {
               <li>
                 <Link
                   to="/terms-of-service"
-                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
+                  className="text-base text-gray-600 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   {t('footer.termsOfService')}
                 </Link>
@@ -75,7 +77,7 @@ const Footer = () => {
               <li>
                 <Link
                   to="/privacy-policy"
-                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
+                  className="text-base text-gray-600 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   {t('footer.privacyPolicy')}
                 </Link>
@@ -83,7 +85,7 @@ const Footer = () => {
               <li>
                 <a
                   href="mailto:prusek@utia.cas.cz"
-                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
+                  className="text-base text-gray-600 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   {t('footer.contactUs')}
                 </a>
@@ -99,7 +101,7 @@ const Footer = () => {
               href="https://utia.cas.cz/en/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
+              className="text-blue-600 hover:underline dark:text-blue-400"
             >
               ÚTIA AV ČR
             </a>
@@ -108,7 +110,7 @@ const Footer = () => {
               href="https://utia.cas.cz/en/people/?pid=3850"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
+              className="text-blue-600 hover:underline dark:text-blue-400"
             >
               Michal Průšek
             </a>

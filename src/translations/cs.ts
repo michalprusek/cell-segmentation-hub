@@ -31,6 +31,7 @@ export default {
     createYourFirst: 'Vytvořte svůj první projekt pro začátek',
     tryAgain: 'Zkusit znovu',
     cancelling: 'Rušení...',
+    deleting: 'Mazání...',
     retry: 'Zkusit znovu',
     retrying: 'Opakuji pokus...',
     retryAttempt: 'Pokus {{attempt}} z {{max}}',
@@ -912,6 +913,7 @@ export default {
     successfulSignUp: 'Úspěšná registrace',
     verifyEmail: 'Zkontrolujte prosím svůj e-mail pro potvrzení účtu',
     successfulSignOut: 'Úspěšné odhlášení',
+    signOutFailed: 'Odhlášení se nezdařilo. Zkuste to prosím znovu.',
     checkingAuthentication: 'Kontrola ověření...',
     loadingAccount: 'Načítání vašeho účtu...',
     processingRequest: 'Zpracování vašeho požadavku...',
@@ -2078,7 +2080,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Pokročilá platforma pro segmentaci a analýzu sféroidů pro biomedicínské výzkumníky, poskytující AI nástroje pro analýzu mikroskopických buněčných obrázků.',
+      'Platforma pro segmentaci a analýzu mikroskopických snímků pro biomedicínské výzkumníky — sféroidy, hojení ran, spermie, mikrokapsle a mikrotubuly, s nástroji AI od snímku až po měření.',
     contact: 'Kontakt',
     institution: 'Instituce',
     institutionName: 'ÚTIA AV ČR',
