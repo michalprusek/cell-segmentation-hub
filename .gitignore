@@ -136,10 +136,17 @@ real-*-measurements-*.json
 .vscode/settings.json
 
 .eslintcache
-.github/workflows/ci-cd.yml
 
-# Serena AI memory files (development artifacts)
-.serena/memories/
+# Serena MCP tool state. The whole directory is local editor/agent config, not
+# project source — `project.yml` and the nested `/cache` ignore were tracked by
+# accident. (`.serena/memories/` alone used to be listed here, which left the
+# config file itself committable.)
+.serena/
+
+# Report emitted by scripts/code-quality-check.js, which .lintstagedrc.json runs
+# on every commit — so without this rule the artifact lands in `git status`
+# after any staged change.
+code-quality-report.json
 
 # Debug/test artifacts
 screenshots/
@@ -149,12 +156,27 @@ backups/
 .tmp_viz/
 .playwright-mcp/
 scripts/certbot-logs/
+certbot/
 
 # Local-only env (Grafana admin password)
 .env.monitoring
 
-# External / scratch model artifacts dropped at repo root
+# External / scratch model artifacts dropped at repo root. These are training
+# and validation packages staged by hand on the box (3.5 GB combined), not
+# repository content. Each currently carries its own nested `.gitignore` holding
+# a single `*`, but that file is itself untracked host state: delete it, or
+# re-stage the directory from a copy that never had one, and the next
+# `git add -A` starts committing gigabytes. The rules below live in the repo, so
+# the protection travels with a clone.
+#
+# `mt-instance-seg-v5H/` in particular is load-bearing on this host: it is the
+# default source for scripts/download-microtubule-weights.sh. Ignore it; do not
+# delete it.
 path_c_v24c/
+mt34-benchmark/
+mt-instance-seg/
+mt-instance-seg-v5H/
+neurite-soma-seg/
 
 # HuggingFace model cache (transformers + DINOv3 backbone downloads)
 backend/segmentation/.hf-cache/
