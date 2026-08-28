@@ -41,7 +41,6 @@ out/
 coverage/
 .nyc_output/
 test-results/
-e2e/
 **/__tests__/
 **/*.test.*
 **/*.spec.*
@@ -140,3 +139,21 @@ backups/
 *.zip
 *.tar.gz
 *.rar
+
+# External / scratch model artifacts dropped at repo root (same set as
+# .gitignore). All four compose services build with `context: .`, so without
+# these every `make build-service` tars these directories and streams them to
+# the docker daemon, once per service. The *.pth / *.ckpt / *.h5 rules above
+# already keep the weights out, but ~177 MB of non-weight content was still
+# going over on every build.
+/mt34-benchmark/
+/mt-instance-seg/
+/mt-instance-seg-v5H/
+/neurite-soma-seg/
+/path_c_v24c/
+
+# Local agent/editor scratch state. Never belongs in an image.
+/.remember/
+/.serena/
+/.claude/
+/certbot/

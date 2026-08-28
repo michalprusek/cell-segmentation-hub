@@ -55,3 +55,37 @@ export function primeTranslationCache(
 ): void {
   _translationCache.set(lang, translations);
 }
+
+/**
+ * Resolve which language the client should render in before (and in the
+ * absence of) a server-side profile preference.
+ *
+ * Precedence:
+ *   1. an explicit choice already persisted in localStorage,
+ *   2. the browser's accept-language list — `navigator.languages` is an
+ *      ordered preference list, so a user whose first choice we do not ship
+ *      (e.g. `pl`) still gets their second (`de`) rather than English,
+ *   3. English.
+ *
+ * Deliberately does NOT write to localStorage. A browser-derived guess has to
+ * stay distinguishable from a real user choice: `syncLocalPreferencesToDatabase`
+ * pushes whatever is in localStorage onto the server profile at sign-in, so
+ * persisting the guess would let a fresh browser silently overwrite the
+ * language a returning user picked on another device.
+ */
+export function resolveClientLanguage(): Language {
+  const stored = localStorage.getItem('language') as Language | null;
+  if (stored && SUPPORTED_LANGUAGES.includes(stored)) return stored;
+
+  // Per spec `navigator.language` is `navigator.languages[0]`, so listing it
+  // first is a no-op in a conformant browser — it just keeps the primary
+  // preference authoritative in runtimes that expose only one of the two.
+  const candidates = [navigator.language, ...(navigator.languages ?? [])];
+
+  for (const tag of candidates) {
+    const base = tag?.split('-')[0]?.toLowerCase() as Language | undefined;
+    if (base && SUPPORTED_LANGUAGES.includes(base)) return base;
+  }
+
+  return 'en';
+}

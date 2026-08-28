@@ -60,13 +60,13 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         if (!selectedPolygonId) {
           return {
             title: t('segmentation.instructions.modes.slice'),
-            color: '#ef4444', // red-500 to match border
+            color: '#f59e0b', // amber-500 to match the slice border
             instructions: [t('segmentation.instructions.slice.selectPolygon')],
           };
         } else if (tempPoints.length === 0) {
           return {
             title: t('segmentation.instructions.modes.slice'),
-            color: '#ef4444', // red-500 to match border
+            color: '#f59e0b', // amber-500 to match the slice border
             instructions: [
               t('segmentation.instructions.slice.placeFirstPoint'),
               t('segmentation.instructions.slice.cancel'),
@@ -75,7 +75,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         } else {
           return {
             title: t('segmentation.instructions.modes.slice'),
-            color: '#ef4444', // red-500 to match border
+            color: '#f59e0b', // amber-500 to match the slice border
             instructions: [
               t('segmentation.instructions.slice.placeSecondPoint'),
               t('segmentation.instructions.slice.cancel'),
@@ -195,7 +195,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
       case EditMode.DeletePolygon:
         return {
           title: t('segmentation.instructions.modes.deletePolygon'),
-          color: '#f97316', // orange-500 to match border
+          color: '#ef4444', // red-500 — destructive, matches the delete border
           instructions: [
             t('segmentation.instructions.deletePolygon.clickToDelete'),
           ],

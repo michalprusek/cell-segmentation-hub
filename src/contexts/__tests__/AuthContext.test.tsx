@@ -275,11 +275,50 @@ describe('AuthContext – signUp', () => {
       'new@example.com',
       'pw',
       'newuser',
-      consentOptions
+      consentOptions,
+      // Client-detected UI language, seeded into the new profile so the
+      // profile-sync effect in LanguageContext doesn't stomp it later.
+      'en'
     );
     expect(result.current.user).toEqual(validAuthResponse.user);
     await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
     await waitFor(() => expect(findEmitted('signup_success')).toBeDefined());
+  });
+
+  it('sends the browser-detected language as the new profile preference', async () => {
+    // beforeEach already pins localStorage.getItem to null, so the resolver
+    // falls through to the browser locale.
+    const original = window.navigator.language;
+    Object.defineProperty(window.navigator, 'language', {
+      value: 'de-DE',
+      writable: true,
+      configurable: true,
+    });
+    vi.mocked(apiClient.register).mockResolvedValueOnce(validAuthResponse);
+
+    try {
+      const result = await renderAuth();
+
+      await act(async () => {
+        await result.current.signUp('de@example.com', 'pw');
+      });
+
+      expect(vi.mocked(apiClient.register)).toHaveBeenCalledWith(
+        'de@example.com',
+        'pw',
+        undefined,
+        undefined,
+        'de'
+      );
+    } finally {
+      // Restore unconditionally: a leaked 'de-DE' would cascade into every
+      // later test in this file.
+      Object.defineProperty(window.navigator, 'language', {
+        value: original,
+        writable: true,
+        configurable: true,
+      });
+    }
   });
 
   it('rejects, stays signed out, and emits signup_error when register fails', async () => {

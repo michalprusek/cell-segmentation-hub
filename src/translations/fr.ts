@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: 'Segmentation de Sphéroïdes',
+    appName: 'SpheroSeg',
     loading: 'Chargement...',
     save: 'Enregistrer',
     cancel: 'Annuler',
@@ -8,6 +8,9 @@ export default {
     dismiss: 'Fermer',
     delete: 'Supprimer',
     edit: 'Modifier',
+    actions: 'Actions',
+    show: 'Afficher',
+    hide: 'Masquer',
     create: 'Créer',
     search: 'Rechercher',
     error: 'Erreur',
@@ -31,6 +34,7 @@ export default {
     createYourFirst: 'Créez votre premier projet pour commencer',
     tryAgain: 'Réessayer',
     cancelling: 'Annulation...',
+    deleting: 'Suppression...',
     retry: 'Réessayer',
     retrying: 'Nouvelle tentative...',
     retryAttempt: 'Tentative {{attempt}} sur {{max}}',
@@ -88,22 +92,62 @@ export default {
   },
   landing: {
     hero: {
-      badge: 'Plateforme Avancée de Segmentation de Sphéroïdes',
-      title: 'Analyse Cellulaire par IA pour la Recherche Biomédicale',
+      eyebrow:
+        "Segmentation d'images biomédicales · ÚTIA, Académie tchèque des sciences",
+      title: 'La segmentation pour chaque échantillon que vous imagez.',
       subtitle:
-        "Améliorez votre analyse d'images cellulaires microscopiques avec notre plateforme de segmentation de sphéroïdes de pointe. Conçue pour les chercheurs recherchant précision et efficacité.",
+        "Sphéroïdes et leur désintégration, plaies de test de rayure, morphologie des spermatozoïdes, filaments de microtubules, microcapsules : un modèle entraîné pour chaque type, un seul éditeur pour tous, et des exports qu'ImageJ, COCO et YOLO comprennent déjà.",
       getStarted: 'Commencer',
-      learnMore: 'En savoir plus',
+      learnMore: 'Voir ce que la plateforme traite',
+    },
+    specimens: {
+      trayLabel: 'Choisissez un échantillon',
+      spheroid: {
+        label: 'Sphéroïde',
+        detail:
+          "Fond clair, 2048 × 2048. Un sphéroïde tumoral, détouré en rouge par HRNet : exactement le contour que l'éditeur vous propose de corriger.",
+        alt: "Micrographie en fond clair d'un sphéroïde tumoral, son contour de segmentation tracé en rouge.",
+      },
+      disintegration: {
+        label: 'Sphéroïde en désintégration',
+        detail:
+          "Fond clair, 2048 × 2048, 48 heures après le début d'un test de désintégration. Le cœur dense est en vert, chaque cellule qui s'en est détachée en rouge. L'indice de désintégration se calcule exactement à partir de cette séparation.",
+        alt: "Micrographie en fond clair d'un sphéroïde en train de se désintégrer, son cœur dense détouré en vert et chaque cellule détachée en rouge.",
+      },
+      wound: {
+        label: 'Plaie de test de rayure',
+        detail:
+          'Test de rayure, 2048 × 2048. La plaie ouverte est la limite rouge ; les îlots de cellules à l’intérieur sont en bleu et sont soustraits de la surface de la plaie.',
+        alt: "Micrographie de test de rayure : la plaie ouverte détourée en rouge et quatre îlots de cellules à l'intérieur détourés en bleu.",
+      },
+      sperm: {
+        label: 'Morphologie des spermatozoïdes',
+        detail:
+          'Fond clair, 1360 × 1024. Chaque cellule est tracée par trois polylignes plutôt que par une seule forme — tête en vert, pièce intermédiaire en ambre, flagelle en cyan — pour que chaque segment se mesure séparément.',
+        alt: 'Micrographie en fond clair de deux spermatozoïdes, chacun tracé par trois polylignes colorées : tête verte, pièce intermédiaire ambre, flagelle cyan.',
+      },
+      microtubule: {
+        label: 'Filaments de microtubules',
+        detail:
+          "Série temporelle en IRM, image 30. Chaque filament reçoit sa propre ligne centrale et sa couleur vient de l'identifiant de trajectoire, qu'il conserve sur toute l'acquisition : le kymographe suit donc un filament précis, et non le plus proche du moment.",
+        alt: 'Micrographie de microtubules en contraste de réflexion interférentielle, chaque filament tracé par une ligne centrale de sa propre couleur.',
+      },
+      microcapsule: {
+        label: 'Microcapsules',
+        detail:
+          "Fond clair, 1280 × 1024. Deux capsules entières sont détourées en rouge : ce sont celles qui reçoivent une surface, un périmètre et une compacité. Les capsules que le bord de l'image coupe n'ont pas de contour rouge ; le modèle les signale et les statistiques les écartent.",
+        alt: "Micrographie en fond clair de microcapsules : les deux capsules entières détourées en rouge, celles coupées par le bord de l'image sans contour.",
+      },
     },
     about: {
-      badge: 'Notre Mission',
-      title: 'Faire Progresser la Recherche Biomédicale par la Technologie',
+      badge: 'Qui la développe',
+      title: "D'où vient la plateforme",
       description1:
         "Notre plateforme a été développée par Bc. Michal Průšek, étudiant à la Faculté des Sciences Nucléaires et d'Ingénierie Physique (FJFI) de l'Université Technique Tchèque de Prague, sous la supervision d'Ing. Adam Novozámský, Ph.D.",
       description2:
         "Ce projet est une collaboration avec le groupe d'Ing. Silvie Rimpelová, Ph.D. de l'Institut de Biochimie et de Microbiologie de l'UCT Prague (VŠCHT Praha).",
       description3:
-        "Nous combinons des modèles d'IA de pointe avec une interface intuitive pour fournir aux chercheurs des outils puissants pour l'analyse d'images microscopiques, en nous concentrant sur la segmentation de sphéroïdes avec une précision inégalée.",
+        "Tout a commencé par les sphéroïdes tumoraux, puis la plateforme a grandi avec les expériences que nos collaborateurs nous ont apportées : tests de désintégration, plaies de test de rayure, morphologie des spermatozoïdes, séries temporelles de microtubules et microcapsules. Chaque type d'échantillon a son modèle entraîné, ses métriques et son export — et derrière eux, un seul éditeur.",
       contactText: 'Pour toute demande, veuillez nous contacter à',
     },
     acknowledgments: {
@@ -115,52 +159,50 @@ export default {
         'pour avoir contribué le module complet de segmentation de cicatrisation des plaies à cette plateforme.',
       visitPage: 'Visiter la page',
     },
-    features: {
-      badge: 'Capacités Puissantes',
-      title: 'Outils Avancés pour la Recherche Biomédicale',
+    cta: {
+      title: 'Apportez vos propres images.',
       subtitle:
-        'Notre plateforme offre une suite complète de fonctionnalités conçues pour rationaliser votre flux de travail de segmentation de sphéroïdes.',
+        "Créez un projet, choisissez le type d'échantillon et téléversez une série. Le modèle tourne sur GPU et le résultat s'ouvre directement dans l'éditeur, prêt à être corrigé.",
+      cardDescription: "L'inscription est ouverte — aucune invitation requise",
+      createAccount: 'Créer votre compte',
+    },
+    features: {
+      badge: 'Ce qu’elle fait',
+      title: "Un seul éditeur, quel que soit ce qu'il y a sur la lame",
+      subtitle:
+        "Chaque type d'échantillon a son modèle et ses métriques. Tout le reste — édition, suivi, export — suit le même flux de travail.",
       cards: {
-        advancedSegmentation: {
-          title: 'Segmentation Avancée',
+        models: {
+          title: "Un modèle par type d'échantillon",
           description:
-            'Détection précise de sphéroïdes avec analyse des limites pour des mesures cellulaires exactes.',
+            "Vous choisissez le type d'échantillon à la création du projet et seuls les modèles adaptés vous sont proposés. Les sphéroïdes en comptent cinq à eux seuls, du U-Net à 200 ms au goulot d'étranglement Mamba pour les images venant d'un microscope inconnu.",
         },
-        aiPowered: {
-          title: 'Analyse par IA',
+        stacks: {
+          title: 'Séries temporelles et piles, pas seulement des images fixes',
           description:
-            "Tirez parti des algorithmes d'apprentissage profond pour la détection et classification cellulaire automatisée.",
+            'MP4, AVI, MOV, MKV et WebM, TIFF multipage et Nikon ND2 se téléversent comme un seul élément et se déplient en images. Les acquisitions multicanaux conservent leurs canaux, et vous décidez duquel le modèle lit.',
         },
-        effortlessUploads: {
-          title: 'Téléchargements Sans Effort',
+        tracking: {
+          title: "Une identité qui survit au curseur d'images",
           description:
-            'Glissez-déposez vos images microscopiques pour un traitement et une analyse instantanés.',
+            "Les microtubules sont appariés d'une image à la suivante par la géométrie des courbes : un filament garde donc son identifiant et sa couleur sur toute l'acquisition, et le kymographe mesure ce filament-là, pas le plus proche du moment.",
         },
-        statisticalInsights: {
-          title: 'Perspectives Statistiques',
+        corrections: {
+          title: 'Corrigez tout à la main',
           description:
-            'Métriques complètes et visualisations pour extraire des modèles de données significatifs.',
+            'Déplacez des sommets, coupez en deux un objet fusionné, ajoutez des points le long d’un contour, joignez deux polylignes, changez une classe. Les modifications sont enregistrées avec l’image, pas seulement dans le navigateur.',
         },
-        collaboration: {
-          title: 'Outils de Collaboration',
+        measurements: {
+          title: "Des chiffres, dans des fichiers que d'autres outils ouvrent",
           description:
-            'Partagez des projets avec des collègues et collaborez en temps réel sur les résultats de recherche.',
+            'Surface, périmètre, diamètre de Feret, longueur de polyligne et intensité par canal, exportés en XLSX aux côtés de COCO, YOLO, jeux de ROI ImageJ et annotations CVAT.',
         },
-        processingPipeline: {
-          title: 'Pipeline de Traitement',
+        batch: {
+          title: 'Dimensionné pour une expérience entière',
           description:
-            "Flux de travail automatisé du préprocessing à l'analyse finale avec des paramètres personnalisables.",
+            "Des lots de 10 000 images tournent sur GPU, et la file d'attente rétrograde celui qu'elle vient de servir : une série de 600 images ne bloque donc pas tout le monde.",
         },
       },
-    },
-    cta: {
-      title: "Prêt à Transformer Votre Flux de Travail d'Analyse Cellulaire ?",
-      subtitle:
-        'Rejoignez les chercheurs de premier plan qui utilisent déjà notre plateforme pour accélérer leurs découvertes.',
-      cardTitle: "Commencez Aujourd'hui",
-      cardDescription:
-        "Inscrivez-vous pour un compte gratuit et découvrez la puissance de la segmentation de sphéroïdes pilotée par l'IA.",
-      createAccount: 'Créer Votre Compte',
     },
   },
   dashboard: {
@@ -224,6 +266,7 @@ export default {
       sperm: 'Spermatozoïdes',
       microtubules: 'Microtubules',
       microcapsule: 'Microcapsules',
+      neurite: 'Neurites et somas',
     },
     projectNamePlaceholder: 'ex. : Sphéroïdes de cellules HeLa',
     projectDescPlaceholder:
@@ -459,6 +502,7 @@ export default {
         wound: 'Modèles de cicatrisation',
         microtubule: 'Modèles de microtubules',
         microcapsule: 'Modèles de microcapsules',
+        neurite: 'Modèles neurites / somas',
       },
       presets: {
         fast: 'Rapide',
@@ -525,6 +569,11 @@ export default {
           description:
             "Segmentation d'instances pour les microcapsules (objets ronds) en microscopie à champ clair. Un U-Net compact distillé de Meta SAM 3 renvoie un contour propre en pleine résolution par capsule et sépare les capsules jointives par un watershed ; les capsules coupées par le bord de l'image sont exclues des métriques (aire, périmètre, compacité).",
         },
+        neurite_soma: {
+          name: 'Neurite / Soma (nnU-Net ResEnc-M)',
+          description:
+            'Segmentation sémantique à deux classes de neurones en microscopie de fluorescence — neurite (prolongements) et soma (corps cellulaire) — à partir du seul canal tubuline. nnU-Net v2 ResEnc-M, ensemble de 3 folds avec TTA par miroir et terme topologique clDice sur la classe neurite. Dice sur données réservées 0,832 neurite / 0,915 soma.',
+        },
       },
     },
     detectHoles: 'Détecter les Trous',
@@ -558,6 +607,8 @@ export default {
         "Segmentation d'instances de microtubules pour la microscopie IRM. Réseau nnU-Net ResEnc-M, instanceur borné en courbure, sortie polyligne native avec tracking géométrique inter-trames.",
       microcapsule:
         "U-Net compact (distillé de Meta SAM 3) pour la segmentation d'instances de microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M (2D, ensemble de 3 folds) pour la segmentation des neurites et des somas en microscopie de fluorescence. Lit le canal tubuline ; Dice sur données réservées 0,832 neurite / 0,915 soma. Entraîné sur des données confocales Leica à ~0,180 µm/px : vérifier les comptages de somas à une autre taille de pixel.',
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
     dataUsageDescription:
@@ -649,6 +700,7 @@ export default {
     successfulSignUp: 'Inscription réussie',
     verifyEmail: 'Veuillez vérifier votre email pour confirmer votre compte',
     successfulSignOut: 'Déconnexion réussie',
+    signOutFailed: 'La déconnexion a échoué. Veuillez réessayer.',
     checkingAuthentication: "Vérification de l'authentification...",
     loadingAccount: 'Chargement de votre compte...',
     processingRequest: 'Traitement de votre demande...',
@@ -871,6 +923,12 @@ export default {
       internal: 'Internal',
       polyline: 'Polyligne',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurite',
+      soma: 'Soma',
+    },
     shortcuts: {
       buttonText: 'Raccourcis',
       title: 'Raccourcis Clavier',
@@ -899,6 +957,7 @@ export default {
       undo: 'Annuler',
       redo: 'Rétablir',
       deleteSelected: 'Supprimer le polygone sélectionné',
+      finishShape: 'Terminer la forme en cours',
 
       // View shortcuts
       zoom: 'Zoomer/Dézoomer',
@@ -1264,6 +1323,8 @@ export default {
         "Longueur, aire et intensité par canal de chaque MT à partir du fichier ND2/TIFF d'origine. Corrigé par la médiane du fond (en dehors du masque MT dilaté).",
       intensityNote:
         "L'intensité du signal par canal — y compris l'intensité sommée (intégrée) — est toujours calculée pour chaque canal et écrite dans la feuille de métriques. Aucune sélection n'est nécessaire.",
+      wideNote:
+        'Chaque canal a sa propre ligne dans metrics.csv (voir la colonne « channel »). Le fichier compagnon metrics_wide.csv — une feuille supplémentaire dans metrics.xlsx — place tous les canaux du même microtubule sur une seule ligne, avec un jeu de colonnes par canal.',
       thicknessLabel: 'Épaisseur du MT (px)',
       thicknessHelp:
         "Largeur de la bande d'échantillonnage le long de chaque polyligne. 5 px correspond au diamètre typique des microtubules en grand champ 100×.",
@@ -2528,7 +2589,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      "Plateforme avancée de segmentation et d'analyse de sphéroïdes pour les chercheurs biomédicaux, fournissant des outils alimentés par IA pour l'analyse d'images cellulaires microscopiques.",
+      "Plateforme de segmentation et d'analyse d'images de microscopie pour les chercheurs biomédicaux — sphéroïdes, cicatrisation, spermatozoïdes, microcapsules et microtubules, avec des outils alimentés par IA de l'image à la mesure.",
     contact: 'Contact',
     institution: 'Institution',
     institutionName: 'ÚTIA AV ČR',

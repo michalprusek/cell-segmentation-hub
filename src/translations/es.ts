@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: 'Segmentación de Esferoides',
+    appName: 'SpheroSeg',
     loading: 'Cargando...',
     save: 'Guardar',
     cancel: 'Cancelar',
@@ -8,6 +8,9 @@ export default {
     dismiss: 'Descartar',
     delete: 'Eliminar',
     edit: 'Editar',
+    actions: 'Acciones',
+    show: 'Mostrar',
+    hide: 'Ocultar',
     create: 'Crear',
     search: 'Buscar',
     error: 'Error',
@@ -31,6 +34,7 @@ export default {
     createYourFirst: 'Crea tu primer proyecto para comenzar',
     tryAgain: 'Intentar de nuevo',
     cancelling: 'Cancelando...',
+    deleting: 'Eliminando...',
     retry: 'Reintentar',
     retrying: 'Reintentando...',
     retryAttempt: 'Intento {{attempt}} de {{max}}',
@@ -88,22 +92,62 @@ export default {
   },
   landing: {
     hero: {
-      badge: 'Plataforma Avanzada de Segmentación de Esferoides',
-      title: 'Análisis Celular con IA para Investigación Biomédica',
+      eyebrow:
+        'Segmentación de imagen biomédica · ÚTIA, Academia Checa de Ciencias',
+      title: 'Segmentación para cada muestra que usted captura.',
       subtitle:
-        'Eleve su análisis de imágenes celulares microscópicas con nuestra plataforma de segmentación de esferoides de vanguardia. Diseñada para investigadores que buscan precisión y eficiencia.',
+        'Esferoides y su desintegración, heridas de ensayo de rayado, morfología espermática, filamentos de microtúbulos, microcápsulas: un modelo entrenado para cada tipo, un único editor para todos y exportaciones que ImageJ, COCO y YOLO ya entienden.',
       getStarted: 'Comenzar',
-      learnMore: 'Saber Más',
+      learnMore: 'Ver qué admite',
+    },
+    specimens: {
+      trayLabel: 'Elija una muestra',
+      spheroid: {
+        label: 'Esferoide',
+        detail:
+          'Campo claro, 2048 × 2048. Un esferoide tumoral, delineado en rojo por HRNet: exactamente el contorno que el editor le entrega para corregir.',
+        alt: 'Micrografía de campo claro de un esferoide tumoral con su contorno de segmentación dibujado en rojo.',
+      },
+      disintegration: {
+        label: 'Esferoide en desintegración',
+        detail:
+          'Campo claro, 2048 × 2048, 48 horas de ensayo de desintegración. El núcleo denso está en verde y cada célula desprendida en rojo. El índice de desintegración se calcula exactamente a partir de esa separación.',
+        alt: 'Micrografía de campo claro de un esferoide desintegrándose, con el núcleo denso delineado en verde y cada célula desprendida en rojo.',
+      },
+      wound: {
+        label: 'Herida de ensayo de rayado',
+        detail:
+          'Ensayo de rayado, 2048 × 2048. La herida abierta es el contorno rojo; las islas de células dentro de ella están en azul y se restan del área de la herida.',
+        alt: 'Micrografía de ensayo de rayado con la herida abierta delineada en rojo y cuatro islas de células en su interior delineadas en azul.',
+      },
+      sperm: {
+        label: 'Morfología espermática',
+        detail:
+          'Campo claro, 1360 × 1024. Cada célula se traza como tres polilíneas en vez de una sola mancha —cabeza en verde, pieza intermedia en ámbar, cola en cian— para poder medir cada segmento por separado.',
+        alt: 'Micrografía de campo claro de dos espermatozoides, cada uno trazado por tres polilíneas de color: cabeza verde, pieza intermedia ámbar, cola cian.',
+      },
+      microtubule: {
+        label: 'Filamentos de microtúbulos',
+        detail:
+          'Serie temporal en IRM, fotograma 30. Cada filamento tiene su propia línea central y su color procede del identificador de trayectoria, que conserva durante toda la adquisición: así el kimograma sigue un filamento concreto y no el que quede más cerca.',
+        alt: 'Micrografía de microtúbulos en contraste de reflexión interferencial, con cada filamento trazado por una línea central de su propio color.',
+      },
+      microcapsule: {
+        label: 'Microcápsulas',
+        detail:
+          'Campo claro, 1280 × 1024. Dos cápsulas completas están delineadas en rojo: son las que reciben área, perímetro y compacidad. Las cápsulas que corta el borde del fotograma no llevan contorno rojo; el modelo las marca y las estadísticas las dejan fuera.',
+        alt: 'Micrografía de campo claro de microcápsulas, las dos completas delineadas en rojo y las cortadas por el borde del fotograma sin contorno.',
+      },
     },
     about: {
-      badge: 'Nuestra Misión',
-      title: 'Avanzando la Investigación Biomédica a través de la Tecnología',
+      badge: 'Quién lo construye',
+      title: 'De dónde viene la plataforma',
       description1:
         'Nuestra plataforma fue desarrollada por Bc. Michal Průšek, estudiante de la Facultad de Ciencias Nucleares e Ingeniería Física (FJFI) en la Universidad Técnica Checa de Praga, bajo la supervisión de Ing. Adam Novozámský, Ph.D.',
       description2:
         'Este proyecto es una colaboración con el grupo de Ing. Silvie Rimpelová, Ph.D. del Instituto de Bioquímica y Microbiología de la UCT Praga (VŠCHT Praha).',
       description3:
-        'Combinamos modelos de IA de vanguardia con una interfaz intuitiva para proporcionar a los investigadores herramientas poderosas para el análisis de imágenes microscópicas, centrándonos en la segmentación de esferoides con precisión sin igual.',
+        'Empezó con esferoides tumorales y creció con los experimentos que trajeron nuestros colaboradores: ensayos de desintegración, heridas de ensayo de rayado, morfología espermática, series temporales de microtúbulos y microcápsulas. Cada tipo de muestra tiene su propio modelo entrenado, sus propias métricas y su propia exportación, y detrás de todos ellos, un único editor.',
       contactText: 'Para consultas, contáctenos en',
     },
     acknowledgments: {
@@ -115,52 +159,50 @@ export default {
         'por contribuir con el módulo completo de segmentación de cicatrización de heridas a esta plataforma.',
       visitPage: 'Visitar página',
     },
-    features: {
-      badge: 'Capacidades Poderosas',
-      title: 'Herramientas Avanzadas para la Investigación Biomédica',
+    cta: {
+      title: 'Traiga sus propias imágenes.',
       subtitle:
-        'Nuestra plataforma ofrece un conjunto completo de características diseñadas para optimizar su flujo de trabajo de segmentación de esferoides.',
+        'Cree un proyecto, elija el tipo de muestra y suba una serie. El modelo se ejecuta en GPU y el resultado se abre directamente en el editor, listo para corregir.',
+      cardDescription: 'El registro está abierto: no hace falta invitación',
+      createAccount: 'Crear su cuenta',
+    },
+    features: {
+      badge: 'Qué hace',
+      title: 'Un editor, sea lo que sea que haya en el portaobjetos',
+      subtitle:
+        'Cada tipo de muestra tiene su modelo y sus métricas. Todo lo demás —edición, seguimiento, exportación— es el mismo flujo de trabajo.',
       cards: {
-        advancedSegmentation: {
-          title: 'Segmentación Avanzada',
+        models: {
+          title: 'Un modelo por tipo de muestra',
           description:
-            'Detección precisa de esferoides con análisis de límites para mediciones celulares exactas.',
+            'Elija el tipo de muestra al crear el proyecto y solo se ofrecerán los modelos que le corresponden. Los esferoides tienen cinco por sí solos, desde una U-Net de 200 ms hasta un cuello de botella Mamba para imágenes de un microscopio desconocido.',
         },
-        aiPowered: {
-          title: 'Análisis con IA',
+        stacks: {
+          title: 'Series temporales y pilas, no solo imágenes sueltas',
           description:
-            'Aproveche algoritmos de aprendizaje profundo para detección y clasificación celular automatizada.',
+            'MP4, AVI, MOV, MKV y WebM, TIFF multipágina y Nikon ND2 se suben como un único elemento y se despliegan en fotogramas. Las adquisiciones multicanal conservan sus canales y usted decide de cuál lee el modelo.',
         },
-        effortlessUploads: {
-          title: 'Cargas Sin Esfuerzo',
+        tracking: {
+          title: 'Identidad que sobrevive al deslizador de fotogramas',
           description:
-            'Arrastre y suelte sus imágenes microscópicas para procesamiento y análisis instantáneos.',
+            'Los microtúbulos se emparejan de un fotograma al siguiente por la geometría de la curva, de modo que un filamento mantiene su identificador y su color durante toda la adquisición, y el kimograma mide ese filamento y no el que quedase más cerca.',
         },
-        statisticalInsights: {
-          title: 'Perspectivas Estadísticas',
+        corrections: {
+          title: 'Corrija cualquier cosa a mano',
           description:
-            'Métricas integrales y visualizaciones para extraer patrones de datos significativos.',
+            'Arrastre vértices, divida en dos un objeto fusionado, añada puntos a lo largo de un contorno, una dos polilíneas, cambie la clase. Las ediciones se guardan junto a la imagen, no solo en el navegador.',
         },
-        collaboration: {
-          title: 'Herramientas de Colaboración',
+        measurements: {
+          title: 'Números, en archivos que otras herramientas abren',
           description:
-            'Comparta proyectos con colegas y colabore en tiempo real en hallazgos de investigación.',
+            'Área, perímetro, diámetro de Feret, longitud de polilínea e intensidad por canal, exportados como XLSX junto con COCO, YOLO, conjuntos de ROI de ImageJ y anotaciones de CVAT.',
         },
-        processingPipeline: {
-          title: 'Pipeline de Procesamiento',
+        batch: {
+          title: 'Dimensionado para un experimento entero',
           description:
-            'Flujo de trabajo automatizado desde preprocesamiento hasta análisis final con parámetros personalizables.',
+            'Los lotes de hasta 10 000 imágenes se procesan en GPU y la cola posterga a quien acaba de atender, de modo que una serie temporal de 600 fotogramas no bloquea a los demás.',
         },
       },
-    },
-    cta: {
-      title: '¿Listo para Transformar su Flujo de Trabajo de Análisis Celular?',
-      subtitle:
-        'Únase a investigadores líderes que ya están usando nuestra plataforma para acelerar sus descubrimientos.',
-      cardTitle: 'Comience Hoy',
-      cardDescription:
-        'Regístrese para obtener una cuenta gratuita y experimente el poder de la segmentación de esferoides impulsada por IA.',
-      createAccount: 'Crear su Cuenta',
     },
   },
   dashboard: {
@@ -223,6 +265,7 @@ export default {
       sperm: 'Esperma',
       microtubules: 'Microtúbulos',
       microcapsule: 'Microcápsulas',
+      neurite: 'Neuritas y somas',
     },
     projectNamePlaceholder: 'ej. Esferoides de células HeLa',
     projectDescPlaceholder:
@@ -445,6 +488,7 @@ export default {
         wound: 'Modelos de cicatrización',
         microtubule: 'Modelos de microtúbulos',
         microcapsule: 'Modelos de microcápsulas',
+        neurite: 'Modelos de neuritas y somas',
       },
       presets: {
         fast: 'Rápido',
@@ -511,6 +555,11 @@ export default {
           description:
             'Segmentación de instancias para microcápsulas (objetos redondos) en microscopía de campo claro. Una U-Net compacta destilada de Meta SAM 3 devuelve un contorno limpio a resolución completa por cápsula y separa las cápsulas adyacentes mediante watershed; las cápsulas cortadas por el borde de la imagen quedan excluidas de las métricas (área, perímetro, compacidad).',
         },
+        neurite_soma: {
+          name: 'Neurita / Soma (nnU-Net ResEnc-M)',
+          description:
+            'Segmentación semántica de dos clases de neuronas en microscopía de fluorescencia — neurita (prolongaciones) y soma (cuerpo celular) — solo a partir del canal de tubulina. nnU-Net v2 ResEnc-M, conjunto de 3 folds con TTA de espejo y término topológico clDice para la clase neurita. Dice en datos retenidos 0,832 neurita / 0,915 soma.',
+        },
       },
     },
     detectHoles: 'Detectar Agujeros',
@@ -544,6 +593,8 @@ export default {
         'Segmentación de instancias de microtúbulos para microscopía IRM. Red nnU-Net ResEnc-M, instanciador acotado por curvatura, salida polilínea nativa con tracking geométrico entre cuadros.',
       microcapsule:
         'U-Net compacta (destilada de Meta SAM 3) para segmentación de instancias de microcápsulas — área, perímetro y compacidad por cápsula, con las cápsulas cortadas por el borde excluidas de las métricas.',
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M (2D, conjunto de 3 folds) para segmentar neuritas y somas en microscopía de fluorescencia. Usa el canal de tubulina; Dice en datos retenidos 0,832 neurita / 0,915 soma. Entrenado con datos confocales Leica a ~0,180 µm/px: valide los recuentos de somas con otro tamaño de píxel.',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
     dataUsageDescription:
@@ -649,6 +700,7 @@ export default {
     verifyEmail:
       'Por favor, verifica tu correo electrónico para confirmar tu cuenta',
     successfulSignOut: 'Cierre de sesión exitoso',
+    signOutFailed: 'No se pudo cerrar la sesión. Inténtalo de nuevo.',
     checkingAuthentication: 'Verificando autenticación...',
     loadingAccount: 'Cargando tu cuenta...',
     processingRequest: 'Procesando tu solicitud...',
@@ -870,6 +922,12 @@ export default {
       internal: 'Interno',
       polyline: 'Polilínea',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurita',
+      soma: 'Soma',
+    },
     shortcuts: {
       buttonText: 'Atajos',
       title: 'Atajos de Teclado',
@@ -898,6 +956,7 @@ export default {
       undo: 'Deshacer',
       redo: 'Rehacer',
       deleteSelected: 'Eliminar polígono seleccionado',
+      finishShape: 'Finalizar la forma actual',
 
       // View shortcuts
       zoom: 'Acercar/Alejar',
@@ -1259,6 +1318,8 @@ export default {
         'Longitud, área e intensidad por canal de cada MT desde el archivo ND2/TIFF original. Corregido con la mediana del fondo (fuera de la máscara MT dilatada).',
       intensityNote:
         'La intensidad de señal por canal —incluida la intensidad sumada (integrada)— se calcula siempre para cada canal y se escribe en la hoja de métricas. No es necesario seleccionar nada.',
+      wideNote:
+        'Cada canal tiene su propia fila en metrics.csv (véase la columna «channel»). El archivo complementario metrics_wide.csv —una hoja adicional en metrics.xlsx— coloca todos los canales del mismo microtúbulo en una sola fila, con un conjunto de columnas por canal.',
       thicknessLabel: 'Grosor del MT (px)',
       thicknessHelp:
         'Ancho de la banda de muestreo a lo largo de cada polilínea. 5 px corresponde al diámetro típico del microtúbulo a 100× campo amplio.',
@@ -2419,7 +2480,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Plataforma avanzada de segmentación y análisis de esferoides para investigadores biomédicos, proporcionando herramientas impulsadas por IA para el análisis de imágenes celulares microscópicas.',
+      'Plataforma de segmentación y análisis de imágenes de microscopía para investigadores biomédicos: esferoides, cicatrización de heridas, espermatozoides, microcápsulas y microtúbulos, con herramientas impulsadas por IA desde la imagen hasta la medición.',
     contact: 'Contacto',
     institution: 'Institución',
     institutionName: 'ÚTIA AV ČR',

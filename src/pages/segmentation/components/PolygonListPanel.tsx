@@ -7,6 +7,7 @@ import {
   MoreVertical,
   ChevronUp,
   ChevronDown,
+  Shapes,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Polygon } from '@/lib/segmentation';
 import { motion } from 'framer-motion';
 import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
+import { neuronClassStyle } from '../utils/neuronClassStyle';
 
 interface PolygonListPanelProps {
   loading: boolean;
@@ -154,6 +156,10 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
           return 'bg-violet-500';
       }
     }
+    // Closed polygons carrying a neuron class (neurite / soma) get that
+    // class's colour instead of the generic external red.
+    const neuronStyle = neuronClassStyle(polygon.partClass);
+    if (neuronStyle) return neuronStyle.dotClass;
     return isInternalPolygon(polygon) ? 'bg-blue-500' : 'bg-red-500';
   };
 
@@ -203,10 +209,14 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
             {t('segmentation.status.polygons')}
           </h3>
         </div>
-        <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
+        <div className="flex flex-1 items-center justify-center p-6 text-gray-500 dark:text-gray-400">
           <div className="text-center">
+            <Shapes
+              className="mx-auto mb-2 h-6 w-6 text-gray-300 dark:text-gray-600"
+              aria-hidden
+            />
             <div className="text-sm">{t('segmentation.status.noPolygons')}</div>
-            <div className="text-xs mt-1">
+            <div className="mt-1 text-xs">
               {t('segmentation.status.startCreating')}
             </div>
           </div>
@@ -236,7 +246,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
               <button
                 type="button"
                 onClick={handleToggleAllVisibility}
-                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
                 title={
                   allHidden
                     ? t('microtubule.showAll')
@@ -344,24 +354,39 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;
             const isPolyline = polygon.geometry === 'polyline';
+            // Neuron classes tag CLOSED polygons, so they are resolved on the
+            // non-polyline branch — and from their own translation namespace,
+            // never sperm's `sperm.part.*`.
+            const neuronStyle = isPolyline
+              ? undefined
+              : neuronClassStyle(polygon.partClass);
             const polygonName = isPolyline
               ? `${polygon.partClass ? t(`sperm.part.${polygon.partClass}`) : t('segmentation.status.polyline')}${polygon.instanceId ? ` (${getInstanceLabel(polygon.instanceId)})` : ''}`
-              : polygon.name || `${t('common.polygon')} ${index + 1}`;
+              : polygon.name ||
+                (neuronStyle
+                  ? `${t(neuronStyle.i18nKey)} ${index + 1}`
+                  : `${t('common.polygon')} ${index + 1}`);
 
             return (
               <motion.div
                 key={ensureValidPolygonId(polygon.id, `polygon-list-${index}`)}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+                // Capped stagger: the old `index * 0.05` made row 120 of a
+                // long list wait six seconds before appearing. The entrance
+                // is a hint that rows arrived, not a queue to sit through.
+                transition={{
+                  duration: 0.15,
+                  delay: Math.min(index, 8) * 0.02,
+                }}
                 className={`
                   relative group rounded-lg border transition-all duration-200 cursor-pointer
                   ${
                     isSelected
                       ? isPolyline
-                        ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20'
-                        : 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        ? 'border-violet-500 bg-violet-50 ring-1 ring-violet-500 dark:bg-violet-900/30'
+                        : 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 dark:bg-blue-900/30'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800/60'
                   }
                   ${isHidden ? 'opacity-50' : ''}
                 `}
@@ -420,9 +445,11 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                             ? polygon.partClass
                               ? t(`sperm.part.${polygon.partClass}`)
                               : t('segmentation.status.polyline')
-                            : isInternalPolygon(polygon)
-                              ? t('segmentation.status.internal')
-                              : t('segmentation.status.external')}
+                            : neuronStyle
+                              ? t(neuronStyle.i18nKey)
+                              : isInternalPolygon(polygon)
+                                ? t('segmentation.status.internal')
+                                : t('segmentation.status.external')}
                         </span>
                         {polygon.area && (
                           <>
@@ -439,7 +466,17 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 opacity-60 hover:opacity-100 transition-opacity"
+                        className="h-7 w-7 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                        aria-label={
+                          isHidden
+                            ? String(t('common.show'))
+                            : String(t('common.hide'))
+                        }
+                        title={
+                          isHidden
+                            ? String(t('common.show'))
+                            : String(t('common.hide'))
+                        }
                         onClick={e => {
                           e.stopPropagation();
                           onTogglePolygonVisibility?.(polygon.id);
@@ -458,7 +495,8 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-60 hover:opacity-100 transition-opacity"
+                            className="h-7 w-7 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                            aria-label={String(t('common.actions'))}
                             onClick={e => e.stopPropagation()}
                           >
                             <MoreVertical className="h-3 w-3" />
@@ -473,7 +511,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => onDeletePolygon?.(polygon.id)}
-                            className="text-red-600 dark:text-red-400"
+                            className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950 dark:focus:text-red-300"
                           >
                             <Trash2 className="h-3 w-3 mr-2" />
                             {t('common.delete')}

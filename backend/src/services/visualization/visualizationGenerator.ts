@@ -26,9 +26,9 @@ export interface VisualizationOptions {
   labelPrefix?: InstanceLabelPrefix;
 }
 
-/** Visualization polygon — `BasePolygon` plus the wider `PolygonPartClass`
- *  union (sperm sub-parts plus spheroid 'core'). The export layer
- *  intentionally uses the narrower `SpermPartClass` flavour. */
+/** Visualization polygon — `BasePolygon` plus the full `PolygonPartClass`
+ *  union (sperm sub-parts, spheroid 'core', neuron classes). The export layer
+ *  now uses the same union; only the sperm-specific guards stay narrow. */
 export interface Polygon extends BasePolygon {
   partClass?: PolygonPartClass;
 }
@@ -37,6 +37,14 @@ const POLYLINE_COLORS: Record<string, string> = {
   head: '#22c55e', // green
   midpiece: '#f59e0b', // orange
   tail: '#06b6d4', // cyan
+};
+
+// Closed-polygon neuron classes. Hues match the model's own `--overlay`
+// output and the editor canvas (see `neuronClassStyle.ts`), so an exported
+// visualization, the editor and a raw `predict.py` overlay agree.
+const NEURON_COLORS: Record<string, string> = {
+  neurite: '#06b6d4', // cyan
+  soma: '#d946ef', // magenta
 };
 
 export enum VisualizationResult {
@@ -323,17 +331,22 @@ export class VisualizationGenerator {
     const isIncomplete = polygon.complete === false;
 
     // Polylines use part-class colors; closed polygons use type-based colors
-    // except 'core' which renders green (consistent with the editor canvas).
+    // except 'core' (green) and the neuron classes, which carry their own —
+    // all consistent with the editor canvas.
     const isCorePolygon = !isPolyline && polygon.partClass === 'core';
+    const neuronColor = isPolyline
+      ? undefined
+      : NEURON_COLORS[polygon.partClass || ''];
     const color = isIncomplete
       ? '#969696' // grey — matches the model overlay (150,150,150)
       : isPolyline
         ? POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7'
         : isCorePolygon
           ? '#22c55e' // green — matches frontend CanvasPolygon for the disintegration core
-          : polygon.type === 'external'
-            ? options.polygonColors?.external || '#00FF00'
-            : options.polygonColors?.internal || '#FF0000';
+          : (neuronColor ??
+            (polygon.type === 'external'
+              ? options.polygonColors?.external || '#00FF00'
+              : options.polygonColors?.internal || '#FF0000'));
 
     ctx.strokeStyle = color;
     ctx.lineWidth = isPolyline

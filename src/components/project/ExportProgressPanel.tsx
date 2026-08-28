@@ -185,10 +185,17 @@ export const ExportProgressPanel = ({
       className={cn('mb-6', className)}
     >
       <Card className="border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/50 dark:to-indigo-950/50">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
+        {/* This panel was the only one on the project page with no responsive
+            direction at all: one unwrappable row holding icon + heading +
+            phase badge + progress bar + fallback badge, with Download /
+            Dismiss / Cancel pinned to its right. Minimum width was ~600px
+            against 328px available, so the whole document gained a horizontal
+            scrollbar for the duration of every export. It now stacks and wraps
+            the same way its sibling QueueStatsPanel already did. */}
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             {/* Left section - Export status */}
-            <div className="flex items-center gap-4 flex-1">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-1 sm:gap-4">
               <div className="flex items-center gap-2">
                 {getPhaseIcon()}
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100">
@@ -200,7 +207,7 @@ export const ExportProgressPanel = ({
               {getPhaseBadge()}
 
               {/* Progress section */}
-              <div className="flex-1 max-w-md">
+              <div className="w-full min-w-0 sm:w-auto sm:flex-1 sm:max-w-md">
                 {(isExporting || isDownloading || isCancelling) && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
@@ -237,7 +244,7 @@ export const ExportProgressPanel = ({
             </div>
 
             {/* Right section - Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
               {/* Download button for completed exports */}
               {completedJobId && !isExporting && (
                 <Button
@@ -314,7 +321,7 @@ export const ExportProgressPanel = ({
                   cancelText={
                     isCancelling ? t('export.cancelling') : t('export.cancel')
                   }
-                  className="min-w-[100px]"
+                  className="min-w-[100px] flex-1 sm:flex-none"
                 />
               )}
             </div>

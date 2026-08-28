@@ -18,9 +18,36 @@ export const isValidSpermPartClass = (
   typeof value === 'string' &&
   (SPERM_PART_CLASSES as readonly string[]).includes(value);
 
-// Wider class union covering both sperm parts and spheroid 'core'
-// (dense central region detected by the disintegration model).
-export const POLYGON_PART_CLASSES = [...SPERM_PART_CLASSES, 'core'] as const;
+/**
+ * Semantic classes emitted by the two-class neurite/soma model. Mirrors the
+ * backend SSOT in `backend/src/utils/polygonValidation.ts`.
+ *
+ * Unlike the sperm parts above — polylines that together make up ONE instance
+ * — these tag whole CLOSED polygons, each an independent object of its class.
+ * They are the only thing distinguishing a process from a cell body once the
+ * mask has been contoured.
+ *
+ * Declared as its own group rather than folded into a flat list so that
+ * `SPERM_PART_CLASSES` / `isValidSpermPartClass` stay exactly three values:
+ * they gate sperm-only paths (COCO polyline export, instance grouping,
+ * the head/midpiece/tail context menu) that must NOT accept a neuron class.
+ */
+export const NEURON_PART_CLASSES = ['neurite', 'soma'] as const;
+export type NeuronPartClass = (typeof NEURON_PART_CLASSES)[number];
+
+export const isValidNeuronPartClass = (
+  value: unknown
+): value is NeuronPartClass =>
+  typeof value === 'string' &&
+  (NEURON_PART_CLASSES as readonly string[]).includes(value);
+
+// Wider class union covering sperm parts, the spheroid 'core' (dense central
+// region detected by the disintegration model) and the neuron classes.
+export const POLYGON_PART_CLASSES = [
+  ...SPERM_PART_CLASSES,
+  'core',
+  ...NEURON_PART_CLASSES,
+] as const;
 export type PolygonPartClass = (typeof POLYGON_PART_CLASSES)[number];
 
 export interface Polygon {

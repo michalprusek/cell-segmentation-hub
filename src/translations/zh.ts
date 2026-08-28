@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: '球体分割',
+    appName: 'SpheroSeg',
     loading: '加载中...',
     save: '保存',
     cancel: '取消',
@@ -8,6 +8,9 @@ export default {
     dismiss: '关闭',
     delete: '删除',
     edit: '编辑',
+    actions: '操作',
+    show: '显示',
+    hide: '隐藏',
     create: '创建',
     search: '搜索',
     error: '错误',
@@ -31,6 +34,7 @@ export default {
     createYourFirst: '创建您的第一个项目开始使用',
     tryAgain: '重试',
     cancelling: '正在取消...',
+    deleting: '正在删除...',
     retry: '重试',
     retrying: '重试中...',
     retryAttempt: '第 {{attempt}} 次重试，共 {{max}} 次',
@@ -88,22 +92,61 @@ export default {
   },
   landing: {
     hero: {
-      badge: '先进的球状体分割平台',
-      title: '用于生物医学研究的AI细胞分析',
+      eyebrow: '生物医学图像分割 · 捷克科学院信息论与自动化研究所（ÚTIA）',
+      title: '为您拍摄的每一种样本提供分割。',
       subtitle:
-        '使用我们尖端的球状体分割平台提升您的显微细胞图像分析。专为寻求精确性和效率的研究人员设计。',
+        '球状体及其解体、划痕实验伤口、精子形态、微管纤维、微胶囊——每一类都有各自训练的模型，全部共用一个编辑器，导出格式 ImageJ、COCO 和 YOLO 都能直接读取。',
       getStarted: '开始使用',
-      learnMore: '了解更多',
+      learnMore: '看看它支持什么',
+    },
+    specimens: {
+      trayLabel: '选择样本',
+      spheroid: {
+        label: '球状体',
+        detail:
+          '明场，2048 × 2048。一个肿瘤球状体，由 HRNet 用红色勾出轮廓——正是编辑器交给您修改的那条轮廓。',
+        alt: '单个肿瘤球状体的明场显微图像，分割轮廓以红色绘出。',
+      },
+      disintegration: {
+        label: '解体中的球状体',
+        detail:
+          '明场，2048 × 2048，解体实验第 48 小时。致密核心为绿色，从核心脱离的每一个细胞为红色。解体指数正是由这一区分计算得出。',
+        alt: '正在解体的球状体明场显微图像，致密核心以绿色勾出，每个脱离的细胞以红色勾出。',
+      },
+      wound: {
+        label: '划痕实验伤口',
+        detail:
+          '划痕实验，2048 × 2048。开放伤口是红色边界；其中的细胞岛为蓝色，会从伤口面积中扣除。',
+        alt: '划痕实验显微图像，开放伤口以红色勾出，其中四个细胞岛以蓝色勾出。',
+      },
+      sperm: {
+        label: '精子形态',
+        detail:
+          '明场，1360 × 1024。每个细胞用三条折线而非一个整块来描画——头部绿色、中段琥珀色、尾部青色——因此每一段都能单独测量。',
+        alt: '两个精子的明场显微图像，每个都由三条彩色折线描画：绿色头部、琥珀色中段、青色尾部。',
+      },
+      microtubule: {
+        label: '微管纤维',
+        detail:
+          'IRM 时间序列，第 30 帧。每根纤维都有自己的中心线，颜色来自轨迹编号，并在整段采集中保持不变，因此 kymograph 跟踪的是同一根纤维，而不是当时最近的那一根。',
+        alt: '干涉反射显微镜下的微管图像，每根纤维由各自颜色的中心线描画。',
+      },
+      microcapsule: {
+        label: '微胶囊',
+        detail:
+          '明场，1280 × 1024。两个完整的胶囊以红色勾出——面积、周长和圆整度只对它们计算。被画面边缘截断的胶囊没有红色轮廓：模型会标记它们，统计也会把它们排除在外。',
+        alt: '微胶囊的明场显微图像，两个完整胶囊以红色勾出，被画面边缘截断的没有轮廓。',
+      },
     },
     about: {
-      badge: '我们的使命',
-      title: '通过技术推进生物医学研究',
+      badge: '由谁开发',
+      title: '这个平台从何而来',
       description1:
         '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）的学生Bc. Michal Průšek开发，在Ing. Adam Novozámský博士的指导下完成。',
       description2:
         '该项目是与布拉格化工大学生物化学和微生物学研究所 Ing. Silvie Rimpelová 博士团队合作的项目（VŠCHT Praha）。',
       description3:
-        '我们将尖端的AI模型与直观的界面相结合，为研究人员提供强大的显微图像分析工具，专注于以无与伦比的精度进行球状体分割。',
+        '它从肿瘤球状体起步，随着合作者带来的实验不断扩展：解体实验、划痕实验伤口、精子形态、微管时间序列和微胶囊。每一种样本类型都有自己训练的模型、自己的指标和自己的导出格式——而它们背后是同一个编辑器。',
       contactText: '如有疑问，请联系我们',
     },
     acknowledgments: {
@@ -114,44 +157,50 @@ export default {
       lukasContribution: '为本平台贡献了完整的伤口愈合分割模块。',
       visitPage: '访问页面',
     },
-    features: {
-      badge: '强大功能',
-      title: '生物医学研究的先进工具',
+    cta: {
+      title: '带上您自己的图像。',
       subtitle:
-        '我们的平台提供全面的功能套件，旨在简化您的球状体分割工作流程。',
+        '创建项目、选择样本类型、上传一组图像。模型在 GPU 上运行，结果直接在编辑器中打开，随时可以修改。',
+      cardDescription: '注册已开放——无需邀请',
+      createAccount: '创建您的账户',
+    },
+    features: {
+      badge: '它能做什么',
+      title: '一个编辑器，无论载玻片上是什么',
+      subtitle:
+        '每种样本类型都有各自的模型和指标。此后的一切——编辑、跨帧跟踪、导出——都是同一套流程。',
       cards: {
-        advancedSegmentation: {
-          title: '高级分割',
-          description: '精确的球状体检测和边界分析，实现准确的细胞测量。',
+        models: {
+          title: '每种样本类型各有模型',
+          description:
+            '创建项目时选择样本类型，系统只会提供与之匹配的模型。仅球状体就有五个，从 200 毫秒的 U-Net 到用于陌生显微镜图像的 Mamba 瓶颈结构。',
         },
-        aiPowered: {
-          title: 'AI驱动分析',
-          description: '利用深度学习算法进行自动细胞检测和分类。',
+        stacks: {
+          title: '时间序列与图像堆栈，不只是单张图片',
+          description:
+            'MP4、AVI、MOV、MKV 和 WebM，多页 TIFF 以及 Nikon ND2 都作为单个条目上传，并展开为逐帧图像。多通道采集会保留各个通道，由您决定模型读取哪一个。',
         },
-        effortlessUploads: {
-          title: '轻松上传',
-          description: '拖放您的显微图像，即可进行即时处理和分析。',
+        tracking: {
+          title: '拖动帧滑块也不会丢失的身份',
+          description:
+            '微管在相邻帧之间按曲线几何进行匹配，因此一根纤维在整段采集中保持相同的编号和颜色——kymograph 测量的正是那根纤维，而不是当时最近的一根。',
         },
-        statisticalInsights: {
-          title: '统计洞察',
-          description: '全面的指标和可视化，提取有意义的数据模式。',
+        corrections: {
+          title: '任何地方都能手动修正',
+          description:
+            '拖动顶点、把粘连的对象切成两个、沿轮廓添加点、连接两条折线、重新标注类别。这些修改会随图像一起保存，而不只是留在浏览器里。',
         },
-        collaboration: {
-          title: '协作工具',
-          description: '与同事分享项目，实时协作研究发现。',
+        measurements: {
+          title: '数据，存成其他工具打得开的文件',
+          description:
+            '面积、周长、Feret 直径、折线长度和逐通道强度，可导出为 XLSX，同时支持 COCO、YOLO、ImageJ ROI 集和 CVAT 标注。',
         },
-        processingPipeline: {
-          title: '处理流水线',
-          description: '从预处理到最终分析的自动化工作流程，具有可自定义参数。',
+        batch: {
+          title: '按整个实验的规模设计',
+          description:
+            '最多 10 000 张图像的批次在 GPU 上运行，队列会降低刚刚处理过的用户的优先级，因此一段 600 帧的时间序列不会把其他人挡住。',
         },
       },
-    },
-    cta: {
-      title: '准备好改变您的细胞分析工作流程了吗？',
-      subtitle: '加入已经在使用我们平台加速发现的领先研究人员。',
-      cardTitle: '今天开始',
-      cardDescription: '注册免费账户，体验AI驱动的球状体分割的力量。',
-      createAccount: '创建您的账户',
     },
   },
   dashboard: {
@@ -210,6 +259,7 @@ export default {
       sperm: '精子',
       microtubules: '微管',
       microcapsule: '微胶囊',
+      neurite: '神经突与胞体',
     },
     projectNamePlaceholder: '例如：HeLa细胞球体',
     projectDescPlaceholder: '例如：用于药物耐受性研究的肿瘤球体分析',
@@ -416,6 +466,7 @@ export default {
         wound: '伤口愈合模型',
         microtubule: '微管模型',
         microcapsule: '微胶囊模型',
+        neurite: '神经突/胞体模型',
       },
       presets: {
         fast: '快速',
@@ -478,6 +529,11 @@ export default {
           description:
             '面向明场显微镜中微胶囊（圆形对象）的实例分割。基于 Meta SAM 3 蒸馏的紧凑型 U-Net 为每个胶囊返回一条清晰的全分辨率轮廓，并通过分水岭算法分离相接触的胶囊；被图像边缘截断的胶囊不计入指标（面积、周长、紧实度）。',
         },
+        neurite_soma: {
+          name: 'Neurite / Soma (nnU-Net ResEnc-M)',
+          description:
+            '面向荧光显微镜中神经元的两类语义分割 — 神经突（突起）与胞体（细胞体）— 仅使用微管蛋白通道。nnU-Net v2 ResEnc-M，3 折集成，配合镜像 TTA 以及针对神经突类别的 clDice 拓扑损失项。留出集 Dice 为 0.832（神经突）/ 0.915（胞体）。',
+        },
       },
     },
     detectHoles: '检测空洞',
@@ -507,6 +563,8 @@ export default {
         '面向 IRM 显微镜的微管实例分割。nnU-Net ResEnc-M 网络，曲率约束实例化，原生折线输出，并支持几何跨帧跟踪。',
       microcapsule:
         '紧凑型 U-Net（由 Meta SAM 3 蒸馏）用于微胶囊实例分割 — 输出每个胶囊的面积、周长和紧实度，被图像边缘截断的胶囊不计入指标。',
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M（2D，3 折集成）用于荧光显微镜中的神经突与胞体分割。读取微管蛋白通道；留出集 Dice 为 0.832（神经突）/ 0.915（胞体）。基于 Leica 共聚焦数据训练，像素尺寸约 0.180 µm/px，在其他像素尺寸下请先验证胞体计数。',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',
@@ -593,6 +651,7 @@ export default {
     successfulSignUp: '注册成功',
     verifyEmail: '请检查您的邮箱以确认您的账户',
     successfulSignOut: '退出登录成功',
+    signOutFailed: '退出登录失败，请重试。',
     checkingAuthentication: '验证身份中...',
     loadingAccount: '加载您的账户...',
     processingRequest: '处理您的请求...',
@@ -806,6 +865,12 @@ export default {
       internal: 'Internal',
       polyline: '折线',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: '神经突',
+      soma: '胞体',
+    },
     shortcuts: {
       buttonText: '快捷键',
       title: '键盘快捷键',
@@ -833,6 +898,7 @@ export default {
       undo: '撤销',
       redo: '重做',
       deleteSelected: '删除选中的多边形',
+      finishShape: '完成当前形状',
 
       // View shortcuts
       zoom: '放大/缩小',
@@ -1161,6 +1227,8 @@ export default {
         '从原始 ND2/TIFF 文件计算每条微管的长度、面积及每通道强度。使用扩张 MT 掩码外的中位数进行背景校正。',
       intensityNote:
         '每通道信号强度——包括总和（积分）强度——始终会为每个通道计算并写入指标表格，无需进行任何选择。',
+      wideNote:
+        '在 metrics.csv 中每个通道各占一行（见 “channel” 列）。配套的 metrics_wide.csv（也是 metrics.xlsx 中的一个额外工作表）把同一根微管的所有通道放在同一行上，每个通道一组列。',
       thicknessLabel: '微管厚度 (px)',
       thicknessHelp:
         '沿每条多边折线采样的带宽。100× 宽场下典型微管直径约为 5 px。',
@@ -2360,7 +2428,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      '为生物医学研究者提供的先进球状细胞分割和分析平台，提供由AI驱动的显微细胞图像分析工具。',
+      '面向生物医学研究者的显微图像分割与分析平台——涵盖球状体、伤口愈合、精子、微胶囊与微管，提供从图像到测量的 AI 工具。',
     contact: '联系方式',
     institution: '机构',
     institutionName: 'ÚTIA AV ČR',

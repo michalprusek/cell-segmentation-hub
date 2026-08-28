@@ -1703,6 +1703,129 @@ describe('SegmentationService — requestBatchSegmentation', () => {
     ({ svc } = makeService());
   });
 
+  // ── polyline models + honestly-empty results ───────────────────────────────
+  // A polyline model (microtubule v5H, sperm) answers with `polygons: []` and
+  // its detections under `polylines`. The batch mapper used to gate on
+  // `result.success && result.polygons` and then copy only `polygons`, so such
+  // a frame came back as a FAILED result with no shapes, and the queue would
+  // record a fully segmented frame as `no_segmentation`.
+  //
+  // Latent, not observed: `BATCH_LIMITS` in queueService caps every model at 1,
+  // so `requestBatchSegmentation` is unreachable from the queue today and every
+  // item takes the `requestSegmentation` branch (which does keep polylines).
+  // These pin the mapper so re-enabling batching cannot silently lose them.
+
+  it('preserves polylines from a polyline model', async () => {
+    const images = [makeImage({ id: 'img-mt', originalPath: 'frame.png' })];
+    // Shape copied from a live production microtubule row.
+    const polyline = {
+      id: 'polyline_1',
+      points: [
+        { x: 447, y: 8 },
+        { x: 465, y: 25 },
+        { x: 467, y: 25 },
+      ],
+      type: 'external',
+      class: 'microtubule',
+      geometry: 'polyline',
+      instanceId: 'mt_c1a01b00',
+      confidence: 1,
+      vertices_count: 3,
+    };
+    mockHttpClientPost.mockResolvedValueOnce({
+      data: {
+        results: [
+          {
+            success: true,
+            polygons: [],
+            polylines: [polyline],
+            model_used: 'microtubule',
+            threshold_used: 0.97,
+            confidence: 1,
+            processing_time: 4.5,
+            image_size: { width: 512, height: 512 },
+          },
+        ],
+        processing_time: 4.5,
+      },
+    });
+
+    const results = await svc.requestBatchSegmentation(
+      images as never[],
+      'microtubule'
+    );
+
+    expect(results[0].success).toBe(true);
+    expect(results[0].polylines).toHaveLength(1);
+    expect(results[0].polylines?.[0]).toMatchObject({
+      geometry: 'polyline',
+      instanceId: 'mt_c1a01b00',
+      points: [
+        { x: 447, y: 8 },
+        { x: 465, y: 25 },
+        { x: 467, y: 25 },
+      ],
+    });
+    expect(results[0].error).toBeUndefined();
+  });
+
+  it('accepts a successful result that carries no polygons key at all', async () => {
+    const images = [makeImage({ id: 'img-mt', originalPath: 'frame.png' })];
+    mockHttpClientPost.mockResolvedValueOnce({
+      data: {
+        results: [
+          {
+            success: true,
+            polylines: [],
+            model_used: 'microtubule',
+            threshold_used: 0.97,
+            processing_time: 4.5,
+            image_size: { width: 512, height: 512 },
+          },
+        ],
+      },
+    });
+
+    const results = await svc.requestBatchSegmentation(
+      images as never[],
+      'microtubule'
+    );
+
+    // A missing key is not a failure. It used to produce
+    // `success: false, error: 'No polygons found'`, which the queue then
+    // retried three times before marking the image failed.
+    expect(results[0].success).toBe(true);
+    expect(results[0].polygons).toEqual([]);
+    expect(results[0].error).toBeUndefined();
+  });
+
+  it('reports an empty-but-successful result as success, not as an error', async () => {
+    const images = [makeImage({ id: 'img-blank', originalPath: 'blank.png' })];
+    mockHttpClientPost.mockResolvedValueOnce({
+      data: {
+        results: [
+          {
+            success: true,
+            polygons: [],
+            polylines: [],
+            model_used: 'hrnet',
+            threshold_used: 0.5,
+            confidence: null,
+            processing_time: 0.2,
+            image_size: { width: 100, height: 100 },
+          },
+        ],
+      },
+    });
+
+    const results = await svc.requestBatchSegmentation(images as never[]);
+
+    // An image with nothing on it is a completed run.
+    expect(results[0].success).toBe(true);
+    expect(results[0].polygons).toEqual([]);
+    expect(results[0].error).toBeUndefined();
+  });
+
   it('maps results correctly when a middle image is invalid', async () => {
     const images = [
       makeImage({ id: 'img1', originalPath: 'path/to/image1.jpg' }),

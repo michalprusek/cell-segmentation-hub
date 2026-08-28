@@ -114,7 +114,13 @@ export async function register(data: RegisterData): Promise<{
               username: data.username,
               preferredModel: 'model1',
               modelThreshold: 0.5,
-              preferredLang: 'cs',
+              // Language the client detected for this visitor (browser
+              // preference or an explicit pick made before signing up).
+              // English is the fallback, NOT Czech: hard-coding 'cs' here
+              // meant every new account was stomped back to Czech by the
+              // profile-sync effect in LanguageContext, whatever the
+              // browser said.
+              preferredLang: data.preferredLang ?? data.language ?? 'en',
               preferredTheme: 'light',
               emailNotifications: true,
               consentToMLTraining: true,
@@ -161,7 +167,7 @@ export async function register(data: RegisterData): Promise<{
 
       // Send verification email using user's preferred language (fire-and-forget)
       // Fire and forget - don't await the email sending to prevent timeout issues
-      const locale = newUser.profile?.preferredLang || 'cs';
+      const locale = newUser.profile?.preferredLang || 'en';
       EmailService.sendVerificationEmail(data.email, verificationToken, locale)
         .then(() => {
           logger.info('Verification email sent successfully', 'AuthService', {
@@ -860,7 +866,7 @@ export async function resendVerificationEmail(
     logger.info('Verification email resent', 'AuthService', { email });
 
     // Send verification email using user's preferred language (non-blocking)
-    const locale = user.profile?.preferredLang || 'cs';
+    const locale = user.profile?.preferredLang || 'en';
     EmailService.sendVerificationEmail(email, verificationToken, locale)
       .then(() => {
         logger.info('Verification email sent successfully', 'AuthService', {

@@ -161,8 +161,14 @@ export const QueueStatsPanel = ({
               )}
             </div>
 
-            {/* Right section - Actions */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Right section - Actions.
+                `flex-wrap` matters here: the primary label can be
+                "Segment 12 + Re-segment 3 (15 total)" — ~370px of unbreakable
+                text in German — which is wider than a 360px viewport on its
+                own. Wrapping puts it on its own line instead of pushing the
+                document sideways. The stats group on the left already wrapped;
+                this one never did. */}
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
               {onOpenSettings && (
                 <Button
                   variant="outline"

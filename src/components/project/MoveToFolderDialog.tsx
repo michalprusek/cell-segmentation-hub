@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Folder, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -43,7 +44,7 @@ const MoveToFolderDialog: React.FC<MoveToFolderDialogProps> = ({
   subject,
 }) => {
   const { t } = useLanguage();
-  const { tree } = useFolders();
+  const { tree, isLoading: foldersLoading } = useFolders();
   const [selected, setSelected] = useState<string | null>(null);
   const moveProjects = useMoveProjects();
   const moveFolder = useMoveFolder();
@@ -118,13 +119,15 @@ const MoveToFolderDialog: React.FC<MoveToFolderDialogProps> = ({
           type="button"
           disabled={isDisabled}
           className={cn(
-            'flex items-center gap-2 w-full px-2 py-1.5 rounded text-left',
+            'flex w-full items-center gap-2 rounded px-2 py-2.5 text-left transition-colors sm:py-1.5',
             'hover:bg-gray-100 dark:hover:bg-gray-800',
             isDisabled && 'opacity-40 cursor-not-allowed',
             selected === node.id &&
               'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200'
           )}
-          style={{ paddingLeft: 8 + depth * 16 }}
+          // Cap the indent: an unbounded 16px per level pushed depth-5 folders
+          // 88px into a ~312px dialog, leaving no room for their names.
+          style={{ paddingLeft: 8 + Math.min(depth, 4) * 16 }}
           onClick={() => !isDisabled && setSelected(node.id)}
         >
           <Folder className="h-4 w-4 flex-shrink-0 text-blue-500" />
@@ -150,7 +153,7 @@ const MoveToFolderDialog: React.FC<MoveToFolderDialogProps> = ({
             <button
               type="button"
               className={cn(
-                'flex items-center gap-2 w-full px-2 py-1.5 rounded text-left',
+                'flex w-full items-center gap-2 rounded px-2 py-2.5 text-left transition-colors sm:py-1.5',
                 'hover:bg-gray-100 dark:hover:bg-gray-800',
                 selected === null &&
                   'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200'
@@ -161,7 +164,16 @@ const MoveToFolderDialog: React.FC<MoveToFolderDialogProps> = ({
               <span>{t('folders.moveToRoot')}</span>
             </button>
           </li>
-          {tree.map(n => renderNode(n, 0))}
+          {/* Without this the dialog rendered only the "move to root" row
+              while the folder list was still in flight, which reads as
+              "you have no folders" rather than "still loading". */}
+          {foldersLoading
+            ? Array.from({ length: 3 }).map((_, i) => (
+                <li key={i} className="px-2 py-1.5">
+                  <Skeleton className="h-5 w-full" />
+                </li>
+              ))
+            : tree.map(n => renderNode(n, 0))}
         </ul>
         <DialogFooter>
           <Button
