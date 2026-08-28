@@ -62,6 +62,15 @@ import {
  *                 type: string
  *                 minLength: 8
  *                 example: "securePassword123"
+ *               preferredLang:
+ *                 type: string
+ *                 enum: [en, cs, es, fr, de, zh]
+ *                 description: >-
+ *                   UI language the client detected for this visitor
+ *                   (explicit pick, else browser preference). Stored as the
+ *                   new profile's preferredLang; defaults to "en" when
+ *                   omitted. "language" is accepted as an alias.
+ *                 example: "de"
  *     responses:
  *       201:
  *         description: Uživatel úspěšně registrován
