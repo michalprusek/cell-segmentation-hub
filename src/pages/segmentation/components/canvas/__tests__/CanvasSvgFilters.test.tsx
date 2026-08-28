@@ -1,9 +1,11 @@
 /**
  * Tests for CanvasSvgFilters component.
  *
- * CanvasSvgFilters renders a <defs> block with five SVG <filter> elements.
- * Tests assert that the component is renderable inside an <svg> wrapper
- * and that each filter id is present in the DOM.
+ * CanvasSvgFilters renders a <defs> block with the SVG <filter> elements the
+ * canvas references by id. The assertions below are deliberately a *closed*
+ * set: a filter nothing names is dead weight, and a name with no filter makes
+ * the referencing element vanish under SVG 1.1, so the defs and
+ * CanvasPolygon's `pathFilter` must stay in exact correspondence.
  *
  * Note: jsdom does not fully implement SVG presentation attributes so we
  * only verify structural ids, not visual correctness.
@@ -32,16 +34,6 @@ describe('CanvasSvgFilters', () => {
   }
 
   describe('Filter IDs', () => {
-    it('renders filter with id "point-shadow"', () => {
-      const { container } = renderInSvg();
-      expect(container.querySelector('filter#point-shadow')).not.toBeNull();
-    });
-
-    it('renders filter with id "line-glow"', () => {
-      const { container } = renderInSvg();
-      expect(container.querySelector('filter#line-glow')).not.toBeNull();
-    });
-
     it('renders filter with id "red-glow"', () => {
       const { container } = renderInSvg();
       expect(container.querySelector('filter#red-glow')).not.toBeNull();
@@ -52,14 +44,12 @@ describe('CanvasSvgFilters', () => {
       expect(container.querySelector('filter#blue-glow')).not.toBeNull();
     });
 
-    it('renders filter with id "point-glow"', () => {
+    it('defines no filter beyond the two CanvasPolygon references', () => {
       const { container } = renderInSvg();
-      expect(container.querySelector('filter#point-glow')).not.toBeNull();
-    });
-
-    it('renders exactly five filter elements', () => {
-      const { container } = renderInSvg();
-      expect(container.querySelectorAll('filter')).toHaveLength(5);
+      const ids = Array.from(container.querySelectorAll('filter')).map(f =>
+        f.getAttribute('id')
+      );
+      expect(ids.sort()).toEqual(['blue-glow', 'red-glow']);
     });
   });
 
@@ -72,22 +62,16 @@ describe('CanvasSvgFilters', () => {
       const { container } = renderInSvg();
       const defs = container.querySelector('defs');
       expect(defs).not.toBeNull();
-      // All five filters should live inside the single defs
-      expect(defs!.querySelectorAll('filter')).toHaveLength(5);
+      // Both filters should live inside the single defs
+      expect(defs!.querySelectorAll('filter')).toHaveLength(2);
     });
   });
 
   // -----------------------------------------------------------------------
-  // feDropShadow inside point-shadow
+  // Filter primitives
   // -----------------------------------------------------------------------
 
   describe('Filter primitives', () => {
-    it('point-shadow contains feDropShadow', () => {
-      const { container } = renderInSvg();
-      const filter = container.querySelector('filter#point-shadow');
-      expect(filter!.querySelector('feDropShadow')).not.toBeNull();
-    });
-
     it('red-glow contains feFlood with flood-color #ea384c', () => {
       const { container } = renderInSvg();
       const filter = container.querySelector('filter#red-glow');
