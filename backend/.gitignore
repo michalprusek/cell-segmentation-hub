@@ -20,10 +20,12 @@ build/
 *.db-journal
 # NOTE: prisma/migrations/ must NOT be ignored. Production applies migrations
 # with `prisma migrate deploy`, which can only replay migration files that are
-# committed. All 9 existing migrations are tracked (they were added past this
-# rule), but a NEW one created by `prisma migrate dev` would be silently skipped
-# by `git add`, ship a schema-less deploy, and only surface as a runtime error
-# against production. So there is deliberately no pattern for them here.
+# committed. A migration created by `prisma migrate dev` while a pattern existed
+# here was silently skipped by `git add`, so it shipped a schema-less deploy and
+# surfaced only as a runtime error against production. That is exactly how nine
+# migrations — including 0001_init, the whole base schema — sat untracked while
+# this comment claimed they were all committed. There is deliberately no pattern
+# for them here; check `git status backend/prisma/migrations` after generating one.
 
 # Logs
 logs/
