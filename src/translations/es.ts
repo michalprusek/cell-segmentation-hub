@@ -62,7 +62,8 @@ export default {
     light: 'Claro',
     dark: 'Oscuro',
     system: 'Sistema',
-    welcome: 'Bienvenido a la plataforma de segmentación de esferoides',
+    welcome:
+      'Bienvenido a la plataforma de segmentación de imágenes de microscopía',
     account: 'Cuenta',
     notifications: 'Notificaciones',
     passwordConfirm: 'Confirmar contraseña',
@@ -227,11 +228,11 @@ export default {
     status: 'Estado',
     stats: {
       totalProjects: 'Total de proyectos',
-      totalProjectsDesc: 'Estudios activos de esferoides',
+      totalProjectsDesc: 'Estudios activos',
       processedImages: 'Imágenes procesadas',
       processedImagesDesc: 'Segmentadas exitosamente',
       uploadedToday: 'Subidas hoy',
-      uploadedTodayDesc: 'Imágenes de esferoides',
+      uploadedTodayDesc: 'Imágenes de microscopía',
       storageUsed: 'Almacenamiento usado',
       totalSpaceUsed: 'Espacio total usado',
       incompleteWarning:
@@ -246,7 +247,7 @@ export default {
   projects: {
     createProject: 'Crear nuevo proyecto',
     createProjectDesc:
-      'Añade un nuevo proyecto para organizar tus imágenes y análisis de esferoides.',
+      'Añade un nuevo proyecto para organizar tus imágenes de microscopía y análisis.',
     projectType: 'Tipo de proyecto',
     projectTypeUpdated: 'Tipo de proyecto actualizado',
     failedToUpdateProject: 'Error al actualizar el proyecto',
@@ -267,9 +268,9 @@ export default {
       microcapsule: 'Microcápsulas',
       neurite: 'Neuritas y somas',
     },
-    projectNamePlaceholder: 'ej. Esferoides de células HeLa',
+    projectNamePlaceholder: 'ej. Células HeLa, placa 3',
     projectDescPlaceholder:
-      'ej. Análisis de esferoides tumorales para estudios de resistencia a fármacos',
+      'ej. Análisis de cultivos tratados con fármacos para estudios de resistencia',
     creatingProject: 'Creando...',
     duplicateProject: 'Duplicar',
     shareProject: 'Compartir',
@@ -705,7 +706,8 @@ export default {
     loadingAccount: 'Cargando tu cuenta...',
     processingRequest: 'Procesando tu solicitud...',
     signInToAccount: 'Inicia sesión en tu cuenta',
-    accessPlatform: 'Accede a la plataforma de segmentación de esferoides',
+    accessPlatform:
+      'Accede a la plataforma de segmentación de imágenes de microscopía',
     emailAddress: 'Dirección de correo electrónico',
     emailPlaceholder: 'tu@ejemplo.com',
     password: 'Contraseña',
@@ -719,7 +721,8 @@ export default {
     registrationFailed: 'Error en el registro',
     logoutFailed: 'Error al cerrar sesión',
     profileUpdateFailed: 'Error al actualizar el perfil',
-    welcomeMessage: 'Bienvenido a la plataforma de segmentación de esferoides',
+    welcomeMessage:
+      'Bienvenido a la plataforma de segmentación de imágenes de microscopía',
     confirmationRequired:
       'El texto de confirmación es obligatorio y debe coincidir con tu dirección de correo electrónico',
     agreeToTerms: 'Al iniciar sesión, aceptas nuestros',
@@ -728,7 +731,7 @@ export default {
     privacyPolicy: 'Política de Privacidad',
     createAccount: 'Crea tu cuenta',
     signUpPlatform:
-      'Regístrate para usar la plataforma de segmentación de esferoides',
+      'Regístrate para usar la plataforma de segmentación de imágenes de microscopía',
     confirmPassword: 'Confirmar contraseña',
     passwordsMatch: 'Las contraseñas coinciden',
     passwordsDoNotMatch: 'Las contraseñas no coinciden',
@@ -2221,7 +2224,7 @@ export default {
         introduction: {
           title: '1. Introducción',
           content:
-            'Esta Política de Privacidad explica cómo SpheroSeg ("nosotros", "nos", "nuestro") recopila, usa, protege y comparte tu información cuando usas nuestra plataforma para segmentación y análisis de esferoides. Al usar nuestro servicio, consientes a las prácticas de datos descritas en esta política.',
+            'Esta Política de Privacidad explica cómo SpheroSeg ("nosotros", "nos", "nuestro") recopila, usa, protege y comparte tu información cuando usas nuestra plataforma para segmentación y análisis de imágenes de microscopía. Al usar nuestro servicio, consientes a las prácticas de datos descritas en esta política.',
         },
         informationCollected: {
           title: '2. Información que Recopilamos',
