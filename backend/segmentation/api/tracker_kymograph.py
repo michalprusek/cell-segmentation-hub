@@ -731,23 +731,28 @@ def _gap_close_merges(
     BIG = 1e6
     C = np.full((M, 2 * M), BIG, dtype=np.float64)
     accept = np.zeros((M, M), dtype=bool)
-    for x in range(M):
-        for y in range(M):
-            if valid[x, y]:
-                base = _filament_cost(
-                    segments[x].end_feat,
-                    segments[y].start_feat,
-                    img_diag,
-                    w_curve,
-                    w_end,
-                    w_orient,
-                    w_len,
-                )
-                if base <= cost_threshold:
-                    gap = int(gap_arr[x, y])
-                    C[x, y] = base * (1.0 + gap_penalty * (gap - 1))
-                    accept[x, y] = True
-        C[x, M + x] = cost_threshold
+    # Walk only the valid pairs. Iterating the full M x M index space and
+    # testing `valid[x, y]` inside would re-pay the M^2 the vectorised `valid`
+    # above just eliminated; gaps are bounded by max_gap so `valid` is sparse.
+    # Order is unchanged -- argwhere yields row-major, exactly the (x, y)
+    # sequence the nested loops produced -- so identical cost ties resolve the
+    # same way and linear_sum_assignment sees the same matrix.
+    for x, y in np.argwhere(valid):
+        x, y = int(x), int(y)
+        base = _filament_cost(
+            segments[x].end_feat,
+            segments[y].start_feat,
+            img_diag,
+            w_curve,
+            w_end,
+            w_orient,
+            w_len,
+        )
+        if base <= cost_threshold:
+            gap = int(gap_arr[x, y])
+            C[x, y] = base * (1.0 + gap_penalty * (gap - 1))
+            accept[x, y] = True
+    C[np.arange(M), M + np.arange(M)] = cost_threshold
 
     row_ind, col_ind = linear_sum_assignment(C)
     merges: List[Tuple[int, int]] = []
@@ -1199,8 +1204,7 @@ def _render_profiles(
     container has no display), mirroring the codebase's lazy-heavy-dep pattern
     so process startup is unaffected. The object-oriented ``Figure`` API is
     used instead of ``pyplot`` to avoid pyplot's non-thread-safe global state
-    (this runs inside the async request handler) and the per-figure cleanup it
-    would otherwise require.
+    and the per-figure cleanup it would otherwise require.
     """
     import matplotlib
 
@@ -1236,16 +1240,23 @@ def _render_profiles(
 
 
 @router.post("/kymograph", response_model=KymographResponse)
-def kymograph(req: KymographRequest) -> KymographResponse:
+async def kymograph(req: KymographRequest) -> KymographResponse:
     """Render a kymograph for one microtubule polyline.
 
-    SYNCHRONOUS on purpose, for the same reason as /track above: the body has
-    no awaits and is pure blocking CPU/IO — a PIL decode, a numpy conversion
-    and a scipy map_coordinates per frame, then one matplotlib Figure and PNG
-    per frame in _render_profiles. As `async def` all of that ran on the event
-    loop, so a several-hundred-frame video pinned the single uvicorn worker for
-    minutes and took /health down with it. `def` hands it to FastAPI's
-    threadpool.
+    NOTE: this is `async def` while the sibling /track is `def`, and the
+    asymmetry is deliberate *for now*. /track is pure numpy/scipy, so handing
+    it to FastAPI's threadpool is a free win. /kymograph is not equivalent:
+    its body holds a full-frame float32 array per frame (16 MB at 2048x2048)
+    and builds one matplotlib Figure per frame, and it calls the process-global
+    `matplotlib.use()`. Under `async def` the event loop serialises requests,
+    so exactly one runs at a time. Declaring it `def` would hand it to anyio's
+    40-slot threadpool instead — 40 concurrent renders, each holding those
+    buffers, on the container that is also doing GPU inference, plus concurrent
+    calls into matplotlib's global backend state.
+
+    So the blocking problem is real (a long render does stall /health, which
+    the compose healthcheck polls every 30 s), but the fix needs a bounded
+    executor, not a keyword change. Measure before switching.
     """
     from PIL import Image as PILImage
     from scipy.ndimage import map_coordinates

@@ -5,12 +5,8 @@
  *  - trackApiError() increments apiErrorsTotal with endpoint/error_type/status_code
  *  - trackFeatureUsage() increments featureUsageCounter with feature/user_type;
  *      defaults user_type to 'anonymous' when not supplied
- *  - trackImageProcessing() increments imageProcessingCounter with type/status labels
  *  - updateActiveUsers() sets userActivityGauge per tier
- *  - trackProjectCreated() increments projectsCreatedTotal counter
- *  - trackSegmentationJob() increments segmentationJobsTotal with model/status
  *  - updateStorageUsage() sets storageUsageGauge per type
- *  - trackAuthenticationAttempt() increments authenticationAttempts with type/status
  *  - recordApiResponseTime() records histogram observation with endpoint/method
  *  - updateQueueSize() sets queueSize gauge per queue_name
  *  - initializeBusinessMetricsCollection() seeds gauges without throwing
@@ -63,13 +59,8 @@ import {
   // Exported counter/gauge/histogram instances for direct reset
   apiErrorsTotal,
   featureUsageCounter,
-  imageProcessingCounter,
   userActivityGauge,
-  projectsCreatedTotal,
-  segmentationJobsTotal,
   storageUsageGauge,
-  authenticationAttempts,
-  apiResponseTime,
   queueSize,
 } from '../../monitoring/businessMetrics';
 import { logger } from '../../utils/logger';
@@ -105,13 +96,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   apiErrorsTotal.reset();
   featureUsageCounter.reset();
-  imageProcessingCounter.reset();
   userActivityGauge.reset();
-  projectsCreatedTotal.reset();
-  segmentationJobsTotal.reset();
   storageUsageGauge.reset();
-  authenticationAttempts.reset();
-  apiResponseTime.reset();
   queueSize.reset();
 });
 

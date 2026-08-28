@@ -19,13 +19,6 @@ const featureUsageCounter = new client.Counter({
   registers: [businessMetricsRegistry],
 });
 
-const imageProcessingCounter = new client.Counter({
-  name: 'images_processed_total',
-  help: 'Total number of images processed',
-  labelNames: ['type', 'status'],
-  registers: [businessMetricsRegistry],
-});
-
 const userActivityGauge = new client.Gauge({
   name: 'active_users',
   help: 'Number of active users',
@@ -33,38 +26,10 @@ const userActivityGauge = new client.Gauge({
   registers: [businessMetricsRegistry],
 });
 
-const projectsCreatedTotal = new client.Counter({
-  name: 'projects_created_total',
-  help: 'Total number of projects created',
-  registers: [businessMetricsRegistry],
-});
-
-const segmentationJobsTotal = new client.Counter({
-  name: 'segmentation_jobs_total',
-  help: 'Total number of segmentation jobs',
-  labelNames: ['model', 'status'],
-  registers: [businessMetricsRegistry],
-});
-
 const storageUsageGauge = new client.Gauge({
   name: 'storage_usage_bytes',
   help: 'Storage usage in bytes',
   labelNames: ['type'],
-  registers: [businessMetricsRegistry],
-});
-
-const authenticationAttempts = new client.Counter({
-  name: 'authentication_attempts_total',
-  help: 'Total authentication attempts',
-  labelNames: ['type', 'status'],
-  registers: [businessMetricsRegistry],
-});
-
-const apiResponseTime = new client.Histogram({
-  name: 'api_response_time_seconds',
-  help: 'API response time distribution',
-  labelNames: ['endpoint', 'method'],
-  buckets: [0.001, 0.01, 0.1, 0.5, 1, 2, 5],
   registers: [businessMetricsRegistry],
 });
 
@@ -173,12 +138,7 @@ export function initializeBusinessMetricsCollection(): void {
 export {
   apiErrorsTotal,
   featureUsageCounter,
-  imageProcessingCounter,
   userActivityGauge,
-  projectsCreatedTotal,
-  segmentationJobsTotal,
   storageUsageGauge,
-  authenticationAttempts,
-  apiResponseTime,
   queueSize,
 };

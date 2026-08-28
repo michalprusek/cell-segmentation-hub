@@ -7,10 +7,6 @@ import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
 
-// Import validation types (some types for future use)
-import {
-} from '../../types/validation';
-
 // Import queue-specific types (some types for future use)
 import {
   BatchQueueResponse,

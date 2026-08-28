@@ -2,18 +2,6 @@
  * Centralized configuration constants for the Cell Segmentation Hub
  * Single Source of Truth (SSOT) for all magic numbers and configuration values
  *
- * Reading env here: use `import.meta.env`, never `process.env`. There is no
- * `process` global in the browser — Vite only substitutes the literal text
- * `process.env.NODE_ENV`, so a `process.env.VITE_*` read survives into the
- * served module and throws `ReferenceError: process is not defined` while the
- * enclosing object literal is evaluated. That takes this module down, and with
- * it `lib/api.ts` and `services/webSocketManager.ts`, which import it — the dev
- * server rendered a blank page. Production escaped only because rollup
- * tree-shook the offending object out of the bundle entirely; one new import of
- * it would have shipped the crash. `import.meta.env.MODE` is the exact
- * equivalent of a NODE_ENV compare ('development' under `vite dev`,
- * 'production' under `vite build`, 'test' under vitest).
- *
  * @module constants
  */
 

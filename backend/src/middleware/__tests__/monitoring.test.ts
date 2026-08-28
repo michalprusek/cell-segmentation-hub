@@ -100,10 +100,6 @@ beforeEach(() => {
   metrics.httpRequestDuration.reset();
   metrics.activeConnections.reset();
   metrics.endpointHealth.reset();
-  metrics.mlModelInferenceTime.reset();
-  metrics.mlModelRequests.reset();
-  metrics.uploadedFiles.reset();
-  metrics.databaseConnections.reset();
   vi.clearAllMocks();
 });
 

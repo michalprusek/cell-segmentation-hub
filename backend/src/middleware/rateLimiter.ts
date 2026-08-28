@@ -1,5 +1,5 @@
 import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import { logger } from '../utils/logger';
 import { ResponseHelper } from '../utils/response';
 import { getUploadLimitsForEnvironment } from '../config/uploadLimits';

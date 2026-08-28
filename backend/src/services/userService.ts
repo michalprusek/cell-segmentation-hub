@@ -112,8 +112,9 @@ export async function getUserProfile(
  */
 export async function getUserStats(userId: string): Promise<UserStats> {
   try {
-    // Images uploaded today — computed before the queries so the window is
-    // one consistent boundary for all of them.
+    // Day boundary for the `imagesUploadedToday` count below. It is the only
+    // one of the six queries with a date predicate; the other five are
+    // independent unsynchronised reads.
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);

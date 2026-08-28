@@ -43,34 +43,6 @@ const endpointHealth = new client.Gauge({
   registers: [register],
 });
 
-const mlModelInferenceTime = new client.Histogram({
-  name: 'ml_model_inference_duration_ms',
-  help: 'ML model inference duration in milliseconds',
-  labelNames: ['model_name', 'status'],
-  buckets: [100, 500, 1000, 2000, 5000, 10000, 20000, 30000],
-  registers: [register],
-});
-
-const mlModelRequests = new client.Counter({
-  name: 'ml_model_requests_total',
-  help: 'Total number of ML model requests',
-  labelNames: ['model_name', 'status'],
-  registers: [register],
-});
-
-const databaseConnections = new client.Gauge({
-  name: 'database_connections_active',
-  help: 'Number of active database connections',
-  registers: [register],
-});
-
-const uploadedFiles = new client.Counter({
-  name: 'uploaded_files_total',
-  help: 'Total number of uploaded files',
-  labelNames: ['file_type', 'status'],
-  registers: [register],
-});
-
 // Middleware pro monitoring HTTP požadavků
 export function createMonitoringMiddleware(): (
   req: Request,
@@ -246,10 +218,6 @@ export const metrics = {
   httpRequestDuration,
   activeConnections,
   endpointHealth,
-  mlModelInferenceTime,
-  mlModelRequests,
-  databaseConnections,
-  uploadedFiles,
   register,
   businessMetricsRegistry,
 };
@@ -260,9 +228,5 @@ export {
   httpRequestDuration,
   activeConnections,
   endpointHealth,
-  mlModelInferenceTime,
-  mlModelRequests,
-  databaseConnections,
-  uploadedFiles,
   register,
 };

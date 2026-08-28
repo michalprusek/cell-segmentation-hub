@@ -48,6 +48,15 @@ class ModelConfig:
     decoder_dropout: float = 0.1
     mask_upsample_factor: int = 2  # DINOv2: 2→148, 4→296 | ConvNeXt-512: 2→256 | ConvNeXt-640: 2→320
     per_layer_heads: bool = False  # True = per-layer prediction heads (original Mask2Former)
+    # Accepted and IGNORED. `run_pipeline.load_model` does
+    # `ModelConfig(**ckpt["config"]["model"])` with no unknown-key filter, and
+    # this config is serialised into checkpoints field by field — so dropping
+    # the field outright would make any checkpoint trained while it existed
+    # fail to load with TypeError instead of merely ignoring it. The branch it
+    # used to select is gone: it imported
+    # sperm_final.models.deformable_attention, a module that is not in this
+    # tree, so setting this True never worked at all.
+    use_deformable: bool = False
 
 
 @dataclass
