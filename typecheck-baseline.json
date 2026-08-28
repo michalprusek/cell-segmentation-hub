@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 475,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1466,
-    "all": 1962
+    "tsconfig.test.json": 1469,
+    "all": 1965
   },
   "projects": {
     "tsconfig.app.json": {
@@ -19,7 +19,13 @@
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,
         "TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.": 1
       },
+      "src/components/Features.tsx": {
+        "TS2322: Type 'string | string[]' is not assignable to type 'string'.": 2
+      },
       "src/components/FloatingUploadProgress.tsx": {
+        "TS7030: Not all code paths return a value.": 1
+      },
+      "src/components/Hero.tsx": {
         "TS7030: Not all code paths return a value.": 1
       },
       "src/components/ImageUploader.tsx": {
@@ -259,8 +265,8 @@
         "TS2345: Argument of type '(prev: ProfileData | null) => {avatar: string; name?: string | undefined; title?: string | undefined; organization?: string | undefined; bio?: string | undefined; email?: string | undefined; location?: string | undefined; joined?: string | undefined; projects?: number | undefined; analyses?: number | undefined; }' is not assignable to parameter of type 'SetStateAction<ProfileData | null>'.": 1,
         "TS2345: Argument of type '<type elided by tsc>' is not assignable to parameter of type 'SetStateAction<ProfileData | null>'.": 1,
         "TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'title' does not exist in type '(() => ReactNode) | Iterable<ReactNode> | ReactElement<any, JSXElementConstructor<any> | string> | ReactPortal'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Iterable<ReactNode> | ReactElement<any, JSXElementConstructor<any> | string> | ReactPortal'.": 1
+        "TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Iterable<ReactNode> | ReactElement<any, JSXElementConstructor<any> | string> | ReactPortal'.": 1,
+        "TS2353: Object literal may only specify known properties, and 'title' does not exist in type '(() => ReactNode) | Iterable<ReactNode> | ReactElement<any, JSXElementConstructor<any> | string> | ReactPortal'.": 1
       },
       "src/pages/ProjectDetail.tsx": {
         "TS2322: Type 'ParallelProcessingStats | null' is not assignable to type 'ParallelProcessingStats | undefined'.": 1,
@@ -522,12 +528,6 @@
         "TS2739: Type 'Mock<Procedure>' is missing the following properties from type '{new (url: URL | string, protocols?: string | string[] | undefined): WebSocket; prototype: WebSocket; readonly CONNECTING: 0; readonly OPEN: 1; readonly CLOSING: 2; readonly CLOSED: 3; }': CONNECTING, OPEN, CLOSING, CLOSED": 1,
         "TS2739: Type '{ getItem: Mock<Procedure>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1,
         "TS2739: Type '{getItem: Mock<\"system\" | (key: string) => \"en\" | null>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1
-      },
-      "src/components/Features.tsx": {
-        "TS2322: Type 'string | string[]' is not assignable to type 'string'.": 2
-      },
-      "src/components/Hero.tsx": {
-        "TS7030: Not all code paths return a value.": 1
       }
     },
     "tsconfig.node.json": {
@@ -612,14 +612,17 @@
         "TS6307: File 'src/components/ui/badge.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/hooks/useSegmentationQueue.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
+      "src/components/Features.tsx": {
+        "TS2322: Type 'string | string[]' is not assignable to type 'string'.": 2
+      },
       "src/components/FloatingUploadProgress.tsx": {
         "TS6307: File 'src/components/ui/progress.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/contexts/useUpload.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS7030: Not all code paths return a value.": 1
       },
       "src/components/Hero.tsx": {
-        "TS6307: File 'src/components/landing/SpecimenShowcase.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS7030: Not all code paths return a value.": 1
+        "TS7030: Not all code paths return a value.": 1,
+        "TS6307: File 'src/components/landing/SpecimenShowcase.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/components/ImageUploader.tsx": {
         "TS2339: Property 'type' does not exist on type 'Project'.": 1,
@@ -686,6 +689,14 @@
         "TS2345: Argument of type '{ user: { email: undefined; id: string; username: string; }; isAuthenticated: boolean; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; refreshToken: Mock<...>; isLoading: boolean; }' is not assignable to parameter of type 'AuthContextType'.": 1,
         "TS2353: Object literal may only specify known properties, and 'waiting' does not exist in type 'QueueStats'.": 1
       },
+      "src/components/__tests__/Features.test.tsx": {
+        "TS2345: Argument of type '(callback: IntersectionObserverCallback) => { observe: Mock<Procedure>; unobserve: Mock<Procedure>; disconnect: Mock<...>; }' is not assignable to parameter of type 'NormalizedProcedure<(callback: IntersectionObserverCallback, options?: IntersectionObserverInit | undefined) => IntersectionObserver>'.": 1,
+        "TS2739: Type '{ observe: Mock<Procedure>; unobserve: Mock<Procedure>; disconnect: Mock<Procedure>; }' is missing the following properties from type 'IntersectionObserver': root, rootMargin, thresholds, takeRecords": 2
+      },
+      "src/components/__tests__/Hero.test.tsx": {
+        "TS2345: Argument of type '(callback: IntersectionObserverCallback) => { observe: Mock<Procedure>; unobserve: Mock<Procedure>; disconnect: Mock<...>; }' is not assignable to parameter of type 'NormalizedProcedure<(callback: IntersectionObserverCallback, options?: IntersectionObserverInit | undefined) => IntersectionObserver>'.": 1,
+        "TS2739: Type '{ observe: Mock<Procedure>; unobserve: Mock<Procedure>; disconnect: Mock<Procedure>; }' is missing the following properties from type 'IntersectionObserver': root, rootMargin, thresholds, takeRecords": 2
+      },
       "src/components/__tests__/ImageUploader.cancel.test.tsx": {
         "TS2684: The 'this' context of type 'this' is not assignable to method's 'this' of type 'FileReader'.": 2
       },
@@ -744,14 +755,6 @@
       },
       "src/components/header/MobileMenu.tsx": {
         "TS6307: File 'src/components/ui/sheet.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
-      "src/components/landing/__tests__/specimens.test.ts": {
-        "TS6307: File 'src/components/landing/specimens.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS6307: File 'src/translations/en.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
-      "src/components/landing/specimens.ts": {
-        "TS6307: File 'src/lib/models/modelRegistry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS6307: File 'src/types/index.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/components/layout/index.ts": {
         "TS6307: File 'src/components/layout/ContentCard.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -933,6 +936,9 @@
       "src/contexts/LanguageContext.tsx": {
         "TS2554: Expected 1-2 arguments, but got 3.": 1,
         "TS6307: File 'src/lib/i18nLogger.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/contexts/LanguageContext.types.ts": {
+        "TS6307: File 'src/translations/en.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/contexts/ModelContext.tsx": {
         "TS2339: Property 'user' does not exist on type 'AuthContextType | undefined'.": 1
@@ -1339,6 +1345,11 @@
         "TS6307: File 'src/hooks/useDashboardProjects.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS7030: Not all code paths return a value.": 1
       },
+      "src/pages/Documentation.tsx": {
+        "TS6307: File 'src/pages/documentation/DocsBlocks.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/documentation/docsContent.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/documentation/useDocsSearch.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
       "src/pages/ForgotPassword.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,
         "TS2341: Property 'instance' is private and only accessible within class 'ApiClient'.": 1,
@@ -1364,11 +1375,11 @@
         "TS2345: Argument of type '(prev: ProfileData | null) => {avatar: string; name?: string | undefined; title?: string | undefined; organization?: string | undefined; bio?: string | undefined; email?: string | undefined; location?: string | undefined; joined?: string | undefined; projects?: number | undefined; analyses?: number | undefined; }' is not assignable to parameter of type 'SetStateAction<ProfileData | null>'.": 1,
         "TS2345: Argument of type '<type elided by tsc>' is not assignable to parameter of type 'SetStateAction<ProfileData | null>'.": 1,
         "TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'title' does not exist in type '(() => ReactNode) | Iterable<ReactNode> | ReactElement<any, JSXElementConstructor<any> | string> | ReactPortal'.": 1,
+        "TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Iterable<ReactNode> | ReactElement<any, JSXElementConstructor<any> | string> | ReactPortal'.": 1,
         "TS6307: File 'src/components/profile/AvatarCropDialog.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/profile/AvatarUploadButton.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ui/separator.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Iterable<ReactNode> | ReactElement<any, JSXElementConstructor<any> | string> | ReactPortal'.": 1
+        "TS2353: Object literal may only specify known properties, and 'title' does not exist in type '(() => ReactNode) | Iterable<ReactNode> | ReactElement<any, JSXElementConstructor<any> | string> | ReactPortal'.": 1
       },
       "src/pages/ProjectDetail.tsx": {
         "TS2322: Type 'ParallelProcessingStats | null' is not assignable to type 'ParallelProcessingStats | undefined'.": 1,
@@ -1475,26 +1486,26 @@
         "TS6307: File 'src/pages/export/hooks/useImageSelection.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/export/hooks/__tests__/useSharedAdvancedExport.events.test.ts": {
-        "TS2345: Argument of type '{ data: { jobId: string; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 2,
-        "TS2345: Argument of type '{ data: { status: string; message: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
-        "TS2345: Argument of type '{ data: { status: string; progress: number; warnings: string[]; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
-        "TS2345: Argument of type '{ data: { status: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
-        "TS2345: Argument of type '{ token: string; }' is not assignable to parameter of type '{ token: string; expiresAt: number; }'.": 2,
-        "TS6307: File 'src/pages/export/hooks/useSharedAdvancedExport.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS2345: Argument of type '{ data: { jobId: string; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 2,
         "TS2345: Argument of type '{ data: { status: string; message: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 1,
         "TS2345: Argument of type '{ data: { status: string; progress: number; warnings: string[]; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 1,
-        "TS2345: Argument of type '{ data: { status: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 1
+        "TS2345: Argument of type '{ data: { status: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 1,
+        "TS2345: Argument of type '{ token: string; }' is not assignable to parameter of type '{ token: string; expiresAt: number; }'.": 2,
+        "TS6307: File 'src/pages/export/hooks/useSharedAdvancedExport.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS2345: Argument of type '{ data: { jobId: string; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 2,
+        "TS2345: Argument of type '{ data: { status: string; message: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
+        "TS2345: Argument of type '{ data: { status: string; progress: number; warnings: string[]; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
+        "TS2345: Argument of type '{ data: { status: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1
       },
       "src/pages/export/hooks/__tests__/useSharedAdvancedExport.test.ts": {
-        "TS2345: Argument of type '{ data: { jobId: string; status: string; }[]; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
-        "TS2345: Argument of type '{ data: { jobId: string; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 5,
-        "TS2345: Argument of type '{ data: { status: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
-        "TS2345: Argument of type '{ data: {}; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
         "TS2345: Argument of type '{ data: { jobId: string; status: string; }[]; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 1,
         "TS2345: Argument of type '{ data: { jobId: string; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 5,
         "TS2345: Argument of type '{ data: { status: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 1,
-        "TS2345: Argument of type '{ data: {}; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 1
+        "TS2345: Argument of type '{ data: {}; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}>'.": 1,
+        "TS2345: Argument of type '{ data: { jobId: string; status: string; }[]; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
+        "TS2345: Argument of type '{ data: { jobId: string; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 5,
+        "TS2345: Argument of type '{ data: { status: string; progress: number; }; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1,
+        "TS2345: Argument of type '{ data: {}; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1
       },
       "src/pages/export/hooks/useExportFunctions.ts": {
         "TS2339: Property 'Sphericity' does not exist on type 'PolygonMetrics'.": 1,
@@ -1535,9 +1546,9 @@
         "TS6307: File 'src/test-utils/segmentationTestUtils.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/__tests__/PolygonDataEdgeCases.test.tsx": {
-        "TS2339: Property 'container' does not exist on type 'RenderResult<typeof import(\"/home/cvat/cell-segmentation-hub/node_modules/@testing-library/dom/types/queries\"), HTMLElement, HTMLElement> | {...; }'.": 21,
+        "TS2339: Property 'container' does not exist on type 'RenderResult<typeof import(\"node_modules/@testing-library/dom/types/queries\"), HTMLElement, HTMLElement> | {...; }'.": 21,
         "TS2353: Object literal may only specify known properties, and 'metadata' does not exist in type 'Polygon'.": 1,
-        "TS2339: Property 'container' does not exist on type 'RenderResult<typeof import(\"node_modules/@testing-library/dom/types/queries\"), HTMLElement, HTMLElement> | {...; }'.": 21
+        "TS2339: Property 'container' does not exist on type 'RenderResult<typeof import(\"/home/cvat/cell-segmentation-hub/node_modules/@testing-library/dom/types/queries\"), HTMLElement, HTMLElement> | {...; }'.": 21
       },
       "src/pages/segmentation/__tests__/PolygonPerformanceRegression.test.tsx": {
         "TS6307: File 'src/test-utils/polygonTestDataFactory.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -1998,8 +2009,8 @@
         "TS6307: File 'src/test/utils/test-utilities.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/types/index.ts": {
-        "TS6307: File 'src/lib/segmentation.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS6307: File 'src/lib/models/modelRegistry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS6307: File 'src/lib/models/modelRegistry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/lib/segmentation.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/utils/__tests__/dashboardDrag.test.ts": {
         "TS6307: File 'src/utils/dashboardDrag.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -2034,8 +2045,8 @@
         "TS2304: Cannot find name 'error'.": 2,
         "TS2322: Type 'string[]' is not assignable to type '(\"Alt\" | \"Control\" | \"ControlOrMeta\" | \"Meta\" | \"Shift\")[]'.": 1,
         "TS2349: This expression is not callable.": 5,
-        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"none\" | \"auto\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{force?: boolean | undefined; noWaitAfter?: boolean | undefined; sourcePosition?: undefined | {x: number; y: number; }; steps?: number | undefined; targetPosition?: undefined | {x: number; y: number; }; timeout?: number | undefined; trial?: boolean | undefined; }'.": 1
+        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{force?: boolean | undefined; noWaitAfter?: boolean | undefined; sourcePosition?: undefined | {x: number; y: number; }; steps?: number | undefined; targetPosition?: undefined | {x: number; y: number; }; timeout?: number | undefined; trial?: boolean | undefined; }'.": 1,
+        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"none\" | \"auto\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
       },
       "tests/e2e/page-objects/SignInPage.ts": {
         "TS2550: Property 'any' does not exist on type 'PromiseConstructor'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2021' or later.": 1
@@ -2054,10 +2065,10 @@
         "TS2339: Property 'waitForDownload' does not exist on type 'Page'.": 3
       },
       "tests/e2e/segmentation-editor-enhanced.spec.ts": {
-        "TS2353: Object literal may only specify known properties, and 'clickCount' does not exist in type '<type elided by tsc>'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"none\" | \"auto\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1,
         "TS2353: Object literal may only specify known properties, and 'clickCount' does not exist in type '{force?: boolean | undefined; modifiers?: (\"Alt\" | \"Control\" | \"ControlOrMeta\" | \"Meta\" | \"Shift\")[] | undefined; noWaitAfter?: boolean | undefined; position?: undefined | {x: number; y: number; }; timeout?: number | undefined; trial?: boolean | undefined; }'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{force?: boolean | undefined; noWaitAfter?: boolean | undefined; sourcePosition?: undefined | {x: number; y: number; }; steps?: number | undefined; targetPosition?: undefined | {x: number; y: number; }; timeout?: number | undefined; trial?: boolean | undefined; }'.": 1
+        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{force?: boolean | undefined; noWaitAfter?: boolean | undefined; sourcePosition?: undefined | {x: number; y: number; }; steps?: number | undefined; targetPosition?: undefined | {x: number; y: number; }; timeout?: number | undefined; trial?: boolean | undefined; }'.": 1,
+        "TS2353: Object literal may only specify known properties, and 'clickCount' does not exist in type '<type elided by tsc>'.": 1,
+        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"none\" | \"auto\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
       },
       "tests/e2e/segmentation-workflow.spec.ts": {
         "TS2339: Property 'waitForDownload' does not exist on type 'Page'.": 1
@@ -2081,11 +2092,11 @@
         "TS18047: 'segmentationResult' is possibly 'null'.": 2,
         "TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.": 1,
         "TS2339: Property 'status' does not exist on type 'never'.": 1,
-        "TS2345: Argument of type 'AxiosResponse<any, { model: string; }, {}, any>' is not assignable to parameter of type 'never'.": 1,
-        "TS2345: Argument of type 'Promise<AxiosResponse<any, { email: string; password: string; username: string; }, {}, any>>' is not assignable to parameter of type 'never'.": 1,
-        "TS2345: Argument of type 'number' is not assignable to parameter of type 'never'.": 1,
         "TS2345: Argument of type 'AxiosResponse<any, any, {}>' is not assignable to parameter of type 'never'.": 1,
-        "TS2345: Argument of type 'Promise<AxiosResponse<any, any, {}>>' is not assignable to parameter of type 'never'.": 1
+        "TS2345: Argument of type 'Promise<AxiosResponse<any, any, {}>>' is not assignable to parameter of type 'never'.": 1,
+        "TS2345: Argument of type 'number' is not assignable to parameter of type 'never'.": 1,
+        "TS2345: Argument of type 'AxiosResponse<any, { model: string; }, {}, any>' is not assignable to parameter of type 'never'.": 1,
+        "TS2345: Argument of type 'Promise<AxiosResponse<any, { email: string; password: string; username: string; }, {}, any>>' is not assignable to parameter of type 'never'.": 1
       },
       "tests/performance/segmentation-performance.spec.ts": {
         "TS2339: Property 'waitForDownload' does not exist on type 'Page'.": 1,
@@ -2094,19 +2105,13 @@
       "tests/utils/api-mock-manager.ts": {
         "TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.": 1
       },
-      "src/components/Features.tsx": {
-        "TS2322: Type 'string | string[]' is not assignable to type 'string'.": 2
-      },
-      "src/components/__tests__/Features.test.tsx": {
-        "TS2345: Argument of type '(callback: IntersectionObserverCallback) => { observe: Mock<Procedure>; unobserve: Mock<Procedure>; disconnect: Mock<...>; }' is not assignable to parameter of type 'NormalizedProcedure<(callback: IntersectionObserverCallback, options?: IntersectionObserverInit | undefined) => IntersectionObserver>'.": 1,
-        "TS2739: Type '{ observe: Mock<Procedure>; unobserve: Mock<Procedure>; disconnect: Mock<Procedure>; }' is missing the following properties from type 'IntersectionObserver': root, rootMargin, thresholds, takeRecords": 2
-      },
-      "src/components/__tests__/Hero.test.tsx": {
-        "TS2345: Argument of type '(callback: IntersectionObserverCallback) => { observe: Mock<Procedure>; unobserve: Mock<Procedure>; disconnect: Mock<...>; }' is not assignable to parameter of type 'NormalizedProcedure<(callback: IntersectionObserverCallback, options?: IntersectionObserverInit | undefined) => IntersectionObserver>'.": 1,
-        "TS2739: Type '{ observe: Mock<Procedure>; unobserve: Mock<Procedure>; disconnect: Mock<Procedure>; }' is missing the following properties from type 'IntersectionObserver': root, rootMargin, thresholds, takeRecords": 2
-      },
-      "src/contexts/LanguageContext.types.ts": {
+      "src/components/landing/__tests__/specimens.test.ts": {
+        "TS6307: File 'src/components/landing/specimens.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/translations/en.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/components/landing/specimens.ts": {
+        "TS6307: File 'src/lib/models/modelRegistry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/types/index.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       }
     }
   }

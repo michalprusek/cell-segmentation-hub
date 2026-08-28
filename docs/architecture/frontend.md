@@ -1,476 +1,140 @@
-# Frontend Architecture
-
-The frontend is a modern React application built with TypeScript and Vite, providing an intuitive interface for cell segmentation analysis.
-
-## Technology Stack
-
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite (fast HMR, modern bundling)
-- **UI Framework**: shadcn/ui components built on Radix UI
-- **Styling**: Tailwind CSS utility-first framework
-- **State Management**: React Query for server state, React Context for client state
-- **Routing**: React Router v6
-- **Form Handling**: React Hook Form with Zod validation
-- **HTTP Client**: Axios with JWT interceptors
-
-## Project Structure
-
-```
-src/
-├── components/           # Reusable UI components
-│   ├── ui/              # shadcn/ui base components
-│   ├── upload/          # File upload components
-│   ├── project/         # Project-specific components
-│   ├── settings/        # Settings page components
-│   └── segmentation/    # Basic segmentation components
-├── contexts/            # React contexts for global state
-│   ├── AuthContext.tsx     # User authentication state
-│   ├── ThemeContext.tsx    # Dark/light theme state
-│   └── LanguageContext.tsx # i18n language state
-├── hooks/              # Custom React hooks
-│   ├── useDashboardProjects.ts
-│   ├── useProjectData.tsx
-│   └── useProjectForm.tsx
-├── lib/                # Utility libraries
-│   ├── api.ts          # Axios HTTP client
-│   ├── segmentation.ts # Segmentation utilities
-│   └── utils.ts        # General utilities
-├── pages/              # Route components
-│   ├── segmentation/   # Complex segmentation editor
-│   ├── Dashboard.tsx
-│   ├── ProjectDetail.tsx
-│   ├── Profile.tsx
-│   └── Settings.tsx
-├── shared/             # Shared types and utilities
-└── types/              # TypeScript type definitions
-```
-
-## Component Architecture
-
-### Core Components Hierarchy
-
-```
-App.tsx
-├── AuthContext.Provider
-├── ThemeContext.Provider
-├── LanguageContext.Provider
-├── QueryClient.Provider
-└── Router
-    ├── ProtectedRoute
-    │   ├── Dashboard
-    │   ├── ProjectDetail
-    │   ├── SegmentationEditor (complex)
-    │   ├── Profile
-    │   └── Settings
-    └── Public Routes
-        ├── Login
-        ├── Register
-        └── RequestAccess
-```
-
-### Segmentation Editor Architecture
-
-The segmentation editor is the most complex part of the application, located in `/src/pages/segmentation/`:
-
-```
-SegmentationEditor.tsx (orchestrator)
-├── hooks/
-│   ├── useSegmentationCore.tsx     # Data fetching & state
-│   ├── useSegmentationView.tsx     # Zoom & pan functionality
-│   ├── useSegmentationEditor.tsx   # Main editor logic
-│   ├── usePolygonInteraction.tsx   # Polygon editing
-│   └── useSegmentationHistory.tsx  # Undo/redo system
-├── components/
-│   ├── canvas/          # Canvas rendering system
-│   ├── toolbar/         # Editor tools & controls
-│   ├── sidebar/         # Properties & settings
-│   └── dialogs/         # Modal dialogs
-└── contexts/
-    └── SegmentationContext.tsx     # Segmentation state
-```
-
-## State Management
-
-### Server State (React Query)
-
-```typescript
-// Project data fetching with caching
-const { data: projects, isLoading } = useQuery({
-  queryKey: ['projects'],
-  queryFn: () => apiClient.getProjects(),
-  staleTime: 5 * 60 * 1000, // 5 minutes
-});
-
-// Mutations with optimistic updates
-const createProjectMutation = useMutation({
-  mutationFn: apiClient.createProject,
-  onSuccess: () => {
-    queryClient.invalidateQueries(['projects']);
-  },
-});
-```
-
-### Client State (React Context)
-
-```typescript
-// Authentication state with safe default
-const AuthContext = createContext<
-  | {
-      user: User | null;
-      login: (credentials: LoginData) => Promise<void>;
-      logout: () => void;
-      isLoading: boolean;
-    }
-  | undefined
->(undefined);
-
-// Theme state with safe default
-const ThemeContext = createContext<
-  | {
-      theme: 'light' | 'dark';
-      setTheme: (theme: 'light' | 'dark') => void;
-    }
-  | undefined
->(undefined);
-
-// Typed getter hooks that throw clear errors if context is undefined
-const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
-```
-
-## Advanced Features
-
-### Complex Polygon Editing System
-
-The segmentation editor includes sophisticated polygon manipulation:
-
-```typescript
-// Vertex drag system with coordinate transformation
-const useVertexDrag = (zoom, offset, segmentation, setSegmentation) => {
-  const handleVertexDrag = useCallback(
-    (e, containerElement) => {
-      // Get container bounding rectangle for coordinate transformation
-      const rect = containerElement.getBoundingClientRect();
-
-      // Transform screen coordinates to image coordinates
-      const x = (e.clientX - rect.left) / zoom - offset.x;
-      const y = (e.clientY - rect.top) / zoom - offset.y;
-
-      // Update polygon vertex position
-      setSegmentation(prevSegmentation => ({
-        ...prevSegmentation,
-        polygons: prevSegmentation.polygons.map(polygon =>
-          polygon.id === selectedPolygonId
-            ? {
-                ...polygon,
-                points: updateVertexAt(polygon.points, vertexIndex, { x, y }),
-              }
-            : polygon
-        ),
-      }));
-    },
-    [zoom, offset, selectedPolygonId, vertexIndex]
-  );
-};
-```
-
-### Canvas Rendering System
-
-Custom canvas system for high-performance polygon rendering:
-
-```typescript
-// Canvas rendering with zoom and pan
-const CanvasRenderer = ({ image, polygons, zoom, offset }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Apply zoom and pan transforms
-    ctx.save();
-    ctx.scale(zoom, zoom);
-    ctx.translate(offset.x, offset.y);
-
-    // Render image
-    ctx.drawImage(image, 0, 0);
-
-    // Render polygons
-    polygons.forEach(polygon => renderPolygon(ctx, polygon));
-
-    ctx.restore();
-  }, [image, polygons, zoom, offset]);
-
-  return <canvas ref={canvasRef} />;
-};
-```
-
-### History Management (Undo/Redo)
-
-Sophisticated undo/redo system for segmentation editing:
-
-```typescript
-const useSegmentationHistory = (segmentation, setSegmentation) => {
-  const [history, setHistory] = useState<SegmentationState[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-
-  const addToHistory = useCallback(
-    (state: SegmentationState) => {
-      setHistory(prev => {
-        const newHistory = prev.slice(0, historyIndex + 1);
-        newHistory.push(state);
-        return newHistory.slice(-MAX_HISTORY_SIZE);
-      });
-      setHistoryIndex(prev => prev + 1);
-    },
-    [historyIndex]
-  );
-
-  const undo = useCallback(() => {
-    if (historyIndex > 0) {
-      const previousState = history[historyIndex - 1];
-      setSegmentation(previousState);
-      setHistoryIndex(prev => prev - 1);
-    }
-  }, [history, historyIndex, setSegmentation]);
-};
-```
-
-## HTTP Client Configuration
-
-Custom Axios client with JWT handling:
-
-```typescript
-const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: 30000,
-});
-
-// Request interceptor for JWT tokens
-apiClient.interceptors.request.use(config => {
-  const token = getAccessToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Response interceptor for token refresh
-apiClient.interceptors.response.use(
-  response => response,
-  async error => {
-    if (error.response?.status === 401) {
-      try {
-        await refreshAccessToken();
-        // Retry original request
-        return apiClient(error.config);
-      } catch (refreshError) {
-        // Redirect to login
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-```
-
-## Performance Optimizations
-
-### Code Splitting
-
-```typescript
-// Lazy loading of routes
-const SegmentationEditor = lazy(() => import('./pages/segmentation/SegmentationEditor'));
-const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
-
-// Route-based code splitting
-const AppRoutes = () => (
-  <Suspense fallback={<LoadingSpinner />}>
-    <Routes>
-      <Route path="/project/:id/segmentation/:imageId" element={<SegmentationEditor />} />
-      <Route path="/project/:id" element={<ProjectDetail />} />
-    </Routes>
-  </Suspense>
-);
-```
-
-### React Query Optimizations
-
-```typescript
-// Efficient caching strategies
-const useProjectData = (projectId: string) => {
-  return useQuery({
-    queryKey: ['project', projectId],
-    queryFn: () => apiClient.getProject(projectId),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    refetchOnWindowFocus: false,
-  });
-};
-
-// Background prefetching
-const prefetchProject = (projectId: string) => {
-  queryClient.prefetchQuery({
-    queryKey: ['project', projectId],
-    queryFn: () => apiClient.getProject(projectId),
-  });
-};
-```
-
-### Image Optimization
-
-```typescript
-// Lazy image loading with thumbnails
-const OptimizedImage = ({ src, thumbnail, alt }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [inView, ref] = useInView({ threshold: 0.1 });
-
-  return (
-    <div ref={ref}>
-      {inView && (
-        <>
-          {!imageLoaded && <img src={thumbnail} alt={alt} className="blur-sm" />}
-          <img
-            src={src}
-            alt={alt}
-            onLoad={() => setImageLoaded(true)}
-            className={imageLoaded ? 'opacity-100' : 'opacity-0'}
-          />
-        </>
-      )}
-    </div>
-  );
-};
-```
-
-## Component Patterns
-
-### Compound Components
-
-```typescript
-// Flexible component composition
-const ImageUploader = {
-  Root: UploaderRoot,
-  DropZone: DropZone,
-  FileList: FileList,
-  Options: UploaderOptions,
-};
-
-// Usage
-<ImageUploader.Root>
-  <ImageUploader.Options />
-  <ImageUploader.DropZone />
-  <ImageUploader.FileList />
-</ImageUploader.Root>
-```
-
-### Hook Composition
-
-```typescript
-// Composable editor functionality
-const useSegmentationEditor = (projectId, imageId, userId) => {
-  const core = useSegmentationCore(projectId, imageId, userId);
-  const view = useSegmentationView(core.canvasContainerRef, core.imageSrc);
-  const interaction = usePolygonInteraction(/* ... */);
-  const history = useSegmentationHistory(/* ... */);
-
-  return {
-    ...core,
-    ...view,
-    ...interaction,
-    ...history,
-  };
-};
-```
-
-## Testing Strategy
-
-### Component Testing
-
-```typescript
-// React Testing Library with user events
-describe('ImageUploader', () => {
-  test('uploads files and triggers segmentation', async () => {
-    const mockFiles = [new File(['content'], 'test.png', { type: 'image/png' })];
-
-    render(<ImageUploader projectId="test-id" />);
-
-    const dropzone = screen.getByTestId('dropzone');
-    await user.upload(dropzone, mockFiles);
-
-    expect(screen.getByText('Uploading...')).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.getByText('Upload complete')).toBeInTheDocument();
-    });
-  });
-});
-```
-
-### Hook Testing
-
-```typescript
-// Custom hook testing
-describe('useSegmentationEditor', () => {
-  test('handles vertex dragging', () => {
-    const { result } = renderHook(() =>
-      useSegmentationEditor('project-1', 'image-1', 'user-1')
-    );
-
-    act(() => {
-      result.current.handleVertexClick(100, 100, mockElement);
-    });
-
-    expect(result.current.vertexDragState.current.isDragging).toBe(true);
-  });
-});
-```
-
-## Build Configuration
-
-### Vite Configuration
-
-```typescript
-// vite.config.ts
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-toast'],
-          routing: ['react-router-dom'],
-        },
-      },
-    },
-  },
-  server: {
-    port: 8082,
-    host: true,
-  },
-});
-```
-
-The frontend architecture provides a solid foundation for complex image editing workflows while maintaining excellent performance and user experience.
+# Frontend architecture
+
+React 18 + TypeScript, built by Vite, styled with Tailwind and shadcn/ui (Radix
+primitives). Single-page app; every route is lazy-loaded.
+
+---
+
+## Layout of `src/`
+
+| Path                  | Contains                                                          |
+| --------------------- | ----------------------------------------------------------------- |
+| `pages/`              | One directory or file per route                                   |
+| `pages/segmentation/` | The editor — the largest subsystem in the app                     |
+| `pages/export/`       | The export dialog and its type-specific sections                  |
+| `pages/segmenter/`    | The standalone annotation tool, deliberately self-contained       |
+| `components/`         | Shared components; `components/ui/` is the shadcn layer           |
+| `contexts/`           | Client state (see below)                                          |
+| `hooks/`              | Reusable hooks                                                    |
+| `lib/`                | Framework-free helpers: API client, geometry, decoders, constants |
+| `services/`           | Heavier client-side services (Excel export, …)                    |
+| `translations/`       | Six locale files                                                  |
+| `types/`              | Shared types, including the project-type and model unions         |
+
+## Routes
+
+`/`, `/sign-in`, `/sign-up`, `/forgot-password`, `/reset-password`,
+`/documentation`, `/terms-of-service`, `/privacy-policy`,
+`/share/accept/:token` are public. Behind auth: `/dashboard`, `/project/:id`,
+`/project/:id/export`, `/segmentation/:projectId/:imageId`, `/settings`,
+`/profile`, `/automated-essays`, and `/segmenter`, `/segmenter/:datasetId`,
+`/segmenter/:datasetId/image/:imageId`.
+
+> `/segmenter` has **no navigation entry point** anywhere in the interface. It
+> is reachable only by URL.
+
+---
+
+## State
+
+**Server state** is React Query (TanStack): optimistic updates and explicit
+query invalidation, with the WebSocket used to _trigger_ invalidation rather
+than to carry authoritative data.
+
+**Client state** is a set of contexts:
+
+| Context               | Holds                                                                     |
+| --------------------- | ------------------------------------------------------------------------- |
+| `AuthContext`         | Session, sign-in/out, token refresh                                       |
+| `LanguageContext`     | Active locale; translations are loaded lazily                             |
+| `ThemeContext`        | Light/dark                                                                |
+| `WebSocketContext`    | The Socket.io connection and its lifecycle                                |
+| `UploadContext`       | Upload queue, routing between the image and video endpoints, cancellation |
+| `ExportContext`       | Export job state                                                          |
+| `ModelContext`        | Selected model, threshold, hole detection                                 |
+| `ImageDisplayContext` | Per-channel window/level, colours, opacities (editor only)                |
+
+`ImageDisplayContext` is the one with non-obvious rules — window/level is
+**per channel**, session-only; colours and opacities are persisted per user in
+browser storage. See
+[Videos, frames and channels](../guides/videos-and-channels.md#displaying-16-bit-data-window-and-level).
+
+---
+
+## The segmentation editor
+
+`src/pages/segmentation/`, the most complex feature in the repository.
+
+| Piece                                      | Role                                                 |
+| ------------------------------------------ | ---------------------------------------------------- |
+| `SegmentationEditor.tsx`                   | Top-level orchestrator                               |
+| `components/SegmentationEditorLayout.tsx`  | The presentational tree                              |
+| `useEnhancedSegmentationEditor`            | Core state: polygons, selection, history, transform  |
+| `useAdvancedInteractions`                  | Mouse and keyboard, shape creation, vertex editing   |
+| `useKeyboardShortcuts`                     | The global key map                                   |
+| `config/modeConfig.ts`                     | The single source of truth for per-mode behaviour    |
+| `components/canvas/CanvasPolygon.tsx`      | One shape; `React.memo` with a custom comparator     |
+| `components/canvas/PolygonVertices.tsx`    | Vertices of the selected shape only                  |
+| `components/canvas/MultiChannelCanvas.tsx` | The channel compositor (WebGL2, with a CPU fallback) |
+
+### Things that will bite you
+
+- **`React.memo` comparators are hand-written.** Adding a prop to a memoised
+  canvas component without adding it to the comparator means the component never
+  re-renders on that prop. This has shipped as a bug more than once.
+- **Hook order matters more than TypeScript can see.** A `useCallback`,
+  `useMemo` or `useEffect` placed _before_ a `const` it captures throws
+  "Cannot access X before initialization" at runtime; in a minified bundle X is
+  a single letter. Place hooks after the values they capture.
+- **Use `editor.getPolygons()`, not `editor.polygons`,** inside event handlers —
+  the latter is a closure snapshot.
+- **There is no viewport culling**, deliberately. A previous culling pass
+  dropped on-screen pieces of fragmented spheroids.
+- **Undo history is per frame** and reset on every image change and reload.
+- **`polygonKey(p) = p.trackId ?? p.id`** is a branded type so a `Set` of keys
+  cannot be accidentally keyed by something else. Cross-frame UI state uses it.
+
+---
+
+## Decoding 16-bit images
+
+Browsers cannot give you 16-bit samples through a canvas: `createImageBitmap` →
+`getImageData` always returns 8-bit RGBA and silently discards the low byte.
+`src/lib/png16.ts` is therefore a hand-rolled grayscale PNG decoder (colour type
+0, 8 or 16 bit, non-interlaced) built on `DecompressionStream`. It returns
+`null` rather than throwing for anything out of scope, and callers degrade to
+8 bit.
+
+The playback proxy path adds `src/lib/webpGray.ts`, which re-expands 8-bit WebP
+samples back to a 16-bit array so the compositor never sees 8-bit data, plus a
+banding guard that falls back to the full-depth PNG when the display window is
+narrower than 1/8 of the range.
+
+---
+
+## Internationalisation
+
+Six locales — English, Czech, Spanish, German, French, Chinese — in
+`src/translations/`. Every user-facing string must exist in **all six**;
+`node scripts/check-i18n.cjs` enforces it and runs in `make ci`. See the
+[i18n guide](../i18n-guide.md).
+
+---
+
+## Build and quality gate
+
+- `make ci` — TypeScript (frontend and backend), ESLint at zero warnings, i18n
+  completeness, and the Python suites.
+- `make build-service SERVICE=frontend` — the production bundle. **Run it before
+  claiming a build-affecting change works**: minification, tree-shaking and
+  chunk splitting behave differently from the dev server, and removing a
+  dependency that is still named in `vite.config.ts`'s `manualChunks` fails only
+  here.
+- The Vitest suite has substantial pre-existing failures and is **not** a gate.
+  See [Testing guide](../testing-guide.md).
+
+## Related
+
+- [Architecture overview](README.md)
+- [Segmentation editor guide](../guides/segmentation-editor.md)
+- [Polygon rendering](../polygon-rendering-optimization.md)
