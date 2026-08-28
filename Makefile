@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check ci ci-test dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
+.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-py test-ml test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check ci ci-test dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
 
 # Detect Docker Compose version  
 DOCKER_COMPOSE := docker compose
@@ -246,6 +246,37 @@ restart-backend-utia:
 	@echo "Test connection: curl http://localhost:3001/api/test-email/test-connection"
 
 # Run unit tests with UI in Docker
+test-py:
+	@echo "🐍 Python suites CI also runs (no GPU needed)"
+	@docker run --rm -v "$$PWD":/w -w /w python:3.10-slim sh -c '\
+	  pip install -q -r backend/requirements-pytest-ci.txt && \
+	  python -m pytest -q -p no:cacheprovider \
+	    backend/src/services/video/pythonHelpers/tests \
+	    backend/essays/tests'
+
+# The ML suite cannot run in CI: models/__init__ imports mamba_ssm -> Triton,
+# which raises "0 active drivers" at import time without a CUDA driver. So it
+# needs this box, the built ml image, and --gpus. Was 469 passed / 1 skipped on
+# 2026-08-28. --asyncio-mode=auto is required; without pytest-asyncio the
+# test_api_segmentation tests error on an unhandled async fixture and look
+# broken when they are merely unplugged.
+test-ml:
+	@echo "🧠 ML suite (needs a GPU and the built ml image)"
+	@docker image inspect cell-segmentation-hub-ml:latest >/dev/null 2>&1 || \
+	  { echo "❌ build it first: make build-service SERVICE=ml"; exit 1; }
+	@# HF_TOKEN is exported into the command's environment and passed by NAME.
+	@# Writing `-e HF_TOKEN="$$(grep ...)"` would expand the secret into the
+	@# docker argument list, where any user on the box can read it out of ps.
+	@HF_TOKEN="$$(grep -E '^HF_TOKEN=' .env.production | cut -d= -f2-)" \
+	docker run --rm --gpus all --entrypoint sh \
+	  -v "$$PWD/backend/segmentation":/app -w /app \
+	  -v "$$PWD/backend/segmentation/.hf-cache":/home/app/.cache/huggingface \
+	  -e HF_TOKEN \
+	  cell-segmentation-hub-ml:latest -c '\
+	    pip install -q -r requirements-test.txt && \
+	    python -m pytest tests/ -q -p no:cacheprovider --asyncio-mode=auto \
+	      --timeout=90 --timeout-method=thread'
+
 test-ui:
 	@echo "🧪 Running unit tests with UI in Docker..."
 	@$(DOCKER_COMPOSE) exec frontend npm run test:ui
@@ -290,14 +321,16 @@ type-check:
 # legacy editor tests). Including it here would render `make ci` unusable
 # until the suite is healed. Use `make ci-test` to run vitest separately.
 ci:
-	@echo "🔍 [1/4] TypeScript (frontend — baseline gate)"
+	@echo "🔍 [1/5] TypeScript (frontend — baseline gate)"
 	@npm run type-check
-	@echo "🔍 [2/4] TypeScript (backend)"
+	@echo "🔍 [2/5] TypeScript (backend)"
 	@cd backend && npm run type-check
-	@echo "🔍 [3/4] ESLint (strict — 0 warnings)"
+	@echo "🔍 [3/5] ESLint (strict — 0 warnings)"
 	@npx eslint --max-warnings=0 src/
-	@echo "🔍 [4/4] i18n completeness (6 locales)"
+	@echo "🔍 [4/5] i18n completeness (6 locales)"
 	@node scripts/check-i18n.cjs
+	@echo "🔍 [5/5] Python suites (same 214 tests CI runs)"
+	@$(MAKE) --no-print-directory test-py
 	@echo "✅ All local CI checks passed"
 
 # Optional: run the Vitest suite. Currently has known pre-existing
