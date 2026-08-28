@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  findSparseChannel,
   findStaticChannel,
   projectionDelta,
   projectPolygons,
+  planSparseCollapse,
   planStaticCollapse,
+  sparseFollowers,
   type StaticChannelLike,
 } from '../staticChannelProjection';
 
@@ -34,7 +37,9 @@ describe('findStaticChannel', () => {
     // "The pixels look the same" is not the same claim as "this came from one
     // image", and only the second one licenses skipping the work.
     expect(findStaticChannel([{ name: 'irm' }], 'irm')).toBeNull();
-    expect(findStaticChannel([{ name: 'irm', staticSource: false }], 'irm')).toBeNull();
+    expect(
+      findStaticChannel([{ name: 'irm', staticSource: false }], 'irm')
+    ).toBeNull();
   });
 
   it('returns null for an unknown name, no name, or no channels', () => {
@@ -174,5 +179,190 @@ describe('planStaticCollapse', () => {
     const plan = planStaticCollapse(staticNoAlign, many);
     expect(plan.segment).toHaveLength(1);
     expect(plan.projectFrom.get('f0')).toHaveLength(298);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sparse channels: the microscope only refreshed this one every N-th frame.
+// ---------------------------------------------------------------------------
+
+/** The reported case — a reference channel refreshed every 3rd frame.
+ *  `sparseFill` is written by the extractor (`plane_coverage.py`). */
+const sparseEveryThird: StaticChannelLike = {
+  name: 'irm',
+  sparseSource: true,
+  sparseFill: { '1': 0, '2': 0, '4': 3, '5': 3, '7': 6, '8': 6 },
+};
+
+const nineFrames = Array.from({ length: 9 }, (_, i) => ({
+  id: `f${i}`,
+  frameIndex: i,
+}));
+
+describe('findSparseChannel', () => {
+  it('finds a channel the extractor measured as sparse', () => {
+    expect(findSparseChannel([sparseEveryThird], 'irm')?.name).toBe('irm');
+  });
+
+  it('refuses the flag without the map, and the map without the flag', () => {
+    // Either alone is a half-written record, and acting on it would drop frames
+    // from the queue with nothing able to fill them back in.
+    expect(
+      findSparseChannel([{ name: 'irm', sparseSource: true }], 'irm')
+    ).toBeNull();
+    expect(
+      findSparseChannel([{ name: 'irm', sparseFill: { '1': 0 } }], 'irm')
+    ).toBeNull();
+  });
+
+  it('refuses an EMPTY map — a channel with no gaps is not sparse', () => {
+    // It would drop nothing from the queue but would still take the sparse
+    // branch in the projection service, costing the static short-circuit.
+    expect(
+      findSparseChannel(
+        [{ name: 'irm', sparseSource: true, sparseFill: {} }],
+        'irm'
+      )
+    ).toBeNull();
+  });
+
+  it('does not mistake a static channel for a sparse one', () => {
+    expect(findSparseChannel([staticNoAlign], 'irm')).toBeNull();
+  });
+
+  it('returns null for an unknown name, no name, or no channels', () => {
+    expect(findSparseChannel([sparseEveryThird], 'tirf')).toBeNull();
+    expect(findSparseChannel([sparseEveryThird], null)).toBeNull();
+    expect(findSparseChannel(null, 'irm')).toBeNull();
+  });
+});
+
+describe('planSparseCollapse', () => {
+  it('segments only the real frames and projects each gap from ITS anchor', () => {
+    // The piecewise part: frame 4 must NOT take frame 0's polylines just
+    // because frame 0 is also an anchor.
+    const plan = planSparseCollapse(sparseEveryThird, nineFrames);
+
+    expect(plan.segment.map(f => f.id)).toEqual(['f0', 'f3', 'f6']);
+    expect(plan.projectFrom.get('f0')?.map(f => f.id)).toEqual(['f1', 'f2']);
+    expect(plan.projectFrom.get('f3')?.map(f => f.id)).toEqual(['f4', 'f5']);
+    expect(plan.projectFrom.get('f6')?.map(f => f.id)).toEqual(['f7', 'f8']);
+    expect(plan.unknownShift).toEqual([]);
+  });
+
+  it('leaves a gap alone when its anchor is not in this batch', () => {
+    // A hand-picked selection that excludes the real frames. Segmenting a blank
+    // plane is a wasted pass, but it is what happened before this existed, so
+    // the fallback is never worse than the status quo — and it is never wrong.
+    const selection = [nineFrames[4], nineFrames[5]];
+    const plan = planSparseCollapse(sparseEveryThird, selection);
+
+    expect(plan.projectFrom.size).toBe(0);
+    expect(plan.unknownShift.map(f => f.id)).toEqual(['f4', 'f5']);
+    expect(plan.segment.map(f => f.id)).toEqual(['f4', 'f5']);
+  });
+
+  it('mixes: an anchor in the batch fills its own gaps, the rest fall back', () => {
+    const selection = [nineFrames[3], nineFrames[4], nineFrames[7]];
+    const plan = planSparseCollapse(sparseEveryThird, selection);
+
+    expect(plan.projectFrom.get('f3')?.map(f => f.id)).toEqual(['f4']);
+    expect(plan.unknownShift.map(f => f.id)).toEqual(['f7']);
+    expect(plan.segment.map(f => f.id)).toEqual(['f3', 'f7']);
+  });
+
+  it('changes nothing for a channel with no recorded gaps', () => {
+    const plan = planSparseCollapse(
+      { name: 'irm', sparseSource: true },
+      nineFrames
+    );
+    expect(plan.segment).toHaveLength(9);
+    expect(plan.projectFrom.size).toBe(0);
+  });
+
+  it('leaves frames the map says nothing about to segment themselves', () => {
+    // The aborted-acquisition tail: the extractor deliberately records no fill
+    // for a timepoint that was never imaged at all, so it must not be dropped.
+    const withTail = [
+      ...nineFrames,
+      { id: 'f9', frameIndex: 9 },
+      { id: 'f10', frameIndex: 10 },
+    ];
+    const plan = planSparseCollapse(sparseEveryThird, withTail);
+    expect(plan.segment.map(f => f.id)).toEqual([
+      'f0',
+      'f3',
+      'f6',
+      'f9',
+      'f10',
+    ]);
+  });
+
+  it('collapses the real Well7 shape: 29 frames, one acquisition', () => {
+    const fill: Record<string, number> = {};
+    for (let i = 1; i < 29; i++) fill[String(i)] = 0;
+    const many = Array.from({ length: 29 }, (_, i) => ({
+      id: `f${i}`,
+      frameIndex: i,
+    }));
+
+    const plan = planSparseCollapse(
+      { name: 'Channel_1', sparseSource: true, sparseFill: fill },
+      many
+    );
+
+    expect(plan.segment.map(f => f.id)).toEqual(['f0']);
+    expect(plan.projectFrom.get('f0')).toHaveLength(28);
+  });
+
+  it('is zero-delta: a sparse channel records no per-frame shift', () => {
+    // Which is what lets the projection reuse the static path unchanged.
+    expect(projectionDelta(sparseEveryThird, 'f0', 'f1')).toEqual([0, 0]);
+  });
+});
+
+describe('sparseFollowers', () => {
+  it('claims exactly the gaps that read from this anchor', () => {
+    expect(
+      sparseFollowers(sparseEveryThird, 3, nineFrames).map(f => f.id)
+    ).toEqual(['f4', 'f5']);
+    expect(
+      sparseFollowers(sparseEveryThird, 0, nineFrames).map(f => f.id)
+    ).toEqual(['f1', 'f2']);
+  });
+
+  it('claims nothing for a frame that is nobody’s anchor', () => {
+    expect(sparseFollowers(sparseEveryThird, 1, nineFrames)).toEqual([]);
+  });
+
+  it('resolves in INDEX space, ignoring the id-space mirror entirely', () => {
+    // The invariant that keeps the queue collapse and the projection from
+    // disagreeing: `planSparseCollapse` drops a gap on the strength of
+    // `sparseFill`, so the projection has to fill in the SAME set. A container
+    // whose `sparseFillFrameIds` never landed (or landed partially) must still
+    // get every dropped frame back.
+    const noIdMap: StaticChannelLike = {
+      name: 'irm',
+      sparseSource: true,
+      sparseFill: sparseEveryThird.sparseFill,
+    };
+    const dropped = planSparseCollapse(noIdMap, nineFrames);
+    const anchors = [...dropped.projectFrom.keys()];
+    const refilled = anchors.flatMap(anchorId => {
+      const idx = nineFrames.find(f => f.id === anchorId)!.frameIndex;
+      return sparseFollowers(noIdMap, idx, nineFrames).map(f => f.id);
+    });
+
+    expect(refilled.sort()).toEqual(
+      [...dropped.projectFrom.values()]
+        .flat()
+        .map(f => f.id)
+        .sort()
+    );
+    expect(refilled).toHaveLength(6);
+  });
+
+  it('is empty for a channel with no map at all', () => {
+    expect(sparseFollowers({ name: 'irm' }, 0, nineFrames)).toEqual([]);
   });
 });
