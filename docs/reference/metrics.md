@@ -2,7 +2,7 @@
 
 Exactly how every measured number is computed, and where the implementation
 deviates from what its name suggests. If you are publishing numbers from this
-platform, read the [caveats](#caveats-read-before-publishing).
+platform, read the [caveats](#caveats--read-before-publishing).
 
 Two implementations exist and they are **not identical**:
 
@@ -13,7 +13,7 @@ Two implementations exist and they are **not identical**:
 
 They agree on area, perimeter, extent, solidity and the Feret family. They
 **disagree on circularity, compactness and convexity for polygons with holes** —
-see [caveats](#caveats-read-before-publishing).
+see [caveats](#caveats--read-before-publishing).
 
 ---
 

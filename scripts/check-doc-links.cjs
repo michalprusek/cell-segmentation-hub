@@ -3,10 +3,16 @@
  * Documentation link checker.
  *
  * Walks every Markdown file under `docs/` plus the repository-root Markdown
- * files and verifies that each *relative* link target resolves on disk.
- * External links (http/https/mailto) and pure in-page anchors (`#section`)
- * are skipped — this checker is about links that rot when a file is renamed
- * or deleted, which is the failure mode the docs tree actually suffers from.
+ * files (README.md and CLAUDE.md — the latter carries its own index into
+ * `docs/` and is the file most likely to rot when a page is renamed) and
+ * verifies that each *relative* link resolves:
+ *
+ *   - the file part must exist on disk;
+ *   - an `#anchor` into a Markdown file must match a heading in that file.
+ *
+ * External links (http/https/mailto) are skipped. Anchors are checked because
+ * a heading containing an em dash slugs to a *double* hyphen, which is easy to
+ * get wrong by hand and silently produces a link that jumps nowhere.
  *
  * Usage:
  *   node scripts/check-doc-links.cjs           # check, exit 1 on any dead link
@@ -19,7 +25,7 @@ const fs = require('fs');
 const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
-const ROOTS = ['docs', 'README.md'];
+const ROOTS = ['docs', 'README.md', 'CLAUDE.md'];
 /** Directories never worth walking. */
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -48,15 +54,19 @@ function collectMarkdown(relRoot) {
   return out;
 }
 
+/** Strip fenced code blocks so example Markdown is not treated as real links. */
+function stripFences(markdown) {
+  return markdown.replace(/```[\s\S]*?```/g, '');
+}
+
 /**
  * Extract link targets from Markdown.
  *
  * Handles inline links `[text](target)` and reference definitions
- * `[label]: target`. Fenced code blocks are stripped first so that example
- * Markdown inside a ``` block is not treated as a real link.
+ * `[label]: target`.
  */
 function extractLinks(markdown) {
-  const withoutFences = markdown.replace(/```[\s\S]*?```/g, '');
+  const withoutFences = stripFences(markdown);
   const links = [];
   const inline = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
   let match;
@@ -70,44 +80,125 @@ function extractLinks(markdown) {
   return links;
 }
 
+/**
+ * GitHub's heading-to-anchor rule: lowercase, strip anything that is not a
+ * word character, space or hyphen, then turn spaces into hyphens.
+ *
+ * The consequence worth knowing: an em dash is *stripped* rather than replaced,
+ * so `## Caveats — read this` leaves two spaces and slugs to
+ * `caveats--read-this` with a DOUBLE hyphen.
+ */
+function slugify(headingText) {
+  return (
+    headingText
+      .trim()
+      .toLowerCase()
+      .replace(/`/g, '')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links render as their text
+      // Emphasis markers only. NOT `_`: it is a word character that GitHub
+      // keeps, and stripping it mangles identifiers such as
+      // `spheroid_disintegration` that legitimately appear in headings.
+      .replace(/[*~]/g, '')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s/g, '-')
+  );
+}
+
+/** Every anchor a Markdown file offers: its headings, plus explicit anchors. */
+function collectAnchors(absPath) {
+  const markdown = stripFences(fs.readFileSync(absPath, 'utf8'));
+  const anchors = new Set();
+  const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/gm;
+  let match;
+  while ((match = heading.exec(markdown)) !== null) {
+    anchors.add(slugify(match[1]));
+  }
+  // Explicit HTML anchors, e.g. <a id="x"> or <a name="x">.
+  const explicit = /<a\s+(?:id|name)=["']([^"']+)["']/gi;
+  while ((match = explicit.exec(markdown)) !== null) {
+    anchors.add(match[1].toLowerCase());
+  }
+  return anchors;
+}
+
 /** True for targets this checker deliberately does not resolve. */
 function isSkippable(target) {
   return (
-    target.startsWith('#') ||
     /^[a-z][a-z0-9+.-]*:/i.test(target) || // http:, https:, mailto:, tel:, ...
     target.startsWith('//')
   );
 }
 
+/**
+ * Decode percent-escapes, tolerating a literal `%` that is not a valid escape.
+ * `decodeURI` throws `URIError` on those, which would kill the whole gate with
+ * a stack trace instead of reporting the link.
+ */
+function safeDecode(target) {
+  try {
+    return decodeURI(target);
+  } catch {
+    return target;
+  }
+}
+
 function main() {
   const verbose = process.argv.includes('--list');
   const files = ROOTS.flatMap(collectMarkdown).sort();
+  const anchorCache = new Map();
   const dead = [];
   let checked = 0;
 
+  const anchorsFor = absPath => {
+    if (!anchorCache.has(absPath)) {
+      anchorCache.set(absPath, collectAnchors(absPath));
+    }
+    return anchorCache.get(absPath);
+  };
+
   for (const file of files) {
     const markdown = fs.readFileSync(file, 'utf8');
+    const rel = path.relative(REPO_ROOT, file);
+
     for (const rawTarget of extractLinks(markdown)) {
       if (isSkippable(rawTarget)) continue;
-      // Drop any in-page anchor; only the file part is resolved on disk.
-      const target = rawTarget.split('#')[0];
-      if (target === '') continue;
-      checked += 1;
-      // A root-absolute target (`/docs/x.md`) is resolved from the repository
-      // root, not from `/` — docs are read from a checkout, not a web server.
-      const base = target.startsWith('/') ? REPO_ROOT : path.dirname(file);
-      const resolved = path.resolve(
-        base,
-        `.${path.sep}`,
-        decodeURI(target).replace(/^\//, '')
-      );
-      const exists = fs.existsSync(resolved);
-      if (verbose) {
-        const rel = path.relative(REPO_ROOT, file);
-        console.log(`${exists ? 'ok  ' : 'DEAD'} ${rel} -> ${rawTarget}`);
+
+      const hashAt = rawTarget.indexOf('#');
+      const filePart = hashAt === -1 ? rawTarget : rawTarget.slice(0, hashAt);
+      const anchor = hashAt === -1 ? '' : rawTarget.slice(hashAt + 1);
+
+      // A bare `#anchor` points at a heading in this same file.
+      const targetFile = filePart === '' ? file : null;
+      let resolved = targetFile;
+
+      if (resolved === null) {
+        // A root-absolute target (`/docs/x.md`) is resolved from the repository
+        // root, not from `/` — docs are read from a checkout, not a web server.
+        const base = filePart.startsWith('/') ? REPO_ROOT : path.dirname(file);
+        resolved = path.resolve(
+          base,
+          `.${path.sep}`,
+          safeDecode(filePart).replace(/^\//, '')
+        );
       }
-      if (!exists) {
-        dead.push({ file: path.relative(REPO_ROOT, file), target: rawTarget });
+
+      checked += 1;
+      let problem = null;
+
+      if (!fs.existsSync(resolved)) {
+        problem = 'file not found';
+      } else if (anchor && resolved.endsWith('.md')) {
+        const wanted = safeDecode(anchor).toLowerCase();
+        if (!anchorsFor(resolved).has(wanted)) {
+          problem = 'no such heading';
+        }
+      }
+
+      if (verbose) {
+        console.log(`${problem ? 'DEAD' : 'ok  '} ${rel} -> ${rawTarget}`);
+      }
+      if (problem) {
+        dead.push({ file: rel, target: rawTarget, problem });
       }
     }
   }
@@ -118,8 +209,8 @@ function main() {
 
   if (dead.length > 0) {
     console.error(`\n${dead.length} dead link(s):`);
-    for (const { file, target } of dead) {
-      console.error(`  ${file} -> ${target}`);
+    for (const { file, target, problem } of dead) {
+      console.error(`  ${file} -> ${target}  (${problem})`);
     }
     process.exit(1);
   }

@@ -229,7 +229,7 @@ export const DocsBlockView: React.FC<BlockProps> = ({ block, terms }) => {
                       className="flex items-baseline gap-2 text-gray-700 dark:text-gray-300"
                     >
                       <kbd className="bg-gray-200 px-2 py-0.5 rounded text-xs font-mono whitespace-nowrap dark:bg-gray-700">
-                        {item.keys}
+                        <Highlight text={item.keys} terms={terms} />
                       </kbd>
                       <span>
                         <Highlight text={item.label} terms={terms} />

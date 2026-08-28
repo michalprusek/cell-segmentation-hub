@@ -38,8 +38,9 @@ export interface DocsSearchResult {
 /**
  * Filter `sections` by `query`.
  *
- * A query of one or two characters is ignored: it would match nearly
- * everything and make the page flicker while the user is still typing.
+ * A single-character query is ignored: it would match nearly everything and
+ * make the page flicker while the user is still typing. Two characters is the
+ * shortest query that filters.
  */
 export function useDocsSearch(
   sections: DocsSection[],

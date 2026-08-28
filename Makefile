@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-py test-ml test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check ci ci-test dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
+.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-py test-ml test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check ci ci-test docs-links dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
 
 # Detect Docker Compose version  
 DOCKER_COMPOSE := docker compose
@@ -41,6 +41,7 @@ help:
 	@echo "  shell-be    Open shell in backend container"
 	@echo "  shell-ml    Open shell in ML container"
 	@echo "  test        Run tests in containers"
+	@echo "  docs-links  Check every relative link + anchor in the docs"
 	@echo "  clean       Clean up Docker resources"
 	@echo "  reset       Reset everything (clean + rebuild)"
 	@echo ""

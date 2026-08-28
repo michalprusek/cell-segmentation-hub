@@ -47,17 +47,20 @@ make ci
 ```
 
 TypeScript (frontend and backend), ESLint at zero warnings, i18n completeness
-across all six locales, and the GPU-free Python suites. Takes about half a
-minute.
+across all six locales, documentation link integrity, and the GPU-free Python
+suites. Takes about half a minute.
 
 ### Documentation links
+
+Already part of `make ci`; run it on its own while editing docs:
 
 ```bash
 make docs-links      # or: node scripts/check-doc-links.cjs
 ```
 
-Every relative link in `docs/**` and the root Markdown files must resolve. Run
-it after renaming or deleting any page.
+Every relative link in `docs/**`, `README.md` and `CLAUDE.md` must resolve —
+both the file and, for a link into a Markdown file, the `#anchor`. Run it after
+renaming or deleting any page, or after renaming a heading.
 
 ---
 

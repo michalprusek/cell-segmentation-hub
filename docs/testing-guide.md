@@ -20,7 +20,8 @@ worth it.
 | **Python (full ML suite)**   | `make test-ml`            | Needs a GPU. Runs in a one-off container.                                                                                                                                                                                                   |
 
 `make ci` runs: frontend TypeScript, backend TypeScript, ESLint at zero
-warnings, i18n completeness across six locales, and `make test-py`. It takes
+warnings, i18n completeness across six locales, documentation link integrity,
+and `make test-py`. It takes
 about half a minute and is the check to run before opening a PR.
 
 ```bash
