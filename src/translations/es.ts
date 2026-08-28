@@ -1259,6 +1259,8 @@ export default {
         'Longitud, área e intensidad por canal de cada MT desde el archivo ND2/TIFF original. Corregido con la mediana del fondo (fuera de la máscara MT dilatada).',
       intensityNote:
         'La intensidad de señal por canal —incluida la intensidad sumada (integrada)— se calcula siempre para cada canal y se escribe en la hoja de métricas. No es necesario seleccionar nada.',
+      wideNote:
+        'Cada canal tiene su propia fila en metrics.csv (véase la columna «channel»). El archivo complementario metrics_wide.csv —una hoja adicional en metrics.xlsx— coloca todos los canales del mismo microtúbulo en una sola fila, con un conjunto de columnas por canal.',
       thicknessLabel: 'Grosor del MT (px)',
       thicknessHelp:
         'Ancho de la banda de muestreo a lo largo de cada polilínea. 5 px corresponde al diámetro típico del microtúbulo a 100× campo amplio.',

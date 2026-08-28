@@ -243,8 +243,59 @@ Intensity is derived from the **raw 16-bit** ND2/TIFF signal, not the 8-bit
 display-normalised per-channel PNGs. The sampling band width (\`thickness\`)
 and the background margin are set in the export dialog.
 
-### Channel totals (\`metrics_channel_totals.csv\` / \`.json\`, or the
-"Channel Totals" sheet in \`metrics.xlsx\`)
+### Which channel do the intensity numbers come from?
+
+**Every channel the video has** — one row each. The \`channel\` column names
+the channel a row was measured in, and its values are read from that
+channel's plane of the **original raw 16-bit** ND2/TIFF (channels added after
+upload are read from their stored per-frame PNG instead). Nothing is measured
+on the 8-bit display images you see in the editor, and the segmentation-source
+channel gets no special treatment: an IRM channel and a TIRF channel of the
+same microtubule each get their own row, with their own intensity and their
+own local background.
+
+Because the sampling band and the background ring are pure geometry, they are
+built once per frame and reused for every channel — so \`lengthPx\`,
+\`areaPx\` and \`pixelCount\` are identical across a microtubule's channel rows.
+Only the intensity/background columns differ.
+
+### Wide view — \`metrics_wide.csv\` / \`.json\`, or the "Microtubule Metrics (wide)" sheet
+
+The same numbers, pivoted: **one row per (frame, microtubule)**, with each
+channel's measures in its own columns — so you can compare channels on one
+line without pivoting yourself.
+
+- The identity and geometry columns (\`frameIndex\`, \`imageName\`, \`label\`,
+  \`mtType\`, \`instanceId\`, \`trackId\`, \`lengthPx\`, \`lengthUm\`,
+  \`areaPx\`, \`areaUm2\`, \`pixelCount\`) appear **once**, because they do not
+  depend on the channel.
+- Every other column is named **\`<channel>_<measure>\`** — e.g.
+  \`IRM_meanIntensity\`, \`TIRF_488_meanIntensity\`,
+  \`IRM_signalMinusBackground\`. The seven per-channel measures are
+  \`sumIntensity\`, \`meanIntensity\`, \`medianIntensity\`, \`stdIntensity\`,
+  \`medianBackground\`, \`meanBackground\` and \`signalMinusBackground\`; they
+  mean exactly what the same-named columns in \`metrics.csv\` mean, and are
+  read from the same **raw 16-bit** source.
+- Columns follow each channel's first appearance, i.e. the video's own channel
+  order; rows are in the same reading order as \`metrics.csv\`
+  (frame-ascending).
+- A channel's cells are **blank** when that channel produced no measurement
+  for that microtubule. Two reasons: the channel exists on the video but the
+  frame image is missing (a channel added after upload with partial coverage),
+  **or** the export spans several videos with different channel names — the
+  table then has a column block per distinct name across the whole export, and
+  each video's rows are blank in the other videos' blocks. The wide view is not
+  written at all on the geometry-only fallback below, where there is no channel
+  to widen.
+- On a very large export the workbook can grow past what Excel writing can hold
+  in memory. The wide **sheet** is then omitted from \`metrics.xlsx\` and a
+  \`metrics_wide.csv\` is written beside it instead — the numbers are never
+  dropped, only moved.
+
+\`metrics.csv\` (long) remains the canonical file and is unchanged — the wide
+view is an extra convenience, not a replacement.
+
+### Channel totals — \`metrics_channel_totals.csv\` / \`.json\`, or the "Channel Totals" sheet
 
 One row per (video, channel): the sum/mean of **every** pixel of that
 channel across the whole video, independent of the microtubules — a global

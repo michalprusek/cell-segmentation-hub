@@ -1252,6 +1252,8 @@ export default {
         'Per-MT length, area, and per-channel intensity from the raw ND2/TIFF file. Background-corrected using the median of pixels outside the dilated MT mask.',
       intensityNote:
         'Per-channel signal intensity — including the summed (integrated) intensity — is always computed for every channel and written to the metrics spreadsheet. No selection needed.',
+      wideNote:
+        'Each channel gets its own row in metrics.csv (see the "channel" column). A companion metrics_wide.csv — an extra sheet in metrics.xlsx — puts all channels of the same microtubule on one row, one column set per channel.',
       thicknessLabel: 'MT thickness (px)',
       thicknessHelp:
         'Width of the sampling band along each polyline. 5 px matches typical microtubule diameter in 100x widefield.',

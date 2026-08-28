@@ -1161,6 +1161,8 @@ export default {
         '从原始 ND2/TIFF 文件计算每条微管的长度、面积及每通道强度。使用扩张 MT 掩码外的中位数进行背景校正。',
       intensityNote:
         '每通道信号强度——包括总和（积分）强度——始终会为每个通道计算并写入指标表格，无需进行任何选择。',
+      wideNote:
+        '在 metrics.csv 中每个通道各占一行（见 “channel” 列）。配套的 metrics_wide.csv（也是 metrics.xlsx 中的一个额外工作表）把同一根微管的所有通道放在同一行上，每个通道一组列。',
       thicknessLabel: '微管厚度 (px)',
       thicknessHelp:
         '沿每条多边折线采样的带宽。100× 宽场下典型微管直径约为 5 px。',
