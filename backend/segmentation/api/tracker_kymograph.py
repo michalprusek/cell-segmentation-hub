@@ -659,11 +659,15 @@ def _solve_link_lap(
 
     BIG = 1e6
     C = np.full((P, Q + P), BIG, dtype=np.float64)
-    for i in range(P):
-        for j in range(Q):
-            if base[i, j] <= cost_threshold:
-                C[i, j] = base[i, j]
-        C[i, Q + i] = cost_threshold
+    # Vectorised, and bit-identical to the P x Q Python loop this replaces:
+    # C starts at BIG everywhere, so `np.where` writes back the same BIG the
+    # loop left in place, and it only *selects* float64 values -- no arithmetic
+    # is performed on them. At the filament counts the frame-to-frame pass
+    # actually sees (mean 61/frame, p95 134, max 311 -- see _build_link_cost)
+    # the loop ran up to ~97k Python iterations per frame pair, immediately
+    # after the matrix was produced by fully-vectorised numpy.
+    C[:, :Q] = np.where(base <= cost_threshold, base, BIG)
+    C[np.arange(P), Q + np.arange(P)] = cost_threshold
     row_ind, col_ind = linear_sum_assignment(C)
     links: Dict[int, int] = {}
     for r, c in zip(row_ind, col_ind):
@@ -710,16 +714,16 @@ def _gap_close_merges(
     if max_gap < 1 or M < 2:
         return []
 
-    valid = np.zeros((M, M), dtype=bool)
-    gap_arr = np.zeros((M, M), dtype=np.int64)
-    for x in range(M):
-        for y in range(M):
-            if x == y:
-                continue
-            gap = segments[y].start_frame - segments[x].end_frame
-            if 1 <= gap <= max_gap:
-                valid[x, y] = True
-                gap_arr[x, y] = gap
+    # Pure integer arithmetic over the tracklet list, so this is exact.
+    # M is the tracklet count -- 250-417 on one real 30-frame video -- and the
+    # M x M Python loop this replaces ran up to ~174k iterations to subtract
+    # two ints.
+    starts = np.fromiter((s.start_frame for s in segments), dtype=np.int64, count=M)
+    ends = np.fromiter((s.end_frame for s in segments), dtype=np.int64, count=M)
+    gap_arr = starts[None, :] - ends[:, None]
+    valid = (gap_arr >= 1) & (gap_arr <= max_gap)
+    np.fill_diagonal(valid, False)
+    gap_arr = np.where(valid, gap_arr, 0)
     if not valid.any():
         return []
 
@@ -1232,8 +1236,17 @@ def _render_profiles(
 
 
 @router.post("/kymograph", response_model=KymographResponse)
-async def kymograph(req: KymographRequest) -> KymographResponse:
-    """Render a kymograph for one microtubule polyline."""
+def kymograph(req: KymographRequest) -> KymographResponse:
+    """Render a kymograph for one microtubule polyline.
+
+    SYNCHRONOUS on purpose, for the same reason as /track above: the body has
+    no awaits and is pure blocking CPU/IO — a PIL decode, a numpy conversion
+    and a scipy map_coordinates per frame, then one matplotlib Figure and PNG
+    per frame in _render_profiles. As `async def` all of that ran on the event
+    loop, so a several-hundred-frame video pinned the single uvicorn worker for
+    minutes and took /health down with it. `def` hands it to FastAPI's
+    threadpool.
+    """
     from PIL import Image as PILImage
     from scipy.ndimage import map_coordinates
 
