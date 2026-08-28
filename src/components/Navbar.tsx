@@ -31,12 +31,16 @@ const Navbar = () => {
   };
 
   return (
+    // The dark variant used to be an unconditional `dark:bg-gray-900`, so the
+    // header sat as an opaque band over the hero in dark mode while light mode
+    // faded in from transparent. Both themes now share the same scroll
+    // behaviour.
     <header
       className={`fixed top-0 left-0 right-0 w-full z-50 transition-all duration-300 ${
         isScrolled
-          ? 'py-3 bg-white/80 backdrop-blur-md shadow-sm'
-          : 'py-5 bg-transparent'
-      } dark:bg-gray-900`}
+          ? 'py-3 bg-white/80 dark:bg-gray-900/85 backdrop-blur-md shadow-sm'
+          : 'py-5 bg-transparent dark:bg-transparent'
+      }`}
     >
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
         <Link
@@ -81,10 +85,14 @@ const Navbar = () => {
           </div>
         </nav>
 
-        {/* Mobile Menu Button */}
+        {/* Mobile Menu Button.
+            This is the only navigation control below 768px and it was a bare
+            button with no padding, so the hit area was the 24px icon itself —
+            well under the 44px touch minimum — and it had no focus ring. */}
         <button
-          className="md:hidden text-gray-700 dark:text-gray-300"
+          className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-700 transition-colors hover:bg-gray-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-gray-300 md:hidden"
           onClick={toggleMobileMenu}
+          aria-expanded={isMobileMenuOpen}
           aria-label={t('accessibility.toggleMenu')}
         >
           {isMobileMenuOpen ? (
@@ -121,7 +129,7 @@ const Navbar = () => {
               {t('common.privacyPolicy')}
             </Link>
             <div className="flex items-center justify-between py-2 border-t border-gray-200 dark:border-gray-700">
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
                 {t('common.settings')}
               </span>
               <div className="flex items-center gap-2">

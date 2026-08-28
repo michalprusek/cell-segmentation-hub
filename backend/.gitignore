@@ -18,7 +18,12 @@ build/
 # Database
 *.db
 *.db-journal
-prisma/migrations/
+# NOTE: prisma/migrations/ must NOT be ignored. Production applies migrations
+# with `prisma migrate deploy`, which can only replay migration files that are
+# committed. All 9 existing migrations are tracked (they were added past this
+# rule), but a NEW one created by `prisma migrate dev` would be silently skipped
+# by `git add`, ship a schema-less deploy, and only surface as a runtime error
+# against production. So there is deliberately no pattern for them here.
 
 # Logs
 logs/

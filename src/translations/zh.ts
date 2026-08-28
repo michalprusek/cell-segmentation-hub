@@ -8,6 +8,9 @@ export default {
     dismiss: '关闭',
     delete: '删除',
     edit: '编辑',
+    actions: '操作',
+    show: '显示',
+    hide: '隐藏',
     create: '创建',
     search: '搜索',
     error: '错误',
@@ -31,6 +34,7 @@ export default {
     createYourFirst: '创建您的第一个项目开始使用',
     tryAgain: '重试',
     cancelling: '正在取消...',
+    deleting: '正在删除...',
     retry: '重试',
     retrying: '重试中...',
     retryAttempt: '第 {{attempt}} 次重试，共 {{max}} 次',
@@ -255,6 +259,7 @@ export default {
       sperm: '精子',
       microtubules: '微管',
       microcapsule: '微胶囊',
+      neurite: '神经突与胞体',
     },
     projectNamePlaceholder: '例如：HeLa细胞球体',
     projectDescPlaceholder: '例如：用于药物耐受性研究的肿瘤球体分析',
@@ -461,6 +466,7 @@ export default {
         wound: '伤口愈合模型',
         microtubule: '微管模型',
         microcapsule: '微胶囊模型',
+        neurite: '神经突/胞体模型',
       },
       presets: {
         fast: '快速',
@@ -523,6 +529,11 @@ export default {
           description:
             '面向明场显微镜中微胶囊（圆形对象）的实例分割。基于 Meta SAM 3 蒸馏的紧凑型 U-Net 为每个胶囊返回一条清晰的全分辨率轮廓，并通过分水岭算法分离相接触的胶囊；被图像边缘截断的胶囊不计入指标（面积、周长、紧实度）。',
         },
+        neurite_soma: {
+          name: 'Neurite / Soma (nnU-Net ResEnc-M)',
+          description:
+            '面向荧光显微镜中神经元的两类语义分割 — 神经突（突起）与胞体（细胞体）— 仅使用微管蛋白通道。nnU-Net v2 ResEnc-M，3 折集成，配合镜像 TTA 以及针对神经突类别的 clDice 拓扑损失项。留出集 Dice 为 0.832（神经突）/ 0.915（胞体）。',
+        },
       },
     },
     detectHoles: '检测空洞',
@@ -552,6 +563,8 @@ export default {
         '面向 IRM 显微镜的微管实例分割。nnU-Net ResEnc-M 网络，曲率约束实例化，原生折线输出，并支持几何跨帧跟踪。',
       microcapsule:
         '紧凑型 U-Net（由 Meta SAM 3 蒸馏）用于微胶囊实例分割 — 输出每个胶囊的面积、周长和紧实度，被图像边缘截断的胶囊不计入指标。',
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M（2D，3 折集成）用于荧光显微镜中的神经突与胞体分割。读取微管蛋白通道；留出集 Dice 为 0.832（神经突）/ 0.915（胞体）。基于 Leica 共聚焦数据训练，像素尺寸约 0.180 µm/px，在其他像素尺寸下请先验证胞体计数。',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',
@@ -638,6 +651,7 @@ export default {
     successfulSignUp: '注册成功',
     verifyEmail: '请检查您的邮箱以确认您的账户',
     successfulSignOut: '退出登录成功',
+    signOutFailed: '退出登录失败，请重试。',
     checkingAuthentication: '验证身份中...',
     loadingAccount: '加载您的账户...',
     processingRequest: '处理您的请求...',
@@ -851,6 +865,12 @@ export default {
       internal: 'Internal',
       polyline: '折线',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: '神经突',
+      soma: '胞体',
+    },
     shortcuts: {
       buttonText: '快捷键',
       title: '键盘快捷键',
@@ -878,6 +898,7 @@ export default {
       undo: '撤销',
       redo: '重做',
       deleteSelected: '删除选中的多边形',
+      finishShape: '完成当前形状',
 
       // View shortcuts
       zoom: '放大/缩小',
@@ -1206,6 +1227,8 @@ export default {
         '从原始 ND2/TIFF 文件计算每条微管的长度、面积及每通道强度。使用扩张 MT 掩码外的中位数进行背景校正。',
       intensityNote:
         '每通道信号强度——包括总和（积分）强度——始终会为每个通道计算并写入指标表格，无需进行任何选择。',
+      wideNote:
+        '在 metrics.csv 中每个通道各占一行（见 “channel” 列）。配套的 metrics_wide.csv（也是 metrics.xlsx 中的一个额外工作表）把同一根微管的所有通道放在同一行上，每个通道一组列。',
       thicknessLabel: '微管厚度 (px)',
       thicknessHelp:
         '沿每条多边折线采样的带宽。100× 宽场下典型微管直径约为 5 px。',
@@ -2052,7 +2075,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      '为生物医学研究者提供的先进球状细胞分割和分析平台，提供由AI驱动的显微细胞图像分析工具。',
+      '面向生物医学研究者的显微图像分割与分析平台——涵盖球状体、伤口愈合、精子、微胶囊与微管，提供从图像到测量的 AI 工具。',
     contact: '联系方式',
     institution: '机构',
     institutionName: 'ÚTIA AV ČR',

@@ -5,10 +5,14 @@ export default {
     save: 'Save',
     cancel: 'Cancel',
     cancelling: 'Cancelling...',
+    deleting: 'Deleting...',
     apply: 'Apply',
     dismiss: 'Dismiss',
     delete: 'Delete',
     edit: 'Edit',
+    actions: 'Actions',
+    show: 'Show',
+    hide: 'Hide',
     create: 'Create',
     search: 'Search',
     error: 'Error',
@@ -269,6 +273,7 @@ export default {
       sperm: 'Sperm',
       microtubules: 'Microtubules',
       microcapsule: 'Microcapsules',
+      neurite: 'Neurites & somas',
     },
     projectNamePlaceholder: 'e.g., HeLa Cell Spheroids',
     projectDescPlaceholder:
@@ -500,6 +505,7 @@ export default {
         wound: 'Wound Healing Models',
         microtubule: 'Microtubule Models',
         microcapsule: 'Microcapsule Models',
+        neurite: 'Neurite / Soma Models',
       },
       presets: {
         fast: 'Fast',
@@ -565,6 +571,11 @@ export default {
           description:
             'Instance segmentation for microcapsules (round objects) in bright-field microscopy. A compact U-Net distilled from Meta SAM 3 returns one clean, full-resolution boundary per capsule and separates touching capsules with a watershed; capsules cut off by the image border are excluded from the metrics (area, perimeter, compactness).',
         },
+        neurite_soma: {
+          name: 'Neurite / Soma (nnU-Net ResEnc-M)',
+          description:
+            'Two-class semantic segmentation of neurons in fluorescence microscopy — neurite (processes) and soma (cell body) — from the tubulin channel alone. nnU-Net v2 ResEnc-M, 3-fold ensemble with mirroring TTA and a clDice topology term on the neurite class. Held-out Dice 0.832 neurite / 0.915 soma.',
+        },
       },
     },
     detectHoles: 'Detect Holes',
@@ -598,6 +609,8 @@ export default {
         'Microtubule instance segmentation for IRM microscopy. nnU-Net ResEnc-M network, curvature-bounded instancer, native polyline output with geometric cross-frame tracking.',
       microcapsule:
         'Compact U-Net (distilled from Meta SAM 3) for microcapsule instance segmentation — area, perimeter and compactness per capsule, with border-cut capsules excluded from metrics.',
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M (2D, 3-fold ensemble) for neurite and soma segmentation in fluorescence microscopy. Reads the tubulin channel; held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at ~0.180 µm/px — validate soma counts on a different pixel size.',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:
@@ -729,6 +742,7 @@ export default {
       undo: 'Undo',
       redo: 'Redo',
       deleteSelected: 'Delete selected polygon',
+      finishShape: 'Finish the current shape',
 
       // View shortcuts
       zoom: 'Zoom in/out',
@@ -840,6 +854,12 @@ export default {
       internal: 'Internal',
       polyline: 'Polyline',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurite',
+      soma: 'Soma',
+    },
     loading: 'Loading segmentation...',
     noPolygons: 'No polygons found',
     polygonNotFound: 'Polygon not found',
@@ -927,6 +947,7 @@ export default {
     successfulSignUp: 'Registration successful',
     verifyEmail: 'Please check your email to confirm your account',
     successfulSignOut: 'Signed out successfully',
+    signOutFailed: 'Could not sign out. Please try again.',
     checkingAuthentication: 'Checking authentication...',
     loadingAccount: 'Loading your account...',
     processingRequest: 'Processing your request...',
@@ -1290,6 +1311,8 @@ export default {
         'Per-MT length, area, and per-channel intensity from the raw ND2/TIFF file. Background-corrected using the median of pixels outside the dilated MT mask.',
       intensityNote:
         'Per-channel signal intensity — including the summed (integrated) intensity — is always computed for every channel and written to the metrics spreadsheet. No selection needed.',
+      wideNote:
+        'Each channel gets its own row in metrics.csv (see the "channel" column). A companion metrics_wide.csv — an extra sheet in metrics.xlsx — puts all channels of the same microtubule on one row, one column set per channel.',
       thicknessLabel: 'MT thickness (px)',
       thicknessHelp:
         'Width of the sampling band along each polyline. 5 px matches typical microtubule diameter in 100x widefield.',
@@ -2159,7 +2182,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Advanced spheroid segmentation and analysis platform for biomedical researchers, providing AI-powered tools for microscopic cell image analysis.',
+      'Microscopy segmentation and analysis platform for biomedical researchers — spheroids, wounds, sperm, microcapsules and microtubules, with AI-powered tools for every stage from image to measurement.',
     contact: 'Contact',
     institution: 'Institution',
     institutionName: 'ÚTIA AV ČR',

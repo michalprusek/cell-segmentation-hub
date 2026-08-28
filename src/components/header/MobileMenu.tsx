@@ -7,8 +7,9 @@ import {
   LogOut,
   X,
   LayoutDashboard,
+  Loader2,
 } from 'lucide-react';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/useAuth';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -30,22 +31,36 @@ const MobileMenu = ({
   const { signOut } = useAuth();
   const { t } = useLanguage();
 
+  const [isSigningOut, setIsSigningOut] = React.useState(false);
+
+  // Sign-out is the one menu item that does not navigate, so without a pending
+  // state the sheet just sat there after the tap with nothing happening. The
+  // row now spins and disables while the request is in flight, closes the
+  // sheet on success, and — where it previously only wrote to the logger —
+  // says so when it fails, leaving the sheet open so the user can retry.
   const handleSignOut = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
     try {
       await signOut();
+      setIsMenuOpen(false);
       toast.success(t('auth.successfulSignOut'));
     } catch (error) {
       logger.error('Error signing out:', error);
+      toast.error(t('auth.signOutFailed'));
+    } finally {
+      setIsSigningOut(false);
     }
   };
 
   return (
+    // BUG FIX: this used to render a `SheetTrigger` wrapping a Button whose
+    // only child was an `sr-only` span — no icon. DashboardHeader already
+    // renders its own Menu button and drives `isMenuOpen` by state, so the
+    // trigger was redundant *and* painted an empty 40×40 ghost box beside the
+    // real hamburger, eating 40px of a 328px mobile header. The Sheet is fully
+    // controlled; it needs no trigger at all.
     <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-      <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="dark:text-gray-300">
-          <span className="sr-only">{t('common.openMenu')}</span>
-        </Button>
-      </SheetTrigger>
       <SheetContent side="right" className="p-0 dark:bg-gray-800">
         <div className="p-4 border-b dark:border-gray-700">
           <div className="flex items-center justify-between">
@@ -113,10 +128,15 @@ const MobileMenu = ({
           </button>
           <div className="border-t my-2 dark:border-gray-700"></div>
           <button
-            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500 dark:hover:bg-gray-800 dark:bg-gray-800"
+            className="flex w-full items-center px-4 py-3 text-red-500 transition-colors hover:bg-gray-100 disabled:opacity-60 dark:bg-gray-800 dark:hover:bg-gray-700"
             onClick={handleSignOut}
+            disabled={isSigningOut}
           >
-            <LogOut className="h-5 w-5 mr-3" />
+            {isSigningOut ? (
+              <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+            ) : (
+              <LogOut className="mr-3 h-5 w-5" />
+            )}
             <span>{t('common.logOut')}</span>
           </button>
         </div>

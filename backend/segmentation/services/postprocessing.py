@@ -3,7 +3,7 @@
 import logging
 import cv2
 import numpy as np
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from skimage import measure
 
 logger = logging.getLogger(__name__)
@@ -25,116 +25,129 @@ class PostprocessingService:
             detect_holes: Whether to detect holes/internal structures
             
         Returns:
-            List of polygon dictionaries with points, area, and confidence
+            List of polygon dictionaries with points, area, and confidence.
+            An empty list means the mask genuinely held nothing above the
+            threshold (or nothing above min_area) — a valid answer for a blank
+            image.
+
+        Raises:
+            TypeError: `mask` is not a numpy array.
+            Exception: anything that goes wrong while polygonising. This used
+                to be caught here and reported as an empty list, which made a
+                postprocessing crash indistinguishable from a blank image: the
+                caller recorded "nothing detected" for a frame that had in fact
+                failed. An empty result is now only ever an honestly empty mask.
         """
-        try:
-            # Ensure mask is 2D - handle common shapes
+        if not isinstance(mask, np.ndarray):
+            raise TypeError(
+                f"mask_to_polygons expects a numpy array, got {type(mask).__name__}"
+            )
+
+        # Ensure mask is 2D - handle common shapes
+        if mask.ndim > 2:
+            mask = np.squeeze(mask)
+            # If still multi-channel after squeeze, take first channel or aggregate
             if mask.ndim > 2:
-                mask = np.squeeze(mask)
-                # If still multi-channel after squeeze, take first channel or aggregate
-                if mask.ndim > 2:
-                    mask = mask[..., 0] if mask.shape[-1] <= mask.shape[0] else mask[0]
-            
-            # Convert to binary mask without cleaning - preserve holes
-            binary_mask = (mask > threshold).astype(np.uint8)
-            
-            # Find connected components
-            labeled_mask = measure.label(binary_mask, connectivity=2)
-            regions = measure.regionprops(labeled_mask)
-            
-            polygons = []
-            
-            for region in regions:
-                # Filter by area
-                if region.area < self.min_area:
-                    continue
-                
-                # Get region mask
-                region_mask = (labeled_mask == region.label).astype(np.uint8)
-                
-                # Convert region to polygon
-                polygon_data = self._region_to_polygon(region_mask, mask, region, detect_holes)
-                
-                if polygon_data:
-                    polygons.append(polygon_data)
-            
-            # Log detailed results including filtered polygons
-            filtered_count = len(regions) - len(polygons)
-            logger.info(f"Converted mask to {len(polygons)} polygons (filtered out {filtered_count} small regions)")
-            
-            if len(polygons) == 0:
-                logger.warning(f"No polygons detected! Original regions: {len(regions)}, filtered by area: {filtered_count}")
-                logger.warning(f"Mask stats - shape: {mask.shape}, unique values: {np.unique(binary_mask)}, max value: {mask.max()}")
-                
-            return polygons
-            
-        except Exception as e:
-            logger.error(f"Failed to convert mask to polygons: {e}")
-            return []
+                mask = mask[..., 0] if mask.shape[-1] <= mask.shape[0] else mask[0]
+
+        # Convert to binary mask without cleaning - preserve holes
+        binary_mask = (mask > threshold).astype(np.uint8)
+
+        # Find connected components
+        labeled_mask = measure.label(binary_mask, connectivity=2)
+        regions = measure.regionprops(labeled_mask)
+
+        polygons = []
+
+        for region in regions:
+            # Filter by area
+            if region.area < self.min_area:
+                continue
+
+            # Get region mask
+            region_mask = (labeled_mask == region.label).astype(np.uint8)
+
+            # Convert region to polygon
+            polygon_data = self._region_to_polygon(region_mask, mask, region, detect_holes)
+
+            if polygon_data:
+                polygons.append(polygon_data)
+
+        # Log detailed results including filtered polygons
+        filtered_count = len(regions) - len(polygons)
+        logger.info(f"Converted mask to {len(polygons)} polygons (filtered out {filtered_count} small regions)")
+
+        if len(polygons) == 0:
+            logger.warning(f"No polygons detected! Original regions: {len(regions)}, filtered by area: {filtered_count}")
+            logger.warning(f"Mask stats - shape: {mask.shape}, unique values: {np.unique(binary_mask)}, max value: {mask.max()}")
+
+        return polygons
     
     
     def _region_to_polygon(self, region_mask: np.ndarray, original_mask: np.ndarray, 
-                          region: Any, detect_holes: bool = True) -> Dict[str, Any]:
-        """Convert a single region to polygon format"""
-        try:
-            # Find contours with hierarchy
-            if detect_holes:
-                # Use RETR_TREE to detect holes and internal structures
-                contours, hierarchy = cv2.findContours(
-                    region_mask.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
-                )
-            else:
-                # Use RETR_EXTERNAL to detect only external boundaries
-                contours, hierarchy = cv2.findContours(
-                    region_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-                )
-            
-            if not contours:
-                return None
-            
-            # Get the largest contour (main object boundary)
-            main_contour = max(contours, key=cv2.contourArea)
-            
-            # Use original contour without simplification to preserve all vertices
-            # Only apply minimal simplification if contour is extremely large (>5000 points)
-            if len(main_contour) > 5000:
-                epsilon = self.simplification_tolerance
-                simplified_contour = cv2.approxPolyDP(main_contour, epsilon, True)
-                logger.info(f"Large contour simplified from {len(main_contour)} to {len(simplified_contour)} points")
-            else:
-                simplified_contour = main_contour
-                logger.info(f"Contour preserved with {len(main_contour)} points")
-            
-            # Convert to points format
-            points = []
-            for point in simplified_contour:
-                x, y = point[0]
-                points.append({"x": float(x), "y": float(y)})
-            
-            # Need at least 3 points for a polygon
-            if len(points) < 3:
-                return None
-            
-            # Calculate confidence as average mask value in the region
-            region_coords = np.where(region_mask > 0)
-            if len(region_coords[0]) > 0:
-                confidence = float(np.mean(original_mask[region_coords]))
-            else:
-                confidence = 0.5
-            
-            # Calculate area
-            area = float(region.area)
-            
-            return {
-                "points": points,
-                "area": area,
-                "confidence": confidence,
-                "type": "external"  # Postprocessing works per-region, so defaults to external
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to convert region to polygon: {e}")
+                          region: Any, detect_holes: bool = True) -> Optional[Dict[str, Any]]:
+        """Convert a single region to polygon format.
+
+        Returns None for a region that legitimately cannot become a polygon
+        (no contour, or fewer than 3 points). Errors are NOT caught: dropping a
+        region on an exception silently lowered the detection count of an
+        otherwise healthy frame, and the caller cannot tell that apart from a
+        region the filters rejected on purpose.
+        """
+        # Find contours with hierarchy
+        if detect_holes:
+            # Use RETR_TREE to detect holes and internal structures
+            contours, hierarchy = cv2.findContours(
+                region_mask.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+            )
+        else:
+            # Use RETR_EXTERNAL to detect only external boundaries
+            contours, hierarchy = cv2.findContours(
+                region_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+        
+        if not contours:
             return None
+        
+        # Get the largest contour (main object boundary)
+        main_contour = max(contours, key=cv2.contourArea)
+        
+        # Use original contour without simplification to preserve all vertices
+        # Only apply minimal simplification if contour is extremely large (>5000 points)
+        if len(main_contour) > 5000:
+            epsilon = self.simplification_tolerance
+            simplified_contour = cv2.approxPolyDP(main_contour, epsilon, True)
+            logger.info(f"Large contour simplified from {len(main_contour)} to {len(simplified_contour)} points")
+        else:
+            simplified_contour = main_contour
+            logger.info(f"Contour preserved with {len(main_contour)} points")
+        
+        # Convert to points format
+        points = []
+        for point in simplified_contour:
+            x, y = point[0]
+            points.append({"x": float(x), "y": float(y)})
+        
+        # Need at least 3 points for a polygon
+        if len(points) < 3:
+            return None
+        
+        # Calculate confidence as average mask value in the region
+        region_coords = np.where(region_mask > 0)
+        if len(region_coords[0]) > 0:
+            confidence = float(np.mean(original_mask[region_coords]))
+        else:
+            confidence = 0.5
+        
+        # Calculate area
+        area = float(region.area)
+
+        return {
+            "points": points,
+            "area": area,
+            "confidence": confidence,
+            "type": "external"  # Postprocessing works per-region, so defaults to external
+        }
 
     def filter_polygons(self, polygons: List[Dict[str, Any]],
                        min_area: int = None, min_confidence: float = None) -> List[Dict[str, Any]]:

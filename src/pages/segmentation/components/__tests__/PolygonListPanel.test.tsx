@@ -44,12 +44,15 @@ const DEFAULT_PROPS = {
   onSelectPolygon: vi.fn(),
 };
 
-// Two h-6 icon buttons render per polygon row: [0] = visibility toggle
-// (Eye/EyeOff), [1] = MoreVertical dropdown trigger.
+// Two icon buttons render per polygon row: [0] = visibility toggle
+// (Eye/EyeOff), [1] = MoreVertical dropdown trigger. Selected by accessible
+// name rather than by a CSS size class, so a restyle can't break the suite.
 function rowIconButtons() {
   return screen
     .getAllByRole('button')
-    .filter(btn => btn.classList.contains('h-6'));
+    .filter(btn =>
+      /^(Show|Hide|Actions)$/.test(btn.getAttribute('aria-label') ?? '')
+    );
 }
 
 const MULTI_POLYS = [

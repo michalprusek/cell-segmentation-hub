@@ -126,9 +126,16 @@ function positionLabel(pos: ExtractedPosition): string {
 async function generateContainerThumbnail(
   framesRoot: string,
   defaultChannel: string,
-  outPath: string
+  outPath: string,
+  /** Frame to draw the thumbnail from. Almost always 0; a sparse channel whose
+   *  first real acquisition is later says so, because a thumbnail rendered from
+   *  a gap frame is a black square. */
+  frameIndex = 0
 ): Promise<void> {
-  const firstFrameDir = path.join(framesRoot, '0000');
+  const firstFrameDir = path.join(
+    framesRoot,
+    String(frameIndex).padStart(4, '0')
+  );
   let listedFiles: string[] = [];
   try {
     listedFiles = await fs.readdir(firstFrameDir);
@@ -193,8 +200,69 @@ async function moveDir(srcDir: string, destDir: string): Promise<void> {
       throw err;
     }
     await fs.cp(srcDir, destDir, { recursive: true });
-    await fs.rm(srcDir, { recursive: true, force: true }).catch(() => undefined);
+    await fs
+      .rm(srcDir, { recursive: true, force: true })
+      .catch(() => undefined);
   }
+}
+
+/**
+ * Add `sparseFillFrameIds` to every channel the extractor flagged sparse.
+ *
+ * The extractor works in frame INDICES because that is all it has: the child
+ * `Image` rows a frame id would name do not exist until `createMany` has run.
+ * The editor, on the other hand, only ever holds ids — `resolveFrameId` is
+ * handed a frame id and a channel name and nothing else — so it needs the same
+ * map in id space to point a gap frame's URL and decode-cache key at the frame
+ * it actually reads from.
+ *
+ * Returns the channel list unchanged (same objects) when nothing is sparse,
+ * which is every ordinary upload, and costs no query in that case.
+ */
+async function withSparseFrameIds(
+  containerId: string,
+  channels: ChannelMeta[]
+): Promise<ChannelMeta[]> {
+  const sparse = channels.filter(
+    c => c.sparseSource === true && c.sparseFill !== undefined
+  );
+  if (sparse.length === 0) return channels;
+
+  const rows = await prisma.image.findMany({
+    where: { parentVideoId: containerId },
+    select: { id: true, frameIndex: true },
+  });
+  const idByIndex = new Map<number, string>();
+  for (const r of rows) {
+    if (r.frameIndex !== null) idByIndex.set(r.frameIndex, r.id);
+  }
+
+  return channels.map(c => {
+    if (c.sparseSource !== true || !c.sparseFill) return c;
+    const byFrameId: Record<string, string> = {};
+    let unresolved = 0;
+    for (const [gapIndex, anchorIndex] of Object.entries(c.sparseFill)) {
+      const gapId = idByIndex.get(Number(gapIndex));
+      const anchorId = idByIndex.get(anchorIndex);
+      // A gap we cannot name in id space is simply left out: the frame-data
+      // route still resolves it from `sparseFill` (which is index-keyed), so
+      // the picture is right either way — the editor just pays for a second
+      // copy of the same bytes. Never guess an id.
+      if (gapId === undefined || anchorId === undefined) {
+        unresolved++;
+        continue;
+      }
+      byFrameId[gapId] = anchorId;
+    }
+    if (unresolved > 0) {
+      logger.warn(
+        `Sparse channel '${c.name}': ${unresolved} of ${Object.keys(c.sparseFill).length} gap frames have no Image row; their editor requests will not be de-duplicated`,
+        'VideoUploadService',
+        { containerId }
+      );
+    }
+    return { ...c, sparseFillFrameIds: byFrameId };
+  });
 }
 
 /**
@@ -254,11 +322,21 @@ async function finalizeContainer(params: {
     'channel'
   );
 
+  // If the default channel is one the microscope only refreshed every N-th
+  // frame, frame 0 may be a gap — draw the thumbnail from the frame that gap
+  // reads from instead of from a black plane. Note this covers a gap in ONE
+  // channel, not a frame 0 that was never acquired in any channel (an aborted
+  // or late-started run): the extractor records no fill for those on purpose,
+  // so such a container still thumbnails black exactly as it does today.
+  const defaultMeta = result.channels.find(c => c.name === defaultChannel);
+  const thumbFrameIndex = defaultMeta?.sparseFill?.['0'] ?? 0;
+
   const thumbnailPath = path.join(baseDir, 'thumbnail.jpg');
   await generateContainerThumbnail(
     path.join(baseDir, 'frames'),
     defaultChannel,
-    thumbnailPath
+    thumbnailPath,
+    thumbFrameIndex
   );
 
   const frameRows = Array.from({ length: result.frameCount }, (_, i) => ({
@@ -279,6 +357,13 @@ async function finalizeContainer(params: {
     await prisma.image.createMany({ data: frameRows });
   }
 
+  // Mirror every sparse channel's index-space gap map into id space, now that
+  // the frame rows exist. The extractor can only ever report INDICES — the rows
+  // it would need to name are created three lines above it — so this is the one
+  // place the two representations are written, and therefore the one place they
+  // could disagree.
+  const channelsForDb = await withSparseFrameIds(containerId, result.channels);
+
   const containerKey = videoContainerStorageKey(projectId, containerId);
   await prisma.image.update({
     where: { id: containerId },
@@ -295,7 +380,7 @@ async function finalizeContainer(params: {
       // carries no metadata — the export modal lets users override.
       pixelSizeUm: result.pixelSizeUm ?? null,
       frameIntervalMs: result.frameIntervalMs ?? null,
-      channels: result.channels as unknown as object,
+      channels: channelsForDb as unknown as object,
       segmentationStatus: 'no_segmentation',
       ...(params.fileSize !== undefined ? { fileSize: params.fileSize } : {}),
       ...(params.mimeType !== undefined ? { mimeType: params.mimeType } : {}),
@@ -503,7 +588,10 @@ export async function uploadVideoFromFile(options: {
       // into the container dir, then drop the now-empty pos_<NNNN> staging
       // subdir.
       const stagingDir = path.join(baseDir, framesSubdir);
-      await moveDir(path.join(stagingDir, 'frames'), path.join(cBaseDir, 'frames'));
+      await moveDir(
+        path.join(stagingDir, 'frames'),
+        path.join(cBaseDir, 'frames')
+      );
       const originalDest = path.join(cBaseDir, originalFile);
       await moveFile(path.join(stagingDir, originalFile), originalDest);
       await fs

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import React, { ReactNode } from 'react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
-import { useLanguage } from '@/contexts/exports';
+import { useAuth, useLanguage } from '@/contexts/exports';
 import apiClient from '@/lib/api';
 import en from '@/translations/en';
 
@@ -112,6 +112,33 @@ describe('LanguageContext', () => {
       });
 
       expect(result.current.language).toBe('en');
+    });
+
+    it('syncs <html lang> with the active language', async () => {
+      // index.html ships a static lang="en"; nothing else updates it, so a
+      // Czech render used to keep announcing itself as English to screen
+      // readers and browser translation prompts.
+      localStorageMock._store.language = 'cs';
+
+      const { result } = renderHook(() => useLanguage(), { wrapper });
+
+      await waitFor(() => {
+        expect(document.documentElement.lang).toBe('cs');
+      });
+
+      // The provider renders null until the first chunk resolves, so the
+      // hook value only appears after that — wait for it before acting.
+      await waitFor(() => {
+        expect(result.current).not.toBeNull();
+      });
+
+      await act(async () => {
+        await result.current.setLanguage('zh');
+      });
+
+      await waitFor(() => {
+        expect(document.documentElement.lang).toBe('zh');
+      });
     });
 
     it('uses stored localStorage language when available', async () => {
@@ -314,6 +341,41 @@ describe('LanguageContext', () => {
         },
         { timeout: 5000 }
       );
+    });
+
+    it('drops the account language on sign-out and re-detects from the browser', async () => {
+      // On a shared browser the departing account's language would otherwise
+      // decide the UI for the next visitor — and, since registration seeds a
+      // new profile from localStorage, get written into their account.
+      vi.mocked(apiClient.getUserProfile).mockResolvedValue({
+        id: '99',
+        email: 'prof@example.com',
+        language: 'cs',
+      } as never);
+      vi.mocked(apiClient.logout).mockResolvedValue(undefined as never);
+      Object.defineProperty(window.navigator, 'language', {
+        value: 'de-DE',
+        writable: true,
+        configurable: true,
+      });
+
+      const { result } = renderHook(
+        () => ({ lang: useLanguage(), auth: useAuth() }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(result.current.lang.language).toBe('cs'), {
+        timeout: 5000,
+      });
+
+      await act(async () => {
+        await result.current.auth.signOut();
+      });
+
+      await waitFor(() => expect(result.current.lang.language).toBe('de'), {
+        timeout: 5000,
+      });
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('language');
     });
   });
 });

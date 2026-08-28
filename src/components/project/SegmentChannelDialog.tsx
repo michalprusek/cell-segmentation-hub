@@ -75,20 +75,26 @@ export function SegmentChannelDialog({
           className="space-y-2 py-2"
         >
           {channels.map(ch => (
-            <div key={ch} className="flex min-w-0 items-center space-x-2">
+            // The whole row is the target, not just the 16 px dot, and the
+            // chosen row carries the selection so it is answerable at a
+            // glance which channel the model is about to run on.
+            <Label
+              key={ch}
+              htmlFor={`channel-${ch}`}
+              className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-md border p-3 font-normal transition-colors ${
+                selected === ch
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-input hover:bg-accent'
+              }`}
+              title={ch}
+            >
               <RadioGroupItem
                 value={ch}
                 id={`channel-${ch}`}
                 className="flex-shrink-0"
               />
-              <Label
-                htmlFor={`channel-${ch}`}
-                className="min-w-0 truncate cursor-pointer"
-                title={ch}
-              >
-                {ch}
-              </Label>
-            </div>
+              <span className="min-w-0 truncate">{ch}</span>
+            </Label>
           ))}
         </RadioGroup>
         <DialogFooter>

@@ -8,6 +8,9 @@ export default {
     dismiss: 'Schließen',
     delete: 'Löschen',
     edit: 'Bearbeiten',
+    actions: 'Aktionen',
+    show: 'Anzeigen',
+    hide: 'Ausblenden',
     create: 'Erstellen',
     search: 'Suchen',
     error: 'Fehler',
@@ -31,6 +34,7 @@ export default {
     createYourFirst: 'Erstellen Sie Ihr erstes Projekt, um zu beginnen',
     tryAgain: 'Erneut versuchen',
     cancelling: 'Wird abgebrochen...',
+    deleting: 'Wird gelöscht...',
     retry: 'Erneut versuchen',
     retrying: 'Neuer Versuch...',
     retryAttempt: 'Versuch {{attempt}} von {{max}}',
@@ -262,6 +266,7 @@ export default {
       sperm: 'Spermien',
       microtubules: 'Mikrotubuli',
       microcapsule: 'Mikrokapseln',
+      neurite: 'Neuriten und Somata',
     },
     projectNamePlaceholder: 'z.B. HeLa-Zell-Sphäroide',
     projectDescPlaceholder:
@@ -506,6 +511,7 @@ export default {
         wound: 'Wundheilungs-Modelle',
         microtubule: 'Mikrotubuli-Modelle',
         microcapsule: 'Mikrokapsel-Modelle',
+        neurite: 'Neuriten-/Soma-Modelle',
       },
       presets: {
         fast: 'Schnell',
@@ -571,6 +577,11 @@ export default {
           description:
             'Instanz-Segmentierung für Mikrokapseln (runde Objekte) in der Hellfeld-Mikroskopie. Ein kompaktes U-Net, das aus Meta SAM 3 destilliert wurde, liefert eine saubere Kontur in voller Auflösung pro Kapsel und trennt sich berührende Kapseln mittels Watershed; am Bildrand abgeschnittene Kapseln werden von den Metriken (Fläche, Umfang, Kompaktheit) ausgeschlossen.',
         },
+        neurite_soma: {
+          name: 'Neurit / Soma (nnU-Net ResEnc-M)',
+          description:
+            'Semantische Zwei-Klassen-Segmentierung von Neuronen in der Fluoreszenzmikroskopie — Neurit (Fortsätze) und Soma (Zellkörper) — allein aus dem Tubulin-Kanal. nnU-Net v2 ResEnc-M, Ensemble aus 3 Folds mit Spiegel-TTA und clDice-Topologieterm für die Neurit-Klasse. Dice auf Holdout-Daten 0,832 Neurit / 0,915 Soma.',
+        },
       },
     },
     detectHoles: 'Löcher Erkennen',
@@ -604,6 +615,8 @@ export default {
         'Instanz-Segmentierung für Mikrotubuli in der IRM-Mikroskopie. nnU-Net-ResEnc-M-Netz, krümmungsbegrenzter Instancer, native Polylinien-Ausgabe mit geometrischem frameübergreifendem Tracking.',
       microcapsule:
         'Kompaktes U-Net (destilliert aus Meta SAM 3) zur Instanz-Segmentierung von Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen.',
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M (2D, Ensemble aus 3 Folds) zur Segmentierung von Neuriten und Somata in der Fluoreszenzmikroskopie. Liest den Tubulin-Kanal; Dice auf Holdout-Daten 0,832 Neurit / 0,915 Soma. Trainiert auf Leica-Konfokaldaten bei ~0,180 µm/px — Soma-Zahlen bei anderer Pixelgröße prüfen.',
     },
     dataUsageTitle: 'Datennutzung und Datenschutz',
     dataUsageDescription:
@@ -691,6 +704,7 @@ export default {
     successfulSignUp: 'Registrierung erfolgreich',
     verifyEmail: 'Bitte überprüfen Sie Ihre E-Mail, um Ihr Konto zu bestätigen',
     successfulSignOut: 'Erfolgreich abgemeldet',
+    signOutFailed: 'Abmeldung fehlgeschlagen. Bitte erneut versuchen.',
     checkingAuthentication: 'Authentifizierung prüfen...',
     loadingAccount: 'Ihr Konto wird geladen...',
     processingRequest: 'Ihre Anfrage wird bearbeitet...',
@@ -915,6 +929,12 @@ export default {
       internal: 'Internal',
       polyline: 'Polylinie',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurit',
+      soma: 'Soma',
+    },
     shortcuts: {
       buttonText: 'Tastenkürzel',
       title: 'Tastenkürzel',
@@ -943,6 +963,7 @@ export default {
       undo: 'Rückgängig',
       redo: 'Wiederholen',
       deleteSelected: 'Ausgewähltes Polygon löschen',
+      finishShape: 'Aktuelle Form abschließen',
 
       // View shortcuts
       zoom: 'Vergrößern/Verkleinern',
@@ -1311,6 +1332,8 @@ export default {
         'Pro-MT-Länge, -Fläche und kanalweise Intensität aus der rohen ND2/TIFF-Datei. Hintergrundkorrektur über den Median außerhalb der dilatierten MT-Maske.',
       intensityNote:
         'Die kanalweise Signalintensität — einschließlich der summierten (integrierten) Intensität — wird immer für jeden Kanal berechnet und in die Metriktabelle geschrieben. Keine Auswahl erforderlich.',
+      wideNote:
+        'Jeder Kanal erhält in metrics.csv eine eigene Zeile (siehe Spalte „channel“). Die Begleitdatei metrics_wide.csv — ein zusätzliches Blatt in metrics.xlsx — stellt alle Kanäle desselben Mikrotubulus in eine Zeile, mit einem Spaltensatz pro Kanal.',
       thicknessLabel: 'MT-Dicke (px)',
       thicknessHelp:
         'Breite des Abtastbands entlang jeder Polyline. 5 px entspricht dem typischen Mikrotubulus-Durchmesser bei 100× Widefield.',
@@ -2188,7 +2211,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Erweiterte Sphäroid-Segmentierungs- und Analyseplattform für biomedizinische Forscher mit KI-gestützten Tools für die mikroskopische Zellbildanalyse.',
+      'Plattform für Segmentierung und Analyse mikroskopischer Aufnahmen für biomedizinische Forscher — Sphäroide, Wundheilung, Spermien, Mikrokapseln und Mikrotubuli, mit KI-gestützten Werkzeugen vom Bild bis zur Messung.',
     contact: 'Kontakt',
     institution: 'Institution',
     institutionName: 'ÚTIA AV ČR',

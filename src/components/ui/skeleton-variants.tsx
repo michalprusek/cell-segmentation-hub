@@ -56,6 +56,42 @@ export function SkeletonImageGrid({
   );
 }
 
+interface SkeletonProjectImageGridProps {
+  count?: number;
+  className?: string;
+}
+
+/**
+ * Placeholder for the project image gallery. Mirrors `ProjectImages`' grid
+ * (auto-fill 220px tracks, 3:2 tiles) so the real cards land exactly where
+ * their placeholders were — a bare centred spinner told the user nothing
+ * about how much was coming or where it would go.
+ */
+export function SkeletonProjectImageGrid({
+  count = 8,
+  className,
+}: SkeletonProjectImageGridProps) {
+  return (
+    <div
+      className={cn(
+        'grid gap-4 grid-cols-1 sm:[grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]',
+        className
+      )}
+      aria-hidden="true"
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="animate-in fade-in duration-500"
+          style={{ animationDelay: `${i * 60}ms` }}
+        >
+          <Skeleton className="aspect-[3/2] min-h-[167px] w-full rounded-lg" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface SkeletonTableProps {
   rows?: number;
   columns?: number;

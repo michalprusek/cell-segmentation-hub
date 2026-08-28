@@ -1,8 +1,11 @@
 import {
   type Polygon,
   type SegmentationResult,
+  type NeuronPartClass,
   isPolyline,
   isValidSpermPartClass,
+  isValidNeuronPartClass,
+  NEURON_PART_CLASSES,
 } from '@/lib/segmentation';
 import {
   calculateMetrics,
@@ -12,6 +15,15 @@ import {
   isPolygonInsidePolygon,
   calculateBoundingBox,
 } from '@/lib/polygonGeometry';
+
+// Neuron classes are separate OBJECT categories, not parts of one object the
+// way head/midpiece/tail are — a standard COCO reader must not see a two-class
+// dataset as a single class named 'spheroid'. Ids match the backend exporter
+// (`formatConverter.ts`) so both COCO writers agree.
+const NEURON_CATEGORY_IDS: Record<NeuronPartClass, number> = {
+  neurite: 3,
+  soma: 4,
+};
 
 const flattenPoints = (points: { x: number; y: number }[]): number[] => {
   const out: number[] = [];
@@ -45,14 +57,20 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
   let annotationId = 1;
   const annotations: Array<Record<string, unknown>> = [];
 
+  const neuronClassesPresent = new Set<NeuronPartClass>();
+
   for (const polygon of closedExternal) {
     const holes = internal.filter(h =>
       isPolygonInsidePolygon(h.points, polygon.points)
     );
+    const neuronClass = isValidNeuronPartClass(polygon.partClass)
+      ? polygon.partClass
+      : undefined;
+    if (neuronClass) neuronClassesPresent.add(neuronClass);
     annotations.push({
       id: annotationId++,
       image_id: 1,
-      category_id: 1,
+      category_id: neuronClass ? NEURON_CATEGORY_IDS[neuronClass] : 1,
       segmentation: [
         flattenPoints(polygon.points),
         ...holes.map(h => flattenPoints(h.points)),
@@ -64,6 +82,7 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
         type: 'external',
         geometry: 'polygon',
         has_holes: holes.length > 0,
+        ...(neuronClass && { partClass: neuronClass }),
       },
     });
   }
@@ -92,6 +111,15 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
   ];
   if (validPolylines.length > 0) {
     categories.push({ id: 2, name: 'sperm', supercategory: 'biological' });
+  }
+  for (const c of NEURON_PART_CLASSES) {
+    if (neuronClassesPresent.has(c)) {
+      categories.push({
+        id: NEURON_CATEGORY_IDS[c],
+        name: c,
+        supercategory: 'biological',
+      });
+    }
   }
 
   const coco = {
