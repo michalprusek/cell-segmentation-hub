@@ -74,15 +74,15 @@ Thumbs.db
 # External / scratch model artifacts dropped at repo root
 path_c_v24c/
 microtubules_v7_pysoax/
-# Git ignores these through their OWN nested .gitignore ("Deployment artifact,
-# not part of the cell-segmentation-hub repository"), which prettier does not
-# read — so without these lines `prettier --check .` fails on vendored DINOv2
-# files and the pre-commit hook blocks every commit in the repo.
+# Git ignores these through the root .gitignore, which prettier does not read —
+# so without these lines `prettier --check .` fails on vendored DINOv2 files,
+# and on the 71 machine-generated JSON files of benchmark data and exported
+# predictions, and the pre-commit hook blocks every commit in the repo.
+# (mt34-benchmark is MT-34 validation data: 34 annotated frames + predictions.)
 mt-instance-seg/
 mt-instance-seg-v5H/
-# Validation data (MT-34): 34 annotated frames + predictions, gitignored
-# through its own nested .gitignore for the same reason as the packages above.
 mt34-benchmark/
+neurite-soma-seg/
 
 # Local "remember" skill scratch state (gitignored, never shipped).
 # Contains free-form notes + bare-expression timestamp files that
@@ -93,10 +93,3 @@ mt34-benchmark/
 .venv*/
 venv/
 **/.venv*/
-
-# Model benchmark data and exported predictions. Machine-generated JSON that
-# lives in the repo root as working data, not source — prettier --check walks
-# the whole tree in the pre-commit hook and 71 of these files blocked every
-# commit until they were listed here.
-mt34-benchmark/
-mt-instance-seg-v5H/
