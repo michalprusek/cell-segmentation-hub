@@ -120,7 +120,7 @@ export default {
         label: 'Morphologie des spermatozoïdes',
         detail:
           'Fond clair, 1360 × 1024. Chaque cellule est tracée par trois polylignes plutôt que par une seule forme — tête en vert, pièce intermédiaire en ambre, flagelle en cyan — pour que chaque segment se mesure séparément.',
-        alt: "Micrographie en fond clair d'un spermatozoïde tracé par trois polylignes colorées : tête verte, pièce intermédiaire ambre, flagelle cyan.",
+        alt: 'Micrographie en fond clair de deux spermatozoïdes, chacun tracé par trois polylignes colorées : tête verte, pièce intermédiaire ambre, flagelle cyan.',
       },
       microtubule: {
         label: 'Filaments de microtubules',
@@ -131,8 +131,8 @@ export default {
       microcapsule: {
         label: 'Microcapsules',
         detail:
-          "Fond clair, 1280 × 1024. Les capsules entières sont détourées en rouge et mesurées ; celles que le bord de l'image coupe sont grisées et écartées des statistiques.",
-        alt: "Micrographie en fond clair de microcapsules : les capsules entières détourées en rouge, celles coupées par le bord de l'image grisées.",
+          "Fond clair, 1280 × 1024. Deux capsules entières sont détourées en rouge : ce sont celles qui reçoivent une surface, un périmètre et une compacité. Les capsules que le bord de l'image coupe n'ont pas de contour rouge ; le modèle les signale et les statistiques les écartent.",
+        alt: "Micrographie en fond clair de microcapsules : les deux capsules entières détourées en rouge, celles coupées par le bord de l'image sans contour.",
       },
     },
     about: {

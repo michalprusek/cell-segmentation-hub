@@ -126,7 +126,7 @@ export default {
         label: 'Sperm morphology',
         detail:
           'Bright-field, 1360 × 1024. Each cell is traced as three polylines instead of one blob — head in green, midpiece in amber, tail in cyan — so every segment can be measured on its own.',
-        alt: 'Bright-field micrograph of a sperm cell traced by three coloured polylines: green head, amber midpiece, cyan tail.',
+        alt: 'Bright-field micrograph of two sperm cells, each traced by three coloured polylines: green head, amber midpiece, cyan tail.',
       },
       microtubule: {
         label: 'Microtubule filaments',
@@ -137,8 +137,8 @@ export default {
       microcapsule: {
         label: 'Microcapsules',
         detail:
-          'Bright-field, 1280 × 1024. Whole capsules are outlined in red and measured; the ones the frame cuts off are greyed out and left out of the statistics.',
-        alt: 'Bright-field micrograph of microcapsules, the whole ones outlined in red and the border-cut ones greyed out.',
+          'Bright-field, 1280 × 1024. Two whole capsules are outlined in red — those are the ones that get an area, a perimeter and a compactness. The capsules the frame cuts off carry no red outline: the model flags them and the statistics leave them out.',
+        alt: 'Bright-field micrograph of microcapsules, the two whole ones outlined in red and the ones cut off by the frame edge left without an outline.',
       },
     },
     about: {

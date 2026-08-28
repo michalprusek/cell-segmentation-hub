@@ -120,7 +120,7 @@ export default {
         label: 'Spermienmorphologie',
         detail:
           'Hellfeld, 1360 × 1024. Jede Zelle wird als drei Polylinien statt als eine Fläche geführt — Kopf grün, Mittelstück bernsteinfarben, Schwanz cyan — damit sich jeder Abschnitt einzeln vermessen lässt.',
-        alt: 'Hellfeldaufnahme eines Spermiums, nachgezeichnet von drei farbigen Polylinien: grüner Kopf, bernsteinfarbenes Mittelstück, cyanfarbener Schwanz.',
+        alt: 'Hellfeldaufnahme zweier Spermien, jedes nachgezeichnet von drei farbigen Polylinien: grüner Kopf, bernsteinfarbenes Mittelstück, cyanfarbener Schwanz.',
       },
       microtubule: {
         label: 'Mikrotubuli-Filamente',
@@ -131,8 +131,8 @@ export default {
       microcapsule: {
         label: 'Mikrokapseln',
         detail:
-          'Hellfeld, 1280 × 1024. Vollständige Kapseln werden rot umrissen und vermessen; vom Bildrand angeschnittene Kapseln werden grau dargestellt und aus der Statistik herausgehalten.',
-        alt: 'Hellfeldaufnahme von Mikrokapseln, die vollständigen rot umrissen, die vom Bildrand angeschnittenen grau.',
+          'Hellfeld, 1280 × 1024. Zwei vollständige Kapseln sind rot umrissen — für genau diese gibt es Fläche, Umfang und Kompaktheit. Die vom Bildrand angeschnittenen Kapseln tragen keinen roten Umriss: das Modell markiert sie, und die Statistik lässt sie weg.',
+        alt: 'Hellfeldaufnahme von Mikrokapseln, die zwei vollständigen rot umrissen, die vom Bildrand angeschnittenen ohne Umriss.',
       },
     },
     about: {

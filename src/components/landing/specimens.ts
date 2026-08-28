@@ -15,6 +15,9 @@
  * `landing.specimens.<id>.*` in the translation files, not here.
  */
 
+import type { ModelType } from '@/lib/models/modelRegistry';
+import type { ProjectType } from '@/types';
+
 /** Ids are the tile ids, NOT project types: `disintegration` is the tile for
  *  the `spheroid_invasive` project type. */
 export type SpecimenId =
@@ -37,9 +40,14 @@ export interface Specimen {
   /** Path under /public. */
   readonly image: string;
   /** Model that produced these outlines (`model_used` on the stored result). */
+  readonly modelId: ModelType;
+  /** `MODEL_REGISTRY[modelId].name`, copied so the landing chunk does not have
+   *  to pull the registry in; specimens.test.ts asserts the two still agree. */
   readonly model: string;
-  /** Project type this specimen belongs to, as used by `PROJECT_TYPES`. */
-  readonly projectType: string;
+  /** Project type this specimen belongs to. Typed, so the singular/plural trap
+   *  (`microtubule` the model vs `microtubules` the project type) is a
+   *  compile error rather than a silent mismatch. */
+  readonly projectType: ProjectType;
   readonly outlines: readonly SpecimenOutline[];
 }
 
@@ -47,6 +55,7 @@ export const SPECIMENS: readonly Specimen[] = [
   {
     id: 'spheroid',
     image: '/specimens/spheroid.webp',
+    modelId: 'hrnet',
     model: 'HRNet',
     projectType: 'spheroid',
     outlines: [
@@ -59,6 +68,7 @@ export const SPECIMENS: readonly Specimen[] = [
   {
     id: 'disintegration',
     image: '/specimens/disintegration.webp',
+    modelId: 'spheroid_disintegration',
     model: 'Spheroid Disintegration',
     projectType: 'spheroid_invasive',
     outlines: [
@@ -490,6 +500,7 @@ export const SPECIMENS: readonly Specimen[] = [
   {
     id: 'wound',
     image: '/specimens/wound.webp',
+    modelId: 'wound',
     model: 'Wound Healing',
     projectType: 'wound',
     outlines: [
@@ -518,6 +529,7 @@ export const SPECIMENS: readonly Specimen[] = [
   {
     id: 'sperm',
     image: '/specimens/sperm.webp',
+    modelId: 'sperm',
     model: 'Sperm Morphology',
     projectType: 'sperm',
     outlines: [
@@ -538,16 +550,13 @@ export const SPECIMENS: readonly Specimen[] = [
   {
     id: 'microtubule',
     image: '/specimens/microtubule.webp',
-    model: 'Microtubule v5H',
+    modelId: 'microtubule',
+    model: 'Microtubule (v5H)',
     projectType: 'microtubules',
     outlines: [
       {
         d: 'M153.3 -133.3L114 -97.6L95.1 -84.6L76.2 -66.2L55.2 -50.2L10.4 -10.4L-26.4 27.9L-37.1 35.5L-60.8 59.1L-123.3 128.3',
         stroke: 'hsl(264, 70%, 55%)',
-      },
-      {
-        d: 'M710 -73.3L689.9 -73.4L687.1 -75L677.3 -73.3L660.9 -75L624.1 -75L617.9 -73.3L554.6 -75L489.1 -68.3L457.2 -61.9L405 -55L348.7 -51.7L306.1 -46.7L272.6 -46.7L253.2 -43.5L207.1 -41.7L194.1 -40L178.3 -35',
-        stroke: 'hsl(186, 70%, 55%)',
       },
       {
         d: 'M238.3 45L178.2 28.3L138.4 24.9L100.1 15L93.3 15',
@@ -572,10 +581,6 @@ export const SPECIMENS: readonly Specimen[] = [
       {
         d: 'M550 415L562.4 418.3L598.7 421.7L682.8 435.5L790.6 463.7L826.6 480.1L840.7 489L855.9 506.5L865 524.4L866.7 530.6L866.5 554L860.8 583L828.2 633.5L786.4 676.9L758.7 709.8L732.8 744.1L713.3 775',
         stroke: 'hsl(39, 70%, 55%)',
-      },
-      {
-        d: 'M-1.7 465L-8 463.3L-62.5 461.7L-99.3 458.3L-126.7 458.3',
-        stroke: 'hsl(32, 70%, 55%)',
       },
       {
         d: 'M498.3 475L613.9 590.6L650.8 624.1L669.2 631.7L711.4 638.3L730 645',
@@ -626,44 +631,41 @@ export const SPECIMENS: readonly Specimen[] = [
         d: 'M800 981.7L727.4 981.7L672.3 994.8L652.2 995.1L629.4 998.3L542.2 1015L456.7 1038.3',
         stroke: 'hsl(157, 70%, 55%)',
       },
-      {
-        d: 'M913.3 1041.7L953.9 1041.6L1013.1 1033.3L1054.9 1025.1L1065 1025',
-        stroke: 'hsl(332, 70%, 55%)',
-      },
     ],
   },
   {
     id: 'microcapsule',
     image: '/specimens/microcapsule.webp',
+    modelId: 'microcapsule',
     model: 'Microcapsule',
     projectType: 'microcapsule',
     outlines: [
       {
-        d: 'M853.3 -78.9L791.1 -66.7L736.7 -41.1L706.7 -18.9L673.3 14.4L640 63.3L621.1 107.8L610 152.2L608.9 204.4L614.4 253.3L625.6 294.4L651.1 345.6L687.8 393.3L740 434.4L770 450L823.3 467.8L864.4 473.3L923.3 471.1L966.7 460L1000 445.6L1041.1 420L1082.2 382.2L1107.8 348.9L1133.3 297.8L1148.9 240L1148.9 163.3L1141.1 116.7L1122.2 66.7L1093.3 22.2L1048.9 -23.3L1000 -55.6L960 -70L908.9 -78.9Z',
+        d: 'M825.2 -32.7L767.9 -21.5L717.8 2L690.2 22.5L659.5 53.2L628.8 98.2L611.5 139.1L601.2 180L600.2 228L605.3 273L615.5 310.8L639.1 357.9L672.8 401.8L720.9 439.7L748.5 454L797.5 470.3L835.4 475.5L889.6 473.4L929.4 463.2L960.1 449.9L998 426.4L1035.8 391.6L1059.3 360.9L1082.8 313.9L1097.1 260.7L1097.1 190.2L1090 147.2L1072.6 101.2L1046 60.3L1005.1 18.4L960.1 -11.2L923.3 -24.5L876.3 -32.7Z',
         stroke: '#969696',
       },
       {
-        d: 'M-7.8 447.8L-74.4 463.3L-112.2 482.2L-156.7 517.8L-186.7 552.2L-215.6 603.3L-226.7 636.7L-232.2 682.2L-231.1 747.8L-215.6 813.3L-196.7 854.4L-182.2 878.9L-130 934.4L-101.1 956.7L-54.4 980L-20 991.1L23.3 997.8L66.7 997.8L126.7 986.7L182.2 961.1L222.2 931.1L252.2 897.8L277.8 856.7L300 794.4L305.6 745.6L300 674.4L288.9 637.8L266.7 588.9L234.4 544.4L202.2 515.6L155.6 482.2L108.9 462.2L41.1 447.8Z',
+        d: 'M32.7 451.9L-28.6 466.3L-63.4 483.6L-104.3 516.4L-131.9 548.1L-158.5 595.1L-168.7 625.8L-173.8 667.7L-172.8 728L-158.5 788.3L-141.1 826.2L-127.8 848.7L-79.8 899.8L-53.2 920.2L-10.2 941.7L21.5 951.9L61.3 958.1L101.2 958.1L156.4 947.9L207.6 924.3L244.4 896.7L272 866.1L295.5 828.2L316 771L321.1 726L316 660.5L305.7 626.8L285.3 581.8L255.6 540.9L183 483.6L140.1 465.2L77.7 451.9Z',
         stroke: '#969696',
       },
       {
-        d: 'M324.4 6.7L258.9 18.9L232.2 30L181.1 63.3L142.2 96.7L103.3 155.6L92.2 181.1L81.1 225.6L76.7 266.7L84.4 348.9L110 412.2L140 456.7L184.4 497.8L223.3 523.3L278.9 545.6L324.4 553.3L372.2 553.3L437.8 538.9L471.1 523.3L533.3 478.9L567.8 437.8L588.9 401.1L607.8 345.6L613.3 304.4L611.1 257.8L600 192.2L577.8 143.3L555.6 111.1L525.6 77.8L475.6 41.1L430 18.9L374.4 6.7Z',
+        d: 'M338.4 46L278.1 57.3L253.6 67.5L206.5 98.2L170.8 128.8L135 183L124.7 206.5L114.5 247.4L110.4 285.3L117.6 360.9L141.1 419.2L168.7 460.1L209.6 498L245.4 521.5L296.5 541.9L338.4 549.1L382.4 549.1L442.7 535.8L473.4 521.5L530.7 480.6L562.4 442.7L581.8 409L599.2 357.9L604.3 320L602.2 277.1L592 216.8L571.6 171.8L551.1 142.1L523.5 111.5L477.5 77.7L435.6 57.3L384.5 46Z',
         stroke: '#ef4444',
       },
       {
-        d: 'M632.2 458.9L586.7 466.7L532.2 487.8L525.6 495.6L476.7 525.6L447.8 552.2L414.4 598.9L395.6 641.1L384.4 685.6L381.1 734.4L395.6 812.2L414.4 854.4L446.7 901.1L473.3 927.8L534.4 967.8L590 986.7L640 994.4L702.2 991.1L750 978.9L797.8 956.7L831.1 932.2L885.6 868.9L891.1 846.7L904.4 820L923.3 743.3L922.2 691.1L907.8 630L890 593.3L856.7 547.8L822.2 515.6L774.4 485.6L724.4 466.7L678.9 458.9Z',
+        d: 'M621.7 462.2L579.8 469.3L529.7 488.8L478.5 523.5L451.9 548.1L421.3 591L403.9 629.9L393.7 670.8L390.6 715.7L403.9 787.3L421.3 826.2L450.9 869.1L475.5 893.7L531.7 930.5L582.8 947.9L628.8 955L686.1 951.9L730.1 940.7L774 920.2L804.7 897.8L854.8 839.5L859.9 819L872.2 794.5L889.6 723.9L888.5 675.9L875.3 619.6L858.9 585.9L828.2 544L796.5 514.3L752.6 486.7L706.5 469.3L664.6 462.2Z',
         stroke: '#ef4444',
       },
       {
-        d: 'M1147.8 624.4L1076.7 636.7L1024.4 660L998.9 677.8L961.1 715.6L928.9 763.3L902.2 848.9L898.9 931.1L914.4 1001.1L936.7 1043.3L962.2 1040L1156.7 1043.3L1168.9 1035.6L1168.9 626.7L1157.8 624.4Z',
+        d: 'M1096.1 614.5L1030.7 625.8L982.6 647.2L959.1 663.6L924.3 698.4L894.7 742.3L870.1 821.1L867.1 896.7L881.4 961.1L901.8 1000L925.4 996.9L1104.3 1000L1115.5 992.8L1115.5 616.6L1105.3 614.5Z',
         stroke: '#969696',
       },
       {
-        d: 'M267.8 -92.2L208.9 -88.9L-235.6 -88.9L-237.8 -80L-212.2 -20L-182.2 23.3L-156.7 48.9L-126.7 71.1L-83.3 93.3L-51.1 104.4L-7.8 112.2L37.8 112.2L86.7 104.4L130 90L182.2 60L195.6 46.7L212.2 37.8L255.6 -13.3L277.8 -54.4L286.7 -83.3L283.3 -92.2Z',
+        d: 'M286.3 -45L232.1 -41.9L-176.9 -41.9L-178.9 -33.7L-155.4 21.5L-127.8 61.3L-104.3 84.9L-76.7 105.3L-36.8 125.8L-7.2 136L32.7 143.1L74.6 143.1L119.6 136L159.5 122.7L207.6 95.1L235.2 74.6L275.1 27.6L295.5 -10.2L303.7 -36.8L300.6 -45Z',
         stroke: '#969696',
       },
       {
-        d: 'M208.9 988.9L132.2 1007.8L84.4 1030L71.1 1044.4L388.9 1044.4L390 1041.1L371.1 1026.7L334.4 1007.8L286.7 993.3L252.2 988.9Z',
+        d: 'M232.1 949.9L161.6 967.3L117.6 987.7L105.3 1001L397.8 1001L398.8 998L381.4 984.7L347.6 967.3L303.7 954L272 949.9Z',
         stroke: '#969696',
       },
     ],

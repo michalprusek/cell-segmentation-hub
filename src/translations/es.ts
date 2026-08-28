@@ -120,7 +120,7 @@ export default {
         label: 'Morfología espermática',
         detail:
           'Campo claro, 1360 × 1024. Cada célula se traza como tres polilíneas en vez de una sola mancha —cabeza en verde, pieza intermedia en ámbar, cola en cian— para poder medir cada segmento por separado.',
-        alt: 'Micrografía de campo claro de un espermatozoide trazado por tres polilíneas de color: cabeza verde, pieza intermedia ámbar, cola cian.',
+        alt: 'Micrografía de campo claro de dos espermatozoides, cada uno trazado por tres polilíneas de color: cabeza verde, pieza intermedia ámbar, cola cian.',
       },
       microtubule: {
         label: 'Filamentos de microtúbulos',
@@ -131,8 +131,8 @@ export default {
       microcapsule: {
         label: 'Microcápsulas',
         detail:
-          'Campo claro, 1280 × 1024. Las cápsulas completas se delinean en rojo y se miden; las que corta el borde del fotograma se muestran en gris y quedan fuera de las estadísticas.',
-        alt: 'Micrografía de campo claro de microcápsulas, las completas delineadas en rojo y las cortadas por el borde en gris.',
+          'Campo claro, 1280 × 1024. Dos cápsulas completas están delineadas en rojo: son las que reciben área, perímetro y compacidad. Las cápsulas que corta el borde del fotograma no llevan contorno rojo; el modelo las marca y las estadísticas las dejan fuera.',
+        alt: 'Micrografía de campo claro de microcápsulas, las dos completas delineadas en rojo y las cortadas por el borde del fotograma sin contorno.',
       },
     },
     about: {

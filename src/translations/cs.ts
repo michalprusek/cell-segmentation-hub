@@ -119,7 +119,7 @@ export default {
         label: 'Morfologie spermií',
         detail:
           'Světlé pole, 1360 × 1024. Každá buňka je vedena jako tři lomené čáry místo jedné plochy — hlavička zeleně, krček oranžově, bičík azurově — takže každý úsek lze změřit zvlášť.',
-        alt: 'Snímek spermie ve světlém poli, vedená třemi barevnými lomenými čarami: zelená hlavička, oranžový krček, azurový bičík.',
+        alt: 'Snímek dvou spermií ve světlém poli, každá vedená třemi barevnými lomenými čarami: zelená hlavička, oranžový krček, azurový bičík.',
       },
       microtubule: {
         label: 'Vlákna mikrotubulů',
@@ -130,8 +130,8 @@ export default {
       microcapsule: {
         label: 'Mikrokapsle',
         detail:
-          'Světlé pole, 1280 × 1024. Celé kapsle jsou obtaženy červeně a měří se; kapsle uříznuté okrajem snímku jsou šedé a do statistik nevstupují.',
-        alt: 'Snímek mikrokapslí ve světlém poli, celé kapsle obtažené červeně, kapsle uříznuté okrajem šedě.',
+          'Světlé pole, 1280 × 1024. Dvě celé kapsle jsou obtaženy červeně — právě u nich se počítá plocha, obvod a kompaktnost. Kapsle uříznuté okrajem snímku červený obrys nemají: model je označí a do statistik nevstupují.',
+        alt: 'Snímek mikrokapslí ve světlém poli, dvě celé kapsle obtažené červeně, kapsle uříznuté okrajem snímku bez obrysu.',
       },
     },
     about: {

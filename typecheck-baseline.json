@@ -737,8 +737,13 @@
       "src/components/header/MobileMenu.tsx": {
         "TS6307: File 'src/components/ui/sheet.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
-      "src/components/landing/SpecimenShowcase.tsx": {
-        "TS6307: File 'src/components/landing/specimens.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      "src/components/landing/__tests__/specimens.test.ts": {
+        "TS6307: File 'src/components/landing/specimens.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/translations/en.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/components/landing/specimens.ts": {
+        "TS6307: File 'src/lib/models/modelRegistry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/types/index.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/components/layout/index.ts": {
         "TS6307: File 'src/components/layout/ContentCard.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -921,9 +926,6 @@
         "TS2554: Expected 1-2 arguments, but got 3.": 1,
         "TS6307: File 'src/lib/i18nLogger.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
-      "src/contexts/LanguageContext.types.ts": {
-        "TS6307: File 'src/translations/en.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
       "src/contexts/ModelContext.tsx": {
         "TS2339: Property 'user' does not exist on type 'AuthContextType | undefined'.": 1
       },
@@ -1017,8 +1019,7 @@
         "TS6307: File 'src/hooks/useDebounce.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/hooks/__tests__/useFolders.test.ts": {
-        "TS6307: File 'src/hooks/useFolders.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS6307: File 'src/types/index.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS6307: File 'src/hooks/useFolders.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/hooks/__tests__/useImageFilter.test.tsx": {
         "TS2551: Property 'projectId' does not exist on type 'Partial<ProjectImage> & { id: string; name: string; }'. Did you mean 'project_id'?": 1,
@@ -1966,7 +1967,6 @@
         "TS6307: File 'src/test/utils/test-utilities.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/types/index.ts": {
-        "TS6307: File 'src/lib/models/modelRegistry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/lib/segmentation.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/utils/__tests__/dashboardDrag.test.ts": {

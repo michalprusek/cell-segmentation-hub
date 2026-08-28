@@ -156,7 +156,6 @@ function SpecimenShowcase() {
             height={720}
             className="h-full w-full object-cover"
             decoding="async"
-            fetchPriority="high"
           />
           <OutlineLayer
             key={`outlines-${active.id}`}
