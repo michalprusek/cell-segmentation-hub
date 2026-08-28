@@ -25,14 +25,15 @@ export type ProjectTypeKey =
   | 'wound'
   | 'sperm'
   | 'microtubules'
-  | 'microcapsule';
+  | 'microcapsule'
+  | 'neurite';
 
 /** Coarse size bucket surfaced in the model picker UI. */
 export type ModelSize = 'small' | 'medium' | 'large';
 
 /** Catalogue category used to group models in settings. */
 export type ModelCategory =
-  'spheroid' | 'sperm' | 'wound' | 'microtubule' | 'microcapsule';
+  'spheroid' | 'sperm' | 'wound' | 'microtubule' | 'microcapsule' | 'neurite';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds
@@ -256,6 +257,31 @@ export const MODEL_REGISTRY = {
       'Instance segmentation for microcapsules (round objects) in bright-field microscopy. A compact U-Net distilled from Meta SAM 3 returns one clean, full-resolution boundary per capsule and separates touching capsules with a watershed; capsules cut off by the image border are flagged and excluded from metrics (area, perimeter, compactness).',
     i18nKey: 'microcapsule',
     compatibleProjectTypes: ['microcapsule'],
+  },
+  neurite_soma: {
+    size: 'large',
+    // Semantic 3-class argmax (background / neurite / soma) — the network has
+    // no tunable foreground cut, so this is the registry's neutral default and
+    // is not forwarded as a meaningful knob.
+    defaultThreshold: 0.5,
+    category: 'neurite',
+    performance: {
+      // Measured on this host's A5000: 118 s for a 6657 x 6664 (44 MP) frame
+      // with the full 3-fold x 4-way-mirror TTA (12 forward passes per tile).
+      // Cost is a sliding window, so it scales with image AREA: ~12 s for a
+      // 2048 x 2048 frame, ~3 s for 1024 x 1024. The figures below are for a
+      // typical 2048-square confocal frame.
+      avgTimePerImage: 12,
+      throughput: 0.083,
+      p95Latency: 120,
+      batchSize: 1,
+    },
+    name: 'Neurite / Soma',
+    displayName: 'Neurite / Soma (nnU-Net ResEnc-M)',
+    description:
+      'Two-class semantic segmentation of neurons in fluorescence microscopy — neurite (processes) and soma (cell body) — from the tubulin channel alone. nnU-Net v2 ResEnc-M, 2D, 3-fold ensemble averaged in logit space with mirroring TTA and a clDice topology term on the neurite class. Held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at ~0.180 um/px; validate soma counts before trusting them on a different pixel size.',
+    i18nKey: 'neurite_soma',
+    compatibleProjectTypes: ['neurite'],
   },
 } as const satisfies Record<string, ModelRegistryEntry>;
 

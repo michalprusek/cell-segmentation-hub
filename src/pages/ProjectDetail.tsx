@@ -20,6 +20,8 @@ import {
   extractChannelsFromPaths,
 } from '@/components/project/SegmentChannelDialog';
 import { AddChannelDialog } from '@/components/project/AddChannelDialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonProjectImageGrid } from '@/components/ui/skeleton-variants';
 import { useSharedAdvancedExport } from '@/pages/export/hooks/useSharedAdvancedExport';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
@@ -114,9 +116,14 @@ const ProjectDetail = () => {
   const handleProjectTypeChange = useCallback(
     async (newType: import('@/types').ProjectType) => {
       if (!id) return;
+      // Optimistic: paint the new type on the pill before the PATCH, and put
+      // the old one back if the server refuses. Previously `setProjectType`
+      // ran *after* the await, so the picker sat showing the old value for the
+      // whole round-trip and read as if the click had been ignored.
+      const previousType = projectType;
+      setProjectType(newType);
       try {
         await apiClient.updateProject(id, { type: newType });
-        setProjectType(newType);
         toast.success(t('projects.projectTypeUpdated'));
 
         // Warn if existing segmentations were produced by a model not standard
@@ -135,13 +142,14 @@ const ProjectDetail = () => {
           );
         }
       } catch (err) {
+        if (previousType) setProjectType(previousType);
         logger.error('Failed to update project type', err);
         toast.error(
           getErrorMessage(err, t) || t('projects.failedToUpdateProject')
         );
       }
     },
-    [id, setProjectType, t, images]
+    [id, projectType, setProjectType, t, images]
   );
 
   const handleVerifiedChange = useCallback(
@@ -150,16 +158,20 @@ const ProjectDetail = () => {
       // Optimistic: PATCH …/verified is settable by the owner AND an
       // accepted-share annotator, and GET /projects/:id is browser-cached
       // for 10 minutes, so we update local state directly rather than
-      // relying on a refetch.
+      // relying on a refetch. The state change now happens *before* the
+      // await — it used to sit after it, so the tick did not move until the
+      // server answered, which is the one thing a checkbox must never do.
+      const previousVerified = projectVerified;
+      setProjectVerified(verified);
       try {
         await apiClient.setProjectVerified(id, verified);
-        setProjectVerified(verified);
         toast.success(
           verified
             ? t('projects.projectVerified')
             : t('projects.projectUnverified')
         );
       } catch (err) {
+        setProjectVerified(previousVerified);
         logger.error('Failed to update project verified flag', err);
         toast.error(
           getErrorMessage(err, key => String(t(key))) ||
@@ -167,7 +179,7 @@ const ProjectDetail = () => {
         );
       }
     },
-    [id, setProjectVerified, t]
+    [id, projectVerified, setProjectVerified, t]
   );
 
   // Handle cancellation events from WebSocket - define early for useSegmentationQueue
@@ -1199,6 +1211,11 @@ const ProjectDetail = () => {
 
   const handleBatchDeleteConfirm = async () => {
     if (!id || !user?.id || selectedImageIds.size === 0) {
+      // The action button now calls preventDefault so the dialog can show a
+      // pending state, which means Radix no longer auto-closes it — this
+      // bail-out has to close it itself or the user is left staring at a
+      // dialog that will never do anything.
+      setShowDeleteDialog(false);
       toast.error(t('errors.noProjectOrUser'));
       return;
     }
@@ -1256,6 +1273,8 @@ const ProjectDetail = () => {
 
   const handleDeleteAnnotationsConfirm = async () => {
     if (!user?.id || selectedImageIds.size === 0) {
+      // See handleBatchDeleteConfirm: preventDefault means we own the close.
+      setShowDeleteAnnotationsDialog(false);
       toast.error(t('errors.noProjectOrUser'));
       return;
     }
@@ -1759,13 +1778,29 @@ const ProjectDetail = () => {
             />
 
             {loading ? (
+              // A skeleton grid rather than a lone spinner in an empty h-64
+              // box: it shows how much is coming and holds the layout, so the
+              // page does not jump when the images arrive. Matches the
+              // Dashboard's existing SkeletonProjectCard treatment.
               <motion.div
-                className="flex justify-center items-center h-64"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
+                role="status"
+                aria-label={String(t('common.loading'))}
               >
-                <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+                {viewMode === 'grid' ? (
+                  <SkeletonProjectImageGrid count={8} />
+                ) : (
+                  <div className="space-y-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton
+                        key={i}
+                        className="h-[68px] w-full rounded-lg"
+                      />
+                    ))}
+                  </div>
+                )}
               </motion.div>
             ) : filteredImages.length === 0 ? (
               <motion.div
@@ -1812,8 +1847,19 @@ const ProjectDetail = () => {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      {/* Delete confirmation dialog.
+          `isBatchDeleting` already existed but was only ever read as a
+          re-entrancy guard — it never reached the DOM. Deleting 200 images
+          dismissed the dialog instantly and then nothing moved for the whole
+          round-trip. The action now holds the dialog open (preventDefault
+          stops Radix's automatic close; the handler's `finally` closes it) and
+          reports progress, and the dialog cannot be dismissed mid-flight. */}
+      <AlertDialog
+        open={showDeleteDialog}
+        onOpenChange={open => {
+          if (!isBatchDeleting) setShowDeleteDialog(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -1824,12 +1870,21 @@ const ProjectDetail = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel disabled={isBatchDeleting}>
+              {t('common.cancel')}
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleBatchDeleteConfirm}
+              onClick={e => {
+                e.preventDefault();
+                void handleBatchDeleteConfirm();
+              }}
+              disabled={isBatchDeleting}
               className="bg-red-600 hover:bg-red-700"
             >
-              {t('common.delete')}
+              {isBatchDeleting && (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              )}
+              {isBatchDeleting ? t('common.deleting') : t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1838,7 +1893,9 @@ const ProjectDetail = () => {
       {/* Delete annotations (segmentation results) confirmation dialog */}
       <AlertDialog
         open={showDeleteAnnotationsDialog}
-        onOpenChange={setShowDeleteAnnotationsDialog}
+        onOpenChange={open => {
+          if (!isDeletingAnnotations) setShowDeleteAnnotationsDialog(open);
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1852,12 +1909,23 @@ const ProjectDetail = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeletingAnnotations}>
+              {t('common.cancel')}
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteAnnotationsConfirm}
+              onClick={e => {
+                e.preventDefault();
+                void handleDeleteAnnotationsConfirm();
+              }}
+              disabled={isDeletingAnnotations}
               className="bg-red-600 hover:bg-red-700"
             >
-              {t('common.delete')}
+              {isDeletingAnnotations && (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              )}
+              {isDeletingAnnotations
+                ? t('common.deleting')
+                : t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

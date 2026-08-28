@@ -19,7 +19,7 @@
  * we mock the TRANSLATION_LOADERS map via vi.mock to isolate the caching logic.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // We need to intercept the module's private TRANSLATION_LOADERS map.
@@ -39,6 +39,7 @@ import {
   primeTranslationCache,
   getCachedTranslation,
   loadTranslation,
+  resolveClientLanguage,
 } from '../translationLoader';
 import type { Language, Translations } from '../LanguageContext.types';
 
@@ -176,5 +177,110 @@ describe('loadTranslation — loader invocation (isolated import)', () => {
     // Second call must return the same reference (cached)
     const resultAgain = await freshLoad('zh');
     expect(resultAgain).toBe(result);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveClientLanguage
+// ---------------------------------------------------------------------------
+
+describe('resolveClientLanguage', () => {
+  // The global test setup (src/test/setup.ts) pins localStorage.getItem
+  // ('language') to 'en', which would short-circuit every browser-detection
+  // case here. Swap in a real in-memory store for this block only.
+  const globalLocalStorage = global.localStorage;
+  let store: Record<string, string>;
+
+  beforeEach(() => {
+    store = {};
+    global.localStorage = {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => {
+        store[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete store[key];
+      },
+      clear: () => {
+        store = {};
+      },
+      key: () => null,
+      length: 0,
+    } as unknown as Storage;
+  });
+
+  const setNavigator = (
+    language: string,
+    languages?: readonly string[] | undefined
+  ) => {
+    Object.defineProperty(window.navigator, 'language', {
+      value: language,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(window.navigator, 'languages', {
+      value: languages,
+      writable: true,
+      configurable: true,
+    });
+  };
+
+  afterEach(() => {
+    global.localStorage = globalLocalStorage;
+  });
+
+  it('prefers an explicit choice stored in localStorage over the browser', () => {
+    localStorage.setItem('language', 'es');
+    setNavigator('de-DE', ['de-DE']);
+
+    expect(resolveClientLanguage()).toBe('es');
+  });
+
+  it('ignores an unsupported value left in localStorage', () => {
+    localStorage.setItem('language', 'pl');
+    setNavigator('de-DE', ['de-DE']);
+
+    expect(resolveClientLanguage()).toBe('de');
+  });
+
+  it('falls back to the browser primary language, region stripped', () => {
+    setNavigator('fr-CA', ['fr-CA']);
+
+    expect(resolveClientLanguage()).toBe('fr');
+  });
+
+  it('walks navigator.languages when the primary language is unsupported', () => {
+    // Polish first — we do not ship it — but German is the user's second
+    // preference and IS shipped, so it beats the English fallback.
+    setNavigator('pl-PL', ['pl-PL', 'de-DE', 'en-US']);
+
+    expect(resolveClientLanguage()).toBe('de');
+  });
+
+  it('returns "en" when nothing the browser asks for is supported', () => {
+    setNavigator('ja-JP', ['ja-JP', 'ko-KR']);
+
+    expect(resolveClientLanguage()).toBe('en');
+  });
+
+  it('tolerates a runtime without navigator.languages', () => {
+    setNavigator('zh-CN', undefined);
+
+    expect(resolveClientLanguage()).toBe('zh');
+  });
+
+  it('matches a case-variant tag', () => {
+    setNavigator('CS-CZ', ['CS-CZ']);
+
+    expect(resolveClientLanguage()).toBe('cs');
+  });
+
+  it('does NOT persist a browser-derived guess to localStorage', () => {
+    // Persisting would let syncLocalPreferencesToDatabase push the guess onto
+    // a returning user's server profile and overwrite their real choice.
+    setNavigator('de-DE', ['de-DE']);
+
+    expect(resolveClientLanguage()).toBe('de');
+    expect(localStorage.getItem('language')).toBeNull();
   });
 });

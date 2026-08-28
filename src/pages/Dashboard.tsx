@@ -16,6 +16,8 @@ import MoveToFolderDialog, {
   type MoveSubject,
 } from '@/components/project/MoveToFolderDialog';
 import NewProjectCard from '@/components/NewProjectCard';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 import { useDashboardProjects } from '@/hooks/useDashboardProjects';
 import {
   useFolders,
@@ -396,6 +398,18 @@ const Dashboard = () => {
     setMoveSubject({ kind: 'folder', id: folderId });
   }, []);
 
+  // `fetchProjects` clears `fetchError` only once it succeeds, so without a
+  // local flag the retry button gave no sign it had been pressed.
+  const [isRetrying, setIsRetrying] = useState(false);
+  const handleRetryFetch = useCallback(async () => {
+    setIsRetrying(true);
+    try {
+      await fetchProjects();
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [fetchProjects]);
+
   const statsOverview = useMemo(() => <StatsOverview />, []);
 
   const projectToolbar = useMemo(
@@ -421,14 +435,15 @@ const Dashboard = () => {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <DashboardHeader />
         <div className="container mx-auto px-4 py-8">
-          <div className="bg-white p-6 rounded-lg border border-red-200 text-center dark:bg-gray-900">
-            <p className="text-red-500 mb-4">{fetchError}</p>
-            <button
-              onClick={fetchProjects}
-              className="bg-blue-500 text-white px-4 py-2 rounded"
-            >
-              {t('common.tryAgain')}
-            </button>
+          {/* Was a hand-rolled `<button className="bg-blue-500 …">` with no
+              focus ring, no hover, no disabled state and no pending feedback,
+              so a failing retry looked identical to a retry never clicked. */}
+          <div className="rounded-lg border border-red-200 bg-white p-6 text-center dark:border-red-900/50 dark:bg-gray-800">
+            <p className="mb-4 text-red-500">{fetchError}</p>
+            <Button onClick={handleRetryFetch} disabled={isRetrying}>
+              {isRetrying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isRetrying ? t('common.loading') : t('common.tryAgain')}
+            </Button>
           </div>
         </div>
       </div>
@@ -446,23 +461,33 @@ const Dashboard = () => {
             breakpoint="md"
             align="start"
             justify="between"
-            className="mb-8"
+            className="mb-6 sm:mb-8"
           >
             <div>
-              <h1 className="text-2xl font-bold mb-1">
+              <h1 className="mb-1 text-xl font-bold sm:text-2xl">
                 {t('common.dashboard')}
               </h1>
-              <p className="text-gray-500">{t('dashboard.manageProjects')}</p>
+              <p className="text-sm text-gray-500 sm:text-base">
+                {t('dashboard.manageProjects')}
+              </p>
             </div>
           </ResponsiveStack>
 
-          <div className="mb-8 animate-fade-in">{statsOverview}</div>
+          <div className="mb-6 animate-fade-in sm:mb-8">{statsOverview}</div>
 
           <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-            <ContentCard className="p-6">
-              <FlexBetween align="center" className="flex-col sm:flex-row mb-6">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1 dark:text-gray-100">
+            {/* `p-6` on top of PageContainer's `px-4` left only 280px of a
+                360px screen for the toolbar and the project grid. */}
+            <ContentCard className="p-4 sm:p-6">
+              {/* `items-center` from FlexBetween survived into the mobile
+                  column, so this heading rendered centre-aligned while the
+                  page h1 directly above it stayed left-aligned. */}
+              <FlexBetween
+                align="start"
+                className="mb-4 flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center"
+              >
+                <div className="min-w-0">
+                  <h2 className="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">
                     {t('dashboard.projectGallery')}
                   </h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400">

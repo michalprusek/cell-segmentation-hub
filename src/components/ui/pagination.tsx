@@ -73,11 +73,15 @@ const PaginationPrevious = ({
     <PaginationLink
       aria-label={t('accessibility.goToPreviousPage')}
       size="default"
-      className={cn('gap-1 pl-2.5', className)}
+      className={cn('gap-1 px-2.5 sm:pl-2.5 sm:pr-4', className)}
       {...props}
     >
       <ChevronLeft className="h-4 w-4" />
-      <span>{t('accessibility.previousPage')}</span>
+      {/* The word costs ~70px of a 328px mobile viewport and the chevron plus
+          the aria-label already say it. Restored from `sm` up. */}
+      <span className="hidden sm:inline">
+        {t('accessibility.previousPage')}
+      </span>
     </PaginationLink>
   );
 };
@@ -92,10 +96,10 @@ const PaginationNext = ({
     <PaginationLink
       aria-label={t('accessibility.goToNextPage')}
       size="default"
-      className={cn('gap-1 pr-2.5', className)}
+      className={cn('gap-1 px-2.5 sm:pl-4 sm:pr-2.5', className)}
       {...props}
     >
-      <span>{t('accessibility.nextPage')}</span>
+      <span className="hidden sm:inline">{t('accessibility.nextPage')}</span>
       <ChevronRight className="h-4 w-4" />
     </PaginationLink>
   );

@@ -5,13 +5,15 @@ import { cn } from '@/lib/utils';
 import { ProjectImage } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2 } from 'lucide-react';
+import { Checkbox, checkboxTouchTargetClass } from '@/components/ui/checkbox';
+import { Loader2, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 
 interface ImageListItemProps {
   image: ProjectImage;
-  onDelete: (imageId: string) => void;
+  /** Resolves when the delete round-trip settles, so the row can show a
+   *  pending state. Errors are handled by the caller. */
+  onDelete: (imageId: string) => void | Promise<void>;
   onOpen: (imageId: string) => void;
   isSelected: boolean;
   onSelectionChange: (imageId: string, selected: boolean) => void;
@@ -27,6 +29,19 @@ export const ImageListItem = ({
   className,
 }: ImageListItemProps) => {
   const { t } = useLanguage();
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(image.id);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -35,14 +50,19 @@ export const ImageListItem = ({
       transition={{ duration: 0.2 }}
       layout
       className={cn(
-        'flex items-center p-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-750 group',
+        // `dark:hover:bg-gray-750` was a no-op — Tailwind has no 750 step, so
+        // the row had no hover feedback at all in dark mode.
+        'flex items-center p-3 rounded-lg border border-gray-200 bg-white transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 group',
         className
       )}
       onClick={() => onOpen(image.id)}
     >
-      {/* Checkbox */}
+      {/* Checkbox — the only way to select an image in list view, and a 16px
+          target on a phone. `checkboxTouchTargetClass` grows the hit area to
+          44px below `sm` without changing what is drawn. */}
       <div className="mr-3" onClick={e => e.stopPropagation()}>
         <Checkbox
+          className={checkboxTouchTargetClass}
           checked={isSelected}
           onCheckedChange={checked =>
             onSelectionChange(image.id, checked as boolean)
@@ -73,8 +93,8 @@ export const ImageListItem = ({
 
       {/* Image details */}
       <div className="ml-3 flex-1 min-w-0 cursor-pointer">
-        <div className="flex items-center">
-          <h4 className="text-sm font-medium truncate">
+        <div className="flex min-w-0 items-center">
+          <h4 className="min-w-0 truncate text-sm font-medium">
             {image.name
               ? image.name.normalize('NFC')
               : t('common.untitledImage')}
@@ -83,7 +103,9 @@ export const ImageListItem = ({
             <Badge
               variant="outline"
               className={cn(
-                'ml-2 text-xs',
+                // `shrink-0` keeps the status readable instead of letting the
+                // filename squeeze it into an ellipsis on a narrow row.
+                'ml-2 shrink-0 whitespace-nowrap text-xs',
                 image.segmentationStatus === 'completed'
                   ? 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/40'
                   : image.segmentationStatus === 'processing'
@@ -104,19 +126,26 @@ export const ImageListItem = ({
         </p>
       </div>
 
-      {/* Action buttons */}
-      <div className="ml-auto pl-3 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+      {/* Action buttons.
+          BUG FIX: this was `opacity-0` with no `pointer-events-none`, so on a
+          touch device the delete button was invisible but still hit-testable —
+          a tap anywhere in the right-hand strip of a row silently deleted the
+          image with no affordance at all. It is now always visible below `sm`
+          (touch) and genuinely inert while hidden above it. */}
+      <div className="ml-auto pl-3 transition-opacity sm:opacity-0 sm:pointer-events-none group-hover:sm:opacity-100 group-hover:sm:pointer-events-auto focus-within:sm:opacity-100 focus-within:sm:pointer-events-auto">
         <Button
           variant="destructive"
           size="icon"
-          className="h-8 w-8"
-          aria-label={`Delete ${image.name ? image.name.normalize('NFC') : 'image'}`}
-          onClick={e => {
-            e.stopPropagation();
-            onDelete(image.id);
-          }}
+          className="h-9 w-9 sm:h-8 sm:w-8"
+          disabled={isDeleting}
+          aria-label={`${t('common.delete')} ${image.name ? image.name.normalize('NFC') : t('common.image')}`}
+          onClick={handleDelete}
         >
-          <Trash2 className="h-4 w-4" />
+          {isDeleting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
         </Button>
       </div>
     </motion.div>

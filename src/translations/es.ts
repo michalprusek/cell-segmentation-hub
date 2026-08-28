@@ -34,6 +34,7 @@ export default {
     createYourFirst: 'Crea tu primer proyecto para comenzar',
     tryAgain: 'Intentar de nuevo',
     cancelling: 'Cancelando...',
+    deleting: 'Eliminando...',
     retry: 'Reintentar',
     retrying: 'Reintentando...',
     retryAttempt: 'Intento {{attempt}} de {{max}}',
@@ -226,6 +227,7 @@ export default {
       sperm: 'Esperma',
       microtubules: 'Microtúbulos',
       microcapsule: 'Microcápsulas',
+      neurite: 'Neuritas y somas',
     },
     projectNamePlaceholder: 'ej. Esferoides de células HeLa',
     projectDescPlaceholder:
@@ -448,6 +450,7 @@ export default {
         wound: 'Modelos de cicatrización',
         microtubule: 'Modelos de microtúbulos',
         microcapsule: 'Modelos de microcápsulas',
+        neurite: 'Modelos de neuritas y somas',
       },
       presets: {
         fast: 'Rápido',
@@ -514,6 +517,11 @@ export default {
           description:
             'Segmentación de instancias para microcápsulas (objetos redondos) en microscopía de campo claro. Una U-Net compacta destilada de Meta SAM 3 devuelve un contorno limpio a resolución completa por cápsula y separa las cápsulas adyacentes mediante watershed; las cápsulas cortadas por el borde de la imagen quedan excluidas de las métricas (área, perímetro, compacidad).',
         },
+        neurite_soma: {
+          name: 'Neurita / Soma (nnU-Net ResEnc-M)',
+          description:
+            'Segmentación semántica de dos clases de neuronas en microscopía de fluorescencia — neurita (prolongaciones) y soma (cuerpo celular) — solo a partir del canal de tubulina. nnU-Net v2 ResEnc-M, conjunto de 3 folds con TTA de espejo y término topológico clDice para la clase neurita. Dice en datos retenidos 0,832 neurita / 0,915 soma.',
+        },
       },
     },
     detectHoles: 'Detectar Agujeros',
@@ -547,6 +555,8 @@ export default {
         'Segmentación de instancias de microtúbulos para microscopía IRM. Red nnU-Net ResEnc-M, instanciador acotado por curvatura, salida polilínea nativa con tracking geométrico entre cuadros.',
       microcapsule:
         'U-Net compacta (destilada de Meta SAM 3) para segmentación de instancias de microcápsulas — área, perímetro y compacidad por cápsula, con las cápsulas cortadas por el borde excluidas de las métricas.',
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M (2D, conjunto de 3 folds) para segmentar neuritas y somas en microscopía de fluorescencia. Usa el canal de tubulina; Dice en datos retenidos 0,832 neurita / 0,915 soma. Entrenado con datos confocales Leica a ~0,180 µm/px: valide los recuentos de somas con otro tamaño de píxel.',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
     dataUsageDescription:
@@ -652,6 +662,7 @@ export default {
     verifyEmail:
       'Por favor, verifica tu correo electrónico para confirmar tu cuenta',
     successfulSignOut: 'Cierre de sesión exitoso',
+    signOutFailed: 'No se pudo cerrar la sesión. Inténtalo de nuevo.',
     checkingAuthentication: 'Verificando autenticación...',
     loadingAccount: 'Cargando tu cuenta...',
     processingRequest: 'Procesando tu solicitud...',
@@ -872,6 +883,12 @@ export default {
       external: 'Externo',
       internal: 'Interno',
       polyline: 'Polilínea',
+    },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurita',
+      soma: 'Soma',
     },
     shortcuts: {
       buttonText: 'Atajos',
@@ -1263,6 +1280,8 @@ export default {
         'Longitud, área e intensidad por canal de cada MT desde el archivo ND2/TIFF original. Corregido con la mediana del fondo (fuera de la máscara MT dilatada).',
       intensityNote:
         'La intensidad de señal por canal —incluida la intensidad sumada (integrada)— se calcula siempre para cada canal y se escribe en la hoja de métricas. No es necesario seleccionar nada.',
+      wideNote:
+        'Cada canal tiene su propia fila en metrics.csv (véase la columna «channel»). El archivo complementario metrics_wide.csv —una hoja adicional en metrics.xlsx— coloca todos los canales del mismo microtúbulo en una sola fila, con un conjunto de columnas por canal.',
       thicknessLabel: 'Grosor del MT (px)',
       thicknessHelp:
         'Ancho de la banda de muestreo a lo largo de cada polilínea. 5 px corresponde al diámetro típico del microtúbulo a 100× campo amplio.',
@@ -2099,7 +2118,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Plataforma avanzada de segmentación y análisis de esferoides para investigadores biomédicos, proporcionando herramientas impulsadas por IA para el análisis de imágenes celulares microscópicas.',
+      'Plataforma de segmentación y análisis de imágenes de microscopía para investigadores biomédicos: esferoides, cicatrización de heridas, espermatozoides, microcápsulas y microtúbulos, con herramientas impulsadas por IA desde la imagen hasta la medición.',
     contact: 'Contacto',
     institution: 'Institución',
     institutionName: 'ÚTIA AV ČR',

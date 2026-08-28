@@ -9,10 +9,33 @@ export const isValidSpermPartClass = (
   typeof value === 'string' &&
   (SPERM_PART_CLASSES as readonly string[]).includes(value);
 
-// Wider partClass union: sperm body parts plus spheroid 'core'.
+/**
+ * Semantic classes emitted by the two-class neurite/soma model.
+ *
+ * Unlike the sperm parts above — which are POLYLINES that together make up
+ * one instance — these tag whole CLOSED polygons, each an independent object
+ * of its class. They are the only thing distinguishing a process from a cell
+ * body once the mask has been contoured, so every stage that can drop an
+ * unknown `partClass` has to know about them.
+ *
+ * Kept as its own group (rather than appended to a flat list) so the two
+ * consumers that must NOT accept them — `isValidSpermPartClass`, which gates
+ * sperm polyline exports, and the sperm instance grouping — stay narrow.
+ */
+export const NEURON_PART_CLASSES = ['neurite', 'soma'] as const;
+export type NeuronPartClass = (typeof NEURON_PART_CLASSES)[number];
+
+export const isValidNeuronPartClass = (
+  value: unknown
+): value is NeuronPartClass =>
+  typeof value === 'string' &&
+  (NEURON_PART_CLASSES as readonly string[]).includes(value);
+
+// Wider partClass union: sperm body parts, spheroid 'core', neuron classes.
 export const POLYGON_PART_CLASSES = [
   ...SPERM_PART_CLASSES,
   'core',
+  ...NEURON_PART_CLASSES,
 ] as const;
 export type PolygonPartClass = (typeof POLYGON_PART_CLASSES)[number];
 
@@ -38,7 +61,8 @@ export interface Polygon {
   area?: number;
   /** Open polyline (sperm tail / microtubule) vs closed polygon. */
   geometry?: 'polygon' | 'polyline';
-  /** Sperm body part (head/midpiece/tail) or spheroid 'core'. */
+  /** Semantic class of this shape: a sperm body part (head/midpiece/tail),
+   *  the spheroid disintegration 'core', or a neuron class (neurite/soma). */
   partClass?: PolygonPartClass;
   /** Per-detection sperm instance grouping id. */
   instanceId?: string;
@@ -100,9 +124,12 @@ const coerceNonEmptyString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
 
 export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
-  // partClass accepts both sperm parts (head/midpiece/tail) and 'core' for
-  // spheroid disintegration core polygons; older code only validated SpermPartClass
-  // which silently stripped 'core' during polygon JSON load.
+  // partClass accepts sperm parts (head/midpiece/tail), 'core' for spheroid
+  // disintegration core polygons, and the neurite/soma classes of the neuron
+  // model; older code only validated SpermPartClass which silently stripped
+  // 'core' during polygon JSON load. This is the FIRST of the stages that can
+  // drop the field — widening the union anywhere else without widening it here
+  // makes the class vanish between the ML response and the database.
   {
     key: 'partClass',
     coerce: value =>

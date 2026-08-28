@@ -89,6 +89,13 @@ export function ChannelOverlayList({
     // this to skip requesting a channel for frames it doesn't cover.
     const coverage: Record<string, string[]> = {};
     for (const c of channels) {
+      // A SPARSE channel is never in the coverage map, even if a writer also
+      // left `frameIds` on it. Coverage means "do not request this channel
+      // here" — right for a channel the user added to a subset of frames,
+      // wrong for one the microscope merely refreshed every N-th frame, where
+      // every frame HAS an answer (the previous real frame's pixels) and
+      // skipping is what left the gaps blank in the first place.
+      if (c.sparseSource === true) continue;
       if (Array.isArray(c.frameIds) && c.frameIds.length > 0) {
         coverage[c.name] = c.frameIds;
       }

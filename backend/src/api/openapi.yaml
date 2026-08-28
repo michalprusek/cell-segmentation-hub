@@ -446,6 +446,20 @@ components:
           minLength: 2
           maxLength: 50
           example: 'jan_novak'
+        preferredLang:
+          type: string
+          enum: [en, cs, es, fr, de, zh]
+          description: >-
+            UI language the client detected for this visitor (explicit pick,
+            else browser preference). Stored as the new profile's
+            preferredLang; defaults to `en` when omitted. `language` is
+            accepted as an alias.
+          example: 'de'
+        language:
+          type: string
+          enum: [en, cs, es, fr, de, zh]
+          description: 'Wire alias for preferredLang'
+          example: 'de'
         consentToMLTraining:
           type: boolean
           example: true

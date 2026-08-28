@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 // Constants
 const MAX_PAGES = 40;
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Microscope, Image, FileUp, HardDrive } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { useAuth, useLanguage } from '@/contexts/exports';
@@ -15,6 +16,8 @@ interface StatCardProps {
   value: string;
   description: string;
   icon: React.ReactNode;
+  /** Renders a shimmer in place of the value while the stats are fetching. */
+  loading?: boolean;
   trend?: {
     value: string;
     isPositive: boolean;
@@ -26,20 +29,33 @@ const StatCard = ({
   value,
   description,
   icon,
+  loading,
   trend,
 }: StatCardProps) => (
+  // Card's default `p-6` header/content meant four full-width cards stacked on
+  // a phone consumed roughly four screens before the project gallery came into
+  // view. Tighter padding below `sm` (paired with the 2-up grid in
+  // StatsOverview) puts the whole strip in one glance without dropping a
+  // single number.
   <Card className="transition-all duration-300 hover:shadow-md dark:bg-gray-800 dark:border-gray-700">
-    <CardHeader className="flex flex-row items-center justify-between pb-2">
-      <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+    <CardHeader className="flex flex-row items-start justify-between gap-2 p-4 pb-1 sm:p-6 sm:pb-2">
+      <CardTitle className="text-xs font-medium text-gray-500 dark:text-gray-400 sm:text-sm">
         {title}
       </CardTitle>
-      <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 sm:h-8 sm:w-8">
         {icon}
       </div>
     </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-bold dark:text-white">{value}</div>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+    <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+      {/* A literal "..." reads as a hang; a shimmer reads as work in
+          progress. Same footprint either way, so the number does not jump
+          into place when it lands. */}
+      {loading ? (
+        <Skeleton className="h-8 w-20" />
+      ) : (
+        <div className="text-2xl font-bold dark:text-white">{value}</div>
+      )}
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
         {description}
       </p>
       {trend && (
@@ -229,25 +245,25 @@ const StatsOverview = () => {
   const stats = [
     {
       title: t('dashboard.stats.totalProjects'),
-      value: loading ? '...' : String(projectCount),
+      value: String(projectCount),
       description: t('dashboard.stats.totalProjectsDesc'),
       icon: <Microscope size={16} />,
     },
     {
       title: t('dashboard.stats.processedImages'),
-      value: loading ? '...' : String(completedImageCount),
+      value: String(completedImageCount),
       description: t('dashboard.stats.processedImagesDesc'),
       icon: <Image size={16} />,
     },
     {
       title: t('dashboard.stats.uploadedToday'),
-      value: loading ? '...' : String(todayUploadCount),
+      value: String(todayUploadCount),
       description: t('dashboard.stats.uploadedTodayDesc'),
       icon: <FileUp size={16} />,
     },
     {
       title: t('dashboard.stats.storageUsed'),
-      value: loading ? '...' : storageUsed,
+      value: storageUsed,
       description:
         storageGrowth !== '0 MB'
           ? storageGrowth
@@ -258,9 +274,11 @@ const StatsOverview = () => {
 
   return (
     <div>
-      <StatsGrid>
+      {/* 2-up on phones. StatsGrid's own `grid-cols-1` is overridden by
+          tailwind-merge (last wins within the same utility group). */}
+      <StatsGrid className="grid-cols-2">
         {stats.map((stat, index) => (
-          <StatCard key={index} {...stat} />
+          <StatCard key={index} {...stat} loading={loading} />
         ))}
       </StatsGrid>
       {!loading && failedProjectCount > 0 && (
