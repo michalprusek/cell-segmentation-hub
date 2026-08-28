@@ -1,5 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { neuronClassStyle } from '../../utils/neuronClassStyle';
 import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
@@ -196,6 +197,14 @@ const CanvasPolygon = React.memo(
       // Spheroid 'core' (closed polygon, dense central region from the disintegration model)
       if (!isPolyline && polygon.partClass === 'core') {
         return isSelected ? '#16a34a' : '#22c55e'; // green
+      }
+      // Neuron classes (closed polygons from the neurite/soma model). The fill
+      // comes from the CSS class below; this is the stroke.
+      const neuronStyle = isPolyline
+        ? undefined
+        : neuronClassStyle(polygon.partClass);
+      if (neuronStyle) {
+        return isSelected ? neuronStyle.strokeSelected : neuronStyle.stroke;
       }
       if (isPolyline) {
         switch (polygon.partClass) {
@@ -406,9 +415,8 @@ const CanvasPolygon = React.memo(
                 ? 'polyline-path'
                 : polygon.partClass === 'core'
                   ? 'polygon-core'
-                  : isInternal
-                    ? 'polygon-internal'
-                    : 'polygon-external',
+                  : (neuronClassStyle(polygon.partClass)?.cssClass ??
+                    (isInternal ? 'polygon-internal' : 'polygon-external')),
               isSelected && 'polygon-selected'
             )}
             fill={

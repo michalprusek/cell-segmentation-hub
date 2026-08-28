@@ -36,7 +36,7 @@ import {
 // ---------------------------------------------------------------------------
 
 describe('PROJECT_TYPES', () => {
-  it('contains exactly the six known project types', () => {
+  it('contains exactly the seven known project types', () => {
     expect([...PROJECT_TYPES]).toEqual([
       'spheroid',
       'spheroid_invasive',
@@ -44,11 +44,12 @@ describe('PROJECT_TYPES', () => {
       'sperm',
       'microtubules',
       'microcapsule',
+      'neurite',
     ]);
   });
 
-  it('is a readonly tuple (length 6)', () => {
-    expect(PROJECT_TYPES).toHaveLength(6);
+  it('is a readonly tuple (length 7)', () => {
+    expect(PROJECT_TYPES).toHaveLength(7);
   });
 });
 
