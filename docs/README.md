@@ -93,14 +93,14 @@ Written for the person in front of the browser. No code knowledge assumed.
 
 ## Architecture
 
-| Page                                                   | Covers                                     |
-| ------------------------------------------------------ | ------------------------------------------ |
-| [Overview](architecture/README.md)                     | Services, data flow, deployment topology   |
-| [Frontend](architecture/frontend.md)                   | React app structure, state, the editor     |
-| [Backend](architecture/backend.md)                     | Express layers, queue, storage, tracking   |
-| [ML service](architecture/ml-service.md)               | FastAPI, model loading, GPU behaviour      |
-| [Data flow (SSOT)](SSOT_DATA_FLOW_CURRENT.md)          | End-to-end trace of a segmentation request |
-| [Polygon rendering](polygon-rendering-optimization.md) | Canvas render path and its indices         |
+| Page                                                   | Covers                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| [Overview](architecture/README.md)                     | Services, data flow, deployment topology                |
+| [Frontend](architecture/frontend.md)                   | React app structure, state, the editor                  |
+| [Backend](architecture/backend.md)                     | Express layers, queue, storage, tracking                |
+| [ML service](architecture/ml-service.md)               | FastAPI, model loading, GPU behaviour                   |
+| [Project/image state flow](SSOT_DATA_FLOW_CURRENT.md)  | How dashboard and project state is owned and propagated |
+| [Polygon rendering](polygon-rendering-optimization.md) | Canvas render path and its indices                      |
 
 ## Development
 

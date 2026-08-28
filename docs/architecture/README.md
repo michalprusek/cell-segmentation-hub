@@ -54,7 +54,9 @@ For microtubule videos there is a step 8: once **every** frame of a container
 reaches a final state, the backend calls the ML tracker and patches `trackId`
 into the stored polygons.
 
-A detailed trace lives in [SSOT data flow](../SSOT_DATA_FLOW_CURRENT.md).
+How the resulting project and image state is owned and propagated on the
+frontend is a separate topic, covered in
+[project/image state flow](../SSOT_DATA_FLOW_CURRENT.md).
 
 ---
 
