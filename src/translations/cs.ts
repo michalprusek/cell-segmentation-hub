@@ -1486,8 +1486,7 @@ export default {
         step1: 'Přejděte na stránku registrace',
         step2: 'Zadejte e-mailovou adresu a zvolte heslo',
         step3: 'Doplňte profil se svým jménem a institucí',
-        step4:
-          'V Nastavení zvolte preferovaný model, výchozí práh, jazyk a motiv',
+        step4: 'V Nastavení zvolte preferovaný model, jazyk a motiv',
       },
       firstProject: 'První projekt',
       projectDescription:
@@ -1739,17 +1738,17 @@ export default {
       howToSelect: 'Výběr modelu',
       selectionSteps: {
         step1:
-          'V Nastavení zvolte výchozí model a práh — použijí se všude, kde typ projektu dovoluje výběr',
+          'V Nastavení zvolte výchozí model — použije se všude, kde typ projektu dovoluje výběr',
         step2: 'Otevřete projekt a vyberte snímky ke zpracování',
         step3:
           'Klikněte na Segmentovat; dialog nabídne jen kompatibilní modely',
         step4:
-          'Upravte práh spolehlivosti a vyvažte tak počet detekcí proti síle důkazu',
+          'Každý model má vlastní práh detekce, pevně daný při jeho validaci — pro jednotlivý běh není co nastavovat',
         step5: 'U vícekanálového videa zvolte, který kanál má model číst',
       },
-      thresholdNote: 'Práh u mikrotubulů je záměrně pevný.',
+      thresholdNote: 'Prahy detekce jsou pevně dané pro každý model.',
       thresholdNoteText:
-        'Tento model používá vlastní naměřený řez 0,97 a posuvník ignoruje. Snížení prahu nenajde více skutečných vláken — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup nesleduje obraz při žádném nastavení. Chybí-li detekce, zkontrolujte raději vstupní kanál.',
+        'V rozhraní žádné nastavení prahu není: každý model používá řez, se kterým byl validován, u mikrotubulů je to 0,97. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
       tip: 'Tip:',
       tipText:
         'Začněte výchozím modelem. Po CBAM-ResUNetu sáhněte, když jsou hranice důležitější než rychlost, a po Mamba-UNetu, když vaše snímky nevypadají jako ničí trénovací data.',
@@ -1776,7 +1775,7 @@ export default {
         step1: 'Nahrajte do projektu snímky nebo videa',
         step2:
           'Vyberte snímky ke zpracování, nebo nevybírejte nic a zpracují se všechny',
-        step3: 'Zvolte model a práh spolehlivosti',
+        step3: 'Zvolte model',
         step4: 'U vícekanálového videa zvolte kanál, který má model číst',
         step5: 'Sledujte průběh na ukazatelích stavu',
         step6:

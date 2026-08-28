@@ -1512,8 +1512,7 @@ export default {
         step1: 'Go to the sign-up page',
         step2: 'Enter your email address and choose a password',
         step3: 'Complete your profile with your name and institution',
-        step4:
-          'In Settings, set your preferred model, default threshold, language and theme',
+        step4: 'In Settings, set your preferred model, language and theme',
       },
       firstProject: 'Creating your first project',
       projectDescription:
@@ -1764,17 +1763,17 @@ export default {
       howToSelect: 'Choosing a model',
       selectionSteps: {
         step1:
-          'Set your default model and threshold in Settings — they are used wherever the project type allows a choice',
+          'Set your default model in Settings — it is used wherever the project type allows a choice',
         step2: 'Open a project and select the images you want to process',
         step3: 'Click Segment; the dialog offers only compatible models',
         step4:
-          'Adjust the confidence threshold to trade detections against evidence',
+          'Each model carries its own detection threshold, fixed when it was validated — there is nothing to tune per run',
         step5:
           'On a multi-channel video, choose which channel the model should read',
       },
-      thresholdNote: 'The microtubule threshold is deliberately fixed.',
+      thresholdNote: 'Detection thresholds are fixed per model.',
       thresholdNoteText:
-        'That model applies its own fitted cut of 0.97 and ignores the slider. Lowering it does not find more real filaments — it finds more with weaker evidence, and on a non-IRM channel the output does not follow the image at any setting. If detections are missing, check the input channel instead.',
+        'There is no threshold control in the interface: each model applies the cut it was validated with, and the microtubule model’s is 0.97. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
       tip: 'Tip:',
       tipText:
         'Start with the default model. Reach for CBAM-ResUNet when boundaries matter more than speed, and for Mamba-UNet when your images do not look like anyone’s training set.',
@@ -1800,7 +1799,7 @@ export default {
       workflowSteps: {
         step1: 'Upload your images or videos into a project',
         step2: 'Select the images to process, or none to process all of them',
-        step3: 'Choose the model and confidence threshold',
+        step3: 'Choose the model',
         step4:
           'On a multi-channel video, pick the channel the model should read',
         step5: 'Watch progress on the status indicators',
