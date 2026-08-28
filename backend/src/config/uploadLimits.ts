@@ -14,12 +14,6 @@ export interface UploadLimitsConfig {
   EXPRESS_JSON_LIMIT: string;
   EXPRESS_URL_ENCODED_LIMIT: string;
   // Rate limiting properties
-  UPLOAD_WINDOW_MS: number;
-  UPLOAD_MAX_REQUESTS: number;
-  BULK_UPLOAD_WINDOW_MS: number;
-  BULK_UPLOAD_MAX_REQUESTS: number;
-  PROCESSING_WINDOW_MS: number;
-  PROCESSING_MAX_REQUESTS: number;
   API_WINDOW_MS: number;
   API_MAX_REQUESTS: number;
   AUTH_WINDOW_MS: number;
@@ -38,12 +32,6 @@ const PRODUCTION_LIMITS: UploadLimitsConfig = {
   EXPRESS_JSON_LIMIT: '50mb', // JSON payload limit
   EXPRESS_URL_ENCODED_LIMIT: '50mb', // URL-encoded payload limit
   // Rate limiting properties
-  UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  UPLOAD_MAX_REQUESTS: 200, // 200 chunks per 5 minutes
-  BULK_UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  BULK_UPLOAD_MAX_REQUESTS: 10000, // 10,000 requests per 5 minutes
-  PROCESSING_WINDOW_MS: 10 * 60 * 1000, // 10 minutes
-  PROCESSING_MAX_REQUESTS: 20, // 20 processing requests per 10 minutes
   API_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
   API_MAX_REQUESTS: 1000, // 1000 requests per 5 minutes
   AUTH_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
@@ -61,12 +49,6 @@ const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
   EXPRESS_JSON_LIMIT: '200mb', // Increased for metadata
   EXPRESS_URL_ENCODED_LIMIT: '200mb', // Increased for form data
   // Rate limiting properties
-  UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  UPLOAD_MAX_REQUESTS: 1000, // More permissive for development
-  BULK_UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  BULK_UPLOAD_MAX_REQUESTS: 10000, // 10,000 requests per 5 minutes
-  PROCESSING_WINDOW_MS: 10 * 60 * 1000, // 10 minutes
-  PROCESSING_MAX_REQUESTS: 100, // More permissive for development
   API_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
   API_MAX_REQUESTS: 5000, // More permissive for development
   AUTH_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
@@ -87,12 +69,6 @@ const TEST_LIMITS: UploadLimitsConfig = {
   EXPRESS_JSON_LIMIT: '10mb',
   EXPRESS_URL_ENCODED_LIMIT: '10mb',
   // Rate limiting properties
-  UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  UPLOAD_MAX_REQUESTS: 10000, // Very permissive for testing
-  BULK_UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  BULK_UPLOAD_MAX_REQUESTS: 10000, // 10,000 requests per 5 minutes
-  PROCESSING_WINDOW_MS: 10 * 60 * 1000, // 10 minutes
-  PROCESSING_MAX_REQUESTS: 1000, // Very permissive for testing
   API_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
   API_MAX_REQUESTS: 10000, // Very permissive for testing
   AUTH_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
@@ -178,22 +154,3 @@ export function createRateLimitConfig(
   return { windowMs, max };
 }
 
-// Tier-based rate limits for different user types
-export const TIER_LIMITS = {
-  anonymous: {
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 100, // 100 requests per minute
-  },
-  authenticated: {
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 300, // 300 requests per minute
-  },
-  premium: {
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 500, // 500 requests per minute
-  },
-  admin: {
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 1000, // 1000 requests per minute
-  },
-};

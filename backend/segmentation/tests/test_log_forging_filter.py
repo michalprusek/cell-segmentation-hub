@@ -2,7 +2,7 @@
 
 `api.main` installs `_NoCRLFLogFilter` on the ROOT HANDLERS so that records
 propagated from every child module logger (`api.frap_targets`, `api.routes`,
-`api.routes`, ...) pass through it. Nothing in the suite checked that, which
+...) pass through it. Nothing in the suite checked that, which
 means the protection could be removed — or quietly bypassed by reconfiguring
 logging — with no test going red.
 

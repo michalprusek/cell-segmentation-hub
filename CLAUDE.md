@@ -266,6 +266,8 @@ Each of these shipped to production at least once in 2026 despite green pre-comm
 
 17. **Cross-frame MT identity is geometric since v5H (2026-08-17).** The model no longer emits 32-d embeddings; `/api/v1/track` matches on symmetric curve distance plus an overlap gate, with common-mode stage drift removed by normal-flow least squares. A `trackId` regression therefore shows up as a _geometry_ problem — gate too tight, drift misestimated on a field of parallel filaments — not a decode problem. Check `api/mt_geometry_cost.py` first. **There is no hard gate any more.** `GATE_MAX_SHIFT` was removed in the same series that added the geometry (it fragmented tracks 3.14x) and is now `CURVE_SCALE_PX` — a saturation _scale_, not a rejection threshold: a pair beyond it is expensive, never `inf`. The only surviving `inf` is geometry too degenerate to compare (a centerline with fewer than two points), where a distance of 0 would otherwise read as a perfect match. `GATE_MIN_OVERLAP`, `OVERLAP_TOL` and `overlap_fraction` still exist in that file and are still tested, but the tracker **does not import them** — as a hard gate overlap caused the fragmentation, and folded in as a cost term it measured no better while doubling wall-clock, because it rebuilds cKDTrees `curve_distance` has already built. They are kept as a geometry primitive for a possible future use (splitting a merged detection), so treat them as a library, not as something in the matching path: tuning them changes nothing. The request's `embedding` and `emb_template_alpha` fields are accepted-and-ignored, and `corrupt_count` / `degraded` are pinned to `0` / `false`; rows written by v7 still carry an `_embedding` and `extra="forbid"` would 400 them otherwise.
 
+18. **`process.env` in a browser bundle blanks the page.** There is no `process` global in the browser, and Vite only substitutes the literal text `process.env.NODE_ENV` — so a `process.env.VITE_*` read survives into the served module and throws `ReferenceError: process is not defined` while the enclosing object literal is evaluated. That takes the whole module down, and with it everything importing it; the dev server rendered a blank page. Production escaped only because rollup tree-shook the offending object out of the bundle entirely, so one new import of it would have shipped the crash. Use `import.meta.env` in `src/` — `import.meta.env.MODE` is the exact equivalent of a NODE_ENV compare ('development' under `vite dev`, 'production' under `vite build`, 'test' under vitest). Live readers today are `services/webSocketManager.ts` and `components/DashboardHeader.tsx`. (This note used to live in `src/lib/constants.ts`, which no longer reads env at all.)
+
 ---
 
 ## Do NOT hand back unverified fixes
@@ -428,7 +430,7 @@ Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runn
 - `polygonGeometry.ts` — area, perimeter, point-in-polygon, vertex ops (don't duplicate)
 - `segmentation.ts` — `Polygon` + `Point` types
 - `metricCalculations.ts` (under `pages/segmentation/utils/`) — Feret diameter, polyline length, ImageJ-convention perimeter
-- `constants.ts` — timeouts, retry, WebSocket event names
+- `constants.ts` — timeouts, retry, file limits, storage TTLs, HTTP status codes
 
 ---
 

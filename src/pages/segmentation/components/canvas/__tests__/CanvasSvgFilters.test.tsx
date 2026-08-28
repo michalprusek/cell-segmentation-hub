@@ -44,12 +44,19 @@ describe('CanvasSvgFilters', () => {
       expect(container.querySelector('filter#blue-glow')).not.toBeNull();
     });
 
-    it('defines no filter beyond the two CanvasPolygon references', () => {
+    // Deliberately one-directional: every filter defined here must be named by
+    // CanvasPolygon's `pathFilter`, because a definition nothing references is
+    // dead weight. It does NOT assert the reverse — `red-glow` is currently
+    // referenced only from a branch that CSS precedence makes inert (see the
+    // comment on `pathFilter`), and if that branch is ever removed, `red-glow`
+    // should be removable with it WITHOUT this test going red first.
+    it('defines no filter that CanvasPolygon does not reference', () => {
       const { container } = renderInSvg();
       const ids = Array.from(container.querySelectorAll('filter')).map(f =>
         f.getAttribute('id')
       );
-      expect(ids.sort()).toEqual(['blue-glow', 'red-glow']);
+      const referenced = ['blue-glow', 'red-glow'];
+      expect(ids.every(id => referenced.includes(id!))).toBe(true);
     });
   });
 

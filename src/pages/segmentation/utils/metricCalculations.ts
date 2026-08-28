@@ -97,6 +97,18 @@ function rotatingCalipers(hull: Point[]): {
 
   // Find minimum Feret diameter (min caliper width)
   // For each edge of the hull, find the furthest point from that edge
+  //
+  // KNOWN APPROXIMATION (pre-existing; this is the repo's "Feret
+  // approximation" debt note, not a regression from the helper swap below).
+  // Rotating calipers wants the perpendicular distance to the INFINITE line
+  // through the hull edge; `distanceToSegment` clamps to the segment, so when
+  // a vertex's perpendicular foot falls past an endpoint it returns the larger
+  // endpoint distance and minFeret comes out too big on elongated hulls with
+  // oblique edges. The local `pointToLineDistance` this replaced clamped
+  // identically (it had the same `param < 0` / `param > 1` branches), so the
+  // numbers are unchanged — but the old name at least claimed "line". Fixing
+  // it means an unclamped projection and would move published measurements, so
+  // it is deliberately left alone here.
   for (let i = 0; i < hull.length; i++) {
     const j = (i + 1) % hull.length;
     let maxDistFromEdge = 0;
@@ -120,7 +132,8 @@ function rotatingCalipers(hull: Point[]): {
     const [p1, p2] = maxPair;
     let maxOrthDist = 0;
 
-    // Find the maximum perpendicular distance from the max Feret line
+    // Find the maximum perpendicular distance from the max Feret line.
+    // Same clamped-vs-infinite-line approximation as above.
     for (const point of hull) {
       const dist = distanceToSegment(point, p1, p2);
       maxOrthDist = Math.max(maxOrthDist, dist);
