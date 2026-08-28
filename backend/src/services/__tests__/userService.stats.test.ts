@@ -265,7 +265,7 @@ describe('UserService Statistics', () => {
       const result = await getUserProfile(testUserId);
 
       expect(result).not.toBeNull();
-      expect(result?.language).toBe('cs'); // Default language
+      expect(result?.language).toBe('en'); // Default language
       expect(result?.theme).toBe('light'); // Default theme
       expect(result?.isEmailVerified).toBe(false);
       expect(result?.settings.notifications.email).toBe(true); // Default notification setting

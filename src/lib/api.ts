@@ -29,6 +29,13 @@ export interface RegisterRequest {
   email: string;
   password: string;
   username?: string;
+  /**
+   * UI language the client resolved for this visitor (explicit pick, else
+   * browser preference). The server persists it as the new profile's
+   * `preferredLang`; without it every new account would fall back to the
+   * column default regardless of what the user is actually reading.
+   */
+  preferredLang?: string;
   consentToMLTraining?: boolean;
   consentToAlgorithmImprovement?: boolean;
   consentToFeatureDevelopment?: boolean;
@@ -486,6 +493,8 @@ class ApiClient {
    * @param {string} request.password - User's password
    * @param {string} [request.username] - Optional username
    * @param {boolean} [request.consentToMLTraining] - Consent for ML training
+   * @param {string} [preferredLang] - Client-resolved UI language, stored as
+   *   the new profile's `preferredLang`
    * @returns {Promise<AuthResponse>} The newly registered user (tokens are
    *   set as httpOnly cookies by the server, not returned in the body)
    * @throws {Error} If registration fails or email already exists
@@ -504,13 +513,15 @@ class ApiClient {
       consentToMLTraining?: boolean;
       consentToAlgorithmImprovement?: boolean;
       consentToFeatureDevelopment?: boolean;
-    }
+    },
+    preferredLang?: string
   ): Promise<AuthResponse> {
     const response = await this.instance.post('/auth/register', {
       email,
       password,
       username,
       ...consentOptions,
+      ...(preferredLang ? { preferredLang } : {}),
     });
 
     // Registration logs the user in via httpOnly cookies set by the server.
