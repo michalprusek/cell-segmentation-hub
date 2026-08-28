@@ -21,6 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Polygon } from '@/lib/segmentation';
 import { motion } from 'framer-motion';
 import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
+import { neuronClassStyle } from '../utils/neuronClassStyle';
 
 interface PolygonListPanelProps {
   loading: boolean;
@@ -154,6 +155,10 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
           return 'bg-violet-500';
       }
     }
+    // Closed polygons carrying a neuron class (neurite / soma) get that
+    // class's colour instead of the generic external red.
+    const neuronStyle = neuronClassStyle(polygon.partClass);
+    if (neuronStyle) return neuronStyle.dotClass;
     return isInternalPolygon(polygon) ? 'bg-blue-500' : 'bg-red-500';
   };
 
@@ -344,9 +349,18 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;
             const isPolyline = polygon.geometry === 'polyline';
+            // Neuron classes tag CLOSED polygons, so they are resolved on the
+            // non-polyline branch — and from their own translation namespace,
+            // never sperm's `sperm.part.*`.
+            const neuronStyle = isPolyline
+              ? undefined
+              : neuronClassStyle(polygon.partClass);
             const polygonName = isPolyline
               ? `${polygon.partClass ? t(`sperm.part.${polygon.partClass}`) : t('segmentation.status.polyline')}${polygon.instanceId ? ` (${getInstanceLabel(polygon.instanceId)})` : ''}`
-              : polygon.name || `${t('common.polygon')} ${index + 1}`;
+              : polygon.name ||
+                (neuronStyle
+                  ? `${t(neuronStyle.i18nKey)} ${index + 1}`
+                  : `${t('common.polygon')} ${index + 1}`);
 
             return (
               <motion.div
@@ -420,9 +434,11 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                             ? polygon.partClass
                               ? t(`sperm.part.${polygon.partClass}`)
                               : t('segmentation.status.polyline')
-                            : isInternalPolygon(polygon)
-                              ? t('segmentation.status.internal')
-                              : t('segmentation.status.external')}
+                            : neuronStyle
+                              ? t(neuronStyle.i18nKey)
+                              : isInternalPolygon(polygon)
+                                ? t('segmentation.status.internal')
+                                : t('segmentation.status.external')}
                         </span>
                         {polygon.area && (
                           <>

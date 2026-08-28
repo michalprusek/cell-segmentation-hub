@@ -251,6 +251,84 @@ describe('AuthService', () => {
       expect(mockHashPassword).toHaveBeenCalledWith(registerData.password);
     });
 
+    it('persists the language the client detected for the new profile', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+      prismaMock.user.create.mockResolvedValueOnce({
+        ...baseUser,
+        profile: { preferredLang: 'de' },
+      });
+      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
+
+      await authService.register({
+        email: 'de@example.com',
+        password: 'Pass1234!',
+        preferredLang: 'de',
+      });
+
+      const createArgs = prismaMock.user.create.mock.calls[0][0] as any;
+      expect(createArgs.data.profile.create.preferredLang).toBe('de');
+    });
+
+    it('accepts the "language" wire alias for the new profile language', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+      prismaMock.user.create.mockResolvedValueOnce({
+        ...baseUser,
+        profile: { preferredLang: 'es' },
+      });
+      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
+
+      await authService.register({
+        email: 'es@example.com',
+        password: 'Pass1234!',
+        language: 'es',
+      });
+
+      const createArgs = prismaMock.user.create.mock.calls[0][0] as any;
+      expect(createArgs.data.profile.create.preferredLang).toBe('es');
+    });
+
+    it('defaults a new profile to English, not Czech, when the client sends no language', async () => {
+      // Regression: this used to hard-code 'cs', and the profile-sync effect
+      // in LanguageContext then overwrote the browser-detected language of
+      // every new account with Czech.
+      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+      prismaMock.user.create.mockResolvedValueOnce({
+        ...baseUser,
+        profile: { preferredLang: 'en' },
+      });
+      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
+
+      await authService.register({
+        email: 'plain@example.com',
+        password: 'Pass1234!',
+      });
+
+      const createArgs = prismaMock.user.create.mock.calls[0][0] as any;
+      expect(createArgs.data.profile.create.preferredLang).toBe('en');
+    });
+
+    it('sends the verification email in the new profile language', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+      prismaMock.user.create.mockResolvedValueOnce({
+        ...baseUser,
+        emailVerified: false,
+        profile: { preferredLang: 'fr' },
+      });
+      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
+
+      await authService.register({
+        email: 'fr@example.com',
+        password: 'Pass1234!',
+        preferredLang: 'fr',
+      });
+
+      expect(mockSendVerificationEmail).toHaveBeenCalledWith(
+        'fr@example.com',
+        expect.any(String),
+        'fr'
+      );
+    });
+
     it('throws conflict when the email already exists', async () => {
       prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'existing' });
 
@@ -875,6 +953,25 @@ describe('AuthService', () => {
         })
       );
       expect(result.verificationToken).toBeDefined();
+    });
+
+    it('resends in English when the account has no stored language', async () => {
+      // A legacy row can have no profile at all; the fallback must be
+      // English, not Czech (which is what a non-Czech user used to get).
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        ...baseUser,
+        emailVerified: false,
+        profile: null,
+      });
+      prismaMock.user.update.mockResolvedValueOnce({ ...baseUser });
+
+      await authService.resendVerificationEmail('user@example.com');
+
+      expect(mockSendVerificationEmail).toHaveBeenCalledWith(
+        'user@example.com',
+        expect.any(String),
+        'en'
+      );
     });
 
     it('wraps an unexpected error as internalError', async () => {

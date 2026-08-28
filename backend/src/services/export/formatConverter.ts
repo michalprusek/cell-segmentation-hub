@@ -3,6 +3,10 @@ import {
   SPERM_PART_CLASSES,
   type SpermPartClass,
   isValidSpermPartClass,
+  NEURON_PART_CLASSES,
+  type NeuronPartClass,
+  type PolygonPartClass,
+  isValidNeuronPartClass,
 } from '../../utils/polygonValidation';
 import { polylineLength } from '../../utils/polygonGeometry';
 import {
@@ -12,6 +16,7 @@ import {
 import {
   groupPolylinesByInstanceId,
   findPart,
+  type SpermPolylinePart,
 } from '../../utils/spermGrouping';
 import {
   polylineSemanticsForProjectType,
@@ -23,11 +28,13 @@ import type { BasePolygon, PolygonPoint } from '../../types/polygon';
  *  use `Point`. Structurally identical to `PolygonPoint`. */
 export type Point = PolygonPoint;
 
-/** Export polygon — `BasePolygon` plus the narrower `SpermPartClass`
- *  union. Spheroid 'core' annotations don't appear in exports, so the
- *  visualization-side `PolygonPartClass` is intentionally too wide here. */
+/** Export polygon — `BasePolygon` plus the full `PolygonPartClass`
+ *  It was `SpermPartClass` while only sperm polylines carried a class; the
+ *  neurite/soma model tags CLOSED polygons, so narrowing it here would make
+ *  the class unreadable on exactly the shapes that now carry it. Sperm's own
+ *  guard (`isValidSpermPartClass`) still narrows at every polyline use. */
 export interface Polygon extends BasePolygon {
-  partClass?: SpermPartClass;
+  partClass?: PolygonPartClass;
 }
 
 const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';
@@ -121,13 +128,39 @@ const buildPolylineCategory = (name: string): COCOCategory => ({
   color: POLYLINE_CATEGORY_COLOR,
 });
 
+// Neuron classes are genuine OBJECT categories, not parts of one object the
+// way head/midpiece/tail are, so they get their own COCO categories rather
+// than riding along as an attribute of `cell`. A standard COCO consumer would
+// otherwise read a two-class dataset as a single class named "cell". Ids are
+// fixed (3 = neurite, 4 = soma) so downstream tooling can key on them, and are
+// emitted only for the classes actually present in the export. Colours mirror
+// the model's own overlay (cyan neurite / magenta soma).
+const NEURON_CATEGORIES: Record<NeuronPartClass, COCOCategory> = {
+  neurite: {
+    id: 3,
+    name: 'neurite',
+    supercategory: 'biological',
+    color: [6, 182, 212],
+  },
+  soma: {
+    id: 4,
+    name: 'soma',
+    supercategory: 'biological',
+    color: [217, 70, 239],
+  },
+};
+
 const buildCocoCategories = (
   hasPolylines: boolean,
-  polylineCategoryName: string
-): COCOCategory[] =>
-  hasPolylines
-    ? [CELL_CATEGORY, buildPolylineCategory(polylineCategoryName)]
-    : [CELL_CATEGORY];
+  polylineCategoryName: string,
+  neuronClassesPresent: ReadonlySet<NeuronPartClass> = new Set()
+): COCOCategory[] => [
+  CELL_CATEGORY,
+  ...(hasPolylines ? [buildPolylineCategory(polylineCategoryName)] : []),
+  ...NEURON_PART_CLASSES.filter(c => neuronClassesPresent.has(c)).map(
+    c => NEURON_CATEGORIES[c]
+  ),
+];
 
 export interface SegmentationResult {
   polygons: string; // JSON string of Polygon[]
@@ -164,7 +197,10 @@ export interface COCOAnnotation {
     type: string;
     geometry?: 'polygon' | 'polyline';
     has_holes?: boolean;
-    partClass?: SpermPartClass;
+    /** Sperm body part on a polyline, or the neuron class on a closed
+     *  polygon. Redundant with `category_id` for neuron classes, kept because
+     *  CVAT surfaces attributes in its UI while category is the label. */
+    partClass?: PolygonPartClass;
     instanceId?: string;
     length?: number;
   };
@@ -205,6 +241,9 @@ export interface JSONPolygonData {
   perimeter: number;
   boundingBox?: [number, number, number, number];
   centroid?: Point;
+  /** Neuron class (neurite / soma) when the polygon carries one. Omitted for
+   *  every other project type, whose closed polygons have no class. */
+  partClass?: NeuronPartClass;
 }
 
 export interface JSONPolylineData {
@@ -294,6 +333,10 @@ export class FormatConverter {
     const imagesList: COCOImage[] = [];
     let annotationId = 1;
     let hasPolylines = false;
+    // Which neuron classes actually occur, so the categories block lists only
+    // those (an empty set leaves the COCO output byte-identical for every
+    // other project type).
+    const neuronClassesPresent = new Set<NeuronPartClass>();
     let totalInvalidPartClass = 0;
     let totalDegeneratePolylines = 0;
     const sampleAffectedImages: string[] = [];
@@ -424,10 +467,21 @@ export class FormatConverter {
             segmentation = [flattenPoints(polygon.points)];
           }
 
+          // A closed polygon from the neuron model carries its class; it
+          // becomes a real COCO category rather than an undifferentiated cell.
+          const neuronClass = isValidNeuronPartClass(polygon.partClass)
+            ? polygon.partClass
+            : undefined;
+          if (neuronClass) {
+            neuronClassesPresent.add(neuronClass);
+          }
+
           annotations.push({
             id: annotationId++,
             image_id: imageIdx + 1,
-            category_id: 1, // Cell/spheroid category
+            category_id: neuronClass
+              ? NEURON_CATEGORIES[neuronClass].id
+              : 1, // Cell/spheroid category
             segmentation,
             bbox,
             area,
@@ -436,6 +490,7 @@ export class FormatConverter {
               type: 'external',
               geometry: 'polygon',
               has_holes: associatedInternalPolygons.length > 0,
+              ...(neuronClass && { partClass: neuronClass }),
             },
           });
         }
@@ -494,7 +549,11 @@ export class FormatConverter {
       },
       images: imagesList,
       annotations,
-      categories: buildCocoCategories(hasPolylines, semantics.exportCategory),
+      categories: buildCocoCategories(
+        hasPolylines,
+        semantics.exportCategory,
+        neuronClassesPresent
+      ),
       licenses: [
         {
           id: 1,
@@ -701,6 +760,9 @@ export class FormatConverter {
               perimeter: calculatePerimeter(p.points),
               boundingBox: this.calculateBoundingBox(p.points),
               centroid: this.calculateCentroid(p.points),
+              ...(isValidNeuronPartClass(p.partClass) && {
+                partClass: p.partClass,
+              }),
             })),
             internal: internalPolygons.map((p: Polygon, idx: number) => ({
               id: idx + 1,
@@ -774,7 +836,16 @@ export class FormatConverter {
     instances: JSONSpermInstance[];
     orphanCount: number;
   } {
-    const { groups, orphanCount } = groupPolylinesByInstanceId(polylines);
+    // `SpermPolylinePart.partClass` is deliberately the 3-value sperm union,
+    // while an export polygon's is now the full `PolygonPartClass`. Narrow
+    // HERE rather than widening the sperm contract: a class this grouper does
+    // not understand becomes `undefined`, exactly as `findPart` would treat
+    // it. Every element is kept, so `orphanCount` is unaffected.
+    const spermParts: SpermPolylinePart[] = polylines.map(p => ({
+      ...p,
+      partClass: isValidSpermPartClass(p.partClass) ? p.partClass : undefined,
+    }));
+    const { groups, orphanCount } = groupPolylinesByInstanceId(spermParts);
 
     const instances: JSONSpermInstance[] = groups.map(
       ({ instanceId, parts }) => {
