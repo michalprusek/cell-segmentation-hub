@@ -2,6 +2,7 @@ import { Point, calculatePerimeter } from '@/lib/segmentation';
 import {
   calculatePolygonArea,
   calculateBoundingBox,
+  distanceToSegment,
 } from '@/lib/polygonGeometry';
 import { logger } from '@/lib/logger';
 
@@ -66,44 +67,6 @@ function distance(p1: Point, p2: Point): number {
 }
 
 /**
- * Calculate the distance from a point to a line defined by two points
- */
-function pointToLineDistance(
-  point: Point,
-  lineStart: Point,
-  lineEnd: Point
-): number {
-  const A = point.x - lineStart.x;
-  const B = point.y - lineStart.y;
-  const C = lineEnd.x - lineStart.x;
-  const D = lineEnd.y - lineStart.y;
-
-  const dot = A * C + B * D;
-  const lenSq = C * C + D * D;
-
-  if (lenSq === 0) return distance(point, lineStart);
-
-  const param = dot / lenSq;
-
-  let xx: number, yy: number;
-
-  if (param < 0) {
-    xx = lineStart.x;
-    yy = lineStart.y;
-  } else if (param > 1) {
-    xx = lineEnd.x;
-    yy = lineEnd.y;
-  } else {
-    xx = lineStart.x + param * C;
-    yy = lineStart.y + param * D;
-  }
-
-  const dx = point.x - xx;
-  const dy = point.y - yy;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-/**
  * Rotating calipers algorithm to find Feret diameters
  * Returns max, min, and orthogonal Feret diameters
  */
@@ -141,7 +104,7 @@ function rotatingCalipers(hull: Point[]): {
     // Find the furthest point from this edge
     for (let k = 0; k < hull.length; k++) {
       if (k === i || k === j) continue;
-      const dist = pointToLineDistance(hull[k], hull[i], hull[j]);
+      const dist = distanceToSegment(hull[k], hull[i], hull[j]);
       maxDistFromEdge = Math.max(maxDistFromEdge, dist);
     }
 
@@ -159,7 +122,7 @@ function rotatingCalipers(hull: Point[]): {
 
     // Find the maximum perpendicular distance from the max Feret line
     for (const point of hull) {
-      const dist = pointToLineDistance(point, p1, p2);
+      const dist = distanceToSegment(point, p1, p2);
       maxOrthDist = Math.max(maxOrthDist, dist);
     }
 
@@ -352,9 +315,4 @@ export const calculatePolylineLength = (
     length += Math.sqrt(dx * dx + dy * dy);
   }
   return length;
-};
-
-// Format number for display
-export const formatNumber = (value: number): string => {
-  return value.toFixed(4);
 };

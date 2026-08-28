@@ -36,7 +36,6 @@ export interface TransformState {
 export const EDITING_CONSTANTS = {
   VERTEX_HIT_RADIUS: 8, // Base radius for vertex hit detection
   CLOSE_POLYGON_DISTANCE: 15, // Distance threshold to close polygon
-  SEGMENT_HIT_DISTANCE: 20, // Distance threshold for segment clicking
   MIN_AUTO_ADD_DISTANCE: 10, // Minimum distance for auto-adding points with Shift
   ZOOM_FACTOR: 1.2, // Zoom multiplier
   MIN_ZOOM: 0.5, // 50% minimum zoom
@@ -49,11 +48,4 @@ export interface VertexDragState {
   vertexIndex: number | null;
   dragOffset?: { x: number; y: number };
   originalPosition?: { x: number; y: number };
-}
-
-export interface TempPointsState {
-  points: Array<{ x: number; y: number }>;
-  startIndex: number | null;
-  endIndex: number | null;
-  polygonId: string | null;
 }

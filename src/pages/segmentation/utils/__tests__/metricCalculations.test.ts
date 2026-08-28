@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateMetrics,
   calculatePolylineLength,
-  formatNumber,
 } from '../metricCalculations';
 
 // Hand-computable reference shapes
@@ -343,29 +342,5 @@ describe('calculatePolylineLength', () => {
       { x: 4, y: 3 },
     ];
     expect(calculatePolylineLength(points)).toBeCloseTo(7, 10);
-  });
-});
-
-describe('formatNumber', () => {
-  it('formats integer to 4 decimal places', () => {
-    expect(formatNumber(1)).toBe('1.0000');
-  });
-
-  it('formats a float to 4 decimal places', () => {
-    expect(formatNumber(Math.PI)).toBe('3.1416');
-  });
-
-  it('formats zero to 4 decimal places', () => {
-    expect(formatNumber(0)).toBe('0.0000');
-  });
-
-  it('rounds correctly (half-up)', () => {
-    expect(formatNumber(1.00005)).toBe('0.0001'.replace('0.0001', '1.0001'));
-    // toFixed rounds: 1.00005 → "1.0001"
-    expect(formatNumber(1.00005)).toBe('1.0001');
-  });
-
-  it('handles negative values', () => {
-    expect(formatNumber(-2.5)).toBe('-2.5000');
   });
 });
