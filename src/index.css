@@ -2,50 +2,83 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens — THE single source of truth.
+ *
+ * These used to be declared twice: once here and once in
+ * `src/styles/tailwind.css`, which `main.tsx` imports immediately after this
+ * file. Same layer, same specificity, so the second file won every token and
+ * this whole block was dead. The two had drifted a long way apart — different
+ * neutral hues (zinc here, slate there) and `--radius` 0.5rem here against the
+ * 0.75rem the app actually rendered — which is why "the radius scale" and "the
+ * neutral scale" could never be reasoned about from either file alone.
+ * Verified with getComputedStyle, not by reading: `--radius` resolved to
+ * 0.75rem and `bg-primary` painted rgb(24,24,27). The values below are those
+ * *effective* ones, so consolidating changed nothing visually; the token
+ * declarations were then removed from `styles/tailwind.css`, which keeps only
+ * its own animation/utility content.
+ *
+ * The two deliberate changes on top of that:
+ *
+ * `--primary` and `--ring` now carry the platform's blue. SpheroSeg already
+ * used that blue everywhere it was decorative — the logo tile, every stat icon
+ * chip, links, the "new project" affordance, the queue panel — while the
+ * controls that matter most (primary CTA, focus ring, checked checkbox, active
+ * tab) sat on shadcn's neutral default. Pointing the two tokens at the blue
+ * the app already paints is what makes those controls read as one system, and
+ * it fixes two concrete defects: the dark-mode primary button was near-white
+ * and glary, and the focus ring was near-black in light mode (invisible
+ * against text) and near-white in dark (invisible against the button it
+ * outlined).
+ *
+ * blue-600 (#2563eb) in both themes: white-on-blue clears 5.1:1, which
+ * white-on-blue-500 would not. The ring goes a step brighter in dark so the
+ * outline separates from the surface it sits on.
+ */
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 83% 53%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217 91% 60%;
   }
 }
 
@@ -111,6 +144,16 @@
     @apply text-gray-400;
   }
 
+  /* gray-600 on the gray-900 dark surface is 2.2:1 — below the 4.5:1 floor.
+     ~40 call sites across the app use `text-gray-600` with no dark: sibling
+     (footer body copy, form hints, dialog descriptions), so they were all
+     illegible in dark mode. This sits in @layer base, so any component that
+     does declare its own `dark:text-*` still wins — the utilities layer is
+     emitted after this one. */
+  .dark .text-gray-600 {
+    @apply text-gray-400;
+  }
+
   .dark .text-gray-700 {
     @apply text-gray-300;
   }
@@ -120,10 +163,95 @@
   }
 }
 
+@layer base {
+  /* Quality floor: honour the OS "reduce motion" setting. The app animates a
+     lot (page transitions, framer-motion card entrances, spinners, the fade-in
+     utility below) and none of it was gated. Spinners keep turning — they
+     report progress rather than decorate — everything else collapses to an
+     instant state change. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .animate-spin,
+    .animate-pulse {
+      animation-duration: 1.2s !important;
+      animation-iteration-count: infinite !important;
+    }
+  }
+}
+
+/*
+ * Elevation + entrance scale for the "floating panel" surfaces.
+ *
+ * `glass-morphism`, `shadow-glass-lg` and `animate-scale-in` were referenced
+ * across the four auth pages (and Documentation) but defined nowhere in the
+ * repo — verified by walking document.styleSheets for a matching selector, not
+ * by grep. They had always been no-ops, so the sign-in / sign-up / forgot- and
+ * reset-password "cards" rendered with no background, no border and no shadow:
+ * bare text floating on the page over the blurred blue bokeh those pages set
+ * up behind them. Somebody clearly intended a frosted panel, so define it
+ * rather than delete the intent.
+ *
+ * These live in `components`, not `utilities`, so existing per-element
+ * overrides (SignUp's `dark:bg-gray-900` on the back button, for example)
+ * still win — the utilities layer is emitted after this one.
+ */
+@layer components {
+  .glass-morphism {
+    background-color: rgb(255 255 255 / 0.72);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid rgb(255 255 255 / 0.6);
+  }
+
+  .dark .glass-morphism {
+    background-color: rgb(17 24 39 / 0.68);
+    border-color: rgb(255 255 255 / 0.08);
+  }
+
+  /* Wide and soft: glass reads as floating, so the shadow has to be diffuse
+     rather than the tight offset a solid card would use. */
+  .shadow-glass-lg {
+    box-shadow:
+      0 24px 48px -12px rgb(15 23 42 / 0.18),
+      0 8px 16px -8px rgb(15 23 42 / 0.1);
+  }
+
+  .dark .shadow-glass-lg {
+    box-shadow:
+      0 24px 48px -12px rgb(0 0 0 / 0.55),
+      0 8px 16px -8px rgb(0 0 0 / 0.4);
+  }
+}
+
 /* Custom utility classes */
 @layer utilities {
   .animate-fade-in {
     animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  /* Ends at opacity 1 / scale 1 and uses `forwards`, so the element is
+     visible even if the animation never runs (reduced motion, print). */
+  .animate-scale-in {
+    animation: scaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   @keyframes fadeIn {

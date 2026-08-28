@@ -193,12 +193,17 @@ const ProjectToolbar = ({
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('project.selected', { count: selectedCount })}
             </span>
+            {/* `ml-2` was stacking on top of the parent's `gap-2`, giving an
+                uneven 20px/8px rhythm; the gap alone is the spacing scale.
+                These three are the densest cluster in the toolbar and two of
+                them are destructive, so they get the same 40px touch height as
+                the rest of the toolbar below `sm`. */}
             {canAddChannel && onAddChannel && (
               <Button
                 onClick={onAddChannel}
                 size="sm"
                 variant="outline"
-                className="ml-2"
+                className="h-10 sm:h-9"
               >
                 <Layers className="h-4 w-4 mr-1" />
                 {t('project.addChannel')}
@@ -209,7 +214,7 @@ const ProjectToolbar = ({
                 onClick={onDeleteAnnotations}
                 size="sm"
                 variant="outline"
-                className="ml-2"
+                className="h-10 sm:h-9"
               >
                 <Eraser className="h-4 w-4 mr-1" />
                 {t('project.deleteAnnotations')}
@@ -219,7 +224,7 @@ const ProjectToolbar = ({
               onClick={onBatchDelete}
               size="sm"
               variant="destructive"
-              className="ml-2"
+              className="h-10 sm:h-9"
             >
               <Trash2 className="h-4 w-4 mr-1" />
               {t('project.deleteSelected')}
@@ -228,11 +233,17 @@ const ProjectToolbar = ({
         )}
       </div>
 
-      {/* Toolbar actions - right side */}
-      <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
+      {/* Toolbar actions - right side.
+          Was `flex-col sm:flex-row` with no `flex-wrap`: below 640px every
+          control became its own full-width row (~300px of toolbar before the
+          first image), and from 640px up the row could not wrap, so search +
+          Upload + Advanced export + Sort + view toggle overflowed the viewport
+          on 640-820px tablets. One wrapping row fixes both directions — search
+          claims its own line only while the viewport is phone-width. */}
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
         {/* Vyhledávací pole zobrazit pouze pokud je požadováno */}
         {showSearchBar && searchTerm !== undefined && onSearchChange && (
-          <div className="relative flex-grow w-full sm:w-auto sm:max-w-md">
+          <div className="relative w-full flex-grow sm:w-auto sm:min-w-[12rem] sm:max-w-md">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="16"
@@ -261,7 +272,7 @@ const ProjectToolbar = ({
           <Button
             variant="default"
             size="sm"
-            className="flex items-center h-10 sm:h-9 justify-center"
+            className="flex h-10 flex-1 items-center justify-center sm:h-9 sm:flex-none"
             onClick={onCreateProject}
           >
             <Plus className="mr-1 h-4 w-4" />
@@ -273,7 +284,7 @@ const ProjectToolbar = ({
           <Button
             variant="outline"
             size="sm"
-            className="flex items-center h-10 sm:h-9 justify-center"
+            className="flex h-10 flex-1 items-center justify-center sm:h-9 sm:flex-none"
             onClick={onCreateFolder}
           >
             <FolderPlus className="mr-1 h-4 w-4" />
@@ -286,7 +297,7 @@ const ProjectToolbar = ({
           <Button
             variant="outline"
             size="sm"
-            className="flex items-center h-10 sm:h-9 justify-center"
+            className="flex h-10 flex-1 items-center justify-center sm:h-9 sm:flex-none"
             onClick={onToggleUploader}
           >
             <svg
@@ -314,7 +325,7 @@ const ProjectToolbar = ({
           <Button
             variant="outline"
             size="sm"
-            className="flex items-center h-10 sm:h-9 justify-center"
+            className="flex h-10 flex-1 items-center justify-center sm:h-9 sm:flex-none"
             onClick={handleExport}
             disabled={isExporting || isDownloading}
           >
@@ -343,7 +354,7 @@ const ProjectToolbar = ({
             <Button
               variant="outline"
               size="sm"
-              className="flex items-center h-10 sm:h-9 justify-center"
+              className="flex h-10 flex-1 items-center justify-center sm:h-9 sm:flex-none"
             >
               <SlidersHorizontal className="mr-1 h-4 w-4" />
               {t('common.sort')}

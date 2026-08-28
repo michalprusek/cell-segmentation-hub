@@ -31,6 +31,7 @@ export default {
     createYourFirst: 'Erstellen Sie Ihr erstes Projekt, um zu beginnen',
     tryAgain: 'Erneut versuchen',
     cancelling: 'Wird abgebrochen...',
+    deleting: 'Wird gelöscht...',
     retry: 'Erneut versuchen',
     retrying: 'Neuer Versuch...',
     retryAttempt: 'Versuch {{attempt}} von {{max}}',
@@ -662,6 +663,7 @@ export default {
     successfulSignUp: 'Registrierung erfolgreich',
     verifyEmail: 'Bitte überprüfen Sie Ihre E-Mail, um Ihr Konto zu bestätigen',
     successfulSignOut: 'Erfolgreich abgemeldet',
+    signOutFailed: 'Abmeldung fehlgeschlagen. Bitte erneut versuchen.',
     checkingAuthentication: 'Authentifizierung prüfen...',
     loadingAccount: 'Ihr Konto wird geladen...',
     processingRequest: 'Ihre Anfrage wird bearbeitet...',
@@ -2167,7 +2169,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Erweiterte Sphäroid-Segmentierungs- und Analyseplattform für biomedizinische Forscher mit KI-gestützten Tools für die mikroskopische Zellbildanalyse.',
+      'Plattform für Segmentierung und Analyse mikroskopischer Aufnahmen für biomedizinische Forscher — Sphäroide, Wundheilung, Spermien, Mikrokapseln und Mikrotubuli, mit KI-gestützten Werkzeugen vom Bild bis zur Messung.',
     contact: 'Kontakt',
     institution: 'Institution',
     institutionName: 'ÚTIA AV ČR',

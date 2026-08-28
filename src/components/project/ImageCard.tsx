@@ -17,12 +17,14 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Checkbox, checkboxTouchTargetClass } from '@/components/ui/checkbox';
 // Canvas renderer removed - using server-generated thumbnails only
 
 interface ImageCardProps {
   image: ProjectImage;
-  onDelete: (imageId: string) => void;
+  /** Resolves when the delete round-trip settles, so the card can show a
+   *  pending state. Errors are handled by the caller. */
+  onDelete: (imageId: string) => void | Promise<void>;
   onOpen: (imageId: string) => void;
   isSelected: boolean;
   onSelectionChange: (imageId: string, selected: boolean) => void;
@@ -86,6 +88,7 @@ export const ImageCard = ({
   className,
 }: ImageCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { t } = useLanguage();
 
   // Create ordered list of candidate URLs, with TIFF support
@@ -127,9 +130,20 @@ export const ImageCard = ({
   const statusInfo = getStatusInfo(actualStatus, t);
   const StatusIcon = statusInfo.icon;
 
-  const handleDelete = (e: React.MouseEvent) => {
+  // `onDelete` resolves when the DELETE round-trip finishes (it swallows its
+  // own errors and toasts). On success this card unmounts; on failure it stays
+  // and the button comes back. Either way the control stops reading as dead
+  // for the ~300ms it used to sit there fully interactive, and a second click
+  // can no longer fire a second DELETE for the same image.
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete(image.id);
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(image.id);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSelectionChange = (checked: boolean | 'indeterminate') => {
@@ -152,8 +166,10 @@ export const ImageCard = ({
           'relative overflow-hidden rounded-lg cursor-pointer',
           'bg-gray-100 dark:bg-gray-800 group transition-all duration-300',
           'hover:shadow-xl hover:scale-[1.02]',
-          // Responsive width: full width on mobile, fixed 250px on tablet+
-          'w-full sm:w-[250px]',
+          'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background',
+          // The grid track sizes the card now (see ProjectImages), so it fills
+          // the row instead of leaving a dead gutter at wide viewports.
+          'w-full',
           // Maintain aspect ratio (3:2) instead of fixed height
           'aspect-[3/2]',
           // Minimum height to prevent too small cards
@@ -264,6 +280,7 @@ export const ImageCard = ({
             className={cn(
               // Larger touch target on mobile (24px), standard on desktop (20px)
               'h-6 w-6 sm:h-5 sm:w-5 border-2 rounded shadow-sm transition-all',
+              checkboxTouchTargetClass,
               isSelected
                 ? 'border-blue-500 bg-blue-500 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white'
                 : 'border-white bg-white/80 backdrop-blur-sm hover:bg-white data-[state=unchecked]:bg-white/80'
@@ -271,21 +288,34 @@ export const ImageCard = ({
           />
         </div>
 
-        {/* Top action buttons */}
+        {/* Top action buttons.
+            Reveal-on-hover hid this permanently on touch devices, where no
+            pointer ever enters the card — deleting an image was simply
+            impossible from the grid on a phone. Below `sm` it is always
+            visible; from `sm` up the original hover reveal is unchanged, plus
+            a `focus-within` escape hatch so it is reachable by keyboard. */}
         <div
           className={cn(
             'absolute top-2 right-2 flex gap-1 transition-all duration-300',
-            isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
+            'opacity-100 translate-y-0',
+            'sm:-translate-y-2 sm:opacity-0 sm:focus-within:translate-y-0 sm:focus-within:opacity-100',
+            isHovered && 'sm:translate-y-0 sm:opacity-100'
           )}
           style={{ zIndex: 15 }}
         >
           <Button
             size="icon"
             variant="destructive"
-            className="h-8 w-8 bg-red-500/90 hover:bg-red-500"
+            aria-label={String(t('common.delete'))}
+            className="h-9 w-9 bg-red-500/90 shadow-sm hover:bg-red-500 sm:h-8 sm:w-8"
+            disabled={isDeleting}
             onClick={handleDelete}
           >
-            <Trash2 className="h-4 w-4" />
+            {isDeleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
           </Button>
         </div>
 
@@ -302,9 +332,16 @@ export const ImageCard = ({
             {image.name ? image.name.normalize('NFC') : t('common.image')}
           </h3>
 
-          {/* Date and status */}
-          <div className="flex items-center justify-between">
-            <p className="text-xs opacity-90">
+          {/* Date and status.
+              The card is a fixed ~250px track, so `dd.MM.yyyy HH:mm` plus a
+              translated status label ("Bez segmentace", "Keine Segmentierung")
+              does not fit on one line. It used to wrap *inside* both elements,
+              which broke the timestamp across two lines and turned the badge
+              into a lumpy two-line pill overlapping the filename. Wrapping as
+              whole units instead keeps each readable, and the badge drops to
+              its own line only in the languages that actually need it. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <p className="whitespace-nowrap text-[11px] leading-4 opacity-90">
               {image.updatedAt &&
                 format(new Date(image.updatedAt), 'dd.MM.yyyy HH:mm')}
             </p>
@@ -312,12 +349,15 @@ export const ImageCard = ({
             {/* Status badge */}
             <Badge
               className={cn(
-                'flex items-center gap-1 text-xs',
+                'flex shrink-0 items-center gap-1 whitespace-nowrap px-2 py-0 text-[11px] font-medium leading-5',
                 statusInfo.className
               )}
             >
               <StatusIcon
-                className={cn('h-3 w-3', statusInfo.animate && 'animate-spin')}
+                className={cn(
+                  'h-3 w-3 shrink-0',
+                  statusInfo.animate && 'animate-spin'
+                )}
               />
               {statusInfo.label}
             </Badge>

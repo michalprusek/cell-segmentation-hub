@@ -16,7 +16,9 @@ import { cn } from '@/lib/utils';
 
 interface ProjectImagesProps {
   images: ProjectImage[];
-  onDelete: (imageId: string) => void;
+  /** Resolves when the delete round-trip settles; the card/row uses that to
+   *  render a pending state. */
+  onDelete: (imageId: string) => void | Promise<void>;
   onOpen: (imageId: string) => void;
   viewMode: 'grid' | 'list';
   currentPage?: number;
@@ -51,20 +53,20 @@ const ProjectImages = ({
     if (viewMode === 'grid') {
       return (
         <motion.div
+          // Pure CSS auto-fill. The previous version read `window.innerWidth`
+          // during render with no resize listener, so rotating a phone or
+          // dragging a window across 640px left the stale template applied
+          // (fixed 250px tracks on a 360px screen, or a single column on a
+          // desktop) until some unrelated re-render happened to fix it. The
+          // inline style also outranked the `grid-cols-1` mobile fallback, so
+          // that fallback was dead whenever the page first rendered wide.
+          // `minmax(220px, 1fr)` also lets cards absorb the leftover width
+          // instead of leaving a ragged gutter on the right at 1440px.
           className={cn(
             'grid gap-4',
-            // Responsive grid: 1 column on mobile, auto-fill on tablet+
-            'grid-cols-1 sm:grid',
-            'sm:justify-items-start'
+            'grid-cols-1',
+            'sm:[grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]'
           )}
-          style={{
-            // Use auto-fill for constant gaps on tablet+ - doesn't stretch items
-            // On mobile, grid-cols-1 takes precedence
-            gridTemplateColumns:
-              window.innerWidth >= 640
-                ? 'repeat(auto-fill, minmax(250px, 250px))'
-                : undefined,
-          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -110,10 +112,12 @@ const ProjectImages = ({
     <div className="space-y-6">
       {renderImages()}
 
-      {/* Pagination controls */}
+      {/* Pagination controls.
+          `overflow-x-auto` keeps a long page list from widening the whole
+          document at 360px — the row itself scrolls instead. */}
       {totalPages && totalPages > 1 && pageNumbers && (
         <nav
-          className="flex justify-center"
+          className="flex justify-center overflow-x-auto"
           role="navigation"
           aria-label="Pagination"
         >

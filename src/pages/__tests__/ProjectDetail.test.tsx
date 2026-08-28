@@ -647,12 +647,15 @@ describe('ProjectDetail page', () => {
   // =========================================================================
 
   describe('Loading & empty states', () => {
-    it('shows spinner and hides gallery/empty-state while loading', () => {
+    it('shows a skeleton grid and hides gallery/empty-state while loading', () => {
       wireHooks([makeImage()], { loading: true });
       renderPage();
 
-      // Loader2 renders as an svg with animate-spin
-      expect(document.querySelector('.animate-spin')).toBeTruthy();
+      // A skeleton grid replaced the lone centred spinner: it holds the
+      // layout and shows how much is coming, so the page does not jump when
+      // the images arrive. Skeleton renders as `.animate-pulse`.
+      const shimmers = document.querySelectorAll('.animate-pulse');
+      expect(shimmers.length).toBeGreaterThan(0);
       expect(screen.queryByTestId('project-images')).toBeNull();
       expect(screen.queryByTestId('empty-state')).toBeNull();
     });
