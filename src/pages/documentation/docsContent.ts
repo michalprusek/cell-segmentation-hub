@@ -150,6 +150,7 @@ export function buildDocsSections(t: Translate): DocsSection[] {
             'sperm',
             'microtubules',
             'microcapsule',
+            'neurite',
           ].map(key => ({
             title: s(`docs.projectTypes.types.${key}.name`),
             lines: [
@@ -317,6 +318,7 @@ export function buildDocsSections(t: Translate): DocsSection[] {
             'sperm',
             'microtubule',
             'microcapsule',
+            'neuriteSoma',
           ].map(key => ({
             title: s(`docs.modelSelection.models.${key}.name`),
             lines: [
@@ -636,6 +638,10 @@ export function buildDocsSections(t: Translate): DocsSection[] {
             [
               s('docs.projectTypes.types.microcapsule.name'),
               s('docs.exportFeatures.metricsTable.microcapsule'),
+            ],
+            [
+              s('docs.projectTypes.types.neurite.name'),
+              s('docs.exportFeatures.metricsTable.neurite'),
             ],
           ],
         },

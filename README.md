@@ -1,6 +1,6 @@
 # SpheroSeg - Cell Segmentation Hub
 
-Advanced cell and sperm segmentation platform powered by deep learning. Full-stack system with React frontend, Node.js backend, and Python ML microservice supporting 4 AI models with real-time processing.
+Microscopy segmentation and measurement platform powered by deep learning. Full-stack system with a React frontend, a Node.js backend and a Python ML microservice, running eleven AI models across seven project types with real-time processing.
 
 > **Resources**: [Dataset, Paper & Supplementary Materials](https://staff.utia.cas.cz/novozada/spheroseg/)
 
@@ -34,7 +34,7 @@ All services start automatically:
 
 ## Key Features
 
-- **4 AI Models** for segmentation: HRNet, CBAM-ResUNet, U-Net, Sperm Morphology
+- **11 AI Models** across **7 project types**: spheroids (5 models), disintegrating spheroids, wound healing, sperm morphology, microtubules, microcapsules, neurites & somas
 - **Interactive Polygon Editor** with undo/redo, vertex editing, polygon slicing, hole detection
 - **Sperm Morphology Analysis** with skeleton extraction for head/midpiece/tail measurement
 - **Batch Processing** up to 10,000 images per project
@@ -56,7 +56,7 @@ All services start automatically:
 │  :3000           │ │  :3001           │ │  :8000           │
 │  Vite + React 18 │ │  Express + Prisma│ │  FastAPI + PyTorch│
 │  shadcn/ui       │ │  Socket.io       │ │  CUDA / CPU      │
-│  TanStack Query  │ │  JWT Auth        │ │  4 Models        │
+│  TanStack Query  │ │  JWT Auth        │ │  11 Models       │
 └──────────────────┘ └────────┬─────────┘ └──────────────────┘
                               │
                     ┌─────────┼─────────┐
@@ -70,25 +70,38 @@ All services start automatically:
 
 ## Tech Stack
 
-| Layer      | Technology                                                     |
-| ---------- | -------------------------------------------------------------- |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)    |
-| Backend    | Node.js + Express + TypeScript + Prisma ORM                    |
-| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm) |
-| Database   | SQLite (dev) / PostgreSQL (prod)                               |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff            |
-| Auth       | JWT access + refresh tokens                                    |
-| i18n       | 6 languages via i18next (EN, CS, ES, DE, FR, ZH)               |
-| Deployment | Docker + Docker Compose + Nginx                                |
+| Layer      | Technology                                                               |
+| ---------- | ------------------------------------------------------------------------ |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)              |
+| Backend    | Node.js + Express + TypeScript + Prisma ORM                              |
+| ML Service | Python + FastAPI + PyTorch (11 models — see docs/reference/ml-models.md) |
+| Database   | SQLite (dev) / PostgreSQL (prod)                                         |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff                      |
+| Auth       | JWT access + refresh tokens                                              |
+| i18n       | 6 languages via i18next (EN, CS, ES, DE, FR, ZH)                         |
+| Deployment | Docker + Docker Compose + Nginx                                          |
 
 ## AI Models
 
-| Model            | Inference   | Throughput | Use Case                                   |
-| ---------------- | ----------- | ---------- | ------------------------------------------ |
-| HRNet            | ~200ms      | 4.9 img/s  | Balanced speed and accuracy                |
-| CBAM-ResUNet     | ~400ms      | 2.7 img/s  | Highest accuracy with attention mechanisms |
-| U-Net (SpheroHQ) | ~200ms      | 5.5 img/s  | Fastest, optimized for real-time           |
-| Sperm            | specialized | varies     | Morphology with skeleton extraction        |
+Eleven models, each locked to the project types it was trained for. Only
+standard spheroid projects offer a choice; every other type has exactly one.
+
+| Model                   | Project type      | Inference | Throughput |
+| ----------------------- | ----------------- | --------- | ---------- |
+| HRNet (Balanced)        | spheroid          | ~0.20 s   | 4.9 img/s  |
+| CBAM-ResUNet (Precise)  | spheroid          | ~0.38 s   | 2.7 img/s  |
+| UNet (Fastest)          | spheroid          | ~0.18 s   | 5.5 img/s  |
+| SegFormer               | spheroid          | ~0.20 s   | 5.0 img/s  |
+| Mamba-UNet              | spheroid          | ~0.24 s   | 4.2 img/s  |
+| Spheroid Disintegration | spheroid_invasive | ~0.70 s   | 1.5 img/s  |
+| Wound Healing           | wound             | ~0.03 s   | 35 img/s   |
+| Sperm Morphology        | sperm             | ~0.30 s   | 3.3 img/s  |
+| Microtubule (v5H)       | microtubules      | ~4.5 s    | 0.22 img/s |
+| Microcapsule            | microcapsule      | ~0.30 s   | 3.0 img/s  |
+| Neurite / Soma          | neurite           | ~12 s     | 0.08 img/s |
+
+Full detail — architecture, training data, thresholds and known limits — in
+[docs/reference/ml-models.md](docs/reference/ml-models.md).
 
 Performance measured on NVIDIA GPU. CPU fallback is supported.
 
@@ -187,7 +200,7 @@ search box.
 | Topic                       | Link                                                                     |
 | --------------------------- | ------------------------------------------------------------------------ |
 | User guide                  | [docs/guides/user-guide.md](docs/guides/user-guide.md)                   |
-| Project types (all six)     | [docs/guides/project-types.md](docs/guides/project-types.md)             |
+| Project types (all seven)   | [docs/guides/project-types.md](docs/guides/project-types.md)             |
 | Uploading data              | [docs/guides/uploading-data.md](docs/guides/uploading-data.md)           |
 | Videos, frames and channels | [docs/guides/videos-and-channels.md](docs/guides/videos-and-channels.md) |
 | Segmentation editor         | [docs/guides/segmentation-editor.md](docs/guides/segmentation-editor.md) |
@@ -196,21 +209,21 @@ search box.
 
 ### For developers
 
-| Topic                 | Link                                                                       |
-| --------------------- | -------------------------------------------------------------------------- |
-| Architecture Overview | [docs/architecture/README.md](docs/architecture/README.md)                 |
-| Frontend Architecture | [docs/architecture/frontend.md](docs/architecture/frontend.md)             |
-| Backend Architecture  | [docs/architecture/backend.md](docs/architecture/backend.md)               |
-| ML Service            | [docs/architecture/ml-service.md](docs/architecture/ml-service.md)         |
-| ML Models (all ten)   | [docs/reference/ml-models.md](docs/reference/ml-models.md)                 |
-| Metrics reference     | [docs/reference/metrics.md](docs/reference/metrics.md)                     |
-| Database Schema       | [docs/reference/database-schema.md](docs/reference/database-schema.md)     |
-| API Reference         | [docs/api/README.md](docs/api/README.md)                                   |
-| Contributing          | [docs/development/contributing.md](docs/development/contributing.md)       |
-| Testing Guide         | [docs/testing-guide.md](docs/testing-guide.md)                             |
-| i18n Guide            | [docs/i18n-guide.md](docs/i18n-guide.md)                                   |
-| Getting Started       | [docs/development/getting-started.md](docs/development/getting-started.md) |
-| Deployment            | [docs/deployment/README.md](docs/deployment/README.md)                     |
+| Topic                  | Link                                                                       |
+| ---------------------- | -------------------------------------------------------------------------- |
+| Architecture Overview  | [docs/architecture/README.md](docs/architecture/README.md)                 |
+| Frontend Architecture  | [docs/architecture/frontend.md](docs/architecture/frontend.md)             |
+| Backend Architecture   | [docs/architecture/backend.md](docs/architecture/backend.md)               |
+| ML Service             | [docs/architecture/ml-service.md](docs/architecture/ml-service.md)         |
+| ML Models (all eleven) | [docs/reference/ml-models.md](docs/reference/ml-models.md)                 |
+| Metrics reference      | [docs/reference/metrics.md](docs/reference/metrics.md)                     |
+| Database Schema        | [docs/reference/database-schema.md](docs/reference/database-schema.md)     |
+| API Reference          | [docs/api/README.md](docs/api/README.md)                                   |
+| Contributing           | [docs/development/contributing.md](docs/development/contributing.md)       |
+| Testing Guide          | [docs/testing-guide.md](docs/testing-guide.md)                             |
+| i18n Guide             | [docs/i18n-guide.md](docs/i18n-guide.md)                                   |
+| Getting Started        | [docs/development/getting-started.md](docs/development/getting-started.md) |
+| Deployment             | [docs/deployment/README.md](docs/deployment/README.md)                     |
 
 ## About
 

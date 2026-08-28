@@ -95,7 +95,7 @@ export default {
         'Segmentación de imagen biomédica · ÚTIA, Academia Checa de Ciencias',
       title: 'Segmentación para cada muestra que usted captura.',
       subtitle:
-        'Esferoides y su desintegración, heridas de ensayo de rayado, morfología espermática, filamentos de microtúbulos, microcápsulas: un modelo entrenado para cada tipo, un único editor para todos y exportaciones que ImageJ, COCO y YOLO ya entienden.',
+        'Esferoides y su desintegración, heridas de ensayo de rayado, morfología espermática, filamentos de microtúbulos, microcápsulas, neuronas y sus prolongaciones: un modelo entrenado para cada tipo, un único editor para todos y exportaciones que ImageJ, COCO y YOLO ya entienden.',
       getStarted: 'Comenzar',
       learnMore: 'Ver qué admite',
     },
@@ -137,6 +137,12 @@ export default {
           'Campo claro, 1280 × 1024. Dos cápsulas completas están delineadas en rojo: son las que reciben área, perímetro y compacidad. Las cápsulas que corta el borde del fotograma no llevan contorno rojo; el modelo las marca y las estadísticas las dejan fuera.',
         alt: 'Micrografía de campo claro de microcápsulas, las dos completas delineadas en rojo y las cortadas por el borde del fotograma sin contorno.',
       },
+      neurite: {
+        label: 'Neuritas y somas',
+        detail:
+          'Fluorescencia confocal, canal de tubulina: un recorte de 1400 × 1400 de un fotograma de 6657 × 6664. Cada neurona se divide en dos: el cuerpo celular en magenta y cada prolongación en cian, de modo que el recuento de somas y la longitud de las prolongaciones se miden por separado y no como una sola mancha.',
+        alt: 'Micrografía de fluorescencia confocal de neuronas en cultivo, con cada cuerpo celular delineado en magenta y las prolongaciones que salen de él delineadas en cian.',
+      },
     },
     about: {
       badge: 'Quién lo construye',
@@ -146,7 +152,7 @@ export default {
       description2:
         'Este proyecto es una colaboración con el grupo de Ing. Silvie Rimpelová, Ph.D. del Instituto de Bioquímica y Microbiología de la UCT Praga (VŠCHT Praha).',
       description3:
-        'Empezó con esferoides tumorales y creció con los experimentos que trajeron nuestros colaboradores: ensayos de desintegración, heridas de ensayo de rayado, morfología espermática, series temporales de microtúbulos y microcápsulas. Cada tipo de muestra tiene su propio modelo entrenado, sus propias métricas y su propia exportación, y detrás de todos ellos, un único editor.',
+        'Empezó con esferoides tumorales y creció con los experimentos que trajeron nuestros colaboradores: ensayos de desintegración, heridas de ensayo de rayado, morfología espermática, series temporales de microtúbulos, microcápsulas y neuronas en cultivo. Cada tipo de muestra tiene su propio modelo entrenado, sus propias métricas y su propia exportación, y detrás de todos ellos, un único editor.',
       contactText: 'Para consultas, contáctenos en',
     },
     acknowledgments: {
@@ -1447,7 +1453,7 @@ export default {
     badge: 'Documentación',
     title: 'Documentación de SpheroSeg',
     subtitle:
-      'Todo lo que hace la plataforma, para los seis tipos de proyecto — con búsqueda',
+      'Todo lo que hace la plataforma, para los siete tipos de proyecto — con búsqueda',
     backTo: 'Volver a {{page}}',
 
     // Búsqueda
@@ -1484,11 +1490,11 @@ export default {
       title: 'Introducción',
       whatIs: '¿Qué es SpheroSeg?',
       description:
-        'SpheroSeg es una plataforma para la segmentación y medición asistidas por IA de imágenes de microscopía y vídeos de lapso de tiempo. Ofrece seis tipos de proyecto respaldados por diez modelos de segmentación, un editor de polígonos y polilíneas, seguimiento de microtúbulos entre fotogramas y una canalización de exportación por lotes.',
+        'SpheroSeg es una plataforma para la segmentación y medición asistidas por IA de imágenes de microscopía y vídeos de lapso de tiempo. Ofrece siete tipos de proyecto respaldados por once modelos de segmentación, un editor de polígonos y polilíneas, seguimiento de microtúbulos entre fotogramas y una canalización de exportación por lotes.',
       developedBy:
         'La plataforma fue desarrollada por Bc. Michal Průšek en la Facultad de Ciencias Nucleares e Ingeniería Física de la Universidad Técnica Checa de Praga, bajo la supervisión del Ing. Adam Novozámský, Ph.D., en colaboración con investigadores del Instituto de Bioquímica y Microbiología de la UCT de Praga.',
       addresses:
-        'Empezó con el difícil problema de delimitar los bordes de los esferoides en microscopía y hoy abarca también esferoides en disgregación, ensayos de cicatrización, morfología de espermatozoides, lapsos de tiempo de microtúbulos y microcápsulas, cada uno con su modelo, sus medidas y su formato de exportación.',
+        'Empezó con el difícil problema de delimitar los bordes de los esferoides en microscopía y hoy abarca también esferoides en disgregación, ensayos de cicatrización, morfología de espermatozoides, lapsos de tiempo de microtúbulos, microcápsulas y neuronas en cultivo, cada uno con su modelo, sus medidas y su formato de exportación.',
     },
 
     // Primeros pasos
@@ -1562,6 +1568,13 @@ export default {
             'Para: microcápsulas redondas en campo claro, incluidas las que se tocan entre sí.',
           output:
             'Resultado: un polígono cerrado por cápsula. Las cápsulas cortadas por el borde de la imagen quedan fuera de las métricas.',
+        },
+        neurite: {
+          name: 'Neuritas y somas',
+          bestFor:
+            'Para: neuronas en cultivo en microscopía de fluorescencia, leídas del canal de tubulina. La pregunta es cuánto de la célula es cuerpo y cuánto es prolongación.',
+          output:
+            'Salida: polígonos cerrados en dos clases — soma (el cuerpo celular) y neurita (las prolongaciones) — dibujados en magenta y cian.',
         },
       },
       note: 'Elija el tipo antes de subir los datos.',
@@ -1654,7 +1667,7 @@ export default {
     modelSelection: {
       title: 'Modelos',
       description:
-        'Diez modelos, cada uno vinculado a los tipos de proyecto para los que fue entrenado. El selector solo ofrece modelos compatibles, y solo los proyectos de esferoides estándar tienen elección real: los demás tipos tienen exactamente uno.',
+        'Once modelos, cada uno vinculado a los tipos de proyecto para los que fue entrenado. El selector solo ofrece modelos compatibles, y solo los proyectos de esferoides estándar tienen elección real: los demás tipos tienen exactamente uno.',
       spheroidModels: 'Modelos de esferoides: elija uno',
       specialisedModels: 'Modelos especializados: uno por tipo de proyecto',
       models: {
@@ -1733,6 +1746,15 @@ export default {
           bestFor: 'Lo usan: los proyectos de microcápsulas.',
           description:
             'Una U-Net compacta destilada de Meta SAM 3, con una divisoria de aguas para separar cápsulas en contacto. Las cápsulas cortadas por el borde se marcan y quedan fuera de las métricas.',
+        },
+        neuriteSoma: {
+          name: 'Neurita / soma',
+          inferenceTime:
+            'Unos 12 s para un fotograma de 2048 × 2048 · sin umbral: la decisión es un argmax',
+          bestFor:
+            'Lo usan: los proyectos de neuritas y somas. Solo fluorescencia, canal de tubulina.',
+          description:
+            'Un conjunto de tres pliegues de nnU-Net v2 ResEnc-M, promediados en el espacio de logits, con aumento por reflexión en inferencia y un término topológico clDice que mantiene conectadas las prolongaciones finas en lugar de fragmentarlas. Dice en datos reservados: 0,832 neurita / 0,915 soma. Entrenado con datos confocales de Leica a unos 0,180 µm/px; a la mitad de ese tamaño de píxel cada soma suele volver partido en dos, así que valide primero los recuentos de somas.',
         },
       },
       howToSelect: 'Elegir un modelo',
@@ -1956,6 +1978,8 @@ export default {
           'Microtubule Metrics + Channel Totals: longitud e intensidad por canal, una fila por fotograma, filamento y canal',
         microcapsule:
           'Microcapsule Metrics + Summary: una fila por cápsula completa; las cortadas por el borde se excluyen',
+        neurite:
+          'Polygon Metrics + Summary — el mismo informe por forma que reciben los proyectos de esferoides estándar, una fila por polígono de neurita o soma',
       },
       scaleTitle: 'Tamaño de píxel y unidades',
       scaleText:
@@ -2478,7 +2502,7 @@ export default {
   footer: {
     appName: 'SpheroSeg',
     description:
-      'Plataforma de segmentación y análisis de imágenes de microscopía para investigadores biomédicos: esferoides, cicatrización de heridas, espermatozoides, microcápsulas y microtúbulos, con herramientas impulsadas por IA desde la imagen hasta la medición.',
+      'Plataforma de segmentación y análisis de imágenes de microscopía para investigadores biomédicos: esferoides, cicatrización de heridas, espermatozoides, microcápsulas, microtúbulos y neuronas, con herramientas impulsadas por IA desde la imagen hasta la medición.',
     contact: 'Contacto',
     institution: 'Institución',
     institutionName: 'ÚTIA AV ČR',

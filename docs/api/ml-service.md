@@ -45,8 +45,8 @@ documents it for people debugging the pipeline or extending it.
 
 Returns the polygons, the model used, and timing.
 
-**Three models ignore `threshold` on purpose**, because their cut is calibrated
-differently from the generic one:
+**Four models ignore `threshold` on purpose**, because their cut is calibrated
+differently from the generic one — or does not exist:
 
 - **`sperm`** uses its own mask threshold (0.3) and score threshold (0.95);
 - **`wound`** does its own grayscale pre-processing;
@@ -55,8 +55,12 @@ differently from the generic one:
   is not even expressible through some callers' constraints, so forwarding a
   user value would either cut a very confident foreground at 0.5 and flood the
   instancer with noise, or fail validation.
+- **`neurite_soma`** has no threshold at all: background / neurite / soma is an
+  **argmax** over averaged logits, so there is no probability cut to move. The
+  request value is accepted and echoed in the response, and then ignored.
 
-Microtubule inference is additionally serialised behind a lock.
+Microtubule and neurite/soma inference are additionally serialised behind a
+lock.
 
 ### `POST /api/v1/batch-segment`
 
