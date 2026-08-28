@@ -36,7 +36,6 @@
     "security:audit": "npm audit --production",
     "test:critical": "vitest run --run src/lib/__tests__/api.test.ts src/contexts/__tests__/AuthContext.test.tsx",
     "test:performance": "vitest run --run tests/performance/*.spec.ts --reporter=verbose",
-    "test:parallel": "vitest run --run --threads --minThreads=2 --maxThreads=4",
     "test:watch:focused": "vitest --watch --testNamePattern"
   },
   "dependencies": {
