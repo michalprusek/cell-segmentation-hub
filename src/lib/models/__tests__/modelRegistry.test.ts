@@ -12,7 +12,7 @@ import { getAllLocalizedModels } from '@/lib/modelUtils';
 
 /**
  * SSOT contract tests for the frontend model registry. These assert the
- * canonical 9-model set, declaration order, the verified project-type
+ * canonical 11-model set, declaration order, the verified project-type
  * compatibility matrix, and the full derived `ModelInfo` shape — guarding
  * against drift between the registry and what consumers expect.
  */
@@ -28,6 +28,7 @@ const CANONICAL_IDS: ModelType[] = [
   'wound',
   'microtubule',
   'microcapsule',
+  'neurite_soma',
 ];
 
 const MODEL_INFO_KEYS: Array<keyof ModelInfo> = [
@@ -42,13 +43,13 @@ const MODEL_INFO_KEYS: Array<keyof ModelInfo> = [
 ];
 
 describe('model registry SSOT', () => {
-  it('registry keys are exactly the canonical 10 models, in order', () => {
+  it('registry keys are exactly the canonical 11 models, in order', () => {
     expect(Object.keys(MODEL_REGISTRY)).toEqual(CANONICAL_IDS);
     expect(ALL_MODEL_IDS).toEqual(CANONICAL_IDS);
-    expect(ALL_MODEL_IDS).toHaveLength(10);
+    expect(ALL_MODEL_IDS).toHaveLength(11);
   });
 
-  it('getAllLocalizedModels() returns the 10 models in display order', () => {
+  it('getAllLocalizedModels() returns the 11 models in display order', () => {
     // Passthrough t returns the key itself; we only assert id ordering here.
     const models = getAllLocalizedModels((k: string) => k);
     expect(models.map(m => m.id)).toEqual(CANONICAL_IDS);
@@ -68,6 +69,7 @@ describe('model registry SSOT', () => {
       sperm: ['sperm'],
       microtubules: ['microtubule'],
       microcapsule: ['microcapsule'],
+      neurite: ['neurite_soma'],
     });
   });
 
@@ -253,6 +255,22 @@ describe('model registry SSOT', () => {
           batchSize: 1,
         },
       },
+      neurite_soma: {
+        id: 'neurite_soma',
+        name: 'Neurite / Soma',
+        displayName: 'Neurite / Soma (nnU-Net ResEnc-M)',
+        description:
+          'Two-class semantic segmentation of neurons in fluorescence microscopy — neurite (processes) and soma (cell body) — from the tubulin channel alone. nnU-Net v2 ResEnc-M, 2D, 3-fold ensemble averaged in logit space with mirroring TTA and a clDice topology term on the neurite class. Held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at ~0.180 um/px; validate soma counts before trusting them on a different pixel size.',
+        size: 'large',
+        defaultThreshold: 0.5,
+        category: 'neurite',
+        performance: {
+          avgTimePerImage: 12,
+          throughput: 0.083,
+          p95Latency: 120,
+          batchSize: 1,
+        },
+      },
     });
   });
 
@@ -268,6 +286,7 @@ describe('model registry SSOT', () => {
       wound: 'wound',
       microtubule: 'microtubule',
       microcapsule: 'microcapsule',
+      neurite_soma: 'neurite_soma',
     });
   });
 });

@@ -25,7 +25,8 @@ export type ProjectTypeKey =
   | 'wound'
   | 'sperm'
   | 'microtubules'
-  | 'microcapsule';
+  | 'microcapsule'
+  | 'neurite';
 
 interface BackendModelSpec {
   /** Project types whose picker offers (and whose worker accepts) this model. */
@@ -47,6 +48,7 @@ export const MODEL_REGISTRY = {
   wound: { compatibleProjectTypes: ['wound'] },
   microtubule: { compatibleProjectTypes: ['microtubules'] },
   microcapsule: { compatibleProjectTypes: ['microcapsule'] },
+  neurite_soma: { compatibleProjectTypes: ['neurite'] },
 } as const satisfies Record<string, BackendModelSpec>;
 
 /** All known model identifiers — derived, so a typo or a removed model is a
