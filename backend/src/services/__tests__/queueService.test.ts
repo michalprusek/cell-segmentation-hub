@@ -929,9 +929,12 @@ describe('processBatch', () => {
         data: expect.objectContaining({ status: 'queued', retryCount: 1 }),
       })
     );
+    // 'queued', not 'no_segmentation': the row really is queued again, and the
+    // WS event next to this update already said 'queued'. Reporting "no
+    // segmentation" made a pending retry look like a finished, empty run.
     expect(imageServiceMock.updateSegmentationStatus).toHaveBeenCalledWith(
       'img-1',
-      'no_segmentation',
+      'queued',
       'user-id'
     );
   });
@@ -966,6 +969,287 @@ describe('processBatch', () => {
     expect(wsServiceMock.emitSegmentationUpdate).toHaveBeenCalledWith(
       'user-id',
       expect.objectContaining({ status: 'failed' })
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTHING MAY STALL IN 'processing'
+//
+// Every one of these encodes a way an item used to be left with
+// segmentationQueue.status = 'processing' AND image.segmentationStatus =
+// 'processing' and nothing left running to move it — the "stuck in
+// processing" the user reported. They are 2-item batches on purpose: the
+// stalls all come from one item's fate leaking into another's.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("processBatch — nothing may stall in 'processing'", () => {
+  const item1 = () => makeQueueEntry({ id: 'qe-1', imageId: 'img-1' });
+  const item2 = () => makeQueueEntry({ id: 'qe-2', imageId: 'img-2' });
+
+  // A real hrnet-shaped result: one closed polygon.
+  const polygonResult = () => ({
+    success: true,
+    polygons: [
+      {
+        id: 'p1',
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 0, y: 10 },
+        ],
+        type: 'external',
+      },
+    ],
+    polylines: [],
+    model_used: 'hrnet',
+    threshold_used: 0.5,
+    confidence: 0.9,
+    processing_time: 120,
+    image_size: { width: 100, height: 100 },
+  });
+
+  const stubBatchPlumbing = () => {
+    imageServiceMock.getImageById.mockImplementation(async (id: string) => ({
+      id,
+      originalPath: `${id}.png`,
+      width: 100,
+      height: 100,
+      mimeType: 'image/png',
+    }));
+    imageServiceMock.updateSegmentationStatus.mockResolvedValue(undefined);
+    segmentationServiceMock.saveSegmentationResults.mockResolvedValue(
+      undefined
+    );
+    prismaMock.segmentationQueue.updateMany.mockResolvedValue({ count: 2 });
+    prismaMock.image.updateMany.mockResolvedValue({ count: 2 });
+    prismaMock.segmentationQueue.count.mockResolvedValue(0);
+    prismaMock.segmentationQueue.delete.mockResolvedValue(undefined);
+    prismaMock.segmentationQueue.update.mockResolvedValue(undefined);
+    prismaMock.image.findUnique.mockResolvedValue({ parentVideoId: null });
+  };
+
+  const statusesFor = (imageId: string): string[] =>
+    imageServiceMock.updateSegmentationStatus.mock.calls
+      .filter((call: unknown[]) => call[0] === imageId)
+      .map((call: unknown[]) => call[1] as string);
+
+  it('settles an item the ML service returned no result for', async () => {
+    stubBatchPlumbing();
+    // One result for a two-item batch: a truncated / misaligned response.
+    segmentationServiceMock.requestBatchSegmentation.mockResolvedValueOnce([
+      polygonResult(),
+    ]);
+
+    await service.processBatch([item1(), item2()]);
+
+    // img-1 finished normally.
+    expect(statusesFor('img-1')).toContain('segmented');
+    // img-2 must not be abandoned: it used to be skipped with a log line and
+    // no status write at all, leaving both rows on 'processing' forever.
+    expect(prismaMock.segmentationQueue.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'qe-2' },
+        data: expect.objectContaining({ status: 'queued', retryCount: 1 }),
+      })
+    );
+    expect(statusesFor('img-2')).toContain('queued');
+  });
+
+  it('keeps processing the rest of the batch after one item throws', async () => {
+    stubBatchPlumbing();
+    segmentationServiceMock.requestBatchSegmentation.mockResolvedValueOnce([
+      polygonResult(),
+      polygonResult(),
+    ]);
+    // The first item's save blows up (disk full, thumbnail failure, ...).
+    segmentationServiceMock.saveSegmentationResults
+      .mockRejectedValueOnce(new Error('save failed'))
+      .mockResolvedValue(undefined);
+
+    await service.processBatch([item1(), item2()]);
+
+    // The failing item is requeued...
+    expect(statusesFor('img-1')).toContain('queued');
+    // ...and — the actual regression — the item AFTER it still gets its own
+    // result. It used to be skipped entirely by the throw unwinding the loop.
+    expect(statusesFor('img-2')).toContain('segmented');
+    expect(prismaMock.segmentationQueue.delete).toHaveBeenCalledWith({
+      where: { id: 'qe-2' },
+    });
+  });
+
+  it('does not roll a finished item back when the trailing work fails', async () => {
+    stubBatchPlumbing();
+    segmentationServiceMock.requestBatchSegmentation.mockResolvedValueOnce([
+      polygonResult(),
+      polygonResult(),
+    ]);
+    // Both items complete and their rows are removed; the queue-stats read
+    // afterwards fails, which lands in the batch-level catch.
+    prismaMock.segmentationQueue.count
+      .mockResolvedValueOnce(0) // isLastBatch probe
+      .mockRejectedValue(new Error('stats query failed'));
+
+    await service.processBatch([item1(), item2()]);
+
+    // Recovery must skip items that already reached a terminal state. It used
+    // to requeue them, overwriting a saved result with 'no_segmentation'.
+    expect(statusesFor('img-1')).toEqual(['segmented']);
+    expect(statusesFor('img-2')).toEqual(['segmented']);
+    expect(prismaMock.segmentationQueue.update).not.toHaveBeenCalled();
+  });
+
+  it('recovers every item even when one queue row is already gone', async () => {
+    stubBatchPlumbing();
+    segmentationServiceMock.requestBatchSegmentation.mockRejectedValueOnce(
+      new Error('ML service unavailable')
+    );
+    // Prisma P2025 for the first row — it vanished under a concurrent cancel.
+    prismaMock.segmentationQueue.update
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Record to update not found'), {
+          code: 'P2025',
+        })
+      )
+      .mockResolvedValue(undefined);
+
+    await service.processBatch([item1(), item2()]);
+
+    // The P2025 used to escape the recovery loop, so every item after the
+    // first stayed on 'processing'.
+    expect(prismaMock.segmentationQueue.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'qe-2' } })
+    );
+    expect(statusesFor('img-2')).toContain('queued');
+
+    // img-1 has no row left, so it cannot be 'queued' — nothing would ever
+    // run that retry. It is repaired only if it is still stuck on
+    // 'processing', which leaves a concurrent cancel's status alone.
+    expect(statusesFor('img-1')).toEqual([]);
+    expect(prismaMock.image.updateMany).toHaveBeenCalledWith({
+      where: { id: 'img-1', segmentationStatus: 'processing' },
+      data: { segmentationStatus: 'failed' },
+    });
+  });
+
+  it('treats an explicit ML failure as a failure, not as an empty result', async () => {
+    stubBatchPlumbing();
+    segmentationServiceMock.requestBatchSegmentation.mockResolvedValueOnce([
+      {
+        success: false,
+        polygons: [],
+        model_used: 'hrnet',
+        threshold_used: 0.5,
+        confidence: null,
+        processing_time: null,
+        image_size: { width: 0, height: 0 },
+        error: 'Image skipped or invalid',
+      },
+      polygonResult(),
+    ]);
+
+    await service.processBatch([item1(), item2()]);
+
+    // `success: false` carries empty shapes because nothing ran. Reading that
+    // as "the model found nothing" wrote a clean `no_segmentation` and dropped
+    // the queue row, so the image was never retried.
+    expect(statusesFor('img-1')).not.toContain('no_segmentation');
+    expect(statusesFor('img-1')).toContain('queued');
+    expect(prismaMock.segmentationQueue.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'qe-1' },
+        data: expect.objectContaining({
+          status: 'queued',
+          error: 'Image skipped or invalid',
+        }),
+      })
+    );
+    expect(statusesFor('img-2')).toContain('segmented');
+  });
+
+  it('accepts a genuinely empty result and clears it out of the queue', async () => {
+    stubBatchPlumbing();
+    segmentationServiceMock.requestBatchSegmentation.mockResolvedValueOnce([
+      {
+        ...polygonResult(),
+        polygons: [],
+        polylines: [],
+      },
+      polygonResult(),
+    ]);
+
+    await service.processBatch([item1(), item2()]);
+
+    // The user's ask: an image with nothing on it is a completed run, not an
+    // error and not a stall.
+    expect(statusesFor('img-1')).toEqual(['no_segmentation']);
+    expect(
+      segmentationServiceMock.saveSegmentationResults
+    ).toHaveBeenCalledWith(
+      'img-1',
+      [],
+      'hrnet',
+      0.5,
+      expect.anything(),
+      expect.anything(),
+      100,
+      100,
+      'user-id',
+      expect.anything()
+    );
+    expect(prismaMock.segmentationQueue.delete).toHaveBeenCalledWith({
+      where: { id: 'qe-1' },
+    });
+    expect(wsServiceMock.emitSegmentationComplete).toHaveBeenCalledWith(
+      'user-id',
+      'img-1',
+      'project-id',
+      0
+    );
+  });
+
+  it('keeps the polylines of a polyline model out of the empty branch', async () => {
+    stubBatchPlumbing();
+    // Real microtubule v5H shape: polygons is empty, the detections are
+    // polylines. Losing them here marked a segmented frame no_segmentation.
+    segmentationServiceMock.requestBatchSegmentation.mockResolvedValueOnce([
+      {
+        success: true,
+        polygons: [],
+        polylines: [
+          {
+            id: 'polyline_1',
+            points: [
+              { x: 447, y: 8 },
+              { x: 465, y: 25 },
+              { x: 467, y: 25 },
+            ],
+            type: 'external',
+            class: 'microtubule',
+            geometry: 'polyline',
+            instanceId: 'mt_c1a01b00',
+            confidence: 1,
+            vertices_count: 3,
+          },
+        ],
+        model_used: 'microtubule',
+        threshold_used: 0.97,
+        confidence: 1,
+        processing_time: 4500,
+        image_size: { width: 512, height: 512 },
+      },
+      polygonResult(),
+    ]);
+
+    await service.processBatch([item1(), item2()]);
+
+    expect(statusesFor('img-1')).toEqual(['segmented']);
+    expect(wsServiceMock.emitSegmentationComplete).toHaveBeenCalledWith(
+      'user-id',
+      'img-1',
+      'project-id',
+      1
     );
   });
 });
@@ -1112,7 +1396,7 @@ describe('resetStuckItems', () => {
     expect(prismaMock.segmentationQueue.delete).not.toHaveBeenCalled();
   });
 
-  it('resets orphaned images stuck in processing with no active queue entry', async () => {
+  it('marks orphaned images stuck in processing as failed, not no_segmentation', async () => {
     prismaMock.segmentationQueue.findMany.mockResolvedValueOnce([]); // no stuck queue rows
     prismaMock.image.findMany.mockResolvedValueOnce([
       { id: 'orphan-img', project: { userId: 'orphan-user' } },
@@ -1121,12 +1405,51 @@ describe('resetStuckItems', () => {
 
     const count = await service.resetStuckItems();
 
+    // 'no_segmentation' is what a SUCCESSFUL run over a blank frame writes.
+    // Reusing it for a run that never finished made a dead worker
+    // indistinguishable from an image that genuinely has nothing on it.
     expect(imageServiceMock.updateSegmentationStatus).toHaveBeenCalledWith(
       'orphan-img',
-      'no_segmentation',
+      'failed',
       'orphan-user'
     );
     expect(count).toBe(0); // orphan handling is separate from stuck/failed counts
+  });
+
+  it('only sweeps orphaned images that have been processing past the cutoff', async () => {
+    prismaMock.segmentationQueue.findMany.mockResolvedValueOnce([]);
+    prismaMock.image.findMany.mockResolvedValueOnce([]);
+
+    await service.resetStuckItems(10);
+
+    // Without the age filter this query also matches a run that started a
+    // second ago via POST /segmentation/batch — which segments directly, with
+    // no queue row — and the sweeper would reset it out from under itself.
+    expect(prismaMock.image.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          segmentationStatus: 'processing',
+          updatedAt: { lt: expect.any(Date) },
+        }),
+      })
+    );
+  });
+
+  it('keeps a floor on the orphan cutoff even at maxProcessingMinutes = 0', async () => {
+    prismaMock.segmentationQueue.findMany.mockResolvedValueOnce([]);
+    prismaMock.image.findMany.mockResolvedValueOnce([]);
+
+    // queueWorker's deadlock path calls resetStuckItems(0), which is meant to
+    // be aggressive about QUEUE rows. Letting that cutoff reach the image sweep
+    // would put it at "now" and kill a healthy in-flight direct segmentation.
+    await service.resetStuckItems(0);
+
+    const where = prismaMock.image.findMany.mock.calls[0][0].where as {
+      updatedAt: { lt: Date };
+    };
+    expect(Date.now() - where.updatedAt.lt.getTime()).toBeGreaterThanOrEqual(
+      5 * 60 * 1000
+    );
   });
 });
 
