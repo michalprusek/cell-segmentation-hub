@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
-import { databaseMetrics } from '../monitoring/databaseMetrics';
 import { getPrismaConfig } from './prismaConfig';
 
 // Create a global variable to store Prisma client
@@ -91,9 +90,6 @@ export const disconnectDatabase = async (): Promise<void> => {
       '🔌 Shutting down enhanced database connection system...',
       'Database'
     );
-
-    // Stop metrics collection
-    databaseMetrics.stop();
 
     // Disconnect the Prisma client
     await prisma.$disconnect();

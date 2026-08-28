@@ -9,15 +9,12 @@
  *  - Enter finalize, Escape fallback, Tab / Shift+Tab mode cycling
  *  - H / ? help routing, input-field guard, onKeyDown callback
  *  - isShift / isCtrl / isAlt / isSpace modifier tracking
- *  - getShortcutForMode() pure helper and listener cleanup on unmount
+ *  - listener cleanup on unmount
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, fireEvent } from '@testing-library/react';
-import {
-  useKeyboardShortcuts,
-  getShortcutForMode,
-} from '../useKeyboardShortcuts';
+import { useKeyboardShortcuts } from '../useKeyboardShortcuts';
 import { EditMode } from '../../types';
 
 // ---------------------------------------------------------------------------
@@ -778,28 +775,6 @@ describe('useKeyboardShortcuts', () => {
 
       expect(result.current.isSpacePressed()).toBe(false);
       document.body.removeChild(input);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // getShortcutForMode – pure helper
-  // -------------------------------------------------------------------------
-
-  describe('getShortcutForMode', () => {
-    it.each([
-      [EditMode.View, 'V'],
-      [EditMode.EditVertices, 'E'],
-      [EditMode.AddPoints, 'A'],
-      [EditMode.CreatePolygon, 'N'],
-      [EditMode.CreatePolyline, 'P'],
-      [EditMode.Slice, 'S'],
-      [EditMode.DeletePolygon, 'D'],
-    ])('returns %s for EditMode.%s', (mode, expected) => {
-      expect(getShortcutForMode(mode)).toBe(expected);
-    });
-
-    it('returns empty string for an unrecognised mode', () => {
-      expect(getShortcutForMode('unknown-mode' as EditMode)).toBe('');
     });
   });
 

@@ -164,27 +164,6 @@ export function chunkFiles(files: File[], chunkSize: number): File[][] {
 }
 
 /**
- * Calculate optimal chunk size based on total files
- */
-export function calculateOptimalChunkSize(
-  totalFiles: number,
-  config: ChunkingConfig = DEFAULT_CHUNKING_CONFIG
-): number {
-  if (totalFiles <= config.chunkSize) {
-    return totalFiles;
-  }
-
-  // Calculate chunk size to minimize total chunks while staying within limits
-  const idealChunks = Math.ceil(totalFiles / config.maxConcurrentChunks);
-  const optimalChunkSize = Math.min(
-    Math.ceil(totalFiles / idealChunks),
-    config.chunkSize
-  );
-
-  return Math.max(1, optimalChunkSize);
-}
-
-/**
  * Process chunks with controlled concurrency and retry logic
  */
 export async function processChunksWithConcurrency<T>(
@@ -375,16 +354,4 @@ export function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-/**
- * Format upload speed for display
- */
-export function formatUploadSpeed(bytesPerSecond: number): string {
-  const mbps = (bytesPerSecond * 8) / (1024 * 1024); // Convert to Mbps
-  if (mbps < 1) {
-    const kbps = (bytesPerSecond * 8) / 1024;
-    return `${kbps.toFixed(1)} Kbps`;
-  }
-  return `${mbps.toFixed(1)} Mbps`;
 }

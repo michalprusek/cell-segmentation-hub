@@ -1,3 +1,8 @@
+// One escaper, shared with the other templates. The local copy this replaces
+// escaped &<>"' but NOT '/', and it is applied to attacker-influenceable
+// input (feedback attachment filenames), so the two implementations had
+// already drifted on a character that matters.
+import { escapeHtml } from '../utils/escapeHtml';
 /**
  * Email template for the in-app feedback notification.
  *
@@ -47,18 +52,6 @@ function humanizeBytes(n: number): string {
     i += 1;
   }
   return `${value.toFixed(1)} ${units[i]}`;
-}
-
-/** Escape user-provided strings before interpolating into the HTML body
- *  — title/body come from the form and can contain &<>"'. The plain
- *  text alternative doesn't need escaping. */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export function renderFeedbackReceivedEmail(data: FeedbackEmailData): {

@@ -50,10 +50,13 @@ from _mt_package import (  # noqa: E402  (needs _HERE on sys.path)
 DEFAULT_WEIGHTS = default_weights()
 
 # A position that fails on the GPU is usually a passing squall rather than a
-# verdict on the data. Measured in production (RTX A5000, 2026-08): one
-# 2048x2048 position peaks at 13.37 GiB against a 14.13 GiB per-process cap, on
-# a 23.56 GiB card shared with the interactive `ml` service and Maptimize — so a
-# co-tenant's spike makes the next allocation raise OutOfMemoryError. The
+# verdict on the data. The card (RTX A5000, 23.56 GiB) is shared with the
+# interactive `ml` service and Maptimize, so a co-tenant's spike can make the
+# next allocation raise OutOfMemoryError. For the current working set and cap
+# see sitecustomize.py's docstring — this comment used to quote v7's numbers
+# (13.37 GiB against a 14.13 GiB cap), which the v5H swap superseded on
+# 2026-08-17 and which would send anyone debugging an essays OOM after the
+# wrong ceiling. The
 # failures arrived in contiguous 5-9 minute bursts, and re-running the same
 # folder a week later failed on a *disjoint* set of positions: every well that
 # was lost one time came back the next. Waiting a burst out costs minutes;

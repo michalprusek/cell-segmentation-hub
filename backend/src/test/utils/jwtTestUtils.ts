@@ -3,7 +3,6 @@ import {
   verifyAccessToken,
   JwtPayload,
 } from '../../auth/jwt';
-import { prisma as _prisma } from '../../db';
 
 /**
  * JWT Test Utilities for ML Authentication Tests

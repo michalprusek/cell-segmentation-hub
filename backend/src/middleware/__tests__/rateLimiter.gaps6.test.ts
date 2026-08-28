@@ -66,12 +66,13 @@ vi.mock('../../config/uploadLimits', () => ({
 
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
-import {
-  conditionalRateLimiter,
-  createConditionalSkipRateLimiter,
-  combineRateLimiters,
-  passwordResetRateLimiter,
-} from '../rateLimiter';
+// Side-effect import, deliberately. This suite asserts on the configs
+// `rateLimiter.ts` hands to express-rate-limit at module load, captured by the
+// mock above — so the module has to actually be evaluated. A named import
+// whose binding is never referenced is NOT enough: esbuild elides it and
+// `capturedConfigs` stays empty. That was masked while the file still imported
+// helpers it used as values.
+import '../rateLimiter';
 
 const mockLogger = logger as unknown as {
   warn: ReturnType<typeof vi.fn>;
@@ -209,151 +210,13 @@ describe('passwordResetRateLimitHandler', () => {
 // conditionalRateLimiter — development branches
 // ---------------------------------------------------------------------------
 
-describe('conditionalRateLimiter()', () => {
-  const prodConfig = { windowMs: 60000, max: 10 };
-  const devConfig = { windowMs: 60000, max: 1000 };
-
-  it('uses production config when NODE_ENV is not development', () => {
-    const origEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'test';
-
-    const limiter = conditionalRateLimiter(prodConfig);
-    const req = buildReq();
-    const res = buildRes();
-    const next = vi.fn() as NextFunction;
-
-    limiter(req as Request, res as Response, next);
-
-    expect(next).toHaveBeenCalled();
-    process.env.NODE_ENV = origEnv;
-  });
-
-  it('uses devConfig when NODE_ENV=development and devConfig is provided', () => {
-    const origEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const limiter = conditionalRateLimiter(prodConfig, devConfig);
-    const req = buildReq();
-    const res = buildRes();
-    const next = vi.fn() as NextFunction;
-
-    limiter(req as Request, res as Response, next);
-
-    expect(next).toHaveBeenCalled();
-    process.env.NODE_ENV = origEnv;
-  });
-
-  it('uses developmentRateLimiter when NODE_ENV=development and no devConfig', () => {
-    const origEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const limiter = conditionalRateLimiter(prodConfig);
-    const req = buildReq();
-    const res = buildRes();
-    const next = vi.fn() as NextFunction;
-
-    limiter(req as Request, res as Response, next);
-
-    expect(next).toHaveBeenCalled();
-    process.env.NODE_ENV = origEnv;
-  });
-});
-
 // ---------------------------------------------------------------------------
 // createConditionalSkipRateLimiter — skip and no-skip paths
 // ---------------------------------------------------------------------------
 
-describe('createConditionalSkipRateLimiter()', () => {
-  const config = { windowMs: 60000, max: 100 };
-
-  it('calls next directly when skipCondition returns true', () => {
-    const limiter = createConditionalSkipRateLimiter(config, () => true);
-    const req = buildReq();
-    const res = buildRes();
-    const next = vi.fn() as NextFunction;
-
-    limiter(req as Request, res as Response, next);
-
-    expect(next).toHaveBeenCalled();
-  });
-
-  it('delegates to inner limiter when skipCondition returns false', () => {
-    const limiter = createConditionalSkipRateLimiter(config, () => false);
-    const req = buildReq();
-    const res = buildRes();
-    const next = vi.fn() as NextFunction;
-
-    limiter(req as Request, res as Response, next);
-
-    // Inner limiter is a mock that calls next
-    expect(next).toHaveBeenCalled();
-  });
-});
-
 // ---------------------------------------------------------------------------
 // combineRateLimiters — chains limiters
 // ---------------------------------------------------------------------------
-
-describe('combineRateLimiters()', () => {
-  it('calls all limiters in order and invokes next when all pass', () => {
-    const calls: number[] = [];
-
-    const limiterA = vi.fn(
-      (_req: Request, _res: Response, next: NextFunction) => {
-        calls.push(1);
-        next();
-      }
-    ) as unknown as RateLimitRequestHandler;
-
-    const limiterB = vi.fn(
-      (_req: Request, _res: Response, next: NextFunction) => {
-        calls.push(2);
-        next();
-      }
-    ) as unknown as RateLimitRequestHandler;
-
-    const combined = combineRateLimiters(limiterA, limiterB);
-    const req = buildReq();
-    const res = buildRes();
-    const next = vi.fn() as NextFunction;
-
-    combined(req as Request, res as Response, next);
-
-    expect(calls).toEqual([1, 2]);
-    expect(next).toHaveBeenCalled();
-  });
-
-  it('stops chain and passes error to next when a limiter errors', () => {
-    const boom = vi.fn(
-      (_req: Request, _res: Response, next: NextFunction) => {
-        next(new Error('rate limit error'));
-      }
-    ) as unknown as RateLimitRequestHandler;
-
-    const shouldNotRun = vi.fn() as unknown as RateLimitRequestHandler;
-
-    const combined = combineRateLimiters(boom, shouldNotRun);
-    const req = buildReq();
-    const res = buildRes();
-    const next = vi.fn() as NextFunction;
-
-    combined(req as Request, res as Response, next);
-
-    expect(next).toHaveBeenCalledWith(expect.any(Error));
-    expect(shouldNotRun).not.toHaveBeenCalled();
-  });
-
-  it('works with zero limiters — calls next immediately', () => {
-    const combined = combineRateLimiters();
-    const req = buildReq();
-    const res = buildRes();
-    const next = vi.fn() as NextFunction;
-
-    combined(req as Request, res as Response, next);
-
-    expect(next).toHaveBeenCalled();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Type import only (needed for the combineRateLimiters test above)

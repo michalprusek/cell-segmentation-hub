@@ -569,12 +569,16 @@ export async function hasProjectAccess(
       userId,
     });
 
-    // Check if user is the owner
+    // Check if user is the owner. `select` matters here: this runs on
+    // effectively every authorized request and the row is only used as a
+    // boolean, so there is no reason to pull title, description and the rest
+    // of the metadata across the wire.
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
         userId,
       },
+      select: { id: true },
     });
 
     logger.debug('Owner check result', 'SharingService', {
@@ -595,8 +599,14 @@ export async function hasProjectAccess(
       return { hasAccess: true, isOwner: true };
     }
 
-    // Check if project is shared with user
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    // Check if project is shared with user. `select` matters: only `email` is
+    // read below, and this runs on effectively every authorized request, so
+    // the default would ship the whole User row -- passwordHash included --
+    // across the wire each time.
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
     logger.debug('User lookup result', 'SharingService', {
       projectId,
       userId,
@@ -642,8 +652,10 @@ export async function hasProjectAccess(
       return { hasAccess: true, isOwner: false, shareId: share.id };
     }
 
-    // Let's also check all shares for this project to see what exists
-    const allShares = await prisma.projectShare.findMany({
+    // Diagnostic only: the sole consumer is `totalShares` in the debug line
+    // below, and this runs on the access-denied path of every request. `count`
+    // gives the identical number without materialising every share row.
+    const totalShares = await prisma.projectShare.count({
       where: {
         projectId,
       },
@@ -651,7 +663,7 @@ export async function hasProjectAccess(
 
     logger.debug('All shares for this project', 'SharingService', {
       projectId,
-      totalShares: allShares.length,
+      totalShares,
     });
 
     // No need for separate ShareLink check - all accepted shares are already checked above

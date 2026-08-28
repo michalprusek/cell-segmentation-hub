@@ -4,12 +4,8 @@ import {
   imageToCanvasCoordinates,
   canvasToImageCoordinates,
   calculateCenteringTransform,
-  calculateWheelZoom,
   calculateFixedPointZoom,
   constrainTransform,
-  isPointVisible,
-  isPolygonVisible,
-  getViewportBounds,
 } from '@/lib/coordinateUtils';
 import type { TransformState } from '@/pages/segmentation/types';
 import { createRef } from 'react';
@@ -165,26 +161,6 @@ describe('coordinateUtils', () => {
       // translateX = -(scaledWidth / 2), translateY = -(scaledHeight / 2)
       expect(result.translateX).toBeLessThan(0);
       expect(result.translateY).toBeLessThan(0);
-    });
-  });
-
-  describe('calculateWheelZoom', () => {
-    it('clamps to minZoom on a large positive delta', () => {
-      expect(calculateWheelZoom(0.2, 5000, 0.001, 0.1, 10)).toBe(0.1);
-    });
-
-    it('clamps to maxZoom on a large negative delta', () => {
-      expect(calculateWheelZoom(9, -5000, 0.001, 0.1, 10)).toBe(10);
-    });
-
-    it('applies a custom sensitivity', () => {
-      // deltaY 100, sensitivity 0.005 -> factor 0.5 -> 1.0 * 0.5 = 0.5
-      expect(calculateWheelZoom(1.0, 100, 0.005, 0.1, 10)).toBeCloseTo(0.5, 3);
-    });
-
-    it('uses the default sensitivity (0.001) when omitted', () => {
-      // deltaY 100 -> factor 0.9 -> 1.0 * 0.9
-      expect(calculateWheelZoom(1.0, 100)).toBeCloseTo(0.9, 3);
     });
   });
 
@@ -375,48 +351,6 @@ describe('coordinateUtils', () => {
         600
       );
       expect(above.zoom).toBe(10);
-    });
-  });
-
-  describe('visibility + viewport bounds', () => {
-    it('isPointVisible: true for a point inside the viewport', () => {
-      expect(isPointVisible({ x: 50, y: 50 }, IDENTITY, 800, 600)).toBe(true);
-    });
-
-    it('isPointVisible: false for a point far outside the viewport', () => {
-      expect(isPointVisible({ x: 10000, y: 10000 }, IDENTITY, 800, 600)).toBe(
-        false
-      );
-    });
-
-    it('isPolygonVisible: true when at least one vertex is visible', () => {
-      const polygon = [
-        { x: 50, y: 50 },
-        { x: 100, y: 50 },
-        { x: 100, y: 100 },
-        { x: 50, y: 100 },
-      ];
-      expect(isPolygonVisible(polygon, IDENTITY, 800, 600)).toBe(true);
-    });
-
-    it('isPolygonVisible: false when every vertex is off-screen', () => {
-      const polygon = [
-        { x: 10000, y: 10000 },
-        { x: 10100, y: 10000 },
-        { x: 10100, y: 10100 },
-        { x: 10000, y: 10100 },
-      ];
-      expect(isPolygonVisible(polygon, IDENTITY, 800, 600)).toBe(false);
-    });
-
-    it('getViewportBounds: maps the canvas corners to image bounds', () => {
-      const result = getViewportBounds(IDENTITY, 800, 600);
-      // identity transform, margin 0 -> corners map straight through
-      // (min corner is -0 from `-margin`, so compare with toBeCloseTo)
-      expect(result.minX).toBeCloseTo(0, 6);
-      expect(result.minY).toBeCloseTo(0, 6);
-      expect(result.maxX).toBe(800);
-      expect(result.maxY).toBe(600);
     });
   });
 });

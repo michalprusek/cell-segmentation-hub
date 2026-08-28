@@ -546,12 +546,3 @@ async def batch_segment_images(
             status_code=500,
             detail="Batch segmentation failed. Please try again later or contact support if the issue persists."
         )
-
-@router.get("/segment/{task_id}")
-async def get_segmentation_status(task_id: str):
-    """Get status of async segmentation task (placeholder for future async implementation)"""
-    # For now, return not implemented since we're using sync processing
-    raise HTTPException(
-        status_code=501, 
-        detail="Async processing not implemented yet. Use /segment endpoint for synchronous processing."
-    )

@@ -2104,9 +2104,6 @@ class ModelLoader:
             self.current_model = None
             self.release_model(model_name)
 
-    def get_available_models(self) -> List[str]:
-        """Get list of available model names"""
-        return list(self.AVAILABLE_MODELS.keys())
     
     def get_model_info(self) -> Dict[str, Dict[str, Any]]:
         """Get information about all available models including batch configuration"""

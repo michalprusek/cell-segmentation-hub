@@ -136,40 +136,6 @@ export function lazyWithRetry<T extends ComponentType<any>>(
 }
 
 /**
- * Wrapper component that provides retry UI for lazy loaded components
- */
-interface LazyWithRetryWrapperProps {
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
-  componentName?: string;
-}
-
-export const LazyWithRetryWrapper: React.FC<LazyWithRetryWrapperProps> = ({
-  children,
-  fallback,
-  componentName = 'component',
-}) => {
-  return (
-    <React.Suspense
-      fallback={
-        fallback || (
-          <div className="flex items-center justify-center p-4">
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
-              <span className="text-sm text-gray-600">
-                Loading {componentName}...
-              </span>
-            </div>
-          </div>
-        )
-      }
-    >
-      {children}
-    </React.Suspense>
-  );
-};
-
-/**
  * Error boundary specifically for lazy imports with retry capability
  */
 interface LazyImportErrorBoundaryState {
@@ -274,22 +240,5 @@ export class LazyImportErrorBoundary extends React.Component<
     }
 
     return children;
-  }
-}
-
-/**
- * Preload a lazy component to avoid loading delays
- */
-export function preloadLazyComponent<T extends ComponentType<any>>(
-  lazyComponent: React.LazyExoticComponent<T>
-): void {
-  // Trigger the lazy loading
-  const componentPromise =
-    (lazyComponent as any)._result || (lazyComponent as any)._ctor?.();
-
-  if (componentPromise && typeof componentPromise.then === 'function') {
-    componentPromise.catch((error: Error) => {
-      logger.warn('Failed to preload lazy component', error);
-    });
   }
 }

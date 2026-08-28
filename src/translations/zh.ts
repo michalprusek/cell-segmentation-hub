@@ -1323,7 +1323,6 @@ export default {
     invalidSelection: '请至少选择一张图像',
     noData: '没有可用于导出的数据',
     segmentationData: '分割数据',
-    spheroidMetrics: '球体指标',
     spermMetrics: '精子指标',
     cocoFormat: 'COCO格式',
     cocoFormatTitle: 'COCO格式导出',
@@ -2275,7 +2274,6 @@ export default {
   },
   metrics: {
     info: '指标仅针对外部多边形进行评估。内部多边形（孔洞）的面积会自动从相应的外部多边形中减去。',
-    spheroid: '球体',
     area: '面积',
     perimeter: '周长',
     equivalentDiameter: '等效直径',

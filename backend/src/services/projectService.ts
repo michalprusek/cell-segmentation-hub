@@ -88,8 +88,12 @@ export async function getUserProjects(
   try {
     const { page, limit, search, sortBy, sortOrder, folderId } = options;
 
-    // Get user for context
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    // Existence check only — `select` keeps this from fetching the whole User
+    // row (passwordHash included) for a null test.
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
     if (!user) {
       throw new Error('User not found');
     }
@@ -449,7 +453,7 @@ export async function updateProject(
  * been reviewed and passed. Deliberately gated on SHARE access
  * (SharingService.hasProjectAccess), NOT ownership: the owner AND any
  * accepted-share annotator may toggle it, unlike title/description/type
- * which stay owner-only (see updateProject / checkProjectOwnership above).
+ * which stay owner-only (see updateProject's own userId check above).
  *
  * Stamps verifiedAt/verifiedBy for later auditability when marking verified;
  * clears both when un-marking so they never describe a stale reviewer.
@@ -692,56 +696,5 @@ export async function getProjectStats(
       { projectId, userId }
     );
     throw error;
-  }
-}
-
-/**
- * Check if user owns a project
- */
-export async function checkProjectOwnership(
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  try {
-    const project = await prisma.project.findFirst({
-      where: {
-        id: projectId,
-        userId: userId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    return !!project;
-  } catch (error) {
-    logger.error(
-      'Failed to check project ownership:',
-      error as Error,
-      'ProjectService',
-      { projectId, userId }
-    );
-    throw error;
-  }
-}
-
-/**
- * Check if user can modify a project (only owners can modify)
- */
-export async function canModifyProject(
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  try {
-    // Only project owners can modify projects
-    return await checkProjectOwnership(projectId, userId);
-  } catch (error) {
-    logger.error(
-      'Failed to check project modification permissions:',
-      error as Error,
-      'ProjectService',
-      { projectId, userId }
-    );
-    return false;
   }
 }

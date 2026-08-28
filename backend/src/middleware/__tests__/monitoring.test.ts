@@ -57,9 +57,6 @@ vi.mock('../../utils/config', () => ({
 import {
   createMonitoringMiddleware,
   getMetricsEndpoint,
-  trackMLModelInference,
-  trackFileUpload,
-  updateDatabaseConnections,
   getMonitoringHealth,
   initializeMetricsCollection,
   metrics,
@@ -103,10 +100,6 @@ beforeEach(() => {
   metrics.httpRequestDuration.reset();
   metrics.activeConnections.reset();
   metrics.endpointHealth.reset();
-  metrics.mlModelInferenceTime.reset();
-  metrics.mlModelRequests.reset();
-  metrics.uploadedFiles.reset();
-  metrics.databaseConnections.reset();
   vi.clearAllMocks();
 });
 
@@ -253,81 +246,13 @@ describe('getMetricsEndpoint()', () => {
 // trackMLModelInference()
 // ---------------------------------------------------------------------------
 
-describe('trackMLModelInference()', () => {
-  it('increments ml_model_requests_total with model_name/status labels on success', async () => {
-    trackMLModelInference('hrnet', 200, true);
-    const val = await getMetricValue('ml_model_requests_total', {
-      model_name: 'hrnet',
-      status: 'success',
-    });
-    expect(val).toBe(1);
-  });
-
-  it('increments ml_model_requests_total with status=error on failure', async () => {
-    trackMLModelInference('unet', 300, false);
-    const val = await getMetricValue('ml_model_requests_total', {
-      model_name: 'unet',
-      status: 'error',
-    });
-    expect(val).toBe(1);
-  });
-
-  it('records histogram observation in ml_model_inference_duration_ms', async () => {
-    trackMLModelInference('mamba', 450, true);
-    const all = await metrics.register.getMetricsAsJSON();
-    const hist = all.find(m => m.name === 'ml_model_inference_duration_ms');
-    const hasObs = (hist?.values ?? []).some(
-      v =>
-        (v.labels as Record<string, string>).model_name === 'mamba' &&
-        (v.metricName as string)?.endsWith('_count') &&
-        (v.value ?? 0) >= 1
-    );
-    expect(hasObs).toBe(true);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // trackFileUpload()
 // ---------------------------------------------------------------------------
 
-describe('trackFileUpload()', () => {
-  it('increments uploaded_files_total with file_type/status=success', async () => {
-    trackFileUpload('image/png', true);
-    const val = await getMetricValue('uploaded_files_total', {
-      file_type: 'image/png',
-      status: 'success',
-    });
-    expect(val).toBe(1);
-  });
-
-  it('increments uploaded_files_total with status=error on failure', async () => {
-    trackFileUpload('video/mp4', false);
-    const val = await getMetricValue('uploaded_files_total', {
-      file_type: 'video/mp4',
-      status: 'error',
-    });
-    expect(val).toBe(1);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // updateDatabaseConnections()
 // ---------------------------------------------------------------------------
-
-describe('updateDatabaseConnections()', () => {
-  it('sets database_connections_active gauge to the supplied count', async () => {
-    updateDatabaseConnections(12);
-    const val = await getMetricValue('database_connections_active');
-    expect(val).toBe(12);
-  });
-
-  it('overwrites the previous value', async () => {
-    updateDatabaseConnections(5);
-    updateDatabaseConnections(20);
-    const val = await getMetricValue('database_connections_active');
-    expect(val).toBe(20);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // getMonitoringHealth()

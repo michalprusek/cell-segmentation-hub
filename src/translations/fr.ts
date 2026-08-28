@@ -1426,7 +1426,6 @@ export default {
     invalidSelection: 'Veuillez sélectionner au moins une image',
     noData: "Aucune donnée disponible pour l'exportation",
     segmentationData: 'Données de segmentation',
-    spheroidMetrics: 'Métriques des sphéroïdes',
     spermMetrics: 'Métriques des spermatozoïdes',
     cocoFormat: 'Format COCO',
     cocoFormatTitle: 'Export format COCO',
@@ -2432,7 +2431,6 @@ export default {
   },
   metrics: {
     info: 'Les métriques sont évaluées uniquement pour les polygones externes. Les surfaces des polygones internes (trous) sont automatiquement soustraites des polygones externes correspondants.',
-    spheroid: 'Sphéroïde',
     area: 'Surface',
     perimeter: 'Périmètre',
     equivalentDiameter: 'Diamètre Équivalent',

@@ -35,7 +35,11 @@ describe('renderFeedbackReceivedEmail', () => {
       body: 'a & b < c > d "e" \'f\'',
     });
     expect(html).not.toContain('<script>alert(1)</script>');
-    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    // `/` is escaped too: this template used to carry its own escaper that
+    // handled &<>"' only, and now shares utils/escapeHtml with the other
+    // templates, which also encodes the solidus. Strictly safer, and the
+    // browser renders &#x2F; as `/`, so the mail reads identically.
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;&#x2F;script&gt;');
     expect(html).toContain('&amp;');
     expect(html).toContain('&quot;');
   });

@@ -105,62 +105,6 @@ function buildCacheControlHeader(options: CacheOptions): string {
 
 
 /**
- * No-cache middleware - prevents caching
- */
-export const noCache = createCacheMiddleware({
-  maxAge: 0,
-  noCache: true,
-  mustRevalidate: true,
-  private: true,
-});
-
-/**
- * Short cache middleware - 5 minutes
- */
-export const shortCache = createCacheMiddleware({
-  maxAge: 300, // 5 minutes
-  private: false,
-  mustRevalidate: true,
-  staleWhileRevalidate: 60, // Allow stale for 1 minute
-});
-
-/**
- * Medium cache middleware - 1 hour
- */
-export const mediumCache = createCacheMiddleware({
-  maxAge: 3600, // 1 hour
-  private: false,
-  staleWhileRevalidate: 300, // Allow stale for 5 minutes
-});
-
-/**
- * Long cache middleware - 1 day
- */
-export const longCache = createCacheMiddleware({
-  maxAge: 86400, // 1 day
-  private: false,
-  staleWhileRevalidate: 3600, // Allow stale for 1 hour
-});
-
-/**
- * Static asset cache middleware - 30 days
- */
-export const staticCache = createCacheMiddleware({
-  maxAge: 2592000, // 30 days
-  private: false,
-});
-
-/**
- * API response cache middleware - 10 minutes
- */
-export const apiCache = createCacheMiddleware({
-  maxAge: 600, // 10 minutes
-  private: true,
-  mustRevalidate: true,
-  staleWhileRevalidate: 120, // Allow stale for 2 minutes
-});
-
-/**
  * Conditional cache middleware based on environment
  */
 export const conditionalCache = Object.assign(
@@ -200,49 +144,6 @@ export const conditionalCache = Object.assign(
 );
 
 /**
- * Cache-busting middleware for dynamic content
- */
-export const bustCache = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  try {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    next();
-  } catch (error) {
-    logger.error('Cache busting middleware error:', error as Error);
-    next(error);
-  }
-};
-
-/**
- * Vary header middleware to indicate response varies based on headers
- */
-export function createVaryMiddleware(headers: string[]) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    try {
-      const varyHeader = headers.join(', ');
-      res.setHeader('Vary', varyHeader);
-      next();
-    } catch (error) {
-      logger.error('Vary middleware error:', error as Error);
-      next(error);
-    }
-  };
-}
-
-/**
- * Common Vary middleware for API responses
- */
-export const varyOnAcceptEncoding = createVaryMiddleware(['Accept-Encoding']);
-export const varyOnAuthorization = createVaryMiddleware(['Authorization']);
-export const varyOnUserAgent = createVaryMiddleware(['User-Agent']);
-export const varyOnAcceptLanguage = createVaryMiddleware(['Accept-Language']);
-
-/**
  * Cache middleware for Express routes
  */
 export const cacheMiddleware = createCacheMiddleware;
@@ -274,19 +175,7 @@ export const cacheInvalidationMiddleware = (
 
 export default {
   createCacheMiddleware,
-  noCache,
-  shortCache,
-  mediumCache,
-  longCache,
-  staticCache,
-  apiCache,
   conditionalCache,
-  bustCache,
-  createVaryMiddleware,
-  varyOnAcceptEncoding,
-  varyOnAuthorization,
-  varyOnUserAgent,
-  varyOnAcceptLanguage,
   cacheMiddleware,
   cacheInvalidationMiddleware,
 };

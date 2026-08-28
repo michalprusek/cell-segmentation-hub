@@ -408,7 +408,6 @@ class Mask2FormerModel(nn.Module):
 
         self.config = config
         self.is_convnext = config.backbone in self.CONVNEXT_BACKBONES
-        self.use_deformable = getattr(config, "use_deformable", False)
 
         if self.is_convnext:
             from sperm_final.models.convnext_backbone import DINOv3ConvNeXtBackbone
@@ -416,9 +415,9 @@ class Mask2FormerModel(nn.Module):
                 model_name=config.backbone,
                 frozen=config.backbone_frozen,
             )
-            all_channels = list(self.backbone.hidden_sizes)  # [192, 384, 768, 1536]
-            high_res_channels = all_channels[0]
-            transformer_in_channels = all_channels[1:]
+            hidden_sizes = list(self.backbone.hidden_sizes)  # [192, 384, 768, 1536]
+            high_res_channels = hidden_sizes[0]
+            transformer_in_channels = hidden_sizes[1:]
         else:
             from sperm_final.models.backbone import DINOv2Backbone
             from sperm_final.models.simple_fpn import SimpleFPN
@@ -431,19 +430,15 @@ class Mask2FormerModel(nn.Module):
                 in_channels=self.backbone.hidden_size,
                 out_channels=config.fpn_channels,
             )
-            all_channels = [config.fpn_channels] * 4
             high_res_channels = config.fpn_channels
             transformer_in_channels = [config.fpn_channels] * 3
 
-        # Pixel decoder
-        if self.use_deformable:
-            from sperm_final.models.deformable_attention import DeformablePixelDecoder
-            self.pixel_decoder = DeformablePixelDecoder(
-                in_channels_list=all_channels,
-                hidden_dim=config.fpn_channels,
-            )
-        else:
-            self.pixel_decoder = MSDeformAttnPixelDecoder(
+        # Pixel decoder. There used to be a `use_deformable` branch here that
+        # imported sperm_final.models.deformable_attention — a module that is
+        # not in the tree, so the branch could only ever raise
+        # ModuleNotFoundError at model construction. The flag defaulted to False
+        # and no checkpoint set it, so it was never taken.
+        self.pixel_decoder = MSDeformAttnPixelDecoder(
                 high_res_channels=high_res_channels,
                 in_channels_list=transformer_in_channels,
                 hidden_dim=config.fpn_channels,
@@ -497,12 +492,9 @@ class Mask2FormerModel(nn.Module):
             all_features = self.fpn(backbone_features)  # 4-scale list
 
         # Pixel decoder
-        if self.use_deformable:
-            mask_features, multi_scale_out = self.pixel_decoder(all_features)
-        else:
-            high_res = all_features[0]
-            multi_scale = all_features[1:]
-            mask_features, multi_scale_out = self.pixel_decoder(high_res, multi_scale)
+        high_res = all_features[0]
+        multi_scale = all_features[1:]
+        mask_features, multi_scale_out = self.pixel_decoder(high_res, multi_scale)
 
         # Upsample mask features for finer mask prediction
         mask_features_hr = self.mask_upsampler(mask_features)

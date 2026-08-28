@@ -36,7 +36,7 @@ class _NoCRLFLogFilter(logging.Filter):
 
 
 # Attach to the root *handler(s)*, not the root logger: records propagated up
-# from child module loggers (routes/cancel/mt_metrics/...) bypass the root
+# from child module loggers (routes/mt_metrics/...) bypass the root
 # logger's own filters but still pass through its handlers.
 for _root_handler in logging.getLogger().handlers:
     _root_handler.addFilter(_NoCRLFLogFilter())
