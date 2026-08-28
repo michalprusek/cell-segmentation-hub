@@ -14,6 +14,9 @@ import {
 } from './metrics/metricsCalculator';
 import {
   FormatConverter,
+  buildYoloClassMap,
+  buildYoloClassesFile,
+  buildYoloDataYaml,
   resolveImageDimensions,
   type Polygon as ExportPolygon,
 } from './export/formatConverter';
@@ -1327,6 +1330,20 @@ export class ExportService {
           }
         }
       } else if (format === 'yolo') {
+        // A YOLO label line is an integer with no name attached, so the class
+        // list has to ship with the labels. Written once per export, from the
+        // same project type `convertToYOLO` derives its ids from — the names
+        // and the ids cannot disagree.
+        const yoloClassMap = buildYoloClassMap(projectType);
+        await fs.writeFile(
+          path.join(formatDir, 'classes.txt'),
+          buildYoloClassesFile(yoloClassMap)
+        );
+        await fs.writeFile(
+          path.join(formatDir, 'data.yaml'),
+          buildYoloDataYaml(yoloClassMap)
+        );
+
         await mapWithConcurrency(
           images,
           YOLO_WRITE_CONCURRENCY,
@@ -1369,7 +1386,8 @@ export class ExportService {
             const yoloResult = await this.formatConverter.convertToYOLO(
               image.segmentation.polygons,
               yoloWidth,
-              yoloHeight
+              yoloHeight,
+              projectType
             );
             const imageNameWithoutExt = path.parse(image.name).name;
             await fs.writeFile(
@@ -1879,7 +1897,7 @@ export class ExportService {
     await fs.writeFile(path.join(docDir, 'README.md'), readme);
 
     // Generate annotation format guides
-    await generateAnnotationGuides(exportDir, options);
+    await generateAnnotationGuides(exportDir, options, project.type);
 
     // Generate metadata. `microtubuleIntensity` is present only for MT
     // projects that ran the metrics stage, so a downloaded archive with
