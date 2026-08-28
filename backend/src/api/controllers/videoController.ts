@@ -37,6 +37,13 @@ interface ChannelDTO {
   wavelengthNm?: number;
   displayColor?: string;
   isSegmentationSource: boolean;
+  /** See `ChannelMeta.sparseSource` — a channel the microscope only refreshed
+   *  every N-th frame. The gaps are served from the frame they read from. */
+  sparseSource?: boolean;
+  /** Gap frameIndex (stringified) -> the frameIndex whose PNG stands in. */
+  sparseFill?: Record<string, number>;
+  /** The same relation in id space, for the editor's request de-duplication. */
+  sparseFillFrameIds?: Record<string, string>;
 }
 
 const MAX_CHANNEL_DISPLAY_NAME_LEN = 128;
@@ -394,9 +401,10 @@ export class VideoController {
           where: { id: image.parentVideoId },
           select: { channels: true },
         });
-        const allowed = Array.isArray(container?.channels)
-          ? (container!.channels as unknown as ChannelDTO[]).map(c => c.name)
+        const declared = Array.isArray(container?.channels)
+          ? (container!.channels as unknown as ChannelDTO[])
           : [];
+        const allowed = declared.map(c => c.name);
         if (allowed.length > 0 && !allowed.includes(channelName)) {
           ResponseHelper.error(res, `Unknown channel: ${channelName}`, 400);
           return;
@@ -410,9 +418,37 @@ export class VideoController {
           'frames'
         );
         containerId = image.parentVideoId;
+
+        // A channel the microscope only refreshed every N-th frame has real
+        // pixels on some frames and an all-constant fill on the rest. The
+        // extractor recorded which is which; a gap is served from the frame it
+        // reads from rather than from its own black plane. The pixels are not
+        // duplicated on disk — this redirect IS the propagation.
+        //
+        // The resolved index comes from the container's own metadata and is
+        // padded into a fixed-width directory name below, so it cannot widen
+        // the filesystem surface this route already reaches: the containment
+        // check further down still runs on the result.
+        const meta = declared.find(c => c.name === channelName);
+        const gapAnchor =
+          meta?.sparseSource === true
+            ? meta.sparseFill?.[String(image.frameIndex)]
+            : undefined;
+        const sourceFrameIndex =
+          typeof gapAnchor === 'number' &&
+          Number.isInteger(gapAnchor) &&
+          gapAnchor >= 0
+            ? gapAnchor
+            : image.frameIndex;
+        if (sourceFrameIndex !== image.frameIndex) {
+          // Observable in a `curl -I` and in the browser network panel, so
+          // "did the fill actually happen" is answerable without reading logs.
+          res.setHeader('X-Sparse-Fill-From', String(sourceFrameIndex));
+        }
+
         absPath = path.join(
           framesDir,
-          String(image.frameIndex).padStart(4, '0'),
+          String(sourceFrameIndex).padStart(4, '0'),
           `${channelName}.png`
         );
       } else {
@@ -596,12 +632,46 @@ export class VideoController {
         return;
       }
 
-      await prisma.image.update({
-        where: { id: imageId },
-        data: { channels: channels as unknown as object },
+      // This route overwrites the channels JSON with whatever the client sent,
+      // which is fine for the things a client owns (name, colour, which channel
+      // is the segmentation source) and NOT fine for the sparse-acquisition
+      // record: that is measured at extraction from the source volume and can
+      // never be recovered from a PATCH body. A caller that renders its request
+      // from a narrower type — `apiClient.updateImageChannels` enumerates its
+      // fields, which is exactly how `pngBacked` and `frameIds` were once lost —
+      // would otherwise silently un-fill every gap in the video AND strand
+      // those frames outside segmentation. Carry them over from the stored row.
+      //
+      // Deliberately narrow: the older ingest-owned fields (`pngBacked`,
+      // `frameIds`, `staticSource`, `staticShifts`) have the same character but
+      // their current behaviour is left untouched here.
+      const storedChannels = Array.isArray(image.channels)
+        ? (image.channels as unknown as ChannelDTO[])
+        : [];
+      const sparseByName = new Map(
+        storedChannels
+          .filter(c => c?.sparseSource === true)
+          .map(c => [c.name, c] as const)
+      );
+      const merged = channels.map(c => {
+        const prior = sparseByName.get(c.name);
+        if (!prior) return c;
+        return {
+          ...c,
+          sparseSource: true,
+          ...(prior.sparseFill ? { sparseFill: prior.sparseFill } : {}),
+          ...(prior.sparseFillFrameIds
+            ? { sparseFillFrameIds: prior.sparseFillFrameIds }
+            : {}),
+        };
       });
 
-      ResponseHelper.success(res, { imageId, channels });
+      await prisma.image.update({
+        where: { id: imageId },
+        data: { channels: merged as unknown as object },
+      });
+
+      ResponseHelper.success(res, { imageId, channels: merged });
     } catch (err) {
       logger.error(
         `Channel update failed: ${(err as Error).message}`,

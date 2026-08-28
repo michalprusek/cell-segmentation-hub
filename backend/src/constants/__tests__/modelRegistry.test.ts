@@ -16,10 +16,11 @@ const CANONICAL_IDS = [
   'wound',
   'microtubule',
   'microcapsule',
+  'neurite_soma',
 ] as const;
 
 describe('backend model registry SSOT', () => {
-  it('registry keys are exactly the canonical 10 models', () => {
+  it('registry keys are exactly the canonical 11 models', () => {
     expect(Object.keys(MODEL_REGISTRY).sort()).toEqual(
       [...CANONICAL_IDS].sort()
     );
@@ -45,6 +46,7 @@ describe('backend model registry SSOT', () => {
       sperm: ['sperm'],
       microtubules: ['microtubule'],
       microcapsule: ['microcapsule'],
+      neurite: ['neurite_soma'],
     });
   });
 });

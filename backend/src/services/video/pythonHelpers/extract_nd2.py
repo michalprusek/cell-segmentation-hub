@@ -43,6 +43,11 @@ from channel_registration import (
     shift_frame,
     write_registration_sidecar,
 )
+from plane_coverage import (
+    coverage_payload,
+    is_blank_plane,
+    plan_sparse_channels,
+)
 
 
 def _extract_workers() -> int:
@@ -473,8 +478,10 @@ def _save_position_tiff(arr_tcyx: np.ndarray, path: Path) -> None:
     )
 
 
-def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
-                  on_frame=None, register: bool = False) -> dict[int, list]:
+def _write_frames(
+    arr_tcyx, frames_root: Path, channel_names: list[str],
+    on_frame=None, register: bool = False,
+) -> tuple[dict[int, list], dict[int, list[bool]]]:
     """Write one PNG per (frame, channel) under ``frames_root/<TTTT>/``.
 
     ``arr_tcyx`` is a dask OR numpy ``(T, C, Y, X)`` array. Frames are streamed
@@ -492,9 +499,27 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
     (multimodal, per-frame — see ``channel_registration``) BEFORE the PNG is
     written, so the stored frames overlay correctly. The shift is applied to a
     fresh array (the source ``arr_tcyx`` is never mutated — a later
-    ``_save_position_tiff`` still archives the raw original). Returns
-    ``{frameIndex: [[dy, dx] per channel]}`` (all-zero when ``register`` is off)
-    for the caller to persist as a registration sidecar.
+    ``_save_position_tiff`` still archives the raw original).
+
+    Returns ``(offsets, blanks)``:
+
+    * ``offsets`` — ``{frameIndex: [[dy, dx] per channel]}`` (all-zero when
+      ``register`` is off) for the caller to persist as a registration sidecar.
+    * ``blanks`` — ``{frameIndex: [bool per channel]}``, True where the plane
+      carries no acquisition (see ``plane_coverage``). The PNG is still written
+      either way, so the on-disk layout is unchanged and nothing that assumes a
+      file per (frame, channel) breaks; the caller turns these flags into the
+      channel's coverage metadata, which is what makes a gap readable.
+
+    A plane recorded as blank is also SKIPPED by registration, as is every
+    channel of a frame whose channel-0 reference is blank. This changes no
+    output: ``estimate_translation`` already returns ``(0, 0)`` for a constant
+    plane, because its gradient magnitude is zero, the correlation surface is
+    flat and the existing ``low_confidence`` guard rejects the peak (measured
+    2026-08-28 in both directions; pinned by
+    ``test_blank_plane_registration_was_already_a_no_op``). The skip is purely a
+    cost saving — one ``estimate_translation`` call is ~290 MB of RSS and the
+    FFT-heaviest thing in this function — for an answer that is known in advance.
 
     MEMORY BUDGET — this function OOM-killed a 4 GiB container on a 2-channel
     2048x2048 ND2, so the bound is explicit and pinned by
@@ -535,31 +560,37 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
     # Only the registration workspace is gated; see rule 2 above.
     reg_gate = threading.Semaphore(_registration_workers(workers))
 
-    def _write_one(t: int, frame_cyx) -> tuple[int, list]:
+    def _write_one(t: int, frame_cyx) -> tuple[int, list, list[bool]]:
         frame_dir = frames_root / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         offset_row = [[0, 0] for _ in range(C)]
+        # One pass over the (already materialised) frame; ``frame_cyx[c]`` is a
+        # view, so this costs a min/max scan and no allocation.
+        blank_row = [is_blank_plane(frame_cyx[c]) for c in range(C)]
         ref = frame_cyx[0] if do_register else None
+        ref_usable = do_register and not blank_row[0]
         for c in range(C):
             plane = frame_cyx[c]
-            if do_register and c > 0:
+            if do_register and c > 0 and ref_usable and not blank_row[c]:
                 with reg_gate:
                     dy, dx, _conf = estimate_translation(ref, plane)
                 if dy or dx:
                     plane = shift_frame(plane, dy, dx)  # new array — no mutation
                 offset_row[c] = [dy, dx]
             _save_png(plane, frame_dir / f"{channel_names[c]}.png")
-        return t, offset_row
+        return t, offset_row, blank_row
 
     offsets: dict[int, list] = {}
+    blanks: dict[int, list[bool]] = {}
     # FIFO queue of submitted-but-unfinished frames. Its length is what caps the
     # number of materialised frames alive at once; draining in submission order
     # keeps ``on_frame`` (and therefore the PROGRESS cadence) in frame order.
     in_flight: deque = deque()
 
     def _drain_one() -> None:
-        t, offset_row = in_flight.popleft().result()
+        t, offset_row, blank_row = in_flight.popleft().result()
         offsets[t] = offset_row
+        blanks[t] = blank_row
         if on_frame is not None:
             on_frame()
 
@@ -573,7 +604,45 @@ def _write_frames(arr_tcyx, frames_root: Path, channel_names: list[str],
             in_flight.append(pool.submit(_write_one, t, np.asarray(arr_tcyx[t])))
         while in_flight:
             _drain_one()
-    return offsets
+    return offsets, blanks
+
+
+def _channels_with_coverage(
+    channels_out: list[dict],
+    blanks: dict[int, list[bool]],
+    label: str,
+) -> list[dict]:
+    """Copy of ``channels_out`` with the sparse channels' coverage merged in.
+
+    A COPY, because the multi-position path shares one ``channels_out`` across
+    every position and each position has its own acquisition — one well can hold
+    a sparse IRM while the next does not.
+
+    Fully-covered channels come back byte-identical to their input, so a video
+    that is not sparse produces the exact result JSON it always did.
+    """
+    plan = plan_sparse_channels(blanks, len(channels_out))
+    total = len(blanks)
+    for i, meta in enumerate(channels_out):
+        if all(row[i] for row in blanks.values()) and total:
+            # Rule 2 in ``plan_sparse_channels``: nothing to propagate FROM.
+            # Loud, because a channel that is empty in every frame is either a
+            # broken acquisition or an axis misread, and both want a human.
+            print(
+                f"WARNING: {label}channel '{meta['name']}' carries no "
+                f"acquisition on ANY of its {total} frames; leaving it as-is",
+                file=sys.stderr,
+            )
+        elif i in plan:
+            covered = len(plan[i]["coveredFrames"])
+            print(
+                f"INFO: {label}channel '{meta['name']}' is sparse — real on "
+                f"{covered}/{total} frames; the gaps will read from the "
+                f"previous real frame",
+                file=sys.stderr,
+            )
+    return [{**meta, **coverage_payload(plan.get(i))}
+            for i, meta in enumerate(channels_out)]
 
 
 def _progress(done: int, total: int) -> None:
@@ -663,12 +732,13 @@ def main() -> int:
                 nonlocal done
                 done += 1
                 _progress(done, T)
-            offsets = _write_frames(
+            offsets, blanks = _write_frames(
                 arr, dest / "frames", channel_names, on_frame=_tick,
                 register=register,
             )
             if register:
                 write_registration_sidecar(dest, channel_names, offsets)
+            channels_result = _channels_with_coverage(channels_out, blanks, "")
 
             duration_ms = None
             frame_interval_ms = _median_interval_ms(timestamps)
@@ -684,7 +754,7 @@ def main() -> int:
                 "pixelSizeUm": pixel_size_um,
                 "width": int(W),
                 "height": int(H),
-                "channels": channels_out,
+                "channels": channels_result,
             }))
             return 0
 
@@ -730,9 +800,9 @@ def main() -> int:
                 nonlocal done
                 done += 1
                 _progress(done, total_writes)
-            offsets = _write_frames(norm, dest / subdir / "frames",
-                                    channel_names, on_frame=_tick,
-                                    register=register)
+            offsets, blanks = _write_frames(norm, dest / subdir / "frames",
+                                            channel_names, on_frame=_tick,
+                                            register=register)
             if register:
                 write_registration_sidecar(
                     dest / subdir, channel_names, offsets
@@ -766,7 +836,9 @@ def main() -> int:
                 "pixelSizeUm": pixel_size_um,
                 "width": int(W),
                 "height": int(H),
-                "channels": channels_out,
+                "channels": _channels_with_coverage(
+                    channels_out, blanks, f"position {p}: "
+                ),
             })
 
         print(json.dumps({"positions": positions_out}))

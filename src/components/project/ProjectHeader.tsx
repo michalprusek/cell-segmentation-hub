@@ -31,6 +31,8 @@ const PROJECT_TYPE_BADGE: Record<ProjectType, string> = {
     'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-200 border-cyan-300 dark:border-cyan-700',
   microcapsule:
     'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200 border-rose-300 dark:border-rose-700',
+  neurite:
+    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200 border-indigo-300 dark:border-indigo-700',
 };
 
 interface ProjectHeaderProps {

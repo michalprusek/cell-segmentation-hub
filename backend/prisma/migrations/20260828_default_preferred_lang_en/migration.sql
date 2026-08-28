@@ -1,0 +1,22 @@
+-- Default the UI language of NEW profiles to English instead of Czech.
+--
+-- The frontend already resolves a sensible language on its own (explicit
+-- pick > browser accept-language > English, see
+-- src/contexts/translationLoader.ts::resolveClientLanguage). That choice was
+-- then overwritten on the first authenticated load by the profile-sync
+-- effect in LanguageContext, because every profile was created with 'cs' —
+-- so a German or Spanish visitor silently ended up in Czech.
+--
+-- Registration now sends the detected language and AuthService persists it,
+-- so this DEFAULT only covers rows created without an explicit value (the
+-- profile.upsert create paths in updateProfile / updateUserProfile).
+--
+-- Deliberately NO backfill of existing rows: an existing preferredLang='cs'
+-- may be a real Czech user's deliberate choice, and a blanket UPDATE would
+-- silently switch them to English. Existing profiles keep whatever they have.
+--
+-- NOTE: written as idempotent SQL — the production Prisma migration history
+-- has drifted, so `migrate deploy` is not run blind here (see the
+-- 20260826_add_project_verified precedent).
+
+ALTER TABLE "profiles" ALTER COLUMN "preferredLang" SET DEFAULT 'en';

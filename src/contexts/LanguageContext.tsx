@@ -19,23 +19,15 @@ import {
   SUPPORTED_LANGUAGES,
   loadTranslation,
   getCachedTranslation,
+  resolveClientLanguage,
 } from './translationLoader';
-
-function resolveInitialLanguage(): Language {
-  const local = localStorage.getItem('language') as Language | null;
-  if (local && SUPPORTED_LANGUAGES.includes(local)) return local;
-  const browser = navigator.language.split('-')[0];
-  if (SUPPORTED_LANGUAGES.includes(browser as Language))
-    return browser as Language;
-  return 'en';
-}
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { user } = useAuth();
   const [language, setLanguageState] = useState<Language>(
-    resolveInitialLanguage
+    resolveClientLanguage
   );
   // Lazy init from the module cache so a pre-loaded language (notably the
   // test-seeded English chunk) is available on the very first synchronous
@@ -44,7 +36,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   // re-mount reuse an already-parsed chunk without a flash.
   const [currentTranslations, setCurrentTranslations] =
     useState<Translations | null>(
-      () => getCachedTranslation(resolveInitialLanguage()) ?? null
+      () => getCachedTranslation(resolveClientLanguage()) ?? null
     );
 
   // Tracks whether the user manually picked a language since the
@@ -61,8 +53,28 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   // setLanguageState mutates `language`, so the deps array would loop
   // — every UI language toggle would cost an extra getUserProfile()).
   const userId = user?.id ?? null;
+  // Distinguishes "never signed in" from "just signed out" — only the second
+  // needs the sign-out reset below.
+  const lastUserIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!userId) return;
+    const previousUserId = lastUserIdRef.current;
+    lastUserIdRef.current = userId;
+
+    if (!userId) {
+      // Signed out. The authenticated branch below writes the SERVER
+      // preference into localStorage, so the key now holds the departing
+      // account's language rather than anything this browser's next visitor
+      // chose — and registration seeds a new profile from it. Drop it and
+      // re-resolve so the browser preference decides again, both on screen
+      // and in the next sign-up payload.
+      if (previousUserId) {
+        localStorage.removeItem('language');
+        manualOverrideRef.current = false;
+        setLanguageState(resolveClientLanguage());
+      }
+      return;
+    }
+
     let cancelled = false;
     manualOverrideRef.current = false;
     (async () => {
@@ -119,6 +131,14 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       cancelled = true;
     };
+  }, [language]);
+
+  // Keep the document language in sync with the UI language. `index.html`
+  // ships a static `<html lang="en">` and nothing else ever updates it, so
+  // screen readers and browser translation prompts mis-identify every
+  // non-English render.
+  useEffect(() => {
+    document.documentElement.lang = language;
   }, [language]);
 
   const setLanguage = useCallback(
