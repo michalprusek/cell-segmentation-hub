@@ -98,17 +98,20 @@ describe('countBufferedFrames — multi-channel', () => {
     ).toBe(1);
   });
 
-  it('does not promote probed entries in the LRU', () => {
-    // The probe looks at the frames it is WAITING for on every stalled tick;
-    // if that counted as a use, they would outlive the ones it needs.
+  it('asks the cache without using it', () => {
+    // `has` rather than `get`, so twenty polls a second while stalled cannot
+    // reorder eviction. The order itself is asserted on the cache in
+    // `decodedFrameCache.test.ts`; here it is only that the probe goes through
+    // the non-promoting door.
     seed('f0', 'irm');
     seed('f0', 'tirf');
-    const before = decodedFrameCache.size;
+    const get = vi.spyOn(decodedFrameCache, 'get');
+    const has = vi.spyOn(decodedFrameCache, 'has');
     countBufferedFrames(base);
-    expect(decodedFrameCache.size).toBe(before);
-    // The oldest entry must still be the oldest: setting a new key with a tiny
-    // budget would evict it first.
-    expect(decodedFrameCache.has(frameCacheKey('f0', 'irm'))).toBe(true);
+    expect(has).toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    get.mockRestore();
+    has.mockRestore();
   });
 
   it('stops at the end of the frame list rather than reporting phantom frames', () => {

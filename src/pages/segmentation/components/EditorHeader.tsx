@@ -319,13 +319,15 @@ const EditorHeader = ({
               variant="outline"
               size="icon"
               onClick={onVideoToggle}
+              // The accessible name keeps naming the ACTION — a button whose
+              // name becomes "Buffering…" no longer tells a screen-reader user
+              // that it pauses. The state rides along on aria-busy instead.
               aria-label={String(
-                videoIsBuffering
-                  ? t('editor.frameNavigation.buffering')
-                  : videoIsPlaying
-                    ? t('editor.frameNavigation.pause')
-                    : t('editor.frameNavigation.play')
+                videoIsPlaying
+                  ? t('editor.frameNavigation.pause')
+                  : t('editor.frameNavigation.play')
               )}
+              aria-busy={videoIsBuffering ? true : undefined}
               title={
                 videoIsBuffering
                   ? String(t('editor.frameNavigation.buffering'))

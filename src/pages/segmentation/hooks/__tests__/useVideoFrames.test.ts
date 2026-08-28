@@ -669,27 +669,37 @@ describe('useVideoFrames — buffer-gated playback', () => {
     expect(result.current.isPlaying).toBe(true);
   });
 
-  it('keeps waiting while the buffer is still growing, however slowly', () => {
-    // A slow-but-progressing link must not trip the give-up clock: it resets
-    // whenever the probe reports more than it did before.
+  it('keeps waiting while the buffer is still growing', () => {
+    // A slow-but-progressing link must not trip the give-up clock: it restarts
+    // whenever the probe reports more than it did before, so the budget is
+    // "time since the buffer last grew", not "time since the stall began".
     let buffered = 0;
     const result = playWith(() => buffered);
 
     act(() => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(200);
     });
+    expect(result.current.isBuffering).toBe(true);
+
     buffered = 1;
     act(() => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(1000); // under the budget, measured from the growth
     });
-    buffered = 2;
-    act(() => {
-      vi.advanceTimersByTime(5000);
-    });
+    expect(result.current.frameIndex).toBe(0);
 
-    // 15 s of stall, none of it without progress → still on frame 0.
+    buffered = 2; // grew again → the clock restarts
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
     expect(result.current.frameIndex).toBe(0);
     expect(result.current.isBuffering).toBe(true);
+
+    buffered = 3; // the resume watermark
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(result.current.frameIndex).toBe(1);
+    expect(result.current.isBuffering).toBe(false);
   });
 
   it('does not gate when the probe cannot tell (single named channel)', () => {
@@ -701,6 +711,79 @@ describe('useVideoFrames — buffer-gated playback', () => {
 
     expect(result.current.frameIndex).toBe(3);
     expect(result.current.isBuffering).toBe(false);
+  });
+
+  it('does not leave the spinner stuck when the container object is replaced', () => {
+    // `container` is a fresh object on every ['video-frames', id] invalidation
+    // (a channel rename does exactly that), so the playback effect restarts
+    // mid-play. Stall bookkeeping that restarted with it would believe the
+    // spinner is off while the state still says on, and nothing would ever turn
+    // it back off.
+    const payload = makeContainerPayload('vid-1', 40);
+    qc.setQueryData(['video-frames', 'vid-1'], payload);
+    mockGet.mockResolvedValue({ data: { data: payload } });
+
+    let buffered = 0;
+    const { result } = renderHook(() => useVideoFrames('vid-1'), {
+      wrapper: wrapQC(qc),
+    });
+    act(() => {
+      result.current.registerBufferProbe(() => buffered);
+      result.current.play();
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.isBuffering).toBe(true);
+
+    // What a channel rename produces: same frames, a payload that differs. It
+    // has to actually differ — React Query's structural sharing keeps the old
+    // object when the new one is deeply equal, and then nothing restarts.
+    act(() => {
+      qc.setQueryData(['video-frames', 'vid-1'], {
+        ...payload,
+        name: 'renamed while playing',
+      });
+    });
+    // React Query's notify is scheduled, and fake timers hold it: without this
+    // flush the hook never sees the new container and the effect never restarts
+    // — the test would pass on a version that has the bug.
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(result.current.container?.name).toBe('renamed while playing');
+    buffered = 3;
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(result.current.frameIndex).toBeGreaterThan(0);
+    expect(result.current.isBuffering).toBe(false);
+  });
+
+  it('gives up on the resume DEPTH quickly when the next frame is ready', () => {
+    // One permanently dead frame inside the horizon caps the count below the
+    // watermark for ever. Charging the full no-progress budget for that would
+    // freeze 6 s at a time on frames that were decoded all along, so a stall
+    // that is only short of the DEPTH is bounded far tighter.
+    let buffered = 0;
+    const result = playWith(() => buffered);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(result.current.frameIndex).toBe(0);
+
+    buffered = 1; // enough to show, never enough to resume
+    act(() => {
+      vi.advanceTimersByTime(1300); // under REBUFFER_MAX_MS — still holding
+    });
+    expect(result.current.frameIndex).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(400); // past it, and far short of MAX_STALL_MS
+    });
+    expect(result.current.frameIndex).toBeGreaterThan(0);
   });
 
   it('clears the buffering flag when the user pauses mid-stall', () => {

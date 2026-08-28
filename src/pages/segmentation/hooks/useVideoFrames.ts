@@ -33,15 +33,17 @@ const PLAYBACK_INTERVAL_MS = 1000 / PLAYBACK_FPS;
  *  is cheaper than making them observable. */
 const BUFFER_RECHECK_MS = 50;
 
-/** Frames to have ready before RESUMING from a stall (the current frame plus
- *  this many after it).
+/** Frames to have ready before RESUMING from a stall (the next frame plus the
+ *  ones after it).
  *
  *  Resuming the instant one frame lands is what turns a stall into a stutter:
  *  the playhead advances once, immediately finds the frame after it missing,
  *  and stalls again. So the low watermark (advance) is 1 frame and the high
- *  watermark (resume) is 3 — see `DECODE_AHEAD_FRAMES`, which is also 3, so
- *  this is exactly the depth the decode-ahead walk maintains, minus the one
- *  still in flight. Demanding more would wait for work nothing is doing. */
+ *  watermark (resume) is 3 — exactly `DECODE_AHEAD_FRAMES`, because the walk
+ *  targets `currentIndex + 1 … + 3` and is not restarted while the playhead is
+ *  held, so a completed walk is precisely this depth. Demanding more would wait
+ *  for work nothing is doing; not reaching it in `REBUFFER_MAX_MS` gives up on
+ *  the depth rather than on playback. */
 const REBUFFER_FRAMES = 3;
 
 /** Longest a stall may go WITHOUT the buffer growing before playback gives up
@@ -53,6 +55,15 @@ const REBUFFER_FRAMES = 3;
  *  it did before, so a genuinely slow link keeps waiting as long as it is
  *  making progress; only a buffer that is stuck outright runs it out. */
 const MAX_STALL_MS = 6000;
+
+/** The same, but for a stall that is only short of the RESUME depth.
+ *
+ *  Much shorter, because this wait is for comfort rather than correctness: the
+ *  frame we would show is already decoded, and the only thing missing is the
+ *  run behind it. One permanently dead frame inside the horizon caps the count
+ *  below the watermark for ever, and charging `MAX_STALL_MS` for that would
+ *  freeze the picture 6 s at a time on frames that were ready all along. */
+const REBUFFER_MAX_MS = 1500;
 
 export interface VideoFrame {
   id: string;
@@ -149,6 +160,17 @@ export function useVideoFrames(
   const [frameIndex, setFrameIndexState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
+  // Mirrors `isBuffering` so the loop can dedupe its own writes. It has to
+  // outlive the effect: `container` is a fresh object on every
+  // ['video-frames', id] invalidation, so the playback effect restarts mid-play
+  // — and an effect-local flag would restart at `false` while the state was
+  // still `true`, leaving the spinner on for the rest of the session.
+  const bufferingShownRef = useRef(false);
+  const setBuffering = useCallback((value: boolean) => {
+    if (value === bufferingShownRef.current) return;
+    bufferingShownRef.current = value;
+    setIsBuffering(value);
+  }, []);
 
   // Latest frameIndex for the playback loop to read. The loop must not list
   // `frameIndex` as an effect dependency — re-creating the timer on every frame
@@ -225,7 +247,7 @@ export function useVideoFrames(
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      setIsBuffering(false);
+      setBuffering(false);
       return;
     }
 
@@ -234,13 +256,6 @@ export function useVideoFrames(
     // rather than in refs: pausing and playing again starts a fresh one.
     let stalledSince: number | null = null;
     let bestBuffered = -1;
-    let bufferingShown = false;
-
-    const setBuffering = (value: boolean) => {
-      if (value === bufferingShown) return;
-      bufferingShown = value;
-      setIsBuffering(value);
-    };
 
     const schedule = (delay: number) => {
       timerRef.current = setTimeout(tick, delay);
@@ -274,14 +289,17 @@ export function useVideoFrames(
           bestBuffered = buffered;
         }
         setBuffering(true);
-        if (now - stalledSince < MAX_STALL_MS) {
+        // Waiting for the frame itself is worth `MAX_STALL_MS`; waiting only
+        // for the run behind it is not — see `REBUFFER_MAX_MS`.
+        const budget = buffered >= 1 ? REBUFFER_MAX_MS : MAX_STALL_MS;
+        if (now - stalledSince < budget) {
           schedule(BUFFER_RECHECK_MS);
           return;
         }
         // Bounded, so a frame that will never arrive cannot hang playback for
         // good. Step over it; the buffering indicator was up the whole time.
         logger.debug(
-          `useVideoFrames: frame ${next} never buffered (${buffered}/${required} after ${MAX_STALL_MS} ms) — skipping`
+          `useVideoFrames: frame ${next} stalled at ${buffered}/${required} for ${budget} ms — advancing anyway`
         );
       }
 
@@ -298,7 +316,7 @@ export function useVideoFrames(
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = null;
     };
-  }, [isPlaying, container]);
+  }, [isPlaying, container, setBuffering]);
 
   const play = useCallback(() => setIsPlaying(true), []);
   const pause = useCallback(() => setIsPlaying(false), []);
