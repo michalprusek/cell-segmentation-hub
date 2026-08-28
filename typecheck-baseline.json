@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 474,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1420,
-    "all": 1915
+    "tsconfig.test.json": 1421,
+    "all": 1916
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1583,7 +1583,8 @@
         "TS18048: 'polygon.children.length' is possibly 'undefined'.": 1
       },
       "src/pages/segmentation/components/PolygonListPanel.tsx": {
-        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1
+        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,
+        "TS6307: File 'src/pages/segmentation/utils/neuronClassStyle.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/components/SegmentationEditorLayout.tsx": {
         "TS2322: Type '(e: React.MouseEvent<HTMLDivElement>) => void' is not assignable to type '(e: MouseEvent<Element, MouseEvent>) => void'.": 3,

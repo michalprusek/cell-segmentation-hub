@@ -545,6 +545,63 @@ describe('FormatConverter', () => {
 // A polyline is a generic primitive — the converter must NOT assume sperm for a
 // microtubule (or any non-sperm) project. These lock the project-type-driven
 // category + the absence of sperm-only fields.
+describe('FormatConverter — neuron classes (neurite / soma)', () => {
+  const neurite: Polygon = {
+    ...closedPolygon,
+    id: 'poly-neurite',
+    partClass: 'neurite',
+  };
+  const soma: Polygon = { ...closedPolygon, id: 'poly-soma', partClass: 'soma' };
+
+  it('gives each neuron class its own COCO category, not the generic cell', async () => {
+    // A standard COCO reader takes `category_id` as THE class. Folding both
+    // classes into `cell` would present a two-class dataset as one class.
+    const { data: coco } = await new FormatConverter().convertToCOCO(
+      [buildImageData([neurite, soma])],
+      'neurite'
+    );
+    const byId = Object.fromEntries(coco.categories.map(c => [c.id, c.name]));
+    expect(byId[3]).toBe('neurite');
+    expect(byId[4]).toBe('soma');
+    expect(coco.annotations.map(a => a.category_id).sort()).toEqual([3, 4]);
+  });
+
+  it('also carries the class as an attribute (CVAT surfaces attributes)', async () => {
+    const { data: coco } = await new FormatConverter().convertToCOCO(
+      [buildImageData([neurite])],
+      'neurite'
+    );
+    expect(coco.annotations[0].attributes?.partClass).toBe('neurite');
+  });
+
+  it('lists only the classes actually present', async () => {
+    const { data: coco } = await new FormatConverter().convertToCOCO(
+      [buildImageData([neurite])],
+      'neurite'
+    );
+    expect(coco.categories.map(c => c.name)).toEqual(['cell', 'neurite']);
+  });
+
+  it('leaves a class-free project byte-identical (no stray categories)', async () => {
+    const { data: coco } = await new FormatConverter().convertToCOCO(
+      [buildImageData([closedPolygon])],
+      'spheroid'
+    );
+    expect(coco.categories.map(c => c.name)).toEqual(['cell']);
+    expect(coco.annotations[0].category_id).toBe(1);
+    expect(coco.annotations[0].attributes?.partClass).toBeUndefined();
+  });
+
+  it('exposes the class in the JSON export too', async () => {
+    const { data } = await new FormatConverter().convertToJSON(
+      [buildImageData([neurite, soma])],
+      'neurite'
+    );
+    const external = data.images[0].segmentation!.polygons.external;
+    expect(external.map(e => e.partClass)).toEqual(['neurite', 'soma']);
+  });
+});
+
 describe('FormatConverter — non-sperm (generic/microtubule) polylines', () => {
   const mtPolyline: Polygon = {
     id: 'pl-mt',

@@ -725,6 +725,12 @@ export default {
       internal: 'Interní',
       polyline: 'Polylajn',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurit',
+      soma: 'Soma',
+    },
     shortcuts: {
       buttonText: 'Zkratky',
       title: 'Klávesové zkratky',

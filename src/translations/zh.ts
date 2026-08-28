@@ -815,6 +815,12 @@ export default {
       internal: 'Internal',
       polyline: '折线',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: '神经突',
+      soma: '胞体',
+    },
     shortcuts: {
       buttonText: '快捷键',
       title: '键盘快捷键',

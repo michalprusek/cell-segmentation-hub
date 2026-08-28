@@ -879,6 +879,12 @@ export default {
       internal: 'Interno',
       polyline: 'Polilínea',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurita',
+      soma: 'Soma',
+    },
     shortcuts: {
       buttonText: 'Atajos',
       title: 'Atajos de Teclado',

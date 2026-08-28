@@ -811,6 +811,12 @@ export default {
       internal: 'Internal',
       polyline: 'Polyline',
     },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurite',
+      soma: 'Soma',
+    },
     loading: 'Loading segmentation...',
     noPolygons: 'No polygons found',
     polygonNotFound: 'Polygon not found',
