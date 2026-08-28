@@ -6,6 +6,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { useLanguage } from '@/contexts/exports';
 import apiClient from '@/lib/api';
+import en from '@/translations/en';
 
 vi.mock('@/lib/api', () => ({
   default: {
@@ -153,9 +154,10 @@ describe('LanguageContext', () => {
         expect(result.current.language).toBe('en');
       });
 
-      // 'common.appName' is defined in en.ts as 'Spheroid Segmentation'
+      // Asserted against the dictionary itself rather than a literal, so
+      // rewording a string can't silently rot this test.
       const translation = result.current.t('common.appName');
-      expect(translation).toBe('Spheroid Segmentation');
+      expect(translation).toBe(en.common.appName);
     });
 
     it('returns the key itself for a missing translation', async () => {

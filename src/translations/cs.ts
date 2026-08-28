@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: 'Segmentace Sféroidů',
+    appName: 'SpheroSeg',
     loading: 'Načítání...',
     save: 'Uložit',
     cancel: 'Zrušit',
@@ -88,22 +88,61 @@ export default {
   },
   landing: {
     hero: {
-      badge: 'Pokročilá platforma pro segmentaci sféroidů',
-      title: 'AI analýza buněk pro biomedicínský výzkum',
+      eyebrow: 'Segmentace biomedicínských obrazů · ÚTIA AV ČR',
+      title: 'Segmentace pro každý vzorek, který nasnímáte.',
       subtitle:
-        'Vylepšete svou analýzu mikroskopických buněčných obrázků s naší nejmodernější platformou pro segmentaci sféroidů. Navrženo pro výzkumníky hledající přesnost a efektivitu.',
+        'Sféroidy a jejich rozpad, rány ze scratch assay, morfologie spermií, vlákna mikrotubulů, mikrokapsle — pro každý typ natrénovaný model, pro všechny jeden editor a export, kterému ImageJ, COCO i YOLO rozumí.',
       getStarted: 'Začít',
-      learnMore: 'Zjistit více',
+      learnMore: 'Co všechno zvládne',
+    },
+    specimens: {
+      trayLabel: 'Vyberte vzorek',
+      spheroid: {
+        label: 'Sféroid',
+        detail:
+          'Světlé pole, 2048 × 2048. Jeden nádorový sféroid, obrys červeně od modelu HRNet — přesně ten obrys, který vám editor nabídne k úpravě.',
+        alt: 'Snímek jednoho nádorového sféroidu ve světlém poli s červeně vykresleným segmentačním obrysem.',
+      },
+      disintegration: {
+        label: 'Rozpadající se sféroid',
+        detail:
+          'Světlé pole, 2048 × 2048, 48 hodin od začátku rozpadového testu. Husté jádro je zeleně, každá buňka, která se od něj oddělila, červeně. Přesně z tohoto rozdělení se počítá index rozpadu.',
+        alt: 'Snímek rozpadajícího se sféroidu ve světlém poli: husté jádro obtažené zeleně, každá oddělená buňka červeně.',
+      },
+      wound: {
+        label: 'Rána ze scratch assay',
+        detail:
+          'Scratch assay, 2048 × 2048. Otevřená rána je červená hranice; ostrůvky buněk uvnitř jsou modré a od plochy rány se odečítají.',
+        alt: 'Snímek ze scratch assay s otevřenou ranou obtaženou červeně a čtyřmi ostrůvky buněk uvnitř obtaženými modře.',
+      },
+      sperm: {
+        label: 'Morfologie spermií',
+        detail:
+          'Světlé pole, 1360 × 1024. Každá buňka je vedena jako tři lomené čáry místo jedné plochy — hlavička zeleně, krček oranžově, bičík azurově — takže každý úsek lze změřit zvlášť.',
+        alt: 'Snímek spermie ve světlém poli, vedená třemi barevnými lomenými čarami: zelená hlavička, oranžový krček, azurový bičík.',
+      },
+      microtubule: {
+        label: 'Vlákna mikrotubulů',
+        detail:
+          'Časosběr v IRM, snímek 30. Každé vlákno má vlastní osu a barvu podle identifikátoru dráhy — tu si drží po celém časosběru, takže kymograf sleduje jedno konkrétní vlákno, ne to zrovna nejbližší.',
+        alt: 'Snímek mikrotubulů v interferenčním reflexním kontrastu, každé vlákno vedené osou ve vlastní barvě.',
+      },
+      microcapsule: {
+        label: 'Mikrokapsle',
+        detail:
+          'Světlé pole, 1280 × 1024. Celé kapsle jsou obtaženy červeně a měří se; kapsle uříznuté okrajem snímku jsou šedé a do statistik nevstupují.',
+        alt: 'Snímek mikrokapslí ve světlém poli, celé kapsle obtažené červeně, kapsle uříznuté okrajem šedě.',
+      },
     },
     about: {
-      badge: 'Naše mise',
-      title: 'Posouvání biomedicínského výzkumu prostřednictvím technologie',
+      badge: 'Kdo za tím stojí',
+      title: 'Odkud platforma pochází',
       description1:
         'Naše platforma byla vyvinuta Bc. Michalem Průškem, studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D.',
       description2:
         'Tento projekt je ve spolupráci se skupinou Ing. Silvie Rimpelové, Ph.D. z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       description3:
-        'Kombinujeme nejmodernější AI modely s intuitivním rozhraním a poskytujeme výzkumníkům mocné nástroje pro analýzu mikroskopických obrázků se zaměřením na segmentaci sféroidů s bezkonkurenční přesností.',
+        'Začalo to u nádorových sféroidů a rostlo to s experimenty, které nám naši spolupracovníci nosili: rozpadové testy, rány ze scratch assay, morfologie spermií, časosběry mikrotubulů a mikrokapsle. Každý typ vzorku má vlastní natrénovaný model, vlastní metriky a vlastní export — a za nimi jeden editor.',
       contactText: 'Pro dotazy nás prosím kontaktujte na',
     },
     acknowledgments: {
@@ -116,50 +155,47 @@ export default {
       visitPage: 'Navštívit stránku',
     },
     cta: {
-      title:
-        'Jste připraveni transformovat svůj pracovní postup analýzy buněk?',
+      title: 'Přineste vlastní snímky.',
       subtitle:
-        'Připojte se k předním výzkumníkům, kteří již používají naši platformu k urychlení svých objevů.',
-      cardTitle: 'Začněte ještě dnes',
-      cardDescription:
-        'Zaregistrujte se zdarma a zažijte sílu AI-řízené segmentace sféroidů.',
+        'Založte projekt, vyberte typ vzorku a nahrajte sérii snímků. Model běží na GPU a výsledek se rovnou otevře v editoru, připravený k úpravám.',
+      cardDescription: 'Registrace je otevřená — pozvánku nepotřebujete',
       createAccount: 'Vytvořit účet',
     },
     features: {
-      badge: 'Výkonné možnosti',
-      title: 'Pokročilé nástroje pro biomedicínský výzkum',
+      badge: 'Co umí',
+      title: 'Jeden editor, ať máte na sklíčku cokoli',
       subtitle:
-        'Naše platforma nabízí komplexní sadu funkcí navržených pro zefektivnění vašeho pracovního postupu segmentace sféroidů.',
+        'Každý typ vzorku má vlastní model a vlastní metriky. Všechno další — úpravy, sledování v čase, export — je už stejné.',
       cards: {
-        advancedSegmentation: {
-          title: 'Pokročilá segmentace',
+        models: {
+          title: 'Model pro každý typ vzorku',
           description:
-            'Přesná detekce sféroidů s analýzou hranic pro přesné měření buněk.',
+            'Typ vzorku zvolíte při zakládání projektu a nabídnou se jen modely, které k němu sedí. Samotné sféroidy jich mají pět, od U-Netu za 200 ms po Mamba bottleneck pro snímky z neznámého mikroskopu.',
         },
-        aiPowered: {
-          title: 'AI analýza',
+        stacks: {
+          title: 'Časosběry a série, nejen jednotlivé snímky',
           description:
-            'Využijte algoritmy hlubokého učení pro automatickou detekci a klasifikaci buněk.',
+            'MP4, AVI, MOV, MKV i WebM, vícestránkový TIFF a Nikon ND2 se nahrají jako jedna položka a rozbalí se na snímky. Vícekanálové akvizice si kanály ponechají a vy vyberete, ze kterého model čte.',
         },
-        effortlessUploads: {
-          title: 'Snadné nahrávání',
+        tracking: {
+          title: 'Identita, která přežije posun v čase',
           description:
-            'Přetáhněte své mikroskopické obrázky pro okamžité zpracování a analýzu.',
+            'Mikrotubuly se mezi snímky páruje geometrie křivek, takže si vlákno drží své id i barvu po celé akvizici — a kymograf měří právě to vlákno, ne to zrovna nejbližší.',
         },
-        statisticalInsights: {
-          title: 'Statistické přehledy',
+        corrections: {
+          title: 'Cokoli opravíte ručně',
           description:
-            'Komplexní metriky a vizualizace pro extrakci významných datových vzorců.',
+            'Táhněte vrcholy, rozdělte slitý objekt na dva, přidejte body na obrysu, spojte dvě lomené čáry, přeznačte třídu. Úpravy se ukládají k obrázku, nedrží se jen v prohlížeči.',
         },
-        collaboration: {
-          title: 'Nástroje pro spolupráci',
+        measurements: {
+          title: 'Čísla, v souborech, které otevřou i jiné nástroje',
           description:
-            'Sdílejte projekty s kolegy a spolupracujte v reálném čase na výzkumných nálezech.',
+            'Plocha, obvod, Feretův průměr, délka lomené čáry a intenzita po kanálech — export do XLSX i do COCO, YOLO, ROI sad pro ImageJ a anotací pro CVAT.',
         },
-        processingPipeline: {
-          title: 'Zpracovatelský proces',
+        batch: {
+          title: 'Dimenzováno na celý experiment',
           description:
-            'Automatizovaný pracovní postup od předzpracování po finální analýzu s přizpůsobitelnými parametry.',
+            'Dávky až 10 000 snímků běží na GPU a fronta odsouvá toho, koho právě obsloužila, takže jeden 600snímkový časosběr nezablokuje ostatní.',
         },
       },
     },

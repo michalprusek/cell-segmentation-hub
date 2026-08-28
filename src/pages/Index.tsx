@@ -4,13 +4,9 @@ import Hero from '@/components/Hero';
 import Features from '@/components/Features';
 import Footer from '@/components/Footer';
 import { useLanguage } from '@/contexts/useLanguage';
-import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 
 function Index() {
   const { t } = useLanguage();
-
-  // Use custom hook for scroll animations with feature detection
-  useScrollAnimation('.animate-on-scroll');
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -19,126 +15,107 @@ function Index() {
         <Hero />
         <Features />
 
-        {/* About Section */}
-        <section id="about" className="py-20 bg-gray-50 dark:bg-gray-900">
+        {/* About */}
+        <section
+          id="about"
+          className="border-t border-gray-200 py-20 dark:border-gray-800"
+        >
           <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <div className="text-center mb-12">
-                <div className="inline-block bg-blue-100 px-4 py-2 rounded-full mb-4">
-                  <span className="text-sm font-medium text-blue-700">
-                    {t('landing.about.badge')}
-                  </span>
-                </div>
-                <h2 className="text-3xl md:text-4xl font-bold mb-6">
+            <div className="grid gap-10 lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-16">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
+                  {t('landing.about.badge')}
+                </p>
+                <h2 className="mt-4 text-3xl font-semibold tracking-[-0.025em] text-gray-900 md:text-4xl dark:text-gray-50">
                   {t('landing.about.title')}
                 </h2>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center animate-on-scroll">
-                <div className="glass-morphism rounded-2xl overflow-hidden">
-                  <img
-                    src="/lovable-uploads/8f483962-36d5-4bae-8c90-c9542f8cc2d8.png"
-                    alt="Segmented spheroid"
-                    className="w-full h-auto"
-                  />
-                </div>
-
-                <div className="space-y-6">
-                  <p className="text-gray-700 leading-relaxed dark:text-gray-300">
-                    {t('landing.about.description1')}
-                  </p>
-                  <p className="text-gray-700 leading-relaxed dark:text-gray-300">
-                    {t('landing.about.description2')}
-                  </p>
-                  <p className="text-gray-700 leading-relaxed dark:text-gray-300">
-                    {t('landing.about.description3')}
-                  </p>
-                  <p className="text-gray-700 leading-relaxed dark:text-gray-300">
-                    {t('landing.about.contactText')}{' '}
-                    <a
-                      href="mailto:prusek@utia.cas.cz"
-                      className="text-blue-600 hover:underline"
-                    >
-                      prusek@utia.cas.cz
-                    </a>
-                  </p>
-                </div>
+              <div className="max-w-2xl space-y-5 text-gray-600 dark:text-gray-300">
+                <p className="leading-relaxed">
+                  {t('landing.about.description1')}
+                </p>
+                <p className="leading-relaxed">
+                  {t('landing.about.description2')}
+                </p>
+                <p className="leading-relaxed">
+                  {t('landing.about.description3')}
+                </p>
+                <p className="leading-relaxed">
+                  {t('landing.about.contactText')}{' '}
+                  <a
+                    href="mailto:prusek@utia.cas.cz"
+                    className="font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
+                  >
+                    prusek@utia.cas.cz
+                  </a>
+                </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Acknowledgments Section */}
-        <section id="acknowledgments" className="py-16">
+        {/* Acknowledgments */}
+        <section
+          id="acknowledgments"
+          className="border-t border-gray-200 py-16 dark:border-gray-800"
+        >
           <div className="container mx-auto px-4">
-            <div className="max-w-3xl mx-auto text-center animate-on-scroll">
-              <div className="inline-block bg-blue-100 px-4 py-2 rounded-full mb-4">
-                <span className="text-sm font-medium text-blue-700">
+            <div className="grid gap-10 lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-16">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
                   {t('landing.acknowledgments.badge')}
-                </span>
+                </p>
+                <h2 className="mt-4 text-2xl font-semibold tracking-[-0.02em] text-gray-900 md:text-3xl dark:text-gray-50">
+                  {t('landing.acknowledgments.title')}
+                </h2>
               </div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                {t('landing.acknowledgments.title')}
-              </h2>
-              <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
-                {t('landing.acknowledgments.lukasIntro')}{' '}
+
+              <div className="max-w-2xl">
+                <p className="leading-relaxed text-gray-600 dark:text-gray-300">
+                  {t('landing.acknowledgments.lukasIntro')}{' '}
+                  <a
+                    href="https://veskrna.matfyz.cz"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
+                  >
+                    {t('landing.acknowledgments.lukasName')}
+                  </a>{' '}
+                  {t('landing.acknowledgments.lukasContribution')}
+                </p>
                 <a
                   href="https://veskrna.matfyz.cz"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline font-semibold"
+                  className="mt-4 inline-block text-sm text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
                 >
-                  {t('landing.acknowledgments.lukasName')}
-                </a>{' '}
-                {t('landing.acknowledgments.lukasContribution')}
-              </p>
-              <a
-                href="https://veskrna.matfyz.cz"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-4 text-blue-600 hover:underline text-sm"
-              >
-                {t('landing.acknowledgments.visitPage')} →
-              </a>
+                  {t('landing.acknowledgments.visitPage')} →
+                </a>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-20 relative overflow-hidden">
-          <div className="absolute inset-0 -z-10">
-            <div
-              className="absolute top-1/4 right-1/4 w-64 h-64 bg-blue-200/30 rounded-full filter blur-3xl animate-float"
-              style={{ animationDelay: '-3s' }}
-            />
-            <div
-              className="absolute bottom-1/3 left-1/3 w-80 h-80 bg-blue-300/20 rounded-full filter blur-3xl animate-float"
-              style={{ animationDelay: '-1s' }}
-            />
-          </div>
-
+        {/* Sign-up */}
+        <section className="border-t border-white/10 bg-gray-950 py-20 text-gray-100">
           <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto text-center animate-on-scroll">
-              <h2 className="text-3xl md:text-4xl font-bold mb-8">
+            <div className="max-w-3xl">
+              <h2 className="text-3xl font-semibold tracking-[-0.025em] md:text-4xl">
                 {t('landing.cta.title')}
               </h2>
-              <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
+              <p className="mt-5 max-w-2xl text-lg leading-relaxed text-gray-400">
                 {t('landing.cta.subtitle')}
               </p>
-              <div className="inline-block glass-morphism rounded-xl p-10 shadow-glass-lg">
-                <h3 className="text-2xl font-semibold mb-6">
-                  {t('landing.cta.cardTitle')}
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  {t('landing.cta.cardDescription')}
-                </p>
-                <a
-                  href="/sign-in"
-                  className="inline-block bg-blue-600 hover:bg-blue-700 text-white py-3 px-8 rounded-md font-medium transition-colors"
-                >
-                  {t('landing.cta.createAccount')}
-                </a>
-              </div>
+              <a
+                href="/sign-in"
+                className="mt-8 inline-flex items-center rounded-md bg-blue-600 px-7 py-3 font-medium text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950"
+              >
+                {t('landing.cta.createAccount')}
+              </a>
+              <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-gray-400">
+                {t('landing.cta.cardDescription')}
+              </p>
             </div>
           </div>
         </section>

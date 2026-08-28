@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: 'Segmentation de Sphéroïdes',
+    appName: 'SpheroSeg',
     loading: 'Chargement...',
     save: 'Enregistrer',
     cancel: 'Annuler',
@@ -88,22 +88,62 @@ export default {
   },
   landing: {
     hero: {
-      badge: 'Plateforme Avancée de Segmentation de Sphéroïdes',
-      title: 'Analyse Cellulaire par IA pour la Recherche Biomédicale',
+      eyebrow:
+        "Segmentation d'images biomédicales · ÚTIA, Académie tchèque des sciences",
+      title: 'La segmentation pour chaque échantillon que vous imagez.',
       subtitle:
-        "Améliorez votre analyse d'images cellulaires microscopiques avec notre plateforme de segmentation de sphéroïdes de pointe. Conçue pour les chercheurs recherchant précision et efficacité.",
+        "Sphéroïdes et leur désintégration, plaies de test de rayure, morphologie des spermatozoïdes, filaments de microtubules, microcapsules : un modèle entraîné pour chaque type, un seul éditeur pour tous, et des exports qu'ImageJ, COCO et YOLO comprennent déjà.",
       getStarted: 'Commencer',
-      learnMore: 'En savoir plus',
+      learnMore: 'Voir ce que la plateforme traite',
+    },
+    specimens: {
+      trayLabel: 'Choisissez un échantillon',
+      spheroid: {
+        label: 'Sphéroïde',
+        detail:
+          "Fond clair, 2048 × 2048. Un sphéroïde tumoral, détouré en rouge par HRNet : exactement le contour que l'éditeur vous propose de corriger.",
+        alt: "Micrographie en fond clair d'un sphéroïde tumoral, son contour de segmentation tracé en rouge.",
+      },
+      disintegration: {
+        label: 'Sphéroïde en désintégration',
+        detail:
+          "Fond clair, 2048 × 2048, 48 heures après le début d'un test de désintégration. Le cœur dense est en vert, chaque cellule qui s'en est détachée en rouge. L'indice de désintégration se calcule exactement à partir de cette séparation.",
+        alt: "Micrographie en fond clair d'un sphéroïde en train de se désintégrer, son cœur dense détouré en vert et chaque cellule détachée en rouge.",
+      },
+      wound: {
+        label: 'Plaie de test de rayure',
+        detail:
+          'Test de rayure, 2048 × 2048. La plaie ouverte est la limite rouge ; les îlots de cellules à l’intérieur sont en bleu et sont soustraits de la surface de la plaie.',
+        alt: "Micrographie de test de rayure : la plaie ouverte détourée en rouge et quatre îlots de cellules à l'intérieur détourés en bleu.",
+      },
+      sperm: {
+        label: 'Morphologie des spermatozoïdes',
+        detail:
+          'Fond clair, 1360 × 1024. Chaque cellule est tracée par trois polylignes plutôt que par une seule forme — tête en vert, pièce intermédiaire en ambre, flagelle en cyan — pour que chaque segment se mesure séparément.',
+        alt: "Micrographie en fond clair d'un spermatozoïde tracé par trois polylignes colorées : tête verte, pièce intermédiaire ambre, flagelle cyan.",
+      },
+      microtubule: {
+        label: 'Filaments de microtubules',
+        detail:
+          "Série temporelle en IRM, image 30. Chaque filament reçoit sa propre ligne centrale et sa couleur vient de l'identifiant de trajectoire, qu'il conserve sur toute l'acquisition : le kymographe suit donc un filament précis, et non le plus proche du moment.",
+        alt: 'Micrographie de microtubules en contraste de réflexion interférentielle, chaque filament tracé par une ligne centrale de sa propre couleur.',
+      },
+      microcapsule: {
+        label: 'Microcapsules',
+        detail:
+          "Fond clair, 1280 × 1024. Les capsules entières sont détourées en rouge et mesurées ; celles que le bord de l'image coupe sont grisées et écartées des statistiques.",
+        alt: "Micrographie en fond clair de microcapsules : les capsules entières détourées en rouge, celles coupées par le bord de l'image grisées.",
+      },
     },
     about: {
-      badge: 'Notre Mission',
-      title: 'Faire Progresser la Recherche Biomédicale par la Technologie',
+      badge: 'Qui la développe',
+      title: "D'où vient la plateforme",
       description1:
         "Notre plateforme a été développée par Bc. Michal Průšek, étudiant à la Faculté des Sciences Nucléaires et d'Ingénierie Physique (FJFI) de l'Université Technique Tchèque de Prague, sous la supervision d'Ing. Adam Novozámský, Ph.D.",
       description2:
         "Ce projet est une collaboration avec le groupe d'Ing. Silvie Rimpelová, Ph.D. de l'Institut de Biochimie et de Microbiologie de l'UCT Prague (VŠCHT Praha).",
       description3:
-        "Nous combinons des modèles d'IA de pointe avec une interface intuitive pour fournir aux chercheurs des outils puissants pour l'analyse d'images microscopiques, en nous concentrant sur la segmentation de sphéroïdes avec une précision inégalée.",
+        "Tout a commencé par les sphéroïdes tumoraux, puis la plateforme a grandi avec les expériences que nos collaborateurs nous ont apportées : tests de désintégration, plaies de test de rayure, morphologie des spermatozoïdes, séries temporelles de microtubules et microcapsules. Chaque type d'échantillon a son modèle entraîné, ses métriques et son export — et derrière eux, un seul éditeur.",
       contactText: 'Pour toute demande, veuillez nous contacter à',
     },
     acknowledgments: {
@@ -115,52 +155,50 @@ export default {
         'pour avoir contribué le module complet de segmentation de cicatrisation des plaies à cette plateforme.',
       visitPage: 'Visiter la page',
     },
-    features: {
-      badge: 'Capacités Puissantes',
-      title: 'Outils Avancés pour la Recherche Biomédicale',
+    cta: {
+      title: 'Apportez vos propres images.',
       subtitle:
-        'Notre plateforme offre une suite complète de fonctionnalités conçues pour rationaliser votre flux de travail de segmentation de sphéroïdes.',
+        "Créez un projet, choisissez le type d'échantillon et téléversez une série. Le modèle tourne sur GPU et le résultat s'ouvre directement dans l'éditeur, prêt à être corrigé.",
+      cardDescription: "L'inscription est ouverte — aucune invitation requise",
+      createAccount: 'Créer votre compte',
+    },
+    features: {
+      badge: 'Ce qu’elle fait',
+      title: "Un seul éditeur, quel que soit ce qu'il y a sur la lame",
+      subtitle:
+        "Chaque type d'échantillon a son modèle et ses métriques. Tout le reste — édition, suivi, export — suit le même flux de travail.",
       cards: {
-        advancedSegmentation: {
-          title: 'Segmentation Avancée',
+        models: {
+          title: "Un modèle par type d'échantillon",
           description:
-            'Détection précise de sphéroïdes avec analyse des limites pour des mesures cellulaires exactes.',
+            "Vous choisissez le type d'échantillon à la création du projet et seuls les modèles adaptés vous sont proposés. Les sphéroïdes en comptent cinq à eux seuls, du U-Net à 200 ms au goulot d'étranglement Mamba pour les images venant d'un microscope inconnu.",
         },
-        aiPowered: {
-          title: 'Analyse par IA',
+        stacks: {
+          title: 'Séries temporelles et piles, pas seulement des images fixes',
           description:
-            "Tirez parti des algorithmes d'apprentissage profond pour la détection et classification cellulaire automatisée.",
+            'MP4, AVI, MOV, MKV et WebM, TIFF multipage et Nikon ND2 se téléversent comme un seul élément et se déplient en images. Les acquisitions multicanaux conservent leurs canaux, et vous décidez duquel le modèle lit.',
         },
-        effortlessUploads: {
-          title: 'Téléchargements Sans Effort',
+        tracking: {
+          title: "Une identité qui survit au curseur d'images",
           description:
-            'Glissez-déposez vos images microscopiques pour un traitement et une analyse instantanés.',
+            "Les microtubules sont appariés d'une image à la suivante par la géométrie des courbes : un filament garde donc son identifiant et sa couleur sur toute l'acquisition, et le kymographe mesure ce filament-là, pas le plus proche du moment.",
         },
-        statisticalInsights: {
-          title: 'Perspectives Statistiques',
+        corrections: {
+          title: 'Corrigez tout à la main',
           description:
-            'Métriques complètes et visualisations pour extraire des modèles de données significatifs.',
+            'Déplacez des sommets, coupez en deux un objet fusionné, ajoutez des points le long d’un contour, joignez deux polylignes, changez une classe. Les modifications sont enregistrées avec l’image, pas seulement dans le navigateur.',
         },
-        collaboration: {
-          title: 'Outils de Collaboration',
+        measurements: {
+          title: "Des chiffres, dans des fichiers que d'autres outils ouvrent",
           description:
-            'Partagez des projets avec des collègues et collaborez en temps réel sur les résultats de recherche.',
+            'Surface, périmètre, diamètre de Feret, longueur de polyligne et intensité par canal, exportés en XLSX aux côtés de COCO, YOLO, jeux de ROI ImageJ et annotations CVAT.',
         },
-        processingPipeline: {
-          title: 'Pipeline de Traitement',
+        batch: {
+          title: 'Dimensionné pour une expérience entière',
           description:
-            "Flux de travail automatisé du préprocessing à l'analyse finale avec des paramètres personnalisables.",
+            "Des lots de 10 000 images tournent sur GPU, et la file d'attente rétrograde celui qu'elle vient de servir : une série de 600 images ne bloque donc pas tout le monde.",
         },
       },
-    },
-    cta: {
-      title: "Prêt à Transformer Votre Flux de Travail d'Analyse Cellulaire ?",
-      subtitle:
-        'Rejoignez les chercheurs de premier plan qui utilisent déjà notre plateforme pour accélérer leurs découvertes.',
-      cardTitle: "Commencez Aujourd'hui",
-      cardDescription:
-        "Inscrivez-vous pour un compte gratuit et découvrez la puissance de la segmentation de sphéroïdes pilotée par l'IA.",
-      createAccount: 'Créer Votre Compte',
     },
   },
   dashboard: {

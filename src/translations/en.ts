@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: 'Spheroid Segmentation',
+    appName: 'SpheroSeg',
     loading: 'Loading...',
     save: 'Save',
     cancel: 'Cancel',
@@ -94,22 +94,62 @@ export default {
 
   landing: {
     hero: {
-      badge: 'Advanced Spheroid Segmentation Platform',
-      title: 'AI-powered Cell Analysis for Biomedical Research',
+      eyebrow:
+        'Biomedical image segmentation · ÚTIA, Czech Academy of Sciences',
+      title: 'Segmentation for every specimen you image.',
       subtitle:
-        'Elevate your microscopic cell image analysis with our cutting-edge spheroid segmentation platform. Designed for researchers seeking precision and efficiency.',
-      getStarted: 'Get Started',
-      learnMore: 'Learn More',
+        'Spheroids and their disintegration, scratch-assay wounds, sperm morphology, microtubule filaments, microcapsules — a trained model for each, one editor for all of them, and exports that ImageJ, COCO and YOLO already understand.',
+      getStarted: 'Get started',
+      learnMore: 'See what it handles',
+    },
+    specimens: {
+      trayLabel: 'Pick a specimen',
+      spheroid: {
+        label: 'Spheroid',
+        detail:
+          'Bright-field, 2048 × 2048. One tumour spheroid, outlined in red by HRNet — the same contour the editor hands you to correct.',
+        alt: 'Bright-field micrograph of a single tumour spheroid with its segmentation contour drawn around it in red.',
+      },
+      disintegration: {
+        label: 'Disintegrating spheroid',
+        detail:
+          'Bright-field, 2048 × 2048, 48 hours into a disintegration assay. The dense core is green; every cell that has broken away from it is red. The Disintegration Index is computed from exactly this split.',
+        alt: 'Bright-field micrograph of a spheroid breaking apart, its dense core outlined in green and each detached cell outlined in red.',
+      },
+      wound: {
+        label: 'Scratch-assay wound',
+        detail:
+          'Scratch assay, 2048 × 2048. The open wound is the red boundary; the islands of cells inside it are blue and are subtracted from the wound area.',
+        alt: 'Scratch-assay micrograph with the open wound outlined in red and four islands of cells inside it outlined in blue.',
+      },
+      sperm: {
+        label: 'Sperm morphology',
+        detail:
+          'Bright-field, 1360 × 1024. Each cell is traced as three polylines instead of one blob — head in green, midpiece in amber, tail in cyan — so every segment can be measured on its own.',
+        alt: 'Bright-field micrograph of a sperm cell traced by three coloured polylines: green head, amber midpiece, cyan tail.',
+      },
+      microtubule: {
+        label: 'Microtubule filaments',
+        detail:
+          'IRM time-lapse, frame 30. Every filament gets its own centreline, and its colour comes from the track id — so it keeps that colour across the whole acquisition and a kymograph follows one filament rather than whatever is nearest.',
+        alt: 'Interference-reflection micrograph of microtubules, each filament traced by a centreline in its own colour.',
+      },
+      microcapsule: {
+        label: 'Microcapsules',
+        detail:
+          'Bright-field, 1280 × 1024. Whole capsules are outlined in red and measured; the ones the frame cuts off are greyed out and left out of the statistics.',
+        alt: 'Bright-field micrograph of microcapsules, the whole ones outlined in red and the border-cut ones greyed out.',
+      },
     },
     about: {
-      badge: 'Our Mission',
-      title: 'Advancing Biomedical Research Through Technology',
+      badge: 'Who builds it',
+      title: 'Where the platform comes from',
       description1:
         'Our platform was developed by Bc. Michal Průšek, a student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D.',
       description2:
         'This project is a collaboration with the group of Ing. Silvie Rimpelová, Ph.D. from the Institute of Biochemistry and Microbiology at UCT Prague (VŠCHT Praha).',
       description3:
-        'We combine cutting-edge AI models with an intuitive interface to provide researchers with powerful tools for microscopic image analysis, focusing on spheroid segmentation with unparalleled precision.',
+        'It began with tumour spheroids and grew with the experiments our collaborators brought us: disintegration assays, scratch-assay wounds, sperm morphology, microtubule time-lapses and microcapsules. Each specimen type has its own trained model, its own metrics and its own export — behind one editor.',
       contactText: 'For inquiries, please contact us at',
     },
     acknowledgments: {
@@ -122,49 +162,47 @@ export default {
       visitPage: 'Visit page',
     },
     cta: {
-      title: 'Ready to Transform Your Cell Analysis Workflow?',
+      title: 'Bring your own images.',
       subtitle:
-        'Join leading researchers who are already using our platform to accelerate their discoveries.',
-      cardTitle: 'Get Started Today',
-      cardDescription:
-        'Sign up for a free account and experience the power of AI-driven spheroid segmentation.',
-      createAccount: 'Create Your Account',
+        'Create a project, choose the specimen type and upload a stack. The model runs on GPU and the result opens straight in the editor, ready to correct.',
+      cardDescription: 'Sign-up is open — no invitation needed',
+      createAccount: 'Create your account',
     },
     features: {
-      badge: 'Powerful Capabilities',
-      title: 'Advanced Tools for Biomedical Research',
+      badge: 'What it does',
+      title: 'One editor, whatever is on the slide',
       subtitle:
-        'Our platform offers a comprehensive suite of features designed to streamline your spheroid segmentation workflow.',
+        'Each specimen type gets its own model and its own metrics. Everything after that — editing, tracking, export — is the same workflow.',
       cards: {
-        advancedSegmentation: {
-          title: 'Advanced Segmentation',
+        models: {
+          title: 'A model per specimen type',
           description:
-            'Precise spheroid detection with boundary analysis for accurate cell measurements.',
+            'Choose the specimen type when you create the project and only the models that fit it are offered. Spheroids alone have five, from a 200 ms U-Net to a Mamba bottleneck for images from an unfamiliar microscope.',
         },
-        aiPowered: {
-          title: 'AI-Powered Analysis',
+        stacks: {
+          title: 'Time-lapses and stacks, not just stills',
           description:
-            'Leverage deep learning algorithms for automated cell detection and classification.',
+            'MP4, AVI, MOV, MKV and WebM, multi-page TIFF and Nikon ND2 upload as a single item and expand into frames. Multi-channel acquisitions keep their channels, and you choose which one the model reads.',
         },
-        effortlessUploads: {
-          title: 'Effortless Uploads',
+        tracking: {
+          title: 'Identity that survives the frame slider',
           description:
-            'Drag and drop your microscopic images for instant processing and analysis.',
+            'Microtubules are matched from frame to frame by curve geometry, so a filament keeps its id and its colour across the whole acquisition — and a kymograph measures that filament, not whatever was nearest.',
         },
-        statisticalInsights: {
-          title: 'Statistical Insights',
+        corrections: {
+          title: 'Correct anything by hand',
           description:
-            'Comprehensive metrics and visualizations to extract meaningful data patterns.',
+            'Drag vertices, slice a merged object in two, add points along a contour, join two polylines, relabel a class. Edits are saved with the image, not held in the browser.',
         },
-        collaboration: {
-          title: 'Collaboration Tools',
+        measurements: {
+          title: 'Numbers, in files other tools open',
           description:
-            'Share projects with colleagues and collaborate in real-time on research findings.',
+            'Area, perimeter, Feret diameter, polyline length and per-channel intensity, exported as XLSX alongside COCO, YOLO, ImageJ ROI sets and CVAT annotations.',
         },
-        processingPipeline: {
-          title: 'Processing Pipeline',
+        batch: {
+          title: 'Sized for a whole experiment',
           description:
-            'Automated workflow from preprocessing to final analysis with customizable parameters.',
+            'Batches of up to 10 000 images run on GPU, and the queue deprioritises whoever it just served, so one 600-frame time-lapse cannot hold up everyone else.',
         },
       },
     },

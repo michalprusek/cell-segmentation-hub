@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: 'Segmentación de Esferoides',
+    appName: 'SpheroSeg',
     loading: 'Cargando...',
     save: 'Guardar',
     cancel: 'Cancelar',
@@ -88,22 +88,62 @@ export default {
   },
   landing: {
     hero: {
-      badge: 'Plataforma Avanzada de Segmentación de Esferoides',
-      title: 'Análisis Celular con IA para Investigación Biomédica',
+      eyebrow:
+        'Segmentación de imagen biomédica · ÚTIA, Academia Checa de Ciencias',
+      title: 'Segmentación para cada muestra que usted captura.',
       subtitle:
-        'Eleve su análisis de imágenes celulares microscópicas con nuestra plataforma de segmentación de esferoides de vanguardia. Diseñada para investigadores que buscan precisión y eficiencia.',
+        'Esferoides y su desintegración, heridas de ensayo de rayado, morfología espermática, filamentos de microtúbulos, microcápsulas: un modelo entrenado para cada tipo, un único editor para todos y exportaciones que ImageJ, COCO y YOLO ya entienden.',
       getStarted: 'Comenzar',
-      learnMore: 'Saber Más',
+      learnMore: 'Ver qué admite',
+    },
+    specimens: {
+      trayLabel: 'Elija una muestra',
+      spheroid: {
+        label: 'Esferoide',
+        detail:
+          'Campo claro, 2048 × 2048. Un esferoide tumoral, delineado en rojo por HRNet: exactamente el contorno que el editor le entrega para corregir.',
+        alt: 'Micrografía de campo claro de un esferoide tumoral con su contorno de segmentación dibujado en rojo.',
+      },
+      disintegration: {
+        label: 'Esferoide en desintegración',
+        detail:
+          'Campo claro, 2048 × 2048, 48 horas de ensayo de desintegración. El núcleo denso está en verde y cada célula desprendida en rojo. El índice de desintegración se calcula exactamente a partir de esa separación.',
+        alt: 'Micrografía de campo claro de un esferoide desintegrándose, con el núcleo denso delineado en verde y cada célula desprendida en rojo.',
+      },
+      wound: {
+        label: 'Herida de ensayo de rayado',
+        detail:
+          'Ensayo de rayado, 2048 × 2048. La herida abierta es el contorno rojo; las islas de células dentro de ella están en azul y se restan del área de la herida.',
+        alt: 'Micrografía de ensayo de rayado con la herida abierta delineada en rojo y cuatro islas de células en su interior delineadas en azul.',
+      },
+      sperm: {
+        label: 'Morfología espermática',
+        detail:
+          'Campo claro, 1360 × 1024. Cada célula se traza como tres polilíneas en vez de una sola mancha —cabeza en verde, pieza intermedia en ámbar, cola en cian— para poder medir cada segmento por separado.',
+        alt: 'Micrografía de campo claro de un espermatozoide trazado por tres polilíneas de color: cabeza verde, pieza intermedia ámbar, cola cian.',
+      },
+      microtubule: {
+        label: 'Filamentos de microtúbulos',
+        detail:
+          'Serie temporal en IRM, fotograma 30. Cada filamento tiene su propia línea central y su color procede del identificador de trayectoria, que conserva durante toda la adquisición: así el kimograma sigue un filamento concreto y no el que quede más cerca.',
+        alt: 'Micrografía de microtúbulos en contraste de reflexión interferencial, con cada filamento trazado por una línea central de su propio color.',
+      },
+      microcapsule: {
+        label: 'Microcápsulas',
+        detail:
+          'Campo claro, 1280 × 1024. Las cápsulas completas se delinean en rojo y se miden; las que corta el borde del fotograma se muestran en gris y quedan fuera de las estadísticas.',
+        alt: 'Micrografía de campo claro de microcápsulas, las completas delineadas en rojo y las cortadas por el borde en gris.',
+      },
     },
     about: {
-      badge: 'Nuestra Misión',
-      title: 'Avanzando la Investigación Biomédica a través de la Tecnología',
+      badge: 'Quién lo construye',
+      title: 'De dónde viene la plataforma',
       description1:
         'Nuestra plataforma fue desarrollada por Bc. Michal Průšek, estudiante de la Facultad de Ciencias Nucleares e Ingeniería Física (FJFI) en la Universidad Técnica Checa de Praga, bajo la supervisión de Ing. Adam Novozámský, Ph.D.',
       description2:
         'Este proyecto es una colaboración con el grupo de Ing. Silvie Rimpelová, Ph.D. del Instituto de Bioquímica y Microbiología de la UCT Praga (VŠCHT Praha).',
       description3:
-        'Combinamos modelos de IA de vanguardia con una interfaz intuitiva para proporcionar a los investigadores herramientas poderosas para el análisis de imágenes microscópicas, centrándonos en la segmentación de esferoides con precisión sin igual.',
+        'Empezó con esferoides tumorales y creció con los experimentos que trajeron nuestros colaboradores: ensayos de desintegración, heridas de ensayo de rayado, morfología espermática, series temporales de microtúbulos y microcápsulas. Cada tipo de muestra tiene su propio modelo entrenado, sus propias métricas y su propia exportación, y detrás de todos ellos, un único editor.',
       contactText: 'Para consultas, contáctenos en',
     },
     acknowledgments: {
@@ -115,52 +155,50 @@ export default {
         'por contribuir con el módulo completo de segmentación de cicatrización de heridas a esta plataforma.',
       visitPage: 'Visitar página',
     },
-    features: {
-      badge: 'Capacidades Poderosas',
-      title: 'Herramientas Avanzadas para la Investigación Biomédica',
+    cta: {
+      title: 'Traiga sus propias imágenes.',
       subtitle:
-        'Nuestra plataforma ofrece un conjunto completo de características diseñadas para optimizar su flujo de trabajo de segmentación de esferoides.',
+        'Cree un proyecto, elija el tipo de muestra y suba una serie. El modelo se ejecuta en GPU y el resultado se abre directamente en el editor, listo para corregir.',
+      cardDescription: 'El registro está abierto: no hace falta invitación',
+      createAccount: 'Crear su cuenta',
+    },
+    features: {
+      badge: 'Qué hace',
+      title: 'Un editor, sea lo que sea que haya en el portaobjetos',
+      subtitle:
+        'Cada tipo de muestra tiene su modelo y sus métricas. Todo lo demás —edición, seguimiento, exportación— es el mismo flujo de trabajo.',
       cards: {
-        advancedSegmentation: {
-          title: 'Segmentación Avanzada',
+        models: {
+          title: 'Un modelo por tipo de muestra',
           description:
-            'Detección precisa de esferoides con análisis de límites para mediciones celulares exactas.',
+            'Elija el tipo de muestra al crear el proyecto y solo se ofrecerán los modelos que le corresponden. Los esferoides tienen cinco por sí solos, desde una U-Net de 200 ms hasta un cuello de botella Mamba para imágenes de un microscopio desconocido.',
         },
-        aiPowered: {
-          title: 'Análisis con IA',
+        stacks: {
+          title: 'Series temporales y pilas, no solo imágenes sueltas',
           description:
-            'Aproveche algoritmos de aprendizaje profundo para detección y clasificación celular automatizada.',
+            'MP4, AVI, MOV, MKV y WebM, TIFF multipágina y Nikon ND2 se suben como un único elemento y se despliegan en fotogramas. Las adquisiciones multicanal conservan sus canales y usted decide de cuál lee el modelo.',
         },
-        effortlessUploads: {
-          title: 'Cargas Sin Esfuerzo',
+        tracking: {
+          title: 'Identidad que sobrevive al deslizador de fotogramas',
           description:
-            'Arrastre y suelte sus imágenes microscópicas para procesamiento y análisis instantáneos.',
+            'Los microtúbulos se emparejan de un fotograma al siguiente por la geometría de la curva, de modo que un filamento mantiene su identificador y su color durante toda la adquisición, y el kimograma mide ese filamento y no el que quedase más cerca.',
         },
-        statisticalInsights: {
-          title: 'Perspectivas Estadísticas',
+        corrections: {
+          title: 'Corrija cualquier cosa a mano',
           description:
-            'Métricas integrales y visualizaciones para extraer patrones de datos significativos.',
+            'Arrastre vértices, divida en dos un objeto fusionado, añada puntos a lo largo de un contorno, una dos polilíneas, cambie la clase. Las ediciones se guardan junto a la imagen, no solo en el navegador.',
         },
-        collaboration: {
-          title: 'Herramientas de Colaboración',
+        measurements: {
+          title: 'Números, en archivos que otras herramientas abren',
           description:
-            'Comparta proyectos con colegas y colabore en tiempo real en hallazgos de investigación.',
+            'Área, perímetro, diámetro de Feret, longitud de polilínea e intensidad por canal, exportados como XLSX junto con COCO, YOLO, conjuntos de ROI de ImageJ y anotaciones de CVAT.',
         },
-        processingPipeline: {
-          title: 'Pipeline de Procesamiento',
+        batch: {
+          title: 'Dimensionado para un experimento entero',
           description:
-            'Flujo de trabajo automatizado desde preprocesamiento hasta análisis final con parámetros personalizables.',
+            'Los lotes de hasta 10 000 imágenes se procesan en GPU y la cola posterga a quien acaba de atender, de modo que una serie temporal de 600 fotogramas no bloquea a los demás.',
         },
       },
-    },
-    cta: {
-      title: '¿Listo para Transformar su Flujo de Trabajo de Análisis Celular?',
-      subtitle:
-        'Únase a investigadores líderes que ya están usando nuestra plataforma para acelerar sus descubrimientos.',
-      cardTitle: 'Comience Hoy',
-      cardDescription:
-        'Regístrese para obtener una cuenta gratuita y experimente el poder de la segmentación de esferoides impulsada por IA.',
-      createAccount: 'Crear su Cuenta',
     },
   },
   dashboard: {

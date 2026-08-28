@@ -1,151 +1,54 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
-
-const SHOWCASE_IMAGES = [
-  {
-    src: '/lovable-uploads/026f6ae6-fa28-487c-8263-f49babd99dd3.png',
-    alt: 'Spheroid microscopy image',
-  },
-  {
-    src: '/lovable-uploads/19687f60-a78f-49e3-ada7-8dfc6a5fab4e.png',
-    alt: 'Spheroid microscopy image with analysis',
-  },
-  {
-    src: '/lovable-uploads/3d7a9b1c-4e2f-4a8d-9c3e-5f8b2a1d6c4e.png',
-    alt: 'Spheroid microscopy image detailed',
-  },
-];
+import SpecimenShowcase from '@/components/landing/SpecimenShowcase';
 
 function Hero() {
   const { t } = useLanguage();
-  const heroRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Feature detection for IntersectionObserver
-    if (typeof IntersectionObserver === 'undefined') {
-      console.warn(
-        'IntersectionObserver not supported, hero animations disabled'
-      );
-
-      // Fallback: immediately show hero content
-      if (heroRef.current) {
-        heroRef.current.classList.add('active');
-      }
-
-      return;
-    }
-
-    try {
-      const observer = new IntersectionObserver(
-        entries => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              entry.target.classList.add('active');
-            }
-          });
-        },
-        { threshold: 0.1 }
-      );
-
-      const currentRef = heroRef.current;
-      if (currentRef) {
-        observer.observe(currentRef);
-      }
-
-      return () => {
-        if (currentRef) {
-          observer.unobserve(currentRef);
-        }
-      };
-    } catch (error) {
-      console.error('Failed to initialize hero animation observer', error);
-
-      // Fallback on error: show content immediately
-      if (heroRef.current) {
-        heroRef.current.classList.add('active');
-      }
-    }
-  }, []);
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
-      {/* Background elements */}
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute top-1/3 left-1/4 w-64 h-64 bg-blue-200/30 rounded-full filter blur-3xl animate-float" />
-        <div
-          className="absolute bottom-1/4 right-1/3 w-80 h-80 bg-blue-300/20 rounded-full filter blur-3xl animate-float"
-          style={{ animationDelay: '-2s' }}
-        />
-        <div
-          className="absolute top-2/3 left-1/3 w-40 h-40 bg-blue-400/20 rounded-full filter blur-3xl animate-float"
-          style={{ animationDelay: '-4s' }}
-        />
-      </div>
-
+    <section className="relative overflow-hidden pt-28 pb-16 sm:pt-32">
+      {/* A single soft wash behind the type, no further decoration: the
+          specimen tray below is the only thing here that should draw the eye. */}
       <div
-        ref={heroRef}
-        className="container mx-auto px-4 py-20 staggered-fade-in"
-      >
-        <div className="max-w-4xl mx-auto text-center space-y-8">
-          <div className="inline-block glass-morphism px-4 py-2 rounded-full mb-4">
-            <span className="text-sm font-medium text-blue-600">
-              {t('landing.hero.badge')}
-            </span>
-          </div>
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[28rem] bg-gradient-to-b from-blue-50/80 to-transparent dark:from-blue-950/30"
+      />
 
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight dark:text-gray-100">
+      <div className="container mx-auto px-4">
+        <div className="max-w-6xl">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
+            {t('landing.hero.eyebrow')}
+          </p>
+
+          <h1 className="mt-5 max-w-4xl text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.035em] text-gray-900 sm:text-5xl lg:text-6xl dark:text-gray-50">
             {t('landing.hero.title')}
           </h1>
 
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-gray-600 dark:text-gray-300">
             {t('landing.hero.subtitle')}
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-            <Button
-              asChild
-              variant="framed"
-              size="lg"
-              className="rounded-md text-base px-8 py-6"
-            >
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Button asChild variant="framed" size="lg" className="rounded-md">
               <Link to="/sign-in">
                 {t('landing.hero.getStarted')}
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              className="rounded-md text-base px-8 py-6"
-            >
+            <Button asChild variant="outline" size="lg" className="rounded-md">
               <a href="#features">{t('landing.hero.learnMore')}</a>
             </Button>
           </div>
 
-          <div className="pt-12 pb-8 max-w-6xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {SHOWCASE_IMAGES.map((image, index) => (
-                <div
-                  key={index}
-                  className="relative glass-morphism rounded-2xl shadow-glass-lg overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10" />
-                  <img
-                    src={image.src}
-                    alt={image.alt}
-                    className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
-                  />
-                </div>
-              ))}
-            </div>
+          <div className="mt-14">
+            <SpecimenShowcase />
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
