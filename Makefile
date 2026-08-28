@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-py test-ml test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check ci ci-test dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
+.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-py test-ml test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check ci ci-test docs-links dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
 
 # Detect Docker Compose version  
 DOCKER_COMPOSE := docker compose
@@ -41,6 +41,7 @@ help:
 	@echo "  shell-be    Open shell in backend container"
 	@echo "  shell-ml    Open shell in ML container"
 	@echo "  test        Run tests in containers"
+	@echo "  docs-links  Check every relative link + anchor in the docs"
 	@echo "  clean       Clean up Docker resources"
 	@echo "  reset       Reset everything (clean + rebuild)"
 	@echo ""
@@ -321,17 +322,25 @@ type-check:
 # legacy editor tests). Including it here would render `make ci` unusable
 # until the suite is healed. Use `make ci-test` to run vitest separately.
 ci:
-	@echo "🔍 [1/5] TypeScript (frontend — baseline gate)"
+	@echo "🔍 [1/6] TypeScript (frontend — baseline gate)"
 	@npm run type-check
-	@echo "🔍 [2/5] TypeScript (backend)"
+	@echo "🔍 [2/6] TypeScript (backend)"
 	@cd backend && npm run type-check
-	@echo "🔍 [3/5] ESLint (strict — 0 warnings)"
+	@echo "🔍 [3/6] ESLint (strict — 0 warnings)"
 	@npx eslint --max-warnings=0 src/
-	@echo "🔍 [4/5] i18n completeness (6 locales)"
+	@echo "🔍 [4/6] i18n completeness (6 locales)"
 	@node scripts/check-i18n.cjs
-	@echo "🔍 [5/5] Python suites (same 214 tests CI runs)"
+	@echo "🔍 [5/6] Documentation link integrity"
+	@node scripts/check-doc-links.cjs
+	@echo "🔍 [6/6] Python suites (same 214 tests CI runs)"
 	@$(MAKE) --no-print-directory test-py
 	@echo "✅ All local CI checks passed"
+
+# Documentation link integrity on its own — every relative link under docs/
+# and in the root Markdown files must resolve. Run after renaming or deleting
+# a page; it is also step 5 of `make ci`.
+docs-links:
+	@node scripts/check-doc-links.cjs
 
 # Optional: run the Vitest suite. Currently has known pre-existing
 # failures (~31%). Use to investigate specific test files; don't treat
