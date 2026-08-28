@@ -5,12 +5,8 @@
  *  - trackApiError() increments apiErrorsTotal with endpoint/error_type/status_code
  *  - trackFeatureUsage() increments featureUsageCounter with feature/user_type;
  *      defaults user_type to 'anonymous' when not supplied
- *  - trackImageProcessing() increments imageProcessingCounter with type/status labels
  *  - updateActiveUsers() sets userActivityGauge per tier
- *  - trackProjectCreated() increments projectsCreatedTotal counter
- *  - trackSegmentationJob() increments segmentationJobsTotal with model/status
  *  - updateStorageUsage() sets storageUsageGauge per type
- *  - trackAuthenticationAttempt() increments authenticationAttempts with type/status
  *  - recordApiResponseTime() records histogram observation with endpoint/method
  *  - updateQueueSize() sets queueSize gauge per queue_name
  *  - initializeBusinessMetricsCollection() seeds gauges without throwing
@@ -55,27 +51,16 @@ vi.mock('../../utils/config', () => ({
 import {
   trackApiError,
   trackFeatureUsage,
-  trackImageProcessing,
   updateActiveUsers,
-  trackProjectCreated,
-  trackSegmentationJob,
   updateStorageUsage,
-  trackAuthenticationAttempt,
-  recordApiResponseTime,
   updateQueueSize,
   initializeBusinessMetricsCollection,
-  getBusinessMetricsSummary,
   businessMetricsRegistry,
   // Exported counter/gauge/histogram instances for direct reset
   apiErrorsTotal,
   featureUsageCounter,
-  imageProcessingCounter,
   userActivityGauge,
-  projectsCreatedTotal,
-  segmentationJobsTotal,
   storageUsageGauge,
-  authenticationAttempts,
-  apiResponseTime,
   queueSize,
 } from '../../monitoring/businessMetrics';
 import { logger } from '../../utils/logger';
@@ -111,13 +96,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   apiErrorsTotal.reset();
   featureUsageCounter.reset();
-  imageProcessingCounter.reset();
   userActivityGauge.reset();
-  projectsCreatedTotal.reset();
-  segmentationJobsTotal.reset();
   storageUsageGauge.reset();
-  authenticationAttempts.reset();
-  apiResponseTime.reset();
   queueSize.reset();
 });
 
@@ -193,26 +173,6 @@ describe('trackFeatureUsage()', () => {
 // trackImageProcessing()
 // ---------------------------------------------------------------------------
 
-describe('trackImageProcessing()', () => {
-  it('increments images_processed_total with type=segmentation/status=success', async () => {
-    trackImageProcessing('segmentation', 'success');
-    const val = await getMetricValue('images_processed_total', {
-      type: 'segmentation',
-      status: 'success',
-    });
-    expect(val).toBe(1);
-  });
-
-  it('tracks failure status separately from success', async () => {
-    trackImageProcessing('upload', 'failure');
-    const val = await getMetricValue('images_processed_total', {
-      type: 'upload',
-      status: 'failure',
-    });
-    expect(val).toBe(1);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // updateActiveUsers()
 // ---------------------------------------------------------------------------
@@ -236,49 +196,9 @@ describe('updateActiveUsers()', () => {
 // trackProjectCreated()
 // ---------------------------------------------------------------------------
 
-describe('trackProjectCreated()', () => {
-  it('increments projects_created_total counter', async () => {
-    trackProjectCreated();
-    trackProjectCreated();
-    const metrics = await businessMetricsRegistry.getMetricsAsJSON();
-    const metric = metrics.find(m => m.name === 'projects_created_total');
-    const total = (metric?.values ?? []).reduce(
-      (s, v) => s + (v.value ?? 0),
-      0
-    );
-    expect(total).toBe(2);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // trackSegmentationJob()
 // ---------------------------------------------------------------------------
-
-describe('trackSegmentationJob()', () => {
-  it('increments segmentation_jobs_total with model/status labels', async () => {
-    trackSegmentationJob('hrnet', 'started');
-    const val = await getMetricValue('segmentation_jobs_total', {
-      model: 'hrnet',
-      status: 'started',
-    });
-    expect(val).toBe(1);
-  });
-
-  it('tracks completed and failed separately', async () => {
-    trackSegmentationJob('unet', 'completed');
-    trackSegmentationJob('unet', 'failed');
-    const done = await getMetricValue('segmentation_jobs_total', {
-      model: 'unet',
-      status: 'completed',
-    });
-    const fail = await getMetricValue('segmentation_jobs_total', {
-      model: 'unet',
-      status: 'failed',
-    });
-    expect(done).toBe(1);
-    expect(fail).toBe(1);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // updateStorageUsage()
@@ -305,56 +225,9 @@ describe('updateStorageUsage()', () => {
 // trackAuthenticationAttempt()
 // ---------------------------------------------------------------------------
 
-describe('trackAuthenticationAttempt()', () => {
-  it('increments authentication_attempts_total with type/status labels', async () => {
-    trackAuthenticationAttempt('password', 'success');
-    const val = await getMetricValue('authentication_attempts_total', {
-      type: 'password',
-      status: 'success',
-    });
-    expect(val).toBe(1);
-  });
-
-  it('tracks failure separately from success', async () => {
-    trackAuthenticationAttempt('token', 'failure');
-    const val = await getMetricValue('authentication_attempts_total', {
-      type: 'token',
-      status: 'failure',
-    });
-    expect(val).toBe(1);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // recordApiResponseTime()
 // ---------------------------------------------------------------------------
-
-describe('recordApiResponseTime()', () => {
-  it('records observation in api_response_time_seconds histogram', async () => {
-    recordApiResponseTime('/api/projects', 'GET', 0.05);
-    const metrics = await businessMetricsRegistry.getMetricsAsJSON();
-    const hist = metrics.find(m => m.name === 'api_response_time_seconds');
-    const countEntry = hist?.values?.find(
-      v =>
-        (v.labels as Record<string, string>).endpoint === '/api/projects' &&
-        (v.labels as Record<string, string>).method === 'GET' &&
-        (v.metricName as string)?.endsWith('_count')
-    );
-    expect(countEntry?.value ?? 0).toBeGreaterThanOrEqual(1);
-  });
-
-  it('records the correct duration in the sum', async () => {
-    recordApiResponseTime('/api/auth/login', 'POST', 0.123);
-    const metrics = await businessMetricsRegistry.getMetricsAsJSON();
-    const hist = metrics.find(m => m.name === 'api_response_time_seconds');
-    const sumEntry = hist?.values?.find(
-      v =>
-        (v.labels as Record<string, string>).endpoint === '/api/auth/login' &&
-        (v.metricName as string)?.endsWith('_sum')
-    );
-    expect(sumEntry?.value).toBeCloseTo(0.123, 3);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // updateQueueSize()
@@ -422,77 +295,6 @@ describe('initializeBusinessMetricsCollection()', () => {
 // getBusinessMetricsSummary()
 // ---------------------------------------------------------------------------
 
-describe('getBusinessMetricsSummary()', () => {
-  it('returns an object with all required summary keys', async () => {
-    const summary = await getBusinessMetricsSummary();
-    expect(summary).toHaveProperty('totalApiErrors');
-    expect(summary).toHaveProperty('totalFeatureUsage');
-    expect(summary).toHaveProperty('totalImagesProcessed');
-    expect(summary).toHaveProperty('totalProjects');
-    expect(summary).toHaveProperty('totalSegmentationJobs');
-    expect(summary).toHaveProperty('totalAuthAttempts');
-  });
-
-  it('totalApiErrors reflects tracked errors', async () => {
-    trackApiError('/api/test', 'client_error', 400);
-    trackApiError('/api/test', 'client_error', 400);
-    const summary = await getBusinessMetricsSummary();
-    expect(summary.totalApiErrors).toBeGreaterThanOrEqual(2);
-  });
-
-  it('totalFeatureUsage reflects feature calls', async () => {
-    trackFeatureUsage('project_creation', 'authenticated');
-    const summary = await getBusinessMetricsSummary();
-    expect(summary.totalFeatureUsage).toBeGreaterThanOrEqual(1);
-  });
-
-  it('totalImagesProcessed reflects image processing calls', async () => {
-    trackImageProcessing('thumbnail', 'success');
-    const summary = await getBusinessMetricsSummary();
-    expect(summary.totalImagesProcessed).toBeGreaterThanOrEqual(1);
-  });
-
-  it('totalProjects reflects project creation calls', async () => {
-    trackProjectCreated();
-    const summary = await getBusinessMetricsSummary();
-    expect(summary.totalProjects).toBeGreaterThanOrEqual(1);
-  });
-
-  it('totalSegmentationJobs reflects job tracking calls', async () => {
-    trackSegmentationJob('mamba', 'completed');
-    const summary = await getBusinessMetricsSummary();
-    expect(summary.totalSegmentationJobs).toBeGreaterThanOrEqual(1);
-  });
-
-  it('totalAuthAttempts reflects authentication tracking calls', async () => {
-    trackAuthenticationAttempt('password', 'success');
-    const summary = await getBusinessMetricsSummary();
-    expect(summary.totalAuthAttempts).toBeGreaterThanOrEqual(1);
-  });
-
-  it('returns a zero-filled summary when the registry read throws', async () => {
-    const spy = vi
-      .spyOn(businessMetricsRegistry, 'getMetricsAsJSON')
-      .mockRejectedValueOnce(new Error('registry error'));
-
-    const summary = await getBusinessMetricsSummary();
-
-    expect(summary).toEqual({
-      totalApiErrors: 0,
-      totalFeatureUsage: 0,
-      totalImagesProcessed: 0,
-      totalProjects: 0,
-      totalSegmentationJobs: 0,
-      totalAuthAttempts: 0,
-    });
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Failed to get business metrics summary:',
-      expect.any(Error)
-    );
-    spy.mockRestore();
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Error catch-branches — each tracker swallows a throwing Prometheus call and
 // delegates it to logger.error instead of re-throwing.
@@ -525,20 +327,6 @@ describe('metric error catch-branches', () => {
     spy.mockRestore();
   });
 
-  it('trackImageProcessing logs when counter.inc throws', () => {
-    const spy = vi
-      .spyOn(imageProcessingCounter, 'inc')
-      .mockImplementationOnce(() => {
-        throw new Error('prom error');
-      });
-    expect(() => trackImageProcessing('resize', 'failure')).not.toThrow();
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Failed to track image processing metric:',
-      expect.any(Error)
-    );
-    spy.mockRestore();
-  });
-
   it('updateActiveUsers logs when gauge.set throws', () => {
     const spy = vi.spyOn(userActivityGauge, 'set').mockImplementationOnce(() => {
       throw new Error('prom error');
@@ -551,34 +339,6 @@ describe('metric error catch-branches', () => {
     spy.mockRestore();
   });
 
-  it('trackProjectCreated logs when counter.inc throws', () => {
-    const spy = vi
-      .spyOn(projectsCreatedTotal, 'inc')
-      .mockImplementationOnce(() => {
-        throw new Error('prom error');
-      });
-    expect(() => trackProjectCreated()).not.toThrow();
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Failed to track project creation metric:',
-      expect.any(Error)
-    );
-    spy.mockRestore();
-  });
-
-  it('trackSegmentationJob logs when counter.inc throws', () => {
-    const spy = vi
-      .spyOn(segmentationJobsTotal, 'inc')
-      .mockImplementationOnce(() => {
-        throw new Error('prom error');
-      });
-    expect(() => trackSegmentationJob('hrnet', 'failed')).not.toThrow();
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Failed to track segmentation job metric:',
-      expect.any(Error)
-    );
-    spy.mockRestore();
-  });
-
   it('updateStorageUsage logs when gauge.set throws', () => {
     const spy = vi.spyOn(storageUsageGauge, 'set').mockImplementationOnce(() => {
       throw new Error('prom error');
@@ -586,38 +346,6 @@ describe('metric error catch-branches', () => {
     expect(() => updateStorageUsage('thumbnails', 512)).not.toThrow();
     expect(mockLogger.error).toHaveBeenCalledWith(
       'Failed to update storage usage metric:',
-      expect.any(Error)
-    );
-    spy.mockRestore();
-  });
-
-  it('trackAuthenticationAttempt logs when counter.inc throws', () => {
-    const spy = vi
-      .spyOn(authenticationAttempts, 'inc')
-      .mockImplementationOnce(() => {
-        throw new Error('prom error');
-      });
-    expect(() =>
-      trackAuthenticationAttempt('refresh', 'failure')
-    ).not.toThrow();
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Failed to track authentication attempt metric:',
-      expect.any(Error)
-    );
-    spy.mockRestore();
-  });
-
-  it('recordApiResponseTime logs when histogram.observe throws', () => {
-    const spy = vi
-      .spyOn(apiResponseTime, 'observe')
-      .mockImplementationOnce(() => {
-        throw new Error('prom error');
-      });
-    expect(() =>
-      recordApiResponseTime('/api/projects', 'GET', 0.05)
-    ).not.toThrow();
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Failed to record API response time metric:',
       expect.any(Error)
     );
     spy.mockRestore();

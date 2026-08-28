@@ -2,7 +2,7 @@
 
 `api.main` installs `_NoCRLFLogFilter` on the ROOT HANDLERS so that records
 propagated from every child module logger (`api.frap_targets`, `api.routes`,
-`api.cancel`, ...) pass through it. Nothing in the suite checked that, which
+...) pass through it. Nothing in the suite checked that, which
 means the protection could be removed — or quietly bypassed by reconfiguring
 logging — with no test going red.
 
@@ -56,7 +56,7 @@ def _log_through(root_filters, logger: logging.Logger, template: str, *args) -> 
 
 @pytest.mark.parametrize(
     "module",
-    ["api.frap_targets", "api.routes", "api.cancel"],
+    ["api.frap_targets", "api.routes"],
 )
 def test_child_module_loggers_cannot_forge_a_log_line(root_filters, module):
     """A newline in an interpolated value must not become a new log record."""

@@ -191,8 +191,11 @@ describe('ProjectService', () => {
       });
       expect(result.projects).toHaveLength(1);
 
+      // `select` is part of the contract: this is an existence check, and
+      // without it Prisma returns the whole User row, passwordHash included.
       expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
         where: { id: userId },
+        select: { id: true },
       });
       expect(prismaMock.project.count).toHaveBeenCalled();
       expect(prismaMock.project.findMany).toHaveBeenCalled();
@@ -216,8 +219,11 @@ describe('ProjectService', () => {
 
       await projectService.getUserProjects(userId, options);
 
+      // `select` is part of the contract: this is an existence check, and
+      // without it Prisma returns the whole User row, passwordHash included.
       expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
         where: { id: userId },
+        select: { id: true },
       });
       expect(prismaMock.project.count).toHaveBeenCalled();
     });
@@ -453,69 +459,13 @@ describe('ProjectService', () => {
     });
   });
 
-  describe('checkProjectOwnership', () => {
-    it('should return true for project owner', async () => {
-      const projectId = 'project-id';
-      const userId = 'user-id';
-
-      const mockProject = {
-        id: projectId,
-      };
-
-      prismaMock.project.findFirst.mockResolvedValueOnce(mockProject);
-
-      const result = await projectService.checkProjectOwnership(
-        projectId,
-        userId
-      );
-
-      expect(result).toBe(true);
-      expect(prismaMock.project.findFirst).toHaveBeenCalledWith({
-        where: {
-          id: projectId,
-          userId: userId,
-        },
-        select: {
-          id: true,
-        },
-      });
-    });
-
-    it('should return false for non-owner', async () => {
-      const projectId = 'project-id';
-      const userId = 'user-id';
-
-      prismaMock.project.findFirst.mockResolvedValueOnce(null);
-
-      const result = await projectService.checkProjectOwnership(
-        projectId,
-        userId
-      );
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false if project not found', async () => {
-      const projectId = 'nonexistent-project';
-      const userId = 'user-id';
-
-      prismaMock.project.findFirst.mockResolvedValueOnce(null);
-
-      const result = await projectService.checkProjectOwnership(
-        projectId,
-        userId
-      );
-
-      expect(result).toBe(false);
-    });
-  });
 });
 
 /**
  * `setVerified` is the write half of the annotator-facing verification flag.
  * Its authorization gate is deliberately DIFFERENT from every other mutation
  * on a project: it goes through `hasProjectAccess` (owner OR accepted share)
- * rather than `checkProjectOwnership`, so that an annotator can mark a project
+ * rather than an owner-only `userId` match, so that an annotator can mark a project
  * reviewed without also gaining the ability to rename or retype it. That
  * distinction is the whole feature, so it is pinned here.
  */

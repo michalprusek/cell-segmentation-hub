@@ -8,7 +8,7 @@
  *   1. Use vi.hoisted() to create mock functions before any vi.mock() hoisting.
  *   2. Mock @prisma/client with a proper constructor (class, not plain object)
  *      so `new PrismaClient()` inside index.ts works.
- *   3. Mock the internal dependencies (databaseMetrics, prismaConfig, etc.).
+ *   3. Mock the internal dependencies (prismaConfig, etc.).
  *   4. Override the global '../index' shim with the REAL module via
  *      importOriginal so the test exercises the real implementations.
  */
@@ -25,7 +25,6 @@ const {
   mockTransactionFn,
   mockUserCount,
   MockPrismaClient,
-  mockMetricsStop,
 } = vi.hoisted(() => {
   const mockConnect = vi.fn();
   const mockDisconnect = vi.fn();
@@ -43,8 +42,6 @@ const {
     user = { count: mockUserCount };
   }
 
-  const mockMetricsStop = vi.fn();
-
   return {
     mockConnect,
     mockDisconnect,
@@ -53,17 +50,12 @@ const {
     mockTransactionFn,
     mockUserCount,
     MockPrismaClient,
-    mockMetricsStop,
   };
 });
 
 // Override the global prisma/client mock with our class-based constructor.
 vi.mock('@prisma/client', () => ({
   PrismaClient: MockPrismaClient,
-}));
-
-vi.mock('../../monitoring/databaseMetrics', () => ({
-  databaseMetrics: { stop: mockMetricsStop },
 }));
 
 vi.mock('../prismaConfig', () => ({
@@ -165,12 +157,11 @@ describe('db/index', () => {
   // ── disconnectDatabase ────────────────────────────────────────────────────
 
   describe('disconnectDatabase', () => {
-    it('stops metrics and calls prisma.$disconnect', async () => {
+    it('calls prisma.$disconnect', async () => {
       mockDisconnect.mockResolvedValueOnce(undefined);
 
       await disconnectDatabase();
 
-      expect(mockMetricsStop).toHaveBeenCalledOnce();
       expect(mockDisconnect).toHaveBeenCalledOnce();
     });
 

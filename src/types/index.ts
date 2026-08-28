@@ -1,4 +1,3 @@
-import type { Polygon as _Polygon } from '@/lib/segmentation';
 // Model identity + compatibility are derived from the frontend model registry
 // SSOT (`@/lib/models/modelRegistry`), which mirrors the backend SSOT. They
 // are re-exported below so existing `@/types` consumers stay untouched.

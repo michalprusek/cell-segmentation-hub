@@ -5,17 +5,12 @@
 import UTIF from 'utif2';
 import { logger } from './logger';
 
-/**
- * Check if file is a TIFF image
- */
-export const isTiffFile = (file: File): boolean => {
-  return (
-    file.type === 'image/tiff' ||
-    file.type === 'image/tif' ||
-    file.name?.toLowerCase().endsWith('.tiff') ||
-    file.name?.toLowerCase().endsWith('.tif')
-  );
-};
+// One TIFF sniffer, in tiffUtils. This module used to carry a second copy
+// narrowed to `File`; it agreed with tiffUtils' on every input a `File` can
+// produce, so it was only a second place for the extension list to drift.
+// Re-exported because this module's own tests and callers name it here.
+export { isTiffFile } from './tiffUtils';
+import { isTiffFile } from './tiffUtils';
 
 /**
  * Convert TIFF file to canvas using UTIF library

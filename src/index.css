@@ -308,6 +308,12 @@
     fill: rgba(217, 70, 239, 0.18);
   }
 
+  /* The single source of the selection glow. CanvasPolygon also sets a
+     `filter="url(#red-glow|#blue-glow)"` presentation attribute on the same
+     path, but a presentation attribute loses to any CSS declaration, so this
+     rule wins on every selected path and those SVG filters only ever paint a
+     hovered, unselected polyline. Make selection glow type-aware by varying
+     `--polygon-selected-glow` here — changing the SVG filter ids does nothing. */
   .polygon-selected {
     filter: drop-shadow(0 0 8px var(--polygon-selected-glow, #3b82f6));
   }

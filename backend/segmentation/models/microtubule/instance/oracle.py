@@ -42,19 +42,6 @@ def _stamp_centerline(points: np.ndarray, out: np.ndarray, up: float) -> np.ndar
     return out
 
 
-def oracle_mask(polylines, shape: tuple[int, int], half_width: float = 1.0,
-                up: float = 1.5) -> np.ndarray:
-    """Union foreground mask in the UPSCALED frame.
-
-    ``shape`` is the native ``(H, W)``; the returned mask is ``(H*up, W*up)``.
-    ``half_width=1.0`` reproduces the ``mask_hw=1.0`` training convention (a 3-px band).
-    """
-    hi = np.zeros(_upscaled_shape(shape, up), dtype=bool)
-    for p in polylines:
-        _stamp_centerline(p, hi, up)
-    return binary_dilation(hi, structure=_footprint(half_width))
-
-
 def oracle_instance_masks(polylines, shape: tuple[int, int], half_width: float = 1.0,
                           up: float = 1.5) -> list[np.ndarray]:
     """One mask per GT polyline, in the upscaled frame.
@@ -110,35 +97,3 @@ def oracle_instance_masks(polylines, shape: tuple[int, int], half_width: float =
     return out
 
 
-def oracle_ori_channels(polylines, shape: tuple[int, int], K: int = 6,
-                        half_width: float = 1.0, up: float = 1.5) -> np.ndarray:
-    """Amodal orientation-keyed channels, ``(K, H*up, W*up)`` float32 in {0, 1}.
-
-    Bin ``b`` covers tangent directions ``[b*180/K, (b+1)*180/K)`` degrees (mod 180, since a
-    filament has no head or tail). A pixel shared by two filaments of different orientation
-    is set in two channels -- that is what keeps the crossing resolvable.
-    """
-    hi_shape = _upscaled_shape(shape, up)
-    chans = np.zeros((K, *hi_shape), dtype=bool)
-    h, w = hi_shape
-    width_deg = 180.0 / K
-
-    for p in polylines:
-        pts = resample(np.asarray(p, dtype=float) * up, ds=_STAMP_DS)
-        if len(pts) < 2:
-            continue
-        ang = np.rad2deg(segment_angles(pts)) % 180.0
-        # Give every sample the angle of the segment it starts, and the last sample the
-        # angle of the segment that ends at it.
-        ang = np.concatenate([ang, ang[-1:]])
-        bins = np.clip((ang // width_deg).astype(int), 0, K - 1)
-        cc = np.clip(np.rint(pts[:, 0]).astype(int), 0, w - 1)
-        rr = np.clip(np.rint(pts[:, 1]).astype(int), 0, h - 1)
-        for b in range(K):
-            sel = bins == b
-            if sel.any():
-                chans[b, rr[sel], cc[sel]] = True
-
-    fp = _footprint(half_width)
-    return np.stack([binary_dilation(chans[b], structure=fp)
-                     for b in range(K)]).astype(np.float32)

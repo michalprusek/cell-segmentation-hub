@@ -1434,7 +1434,6 @@ export default {
     invalidSelection: 'Bitte wählen Sie mindestens ein Bild aus',
     noData: 'Keine Daten für Export verfügbar',
     segmentationData: 'Segmentierungsdaten',
-    spheroidMetrics: 'Sphäroid-Metriken',
     spermMetrics: 'Spermien-Metriken',
     cocoFormat: 'COCO-Format',
     cocoFormatTitle: 'COCO-Format-Export',
@@ -2439,7 +2438,6 @@ export default {
   },
   metrics: {
     info: 'Metriken werden nur für externe Polygone ausgewertet. Flächen interner Polygone (Löcher) werden automatisch von den entsprechenden externen Polygonen abgezogen.',
-    spheroid: 'Sphäroid',
     area: 'Fläche',
     perimeter: 'Umfang',
     equivalentDiameter: 'Äquivalenter Durchmesser',

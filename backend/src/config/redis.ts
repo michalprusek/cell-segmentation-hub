@@ -121,8 +121,6 @@ export async function redisHealthCheck(): Promise<{
     // Perform a simple ping
     const pingResult = await redisClient.ping();
 
-    // Get some basic info
-    const _info = await redisClient.info('server');
     const memoryInfo = await redisClient.info('memory');
 
     // Parse memory usage

@@ -1,21 +1,11 @@
+import { escapeHtml } from '../utils/escapeHtml';
+
 interface VerificationEmailData {
   verificationUrl: string;
   userEmail?: string;
   locale?: string;
 }
 
-// Simple HTML escape function for security
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-    '/': '&#x2F;',
-  };
-  return text.replace(/[&<>"'/]/g, char => map[char] || char);
-}
 
 const translations = {
   en: {

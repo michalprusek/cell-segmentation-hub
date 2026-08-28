@@ -5,21 +5,8 @@ import { useWebSocket } from '@/contexts/useWebSocket';
 import { useLanguage } from '@/contexts/useLanguage';
 import { toast } from 'sonner';
 import WebSocketManager from '@/services/webSocketManager';
-import type {
-  QueueStats,
-  SegmentationUpdate,
-  SegmentationStatusMessage as _SegmentationStatusMessage,
-  QueueStatsMessage as _QueueStatsMessage,
-  SegmentationCompletedMessage as _SegmentationCompletedMessage,
-  SegmentationFailedMessage as _SegmentationFailedMessage,
-  WebSocketEventMap as _WebSocketEventMap,
-  ParallelProcessingStatusMessage as _ParallelProcessingStatusMessage,
-  ConcurrentUserMessage as _ConcurrentUserMessage,
-  ProcessingStreamUpdateMessage as _ProcessingStreamUpdateMessage,
-  QueuePositionUpdateMessage as _QueuePositionUpdateMessage,
-} from '@/types/websocket';
+import type { QueueStats, SegmentationUpdate } from '@/types/websocket';
 import type { ParallelProcessingStats } from '@/components/project/QueueStatsPanel';
-import type { ProcessingSlot as _ProcessingSlot } from '@/components/project/ProcessingSlots';
 
 export type { QueueStats, SegmentationUpdate } from '@/types/websocket';
 export type { ParallelProcessingStats } from '@/components/project/QueueStatsPanel';

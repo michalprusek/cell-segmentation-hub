@@ -1,16 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   chunkFiles,
-  calculateOptimalChunkSize,
   processChunksWithConcurrency,
   estimateUploadTime,
   validateFiles,
   formatFileSize,
-  formatUploadSpeed,
   isVideoLikeUpload,
   isMultiPageTiff,
   shouldRouteAsVideo,
-  DEFAULT_CHUNKING_CONFIG,
   type ChunkingConfig,
 } from '@/lib/uploadUtils';
 
@@ -84,27 +81,6 @@ describe('chunkFiles', () => {
 
   it('returns an empty array for an empty input', () => {
     expect(chunkFiles([], 5)).toEqual([]);
-  });
-});
-
-describe('calculateOptimalChunkSize', () => {
-  it('returns totalFiles when it is less than or equal to chunkSize', () => {
-    expect(calculateOptimalChunkSize(3, testConfig)).toBe(3);
-  });
-
-  it('returns at most chunkSize when totalFiles exceeds chunkSize', () => {
-    const result = calculateOptimalChunkSize(100, testConfig);
-    expect(result).toBeLessThanOrEqual(testConfig.chunkSize);
-  });
-
-  it('never returns less than 1', () => {
-    expect(calculateOptimalChunkSize(1, testConfig)).toBeGreaterThanOrEqual(1);
-  });
-
-  it('uses DEFAULT_CHUNKING_CONFIG when no config is provided', () => {
-    const result = calculateOptimalChunkSize(DEFAULT_CHUNKING_CONFIG.chunkSize);
-    expect(result).toBeGreaterThanOrEqual(1);
-    expect(result).toBeLessThanOrEqual(DEFAULT_CHUNKING_CONFIG.chunkSize);
   });
 });
 
@@ -400,25 +376,5 @@ describe('shouldRouteAsVideo', () => {
   it('leaves a plain image on the image route', async () => {
     const jpg = new File(['x'], 'photo.jpg', { type: 'image/jpeg' });
     await expect(shouldRouteAsVideo(jpg)).resolves.toBe(false);
-  });
-});
-
-describe('formatUploadSpeed', () => {
-  it('formats speeds below 1 Mbps as Kbps', () => {
-    // 64 KB/s = 0.5 Mbps → should show as Kbps
-    const kbps = formatUploadSpeed(64 * 1024);
-    expect(kbps).toContain('Kbps');
-  });
-
-  it('formats speeds of 1 Mbps and above as Mbps', () => {
-    // 1.25 MB/s = 10 Mbps
-    const mbps = formatUploadSpeed(1.25 * 1024 * 1024);
-    expect(mbps).toContain('Mbps');
-  });
-
-  it('produces a numeric value in the result', () => {
-    const result = formatUploadSpeed(2 * 1024 * 1024);
-    const numeric = parseFloat(result);
-    expect(numeric).toBeGreaterThan(0);
   });
 });

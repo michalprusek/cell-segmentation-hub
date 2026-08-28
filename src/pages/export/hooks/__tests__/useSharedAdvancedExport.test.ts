@@ -17,7 +17,9 @@
  *     doesn't add much value over the simpler WS path. The WebSocket mock is
  *     set to connected=true throughout to keep the hook's poll-guard in the
  *     "WS present" branch and avoid infinite setInterval loops.
- *   - State-restore on mount: covered in usePersistedExportState.test.ts.
+ *   - State-restore on mount: the hook restores via lib/exportStateManager.
+ *     (This used to point at usePersistedExportState.test.ts, whose subject
+ *     was an unused parallel implementation and has been deleted.)
  *
  * NOTE on OOM: the hook's polling useEffect fires setInterval immediately when
  * wsConnected=false and `currentJob && isExporting`. Mocking the socket as

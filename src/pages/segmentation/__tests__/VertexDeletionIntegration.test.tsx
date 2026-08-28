@@ -34,10 +34,6 @@ const mockSegmentationContext = {
   save: vi.fn(),
 };
 
-vi.mock('../contexts/useSegmentationContext', () => ({
-  useSegmentationContext: () => mockSegmentationContext,
-}));
-
 vi.mock('@/contexts/useLanguage', () => ({
   useLanguage: () => ({
     t: (key: string) => key,

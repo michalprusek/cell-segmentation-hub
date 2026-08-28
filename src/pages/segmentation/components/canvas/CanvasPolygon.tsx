@@ -275,7 +275,18 @@ const CanvasPolygon = React.memo(
         ? 1.3
         : 1;
 
-    // Compute SVG filter for glow effects
+    // Compute SVG filter for glow effects.
+    //
+    // CAVEAT — this only paints on a hovered, *unselected* polyline. The same
+    // `isEffectivelySelected` that makes the two branches below non-empty also
+    // puts `.polygon-selected` on the path, and that rule's CSS
+    // `filter: drop-shadow(...)` beats a `filter` presentation attribute (a
+    // presentation attribute loses to any CSS declaration, whatever its
+    // specificity). So on every selected path — closed or open, internal or
+    // external — the drop-shadow wins and the url(#…) below is inert. The
+    // red/blue split has therefore never reached the screen: selection has
+    // always glowed the one colour `--polygon-selected-glow` names in
+    // `src/index.css`. That is where to change it, not here.
     const pathFilter = (() => {
       if (isEffectivelySelected && !isPolyline) {
         return `url(#${type === 'internal' ? 'blue' : 'red'}-glow)`;

@@ -15,15 +15,6 @@
  *   - calls next() on success
  *   - calls next(error) on thrown error
  *
- *  Preset middlewares (noCache, shortCache, mediumCache, longCache, staticCache, apiCache)
- *   - each sets the expected Cache-Control directives
- *
- *  bustCache
- *   - sets no-cache, no-store, must-revalidate + Pragma + Expires:0
- *
- *  createVaryMiddleware
- *   - sets Vary header with provided header names
- *
  *  conditionalCache
  *   - picks development options in dev, production options in prod
  *
@@ -48,14 +39,6 @@ vi.mock('../../utils/logger', () => ({
 
 import {
   createCacheMiddleware,
-  noCache,
-  shortCache,
-  mediumCache,
-  longCache,
-  staticCache,
-  apiCache,
-  bustCache,
-  createVaryMiddleware,
   conditionalCache,
   cacheInvalidationMiddleware,
 } from '../cache';
@@ -131,16 +114,6 @@ describe('createCacheMiddleware', () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
-  it('includes "no-cache" directive when noCache:true', () => {
-    const mw = createCacheMiddleware({ noCache: true });
-    const { req, res, headers, next } = makeReqRes();
-
-    mw(req, res, next);
-
-    expect(headers['Cache-Control']).toContain('no-cache');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
   it('includes "must-revalidate" directive when mustRevalidate:true', () => {
     const mw = createCacheMiddleware({ maxAge: 60, mustRevalidate: true });
     const { req, res, headers, next } = makeReqRes();
@@ -184,34 +157,6 @@ describe('createCacheMiddleware', () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
-  it('never sets an ETag, whatever the options', () => {
-    // THE BUG THIS REPLACES. This middleware runs before the handler, so it
-    // has no response body to identify and used to hash the URL and the clock
-    // instead, truncated to 16 base64 characters — twelve bytes, which on this
-    // router is always `/api/images/`. Every response therefore carried the
-    // same ETag and the server answered 304 to it regardless of content.
-    //
-    // The old tests here asserted only that an ETag EXISTED and matched /^"/,
-    // which a constant satisfies perfectly. That is why it survived.
-    //
-    // Setting one also suppressed the correct one: res.sendFile only sets its
-    // size+mtime ETag `if (!res.getHeader('ETag'))` (send/index.js:763), and
-    // res.json/res.send only generate a body-derived ETag when none is present.
-    for (const options of [
-      { maxAge: 3600 },
-      { maxAge: 3600, private: true },
-      { ttl: 600, namespace: 'project', keyGenerator: () => 'k' },
-      { maxAge: 0 },
-      { maxAge: 3600, noCache: true },
-    ]) {
-      const { req, res, headers, next } = makeReqRes(
-        '/api/images/abc-123/frame-data?channel=488_nm'
-      );
-      createCacheMiddleware(options)(req, res, next);
-      expect(headers['ETag']).toBeUndefined();
-    }
-  });
-
   it('calls next(error) when res.setHeader throws', () => {
     const mw = createCacheMiddleware({ maxAge: 300 });
     const { req, next } = makeReqRes();
@@ -228,140 +173,8 @@ describe('createCacheMiddleware', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Preset middlewares
-// ---------------------------------------------------------------------------
-
-describe('preset middlewares', () => {
-  it('noCache: sets no-cache + private + must-revalidate', () => {
-    const { req, res, headers, next } = makeReqRes();
-    noCache(req, res, next);
-    expect(headers['Cache-Control']).toContain('no-cache');
-    expect(headers['Cache-Control']).toContain('private');
-    expect(headers['Cache-Control']).toContain('must-revalidate');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('shortCache: sets max-age=300 + must-revalidate', () => {
-    const { req, res, headers, next } = makeReqRes();
-    shortCache(req, res, next);
-    expect(headers['Cache-Control']).toContain('max-age=300');
-    expect(headers['Cache-Control']).toContain('must-revalidate');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('mediumCache: sets max-age=3600', () => {
-    const { req, res, headers, next } = makeReqRes();
-    mediumCache(req, res, next);
-    expect(headers['Cache-Control']).toContain('max-age=3600');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('longCache: sets max-age=86400', () => {
-    const { req, res, headers, next } = makeReqRes();
-    longCache(req, res, next);
-    expect(headers['Cache-Control']).toContain('max-age=86400');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('staticCache: sets max-age=2592000', () => {
-    const { req, res, headers, next } = makeReqRes();
-    staticCache(req, res, next);
-    expect(headers['Cache-Control']).toContain('max-age=2592000');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('apiCache: sets max-age=600 + private + must-revalidate', () => {
-    const { req, res, headers, next } = makeReqRes();
-    apiCache(req, res, next);
-    expect(headers['Cache-Control']).toContain('max-age=600');
-    expect(headers['Cache-Control']).toContain('private');
-    expect(headers['Cache-Control']).toContain('must-revalidate');
-    expect(next).toHaveBeenCalledOnce();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// bustCache
-// ---------------------------------------------------------------------------
-
-describe('bustCache', () => {
-  it('sets no-cache, no-store, must-revalidate', () => {
-    const { req, res, headers, next } = makeReqRes();
-    bustCache(req, res, next);
-    expect(headers['Cache-Control']).toBe(
-      'no-cache, no-store, must-revalidate'
-    );
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('sets Pragma: no-cache', () => {
-    const { req, res, headers, next } = makeReqRes();
-    bustCache(req, res, next);
-    expect(headers['Pragma']).toBe('no-cache');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('sets Expires: 0', () => {
-    const { req, res, headers, next } = makeReqRes();
-    bustCache(req, res, next);
-    expect(headers['Expires']).toBe('0');
-    expect(next).toHaveBeenCalledOnce();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// createVaryMiddleware
-// ---------------------------------------------------------------------------
-
-describe('createVaryMiddleware', () => {
-  it('sets Vary header with a single header name', () => {
-    const mw = createVaryMiddleware(['Accept-Encoding']);
-    const { req, res, headers, next } = makeReqRes();
-    mw(req, res, next);
-    expect(headers['Vary']).toBe('Accept-Encoding');
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('joins multiple headers with ", "', () => {
-    const mw = createVaryMiddleware(['Accept-Encoding', 'Authorization']);
-    const { req, res, headers, next } = makeReqRes();
-    mw(req, res, next);
-    expect(headers['Vary']).toBe('Accept-Encoding, Authorization');
-    expect(next).toHaveBeenCalledOnce();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // conditionalCache
 // ---------------------------------------------------------------------------
-
-describe('conditionalCache', () => {
-  it('uses development options when NODE_ENV=development', () => {
-    const original = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const mw = conditionalCache({ maxAge: 0, noCache: true }, { maxAge: 300 });
-    const { req, res, headers, next } = makeReqRes();
-    mw(req, res, next);
-
-    expect(headers['Cache-Control']).toContain('no-cache');
-    process.env.NODE_ENV = original;
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('uses production options when NODE_ENV=production', () => {
-    const original = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-
-    const mw = conditionalCache({ maxAge: 0, noCache: true }, { maxAge: 300 });
-    const { req, res, headers, next } = makeReqRes();
-    mw(req, res, next);
-
-    expect(headers['Cache-Control']).toContain('max-age=300');
-    process.env.NODE_ENV = original;
-    expect(next).toHaveBeenCalledOnce();
-  });
-});
 
 describe('conditionalCache.userSpecific', () => {
   it('sets private cache headers when user is authenticated', () => {

@@ -71,14 +71,6 @@ describe('i18nLogger (test env — disabled)', () => {
     expect(i18nLogger.exportMissingKeys()).toEqual({});
   });
 
-  it('printReport does nothing in test env', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    i18nLogger.logMissingKey('x.y');
-    i18nLogger.printReport();
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
-  });
-
   it('clear() is safe to call even when no keys tracked', () => {
     expect(() => i18nLogger.clear()).not.toThrow();
   });
@@ -291,20 +283,6 @@ describe('i18nLogger (dev env — enabled)', () => {
       devLogger.logMissingKey('cycle.key');
       // Should have warned twice — once before clear, once after
       expect(warnSpy).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  // ---- printReport --------------------------------------------------------
-
-  describe('printReport()', () => {
-    it('does not throw when keys are present', () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
-      devLogger.logMissingKey('report.key');
-      expect(() => devLogger.printReport()).not.toThrow();
-    });
-
-    it('does not throw when no keys are present', () => {
-      expect(() => devLogger.printReport()).not.toThrow();
     });
   });
 });

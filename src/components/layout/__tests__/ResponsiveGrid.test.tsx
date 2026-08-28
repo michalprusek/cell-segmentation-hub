@@ -18,12 +18,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
-import {
-  ResponsiveGrid,
-  ProjectsGrid,
-  StatsGrid,
-  TwoColumnGrid,
-} from '../ResponsiveGrid';
+import { ResponsiveGrid, ProjectsGrid, StatsGrid } from '../ResponsiveGrid';
 
 // ---------------------------------------------------------------------------
 // Helper: get the single root div rendered by ResponsiveGrid
@@ -310,48 +305,6 @@ describe('StatsGrid', () => {
       <StatsGrid>
         <span />
       </StatsGrid>
-    );
-    expect(getGrid(container).className).toContain('gap-4');
-  });
-});
-
-describe('TwoColumnGrid', () => {
-  it('renders children', () => {
-    render(
-      <TwoColumnGrid>
-        <div data-testid="col-a">A</div>
-        <div data-testid="col-b">B</div>
-      </TwoColumnGrid>
-    );
-    expect(screen.getByTestId('col-a')).toBeInTheDocument();
-    expect(screen.getByTestId('col-b')).toBeInTheDocument();
-  });
-
-  it('uses 1/2 column layout (default/md)', () => {
-    const { container } = render(
-      <TwoColumnGrid>
-        <span />
-      </TwoColumnGrid>
-    );
-    const cls = getGrid(container).className;
-    expect(cls).toContain('grid-cols-1');
-    expect(cls).toContain('md:grid-cols-2');
-  });
-
-  it('does NOT apply a lg:grid-cols class', () => {
-    const { container } = render(
-      <TwoColumnGrid>
-        <span />
-      </TwoColumnGrid>
-    );
-    expect(getGrid(container).className).not.toContain('lg:grid-cols');
-  });
-
-  it('default gap is 4', () => {
-    const { container } = render(
-      <TwoColumnGrid>
-        <span />
-      </TwoColumnGrid>
     );
     expect(getGrid(container).className).toContain('gap-4');
   });

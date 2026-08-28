@@ -1416,7 +1416,6 @@ export default {
     invalidSelection: 'Vyberte prosím alespoň jeden obrázek',
     noData: 'Žádná data k exportu nejsou k dispozici',
     segmentationData: 'Data segmentace',
-    spheroidMetrics: 'Metriky sféroidů',
     spermMetrics: 'Metriky spermií',
     cocoFormat: 'Formát COCO',
     cocoFormatTitle: 'Export formátu COCO',
@@ -2391,7 +2390,6 @@ export default {
   },
   metrics: {
     info: 'Metriky jsou vyhodnocovány pouze pro externí polygony. Plochy interních polygonů (děr) jsou automaticky odečteny od příslušných externích polygonů.',
-    spheroid: 'Sféroid',
     area: 'Plocha',
     perimeter: 'Obvod',
     equivalentDiameter: 'Ekvivalentní průměr',

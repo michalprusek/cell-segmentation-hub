@@ -90,31 +90,40 @@ export class HealthCheckService {
    */
   async checkHealth(): Promise<HealthStatus> {
     const startTime = Date.now();
-    const checks: { [key: string]: ComponentHealth } = {};
+    // No probe reads another's result, so they run concurrently: awaited in
+    // sequence the endpoint's latency was their SUM, and the ML probe alone is
+    // a cross-container HTTP round-trip. /health is hit by the compose
+    // healthcheck every 30 s as well as by callers.
+    const [
+      database,
+      redis,
+      mlService,
+      fileSystem,
+      webSocket,
+      emailService,
+      monitoring,
+      parallelProcessing,
+    ] = await Promise.all([
+      this.checkDatabase(),
+      this.checkRedis(),
+      this.checkMLService(),
+      this.checkFileSystem(),
+      this.checkWebSocket(),
+      this.checkEmailService(),
+      this.checkMonitoring(),
+      this.checkParallelProcessing(),
+    ]);
 
-    // Check database
-    checks.database = await this.checkDatabase();
-
-    // Check Redis
-    checks.redis = await this.checkRedis();
-
-    // Check ML Service
-    checks.mlService = await this.checkMLService();
-
-    // Check file system
-    checks.fileSystem = await this.checkFileSystem();
-
-    // Check WebSocket
-    checks.webSocket = await this.checkWebSocket();
-
-    // Check email service
-    checks.emailService = await this.checkEmailService();
-
-    // Check monitoring services
-    checks.monitoring = await this.checkMonitoring();
-
-    // Check parallel processing system
-    checks.parallelProcessing = await this.checkParallelProcessing();
+    const checks: { [key: string]: ComponentHealth } = {
+      database,
+      redis,
+      mlService,
+      fileSystem,
+      webSocket,
+      emailService,
+      monitoring,
+      parallelProcessing,
+    };
 
     // Calculate overall status
     const overallStatus = this.calculateOverallStatus(checks);

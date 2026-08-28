@@ -37,21 +37,12 @@ def calculate_equivalent_diameter_from_contour(contour):
     area = calculate_area_from_contour(contour)
     return np.sqrt(4 * area / np.pi)
 
-def calculate_convex_perimeter_from_contour(contour):
-    convex_hull = cv2.convexHull(contour)
-    return cv2.arcLength(convex_hull, True)
 
 def calculate_circularity_from_contour(contour):
     area = calculate_area_from_contour(contour)
     perimeter = calculate_perimeter_from_contour(contour)
     return (4 * np.pi * area) / (perimeter ** 2) if perimeter else 0
 
-
-def calculate_convexity_from_contour(contour):
-    hull = cv2.convexHull(contour)
-    hull_perimeter = cv2.arcLength(hull, True)
-    contour_perimeter = calculate_perimeter_from_contour(contour)
-    return hull_perimeter / contour_perimeter if contour_perimeter else 0
 
 def calculate_solidity_from_contour(contour):
     area = calculate_area_from_contour(contour)

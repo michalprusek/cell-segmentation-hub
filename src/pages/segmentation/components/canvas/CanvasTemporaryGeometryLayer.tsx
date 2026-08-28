@@ -1,5 +1,10 @@
 import React from 'react';
-import { EditMode, InteractionState, TransformState } from '../../types';
+import {
+  EDITING_CONSTANTS,
+  EditMode,
+  InteractionState,
+  TransformState,
+} from '../../types';
 import { Point, Polygon } from '@/lib/segmentation';
 import { calculateVertexRadius, defaultConfig } from './CanvasVertex';
 
@@ -101,7 +106,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
       const dx = firstPoint.x - cursorPosition.x;
       const dy = firstPoint.y - cursorPosition.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      const closeDistance = 15 / transform.zoom;
+      // Must stay the threshold useAdvancedInteractions actually closes on —
+      // this only draws the "you can close here" hint, so a divergence would
+      // promise a close the click does not perform.
+      const closeDistance =
+        EDITING_CONSTANTS.CLOSE_POLYGON_DISTANCE / transform.zoom;
 
       if (distance <= closeDistance) {
         elements.push(
@@ -384,11 +393,6 @@ const CanvasTemporaryGeometryLayer: React.FC<
     return elements;
   };
 
-  const renderDragPreview = () => {
-    // Drag preview disabled - no ghost circle shown
-    return null;
-  };
-
   const renderJoinTargetHighlight = () => {
     if (editMode !== EditMode.AddPoints || !hoveredJoinTarget) {
       return null;
@@ -422,7 +426,6 @@ const CanvasTemporaryGeometryLayer: React.FC<
       {renderSlicePreview()}
       {renderAddPointsPreview()}
       {renderJoinTargetHighlight()}
-      {renderDragPreview()}
     </g>
   );
 };

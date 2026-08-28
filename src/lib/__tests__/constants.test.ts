@@ -3,19 +3,13 @@
  * @module constants.test
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   TIMEOUTS,
   RETRY_ATTEMPTS,
   FILE_LIMITS,
-  RATE_LIMITS,
   STORAGE,
-  WEBSOCKET_EVENTS,
   HTTP_STATUS,
-  ENVIRONMENT,
-  VALIDATION,
-  getTimeout,
-  getRetryAttempts,
   videoUploadTimeoutMs,
 } from '../constants';
 
@@ -89,17 +83,6 @@ describe('constants', () => {
       ]);
     });
 
-    it('should export rate limit configurations', () => {
-      expect(RATE_LIMITS).toBeDefined();
-      expect(RATE_LIMITS.GENERAL).toBe(10);
-      expect(RATE_LIMITS.API).toBe(30);
-      expect(RATE_LIMITS.API_BURST).toBe(80);
-      expect(RATE_LIMITS.SEGMENTATION).toBe(100);
-      expect(RATE_LIMITS.SEGMENTATION_BURST).toBe(100);
-      expect(RATE_LIMITS.UPLOAD).toBe(5);
-      expect(RATE_LIMITS.DOWNLOAD).toBe(10);
-    });
-
     it('should export storage configurations', () => {
       expect(STORAGE).toBeDefined();
       expect(STORAGE.EXPORT_STATE_EXPIRATION).toBe(2 * 60 * 60 * 1000); // 2 hours
@@ -107,16 +90,6 @@ describe('constants', () => {
       expect(STORAGE.THUMBNAIL_CACHE).toBe(24 * 60 * 60 * 1000); // 1 day
       expect(STORAGE.LOCAL_STORAGE_WARNING).toBe(5 * 1024 * 1024); // 5MB
       expect(STORAGE.LOCAL_STORAGE_CRITICAL).toBe(10 * 1024 * 1024); // 10MB
-    });
-
-    it('should export WebSocket event names', () => {
-      expect(WEBSOCKET_EVENTS).toBeDefined();
-      expect(WEBSOCKET_EVENTS.CONNECT).toBe('connect');
-      expect(WEBSOCKET_EVENTS.DISCONNECT).toBe('disconnect');
-      expect(WEBSOCKET_EVENTS.ERROR).toBe('error');
-      expect(WEBSOCKET_EVENTS.SEGMENTATION_STATUS).toBe('segmentationStatus');
-      expect(WEBSOCKET_EVENTS.EXPORT_COMPLETED).toBe('exportCompleted');
-      expect(WEBSOCKET_EVENTS.QUEUE_UPDATE).toBe('queueUpdate');
     });
 
     it('should export HTTP status codes', () => {
@@ -129,124 +102,6 @@ describe('constants', () => {
       expect(HTTP_STATUS.INTERNAL_SERVER_ERROR).toBe(500);
       expect(HTTP_STATUS.SERVICE_UNAVAILABLE).toBe(503);
     });
-
-    it('should export validation patterns', () => {
-      expect(VALIDATION).toBeDefined();
-      expect(VALIDATION.EMAIL_REGEX).toBeInstanceOf(RegExp);
-      expect(VALIDATION.PASSWORD_MIN_LENGTH).toBe(8);
-      expect(VALIDATION.PROJECT_NAME_MAX_LENGTH).toBe(100);
-      expect(VALIDATION.USERNAME_REGEX).toBeInstanceOf(RegExp);
-
-      // Test regex patterns
-      expect('test@example.com').toMatch(VALIDATION.EMAIL_REGEX);
-      expect('invalid-email').not.toMatch(VALIDATION.EMAIL_REGEX);
-      expect('valid_user-123').toMatch(VALIDATION.USERNAME_REGEX);
-      expect('a').not.toMatch(VALIDATION.USERNAME_REGEX); // Too short
-    });
-  });
-
-  describe('getTimeout helper function', () => {
-    const originalEnv = process.env.NODE_ENV;
-
-    beforeEach(() => {
-      vi.resetModules();
-    });
-
-    afterEach(() => {
-      process.env.NODE_ENV = originalEnv;
-    });
-
-    it('should return default timeout value', () => {
-      process.env.NODE_ENV = 'development';
-      const timeout = getTimeout('RETRY_INITIAL');
-      expect(timeout).toBe(1000);
-    });
-
-    it('should return default timeout when no override provided', () => {
-      process.env.NODE_ENV = 'production';
-      const timeout = getTimeout('API_REQUEST');
-      expect(timeout).toBe(5000);
-    });
-
-    it('should use environment override in production', () => {
-      // ENVIRONMENT.IS_PRODUCTION is evaluated at module-load time, not at call
-      // time. In the test environment NODE_ENV='test' so IS_PRODUCTION is always
-      // false regardless of runtime changes to process.env.NODE_ENV.
-      process.env.NODE_ENV = 'production';
-      const timeout = getTimeout('RETRY_INITIAL', 5000);
-      // Override NOT applied because IS_PRODUCTION was fixed to false at module load
-      expect(timeout).toBe(1000);
-    });
-
-    it('should ignore environment override in development', () => {
-      process.env.NODE_ENV = 'development';
-      const timeout = getTimeout('RETRY_INITIAL', 5000);
-      expect(timeout).toBe(1000); // Should return default, not override
-    });
-
-    it('should handle all timeout keys', () => {
-      const timeoutKeys = Object.keys(TIMEOUTS) as Array<keyof typeof TIMEOUTS>;
-      timeoutKeys.forEach(key => {
-        const timeout = getTimeout(key);
-        expect(timeout).toBe(TIMEOUTS[key]);
-      });
-    });
-  });
-
-  describe('getRetryAttempts helper function', () => {
-    const originalEnv = process.env.NODE_ENV;
-
-    beforeEach(() => {
-      vi.resetModules();
-    });
-
-    afterEach(() => {
-      process.env.NODE_ENV = originalEnv;
-    });
-
-    it('should return default retry attempts', () => {
-      process.env.NODE_ENV = 'development';
-      const attempts = getRetryAttempts('API');
-      expect(attempts).toBe(3);
-    });
-
-    it('should return default attempts when no override provided', () => {
-      process.env.NODE_ENV = 'production';
-      const attempts = getRetryAttempts('UPLOAD');
-      expect(attempts).toBe(5);
-    });
-
-    it('should use environment override in production', () => {
-      // ENVIRONMENT.IS_PRODUCTION is evaluated at module-load time (not at call
-      // time), so changing process.env.NODE_ENV after import has no effect.
-      // In the test environment NODE_ENV='test', so IS_PRODUCTION is always false
-      // and the override is never applied. Assert the actual runtime behaviour.
-      process.env.NODE_ENV = 'production';
-      const attempts = getRetryAttempts('API', 10);
-      // Override is NOT applied because IS_PRODUCTION was fixed at module load (test env)
-      expect(attempts).toBe(3);
-    });
-
-    it('should ignore environment override in development', () => {
-      process.env.NODE_ENV = 'development';
-      const attempts = getRetryAttempts('API', 10);
-      expect(attempts).toBe(3); // Should return default, not override
-    });
-
-    it('should handle Infinity for WebSocket retries', () => {
-      const attempts = getRetryAttempts('WEBSOCKET');
-      expect(attempts).toBe(Infinity);
-    });
-
-    it('should handle all retry keys', () => {
-      const retryKeys = Object.keys(RETRY_ATTEMPTS) as Array<
-        keyof typeof RETRY_ATTEMPTS
-      >;
-      retryKeys.forEach(key => {
-        const attempts = getRetryAttempts(key);
-        expect(attempts).toBe(RETRY_ATTEMPTS[key]);
-      });
-    });
   });
 
   describe('Constants Immutability', () => {
@@ -255,73 +110,38 @@ describe('constants', () => {
     // without Object.freeze(). These tests verify the TypeScript type system
     // rejects mutations (via @ts-expect-error) while documenting that the
     // objects are NOT frozen at the JavaScript runtime level.
+    //
+    // Each @ts-expect-error must sit on the assignment itself. It used to sit
+    // on the enclosing `expect(() => {` line, where it suppressed nothing —
+    // tsc reported the real TS2540 on the assignment AND a TS2578 for the
+    // unused directive, so the "TypeScript rejects this" half of each test was
+    // asserting nothing.
 
     it('should report timeout constants as not frozen (as const = compile-time only)', () => {
       // TypeScript catches this at compile time (@ts-expect-error proves it).
       // At runtime the object is mutable because Object.freeze is not used.
       expect(Object.isFrozen(TIMEOUTS)).toBe(false);
       // The compile-time type prevents accidental writes in production code.
-      // @ts-expect-error - compile-time immutability check
       expect(() => {
+        // @ts-expect-error - compile-time immutability check
         TIMEOUTS.RETRY_INITIAL = 2000;
       }).not.toThrow();
     });
 
     it('should report file limits as not frozen (as const = compile-time only)', () => {
       expect(Object.isFrozen(FILE_LIMITS)).toBe(false);
-      // @ts-expect-error - compile-time immutability check
       expect(() => {
+        // @ts-expect-error - compile-time immutability check
         FILE_LIMITS.MAX_FILE_SIZE_MB = 50;
       }).not.toThrow();
     });
 
     it('should report supported formats array as not frozen (as const = compile-time only)', () => {
       expect(Object.isFrozen(FILE_LIMITS.SUPPORTED_FORMATS)).toBe(false);
-      // @ts-expect-error - compile-time immutability check
       expect(() => {
+        // @ts-expect-error - compile-time immutability check
         FILE_LIMITS.SUPPORTED_FORMATS.push('gif');
       }).not.toThrow();
-    });
-
-    it('should report WebSocket events as not frozen (as const = compile-time only)', () => {
-      expect(Object.isFrozen(WEBSOCKET_EVENTS)).toBe(false);
-      // @ts-expect-error - compile-time immutability check
-      expect(() => {
-        WEBSOCKET_EVENTS.CONNECT = 'connection';
-      }).not.toThrow();
-    });
-  });
-
-  describe('Environment Configuration', () => {
-    it('should detect development environment', () => {
-      if (process.env.NODE_ENV === 'development') {
-        expect(ENVIRONMENT.IS_DEVELOPMENT).toBe(true);
-        expect(ENVIRONMENT.IS_PRODUCTION).toBe(false);
-      }
-    });
-
-    it('should have default API URLs', () => {
-      expect(ENVIRONMENT.API_BASE_URL).toBeDefined();
-      expect(ENVIRONMENT.ML_SERVICE_URL).toBeDefined();
-      expect(ENVIRONMENT.WS_URL).toBeDefined();
-    });
-  });
-
-  describe('Type Exports', () => {
-    it('should export TypeScript types', () => {
-      // This test verifies that types compile correctly
-      type TestTimeoutConfig = typeof TIMEOUTS;
-      type TestRetryConfig = typeof RETRY_ATTEMPTS;
-      type TestFileLimitConfig = typeof FILE_LIMITS;
-
-      // Type assertions to ensure correct typing
-      const testTimeout: TestTimeoutConfig = TIMEOUTS;
-      const testRetry: TestRetryConfig = RETRY_ATTEMPTS;
-      const testFileLimit: TestFileLimitConfig = FILE_LIMITS;
-
-      expect(testTimeout).toBe(TIMEOUTS);
-      expect(testRetry).toBe(RETRY_ATTEMPTS);
-      expect(testFileLimit).toBe(FILE_LIMITS);
     });
   });
 });

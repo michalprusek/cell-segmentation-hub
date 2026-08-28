@@ -92,15 +92,3 @@ export const StatsGrid: React.FC<
     {children}
   </ResponsiveGrid>
 );
-
-export const TwoColumnGrid: React.FC<
-  Omit<ResponsiveGridProps, 'cols' | 'gap'> & { gap?: number }
-> = ({ children, gap = 4, className }) => (
-  <ResponsiveGrid
-    cols={{ default: 1, md: 2 }}
-    gap={gap as any}
-    className={className}
-  >
-    {children}
-  </ResponsiveGrid>
-);

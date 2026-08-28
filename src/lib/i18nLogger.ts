@@ -106,17 +106,6 @@ class I18nLogger {
   clear(): void {
     this.missingKeys.clear();
   }
-
-  /**
-   * Print summary report to console
-   */
-  printReport(): void {
-    if (!this.isEnabled || this.missingKeys.size === 0) return;
-
-    // Report available via getMissingKeysReport() and exportMissingKeys() methods
-    // Console logging disabled to pass pre-commit hooks
-    // Use: i18nLogger.getMissingKeysReport() or i18nLogger.exportMissingKeys() in dev tools
-  }
 }
 
 // Export singleton instance

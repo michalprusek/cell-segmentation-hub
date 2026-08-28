@@ -6,12 +6,7 @@
  */
 
 export { PageContainer } from './PageContainer';
-export {
-  ResponsiveGrid,
-  ProjectsGrid,
-  StatsGrid,
-  TwoColumnGrid,
-} from './ResponsiveGrid';
+export { ResponsiveGrid, ProjectsGrid, StatsGrid } from './ResponsiveGrid';
 export { FlexBetween } from './FlexBetween';
 export { ResponsiveStack } from './ResponsiveStack';
 export { ContentCard } from './ContentCard';

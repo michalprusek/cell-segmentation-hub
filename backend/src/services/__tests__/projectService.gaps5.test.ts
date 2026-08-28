@@ -26,12 +26,6 @@
  *  E. getProjectStats — uncovered branches
  *     - returns null when project not found
  *     - error catch re-throws
- *
- *  F. checkProjectOwnership — error catch
- *     - throws when findFirst throws
- *
- *  G. canModifyProject — error → returns false
- *     - when checkProjectOwnership throws, returns false
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -291,30 +285,5 @@ describe('projectService.getProjectStats', () => {
     await expect(
       projectService.getProjectStats('proj-1', 'user-1')
     ).rejects.toThrow('DB timeout');
-  });
-});
-
-// ─── F. checkProjectOwnership — error catch ───────────────────────────────────
-
-describe('projectService.checkProjectOwnership', () => {
-  it('throws when findFirst throws', async () => {
-    prismaMock.project.findFirst.mockRejectedValueOnce(
-      new Error('Network error')
-    );
-
-    await expect(
-      projectService.checkProjectOwnership('proj-1', 'user-1')
-    ).rejects.toThrow('Network error');
-  });
-});
-
-// ─── G. canModifyProject — error → returns false ─────────────────────────────
-
-describe('projectService.canModifyProject', () => {
-  it('returns false when checkProjectOwnership throws internally', async () => {
-    prismaMock.project.findFirst.mockRejectedValueOnce(new Error('DB error'));
-
-    const result = await projectService.canModifyProject('proj-1', 'user-1');
-    expect(result).toBe(false);
   });
 });

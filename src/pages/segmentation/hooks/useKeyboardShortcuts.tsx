@@ -367,27 +367,3 @@ function showKeyboardHelp() {
     );
   }
 }
-
-/**
- * Get keyboard shortcut description for a given mode
- */
-export const getShortcutForMode = (mode: EditMode): string => {
-  switch (mode) {
-    case EditMode.View:
-      return 'V';
-    case EditMode.EditVertices:
-      return 'E';
-    case EditMode.AddPoints:
-      return 'A';
-    case EditMode.CreatePolygon:
-      return 'N';
-    case EditMode.CreatePolyline:
-      return 'P';
-    case EditMode.Slice:
-      return 'S';
-    case EditMode.DeletePolygon:
-      return 'D';
-    default:
-      return '';
-  }
-};

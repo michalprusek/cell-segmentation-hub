@@ -3,10 +3,7 @@ import { Socket } from 'socket.io-client';
 import { useAuth } from './exports';
 import WebSocketManager from '@/services/webSocketManager';
 import { logger } from '@/lib/logger';
-import {
-  WebSocketContext,
-  type WebSocketContextType as _WebSocketContextType,
-} from './WebSocketContext.types';
+import { WebSocketContext } from './WebSocketContext.types';
 
 interface WebSocketProviderProps {
   children: React.ReactNode;

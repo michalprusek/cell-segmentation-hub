@@ -659,11 +659,15 @@ def _solve_link_lap(
 
     BIG = 1e6
     C = np.full((P, Q + P), BIG, dtype=np.float64)
-    for i in range(P):
-        for j in range(Q):
-            if base[i, j] <= cost_threshold:
-                C[i, j] = base[i, j]
-        C[i, Q + i] = cost_threshold
+    # Vectorised, and bit-identical to the P x Q Python loop this replaces:
+    # C starts at BIG everywhere, so `np.where` writes back the same BIG the
+    # loop left in place, and it only *selects* float64 values -- no arithmetic
+    # is performed on them. At the filament counts the frame-to-frame pass
+    # actually sees (mean 61/frame, p95 134, max 311 -- see _build_link_cost)
+    # the loop ran up to ~97k Python iterations per frame pair, immediately
+    # after the matrix was produced by fully-vectorised numpy.
+    C[:, :Q] = np.where(base <= cost_threshold, base, BIG)
+    C[np.arange(P), Q + np.arange(P)] = cost_threshold
     row_ind, col_ind = linear_sum_assignment(C)
     links: Dict[int, int] = {}
     for r, c in zip(row_ind, col_ind):
@@ -710,16 +714,16 @@ def _gap_close_merges(
     if max_gap < 1 or M < 2:
         return []
 
-    valid = np.zeros((M, M), dtype=bool)
-    gap_arr = np.zeros((M, M), dtype=np.int64)
-    for x in range(M):
-        for y in range(M):
-            if x == y:
-                continue
-            gap = segments[y].start_frame - segments[x].end_frame
-            if 1 <= gap <= max_gap:
-                valid[x, y] = True
-                gap_arr[x, y] = gap
+    # Pure integer arithmetic over the tracklet list, so this is exact.
+    # M is the tracklet count -- 250-417 on one real 30-frame video -- and the
+    # M x M Python loop this replaces ran up to ~174k iterations to subtract
+    # two ints.
+    starts = np.fromiter((s.start_frame for s in segments), dtype=np.int64, count=M)
+    ends = np.fromiter((s.end_frame for s in segments), dtype=np.int64, count=M)
+    gap_arr = starts[None, :] - ends[:, None]
+    valid = (gap_arr >= 1) & (gap_arr <= max_gap)
+    np.fill_diagonal(valid, False)
+    gap_arr = np.where(valid, gap_arr, 0)
     if not valid.any():
         return []
 
@@ -727,23 +731,28 @@ def _gap_close_merges(
     BIG = 1e6
     C = np.full((M, 2 * M), BIG, dtype=np.float64)
     accept = np.zeros((M, M), dtype=bool)
-    for x in range(M):
-        for y in range(M):
-            if valid[x, y]:
-                base = _filament_cost(
-                    segments[x].end_feat,
-                    segments[y].start_feat,
-                    img_diag,
-                    w_curve,
-                    w_end,
-                    w_orient,
-                    w_len,
-                )
-                if base <= cost_threshold:
-                    gap = int(gap_arr[x, y])
-                    C[x, y] = base * (1.0 + gap_penalty * (gap - 1))
-                    accept[x, y] = True
-        C[x, M + x] = cost_threshold
+    # Walk only the valid pairs. Iterating the full M x M index space and
+    # testing `valid[x, y]` inside would re-pay the M^2 the vectorised `valid`
+    # above just eliminated; gaps are bounded by max_gap so `valid` is sparse.
+    # Order is unchanged -- argwhere yields row-major, exactly the (x, y)
+    # sequence the nested loops produced -- so identical cost ties resolve the
+    # same way and linear_sum_assignment sees the same matrix.
+    for x, y in np.argwhere(valid):
+        x, y = int(x), int(y)
+        base = _filament_cost(
+            segments[x].end_feat,
+            segments[y].start_feat,
+            img_diag,
+            w_curve,
+            w_end,
+            w_orient,
+            w_len,
+        )
+        if base <= cost_threshold:
+            gap = int(gap_arr[x, y])
+            C[x, y] = base * (1.0 + gap_penalty * (gap - 1))
+            accept[x, y] = True
+    C[np.arange(M), M + np.arange(M)] = cost_threshold
 
     row_ind, col_ind = linear_sum_assignment(C)
     merges: List[Tuple[int, int]] = []
@@ -1195,8 +1204,7 @@ def _render_profiles(
     container has no display), mirroring the codebase's lazy-heavy-dep pattern
     so process startup is unaffected. The object-oriented ``Figure`` API is
     used instead of ``pyplot`` to avoid pyplot's non-thread-safe global state
-    (this runs inside the async request handler) and the per-figure cleanup it
-    would otherwise require.
+    and the per-figure cleanup it would otherwise require.
     """
     import matplotlib
 
@@ -1233,7 +1241,23 @@ def _render_profiles(
 
 @router.post("/kymograph", response_model=KymographResponse)
 async def kymograph(req: KymographRequest) -> KymographResponse:
-    """Render a kymograph for one microtubule polyline."""
+    """Render a kymograph for one microtubule polyline.
+
+    NOTE: this is `async def` while the sibling /track is `def`, and the
+    asymmetry is deliberate *for now*. /track is pure numpy/scipy, so handing
+    it to FastAPI's threadpool is a free win. /kymograph is not equivalent:
+    its body holds a full-frame float32 array per frame (16 MB at 2048x2048)
+    and builds one matplotlib Figure per frame, and it calls the process-global
+    `matplotlib.use()`. Under `async def` the event loop serialises requests,
+    so exactly one runs at a time. Declaring it `def` would hand it to anyio's
+    40-slot threadpool instead — 40 concurrent renders, each holding those
+    buffers, on the container that is also doing GPU inference, plus concurrent
+    calls into matplotlib's global backend state.
+
+    So the blocking problem is real (a long render does stall /health, which
+    the compose healthcheck polls every 30 s), but the fix needs a bounded
+    executor, not a keyword change. Measure before switching.
+    """
     from PIL import Image as PILImage
     from scipy.ndimage import map_coordinates
 
