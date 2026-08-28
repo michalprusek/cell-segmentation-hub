@@ -22,29 +22,33 @@
 # fastapi / starlette / prometheus-fastapi-instrumentator move as ONE set.
 #
 # The instrumentator's middleware runs before every endpoint and resolves the
-# route name by walking `app.routes`. Through 7.1.0 it does that with a bare
-# `route.path`:
+# route name by walking `app.routes`. Up to and including 8.0.0 it does that
+# with a bare attribute read:
 #
 #     File "prometheus_fastapi_instrumentator/routing.py", line 55
 #       route_name = route.path
 #     AttributeError: '_IncludedRouter' object has no attribute 'path'
 #
-# FastAPI 0.130+ puts `_IncludedRouter` objects in that list, so 0.141 + 6.1.0
-# starts cleanly, answers /health 200, pre-loads all five models -- and returns
-# 500 on every single POST to /api/v1/segment. Health stays green throughout,
-# which is what makes the pairing dangerous rather than merely broken.
+# FastAPI 0.137.0 introduced `_IncludedRouter` and puts those objects in that
+# list. Paired with an instrumentator <= 8.0.0 the service starts cleanly,
+# answers /health 200 and pre-loads all five models -- then returns 500 on every
+# POST to /api/v1/segment. Health stays green throughout, which is what makes
+# the pairing dangerous rather than merely broken.
 #
-# 8.0.0 is the fix: it reads `getattr(route, "path", None)` and skips what has
-# none. That version requires starlette >= 1.0, and starlette is where the
-# coupling bites -- but only in one direction. fastapi 0.141.1 asks for
-# `starlette >= 0.46.0` with NO upper bound, so it is happy on 1.x; it is the
-# instrumentator that forces the floor. Hence one set, not a chain:
+# 8.0.1 is the fix, not 8.0.0: it restructured resolution around
+# `getattr(route, "path", None)` and skips what has none. Verified by reading
+# routing.py in 6.1.0 / 7.1.0 / 8.0.0 / 8.0.1 -- the first three are identical
+# on this line, so no smaller bump gets there.
 #
 #     fastapi 0.141.1  +  starlette 1.6.0  +  instrumentator 8.1.0
 #
-# starlette is pinned explicitly even though it is transitive, because it is the
-# member of the set nothing else names, and an unpinned resolve back to 0.4x
-# would silently violate the instrumentator floor.
+# starlette is a REPRODUCIBILITY pin, not a constraint: instrumentator 8.x
+# already declares `starlette >=1.0.0,<2.0.0`, so pip would refuse a 0.4x
+# resolve rather than accept one quietly. It is pinned because it is the member
+# of the set nothing else in this file names, and an unpinned transitive floats
+# on its own schedule. fastapi does not object -- 0.141.1 asks for
+# `starlette >= 0.46.0` with no upper bound, so the 1.x floor comes entirely
+# from the instrumentator.
 #
 # Verified against the running production service: all 9 models on one image
 # plus sperm and microcapsule on another, 11/11 byte-identical outputs;
