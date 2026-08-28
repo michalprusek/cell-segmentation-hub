@@ -27,13 +27,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  optimizeDeps: {
-    include: ['xlsx'],
-  },
   build: {
     sourcemap: 'hidden',
     commonjsOptions: {
-      include: [/xlsx/, /node_modules/],
+      include: [/node_modules/],
     },
     chunkSizeWarningLimit: 500, // Warn for chunks over 500KB
     rollupOptions: {
