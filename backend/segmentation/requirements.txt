@@ -19,27 +19,42 @@
 # raising any of the numeric pins below.
 
 # Core dependencies
-# fastapi/uvicorn are HELD at 0.104.1 / 0.24.0, deliberately.
+# fastapi / starlette / prometheus-fastapi-instrumentator move as ONE set.
 #
-# Dependabot offered 0.141.1, and it installs fine -- then every POST to
-# /api/v1/segment returns 500. FastAPI 0.141 puts `_IncludedRouter` objects into
-# `app.routes`, and prometheus-fastapi-instrumentator 6.1.0 walks that list
-# doing `route.path`:
+# The instrumentator's middleware runs before every endpoint and resolves the
+# route name by walking `app.routes`. Through 7.1.0 it does that with a bare
+# `route.path`:
 #
-#   File "prometheus_fastapi_instrumentator/routing.py", line 55
-#     route_name = route.path
-#   AttributeError: '_IncludedRouter' object has no attribute 'path'
+#     File "prometheus_fastapi_instrumentator/routing.py", line 55
+#       route_name = route.path
+#     AttributeError: '_IncludedRouter' object has no attribute 'path'
 #
-# The instrumentator middleware runs before the endpoint, so nothing segments at
-# all. Note the shape of this: the service still starts, /health still answers
-# 200, all 5 models still pre-load. Only the actual work fails.
+# FastAPI 0.130+ puts `_IncludedRouter` objects in that list, so 0.141 + 6.1.0
+# starts cleanly, answers /health 200, pre-loads all five models -- and returns
+# 500 on every single POST to /api/v1/segment. Health stays green throughout,
+# which is what makes the pairing dangerous rather than merely broken.
 #
-# Fixing it is a cascade, not a bump: instrumentator >= 8 is required, which
-# needs starlette >= 1.0, which needs a different fastapi again. That is a
-# deliberate coordinated upgrade with its own verification, not something to
-# fold into a weekly group PR -- so the two stay pinned until someone does it.
-fastapi==0.104.1
-uvicorn==0.24.0
+# 8.0.0 is the fix: it reads `getattr(route, "path", None)` and skips what has
+# none. That version requires starlette >= 1.0, and starlette is where the
+# coupling bites -- but only in one direction. fastapi 0.141.1 asks for
+# `starlette >= 0.46.0` with NO upper bound, so it is happy on 1.x; it is the
+# instrumentator that forces the floor. Hence one set, not a chain:
+#
+#     fastapi 0.141.1  +  starlette 1.6.0  +  instrumentator 8.1.0
+#
+# starlette is pinned explicitly even though it is transitive, because it is the
+# member of the set nothing else names, and an unpinned resolve back to 0.4x
+# would silently violate the instrumentator floor.
+#
+# Verified against the running production service: all 9 models on one image
+# plus sperm and microcapsule on another, 11/11 byte-identical outputs;
+# /api/v1/batch-segment (the path the custom logging middleware special-cases)
+# working; and /metrics still labelling `handler="/api/v1/segment"` correctly
+# rather than degrading to "none", which is the failure mode a getattr-and-skip
+# fix could plausibly have introduced.
+fastapi==0.141.1
+starlette==1.6.0
+uvicorn==0.52.4
 pydantic==2.13.4
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
@@ -144,7 +159,7 @@ einops>=0.7.0
 # download at runtime (SAM 3 was used only offline as a distillation teacher).
 
 # Prometheus metrics
-prometheus-fastapi-instrumentator==6.1.0
+prometheus-fastapi-instrumentator==8.1.0
 
 # Test infrastructure (not used at runtime; installed separately in test envs)
 # asgi-lifespan: enables FastAPI lifespan in async httpx test clients
