@@ -78,6 +78,25 @@ export interface MTMetricsRow {
   trackId: string | null;
   /** Channel machine name, or '' for geometry-only rows (no channel picked). */
   channel: string;
+  /**
+   * The frame this row's channel intensity was actually MEASURED on.
+   *
+   * Equal to `frameIndex` for every ordinary row. It differs only on a gap
+   * frame of a SPARSE channel — one the microscope refreshed every N-th
+   * timepoint (`ChannelMeta.sparseSource`) — where the acquisition wrote a
+   * constant fill and the measurement repeats another frame's exposure instead
+   * of being an independent observation. Without this column such a run of
+   * frames reads as a genuine flat stretch of a time series.
+   *
+   * Usually the PREVIOUS real frame, so `channelFrameSource < frameIndex`. Not
+   * always: gaps before the first exposure read FORWARD from it
+   * (`plan_sparse_channels`, "head gaps"), so on a video whose IRM starts at
+   * frame 4 the first four rows carry `channelFrameSource === 4`. Compare the
+   * two columns for equality; do not assume an ordering between them.
+   *
+   * `null` on geometry-only rows: nothing was measured, so no frame was read.
+   */
+  channelFrameSource: number | null;
   lengthPx: number;
   lengthUm: number | null;
   // Intensity-dependent columns are null on geometry-only rows (no channel
@@ -112,14 +131,20 @@ export interface MTChannelSummaryRow {
 }
 
 /**
- * The measures that genuinely differ between channels — everything the raw
- * raster feeds. In the wide output each of these becomes one column PER
- * channel, named ``<channel>_<measure>``.
+ * The columns that genuinely differ between channels — everything the raw
+ * raster feeds, plus the frame that raster was read from. In the wide output
+ * each of these becomes one column PER channel, named ``<channel>_<measure>``.
  *
  * Deliberately excludes ``lengthPx`` / ``areaPx`` / ``pixelCount``: the ML side
  * builds the band + vicinity masks ONCE per frame and reuses them for every
  * channel (`mt_metrics.py` → `mt_measure.frame_geometry`), so those are
  * channel-independent and appear once in {@link WIDE_SHARED_HEADERS}.
+ *
+ * ``channelFrameSource`` belongs here rather than in the shared headers for the
+ * same reason in reverse: sparseness is a property of ONE channel. On a video
+ * whose IRM refreshes every third frame, the IRM columns of the frames in
+ * between are a repeat while the fluorescent columns beside them are genuine —
+ * a single per-row flag could not say that.
  */
 export const WIDE_CHANNEL_MEASURES = [
   'sumIntensity',
@@ -129,6 +154,7 @@ export const WIDE_CHANNEL_MEASURES = [
   'medianBackground',
   'meanBackground',
   'signalMinusBackground',
+  'channelFrameSource',
 ] as const;
 
 export type MTChannelMeasure = (typeof WIDE_CHANNEL_MEASURES)[number];
@@ -184,6 +210,14 @@ interface VideoChannelMeta {
    *  pixels live only in the per-frame PNGs, not the original volume, so they
    *  are sampled via ``png_channels`` rather than a C-axis index. */
   pngBacked?: boolean;
+  /** True when the microscope only refreshed this channel every N-th frame
+   *  (see `ChannelMeta.sparseSource`). The un-acquired planes are still in the
+   *  original file as a constant fill, so the ML side must be told to read the
+   *  anchor's plane instead of measuring that fill as signal. */
+  sparseSource?: boolean;
+  /** Gap frameIndex (stringified) -> the frameIndex whose plane stands in for
+   *  it. See `ChannelMeta.sparseFill`. */
+  sparseFill?: Record<string, number>;
 }
 
 interface PolylinePayload {
@@ -216,6 +250,11 @@ interface MLMTMetricsRequest {
    *  than the original volume, skipping any frame whose PNG is absent (an added
    *  channel may cover only some frames). No channel_offsets are applied. */
   png_channels?: string[];
+  /** Sparse channels: machine name -> {gap frameIndex -> the frameIndex whose
+   *  plane stands in for it}. Mirrors `ChannelMeta.sparseFill`. Omitted when no
+   *  sampled channel is sparse, which is every container extracted before
+   *  2026-08-28. */
+  sparse_fill?: Record<string, Record<string, number>>;
 }
 
 /** On-disk shape of the `registration.json` sidecar written by the extractors
@@ -231,6 +270,17 @@ interface MLMTMetricsResponseRow {
   instance_id: string;
   track_id: string | null;
   channel: string;
+  /** The frame the channel's pixels were read from — `frame_index` except on a
+   *  sparse channel's gap frame.
+   *
+   *  NOT optional, unlike `channel_summaries` on the response envelope. The ML
+   *  request model is `extra="forbid"`, so an ML service that does not know
+   *  `sparse_fill` rejects the request outright (422) rather than answering
+   *  without this field: there is no version in which a row arrives unlabelled,
+   *  and a fallback for one would be unreachable code asserting something
+   *  untrue. Deploy `ml` before `backend`; in the window between them MT
+   *  intensity degrades to the geometry-only fallback, which stamps itself. */
+  source_frame_index: number;
   length_px: number;
   area_px: number;
   pixel_count: number;
@@ -378,6 +428,47 @@ function resolveChannelIndices(
     }
   }
   return { indices, names, skipped };
+}
+
+/**
+ * The `sparse_fill` fragment of the ML request: for every channel being sampled
+ * that the microscope only refreshed every N-th frame, its gap → anchor map.
+ *
+ * Why the export needs it at all. The forward fill added in PR #377 redirects
+ * the READ path (editor, frame-data route, segmentation collapse); it does not
+ * touch the original ND2/TIFF, where the un-acquired planes remain the constant
+ * fill the acquisition software wrote. `mt_metrics.py` samples that original, so
+ * without this map a gap frame's intensity for a sparse channel is a
+ * measurement of the fill — a number with no exposure behind it, sitting in a
+ * per-frame time series next to real ones.
+ *
+ * Entries are re-validated rather than forwarded from the parsed `channels`
+ * JSON, the same defensive shape `readRegistrationOffsets` uses: only a
+ * non-negative integer frame index reaches the outbound request. `Number.
+ * isInteger` and not a `Number()` coercion, because coercion would turn a
+ * `null` anchor into frame 0 — i.e. invent a redirect to the first frame out of
+ * a corrupt entry, which is the one outcome worse than dropping it.
+ *
+ * Returns `undefined` when nothing sampled here is sparse — the field is then
+ * omitted entirely and the ML side takes its dense path unchanged.
+ */
+function buildSparseFillRequest(
+  containerChannels: VideoChannelMeta[],
+  sampledNames: readonly string[]
+): Record<string, Record<string, number>> | undefined {
+  const out: Record<string, Record<string, number>> = {};
+  for (const name of new Set(sampledNames)) {
+    const meta = containerChannels.find(c => c.name === name);
+    if (meta?.sparseSource !== true || !meta.sparseFill) continue;
+    const clean: Record<string, number> = {};
+    for (const [gap, anchor] of Object.entries(meta.sparseFill)) {
+      if (!/^\d+$/.test(gap)) continue;
+      if (!Number.isInteger(anchor) || anchor < 0) continue;
+      clean[gap] = anchor;
+    }
+    if (Object.keys(clean).length > 0) out[name] = clean;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 // ----------------------------------------------------------------------------
@@ -658,6 +749,14 @@ export async function computeMTMetrics(
     // channel's intensity would be read at the wrong pixels.
     const channelOffsets = await readRegistrationOffsets(absoluteOriginalPath);
 
+    // Channels this container only acquired every N-th frame. Sent so the gap
+    // frames are measured on the plane that stands in for them and stamped with
+    // it, instead of on the constant fill the microscope left behind.
+    const sparseFill = buildSparseFillRequest(containerChannels, [
+      ...names,
+      ...pngChannelNames,
+    ]);
+
     const body: MLMTMetricsRequest = {
       original_path: absoluteOriginalPath,
       file_kind: fileKind,
@@ -668,6 +767,7 @@ export async function computeMTMetrics(
       margin_multiplier: options.marginMultiplier,
       channel_offsets: channelOffsets,
       png_channels: pngChannelNames.length ? pngChannelNames : undefined,
+      sparse_fill: sparseFill,
     };
 
     // Scale the timeout to this request's actual workload (frames x channels,
@@ -744,6 +844,7 @@ export async function computeMTMetrics(
         instanceId: row.instance_id,
         trackId: row.track_id,
         channel: row.channel,
+        channelFrameSource: row.source_frame_index,
         lengthPx: row.length_px,
         lengthUm: scale != null ? row.length_px * scale : null,
         areaPx: row.area_px,
@@ -852,6 +953,8 @@ export function computeMTGeometry(
           p.instanceId ?? `mt_${fr.id.slice(0, 8)}_${p.points!.length}`,
         trackId: p.trackId ?? null,
         channel: '',
+        // Nothing was measured, so no frame was read — not even this one.
+        channelFrameSource: null,
         lengthPx,
         lengthUm:
           pixelToMicrometerScale != null
@@ -981,6 +1084,7 @@ export function pivotMTMetricsWide(rows: readonly MTMetricsRow[]): {
       medianBackground: row.medianBackground,
       meanBackground: row.meanBackground,
       signalMinusBackground: row.signalMinusBackground,
+      channelFrameSource: row.channelFrameSource,
     };
   }
 
@@ -1001,9 +1105,9 @@ function wideChannelColumn(channel: string, measure: MTChannelMeasure): string {
 }
 
 /**
- * Full wide header row: the shared identity/geometry columns once, then seven
- * columns per channel. Column count is `11 + 7 * channels` — Excel's
- * 16 384-column ceiling is only reached past ~2 300 distinct channel names, so
+ * Full wide header row: the shared identity/geometry columns once, then eight
+ * columns per channel. Column count is `11 + 8 * channels` — Excel's
+ * 16 384-column ceiling is only reached past ~2 045 distinct channel names, so
  * no cap is applied.
  */
 function wideHeaders(channels: readonly string[]): string[] {
@@ -1080,6 +1184,12 @@ const CSV_HEADERS: readonly (keyof MTMetricsRow)[] = [
   'medianBackground',
   'meanBackground',
   'signalMinusBackground',
+  // APPENDED, not slotted in next to `channel` where it reads best. The long
+  // format is the canonical file and pipelines outside this repo consume it; a
+  // column inserted mid-row shifts every later one and a positional reader
+  // would silently pick this up where it expects `lengthPx`. Last in each
+  // channel's block in the wide view too, for the same reason.
+  'channelFrameSource',
 ] as const;
 
 function csvCell(v: unknown): string {
