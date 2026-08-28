@@ -95,8 +95,13 @@ function buildUnitContext(options?: ExportOptions): UnitContext {
  *
  * Each `ProjectType` exports a different Excel layout — the guide must
  * match. Fanning out by type prevents mismatches like "sperm export
- * lists Disintegration Index" (real bug, fixed here). The four
+ * lists Disintegration Index" (real bug, fixed here). The explicit
  * branches mirror the dispatch in `exportService.exportMetrics`.
+ *
+ * `neurite` deliberately has no branch: like standard `spheroid` it emits the
+ * generic per-polygon report, and `buildSpheroidGuide` is that report's guide
+ * (its title is "Polygon Metrics Reference Guide", not a spheroid-specific
+ * one), so the `default` arm is the correct destination rather than a gap.
  */
 export function generateMetricsGuide(
   projectType: ProjectType,

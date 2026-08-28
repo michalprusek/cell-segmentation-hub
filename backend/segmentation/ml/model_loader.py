@@ -103,6 +103,22 @@ except ImportError as e:
     DisintegrationModel = None
     _disintegration_import_error = e
 
+# Optional neurite/soma model import (nnU-Net ResEnc-M, 3-class semantic).
+# Self-contained: it reuses the microtubule package's vendored
+# dynamic_network_architectures (verified byte-identical) rather than shipping a
+# second copy, and the checkpoints carry every weight — no HF_TOKEN, no download.
+_neurite_soma_import_error = None
+try:
+    from models.neurite_soma import NEURITE_SOMA_CLASSES, NeuriteSomaModel
+except ImportError as e:
+    logger.warning(
+        f"Could not import NeuriteSomaModel: {e}. "
+        "Neurite/soma segmentation will not be available."
+    )
+    NeuriteSomaModel = None
+    NEURITE_SOMA_CLASSES = ()
+    _neurite_soma_import_error = e
+
 # Optional Mamba-UNet spheroid model import (requires mamba_ssm CUDA kernels).
 # OSError is caught alongside ImportError: an ABI-mismatched compiled .so can
 # raise OSError on load, and that must disable only this model, not the service.
@@ -264,6 +280,22 @@ class ModelLoader:
             'class': MicrocapsuleModel,
             'pretrained_path': 'weights/microcapsule_unet.pt',
             'finetuned_path': 'weights/microcapsule_unet.pt',
+            'config_path': None
+        },
+        'neurite_soma': {
+            # Neurite/soma (nnU-Net ResEnc-M 2D, 3-class). The path is a
+            # DIRECTORY, not a file — the ensemble is fold_0/1/2.pth plus the
+            # plans.json that defines the architecture and the dataset.json that
+            # defines the labels. `Path.exists()` is true for a directory, so
+            # load_model()'s guard and get_model_info()'s has_pretrained accept
+            # it as-is. Note they accept an EMPTY one too, so those two are a
+            # coarse check: the authoritative one is NeuriteSomaModel.load_weights,
+            # which requires all five files and raises naming the staging script.
+            # Stage it with scripts/download-neurite-soma-weights.sh (which
+            # refuses to leave an empty or partial directory behind).
+            'class': NeuriteSomaModel,
+            'pretrained_path': 'weights/neurite_soma',
+            'finetuned_path': 'weights/neurite_soma',
             'config_path': None
         }
     }
@@ -452,6 +484,22 @@ class ModelLoader:
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
                 logger.info(f"Successfully loaded microcapsule U-Net model from: {weights_full_path}")
+                return model
+            elif model_name == 'neurite_soma':
+                # Neurite/soma — an nnU-Net ResEnc-M 3-fold ensemble. The wrapper
+                # builds each network from the checkpoint's OWN plans.json before
+                # loading it, and holds a list of nets rather than one nn.Module,
+                # so the generic torch.load + load_state_dict path below cannot
+                # apply. Inference is served by predict_neurite_soma.
+                if NeuriteSomaModel is None:
+                    raise ImportError(
+                        f"Neurite/soma model architecture not available: "
+                        f"{_neurite_soma_import_error}"
+                    )
+                model = NeuriteSomaModel()
+                model.load_weights(str(weights_full_path), self.device)
+                self.loaded_models[model_name] = model
+                logger.info(f"Successfully loaded neurite/soma model from: {weights_full_path}")
                 return model
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
@@ -1394,6 +1442,168 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('spheroid_disintegration')
+
+    def predict_neurite_soma(self, image: Image.Image, threshold: float = 0.5,
+                             detect_holes: bool = True,
+                             timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Run the neurite/soma model (nnU-Net ResEnc-M 2D, 3 folds, 3 classes).
+
+        The model predicts 0 = background, 1 = neurite, 2 = soma. Each class
+        becomes its own set of polygons, tagged with BOTH ``class`` and
+        ``partClass`` set to ``'neurite'`` / ``'soma'`` — see the comment at the
+        tagging loop for why the second one is not redundant. They are different
+        biological objects (processes vs cell bodies), not a foreground/part
+        split like disintegration's spheroid/core, so neither is nested inside
+        the other and every polygon is ``type='external'``.
+
+        ``threshold`` is accepted for interface symmetry but does NOT apply: the
+        3-class decision is an argmax over averaged logits, exactly as the
+        held-out Dice was measured. There is no probability cut to move.
+        ``detect_holes`` is forwarded to polygonisation. ``timeout`` is accepted
+        for symmetry with the other predict_* methods.
+        """
+        import time as _time
+        from services.postprocessing import PostprocessingService
+
+        self.get_model('neurite_soma')
+        if 'neurite_soma' not in self.loaded_models:
+            raise ValueError(
+                "Neurite/soma model not loaded. "
+                "Load it first with load_model('neurite_soma')"
+            )
+
+        model = self.loaded_models['neurite_soma']
+        original_size = image.size  # (width, height)
+
+        self.is_processing = True
+        self.current_model = 'neurite_soma'
+        start_time = _time.time()
+
+        try:
+            # PIL → grayscale numpy (H, W), preserving native bit depth.
+            # `convert('L')` would quantise an 'I;16' 16-bit microscopy frame to
+            # 8-bit BEFORE the wrapper's percentile stretch, throwing away the
+            # dynamic range that stretch exists to place. Same reasoning as
+            # predict_microtubule; the wrapper normalises from whatever dtype
+            # arrives.
+            if image.mode in ('I;16', 'I;16B', 'I;16L'):
+                image_np = np.array(image, dtype=np.uint16)
+            elif image.mode == 'I':
+                image_np = np.array(image, dtype=np.int32)
+            elif image.mode == 'F':
+                image_np = np.array(image, dtype=np.float32)
+            elif image.mode in ('RGB', 'RGBA', 'P'):
+                # An RGB render of one grayscale channel is the common case for
+                # a web upload; the wrapper rejects a genuinely multi-channel
+                # frame rather than averaging a mixture the model never saw.
+                image_np = np.array(image.convert('RGB'))
+            else:
+                image_np = np.array(image.convert('L'), dtype=np.uint8)
+
+            label = model.predict(image_np)  # (H, W) uint8: 0 bg / 1 neurite / 2 soma
+
+            pp = PostprocessingService()
+            emitted: List[Dict[str, Any]] = []
+            counts: Dict[str, int] = {}
+            coverage: Dict[str, float] = {}
+            polygon_id_counter = 1
+            # Iterate the wrapper's own id -> class mapping rather than repeating
+            # the literals: load_weights checks it against the checkpoint's
+            # dataset.json, so the two cannot drift into mislabelled polygons.
+            for class_id, class_name in NEURITE_SOMA_CLASSES:
+                class_hit = label == class_id
+                class_polys = pp.mask_to_polygons(
+                    class_hit.astype(np.float32), threshold=0.5, detect_holes=detect_holes
+                )
+                counts[class_name] = len(class_polys)
+                coverage[class_name] = float(class_hit.mean()) * 100.0
+                for poly in class_polys:
+                    poly['id'] = f"polygon_{polygon_id_counter}"
+                    poly['type'] = 'external'
+                    # BOTH fields, and the second one is the load-bearing one.
+                    # `class` is what every other wrapper here puts on a polygon,
+                    # but the Node side's polygon validator
+                    # (backend/src/utils/polygonValidation.ts) passes through an
+                    # explicit whitelist and `class` is NOT on it — it is dropped
+                    # before the editor ever sees it, and every neurite and soma
+                    # would arrive indistinguishable. `partClass` IS on that
+                    # whitelist; it is the same carrier sperm head/midpiece/tail
+                    # and disintegration's `core` already use.
+                    #
+                    # The whitelist checks the VALUE too, against
+                    # POLYGON_PART_CLASSES (backend/src/utils/polygonValidation.ts,
+                    # mirrored in src/lib/segmentation.ts). 'neurite' and 'soma'
+                    # have to be added to that union or this field is coerced to
+                    # undefined and dropped exactly like `class` — the Node/React
+                    # half of this feature owns that change. See "Polygon
+                    # enumerative-drop pattern" in CLAUDE.md.
+                    poly['class'] = class_name
+                    poly['partClass'] = class_name
+                    emitted.append(poly)
+                    polygon_id_counter += 1
+
+                # Pixels of this class survived the argmax but no polygon came
+                # out of them — every component was under PostprocessingService's
+                # 50 px minimum, or polygonisation swallowed an error. Surface
+                # it: a frame with predicted soma and zero soma polygons is not
+                # the same result as a frame with no soma.
+                class_px = int(class_hit.sum())
+                if class_px > 0 and not class_polys:
+                    logger.warning(
+                        "Neurite/soma: %d %s pixel(s) predicted but 0 polygon(s) "
+                        "emitted (min-area filter or postprocessing failure).",
+                        class_px, class_name,
+                    )
+
+            processing_time = _time.time() - start_time
+            logger.info(
+                "Neurite/soma: %d polygon(s) [%s] in %.2fs",
+                len(emitted),
+                ", ".join(
+                    f"{name} {counts[name]} @ {coverage[name]:.2f}% coverage"
+                    for _, name in NEURITE_SOMA_CLASSES
+                ),
+                processing_time,
+            )
+
+            return {
+                "model_used": "neurite_soma",
+                "threshold_used": threshold,
+                "image_size": {"width": original_size[0], "height": original_size[1]},
+                "polygons": emitted,
+                "processing_info": {
+                    "device": str(self.device),
+                    "num_polygons": len(emitted),
+                    # Per-class counts, keyed by the class names the polygons
+                    # carry — a caller reading this does not have to re-scan the
+                    # polygon list to know how many soma were found.
+                    "num_per_class": dict(counts),
+                    "coverage_percent_per_class": dict(coverage),
+                    "confidence_scores": [p.get("confidence", 1.0) for p in emitted],
+                    "processing_time_s": processing_time,
+                    "batch_size": 1,
+                },
+            }
+
+        except Exception as e:
+            processing_time = _time.time() - start_time
+            logger.error(
+                "Neurite/soma inference failed after %.2fs: %s: %s",
+                processing_time, type(e).__name__, e, exc_info=True,
+            )
+            raise
+
+        finally:
+            self.is_processing = False
+            self.current_model = None
+            self.release_model('neurite_soma')
+            # Three fold networks stay resident (~1.7 GiB of weights), but the
+            # sliding-window accumulators are per-call and proportional to frame
+            # area — two (C, H, W) fp16 tensors, ~1.2 GiB on a 13000² frame.
+            # Hand those blocks back between calls: the card is shared with the
+            # essays batch worker and Maptimize.
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     def predict_microtubule(self, image: Image.Image,
                             threshold: Optional[float] = None,

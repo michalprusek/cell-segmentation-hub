@@ -3,7 +3,7 @@ Unit tests for PostprocessingService.
 
 Covers:
   - mask_to_polygons  (threshold, squeeze, multi-region, hole detection,
-                       small-region filtering, exception safety)
+                       small-region filtering, error propagation)
   - _region_to_polygon (structure, degenerate contour, simplification,
                         confidence calculation)
   - filter_polygons    (area, confidence, combined, None thresholds, empty)
@@ -148,11 +148,21 @@ class TestMaskToPolygons:
 
         assert len(result) >= 1
 
-    def test_exception_returns_empty_list(self, service):
-        """Passing a non-array object should not raise; returns empty list."""
-        result = service.mask_to_polygons("not_an_array", threshold=0.5)  # type: ignore[arg-type]
+    def test_non_array_input_raises(self, service):
+        """A bad input must raise, not come back as an empty list.
 
-        assert result == []
+        An empty list is the answer for a blank image, and the queue records it
+        as `no_segmentation` — a *successful* run that found nothing. Returning
+        [] for a crash therefore reported a broken frame as a clean one. Only a
+        genuinely empty mask may produce [].
+        """
+        with pytest.raises(TypeError):
+            service.mask_to_polygons("not_an_array", threshold=0.5)  # type: ignore[arg-type]
+
+    def test_empty_mask_still_returns_empty_list(self, service, empty_mask):
+        """The other half of the same contract: an honestly blank mask is not
+        an error, and must still come back as []."""
+        assert service.mask_to_polygons(empty_mask, threshold=0.5) == []
 
     def test_polygon_points_are_dicts_with_x_y(self, service, single_circle_mask):
         """Every point in every polygon must be a dict with 'x' and 'y' keys."""

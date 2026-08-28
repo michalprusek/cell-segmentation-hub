@@ -5,6 +5,7 @@ import { User, Profile, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 import { authEventEmitter } from '@/lib/authEvents';
 import { tokenRefreshManager } from '@/lib/tokenRefresh';
+import { resolveClientLanguage } from './translationLoader';
 import {
   AuthContext,
   // type AuthContextType,
@@ -200,11 +201,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     try {
       setLoading(true);
+      // Seed the new profile with the language the visitor is actually
+      // reading (explicit pick, else browser preference). Registration is
+      // the only chance to get this right: afterwards the profile-sync
+      // effect in LanguageContext treats the server value as authoritative
+      // and would overwrite the detected language with the column default.
       const authResponse: AuthResponse = await apiClient.register(
         email,
         password,
         username,
-        consentOptions
+        consentOptions,
+        resolveClientLanguage()
       );
 
       setUser(authResponse.user);

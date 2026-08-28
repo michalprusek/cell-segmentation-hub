@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+// The six locales the frontend ships translation chunks for
+// (src/contexts/translationLoader.ts). Shared by the register and
+// profile-update schemas so the two can never drift apart.
+const supportedLanguage = z.enum(['en', 'cs', 'es', 'fr', 'de', 'zh']);
+
 // Auth validation schemas
 export const loginSchema = z.object({
   email: z.string().email('Neplatná emailová adresa'),
@@ -14,6 +19,12 @@ export const registerSchema = z.object({
     .string()
     .min(2, 'Uživatelské jméno musí mít minimálně 2 znaky')
     .optional(),
+  // UI language the client resolved for this visitor (explicit pick, else
+  // browser preference). Persisted as the new profile's preferredLang so a
+  // fresh account starts in the language the user is actually reading.
+  // Both wire names are accepted, matching updateProfileSchema below.
+  preferredLang: supportedLanguage.optional(),
+  language: supportedLanguage.optional(),
   consentToMLTraining: z.boolean().optional(),
   consentToAlgorithmImprovement: z.boolean().optional(),
   consentToFeatureDevelopment: z.boolean().optional(),
@@ -64,14 +75,14 @@ export const updateProfileSchema = z.object({
   avatarUrl: z.string().url('Neplatná URL adresa').optional(),
   preferredModel: z.string().optional(),
   modelThreshold: z.number().min(0).max(1).optional(),
-  preferredLang: z.enum(['en', 'cs', 'es', 'fr', 'de', 'zh']).optional(),
+  preferredLang: supportedLanguage.optional(),
   preferredTheme: z.enum(['light', 'dark']).optional(),
   // Wire aliases the frontend actually sends: getUserProfile() serialises
   // preferredLang/preferredTheme as `language`/`theme`, so the write side
   // uses the same names. Without these, Zod silently strips them and the
   // language/theme change is dropped (app reverts to the stale profile
   // value on next load). Mapped back in AuthService.updateProfile.
-  language: z.enum(['en', 'cs', 'es', 'fr', 'de', 'zh']).optional(),
+  language: supportedLanguage.optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
   emailNotifications: z.boolean().optional(),
   consentToMLTraining: z.boolean().optional(),

@@ -471,3 +471,52 @@ describe('convertToCOCO', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Neuron classes (neurite / soma) — closed polygons, not polylines. The
+// sperm-only `isValidSpermPartClass` filter guards the POLYLINE branch, so it
+// never sees these; the class has to be carried on the closed-polygon branch
+// or it is lost on export.
+// ---------------------------------------------------------------------------
+describe('convertToCOCO — neuron classes', () => {
+  const neurite: Polygon = {
+    ...UNIT_SQUARE,
+    id: 'n1',
+    partClass: 'neurite',
+  };
+  const soma: Polygon = { ...UNIT_SQUARE, id: 's1', partClass: 'soma' };
+
+  it('gives each class its own category id, matching the backend exporter', () => {
+    const coco = parse(convertToCOCO(makeSegmentation([neurite, soma])));
+    const byId = Object.fromEntries(
+      coco.categories.map((c: { id: number; name: string }) => [c.id, c.name])
+    );
+    expect(byId[3]).toBe('neurite');
+    expect(byId[4]).toBe('soma');
+    expect(
+      coco.annotations.map((a: { category_id: number }) => a.category_id).sort()
+    ).toEqual([3, 4]);
+  });
+
+  it('carries the class as an attribute as well', () => {
+    const coco = parse(convertToCOCO(makeSegmentation([neurite])));
+    expect(coco.annotations[0].attributes.partClass).toBe('neurite');
+  });
+
+  it('lists only the classes present', () => {
+    const coco = parse(convertToCOCO(makeSegmentation([soma])));
+    expect(coco.categories.map((c: { name: string }) => c.name)).toEqual([
+      'spheroid',
+      'soma',
+    ]);
+  });
+
+  it('leaves a class-free polygon on the generic category', () => {
+    const coco = parse(convertToCOCO(makeSegmentation([UNIT_SQUARE])));
+    expect(coco.annotations[0].category_id).toBe(1);
+    expect(coco.annotations[0].attributes).not.toHaveProperty('partClass');
+    expect(coco.categories.map((c: { name: string }) => c.name)).toEqual([
+      'spheroid',
+    ]);
+  });
+});
