@@ -307,11 +307,26 @@ describe('CanvasPolygon', () => {
       expect(renderOnce({ ...props, isMultiSelected: true }).markers).toBe(0);
     });
 
-    it('gives a multi-selected polygon the same glow filter as a selected one', () => {
-      expect(renderOnce({ isMultiSelected: true }).filter).toBe(
-        renderOnce({ isSelected: true }).filter
+    it('gives a multi-selected polygon the same glow as a selected one', () => {
+      // The glow on a selected shape comes from `.polygon-selected`'s CSS
+      // drop-shadow, NOT from the SVG filter attribute — a CSS `filter`
+      // declaration beats a presentation attribute, so the attribute is
+      // empty on every selected shape. Assert the class, which is what
+      // actually paints; asserting `.filter` here would pin the inert one.
+      expect(renderOnce({ isMultiSelected: true }).cls).toContain(
+        'polygon-selected'
       );
-      expect(renderOnce({ isMultiSelected: true }).filter).toBeTruthy();
+      expect(renderOnce({ isSelected: true }).cls).toContain(
+        'polygon-selected'
+      );
+      expect(renderOnce({}).cls).not.toContain('polygon-selected');
+    });
+
+    it('leaves the SVG filter attribute empty on a selected closed polygon', () => {
+      // Guards the deletion of `red-glow`: it was only ever emitted here, in
+      // the one case CSS overrides, so it had never reached the screen.
+      expect(renderOnce({ isSelected: true }).filter).toBe('');
+      expect(renderOnce({ isMultiSelected: true }).filter).toBe('');
       expect(renderOnce({}).filter).toBe('');
     });
   });

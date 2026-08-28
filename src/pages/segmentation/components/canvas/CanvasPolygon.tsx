@@ -287,15 +287,15 @@ const CanvasPolygon = React.memo(
     // red/blue split has therefore never reached the screen: selection has
     // always glowed the one colour `--polygon-selected-glow` names in
     // `src/index.css`. That is where to change it, not here.
-    const pathFilter = (() => {
-      if (isEffectivelySelected && !isPolyline) {
-        return `url(#${type === 'internal' ? 'blue' : 'red'}-glow)`;
-      }
-      if (isPolyline && (isEffectivelySelected || isHovered)) {
-        return 'url(#blue-glow)';
-      }
-      return '';
-    })();
+    // Emitted ONLY where it actually paints: a hovered polyline that is not
+    // selected. Every selected shape carries `.polygon-selected`, whose CSS
+    // drop-shadow beats a `filter` attribute, so a url(#…) there is inert —
+    // which is why the red/blue split never reached the screen. Keeping the
+    // attribute for those cases just implied a behaviour that did not exist.
+    const pathFilter =
+      isPolyline && isHovered && !isEffectivelySelected
+        ? 'url(#blue-glow)'
+        : '';
 
     // Memoized click handlers
     const handleClick = useCallback(
