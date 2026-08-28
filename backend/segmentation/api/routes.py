@@ -39,6 +39,23 @@ router = APIRouter()
 # measurements, not a side effect of the model swap.
 _microtubule_inference_lock = threading.Lock()
 
+# Serialises neurite/soma inference at the request layer.
+#
+# Like the microtubule lock above, this is currently insurance rather than an
+# active guard: `/segment` is `async def` and its predict calls are blocking, so
+# the event loop already serialises every inference in this worker. The lock is
+# what still holds if that ever changes (a `def` route, a threadpool hop, an
+# `await` added mid-body) — and this is the model where it would matter most.
+#
+# It is the heaviest interactive one on the card: three ResEnc-M folds stay
+# resident (1.70 GiB reserved) and each call adds a working set sized by the
+# FRAME, not the tile, because the two fp16 accumulators are C x H x W — 3.35 GiB
+# peak reserved on a 6657x6664 frame. It is also the longest: 108 forward passes
+# of 512² for a 1024² frame (9 tiles x 3 folds x 4 mirror variants), ~2 min for a
+# native one. Concurrency here would not shorten the queue, only raise the peak
+# on a card shared with the essays worker and Maptimize.
+_neurite_soma_inference_lock = threading.Lock()
+
 from fastapi import Request
 
 def get_model_loader(request: Request):
@@ -185,6 +202,44 @@ async def segment_image(
             # is a single closed instance polygon. The model is light (~14.5 MB),
             # so it runs in parallel like hrnet/sperm/wound (no inference lock).
             result = loader.predict_microcapsule(image, threshold)
+        elif model == 'neurite_soma':
+            # Neurite/soma (nnU-Net ResEnc-M, 3 folds, 3 classes). Does its own
+            # two-stage normalisation (1-99.5 percentile stretch, then z-score)
+            # and emits per-class polygons, so it cannot flow through the generic
+            # ImageNet-normalised single-channel path — that path would silently
+            # produce garbage rather than fail.
+            #
+            # `threshold` is forwarded only so the response echoes what the
+            # caller sent; the 3-class decision is an argmax, with no probability
+            # cut to move.
+            #
+            # Blocking, on the event loop, like every other branch here. That is
+            # a deliberate choice, not an oversight, and the trade-off is worth
+            # writing down because this model makes it sharpest.
+            #
+            # `segment_image` is `async def`, so a blocking predict stalls the
+            # whole worker — including GET /health — for its duration. That is
+            # up to 4 s at 1024x1024, 15 s at 2048x2048 and 150 s on the
+            # 6657x6664 frames this model was trained on (measured 2026-08-28,
+            # A5000, two runs at different card load), against a docker
+            # healthcheck that gives up after 30 s x 3.
+            #
+            # Hopping this ONE branch to a threadpool fixes that and breaks
+            # something worse: the event loop is what serialises inference
+            # across models today, and the queue worker dispatches up to FOUR
+            # concurrent /segment calls (queueService.getMultipleBatches — the
+            # SERIAL_DISPATCH_MODELS cap only applies when a serial model is
+            # picked FIRST). Real concurrency would sum GPU peaks instead of
+            # maxing them on a card shared with the essays worker and Maptimize
+            # — the exact OOM that cap exists to prevent — and would let two
+            # threads race `loader.is_processing` / `current_model`, so
+            # GET /api/v1/status would report idle mid-inference.
+            #
+            # The correct fix is a loader-wide inference lock applied to EVERY
+            # branch, which is a change to shared code that needs its own
+            # measurement. Until then this stays consistent with its neighbours.
+            with _neurite_soma_inference_lock:
+                result = loader.predict_neurite_soma(image, threshold, detect_holes)
         elif model == 'spheroid_disintegration':
             # Spheroid-disintegration model (UNet++/EffB5, 3-class). Uses its own
             # CLAHE preprocessing and emits foreground + core polygons directly,

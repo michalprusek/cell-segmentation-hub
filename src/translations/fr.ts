@@ -224,6 +224,7 @@ export default {
       sperm: 'Spermatozoïdes',
       microtubules: 'Microtubules',
       microcapsule: 'Microcapsules',
+      neurite: 'Neurites et somas',
     },
     projectNamePlaceholder: 'ex. : Sphéroïdes de cellules HeLa',
     projectDescPlaceholder:
@@ -459,6 +460,7 @@ export default {
         wound: 'Modèles de cicatrisation',
         microtubule: 'Modèles de microtubules',
         microcapsule: 'Modèles de microcapsules',
+        neurite: 'Modèles neurites / somas',
       },
       presets: {
         fast: 'Rapide',
@@ -525,6 +527,11 @@ export default {
           description:
             "Segmentation d'instances pour les microcapsules (objets ronds) en microscopie à champ clair. Un U-Net compact distillé de Meta SAM 3 renvoie un contour propre en pleine résolution par capsule et sépare les capsules jointives par un watershed ; les capsules coupées par le bord de l'image sont exclues des métriques (aire, périmètre, compacité).",
         },
+        neurite_soma: {
+          name: 'Neurite / Soma (nnU-Net ResEnc-M)',
+          description:
+            'Segmentation sémantique à deux classes de neurones en microscopie de fluorescence — neurite (prolongements) et soma (corps cellulaire) — à partir du seul canal tubuline. nnU-Net v2 ResEnc-M, ensemble de 3 folds avec TTA par miroir et terme topologique clDice sur la classe neurite. Dice sur données réservées 0,832 neurite / 0,915 soma.',
+        },
       },
     },
     detectHoles: 'Détecter les Trous',
@@ -558,6 +565,8 @@ export default {
         "Segmentation d'instances de microtubules pour la microscopie IRM. Réseau nnU-Net ResEnc-M, instanceur borné en courbure, sortie polyligne native avec tracking géométrique inter-trames.",
       microcapsule:
         "U-Net compact (distillé de Meta SAM 3) pour la segmentation d'instances de microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
+      neurite_soma:
+        'nnU-Net v2 ResEnc-M (2D, ensemble de 3 folds) pour la segmentation des neurites et des somas en microscopie de fluorescence. Lit le canal tubuline ; Dice sur données réservées 0,832 neurite / 0,915 soma. Entraîné sur des données confocales Leica à ~0,180 µm/px : vérifier les comptages de somas à une autre taille de pixel.',
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
     dataUsageDescription:
@@ -870,6 +879,12 @@ export default {
       external: 'External',
       internal: 'Internal',
       polyline: 'Polyligne',
+    },
+    // Object classes of the neurite/soma model. Deliberately NOT under
+    // `sperm.part` — different model, different vocabulary.
+    partClass: {
+      neurite: 'Neurite',
+      soma: 'Soma',
     },
     shortcuts: {
       buttonText: 'Raccourcis',
@@ -1264,6 +1279,8 @@ export default {
         "Longueur, aire et intensité par canal de chaque MT à partir du fichier ND2/TIFF d'origine. Corrigé par la médiane du fond (en dehors du masque MT dilaté).",
       intensityNote:
         "L'intensité du signal par canal — y compris l'intensité sommée (intégrée) — est toujours calculée pour chaque canal et écrite dans la feuille de métriques. Aucune sélection n'est nécessaire.",
+      wideNote:
+        'Chaque canal a sa propre ligne dans metrics.csv (voir la colonne « channel »). Le fichier compagnon metrics_wide.csv — une feuille supplémentaire dans metrics.xlsx — place tous les canaux du même microtubule sur une seule ligne, avec un jeu de colonnes par canal.',
       thicknessLabel: 'Épaisseur du MT (px)',
       thicknessHelp:
         "Largeur de la bande d'échantillonnage le long de chaque polyligne. 5 px correspond au diamètre typique des microtubules en grand champ 100×.",

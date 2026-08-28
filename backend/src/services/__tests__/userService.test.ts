@@ -107,7 +107,7 @@ describe('UserService', () => {
       });
     });
 
-    it('uses default language cs and theme light when profile is null', async () => {
+    it('uses default language en and theme light when profile is null', async () => {
       const mockUser = {
         id: testUserId,
         email: 'test@example.com',
@@ -127,7 +127,9 @@ describe('UserService', () => {
 
       const result = await getUserProfile(testUserId);
 
-      expect(result!.language).toBe('cs');
+      // English, not Czech: a profile with no stored preference must not
+      // force the UI into a language the visitor never asked for.
+      expect(result!.language).toBe('en');
       expect(result!.theme).toBe('light');
     });
   });

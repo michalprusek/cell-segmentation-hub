@@ -1,0 +1,10 @@
+{
+  "_comment": "Inference configuration for the neurite/soma model. These are NOT tunables: every number here is part of the configuration the held-out Dice (neurite 0.832 / soma 0.915) was measured with, and the one the numerical-equivalence check against nnUNetv2_predict was run at. Changing any of them invalidates both. The label ids are deliberately NOT here: they come from the checkpoint's own dataset.json, checked against wrapper.EXPECTED_LABELS at load.",
+  "configuration": "2d",
+  "folds": [0, 1, 2],
+  "percentile_lo": 1.0,
+  "percentile_hi": 99.5,
+  "tile_step_ratio": 0.5,
+  "gaussian_sigma_scale": 0.125,
+  "use_mirroring": true
+}

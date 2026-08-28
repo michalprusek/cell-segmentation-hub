@@ -1388,9 +1388,26 @@ export class SegmentationService {
           continue;
         }
 
-        if (result.success && result.polygons) {
+        // Success is decided by the ML service's own `success` flag alone.
+        // Gating on `result.polygons` as well conflated two different things:
+        // a *missing* key (a broken response) and an *empty array* (the model
+        // ran fine and found nothing). The empty case is a legitimate answer —
+        // an image with nothing on it — and must not be reported as a failure,
+        // or the queue records `error: 'No polygons found'` for a healthy run.
+        if (result.success) {
+          const resultPolygons: SegmentationPolygon[] = result.polygons ?? [];
+          // Polyline models (microtubule, sperm) return their detections under
+          // `polylines` with `polygons: []`. Dropping the key here discards
+          // every detection and makes the caller see an empty result, marking a
+          // successfully segmented frame as `no_segmentation`. Latent today —
+          // queueService's BATCH_LIMITS caps every model at 1, so this function
+          // is unreachable from the queue — but it must not be a trap for
+          // whoever re-enables batching.
+          const resultPolylines: SegmentationPolygon[] = result.polylines ?? [];
+          const allShapes = [...resultPolygons, ...resultPolylines];
+
           // Calculate vertices statistics for logging
-          const verticesStats = result.polygons.map(
+          const verticesStats = allShapes.map(
             (p: SegmentationPolygon) => p.points?.length || 0
           );
           const totalVertices = verticesStats.reduce(
@@ -1409,7 +1426,8 @@ export class SegmentationService {
               originalIndex,
               resultIndex,
               model: result.model_used,
-              polygonCount: result.polygons.length,
+              polygonCount: resultPolygons.length,
+              polylineCount: resultPolylines.length,
               processingTime: result.processing_time,
               verticesStats: {
                 total: totalVertices,
@@ -1423,7 +1441,8 @@ export class SegmentationService {
           // Update the pre-allocated result at the correct original index
           results[originalIndex] = {
             success: true,
-            polygons: result.polygons,
+            polygons: resultPolygons,
+            polylines: resultPolylines,
             model_used: result.model_used,
             threshold_used: result.threshold_used,
             confidence: result.confidence,
@@ -1431,11 +1450,14 @@ export class SegmentationService {
             image_size: result.image_size,
           };
         } else {
+          const failureReason =
+            result.error || 'ML service returned no result for this image';
+
           logger.warn('Batch segmentation item failed', 'SegmentationService', {
             imageId: image.id,
             originalIndex,
             resultIndex,
-            error: result.error || 'No polygons found',
+            error: failureReason,
           });
 
           // Update with specific failure information
@@ -1447,7 +1469,7 @@ export class SegmentationService {
             confidence: null,
             processing_time: null,
             image_size: { width: image.width || 0, height: image.height || 0 },
-            error: result.error || 'No polygons found',
+            error: failureReason,
           };
         }
       }

@@ -36,6 +36,10 @@ export interface MicrotubuleMetricsSectionProps {
  * band. The backend re-reads the original ND2/TIFF so the intensity numbers
  * come from raw 16-bit signal (the per-channel PNGs are percentile-clipped
  * 8-bit and unsuitable for absolute fluorescence).
+ *
+ * The archive carries the numbers twice: `metrics.csv` long (one row per
+ * frame/MT/channel, with a `channel` column) and `metrics_wide.csv` pivoted
+ * (one row per frame/MT, one `<channel>_<measure>` column set per channel).
  */
 export const MicrotubuleMetricsSection: React.FC<
   MicrotubuleMetricsSectionProps
@@ -128,10 +132,13 @@ export const MicrotubuleMetricsSection: React.FC<
       <CardContent className="space-y-4 p-0">
         {/* Per-channel intensity (incl. the integrated sum) is always computed
             for every channel — no opt-in. This note replaces the old enable
-            checkbox + channel picker. */}
+            checkbox + channel picker, and names BOTH shapes the numbers ship
+            in so nobody has to guess which channel a column came from. */}
         <div className="flex items-start gap-2 rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground">
           <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <span>{t('export.mt.intensityNote')}</span>
+          <span>
+            {t('export.mt.intensityNote')} {t('export.mt.wideNote')}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

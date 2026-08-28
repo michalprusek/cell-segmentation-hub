@@ -9,13 +9,13 @@
  * had to be edited in lockstep.
  *
  * What IS NOT shared here:
- * - `partClass`. Visualization renders BOTH sperm sub-parts and the
- *   spheroid 'core' annotation, so its `partClass` is `PolygonPartClass`
- *   (4 values). Exports never carry the 'core' value, so format
- *   converters use `SpermPartClass` (3 values). The two services
- *   intentionally differ on this one field — combining them would
- *   either widen the export contract incorrectly or lose 'core'
- *   annotations from rendered visualizations.
+ * - `partClass`. Both visualization and export now type it as the full
+ *   `PolygonPartClass` (sperm sub-parts, spheroid 'core', neurite/soma),
+ *   because the neuron model tags CLOSED polygons and those DO reach the
+ *   export. They stay separate declarations only because each service adds
+ *   its own extra fields; narrowing either to `SpermPartClass` would drop
+ *   a class that is now on the wire. Sperm-only behaviour is enforced by
+ *   `isValidSpermPartClass` at each polyline use site, not by the type.
  * - `polygonValidation.Polygon`. That type represents the wire-format
  *   payload (snake_case `parent_id`, optional `type`, plus
  *   color/category/confidence) and serves a different purpose

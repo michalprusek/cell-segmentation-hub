@@ -127,6 +127,45 @@ describe('Auth Controller Functions', () => {
       expect(hintCookie).not.toMatch(/HttpOnly/i);
     });
 
+    it('passes the client-detected language through to AuthService', async () => {
+      // Zod strips unknown keys, so a missing `preferredLang` in
+      // registerSchema would silently drop the browser-detected language and
+      // every new profile would fall back to the column default.
+      authService.register.mockResolvedValueOnce({
+        message: 'ok',
+        user: { id: 'user-id', email: 'de@example.com', emailVerified: false },
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
+
+      await request(app)
+        .post('/auth/register')
+        .send({
+          email: 'de@example.com',
+          password: 'password123',
+          preferredLang: 'de',
+        })
+        .expect(201);
+
+      expect(authService.register).toHaveBeenCalledWith(
+        expect.objectContaining({ preferredLang: 'de' })
+      );
+    });
+
+    it('rejects a language code we do not ship translations for', async () => {
+      const response = await request(app)
+        .post('/auth/register')
+        .send({
+          email: 'pl@example.com',
+          password: 'password123',
+          preferredLang: 'pl',
+        })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(authService.register).not.toHaveBeenCalled();
+    });
+
     it('should return 400 for invalid email', async () => {
       const invalidUserData = {
         email: 'invalid-email',

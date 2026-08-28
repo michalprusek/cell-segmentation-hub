@@ -29,6 +29,13 @@ export interface RegisterRequest {
   email: string;
   password: string;
   username?: string;
+  /**
+   * UI language the client resolved for this visitor (explicit pick, else
+   * browser preference). The server persists it as the new profile's
+   * `preferredLang`; without it every new account would fall back to the
+   * column default regardless of what the user is actually reading.
+   */
+  preferredLang?: string;
   consentToMLTraining?: boolean;
   consentToAlgorithmImprovement?: boolean;
   consentToFeatureDevelopment?: boolean;
@@ -91,7 +98,7 @@ export interface SegmentationRequest {
   threshold?: number;
 }
 
-import type { SpermPartClass } from '@/lib/segmentation';
+import type { PolygonPartClass } from '@/lib/segmentation';
 import type { EssayJob, EssayJobOptions } from '@/types/essays';
 
 /** One microtubule type-label in a project's palette (SSOT for name + colour).
@@ -111,9 +118,12 @@ export interface SegmentationPolygon {
   confidence?: number;
   area?: number;
   geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
-  /** Sperm polyline part — shared with editor's SpermPartClass to avoid
-   *  drift if the model's part vocabulary expands. */
-  partClass?: SpermPartClass;
+  /** Semantic class of the shape: a sperm polyline part, the spheroid
+   *  disintegration 'core', or a neurite/soma class. Shared with the editor's
+   *  `PolygonPartClass` so the wire type cannot narrow below what the backend
+   *  actually sends — it was `SpermPartClass` while 'core' was already on the
+   *  wire, and a neuron class would have been the second such mismatch. */
+  partClass?: PolygonPartClass;
   instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
   /** Cross-frame microtubule track ID populated by backend tracker after a
    *  video container's batch finishes segmentation. Sibling polylines for
@@ -483,6 +493,8 @@ class ApiClient {
    * @param {string} request.password - User's password
    * @param {string} [request.username] - Optional username
    * @param {boolean} [request.consentToMLTraining] - Consent for ML training
+   * @param {string} [preferredLang] - Client-resolved UI language, stored as
+   *   the new profile's `preferredLang`
    * @returns {Promise<AuthResponse>} The newly registered user (tokens are
    *   set as httpOnly cookies by the server, not returned in the body)
    * @throws {Error} If registration fails or email already exists
@@ -501,13 +513,15 @@ class ApiClient {
       consentToMLTraining?: boolean;
       consentToAlgorithmImprovement?: boolean;
       consentToFeatureDevelopment?: boolean;
-    }
+    },
+    preferredLang?: string
   ): Promise<AuthResponse> {
     const response = await this.instance.post('/auth/register', {
       email,
       password,
       username,
       ...consentOptions,
+      ...(preferredLang ? { preferredLang } : {}),
     });
 
     // Registration logs the user in via httpOnly cookies set by the server.
