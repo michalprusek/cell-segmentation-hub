@@ -312,6 +312,12 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
           <VideoModeOverlay
             videoContainerId={videoContainerId}
             projectType={projectType}
+            // The editor's single useVideoFrames instance, so the keyboard
+            // controls drive the same (buffer-gated) playback the header does.
+            frameIndex={video.frameIndex}
+            step={video.step}
+            toggle={video.toggle}
+            channels={video.container?.channels ?? null}
           />
         )}
 
