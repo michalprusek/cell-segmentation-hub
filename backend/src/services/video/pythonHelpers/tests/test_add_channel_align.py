@@ -42,7 +42,7 @@ HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
 from channel_registration import (  # noqa: E402
-    _MAX_SHIFT_FRACTION,
+    _MAX_SHIFT_PX,
     _MIN_CONFIDENCE,
     shift_frame,
 )
@@ -195,7 +195,7 @@ def test_reason_implausible_shift_keeps_a_high_confidence():
     # decay into just another low-confidence pair and this branch would go
     # untested.
     ref = _reference(seed=10)
-    true_dy = int(_MAX_SHIFT_FRACTION * min(ref.shape)) + 25  # 37 px, way over
+    true_dy = _MAX_SHIFT_PX + 25  # 41 px, way over the 16 px budget
     row = _one(ref, shift_frame(ref, true_dy, 0).astype(np.uint16))
     assert row[:2] == [0, 0], row  # nothing applied
     assert row[3] == "implausible_shift", row

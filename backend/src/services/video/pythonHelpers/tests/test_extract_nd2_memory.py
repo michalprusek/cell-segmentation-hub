@@ -107,7 +107,7 @@ def _run(T, C=2, Y=128, X=128, workers=2, register=False):
     prev = os.environ.get("ND2_EXTRACT_WORKERS")
     os.environ["ND2_EXTRACT_WORKERS"] = str(workers)
     try:
-        offsets, blanks = _write_frames(
+        offsets, _reasons, blanks = _write_frames(
             stack, dest / "frames", [f"ch{c}" for c in range(C)],
             register=register,
         )
@@ -181,7 +181,7 @@ def test_concurrent_registrations_are_capped():
     cap = _registration_workers(workers)
     assert cap < workers, "test is vacuous unless the cap actually binds"
 
-    real = extract_nd2.estimate_translation
+    real = extract_nd2.estimate_translation_detailed
     lock = threading.Lock()
     state = {"now": 0, "max": 0}
 
@@ -195,11 +195,11 @@ def test_concurrent_registrations_are_capped():
             with lock:
                 state["now"] -= 1
 
-    extract_nd2.estimate_translation = counting
+    extract_nd2.estimate_translation_detailed = counting
     try:
         _run(T=30, C=2, Y=128, X=128, workers=workers, register=True)
     finally:
-        extract_nd2.estimate_translation = real
+        extract_nd2.estimate_translation_detailed = real
 
     assert state["max"] > 0, "registration never ran — test would be vacuous"
     assert state["max"] <= cap, (

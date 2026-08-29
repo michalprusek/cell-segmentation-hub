@@ -18,9 +18,29 @@ Method — why phase correlation on gradient maps:
        resulting phase-correlation surface is the integer translation.
   This is the fast, no-heavy-dependency (numpy-only) member of the phase-based
   multimodal-registration family that is standard in microscopy (ImageJ
-  StackReg / scikit-image). For the rigid-translation, shared-structure case
-  it is as good in practice as mutual-information registration, without the
-  extra dependency or the non-convex optimisation.
+  StackReg / scikit-image).
+
+Why not mutual information (or LC²), measured rather than assumed:
+  MI was evaluated against this method on real production pairs (2026-08-29,
+  ±16 px window, 32 bins, 2× decimation).
+    * Cost — 0.489 s vs 0.086 s per pair at 1024², i.e. 6× slower, and MI needs
+      a SEARCH where phase correlation answers for every shift at once from two
+      FFTs. On a 621-frame 2-channel ND2 that is +5.1 min on a synchronous
+      upload against +0.9 min.
+    * Accuracy — on 14 pairs this method handles well, MI's optimum disagreed
+      on 7, and on those it landed ON THE WINDOW BOUNDARY ((-16,-16), (-16,-14),
+      (6,-16)) with a flat landscape (peak/median 1.03-1.09): the signature of
+      an optimiser sliding across a non-convex surface with no optimum in it.
+      Phase correlation meanwhile returned the same (3, -2) across five
+      independent containers of one microscope session — a reproducible
+      chromatic offset MI could not recover.
+    * As a veto — MI's peak/median does not separate the populations either
+      (good pairs scored 106, 67, 9.97, 3.57, 1.52, 1.63, 1.10; bad ones up to
+      2.75), so no threshold on it is usable.
+  The pairs that fail here fail because the two channels image DIFFERENT
+  structures — one is often nearly empty — and no similarity metric can invent
+  a correspondence that is not in the data. Changing the metric would only
+  change the disguise the failure wears.
 
 The shift is applied as an **integer** pixel shift (array slice + zero-fill of
 the vacated border), which is **lossless** for the 16-bit data — no
@@ -39,14 +59,53 @@ from typing import NamedTuple
 
 import numpy as np
 
-# A channel offset larger than this fraction of the smaller image dimension is
-# treated as a spurious correlation peak (real chromatic/stage offsets are a
-# handful of pixels, never a third of the frame) and rejected → (0, 0).
-_MAX_SHIFT_FRACTION = 0.10
+# How far from the origin the true offset may lie, in PIXELS. A chromatic or
+# stage offset is a physical quantity — it does not grow because the camera has
+# more pixels — so this is an absolute budget, not a fraction of the frame.
+#
+# It replaced ``_MAX_SHIFT_FRACTION = 0.10`` on 2026-08-29. That rule read
+# "10 % of the smaller dimension", which is ±12 px on the 128² synthetic frames
+# the tests used and ±130 px on a real 1300² acquisition — so on production data
+# it admitted almost any noise peak. Measured over 116 real (reference, moving)
+# pairs from production: 27 % of pairs had a spurious peak accepted and APPLIED
+# as a shift of up to 128 px. Genuine offsets in that same sample had a median
+# magnitude of 3 px and none exceeded 10.
+_MAX_SHIFT_PX = 16
 
-# Minimum peak-to-background ratio for a phase-correlation estimate to be
-# trusted. A dark/low-signal frame produces a flat surface with no clear peak;
-# below this the estimate is discarded so noise can't inject jitter.
+# The search is confined to ±_MAX_SHIFT_PX, so the peak is chosen among
+# plausible candidates rather than found globally and then vetoed. That
+# ordering is the point: when the true peak is the second-highest on the
+# surface, a global argmax never sees it.
+
+# Minimum ratio of the winning peak to its best RIVAL elsewhere on the surface
+# for the estimate to be trusted.
+#
+# This is the discriminator, and its boundary is structural rather than tuned: a
+# genuine registration peak IS the global maximum, so the ratio exceeds 1; a
+# noise peak means the real maximum lies somewhere else, so it falls below 1.
+# Measured on those same 116 production pairs, with the rival taken outside a
+# ±_PEAK_EXCLUSION_PX disc around the peak:
+#
+#     genuine pairs  n=52  min 1.006   median 10.5   max 32687
+#     spurious pairs n=64  min 0.195   median 0.77   max 0.991
+#
+# 1.2 sits in the empty gap with ~20 % margin either way: it keeps 50 of 52
+# genuine estimates and admits 0 of 64 spurious ones.
+_MIN_PEAK_RATIO = 1.2
+
+# Radius of the disc around the winning peak that is excluded when looking for
+# its rival. A real correlation peak is a few pixels wide, so without this the
+# peak's own shoulder is its strongest competitor and every ratio collapses to
+# ~1 regardless of match quality.
+_PEAK_EXCLUSION_PX = 3
+
+# Legacy peak-to-background ratio, kept as a floor for degenerate surfaces (an
+# all-constant frame scores 0 here). It is NOT the discriminator and never was:
+# the docstring below used to claim a no-match surface scores ~1, but measured,
+# two unrelated frames score 6.7-8.1 — because ``mean + std`` makes this ratio
+# track the expected maximum of N noise samples (≈√(2 ln N) for N pixels), a
+# property of the SURFACE SIZE, not of match quality. No value of this threshold
+# separates the populations, which is why _MIN_PEAK_RATIO exists.
 _MIN_CONFIDENCE = 3.0
 
 # --------------------------------------------------------------------------
@@ -89,6 +148,9 @@ class TranslationEstimate(NamedTuple):
     reason: str
     peak_dy: int
     peak_dx: int
+    #: Winning peak / best rival outside a ±_PEAK_EXCLUSION_PX disc. >1 means
+    #: the accepted peak is the global maximum. This is what decides trust.
+    quality: float = 0.0
 
 
 def _to_float_gray(arr: np.ndarray) -> np.ndarray:
@@ -239,30 +301,62 @@ def estimate_translation_detailed(
     corr = np.fft.irfft2(cross, s=shape)
     del cross
 
-    peak = np.unravel_index(int(np.argmax(corr)), corr.shape)
-    peak_val = float(corr[peak])
-    # Peak-to-background ratio: a sharp, trustworthy peak sits far above the
-    # surface's mean±std; a flat (no-match) surface scores ~1.
+    h, w = shape
+
+    # The GLOBAL peak is computed for reporting only — it is what the estimate
+    # would have been under the old global-argmax rule, and naming it is what
+    # turns "rejected" into the actionable "wanted (-87, 3)".
+    gpeak = np.unravel_index(int(np.argmax(corr)), corr.shape)
+    peak_val = float(corr[gpeak])
     background = float(corr.mean() + corr.std()) or 1e-12
     confidence = peak_val / background if background > 0 else 0.0
 
     # Fold the periodic FFT index into a signed shift in [-N/2, N/2).
-    dy, dx = int(peak[0]), int(peak[1])
-    if dy > shape[0] // 2:
-        dy -= shape[0]
-    if dx > shape[1] // 2:
-        dx -= shape[1]
+    gdy, gdx = int(gpeak[0]), int(gpeak[1])
+    if gdy > h // 2:
+        gdy -= h
+    if gdx > w // 2:
+        gdx -= w
 
-    max_shift = _MAX_SHIFT_FRACTION * min(shape)
-    if abs(dy) > max_shift or abs(dx) > max_shift:
-        # Implausible → reject. The candidate peak survives in peak_dy/peak_dx
-        # so the caller can report WHAT was rejected, not just that something
-        # was.
-        return TranslationEstimate(0, 0, confidence, REASON_IMPLAUSIBLE_SHIFT, dy, dx)
-    if confidence < _MIN_CONFIDENCE:
-        return TranslationEstimate(0, 0, confidence, REASON_LOW_CONFIDENCE, dy, dx)
+    # --- the estimate itself: best peak WITHIN the plausible window ---------
+    # Clamped so a frame smaller than the budget cannot wrap the window onto
+    # itself (at 32² a ±16 window would cover every shift there is).
+    radius = max(1, min(_MAX_SHIFT_PX, min(h, w) // 4))
+    off = np.arange(-radius, radius + 1)
+    ys, xs = off % h, off % w
+    sub = corr[np.ix_(ys, xs)]  # (2r+1)² — small, unlike the full surface
+    k = int(np.argmax(sub))
+    dy = int(off[k // sub.shape[1]])
+    dx = int(off[k % sub.shape[1]])
+    win_val = float(corr[dy % h, dx % w])
 
-    return TranslationEstimate(dy, dx, confidence, REASON_OK, dy, dx)
+    # --- quality: the winning peak against its best rival -------------------
+    # The exclusion disc is written into `corr` in place and never restored:
+    # `corr` is local and dead after this. A masked copy would cost another
+    # full-frame float64 (32 MB at 2048²), which the memory note above exists
+    # to avoid.
+    ey = (dy + np.arange(-_PEAK_EXCLUSION_PX, _PEAK_EXCLUSION_PX + 1)) % h
+    ex = (dx + np.arange(-_PEAK_EXCLUSION_PX, _PEAK_EXCLUSION_PX + 1)) % w
+    corr[np.ix_(ey, ex)] = -np.inf
+    rival = float(corr.max())
+    del corr
+    quality = win_val / rival if rival > 0 and win_val > 0 else 0.0
+
+    if quality >= _MIN_PEAK_RATIO and confidence >= _MIN_CONFIDENCE:
+        return TranslationEstimate(dy, dx, confidence, REASON_OK, gdy, gdx, quality)
+
+    # Rejected. WHICH reason is itself informative: a global peak outside the
+    # window means a real (or noise) structure pulled the match somewhere
+    # implausible, while a global peak inside it means the surface simply has
+    # no dominant peak at all. Order preserved from the original: the
+    # plausibility branch reports first when both would fire.
+    if abs(gdy) > radius or abs(gdx) > radius:
+        return TranslationEstimate(
+            0, 0, confidence, REASON_IMPLAUSIBLE_SHIFT, gdy, gdx, quality
+        )
+    return TranslationEstimate(
+        0, 0, confidence, REASON_LOW_CONFIDENCE, gdy, gdx, quality
+    )
 
 
 def shift_frame(arr: np.ndarray, dy: int, dx: int, fill: int = 0) -> np.ndarray:
@@ -296,6 +390,7 @@ def write_registration_sidecar(
     dest_dir: Path | str,
     channel_names: list[str],
     offsets: dict[int, list],
+    reasons: dict[int, list[str]] | None = None,
 ) -> None:
     """Persist the per-frame per-channel translation applied at extraction, as
     ``<dest_dir>/registration.json``. Downstream consumers that re-read the raw
@@ -307,13 +402,23 @@ def write_registration_sidecar(
     if len(channel_names) <= 1:
         return
     data = {
-        "version": 1,
+        "version": 2,
         "method": "phase_correlation_gradient_translation",
         "referenceChannel": channel_names[0],
         "channels": channel_names,
         # frameIndex (string key) -> [[dy, dx], ...] aligned to ``channels``.
+        # SHAPE IS FROZEN: mtMetricsExporter and the kymograph path index
+        # ``frames[t][c] == [dy, dx]``, so the reasons go in a PARALLEL map
+        # rather than being appended to each row.
         "frames": {str(t): offsets[t] for t in sorted(offsets)},
     }
+    if reasons is not None:
+        # Why each offset is what it is. Without this a stored ``(0, 0)`` is
+        # ambiguous — genuinely aligned, or an estimate that was refused — and
+        # that ambiguity is exactly why the 2026-08 registration failures went
+        # unnoticed: the reason existed in memory and both extractors dropped
+        # it on the floor.
+        data["reasons"] = {str(t): reasons[t] for t in sorted(reasons)}
     (Path(dest_dir) / "registration.json").write_text(json.dumps(data))
 
 
