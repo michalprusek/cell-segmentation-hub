@@ -41,6 +41,7 @@ import express, { Express } from 'express';
 const {
   prismaUserFindUnique,
   prismaProjectFindFirst,
+  prismaProjectFindUnique,
   prismaImageFindUnique,
   prismaImageFindMany,
   prismaImageUpdate,
@@ -52,6 +53,7 @@ const {
 } = vi.hoisted(() => ({
   prismaUserFindUnique: vi.fn(),
   prismaProjectFindFirst: vi.fn(),
+  prismaProjectFindUnique: vi.fn(),
   prismaImageFindUnique: vi.fn(),
   prismaImageFindMany: vi.fn(),
   prismaImageUpdate: vi.fn(),
@@ -65,7 +67,14 @@ const {
 vi.mock('../../db/prismaClient', () => ({
   prisma: {
     user: { findUnique: prismaUserFindUnique },
-    project: { findFirst: prismaProjectFindFirst },
+    project: {
+      findFirst: prismaProjectFindFirst,
+      // `upload` reads the project TYPE (drift correction + channel
+      // registration are microtubule-gated). Without this the handler throws
+      // on `undefined.findUnique` rather than failing an assertion, which is
+      // how it slipped past a green `make ci` — vitest is not in that gate.
+      findUnique: prismaProjectFindUnique,
+    },
     image: {
       findUnique: prismaImageFindUnique,
       findMany: prismaImageFindMany,
@@ -174,6 +183,9 @@ describe('VideoController.upload()', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fsRmMock.mockResolvedValue(undefined);
+    // Default: an ordinary (non-microtubule) project, so neither channel
+    // registration nor drift correction is requested unless a test says so.
+    prismaProjectFindUnique.mockResolvedValue({ type: 'spheroid' });
     // ResponseHelper re-wired after clearAllMocks
     responseSuccessMock.mockImplementation(
       (res: express.Response, data: unknown) => {
@@ -393,6 +405,64 @@ describe('VideoController.upload()', () => {
       // Best-effort tmp cleanup must fire
       expect(fsRmMock).toHaveBeenCalledWith('/tmp/clip-err.mp4', {
         force: true,
+      });
+    });
+  });
+
+  describe('microtubule gating', () => {
+    /** Drive one upload against a project of `type` and return the options the
+     *  controller handed to uploadVideoFromFile. */
+    async function uploadInto(type: string) {
+      prismaProjectFindUnique.mockResolvedValue({ type });
+      prismaUserFindUnique.mockResolvedValue(MOCK_USER);
+      prismaProjectFindFirst.mockResolvedValue({ id: 'proj-1' });
+      isVideoFilenameMock.mockReturnValue(true);
+      uploadVideoFromFileMock.mockResolvedValue(MOCK_UPLOAD_RESULT);
+
+      const testApp = express();
+      testApp.use(
+        (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+          req.user = { id: 'user-1' };
+          req.file = {
+            fieldname: 'video',
+            originalname: 'clip.tif',
+            encoding: '7bit',
+            mimetype: 'image/tiff',
+            path: '/tmp/clip.tif',
+            size: 2048,
+            destination: '/tmp',
+            filename: 'clip.tif',
+            buffer: Buffer.alloc(0),
+            stream: null as unknown as NodeJS.ReadableStream,
+          };
+          next();
+        }
+      );
+      testApp.post('/projects/:id/videos', VideoController.upload);
+      await request(testApp).post('/projects/proj-1/videos').expect(200);
+      return uploadVideoFromFileMock.mock.calls.at(-1)?.[0];
+    }
+
+    it('turns drift correction ON for a microtubule project, with no request flag', () => {
+      // Deliberately not a user toggle, unlike registerChannels: the drift it
+      // removes is ~0.08 px/frame, invisible frame-to-frame, so there is
+      // nothing a user could judge to tick a box about.
+      return uploadInto('microtubules').then(opts => {
+        expect(opts).toMatchObject({ correctDrift: true });
+      });
+    });
+
+    it('leaves drift correction OFF for any other project type', () => {
+      return uploadInto('spheroid').then(opts => {
+        expect(opts).toMatchObject({ correctDrift: false });
+      });
+    });
+
+    it('does not enable channel registration just because drift is on', () => {
+      // registerChannels stays opt-in even on a microtubule project — the two
+      // are gated on the same project type but not on the same consent.
+      return uploadInto('microtubules').then(opts => {
+        expect(opts).toMatchObject({ registerChannels: false });
       });
     });
   });
