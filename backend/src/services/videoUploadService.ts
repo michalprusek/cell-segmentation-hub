@@ -409,6 +409,10 @@ export async function uploadVideoFromFile(options: {
    *  the controller only sets this when the user ticked it and the project is
    *  a microtubule project). Passed through to the extractor. */
   registerChannels?: boolean;
+  /** Remove stage drift across frames. Automatic for microtubule projects —
+   *  unlike `registerChannels` this is not a user toggle, because the drift it
+   *  removes is invisible frame-to-frame and a user has no way to judge it. */
+  correctDrift?: boolean;
 }): Promise<VideoUploadResult> {
   const {
     projectId,
@@ -417,6 +421,7 @@ export async function uploadVideoFromFile(options: {
     tempFilePath,
     onProgress,
     registerChannels,
+    correctDrift,
   } = options;
 
   // 1. Create container DB row up front so the worker has a stable ID.
@@ -504,6 +509,7 @@ export async function uploadVideoFromFile(options: {
           p.message ?? `Frame ${p.currentFrame ?? '?'}`
         ),
       registerChannels,
+      correctDrift,
     });
 
     // 4a. Single-position / ordinary video: finalize the pre-created row.

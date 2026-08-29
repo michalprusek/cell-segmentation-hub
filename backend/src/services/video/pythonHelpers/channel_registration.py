@@ -202,7 +202,9 @@ def _hann2d(shape: tuple[int, int]) -> np.ndarray:
 
 
 def estimate_translation(
-    reference: np.ndarray, moving: np.ndarray
+    reference: np.ndarray,
+    moving: np.ndarray,
+    max_shift_px: int = _MAX_SHIFT_PX,
 ) -> tuple[int, int, float]:
     """Integer translation ``(dy, dx)`` that best aligns ``moving`` onto
     ``reference`` (both single-channel frames of equal shape), plus a
@@ -220,12 +222,14 @@ def estimate_translation(
     numbers are produced by exactly the same code path, so the shifts this
     returns are identical to what it returned before the reason field existed.
     """
-    est = estimate_translation_detailed(reference, moving)
+    est = estimate_translation_detailed(reference, moving, max_shift_px)
     return est.dy, est.dx, est.confidence
 
 
 def estimate_translation_detailed(
-    reference: np.ndarray, moving: np.ndarray
+    reference: np.ndarray,
+    moving: np.ndarray,
+    max_shift_px: int = _MAX_SHIFT_PX,
 ) -> TranslationEstimate:
     """:func:`estimate_translation` plus the outcome ``reason`` and the raw
     correlation peak.
@@ -321,7 +325,14 @@ def estimate_translation_detailed(
     # --- the estimate itself: best peak WITHIN the plausible window ---------
     # Clamped so a frame smaller than the budget cannot wrap the window onto
     # itself (at 32² a ±16 window would cover every shift there is).
-    radius = max(1, min(_MAX_SHIFT_PX, min(h, w) // 4))
+    # ``max_shift_px`` is a per-call budget because the two callers measure
+    # different physical quantities. A CHANNEL offset is a fixed chromatic /
+    # optical constant and never grows, so 16 px is generous. STAGE DRIFT
+    # accumulates: at the 0.084 px/frame measured on production, a 243-frame
+    # baseline has moved 20 px and a 729-frame one 61 px, both of which a 16 px
+    # window would clip to its edge and then reject. Drift estimation therefore
+    # passes its own, larger budget.
+    radius = max(1, min(max_shift_px, min(h, w) // 4))
     off = np.arange(-radius, radius + 1)
     ys, xs = off % h, off % w
     sub = corr[np.ix_(ys, xs)]  # (2r+1)² — small, unlike the full surface

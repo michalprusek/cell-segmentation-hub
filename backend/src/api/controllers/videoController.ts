@@ -209,14 +209,23 @@ export class VideoController {
         req.body?.registerChannels === 'true' ||
         req.body?.registerChannels === '1' ||
         req.body?.registerChannels === true;
-      let registerChannels = false;
-      if (wantsRegister) {
-        const project = await prisma.project.findUnique({
-          where: { id: projectId },
-          select: { type: true },
-        });
-        registerChannels = (project?.type ?? '') === 'microtubules';
-      }
+
+      // Stage-drift correction is NOT a user toggle, unlike the registration
+      // above. Measured across production, 12 of 42 multi-frame videos have
+      // drifted 3-16 px by their last frame, and every one of them reports
+      // (0, 0) between consecutive frames — the per-frame step is ~0.08 px and
+      // rounds away. A user cannot see that to tick a box about, so for the
+      // project type where frames are measured against each other it is simply
+      // always on. See `drift_correction.py`.
+      // Looked up unconditionally now: drift correction needs the project type
+      // whether or not the user asked for channel registration.
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { type: true },
+      });
+      const isMicrotubuleProject = (project?.type ?? '') === 'microtubules';
+      const registerChannels = wantsRegister && isMicrotubuleProject;
+      const correctDrift = isMicrotubuleProject;
 
       // uploadVideoFromFile owns the tmp file from here — it either
       // renames it into place (success) or removes it via cleanupOnFailure
@@ -227,6 +236,7 @@ export class VideoController {
         mimeType: file.mimetype,
         tempFilePath: file.path,
         registerChannels,
+        correctDrift,
       });
 
       ResponseHelper.success(res, {

@@ -31,6 +31,10 @@ from channel_registration import (
     shift_frame,
     write_registration_sidecar,
 )
+from drift_correction import (
+    compose_into_registration_offsets,
+    correct_drift_in_place,
+)
 from plane_coverage import (
     coverage_payload,
     is_blank_plane,
@@ -841,11 +845,16 @@ def main() -> int:
     # Opt-in multimodal channel registration (translation-only); the backend
     # passes this only when the user ticked it at upload for an MT project.
     register = "--register-channels" in argv
+    # Stage-drift correction. Automatic for microtubule projects (the backend
+    # decides and passes the flag), because the drift it removes is invisible
+    # frame-to-frame and only shows up as a wandering movie — see
+    # ``drift_correction``.
+    correct_drift = "--correct-drift" in argv
     positional = [a for a in argv if not a.startswith("--")]
     if len(positional) < 2:
         print(
             "usage: extract_tiff_stack.py <src.tif> <dest_dir> "
-            "[--register-channels]",
+            "[--register-channels] [--correct-drift]",
             file=sys.stderr,
         )
         return 2
@@ -919,7 +928,25 @@ def main() -> int:
             sys.stdout.write(f"PROGRESS {(t + 1) / T:.4f}\n")
             sys.stdout.flush()
 
-    if register:
+    # Drift correction runs AFTER the per-frame PNGs exist — it reads them back
+    # two at a time, because a trajectory needs pairs up to 243 frames apart and
+    # the write loop above deliberately streams. Channel 0 drives, matching the
+    # channel-registration reference.
+    drift = None
+    if correct_drift and T > 1:
+        drift = correct_drift_in_place(
+            dest / "frames", channel_names, channel_names[0]
+        )
+        if drift is not None:
+            (dest / "drift.json").write_text(json.dumps(drift))
+            # MUST happen before the sidecar is written: it is the map used to
+            # sample the RAW file, which drift correction did not move.
+            compose_into_registration_offsets(offsets, drift)
+
+    # The sidecar is written whenever there is any offset to record — channel
+    # registration OR drift. Skipping it when only drift ran would leave the
+    # metrics exporter sampling the original in the wrong place.
+    if register or drift is not None:
         write_registration_sidecar(dest, channel_names, offsets, reasons)
 
     # Approximate duration from the (constant) frame interval when we

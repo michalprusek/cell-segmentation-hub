@@ -221,17 +221,34 @@ function buildChannelMeta(
   });
 }
 
+/** Argv for an extractor helper. Kept in one place so the TIFF and ND2 paths
+ *  cannot drift apart on which flags they know about. */
+function extractorArgs(
+  sourcePath: string,
+  destDir: string,
+  registerChannels: boolean,
+  correctDrift: boolean
+): string[] {
+  const args = [sourcePath, destDir];
+  if (registerChannels) {
+    args.push('--register-channels');
+  }
+  if (correctDrift) {
+    args.push('--correct-drift');
+  }
+  return args;
+}
+
 export async function extractTiffStack(
   sourcePath: string,
   destDir: string,
   onProgress?: ProgressCallback,
-  registerChannels = false
+  registerChannels = false,
+  correctDrift = false
 ): Promise<ExtractionResult> {
   const result = await runHelper(
     'extract_tiff_stack.py',
-    registerChannels
-      ? [sourcePath, destDir, '--register-channels']
-      : [sourcePath, destDir],
+    extractorArgs(sourcePath, destDir, registerChannels, correctDrift),
     onProgress
   );
   const channels = buildChannelMeta(result.channels, true);
@@ -270,13 +287,12 @@ export async function extractNd2(
   sourcePath: string,
   destDir: string,
   onProgress?: ProgressCallback,
-  registerChannels = false
+  registerChannels = false,
+  correctDrift = false
 ): Promise<ExtractionOutcome> {
   const raw = await runHelper<PythonNd2Result>(
     'extract_nd2.py',
-    registerChannels
-      ? [sourcePath, destDir, '--register-channels']
-      : [sourcePath, destDir],
+    extractorArgs(sourcePath, destDir, registerChannels, correctDrift),
     onProgress
   );
 
