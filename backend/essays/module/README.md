@@ -63,15 +63,23 @@ For **every microtubule** in every position of every well, one row in
 | `acquired_at` | when the well was recorded, **ISO-8601 UTC** (e.g. `2026-05-19T21:48:02Z`) — read from the ND2 itself, so it identifies the run no matter how the folder is named |
 | `irm_tirf_dy`, `irm_tirf_dx` | **measured** offset between the IRM and TIRF channels of this position, in pixels — a diagnostic, never applied (see below) |
 | `irm_tirf_quality` | peak dominance of that measurement: the winning correlation peak over its best rival |
-| `irm_tirf_reason` | `ok` if the measurement is trustworthy, otherwise why it was refused |
+| `irm_tirf_reason` | `ok` if the measurement is trustworthy; `implausible_shift` / `low_confidence` if the correlation was **refused**; `estimator_unavailable` or `error:<Type>` if the measurement **could not run** (a deployment problem, not a data one). Blank when the position carried no measurement |
+
+`irm_tirf_dy` / `irm_tirf_dx` are blank whenever `irm_tirf_reason` is not `ok`:
+a refused estimate has no offset, and writing `0, 0` there would be
+indistinguishable from a perfectly aligned pair. `irm_tirf_quality` is still
+reported on a refusal — it is the number that says how badly — and blank only
+when nothing ran at all.
 
 The centerlines come from the **IRM** channel; every `mt_*` / `bg_*` intensity is
 measured on the **TIRF** channel.
 
 ### Reading the channel-alignment columns
 
-**`irm_tirf_reason` says `implausible_shift` on most rows, and that is the
-expected, correct output — not a failed run.** IRM and TIRF do not share edges:
+**`irm_tirf_reason` is a refusal — `implausible_shift` or `low_confidence` —
+on most rows, and that is the expected, correct output, not a failed run.**
+(`estimator_unavailable` and `error:<Type>` are different: they mean the code
+did not run, and a whole batch reading one of those is a broken deployment.) IRM and TIRF do not share edges:
 IRM is interference contrast off the coverslip surface, TIRF is fluorescence
 from the filaments. The phase correlation the measurement relies on has no
 common structure to lock onto, so its quality gate refuses.
@@ -87,6 +95,11 @@ visible — it would read `ok` with a quality well above 1 **and** a non-zero
 offset — without any run's pixels or intensities changing. Nothing is shifted:
 `net_mean_intensity` and its siblings mean exactly what they meant before this
 column existed, and runs stay comparable across it.
+
+One gap worth knowing: `results.csv` has one row per microtubule, so a position
+where the model detects nothing carries no alignment row either — and a
+zero-detection position is not a failure, so it is not in `failures.csv`. A
+misaligned acquisition that yields no detections therefore leaves no record.
 
 Applying a correction here was considered and rejected: on this data it would be
 a no-op on ~60 % of positions and a demonstrably wrong 1–2 px shift on the rest,
@@ -260,7 +273,7 @@ results/
 Example `results.csv` rows:
 
 ```csv
-well_id,position,mt_id,solution_intensity_median,length_px,length_um,mt_mean_intensity,mt_std_intensity,mt_sum_intensity,bg_mean_intensity,bg_median_intensity,bg_sum_intensity,net_mean_intensity,n_px_mt,n_px_bg,source_file,acquired_at
+well_id,position,mt_id,solution_intensity_median,length_px,length_um,mt_mean_intensity,mt_std_intensity,mt_sum_intensity,bg_mean_intensity,bg_median_intensity,bg_sum_intensity,net_mean_intensity,n_px_mt,n_px_bg,source_file,acquired_at,mt_median_intensity,signal_minus_background,irm_tirf_dy,irm_tirf_dx,irm_tirf_quality,irm_tirf_reason
 D04,0,1,4603.0,95.83,6.9209,176.503,20.986,51892.0,194.811,182.0,99743.0,-18.307,294,512,"WellD04_....nd2",2026-05-19T21:48:02Z
 D04,0,2,4603.0,299.46,21.6278,158.946,20.668,182311.0,156.894,155.0,438677.0,2.051,1147,2796,"WellD04_....nd2",2026-05-19T21:48:02Z
 ```

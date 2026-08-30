@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import os
+import pathlib
 import sys
 import tempfile
 from contextlib import redirect_stderr
@@ -416,7 +417,7 @@ def test_register_plane_applies_the_offset_and_reports_it():
     # The step BOTH extractors run on every non-reference channel. It used to
     # be a copy-pasted block inside each of them and nothing exercised it:
     # mutation-checked 2026-08-30, a `register_plane` that stopped applying the
-    # shift, or stopped returning the reason, left all 225 tests green.
+    # shift, or stopped returning the reason, left the whole helper suite green.
     ref = _synthetic_frame(11)
     moving = shift_frame(ref, 5, -6)
 
@@ -469,6 +470,55 @@ def test_read_registration_sidecar_round_trips_what_the_writer_wrote():
     # Integer frame keys — the shape `write_registration_sidecar` takes, so the
     # value round-trips through a read/compose/write cycle unchanged.
     assert all(isinstance(t, int) for t in back_offsets)
+
+
+def test_a_row_of_the_wrong_length_is_refused_rather_than_written():
+    """The one violation here that is UNRECOVERABLE.
+
+    `frames[t][c]` and `reasons[t][c]` are read by index, so a short or long row
+    silently re-aligns every channel after it — and it goes to disk, where the
+    extract cannot be repeated without the original upload.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            write_registration_sidecar(
+                d, ["IRM", "TIRF"], {0: [[0, 0]]}  # one entry, two channels
+            )
+        except ValueError as exc:
+            assert "one entry per channel" in str(exc), exc
+        else:
+            raise AssertionError("a short offsets row must not be written")
+
+        try:
+            write_registration_sidecar(
+                d, ["IRM", "TIRF"], {0: [[0, 0], [1, 1]]},
+                reasons={0: [REASON_OK]},  # one reason, two channels
+            )
+        except ValueError as exc:
+            assert "one entry per channel" in str(exc), exc
+        else:
+            raise AssertionError("a short reasons row must not be written")
+
+        assert not (pathlib.Path(d) / "registration.json").exists(), \
+            "nothing may be written when a row is malformed"
+
+
+def test_a_prepared_spectrum_is_frozen():
+    """The shared-cache rule, as a runtime guarantee rather than a comment.
+
+    A caller may hold this spectrum and correlate it a second time (that is the
+    whole point of the split), so a buffer-reusing rewrite would corrupt the
+    NEXT pair — where the corruption reads as a drift estimate, not an error.
+    """
+    prepared = prepare_frame(_synthetic_frame(2))
+
+    assert not prepared.spectrum.flags.writeable
+    try:
+        prepared.spectrum[0, 0] = 0
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a shared spectrum must not be writable")
 
 
 def test_read_registration_sidecar_is_none_when_there_is_no_sidecar():

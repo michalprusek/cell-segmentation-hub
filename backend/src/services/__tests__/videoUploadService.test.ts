@@ -109,6 +109,7 @@ vi.mock('../video/videoExtractor', () => ({
 
 vi.mock('../video/pythonExtractor', () => ({
   correctDriftInContainer: correctDriftMock,
+  EXIT_DRIFT_REWRITE_FAILED: 4,
 }));
 
 vi.mock('../../utils/config', () => ({
@@ -449,6 +450,51 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     expect(recursiveStagingRm).toHaveLength(0);
   });
 
+  it('refuses to relocate over an existing file instead of clobbering it', async () => {
+    // For position 0 the destination IS baseDir, which already holds the source
+    // original. `fs.rename` overwrites silently, so a future extractor writing
+    // e.g. `original.nd2` per position would destroy the container's own copy
+    // with no error — and moving EVERYTHING is exactly what makes that reachable.
+    let nextId = 0;
+    prismaImageCreate.mockImplementation(() =>
+      Promise.resolve({ id: `c-${++nextId}` })
+    );
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    stagingEntries.push({ name: 'original.nd2', dir: false });
+    fsAccessMock.mockResolvedValue(undefined); // the destination already exists
+    extractMock.mockResolvedValue({
+      kind: 'multi',
+      positions: [
+        {
+          positionIndex: 0,
+          positionName: 'D03_0000',
+          stageXUm: 0,
+          stageYUm: 0,
+          framesSubdir: 'pos_0000',
+          originalFile: 'original.tif',
+          result: {
+            frameCount: 1,
+            durationMs: null,
+            frameIntervalMs: null,
+            pixelSizeUm: 0.072,
+            channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+            width: 512,
+            height: 512,
+          },
+        },
+      ],
+    });
+
+    await expect(
+      uploadVideoFromFile({
+        projectId: 'proj-1',
+        originalName: 'WellD03.nd2',
+        mimeType: 'image/nd2',
+        tempFilePath: '/tmp/multer/well.nd2',
+      })
+    ).rejects.toThrow(/already exists/);
+  });
+
   it('drives drift correction with the SEGMENTATION SOURCE, not channel 0', async () => {
     // The single most important property of this path. Stage drift must be
     // measured on the label-free channel the polylines and intensities live
@@ -486,6 +532,125 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     const [, channelNames, source] = correctDriftMock.mock.calls[0];
     expect(source).toBe('IRM');
     expect(channelNames).toEqual(['TIRF_488', 'IRM']);
+  });
+
+  it('ROLLS BACK when drift correction fails after rewriting frames', async () => {
+    // The helper deliberately makes the pixel rewrite fatal ("a half-corrected
+    // stack is worse than an uncorrected one"). Swallowing that here cancelled
+    // the intent: verified by injecting ENOSPC at the 21st save of a 40-frame
+    // stack — 10 frames de-drifted, 30 untouched, no composed sidecar, and the
+    // upload still returned 200. Frames either side of that seam are in
+    // different coordinate spaces and every cross-frame consumer measures
+    // across it silently.
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+        width: 512,
+        height: 512,
+      },
+    });
+    const halfWritten = Object.assign(
+      new Error('python helper correct_drift.py exited 4: REWRITE FAILED'),
+      { exitCode: 4 }
+    );
+    correctDriftMock.mockRejectedValue(halfWritten);
+
+    await expect(
+      uploadVideoFromFile({
+        projectId: 'proj-1',
+        originalName: 'well.nd2',
+        mimeType: 'image/nd2',
+        tempFilePath: '/tmp/multer/well.nd2',
+      })
+    ).rejects.toThrow(/exited 4/);
+
+    // Rolled back, not finalized: the container must not survive as a
+    // seam-corrupted artifact the gallery presents as normal.
+    expect(prismaImageUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          segmentationStatus: 'extraction_failed',
+        }),
+      })
+    );
+  });
+
+  it('ROLLS BACK when the drift helper is KILLED, which reports no exit code', async () => {
+    // The back door into the same corruption: `runHelper` builds a plain Error
+    // for a signal death, so a SIGKILL (the cgroup OOM killer, on a container
+    // that is memory-capped while rewriting hundreds of PNGs) carried no exit
+    // code and landed in the "declined" branch. A killed helper never gets to
+    // say whether it had started writing, so it is treated as if it had.
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+        width: 512,
+        height: 512,
+      },
+    });
+    correctDriftMock.mockRejectedValue(
+      Object.assign(
+        new Error('python helper correct_drift.py was killed by SIGKILL'),
+        { signal: 'SIGKILL' }
+      )
+    );
+
+    await expect(
+      uploadVideoFromFile({
+        projectId: 'proj-1',
+        originalName: 'well.nd2',
+        mimeType: 'image/nd2',
+        tempFilePath: '/tmp/multer/well.nd2',
+      })
+    ).rejects.toThrow(/SIGKILL/);
+  });
+
+  it('completes the upload when drift correction declines without touching frames', async () => {
+    // The other half of the same rule: a decline, or a helper that fails BEFORE
+    // rewriting, is an optional improvement not taken. Losing an hour of ND2
+    // extraction to it would be the wrong trade.
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+        width: 512,
+        height: 512,
+      },
+    });
+    correctDriftMock.mockRejectedValue(
+      Object.assign(new Error('python helper correct_drift.py exited 2: bad args'), {
+        exitCode: 2,
+      })
+    );
+
+    await expect(
+      uploadVideoFromFile({
+        projectId: 'proj-1',
+        originalName: 'well.nd2',
+        mimeType: 'image/nd2',
+        tempFilePath: '/tmp/multer/well.nd2',
+      })
+    ).resolves.toBeTruthy();
   });
 
   it('does not correct drift on a non-microtubule project', async () => {

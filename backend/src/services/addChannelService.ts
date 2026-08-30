@@ -34,6 +34,7 @@ import { isMicrotubuleProject } from '../types/validation';
 import { detectVideoKind, extractVideoSafe } from './video/videoExtractor';
 import { alignChannelFrames, ChannelAlignJob } from './video/pythonExtractor';
 import { frameStorageKey } from './videoUploadService';
+import { resolveSegmentationSource } from './video/types';
 
 const MAX_DISPLAY_NAME_LEN = 128;
 
@@ -709,10 +710,7 @@ export async function addChannelToFrames(
         ? (container.channels as unknown as ChannelMeta[])
         : [];
       const usedNames = new Set(existing.map(c => c.name));
-      const segSourceName =
-        existing.find(c => c.isSegmentationSource)?.name ??
-        existing[0]?.name ??
-        null;
+      const segSourceName = resolveSegmentationSource(existing) ?? null;
       if (align && !segSourceName) {
         throw new Error(
           'Cannot align: the target video has no channels to align against'

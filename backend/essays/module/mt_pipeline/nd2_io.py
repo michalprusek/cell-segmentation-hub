@@ -37,6 +37,9 @@ REASON_UNAVAILABLE = "estimator_unavailable"
 
 _UNSET = object()
 _ESTIMATOR = _UNSET
+#: Exception types already reported, so a systematic failure says so once per
+#: run rather than never (it used to print nothing at all) or 180 times.
+_REPORTED_ERRORS: set[str] = set()
 
 
 @dataclass(frozen=True)
@@ -44,16 +47,23 @@ class ChannelAlignment:
     """How far TIRF sits from IRM, as MEASURED — never as applied.
 
     ``reason`` is the load-bearing field. On production wells the gate refuses
-    roughly three quarters of positions, and a bare ``(0, 0)`` cannot be told
+    about 60 % of positions (9 of the 15 sampled), and a bare ``(0, 0)``
+    cannot be told
     apart from a genuine perfect alignment; that ambiguity is what let the
     2026-08 mis-registrations run unnoticed. ``quality`` is peak dominance:
     above ~1 the peak beat every rival, and same-content pairs score in the
     thousands, so a value near 1 means "no dominant peak", not "barely aligned".
     """
 
-    dy: int
-    dx: int
-    quality: float
+    #: The measured offset, or None when nothing was measured — a refusal, a
+    #: crash, or an unavailable estimator. NOT 0: "no measurement" and "a
+    #: measurement of zero" are exactly the pair this module exists to keep
+    #: apart, and `evaluate.py` renders None as a blank cell.
+    dy: int | None
+    dx: int | None
+    #: Peak dominance. Present on a refusal too — that is the number that says
+    #: HOW badly it was refused — and None only when nothing ran at all.
+    quality: float | None
     reason: str
 
 
@@ -101,20 +111,46 @@ def measure_alignment(reference: np.ndarray, moving: np.ndarray) -> ChannelAlign
 
     Never raises: a diagnostic must not be able to fail a well.
 
-    Cost, measured 2026-08-30 on production wells: **124 ms per position** for
-    one estimate. That is ~7 % of a 1400x1400 well (~1.7 s/position observed end
-    to end) and ~0.9 % of a 2048x2048 one (~14 s/position). Always on rather
-    than behind a flag, because a diagnostic nobody enables collects no data --
-    but if a future acquisition makes this the expensive part, that is the
-    trade-off to revisit.
+    Cost, measured 2026-08-30 on production wells: **~120 ms per position** on
+    a 1400x1400 well, ~7 % of that well's ~1.7 s/position. It scales with the
+    transform, not flat -- at 2048x2048 one estimate is ~270 ms, ~1.9 % of that
+    well's ~14 s/position. (Do not reuse the 1400 figure there: an earlier
+    revision of this docstring did, and understated it by 2.3x.) Always on
+    rather than behind a flag, because a diagnostic nobody enables collects no
+    data -- but if a future acquisition makes this the expensive part, that is
+    the trade-off to revisit.
     """
     estimator = _load_estimator()
     if estimator is None:
-        return ChannelAlignment(0, 0, 0.0, REASON_UNAVAILABLE)
+        return ChannelAlignment(None, None, None, REASON_UNAVAILABLE)
     try:
         est = estimator(reference, moving)
-    except Exception as exc:  # noqa: BLE001 - a shape mismatch is a REPORT
-        return ChannelAlignment(0, 0, 0.0, f"error:{type(exc).__name__}")
+    except ValueError:
+        # The one failure the shared module has a name for. Its own comment says
+        # the constant "exists for callers that catch that case up-front" — this
+        # is that caller. Imported here, not at module scope: the shared module
+        # is only on sys.path once `_load_estimator` has succeeded above.
+        from channel_registration import REASON_SHAPE_MISMATCH
+
+        return ChannelAlignment(None, None, None, REASON_SHAPE_MISMATCH)
+    except Exception as exc:  # noqa: BLE001 - a diagnostic must not fail a well
+        # Said ONCE per exception type: a systematic failure (MemoryError under
+        # pressure, a rename in the shared module) would otherwise produce zero
+        # log output across an entire 180-well batch while every row quietly
+        # reads `error:...`, and the run finishes "completed, failures: 0".
+        kind = type(exc).__name__
+        if kind not in _REPORTED_ERRORS:
+            _REPORTED_ERRORS.add(kind)
+            print(f"[warn] channel-alignment measurement failed ({kind}: {exc}); "
+                  f"reported as error:{kind} for every affected position",
+                  file=sys.stderr)
+        return ChannelAlignment(None, None, None, f"error:{kind}")
+    from channel_registration import REASON_OK
+
+    if est.reason != REASON_OK:
+        # A refused estimate has no offset to report: (0, 0) here would read as
+        # a perfectly aligned pair. `quality` IS measured on a refusal and stays.
+        return ChannelAlignment(None, None, float(est.quality), str(est.reason))
     return ChannelAlignment(int(est.dy), int(est.dx),
                             float(est.quality), str(est.reason))
 

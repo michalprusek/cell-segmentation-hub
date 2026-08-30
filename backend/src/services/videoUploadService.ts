@@ -38,7 +38,11 @@ import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { assertSafeStorageSegment } from '../utils/storagePath';
 import { extractVideoSafe } from './video/videoExtractor';
-import { correctDriftInContainer } from './video/pythonExtractor';
+import {
+  EXIT_DRIFT_REWRITE_FAILED,
+  correctDriftInContainer,
+} from './video/pythonExtractor';
+import type { HelperExitError } from './video/pythonExtractor';
 import { isMicrotubuleProject } from '../types/validation';
 import { isSafeChannelName, resolveSegmentationSource } from './video/types';
 import type {
@@ -281,12 +285,24 @@ async function withSparseFrameIds(
  *  wrong one is not cosmetic: on a motility assay a fluorescence channel
  *  measures filament gliding, so de-drifting on it would subtract the very
  *  signal the experiment records. Across 65 production microtubule containers
- *  the source is channel 0 on only 45 — on the other 20 the two trajectories
- *  disagree by up to 28 px.
+ *  the source is channel 0 on only 45; on the SEVEN where channel 0 is TIRF and
+ *  the source is IRM, the two trajectories disagree by up to 28 px, and on two
+ *  of them the choice flips whether any correction runs at all.
  *
- *  Never fatal: the correction is an optional improvement on frames that are
- *  already written and already correct, so a failure is logged and the upload
- *  completes. Losing an hour of ND2 extraction to it would be the wrong trade.
+ *  Non-fatal for everything that leaves the pixels ALONE — an estimate that
+ *  declines, or a helper that fails before touching a frame, is an optional
+ *  improvement not taken, and losing an hour of ND2 extraction to it would be
+ *  the wrong trade.
+ *
+ *  FATAL when the helper fails after it has started rewriting. The Python side
+ *  deliberately does not catch that ("a half-corrected stack is worse than an
+ *  uncorrected one"), and swallowing it here cancelled exactly that intent:
+ *  verified by injecting ENOSPC at the 21st save of a 40-frame stack — 10
+ *  frames de-drifted, 30 untouched, no composed sidecar, and the upload still
+ *  returned 200 with "frames left uncorrected" in the log. Frames either side
+ *  of that seam are in different coordinate spaces and every cross-frame
+ *  consumer — tracking, kymographs, MT metrics — measures across it silently.
+ *  A rolled-back upload the user can retry is strictly better.
  */
 async function correctDriftForContainer(
   containerDir: string,
@@ -303,8 +319,34 @@ async function correctDriftForContainer(
       source
     );
   } catch (err) {
+    // A KILLED helper (SIGKILL from the cgroup OOM killer is the realistic
+    // one on this deployment) never gets to report anything, so it cannot tell
+    // us whether it had started rewriting. Treated as fatal for the same reason
+    // exit 4 is: the cost of rolling back an upload that was actually fine is a
+    // retry, and the cost of keeping a seam-corrupted one is silently wrong
+    // measurements nobody can detect.
+    const failure = err as HelperExitError;
+    if (
+      failure?.exitCode === EXIT_DRIFT_REWRITE_FAILED ||
+      failure?.signal !== undefined
+    ) {
+      // Pixels have already moved. Let this reach `uploadVideoFromFile`'s
+      // catch so cleanupOnFailure runs and the container is rolled back.
+      logger.error(
+        `Drift correction failed for ${containerDir} at a point where frames ` +
+          'may already have been rewritten: they would be in mixed coordinate ' +
+          'spaces with registration.json not composed. Rolling the upload back ' +
+          'rather than keeping a container whose cross-frame measurements are ' +
+          'silently wrong.',
+        err instanceof Error ? err : new Error(String(err)),
+        'VideoUploadService',
+        { containerDir, source }
+      );
+      throw err;
+    }
+    // Everything else left the frames untouched, so the upload is still good.
     logger.warn(
-      `Drift correction failed for ${containerDir}; frames left uncorrected`,
+      `Drift correction declined for ${containerDir}; frames left uncorrected`,
       'VideoUploadService',
       { error: err instanceof Error ? err.message : String(err) }
     );
@@ -666,6 +708,23 @@ export async function uploadVideoFromFile(options: {
       })) {
         const from = path.join(stagingDir, entry.name);
         const to = path.join(cBaseDir, entry.name);
+        // For position 0, cBaseDir IS baseDir, which already holds the source
+        // original and the other positions' staging dirs. `fs.rename` silently
+        // overwrites a file, so a future extractor emitting e.g. `original.nd2`
+        // or `thumbnail.jpg` per position would destroy the container's own
+        // copy with no error. Nothing collides today; refuse rather than rely
+        // on that, since moving EVERYTHING is precisely the point of the loop.
+        if (
+          await fs
+            .access(to)
+            .then(() => true)
+            .catch(() => false)
+        ) {
+          throw new Error(
+            `refusing to relocate ${from}: ${to} already exists. A position's ` +
+              'artifact would overwrite the container\'s own file.'
+          );
+        }
         await (entry.isDirectory() ? moveDir(from, to) : moveFile(from, to));
       }
       // Non-recursive on purpose: an EMPTY staging dir is the proof that

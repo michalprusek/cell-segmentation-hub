@@ -157,6 +157,35 @@ REASON_NOT_ESTIMATED = "not_estimated"
 REASON_SHAPE_MISMATCH = "shape_mismatch"
 
 
+#: Every reason this module can produce or accept, so a consumer can enumerate
+#: the set instead of hard-coding it. A tuple rather than an enum ON PURPOSE:
+#: this file is COPY'd into the essays image and executed under Python 3.10
+#: there (`/app/models/channel_registration.py`) while the backend runs 3.12.
+#: `StrEnum` does not exist on 3.10 — and the ImportError would be swallowed by
+#: `nd2_io._load_estimator`, silently disabling the whole diagnostic — while the
+#: `(str, Enum)` fallback formats as 'ok' on 3.10 and 'R.OK' on 3.12, which
+#: would corrupt `register_plane`'s operator line on one of them.
+REASONS: tuple[str, ...] = (
+    REASON_OK,
+    REASON_LOW_CONFIDENCE,
+    REASON_IMPLAUSIBLE_SHIFT,
+    REASON_SHAPE_MISMATCH,
+    REASON_REFERENCE,
+    REASON_BLANK_PLANE,
+    REASON_NOT_REGISTERED,
+    REASON_NOT_ESTIMATED,
+)
+
+#: The subset :func:`estimate_translation_detailed` can RETURN — the only ones
+#: that can reach `add_channel_align`'s rows, and therefore the TypeScript
+#: `ALIGN_REASONS` in addChannelService.
+ESTIMATOR_REASONS: tuple[str, ...] = (
+    REASON_OK,
+    REASON_LOW_CONFIDENCE,
+    REASON_IMPLAUSIBLE_SHIFT,
+)
+
+
 class TranslationEstimate(NamedTuple):
     """One frame's registration outcome: the shift that was APPLIED, how much
     the correlation was trusted, WHY the shift is what it is, and the raw
@@ -239,9 +268,10 @@ def _hann2d(shape: tuple[int, int]) -> np.ndarray:
     frame geometry, which is constant for a whole acquisition, so rebuilding it
     on every (frame, channel) estimate allocated a full-frame float64 array
     (32 MB at 2048²) per call for an identical result. ``maxsize=2`` bounds the
-    retained cache at 2·Y·X·8 bytes — one live shape plus one in transition —
-    which is strictly less than the per-call allocation it replaces. The array
-    is frozen so a caller cannot mutate the shared instance.
+    retained cache at 2·Y·X·8 bytes — one live shape plus one in transition — a
+    fixed cost that replaces one full-frame allocation on EVERY (frame, channel)
+    estimate. The array is frozen so a caller cannot mutate the shared
+    instance.
     """
     wy = np.hanning(shape[0])
     wx = np.hanning(shape[1])
@@ -298,8 +328,8 @@ def estimate_translation_detailed(
     Every rewrite is elementwise with exact aliasing, so the arithmetic and the
     returned numbers are BIT-IDENTICAL to the out-of-place form — verified over
     84 frame/dtype/shift combinations and pinned by
-    ``test_channel_registration.py``. The algorithm, both guards and their
-    thresholds are untouched.
+    ``test_channel_registration.py``. The algorithm, the gate and its thresholds
+    are untouched.
     """
     ref = _to_float_gray(reference)
     mov = _to_float_gray(moving)
@@ -328,6 +358,12 @@ def _prepare(gray: np.ndarray) -> PreparedFrame:
     g *= _hann2d(shape)  # in place: same values as `_gradient_magnitude(g) * win`
     spectrum = np.fft.rfft2(g)
     del g
+    # Frozen for the same reason `_hann2d`'s window is: a caller may CACHE this
+    # and hand it to a second correlation (see PreparedFrame), so a future
+    # buffer-reusing rewrite would corrupt the NEXT pair in a chain — where the
+    # corruption reads as a drift estimate, not as an error. Verified
+    # bit-identical with the flag set.
+    spectrum.flags.writeable = False
     return PreparedFrame(spectrum, shape)
 
 
@@ -556,23 +592,36 @@ def write_registration_sidecar(
     without the sidecar `mtMetricsExporter.readRegistrationOffsets` returns
     undefined and `mt_metrics.py` samples the untouched original, up to 20 px
     from where the polylines drawn on the de-drifted PNGs actually sit. So the
-    skip is on "nothing to record", not on "one channel" — the two stopped
-    meaning the same thing when drift correction arrived (production has 4
-    single-channel multi-frame microtubule containers).
+    skip needs BOTH — one channel AND nothing to record. A multi-channel
+    container whose offsets are all zero IS written. The two stopped meaning the
+    same thing when drift correction arrived (production has 4 single-channel
+    multi-frame microtubule containers).
     """
     if len(channel_names) <= 1 and not any(
         dy or dx for rows in offsets.values() for dy, dx in rows
     ):
         return
+    # The file is positional: `frames[t][c]` and `reasons[t][c]` are read by
+    # index, so a row of the wrong length silently re-aligns every channel after
+    # it. Checked here because this is the only place that owns the format, and
+    # because the damage is UNRECOVERABLE — it goes to disk and the extract is
+    # not repeatable without the original upload.
+    for label, rows_by_frame in (("offsets", offsets), ("reasons", reasons or {})):
+        bad = [t for t, row in rows_by_frame.items() if len(row) != len(channel_names)]
+        if bad:
+            raise ValueError(
+                f"{label} rows must carry one entry per channel "
+                f"({len(channel_names)}); frames {sorted(bad)[:5]} do not"
+            )
     data = {
         "version": 2,
         "method": "phase_correlation_gradient_translation",
         "referenceChannel": channel_names[0],
         "channels": channel_names,
         # frameIndex (string key) -> [[dy, dx], ...] aligned to ``channels``.
-        # SHAPE IS FROZEN: mtMetricsExporter and the kymograph path index
-        # ``frames[t][c] == [dy, dx]``, so the reasons go in a PARALLEL map
-        # rather than being appended to each row.
+        # SHAPE IS FROZEN: mtMetricsExporter indexes ``frames[t][c] ==
+        # [dy, dx]`` positionally, so the reasons go in a PARALLEL map rather
+        # than being appended to each row.
         "frames": {str(t): offsets[t] for t in sorted(offsets)},
     }
     if reasons is not None:

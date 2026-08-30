@@ -1,5 +1,10 @@
 # MT "Add channel" to selected frames — design
 
+> **Partly superseded (2026-08-30):** `estimate_translation` was removed in
+> #397 — callers moved to `estimate_translation_detailed`, which returns a
+> `TranslationEstimate` carrying `reason` instead of a `(dy, dx, conf)` tuple.
+> The design below is otherwise as built.
+
 **Date:** 2026-07-08
 **Scope:** Microtubule (`type === 'microtubules'`) projects only.
 **Goal:** From the project gallery, let the user append an extra image channel to a
@@ -42,7 +47,7 @@ they selected.
 - `ChannelMeta = { name, displayName?, type:'irm'|'fluorescent', wavelengthNm?,
 displayColor?, isSegmentationSource }`. `name` matches `/^[A-Za-z0-9_-]{1,64}$/`
   and equals the on-disk filename.
-- `channel_registration.py` exposes `estimate_translation(ref, moving) -> (dy,dx,conf)`
+- `channel_registration.py` exposes `estimate_translation_detailed(ref, moving) -> TranslationEstimate`
   and `shift_frame(arr, dy, dx)` (lossless integer shift).
 - Extractors (`extract_nd2.py`, `extract_tiff_stack.py`, ffmpeg path) write
   `frames/<TTTT>/<chan>.png` + return `{frameCount,width,height,channels[...]}`.
@@ -83,7 +88,7 @@ displayColor?, isSegmentationSource }`. `name` matches `/^[A-Za-z0-9_-]{1,64}$/`
 7. For each (target frame, source channel):
    - **align OFF** → `fs.copyFile(tempPng, frameStorageKey(pid, container, frameIndex, name))`.
    - **align ON** → batched Python call `add_channel_align.py` with a manifest
-     `[{moving, reference, out}]`; it reads moving+reference, `estimate_translation`,
+     `[{moving, reference, out}]`; it reads moving+reference, `estimate_translation_detailed`,
      `shift_frame`, writes `out`. Reuses `channel_registration.py`.
 8. Append the new `ChannelMeta[]` to each affected container's `channels` JSON
    (dedupe) in a transaction.
@@ -91,7 +96,7 @@ displayColor?, isSegmentationSource }`. `name` matches `/^[A-Za-z0-9_-]{1,64}$/`
 
 **Python driver `add_channel_align.py`** (new, in `pythonHelpers/`): stdin/arg JSON
 manifest of `{moving, reference, out}` triples → for each, load both PNGs (imageio),
-`estimate_translation(ref, mov)`, `shift_frame(mov, dy, dx)`, save `out` preserving
+`estimate_translation_detailed(ref, mov)`, `shift_frame(mov, est.dy, est.dx)`, save `out` preserving
 dtype. No new deps (numpy + imageio already used).
 
 ### PNG-backed vs volume-backed channels (pivotal)

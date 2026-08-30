@@ -26,6 +26,7 @@ import { prisma } from '../../db/prismaClient';
 import { logger } from '../../utils/logger';
 import { mapWithConcurrency, runGated, type Semaphore } from '../../utils/concurrency';
 import { buildKymograph } from '../kymographService';
+import { resolveSegmentationSource } from '../video/types';
 
 const CTX = 'MTKymographExporter';
 
@@ -125,8 +126,9 @@ export function pickSourceChannels(channels: ChannelMeta[]): string[] {
   if (fluorescent.length > 0) {
     return fluorescent;
   }
-  const source = channels.find(c => c.isSegmentationSource);
-  return [source?.name ?? channels[0].name];
+  // channels is non-empty here (the caller returns early on an empty list), so
+  // the shared resolver cannot come back undefined.
+  return [resolveSegmentationSource(channels) as string];
 }
 
 /** One velocity row, in the exact column order of ``VELOCITY_HEADER``. Cells are

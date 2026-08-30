@@ -38,6 +38,13 @@ with the rounded correction, writes ``<container_dir>/drift.json``, and folds
 the correction into ``<container_dir>/registration.json`` — see
 ``drift_correction.compose_into_registration_offsets`` for why that last step
 is not optional. Prints one JSON object on stdout.
+
+WHICH channel drives the estimate is decided on the TypeScript side by
+``resolveSegmentationSource`` (video/types.ts): the channel the extractor marked
+via ``isIrmChannel``, else channel 0. That fallback is NOT a guarantee — a stack
+whose channels cannot be typed (every plain multi-page TIFF carries no
+wavelength) gets no IRM mark and drives the estimate from channel 0, which on
+seven production containers is TIRF. The user can override it per container.
 """
 from __future__ import annotations
 
@@ -51,6 +58,10 @@ from channel_registration import (
     write_registration_sidecar,
 )
 from drift_correction import compose_into_registration_offsets, correct_drift_in_place
+
+#: The rewrite failed after moving pixels. Distinct from any other non-zero
+#: exit so the caller can tell "declined, nothing touched" from "half-written".
+EXIT_REWRITE_FAILED = 4
 
 
 def main() -> int:
@@ -78,10 +89,49 @@ def main() -> int:
         print(f"no frames directory at {frames_dir}", file=sys.stderr)
         return 2
 
-    drift = correct_drift_in_place(frames_dir, channel_names, source_channel)
-    if drift is None:
-        print(json.dumps({"corrected": False}))
+    # A raise from here means the REWRITE failed part-way: some frames are
+    # de-drifted and some are not, and `registration.json` was never composed.
+    # That is not a decline, it is a corrupted container, and it exits with a
+    # distinct code so the caller can roll the upload back instead of logging a
+    # warning and finalising it. Declines return normally with a reason.
+    try:
+        drift = correct_drift_in_place(frames_dir, channel_names, source_channel)
+    except Exception as exc:  # noqa: BLE001 - re-raised as a distinct exit code
+        print(
+            f"drift: REWRITE FAILED PART-WAY on {frames_dir} "
+            f"({type(exc).__name__}: {exc}). Frames are in MIXED coordinate "
+            f"spaces (some de-drifted, some not) and registration.json was not "
+            f"composed; this container must not be kept.",
+            file=sys.stderr,
+        )
+        return EXIT_REWRITE_FAILED
+
+    if not drift["corrected"]:
+        print(json.dumps(drift))
         return 0
+
+    # From here the PIXELS HAVE MOVED. Composing the sidecar is what keeps the
+    # stored frames and the raw file in the same space, so a failure in any of
+    # the steps below leaves exactly the state
+    # `compose_into_registration_offsets` exists to prevent: de-drifted PNGs
+    # measured against an un-composed map, silently, by exactly the drift.
+    # Same exit code as a failed rewrite, for the same reason — the container
+    # must not be kept.
+    try:
+        return _finish(container, channel_names, source_channel, drift)
+    except Exception as exc:  # noqa: BLE001 - re-raised as a distinct exit code
+        print(
+            f"drift: frames were rewritten but the sidecar could not be "
+            f"composed on {container} ({type(exc).__name__}: {exc}). The stored "
+            f"frames are de-drifted and registration.json does not say so; this "
+            f"container must not be kept.",
+            file=sys.stderr,
+        )
+        return EXIT_REWRITE_FAILED
+
+
+def _finish(container, channel_names, source_channel, drift) -> int:
+    """Persist the provenance and fold the drift into the registration map."""
 
     (container / "drift.json").write_text(json.dumps(drift))
 

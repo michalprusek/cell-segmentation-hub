@@ -106,6 +106,19 @@ from channel_registration import (
 #: the window edge and then rejected as low quality.
 DRIFT_MAX_SHIFT_PX = 96
 
+#: Why a stack was left uncorrected. Without these, every decline crosses the
+#: process boundary as a bare ``{"corrected": false}`` — byte-identical whether
+#: the stack genuinely held still or the estimator CRASHED. A rename that broke
+#: estimation would stop drift correction across production and show up only as
+#: one warn line per upload, which is the 2026-08 registration defect inverted:
+#: months of correcting nothing, with nothing to see.
+REASON_TOO_SHORT = "too_short"          # fewer than two frames; nothing to compare
+REASON_STILL = "still"                  # measured, and it does not move enough
+REASON_UNMATCHABLE = "unmatchable"      # every pair refused by the quality gate
+REASON_UNANCHORED = "unanchored"        # the full-baseline pass found no match
+REASON_OVER_LIMIT = "over_limit"        # composed correction larger than the frame
+REASON_ESTIMATION_FAILED = "estimation_failed"  # the estimator raised
+
 #: Fiji's schedule: a consecutive pass, then ascending powers of three, and
 #: finally the whole baseline — `dts = [3,9,27,81,243,729,dt_max]`, iterated
 #: with `if dt < dt_max: ... else: run dt_max; break`.
@@ -115,15 +128,18 @@ _LAG_BASE = 3
 #: dimension is refused outright.
 #:
 #: ``DRIFT_MAX_SHIFT_PX`` bounds each PAIR; nothing bounds their sum, and the
-#: ramp extrapolates to the end of the stack. On a 40-frame 256² stack of pure
-#: noise the gate still accepts 9 of 60 pairs and the composed trajectory
-#: reaches **396 px — 1.55x the frame width**; applying that rewrites every PNG
-#: to a uniform fill, in place, and the extracted pixels are gone. Real data is
-#: nowhere near it (12 production containers: 98-100 % of pairs accepted, max
-#: correction 19 px = 1.9 % of the frame), so this never fires on a genuine
-#: stack — it exists because the operation is automatic, destructive and
-#: irreversible, and "every frame is now blank" must not be reported as
-#: success.
+#: ramp extrapolates to the end of the stack.
+#:
+#: The ``anchored`` guard above intercepts most runaway trajectories, including
+#: the pure-noise case: a monotonic drift past this limit also puts the last
+#: frame outside the search window, so the full-baseline pass finds no match and
+#: declines first. The shape that actually REACHES here is a stage that wanders
+#: out and returns — it anchors on its endpoint while the interior peak runs
+#: away past the frame width. Applying that rewrites PNGs in place and the
+#: extracted pixels are gone. Real data is nowhere near it (12 production
+#: containers: 98-100 % of pairs accepted, max correction 19 px on a ~1000 px
+#: frame), so this never fires on a genuine stack — it exists because the
+#: operation is automatic, destructive and irreversible.
 _MAX_TOTAL_DRIFT_FRACTION = 0.25
 
 #: Fiji stops the powers at 3^6 and jumps straight to the full baseline; its
@@ -350,6 +366,27 @@ def _round_shift(dy: float, dx: float) -> tuple[int, int]:
     return int(round(dy)), int(round(dx))
 
 
+def _declined(source_channel: str, reason: str, *, est=None, error: str = "") -> dict:
+    """A decline that says WHICH decline it was.
+
+    Same shape as the success record so a caller reads one field to branch, and
+    the counts ride along when there are any — a stack that refused every pair
+    and one that genuinely held still both produce an all-zero trajectory, and
+    ``pairsAccepted``/``pairsMeasured`` is what separates them.
+    """
+    out = {
+        "corrected": False,
+        "reason": reason,
+        "sourceChannel": source_channel,
+        "pairsMeasured": est.measured if est else 0,
+        "pairsAccepted": est.accepted if est else 0,
+        "anchored": bool(est.anchored) if est else False,
+    }
+    if error:
+        out["error"] = error
+    return out
+
+
 def _prepare_at(frames, i: int, decim: int):
     """Frame ``i`` of ``frames``, decimated if asked, as a prepared spectrum.
 
@@ -452,9 +489,19 @@ def correct_drift_in_place(
     ``channel_registration`` just established.
 
     Rewrites the PNGs in place with the ROUNDED shift (lossless — see
-    :func:`apply_drift`) and returns the sidecar dict, or ``None`` when the
-    stack does not move far enough to be worth blanking a border for. Frames
-    whose shift rounds to zero are not rewritten at all.
+    :func:`apply_drift`). Frames whose shift rounds to zero are not rewritten
+    at all.
+
+    ALWAYS returns a dict carrying ``corrected``; on False it also carries
+    ``reason`` (see the REASON_* constants above). It never returns None,
+    because "declined" and "crashed" must not look alike to the caller — that
+    is the whole failure this module exists to stop, one level up.
+
+    RAISES only from the rewrite loop, and that is deliberate: an exception
+    here means some frames are already de-drifted and the rest are not, which
+    is worse than an uncorrected stack and must not be reported as success.
+    Estimation failures are caught and returned as a decline instead, because
+    they touch nothing.
     """
     from pathlib import Path
 
@@ -466,7 +513,7 @@ def correct_drift_in_place(
         if p.is_dir() and p.name.isdigit()
     )
     if len(indices) < 2:
-        return None
+        return _declined(source_channel, REASON_TOO_SHORT)
 
     # ESTIMATION reads and mutates nothing, so a failure here must not cost the
     # upload. `extractVideoSafe` deletes the whole destination directory —
@@ -484,7 +531,8 @@ def correct_drift_in_place(
             f"drift: estimation failed on channel '{source_channel}' "
             f"({type(exc).__name__}: {exc}); frames left uncorrected\n"
         )
-        return None
+        return _declined(source_channel, REASON_ESTIMATION_FAILED,
+                         error=f"{type(exc).__name__}: {exc}")
 
     trajectory = est.corrections
     peak = max(
@@ -498,7 +546,7 @@ def correct_drift_in_place(
             f"drift: no measurable structure on channel '{source_channel}' "
             f"(0 of {est.measured} frame pairs matched); left uncorrected\n"
         )
-        return None
+        return _declined(source_channel, REASON_UNMATCHABLE, est=est)
 
     if not est.anchored:
         # The final pass — frame 0 against the LAST frame — was refused, so the
@@ -522,10 +570,10 @@ def correct_drift_in_place(
             f"({peak:.0f} px) is extrapolation, not measurement; "
             f"left uncorrected\n"
         )
-        return None
+        return _declined(source_channel, REASON_UNANCHORED, est=est)
 
     if not drift_is_worth_correcting(trajectory):
-        return None
+        return _declined(source_channel, REASON_STILL, est=est)
 
     # Nothing bounds the SUM of the per-pair estimates, and the ramp
     # extrapolates to the end of the stack — see _MAX_TOTAL_DRIFT_FRACTION.
@@ -539,7 +587,7 @@ def correct_drift_in_place(
             f"'{source_channel}' (limit {limit:.0f} px, "
             f"{est.accepted}/{est.measured} pairs matched); left uncorrected\n"
         )
-        return None
+        return _declined(source_channel, REASON_OVER_LIMIT, est=est)
 
     sys.stderr.write(
         f"drift: channel '{source_channel}', {len(indices)} frames, "
@@ -582,6 +630,7 @@ def correct_drift_in_place(
             )
 
     return {
+        "corrected": True,
         "version": 1,
         "method": "fiji_correct_3d_drift_multi_time_scale",
         "sourceChannel": source_channel,
@@ -605,8 +654,10 @@ def compose_into_registration_offsets(offsets: dict, drift: dict) -> dict:
     """Fold the applied drift into the per-frame channel-registration offsets.
 
     WHY THIS IS NOT OPTIONAL. ``registration.json`` is not a log — it is the
-    map ``mtMetricsExporter`` and the kymograph path use to sample the RAW
-    file (``original.nd2`` / ``.tif``) in the same space as the stored frames.
+    map ``mtMetricsExporter`` uses to sample the RAW file (``original.nd2`` /
+    ``.tif``) in the same space as the stored frames. (The kymograph path does
+    NOT read it: it samples the stored PNGs, which already carry both shifts,
+    and applying these offsets there would double-count them.)
     Drift correction moves the stored PNGs and does not touch the original, so
     without this the polygons a user draws on a de-drifted frame would be
     measured against un-drifted pixels, silently, by exactly the drift. That is

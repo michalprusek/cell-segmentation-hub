@@ -189,6 +189,10 @@ users index by position.
 | 17  | `acquired_at`               | Acquisition time, ISO-8601 UTC, from the ND2's absolute Julian day. Falls back to the file's own date string **verbatim** (an acquisition PC's local wall clock in its own locale, so month/day order is not recoverable). Per **file**, not per position |
 | 18  | `mt_median_intensity`       | The **band's** median (ImageJ tie rule)                                                                                                                                                                                                                   |
 | 19  | `signal_minus_background`   | mean(band) − **median**(ring) — the platform's standard readout                                                                                                                                                                                           |
+| 20  | `irm_tirf_dy`               | **Measured** IRM→TIRF offset for this position, in pixels. A diagnostic — never applied to a pixel. Blank unless `irm_tirf_reason` is `ok`                                                                                                                |
+| 21  | `irm_tirf_dx`               | The same, horizontally                                                                                                                                                                                                                                    |
+| 22  | `irm_tirf_quality`          | Peak dominance of that measurement (winning correlation peak over its best rival). Reported on a refusal too; blank only when nothing ran                                                                                                                 |
+| 23  | `irm_tirf_reason`           | `ok`, a refusal (`implausible_shift` / `low_confidence` — **expected on most rows**, since IRM and TIRF share no edges), or `estimator_unavailable` / `error:<Type>` meaning the measurement could not run at all                                         |
 
 Three distinctions worth pinning down:
 
