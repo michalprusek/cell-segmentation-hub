@@ -24,9 +24,99 @@ from typing import Iterator
 import numpy as np
 import nd2
 
+_MODULE_ROOT = Path(__file__).resolve().parents[1]
+
 # Julian Day Number of the Unix epoch (1970-01-01T00:00:00Z). ND2 stores the
 # acquisition instant as a JD float, which is what makes it unambiguous.
 _JD_UNIX_EPOCH = 2440587.5
+
+
+#: Reported when the shared estimator could not be imported at all. A blank
+#: quality would be indistinguishable from a measurement of zero.
+REASON_UNAVAILABLE = "estimator_unavailable"
+
+_UNSET = object()
+_ESTIMATOR = _UNSET
+
+
+@dataclass(frozen=True)
+class ChannelAlignment:
+    """How far TIRF sits from IRM, as MEASURED — never as applied.
+
+    ``reason`` is the load-bearing field. On production wells the gate refuses
+    roughly three quarters of positions, and a bare ``(0, 0)`` cannot be told
+    apart from a genuine perfect alignment; that ambiguity is what let the
+    2026-08 mis-registrations run unnoticed. ``quality`` is peak dominance:
+    above ~1 the peak beat every rival, and same-content pairs score in the
+    thousands, so a value near 1 means "no dominant peak", not "barely aligned".
+    """
+
+    dy: int
+    dx: int
+    quality: float
+    reason: str
+
+
+def _load_estimator():
+    """The shared ``estimate_translation_detailed``, or None if unreachable.
+
+    Resolved once and cached. A missing estimator degrades the diagnostic, it
+    does not fail the run — the intensities are what the run exists to produce.
+    """
+    global _ESTIMATOR
+    if _ESTIMATOR is _UNSET:
+        try:
+            if str(_MODULE_ROOT) not in sys.path:
+                sys.path.insert(0, str(_MODULE_ROOT))
+            from _mt_package import ensure_registration_on_path
+
+            ensure_registration_on_path()
+            from channel_registration import estimate_translation_detailed
+
+            _ESTIMATOR = estimate_translation_detailed
+        except Exception as exc:  # noqa: BLE001 - degrade, never abort
+            print(f"[warn] channel-alignment diagnostic unavailable: "
+                  f"{type(exc).__name__}: {exc}", file=sys.stderr)
+            _ESTIMATOR = None
+    return _ESTIMATOR
+
+
+def measure_alignment(reference: np.ndarray, moving: np.ndarray) -> ChannelAlignment:
+    """Measure ``moving``'s offset from ``reference``. Reports; never applies.
+
+    WHY NOTHING IS APPLIED. Measured 2026-08-30 across 180 production wells: the
+    estimator recovers an injected (5, -3) from IRM-vs-shifted-IRM 15/15 times
+    at quality ~7000, and from TIRF-vs-shifted-TIRF 15/15 times — but
+    IRM-vs-shifted-TIRF is accepted only 6/15 times and every accepted answer is
+    wrong by 1-2 px, at quality 0.5-2.9. The channels do not share edges: IRM is
+    interference contrast off the surface, TIRF is fluorescence from the
+    filaments, and the gradient correlation the estimator relies on has no
+    common structure to lock onto. The real offset measures 0-1 px.
+
+    Applying that would write a noise peak into the readout — the 2026-08 defect
+    — and shift the measurement band against the signal it integrates. So the
+    numbers are recorded and an acquisition that genuinely IS misaligned becomes
+    visible (``ok`` at a quality well above 1, with a non-zero offset) without
+    any run's pixels changing.
+
+    Never raises: a diagnostic must not be able to fail a well.
+
+    Cost, measured 2026-08-30 on production wells: **124 ms per position** for
+    one estimate. That is ~7 % of a 1400x1400 well (~1.7 s/position observed end
+    to end) and ~0.9 % of a 2048x2048 one (~14 s/position). Always on rather
+    than behind a flag, because a diagnostic nobody enables collects no data --
+    but if a future acquisition makes this the expensive part, that is the
+    trade-off to revisit.
+    """
+    estimator = _load_estimator()
+    if estimator is None:
+        return ChannelAlignment(0, 0, 0.0, REASON_UNAVAILABLE)
+    try:
+        est = estimator(reference, moving)
+    except Exception as exc:  # noqa: BLE001 - a shape mismatch is a REPORT
+        return ChannelAlignment(0, 0, 0.0, f"error:{type(exc).__name__}")
+    return ChannelAlignment(int(est.dy), int(est.dx),
+                            float(est.quality), str(est.reason))
 
 
 @dataclass
@@ -38,6 +128,9 @@ class Position:
     solution: np.ndarray    # (Y, X) raw intensities — 488 in-solution channel
     px_um: float | None     # micron / pixel (None if unavailable)
     acquired_at: str | None = None  # ISO-8601 UTC, or the raw ND2 date string
+    #: MEASURED IRM->TIRF offset, for the report. Never applied to the arrays
+    #: above — see :func:`measure_alignment`.
+    alignment: "ChannelAlignment | None" = None
 
 
 def parse_well_id(path: Path) -> str:
@@ -144,14 +237,20 @@ def iter_positions(path: Path, *, irm_match=("irm",), tirf_match=("tirf",),
             arr = arr[None]
         n_pos = arr.shape[0]
         for p in range(n_pos):
+            irm = np.asarray(arr[p, ci_irm])
+            tirf = np.asarray(arr[p, ci_tirf])
             yield Position(
                 well_id=well_id,
                 position=p,
-                irm=np.asarray(arr[p, ci_irm]),
-                tirf=np.asarray(arr[p, ci_tirf]),
+                irm=irm,
+                tirf=tirf,
                 solution=np.asarray(arr[p, ci_sol]),
                 px_um=px_um,
                 acquired_at=acquired_at,
+                # Measured here, where the channel roles are resolved, so the
+                # diagnostic cannot describe a different pair than the one the
+                # run segments and measures. The arrays are handed on unchanged.
+                alignment=measure_alignment(irm, tirf),
             )
 
 

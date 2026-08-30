@@ -61,9 +61,37 @@ For **every microtubule** in every position of every well, one row in
 | `n_px_mt`, `n_px_bg` | number of pixels in the band / ring |
 | `source_file` | originating `.nd2` file name |
 | `acquired_at` | when the well was recorded, **ISO-8601 UTC** (e.g. `2026-05-19T21:48:02Z`) — read from the ND2 itself, so it identifies the run no matter how the folder is named |
+| `irm_tirf_dy`, `irm_tirf_dx` | **measured** offset between the IRM and TIRF channels of this position, in pixels — a diagnostic, never applied (see below) |
+| `irm_tirf_quality` | peak dominance of that measurement: the winning correlation peak over its best rival |
+| `irm_tirf_reason` | `ok` if the measurement is trustworthy, otherwise why it was refused |
 
 The centerlines come from the **IRM** channel; every `mt_*` / `bg_*` intensity is
 measured on the **TIRF** channel.
+
+### Reading the channel-alignment columns
+
+**`irm_tirf_reason` says `implausible_shift` on most rows, and that is the
+expected, correct output — not a failed run.** IRM and TIRF do not share edges:
+IRM is interference contrast off the coverslip surface, TIRF is fluorescence
+from the filaments. The phase correlation the measurement relies on has no
+common structure to lock onto, so its quality gate refuses.
+
+Measured over 180 production wells (2026-08-30): the estimator recovers an
+injected `(5, -3)` from IRM against *shifted IRM* 15/15 times at quality ~7000,
+but from IRM against *shifted TIRF* it is accepted only 6/15 times and every
+accepted answer is wrong by 1–2 px, at quality 0.5–2.9. The real offset measures
+**0–1 px**.
+
+These columns therefore exist to make a *genuinely* misaligned acquisition
+visible — it would read `ok` with a quality well above 1 **and** a non-zero
+offset — without any run's pixels or intensities changing. Nothing is shifted:
+`net_mean_intensity` and its siblings mean exactly what they meant before this
+column existed, and runs stay comparable across it.
+
+Applying a correction here was considered and rejected: on this data it would be
+a no-op on ~60 % of positions and a demonstrably wrong 1–2 px shift on the rest,
+which is the 2026-08 registration defect (a noise peak written into the data)
+reproduced in the readout.
 
 It also writes **two QC overlay PNGs** (one per channel) and a **polyline
 annotation JSON** per position (toggle off with `--no-overlays` / `--no-json`).
