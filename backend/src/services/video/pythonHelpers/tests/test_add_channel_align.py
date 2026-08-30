@@ -253,18 +253,10 @@ def test_alignment_budget_covers_a_de_drifted_container():
 
     assert DRIFT_MAX_SHIFT_PX > _MAX_SHIFT_PX
 
-    ref = _synthetic_frame(21, 512) if "_synthetic_frame" in dir() else None
-    if ref is None:  # local fixture name differs; build one inline
-        rng = np.random.RandomState(21)
-        ref = rng.rand(512, 512) * 400
-        for k in range(10):
-            y = 40 + k * 46
-            for x in range(20, 492):
-                yy = y + (x - 256) // 8
-                if 0 <= yy < 512:
-                    ref[yy, x] += 6000
-
-    drift = 20  # beyond the 16 px channel window, inside the 96 px drift one
+    ref = _reference(21)
+    # 20 px: beyond the 16 px channel window, and inside the drift budget as
+    # this frame clamps it (radius = min(96, min(h, w) // 4) = 32).
+    drift = 20
     moving = shift_frame(ref, 0, drift)
     assert estimate_translation_detailed(ref, moving).reason != "ok", (
         "fixture must exceed the default window, or this proves nothing"
