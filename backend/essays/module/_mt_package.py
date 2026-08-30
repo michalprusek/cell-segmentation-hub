@@ -80,6 +80,47 @@ def ensure_on_path() -> Path:
     )
 
 
+def _registration_candidates() -> list[Path]:
+    override = os.environ.get("MT_REGISTRATION_DIR")
+    if override:
+        return [Path(override)]
+    return [
+        # backend/essays/module/ -> backend/src/services/video/pythonHelpers/
+        *_sibling_of_essays("src", "services", "video", "pythonHelpers"),
+        Path("/app/models"),
+    ]
+
+
+def ensure_registration_on_path() -> Path:
+    """Put the directory containing ``channel_registration`` on sys.path.
+
+    Same single-source rule as :func:`ensure_on_path`, for the phase-correlation
+    estimator. It lives in the video upload pipeline
+    (``backend/src/services/video/pythonHelpers/channel_registration.py``) —
+    that is the ONLY copy, and the essays image gets it by a ``COPY`` into
+    ``/app/models`` beside ``mt_measure.py``, exactly as the metrics do.
+
+    Do not vendor a second copy here. Two copies of a registration estimator is
+    how the 2026-08 mis-registrations survived: a threshold was corrected on one
+    side and the other kept applying noise peaks.
+
+    Raises:
+        ModuleNotFoundError: naming every path tried.
+    """
+    tried: list[Path] = []
+    for candidate in _registration_candidates():
+        tried.append(candidate)
+        if (candidate / "channel_registration.py").is_file():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            return candidate
+    raise ModuleNotFoundError(
+        "Could not locate 'channel_registration'. Tried: "
+        + ", ".join(str(p) for p in tried)
+        + ". Set MT_REGISTRATION_DIR to the directory that CONTAINS it."
+    )
+
+
 WEIGHTS_NAME = "microtubule_v5h.pth"
 
 

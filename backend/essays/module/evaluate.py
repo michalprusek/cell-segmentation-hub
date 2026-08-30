@@ -338,12 +338,20 @@ def main() -> int:
             rows = measure_frame(pos.tirf, centerlines,
                                  mt_width=args.mt_width,
                                  bg_margin=args.bg_margin, px_um=pos.px_um)
+            # Per-POSITION, repeated on each of that position's MT rows:
+            # results.csv is one row per microtubule and the alignment belongs
+            # to the frame pair they were measured on.
+            align = pos.alignment
             for r in rows:
                 r["well_id"] = pos.well_id
                 r["position"] = pos.position
                 r["solution_intensity_median"] = round(solution_median, 3)
                 r["source_file"] = f.name
                 r["acquired_at"] = pos.acquired_at
+                r["irm_tirf_dy"] = align.dy if align else ""
+                r["irm_tirf_dx"] = align.dx if align else ""
+                r["irm_tirf_quality"] = round(align.quality, 3) if align else ""
+                r["irm_tirf_reason"] = align.reason if align else ""
             csvw.write_rows(rows)
 
             stem = f"{pos.well_id}_pos{pos.position}"

@@ -163,7 +163,8 @@ jobs:
         run: |
           python -m pytest -q -p no:cacheprovider \
             backend/src/services/video/pythonHelpers/tests \
-            backend/essays/tests
+            backend/essays/tests \
+            backend/essays/module/tests
 
   backend:
     name: backend

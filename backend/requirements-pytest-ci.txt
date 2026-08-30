@@ -4,9 +4,10 @@
 # -----------------------------------
 # Three pytest suites live in this repo:
 #
-#   backend/src/services/video/pythonHelpers/tests   163 tests   <- CI runs it
-#   backend/essays/tests                              51 tests   <- CI runs it
-#   backend/segmentation/tests                       469 tests   <- CI cannot
+#   backend/src/services/video/pythonHelpers/tests   <- CI runs it
+#   backend/essays/tests                              <- CI runs it
+#   backend/essays/module/tests                       <- CI runs it (since 2026-08-30)
+#   backend/segmentation/tests                        <- CI cannot
 #
 # The segmentation suite is not excluded for being slow or flaky. It cannot be
 # collected at all without a GPU: `models/__init__` imports mamba_ssm, which
@@ -43,3 +44,17 @@ pillow
 tifffile
 scipy
 scikit-image
+
+# The essays module suite (backend/essays/module/tests) was excluded from CI
+# until 2026-08-30 purely because these two were missing, so 45 tests never ran
+# anywhere automated -- including test_metrics_match_export.py, which is the
+# only thing holding the essays adapter and the project export to ONE metric
+# implementation after they had already drifted apart once.
+#
+# `nd2` is imported at module scope by mt_pipeline/nd2_io.py; `cv2` is reached
+# through the shared mt_measure.dilate(). Left unpinned like the imaging
+# libraries above: the tests assert behaviour that is stable across their
+# versions, verified 2026-08-30 at nd2 0.11.3 / opencv 5.0.0 against the
+# production stack's numpy 1.26.4 + opencv 4.11.0.86.
+nd2
+opencv-python-headless

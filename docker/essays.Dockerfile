@@ -53,6 +53,13 @@ COPY --chown=app:app backend/segmentation/models/microtubule /app/models/microtu
 # torch — measuring pixels needs neither.
 COPY --chown=app:app backend/segmentation/models/mt_measure.py /app/models/mt_measure.py
 
+# The phase-correlation estimator, for the IRM<->TIRF alignment DIAGNOSTIC (it
+# is reported, never applied — see mt_pipeline/nd2_io.py). Copied from its one
+# home in the video upload pipeline rather than vendored, for the same reason
+# the model and the metrics are: two copies of a registration estimator is how
+# the 2026-08 mis-registrations survived a fix to one of them.
+COPY --chown=app:app backend/src/services/video/pythonHelpers/channel_registration.py /app/models/channel_registration.py
+
 # Where that package lives in THIS image. Set explicitly rather than left to the
 # resolver's fallback search, so a future move of the ML sources fails the build
 # here instead of silently finding nothing.

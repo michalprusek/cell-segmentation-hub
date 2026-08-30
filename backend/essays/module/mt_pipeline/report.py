@@ -36,6 +36,13 @@ COLUMNS = [
     # ``signal_minus_background``. ``net_mean_intensity`` above stays
     # mean-minus-MEAN so earlier runs remain interpretable.
     "signal_minus_background",
+    # Added 2026-08-30. The MEASURED IRM->TIRF offset for this position, its
+    # peak-dominance quality and the outcome reason — a diagnostic, never
+    # applied to a pixel (see mt_pipeline/nd2_io.measure_alignment). Expect
+    # `implausible_shift` on most rows: IRM and TIRF share no edges, so the gate
+    # correctly refuses. A real misalignment would read `ok` at a quality well
+    # above 1 with a non-zero offset. Blank when nothing measured it.
+    "irm_tirf_dy", "irm_tirf_dx", "irm_tirf_quality", "irm_tirf_reason",
 ]
 
 

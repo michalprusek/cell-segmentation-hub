@@ -253,7 +253,8 @@ test-py:
 	  pip install -q -r backend/requirements-pytest-ci.txt && \
 	  python -m pytest -q -p no:cacheprovider \
 	    backend/src/services/video/pythonHelpers/tests \
-	    backend/essays/tests'
+	    backend/essays/tests \
+	    backend/essays/module/tests'
 
 # The ML suite cannot run in CI: models/__init__ imports mamba_ssm -> Triton,
 # which raises "0 active drivers" at import time without a CUDA driver. So it
@@ -342,7 +343,7 @@ ci:
 	@node scripts/check-i18n.cjs
 	@echo "🔍 [6/7] Documentation link integrity"
 	@node scripts/check-doc-links.cjs
-	@echo "🔍 [7/7] Python suites (same 214 tests CI runs)"
+	@echo "🔍 [7/7] Python suites (the same ones CI runs)"
 	@$(MAKE) --no-print-directory test-py
 	@echo "✅ All local CI checks passed"
 
