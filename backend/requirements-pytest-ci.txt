@@ -46,10 +46,12 @@ scipy
 scikit-image
 
 # The essays module suite (backend/essays/module/tests) was excluded from CI
-# until 2026-08-30 purely because these two were missing, so 45 tests never ran
-# anywhere automated -- including test_metrics_match_export.py, which is the
-# only thing holding the essays adapter and the project export to ONE metric
-# implementation after they had already drifted apart once.
+# until 2026-08-30 purely because these two were missing, so 36 tests never ran
+# anywhere automated -- including test_metrics_match_export.py, the only
+# AUTOMATABLE thing holding the essays adapter and the project export to ONE
+# metric implementation after they had already drifted apart once (its
+# counterpart, test_mt_metrics_band.py, sits in the GPU-blocked segmentation
+# suite that CI cannot run).
 #
 # `nd2` is imported at module scope by mt_pipeline/nd2_io.py; `cv2` is reached
 # through the shared mt_measure.dilate(). Left unpinned like the imaging

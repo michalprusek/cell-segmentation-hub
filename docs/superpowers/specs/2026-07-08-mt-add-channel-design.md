@@ -1,5 +1,10 @@
 # MT "Add channel" to selected frames — design
 
+> **Partly superseded (2026-08-30):** `estimate_translation` was removed in
+> #397 — callers moved to `estimate_translation_detailed`, which returns a
+> `TranslationEstimate` carrying `reason` instead of a `(dy, dx, conf)` tuple.
+> The design below is otherwise as built.
+
 **Date:** 2026-07-08
 **Scope:** Microtubule (`type === 'microtubules'`) projects only.
 **Goal:** From the project gallery, let the user append an extra image channel to a

@@ -118,15 +118,23 @@ def test_a_refused_alignment_is_reported_as_refused_not_as_zero(run_evaluate):
     """A rejected estimate must not read as `aligned`.
 
     This is the whole point of carrying `reason`: on production wells the gate
-    refuses roughly three quarters of positions, and a bare (0, 0) would be
+    refuses about 60 % of positions (9 of the 15 sampled), and a bare (0, 0)
+    would be
     indistinguishable from a genuine perfect alignment -- the exact ambiguity
     that let the 2026-08 mis-registrations run unnoticed for months.
     """
     rows = run_evaluate(
-        ChannelAlignment(dy=0, dx=0, quality=0.77, reason="implausible_shift"))
+        ChannelAlignment(dy=None, dx=None, quality=0.77,
+                         reason="implausible_shift"))
 
     assert rows[0]["irm_tirf_reason"] == "implausible_shift"
+    # The quality IS measured on a refusal — it is the number that says how
+    # badly — so it is reported...
     assert float(rows[0]["irm_tirf_quality"]) == pytest.approx(0.77)
+    # ...but the offset is not: a refused estimate has no offset, and writing
+    # 0, 0 there is indistinguishable from a perfectly aligned pair.
+    assert rows[0]["irm_tirf_dy"] == ""
+    assert rows[0]["irm_tirf_dx"] == ""
 
 
 def test_a_position_without_a_measurement_leaves_the_cells_blank(run_evaluate):
@@ -135,6 +143,24 @@ def test_a_position_without_a_measurement_leaves_the_cells_blank(run_evaluate):
 
     for column in ALIGNMENT_COLUMNS:
         assert rows[0][column] == "", f"{column} must be blank, not 0"
+
+
+def test_an_unavailable_estimator_reports_no_numbers_at_all(run_evaluate):
+    """The reachable no-measurement path, unlike the None above.
+
+    `iter_positions` always attaches an alignment, so `alignment is None` is
+    effectively unreachable in production while THIS is what a broken
+    deployment actually writes. It used to emit `0, 0, 0.0` — a perfectly
+    aligned pair, on every row of every well — with the reason as the only clue.
+    """
+    rows = run_evaluate(
+        ChannelAlignment(dy=None, dx=None, quality=None,
+                         reason="estimator_unavailable"))
+
+    assert rows[0]["irm_tirf_reason"] == "estimator_unavailable"
+    assert rows[0]["irm_tirf_dy"] == ""
+    assert rows[0]["irm_tirf_dx"] == ""
+    assert rows[0]["irm_tirf_quality"] == ""
 
 
 def test_alignment_columns_are_appended_never_inserted():
@@ -285,5 +311,10 @@ def test_measure_alignment_never_raises_into_the_run():
     got = nd2_io.measure_alignment(np.zeros((8, 8)), np.zeros((4, 4)))
 
     assert got is not None, "a shape mismatch must be reported, not raised"
-    assert got.reason != "ok"
-    assert (got.dy, got.dx) == (0, 0)
+    # The shared module already NAMES this failure; reporting it as a generic
+    # `error:ValueError` would throw that away. Pinned by value, because
+    # `reason != "ok"` alone is satisfied by every refusal there is.
+    assert got.reason == "shape_mismatch", got
+    # And nothing was measured, so nothing is reported: (0, 0) would read as a
+    # perfectly aligned pair.
+    assert (got.dy, got.dx, got.quality) == (None, None, None)

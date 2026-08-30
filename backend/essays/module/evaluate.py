@@ -237,6 +237,15 @@ def build_args() -> argparse.Namespace:
     return ap.parse_args()
 
 
+def _cell(value):
+    """A CSV cell: blank for a value that was never measured.
+
+    `None` and `0` are different claims — "nothing ran" versus "it ran and found
+    zero" — and this table's whole point is telling them apart.
+    """
+    return "" if value is None else value
+
+
 def main() -> int:
     args = build_args()
 
@@ -348,9 +357,14 @@ def main() -> int:
                 r["solution_intensity_median"] = round(solution_median, 3)
                 r["source_file"] = f.name
                 r["acquired_at"] = pos.acquired_at
-                r["irm_tirf_dy"] = align.dy if align else ""
-                r["irm_tirf_dx"] = align.dx if align else ""
-                r["irm_tirf_quality"] = round(align.quality, 3) if align else ""
+                # None renders as a blank cell: an unmeasured offset must not
+                # read as a measured zero.
+                r["irm_tirf_dy"] = _cell(align and align.dy)
+                r["irm_tirf_dx"] = _cell(align and align.dx)
+                r["irm_tirf_quality"] = _cell(
+                    None if not align or align.quality is None
+                    else round(align.quality, 3)
+                )
                 r["irm_tirf_reason"] = align.reason if align else ""
             csvw.write_rows(rows)
 

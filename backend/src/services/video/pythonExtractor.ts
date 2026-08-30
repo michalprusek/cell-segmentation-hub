@@ -125,11 +125,15 @@ async function runHelper<T = PythonResult>(
         );
       }
       if (code !== 0) {
-        return reject(
-          new Error(
-            `python helper ${scriptName} exited ${code}: ${stderr.slice(-500)}`
-          )
+        // The code is attached, not just interpolated into the message: one
+        // caller (drift correction) has to tell a clean decline from a helper
+        // that failed AFTER modifying data, and parsing that back out of a
+        // string would be a decision made on prose.
+        const err: HelperExitError = new Error(
+          `python helper ${scriptName} exited ${code}: ${stderr.slice(-500)}`
         );
+        err.exitCode = code ?? undefined;
+        return reject(err);
       }
       // Helpers occasionally warn on stderr while still exiting 0 (e.g.
       // tifffile deprecation, partial-page skip). Surface to ops at warn
@@ -350,12 +354,29 @@ export async function alignChannelFrames(
   return runHelper<ChannelAlignResult>('add_channel_align.py', [manifestPath]);
 }
 
-/** Outcome of one container's drift-correction pass. `corrected: false` means
- *  the stack did not move far enough to be worth blanking a border for, or
- *  nothing on it could be matched — the helper says which on stderr, which
- *  `runHelper` surfaces at `warn`. */
+/** An `Error` from a helper that exited non-zero, carrying the exit code. */
+export interface HelperExitError extends Error {
+  exitCode?: number;
+}
+
+/** `correct_drift.py` exited having ALREADY rewritten some frames. The stack is
+ *  in mixed coordinate spaces and `registration.json` was never composed, so
+ *  the container must not be kept — see `correctDriftForContainer`. */
+export const EXIT_DRIFT_REWRITE_FAILED = 4;
+
+/** Outcome of one container's drift-correction pass. `corrected: false` carries
+ *  a `reason` saying which decline it was; the helper also says so on stderr,
+ *  which `runHelper` surfaces at `warn`. */
 export interface DriftCorrectionResult {
   corrected: boolean;
+  /** WHY, when `corrected` is false: `still` | `unmatchable` | `unanchored` |
+   *  `over_limit` | `too_short` | `estimation_failed`. The last one is a
+   *  malfunction, not a data condition — without it a broken estimator and a
+   *  stack that genuinely holds still are the same wire message, and drift
+   *  correction could stop happening across production unnoticed. */
+  reason?: string;
+  /** Present with `estimation_failed`: the exception that ended the estimate. */
+  error?: string;
   sourceChannel?: string;
   pairsMeasured?: number;
   pairsAccepted?: number;
@@ -370,7 +391,12 @@ export interface DriftCorrectionResult {
  * driven by the channel the measurements live on — which `buildChannelMeta`
  * only resolves once the extractor has returned its channel list, and which
  * a fluorescence channel of a motility assay must never be (correlating that
- * measures filament gliding and calls it drift). See `correct_drift.py`.
+ * measures filament gliding and calls it drift).
+ *
+ * That is an intent, not a guarantee: `resolveSegmentationSource` falls back to
+ * channel 0 when nothing carries an IRM mark — the normal outcome for a plain
+ * multi-page TIFF, which has no wavelength to type channels by — and channel 0
+ * is TIRF on seven production containers. See `correct_drift.py`.
  *
  * Rewrites the frame PNGs with a rounded, lossless integer shift and folds the
  * correction into `registration.json`. Never throws for a stack it merely

@@ -144,7 +144,9 @@ describe('summarizeAlignment', () => {
 
   it('counts a run where every estimate was rejected as too weak', () => {
     // (0, 0, conf) with conf < _MIN_CONFIDENCE is exactly what
-    // estimate_translation returns when the correlation peak is untrustworthy.
+    // estimate_translation_detailed returns for a refused peak. (Note the live
+    // gate refuses mostly on `quality`, not on `confidence`; this legacy helper
+    // only ever saw the confidence field.)
     const s = summarizeAlignment([
       [0, 0, 1.2],
       [0, 0, 1.4],

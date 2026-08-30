@@ -31,12 +31,17 @@ export function isSafeChannelName(name: unknown): name is string {
  * The container's segmentation-source channel name: the channel explicitly
  * marked as the source, else the first one.
  *
- * The rule was written out at six call sites with three different null-handling
- * tails. It is not a display detail: drift correction is driven by this
- * channel, and on a motility assay picking a fluorescence channel measures
- * filament gliding and subtracts the signal the experiment records. If the rule
- * ever gains a step — "prefer `type === 'irm'` over index 0" is the obvious
- * next one — it must gain it everywhere at once.
+ * It is not a display detail: drift correction is driven by this channel, and
+ * on a motility assay picking a fluorescence channel measures filament gliding
+ * and subtracts the signal the experiment records.
+ *
+ * The BACKEND now shares this one definition — videoUploadService (x2),
+ * imageService, addChannelService and mtKymographExporter. Three editor
+ * components still open-code it (`SegmentationEditorLayout`, `ChannelOverlayList`,
+ * `KymographModal`) because they cannot import from `backend/src`; changing the
+ * rule here does NOT change them, so migrate those through shared-types first
+ * if the rule ever gains a step ("prefer `type === 'irm'` over index 0" is the
+ * obvious next one).
  *
  * Returns undefined for an empty channel list; callers decide what that means.
  */

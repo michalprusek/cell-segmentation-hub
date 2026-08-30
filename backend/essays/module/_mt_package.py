@@ -1,4 +1,10 @@
-"""Locate the shared ``microtubule`` package and put it on ``sys.path``.
+"""Locate the shared model code and estimator, and put them on ``sys.path``.
+
+Two resolvers live here, one per shared artifact: ``ensure_on_path`` for the
+``microtubule`` package (``MT_PACKAGE_DIR``) and ``ensure_registration_on_path``
+for ``channel_registration`` (``MT_REGISTRATION_DIR``). Both env vars are set
+explicitly in ``docker/essays.Dockerfile`` so a future move of either source
+fails the build there rather than silently finding nothing at run time.
 
 Single source of truth: the microtubule v5H model code (wrapper, net, the
 instancer, the vendored network library) lives ONCE, in the ML service at
@@ -100,9 +106,12 @@ def ensure_registration_on_path() -> Path:
     that is the ONLY copy, and the essays image gets it by a ``COPY`` into
     ``/app/models`` beside ``mt_measure.py``, exactly as the metrics do.
 
-    Do not vendor a second copy here. Two copies of a registration estimator is
-    how the 2026-08 mis-registrations survived: a threshold was corrected on one
-    side and the other kept applying noise peaks.
+    Do not vendor a second copy here. The precedent is `mt_measure`: it and the
+    model wrapper drifted apart for months as two copies, disagreeing by up to
+    +33 % on net signal, until they were unified (see
+    test_metrics_match_export.py). The 2026-08 mis-registrations were a
+    DIFFERENT failure — a single copy with a fraction-of-frame plausibility cap
+    — but a second copy is what would have made that fix reach only one caller.
 
     Raises:
         ModuleNotFoundError: naming every path tried.

@@ -414,7 +414,22 @@ async function readRegistrationOffsets(
       });
     }
     return Object.keys(clean).length > 0 ? clean : undefined;
-  } catch {
+  } catch (err) {
+    // "No sidecar" and "a sidecar that cannot be read" are different events and
+    // must not share a silent return. The second means the container HAS
+    // registered or de-drifted frames while this export samples the raw file
+    // unshifted — every intensity off by exactly the offsets in the file we
+    // just failed to parse. Undefined is still returned (an export that works
+    // beats one that aborts), but it no longer happens in silence.
+    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+      logger.warn(
+        `${sidecarPath} present but unreadable; ` +
+          'sampling the raw file UNSHIFTED — intensities will be off by the ' +
+          'recorded offsets',
+        'MTMetricsExporter',
+        { error: err instanceof Error ? err.message : String(err) }
+      );
+    }
     return undefined;
   }
 }

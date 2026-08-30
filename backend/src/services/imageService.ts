@@ -16,6 +16,7 @@ import {
   DashboardUpdateData,
 } from '../types/websocket';
 import * as UserService from './userService';
+import { resolveSegmentationSource } from './video/types';
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -1624,10 +1625,7 @@ export class ImageService {
           isSegmentationSource?: boolean;
         }>)
       : [];
-    const sourceChannel =
-      channels.find(c => c.isSegmentationSource)?.name ??
-      channels[0]?.name ??
-      null;
+    const sourceChannel = resolveSegmentationSource(channels) ?? null;
     if (!sourceChannel) {
       return null;
     }

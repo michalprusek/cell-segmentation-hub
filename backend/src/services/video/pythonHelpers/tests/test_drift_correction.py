@@ -43,6 +43,11 @@ import drift_correction  # noqa: E402
 from drift_correction import (  # noqa: E402
     _MAX_TOTAL_DRIFT_FRACTION,
     DRIFT_MAX_SHIFT_PX,
+    REASON_ESTIMATION_FAILED,
+    REASON_OVER_LIMIT,
+    REASON_STILL,
+    REASON_UNANCHORED,
+    REASON_UNMATCHABLE,
     apply_drift,
     compose_into_registration_offsets,
     correct_drift_in_place,
@@ -439,7 +444,8 @@ def test_a_still_stack_is_left_byte_identical_on_disk():
     with _staged({"IRM": frames}) as root:
         raw = _png_bytes(root, n)
 
-        assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+        out = correct_drift_in_place(root, ["IRM"], "IRM")
+        assert (out["corrected"], out["reason"]) == (False, REASON_STILL)
 
         after = _png_bytes(root, n)
         assert raw == after, "a still stack must not be rewritten"
@@ -524,7 +530,8 @@ def test_a_composed_correction_larger_than_the_frame_is_refused():
 
         err = io.StringIO()
         with redirect_stderr(err):
-            assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+            out = correct_drift_in_place(root, ["IRM"], "IRM")
+        assert (out["corrected"], out["reason"]) == (False, REASON_OVER_LIMIT)
 
         # WHICH refusal it was. `is None` alone is satisfied by four different
         # declines, which is exactly how this guard went untested.
@@ -547,14 +554,19 @@ def test_a_stack_with_nothing_matchable_is_not_reported_as_still():
     with _staged({"IRM": frames}) as root:
         blank = io.StringIO()
         with redirect_stderr(blank):
-            assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+            out = correct_drift_in_place(root, ["IRM"], "IRM")
+        assert (out["corrected"], out["reason"]) == (False, REASON_UNMATCHABLE)
+        # The counts travel with the decline: an all-zero trajectory from a
+        # refused stack and one from a still stack are otherwise identical.
+        assert out["pairsMeasured"] > 0 and out["pairsAccepted"] == 0
         said = blank.getvalue()
 
         still = _drifting_stack(12, (0.0, 0.0), seed=7)
         _write_stack(root, {"IRM": still})
         quiet = io.StringIO()
         with redirect_stderr(quiet):
-            assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+            out = correct_drift_in_place(root, ["IRM"], "IRM")
+        assert (out["corrected"], out["reason"]) == (False, REASON_STILL)
 
     assert "no measurable structure" in said, (
         "a stack nothing could be matched on must say so; it is otherwise "
@@ -608,7 +620,20 @@ def test_an_unreadable_source_channel_declines_instead_of_aborting():
     frames = _drifting_stack(20, (0.0, 0.4), seed=5)
     with _staged({"IRM": frames}) as root:
         (root / "0005" / "IRM.png").write_bytes(b"not a png")
-        assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+        err = io.StringIO()
+        with redirect_stderr(err):
+            out = correct_drift_in_place(root, ["IRM"], "IRM")
+
+        # A CRASH, not a decline -- and the two must not look alike.
+        # Asserting only "declined" let a mutant that replaced the whole
+        # except body with a silent `return None` pass the ENTIRE suite
+        # (mutation-checked 2026-08-30). A rename that broke estimation
+        # would then stop drift correction across production, visible only
+        # as one warn line per upload.
+        assert out["corrected"] is False
+        assert out["reason"] == REASON_ESTIMATION_FAILED, out
+        assert "UnidentifiedImageError" in out["error"], out
+        assert "estimation failed" in err.getvalue()
 
 
 
@@ -737,7 +762,8 @@ def test_a_trajectory_whose_anchor_was_refused_is_not_applied():
         raw = _png_bytes(root, n)
         err = io.StringIO()
         with redirect_stderr(err):
-            assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+            out = correct_drift_in_place(root, ["IRM"], "IRM")
+        assert (out["corrected"], out["reason"]) == (False, REASON_UNANCHORED)
         after = _png_bytes(root, n)
 
     assert raw == after, "a refused trajectory must not touch the frames"

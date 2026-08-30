@@ -56,14 +56,22 @@ COPY --chown=app:app backend/segmentation/models/mt_measure.py /app/models/mt_me
 # The phase-correlation estimator, for the IRM<->TIRF alignment DIAGNOSTIC (it
 # is reported, never applied — see mt_pipeline/nd2_io.py). Copied from its one
 # home in the video upload pipeline rather than vendored, for the same reason
-# the model and the metrics are: two copies of a registration estimator is how
-# the 2026-08 mis-registrations survived a fix to one of them.
+# the model and the metrics are: `mt_measure` and the model wrapper drifted
+# apart for months as two copies, and a second estimator would make the next
+# fix reach only one caller.
 COPY --chown=app:app backend/src/services/video/pythonHelpers/channel_registration.py /app/models/channel_registration.py
 
 # Where that package lives in THIS image. Set explicitly rather than left to the
 # resolver's fallback search, so a future move of the ML sources fails the build
 # here instead of silently finding nothing.
 ENV MT_PACKAGE_DIR=/app/models
+
+# Same rule for the registration estimator. Without this the resolver falls
+# through to its /app/models default, which means dropping or mistyping the COPY
+# above builds green and every batch then writes `estimator_unavailable` into
+# all four alignment columns forever — the warning goes to a container log that
+# is deleted on the next recreate. Set it, and the smoke below fails the build.
+ENV MT_REGISTRATION_DIR=/app/models
 
 # Build-time smoke: the module imports cleanly against this stack AND resolves
 # the shared microtubule package. Fails the build early if a dependency is
@@ -85,8 +93,15 @@ assert (mt / 'params_v5h.json').is_file(), \
 import net; assert net.TILE == 512, 'unexpected tile size %s' % net.TILE; \
 assert mt_pipeline.measure.mt_measure is mt_measure, \
     'the essays measurement is not the shared one'; \
+reg = _mt_package.ensure_registration_on_path(); \
+import channel_registration; \
+assert str(reg) == '/app/models', \
+    'registration estimator not resolved from the image copy: %s' % reg; \
+assert mt_pipeline.nd2_io._load_estimator() is not None, \
+    'the channel-alignment diagnostic cannot load its estimator'; \
 print('essays module import OK; microtubule from', microtubule.__file__); \
-print('shared measurement from', mt_measure.__file__)"
+print('shared measurement from', mt_measure.__file__); \
+print('shared estimator from', channel_registration.__file__)"
 
 USER app
 
