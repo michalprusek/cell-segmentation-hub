@@ -664,6 +664,56 @@ def test_correct_drift_cli_rejects_a_source_channel_it_was_not_given():
     assert "not among" in proc.stderr
 
 
+
+def test_a_trajectory_whose_anchor_was_refused_is_not_applied():
+    """Content that moves independently of the stage must not be de-drifted.
+
+    On a motility assay every filament glides at once, so correlating that
+    channel measures the gliding and calls it drift. What separates it from a
+    genuine drift is the FULL-BASELINE pass: real stage drift leaves frame 0
+    and frame N sharing their static structure; gliding does not.
+
+    Observed live on production 2026-08-30 — a stack gliding 2 px/frame got 74
+    of 75 pairs accepted and a 97 px "correction", with only this anchor
+    refusing. Free on real data: four production stacks carrying genuine drift
+    all anchor at 100 % of pairs.
+    """
+    import io
+    import pathlib as _p
+    import tempfile
+    from contextlib import redirect_stderr
+
+    n = 40
+    base = _filament_field(4, 384)
+    rng = np.random.RandomState(9)
+    frames = []
+    for f in range(n):
+        # Whole-field motion of 3 px/frame: consecutive pairs match perfectly,
+        # but frame 0 and frame 39 are 117 px apart and share nothing.
+        img = np.roll(base, f * 3, axis=0)
+        frames.append(
+            (img * 9000 + rng.normal(4000, 120, base.shape))
+            .clip(0, 65535)
+            .astype(np.uint16)
+        )
+
+    est = estimate_drift_trajectory_detailed(frames)
+    assert est.accepted > 0, "fixture must produce accepted pairs"
+    assert not est.anchored, "fixture must lose the full-baseline anchor"
+
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root, {"IRM": frames})
+        raw = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(n)]
+        err = io.StringIO()
+        with redirect_stderr(err):
+            assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+        after = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(n)]
+
+    assert raw == after, "a refused trajectory must not touch the frames"
+    assert "full-baseline pass found no match" in err.getvalue()
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

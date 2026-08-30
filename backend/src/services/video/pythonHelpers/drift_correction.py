@@ -471,6 +471,30 @@ def correct_drift_in_place(
         )
         return None
 
+    if not est.anchored:
+        # The final pass — frame 0 against the LAST frame — was refused, so the
+        # trajectory's tail rests on ramp extrapolation with nothing measuring
+        # it. That is not a small loss of confidence; it is the signature of a
+        # stack whose content changes independently of the stage, and on a
+        # motility assay the "drift" such a stack reports IS the motility.
+        #
+        # Observed live, 2026-08-30: a 50-frame stack whose driving channel
+        # held filaments gliding at 2 px/frame produced 74 of 75 pairs
+        # accepted, a 97 px correction, and this anchor refused — the only
+        # signal separating it from a genuine 10 px drift. Subtracting it would
+        # have cancelled the signal the experiment records and blanked 19 % of
+        # every frame.
+        #
+        # Free on real data: all four production stacks carrying genuine drift
+        # anchor with 100 % of pairs accepted (181/181, 62/62).
+        sys.stderr.write(
+            f"drift: refusing on channel '{source_channel}' — the "
+            f"full-baseline pass found no match, so the trajectory "
+            f"({peak:.0f} px) is extrapolation, not measurement; "
+            f"left uncorrected\n"
+        )
+        return None
+
     if not drift_is_worth_correcting(trajectory, min_px=min_px):
         return None
 
