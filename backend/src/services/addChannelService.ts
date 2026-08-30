@@ -73,7 +73,7 @@ export const ALIGN_REJECTED_WARN_FRACTION = 0.5;
  * - ``low_confidence`` — the correlation peak was below
  *   {@link MIN_ALIGN_CONFIDENCE}; the frame was written unshifted.
  * - ``implausible_shift`` — a peak was found but sat further from the origin
- *   than ``_MAX_SHIFT_FRACTION`` allows, so it was discarded and the frame was
+ *   than the estimator's search window allows, so it was discarded and the frame was
  *   written unshifted. Its confidence is usually HIGH, which is what made this
  *   failure indistinguishable from "already aligned". Python checks
  *   plausibility BEFORE confidence, so an estimate that would fail both
@@ -120,7 +120,7 @@ export type AlignShiftRow = readonly [number, number, number, ...unknown[]];
  * The ``shifted`` / ``rejected`` / ``zeroShift`` trio is unchanged — a pure
  * function of ``(dy, dx, confidence)`` — so existing consumers keep working.
  * It cannot tell a *trusted* peak at the origin (already aligned — a success)
- * from a peak discarded for exceeding ``_MAX_SHIFT_FRACTION`` (a silent
+ * from a peak discarded for falling outside the search window (a silent
  * failure): both are ``[0, 0, <high confidence>]`` and both land in
  * ``zeroShift``. {@link ChannelAlignmentSummary.reasons} resolves that, and
  * {@link ChannelAlignmentSummary.failed} — not ``rejected`` — is the count

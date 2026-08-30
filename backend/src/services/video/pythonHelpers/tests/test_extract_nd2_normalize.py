@@ -278,7 +278,7 @@ def test_write_frames_registers_channels_to_first():
     ch1 = shift_frame(ref, 5, -3)
     arr = np.stack([np.stack([ref, ch1])])  # (T=1, C=2, Y, X)
     d = Path(tempfile.mkdtemp())
-    offsets, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
+    offsets, _reasons, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
     assert offsets[0][0] == [0, 0]  # reference never moves
     assert offsets[0][1] == [-5, 3]  # inverse of the injected shift
     assert blanks[0] == [False, False]  # both planes carry real data
@@ -297,7 +297,7 @@ def test_write_frames_register_off_is_untouched():
     ch1[10, 8:28] = 9000
     arr = np.stack([np.stack([ref, ch1])])
     d = Path(tempfile.mkdtemp())
-    offsets, blanks = _write_frames(arr, d, ["c0", "c1"], register=False)
+    offsets, _reasons, blanks = _write_frames(arr, d, ["c0", "c1"], register=False)
     assert offsets[0] == [[0, 0], [0, 0]]
     assert blanks[0] == [False, False]
     got = np.asarray(Image.open(d / "0000" / "c1.png"))
@@ -346,7 +346,7 @@ def test_write_frames_reports_blank_planes_and_skips_their_registration():
     arr = np.stack([np.stack([ref, moved]), np.stack([ref, blank])])
     d = Path(tempfile.mkdtemp())
 
-    offsets, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
+    offsets, _reasons, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
 
     assert blanks[0] == [False, False]
     assert blanks[1] == [False, True]
@@ -366,7 +366,7 @@ def test_write_frames_skips_registration_when_the_reference_is_blank():
     arr = np.stack([np.stack([blank, real])])
     d = Path(tempfile.mkdtemp())
 
-    offsets, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
+    offsets, _reasons, blanks = _write_frames(arr, d, ["c0", "c1"], register=True)
 
     assert blanks[0] == [True, False]
     assert offsets[0][1] == [0, 0]

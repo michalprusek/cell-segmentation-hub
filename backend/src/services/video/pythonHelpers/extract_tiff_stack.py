@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from channel_registration import (
-    estimate_translation,
+    estimate_translation_detailed,
     shift_frame,
     write_registration_sidecar,
 )
@@ -874,6 +874,7 @@ def main() -> int:
     # source ``arr`` is never mutated; offsets are recorded for the sidecar.
     do_register = register and C > 1
     offsets: dict[int, list] = {}
+    reasons: dict[int, list[str]] = {}
     # {frameIndex: [bool per channel]} — True where the plane carries no
     # acquisition. A stack can declare the full (T, C) grid while the microscope
     # only refreshed a channel every N-th frame; those planes are written as a
@@ -884,6 +885,10 @@ def main() -> int:
         frame_dir = dest / "frames" / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         offset_row = [[0, 0] for _ in range(C)]
+        # Why each offset is what it is. A stored (0, 0) is otherwise
+        # ambiguous — genuinely aligned, or an estimate that was refused —
+        # and that ambiguity hid the 2026-08 mis-registrations.
+        reason_row = ["ok"] * C
         blank_row = [is_blank_plane(arr[t, c]) for c in range(C)]
         ref = arr[t, 0] if do_register else None
         # Skipping registration when either plane is blank changes no output:
@@ -894,19 +899,31 @@ def main() -> int:
         for c in range(C):
             plane = arr[t, c]
             if do_register and c > 0 and ref_usable and not blank_row[c]:
-                dy, dx, _conf = estimate_translation(ref, plane)
-                if dy or dx:
-                    plane = shift_frame(plane, dy, dx)  # new array — no mutation
-                offset_row[c] = [dy, dx]
+                est = estimate_translation_detailed(ref, plane)
+                if est.dy or est.dx:
+                    plane = shift_frame(plane, est.dy, est.dx)  # new array
+                offset_row[c] = [est.dy, est.dx]
+                reason_row[c] = est.reason
+                if est.reason != "ok":
+                    sys.stderr.write(
+                        f"registration: frame {t} channel '{channel_names[c]}' "
+                        f"not registered ({est.reason}; wanted "
+                        f"({est.peak_dy},{est.peak_dx}), quality "
+                        f"{est.quality:.2f})\n"
+                    )
             _save_png(plane, frame_dir / f"{channel_names[c]}.png")
         offsets[t] = offset_row
+        reasons[t] = reason_row
         blanks[t] = blank_row
         if t % 5 == 0 or t == T - 1:
             sys.stdout.write(f"PROGRESS {(t + 1) / T:.4f}\n")
             sys.stdout.flush()
 
+    # Stage-drift correction is NOT done here. It has to be driven by the
+    # channel the measurements live on, and which channel that is, is decided
+    # on the TypeScript side AFTER this returns — see ``correct_drift.py``.
     if register:
-        write_registration_sidecar(dest, channel_names, offsets)
+        write_registration_sidecar(dest, channel_names, offsets, reasons)
 
     # Approximate duration from the (constant) frame interval when we
     # have it. TIFFs don't carry per-frame timestamps, so this is an

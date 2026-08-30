@@ -39,7 +39,7 @@ from pathlib import Path
 import numpy as np
 
 from channel_registration import (
-    estimate_translation,
+    estimate_translation_detailed,
     shift_frame,
     write_registration_sidecar,
 )
@@ -481,7 +481,7 @@ def _save_position_tiff(arr_tcyx: np.ndarray, path: Path) -> None:
 def _write_frames(
     arr_tcyx, frames_root: Path, channel_names: list[str],
     on_frame=None, register: bool = False,
-) -> tuple[dict[int, list], dict[int, list[bool]]]:
+) -> tuple[dict[int, list], dict[int, list[str]], dict[int, list[bool]]]:
     """Write one PNG per (frame, channel) under ``frames_root/<TTTT>/``.
 
     ``arr_tcyx`` is a dask OR numpy ``(T, C, Y, X)`` array. Frames are streamed
@@ -564,6 +564,7 @@ def _write_frames(
         frame_dir = frames_root / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         offset_row = [[0, 0] for _ in range(C)]
+        reason_row = ["ok"] * C
         # One pass over the (already materialised) frame; ``frame_cyx[c]`` is a
         # view, so this costs a min/max scan and no allocation.
         blank_row = [is_blank_plane(frame_cyx[c]) for c in range(C)]
@@ -573,14 +574,25 @@ def _write_frames(
             plane = frame_cyx[c]
             if do_register and c > 0 and ref_usable and not blank_row[c]:
                 with reg_gate:
-                    dy, dx, _conf = estimate_translation(ref, plane)
-                if dy or dx:
-                    plane = shift_frame(plane, dy, dx)  # new array — no mutation
-                offset_row[c] = [dy, dx]
+                    est = estimate_translation_detailed(ref, plane)
+                if est.dy or est.dx:
+                    plane = shift_frame(plane, est.dy, est.dx)  # new array
+                offset_row[c] = [est.dy, est.dx]
+                reason_row[c] = est.reason
+                if est.reason != "ok":
+                    sys.stderr.write(
+                        f"registration: frame {t} channel '{channel_names[c]}' "
+                        f"not registered ({est.reason}; wanted "
+                        f"({est.peak_dy},{est.peak_dx}), quality "
+                        f"{est.quality:.2f})\n"
+                    )
             _save_png(plane, frame_dir / f"{channel_names[c]}.png")
-        return t, offset_row, blank_row
+        return t, offset_row, blank_row, reason_row
 
     offsets: dict[int, list] = {}
+    # Why each offset is what it is; a stored (0, 0) is otherwise ambiguous
+    # between "already aligned" and "estimate refused". See the sidecar.
+    reasons: dict[int, list[str]] = {}
     blanks: dict[int, list[bool]] = {}
     # FIFO queue of submitted-but-unfinished frames. Its length is what caps the
     # number of materialised frames alive at once; draining in submission order
@@ -588,8 +600,9 @@ def _write_frames(
     in_flight: deque = deque()
 
     def _drain_one() -> None:
-        t, offset_row, blank_row = in_flight.popleft().result()
+        t, offset_row, blank_row, reason_row = in_flight.popleft().result()
         offsets[t] = offset_row
+        reasons[t] = reason_row
         blanks[t] = blank_row
         if on_frame is not None:
             on_frame()
@@ -604,7 +617,7 @@ def _write_frames(
             in_flight.append(pool.submit(_write_one, t, np.asarray(arr_tcyx[t])))
         while in_flight:
             _drain_one()
-    return offsets, blanks
+    return offsets, reasons, blanks
 
 
 def _channels_with_coverage(
@@ -732,12 +745,14 @@ def main() -> int:
                 nonlocal done
                 done += 1
                 _progress(done, T)
-            offsets, blanks = _write_frames(
+            offsets, reasons, blanks = _write_frames(
                 arr, dest / "frames", channel_names, on_frame=_tick,
                 register=register,
             )
+            # Drift correction runs later, from TypeScript — see
+            # ``correct_drift.py`` for why it cannot pick its own channel.
             if register:
-                write_registration_sidecar(dest, channel_names, offsets)
+                write_registration_sidecar(dest, channel_names, offsets, reasons)
             channels_result = _channels_with_coverage(channels_out, blanks, "")
 
             duration_ms = None
@@ -800,12 +815,12 @@ def main() -> int:
                 nonlocal done
                 done += 1
                 _progress(done, total_writes)
-            offsets, blanks = _write_frames(norm, dest / subdir / "frames",
-                                            channel_names, on_frame=_tick,
-                                            register=register)
+            offsets, reasons, blanks = _write_frames(
+                norm, dest / subdir / "frames", channel_names,
+                on_frame=_tick, register=register)
             if register:
                 write_registration_sidecar(
-                    dest / subdir, channel_names, offsets
+                    dest / subdir, channel_names, offsets, reasons
                 )
 
             # Per-position single-position original the metrics reader can load

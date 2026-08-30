@@ -51,7 +51,11 @@ vi.mock('url', async importOriginal => {
 });
 
 import { spawn } from 'child_process';
-import { extractTiffStack, extractNd2 } from '../pythonExtractor';
+import {
+  extractTiffStack,
+  extractNd2,
+  correctDriftInContainer,
+} from '../pythonExtractor';
 import { logger } from '../../../utils/logger';
 
 const mockSpawn = spawn as unknown as Mock;
@@ -151,6 +155,40 @@ describe('pythonExtractor', () => {
       await extractTiffStack('/a', '/b');
 
       expect(mockSpawn.mock.calls[0][0]).toBe('python3');
+    });
+  });
+
+  describe('correctDriftInContainer', () => {
+    it('passes the container dir, the DRIVING channel and the full channel list', async () => {
+      // The driving channel is passed in rather than guessed, and this is the
+      // only place that contract is visible. On a motility assay, driving on a
+      // fluorescence channel would measure filament gliding and subtract it as
+      // though it were stage drift.
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+      resolveWith(fake, [JSON.stringify({ corrected: true })]);
+
+      await correctDriftInContainer('/dest/c1', ['TIRF_488', 'IRM'], 'IRM');
+
+      const [, scriptArgs] = mockSpawn.mock.calls[0];
+      expect(scriptArgs[0]).toMatch(/correct_drift\.py$/);
+      expect(scriptArgs[1]).toBe('/dest/c1');
+      expect(scriptArgs[2]).toBe('IRM');
+      expect(scriptArgs[3]).toBe('TIRF_488,IRM');
+    });
+
+    it('refuses a source channel that is not one of the container channels', async () => {
+      // Fails before spawning: a typo here would otherwise reach the helper,
+      // which cannot tell it from a channel that was legitimately renamed.
+      await expect(
+        correctDriftInContainer('/dest/c1', ['IRM'], 'TIRF_488')
+      ).rejects.toThrow(/not among/);
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it('refuses a container with no channels at all', async () => {
+      await expect(correctDriftInContainer('/dest/c1', [], 'IRM')).rejects.toThrow();
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
   });
 

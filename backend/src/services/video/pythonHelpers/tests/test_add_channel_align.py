@@ -42,7 +42,7 @@ HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
 from channel_registration import (  # noqa: E402
-    _MAX_SHIFT_FRACTION,
+    _MAX_SHIFT_PX,
     _MIN_CONFIDENCE,
     shift_frame,
 )
@@ -195,7 +195,7 @@ def test_reason_implausible_shift_keeps_a_high_confidence():
     # decay into just another low-confidence pair and this branch would go
     # untested.
     ref = _reference(seed=10)
-    true_dy = int(_MAX_SHIFT_FRACTION * min(ref.shape)) + 25  # 37 px, way over
+    true_dy = _MAX_SHIFT_PX + 25  # 41 px, way over the 16 px budget
     row = _one(ref, shift_frame(ref, true_dy, 0).astype(np.uint16))
     assert row[:2] == [0, 0], row  # nothing applied
     assert row[3] == "implausible_shift", row
@@ -236,3 +236,33 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {exc}")
     print(f"\n{'OK' if failures == 0 else f'{failures} FAILED'}")
     sys.exit(1 if failures else 0)
+
+
+def test_alignment_budget_covers_a_de_drifted_container():
+    """An added channel must still align to a container that was de-drifted.
+
+    Since 2026-08-29 the stored frames of a microtubule container may have been
+    moved by up to `DRIFT_MAX_SHIFT_PX`, so the shift needed to land on frame N
+    is the chromatic offset PLUS that frame's accumulated drift. Under the
+    default 16 px window that worked to ~frame 60 of a 90-frame stack drifting
+    0.22 px/frame and then silently stopped — writing unshifted copies while
+    the earlier frames looked perfect, which is the worst shape of failure.
+    """
+    from channel_registration import _MAX_SHIFT_PX, estimate_translation_detailed
+    from drift_correction import DRIFT_MAX_SHIFT_PX
+
+    assert DRIFT_MAX_SHIFT_PX > _MAX_SHIFT_PX
+
+    ref = _reference(21)
+    # 20 px: beyond the 16 px channel window, and inside the drift budget as
+    # this frame clamps it (radius = min(96, min(h, w) // 4) = 32).
+    drift = 20
+    moving = shift_frame(ref, 0, drift)
+    assert estimate_translation_detailed(ref, moving).reason != "ok", (
+        "fixture must exceed the default window, or this proves nothing"
+    )
+    est = estimate_translation_detailed(
+        ref, moving, max_shift_px=DRIFT_MAX_SHIFT_PX
+    )
+    assert est.reason == "ok", est
+    assert (est.dy, est.dx) == (0, -drift), est

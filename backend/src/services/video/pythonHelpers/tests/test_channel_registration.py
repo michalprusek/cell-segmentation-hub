@@ -25,8 +25,10 @@ HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
 from channel_registration import (  # noqa: E402
-    _MAX_SHIFT_FRACTION,
+    _MAX_SHIFT_PX,
     _MIN_CONFIDENCE,
+    _MIN_PEAK_RATIO,
+    _PEAK_EXCLUSION_PX,
     estimate_translation,
     estimate_translation_detailed,
     shift_frame,
@@ -197,7 +199,7 @@ def test_detailed_reports_implausible_shift_with_high_confidence():
     # cap. Zero shift + high confidence — byte-for-byte the same 3-tuple as
     # "already aligned" above, which is why the reason has to exist.
     ref = _synthetic_frame(12)
-    true_dy = int(_MAX_SHIFT_FRACTION * min(ref.shape)) + 20
+    true_dy = _MAX_SHIFT_PX + 20
     est = estimate_translation_detailed(ref, shift_frame(ref, true_dy, 0))
     assert (est.dy, est.dx) == (0, 0)
     assert est.reason == "implausible_shift"
@@ -223,9 +225,7 @@ def test_implausible_beats_low_confidence_when_both_would_fire():
     b = np.random.RandomState(99).rand(128, 128) * 1000
     est = estimate_translation_detailed(a, b)
     assert (est.dy, est.dx) == (0, 0)
-    if abs(est.peak_dy) > _MAX_SHIFT_FRACTION * 128 or abs(
-        est.peak_dx
-    ) > _MAX_SHIFT_FRACTION * 128:
+    if abs(est.peak_dy) > _MAX_SHIFT_PX or abs(est.peak_dx) > _MAX_SHIFT_PX:
         assert est.reason == "implausible_shift", (est.reason, est.confidence)
     else:
         assert est.reason == "low_confidence", (est.reason, est.confidence)
@@ -241,6 +241,129 @@ def test_wrapper_returns_exactly_the_detailed_numbers():
         est = estimate_translation_detailed(ref, mov)
         assert triple == (est.dy, est.dx, est.confidence)
         assert repr(triple[2]) == repr(est.confidence)
+
+
+# ---------------------------------------------------------------------------
+# Windowed search + peak-dominance quality (2026-08-29).
+#
+# WHY THESE EXIST. The guards above were written against 128x128 synthetic
+# frames, where `_MAX_SHIFT_FRACTION * 128` is a tight +-12 px. On a real
+# 1300x1300 acquisition the SAME constant is +-130 px, and at 2048x2048 it is
+# +-204 px — so on production data the plausibility guard admitted almost any
+# noise peak. Measured over 116 real (reference, moving) channel pairs from
+# production on 2026-08-29: 27% of pairs had a spurious peak ACCEPTED and
+# applied as a shift of up to 128 px, and a further 28% were rejected outright;
+# only 45% were genuine. `test_rejects_implausibly_large_shift` passed
+# throughout, because at 128x128 it never exercised the regime that breaks.
+#
+# The frames below are therefore deliberately PRODUCTION-SIZED. A 128x128
+# version of any of them passes against the old code and proves nothing.
+# ---------------------------------------------------------------------------
+
+
+def _big_frame(seed: int = 0, n: int = 512) -> np.ndarray:
+    """Filament-like structure at a realistic frame size."""
+    rng = np.random.RandomState(seed)
+    img = rng.rand(n, n).astype(np.float64) * 500.0
+    for k in range(10):
+        y = 20 + k * (n // 12)
+        for x in range(10, n - 10):
+            yy = y + (x - n // 2) // 8
+            if 0 <= yy < n:
+                img[yy, x] += 6000.0
+    return img
+
+
+def test_search_window_is_absolute_not_a_fraction_of_the_frame():
+    # The largest offset the estimator may return must be a PHYSICAL budget,
+    # identical at every frame size. Under the old fraction rule this cap grew
+    # with the image (12 px at 128, 51 px at 512), which is exactly how a noise
+    # peak 100 px from the origin came to be applied to a 1300px frame.
+    for n in (256, 512):
+        ref = _big_frame(3, n)
+        beyond = _MAX_SHIFT_PX + 24
+        est = estimate_translation_detailed(ref, shift_frame(ref, beyond, 0))
+        assert (est.dy, est.dx) == (0, 0), (n, est)
+        assert est.reason == "implausible_shift", (n, est)
+        # The refused candidate is still reported, so a caller can say WHAT it
+        # refused rather than only that something was refused.
+        assert (est.peak_dy, est.peak_dx) == (-beyond, 0), (n, est)
+
+
+def test_unrelated_frames_at_production_resolution_are_rejected():
+    # Two unrelated scenes share no structure, so there is nothing to register.
+    # Whitening puts noise on the same footing as signal, so `argmax` always
+    # finds *a* peak; it must never be trusted. This is the production failure
+    # mode, and it needs a production-sized frame to show up at all.
+    for seed_a, seed_b in ((3, 99), (7, 21), (11, 33)):
+        a = np.random.RandomState(seed_a).rand(512, 512) * 1000
+        b = np.random.RandomState(seed_b).rand(512, 512) * 1000
+        est = estimate_translation_detailed(a, b)
+        assert (est.dy, est.dx) == (0, 0), est
+        assert est.reason in ("implausible_shift", "low_confidence"), est
+
+
+def test_quality_is_peak_dominance_not_peak_over_mean():
+    # The discriminator: the winning peak measured against its best RIVAL
+    # elsewhere on the surface. A genuine registration peak is the global
+    # maximum, so the ratio exceeds 1 structurally; a noise peak means the
+    # global maximum lies somewhere else, so it falls below 1. That boundary
+    # is a property of the surface, not a tuned threshold.
+    ref = _big_frame(5)
+    genuine = estimate_translation_detailed(ref, shift_frame(ref, 6, -4))
+    assert genuine.reason == "ok"
+    assert genuine.quality >= _MIN_PEAK_RATIO, genuine
+
+    a = np.random.RandomState(3).rand(512, 512) * 1000
+    b = np.random.RandomState(99).rand(512, 512) * 1000
+    noise = estimate_translation_detailed(a, b)
+    assert noise.quality < 1.0, noise
+
+    # ...and the OLD measure cannot tell them apart: an unrelated pair scores
+    # far above `_MIN_CONFIDENCE`, which is why that guard never fired on real
+    # data (lowest confidence observed across 116 production pairs: 5.77).
+    assert noise.confidence > _MIN_CONFIDENCE, noise
+
+
+def test_sidecar_records_why_each_estimate_is_what_it_is():
+    # Without this, a `(0, 0)` on disk is ambiguous: genuinely aligned, or a
+    # silently refused estimate. That ambiguity is why the production failure
+    # went unnoticed for months — the reason existed in memory and was dropped
+    # on the floor by both extractors.
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        write_registration_sidecar(
+            d,
+            ["IRM", "TIRF"],
+            {0: [(0, 0), (3, -2)], 1: [(0, 0), (0, 0)]},
+            reasons={0: ["ok", "ok"], 1: ["ok", "low_confidence"]},
+        )
+        data = json.loads((__import__("pathlib").Path(d) / "registration.json").read_text())
+
+    # The offsets keep their exact historical shape — downstream consumers
+    # (mtMetricsExporter, kymographs) index `frames[t][c] == [dy, dx]`.
+    assert data["frames"]["0"] == [[0, 0], [3, -2]]
+    assert data["reasons"]["1"] == ["ok", "low_confidence"]
+    assert data["version"] >= 2
+
+
+def test_rival_is_measured_outside_the_peak_s_own_shoulder():
+    # A correlation peak is several pixels wide. If the rival is taken without
+    # excluding a disc around the winner, the winner's OWN shoulder is its
+    # strongest competitor and the ratio collapses toward 1 no matter how good
+    # the match is — which would push genuine registrations under the
+    # threshold. Measured on production, dropping the exclusion moved the
+    # minimum quality of a genuine pair from 1.006 to 1.000.
+    assert _PEAK_EXCLUSION_PX >= 1, "the disc is load-bearing, not decoration"
+
+    ref = _big_frame(9)
+    est = estimate_translation_detailed(ref, shift_frame(ref, 5, -3))
+    assert est.reason == "ok", est
+    # A clean synthetic match must clear the bar by a wide margin; a shoulder
+    # counted as a rival would leave it hovering just above 1.
+    assert est.quality > 2.0 * _MIN_PEAK_RATIO, est
 
 
 if __name__ == "__main__":
