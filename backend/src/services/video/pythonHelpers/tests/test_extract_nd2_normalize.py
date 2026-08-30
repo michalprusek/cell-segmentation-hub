@@ -305,13 +305,13 @@ def test_write_frames_register_off_is_untouched():
 
 
 def test_blank_plane_registration_was_already_a_no_op():
-    # The premise of the skip below: `estimate_translation` ALREADY returns
-    # (0, 0) whenever either plane is constant, because a constant plane has
-    # zero gradient, so the correlation surface is flat and the existing
+    # The premise of the skip below: the estimator ALREADY returns (0, 0)
+    # whenever either plane is constant, because a constant plane has zero
+    # gradient, so the correlation surface is flat and the existing
     # `low_confidence` guard rejects the peak. Skipping the call is therefore a
     # cost saving, not a behaviour change — and this is the assertion that keeps
     # that claim true if the guard is ever retuned.
-    from channel_registration import estimate_translation, shift_frame
+    from channel_registration import estimate_translation_detailed, shift_frame
 
     rng = np.random.RandomState(3)
     real = (rng.rand(96, 96) * 400).astype(np.uint16)
@@ -322,11 +322,12 @@ def test_blank_plane_registration_was_already_a_no_op():
     const = np.full((96, 96), 100, np.uint16)
 
     # Sanity: the estimator does find a real shift when there is one.
-    assert estimate_translation(real, moved)[:2] == (-5, 3)
+    first = estimate_translation_detailed(real, moved)
+    assert (first.dy, first.dx) == (-5, 3)
 
     for ref, mov in ((real, blank), (real, const), (blank, moved), (const, moved)):
-        dy, dx, _conf = estimate_translation(ref, mov)
-        assert (dy, dx) == (0, 0)
+        est = estimate_translation_detailed(ref, mov)
+        assert (est.dy, est.dx) == (0, 0)
 
 
 def test_write_frames_reports_blank_planes_and_skips_their_registration():

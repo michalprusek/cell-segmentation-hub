@@ -15,8 +15,11 @@ It is also pytest-collectable (``test_*`` functions).
 """
 from __future__ import annotations
 
+import io
 import os
 import sys
+import tempfile
+from contextlib import redirect_stderr
 
 import numpy as np
 
@@ -29,10 +32,13 @@ from channel_registration import (  # noqa: E402
     _MIN_CONFIDENCE,
     _MIN_PEAK_RATIO,
     _PEAK_EXCLUSION_PX,
-    estimate_translation,
+    REASON_OK,
     estimate_translation_detailed,
+    estimate_translation_prepared,
+    prepare_frame,
+    read_registration_sidecar,
+    register_plane,
     shift_frame,
-    register_stack_to_first_channel,
     write_registration_sidecar,
 )
 
@@ -65,17 +71,19 @@ def test_recovers_known_shift_exactly():
     ref = _synthetic_frame()
     for dy0, dx0 in [(6, -4), (-9, 3), (0, 5), (11, 0)]:
         moving = shift_frame(ref, dy0, dx0)
-        dy, dx, conf = estimate_translation(ref, moving)
+        est = estimate_translation_detailed(ref, moving)
         # estimate must be the *inverse* offset that re-aligns moving onto ref
-        assert (dy, dx) == (-dy0, -dx0), f"got ({dy},{dx}) for shift ({dy0},{dx0})"
-        assert conf > 3.0
+        assert (est.dy, est.dx) == (-dy0, -dx0), (
+            f"got ({est.dy},{est.dx}) for shift ({dy0},{dx0})"
+        )
+        assert est.confidence > 3.0
 
 
 def test_applying_estimate_realigns():
     ref = _synthetic_frame(1)
     moving = shift_frame(ref, 7, -5)
-    dy, dx, _ = estimate_translation(ref, moving)
-    registered = shift_frame(moving, dy, dx)
+    est = estimate_translation_detailed(ref, moving)
+    registered = shift_frame(moving, est.dy, est.dx)
     m = 14  # ignore zero-filled borders
     assert _grad_ncc(ref[m:-m, m:-m], registered[m:-m, m:-m]) > 0.98
 
@@ -101,15 +109,15 @@ def test_rejects_implausibly_large_shift():
     # must be rejected (implausible / low confidence) rather than applied.
     a = np.random.RandomState(3).rand(128, 128) * 1000
     b = np.random.RandomState(99).rand(128, 128) * 1000
-    dy, dx, _ = estimate_translation(a, b)
-    assert (dy, dx) == (0, 0)
+    est = estimate_translation_detailed(a, b)
+    assert (est.dy, est.dx) == (0, 0)
 
 
 def test_low_signal_frame_falls_back_to_zero():
     ref = _synthetic_frame(4)
     flat = np.full_like(ref, 200.0)  # dark/flat channel: no edges to match
-    dy, dx, conf = estimate_translation(ref, flat)
-    assert (dy, dx) == (0, 0)
+    est = estimate_translation_detailed(ref, flat)
+    assert (est.dy, est.dx) == (0, 0)
 
 
 def test_multimodal_contrast_inversion():
@@ -118,30 +126,9 @@ def test_multimodal_contrast_inversion():
     ref = _synthetic_frame(5)
     other = (ref.max() - ref) * 0.3 + 50.0  # inverted, different dynamic range
     moving = shift_frame(other, 5, -6)
-    dy, dx, conf = estimate_translation(ref, moving)
-    assert (dy, dx) == (-5, 6), f"got ({dy},{dx})"
-    assert conf > 3.0
-
-
-def test_register_stack_first_channel_is_reference():
-    ref = _synthetic_frame(6)
-    c1 = shift_frame(ref, 4, -3)
-    c2 = shift_frame(ref, -6, 2)
-    frames = [[ref, c1, c2]]  # one frame, three channels
-    registered, offsets = register_stack_to_first_channel(frames)
-    # channel 0 never moves
-    assert offsets[0][0] == (0, 0)
-    assert np.array_equal(registered[0][0], ref)
-    # the other channels get the inverse of their injected shift
-    assert offsets[0][1] == (-4, 3)
-    assert offsets[0][2] == (6, -2)
-
-
-def test_single_channel_passthrough():
-    f = _synthetic_frame(7)
-    registered, offsets = register_stack_to_first_channel([[f]])
-    assert offsets == [[(0, 0)]]
-    assert np.array_equal(registered[0][0], f)
+    est = estimate_translation_detailed(ref, moving)
+    assert (est.dy, est.dx) == (-5, 6), f"got ({est.dy},{est.dx})"
+    assert est.confidence > 3.0
 
 
 def test_sidecar_roundtrip():
@@ -168,10 +155,10 @@ def test_sidecar_noop_for_single_channel():
 
 
 # ---------------------------------------------------------------------------
-# Outcome reasons. estimate_translation returns (0, 0, conf) for two opposite
-# outcomes — a genuine zero shift and a peak rejected as implausible — so the
-# 3-tuple alone cannot separate a success from a silent failure. The detailed
-# variant names the branch that produced the shift.
+# Outcome reasons. The estimate is (0, 0) for two opposite outcomes — a
+# genuine zero shift and a peak rejected as implausible — so the shift alone
+# cannot separate a success from a silent failure. `reason` names the branch
+# that produced it, which is what the sidecar records.
 # ---------------------------------------------------------------------------
 
 
@@ -229,18 +216,6 @@ def test_implausible_beats_low_confidence_when_both_would_fire():
         assert est.reason == "implausible_shift", (est.reason, est.confidence)
     else:
         assert est.reason == "low_confidence", (est.reason, est.confidence)
-
-
-def test_wrapper_returns_exactly_the_detailed_numbers():
-    # estimate_translation is a thin projection of the detailed result, so the
-    # shifts every existing caller sees cannot drift from the reported ones.
-    ref = _synthetic_frame(14)
-    for dy0, dx0 in [(6, -4), (0, 0), (40, 0)]:
-        mov = shift_frame(ref, dy0, dx0)
-        triple = estimate_translation(ref, mov)
-        est = estimate_translation_detailed(ref, mov)
-        assert triple == (est.dy, est.dx, est.confidence)
-        assert repr(triple[2]) == repr(est.confidence)
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +322,126 @@ def test_sidecar_records_why_each_estimate_is_what_it_is():
     assert data["frames"]["0"] == [[0, 0], [3, -2]]
     assert data["reasons"]["1"] == ["ok", "low_confidence"]
     assert data["version"] >= 2
+
+
+def test_a_prepared_estimate_is_bit_identical_to_the_monolithic_one():
+    # The estimate is split into a per-FRAME half and a per-PAIR half so a
+    # caller walking a chain can reuse a spectrum. That is only safe if it
+    # changes no arithmetic: acceptance is a threshold test
+    # (`quality >= _MIN_PEAK_RATIO`), so a last-ULP difference could flip a
+    # refusal into an applied shift. Every field must match, refusals included.
+    rng = np.random.RandomState(0)
+    for s in range(6):
+        ref = _synthetic_frame(s)
+        if s % 3 == 0:  # an unmatchable pair, so the reject branches count too
+            moving = np.random.RandomState(s + 77).rand(*ref.shape) * 1000
+        else:
+            moving = shift_frame(ref, rng.randint(-9, 10), rng.randint(-9, 10))
+
+        mono = estimate_translation_detailed(ref, moving)
+        prepared = estimate_translation_prepared(
+            prepare_frame(ref), prepare_frame(moving)
+        )
+        assert tuple(mono) == tuple(prepared), (s, mono, prepared)
+
+
+def test_a_prepared_pair_of_different_shapes_is_refused():
+    # Why PreparedFrame carries `shape` at all: it is NOT recoverable from the
+    # spectrum. An rfft2 of width W has width W//2+1, so 6 and 7 both give 4 —
+    # the two spectra are then multipliable and numpy raises nothing. The
+    # recorded shape is the only thing standing between a mismatched pair and a
+    # confident, meaningless shift.
+    a = prepare_frame(np.random.RandomState(0).rand(64, 6) * 1000)
+    b = prepare_frame(np.random.RandomState(1).rand(64, 7) * 1000)
+    assert a.spectrum.shape == b.spectrum.shape, "the collision this guards is real"
+
+    try:
+        estimate_translation_prepared(a, b)
+    except ValueError as exc:
+        assert "share a shape" in str(exc), exc
+    else:
+        raise AssertionError("a pair of different shapes must raise")
+
+
+def test_correlating_does_not_mutate_a_prepared_spectrum():
+    # What makes reuse safe at all: `cross = fr * np.conj(fm)` allocates rather
+    # than writing into either operand. A buffer-reusing rewrite would corrupt
+    # the NEXT pair — the one that reuses the spectrum — and the corruption
+    # would look like a drift estimate, not like an error.
+    a = prepare_frame(_synthetic_frame(1))
+    b = prepare_frame(_synthetic_frame(2))
+    sa, sb = a.spectrum.copy(), b.spectrum.copy()
+
+    first = estimate_translation_prepared(a, b)
+    second = estimate_translation_prepared(a, b)
+
+    assert np.array_equal(a.spectrum, sa), "the reference spectrum was written to"
+    assert np.array_equal(b.spectrum, sb), "the moving spectrum was written to"
+    assert tuple(first) == tuple(second), "a reused spectrum changed the answer"
+
+
+def test_register_plane_applies_the_offset_and_reports_it():
+    # The step BOTH extractors run on every non-reference channel. It used to
+    # be a copy-pasted block inside each of them and nothing exercised it:
+    # mutation-checked 2026-08-30, a `register_plane` that stopped applying the
+    # shift, or stopped returning the reason, left all 225 tests green.
+    ref = _synthetic_frame(11)
+    moving = shift_frame(ref, 5, -6)
+
+    out, offset, reason = register_plane(
+        ref, moving, frame_index=3, channel_name="TIRF"
+    )
+
+    assert reason == REASON_OK
+    assert offset == [-5, 6], offset
+    # Moved, and by exactly the offset that was recorded. A sidecar describing
+    # a shift the pixels never received is the silent mis-measurement the
+    # reasons map exists to prevent.
+    assert not np.array_equal(out, moving)
+    assert np.array_equal(out, shift_frame(moving, *offset))
+
+
+def test_register_plane_reports_a_refusal_and_leaves_the_pixels_alone():
+    ref = _synthetic_frame(12)
+    flat = np.full_like(ref, 200.0)  # dark/flat channel: no edges to match
+
+    err = io.StringIO()
+    with redirect_stderr(err):
+        out, offset, reason = register_plane(
+            ref, flat, frame_index=7, channel_name="TIRF"
+        )
+
+    assert reason != REASON_OK
+    assert offset == [0, 0]
+    assert out is flat, "a refused registration must not move or copy the plane"
+    # That stderr line is the ONLY place an operator learns of a refusal.
+    msg = err.getvalue()
+    assert "frame 7" in msg and "TIRF" in msg and reason in msg, msg
+
+
+def test_read_registration_sidecar_round_trips_what_the_writer_wrote():
+    # `correct_drift.py` re-reads this file to fold stage drift into it. A
+    # reader that dropped the reasons map would erase every recorded refusal at
+    # the moment drift correction ran — silently, and only on the containers
+    # that drifted.
+    offsets = {0: [[0, 0], [3, -2]], 1: [[0, 0], [0, 0]]}
+    reasons = {0: [REASON_OK, REASON_OK], 1: [REASON_OK, "low_confidence"]}
+
+    with tempfile.TemporaryDirectory() as d:
+        write_registration_sidecar(d, ["IRM", "TIRF"], offsets, reasons=reasons)
+        names, back_offsets, back_reasons = read_registration_sidecar(d)
+
+    assert names == ["IRM", "TIRF"]
+    assert back_offsets == offsets
+    assert back_reasons == reasons
+    # Integer frame keys — the shape `write_registration_sidecar` takes, so the
+    # value round-trips through a read/compose/write cycle unchanged.
+    assert all(isinstance(t, int) for t in back_offsets)
+
+
+def test_read_registration_sidecar_is_none_when_there_is_no_sidecar():
+    with tempfile.TemporaryDirectory() as d:
+        assert read_registration_sidecar(d) is None
 
 
 def test_rival_is_measured_outside_the_peak_s_own_shoulder():

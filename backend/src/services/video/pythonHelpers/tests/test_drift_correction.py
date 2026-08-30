@@ -20,8 +20,14 @@ Pure numpy, pytest-collectable, and runnable directly:
 """
 from __future__ import annotations
 
+import io
+import json
 import os
+import pathlib
+import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager, redirect_stderr
 
 import numpy as np
 
@@ -29,16 +35,27 @@ HERE = os.path.dirname(__file__)
 HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
+from PIL import Image  # noqa: E402
+
+from channel_registration import _MAX_SHIFT_PX, shift_frame  # noqa: E402
+
+import drift_correction  # noqa: E402
 from drift_correction import (  # noqa: E402
+    _MAX_TOTAL_DRIFT_FRACTION,
     DRIFT_MAX_SHIFT_PX,
     apply_drift,
     compose_into_registration_offsets,
     correct_drift_in_place,
     drift_is_worth_correcting,
-    estimate_drift_trajectory,
     estimate_drift_trajectory_detailed,
     multi_scale_lags,
 )
+
+
+def _corrections(frames, **kw):
+    """The trajectory alone. The counts are what production reads, so the
+    module returns them; a test that only places pixels wants the list."""
+    return estimate_drift_trajectory_detailed(frames, **kw).corrections
 
 
 def _filament_field(seed: int = 0, n: int = 384) -> np.ndarray:
@@ -55,10 +72,8 @@ def _filament_field(seed: int = 0, n: int = 384) -> np.ndarray:
     return img
 
 
-def _drifting_stack(
-    n_frames: int, per_frame=(0.0, 0.084), seed: int = 0, size: int = 384
-):
-    """A stack whose content translates by ``per_frame`` px per frame.
+def _stack_along(path, seed: int = 0, size: int = 384):
+    """A stack whose content sits at ``path[t] == (dy, dx)`` on frame ``t``.
 
     Rendered with bilinear weights so the motion is genuinely SUB-PIXEL: a
     stack built with ``np.roll`` alone would move in whole-pixel jumps and the
@@ -67,8 +82,7 @@ def _drifting_stack(
     base = _filament_field(seed, size)
     rng = np.random.RandomState(seed + 100)
     out = []
-    for f in range(n_frames):
-        dy, dx = f * per_frame[0], f * per_frame[1]
+    for dy, dx in path:
         fy, fx = int(np.floor(dy)), int(np.floor(dx))
         wy, wx = dy - fy, dx - fx
         a = np.roll(np.roll(base, fy, 0), fx, 1)
@@ -82,6 +96,15 @@ def _drifting_stack(
             .astype(np.uint16)
         )
     return out
+
+
+def _drifting_stack(
+    n_frames: int, per_frame=(0.0, 0.084), seed: int = 0, size: int = 384
+):
+    """A stack whose content translates by ``per_frame`` px per frame."""
+    return _stack_along(
+        [(f * per_frame[0], f * per_frame[1]) for f in range(n_frames)], seed, size
+    )
 
 
 def _terminal_error(traj, n_frames, per_frame):
@@ -117,32 +140,78 @@ def test_schedule_is_identical_to_fiji_s_at_every_stack_length():
     for n in list(range(2, 300)) + [621, 1000, 2188, 2189, 3000, 5000]:
         assert multi_scale_lags(n) == fiji(n), n
 
+    # The one case outside Fiji's domain: a single frame has no pair, where the
+    # reference above would return a degenerate [0].
+    assert multi_scale_lags(1) == []
+
 
 def test_a_two_frame_stack_does_not_run_the_consecutive_pass_twice():
     # `multi_scale_lags(2) == [1]`, and the trajectory prepends its own dt=1,
-    # so without de-duplication the only pair in the stack is correlated twice
-    # for a residual that is zero by construction the second time.
+    # so without de-duplication the only pair in the stack is correlated twice.
+    #
+    # The COUNT is the only observable: the second pass measures a residual of
+    # zero and `if not np.any(residual): continue` swallows it, so asserting on
+    # the trajectory passes with the de-duplication removed. Mutation-checked.
     frames = _drifting_stack(2, (0.0, 3.0))
-    traj = estimate_drift_trajectory(frames, multi_scale=True)
+    calls = []
+    real = drift_correction.estimate_translation_prepared
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    drift_correction.estimate_translation_prepared = counting
+    try:
+        traj = _corrections(frames, multi_scale=True)
+    finally:
+        drift_correction.estimate_translation_prepared = real
+
+    assert len(calls) == 1, f"the stack's only pair was correlated {len(calls)}x"
     assert len(traj) == 2
     assert traj[0] == (0.0, 0.0)
 
 
-def test_lags_ascend_in_powers_of_three_and_end_on_the_full_baseline():
-    # Fiji's `dts = [3,9,27,81,243,729,dt_max]`. The final, full-baseline pass
-    # is the re-anchoring step: it correlates frame 0 against the last frame
-    # directly, so the trajectory cannot have wandered away from its origin.
-    lags = multi_scale_lags(300)
-    assert lags[0] == 3
-    assert lags[-1] == 299, "the last lag must span the whole stack"
-    powers = [l for l in lags if l != 299]
-    assert powers == [3, 9, 27, 81, 243][: len(powers)]
-    # A lag can never exceed the stack, or there is no pair to compare.
-    assert all(1 <= l <= 299 for l in lags)
-    # Short stacks must not produce a degenerate or duplicated schedule.
-    assert multi_scale_lags(2) == [1]
-    assert multi_scale_lags(1) == []
-    assert len(set(multi_scale_lags(10))) == len(multi_scale_lags(10))
+def test_a_pass_prepares_each_frame_once_not_twice():
+    # Every pass walks a CHAIN of pairs, so frame t is the moving frame of one
+    # and the reference of the next. Without the one-slot cache each frame is
+    # decoded and Fourier-transformed twice — measured at 2048², ~38% of the
+    # estimation pass spent recomputing what the previous pair just produced.
+    #
+    # n=10 so every long-lag pass tiles the stack exactly: with `(n-1) % dt`
+    # non-zero the schedule appends a final `n-1` step whose reference is NOT
+    # the previous pair's moving frame, which legitimately costs one extra
+    # preparation and would make the exact count below depend on the stack
+    # length rather than on the cache.
+    n = 10
+    frames = _drifting_stack(n, (0.0, 0.6))
+    prepares, pairs = [], []
+    real_prepare = drift_correction.prepare_frame
+    real_pair = drift_correction.estimate_translation_prepared
+
+    def counting_prepare(arr):
+        prepares.append(1)
+        return real_prepare(arr)
+
+    def counting_pair(*args, **kwargs):
+        pairs.append(1)
+        return real_pair(*args, **kwargs)
+
+    drift_correction.prepare_frame = counting_prepare
+    drift_correction.estimate_translation_prepared = counting_pair
+    try:
+        estimate_drift_trajectory_detailed(frames)
+    finally:
+        drift_correction.prepare_frame = real_prepare
+        drift_correction.estimate_translation_prepared = real_pair
+
+    # One preparation per pair, plus one to open each pass's chain. Derived
+    # from the observed pair count rather than from a second copy of the
+    # schedule, so this cannot drift away from `multi_scale_lags`.
+    passes = len(dict.fromkeys([1] + multi_scale_lags(n)))
+    assert len(prepares) == len(pairs) + passes, (
+        f"{len(prepares)} preparations for {len(pairs)} pairs over {passes} "
+        f"passes — the chain cache is not hitting (uncached: {2 * len(pairs)})"
+    )
 
 
 def test_consecutive_only_estimation_cannot_see_sub_pixel_drift():
@@ -151,7 +220,7 @@ def test_consecutive_only_estimation_cannot_see_sub_pixel_drift():
     # a pairwise-only trajectory stays flat while the stack really moves 10 px.
     n, per = 120, (0.0, 0.084)
     frames = _drifting_stack(n, per)
-    flat = estimate_drift_trajectory(frames, multi_scale=False)
+    flat = _corrections(frames, multi_scale=False)
     assert all(dy == 0 and dx == 0 for dy, dx in flat), (
         "consecutive pairs are expected to measure nothing here — if this "
         "fails the premise of the multi-scale pass has changed"
@@ -162,7 +231,7 @@ def test_consecutive_only_estimation_cannot_see_sub_pixel_drift():
 def test_multi_scale_recovers_sub_pixel_drift_the_pairwise_pass_misses():
     n, per = 120, (0.0, 0.084)
     frames = _drifting_stack(n, per)
-    traj = estimate_drift_trajectory(frames, multi_scale=True)
+    traj = _corrections(frames, multi_scale=True)
     assert len(traj) == n
     assert traj[0] == (0.0, 0.0), "frame 0 is the origin and never moves"
     err = _terminal_error(traj, n, per)
@@ -175,7 +244,7 @@ def test_trajectory_is_monotonic_for_a_monotonic_drift():
     # ramp spread the error backwards.
     n = 90
     frames = _drifting_stack(n, (0.0, 0.1))
-    xs = [dx for _, dx in estimate_drift_trajectory(frames, multi_scale=True)]
+    xs = [dx for _, dx in _corrections(frames, multi_scale=True)]
     diffs = np.diff(xs)
     assert (diffs <= 1e-9).all(), f"correction reverses direction: {xs[:12]}"
 
@@ -183,7 +252,7 @@ def test_trajectory_is_monotonic_for_a_monotonic_drift():
 def test_two_axis_drift_is_recovered_on_both_axes():
     n, per = 100, (0.05, -0.07)
     frames = _drifting_stack(n, per)
-    traj = estimate_drift_trajectory(frames, multi_scale=True)
+    traj = _corrections(frames, multi_scale=True)
     assert _terminal_error(traj, n, per) < 1.0
 
 
@@ -191,7 +260,7 @@ def test_a_static_stack_yields_no_correction():
     # The common case. A stack that does not move must be left exactly alone —
     # a correction invented here would zero-fill borders for nothing.
     frames = _drifting_stack(40, (0.0, 0.0))
-    traj = estimate_drift_trajectory(frames, multi_scale=True)
+    traj = _corrections(frames, multi_scale=True)
     assert all(abs(dy) < 0.5 and abs(dx) < 0.5 for dy, dx in traj)
 
 
@@ -200,7 +269,6 @@ def test_search_budget_exceeds_what_a_long_baseline_needs():
     # 20 px and a 729-frame one 61 px. The channel-registration window is 16 px
     # and would clip both to its edge, then reject them as low quality.
     assert DRIFT_MAX_SHIFT_PX >= 64
-    from channel_registration import _MAX_SHIFT_PX
     assert DRIFT_MAX_SHIFT_PX > _MAX_SHIFT_PX
 
 
@@ -236,7 +304,7 @@ def test_frames_that_cannot_be_matched_do_not_corrupt_the_trajectory():
     frames = _drifting_stack(n, (0.0, 0.1))
     for t in range(40, n):
         frames[t] = np.zeros_like(frames[t])
-    traj = estimate_drift_trajectory(frames, multi_scale=True)
+    traj = _corrections(frames, multi_scale=True)
     assert len(traj) == n
     good_dx = traj[35][1]
     assert abs(-good_dx - 35 * 0.1) < 1.5, f"pre-blank drift lost: {good_dx}"
@@ -250,7 +318,7 @@ def test_the_ramp_corrects_intermediate_frames_not_just_the_endpoints():
     # the residual is dumped entirely onto frame t. Check the middle.
     n, per = 120, (0.0, 0.084)
     frames = _drifting_stack(n, per)
-    traj = estimate_drift_trajectory(frames, multi_scale=True)
+    traj = _corrections(frames, multi_scale=True)
 
     worst = 0.0
     for t in range(10, n, 10):
@@ -279,8 +347,8 @@ def test_fast_schedule_agrees_with_fiji_s_exact_one():
     # and the default should be revisited.
     n, per = 100, (0.03, 0.084)
     frames = _drifting_stack(n, per)
-    faithful = estimate_drift_trajectory(frames, fast=False)
-    quick = estimate_drift_trajectory(frames, fast=True)
+    faithful = _corrections(frames, fast=False)
+    quick = _corrections(frames, fast=True)
 
     end = max(
         abs(faithful[-1][0] - quick[-1][0]), abs(faithful[-1][1] - quick[-1][1])
@@ -301,7 +369,6 @@ def test_fast_schedule_agrees_with_fiji_s_exact_one():
 
 def _write_stack(root, frames_by_channel):
     """Write {channel: [frame arrays]} as the extractors do: frames/NNNN/<ch>.png."""
-    from PIL import Image
 
     n = len(next(iter(frames_by_channel.values())))
     for t in range(n):
@@ -311,24 +378,37 @@ def _write_stack(root, frames_by_channel):
             Image.fromarray(arrs[t]).save(d / f"{ch}.png", format="PNG")
 
 
+@contextmanager
+def _staged(frames_by_channel, sub=""):
+    """A throwaway container directory holding one written stack.
+
+    ``sub="frames"`` stages it as a real container (``<root>/frames/NNNN/``),
+    which is what the CLI and the sidecar composition see; the bare form is
+    the frames directory itself, which is what ``correct_drift_in_place``
+    takes.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        _write_stack(root / sub if sub else root, frames_by_channel)
+        yield root
+
+
+def _png_bytes(root, n, channel="IRM"):
+    """The on-disk bytes of one channel, for a byte-identity comparison."""
+    return [(root / f"{t:04d}" / f"{channel}.png").read_bytes() for t in range(n)]
+
+
 def test_in_place_correction_de_drifts_every_channel_from_one_estimate():
     # The channels are simultaneous views of one field. A per-channel
     # trajectory would pull them out of the alignment channel_registration
     # just established, so ONE channel drives and all of them get that shift —
     # Fiji's hyperstack rule.
-    import pathlib
-    import tempfile
-
-    from PIL import Image
-
     n, per = 40, (0.0, 0.3)   # 11.7 px by the last frame
     drive = _drifting_stack(n, per, seed=5)
     # A second channel carrying different structure but the SAME motion.
     other = _drifting_stack(n, per, seed=6)
 
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        _write_stack(root, {"IRM": drive, "TIRF": other})
+    with _staged({"IRM": drive, "TIRF": other}) as root:
         before = np.asarray(Image.open(root / "0039" / "TIRF.png"))
 
         sidecar = correct_drift_in_place(root, ["IRM", "TIRF"], "IRM")
@@ -347,32 +427,21 @@ def test_in_place_correction_de_drifts_every_channel_from_one_estimate():
         assert after.shape == before.shape, "frame size must not change"
         assert set(np.unique(after)).issubset(set(np.unique(before)) | {0})
         assert np.array_equal(
-            shift_frame_reference(before, dy, dx), after
+            shift_frame(before, dy, dx), after
         ), "the second channel did not receive the driving channel's shift"
-
-
-def shift_frame_reference(arr, dy, dx):
-    from channel_registration import shift_frame
-
-    return shift_frame(arr, dy, dx)
 
 
 def test_a_still_stack_is_left_byte_identical_on_disk():
     # Correction costs a blanked border, so a stack that does not move must not
     # be touched at all — not rewritten with a zero shift, not re-encoded.
-    import pathlib
-    import tempfile
-
     n = 20
     frames = _drifting_stack(n, (0.0, 0.0), seed=7)
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        _write_stack(root, {"IRM": frames})
-        raw = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(n)]
+    with _staged({"IRM": frames}) as root:
+        raw = _png_bytes(root, n)
 
         assert correct_drift_in_place(root, ["IRM"], "IRM") is None
 
-        after = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(n)]
+        after = _png_bytes(root, n)
         assert raw == after, "a still stack must not be rewritten"
 
 
@@ -404,8 +473,6 @@ def test_composition_matches_what_applying_both_shifts_actually_does():
     # The addition above is only correct because two integer translations of the
     # same plane compose. Prove it against the real pixels rather than asserting
     # the arithmetic twice.
-    from channel_registration import shift_frame
-
     raw = _filament_field(11, 128).astype(np.uint16)
     ch, dr = (3, -2), (-1, -4)
 
@@ -422,32 +489,47 @@ def test_composition_matches_what_applying_both_shifts_actually_does():
 
 def test_a_composed_correction_larger_than_the_frame_is_refused():
     # DRIFT_MAX_SHIFT_PX bounds each PAIR; nothing bounds their sum, and the
-    # ramp extrapolates to the end of the stack. On pure noise the gate still
-    # accepts a few pairs and the composed trajectory reached 396 px on a
-    # 256 px frame — 1.55x its width. Applying that rewrites every PNG to a
-    # uniform fill, IN PLACE, and the extracted pixels are gone.
-    import pathlib as _p
-    import tempfile
+    # ramp extrapolates to the end of the stack. Applying a runaway trajectory
+    # rewrites every PNG to a uniform fill, IN PLACE, and the pixels are gone.
+    #
+    # REACHING this guard takes a NON-MONOTONIC excursion, and the earlier
+    # version of this test never did. The search radius is
+    # min(DRIFT_MAX_SHIFT_PX, min(h,w)//4) and the limit is 0.25*min(h,w), so on
+    # any frame up to 384 px the two are EQUAL: a monotonic drift past the limit
+    # also puts the last frame outside the window, the full-baseline pass finds
+    # no match, and the ANCHOR guard declines first. (Mutation-checked: with the
+    # old pure-noise fixture, setting _MAX_TOTAL_DRIFT_FRACTION to 1e9 left the
+    # test green — it was pinning the anchor guard under this guard's name.)
+    #
+    # A stage that wanders out and returns anchors on its endpoint while the
+    # interior peak runs away, which is the one shape that reaches here.
+    n, amp, size = 40, 85, 256
+    frames = _stack_along(
+        [(0.0, amp * (1 - abs(2 * t / (n - 1) - 1))) for t in range(n)],
+        seed=5,
+        size=size,
+    )
+    limit = _MAX_TOTAL_DRIFT_FRACTION * size
 
-    rng = np.random.RandomState(3)
-    frames = [(rng.rand(256, 256) * 1000).astype(np.uint16) for _ in range(40)]
-
-    traj = estimate_drift_trajectory(frames)
-    peak = max(max(abs(dy), abs(dx)) for dy, dx in traj)
-    assert peak > 256, (
-        f"fixture no longer produces a runaway trajectory ({peak:.0f} px) — "
+    est = estimate_drift_trajectory_detailed(frames)
+    peak = max(max(abs(dy), abs(dx)) for dy, dx in est.corrections)
+    assert est.anchored, "fixture must reach the LIMIT guard, not the anchor one"
+    assert peak > limit, (
+        f"fixture no longer exceeds the limit ({peak:.0f} px vs {limit:.0f}) — "
         "the guard below would pass vacuously"
     )
 
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root, {"IRM": frames})
-        raw = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(40)]
+    with _staged({"IRM": frames}) as root:
+        raw = _png_bytes(root, n)
 
-        assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+        err = io.StringIO()
+        with redirect_stderr(err):
+            assert correct_drift_in_place(root, ["IRM"], "IRM") is None
 
-        after = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(40)]
-        assert raw == after, "a refused correction must not touch the frames"
+        # WHICH refusal it was. `is None` alone is satisfied by four different
+        # declines, which is exactly how this guard went untested.
+        assert f"limit {limit:.0f} px" in err.getvalue(), err.getvalue()
+        assert _png_bytes(root, n) == raw, "a refusal must not touch the frames"
 
 
 def test_a_stack_with_nothing_matchable_is_not_reported_as_still():
@@ -456,20 +538,13 @@ def test_a_stack_with_nothing_matchable_is_not_reported_as_still():
     # thing separating them is what gets said, and that is what this asserts.
     # (`drift_is_worth_correcting` returns False either way, so a test that
     # only checked the return value would pass with the distinction removed.)
-    import io
-    import pathlib as _p
-    import tempfile
-    from contextlib import redirect_stderr
-
     frames = [np.zeros((128, 128), dtype=np.uint16) for _ in range(12)]
     est = estimate_drift_trajectory_detailed(frames)
     assert est.measured > 0
     assert est.accepted == 0
     assert not est.anchored
 
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root, {"IRM": frames})
+    with _staged({"IRM": frames}) as root:
         blank = io.StringIO()
         with redirect_stderr(blank):
             assert correct_drift_in_place(root, ["IRM"], "IRM") is None
@@ -495,17 +570,12 @@ def test_the_detailed_estimate_reports_what_it_measured():
     assert est.accepted > 0
     assert est.anchored, "the full-baseline pass must have been accepted here"
     # The thin wrapper is exactly this projection, so callers cannot drift.
-    assert estimate_drift_trajectory(_drifting_stack(n, per)) == est.corrections
+    assert _corrections(_drifting_stack(n, per)) == est.corrections
 
 
 def test_the_sidecar_records_how_much_was_measured():
-    import pathlib as _p
-    import tempfile
-
     frames = _drifting_stack(40, (0.0, 0.3), seed=5)
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root, {"IRM": frames})
+    with _staged({"IRM": frames}) as root:
         side = correct_drift_in_place(root, ["IRM"], "IRM")
     assert side is not None
     assert side["pairsAccepted"] > 0
@@ -517,15 +587,10 @@ def test_a_missing_channel_png_is_fatal_rather_than_silently_skipped():
     # Skipping would leave that frame's channels in DIFFERENT coordinate
     # spaces while `applied` claims every channel got the shift. Unreachable
     # from the extractors; reachable from any future backfill.
-    import pathlib as _p
-    import tempfile
-
     n = 30
     drive = _drifting_stack(n, (0.0, 0.4), seed=5)
     other = _drifting_stack(n, (0.0, 0.4), seed=6)
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root, {"IRM": drive, "TIRF": other})
+    with _staged({"IRM": drive, "TIRF": other}) as root:
         (root / f"{n - 1:04d}" / "TIRF.png").unlink()
         try:
             correct_drift_in_place(root, ["IRM", "TIRF"], "IRM")
@@ -540,13 +605,8 @@ def test_an_unreadable_source_channel_declines_instead_of_aborting():
     # upload: `extractVideoSafe` deletes the whole destination directory —
     # including the original just moved into it — when the helper exits
     # non-zero.
-    import pathlib as _p
-    import tempfile
-
     frames = _drifting_stack(20, (0.0, 0.4), seed=5)
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root, {"IRM": frames})
+    with _staged({"IRM": frames}) as root:
         (root / "0005" / "IRM.png").write_bytes(b"not a png")
         assert correct_drift_in_place(root, ["IRM"], "IRM") is None
 
@@ -561,20 +621,12 @@ def test_correct_drift_cli_folds_the_shift_into_the_registration_sidecar():
     directly — for every (frame, channel), the recorded offset must equal the
     channel's own offset plus that frame's drift.
     """
-    import json
-    import pathlib as _p
-    import subprocess
-    import sys as _sys
-    import tempfile
-
     n, per = 40, (0.0, 0.3)
     drive = _drifting_stack(n, per, seed=5)
     other = _drifting_stack(n, per, seed=6)
     chan_offset = {"IRM": [0, 0], "TIRF": [3, -2]}
 
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root / "frames", {"IRM": drive, "TIRF": other})
+    with _staged({"IRM": drive, "TIRF": other}, sub="frames") as root:
         # A container that already went through channel registration.
         (root / "registration.json").write_text(
             json.dumps(
@@ -592,7 +644,7 @@ def test_correct_drift_cli_folds_the_shift_into_the_registration_sidecar():
         )
 
         proc = subprocess.run(
-            [_sys.executable, str(_p.Path(HELPERS_DIR) / "correct_drift.py"),
+            [sys.executable, str(pathlib.Path(HELPERS_DIR) / "correct_drift.py"),
              str(root), "IRM", "IRM,TIRF"],
             capture_output=True, text=True,
         )
@@ -616,20 +668,12 @@ def test_correct_drift_cli_creates_a_sidecar_when_registration_never_ran():
     # A single-channel container has no channel-to-channel offset, so no
     # sidecar exists — but it can still have drifted, and without the map
     # `mtMetricsExporter` samples the untouched original.
-    import json
-    import pathlib as _p
-    import subprocess
-    import sys as _sys
-    import tempfile
-
     n = 40
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root / "frames", {"IRM": _drifting_stack(n, (0.0, 0.3), seed=5)})
+    with _staged({"IRM": _drifting_stack(n, (0.0, 0.3), seed=5)}, sub="frames") as root:
         assert not (root / "registration.json").exists()
 
         proc = subprocess.run(
-            [_sys.executable, str(_p.Path(HELPERS_DIR) / "correct_drift.py"),
+            [sys.executable, str(pathlib.Path(HELPERS_DIR) / "correct_drift.py"),
              str(root), "IRM", "IRM"],
             capture_output=True, text=True,
         )
@@ -647,16 +691,9 @@ def test_correct_drift_cli_rejects_a_source_channel_it_was_not_given():
     # The caller resolves the driving channel; a typo must fail loudly rather
     # than silently falling back to channel 0, which is the whole reason this
     # is passed in instead of guessed.
-    import pathlib as _p
-    import subprocess
-    import sys as _sys
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root / "frames", {"IRM": _drifting_stack(6, (0.0, 0.3))})
+    with _staged({"IRM": _drifting_stack(6, (0.0, 0.3))}, sub="frames") as root:
         proc = subprocess.run(
-            [_sys.executable, str(_p.Path(HELPERS_DIR) / "correct_drift.py"),
+            [sys.executable, str(pathlib.Path(HELPERS_DIR) / "correct_drift.py"),
              str(root), "TIRF", "IRM"],
             capture_output=True, text=True,
         )
@@ -678,11 +715,6 @@ def test_a_trajectory_whose_anchor_was_refused_is_not_applied():
     refusing. Free on real data: four production stacks carrying genuine drift
     all anchor at 100 % of pairs.
     """
-    import io
-    import pathlib as _p
-    import tempfile
-    from contextlib import redirect_stderr
-
     n = 40
     base = _filament_field(4, 384)
     rng = np.random.RandomState(9)
@@ -701,14 +733,12 @@ def test_a_trajectory_whose_anchor_was_refused_is_not_applied():
     assert est.accepted > 0, "fixture must produce accepted pairs"
     assert not est.anchored, "fixture must lose the full-baseline anchor"
 
-    with tempfile.TemporaryDirectory() as d:
-        root = _p.Path(d)
-        _write_stack(root, {"IRM": frames})
-        raw = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(n)]
+    with _staged({"IRM": frames}) as root:
+        raw = _png_bytes(root, n)
         err = io.StringIO()
         with redirect_stderr(err):
             assert correct_drift_in_place(root, ["IRM"], "IRM") is None
-        after = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(n)]
+        after = _png_bytes(root, n)
 
     assert raw == after, "a refused trajectory must not touch the frames"
     assert "full-baseline pass found no match" in err.getvalue()

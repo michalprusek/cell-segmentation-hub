@@ -22,6 +22,7 @@ import {
   resolveFrameRepresentation,
   ensureProxySupport,
 } from '../../services/playbackProxyService';
+import { isMicrotubuleProject } from '../../types/validation';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
@@ -223,9 +224,9 @@ export class VideoController {
         where: { id: projectId },
         select: { type: true },
       });
-      const isMicrotubuleProject = (project?.type ?? '') === 'microtubules';
-      const registerChannels = wantsRegister && isMicrotubuleProject;
-      const correctDrift = isMicrotubuleProject;
+      const isMtProject = isMicrotubuleProject(project?.type);
+      const registerChannels = wantsRegister && isMtProject;
+      const correctDrift = isMtProject;
 
       // uploadVideoFromFile owns the tmp file from here — it either
       // renames it into place (success) or removes it via cleanupOnFailure

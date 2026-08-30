@@ -53,6 +53,8 @@ Runs inside the backend container (numpy only — no scipy / skimage / cv2).
 from __future__ import annotations
 
 import json
+import sys
+from contextlib import nullcontext
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
@@ -128,8 +130,9 @@ _MIN_CONFIDENCE = 3.0
 # rejection by where the global peak fell. The observable labelling is
 # unchanged, but nothing is "guarded" in that order any more.
 REASON_OK = "ok"  # estimate accepted and returned as-is (may be a real (0, 0))
-#: Rejected, global peak INSIDE the window. Despite the name this fires mostly
-#: on a weak `quality` at a high `confidence` — see the note above.
+#: Rejected, global peak INSIDE the window. Despite the name it fires mostly on
+#: a weak `quality` at a HIGH `confidence` — see ``_MIN_CONFIDENCE`` above for
+#: why that threshold is not the discriminator.
 REASON_LOW_CONFIDENCE = "low_confidence"
 #: Rejected, global peak OUTSIDE the ±`max_shift_px` window.
 REASON_IMPLAUSIBLE_SHIFT = "implausible_shift"
@@ -159,7 +162,30 @@ class TranslationEstimate(NamedTuple):
     #: Winning peak / best rival outside a ±_PEAK_EXCLUSION_PX box. Above 1 the
     #: peak beats everything outside that box — a near-1 value can still have a
     #: rival a few px away. Acceptance needs this AND ``confidence``.
-    quality: float = 0.0
+    quality: float
+
+
+class PreparedFrame(NamedTuple):
+    """One frame reduced to the half-spectrum an estimate consumes.
+
+    Preparing a frame — float conversion, gradient magnitude, Hann window,
+    ``rfft2`` — is the per-FRAME half of an estimate and costs about as much as
+    the correlation it feeds (measured at 2048²: 124 ms of a 365 ms estimate,
+    twice over, and at the decimation the consecutive drift pass uses the PNG
+    decode alone outweighs the correlation 5:1).
+
+    Anything walking a CHAIN of pairs — ``(0,dt), (dt,2dt), (2dt,3dt)…``, which
+    is every pass of :mod:`drift_correction` — meets each frame twice: once as
+    the moving frame, once as the next pair's reference. Preparing separately
+    lets the second visit reuse the first for one half-spectrum of RAM.
+
+    ``shape`` is carried because it is not recoverable from the spectrum: an
+    ``rfft2`` of width W has width ``W // 2 + 1``, so 6 and 7 both give 4, and
+    the pair check needs the real one.
+    """
+
+    spectrum: np.ndarray
+    shape: tuple[int, int]
 
 
 def _to_float_gray(arr: np.ndarray) -> np.ndarray:
@@ -210,41 +236,19 @@ def _hann2d(shape: tuple[int, int]) -> np.ndarray:
     return win
 
 
-def estimate_translation(
-    reference: np.ndarray,
-    moving: np.ndarray,
-    max_shift_px: int = _MAX_SHIFT_PX,
-) -> tuple[int, int, float]:
-    """Integer translation ``(dy, dx)`` that best aligns ``moving`` onto
-    ``reference`` (both single-channel frames of equal shape), plus a
-    confidence score.
-
-    Applying the result: ``registered = shift_frame(moving, dy, dx)`` puts
-    ``moving``'s features on top of ``reference``'s.
-
-    Returns ``(0, 0, confidence)`` when the estimate is implausibly large or
-    the correlation peak is too weak to trust — a safe no-op. Those two
-    outcomes are NOT distinguishable from this 3-tuple; call
-    :func:`estimate_translation_detailed` when you need to report *why*.
-
-    Kept as a thin wrapper so existing 3-tuple call sites are untouched: the
-    numbers are produced by exactly the same code path, so the shifts this
-    returns are identical to what it returned before the reason field existed.
-    """
-    est = estimate_translation_detailed(reference, moving, max_shift_px)
-    return est.dy, est.dx, est.confidence
-
-
 def estimate_translation_detailed(
     reference: np.ndarray,
     moving: np.ndarray,
     max_shift_px: int = _MAX_SHIFT_PX,
 ) -> TranslationEstimate:
-    """:func:`estimate_translation` plus the outcome ``reason`` and the raw
-    correlation peak.
+    """Integer translation ``(dy, dx)`` that best aligns ``moving`` onto
+    ``reference`` (both single-channel frames of equal shape), with the outcome
+    ``reason``, the raw GLOBAL correlation peak and ``quality``.
 
-    Same numbers as :func:`estimate_translation`, plus the outcome ``reason``,
-    the raw GLOBAL correlation peak, and ``quality``:
+    Applying the result: ``registered = shift_frame(moving, dy, dx)`` puts
+    ``moving``'s features on top of ``reference``'s. ``(dy, dx)`` is ``(0, 0)``
+    whenever ``reason`` is not ``ok``, so the reason is what separates a
+    genuine "already aligned" from a refusal:
 
     * ``ok`` — the windowed peak cleared both ``_MIN_PEAK_RATIO`` and
       ``_MIN_CONFIDENCE`` and is returned. A returned ``(0, 0)`` here is a
@@ -254,10 +258,8 @@ def estimate_translation_detailed(
       better than anything plausible. ``peak_dy``/``peak_dx`` carry that
       candidate so a caller can report WHAT it refused.
     * ``low_confidence`` — rejected with the global peak inside the window.
-      The name predates ``quality``: in practice this fires on a weak
-      ``quality`` at a ``confidence`` well above ``_MIN_CONFIDENCE`` (two
-      unrelated production frames score 6-8 there), so read it as "no dominant
-      peak", not as a statement about ``_MIN_CONFIDENCE``.
+      Read it as "no dominant peak"; the name predates ``quality`` and is not a
+      statement about ``_MIN_CONFIDENCE`` (see that constant).
 
     Note both rejection reasons are CLASSIFICATIONS of one combined gate, not
     two guards applied in order.
@@ -265,16 +267,19 @@ def estimate_translation_detailed(
     A shape mismatch raises, as before; it is not a reason this function can
     return (see ``REASON_SHAPE_MISMATCH``).
 
-    Memory: every intermediate here is a FULL-FRAME float64 (or complex128
+    Memory: every intermediate is a FULL-FRAME float64 (or complex128
     half-spectrum) array — 32 MB apiece at 2048² — and the naive out-of-place
     form kept a dozen of them alive at once: a measured **386 MB of RSS per
     call** for a single 2048² frame. Run from N encoder threads that is 386·N,
     which is what OOM-killed a 4 GiB container on a 2-channel 2048²
-    acquisition. The steps below therefore reuse buffers in place and ``del``
-    each array at its last use, which brings the traced peak to exactly
-    **6·Y·X·8 bytes** (measured 6.00 full-frame float64 planes at 512², 1024²
-    and 2048² alike) and the RSS peak to ~290 MB at 2048² once allocator slack
-    and pocketfft's internal buffers are counted.
+    acquisition. :func:`_prepare` and :func:`estimate_translation_prepared`
+    therefore reuse buffers in place and ``del`` each array at its last use,
+    holding the traced peak to ~6 full-frame float64 planes and the RSS peak to
+    ~290 MB at 2048² once allocator slack and pocketfft's internal buffers are
+    counted. The peak falls at the cross-power step, where both spectra are
+    live either way, so the split does not move it — but a caller that RETAINS
+    a spectrum between calls (see :class:`PreparedFrame`) adds one plane on top
+    for as long as it holds it.
 
     Every rewrite is elementwise with exact aliasing, so the arithmetic and the
     returned numbers are BIT-IDENTICAL to the out-of-place form — verified over
@@ -290,28 +295,66 @@ def estimate_translation_detailed(
         )
     if ref.ndim != 2:
         raise ValueError(f"expected 2-D frames, got ndim={ref.ndim}")
-    shape = ref.shape
 
-    win = _hann2d(shape)  # cached + read-only; see _hann2d
-    rg = _gradient_magnitude(ref)
-    rg *= win  # in place: same values as `_gradient_magnitude(ref) * win`
-    del ref  # gradient map supersedes the float copy
-    mg = _gradient_magnitude(mov)
-    mg *= win
+    a = _prepare(ref)
+    del ref
+    b = _prepare(mov)
     del mov
+    return estimate_translation_prepared(a, b, max_shift_px)
 
-    fr = np.fft.rfft2(rg)
-    del rg
-    fm = np.fft.rfft2(mg)
-    del mg
+
+def _prepare(gray: np.ndarray) -> PreparedFrame:
+    """Windowed gradient map of an already-float 2-D frame, as a half-spectrum.
+
+    Consumes ``gray``: the caller should drop its reference immediately after,
+    as :func:`estimate_translation_detailed` does.
+    """
+    shape = gray.shape
+    g = _gradient_magnitude(gray)
+    g *= _hann2d(shape)  # in place: same values as `_gradient_magnitude(g) * win`
+    spectrum = np.fft.rfft2(g)
+    del g
+    return PreparedFrame(spectrum, shape)
+
+
+def prepare_frame(frame: np.ndarray) -> PreparedFrame:
+    """One frame reduced to the half-spectrum an estimate consumes.
+
+    Public so a caller walking a CHAIN of pairs can prepare each frame once —
+    see :class:`PreparedFrame` for why that is worth doing.
+    """
+    gray = _to_float_gray(frame)
+    if gray.ndim != 2:
+        raise ValueError(f"expected 2-D frames, got ndim={gray.ndim}")
+    return _prepare(gray)
+
+
+def estimate_translation_prepared(
+    reference: PreparedFrame,
+    moving: PreparedFrame,
+    max_shift_px: int = _MAX_SHIFT_PX,
+) -> TranslationEstimate:
+    """:func:`estimate_translation_detailed` on two already-prepared frames.
+
+    This is the PAIR half of an estimate — everything that genuinely depends on
+    both frames. Splitting it out changes no arithmetic: the spectra are read,
+    never written (``cross = fr * np.conj(fm)`` allocates), so an estimate run
+    from a reused spectrum is bit-identical to one that recomputed it.
+    """
+    if reference.shape != moving.shape:
+        raise ValueError(
+            f"channel frames must share a shape, got "
+            f"{reference.shape} vs {moving.shape}"
+        )
+    shape = reference.shape
+    fr, fm = reference.spectrum, moving.spectrum
     # NOTE: written exactly as `fr * np.conj(fm)` on purpose. numpy dispatches
     # this expression to a different complex-multiply loop than the buffer-
     # reusing `np.conjugate(fm, out=fm); np.multiply(fr, fm, out=fm)` form, and
     # the two disagree in the last ULP — enough to move `confidence` and, at a
-    # threshold boundary, the accepted shift. The 33 MB that rewrite would have
-    # saved is not worth an output change, so only the *lifetimes* are
-    # tightened here: fr and fm are dropped the moment the product exists,
-    # instead of staying live to the end of the function.
+    # threshold boundary, the accepted shift. Since the split above, a spectrum
+    # may also be SHARED with a caller's cache, so writing into one would
+    # corrupt the next pair as well; both reasons point the same way.
     cross = fr * np.conj(fm)
     del fr, fm
     mag = np.abs(cross)
@@ -392,7 +435,7 @@ def shift_frame(arr: np.ndarray, dy: int, dx: int, fill: int = 0) -> np.ndarray:
     (no interpolation), so 16-bit data survives untouched.
 
     ``dy > 0`` moves content down, ``dx > 0`` moves it right — the inverse of
-    the offset returned by :func:`estimate_translation`, i.e. calling
+    the offset returned by :func:`estimate_translation_detailed`, i.e. calling
     ``shift_frame(moving, dy, dx)`` with that offset registers ``moving`` onto
     the reference.
     """
@@ -413,6 +456,45 @@ def shift_frame(arr: np.ndarray, dy: int, dx: int, fill: int = 0) -> np.ndarray:
     return out
 
 
+def register_plane(
+    reference: np.ndarray,
+    plane: np.ndarray,
+    *,
+    frame_index: int,
+    channel_name: str,
+    gate=None,
+) -> tuple[np.ndarray, list[int], str]:
+    """Estimate one channel's offset onto ``reference``, apply it, and REPORT.
+
+    Returns ``(plane, [dy, dx], reason)`` — the registered plane (the original
+    object when the offset is zero, so no needless copy), the offset for the
+    sidecar, and the outcome for its ``reasons`` map.
+
+    Lives here rather than in the extractors because both of them run exactly
+    this step and used to carry byte-identical copies of it. The stderr line is
+    the reason that matters: it is the only place a rejected registration
+    becomes visible to an operator, and a copy that drifted would silently take
+    half the diagnostics with it.
+
+    ``gate`` is an optional context manager bounding how many estimates run at
+    once (the ND2 extractor registers from a thread pool and caps the FFT
+    workspace; the TIFF path is serial and passes nothing). It gates only the
+    estimate, never the shift or the write.
+    """
+    with gate if gate is not None else nullcontext():
+        est = estimate_translation_detailed(reference, plane)
+    if est.reason != REASON_OK:
+        sys.stderr.write(
+            f"registration: frame {frame_index} channel '{channel_name}' "
+            f"not registered ({est.reason}; wanted "
+            f"({est.peak_dy},{est.peak_dx}), quality "
+            f"{est.quality:.2f})\n"
+        )
+    if est.dy or est.dx:
+        plane = shift_frame(plane, est.dy, est.dx)  # new array
+    return plane, [est.dy, est.dx], est.reason
+
+
 def write_registration_sidecar(
     dest_dir: Path | str,
     channel_names: list[str],
@@ -420,9 +502,11 @@ def write_registration_sidecar(
     reasons: dict[int, list[str]] | None = None,
 ) -> None:
     """Persist the per-frame per-channel translation applied at extraction, as
-    ``<dest_dir>/registration.json``. Downstream consumers that re-read the raw
-    file (MT metrics / kymographs) load this to sample each channel in the
-    registered (channel-0) space. Shared by both extractors so the on-disk
+    ``<dest_dir>/registration.json``. ``mtMetricsExporter`` loads this to sample
+    each channel of the RAW original in the registered (channel-0) space —
+    it is the only reader, and deliberately so: the kymograph path samples the
+    STORED PNGs, which already carry the shift, and applying these offsets
+    there would double-count it. Shared by both extractors so the on-disk
     format stays identical.
 
     A single-channel video has no channel-TO-channel offset to record, but it
@@ -459,31 +543,25 @@ def write_registration_sidecar(
     (Path(dest_dir) / "registration.json").write_text(json.dumps(data))
 
 
-def register_stack_to_first_channel(
-    frame_channels: list[list[np.ndarray]],
-) -> tuple[list[list[np.ndarray]], list[list[tuple[int, int]]]]:
-    """Register every channel of every frame onto that frame's **channel 0**.
+def read_registration_sidecar(
+    dest_dir: Path | str,
+) -> tuple[list[str], dict[int, list], dict[int, list[str]]] | None:
+    """The sidecar written by :func:`write_registration_sidecar`, parsed back.
 
-    ``frame_channels[t][c]`` is the 2-D array for frame ``t``, channel ``c``.
-    Per-frame estimation (offsets may drift across the acquisition), with
-    channel 0 fixed as the reference. Returns the registered arrays plus the
-    applied ``(dy, dx)`` offset for each (frame, channel) for provenance.
-    Single-channel frames pass through unchanged with a ``(0, 0)`` offset.
+    Returns ``(channel_names, offsets, reasons)`` with integer frame keys — the
+    shape :func:`write_registration_sidecar` takes — or ``None`` when no
+    sidecar exists.
+
+    The counterpart to the writer, and here for the same reason it is: the
+    schema has exactly one definition. ``correct_drift.py`` re-reads this file
+    to fold stage drift into it, and a reader that open-coded the key names
+    would be a second, silent statement of a format whose consumers
+    (``mtMetricsExporter``) index it positionally.
     """
-    registered: list[list[np.ndarray]] = []
-    offsets: list[list[tuple[int, int]]] = []
-    for channels in frame_channels:
-        if len(channels) <= 1:
-            registered.append([c.copy() for c in channels])
-            offsets.append([(0, 0)] * len(channels))
-            continue
-        ref = channels[0]
-        reg_row: list[np.ndarray] = [ref.copy()]
-        off_row: list[tuple[int, int]] = [(0, 0)]
-        for c in channels[1:]:
-            dy, dx, _conf = estimate_translation(ref, c)
-            reg_row.append(shift_frame(c, dy, dx))
-            off_row.append((dy, dx))
-        registered.append(reg_row)
-        offsets.append(off_row)
-    return registered, offsets
+    path = Path(dest_dir) / "registration.json"
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text())
+    offsets = {int(t): rows for t, rows in data["frames"].items()}
+    reasons = {int(t): rows for t, rows in data.get("reasons", {}).items()}
+    return data["channels"], offsets, reasons

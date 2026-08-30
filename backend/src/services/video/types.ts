@@ -27,6 +27,25 @@ export function isSafeChannelName(name: unknown): name is string {
   return typeof name === 'string' && CHANNEL_NAME_RE.test(name);
 }
 
+/**
+ * The container's segmentation-source channel name: the channel explicitly
+ * marked as the source, else the first one.
+ *
+ * The rule was written out at six call sites with three different null-handling
+ * tails. It is not a display detail: drift correction is driven by this
+ * channel, and on a motility assay picking a fluorescence channel measures
+ * filament gliding and subtracts the signal the experiment records. If the rule
+ * ever gains a step — "prefer `type === 'irm'` over index 0" is the obvious
+ * next one — it must gain it everywhere at once.
+ *
+ * Returns undefined for an empty channel list; callers decide what that means.
+ */
+export function resolveSegmentationSource(
+  channels: readonly { name: string; isSegmentationSource?: boolean }[]
+): string | undefined {
+  return channels.find(c => c.isSegmentationSource)?.name ?? channels[0]?.name;
+}
+
 export type ChannelType = 'irm' | 'fluorescent';
 
 export interface ChannelMeta {

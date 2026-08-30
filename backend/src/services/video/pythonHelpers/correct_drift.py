@@ -45,7 +45,11 @@ import json
 import sys
 from pathlib import Path
 
-from channel_registration import write_registration_sidecar
+from channel_registration import (
+    REASON_OK,
+    read_registration_sidecar,
+    write_registration_sidecar,
+)
 from drift_correction import compose_into_registration_offsets, correct_drift_in_place
 
 
@@ -87,19 +91,16 @@ def main() -> int:
     # to extend, and one is created carrying the drift alone — without it
     # `mtMetricsExporter` reads the untouched original and every intensity is
     # off by exactly the drift.
-    sidecar = container / "registration.json"
-    if sidecar.exists():
-        existing = json.loads(sidecar.read_text())
-        offsets = {int(t): rows for t, rows in existing["frames"].items()}
-        reasons = {
-            int(t): rows for t, rows in existing.get("reasons", {}).items()
-        }
-        names = existing["channels"]
+    existing = read_registration_sidecar(container)
+    if existing is not None:
+        names, offsets, reasons = existing
     else:
         offsets = {
             int(t): [[0, 0] for _ in channel_names] for t in drift["applied"]
         }
-        reasons = {int(t): ["ok"] * len(channel_names) for t in drift["applied"]}
+        reasons = {
+            int(t): [REASON_OK] * len(channel_names) for t in drift["applied"]
+        }
         names = channel_names
 
     compose_into_registration_offsets(offsets, drift)

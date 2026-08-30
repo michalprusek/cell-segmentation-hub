@@ -27,8 +27,8 @@ from pathlib import Path
 import numpy as np
 
 from channel_registration import (
-    estimate_translation_detailed,
-    shift_frame,
+    REASON_OK,
+    register_plane,
     write_registration_sidecar,
 )
 from plane_coverage import (
@@ -888,29 +888,20 @@ def main() -> int:
         # Why each offset is what it is. A stored (0, 0) is otherwise
         # ambiguous — genuinely aligned, or an estimate that was refused —
         # and that ambiguity hid the 2026-08 mis-registrations.
-        reason_row = ["ok"] * C
+        reason_row = [REASON_OK] * C
         blank_row = [is_blank_plane(arr[t, c]) for c in range(C)]
         ref = arr[t, 0] if do_register else None
         # Skipping registration when either plane is blank changes no output:
-        # `estimate_translation` already returns (0, 0) for a constant plane
+        # `estimate_translation_detailed` already returns (0, 0) for a constant plane
         # (zero gradient -> flat correlation surface -> its `low_confidence`
         # guard). This just declines to spend the FFT to learn that.
         ref_usable = do_register and not blank_row[0]
         for c in range(C):
             plane = arr[t, c]
             if do_register and c > 0 and ref_usable and not blank_row[c]:
-                est = estimate_translation_detailed(ref, plane)
-                if est.dy or est.dx:
-                    plane = shift_frame(plane, est.dy, est.dx)  # new array
-                offset_row[c] = [est.dy, est.dx]
-                reason_row[c] = est.reason
-                if est.reason != "ok":
-                    sys.stderr.write(
-                        f"registration: frame {t} channel '{channel_names[c]}' "
-                        f"not registered ({est.reason}; wanted "
-                        f"({est.peak_dy},{est.peak_dx}), quality "
-                        f"{est.quality:.2f})\n"
-                    )
+                plane, offset_row[c], reason_row[c] = register_plane(
+                    ref, plane, frame_index=t, channel_name=channel_names[c]
+                )
             _save_png(plane, frame_dir / f"{channel_names[c]}.png")
         offsets[t] = offset_row
         reasons[t] = reason_row
