@@ -381,7 +381,7 @@ export async function correctDriftInContainer(
   channelNames: string[],
   sourceChannel: string
 ): Promise<DriftCorrectionResult> {
-  if (channelNames.length === 0 || !channelNames.includes(sourceChannel)) {
+  if (!channelNames.includes(sourceChannel)) {
     throw new Error(
       `drift correction: source channel '${sourceChannel}' is not among [${channelNames.join(', ')}]`
     );

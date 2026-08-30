@@ -39,7 +39,7 @@ import { logger } from '../utils/logger';
 import { assertSafeStorageSegment } from '../utils/storagePath';
 import { extractVideoSafe } from './video/videoExtractor';
 import { correctDriftInContainer } from './video/pythonExtractor';
-import { isSafeChannelName } from './video/types';
+import { isSafeChannelName, resolveSegmentationSource } from './video/types';
 import type {
   ChannelMeta,
   ExtractedPosition,
@@ -272,14 +272,6 @@ async function withSparseFrameIds(
   });
 }
 
-/**
- * Finalize one video container: pick the default (segmentation-source)
- * channel, generate a thumbnail from its first frame, create the child
- * frame Image rows, and stamp the container row with its metadata. Shared
- * by the single-position and per-position paths so they stay in lockstep.
- *
- * Frames must already be on disk at ``<baseDir>/frames/<TTTT>/<channel>.png``.
- */
 /** Remove stage drift from one finished container, driven by the channel the
  *  measurements live on.
  *
@@ -299,13 +291,10 @@ async function correctDriftForContainer(
   containerDir: string,
   channels: { name: string; isSegmentationSource?: boolean }[]
 ): Promise<void> {
-  if (channels.length === 0) {
+  const source = resolveSegmentationSource(channels);
+  if (!source) {
     return;
   }
-  // Same resolution every other consumer uses (imageService, ChannelSwitcher):
-  // the marked source, else the first channel.
-  const source =
-    channels.find(c => c.isSegmentationSource)?.name ?? channels[0].name;
   try {
     await correctDriftInContainer(
       containerDir,
@@ -321,6 +310,14 @@ async function correctDriftForContainer(
   }
 }
 
+/**
+ * Finalize one video container: pick the default (segmentation-source)
+ * channel, generate a thumbnail from its first frame, create the child
+ * frame Image rows, and stamp the container row with its metadata. Shared
+ * by the single-position and per-position paths so they stay in lockstep.
+ *
+ * Frames must already be on disk at ``<baseDir>/frames/<TTTT>/<channel>.png``.
+ */
 async function finalizeContainer(params: {
   containerId: string;
   baseDir: string;
@@ -364,9 +361,7 @@ async function finalizeContainer(params: {
   // Channel names originate in source metadata (ND2/OME-TIFF); guard before
   // they reach the thumbnail read-path and the frame storage keys.
   const defaultChannel = assertSafeStorageSegment(
-    result.channels.find(c => c.isSegmentationSource)?.name ??
-      result.channels[0]?.name ??
-      'video',
+    resolveSegmentationSource(result.channels) ?? 'video',
     'channel'
   );
 
@@ -675,6 +670,11 @@ export async function uploadVideoFromFile(options: {
         .catch(() => undefined);
 
       if (correctDrift) {
+        reportProgress(
+          'persisting',
+          0.85 + (i / positions.length) * 0.14,
+          `Correcting stage drift (position ${i + 1}/${positions.length})`
+        );
         await correctDriftForContainer(cBaseDir, pos.result.channels);
       }
 

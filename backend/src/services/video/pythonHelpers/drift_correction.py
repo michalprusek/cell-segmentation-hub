@@ -90,10 +90,9 @@ from typing import NamedTuple
 import numpy as np
 
 from channel_registration import (
-    _MAX_SHIFT_PX,
-    _MIN_PEAK_RATIO,
     REASON_OK,
-    estimate_translation_detailed,
+    estimate_translation_prepared,
+    prepare_frame,
     shift_frame,
 )
 
@@ -188,22 +187,6 @@ class DriftTrajectory(NamedTuple):
     anchored: bool
 
 
-def estimate_drift_trajectory(
-    frames,
-    multi_scale: bool = True,
-    max_shift_px: int = DRIFT_MAX_SHIFT_PX,
-    fast: bool = True,
-) -> list[tuple[float, float]]:
-    """The corrections alone — see :func:`estimate_drift_trajectory_detailed`.
-
-    A thin projection, so callers that only place pixels stay simple while the
-    ones that must report on the estimate get the counts.
-    """
-    return estimate_drift_trajectory_detailed(
-        frames, multi_scale, max_shift_px, fast
-    ).corrections
-
-
 def estimate_drift_trajectory_detailed(
     frames,
     multi_scale: bool = True,
@@ -290,11 +273,26 @@ def estimate_drift_trajectory_detailed(
             decim = 1
         budget = max(8, max_shift_px // decim)
 
+        # Every pass walks a CHAIN — (0,dt), (dt,2dt), (2dt,3dt)… — so this
+        # pair's reference is the previous pair's moving frame. ONE slot is
+        # therefore a ~100 % hit rate, and each hit skips a PNG decode plus the
+        # whole per-frame half of the estimate (float, gradient, window, FFT).
+        # Measured at 2048²: 52 ms of decode and 124 ms of preparation against
+        # 365 ms for a full-resolution estimate, so this is ~38 % of the pass;
+        # on the decimated dt=1 pass, which is two thirds of all pairs, the
+        # decode alone outweighs the correlation 5:1.
+        #
+        # Reset per pass: `decim` differs between passes, so a spectrum carried
+        # across one would be the wrong resolution. Costs one retained
+        # half-spectrum (33.6 MB at 2048²) — see `PreparedFrame`.
+        held_idx, held = -1, None
         for t in steps:
-            a, b = frames[t - dt], frames[t]
-            if decim > 1:
-                a, b = a[::decim, ::decim], b[::decim, ::decim]
-            est = estimate_translation_detailed(a, b, max_shift_px=budget)
+            ref_idx = t - dt
+            ref = held if held_idx == ref_idx else _prepare_at(frames, ref_idx, decim)
+            mov = _prepare_at(frames, t, decim)
+            held_idx, held = t, mov
+            est = estimate_translation_prepared(ref, mov, max_shift_px=budget)
+            del ref, mov
             measured += 1
             if est.reason != REASON_OK:
                 # Nothing trustworthy to add. Leaving the trajectory alone is
@@ -340,6 +338,31 @@ def estimate_drift_trajectory_detailed(
     )
 
 
+def _round_shift(dy: float, dx: float) -> tuple[int, int]:
+    """The sub-pixel trajectory rounded to the whole pixels actually applied.
+
+    One home for the rule, because it is stated in two places that must agree:
+    the value written into the ``applied`` sidecar and the shift handed to
+    :func:`shift_frame`. A sidecar that records a different number from the one
+    baked into the PNG is precisely the silent mis-measurement
+    :func:`compose_into_registration_offsets` exists to prevent.
+    """
+    return int(round(dy)), int(round(dx))
+
+
+def _prepare_at(frames, i: int, decim: int):
+    """Frame ``i`` of ``frames``, decimated if asked, as a prepared spectrum.
+
+    The decimation is a strided VIEW, so the decode it feeds is still a full
+    read — PNG has no reduced-resolution decode — which is precisely why the
+    result is worth caching rather than the frame.
+    """
+    arr = frames[i]
+    if decim > 1:
+        arr = arr[::decim, ::decim]
+    return prepare_frame(arr)
+
+
 def apply_drift(frame: np.ndarray, dy: float, dx: float, fill: int = 0) -> np.ndarray:
     """``frame`` translated by ``(dy, dx)``, ROUNDED to whole pixels.
 
@@ -351,7 +374,7 @@ def apply_drift(frame: np.ndarray, dy: float, dx: float, fill: int = 0) -> np.nd
     A shift that rounds to zero returns the frame unchanged rather than a copy
     with a shaved border.
     """
-    idy, idx = int(round(dy)), int(round(dx))
+    idy, idx = _round_shift(dy, dx)
     if idy == 0 and idx == 0:
         return frame
     return shift_frame(frame, idy, idx, fill=fill)
@@ -384,10 +407,19 @@ class _DiskFrames:
     holds the array; it shares this path so there is one implementation, not
     because it needs the saving.)
 
-    Frames are re-decoded on each access rather than cached: at 2048² a decode
-    is ~0.08 s against ~0.38 s for the correlation it feeds, so a cache would
-    save under a fifth of the pass for a per-frame RAM cost the streaming above
-    exists to avoid.
+    Frames are re-decoded on each access rather than cached, and that is still
+    right: caching FRAMES would cost RAM proportional to the stack, which is
+    the bound this class exists to hold. What is cached instead is the
+    PREPARED SPECTRUM of the single frame a pass has just visited — O(1), and
+    it removes the repeat decode anyway, because a chain's reference is always
+    the previous pair's moving frame.
+
+    Do not restore the old justification here ("a decode is ~0.08 s against
+    ~0.38 s for the correlation it feeds, so a cache saves under a fifth"):
+    the ratio is real but describes only the FULL-RESOLUTION passes. The dt=1
+    pass is two thirds of all pairs and decimates by 4, so its correlation
+    costs ~20 ms against ~105 ms for its two decodes — decode is 84 % of that
+    pass, not a fifth.
     """
 
     def __init__(self, frames_dir, channel: str, indices):
@@ -410,8 +442,6 @@ def correct_drift_in_place(
     frames_dir,
     channel_names: list[str],
     source_channel: str,
-    indices=None,
-    min_px: float = 1.0,
 ) -> dict | None:
     """Estimate stage drift from ``source_channel`` and de-drift EVERY channel.
 
@@ -431,11 +461,10 @@ def correct_drift_in_place(
     from PIL import Image
 
     frames_dir = Path(frames_dir)
-    if indices is None:
-        indices = sorted(
-            int(p.name) for p in frames_dir.iterdir()
-            if p.is_dir() and p.name.isdigit()
-        )
+    indices = sorted(
+        int(p.name) for p in frames_dir.iterdir()
+        if p.is_dir() and p.name.isdigit()
+    )
     if len(indices) < 2:
         return None
 
@@ -495,7 +524,7 @@ def correct_drift_in_place(
         )
         return None
 
-    if not drift_is_worth_correcting(trajectory, min_px=min_px):
+    if not drift_is_worth_correcting(trajectory):
         return None
 
     # Nothing bounds the SUM of the per-pair estimates, and the ramp
@@ -514,16 +543,18 @@ def correct_drift_in_place(
 
     sys.stderr.write(
         f"drift: channel '{source_channel}', {len(indices)} frames, "
-        f"{est.accepted}/{est.measured} pairs matched"
-        f"{'' if est.anchored else ', FULL-BASELINE ANCHOR REFUSED'}, "
+        f"{est.accepted}/{est.measured} pairs matched, "
         f"max applied {peak:.0f} px\n"
     )
 
-    applied = []
+    # frameIndex -> the [dy, dx] actually written into the pixels. Built here
+    # rather than zipped back onto `indices` afterwards, so the recorded value
+    # and the applied one cannot come apart.
+    applied: dict[str, list[int]] = {}
     for pos, t in enumerate(indices):
         dy, dx = trajectory[pos]
-        idy, idx = int(round(dy)), int(round(dx))
-        applied.append([idy, idx])
+        idy, idx = _round_shift(dy, dx)
+        applied[str(t)] = [idy, idx]
         if idy == 0 and idx == 0:
             continue
         for channel in channel_names:
@@ -546,7 +577,7 @@ def correct_drift_in_place(
             # No `mode=`: it is deprecated in Pillow 12 and removed in 13, and
             # it was never needed — the dtype already determines the mode, and
             # `shift_frame` preserves it. Saved exactly as `_save_png` does.
-            Image.fromarray(shift_frame(arr, idy, idx)).save(
+            Image.fromarray(apply_drift(arr, dy, dx)).save(
                 path, format="PNG", optimize=True
             )
 
@@ -560,8 +591,7 @@ def correct_drift_in_place(
         "pairsMeasured": est.measured,
         "pairsAccepted": est.accepted,
         "anchored": est.anchored,
-        # frameIndex -> the [dy, dx] actually written into the pixels.
-        "applied": {str(t): applied[i] for i, t in enumerate(indices)},
+        "applied": applied,
         # The sub-pixel estimate before rounding, so a later pass can tell a
         # frame that was left alone from one whose correction rounded to zero.
         "estimated": {
@@ -617,6 +647,6 @@ __all__ = [
     "apply_drift",
     "correct_drift_in_place",
     "drift_is_worth_correcting",
-    "estimate_drift_trajectory",
+    "estimate_drift_trajectory_detailed",
     "multi_scale_lags",
 ]

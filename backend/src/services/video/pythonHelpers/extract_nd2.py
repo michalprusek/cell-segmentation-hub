@@ -39,8 +39,8 @@ from pathlib import Path
 import numpy as np
 
 from channel_registration import (
-    estimate_translation_detailed,
-    shift_frame,
+    REASON_OK,
+    register_plane,
     write_registration_sidecar,
 )
 from plane_coverage import (
@@ -67,7 +67,7 @@ def _extract_workers() -> int:
 def _registration_workers(workers: int) -> int:
     """How many channel registrations may run CONCURRENTLY (<= ``workers``).
 
-    Registration is the memory hog of the extract: one ``estimate_translation``
+    Registration is the memory hog of the extract: one ``estimate_translation_detailed``
     allocates 6 full-frame float64 planes' worth of workspace (6*Y*X*8 bytes,
     measured constant across 512², 1024² and 2048²) — 290 MB of RSS for a
     single 2048x2048 frame, ~36x the 8 MB uint16 plane it is aligning, because
@@ -513,12 +513,12 @@ def _write_frames(
 
     A plane recorded as blank is also SKIPPED by registration, as is every
     channel of a frame whose channel-0 reference is blank. This changes no
-    output: ``estimate_translation`` already returns ``(0, 0)`` for a constant
+    output: ``estimate_translation_detailed`` already returns ``(0, 0)`` for a constant
     plane, because its gradient magnitude is zero, the correlation surface is
     flat and the existing ``low_confidence`` guard rejects the peak (measured
     2026-08-28 in both directions; pinned by
     ``test_blank_plane_registration_was_already_a_no_op``). The skip is purely a
-    cost saving — one ``estimate_translation`` call is ~290 MB of RSS and the
+    cost saving — one ``estimate_translation_detailed`` call is ~290 MB of RSS and the
     FFT-heaviest thing in this function — for an answer that is known in advance.
 
     MEMORY BUDGET — this function OOM-killed a 4 GiB container on a 2-channel
@@ -536,7 +536,7 @@ def _write_frames(
 
     with ``W = _extract_workers()`` and ``R = _registration_workers(W)``. NOTHING
     in it scales with ``T``, ``C`` only multiplies the (small) frame term, and
-    the dominant term is the registration workspace — one ``estimate_translation``
+    the dominant term is the registration workspace — one ``estimate_translation_detailed``
     call needs 6 full-frame float64 planes at once (measured 290 MB RSS at
     2048²), which is ~36x the uint16 frame it is aligning. Two rules keep that
     from multiplying out of control:
@@ -564,7 +564,7 @@ def _write_frames(
         frame_dir = frames_root / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         offset_row = [[0, 0] for _ in range(C)]
-        reason_row = ["ok"] * C
+        reason_row = [REASON_OK] * C
         # One pass over the (already materialised) frame; ``frame_cyx[c]`` is a
         # view, so this costs a min/max scan and no allocation.
         blank_row = [is_blank_plane(frame_cyx[c]) for c in range(C)]
@@ -573,19 +573,13 @@ def _write_frames(
         for c in range(C):
             plane = frame_cyx[c]
             if do_register and c > 0 and ref_usable and not blank_row[c]:
-                with reg_gate:
-                    est = estimate_translation_detailed(ref, plane)
-                if est.dy or est.dx:
-                    plane = shift_frame(plane, est.dy, est.dx)  # new array
-                offset_row[c] = [est.dy, est.dx]
-                reason_row[c] = est.reason
-                if est.reason != "ok":
-                    sys.stderr.write(
-                        f"registration: frame {t} channel '{channel_names[c]}' "
-                        f"not registered ({est.reason}; wanted "
-                        f"({est.peak_dy},{est.peak_dx}), quality "
-                        f"{est.quality:.2f})\n"
-                    )
+                plane, offset_row[c], reason_row[c] = register_plane(
+                    ref,
+                    plane,
+                    frame_index=t,
+                    channel_name=channel_names[c],
+                    gate=reg_gate,
+                )
             _save_png(plane, frame_dir / f"{channel_names[c]}.png")
         return t, offset_row, blank_row, reason_row
 

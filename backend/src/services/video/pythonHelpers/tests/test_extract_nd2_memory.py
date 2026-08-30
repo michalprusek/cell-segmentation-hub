@@ -12,7 +12,7 @@ out:
    submitting any of it, and the outgoing list stayed alive while the next one
    was built: up to ``4 * workers`` decoded frames at once.
 2. every one of the ``workers`` encoder threads could be inside
-   ``estimate_translation`` simultaneously, and one such call ran the whole
+   ``estimate_translation_detailed`` simultaneously, and one such call ran the whole
    phase correlation in full-frame float64/complex128 — a measured **386 MB of
    RSS for a single 2048x2048 frame**, ~48x the 8 MB uint16 plane it aligns.
    Reg-on minus reg-off at ``workers=4`` accounted for 1.45 GB of the peak.
@@ -52,7 +52,7 @@ HERE = os.path.dirname(__file__)
 HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
-import extract_nd2  # noqa: E402
+import channel_registration  # noqa: E402
 from extract_nd2 import (  # noqa: E402
     _registration_workers,
     _write_frames,
@@ -181,7 +181,11 @@ def test_concurrent_registrations_are_capped():
     cap = _registration_workers(workers)
     assert cap < workers, "test is vacuous unless the cap actually binds"
 
-    real = extract_nd2.estimate_translation_detailed
+    # Patched on `channel_registration`, where the estimate now lives: the
+    # extractor hands its semaphore to `register_plane`, which holds the gate
+    # across exactly this call. Counting here therefore measures what the cap
+    # is meant to bound — the FFT workspace — rather than the call site.
+    real = channel_registration.estimate_translation_detailed
     lock = threading.Lock()
     state = {"now": 0, "max": 0}
 
@@ -195,11 +199,11 @@ def test_concurrent_registrations_are_capped():
             with lock:
                 state["now"] -= 1
 
-    extract_nd2.estimate_translation_detailed = counting
+    channel_registration.estimate_translation_detailed = counting
     try:
         _run(T=30, C=2, Y=128, X=128, workers=workers, register=True)
     finally:
-        extract_nd2.estimate_translation_detailed = real
+        channel_registration.estimate_translation_detailed = real
 
     assert state["max"] > 0, "registration never ran — test would be vacuous"
     assert state["max"] <= cap, (
