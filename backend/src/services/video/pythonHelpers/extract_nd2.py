@@ -43,10 +43,6 @@ from channel_registration import (
     shift_frame,
     write_registration_sidecar,
 )
-from drift_correction import (
-    compose_into_registration_offsets,
-    correct_drift_in_place,
-)
 from plane_coverage import (
     coverage_payload,
     is_blank_plane,
@@ -673,15 +669,10 @@ def main() -> int:
     # Opt-in multimodal channel registration (translation-only); the backend
     # passes this only when the user ticked it at upload for an MT project.
     register = "--register-channels" in argv
-    # Stage-drift correction; automatic for microtubule projects (the backend
-    # decides). See ``drift_correction`` for why frame-to-frame estimation
-    # cannot see the drift this removes.
-    correct_drift = "--correct-drift" in argv
     positional = [a for a in argv if not a.startswith("--")]
     if len(positional) < 2:
         print(
-            "usage: extract_nd2.py <src.nd2> <dest_dir> "
-            "[--register-channels] [--correct-drift]",
+            "usage: extract_nd2.py <src.nd2> <dest_dir> [--register-channels]",
             file=sys.stderr,
         )
         return 2
@@ -758,17 +749,9 @@ def main() -> int:
                 arr, dest / "frames", channel_names, on_frame=_tick,
                 register=register,
             )
-            drift = None
-            if correct_drift and len(offsets) > 1:
-                drift = correct_drift_in_place(
-                    dest / "frames", channel_names, channel_names[0]
-                )
-                if drift is not None:
-                    (dest / "drift.json").write_text(json.dumps(drift))
-                    # Before the sidecar: it maps the RAW file, which drift
-                    # correction did not move. See the composer's docstring.
-                    compose_into_registration_offsets(offsets, drift)
-            if register or drift is not None:
+            # Drift correction runs later, from TypeScript — see
+            # ``correct_drift.py`` for why it cannot pick its own channel.
+            if register:
                 write_registration_sidecar(dest, channel_names, offsets, reasons)
             channels_result = _channels_with_coverage(channels_out, blanks, "")
 
@@ -835,15 +818,7 @@ def main() -> int:
             offsets, reasons, blanks = _write_frames(
                 norm, dest / subdir / "frames", channel_names,
                 on_frame=_tick, register=register)
-            drift = None
-            if correct_drift and len(offsets) > 1:
-                drift = correct_drift_in_place(
-                    dest / subdir / "frames", channel_names, channel_names[0]
-                )
-                if drift is not None:
-                    (dest / subdir / "drift.json").write_text(json.dumps(drift))
-                    compose_into_registration_offsets(offsets, drift)
-            if register or drift is not None:
+            if register:
                 write_registration_sidecar(
                     dest / subdir, channel_names, offsets, reasons
                 )

@@ -57,10 +57,6 @@ export async function extractVideo(
      *  extraction. Only meaningful for multi-channel TIFF / ND2 — ignored by
      *  the single-channel ffmpeg path. */
     registerChannels?: boolean;
-    /** Remove stage drift across frames (multi-page TIFF / ND2 only — the
-     *  ffmpeg path is 8-bit consumer video, not a measurement series).
-     *  Automatic for microtubule projects; see `drift_correction.py`. */
-    correctDrift?: boolean;
   } = {}
 ): Promise<ExtractionOutcome> {
   const kind = detectVideoKind(sourcePath);
@@ -85,8 +81,7 @@ export async function extractVideo(
           sourcePath,
           destDir,
           options.onProgress,
-          options.registerChannels,
-          options.correctDrift
+          options.registerChannels
         ),
       };
     case 'nd2':
@@ -94,8 +89,7 @@ export async function extractVideo(
         sourcePath,
         destDir,
         options.onProgress,
-        options.registerChannels,
-        options.correctDrift
+        options.registerChannels
       );
     default: {
       const exhaustive: never = kind;
@@ -113,8 +107,6 @@ export async function extractVideoSafe(
   options: {
     onProgress?: ProgressCallback;
     registerChannels?: boolean;
-    /** See `extractVideo`. */
-    correctDrift?: boolean;
   } = {}
 ): Promise<ExtractionOutcome> {
   try {

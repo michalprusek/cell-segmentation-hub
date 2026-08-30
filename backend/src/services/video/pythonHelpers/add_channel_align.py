@@ -60,6 +60,7 @@ from channel_registration import (
     estimate_translation_detailed,
     shift_frame,
 )
+from drift_correction import DRIFT_MAX_SHIFT_PX
 
 
 def _load_array(path: str) -> np.ndarray:
@@ -99,7 +100,19 @@ def main() -> int:
         reason = REASON_SHAPE_MISMATCH
         peak_dy = peak_dx = 0
         if reference.shape == moving2d.shape and moving2d.ndim == 2:
-            est = estimate_translation_detailed(reference, moving2d)
+            # The reference is the container's STORED frame, which since
+            # 2026-08-29 may have been de-drifted (see `drift_correction`).
+            # The shift needed to land on it is therefore the chromatic offset
+            # PLUS that frame's accumulated drift, and the default 16 px window
+            # is sized for the offset alone. Measured on a 90-frame stack
+            # drifting 0.22 px/frame: alignment is exact to frame 60 and then
+            # silently stops (`implausible_shift`, unshifted copy written) —
+            # a PARTIAL failure, which is worse than a clean refusal because
+            # the early frames look right. The budget must cover what drift
+            # correction itself was allowed to apply.
+            est = estimate_translation_detailed(
+                reference, moving2d, max_shift_px=DRIFT_MAX_SHIFT_PX
+            )
             dy, dx, conf = est.dy, est.dx, est.confidence
             reason, peak_dy, peak_dx = est.reason, est.peak_dy, est.peak_dx
         else:

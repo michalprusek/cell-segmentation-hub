@@ -236,3 +236,41 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {exc}")
     print(f"\n{'OK' if failures == 0 else f'{failures} FAILED'}")
     sys.exit(1 if failures else 0)
+
+
+def test_alignment_budget_covers_a_de_drifted_container():
+    """An added channel must still align to a container that was de-drifted.
+
+    Since 2026-08-29 the stored frames of a microtubule container may have been
+    moved by up to `DRIFT_MAX_SHIFT_PX`, so the shift needed to land on frame N
+    is the chromatic offset PLUS that frame's accumulated drift. Under the
+    default 16 px window that worked to ~frame 60 of a 90-frame stack drifting
+    0.22 px/frame and then silently stopped — writing unshifted copies while
+    the earlier frames looked perfect, which is the worst shape of failure.
+    """
+    from channel_registration import _MAX_SHIFT_PX, estimate_translation_detailed
+    from drift_correction import DRIFT_MAX_SHIFT_PX
+
+    assert DRIFT_MAX_SHIFT_PX > _MAX_SHIFT_PX
+
+    ref = _synthetic_frame(21, 512) if "_synthetic_frame" in dir() else None
+    if ref is None:  # local fixture name differs; build one inline
+        rng = np.random.RandomState(21)
+        ref = rng.rand(512, 512) * 400
+        for k in range(10):
+            y = 40 + k * 46
+            for x in range(20, 492):
+                yy = y + (x - 256) // 8
+                if 0 <= yy < 512:
+                    ref[yy, x] += 6000
+
+    drift = 20  # beyond the 16 px channel window, inside the 96 px drift one
+    moving = shift_frame(ref, 0, drift)
+    assert estimate_translation_detailed(ref, moving).reason != "ok", (
+        "fixture must exceed the default window, or this proves nothing"
+    )
+    est = estimate_translation_detailed(
+        ref, moving, max_shift_px=DRIFT_MAX_SHIFT_PX
+    )
+    assert est.reason == "ok", est
+    assert (est.dy, est.dx) == (0, -drift), est

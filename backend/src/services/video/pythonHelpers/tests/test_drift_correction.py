@@ -36,6 +36,7 @@ from drift_correction import (  # noqa: E402
     correct_drift_in_place,
     drift_is_worth_correcting,
     estimate_drift_trajectory,
+    estimate_drift_trajectory_detailed,
     multi_scale_lags,
 )
 
@@ -90,6 +91,41 @@ def _terminal_error(traj, n_frames, per_frame):
     dy, dx = traj[-1]
     # traj is the correction, i.e. the negation of the displacement.
     return max(abs(-dy - true_dy), abs(-dx - true_dx))
+
+
+def test_schedule_is_identical_to_fiji_s_at_every_stack_length():
+    """`multi_scale_lags` must reproduce Correct_3D_drift.py exactly.
+
+    Fiji's is a literal `dts = [3,9,27,81,243,729,dt_max]` iterated as
+    `if dt < dt_max: run(dt) else: run(dt_max); break` — so the powers stop at
+    3^6 and it jumps to the full baseline. An earlier version of this module
+    kept multiplying, which diverged from n=2189 (adding a 2187 pass). Nothing
+    in production is that long, which is exactly why it needed pinning rather
+    than trusting.
+    """
+    def fiji(n_frames: int) -> list[int]:
+        dt_max = n_frames - 1
+        out = []
+        for dt in [3, 9, 27, 81, 243, 729, dt_max]:
+            if dt < dt_max:
+                out.append(dt)
+            else:
+                out.append(dt_max)
+                break
+        return out
+
+    for n in list(range(2, 300)) + [621, 1000, 2188, 2189, 3000, 5000]:
+        assert multi_scale_lags(n) == fiji(n), n
+
+
+def test_a_two_frame_stack_does_not_run_the_consecutive_pass_twice():
+    # `multi_scale_lags(2) == [1]`, and the trajectory prepends its own dt=1,
+    # so without de-duplication the only pair in the stack is correlated twice
+    # for a residual that is zero by construction the second time.
+    frames = _drifting_stack(2, (0.0, 3.0))
+    traj = estimate_drift_trajectory(frames, multi_scale=True)
+    assert len(traj) == 2
+    assert traj[0] == (0.0, 0.0)
 
 
 def test_lags_ascend_in_powers_of_three_and_end_on_the_full_baseline():
@@ -205,20 +241,6 @@ def test_frames_that_cannot_be_matched_do_not_corrupt_the_trajectory():
     good_dx = traj[35][1]
     assert abs(-good_dx - 35 * 0.1) < 1.5, f"pre-blank drift lost: {good_dx}"
     assert all(np.isfinite(dy) and np.isfinite(dx) for dy, dx in traj)
-
-
-if __name__ == "__main__":
-    failures = 0
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            try:
-                fn()
-                print(f"PASS {name}")
-            except Exception as exc:  # noqa: BLE001 - report all, exit non-zero
-                failures += 1
-                print(f"FAIL {name}: {exc}")
-    print(f"\n{'OK' if failures == 0 else f'{failures} FAILED'}")
-    sys.exit(1 if failures else 0)
 
 
 def test_the_ramp_corrects_intermediate_frames_not_just_the_endpoints():
@@ -395,3 +417,262 @@ def test_composition_matches_what_applying_both_shifts_actually_does():
     # stepwise pair blanks a corner of it twice.
     m = 8
     assert np.array_equal(stepwise[m:-m, m:-m], composed[m:-m, m:-m])
+
+
+
+def test_a_composed_correction_larger_than_the_frame_is_refused():
+    # DRIFT_MAX_SHIFT_PX bounds each PAIR; nothing bounds their sum, and the
+    # ramp extrapolates to the end of the stack. On pure noise the gate still
+    # accepts a few pairs and the composed trajectory reached 396 px on a
+    # 256 px frame — 1.55x its width. Applying that rewrites every PNG to a
+    # uniform fill, IN PLACE, and the extracted pixels are gone.
+    import pathlib as _p
+    import tempfile
+
+    rng = np.random.RandomState(3)
+    frames = [(rng.rand(256, 256) * 1000).astype(np.uint16) for _ in range(40)]
+
+    traj = estimate_drift_trajectory(frames)
+    peak = max(max(abs(dy), abs(dx)) for dy, dx in traj)
+    assert peak > 256, (
+        f"fixture no longer produces a runaway trajectory ({peak:.0f} px) — "
+        "the guard below would pass vacuously"
+    )
+
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root, {"IRM": frames})
+        raw = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(40)]
+
+        assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+
+        after = [(root / f"{t:04d}" / "IRM.png").read_bytes() for t in range(40)]
+        assert raw == after, "a refused correction must not touch the frames"
+
+
+def test_a_stack_with_nothing_matchable_is_not_reported_as_still():
+    # Every pair refused produces an all-zero trajectory, byte-identical to a
+    # stack that genuinely holds still. Both decline to correct — so the ONLY
+    # thing separating them is what gets said, and that is what this asserts.
+    # (`drift_is_worth_correcting` returns False either way, so a test that
+    # only checked the return value would pass with the distinction removed.)
+    import io
+    import pathlib as _p
+    import tempfile
+    from contextlib import redirect_stderr
+
+    frames = [np.zeros((128, 128), dtype=np.uint16) for _ in range(12)]
+    est = estimate_drift_trajectory_detailed(frames)
+    assert est.measured > 0
+    assert est.accepted == 0
+    assert not est.anchored
+
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root, {"IRM": frames})
+        blank = io.StringIO()
+        with redirect_stderr(blank):
+            assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+        said = blank.getvalue()
+
+        still = _drifting_stack(12, (0.0, 0.0), seed=7)
+        _write_stack(root, {"IRM": still})
+        quiet = io.StringIO()
+        with redirect_stderr(quiet):
+            assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+
+    assert "no measurable structure" in said, (
+        "a stack nothing could be matched on must say so; it is otherwise "
+        f"indistinguishable from one that holds still. Got: {said!r}"
+    )
+    assert "no measurable structure" not in quiet.getvalue()
+
+
+def test_the_detailed_estimate_reports_what_it_measured():
+    n, per = 60, (0.0, 0.2)
+    est = estimate_drift_trajectory_detailed(_drifting_stack(n, per))
+    assert est.measured > 0
+    assert est.accepted > 0
+    assert est.anchored, "the full-baseline pass must have been accepted here"
+    # The thin wrapper is exactly this projection, so callers cannot drift.
+    assert estimate_drift_trajectory(_drifting_stack(n, per)) == est.corrections
+
+
+def test_the_sidecar_records_how_much_was_measured():
+    import pathlib as _p
+    import tempfile
+
+    frames = _drifting_stack(40, (0.0, 0.3), seed=5)
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root, {"IRM": frames})
+        side = correct_drift_in_place(root, ["IRM"], "IRM")
+    assert side is not None
+    assert side["pairsAccepted"] > 0
+    assert side["pairsAccepted"] <= side["pairsMeasured"]
+    assert side["anchored"] is True
+
+
+def test_a_missing_channel_png_is_fatal_rather_than_silently_skipped():
+    # Skipping would leave that frame's channels in DIFFERENT coordinate
+    # spaces while `applied` claims every channel got the shift. Unreachable
+    # from the extractors; reachable from any future backfill.
+    import pathlib as _p
+    import tempfile
+
+    n = 30
+    drive = _drifting_stack(n, (0.0, 0.4), seed=5)
+    other = _drifting_stack(n, (0.0, 0.4), seed=6)
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root, {"IRM": drive, "TIRF": other})
+        (root / f"{n - 1:04d}" / "TIRF.png").unlink()
+        try:
+            correct_drift_in_place(root, ["IRM", "TIRF"], "IRM")
+        except FileNotFoundError as exc:
+            assert "different spaces" in str(exc)
+        else:
+            raise AssertionError("a missing channel PNG must not be skipped")
+
+
+def test_an_unreadable_source_channel_declines_instead_of_aborting():
+    # Estimation reads and mutates nothing. A failure there must not cost the
+    # upload: `extractVideoSafe` deletes the whole destination directory —
+    # including the original just moved into it — when the helper exits
+    # non-zero.
+    import pathlib as _p
+    import tempfile
+
+    frames = _drifting_stack(20, (0.0, 0.4), seed=5)
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root, {"IRM": frames})
+        (root / "0005" / "IRM.png").write_bytes(b"not a png")
+        assert correct_drift_in_place(root, ["IRM"], "IRM") is None
+
+
+
+def test_correct_drift_cli_folds_the_shift_into_the_registration_sidecar():
+    """End to end through the CLI the backend actually invokes.
+
+    This is the seam the whole feature hangs on: the module can be perfect and
+    the pixels still get measured in the wrong place if the sidecar is not
+    updated, or is updated after being written. Asserts the composed invariant
+    directly — for every (frame, channel), the recorded offset must equal the
+    channel's own offset plus that frame's drift.
+    """
+    import json
+    import pathlib as _p
+    import subprocess
+    import sys as _sys
+    import tempfile
+
+    n, per = 40, (0.0, 0.3)
+    drive = _drifting_stack(n, per, seed=5)
+    other = _drifting_stack(n, per, seed=6)
+    chan_offset = {"IRM": [0, 0], "TIRF": [3, -2]}
+
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root / "frames", {"IRM": drive, "TIRF": other})
+        # A container that already went through channel registration.
+        (root / "registration.json").write_text(
+            json.dumps(
+                {
+                    "version": 2,
+                    "method": "phase_correlation_gradient_translation",
+                    "referenceChannel": "IRM",
+                    "channels": ["IRM", "TIRF"],
+                    "frames": {
+                        str(t): [chan_offset["IRM"], chan_offset["TIRF"]]
+                        for t in range(n)
+                    },
+                }
+            )
+        )
+
+        proc = subprocess.run(
+            [_sys.executable, str(_p.Path(HELPERS_DIR) / "correct_drift.py"),
+             str(root), "IRM", "IRM,TIRF"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        summary = json.loads(proc.stdout)
+        assert summary["corrected"] is True
+        assert summary["sourceChannel"] == "IRM"
+
+        drift = json.loads((root / "drift.json").read_text())
+        reg = json.loads((root / "registration.json").read_text())
+
+    for t in range(n):
+        ddy, ddx = drift["applied"][str(t)]
+        assert reg["frames"][str(t)] == [
+            [chan_offset["IRM"][0] + ddy, chan_offset["IRM"][1] + ddx],
+            [chan_offset["TIRF"][0] + ddy, chan_offset["TIRF"][1] + ddx],
+        ], f"frame {t} offset does not carry the drift"
+
+
+def test_correct_drift_cli_creates_a_sidecar_when_registration_never_ran():
+    # A single-channel container has no channel-to-channel offset, so no
+    # sidecar exists — but it can still have drifted, and without the map
+    # `mtMetricsExporter` samples the untouched original.
+    import json
+    import pathlib as _p
+    import subprocess
+    import sys as _sys
+    import tempfile
+
+    n = 40
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root / "frames", {"IRM": _drifting_stack(n, (0.0, 0.3), seed=5)})
+        assert not (root / "registration.json").exists()
+
+        proc = subprocess.run(
+            [_sys.executable, str(_p.Path(HELPERS_DIR) / "correct_drift.py"),
+             str(root), "IRM", "IRM"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+
+        reg = json.loads((root / "registration.json").read_text())
+        drift = json.loads((root / "drift.json").read_text())
+
+    assert reg["channels"] == ["IRM"]
+    for t, (ddy, ddx) in drift["applied"].items():
+        assert reg["frames"][t] == [[ddy, ddx]], t
+
+
+def test_correct_drift_cli_rejects_a_source_channel_it_was_not_given():
+    # The caller resolves the driving channel; a typo must fail loudly rather
+    # than silently falling back to channel 0, which is the whole reason this
+    # is passed in instead of guessed.
+    import pathlib as _p
+    import subprocess
+    import sys as _sys
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        root = _p.Path(d)
+        _write_stack(root / "frames", {"IRM": _drifting_stack(6, (0.0, 0.3))})
+        proc = subprocess.run(
+            [_sys.executable, str(_p.Path(HELPERS_DIR) / "correct_drift.py"),
+             str(root), "TIRF", "IRM"],
+            capture_output=True, text=True,
+        )
+    assert proc.returncode == 2
+    assert "not among" in proc.stderr
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except Exception as exc:  # noqa: BLE001 - report all, exit non-zero
+                failures += 1
+                print(f"FAIL {name}: {exc}")
+    print(f"\n{'OK' if failures == 0 else f'{failures} FAILED'}")
+    sys.exit(1 if failures else 0)

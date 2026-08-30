@@ -31,6 +31,8 @@ const {
   fsRenameMock,
   fsRmMock,
   fsReaddirMock,
+  fsAccessMock,
+  correctDriftMock,
   sharpMock,
   loggerErrorMock,
 } = vi.hoisted(() => ({
@@ -45,6 +47,8 @@ const {
   fsRenameMock: vi.fn(),
   fsRmMock: vi.fn(),
   fsReaddirMock: vi.fn(),
+  fsAccessMock: vi.fn(),
+  correctDriftMock: vi.fn(),
   sharpMock: vi.fn(),
   loggerErrorMock: vi.fn(),
 }));
@@ -68,6 +72,7 @@ vi.mock('fs/promises', () => ({
     rename: fsRenameMock,
     rm: fsRmMock,
     readdir: fsReaddirMock,
+    access: fsAccessMock,
     copyFile: vi.fn(),
     cp: vi.fn(),
     unlink: vi.fn(),
@@ -77,6 +82,7 @@ vi.mock('fs/promises', () => ({
   rename: fsRenameMock,
   rm: fsRmMock,
   readdir: fsReaddirMock,
+  access: fsAccessMock,
   copyFile: vi.fn(),
   cp: vi.fn(),
   unlink: vi.fn(),
@@ -92,6 +98,10 @@ vi.mock('sharp', () => ({
 
 vi.mock('../video/videoExtractor', () => ({
   extractVideoSafe: extractMock,
+}));
+
+vi.mock('../video/pythonExtractor', () => ({
+  correctDriftInContainer: correctDriftMock,
 }));
 
 vi.mock('../../utils/config', () => ({
@@ -121,6 +131,9 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     fsRenameMock.mockResolvedValue(undefined);
     fsRmMock.mockResolvedValue(undefined);
     fsReaddirMock.mockResolvedValue(['irm.png']);
+    // No per-position registration.json unless a test says otherwise.
+    fsAccessMock.mockRejectedValue(new Error('ENOENT'));
+    correctDriftMock.mockResolvedValue({ corrected: false });
     sharpMock.mockResolvedValue(undefined);
     prismaImageCreate.mockResolvedValue({ id: 'container-1' });
     prismaImageUpdate.mockResolvedValue({});
@@ -266,8 +279,15 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     expect(updateNames).toContain('WellD03.nd2 — D03_0000');
     expect(updateNames).toContain('WellD03.nd2 — D03_0002');
     // Moves: 1 source temp→original, then per position a frames-dir move +
-    // a per-position TIFF move = 1 + 3*2 = 7.
+    // a per-position TIFF move = 1 + 3*2 = 7. No registration.json here —
+    // `fsAccessMock` rejects, modelling an upload that did not opt into
+    // channel registration.
     expect(fsRenameMock).toHaveBeenCalledTimes(7);
+    expect(
+      fsRenameMock.mock.calls.filter(c =>
+        String(c[0]).endsWith('registration.json')
+      )
+    ).toHaveLength(0);
     // Each container owns its OWN single-position TIFF original (self-
     // contained — no shared/dangling original across positions).
     const originalPaths = prismaImageUpdate.mock.calls
@@ -282,6 +302,123 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     // The multi-position source ND2 is deleted after the split.
     const rmTargets = fsRmMock.mock.calls.map(c => String(c[0]));
     expect(rmTargets.some(p => p.endsWith('original.nd2'))).toBe(true);
+  });
+
+  it("relocates each position's registration.json instead of deleting it", async () => {
+    // The sidecar is written per position into the staging dir, and only
+    // `frames` and the TIFF were moved out before that dir was removed — so it
+    // was deleted, and `mtMetricsExporter` then sampled the raw original
+    // UNREGISTERED, silently and permanently. Pre-existing bug, found while
+    // moving drift correction out of the extractor.
+    let nextId = 0;
+    prismaImageCreate.mockImplementation(() =>
+      Promise.resolve({ id: `c-${++nextId}` })
+    );
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    fsAccessMock.mockResolvedValue(undefined); // the sidecar exists
+    extractMock.mockResolvedValue({
+      kind: 'multi',
+      positions: [0, 1, 2].map(index => ({
+        positionIndex: index,
+        positionName: `D03_000${index}`,
+        stageXUm: index,
+        stageYUm: -index,
+        framesSubdir: `pos_${String(index).padStart(4, '0')}`,
+        originalFile: 'original.tif',
+        result: {
+          frameCount: 1,
+          durationMs: null,
+          frameIntervalMs: null,
+          pixelSizeUm: 0.072,
+          channels: [
+            { name: 'IRM', type: 'irm', isSegmentationSource: true },
+          ],
+          width: 512,
+          height: 512,
+        },
+      })),
+    });
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'WellD03.nd2',
+      mimeType: 'image/nd2',
+      tempFilePath: '/tmp/multer/well.nd2',
+    });
+
+    const sidecars = fsRenameMock.mock.calls
+      .map(c => String(c[0]))
+      .filter(src => src.endsWith('registration.json'));
+    expect(sidecars).toHaveLength(3);
+    for (const src of sidecars) {
+      expect(src).toMatch(/pos_\d{4}\/registration\.json$/);
+    }
+  });
+
+  it('drives drift correction with the SEGMENTATION SOURCE, not channel 0', async () => {
+    // The single most important property of this path. Stage drift must be
+    // measured on the label-free channel the polylines and intensities live
+    // on. On a motility assay a fluorescence channel does not measure the
+    // stage — every filament is moving — so correlating it measures gliding
+    // and subtracting it would cancel the signal the experiment records.
+    // Across 65 production microtubule containers channel 0 is the source on
+    // only 45; on the other 20 the two trajectories differ by up to 28 px.
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [
+          { name: 'TIRF_488', type: 'fluorescent', isSegmentationSource: false },
+          { name: 'IRM', type: 'irm', isSegmentationSource: true },
+        ],
+        width: 512,
+        height: 512,
+      },
+    });
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'well.nd2',
+      mimeType: 'image/nd2',
+      tempFilePath: '/tmp/multer/well.nd2',
+      correctDrift: true,
+    });
+
+    expect(correctDriftMock).toHaveBeenCalledTimes(1);
+    const [, channelNames, source] = correctDriftMock.mock.calls[0];
+    expect(source).toBe('IRM');
+    expect(channelNames).toEqual(['TIRF_488', 'IRM']);
+  });
+
+  it('does not correct drift unless the caller asked for it', async () => {
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+        width: 512,
+        height: 512,
+      },
+    });
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'well.nd2',
+      mimeType: 'image/nd2',
+      tempFilePath: '/tmp/multer/well.nd2',
+    });
+
+    expect(correctDriftMock).not.toHaveBeenCalled();
   });
 
   it('multi-position partial failure: rolls back ALL created containers (no orphan frame rows)', async () => {
@@ -455,6 +592,9 @@ describe('videoUploadService — sparse channels', () => {
     fsRenameMock.mockResolvedValue(undefined);
     fsRmMock.mockResolvedValue(undefined);
     fsReaddirMock.mockResolvedValue(['irm.png']);
+    // No per-position registration.json unless a test says otherwise.
+    fsAccessMock.mockRejectedValue(new Error('ENOENT'));
+    correctDriftMock.mockResolvedValue({ corrected: false });
     sharpMock.mockResolvedValue(undefined);
     prismaImageCreate.mockResolvedValue({ id: 'container-1' });
     prismaImageUpdate.mockResolvedValue({});

@@ -243,20 +243,6 @@ def test_wrapper_returns_exactly_the_detailed_numbers():
         assert repr(triple[2]) == repr(est.confidence)
 
 
-if __name__ == "__main__":
-    failures = 0
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            try:
-                fn()
-                print(f"PASS {name}")
-            except Exception as exc:  # noqa: BLE001 - report all, exit non-zero
-                failures += 1
-                print(f"FAIL {name}: {exc}")
-    print(f"\n{'OK' if failures == 0 else f'{failures} FAILED'}")
-    sys.exit(1 if failures else 0)
-
-
 # ---------------------------------------------------------------------------
 # Windowed search + peak-dominance quality (2026-08-29).
 #
@@ -378,3 +364,17 @@ def test_rival_is_measured_outside_the_peak_s_own_shoulder():
     # A clean synthetic match must clear the bar by a wide margin; a shoulder
     # counted as a rival would leave it hovering just above 1.
     assert est.quality > 2.0 * _MIN_PEAK_RATIO, est
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except Exception as exc:  # noqa: BLE001 - report all, exit non-zero
+                failures += 1
+                print(f"FAIL {name}: {exc}")
+    print(f"\n{'OK' if failures == 0 else f'{failures} FAILED'}")
+    sys.exit(1 if failures else 0)

@@ -221,34 +221,17 @@ function buildChannelMeta(
   });
 }
 
-/** Argv for an extractor helper. Kept in one place so the TIFF and ND2 paths
- *  cannot drift apart on which flags they know about. */
-function extractorArgs(
-  sourcePath: string,
-  destDir: string,
-  registerChannels: boolean,
-  correctDrift: boolean
-): string[] {
-  const args = [sourcePath, destDir];
-  if (registerChannels) {
-    args.push('--register-channels');
-  }
-  if (correctDrift) {
-    args.push('--correct-drift');
-  }
-  return args;
-}
-
 export async function extractTiffStack(
   sourcePath: string,
   destDir: string,
   onProgress?: ProgressCallback,
-  registerChannels = false,
-  correctDrift = false
+  registerChannels = false
 ): Promise<ExtractionResult> {
   const result = await runHelper(
     'extract_tiff_stack.py',
-    extractorArgs(sourcePath, destDir, registerChannels, correctDrift),
+    registerChannels
+      ? [sourcePath, destDir, '--register-channels']
+      : [sourcePath, destDir],
     onProgress
   );
   const channels = buildChannelMeta(result.channels, true);
@@ -287,12 +270,13 @@ export async function extractNd2(
   sourcePath: string,
   destDir: string,
   onProgress?: ProgressCallback,
-  registerChannels = false,
-  correctDrift = false
+  registerChannels = false
 ): Promise<ExtractionOutcome> {
   const raw = await runHelper<PythonNd2Result>(
     'extract_nd2.py',
-    extractorArgs(sourcePath, destDir, registerChannels, correctDrift),
+    registerChannels
+      ? [sourcePath, destDir, '--register-channels']
+      : [sourcePath, destDir],
     onProgress
   );
 
@@ -364,4 +348,52 @@ export async function alignChannelFrames(
   manifestPath: string
 ): Promise<ChannelAlignResult> {
   return runHelper<ChannelAlignResult>('add_channel_align.py', [manifestPath]);
+}
+
+/** Outcome of one container's drift-correction pass. `corrected: false` means
+ *  the stack did not move far enough to be worth blanking a border for, or
+ *  nothing on it could be matched — the helper says which on stderr, which
+ *  `runHelper` surfaces at `warn`. */
+export interface DriftCorrectionResult {
+  corrected: boolean;
+  sourceChannel?: string;
+  pairsMeasured?: number;
+  pairsAccepted?: number;
+  anchored?: boolean;
+  maxApplied?: number;
+}
+
+/**
+ * Remove stage drift from an already-extracted container, in place.
+ *
+ * Runs AFTER extraction rather than inside it because the estimate must be
+ * driven by the channel the measurements live on — which `buildChannelMeta`
+ * only resolves once the extractor has returned its channel list, and which
+ * a fluorescence channel of a motility assay must never be (correlating that
+ * measures filament gliding and calls it drift). See `correct_drift.py`.
+ *
+ * Rewrites the frame PNGs with a rounded, lossless integer shift and folds the
+ * correction into `registration.json`. Never throws for a stack it merely
+ * cannot measure; it declines and says so.
+ */
+export async function correctDriftInContainer(
+  containerDir: string,
+  channelNames: string[],
+  sourceChannel: string
+): Promise<DriftCorrectionResult> {
+  if (channelNames.length === 0 || !channelNames.includes(sourceChannel)) {
+    throw new Error(
+      `drift correction: source channel '${sourceChannel}' is not among [${channelNames.join(', ')}]`
+    );
+  }
+  const result = await runHelper<DriftCorrectionResult>('correct_drift.py', [
+    containerDir,
+    sourceChannel,
+    channelNames.join(','),
+  ]);
+  logger.info('Drift correction finished', 'VideoExtractor', {
+    containerDir,
+    ...result,
+  });
+  return result;
 }

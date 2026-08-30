@@ -84,16 +84,19 @@ _MAX_SHIFT_PX = 16
 # genuine registration peak IS the global maximum, so the ratio exceeds 1; a
 # noise peak means the real maximum lies somewhere else, so it falls below 1.
 # Measured on those same 116 production pairs, with the rival taken outside a
-# ±_PEAK_EXCLUSION_PX disc around the peak:
+# ±_PEAK_EXCLUSION_PX box around the peak:
 #
 #     genuine pairs  n=52  min 1.006   median 10.5   max 32687
 #     spurious pairs n=64  min 0.195   median 0.77   max 0.991
 #
-# 1.2 sits in the empty gap with ~20 % margin either way: it keeps 50 of 52
-# genuine estimates and admits 0 of 64 spurious ones.
+# The structural boundary is 1.0 — the empty gap in that sample is
+# [0.991, 1.006]. 1.2 sits ~21 % ABOVE the highest spurious score, buying
+# headroom on data the sample never saw; the price is paid on the genuine side.
+# At this value it keeps 50 of 52 genuine estimates and admits 0 of 64 spurious
+# ones — change it and those two counts stop describing it.
 _MIN_PEAK_RATIO = 1.2
 
-# Radius of the disc around the winning peak that is excluded when looking for
+# Half-width of the square window around the winning peak that is excluded when looking for
 # its rival. A real correlation peak is a few pixels wide, so without this the
 # peak's own shoulder is its strongest competitor and every ratio collapses to
 # ~1 regardless of match quality.
@@ -103,8 +106,10 @@ _PEAK_EXCLUSION_PX = 3
 # all-constant frame scores 0 here). It is NOT the discriminator and never was:
 # the docstring below used to claim a no-match surface scores ~1, but measured,
 # two unrelated frames score 6.7-8.1 — because ``mean + std`` makes this ratio
-# track the expected maximum of N noise samples (≈√(2 ln N) for N pixels), a
-# property of the SURFACE SIZE, not of match quality. No value of this threshold
+# track the extreme value of N noise samples, a property of the SURFACE SIZE,
+# not of match quality. (√(2 ln N) is the Gaussian idealisation of that growth
+# and under-predicts the measured 6.7-8.1, so read it as the reason, not the
+# formula.) No value of this threshold
 # separates the populations, which is why _MIN_PEAK_RATIO exists.
 _MIN_CONFIDENCE = 3.0
 
@@ -118,13 +123,16 @@ _MIN_CONFIDENCE = 3.0
 # high confidence, so a caller counting zero shifts cannot tell a no-op success
 # from a silent failure.
 #
-# NOTE on branch ORDER: the plausibility guard runs BEFORE the confidence
-# guard, so an estimate that is both implausibly large AND weak is reported as
-# ``implausible_shift``. That is what the code does; the reason names the
-# branch actually taken, not a priority ranking.
+# NOTE: there are no longer two ordered guards. ONE combined gate accepts
+# (``quality`` AND ``confidence``); the two rejection reasons only CLASSIFY a
+# rejection by where the global peak fell. The observable labelling is
+# unchanged, but nothing is "guarded" in that order any more.
 REASON_OK = "ok"  # estimate accepted and returned as-is (may be a real (0, 0))
-REASON_LOW_CONFIDENCE = "low_confidence"  # peak-to-background < _MIN_CONFIDENCE
-REASON_IMPLAUSIBLE_SHIFT = "implausible_shift"  # peak beyond _MAX_SHIFT_FRACTION
+#: Rejected, global peak INSIDE the window. Despite the name this fires mostly
+#: on a weak `quality` at a high `confidence` — see the note above.
+REASON_LOW_CONFIDENCE = "low_confidence"
+#: Rejected, global peak OUTSIDE the ±`max_shift_px` window.
+REASON_IMPLAUSIBLE_SHIFT = "implausible_shift"
 # Not produced here — :func:`estimate_translation_detailed` RAISES on a shape
 # mismatch. It exists for callers that catch that case up-front and degrade to
 # an unshifted copy rather than aborting a batch (``add_channel_align.py``), so
@@ -148,8 +156,9 @@ class TranslationEstimate(NamedTuple):
     reason: str
     peak_dy: int
     peak_dx: int
-    #: Winning peak / best rival outside a ±_PEAK_EXCLUSION_PX disc. >1 means
-    #: the accepted peak is the global maximum. This is what decides trust.
+    #: Winning peak / best rival outside a ±_PEAK_EXCLUSION_PX box. Above 1 the
+    #: peak beats everything outside that box — a near-1 value can still have a
+    #: rival a few px away. Acceptance needs this AND ``confidence``.
     quality: float = 0.0
 
 
@@ -234,17 +243,24 @@ def estimate_translation_detailed(
     """:func:`estimate_translation` plus the outcome ``reason`` and the raw
     correlation peak.
 
-    The registration math and both guards are unchanged — this only *names*
-    the branch that produced the returned shift:
+    Same numbers as :func:`estimate_translation`, plus the outcome ``reason``,
+    the raw GLOBAL correlation peak, and ``quality``:
 
-    * ``ok`` — the peak passed both guards and is returned. A returned
-      ``(0, 0)`` here is a genuine success: the channels are already aligned.
-    * ``implausible_shift`` — a peak was found but sits further than
-      ``_MAX_SHIFT_FRACTION`` of the smaller dimension from the origin, so it
-      was discarded. Zeroed shift, confidence untouched — this is the silent
-      failure that used to be indistinguishable from "already aligned".
-    * ``low_confidence`` — the peak-to-background ratio is below
-      ``_MIN_CONFIDENCE`` (a flat, no-match correlation surface).
+    * ``ok`` — the windowed peak cleared both ``_MIN_PEAK_RATIO`` and
+      ``_MIN_CONFIDENCE`` and is returned. A returned ``(0, 0)`` here is a
+      genuine success: the channels are already aligned.
+    * ``implausible_shift`` — rejected, and the GLOBAL peak lies outside the
+      ±``max_shift_px`` window: something elsewhere in the frame correlated
+      better than anything plausible. ``peak_dy``/``peak_dx`` carry that
+      candidate so a caller can report WHAT it refused.
+    * ``low_confidence`` — rejected with the global peak inside the window.
+      The name predates ``quality``: in practice this fires on a weak
+      ``quality`` at a ``confidence`` well above ``_MIN_CONFIDENCE`` (two
+      unrelated production frames score 6-8 there), so read it as "no dominant
+      peak", not as a statement about ``_MIN_CONFIDENCE``.
+
+    Note both rejection reasons are CLASSIFICATIONS of one combined gate, not
+    two guards applied in order.
 
     A shape mismatch raises, as before; it is not a reason this function can
     return (see ``REASON_SHAPE_MISMATCH``).
@@ -342,7 +358,7 @@ def estimate_translation_detailed(
     win_val = float(corr[dy % h, dx % w])
 
     # --- quality: the winning peak against its best rival -------------------
-    # The exclusion disc is written into `corr` in place and never restored:
+    # The exclusion window is written into `corr` in place and never restored:
     # `corr` is local and dead after this. A masked copy would cost another
     # full-frame float64 (32 MB at 2048²), which the memory note above exists
     # to avoid.
@@ -406,11 +422,21 @@ def write_registration_sidecar(
     """Persist the per-frame per-channel translation applied at extraction, as
     ``<dest_dir>/registration.json``. Downstream consumers that re-read the raw
     file (MT metrics / kymographs) load this to sample each channel in the
-    registered (channel-0) space. Single-channel videos have nothing to record,
-    so this is a no-op there. Shared by both extractors so the on-disk format
-    stays identical.
+    registered (channel-0) space. Shared by both extractors so the on-disk
+    format stays identical.
+
+    A single-channel video has no channel-TO-channel offset to record, but it
+    can still carry a per-frame DRIFT offset, and that one is load-bearing:
+    without the sidecar `mtMetricsExporter.readRegistrationOffsets` returns
+    undefined and `mt_metrics.py` samples the untouched original, up to 20 px
+    from where the polylines drawn on the de-drifted PNGs actually sit. So the
+    skip is on "nothing to record", not on "one channel" — the two stopped
+    meaning the same thing when drift correction arrived (production has 4
+    single-channel multi-frame microtubule containers).
     """
-    if len(channel_names) <= 1:
+    if len(channel_names) <= 1 and not any(
+        dy or dx for rows in offsets.values() for dy, dx in rows
+    ):
         return
     data = {
         "version": 2,

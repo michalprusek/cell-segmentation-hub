@@ -38,6 +38,7 @@ import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { assertSafeStorageSegment } from '../utils/storagePath';
 import { extractVideoSafe } from './video/videoExtractor';
+import { correctDriftInContainer } from './video/pythonExtractor';
 import { isSafeChannelName } from './video/types';
 import type {
   ChannelMeta,
@@ -279,6 +280,47 @@ async function withSparseFrameIds(
  *
  * Frames must already be on disk at ``<baseDir>/frames/<TTTT>/<channel>.png``.
  */
+/** Remove stage drift from one finished container, driven by the channel the
+ *  measurements live on.
+ *
+ *  Runs here rather than inside the extractor because that channel is only
+ *  resolved by `buildChannelMeta` once extraction has returned, and picking the
+ *  wrong one is not cosmetic: on a motility assay a fluorescence channel
+ *  measures filament gliding, so de-drifting on it would subtract the very
+ *  signal the experiment records. Across 65 production microtubule containers
+ *  the source is channel 0 on only 45 — on the other 20 the two trajectories
+ *  disagree by up to 28 px.
+ *
+ *  Never fatal: the correction is an optional improvement on frames that are
+ *  already written and already correct, so a failure is logged and the upload
+ *  completes. Losing an hour of ND2 extraction to it would be the wrong trade.
+ */
+async function correctDriftForContainer(
+  containerDir: string,
+  channels: { name: string; isSegmentationSource?: boolean }[]
+): Promise<void> {
+  if (channels.length === 0) {
+    return;
+  }
+  // Same resolution every other consumer uses (imageService, ChannelSwitcher):
+  // the marked source, else the first channel.
+  const source =
+    channels.find(c => c.isSegmentationSource)?.name ?? channels[0].name;
+  try {
+    await correctDriftInContainer(
+      containerDir,
+      channels.map(c => c.name),
+      source
+    );
+  } catch (err) {
+    logger.warn(
+      `Drift correction failed for ${containerDir}; frames left uncorrected`,
+      'VideoUploadService',
+      { error: err instanceof Error ? err.message : String(err) }
+    );
+  }
+}
+
 async function finalizeContainer(params: {
   containerId: string;
   baseDir: string;
@@ -509,11 +551,14 @@ export async function uploadVideoFromFile(options: {
           p.message ?? `Frame ${p.currentFrame ?? '?'}`
         ),
       registerChannels,
-      correctDrift,
     });
 
     // 4a. Single-position / ordinary video: finalize the pre-created row.
     if (outcome.kind === 'single') {
+      if (correctDrift) {
+        reportProgress('persisting', 0.82, 'Correcting stage drift');
+        await correctDriftForContainer(baseDir, outcome.result.channels);
+      }
       reportProgress('persisting', 0.85, 'Generating thumbnail');
       await finalizeContainer({
         containerId,
@@ -606,9 +651,32 @@ export async function uploadVideoFromFile(options: {
       );
       const originalDest = path.join(cBaseDir, originalFile);
       await moveFile(path.join(stagingDir, originalFile), originalDest);
+      // The channel-registration sidecar is written per position, and only
+      // `frames` and the original were being relocated — so the `rm` below
+      // deleted it and `mtMetricsExporter` then sampled the raw file
+      // UNREGISTERED, silently. Pre-existing; found while moving drift
+      // correction out of the extractor.
+      //
+      // Guarded on existence rather than moved-and-swallowed: the sidecar is
+      // absent for every upload that did not opt into registration, and a
+      // blanket catch there would hide a real move failure just as quietly as
+      // the benign case.
+      const posSidecar = path.join(stagingDir, 'registration.json');
+      if (
+        await fs
+          .access(posSidecar)
+          .then(() => true)
+          .catch(() => false)
+      ) {
+        await moveFile(posSidecar, path.join(cBaseDir, 'registration.json'));
+      }
       await fs
         .rm(stagingDir, { recursive: true, force: true })
         .catch(() => undefined);
+
+      if (correctDrift) {
+        await correctDriftForContainer(cBaseDir, pos.result.channels);
+      }
 
       const originalStat = await fs.stat(originalDest);
       await finalizeContainer({
