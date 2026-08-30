@@ -110,6 +110,29 @@ def main() -> int:
         print(json.dumps(drift))
         return 0
 
+    # From here the PIXELS HAVE MOVED. Composing the sidecar is what keeps the
+    # stored frames and the raw file in the same space, so a failure in any of
+    # the steps below leaves exactly the state
+    # `compose_into_registration_offsets` exists to prevent: de-drifted PNGs
+    # measured against an un-composed map, silently, by exactly the drift.
+    # Same exit code as a failed rewrite, for the same reason — the container
+    # must not be kept.
+    try:
+        return _finish(container, channel_names, source_channel, drift)
+    except Exception as exc:  # noqa: BLE001 - re-raised as a distinct exit code
+        print(
+            f"drift: frames were rewritten but the sidecar could not be "
+            f"composed on {container} ({type(exc).__name__}: {exc}). The stored "
+            f"frames are de-drifted and registration.json does not say so; this "
+            f"container must not be kept.",
+            file=sys.stderr,
+        )
+        return EXIT_REWRITE_FAILED
+
+
+def _finish(container, channel_names, source_channel, drift) -> int:
+    """Persist the provenance and fold the drift into the registration map."""
+
     (container / "drift.json").write_text(json.dumps(drift))
 
     # Fold into the channel-registration offsets so the map that samples the

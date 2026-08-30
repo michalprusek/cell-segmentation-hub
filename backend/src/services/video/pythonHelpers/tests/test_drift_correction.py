@@ -637,6 +637,39 @@ def test_an_unreadable_source_channel_declines_instead_of_aborting():
 
 
 
+def test_a_failure_AFTER_the_rewrite_exits_with_the_fatal_code():
+    """The pixels have moved; the map has not. That must not read as a decline.
+
+    The rewrite itself is fatal, but everything after it — writing drift.json,
+    reading the sidecar, composing, writing it back — runs with the frames
+    ALREADY de-drifted. A plain non-zero exit there is indistinguishable from a
+    bad-arguments exit, so the caller logs a warning and finalises a container
+    whose stored frames and registration map disagree by exactly the drift.
+
+    Provoked by making `registration.json` a DIRECTORY, so the composed sidecar
+    cannot be written.
+    """
+    n = 24
+    frames = _drifting_stack(n, (0.0, 0.4), seed=5)
+    with _staged({"IRM": frames}, sub="frames") as root:
+        (root / "registration.json").mkdir()
+
+        proc = subprocess.run(
+            [sys.executable, str(pathlib.Path(HELPERS_DIR) / "correct_drift.py"),
+             str(root), "IRM", "IRM"],
+            capture_output=True, text=True,
+        )
+
+        assert proc.returncode == 4, (
+            f"a post-rewrite failure must exit with the FATAL code so the "
+            f"upload rolls back, got {proc.returncode}: {proc.stderr}"
+        )
+        assert "must not be kept" in proc.stderr, proc.stderr
+        # And it really had rewritten frames before failing, or this test would
+        # be pinning the wrong path.
+        assert "rewritten" in proc.stderr or "composed" in proc.stderr, proc.stderr
+
+
 def test_correct_drift_cli_folds_the_shift_into_the_registration_sidecar():
     """End to end through the CLI the backend actually invokes.
 

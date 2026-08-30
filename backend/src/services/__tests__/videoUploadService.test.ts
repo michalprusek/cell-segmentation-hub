@@ -582,6 +582,43 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     );
   });
 
+  it('ROLLS BACK when the drift helper is KILLED, which reports no exit code', async () => {
+    // The back door into the same corruption: `runHelper` builds a plain Error
+    // for a signal death, so a SIGKILL (the cgroup OOM killer, on a container
+    // that is memory-capped while rewriting hundreds of PNGs) carried no exit
+    // code and landed in the "declined" branch. A killed helper never gets to
+    // say whether it had started writing, so it is treated as if it had.
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+        width: 512,
+        height: 512,
+      },
+    });
+    correctDriftMock.mockRejectedValue(
+      Object.assign(
+        new Error('python helper correct_drift.py was killed by SIGKILL'),
+        { signal: 'SIGKILL' }
+      )
+    );
+
+    await expect(
+      uploadVideoFromFile({
+        projectId: 'proj-1',
+        originalName: 'well.nd2',
+        mimeType: 'image/nd2',
+        tempFilePath: '/tmp/multer/well.nd2',
+      })
+    ).rejects.toThrow(/SIGKILL/);
+  });
+
   it('completes the upload when drift correction declines without touching frames', async () => {
     // The other half of the same rule: a decline, or a helper that fails BEFORE
     // rewriting, is an optional improvement not taken. Losing an hour of ND2

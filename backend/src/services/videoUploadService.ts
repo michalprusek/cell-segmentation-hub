@@ -319,14 +319,25 @@ async function correctDriftForContainer(
       source
     );
   } catch (err) {
-    if ((err as HelperExitError)?.exitCode === EXIT_DRIFT_REWRITE_FAILED) {
+    // A KILLED helper (SIGKILL from the cgroup OOM killer is the realistic
+    // one on this deployment) never gets to report anything, so it cannot tell
+    // us whether it had started rewriting. Treated as fatal for the same reason
+    // exit 4 is: the cost of rolling back an upload that was actually fine is a
+    // retry, and the cost of keeping a seam-corrupted one is silently wrong
+    // measurements nobody can detect.
+    const failure = err as HelperExitError;
+    if (
+      failure?.exitCode === EXIT_DRIFT_REWRITE_FAILED ||
+      failure?.signal !== undefined
+    ) {
       // Pixels have already moved. Let this reach `uploadVideoFromFile`'s
       // catch so cleanupOnFailure runs and the container is rolled back.
       logger.error(
-        `Drift correction failed PART-WAY for ${containerDir}: frames are in ` +
-          'mixed coordinate spaces and registration.json was not composed. ' +
-          'Rolling the upload back rather than keeping a container whose ' +
-          'cross-frame measurements are silently wrong.',
+        `Drift correction failed for ${containerDir} at a point where frames ` +
+          'may already have been rewritten: they would be in mixed coordinate ' +
+          'spaces with registration.json not composed. Rolling the upload back ' +
+          'rather than keeping a container whose cross-frame measurements are ' +
+          'silently wrong.',
         err instanceof Error ? err : new Error(String(err)),
         'VideoUploadService',
         { containerDir, source }

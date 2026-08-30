@@ -117,12 +117,12 @@ async function runHelper<T = PythonResult>(
               'and raise the backend memory limit in docker-compose.production.yml ' +
               'if the file is legitimately that large.'
             : '';
-        return reject(
-          new Error(
-            `python helper ${scriptName} was killed by ${signal}${oomHint}` +
-              (stderr.trim() ? ` Last stderr: ${stderr.slice(-500)}` : '')
-          )
+        const killed: HelperExitError = new Error(
+          `python helper ${scriptName} was killed by ${signal}${oomHint}` +
+            (stderr.trim() ? ` Last stderr: ${stderr.slice(-500)}` : '')
         );
+        killed.signal = signal;
+        return reject(killed);
       }
       if (code !== 0) {
         // The code is attached, not just interpolated into the message: one
@@ -357,6 +357,10 @@ export async function alignChannelFrames(
 /** An `Error` from a helper that exited non-zero, carrying the exit code. */
 export interface HelperExitError extends Error {
   exitCode?: number;
+  /** Set instead of `exitCode` when the child was KILLED. A helper that dies
+   *  this way never gets to report anything, so a caller that cares whether
+   *  data was already modified must treat it as "possibly mid-write". */
+  signal?: NodeJS.Signals;
 }
 
 /** `correct_drift.py` exited having ALREADY rewritten some frames. The stack is
