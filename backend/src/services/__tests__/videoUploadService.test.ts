@@ -25,11 +25,13 @@ const {
   prismaImageCreateMany,
   prismaImageDeleteMany,
   prismaImageFindMany,
+  prismaProjectFindUnique,
   extractMock,
   fsStatMock,
   fsMkdirMock,
   fsRenameMock,
   fsRmMock,
+  fsRmdirMock,
   fsReaddirMock,
   fsAccessMock,
   correctDriftMock,
@@ -42,10 +44,12 @@ const {
   prismaImageDeleteMany: vi.fn(),
   prismaImageFindMany: vi.fn(),
   extractMock: vi.fn(),
+  prismaProjectFindUnique: vi.fn(),
   fsStatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
   fsRenameMock: vi.fn(),
   fsRmMock: vi.fn(),
+  fsRmdirMock: vi.fn(),
   fsReaddirMock: vi.fn(),
   fsAccessMock: vi.fn(),
   correctDriftMock: vi.fn(),
@@ -62,6 +66,7 @@ vi.mock('../../db/prismaClient', () => ({
       deleteMany: prismaImageDeleteMany,
       findMany: prismaImageFindMany,
     },
+    project: { findUnique: prismaProjectFindUnique },
   },
 }));
 
@@ -71,6 +76,7 @@ vi.mock('fs/promises', () => ({
     mkdir: fsMkdirMock,
     rename: fsRenameMock,
     rm: fsRmMock,
+    rmdir: fsRmdirMock,
     readdir: fsReaddirMock,
     access: fsAccessMock,
     copyFile: vi.fn(),
@@ -81,6 +87,7 @@ vi.mock('fs/promises', () => ({
   mkdir: fsMkdirMock,
   rename: fsRenameMock,
   rm: fsRmMock,
+  rmdir: fsRmdirMock,
   readdir: fsReaddirMock,
   access: fsAccessMock,
   copyFile: vi.fn(),
@@ -123,6 +130,29 @@ import { uploadVideoFromFile } from '../videoUploadService';
 
 // --- tests -------------------------------------------------------------
 
+/** What `fs.readdir(stagingDir, { withFileTypes: true })` finds per position.
+ *  The relocation loop moves whatever is here, so a test adds an artifact by
+ *  adding it to this list rather than by teaching the service about it. */
+let stagingEntries: { name: string; dir: boolean }[] = [];
+
+function installReaddir(): void {
+  stagingEntries = [
+    { name: 'frames', dir: true },
+    { name: 'original.tif', dir: false },
+  ];
+  fsReaddirMock.mockImplementation(
+    (_p: unknown, opts?: { withFileTypes?: boolean }) =>
+      Promise.resolve(
+        opts?.withFileTypes
+          ? stagingEntries.map(e => ({
+              name: e.name,
+              isDirectory: () => e.dir,
+            }))
+          : ['irm.png']
+      )
+  );
+}
+
 describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -130,7 +160,10 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     fsMkdirMock.mockResolvedValue(undefined);
     fsRenameMock.mockResolvedValue(undefined);
     fsRmMock.mockResolvedValue(undefined);
-    fsReaddirMock.mockResolvedValue(['irm.png']);
+    installReaddir();
+    // The gate `uploadVideoFromFile` now applies itself. Most tests here run a
+    // microtubule project; the ones that care about the other side say so.
+    prismaProjectFindUnique.mockResolvedValue({ type: 'microtubules' });
     // No per-position registration.json unless a test says otherwise.
     fsAccessMock.mockRejectedValue(new Error('ENOENT'));
     correctDriftMock.mockResolvedValue({ corrected: false });
@@ -315,7 +348,10 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
       Promise.resolve({ id: `c-${++nextId}` })
     );
     prismaImageCreateMany.mockResolvedValue({ count: 1 });
-    fsAccessMock.mockResolvedValue(undefined); // the sidecar exists
+    // The extractor wrote a sidecar into the staging dir. Stated as "it is on
+    // disk" rather than as "fs.access resolves": the relocation moves whatever
+    // it finds, so this is what the condition actually is now.
+    stagingEntries.push({ name: 'registration.json', dir: false });
     extractMock.mockResolvedValue({
       kind: 'multi',
       positions: [0, 1, 2].map(index => ({
@@ -355,6 +391,64 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     }
   });
 
+  it('moves an artifact nobody taught it about, and empties the staging dir', async () => {
+    // The generalisation the sidecar bug asked for. Naming `registration.json`
+    // as a third special case rescues that one file and leaves the trap set for
+    // whatever an extractor learns to write next; moving EVERYTHING closes it.
+    // `drift.json` stands in for that next artifact here.
+    let nextId = 0;
+    prismaImageCreate.mockImplementation(() =>
+      Promise.resolve({ id: `c-${++nextId}` })
+    );
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    stagingEntries.push({ name: 'drift.json', dir: false });
+    extractMock.mockResolvedValue({
+      kind: 'multi',
+      positions: [
+        {
+          positionIndex: 0,
+          positionName: 'D03_0000',
+          stageXUm: 0,
+          stageYUm: 0,
+          framesSubdir: 'pos_0000',
+          originalFile: 'original.tif',
+          result: {
+            frameCount: 1,
+            durationMs: null,
+            frameIntervalMs: null,
+            pixelSizeUm: 0.072,
+            channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+            width: 512,
+            height: 512,
+          },
+        },
+      ],
+    });
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'WellD03.nd2',
+      mimeType: 'image/nd2',
+      tempFilePath: '/tmp/multer/well.nd2',
+    });
+
+    const moved = fsRenameMock.mock.calls.map(c => String(c[0]));
+    expect(moved.some(src => src.endsWith('pos_0000/drift.json'))).toBe(true);
+
+    // And the staging dir is removed NON-recursively: an empty directory is the
+    // proof nothing was left behind. A recursive rm would delete a missed
+    // artifact exactly as quietly as before.
+    expect(fsRmdirMock).toHaveBeenCalledWith(
+      expect.stringContaining('pos_0000')
+    );
+    const recursiveStagingRm = fsRmMock.mock.calls.filter(
+      c =>
+        String(c[0]).includes('pos_0000') &&
+        (c[1] as { recursive?: boolean } | undefined)?.recursive
+    );
+    expect(recursiveStagingRm).toHaveLength(0);
+  });
+
   it('drives drift correction with the SEGMENTATION SOURCE, not channel 0', async () => {
     // The single most important property of this path. Stage drift must be
     // measured on the label-free channel the polylines and intensities live
@@ -386,7 +480,6 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
       originalName: 'well.nd2',
       mimeType: 'image/nd2',
       tempFilePath: '/tmp/multer/well.nd2',
-      correctDrift: true,
     });
 
     expect(correctDriftMock).toHaveBeenCalledTimes(1);
@@ -395,7 +488,11 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     expect(channelNames).toEqual(['TIRF_488', 'IRM']);
   });
 
-  it('does not correct drift unless the caller asked for it', async () => {
+  it('does not correct drift on a non-microtubule project', async () => {
+    // The gate is the service's, not the caller's: no argument can turn drift
+    // correction on for a project type whose frames are not measured against
+    // each other.
+    prismaProjectFindUnique.mockResolvedValue({ type: 'spheroid' });
     prismaImageCreate.mockResolvedValue({ id: 'container-1' });
     prismaImageCreateMany.mockResolvedValue({ count: 1 });
     extractMock.mockResolvedValue({
@@ -419,6 +516,71 @@ describe('videoUploadService.uploadVideoFromFile (round-2 GAP-1)', () => {
     });
 
     expect(correctDriftMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses channel registration on a non-microtubule project, even when asked', async () => {
+    // Migrated from the controller when the gate moved. A stray
+    // `registerChannels=true` from any other project type must be ignored, and
+    // that has to hold for every caller, not just the HTTP handler.
+    prismaProjectFindUnique.mockResolvedValue({ type: 'spheroid' });
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+        width: 512,
+        height: 512,
+      },
+    });
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'well.nd2',
+      mimeType: 'image/nd2',
+      tempFilePath: '/tmp/multer/well.nd2',
+      registerChannels: true,
+    });
+
+    expect(extractMock).toHaveBeenCalled();
+    // `registerChannels` rides in the options object, 3rd arg.
+    expect(extractMock.mock.calls[0][2]).toMatchObject({
+      registerChannels: false,
+    });
+    expect(correctDriftMock).not.toHaveBeenCalled();
+  });
+
+  it('honours channel registration on a microtubule project', async () => {
+    prismaImageCreate.mockResolvedValue({ id: 'container-1' });
+    prismaImageCreateMany.mockResolvedValue({ count: 1 });
+    extractMock.mockResolvedValue({
+      kind: 'single',
+      result: {
+        frameCount: 3,
+        durationMs: null,
+        frameIntervalMs: null,
+        pixelSizeUm: 0.072,
+        channels: [{ name: 'IRM', type: 'irm', isSegmentationSource: true }],
+        width: 512,
+        height: 512,
+      },
+    });
+
+    await uploadVideoFromFile({
+      projectId: 'proj-1',
+      originalName: 'well.nd2',
+      mimeType: 'image/nd2',
+      tempFilePath: '/tmp/multer/well.nd2',
+      registerChannels: true,
+    });
+
+    expect(extractMock.mock.calls[0][2]).toMatchObject({
+      registerChannels: true,
+    });
   });
 
   it('multi-position partial failure: rolls back ALL created containers (no orphan frame rows)', async () => {
@@ -591,7 +753,10 @@ describe('videoUploadService — sparse channels', () => {
     fsMkdirMock.mockResolvedValue(undefined);
     fsRenameMock.mockResolvedValue(undefined);
     fsRmMock.mockResolvedValue(undefined);
-    fsReaddirMock.mockResolvedValue(['irm.png']);
+    installReaddir();
+    // The gate `uploadVideoFromFile` now applies itself. Most tests here run a
+    // microtubule project; the ones that care about the other side say so.
+    prismaProjectFindUnique.mockResolvedValue({ type: 'microtubules' });
     // No per-position registration.json unless a test says otherwise.
     fsAccessMock.mockRejectedValue(new Error('ENOENT'));
     correctDriftMock.mockResolvedValue({ corrected: false });

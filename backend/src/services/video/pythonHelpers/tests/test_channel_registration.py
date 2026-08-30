@@ -32,8 +32,12 @@ from channel_registration import (  # noqa: E402
     _MIN_CONFIDENCE,
     _MIN_PEAK_RATIO,
     _PEAK_EXCLUSION_PX,
+    REASON_BLANK_PLANE,
+    REASON_NOT_REGISTERED,
     REASON_OK,
+    REASON_REFERENCE,
     estimate_translation_detailed,
+    initial_reasons,
     estimate_translation_prepared,
     prepare_frame,
     read_registration_sidecar,
@@ -378,6 +382,34 @@ def test_correlating_does_not_mutate_a_prepared_spectrum():
     assert np.array_equal(a.spectrum, sa), "the reference spectrum was written to"
     assert np.array_equal(b.spectrum, sb), "the moving spectrum was written to"
     assert tuple(first) == tuple(second), "a reused spectrum changed the answer"
+
+
+def test_a_channel_that_was_never_estimated_does_not_read_as_ok():
+    """Both extractors seeded every channel with `ok` until 2026-08-30.
+
+    That recorded "never attempted" as "estimated and accepted" — the very
+    ambiguity the reasons map exists to end. It lands hardest on sparse stacks,
+    where a blank plane is the normal case: those containers reported a full row
+    of `ok` for registrations that never ran.
+    """
+    # Channel 0 is the origin, not an estimate that returned zero.
+    assert initial_reasons(3, registering=True, blank=[False] * 3) == [
+        REASON_REFERENCE, "not_estimated", "not_estimated",
+    ]
+    # A blank plane on either side means nothing could be estimated.
+    assert initial_reasons(3, registering=True, blank=[False, True, False])[1] \
+        == REASON_BLANK_PLANE
+    assert initial_reasons(3, registering=True, blank=[True, False, False]) == [
+        REASON_REFERENCE, REASON_BLANK_PLANE, REASON_BLANK_PLANE,
+    ], "a blank REFERENCE blocks every channel, not just its own"
+    # Registration off: nothing was attempted anywhere.
+    assert initial_reasons(2, registering=False, blank=[False, False]) == [
+        REASON_NOT_REGISTERED, REASON_NOT_REGISTERED,
+    ]
+    # And the one thing that must NOT appear anywhere above.
+    for case in (initial_reasons(3, registering=True, blank=[False] * 3),
+                 initial_reasons(2, registering=False, blank=[False, False])):
+        assert REASON_OK not in case, "an unattempted channel must not read ok"
 
 
 def test_register_plane_applies_the_offset_and_reports_it():

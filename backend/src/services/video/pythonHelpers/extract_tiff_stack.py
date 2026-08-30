@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from channel_registration import (
-    REASON_OK,
+    initial_reasons,
     register_plane,
     write_registration_sidecar,
 )
@@ -885,11 +885,11 @@ def main() -> int:
         frame_dir = dest / "frames" / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         offset_row = [[0, 0] for _ in range(C)]
-        # Why each offset is what it is. A stored (0, 0) is otherwise
-        # ambiguous — genuinely aligned, or an estimate that was refused —
-        # and that ambiguity hid the 2026-08 mis-registrations.
-        reason_row = [REASON_OK] * C
         blank_row = [is_blank_plane(arr[t, c]) for c in range(C)]
+        # Why each offset is what it is. A stored (0, 0) is otherwise ambiguous
+        # — genuinely aligned, refused, or never attempted — and that ambiguity
+        # hid the 2026-08 mis-registrations. See `initial_reasons`.
+        reason_row = initial_reasons(C, registering=do_register, blank=blank_row)
         ref = arr[t, 0] if do_register else None
         # Skipping registration when either plane is blank changes no output:
         # `estimate_translation_detailed` already returns (0, 0) for a constant plane

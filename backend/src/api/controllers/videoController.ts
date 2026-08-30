@@ -22,7 +22,6 @@ import {
   resolveFrameRepresentation,
   ensureProxySupport,
 } from '../../services/playbackProxyService';
-import { isMicrotubuleProject } from '../../types/validation';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
@@ -202,31 +201,18 @@ export class VideoController {
         return;
       }
 
-      // Opt-in multimodal channel registration (translation-only). The FE only
-      // offers the toggle for microtubule projects; re-check the project type
-      // here (defence in depth) so the flag is honoured ONLY for MT projects —
-      // a stray `registerChannels=true` on any other project type is ignored.
+      // Opt-in multimodal channel registration (translation-only). This reads
+      // the user's INTENT only; the project-type check that makes a stray
+      // `registerChannels=true` harmless on a non-MT project now lives in
+      // `uploadVideoFromFile` (see below).
       const wantsRegister =
         req.body?.registerChannels === 'true' ||
         req.body?.registerChannels === '1' ||
         req.body?.registerChannels === true;
 
-      // Stage-drift correction is NOT a user toggle, unlike the registration
-      // above. Measured across production, 12 of 42 multi-frame videos have
-      // drifted 3-16 px by their last frame, and every one of them reports
-      // (0, 0) between consecutive frames — the per-frame step is ~0.08 px and
-      // rounds away. A user cannot see that to tick a box about, so for the
-      // project type where frames are measured against each other it is simply
-      // always on. See `drift_correction.py`.
-      // Looked up unconditionally now: drift correction needs the project type
-      // whether or not the user asked for channel registration.
-      const project = await prisma.project.findUnique({
-        where: { id: projectId },
-        select: { type: true },
-      });
-      const isMtProject = isMicrotubuleProject(project?.type);
-      const registerChannels = wantsRegister && isMtProject;
-      const correctDrift = isMtProject;
+      // The project-type gate is NOT applied here. `uploadVideoFromFile` owns
+      // it, so a backfill script or a re-extract job gets the same policy this
+      // endpoint does. The controller's job is to say what the USER asked for.
 
       // uploadVideoFromFile owns the tmp file from here — it either
       // renames it into place (success) or removes it via cleanupOnFailure
@@ -236,8 +222,7 @@ export class VideoController {
         originalName: file.originalname,
         mimeType: file.mimetype,
         tempFilePath: file.path,
-        registerChannels,
-        correctDrift,
+        registerChannels: wantsRegister,
       });
 
       ResponseHelper.success(res, {
