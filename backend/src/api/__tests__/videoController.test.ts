@@ -412,7 +412,7 @@ describe('VideoController.upload()', () => {
   describe('microtubule gating', () => {
     /** Drive one upload against a project of `type` and return the options the
      *  controller handed to uploadVideoFromFile. */
-    async function uploadInto(type: string) {
+    async function uploadInto(type: string, body: Record<string, string> = {}) {
       prismaProjectFindUnique.mockResolvedValue({ type });
       prismaUserFindUnique.mockResolvedValue(MOCK_USER);
       prismaProjectFindFirst.mockResolvedValue({ id: 'proj-1' });
@@ -423,6 +423,7 @@ describe('VideoController.upload()', () => {
       testApp.use(
         (req: express.Request, _res: express.Response, next: express.NextFunction) => {
           req.user = { id: 'user-1' };
+          req.body = body;
           req.file = {
             fieldname: 'video',
             originalname: 'clip.tif',
@@ -443,27 +444,22 @@ describe('VideoController.upload()', () => {
       return uploadVideoFromFileMock.mock.calls.at(-1)?.[0];
     }
 
-    it('turns drift correction ON for a microtubule project, with no request flag', () => {
-      // Deliberately not a user toggle, unlike registerChannels: the drift it
-      // removes is ~0.08 px/frame, invisible frame-to-frame, so there is
-      // nothing a user could judge to tick a box about.
-      return uploadInto('microtubules').then(opts => {
-        expect(opts).toMatchObject({ correctDrift: true });
-      });
+    it('forwards the user\'s intent and does NOT decide the policy', async () => {
+      // The project-type gate moved into `uploadVideoFromFile` so that every
+      // caller gets it, not just this endpoint. The controller's remaining job
+      // is to read the request truthfully — so it must NOT pre-filter, and it
+      // must not send a `correctDrift` the service no longer accepts.
+      const opts = await uploadInto('microtubules');
+      expect(opts).toMatchObject({ registerChannels: false });
+      expect(opts).not.toHaveProperty('correctDrift');
     });
 
-    it('leaves drift correction OFF for any other project type', () => {
-      return uploadInto('spheroid').then(opts => {
-        expect(opts).toMatchObject({ correctDrift: false });
-      });
-    });
-
-    it('does not enable channel registration just because drift is on', () => {
-      // registerChannels stays opt-in even on a microtubule project — the two
-      // are gated on the same project type but not on the same consent.
-      return uploadInto('microtubules').then(opts => {
-        expect(opts).toMatchObject({ registerChannels: false });
-      });
+    it('passes registerChannels through unfiltered on any project type', async () => {
+      // Deliberately NOT gated here: a stray `registerChannels=true` on a
+      // non-MT project is made harmless by the service, and duplicating that
+      // check would be a second place for the two to disagree.
+      const opts = await uploadInto('spheroid', { registerChannels: 'true' });
+      expect(opts).toMatchObject({ registerChannels: true });
     });
   });
 });

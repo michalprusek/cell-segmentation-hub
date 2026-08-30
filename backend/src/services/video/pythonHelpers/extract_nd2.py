@@ -39,7 +39,7 @@ from pathlib import Path
 import numpy as np
 
 from channel_registration import (
-    REASON_OK,
+    initial_reasons,
     register_plane,
     write_registration_sidecar,
 )
@@ -564,10 +564,12 @@ def _write_frames(
         frame_dir = frames_root / f"{t:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         offset_row = [[0, 0] for _ in range(C)]
-        reason_row = [REASON_OK] * C
         # One pass over the (already materialised) frame; ``frame_cyx[c]`` is a
         # view, so this costs a min/max scan and no allocation.
         blank_row = [is_blank_plane(frame_cyx[c]) for c in range(C)]
+        # Why each offset is what it is. Seeded from what was ATTEMPTED, not
+        # from `ok`: see `initial_reasons`.
+        reason_row = initial_reasons(C, registering=do_register, blank=blank_row)
         ref = frame_cyx[0] if do_register else None
         ref_usable = do_register and not blank_row[0]
         for c in range(C):
@@ -731,8 +733,8 @@ def main() -> int:
             # max), so it stays lazy on a dask input.
             src = darr if use_dask else f.asarray()
             arr = normalize_to_tcyx(src, axes)
-            T, C, H, W = (int(arr.shape[0]), int(arr.shape[1]),
-                          int(arr.shape[2]), int(arr.shape[3]))
+            T, _C, H, W = (int(arr.shape[0]), int(arr.shape[1]),
+                           int(arr.shape[2]), int(arr.shape[3]))
 
             done = 0
             def _tick():
@@ -800,8 +802,8 @@ def main() -> int:
             else:
                 sub = np.take(full_arr, p, axis=p_axis_idx)
             norm = normalize_to_tcyx(sub, sub_axes)
-            T, C, H, W = (int(norm.shape[0]), int(norm.shape[1]),
-                          int(norm.shape[2]), int(norm.shape[3]))
+            T, _C, H, W = (int(norm.shape[0]), int(norm.shape[1]),
+                           int(norm.shape[2]), int(norm.shape[3]))
 
             subdir = f"pos_{p:04d}"
 

@@ -46,7 +46,7 @@ import sys
 from pathlib import Path
 
 from channel_registration import (
-    REASON_OK,
+    REASON_NOT_REGISTERED,
     read_registration_sidecar,
     write_registration_sidecar,
 )
@@ -98,8 +98,11 @@ def main() -> int:
         offsets = {
             int(t): [[0, 0] for _ in channel_names] for t in drift["applied"]
         }
+        # Drift ran, channel registration did not — so these offsets carry the
+        # drift alone. `ok` would claim an estimate that never happened.
         reasons = {
-            int(t): [REASON_OK] * len(channel_names) for t in drift["applied"]
+            int(t): [REASON_NOT_REGISTERED] * len(channel_names)
+            for t in drift["applied"]
         }
         names = channel_names
 

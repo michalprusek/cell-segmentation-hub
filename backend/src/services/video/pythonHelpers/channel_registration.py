@@ -136,6 +136,20 @@ REASON_OK = "ok"  # estimate accepted and returned as-is (may be a real (0, 0))
 REASON_LOW_CONFIDENCE = "low_confidence"
 #: Rejected, global peak OUTSIDE the ±`max_shift_px` window.
 REASON_IMPLAUSIBLE_SHIFT = "implausible_shift"
+#: Channel 0. Its offset is (0, 0) by definition — the origin every other
+#: channel is measured against — which is NOT the same claim as "an estimate ran
+#: and returned zero".
+REASON_REFERENCE = "reference"
+#: No estimate was attempted because a plane carried no acquisition (this
+#: channel's, or the reference's). The normal case on a sparse stack, where the
+#: microscope only refreshed a channel every N-th frame.
+REASON_BLANK_PLANE = "blank_plane"
+#: The container was extracted without channel registration at all.
+REASON_NOT_REGISTERED = "not_registered"
+#: No estimate ran, for a reason none of the above names. A defensive default:
+#: a future skip condition then reads as "not estimated" rather than silently
+#: inheriting "ok".
+REASON_NOT_ESTIMATED = "not_estimated"
 # Not produced here — :func:`estimate_translation_detailed` RAISES on a shape
 # mismatch. It exists for callers that catch that case up-front and degrade to
 # an unshifted copy rather than aborting a batch (``add_channel_align.py``), so
@@ -453,6 +467,34 @@ def shift_frame(arr: np.ndarray, dy: int, dx: int, fill: int = 0) -> np.ndarray:
 
     if src_y1 > src_y0 and src_x1 > src_x0:
         out[dst_y0:dst_y1, dst_x0:dst_x1] = arr[src_y0:src_y1, src_x0:src_x1]
+    return out
+
+
+def initial_reasons(
+    channel_count: int, *, registering: bool, blank: list[bool]
+) -> list[str]:
+    """What each channel's ``reason`` is BEFORE any estimate runs.
+
+    Both extractors seeded every channel with ``REASON_OK`` until 2026-08-30,
+    which recorded "never attempted" as "estimated and accepted" — the exact
+    ambiguity the reasons map was added to end. It lands hardest on sparse-IRM
+    stacks, where a blank plane is the normal case, not an anomaly: those
+    containers reported a full row of ``ok`` for registrations that never ran.
+
+    Channels that DO get estimated have their entry overwritten by
+    :func:`register_plane`; the value seeded here is what survives for the ones
+    that do not.
+    """
+    if not registering:
+        return [REASON_NOT_REGISTERED] * channel_count
+    out = []
+    for c in range(channel_count):
+        if c == 0:
+            out.append(REASON_REFERENCE)
+        elif blank[0] or blank[c]:
+            out.append(REASON_BLANK_PLANE)
+        else:
+            out.append(REASON_NOT_ESTIMATED)
     return out
 
 

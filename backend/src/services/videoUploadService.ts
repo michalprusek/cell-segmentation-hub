@@ -39,6 +39,7 @@ import { logger } from '../utils/logger';
 import { assertSafeStorageSegment } from '../utils/storagePath';
 import { extractVideoSafe } from './video/videoExtractor';
 import { correctDriftInContainer } from './video/pythonExtractor';
+import { isMicrotubuleProject } from '../types/validation';
 import { isSafeChannelName, resolveSegmentationSource } from './video/types';
 import type {
   ChannelMeta,
@@ -442,14 +443,13 @@ export async function uploadVideoFromFile(options: {
   mimeType: string;
   tempFilePath: string;
   onProgress?: VideoProgressCallback;
-  /** Opt-in multimodal channel registration at extraction (MT projects only —
-   *  the controller only sets this when the user ticked it and the project is
-   *  a microtubule project). Passed through to the extractor. */
+  /** The user asked to align the channels. Whether it actually runs is THIS
+   *  function's decision, not the caller's — it is gated on the project type
+   *  here, the way `addChannelToFrames` gates itself. Stage drift correction is
+   *  derived from the same gate and is deliberately not a parameter: it is not
+   *  a user toggle, because the drift it removes is ~0.08 px/frame and
+   *  invisible frame-to-frame, so there is nothing a user could judge. */
   registerChannels?: boolean;
-  /** Remove stage drift across frames. Automatic for microtubule projects —
-   *  unlike `registerChannels` this is not a user toggle, because the drift it
-   *  removes is invisible frame-to-frame and a user has no way to judge it. */
-  correctDrift?: boolean;
 }): Promise<VideoUploadResult> {
   const {
     projectId,
@@ -457,9 +457,21 @@ export async function uploadVideoFromFile(options: {
     mimeType,
     tempFilePath,
     onProgress,
-    registerChannels,
-    correctDrift,
+    registerChannels: requestedRegisterChannels,
   } = options;
+
+  // The microtubule gate lives here rather than in the HTTP handler, so every
+  // entry point gets it. While it sat in the controller, the service's own
+  // JSDoc had to explain a policy it could not enforce, and any non-HTTP caller
+  // — a backfill script, a re-extract job — would silently have got neither
+  // registration nor drift correction with nothing to notice.
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { type: true },
+  });
+  const isMtProject = isMicrotubuleProject(project?.type);
+  const registerChannels = Boolean(requestedRegisterChannels) && isMtProject;
+  const correctDrift = isMtProject;
 
   // 1. Create container DB row up front so the worker has a stable ID.
   const fileStat = await fs.stat(tempFilePath);
@@ -636,38 +648,31 @@ export async function uploadVideoFromFile(options: {
         await fs.mkdir(cBaseDir, { recursive: true });
       }
 
-      // Relocate this position's frames + its single-position TIFF original
-      // into the container dir, then drop the now-empty pos_<NNNN> staging
-      // subdir.
-      const stagingDir = path.join(baseDir, framesSubdir);
-      await moveDir(
-        path.join(stagingDir, 'frames'),
-        path.join(cBaseDir, 'frames')
-      );
-      const originalDest = path.join(cBaseDir, originalFile);
-      await moveFile(path.join(stagingDir, originalFile), originalDest);
-      // The channel-registration sidecar is written per position, and only
-      // `frames` and the original were being relocated — so the `rm` below
-      // deleted it and `mtMetricsExporter` then sampled the raw file
-      // UNREGISTERED, silently. Pre-existing; found while moving drift
-      // correction out of the extractor.
+      // Relocate EVERY artifact this position produced into its container.
       //
-      // Guarded on existence rather than moved-and-swallowed: the sidecar is
-      // absent for every upload that did not opt into registration, and a
-      // blanket catch there would hide a real move failure just as quietly as
-      // the benign case.
-      const posSidecar = path.join(stagingDir, 'registration.json');
-      if (
-        await fs
-          .access(posSidecar)
-          .then(() => true)
-          .catch(() => false)
-      ) {
-        await moveFile(posSidecar, path.join(cBaseDir, 'registration.json'));
+      // Enumerating the ones we happen to know about is how `registration.json`
+      // came to be lost: `frames` and the original were moved by name, and the
+      // recursive `rm` that followed deleted whatever was left — silently, so
+      // `mtMetricsExporter` then sampled the raw file UNREGISTERED. Naming the
+      // sidecar as a third case fixes that one file and leaves the trap set for
+      // the next artifact an extractor learns to write. Moving everything
+      // closes it, and removes the ordering hazard with it: there is no longer
+      // a separate sidecar move that could be reordered past the drift
+      // correction below, which would compose drift into a map that is then
+      // overwritten by the un-composed one.
+      const stagingDir = path.join(baseDir, framesSubdir);
+      for (const entry of await fs.readdir(stagingDir, {
+        withFileTypes: true,
+      })) {
+        const from = path.join(stagingDir, entry.name);
+        const to = path.join(cBaseDir, entry.name);
+        await (entry.isDirectory() ? moveDir(from, to) : moveFile(from, to));
       }
-      await fs
-        .rm(stagingDir, { recursive: true, force: true })
-        .catch(() => undefined);
+      // Non-recursive on purpose: an EMPTY staging dir is the proof that
+      // nothing was left behind. Anything the loop could not move now fails
+      // loudly here instead of being deleted quietly.
+      await fs.rmdir(stagingDir);
+      const originalDest = path.join(cBaseDir, originalFile);
 
       if (correctDrift) {
         reportProgress(
