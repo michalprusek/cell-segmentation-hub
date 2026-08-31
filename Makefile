@@ -535,10 +535,11 @@ clean-monitoring:
 # Download ML model weights
 download-weights:
 	@echo "📥 Downloading ML model weights..."
-	@echo "This will download ~2.3 GB of model weights (incl. microtubule v5H)"
+	@echo "This will download ~2.6 GB of model weights (incl. microtubule v5H + KymoButler)"
 	@if [ \! -d "backend/segmentation/weights" ]; then mkdir -p backend/segmentation/weights; fi
 	@cd backend/segmentation && python scripts/download_weights.py
 	@./scripts/download-microtubule-weights.sh
+	@./scripts/download-kymobutler-weights.sh
 	@echo "✅ Weights download complete\!"
 
 # Check if model weights exist
@@ -556,6 +557,18 @@ check-weights:
 	else \
 		echo "⚠️  Microtubule v5H weights missing (microtubule_v5h.pth)"; \
 		echo "   Run: ./scripts/download-microtubule-weights.sh"; \
+	fi
+	@# KymoButler backs kymograph trajectory detection. Missing weights do not
+	@# break the service -- /kymograph degrades to `tracks: []` plus a
+	@# velocity_error -- which is exactly why it needs saying out loud here:
+	@# the symptom is "every kymograph finds nothing", not a crash.
+	@if [ -f "backend/segmentation/weights/kymobutler/bidirectional_seg.onnx" ] && \
+	   [ -f "backend/segmentation/weights/kymobutler/decision_module.onnx" ] && \
+	   [ -f "backend/segmentation/weights/kymobutler/unidirectional_seg.onnx" ]; then \
+		echo "✅ KymoButler weights found ($$(du -sh backend/segmentation/weights/kymobutler | cut -f1))"; \
+	else \
+		echo "⚠️  KymoButler weights missing -- kymograph velocity detection will find NO tracks"; \
+		echo "   Run: ./scripts/download-kymobutler-weights.sh"; \
 	fi
 	@echo ""
 	@du -sh backend/segmentation/weights

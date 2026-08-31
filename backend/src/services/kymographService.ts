@@ -582,7 +582,17 @@ export async function buildKymograph(
       ...(detectVelocity && renderOverlay ? { render_overlay: true } : {}),
       ...(renderProfiles ? { render_profiles: true } : {}),
     },
-    { timeout: 120_000 }
+    // 120 s was right when trajectory detection was 0.03-0.2 s of numpy. It is
+    // not right for KymoButler: measured 2.6-131.7 s per kymograph on CPU on
+    // 2026-08-31 (the spread is box load and torch thread count; the GPU path
+    // could not be measured, the host driver was mismatched). At 120 s a single
+    // slow kymograph aborts here while the ML service keeps working on it, so
+    // the editor modal shows a timeout and a batch export — one job per
+    // polyline x channel — dies partway through. Detection is also serialised
+    // one-at-a-time on the ML side, so a queued request waits for the one ahead
+    // of it as well. 10 minutes covers the measured worst case with room for
+    // both, and still fails rather than hanging forever.
+    { timeout: 600_000 }
   );
   const payload = res.data?.data ?? res.data ?? {};
 

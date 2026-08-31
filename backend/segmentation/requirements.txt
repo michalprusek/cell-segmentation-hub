@@ -162,6 +162,39 @@ einops>=0.7.0
 # watershed (above). No extra dependency — and no SAM 3 / transformers / HF
 # download at runtime (SAM 3 was used only offline as a distillation teacher).
 
+# KymoButler kymograph trajectory detection (models/kymobutler).
+#
+# onnx + onnx2torch move as ONE set with ml_dtypes, and the ORDER OF PINS HERE
+# IS NOT WHAT MAKES IT RESOLVE -- pip resolves a requirements file as a set, so
+# what makes numpy stay at 1.26.4 is the explicit `ml_dtypes` pin below, not
+# where it sits in the file.
+#
+# The trap: `pip install onnx` on this image force-upgrades numpy 1.26.4 ->
+# 2.2.6, which every numeric pin in this file is incompatible with (see the
+# numpy ceiling at the top). The culprit is NOT onnx, which asks only for
+# `numpy>=1.23.2`. It is onnx's own dependency `ml_dtypes>=0.5.4`, whose latest
+# release 0.6.0 requires `numpy>=2.0.0` outright. ml_dtypes **0.5.4** satisfies
+# onnx's floor exactly while still declaring `numpy>=1.21.2` on Python 3.10, so
+# pinning it is the whole fix -- no onnx downgrade needed. Verified by resolving
+# this file in a clean python:3.10-slim: numpy stays 1.26.4.
+#
+# onnx2torch is LOAD-BEARING, not a convenience. The four KymoButler graphs
+# declare a STATIC [1,1,256,256] input, so onnxruntime rejects a 300x200
+# kymograph outright; onnx2torch rebuilds the graph as an ordinary
+# shape-agnostic torch nn.Module, which is the only reason arbitrary sizes run.
+# It imports torchvision, so it must stay paired with the +cu124 torchvision
+# above -- a PyPI torchvision against a +cu124 torch gives
+# "operator torchvision::nms does not exist" at import.
+#
+# protobuf is a REPRODUCIBILITY pin, not a constraint: it is absent from the
+# base image, arrives only as onnx's transitive, and onnx bounds it only from
+# below (`>=4.25.1`). Nothing else in this file names it, so unpinned it would
+# float on its own schedule.
+onnx==1.22.0
+ml_dtypes==0.5.4
+onnx2torch==1.5.15
+protobuf==7.36.0
+
 # Prometheus metrics
 prometheus-fastapi-instrumentator==8.1.0
 

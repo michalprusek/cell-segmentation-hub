@@ -693,9 +693,16 @@ export function buildDocsSections(t: Translate): DocsSection[] {
           items: list('docs.automatedEssays.resultsList', [
             'csv',
             'failures',
+            'focus',
             'overlays',
             'annotations',
           ]),
+        },
+        {
+          kind: 'note',
+          tone: 'warning',
+          label: s('docs.automatedEssays.focusNote'),
+          text: s('docs.automatedEssays.focusNoteText'),
         },
         {
           kind: 'note',

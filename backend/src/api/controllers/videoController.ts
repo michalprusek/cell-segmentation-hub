@@ -44,7 +44,40 @@ interface ChannelDTO {
   sparseFill?: Record<string, number>;
   /** The same relation in id space, for the editor's request de-duplication. */
   sparseFillFrameIds?: Record<string, string>;
+  /** See `ChannelMeta` — written by add-channel / the extractor, never by a
+   *  client. Listed in `SERVER_OWNED_CHANNEL_KEYS` and grafted back on update. */
+  pngBacked?: boolean;
+  frameIds?: string[];
+  staticSource?: boolean;
+  staticShifts?: Record<string, [number, number]>;
+  proxyRangeMax?: number;
 }
+
+/**
+ * The `ChannelMeta` keys a PATCH body may never set, clear or change.
+ *
+ * Each records how the channel was BUILT — measured by the extractor
+ * (`sparse*`, `proxyRangeMax`) or written by add-channel (`staticSource`,
+ * `staticShifts`, `pngBacked`, `frameIds`) — so none can be reconstructed from
+ * a request, and a caller built on a narrower type drops them without noticing.
+ * Enumerating what the SERVER owns (rather than what the client may send) is
+ * deliberate: a new ingest-owned field is protected by adding one line here,
+ * whereas the old shape protected only what someone remembered to list.
+ */
+const SERVER_OWNED_CHANNEL_KEYS = [
+  'pngBacked',
+  'frameIds',
+  'staticSource',
+  'staticShifts',
+  'sparseSource',
+  'sparseFill',
+  'sparseFillFrameIds',
+  'proxyRangeMax',
+] as const;
+
+const SERVER_OWNED_CHANNEL_KEY_SET: ReadonlySet<string> = new Set(
+  SERVER_OWNED_CHANNEL_KEYS
+);
 
 const MAX_CHANNEL_DISPLAY_NAME_LEN = 128;
 
@@ -643,39 +676,51 @@ export class VideoController {
       }
 
       // This route overwrites the channels JSON with whatever the client sent,
-      // which is fine for the things a client owns (name, colour, which channel
-      // is the segmentation source) and NOT fine for the sparse-acquisition
-      // record: that is measured at extraction from the source volume and can
-      // never be recovered from a PATCH body. A caller that renders its request
-      // from a narrower type — `apiClient.updateImageChannels` enumerates its
-      // fields, which is exactly how `pngBacked` and `frameIds` were once lost —
-      // would otherwise silently un-fill every gap in the video AND strand
-      // those frames outside segmentation. Carry them over from the stored row.
+      // which is fine for the things a client owns (label, colour, which
+      // channel is the segmentation source) and NOT fine for the record of how
+      // the channel was BUILT: those are facts measured at extraction or
+      // written by add-channel, and a PATCH body cannot recover any of them. A
+      // caller that renders its request from a narrower type would drop them
+      // silently — `apiClient.updateImageChannels` enumerates its fields, which
+      // is exactly how `pngBacked` and `frameIds` were once lost, and it still
+      // does not name `staticSource` / `staticShifts` today.
       //
-      // Deliberately narrow: the older ingest-owned fields (`pngBacked`,
-      // `frameIds`, `staticSource`, `staticShifts`) have the same character but
-      // their current behaviour is left untouched here.
+      // So the stored row is authoritative for these keys in BOTH directions:
+      // present there means present here, absent there means absent here. A
+      // client can neither erase `staticSource` from a channel that has it (the
+      // container would then be re-segmented frame by frame and, worse, lose
+      // the cross-frame identity the projection mints) nor assert it on a
+      // channel that does not — "this came from one image" is something the
+      // ingest measured, never something a request may claim.
       const storedChannels = Array.isArray(image.channels)
         ? (image.channels as unknown as ChannelDTO[])
         : [];
-      const sparseByName = new Map(
-        storedChannels
-          .filter(c => c?.sparseSource === true)
-          .map(c => [c.name, c] as const)
+      const storedByName = new Map(
+        storedChannels.filter(c => c?.name).map(c => [c.name, c] as const)
       );
       const merged = channels.map(c => {
-        const prior = sparseByName.get(c.name);
-        if (!prior) {
-          return c;
+        // Drop the server-owned keys the body carried, then re-add exactly what
+        // the stored row has — so a value the row does not have does not
+        // survive, whatever the body claimed. The strip runs for EVERY channel,
+        // including one whose name is not in the stored row: exempting those
+        // would leave the assert direction wide open, since a body can invent a
+        // channel (or rename an existing one) and `findStaticChannel` would then
+        // believe a `staticSource: true` nothing measured and drop 298 frames of
+        // real acquisition out of the segmentation queue.
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(c)) {
+          if (!SERVER_OWNED_CHANNEL_KEY_SET.has(k)) {
+            out[k] = v;
+          }
         }
-        return {
-          ...c,
-          sparseSource: true,
-          ...(prior.sparseFill ? { sparseFill: prior.sparseFill } : {}),
-          ...(prior.sparseFillFrameIds
-            ? { sparseFillFrameIds: prior.sparseFillFrameIds }
-            : {}),
-        };
+        const prior = storedByName.get(c.name);
+        for (const key of SERVER_OWNED_CHANNEL_KEYS) {
+          const value = prior?.[key];
+          if (value !== undefined) {
+            out[key] = value;
+          }
+        }
+        return out as unknown as ChannelDTO;
       });
 
       await prisma.image.update({

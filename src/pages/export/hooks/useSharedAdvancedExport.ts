@@ -115,8 +115,9 @@ export interface ExportOptions {
   };
   /**
    * Microtubule-only kymograph export. When enabled (MT projects only), the
-   * backend builds a kymograph per microtubule, runs blob-motion detection,
-   * and writes segmented kymograph images and/or a velocity-metrics CSV.
+   * backend builds a kymograph per microtubule, runs KymoButler trajectory
+   * detection, and writes segmented kymograph images and/or a velocity-metrics
+   * CSV.
    */
   mtKymographs?: MicrotubuleKymographsOptions;
 }
