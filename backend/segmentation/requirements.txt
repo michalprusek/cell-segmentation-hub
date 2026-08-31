@@ -100,7 +100,7 @@ roifile==2025.12.12
 matplotlib==3.10.9
 # Sperm model dependencies (Mask2Former + graph assembly)
 # ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
-networkx>=3.0
+networkx>=3.4.2
 
 # segmentation_models_pytorch serves two models: the wound-healing model
 # (MiT-B5 encoder) and the microcapsule student U-Net (timm-mobilenetv3_small_100
