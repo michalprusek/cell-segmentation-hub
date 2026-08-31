@@ -154,6 +154,7 @@ export default {
       description3:
         'Empezó con esferoides tumorales y creció con los experimentos que trajeron nuestros colaboradores: ensayos de desintegración, heridas de ensayo de rayado, morfología espermática, series temporales de microtúbulos, microcápsulas y neuronas en cultivo. Cada tipo de muestra tiene su propio modelo entrenado, sus propias métricas y su propia exportación, y detrás de todos ellos, un único editor.',
       contactText: 'Para consultas, contáctenos en',
+      supportText: 'Si desea apoyar el proyecto económicamente, escríbame a',
     },
     acknowledgments: {
       badge: 'Agradecimientos',

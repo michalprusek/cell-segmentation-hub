@@ -154,6 +154,8 @@ export default {
       description3:
         "Tout a commencé par les sphéroïdes tumoraux, puis la plateforme a grandi avec les expériences que nos collaborateurs nous ont apportées : tests de désintégration, plaies de test de rayure, morphologie des spermatozoïdes, séries temporelles de microtubules, microcapsules et neurones en culture. Chaque type d'échantillon a son modèle entraîné, ses métriques et son export — et derrière eux, un seul éditeur.",
       contactText: 'Pour toute demande, veuillez nous contacter à',
+      supportText:
+        'Si vous souhaitez soutenir le projet financièrement, écrivez-moi à',
     },
     acknowledgments: {
       badge: 'Remerciements',

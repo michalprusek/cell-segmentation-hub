@@ -153,6 +153,8 @@ export default {
       description3:
         'Začalo to u nádorových sféroidů a rostlo to s experimenty, které nám naši spolupracovníci nosili: rozpadové testy, rány ze scratch assay, morfologie spermií, časosběry mikrotubulů, mikrokapsle a kultivované neurony. Každý typ vzorku má vlastní natrénovaný model, vlastní metriky a vlastní export — a za nimi jeden editor.',
       contactText: 'Pro dotazy nás prosím kontaktujte na',
+      supportText:
+        'Pokud byste chtěli projekt podpořit finančně, ozvěte se mi prosím na',
     },
     acknowledgments: {
       badge: 'Poděkování',

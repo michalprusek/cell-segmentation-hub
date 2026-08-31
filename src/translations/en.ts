@@ -160,6 +160,8 @@ export default {
       description3:
         'It began with tumour spheroids and grew with the experiments our collaborators brought us: disintegration assays, scratch-assay wounds, sperm morphology, microtubule time-lapses, microcapsules and cultured neurons. Each specimen type has its own trained model, its own metrics and its own export — behind one editor.',
       contactText: 'For inquiries, please contact us at',
+      supportText:
+        'If you would like to support the project financially, please write to me at',
     },
     acknowledgments: {
       badge: 'Acknowledgments',

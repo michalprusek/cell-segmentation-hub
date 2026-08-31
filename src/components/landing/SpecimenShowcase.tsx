@@ -137,7 +137,7 @@ function SpecimenShowcase() {
   );
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,40rem)_minmax(0,20rem)] lg:gap-10">
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,40rem)_minmax(0,1fr)] lg:gap-10">
       <style>{SHOWCASE_CSS}</style>
 
       <figure

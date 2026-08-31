@@ -50,6 +50,15 @@ function Index() {
                     prusek@utia.cas.cz
                   </a>
                 </p>
+                <p className="leading-relaxed">
+                  {t('landing.about.supportText')}{' '}
+                  <a
+                    href="mailto:prusek@utia.cas.cz"
+                    className="font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
+                  >
+                    prusek@utia.cas.cz
+                  </a>
+                </p>
               </div>
             </div>
           </div>

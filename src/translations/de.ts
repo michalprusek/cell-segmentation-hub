@@ -154,6 +154,8 @@ export default {
       description3:
         'Es begann bei Tumorsphäroiden und wuchs mit den Experimenten, die unsere Kooperationspartner mitbrachten: Zerfallsassays, Wunden aus dem Scratch-Assay, Spermienmorphologie, Mikrotubuli-Zeitraffer, Mikrokapseln und kultivierte Neuronen. Jeder Probentyp hat sein eigenes trainiertes Modell, seine eigenen Metriken und seinen eigenen Export — dahinter steht ein Editor.',
       contactText: 'Für Anfragen kontaktieren Sie uns bitte unter',
+      supportText:
+        'Wenn Sie das Projekt finanziell unterstützen möchten, schreiben Sie mir bitte an',
     },
     acknowledgments: {
       badge: 'Danksagungen',
