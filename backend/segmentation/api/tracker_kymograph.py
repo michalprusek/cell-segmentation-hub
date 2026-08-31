@@ -48,7 +48,6 @@ from typing import Any, Dict, List, Literal, NamedTuple, Optional, Tuple
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.concurrency import run_in_threadpool
 
 from api.kymograph_velocity import (
     detect_tracks,
@@ -76,13 +75,6 @@ router = APIRouter()
 # that the backend service sets. Paths supplied by callers must resolve to a
 # descendant of this directory.
 _UPLOAD_ROOT = Path(os.getenv("UPLOAD_DIR", "/app/uploads")).resolve()
-
-# One KymoButler detection at a time. See the comment at its acquisition site in
-# /kymograph: the work now runs in a worker thread so it stops blocking the
-# event loop, and this restores the one-at-a-time behaviour that being inline in
-# an `async def` handler used to give for free.
-_DETECT_LOCK = asyncio.Lock()
-
 
 def _assert_safe_path(p: Path, label: str) -> None:
     """Raise HTTPException(400) if *p* resolves outside _UPLOAD_ROOT."""
@@ -1740,25 +1732,21 @@ def _kymograph_sync(req: KymographRequest) -> KymographResponse:
     filtered_track_count = 0
     if req.detect_velocity:
         try:
-            # OFF THE EVENT LOOP. This handler is `async def` (see the docstring
-            # above for why the sampling and matplotlib work stays serialised),
-            # and until 2026-08-31 detection was cheap enough — 0.03-0.2 s of
-            # numpy — that running it inline cost nothing. KymoButler is 2.6-132 s
-            # of torch per kymograph on CPU, plus a one-off ~5 s onnx2torch
-            # conversion. Inline, that stalls the whole ML service for the
-            # duration: uvicorn cannot accept /segment or /track, and the compose
-            # healthcheck (30 s interval, 5 retries) marks `ml` unhealthy after
-            # ~150 s of it.
+            # Already OFF the event loop: `kymograph` hands this whole body
+            # to `_KYMOGRAPH_EXECUTOR`, so uvicorn keeps answering /segment,
+            # /track and /health while detection runs. That matters more since
+            # 2026-08-31 than it used to — detection was 0.03-0.2 s of numpy
+            # and is now KymoButler, 0.03-0.14 s on GPU but 2.6-132 s of torch
+            # on CPU, plus a one-off ~5 s onnx2torch conversion. Held inline on
+            # the loop, the CPU figure alone would trip the compose healthcheck
+            # (30 s interval, 5 retries) after ~150 s.
             #
-            # The lock keeps the SERIALISATION `async def` gives today — one
-            # detection at a time — while freeing the loop to answer /health and
-            # queue other work. Without it anyio's 40-slot threadpool would
-            # happily start 40 concurrent tracking runs, each with its own torch
-            # thread pool, on a box that also serves GPU inference.
-            async with _DETECT_LOCK:
-                raw_tracks = await run_in_threadpool(
-                    detect_tracks, kymo, mode=req.kymobutler_mode
-                )
+            # Serialisation is already guaranteed: this body runs on
+            # `_KYMOGRAPH_EXECUTOR`, a max_workers=1 pool, so exactly one
+            # detection is in flight at a time. An explicit lock here would be
+            # redundant — and an `async` one is impossible, because this
+            # function is synchronous by construction.
+            raw_tracks = detect_tracks(kymo, mode=req.kymobutler_mode)
             # Which way "signal" points on THIS kymograph. detect_tracks signs
             # its own SNR the same way; the metrics below are measured beside
             # those tracks and must agree, or an inverted kymograph reports a
