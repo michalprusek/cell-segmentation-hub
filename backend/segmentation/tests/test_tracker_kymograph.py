@@ -567,6 +567,90 @@ def test_kymograph_rejects_extra_field(client):
     assert r.status_code == 422
 
 
+async def test_kymograph_detection_does_not_block_the_event_loop(monkeypatch):
+    """Trajectory detection must run OFF the loop, or the whole service stalls.
+
+    ``/kymograph`` is ``async def`` on purpose (see the handler's docstring:
+    holding a full-frame float32 array per frame and calling into matplotlib's
+    global backend state on 40 threadpool slots is worse than serialising). That
+    was free while detection was 0.03-0.2 s of numpy. KymoButler is seconds to
+    minutes of torch, and inline it starves the loop for the whole request:
+    uvicorn cannot accept ``/segment`` or ``/track``, and the compose
+    healthcheck marks ``ml`` unhealthy after ~150 s.
+
+    Measured before the fix, on a real 300-frame kymograph: a 20 Hz poller got
+    ZERO responses for the entire 8.5 s request. After it, 15 responses at a
+    1 ms median.
+    """
+    import asyncio
+
+    import httpx
+    from PIL import Image as PILImage
+
+    app = FastAPI()
+    app.include_router(tracker_kymograph_router, prefix="/api/v1")
+
+    @app.get("/ping")
+    async def ping():  # pragma: no cover - trivial
+        return {"ok": True}
+
+    # Stand in for KymoButler with something that merely sleeps. This tests the
+    # WIRING (is the call awaited off-loop?), not the detector — a real forward
+    # pass would need 272 MB of ONNX staged and would make the test minutes long.
+    blocking_seconds = 1.0
+
+    def _slow_detect(kymo, **kwargs):
+        time.sleep(blocking_seconds)
+        return []
+
+    monkeypatch.setattr(tracker_kymograph, "detect_tracks", _slow_detect)
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td).resolve()
+        monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+        png = td_path / "frame0.png"
+        PILImage.fromarray(
+            np.zeros((32, 32), dtype=np.uint8), mode="L"
+        ).save(png)
+        polyline_rc = [[8.0, float(x)] for x in range(0, 32)]
+        payload = {
+            "frames": [
+                {"frame": i, "polyline_rc": polyline_rc, "image_path": str(png)}
+                for i in range(4)
+            ],
+            "target_width": 32,
+            "tracked": False,
+            "detect_velocity": True,
+        }
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://t", timeout=60
+        ) as c:
+            served = 0
+            done = asyncio.Event()
+
+            async def poll():
+                nonlocal served
+                while not done.is_set():
+                    r = await c.get("/ping")
+                    assert r.status_code == 200
+                    served += 1
+                    await asyncio.sleep(0.02)
+
+            poller = asyncio.create_task(poll())
+            res = await c.post("/api/v1/kymograph", json=payload)
+            done.set()
+            await poller
+
+    assert res.status_code == 200, res.text
+    # Inline, `served` is 0 — the poller never gets scheduled at all.
+    assert served >= 5, (
+        f"event loop was starved during detection: only {served} sibling "
+        "request(s) served while it ran"
+    )
+
+
 # ---------------------------------------------------------------------------
 #  viridis LUT
 # ---------------------------------------------------------------------------

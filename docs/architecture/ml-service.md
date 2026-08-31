@@ -8,21 +8,23 @@ the Node backend.
 
 ## Layout of `backend/segmentation/`
 
-| Path                       | Contains                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------ |
-| `api/main.py`              | The FastAPI app: middleware, exception handlers, router mounting, Prometheus metrics |
-| `api/routes.py`            | `/segment`, `/batch-segment`, `/models`, `/status`, `/health`                        |
-| `api/tracker_kymograph.py` | `/track` and `/kymograph`                                                            |
-| `api/mt_geometry_cost.py`  | The geometric matching cost used by the tracker                                      |
-| `api/mt_metrics.py`        | `/mt-metrics` and `/mt-background-rois`                                              |
-| `api/metrics_endpoint.py`  | Shape metrics and the disintegration index                                           |
-| `api/monitoring.py`        | GPU status and memory endpoints                                                      |
-| `api/frap_targets.py`      | FRAP target selection                                                                |
-| `ml/model_loader.py`       | The model catalogue, loading, caching and unloading                                  |
-| `models/`                  | One wrapper per model                                                                |
-| `models/microtubule/`      | The v5H network, its instancer and its parameters                                    |
-| `models/mt_measure.py`     | Band/ring rasterisation and ImageJ-convention statistics                             |
-| `weights/`                 | Checkpoints; not in the repository                                                   |
+| Path                        | Contains                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `api/main.py`               | The FastAPI app: middleware, exception handlers, router mounting, Prometheus metrics |
+| `api/routes.py`             | `/segment`, `/batch-segment`, `/models`, `/status`, `/health`                        |
+| `api/tracker_kymograph.py`  | `/track` and `/kymograph`                                                            |
+| `api/kymograph_velocity.py` | Kymograph trajectory detection (KymoButler) + the per-track metrics                  |
+| `api/mt_geometry_cost.py`   | The geometric matching cost used by the tracker                                      |
+| `api/mt_metrics.py`         | `/mt-metrics` and `/mt-background-rois`                                              |
+| `api/metrics_endpoint.py`   | Shape metrics and the disintegration index                                           |
+| `api/monitoring.py`         | GPU status and memory endpoints                                                      |
+| `api/frap_targets.py`       | FRAP target selection                                                                |
+| `ml/model_loader.py`        | The model catalogue, loading, caching and unloading                                  |
+| `models/`                   | One wrapper per model                                                                |
+| `models/microtubule/`       | The v5H network, its instancer and its parameters                                    |
+| `models/mt_measure.py`      | Band/ring rasterisation and ImageJ-convention statistics                             |
+| `models/kymobutler/`        | Vendored KymoButler (MIT) — the kymograph trajectory networks                        |
+| `weights/`                  | Checkpoints; not in the repository                                                   |
 
 Router prefixes: most are mounted under `/api/v1`; the metrics router carries
 its own `/api` prefix. Endpoint list: [ML service API](../api/ml-service.md).
