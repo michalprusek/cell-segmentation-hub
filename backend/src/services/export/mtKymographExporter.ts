@@ -16,6 +16,31 @@
  * same sampling, detection and calibration path — no drift between what the
  * user sees and what ships in the bundle.
  *
+ * SHAPE OF THE WORK. This stage is quadratic in a way that is easy to miss:
+ * every one of the (microtubule × channel) kymographs of a container reads the
+ * SAME rows and the SAME per-frame images, and differs only in the polyline
+ * geometry sampled from them. A real 300-frame, 3-channel container with the
+ * 60-microtubule cap fans out into 180 builds over 900 distinct frame images —
+ * 54 000 image reads, and (before the grouping below) 180 repeats of the
+ * container's polygon JSON: 5.6 GB through Prisma for a 31 MB container,
+ * decoded on the single Node event loop, so it stalled the rest of the API
+ * too. Measured on that container, replacing the repeats with one load per
+ * container took this stage's Node-side wall clock from 84 s to 3.7 s; on a
+ * tracked 53 MB container (where the old code re-parsed every frame per job)
+ * 147 s to 4.7 s, at 2.9x LOWER peak heap (748 MB -> 254 MB).
+ *
+ * So the jobs are dispatched grouped by container, and channel-major within
+ * it, and each container's rows are read twice in total (once in Phase 1 to
+ * find the seed polylines, once in Phase 2 for the builds) rather than once
+ * per job. Phase 1 keeps its own read because the whole job list — and with it
+ * the progress total — has to be known before the first container's rows are
+ * held, and holding every container's rows at once is what the grouping exists
+ * to avoid. Ordering is not cosmetic either: consecutive jobs then share their
+ * entire decode set, which keeps the page-cache working set to one channel's
+ * frames instead of rotating over all of them, and is the precondition for any
+ * frame cache in the ML service to score a hit at all (an LRU that rotates
+ * over N channels needs N x the frames resident before it hits once).
+ *
  * This is an OPTIONAL add-on: any failure (DB, disk, ML) degrades to "no
  * kymograph output" and must never abort the surrounding export job.
  */
@@ -25,7 +50,11 @@ import { promises as fs } from 'fs';
 import { prisma } from '../../db/prismaClient';
 import { logger } from '../../utils/logger';
 import { mapWithConcurrency, runGated, type Semaphore } from '../../utils/concurrency';
-import { buildKymograph } from '../kymographService';
+import {
+  buildKymograph,
+  loadKymographContainerContext,
+  type KymographContainerContext,
+} from '../kymographService';
 import { resolveSegmentationSource } from '../video/types';
 
 const CTX = 'MTKymographExporter';
@@ -89,6 +118,16 @@ interface KymographJob {
   /** Selected frame indices for this container (export image selection), or
    *  undefined when the whole video is in scope. */
   frameFilter?: number[];
+}
+
+/** All jobs of one video container, in the order they are dispatched. Grouping
+ *  is what lets the per-container database rows be loaded ONCE (see
+ *  ``loadKymographContainerContext``) and reused by every job in the group,
+ *  while never holding more than one container's rows in memory. */
+interface ContainerJobGroup {
+  containerId: string;
+  videoName: string;
+  jobs: KymographJob[];
 }
 
 function parsePolylines(
@@ -265,7 +304,11 @@ export async function exportMicrotubuleKymographs(
     await fs.mkdir(outDir, { recursive: true });
 
     // --- Phase 1: resolve the (microtubule × channel) job list. ----------
+    // `jobs` is the flat dispatch order (its length is the progress total and
+    // its indices key the velocity rows); `groups` is the same jobs partitioned
+    // per container, which is the unit Phase 2 loads database rows for.
     const jobs: KymographJob[] = [];
+    const groups: ContainerJobGroup[] = [];
     for (const container of containers) {
       const channels = Array.isArray(container.channels)
         ? (container.channels as unknown as ChannelMeta[])
@@ -341,9 +384,14 @@ export async function exportMicrotubuleKymographs(
         );
       }
 
-      for (const poly of selected) {
-        for (const sourceChannel of sourceChannels) {
-          jobs.push({
+      // CHANNEL-major, not microtubule-major (see the header note). It does NOT
+      // change the output: files are named per (video, polyline, channel) and
+      // the velocity sheets are assembled by job index below, so within each
+      // channel the rows stay in polyline order either way.
+      const containerJobs: KymographJob[] = [];
+      for (const sourceChannel of sourceChannels) {
+        for (const poly of selected) {
+          containerJobs.push({
             containerId: container.id,
             videoName: container.name,
             safeVideo,
@@ -354,19 +402,91 @@ export async function exportMicrotubuleKymographs(
           });
         }
       }
+      jobs.push(...containerJobs);
+      groups.push({
+        containerId: container.id,
+        videoName: container.name,
+        jobs: containerJobs,
+      });
     }
+
+    let jobsDone = 0;
+    const reportDone = (): void => {
+      jobsDone++;
+      onProgress?.(jobsDone, jobs.length);
+    };
+
+    /**
+     * Run `runJob` over every job, one container group at a time, with that
+     * container's database rows loaded ONCE and handed to each of its jobs.
+     *
+     * Groups are processed one after another rather than interleaved so at most
+     * one container's rows (tens of MB of polygon JSON) are resident. Nothing
+     * is lost by not overlapping them: the shared `mlGate` serialises the ML
+     * requests anyway.
+     *
+     * A container whose rows fail to load is skipped with a warning and its
+     * jobs still count as done — same treatment as an individual job failure,
+     * so the progress bar still reaches 100 % and the export still completes.
+     *
+     * `runJob` catches its own errors, so `mapWithConcurrency` (which
+     * short-circuits the remaining work on the first throw) should never see
+     * one. The belt-and-braces catch below keeps an unexpected escape — a
+     * throwing `onProgress`, say — contained to the one container group,
+     * instead of abandoning every later container AND the velocity workbook.
+     */
+    const forEachJobWithContext = async (
+      runJob: (
+        job: KymographJob,
+        context: KymographContainerContext,
+        jobIndex: number
+      ) => Promise<void>
+    ): Promise<void> => {
+      let base = 0;
+      for (const group of groups) {
+        const groupBase = base;
+        base += group.jobs.length;
+
+        let context: KymographContainerContext | null = null;
+        try {
+          context = await loadKymographContainerContext(group.containerId);
+        } catch (err) {
+          logger.warn(
+            `Kymograph export skipped ${group.jobs.length} job(s) for ` +
+              `${group.videoName}: ${(err as Error).message}`,
+            CTX
+          );
+        }
+        if (!context) {
+          for (let i = 0; i < group.jobs.length; i++) {
+            reportDone();
+          }
+          continue;
+        }
+
+        const loaded = context;
+        try {
+          await mapWithConcurrency(
+            group.jobs,
+            KYMOGRAPH_CONCURRENCY,
+            (job, i) => runJob(job, loaded, groupBase + i)
+          );
+        } catch (err) {
+          logger.warn(
+            `Kymograph export aborted for ${group.videoName}: ` +
+              `${(err as Error).message}`,
+            CTX
+          );
+        }
+      }
+    };
 
     // --- Phase 2 (profiles mode): one matplotlib intensity-vs-position plot
     // per frame, plus the intensity CSV, for each (microtubule × channel).
     // Capped per MT so a long time-lapse can't emit thousands of PNGs. --------
     if (mode === 'profiles') {
       let profileCount = 0;
-      let jobsDone = 0;
-      const reportDone = (): void => {
-        jobsDone++;
-        onProgress?.(jobsDone, jobs.length);
-      };
-      await mapWithConcurrency(jobs, KYMOGRAPH_CONCURRENCY, async job => {
+      await forEachJobWithContext(async (job, containerContext) => {
         try {
           const result = await runGated(mlGate, () =>
             buildKymograph({
@@ -377,6 +497,7 @@ export async function exportMicrotubuleKymographs(
               detectVelocity: false,
               renderProfiles: true,
               frameFilter: job.frameFilter,
+              containerContext,
             })
           );
 
@@ -435,16 +556,16 @@ export async function exportMicrotubuleKymographs(
     }
 
     // --- Phase 2: build kymographs with bounded concurrency. -------------
-    // Velocity rows grouped by source channel — each channel becomes one
-    // worksheet (channel = motor/protein) in velocity_metrics.xlsx.
-    const rowsByChannel = new Map<string, VelocityRow[]>();
+    // Velocity rows, one slot per job, filled in place. Assembling the
+    // worksheets from these slots in JOB order (below) rather than in
+    // completion order makes the sheet contents independent of which worker
+    // finished first — the same rows, in the same order, on every run.
+    // `undefined` = the job failed or returned no `tracks` array at all; an
+    // EMPTY array = the job ran and detected nothing, which still gives the
+    // channel a (header-only) worksheet.
+    const rowSlots: Array<VelocityRow[] | undefined> = new Array(jobs.length);
 
-    let jobsDone = 0;
-    const reportDone = (): void => {
-      jobsDone++;
-      onProgress?.(jobsDone, jobs.length);
-    };
-    await mapWithConcurrency(jobs, KYMOGRAPH_CONCURRENCY, async job => {
+    await forEachJobWithContext(async (job, containerContext, jobIndex) => {
       try {
         const result = await runGated(mlGate, () =>
           buildKymograph({
@@ -455,6 +576,7 @@ export async function exportMicrotubuleKymographs(
             detectVelocity: true,
             renderOverlay: options.includeSegmentedImages,
             frameFilter: job.frameFilter,
+            containerContext,
           })
         );
 
@@ -480,10 +602,10 @@ export async function exportMicrotubuleKymographs(
         }
 
         if (options.includeVelocityMetrics && result.tracks) {
-          // One row per trajectory (no per-run breakdown). Build this job's
-          // rows locally, then splice in one push so rows stay grouped per
-          // microtubule under concurrent job completion.
-          const rows: VelocityRow[] = result.tracks.map((tr, ti) => [
+          // One row per trajectory (no per-run breakdown), parked in this job's
+          // slot so the worksheet order follows the job list, not the order the
+          // concurrent workers happened to finish in.
+          rowSlots[jobIndex] = result.tracks.map((tr, ti) => [
             job.videoName,
             job.polylineId,
             ti + 1,
@@ -500,12 +622,6 @@ export async function exportMicrotubuleKymographs(
             result.pixelSizeUm,
             result.frameIntervalMs,
           ]);
-          const existing = rowsByChannel.get(job.sourceChannel);
-          if (existing) {
-            existing.push(...rows);
-          } else {
-            rowsByChannel.set(job.sourceChannel, rows);
-          }
         }
       } catch (err) {
         // One bad microtubule/channel must not abort the whole export.
@@ -517,6 +633,25 @@ export async function exportMicrotubuleKymographs(
         reportDone();
       }
     });
+
+    // Group the per-job rows by source channel — each channel becomes one
+    // worksheet (channel = motor/protein) in velocity_metrics.xlsx. Walking the
+    // slots in job order keeps every sheet in polyline order; a channel whose
+    // jobs all detected nothing still gets its (header-only) sheet, because an
+    // empty-but-present slot creates the entry.
+    const rowsByChannel = new Map<string, VelocityRow[]>();
+    for (let i = 0; i < jobs.length; i++) {
+      const rows = rowSlots[i];
+      if (!rows) {
+        continue;
+      }
+      const existing = rowsByChannel.get(jobs[i].sourceChannel);
+      if (existing) {
+        existing.push(...rows);
+      } else {
+        rowsByChannel.set(jobs[i].sourceChannel, [...rows]);
+      }
+    }
 
     const velocityRowCount = [...rowsByChannel.values()].reduce(
       (n, rows) => n + rows.length,
