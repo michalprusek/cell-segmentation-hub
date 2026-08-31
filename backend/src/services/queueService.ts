@@ -1080,6 +1080,12 @@ export class QueueService {
                 // exact by construction. Running the tracker over them would be
                 // paying to rediscover it — and on a 299-frame container that is
                 // what overran its timeout and lost the answer entirely.
+                //
+                // "trackId included" is true because the projection MINTS one
+                // for this frame first and writes it back here. It was not true
+                // when the suppression was written — the model emits no
+                // track_id — and the result was a container segmented end to
+                // end with no cross-frame identity anywhere.
                 const projected = await projectStaticChannelResult({
                   containerId: imageMeta.parentVideoId,
                   sourceImageId: item.imageId,

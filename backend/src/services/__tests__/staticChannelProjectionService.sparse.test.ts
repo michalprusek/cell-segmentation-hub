@@ -13,15 +13,25 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { imageFindUnique, imageFindMany, imageUpdate, segFindUnique, segUpsert, txn } =
-  vi.hoisted(() => ({
-    imageFindUnique: vi.fn() as ReturnType<typeof vi.fn>,
-    imageFindMany: vi.fn() as ReturnType<typeof vi.fn>,
-    imageUpdate: vi.fn() as ReturnType<typeof vi.fn>,
-    segFindUnique: vi.fn() as ReturnType<typeof vi.fn>,
-    segUpsert: vi.fn() as ReturnType<typeof vi.fn>,
-    txn: vi.fn() as ReturnType<typeof vi.fn>,
-  }));
+const {
+  imageFindUnique,
+  imageFindMany,
+  imageUpdate,
+  segFindUnique,
+  segUpsert,
+  segUpdate,
+  txn,
+} = vi.hoisted(() => ({
+  imageFindUnique: vi.fn() as ReturnType<typeof vi.fn>,
+  imageFindMany: vi.fn() as ReturnType<typeof vi.fn>,
+  imageUpdate: vi.fn() as ReturnType<typeof vi.fn>,
+  segFindUnique: vi.fn() as ReturnType<typeof vi.fn>,
+  segUpsert: vi.fn() as ReturnType<typeof vi.fn>,
+  // The static branch mints a trackId onto the anchor before projecting; the
+  // sparse branch must never reach this (see the trackId suite).
+  segUpdate: vi.fn() as ReturnType<typeof vi.fn>,
+  txn: vi.fn() as ReturnType<typeof vi.fn>,
+}));
 
 vi.mock('../../db', () => ({
   prisma: {
@@ -30,7 +40,11 @@ vi.mock('../../db', () => ({
       findMany: imageFindMany,
       update: imageUpdate,
     },
-    segmentation: { findUnique: segFindUnique, upsert: segUpsert },
+    segmentation: {
+      findUnique: segFindUnique,
+      upsert: segUpsert,
+      update: segUpdate,
+    },
     $transaction: txn,
   },
 }));
@@ -79,6 +93,7 @@ beforeEach(() => {
   });
   txn.mockResolvedValue([]);
   imageUpdate.mockResolvedValue({});
+  segUpdate.mockResolvedValue({});
   segUpsert.mockImplementation((a: unknown) => a);
 });
 
