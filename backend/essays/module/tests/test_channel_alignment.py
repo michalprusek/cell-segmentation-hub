@@ -163,14 +163,18 @@ def test_an_unavailable_estimator_reports_no_numbers_at_all(run_evaluate):
     assert rows[0]["irm_tirf_quality"] == ""
 
 
-def test_alignment_columns_are_appended_never_inserted():
+def test_alignment_columns_keep_the_positions_they_were_appended_at():
     """Downstream scripts index this CSV by column POSITION.
 
-    `report.COLUMNS` says so itself. Inserting the new columns anywhere but the
-    end would silently shift every later column in every user's script.
+    `report.COLUMNS` says so itself. These four went on the end on 2026-08-30
+    and are no longer last -- the `focus_*` group was appended after them on
+    2026-08-31 -- so this pins the INDICES they were published at rather than
+    "they are last", which was the original assertion and which forbade every
+    future append instead of forbidding an insertion. An insertion anywhere
+    before index 19 still fails here, which is the guarantee that matters.
     """
-    assert COLUMNS[-4:] == ALIGNMENT_COLUMNS
-    assert COLUMNS.index("signal_minus_background") < COLUMNS.index("irm_tirf_dy")
+    assert COLUMNS[18] == "signal_minus_background"
+    assert COLUMNS[19:23] == ALIGNMENT_COLUMNS
 
 
 def test_the_estimator_is_the_shared_one_not_a_copy():

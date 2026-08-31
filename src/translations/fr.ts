@@ -2033,11 +2033,16 @@ export default {
         csv: 'results.csv — une ligne par microtubule, avec sa longueur, l’intensité le long de celui-ci et son fond',
         failures:
           'failures.csv — chaque puits ou position qui n’a pas pu être produit, et pourquoi. Il est toujours écrit, même vide',
+        focus:
+          'focus_qc.csv — une ligne par position, avec un score de flou pour le canal segmenté et pour le canal mesuré. results.csv porte le même verdict pour chaque filament',
         overlays:
           'Deux images superposées par position : l’une vérifie la segmentation par rapport à son propre signal d’entrée, l’autre la bande mesurée par rapport au signal',
         annotations:
           'Un fichier JSON par position, avec les lignes médianes tracées et leurs longueurs',
       },
+      focusNote: 'L’indicateur de flou est consultatif — rien n’est écarté.',
+      focusNoteText:
+        'Il mesure quelle part de l’image est occupée par de la structure se détachant nettement du bruit : un champ densément couvert peut donc passer même flou. Il penche du côté de la conservation des données, jamais de leur rejet. Ses seuils ont été ajustés sur une seule acquisition ; une autre exposition ou une autre caméra est donc signalée out_of_calibration dans la colonne reason — c’est une remarque sur le seuil, pas sur votre image.',
       channelNote: 'L’IRM est segmentée, la fluorescence est mesurée.',
       channelNoteText:
         'Le modèle a été entraîné sur de l’IRM : les filaments y sont tracés et le canal de fluorescence n’est lu que le long de ces tracés. Un fichier dépourvu de canal IRM est signalé comme un échec plutôt que segmenté à partir d’autre chose.',
