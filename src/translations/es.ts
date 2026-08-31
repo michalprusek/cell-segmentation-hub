@@ -2026,11 +2026,16 @@ export default {
         csv: 'results.csv: una fila por microtúbulo, con su longitud, la intensidad a lo largo de él y su fondo',
         failures:
           'failures.csv: cada pocillo o posición que no pudo producirse, y por qué. Se escribe siempre, aunque esté vacío',
+        focus:
+          'focus_qc.csv: una fila por posición con una puntuación de desenfoque para el canal segmentado y el medido. results.csv lleva el mismo veredicto por filamento',
         overlays:
           'Dos imágenes superpuestas por posición: una comprueba la segmentación frente a su propia entrada, la otra la banda medida frente a la señal',
         annotations:
           'Un archivo JSON por posición con las líneas centrales trazadas y sus longitudes',
       },
+      focusNote: 'La marca de desenfoque es orientativa: no se descarta nada.',
+      focusNoteText:
+        'Mide qué parte del fotograma ocupa estructura que sobresale claramente del ruido, así que un campo densamente cubierto puede pasar aun estando desenfocado; se equivoca del lado de conservar los datos, no de tirarlos. Sus umbrales se ajustaron sobre una única adquisición, de modo que otra exposición u otra cámara se informa como out_of_calibration en la columna reason: es una nota sobre el umbral, no sobre su fotograma.',
       channelNote: 'Se segmenta IRM, se mide la fluorescencia.',
       channelNoteText:
         'El modelo se entrenó con IRM, así que los filamentos se trazan ahí y el canal de fluorescencia solo se lee a lo largo de esos trazos. Un archivo sin canal IRM se informa como fallo en lugar de segmentarse a partir de otra cosa.',

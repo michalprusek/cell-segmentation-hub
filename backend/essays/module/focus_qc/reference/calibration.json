@@ -1,0 +1,44 @@
+{
+  "thresholds": {
+    "irm": 7.64036346269919,
+    "fluor": 0.18441848619596696
+  },
+  "domain": {
+    "irm": {
+      "noise_sigma": [
+        165.72342706483516,
+        169.96734178717946
+      ],
+      "background": [
+        16401.0,
+        16748.0
+      ]
+    },
+    "fluor": {
+      "noise_sigma": [
+        5.792215675862315,
+        5.889945360930657
+      ],
+      "background": [
+        110.0,
+        111.0
+      ]
+    }
+  },
+  "tolerance_um": 0.3,
+  "notes": "5 Z-stacks, IRM + TIRF 488, 0.1 um step, colleague-annotated sharp planes",
+  "metrics": {
+    "IRM": {
+      "mean_balanced_accuracy": 0.9526785714285715,
+      "worst_fold": 0.9129464285714286
+    },
+    "TIRF 488": {
+      "mean_balanced_accuracy": 0.9669642857142857,
+      "worst_fold": 0.9285714285714286
+    },
+    "OR (frame verdict)": {
+      "mean_balanced_accuracy": 0.9589285714285716,
+      "worst_fold": 0.9285714285714286
+    }
+  }
+}

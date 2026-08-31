@@ -2047,11 +2047,17 @@ export default {
         csv: 'results.csv — eine Zeile je Mikrotubulus mit Länge, Intensität entlang des Filaments und dessen Hintergrund',
         failures:
           'failures.csv — jede Vertiefung oder Position, die nicht erzeugt werden konnte, und warum. Sie wird immer geschrieben, auch wenn sie leer ist',
+        focus:
+          'focus_qc.csv — eine Zeile je Position mit einem Unschärfewert für den segmentierten und den gemessenen Kanal. results.csv trägt dasselbe Urteil je Filament',
         overlays:
           'Zwei Überlagerungsbilder je Position: eines prüft die Segmentierung gegen ihre eigene Eingabe, das andere das Messband gegen das Signal',
         annotations:
           'Eine JSON-Datei je Position mit den verfolgten Mittellinien und ihren Längen',
       },
+      focusNote:
+        'Die Unschärfe-Markierung ist ein Hinweis — nichts wird verworfen.',
+      focusNoteText:
+        'Sie misst, wie viel eines Bildes von Struktur eingenommen wird, die deutlich über dem Rauschen liegt; ein dicht bedecktes Feld kann daher auch unscharf bestehen. Sie irrt zugunsten des Behaltens, nicht des Verwerfens. Die Schwellen wurden an einer einzigen Aufnahme angepasst, daher wird eine andere Belichtung oder Kamera in der Spalte reason als out_of_calibration gemeldet — das ist eine Aussage über die Schwelle, nicht über Ihr Bild.',
       channelNote: 'IRM wird segmentiert, Fluoreszenz wird gemessen.',
       channelNoteText:
         'Das Modell wurde auf IRM trainiert, daher werden die Filamente dort verfolgt und der Fluoreszenzkanal nur entlang dieser Spuren gelesen. Eine Datei ohne IRM-Kanal wird als Fehler gemeldet statt aus etwas anderem segmentiert.',

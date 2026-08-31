@@ -12,8 +12,13 @@ centerlines. Per microtubule it produces a row in ``results.csv`` with:
   * the mean / std / sum TIRF intensity along the microtubule (a 5-px band),
   * the mean / median / sum TIRF intensity of the surrounding background ring,
   * the acquisition timestamp of the recording (``acquired_at``, ISO-8601 UTC),
+  * the position's out-of-focus verdict (``focus_*``), measured on the raw
+    16-bit frames,
 
-plus QC overlay PNGs (one per channel) and polyline annotation JSON.
+plus QC overlay PNGs (one per channel), polyline annotation JSON, and
+``focus_qc.csv`` — one row per position rather than per microtubule, because a
+defocused field often produces no microtubules to hang the verdict on. The
+verdict is ADVISORY: nothing is excluded and the exit code is unaffected.
 
 Quick start
 -----------
@@ -237,15 +242,6 @@ def build_args() -> argparse.Namespace:
     return ap.parse_args()
 
 
-def _cell(value):
-    """A CSV cell: blank for a value that was never measured.
-
-    `None` and `0` are different claims — "nothing ran" versus "it ran and found
-    zero" — and this table's whole point is telling them apart.
-    """
-    return "" if value is None else value
-
-
 def main() -> int:
     args = build_args()
 
@@ -254,7 +250,8 @@ def main() -> int:
     # flag and the bundled DINOv3 config it guarded went with the v7 model.
 
     from mt_pipeline import (iter_positions, find_nd2_files, measure_frame,
-                             CsvWriter, FailureLog, parse_well_id, save_overlay,
+                             CsvWriter, FailureLog, FocusLog, cell,
+                             focus_result_cells, parse_well_id, save_overlay,
                              save_annotation_json)
 
     files = find_nd2_files(args.data)
@@ -299,6 +296,10 @@ def main() -> int:
     # Opened unconditionally: a header-only failures.csv is the run stating that
     # nothing was lost, which a missing file cannot do.
     failures = FailureLog(out / "failures.csv")
+    # Same rule, and one row per POSITION rather than per microtubule: a
+    # defocused field often yields no centerlines at all, so results.csv would
+    # have nowhere to carry its verdict.
+    focus_log = FocusLog(out / "focus_qc.csv")
     budget = _RetryBudget(RETRY_WAIT_BUDGET_S)
     sol_match = tuple(s.strip() for s in args.solution_name.split(",") if s.strip())
 
@@ -323,6 +324,15 @@ def main() -> int:
         for pos in positions:
             ti = time.time()
             solution_median = float(np.median(pos.solution))
+            # BEFORE the segmentation attempt, deliberately. The focus verdict
+            # was measured when the frames were read, and the positions it most
+            # needs to describe are the ones that never reach `write_rows`: a
+            # field with no microtubules, and a position whose segmentation
+            # failed (failures.csv says the well was lost, this says the frame
+            # was out of focus, which is often why).
+            focus_log.record(well_id=pos.well_id, position=pos.position,
+                             source_file=f.name, acquired_at=pos.acquired_at,
+                             focus=pos.focus)
             # IRM, not TIRF: the checkpoint was trained and validated on IRM
             # frames (TIRF is architecturally supported but unvalidated).
             # Feeding it TIRF produced confident, wrong centerlines for every
@@ -351,6 +361,7 @@ def main() -> int:
             # results.csv is one row per microtubule and the alignment belongs
             # to the frame pair they were measured on.
             align = pos.alignment
+            focus_cells = focus_result_cells(pos.focus)
             for r in rows:
                 r["well_id"] = pos.well_id
                 r["position"] = pos.position
@@ -359,13 +370,16 @@ def main() -> int:
                 r["acquired_at"] = pos.acquired_at
                 # None renders as a blank cell: an unmeasured offset must not
                 # read as a measured zero.
-                r["irm_tirf_dy"] = _cell(align and align.dy)
-                r["irm_tirf_dx"] = _cell(align and align.dx)
-                r["irm_tirf_quality"] = _cell(
+                r["irm_tirf_dy"] = cell(align and align.dy)
+                r["irm_tirf_dx"] = cell(align and align.dx)
+                r["irm_tirf_quality"] = cell(
                     None if not align or align.quality is None
                     else round(align.quality, 3)
                 )
                 r["irm_tirf_reason"] = align.reason if align else ""
+                # Same per-position-repeated-per-row rule as the alignment
+                # above; the cells are built once outside this loop.
+                r.update(focus_cells)
             csvw.write_rows(rows)
 
             stem = f"{pos.well_id}_pos{pos.position}"
@@ -381,7 +395,8 @@ def main() -> int:
                 save_annotation_json(pos.well_id, pos.position, f.name,
                                      pos.irm.shape, centerlines, rows,
                                      out / "annotations" / f"{stem}.json",
-                                     acquired_at=pos.acquired_at)
+                                     acquired_at=pos.acquired_at,
+                                     focus=pos.focus)
 
             n_pos += 1
             n_mt += len(rows)
@@ -390,6 +405,7 @@ def main() -> int:
 
     csvw.close()
     failures.close()
+    focus_log.close()
     dt = time.time() - t_start
     print(f"\n[done] {n_pos} positions, {n_mt} microtubules, {n_fail} failures "
           f"in {dt/60:.1f} min")
@@ -397,6 +413,25 @@ def main() -> int:
     if n_fail:
         print(f"[done] failures -> {failures.path} (one row per lost well, "
               f"with the reason)")
+    # Always printed, flagged or not: "0 of 900 flagged" is a result, and a
+    # silent run would leave the reader unsure the check ran at all. Stated as a
+    # diagnostic, never as a verdict on the run — the exit code is unaffected,
+    # because the descriptor conflates focus with field density and fails
+    # permissive (see mt_pipeline/nd2_io.FocusQuality).
+    #
+    # The unmeasured count is NOT decoration. Without it, a deployment where
+    # focus_qc or its calibration never loaded prints "0/900 flagged" — the
+    # reassuring reading of a blank — and the one [warn] explaining why is
+    # hundreds of lines up in a log that dies with the container.
+    focus_summary = (f"[done] out-of-focus check -> {focus_log.path} "
+                     f"({focus_log.n_flagged}/{focus_log.n_rows} positions "
+                     "flagged; advisory only, nothing was excluded)")
+    if focus_log.n_unmeasured:
+        focus_summary += (f"\n[warn] {focus_log.n_unmeasured}/{focus_log.n_rows} "
+                          "positions could not be judged at all — see the "
+                          "`reason` column (detector_unavailable / error:<Type> "
+                          "mean the check did not run; blank is NOT `in focus`)")
+    print(focus_summary)
     return 0
 
 

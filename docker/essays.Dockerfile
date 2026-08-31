@@ -99,9 +99,15 @@ assert str(reg) == '/app/models', \
     'registration estimator not resolved from the image copy: %s' % reg; \
 assert mt_pipeline.nd2_io._load_estimator() is not None, \
     'the channel-alignment diagnostic cannot load its estimator'; \
+focus = mt_pipeline.nd2_io._load_focus_detector(); \
+assert focus is not None, \
+    'the out-of-focus check cannot load focus_qc or its calibration'; \
+assert set(focus.calibration.thresholds) == {'irm', 'fluor'}, \
+    'the focus calibration covers %s, not IRM + fluorescence' % sorted(focus.calibration.thresholds); \
 print('essays module import OK; microtubule from', microtubule.__file__); \
 print('shared measurement from', mt_measure.__file__); \
-print('shared estimator from', channel_registration.__file__)"
+print('shared estimator from', channel_registration.__file__); \
+print('focus calibration from', focus.source)"
 
 USER app
 

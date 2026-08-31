@@ -16,13 +16,19 @@
  *
  * Returns the ML response verbatim — frontend handles PNG/CSV download
  * UX.
+ *
+ * Callers that ask again for the same render (the editor modal, every time it
+ * is reopened) can opt in to a Redis response cache with ``useCache``; see
+ * the "Response cache" section below for the key and its bounds.
  */
 
 import * as path from 'path';
+import { createHash } from 'crypto';
 import axios from 'axios';
 import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
+import { cacheService, CacheService } from './cacheService';
 import { CHANNEL_NAME_RE } from './video/types';
 
 /** Net-velocity cut-off (µm/s): trajectories slower than this are dropped as
@@ -34,6 +40,47 @@ const MIN_NET_VELOCITY_UM_S = 0.01;
 /** Mirrors the pattern accepted by the ML KymographRequest. Defence in
  *  depth — the controller layer also validates. */
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+
+/** Column count requested from the ML renderer. Part of the cache key, so
+ *  changing it can never serve back an entry rendered at the old width. */
+const KYMOGRAPH_TARGET_WIDTH = 200;
+
+/** Signal-band width used when the caller passes no ``intensityWidth``. */
+const DEFAULT_INTENSITY_WIDTH = 3;
+
+// ---------------------------------------------------------------------------
+// Response cache
+// ---------------------------------------------------------------------------
+
+const CACHE_NAMESPACE = 'kymograph';
+
+/** Bump when ``KymographServiceResult`` changes shape, so entries written by
+ *  an older build hash to a different key instead of being read back missing
+ *  fields the new code expects. */
+const CACHE_SCHEMA_VERSION = 1;
+
+/** 30 minutes.
+ *
+ *  The key is content-addressed — it carries every render parameter plus a
+ *  per-frame ``updatedAt`` staleness token — so the TTL is NOT what keeps the
+ *  cache honest: an edit invalidates by changing the key, not by expiring.
+ *  The TTL is purely a footprint bound, and there has to be one, because the
+ *  production Redis runs with ``maxmemory 0`` and ``noeviction`` (measured
+ *  2026-08-31) and so reclaims nothing on its own. 30 minutes covers the
+ *  reported pain — close the modal, reopen it, scrub back to the same
+ *  polyline — while capping a pathological session (a new polyline every
+ *  20 s for half an hour) at roughly 90 entries x 0.6 MB = 55 MB. */
+const CACHE_TTL_SECONDS = CacheService.TTL_PRESETS.MEDIUM;
+
+/** Skip caching a response larger than this once serialized.
+ *
+ *  Measured on the 300-frame container 1990f89e (56 MB of polygons JSON,
+ *  30 790 polylines): the editor modal's response is 611 KB — a 128 KB PNG
+ *  plus a 483 KB CSV — so 4 MB leaves ~6.5x headroom for the velocity overlay
+ *  and a long track table. A backstop, not the main defence: the caller that
+ *  produces genuinely huge results (``renderProfiles``, one matplotlib PNG
+ *  per frame) does not opt in to the cache at all. */
+const CACHE_MAX_BYTES = 4 * 1024 * 1024;
 
 interface PolylineRecord {
   id: string;
@@ -94,6 +141,17 @@ export interface KymographServiceInput {
    *  the sampled matrix, so both the ML render cost and the output scope shrink
    *  to the selection. */
   frameFilter?: number[];
+  /** Opt in to the Redis response cache. Opt-IN, not opt-out, on purpose.
+   *
+   *  Only the interactive modal sets it: it asks for the same (container,
+   *  polyline, channel) again every time the user reopens the dialog, so a hit
+   *  is likely and the entry earns its space. The export fan-out deliberately
+   *  does not — it renders every polyline of every container exactly once, in
+   *  one pass, and would push thousands of 0.6 MB entries that nothing will
+   *  ever read into a Redis running `maxmemory 0` / `noeviction`. A 20-video,
+   *  2-channel project at MAX_MT_PER_CONTAINER would be ~1.4 GB of write-only
+   *  cache, on the instance that also holds sessions. */
+  useCache?: boolean;
 }
 
 /** One per-frame intensity profile rendered as a matplotlib PNG. Mirrors the ML
@@ -184,6 +242,136 @@ function parsePolygons(json: string | null | undefined): PolylineRecord[] {
   }
 }
 
+/** Raw ``Segmentation.polygons`` JSON for the named frames, keyed by frame
+ *  index. Fetched separately from the frame metadata (and only for the frames
+ *  whose geometry is actually read) because the polygons column dominates the
+ *  cost of this service: 56 MB for one real 300-frame container.
+ *
+ *  Doing the ``trackId`` lookup inside Postgres instead was measured on that
+ *  container and is SLOWER, so it is deliberately not done here:
+ *  ``jsonb_array_elements(polygons::jsonb)`` took 1097 ms and the ``::json``
+ *  variant 724 ms, against 459 ms to ship the text plus 285 ms to
+ *  ``JSON.parse`` it in Node — the cast has to re-parse all 56 MB on every
+ *  call, and it burns shared database CPU to do it. */
+async function fetchPolygonsByFrame(
+  videoContainerId: string,
+  frameIndices: number[]
+): Promise<Map<number, string | null>> {
+  const byFrame = new Map<number, string | null>();
+  if (frameIndices.length === 0) {
+    return byFrame;
+  }
+  const rows = await prisma.image.findMany({
+    where: {
+      parentVideoId: videoContainerId,
+      frameIndex: { in: frameIndices },
+    },
+    // `(parentVideoId, frameIndex)` is indexed but NOT unique, so a duplicated
+    // frame row (an orphan or re-extraction artefact) would otherwise resolve
+    // to whichever row Postgres happened to return first — and back two
+    // different renders under one cache key. Order it explicitly.
+    orderBy: [{ frameIndex: 'asc' }, { id: 'asc' }],
+    select: {
+      frameIndex: true,
+      segmentation: { select: { polygons: true } },
+    },
+  });
+  const wanted = new Set(frameIndices);
+  for (const row of rows) {
+    // First row wins on a duplicated frame index.
+    if (
+      row.frameIndex != null &&
+      wanted.has(row.frameIndex) &&
+      !byFrame.has(row.frameIndex)
+    ) {
+      byFrame.set(row.frameIndex, row.segmentation?.polygons ?? null);
+    }
+  }
+  return byFrame;
+}
+
+/** Per-frame staleness token. ``seg`` is the load-bearing half: a resegment or
+ *  a polyline edit bumps ``Segmentation.updatedAt`` and so changes the cache
+ *  key. ``img`` costs nothing extra (same row) and additionally catches a
+ *  frame whose image record was rewritten — a re-extracted channel PNG changes
+ *  the pixels the kymograph samples without touching the segmentation. */
+interface FrameStamp {
+  f: number;
+  img: number;
+  seg: number | null;
+}
+
+/** Everything the ML render depends on, hashed into one key.
+ *
+ *  Note the frame stamps carry the frame SET as well as its contents, so a
+ *  ``frameFilter`` and a frame being added or deleted both change the key.
+ *  The container id stays in the clear as a prefix: it keeps the key
+ *  greppable in ``redis-cli --scan`` and leaves a per-container
+ *  ``invalidatePattern`` open should one ever be needed. */
+function kymographCacheKey(
+  input: KymographServiceInput,
+  container: {
+    updatedAt: Date;
+    pixelSizeUm: number | null;
+    frameIntervalMs: number | null;
+  },
+  frames: FrameStamp[]
+): string {
+  const descriptor = JSON.stringify({
+    v: CACHE_SCHEMA_VERSION,
+    polylineId: input.polylineId,
+    frameIndex: input.frameIndex,
+    sourceChannel: input.sourceChannel,
+    channelColor: input.channelColor ?? null,
+    detectVelocity: input.detectVelocity === true,
+    renderOverlay:
+      input.detectVelocity === true && input.renderOverlay === true,
+    renderProfiles: input.renderProfiles === true,
+    intensityWidth: input.intensityWidth ?? DEFAULT_INTENSITY_WIDTH,
+    targetWidth: KYMOGRAPH_TARGET_WIDTH,
+    minNetVelocityUmS: MIN_NET_VELOCITY_UM_S,
+    // Container calibration scales every velocity/length in the result. Held
+    // explicitly as well as via `containerUpdatedAt` so the key stays correct
+    // even for a backfill written with raw SQL, which does not bump the row's
+    // updatedAt. `containerUpdatedAt` covers the rest of the container row —
+    // notably the `channels` JSON.
+    pixelSizeUm: container.pixelSizeUm ?? null,
+    frameIntervalMs: container.frameIntervalMs ?? null,
+    containerUpdatedAt: container.updatedAt.getTime(),
+    frames,
+  });
+  return `${input.videoContainerId}:${createHash('sha256')
+    .update(descriptor)
+    .digest('hex')}`;
+}
+
+/** Store a freshly rendered kymograph, unless it is transient or oversized. */
+async function cacheKymographResult(
+  key: string,
+  result: KymographServiceResult,
+  context: { videoContainerId: string; polylineId: string }
+): Promise<void> {
+  // A crashed velocity run and a render that came back without a PNG are both
+  // transient ML failures. Caching either would pin the failure in front of
+  // the user for the whole TTL, and a retry would never reach the ML service.
+  if (result.velocityError || !result.pngBase64) {
+    return;
+  }
+  const bytes = Buffer.byteLength(JSON.stringify(result));
+  if (bytes > CACHE_MAX_BYTES) {
+    logger.info('Kymograph too large to cache', 'KymographService', {
+      ...context,
+      bytes,
+      limit: CACHE_MAX_BYTES,
+    });
+    return;
+  }
+  await cacheService.set(key, result, {
+    namespace: CACHE_NAMESPACE,
+    ttl: CACHE_TTL_SECONDS,
+  });
+}
+
 export async function buildKymograph(
   input: KymographServiceInput
 ): Promise<KymographServiceResult> {
@@ -224,6 +412,7 @@ export async function buildKymograph(
       channels: true,
       pixelSizeUm: true,
       frameIntervalMs: true,
+      updatedAt: true,
     },
   });
   if (!container || !container.isVideoContainer) {
@@ -238,26 +427,77 @@ export async function buildKymograph(
     throw new Error(`Unknown source channel: ${sourceChannel}`);
   }
 
+  // Frame METADATA only — deliberately without `segmentation.polygons`. This
+  // query used to carry the polygons of every frame (56 MB, 459 ms, plus
+  // 285 ms of event-loop-blocking JSON.parse on a real 300-frame container)
+  // purely to find one sibling polyline per frame. Everything needed to build
+  // the cache key is here, so a cache hit — and every static-line render —
+  // now costs ~8 ms of database time instead of ~745 ms.
   const allFrames = await prisma.image.findMany({
     where: { parentVideoId: videoContainerId },
     orderBy: { frameIndex: 'asc' },
     select: {
       id: true,
       frameIndex: true,
-      segmentation: { select: { polygons: true } },
+      updatedAt: true,
+      segmentation: { select: { updatedAt: true } },
     },
   });
   if (allFrames.length === 0) {
     throw new Error('No frames found for the given video container');
   }
-
-  // Locate the selected polyline and decide tracked vs static-line mode.
-  const seedFrame = allFrames.find(f => f.frameIndex === frameIndex);
-  if (!seedFrame) {
+  const seedMeta = allFrames.find(f => f.frameIndex === frameIndex);
+  if (!seedMeta) {
     throw new Error(`Frame ${frameIndex} not found in container`);
   }
+
+  // Frames that will actually be sampled, in frameIndex order. `frameIndex` is
+  // nullable on the column, never null on a video frame row.
+  const selectedFrames = allFrames.filter(
+    (f): f is typeof f & { frameIndex: number } =>
+      f.frameIndex != null &&
+      (!frameFilterSet || frameFilterSet.has(f.frameIndex))
+  );
+
+  let cacheKey: string | null = null;
+  if (input.useCache) {
+    const stamp = (
+      f: (typeof allFrames)[number],
+      index: number
+    ): FrameStamp => ({
+      f: index,
+      img: f.updatedAt.getTime(),
+      seg: f.segmentation?.updatedAt.getTime() ?? null,
+    });
+    const frameStamps = selectedFrames.map(f => stamp(f, f.frameIndex));
+    // The seed polyline is the geometry every frame falls back to, and it is
+    // what decides tracked-vs-static — so its staleness token belongs in the
+    // key even when a frameFilter leaves its own frame out of the render.
+    if (frameFilterSet && !frameFilterSet.has(frameIndex)) {
+      frameStamps.unshift(stamp(seedMeta, frameIndex));
+    }
+    cacheKey = kymographCacheKey(input, container, frameStamps);
+
+    const cached = await cacheService.get<KymographServiceResult>(cacheKey, {
+      namespace: CACHE_NAMESPACE,
+    });
+    if (cached) {
+      logger.info('Kymograph served from cache', 'KymographService', {
+        videoContainerId,
+        polylineId,
+        frames: selectedFrames.length,
+      });
+      return cached;
+    }
+  }
+
+  // Cache miss: only now is any polygon JSON worth fetching. The seed frame
+  // comes first because it is what decides whether ANY other frame's polygons
+  // are needed at all.
   const seedPolygons = parsePolygons(
-    seedFrame.segmentation?.polygons ?? null
+    (await fetchPolygonsByFrame(videoContainerId, [frameIndex])).get(
+      frameIndex
+    ) ?? null
   );
   const seedPolyline = seedPolygons.find(p => p.id === polylineId);
   if (!seedPolyline || !Array.isArray(seedPolyline.points)) {
@@ -267,43 +507,51 @@ export async function buildKymograph(
   const trackId = seedPolyline.trackId;
   const trackedMode = typeof trackId === 'string' && trackId.length > 0;
 
-  const framesPayload: Array<{
-    frame: number;
-    polyline_rc: number[][];
-    image_path: string;
-  }> = [];
-
-  for (const f of allFrames) {
-    if (f.frameIndex == null) {
-      continue;
-    }
-    // Restrict to the selected frames when the export passed a filter.
-    if (frameFilterSet && !frameFilterSet.has(f.frameIndex)) {
-      continue;
-    }
-    let geometry: Array<{ x: number; y: number }> | null = null;
-    if (trackedMode) {
-      const polygons = parsePolygons(f.segmentation?.polygons ?? null);
+  // Sibling geometry, keyed by frame index. Static-line mode reuses the seed
+  // polyline on every frame, so it never reads another frame's polygons —
+  // which is the whole 56 MB.
+  const geometryByFrame = new Map<number, Array<{ x: number; y: number }>>();
+  if (trackedMode) {
+    const siblingPoints = (
+      polygons: PolylineRecord[]
+    ): Array<{ x: number; y: number }> | null => {
       const sibling = polygons.find(p => p.trackId === trackId);
-      if (sibling && Array.isArray(sibling.points)) {
-        geometry = sibling.points;
+      return sibling && Array.isArray(sibling.points) ? sibling.points : null;
+    };
+    // The seed frame is already parsed; re-parsing it here was 190 KB of pure
+    // waste on every tracked request.
+    const seedSibling = siblingPoints(seedPolygons);
+    if (seedSibling) {
+      geometryByFrame.set(frameIndex, seedSibling);
+    }
+    const otherFrames = selectedFrames
+      .map(f => f.frameIndex)
+      .filter(idx => idx !== frameIndex);
+    for (const [idx, json] of await fetchPolygonsByFrame(
+      videoContainerId,
+      otherFrames
+    )) {
+      const points = siblingPoints(parsePolygons(json));
+      if (points) {
+        geometryByFrame.set(idx, points);
       }
     }
-    if (!geometry) {
-      // Fallback: reuse the seed-frame polyline as a static reference line.
-      geometry = seedPolyline.points as Array<{ x: number; y: number }>;
-    }
-    framesPayload.push({
-      frame: f.frameIndex,
-      polyline_rc: geometry.map(pt => [pt.y, pt.x]),
-      image_path: framePngPath(
-        container.projectId,
-        videoContainerId,
-        f.frameIndex,
-        sourceChannel
-      ),
-    });
   }
+
+  const framesPayload = selectedFrames.map(f => ({
+    frame: f.frameIndex,
+    // Fallback: reuse the seed-frame polyline as a static reference line.
+    polyline_rc: (
+      geometryByFrame.get(f.frameIndex) ??
+      (seedPolyline.points as Array<{ x: number; y: number }>)
+    ).map(pt => [pt.y, pt.x]),
+    image_path: framePngPath(
+      container.projectId,
+      videoContainerId,
+      f.frameIndex,
+      sourceChannel
+    ),
+  }));
 
   // Calibration: null when the upload carried no pixel size / frame interval
   // (older videos, non-microscopy formats). Resolved BEFORE the ML call so the
@@ -317,9 +565,9 @@ export async function buildKymograph(
     mlUrl,
     {
       frames: framesPayload,
-      target_width: 200,
+      target_width: KYMOGRAPH_TARGET_WIDTH,
       tracked: trackedMode,
-      intensity_width: intensityWidth ?? 3,
+      intensity_width: intensityWidth ?? DEFAULT_INTENSITY_WIDTH,
       min_net_velocity_um_s: MIN_NET_VELOCITY_UM_S,
       // Forward calibration only when usable (> 0). The ML field is gt=0, and
       // 0 means "uncalibrated" here — sending it would 422 the whole request.
@@ -334,7 +582,17 @@ export async function buildKymograph(
       ...(detectVelocity && renderOverlay ? { render_overlay: true } : {}),
       ...(renderProfiles ? { render_profiles: true } : {}),
     },
-    { timeout: 120_000 }
+    // 120 s was right when trajectory detection was 0.03-0.2 s of numpy. It is
+    // not right for KymoButler: measured 2.6-131.7 s per kymograph on CPU on
+    // 2026-08-31 (the spread is box load and torch thread count; the GPU path
+    // could not be measured, the host driver was mismatched). At 120 s a single
+    // slow kymograph aborts here while the ML service keeps working on it, so
+    // the editor modal shows a timeout and a batch export — one job per
+    // polyline x channel — dies partway through. Detection is also serialised
+    // one-at-a-time on the ML side, so a queued request waits for the one ahead
+    // of it as well. 10 minutes covers the measured worst case with room for
+    // both, and still fails rather than hanging forever.
+    { timeout: 600_000 }
   );
   const payload = res.data?.data ?? res.data ?? {};
 
@@ -424,7 +682,7 @@ export async function buildKymograph(
     profiles: profiles?.length,
   });
 
-  return {
+  const result: KymographServiceResult = {
     pngBase64: payload.png_base64,
     csvBase64: payload.csv_base64,
     frameCount: payload.frame_count,
@@ -444,4 +702,13 @@ export async function buildKymograph(
       : {}),
     ...(profiles ? { profiles } : {}),
   };
+
+  if (cacheKey) {
+    await cacheKymographResult(cacheKey, result, {
+      videoContainerId,
+      polylineId,
+    });
+  }
+
+  return result;
 }
