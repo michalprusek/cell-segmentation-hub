@@ -4,8 +4,8 @@
  * The frontend orchestrates UI state; the backend samples raw image intensity
  * along the selected polyline across every frame and returns a colour-mapped
  * PNG plus the underlying CSV. When "Velocity analysis" is enabled the backend
- * also runs blob-motion detection and returns one track per moving particle
- * (with µm/s velocities derived from the container calibration). Those tracks
+ * also runs KymoButler trajectory detection and returns one track per moving
+ * particle (with µm/s velocities derived from the container calibration). Those
  * are drawn as an interactive SVG overlay on top of the kymograph and listed in
  * a velocity table.
  */

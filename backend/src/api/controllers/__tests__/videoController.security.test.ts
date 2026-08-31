@@ -17,6 +17,13 @@
  *    segmenter.
  *  - GAP-3: `updateChannels` rejects a channel.type outside
  *    `'irm'|'fluorescent'`.
+ *  - `updateChannels` treats the STORED row as authoritative for the
+ *    keys that record how a channel was built (`SERVER_OWNED_CHANNEL_KEYS`).
+ *    A PATCH body can neither erase them nor assert them. Both directions
+ *    matter: erasing `staticSource` makes a 299-frame video re-segment frame
+ *    by frame and lose the cross-frame identity the projection mints, and
+ *    asserting it makes the server skip 298 frames of real acquisition on a
+ *    claim nothing measured.
  *
  * Mocked surface: prisma (db/prismaClient), fs/promises (the access()
  * call), authz (assertProjectAccess via prisma.user + prisma.project
@@ -264,6 +271,227 @@ describe('VideoController security regressions (round-2 GAP-2 + GAP-3)', () => {
       expect(prismaImageUpdate).toHaveBeenCalledOnce();
       const call = prismaImageUpdate.mock.calls[0]?.[0];
       expect(call?.where).toEqual({ id: 'video-1' });
+    });
+  });
+
+  describe('updateChannels — the stored row owns how a channel was built', () => {
+    /** An IRM snapshot glued onto every frame by "Add channel", plus a
+     *  channel the microscope only refreshed every third frame. Both records
+     *  are measurements; neither is reconstructible from a request body. */
+    const STORED = [
+      {
+        name: 'IRM',
+        displayName: 'IRM',
+        type: 'fluorescent',
+        isSegmentationSource: false,
+        pngBacked: true,
+        staticSource: true,
+        frameIds: ['f0', 'f1', 'f2'],
+        staticShifts: { f0: [0, 0], f1: [3, -2] },
+        proxyRangeMax: 32767,
+      },
+      {
+        name: 'Channel_1',
+        type: 'fluorescent',
+        isSegmentationSource: true,
+        sparseSource: true,
+        sparseFill: { '1': 0, '2': 0 },
+        sparseFillFrameIds: { 'f1': 'f0' },
+      },
+    ];
+
+    /** What a client built from `apiClient.updateImageChannels`'s DTO sends:
+     *  the enumerated fields only. `staticSource` / `staticShifts` /
+     *  `proxyRangeMax` are not in that type, so they simply vanish. */
+    const NARROW_BODY = [
+      {
+        name: 'IRM',
+        displayName: 'IRM snapshot',
+        type: 'fluorescent',
+        isSegmentationSource: false,
+      },
+      {
+        name: 'Channel_1',
+        type: 'fluorescent',
+        isSegmentationSource: true,
+      },
+    ];
+
+    function storedContainer(channels: unknown = STORED) {
+      prismaImageFindUnique.mockResolvedValue({
+        ...VALID_CONTAINER_ROW,
+        channels,
+      });
+      prismaImageUpdate.mockResolvedValue({});
+    }
+
+    /** The channels JSON actually persisted. */
+    function persisted(): Record<string, unknown>[] {
+      const call = prismaImageUpdate.mock.calls[0]?.[0] as {
+        data: { channels: Record<string, unknown>[] };
+      };
+      return call.data.channels;
+    }
+
+    it('re-grafts every server-owned field a narrow client dropped', async () => {
+      storedContainer();
+
+      const res = await request(buildApp())
+        .patch('/images/video-1/channels')
+        .send({ channels: NARROW_BODY });
+
+      expect(res.status).toBe(200);
+      const [irm, sparse] = persisted();
+      expect(irm).toMatchObject({
+        // the client's edit lands …
+        displayName: 'IRM snapshot',
+        // … and everything the ingest recorded survives it
+        staticSource: true,
+        staticShifts: { f0: [0, 0], f1: [3, -2] },
+        pngBacked: true,
+        frameIds: ['f0', 'f1', 'f2'],
+        proxyRangeMax: 32767,
+      });
+      expect(sparse).toMatchObject({
+        sparseSource: true,
+        sparseFill: { '1': 0, '2': 0 },
+        sparseFillFrameIds: { 'f1': 'f0' },
+      });
+    });
+
+    it('refuses an explicit attempt to clear them', async () => {
+      // Not hypothetical malice: a stale client cache round-tripping an old
+      // copy of the row looks exactly like this.
+      storedContainer();
+
+      const res = await request(buildApp())
+        .patch('/images/video-1/channels')
+        .send({
+          channels: [
+            { ...NARROW_BODY[0], staticSource: false, frameIds: [] },
+            { ...NARROW_BODY[1], sparseSource: false, sparseFill: {} },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      const [irm, sparse] = persisted();
+      expect(irm.staticSource).toBe(true);
+      expect(irm.frameIds).toEqual(['f0', 'f1', 'f2']);
+      expect(sparse.sparseSource).toBe(true);
+      expect(sparse.sparseFill).toEqual({ '1': 0, '2': 0 });
+    });
+
+    it('refuses to let a body ASSERT them on a plain channel', async () => {
+      // "This channel came from one image" is something the ingest measured.
+      // Believing a request would skip segmenting frames that hold real,
+      // different acquisitions.
+      storedContainer([
+        { name: 'GFP', type: 'fluorescent', isSegmentationSource: false },
+      ]);
+
+      const res = await request(buildApp())
+        .patch('/images/video-1/channels')
+        .send({
+          channels: [
+            {
+              name: 'GFP',
+              type: 'fluorescent',
+              isSegmentationSource: false,
+              staticSource: true,
+              sparseSource: true,
+              sparseFill: { '1': 0 },
+              frameIds: ['forged'],
+            },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      const [gfp] = persisted();
+      expect(gfp).not.toHaveProperty('staticSource');
+      expect(gfp).not.toHaveProperty('sparseSource');
+      expect(gfp).not.toHaveProperty('sparseFill');
+      expect(gfp).not.toHaveProperty('frameIds');
+    });
+
+    it('still lets the client own label, colour and the segmentation source', async () => {
+      storedContainer();
+
+      const res = await request(buildApp())
+        .patch('/images/video-1/channels')
+        .send({
+          channels: [
+            {
+              ...NARROW_BODY[0],
+              displayName: 'renamed',
+              displayColor: '#ff00ff',
+              isSegmentationSource: true,
+            },
+            { ...NARROW_BODY[1], isSegmentationSource: false },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      const [irm, sparse] = persisted();
+      expect(irm.displayName).toBe('renamed');
+      expect(irm.displayColor).toBe('#ff00ff');
+      expect(irm.isSegmentationSource).toBe(true);
+      expect(sparse.isSegmentationSource).toBe(false);
+    });
+
+    it('passes a genuinely new channel through untouched', async () => {
+      storedContainer();
+
+      const res = await request(buildApp())
+        .patch('/images/video-1/channels')
+        .send({
+          channels: [
+            ...NARROW_BODY,
+            { name: 'GFP', type: 'fluorescent', isSegmentationSource: false },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      expect(persisted()[2]).toEqual({
+        name: 'GFP',
+        type: 'fluorescent',
+        isSegmentationSource: false,
+      });
+    });
+
+    it('strips the forged keys off a channel the stored row has never heard of', async () => {
+      // The assert direction has to hold for a name that is NOT in the stored
+      // row too, or the hole is trivial to walk through: invent a channel (or
+      // rename an existing one, which misses the lookup the same way), claim
+      // `staticSource`, and `collapseStaticChannelFrames` will drop 298 frames
+      // of real acquisition from the queue on that claim alone.
+      storedContainer();
+
+      const res = await request(buildApp())
+        .patch('/images/video-1/channels')
+        .send({
+          channels: [
+            ...NARROW_BODY,
+            {
+              name: 'IRM_2',
+              type: 'irm',
+              isSegmentationSource: false,
+              staticSource: true,
+              staticShifts: { f0: [0, 0] },
+              sparseSource: true,
+              sparseFill: { '1': 0 },
+              frameIds: ['forged'],
+              pngBacked: true,
+              proxyRangeMax: 1,
+            },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      expect(persisted()[2]).toEqual({
+        name: 'IRM_2',
+        type: 'irm',
+        isSegmentationSource: false,
+      });
     });
   });
 });
