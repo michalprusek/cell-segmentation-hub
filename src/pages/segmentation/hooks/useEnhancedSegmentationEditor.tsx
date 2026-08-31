@@ -53,6 +53,10 @@ interface UseEnhancedSegmentationEditorProps {
   activeInstanceIdRef?: React.RefObject<string>;
   /** Gates MT-only polyline behaviours (Enter-commits, slice geometry). */
   projectType?: ProjectType;
+  /** First refusal on a scope-less delete gesture (Delete key, delete-mode
+   *  click). Return true to say "handled — I opened a scope dialog"; the editor
+   *  then deletes nothing. Omit it and those gestures delete locally as before. */
+  onRequestDeletePolygon?: (polygonId: string) => boolean;
   // onPolygonSelection is now handled internally via usePolygonSelection for SSOT
 }
 
@@ -74,6 +78,7 @@ export const useEnhancedSegmentationEditor = ({
   activePartClassRef,
   activeInstanceIdRef,
   projectType,
+  onRequestDeletePolygon,
   // onPolygonSelection is now handled internally
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
@@ -723,24 +728,57 @@ export const useEnhancedSegmentationEditor = ({
     setTransform(newTransform);
   }, [imageWidth, imageHeight, canvasWidth, canvasHeight]);
 
-  // Polygon operations
+  // Polygon operations.
+  // `silent` suppresses the generic toast for callers that report the delete
+  // themselves with more information (the microtubule scope handlers say which
+  // frames were touched) — two stacked success toasts for one gesture is noise.
   const handleDeletePolygon = useCallback(
-    (polygonId?: string) => {
+    (polygonId?: string, options?: { silent?: boolean }) => {
       const idToDelete = polygonId || selectedPolygonId;
       if (!idToDelete) return;
 
       const updatedPolygons = polygons.filter(p => p.id !== idToDelete);
-      updatePolygons(updatedPolygons);
+      // The id may no longer exist — a reload can replace the polygons under an
+      // open confirmation. Pushing an identical array would spend a history
+      // entry and mark the editor dirty for a delete that removed nothing, and
+      // announce a success that did not happen.
+      const removed = updatedPolygons.length !== polygons.length;
+      if (removed) {
+        updatePolygons(updatedPolygons);
+      }
 
       if (selectedPolygonId === idToDelete) {
         setSelectedPolygonId(null);
       }
 
-      toast.success(t('toast.segmentation.deleted'));
+      if (removed && !options?.silent) {
+        toast.success(t('toast.segmentation.deleted'));
+      }
     },
     // setSelectedPolygonId is a stable useState setter; omitted intentionally.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [polygons, selectedPolygonId, updatePolygons, t]
+  );
+
+  /**
+   * Delete gestures that carry no scope of their own — the Delete key and a
+   * click in DeletePolygon mode. `onRequestDeletePolygon` gets first refusal:
+   * for a tracked microtubule the parent opens the "this frame or the whole
+   * track?" dialog and returns true, and nothing is deleted here. Everything
+   * else (and every editor without that prop) deletes locally as before.
+   *
+   * NOT used by `handleDeletePolygon` itself: the sidebar / context-menu
+   * helpers in `usePolygonHandlers` call that one to apply an ALREADY-chosen
+   * scope, and re-prompting there would loop.
+   */
+  const requestDeletePolygon = useCallback(
+    (polygonId?: string) => {
+      const idToDelete = polygonId || selectedPolygonId;
+      if (!idToDelete) return;
+      if (onRequestDeletePolygon?.(idToDelete)) return;
+      handleDeletePolygon(idToDelete);
+    },
+    [selectedPolygonId, onRequestDeletePolygon, handleDeletePolygon]
   );
 
   // Now initialize centralized polygon selection system (SSOT) after handleDeletePolygon is defined
@@ -749,7 +787,7 @@ export const useEnhancedSegmentationEditor = ({
     currentSelectedPolygonId: selectedPolygonId,
     onModeChange: setEditMode,
     onSelectionChange: setSelectedPolygonId,
-    onDeletePolygon: handleDeletePolygon,
+    onDeletePolygon: requestDeletePolygon,
     polygons,
   });
 
@@ -908,7 +946,9 @@ export const useEnhancedSegmentationEditor = ({
     handleZoomIn,
     handleZoomOut,
     handleResetView,
-    handleDeletePolygon,
+    // Scope-less gesture: a tracked microtubule asks first (see
+    // requestDeletePolygon), everything else deletes locally as before.
+    handleDeletePolygon: requestDeletePolygon,
     onEscape: handleEscape,
     onEnter: handleEnterPolyline,
   });

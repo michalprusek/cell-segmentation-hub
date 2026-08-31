@@ -251,6 +251,47 @@ describe('Segmentation Routes', () => {
     });
   });
 
+  describe('DELETE /api/segmentation/images/:imageId/tracks/:trackId', () => {
+    const trackId = 'mt_a1b2c3';
+
+    it('should require authentication', async () => {
+      mockedAuthenticate.mockImplementationOnce(async (_req, res, _next) => {
+        res.status(401).json({ success: false, message: 'Unauthorized' });
+      });
+
+      await request(app)
+        .delete(`/api/segmentation/images/${validImageId}/tracks/${trackId}`)
+        .expect(401);
+    });
+
+    it('should reject non-UUID imageId', async () => {
+      const response = await request(app)
+        .delete(`/api/segmentation/images/${invalidImageId}/tracks/${trackId}`)
+        .expect(400);
+
+      expect(response.body).toHaveProperty('errors');
+    });
+
+    it('should reject an over-long trackId', async () => {
+      const response = await request(app)
+        .delete(
+          `/api/segmentation/images/${validImageId}/tracks/${'x'.repeat(201)}`
+        )
+        .expect(400);
+
+      expect(response.body).toHaveProperty('errors');
+    });
+
+    it('should proceed to controller with valid UUID + trackId', async () => {
+      const response = await request(app).delete(
+        `/api/segmentation/images/${validImageId}/tracks/${trackId}`
+      );
+
+      // 200 or 500 — auth and validation passed, the route is registered
+      expect([200, 500]).toContain(response.status);
+    });
+  });
+
   describe('POST /api/segmentation/batch', () => {
     it('should require authentication', async () => {
       mockedAuthenticate.mockImplementationOnce(async (_req, res, _next) => {

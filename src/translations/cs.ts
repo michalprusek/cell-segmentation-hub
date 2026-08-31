@@ -692,6 +692,11 @@ export default {
       propagateFailed: 'Propagace mikrotubulu selhala',
       deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
       deleteTrackFailed: 'Smazání tracku selhalo',
+      deleteFrameSuccess:
+        'Mikrotubulus odstraněn z tohoto snímku; zbytek tracku zůstává',
+      deleteFrameFailed: 'Odstranění mikrotubulu z tohoto snímku selhalo',
+      deleteScopeUnavailable:
+        'Video se ještě načítá — zkuste mikrotubulus smazat za okamžik znovu',
     },
     modelNotCompatible:
       'Model "{{model}}" není kompatibilní s typem projektu "{{type}}". Povolené: {{allowed}}.',
@@ -2402,6 +2407,13 @@ export default {
     confirmDeleteTrack: 'Smazat celý track mikrotubulu?',
     deleteTrackDescription:
       'Odstraní tento mikrotubulus ze všech {{count}} snímků videa. Tuto akci nelze vrátit.',
+    deleteMicrotubule: 'Smazat mikrotubulus…',
+    confirmDeleteScope: 'Smazat tento mikrotubulus?',
+    deleteScopeDescription:
+      'Tento mikrotubulus je sledován napříč celým videem. Smazat ho jen z aktuálního snímku, nebo ze všech snímků? Tuto akci nelze vrátit.',
+    deleteScopeThisFrame: 'Jen z tohoto snímku',
+    deleteScopeAllFrames: 'Ze všech snímků',
+    deleteScopeAllFramesCount: 'Ze všech {{count}} snímků',
     editPolygon: 'Upravit polygon',
     splitPolygon: 'Rozdělit polygon',
     deletePolygon: 'Smazat polygon',

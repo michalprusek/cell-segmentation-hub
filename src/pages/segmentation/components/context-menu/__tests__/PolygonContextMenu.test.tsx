@@ -286,6 +286,130 @@ describe('PolygonContextMenu', () => {
     });
   });
 
+  // ── tracked microtubule: the delete SCOPE choice ──────────────────────────
+  //
+  // A polyline with a trackId is one object spread over every frame, so delete
+  // is ambiguous. With a frame-scoped delete wired the menu must ask which
+  // scope; without one it must fall back to the old whole-track confirm.
+
+  describe('delete scope for a tracked microtubule', () => {
+    const TRACKED_PROPS = {
+      ...DEFAULT_PROPS,
+      isPolyline: true,
+      projectType: 'microtubules' as const,
+      trackId: 'mt_a1b2c3',
+      videoFrameCount: 12,
+    };
+
+    it('offers a three-way choice when a frame-scoped delete is available', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+      const onDeleteFromFrame = vi.fn();
+
+      render(
+        <PolygonContextMenu
+          {...TRACKED_PROPS}
+          onDelete={onDelete}
+          onDeleteFromFrame={onDeleteFromFrame}
+        />
+      );
+
+      const deleteItem = getMenuItemByText(/contextMenu.deleteMicrotubule/i);
+      expect(deleteItem).toBeTruthy();
+      await user.click(deleteItem!);
+
+      // The two-way confirm must NOT be what opens.
+      expect(screen.queryByTestId('alert-dialog')).not.toBeInTheDocument();
+      expect(screen.getByTestId('delete-scope-frame')).toBeInTheDocument();
+      expect(screen.getByTestId('delete-scope-track')).toBeInTheDocument();
+      // Nothing is deleted until the user picks a scope.
+      expect(onDelete).not.toHaveBeenCalled();
+      expect(onDeleteFromFrame).not.toHaveBeenCalled();
+    });
+
+    it('"this frame only" deletes the frame and NOT the track', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+      const onDeleteFromFrame = vi.fn();
+
+      render(
+        <PolygonContextMenu
+          {...TRACKED_PROPS}
+          onDelete={onDelete}
+          onDeleteFromFrame={onDeleteFromFrame}
+        />
+      );
+      await user.click(getMenuItemByText(/contextMenu.deleteMicrotubule/i)!);
+      await user.click(screen.getByTestId('delete-scope-frame'));
+
+      expect(onDeleteFromFrame).toHaveBeenCalledTimes(1);
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('"all frames" deletes the track and NOT just the frame', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+      const onDeleteFromFrame = vi.fn();
+
+      render(
+        <PolygonContextMenu
+          {...TRACKED_PROPS}
+          onDelete={onDelete}
+          onDeleteFromFrame={onDeleteFromFrame}
+        />
+      );
+      await user.click(getMenuItemByText(/contextMenu.deleteMicrotubule/i)!);
+      const allFrames = screen.getByTestId('delete-scope-track');
+      // The frame count reaches the label so the user sees the blast radius.
+      expect(allFrames.textContent).toMatch(
+        /contextMenu.deleteScopeAllFramesCount/
+      );
+      await user.click(allFrames);
+
+      expect(onDelete).toHaveBeenCalledTimes(1);
+      expect(onDeleteFromFrame).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the whole-track confirm when no frame-scoped delete is wired', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+
+      render(<PolygonContextMenu {...TRACKED_PROPS} onDelete={onDelete} />);
+
+      const deleteItem = getMenuItemByText(/contextMenu.deleteTrack/i);
+      expect(deleteItem).toBeTruthy();
+      await user.click(deleteItem!);
+
+      expect(screen.getByTestId('alert-dialog')).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('delete-scope-frame')
+      ).not.toBeInTheDocument();
+      await user.click(screen.getByTestId('alert-confirm'));
+      expect(onDelete).toHaveBeenCalledTimes(1);
+    });
+
+    it('an untracked polyline keeps the plain polyline confirm', async () => {
+      const user = userEvent.setup();
+      const onDelete = vi.fn();
+      const onDeleteFromFrame = vi.fn();
+
+      render(
+        <PolygonContextMenu
+          {...TRACKED_PROPS}
+          trackId={undefined}
+          onDelete={onDelete}
+          onDeleteFromFrame={onDeleteFromFrame}
+        />
+      );
+
+      await user.click(getMenuItemByText(/contextMenu.deletePolyline/i)!);
+      expect(screen.getByTestId('alert-dialog')).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('delete-scope-frame')
+      ).not.toBeInTheDocument();
+    });
+  });
+
   // ── microtubule kymograph item ────────────────────────────────────────────
 
   describe('microtubule kymograph item', () => {

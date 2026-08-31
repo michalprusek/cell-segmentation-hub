@@ -851,6 +851,12 @@ export default {
       propagateFailed: 'Échec de la propagation du microtubule',
       deleteTrackSuccess: 'Trace supprimée de {{count}} images',
       deleteTrackFailed: 'Échec de la suppression de la trace',
+      deleteFrameSuccess:
+        'Microtubule supprimé de cette image ; le reste de sa trace est conservé',
+      deleteFrameFailed:
+        'Échec de la suppression du microtubule sur cette image',
+      deleteScopeUnavailable:
+        'La vidéo est encore en cours de chargement — réessayez dans un instant',
     },
     modelNotCompatible:
       'Le modèle "{{model}}" n\'est pas compatible avec le type de projet "{{type}}". Autorisés : {{allowed}}.',
@@ -2438,6 +2444,13 @@ export default {
     confirmDeleteTrack: 'Supprimer toute la trace du microtubule ?',
     deleteTrackDescription:
       'Cela supprime ce microtubule de toutes les {{count}} images de la vidéo. Cette action est irréversible.',
+    deleteMicrotubule: 'Supprimer le microtubule…',
+    confirmDeleteScope: 'Supprimer ce microtubule ?',
+    deleteScopeDescription:
+      'Ce microtubule est suivi sur toute la vidéo. Le supprimer uniquement de l’image actuelle ou de toutes les images ? Cette action est irréversible.',
+    deleteScopeThisFrame: 'Cette image uniquement',
+    deleteScopeAllFrames: 'Toutes les images',
+    deleteScopeAllFramesCount: 'Les {{count}} images',
     editPolygon: 'Modifier le polygone',
     splitPolygon: 'Diviser le polygone',
     deletePolygon: 'Supprimer le polygone',

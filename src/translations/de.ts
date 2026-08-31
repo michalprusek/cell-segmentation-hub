@@ -855,6 +855,12 @@ export default {
       propagateFailed: 'Übertragung des Mikrotubulus fehlgeschlagen',
       deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
       deleteTrackFailed: 'Löschen des Tracks fehlgeschlagen',
+      deleteFrameSuccess:
+        'Mikrotubulus aus diesem Frame entfernt; der restliche Track bleibt erhalten',
+      deleteFrameFailed:
+        'Entfernen des Mikrotubulus aus diesem Frame fehlgeschlagen',
+      deleteScopeUnavailable:
+        'Das Video wird noch geladen — versuchen Sie es gleich noch einmal',
     },
     modelNotCompatible:
       'Modell "{{model}}" ist nicht mit dem Projekttyp "{{type}}" kompatibel. Erlaubt: {{allowed}}.',
@@ -2443,6 +2449,13 @@ export default {
     confirmDeleteTrack: 'Den gesamten Mikrotubulus-Track löschen?',
     deleteTrackDescription:
       'Dies entfernt diesen Mikrotubulus aus allen {{count}} Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
+    deleteMicrotubule: 'Mikrotubulus löschen…',
+    confirmDeleteScope: 'Diesen Mikrotubulus löschen?',
+    deleteScopeDescription:
+      'Dieser Mikrotubulus wird über das gesamte Video verfolgt. Nur aus dem aktuellen Frame löschen oder aus allen Frames? Dies kann nicht rückgängig gemacht werden.',
+    deleteScopeThisFrame: 'Nur dieser Frame',
+    deleteScopeAllFrames: 'Alle Frames',
+    deleteScopeAllFramesCount: 'Alle {{count}} Frames',
     editPolygon: 'Polygon bearbeiten',
     splitPolygon: 'Polygon teilen',
     deletePolygon: 'Polygon löschen',

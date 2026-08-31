@@ -171,6 +171,27 @@ router.delete(
 );
 
 /**
+ * @route DELETE /api/segmentation/images/:imageId/tracks/:trackId
+ * @description Delete a microtubule from ONE frame, keeping the rest of its
+ *              track. Frame-scoped counterpart of the /videos/... route above.
+ * @access Private
+ */
+router.delete(
+  '/images/:imageId/tracks/:trackId',
+  [
+    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID'),
+    param('trackId')
+      .isString()
+      .trim()
+      .notEmpty()
+      .isLength({ max: 200 })
+      .withMessage('trackId musí být neprázdný řetězec'),
+  ],
+  handleValidation,
+  segmentationController.deleteTrackFromFrame
+);
+
+/**
  * @route PATCH /api/segmentation/videos/:videoId/tracks/type
  * @description Set/clear the microtubule type-label id on one or more tracks
  * @access Private

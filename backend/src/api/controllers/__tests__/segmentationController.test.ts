@@ -3,6 +3,7 @@ import express from 'express';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import { segmentationController } from '../segmentationController';
+import { VideoAccessError } from '../../../services/segmentationService';
 import { authenticate } from '../../../middleware/auth';
 import { logger } from '../../../utils/logger';
 import { ResponseHelper } from '../../../utils/response';
@@ -163,6 +164,11 @@ describe('SegmentationController', () => {
       '/segmentation/batch/results',
       mockAuthMiddleware,
       segmentationController.batchGetSegmentationResults
+    );
+    app.delete(
+      '/segmentation/images/:imageId/tracks/:trackId',
+      mockAuthMiddleware,
+      segmentationController.deleteTrackFromFrame
     );
   });
 
@@ -495,6 +501,70 @@ describe('SegmentationController', () => {
         .expect(401);
 
       expect(response.body.success).toBe(false);
+    });
+  });
+
+  describe('deleteTrackFromFrame', () => {
+    const trackId = 'mt_a1b2c3';
+
+    it('passes imageId, trackId and the caller to the frame-scoped service call', async () => {
+      const fn = mockMethod('deleteTrackFromFrame').mockResolvedValueOnce({
+        removed: 1,
+      });
+      installResponseMocks();
+
+      const response = await request(app)
+        .delete(`/segmentation/images/${imageId}/tracks/${trackId}`)
+        .expect(200);
+
+      expect(fn).toHaveBeenCalledWith(imageId, trackId, mockUser.id);
+      expect(response.body.data).toEqual({ removed: 1 });
+      // It must NOT reach the video-wide delete — that is the other scope.
+      expect(
+        (segmentationController as Record<string, any>).segmentationService
+          .deleteTrackAcrossVideo
+      ).not.toHaveBeenCalled();
+    });
+
+    it('reports a missing frame as 404, not a 500', async () => {
+      mockMethod('deleteTrackFromFrame').mockRejectedValueOnce(
+        new VideoAccessError('Frame not found or no access')
+      );
+      installResponseMocks();
+
+      const response = await request(app)
+        .delete(`/segmentation/images/${imageId}/tracks/${trackId}`)
+        .expect(404);
+
+      expect(response.body.success).toBe(false);
+    });
+
+    it('returns 500 when the frame is unreadable', async () => {
+      mockMethod('deleteTrackFromFrame').mockRejectedValueOnce(
+        new Error('Segmentation polygons for image X are unreadable')
+      );
+      installResponseMocks();
+
+      await request(app)
+        .delete(`/segmentation/images/${imageId}/tracks/${trackId}`)
+        .expect(500);
+    });
+
+    it('should return 401 when not authenticated', async () => {
+      mockAuthMiddleware.mockImplementationOnce(
+        async (
+          req: express.Request & { user?: Record<string, unknown> },
+          _res: express.Response,
+          next: express.NextFunction
+        ) => {
+          req.user = undefined;
+          next();
+        }
+      );
+
+      await request(app)
+        .delete(`/segmentation/images/${imageId}/tracks/${trackId}`)
+        .expect(401);
     });
   });
 });

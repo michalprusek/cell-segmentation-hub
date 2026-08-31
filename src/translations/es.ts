@@ -849,6 +849,11 @@ export default {
       propagateFailed: 'No se pudo propagar el microtúbulo',
       deleteTrackSuccess: 'Traza eliminada de {{count}} fotogramas',
       deleteTrackFailed: 'No se pudo eliminar la traza',
+      deleteFrameSuccess:
+        'Microtúbulo eliminado de este fotograma; el resto de su traza no cambia',
+      deleteFrameFailed: 'No se pudo eliminar el microtúbulo de este fotograma',
+      deleteScopeUnavailable:
+        'El vídeo aún se está cargando: vuelve a eliminar este microtúbulo en un momento',
     },
     modelNotCompatible:
       'El modelo "{{model}}" no es compatible con el tipo de proyecto "{{type}}". Permitidos: {{allowed}}.',
@@ -2421,6 +2426,13 @@ export default {
     confirmDeleteTrack: '¿Eliminar toda la traza del microtúbulo?',
     deleteTrackDescription:
       'Esto elimina este microtúbulo de los {{count}} fotogramas del vídeo. Esta acción no se puede deshacer.',
+    deleteMicrotubule: 'Eliminar microtúbulo…',
+    confirmDeleteScope: '¿Eliminar este microtúbulo?',
+    deleteScopeDescription:
+      'Este microtúbulo se sigue a lo largo del vídeo. ¿Eliminarlo solo del fotograma actual o de todos los fotogramas? Esta acción no se puede deshacer.',
+    deleteScopeThisFrame: 'Solo este fotograma',
+    deleteScopeAllFrames: 'Todos los fotogramas',
+    deleteScopeAllFramesCount: 'Los {{count}} fotogramas',
     editPolygon: 'Editar polígono',
     splitPolygon: 'Dividir polígono',
     deletePolygon: 'Eliminar polígono',
