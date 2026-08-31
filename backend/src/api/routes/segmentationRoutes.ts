@@ -171,6 +171,27 @@ router.delete(
 );
 
 /**
+ * @route DELETE /api/segmentation/images/:imageId/tracks/:trackId
+ * @description Delete a microtubule from ONE frame, keeping the rest of its
+ *              track. Frame-scoped counterpart of the /videos/... route above.
+ * @access Private
+ */
+router.delete(
+  '/images/:imageId/tracks/:trackId',
+  [
+    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID'),
+    param('trackId')
+      .isString()
+      .trim()
+      .notEmpty()
+      .isLength({ max: 200 })
+      .withMessage('trackId musí být neprázdný řetězec'),
+  ],
+  handleValidation,
+  segmentationController.deleteTrackFromFrame
+);
+
+/**
  * @route PATCH /api/segmentation/videos/:videoId/tracks/type
  * @description Set/clear the microtubule type-label id on one or more tracks
  * @access Private
@@ -209,9 +230,7 @@ router.post(
     body('imageIds')
       .isArray({ min: 1, max: 10000 })
       .withMessage('Musíte zadat 1-10000 obrázků'),
-    body('imageIds.*')
-      .isUUID()
-      .withMessage('ID obrázku musí být platné UUID'),
+    body('imageIds.*').isUUID().withMessage('ID obrázku musí být platné UUID'),
   ],
   handleValidation,
   segmentationController.deleteSegmentationBatch
@@ -389,7 +408,17 @@ router.post(
           req.body.intensityWidth != null
             ? Number(req.body.intensityWidth)
             : undefined,
+        // The modal re-asks for the same kymograph every time the user
+        // reopens it, so this is the one caller a cached response pays for.
+        useCache: true,
       });
+      // No hand-rolled ETag / Cache-Control here, deliberately. This is a
+      // POST, so no browser caches the response or sends If-None-Match on it;
+      // and `res.json` already emits a body-derived weak ETag (Express only
+      // generates one when the header is absent), so setting our own could
+      // only make it WORSE — see commit 5108335, where a request-derived ETag
+      // suppressed the correct one and turned every 304 into a lie. The
+      // repeat-request win lives in buildKymograph's Redis cache instead.
       ResponseHelper.success(res, result);
     } catch (err) {
       const message = (err as Error).message;

@@ -9,6 +9,11 @@
  *    coordinate mapping (x,y → row,col), framePngPath construction
  *  - Response mapping from ML data envelope
  *  - Axios error propagation
+ *  - Redis response cache: hit/miss, staleness on edit, per-parameter keying,
+ *    what is deliberately NOT cached, and degradation when Redis is down
+ *  - Polygon fetch cost: which frames' `polygons` the service reads at all
+ *  - Prefetched per-container rows (`containerContext`): no queries, no
+ *    behaviour change, one parse per frame however many builds
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -41,6 +46,26 @@ vi.mock('../../utils/logger', () => ({
 
 vi.mock('axios');
 
+// In-memory stand-in for the Redis-backed cacheService. Values round-trip
+// through JSON exactly as Redis stores them, so a hit can never hand back the
+// very object the miss produced.
+const cacheMocks = vi.hoisted(() => {
+  const store = new Map<string, unknown>();
+  return {
+    store,
+    get: vi.fn(async (key: string) => (store.has(key) ? store.get(key) : null)),
+    set: vi.fn(async (key: string, value: unknown) => {
+      store.set(key, JSON.parse(JSON.stringify(value)));
+      return true;
+    }),
+  };
+});
+
+vi.mock('../cacheService', () => ({
+  cacheService: { get: cacheMocks.get, set: cacheMocks.set },
+  CacheService: { TTL_PRESETS: { MEDIUM: 1800 } },
+}));
+
 import { buildKymograph } from '../kymographService';
 import { prisma } from '../../db/prismaClient';
 import axios from 'axios';
@@ -57,12 +82,19 @@ const mockAxios = axios as unknown as { post: ReturnType<typeof vi.fn> };
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Staleness tokens the cache key is built from. Distinct values so a test
+ *  that bumps one cannot accidentally collide with the other. */
+const CONTAINER_UPDATED_AT = new Date('2026-08-30T09:00:00.000Z');
+const IMAGE_UPDATED_AT = new Date('2026-08-30T10:00:00.000Z');
+const SEG_UPDATED_AT = new Date('2026-08-30T11:00:00.000Z');
+
 function makeContainer(overrides?: object) {
   return {
     id: 'container-1',
     projectId: 'project-1',
     isVideoContainer: true,
     channels: [] as Array<{ name: string }>,
+    updatedAt: CONTAINER_UPDATED_AT,
     ...overrides,
   };
 }
@@ -75,7 +107,10 @@ function makeFrame(
   return {
     id: `frame-${frameIndex}`,
     frameIndex,
-    segmentation: polygons ? { polygons: JSON.stringify(polygons) } : null,
+    updatedAt: IMAGE_UPDATED_AT,
+    segmentation: polygons
+      ? { polygons: JSON.stringify(polygons), updatedAt: SEG_UPDATED_AT }
+      : null,
     ...overrides,
   };
 }
@@ -110,6 +145,7 @@ const ML_RESPONSE = {
 describe('buildKymograph', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    cacheMocks.store.clear();
     mockAxios.post = vi.fn().mockResolvedValue(ML_RESPONSE);
   });
 
@@ -570,14 +606,14 @@ describe('buildKymograph', () => {
       mockPrisma.image.findUnique.mockResolvedValue(makeContainer());
     });
 
+    // Tracked seed on purpose: static-line mode never reads another frame's
+    // polygons at all, so a corrupt frame can only be exercised via a trackId.
     it('falls back to static seed when a frame has invalid JSON polygons', async () => {
       const frames = [
-        makeFrame(0, [POLYLINE_STATIC]),
-        {
-          id: 'frame-1',
-          frameIndex: 1,
-          segmentation: { polygons: 'NOT_JSON' },
-        },
+        makeFrame(0, [POLYLINE_TRACKED]),
+        makeFrame(1, null, {
+          segmentation: { polygons: 'NOT_JSON', updatedAt: SEG_UPDATED_AT },
+        }),
       ];
       mockPrisma.image.findMany.mockResolvedValue(frames);
       // Should not throw — corrupt JSON causes fallback to seed geometry.
@@ -704,7 +740,9 @@ describe('buildKymograph', () => {
       expect(res.tracks?.[0].edge).toBe('right');
       // Without calibration the µm/s cut-off can't be applied → no
       // pixel_size_um / frame_interval_ms forwarded to the ML service.
-      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty('pixel_size_um');
+      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty(
+        'pixel_size_um'
+      );
       expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty(
         'frame_interval_ms'
       );
@@ -737,7 +775,9 @@ describe('buildKymograph', () => {
       expect(res.tracks?.[0].netVelocityUmPerSec).toBeNull();
       expect(res.tracks?.[0].totalRunTimeS).toBeCloseTo(4 * (400 / 1000), 9);
       // pixel_size_um=0 must NOT be forwarded (ML field is gt=0).
-      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty('pixel_size_um');
+      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty(
+        'pixel_size_um'
+      );
     });
 
     it('scales run length + velocity by px_per_column (long MT, compressed column axis)', async () => {
@@ -785,6 +825,576 @@ describe('buildKymograph', () => {
         'detect_velocity'
       );
       expect(res.tracks).toBeUndefined();
+    });
+  });
+
+  // ── Response cache ─────────────────────────────────────────────────────────
+  describe('response cache', () => {
+    // The cache is opt-IN; the kymograph route is the caller that opts in.
+    const INPUT = {
+      videoContainerId: 'container-1',
+      polylineId: 'poly-1',
+      frameIndex: 0,
+      sourceChannel: 'IRM',
+      useCache: true,
+    };
+
+    beforeEach(() => {
+      mockPrisma.image.findUnique.mockResolvedValue(makeContainer());
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+        makeFrame(1, [POLYLINE_STATIC]),
+      ]);
+    });
+
+    /** The key `buildKymograph` looked up on its Nth call. */
+    const lookupKey = (call: number): string =>
+      cacheMocks.get.mock.calls[call][0] as string;
+
+    it('serves a repeat request from cache without calling the ML service', async () => {
+      const cold = await buildKymograph(INPUT);
+      expect(mockAxios.post).toHaveBeenCalledTimes(1);
+      expect(cacheMocks.set).toHaveBeenCalledTimes(1);
+
+      const warm = await buildKymograph(INPUT);
+      expect(mockAxios.post).toHaveBeenCalledTimes(1);
+      expect(warm).toEqual(cold);
+      expect(lookupKey(1)).toBe(lookupKey(0));
+    });
+
+    it('a warm hit does not read any frame polygons', async () => {
+      await buildKymograph(INPUT);
+      mockPrisma.image.findMany.mockClear();
+
+      await buildKymograph(INPUT);
+      // Exactly one query: the frame metadata. No polygons are fetched.
+      expect(mockPrisma.image.findMany).toHaveBeenCalledTimes(1);
+      const select = mockPrisma.image.findMany.mock.calls[0][0].select;
+      expect(select.segmentation.select).not.toHaveProperty('polygons');
+    });
+
+    it('MISSES the cache after an edit bumps Segmentation.updatedAt', async () => {
+      const cold = await buildKymograph(INPUT);
+      expect(cold.pngBase64).toBe('iVBOR');
+
+      // Same container, same frames, same polyline id — the user moved a
+      // vertex, so only the geometry and Prisma's @updatedAt change.
+      const edited = {
+        ...POLYLINE_STATIC,
+        points: [
+          { x: 11, y: 21 },
+          { x: 31, y: 41 },
+        ],
+      };
+      const bumped = new Date(SEG_UPDATED_AT.getTime() + 1000);
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, null, {
+          segmentation: {
+            polygons: JSON.stringify([edited]),
+            updatedAt: bumped,
+          },
+        }),
+        makeFrame(1, null, {
+          segmentation: {
+            polygons: JSON.stringify([edited]),
+            updatedAt: bumped,
+          },
+        }),
+      ]);
+      mockAxios.post = vi.fn().mockResolvedValue({
+        data: { ...ML_RESPONSE.data, png_base64: 'AFTER_EDIT' },
+      });
+
+      const warm = await buildKymograph(INPUT);
+      expect(lookupKey(1)).not.toBe(lookupKey(0));
+      expect(mockAxios.post).toHaveBeenCalledTimes(1);
+      // The re-render sampled the MOVED polyline, and the caller got it.
+      expect(mockAxios.post.mock.calls[0][1].frames[0].polyline_rc).toEqual([
+        [21, 11],
+        [41, 31],
+      ]);
+      expect(warm.pngBase64).toBe('AFTER_EDIT');
+    });
+
+    it('MISSES the cache when a frame image row is rewritten', async () => {
+      await buildKymograph(INPUT);
+      // A re-extracted channel PNG changes the pixels the kymograph samples
+      // while leaving the segmentation untouched.
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC], {
+          updatedAt: new Date(IMAGE_UPDATED_AT.getTime() + 1000),
+        }),
+        makeFrame(1, [POLYLINE_STATIC]),
+      ]);
+
+      await buildKymograph(INPUT);
+      expect(lookupKey(1)).not.toBe(lookupKey(0));
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('MISSES the cache when a frame is added to the container', async () => {
+      await buildKymograph(INPUT);
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+        makeFrame(1, [POLYLINE_STATIC]),
+        makeFrame(2, [POLYLINE_STATIC]),
+      ]);
+
+      await buildKymograph(INPUT);
+      expect(lookupKey(1)).not.toBe(lookupKey(0));
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('never touches Redis for a caller that did not opt in', async () => {
+      // The export fan-out's shape: renders every polyline once and never
+      // re-reads the result, so it must not fill a noeviction Redis.
+      const exportInput = { ...INPUT, useCache: undefined };
+      await buildKymograph(exportInput);
+      await buildKymograph(exportInput);
+
+      expect(cacheMocks.get).not.toHaveBeenCalled();
+      expect(cacheMocks.set).not.toHaveBeenCalled();
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('MISSES the cache when the seed frame is edited outside the frameFilter', async () => {
+      // The seed polyline is the geometry every frame falls back to, so an
+      // edit to it must invalidate even though its own frame is not rendered.
+      const filtered = { ...INPUT, frameFilter: [1, 2] };
+      const frames = (seedUpdatedAt: Date) => [
+        makeFrame(0, [POLYLINE_STATIC], {
+          segmentation: {
+            polygons: JSON.stringify([POLYLINE_STATIC]),
+            updatedAt: seedUpdatedAt,
+          },
+        }),
+        makeFrame(1, [POLYLINE_STATIC]),
+        makeFrame(2, [POLYLINE_STATIC]),
+      ];
+      mockPrisma.image.findMany.mockResolvedValue(frames(SEG_UPDATED_AT));
+      await buildKymograph(filtered);
+
+      mockPrisma.image.findMany.mockResolvedValue(
+        frames(new Date(SEG_UPDATED_AT.getTime() + 1000))
+      );
+      await buildKymograph(filtered);
+
+      expect(lookupKey(1)).not.toBe(lookupKey(0));
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('MISSES the cache when the frame SET changes but its size does not', async () => {
+      await buildKymograph(INPUT);
+      // Frame 1 deleted, frame 5 present: same count, different frames, so a
+      // key that carried only the frame count would wrongly hit.
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+        makeFrame(5, [POLYLINE_STATIC]),
+      ]);
+
+      await buildKymograph(INPUT);
+      expect(lookupKey(1)).not.toBe(lookupKey(0));
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('MISSES the cache when the container row changes', async () => {
+      await buildKymograph(INPUT);
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({
+          updatedAt: new Date(CONTAINER_UPDATED_AT.getTime() + 1000),
+        })
+      );
+
+      await buildKymograph(INPUT);
+      expect(lookupKey(1)).not.toBe(lookupKey(0));
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('keys separately on every render parameter', async () => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC, { ...POLYLINE_STATIC, id: 'poly-2' }]),
+        makeFrame(1, [POLYLINE_STATIC, { ...POLYLINE_STATIC, id: 'poly-2' }]),
+      ]);
+      const variants = [
+        INPUT,
+        { ...INPUT, polylineId: 'poly-2' },
+        { ...INPUT, frameIndex: 1 },
+        { ...INPUT, sourceChannel: 'TIRF' },
+        { ...INPUT, channelColor: '#ff0000' },
+        { ...INPUT, detectVelocity: true },
+        { ...INPUT, detectVelocity: true, renderOverlay: true },
+        { ...INPUT, renderProfiles: true },
+        { ...INPUT, intensityWidth: 7 },
+        { ...INPUT, frameFilter: [0] },
+        { ...INPUT, videoContainerId: 'container-2' },
+      ];
+      for (const variant of variants) {
+        await buildKymograph(variant);
+      }
+
+      const keys = cacheMocks.get.mock.calls.map(c => c[0]);
+      expect(new Set(keys).size).toBe(variants.length);
+      // Every one of them was a miss, so every one reached the ML service.
+      expect(mockAxios.post).toHaveBeenCalledTimes(variants.length);
+    });
+
+    it('caches calibration alongside the container timestamp', async () => {
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({ pixelSizeUm: 0.07245 })
+      );
+      await buildKymograph(INPUT);
+      // Same updatedAt (a raw-SQL backfill does not bump it), new calibration.
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({ pixelSizeUm: 0.1 })
+      );
+      await buildKymograph(INPUT);
+
+      expect(lookupKey(1)).not.toBe(lookupKey(0));
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache a response whose velocity detection crashed', async () => {
+      mockAxios.post = vi.fn().mockResolvedValue({
+        data: { ...ML_RESPONSE.data, velocity_error: 'blob detector blew up' },
+      });
+      await buildKymograph({ ...INPUT, detectVelocity: true });
+      expect(cacheMocks.set).not.toHaveBeenCalled();
+
+      // The next request retries the ML service instead of replaying the error.
+      await buildKymograph({ ...INPUT, detectVelocity: true });
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache a response the ML service returned without a PNG', async () => {
+      mockAxios.post = vi
+        .fn()
+        .mockResolvedValue({ data: { ...ML_RESPONSE.data, png_base64: '' } });
+      await buildKymograph(INPUT);
+      expect(cacheMocks.set).not.toHaveBeenCalled();
+    });
+
+    it('does not cache a response over the 4 MB entry limit', async () => {
+      mockAxios.post = vi.fn().mockResolvedValue({
+        data: { ...ML_RESPONSE.data, csv_base64: 'x'.repeat(5 * 1024 * 1024) },
+      });
+      const result = await buildKymograph(INPUT);
+      // Still returned to the caller — only the store is skipped.
+      expect(result.csvBase64).toHaveLength(5 * 1024 * 1024);
+      expect(cacheMocks.set).not.toHaveBeenCalled();
+    });
+
+    it('renders normally when Redis is unavailable', async () => {
+      // executeRedisCommand swallows a dead client: get resolves null, set false.
+      cacheMocks.get.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      cacheMocks.set.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+
+      const first = await buildKymograph(INPUT);
+      const second = await buildKymograph(INPUT);
+      expect(first).toEqual(second);
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── Polygon fetch cost ─────────────────────────────────────────────────────
+  describe('polygon fetch cost', () => {
+    beforeEach(() => {
+      mockPrisma.image.findUnique.mockResolvedValue(makeContainer());
+    });
+
+    /** `where` of the Nth image.findMany call. */
+    const whereOf = (call: number) =>
+      mockPrisma.image.findMany.mock.calls[call][0].where;
+
+    it('reads frame metadata without the polygons column', async () => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+        makeFrame(1, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+      });
+
+      const select = mockPrisma.image.findMany.mock.calls[0][0].select;
+      expect(select).not.toHaveProperty('polygons');
+      expect(select.segmentation.select).toEqual({ updatedAt: true });
+    });
+
+    it('reads only the seed frame polygons in static-line mode', async () => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+        makeFrame(1, [POLYLINE_STATIC]),
+        makeFrame(2, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 1,
+        sourceChannel: 'IRM',
+      });
+
+      // Metadata, then the seed frame's polygons. Nothing else: the other
+      // frames reuse the seed geometry, so their polygons are never read.
+      expect(mockPrisma.image.findMany).toHaveBeenCalledTimes(2);
+      expect(whereOf(1).frameIndex).toEqual({ in: [1] });
+    });
+
+    it('reads sibling polygons for every other frame in tracked mode', async () => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_TRACKED]),
+        makeFrame(1, [POLYLINE_TRACKED]),
+        makeFrame(2, [POLYLINE_TRACKED]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+      });
+
+      expect(mockPrisma.image.findMany).toHaveBeenCalledTimes(3);
+      expect(whereOf(1).frameIndex).toEqual({ in: [0] });
+      // The seed frame is excluded — its polygons were parsed once already.
+      expect(whereOf(2).frameIndex).toEqual({ in: [1, 2] });
+      // Asserted structurally: a mocked Prisma cannot reproduce the duplicate
+      // (parentVideoId, frameIndex) rows this ordering exists to disambiguate,
+      // but dropping it would silently let one cache key back two renders.
+      expect(mockPrisma.image.findMany.mock.calls[2][0].orderBy).toEqual([
+        { frameIndex: 'asc' },
+        { id: 'asc' },
+      ]);
+    });
+
+    it('narrows the tracked-mode fetch to the frameFilter selection', async () => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_TRACKED]),
+        makeFrame(1, [POLYLINE_TRACKED]),
+        makeFrame(2, [POLYLINE_TRACKED]),
+        makeFrame(3, [POLYLINE_TRACKED]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        frameFilter: [0, 2],
+      });
+
+      expect(whereOf(2).frameIndex).toEqual({ in: [2] });
+      const body = mockAxios.post.mock.calls[0][1];
+      expect(body.frames.map((f: { frame: number }) => f.frame)).toEqual([
+        0, 2,
+      ]);
+    });
+
+    it('skips the second query entirely when the selection is the seed alone', async () => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_TRACKED]),
+        makeFrame(1, [POLYLINE_TRACKED]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        frameFilter: [0],
+      });
+
+      expect(mockPrisma.image.findMany).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── Prefetched per-container rows ────────────────────────────────────────
+  //
+  // Every kymograph of one container reads the identical container + frame
+  // rows, so a caller building many of them (the MT export: up to 60
+  // microtubules x every channel) loads them once and passes them in. These
+  // guard that the shortcut is real (no queries at all) AND that it does not
+  // change the request that reaches the ML service.
+  describe('prefetched containerContext', () => {
+    const CONTEXT = {
+      container: {
+        id: 'container-1',
+        projectId: 'project-1',
+        channels: [{ name: 'IRM' }, { name: 'GFP' }],
+        pixelSizeUm: 0.5,
+        frameIntervalMs: 200,
+        updatedAt: CONTAINER_UPDATED_AT,
+      },
+      frames: [
+        {
+          id: 'frame-0',
+          frameIndex: 0,
+          updatedAt: IMAGE_UPDATED_AT,
+          segmentationUpdatedAt: SEG_UPDATED_AT,
+          polygonsJson: JSON.stringify([POLYLINE_STATIC]),
+        },
+        {
+          id: 'frame-1',
+          frameIndex: 1,
+          updatedAt: IMAGE_UPDATED_AT,
+          segmentationUpdatedAt: SEG_UPDATED_AT,
+          polygonsJson: JSON.stringify([POLYLINE_STATIC]),
+        },
+      ],
+    };
+
+    it('issues NO database queries when the rows are supplied', async () => {
+      mockPrisma.image.findUnique.mockResolvedValue(makeContainer());
+      mockPrisma.image.findMany.mockResolvedValue([]);
+
+      const res = await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        containerContext: structuredClone(CONTEXT),
+      });
+
+      expect(mockPrisma.image.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.image.findMany).not.toHaveBeenCalled();
+      expect(res.pixelSizeUm).toBe(0.5);
+      expect(res.frameIntervalMs).toBe(200);
+    });
+
+    it('builds the identical ML request it would have built from the DB', async () => {
+      // Same rows, once through the DB and once prefetched: the POSTed body
+      // must be byte-identical, or the export would silently drift from the
+      // editor modal.
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({ channels: CONTEXT.container.channels })
+      );
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+        makeFrame(1, [POLYLINE_STATIC]),
+      ]);
+      const args = {
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+      };
+      await buildKymograph(args);
+      const fromDb = JSON.stringify(mockAxios.post.mock.calls[0][1]);
+
+      mockAxios.post = vi.fn().mockResolvedValue(ML_RESPONSE);
+      await buildKymograph({
+        ...args,
+        containerContext: {
+          ...structuredClone(CONTEXT),
+          // pixelSize/frameInterval are absent from makeContainer(), so match
+          // it here: the payload, not the calibration, is what is compared.
+          container: {
+            ...CONTEXT.container,
+            pixelSizeUm: null,
+            frameIntervalMs: null,
+          },
+        },
+      });
+      expect(JSON.stringify(mockAxios.post.mock.calls[0][1])).toBe(fromDb);
+    });
+
+    it('rejects a context belonging to a different container', async () => {
+      // Silent-and-plausible otherwise: frame paths are built from the
+      // context's projectId and the input's container id, so the mismatch
+      // would render another container's frames under this one's calibration.
+      await expect(
+        buildKymograph({
+          videoContainerId: 'container-2',
+          polylineId: 'poly-1',
+          frameIndex: 0,
+          sourceChannel: 'IRM',
+          containerContext: structuredClone(CONTEXT),
+        })
+      ).rejects.toThrow('containerContext is for container-1, not container-2');
+      expect(mockAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('still whitelists the channel against the prefetched container', async () => {
+      // A context is channel-agnostic — one load serves every channel — so the
+      // per-call check cannot be skipped just because the rows came in ready.
+      await expect(
+        buildKymograph({
+          videoContainerId: 'container-1',
+          polylineId: 'poly-1',
+          frameIndex: 0,
+          sourceChannel: 'RFP',
+          containerContext: structuredClone(CONTEXT),
+        })
+      ).rejects.toThrow('Unknown source channel: RFP');
+    });
+
+    it('parses each frame ONCE across repeated tracked-mode builds', async () => {
+      // The reuse that matters for a 300-frame container: without memoisation
+      // every build re-parses every frame's polygon JSON (~30 MB per build,
+      // on the single Node event loop).
+      const context = {
+        ...structuredClone(CONTEXT),
+        frames: [
+          {
+            id: 'frame-0',
+            frameIndex: 0,
+            updatedAt: IMAGE_UPDATED_AT,
+            segmentationUpdatedAt: SEG_UPDATED_AT,
+            polygonsJson: JSON.stringify([POLYLINE_TRACKED]),
+          },
+          {
+            id: 'frame-1',
+            frameIndex: 1,
+            updatedAt: IMAGE_UPDATED_AT,
+            segmentationUpdatedAt: SEG_UPDATED_AT,
+            polygonsJson: JSON.stringify([POLYLINE_TRACKED]),
+          },
+        ],
+      };
+      const parseSpy = vi.spyOn(JSON, 'parse');
+      const before = parseSpy.mock.calls.length;
+      for (let i = 0; i < 5; i++) {
+        mockAxios.post = vi.fn().mockResolvedValue(ML_RESPONSE);
+        await buildKymograph({
+          videoContainerId: 'container-1',
+          polylineId: 'poly-1',
+          frameIndex: 0,
+          sourceChannel: 'IRM',
+          containerContext: context,
+        });
+      }
+      const polygonParses = parseSpy.mock.calls
+        .slice(before)
+        .filter(c => String(c[0]).includes('"poly-1"')).length;
+      parseSpy.mockRestore();
+      // 2 frames, 5 builds: 2 parses, not 10.
+      expect(polygonParses).toBe(2);
+    });
+
+    it('still uses the response cache when the rows are prefetched', async () => {
+      // The two optimisations compose: a context removes the queries, the
+      // cache removes the ML render. A context is stamped with the same
+      // updatedAt tokens the metadata query supplies, so the key is built the
+      // same way on both paths.
+      const cached = {
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        useCache: true,
+        containerContext: structuredClone(CONTEXT),
+      };
+      await buildKymograph(cached);
+      expect(mockAxios.post).toHaveBeenCalledTimes(1);
+
+      await buildKymograph({ ...cached, containerContext: structuredClone(CONTEXT) });
+      expect(mockAxios.post).toHaveBeenCalledTimes(1);
+
+      // And an edit to a frame still invalidates it, exactly as on the DB path.
+      const edited = structuredClone(CONTEXT);
+      edited.frames[1].segmentationUpdatedAt = new Date(
+        SEG_UPDATED_AT.getTime() + 1000
+      );
+      await buildKymograph({ ...cached, containerContext: edited });
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 399,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1214,
-    "all": 1634
+    "tsconfig.test.json": 1216,
+    "all": 1636
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1390,6 +1390,7 @@
       },
       "src/pages/segmentation/components/SegmentationEditorLayout.tsx": {
         "TS2322: Type '(e: React.MouseEvent<HTMLDivElement>) => void' is not assignable to type '(e: MouseEvent<Element, MouseEvent>) => void'.": 3,
+        "TS6307: File 'src/pages/segmentation/components/DeleteTrackScopeDialog.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/EditorHeader.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/KeyboardShortcutsHelp.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/MicrotubuleInstancePanel.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -1504,6 +1505,9 @@
       },
       "src/pages/segmentation/hooks/__tests__/useDecodeAhead.test.ts": {
         "TS6307: File 'src/pages/segmentation/hooks/useDecodeAhead.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/pages/segmentation/hooks/__tests__/useDeleteTrackScope.test.ts": {
+        "TS6307: File 'src/pages/segmentation/hooks/useDeleteTrackScope.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/hooks/__tests__/useMtTypeLabels.test.ts": {
         "TS6307: File 'src/pages/segmentation/hooks/useMtTypeLabels.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1

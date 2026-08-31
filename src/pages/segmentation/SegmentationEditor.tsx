@@ -28,6 +28,7 @@ import {
   applyMtTypeToPolygons,
 } from './utils/mtTypeTargets';
 import { usePolygonHandlers } from './hooks/usePolygonHandlers';
+import { useDeleteTrackScope } from './hooks/useDeleteTrackScope';
 import { useCanvasBackgroundDeselect } from './hooks/useCanvasBackgroundDeselect';
 import { shouldPreventCanvasDeselection } from './config/modeConfig';
 import { useSegmentationLoader } from './hooks/useSegmentationLoader';
@@ -330,6 +331,17 @@ const SegmentationEditor = () => {
   activePartClassRef.current = activePartClass;
   activeInstanceIdRef.current = activeInstanceId;
 
+  // Scope-less delete gestures (Delete key, delete-mode click) ask this before
+  // removing anything. The real implementation needs `video` and the polygon
+  // handlers, which are declared far below — routing it through a ref keeps the
+  // editor hook's argument TDZ-free (recurring bug #11) while still reaching
+  // the live implementation on every call.
+  const requestDeleteScopeRef = useRef<((id: string) => boolean) | null>(null);
+  const handleRequestDeletePolygon = useCallback(
+    (polygonId: string) => requestDeleteScopeRef.current?.(polygonId) ?? false,
+    []
+  );
+
   // Initialize enhanced editor
   const editor = useEnhancedSegmentationEditor({
     initialPolygons,
@@ -346,6 +358,7 @@ const SegmentationEditor = () => {
     // slicing hook it owns (Enter-extends, polyline-slice). Sperm
     // and other types fall back to the legacy paths.
     projectType,
+    onRequestDeletePolygon: handleRequestDeletePolygon,
     onSave: async (polygons, targetImageId, targetDimensions, signal) => {
       const saveToImageId = targetImageId || imageId;
       if (!projectId || !saveToImageId) return;
@@ -995,42 +1008,49 @@ const SegmentationEditor = () => {
     ]
   );
 
-  // Right-click delete: whole track for a tracked microtubule, else the single
-  // polyline (untracked MT or non-MT project).
-  const handleDeletePolygonOrTrack = useCallback(
-    async (polygonId: string) => {
-      const videoId = video.container?.id;
-      const target = editorRef.current
-        .getPolygons()
-        .find(p => p.id === polygonId);
-      const trackId = target?.trackId;
-      if (projectType === 'microtubules' && videoId && trackId) {
-        try {
-          const result = await apiClient.deleteTrack(videoId, trackId);
-          // Remove it from the current frame + hidden-set locally for instant
-          // feedback; the backend already purged every sibling frame.
-          handleDeletePolygonFromContextMenu(polygonId);
-          evictVideoFrameSegmentationCaches();
-          toast.success(
-            t('segmentation.trackOps.deleteTrackSuccess', {
-              count: result.framesAffected,
-            })
-          );
-        } catch (error) {
-          logger.error('Failed to delete microtubule track', error);
-          toast.error(t('segmentation.trackOps.deleteTrackFailed'));
-        }
-        return;
-      }
-      handleDeletePolygonFromContextMenu(polygonId);
+  // Reads the CURRENT polygons for the delete-scope hook — `editorRef` rather
+  // than `editor.polygons` so a handler fired from a portalled dialog never
+  // sees a render-old snapshot.
+  const getEditorPolygons = useCallback(
+    () => editorRef.current.getPolygons(),
+    []
+  );
+
+  // "This frame only" vs "the whole track" for microtubule deletes. Owns both
+  // server calls, the local removal, and the shared confirmation dialog; see
+  // the hook for why the frame-scoped delete has to reach the server.
+  const deleteScope = useDeleteTrackScope({
+    // `videoContainerId` (from the frame row's parentVideoId), NOT
+    // `video.container?.id`: the container is a separate fetch that is still
+    // null on a cold deep-link into a frame URL, and the track routes only ever
+    // needed the id. Both address the same container once loaded.
+    videoId: videoContainerId ?? undefined,
+    projectType,
+    imageId,
+    getPolygons: getEditorPolygons,
+    removeLocally: handleDeletePolygonFromContextMenu,
+    onServerMutation: evictVideoFrameSegmentationCaches,
+  });
+
+  // Close the loop opened before the editor hook: scope-less delete gestures
+  // (Delete key, delete-mode click) now reach the live implementation.
+  requestDeleteScopeRef.current = deleteScope.requestDelete;
+
+  const handleDeletePolygonOrTrack = deleteScope.deleteWholeTrack;
+  const handleDeletePolygonFromFrame = deleteScope.deleteFromCurrentFrame;
+
+  // Sidebar trash icon. A tracked microtubule gets the same scope question as
+  // every other delete path; anything else deletes locally as before.
+  // Depends on `deleteScope.requestDelete` (identity-stable), NOT on the
+  // `deleteScope` object, which is a fresh literal each render — the panels
+  // this is handed to compare their props.
+  const requestDeleteScope = deleteScope.requestDelete;
+  const handleRequestDeleteFromPanel = useCallback(
+    (polygonId: string) => {
+      if (requestDeleteScope(polygonId)) return;
+      handleDeletePolygonFromPanel(polygonId);
     },
-    [
-      video.container,
-      projectType,
-      handleDeletePolygonFromContextMenu,
-      evictVideoFrameSegmentationCaches,
-      t,
-    ]
+    [requestDeleteScope, handleDeletePolygonFromPanel]
   );
 
   // Read the multi-selection through a ref so the canvas callbacks below stay
@@ -1473,9 +1493,11 @@ const SegmentationEditor = () => {
         setHoveredPolygonId={setHoveredPolygonId}
         hoveredPolygonId={hoveredPolygonId}
         handleTogglePolygonVisibility={handleTogglePolygonVisibility}
-        handleDeletePolygonFromPanel={handleDeletePolygonFromPanel}
+        handleDeletePolygonFromPanel={handleRequestDeleteFromPanel}
         handleSelectPolygon={handleSelectPolygon}
         handleDeletePolygonOrTrack={handleDeletePolygonOrTrack}
+        handleDeletePolygonFromFrame={handleDeletePolygonFromFrame}
+        deleteScopeDialog={deleteScope.scopeDialog}
         handlePropagateTrack={handlePropagateTrack}
         handleCanvasSelect={handleCanvasSelect}
         handlePropagateSelected={handlePropagateSelected}

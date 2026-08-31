@@ -34,6 +34,10 @@ interface CanvasPolygonProps {
   /** Propagate all multi-selected microtubules to the following frames. */
   onPropagateSelected?: () => void;
   onDeletePolygon?: (id: string) => void;
+  /** Remove a tracked microtubule from the current frame only. Wired only when
+   *  a frame-scoped delete is possible; its presence is what turns the
+   *  context-menu delete into a three-way scope choice. */
+  onDeletePolygonFromFrame?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
   onChangePartClass?: (
@@ -89,6 +93,7 @@ const CanvasPolygon = React.memo(
     multiSelectCount = 0,
     onPropagateSelected,
     onDeletePolygon,
+    onDeletePolygonFromFrame,
     onSlicePolygon,
     onEditPolygon,
     onChangePartClass,
@@ -318,6 +323,10 @@ const CanvasPolygon = React.memo(
       () => onDeletePolygon?.(id),
       [onDeletePolygon, id]
     );
+    const handleDeleteFromFrame = useCallback(
+      () => onDeletePolygonFromFrame?.(id),
+      [onDeletePolygonFromFrame, id]
+    );
     const handleSlice = useCallback(
       () => onSlicePolygon?.(id),
       [onSlicePolygon, id]
@@ -370,6 +379,11 @@ const CanvasPolygon = React.memo(
       <PolygonContextMenu
         polygonId={id}
         onDelete={handleDelete}
+        // Only offer the "this frame only" scope when the parent wired a
+        // frame-scoped delete; otherwise the menu keeps the old confirm.
+        onDeleteFromFrame={
+          onDeletePolygonFromFrame ? handleDeleteFromFrame : undefined
+        }
         onSlice={handleSlice}
         onEdit={handleEdit}
         isPolyline={isPolyline}
@@ -610,6 +624,10 @@ const CanvasPolygon = React.memo(
       // changes on polygon/selection edits, and comparing it would re-render
       // every polygon on each edit.
       prevProps.onDeletePolygon === nextProps.onDeletePolygon &&
+      // Gates the three-way delete-scope dialog: when it flips undefined ↔
+      // defined (video container resolved), the menu must re-render.
+      prevProps.onDeletePolygonFromFrame ===
+        nextProps.onDeletePolygonFromFrame &&
       prevProps.onSlicePolygon === nextProps.onSlicePolygon &&
       prevProps.onEditPolygon === nextProps.onEditPolygon &&
       prevProps.onDeleteVertex === nextProps.onDeleteVertex &&

@@ -21,6 +21,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useEnhancedSegmentationEditor } from '../useEnhancedSegmentationEditor';
+import { useKeyboardShortcuts } from '../useKeyboardShortcuts';
 import { EditMode } from '../../types';
 import { Polygon } from '@/lib/segmentation';
 import { toast } from 'sonner';
@@ -331,6 +332,119 @@ describe('useEnhancedSegmentationEditor', () => {
       act(() => result.current.handleDeletePolygon());
 
       expect(result.current.polygons).toHaveLength(1);
+    });
+
+    it('suppresses the generic toast when the caller reports the delete itself', () => {
+      // The microtubule scope handlers raise a toast naming the frames touched;
+      // two success toasts for one gesture is noise.
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({
+          ...baseProps,
+          initialPolygons: [makePolygon('a'), makePolygon('b')],
+        })
+      );
+
+      act(() => result.current.handleDeletePolygon('a', { silent: true }));
+
+      expect(result.current.polygons.map(p => p.id)).toEqual(['b']);
+      expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+    });
+
+    it('does not claim success or dirty the editor for an id that is gone', () => {
+      // A reload can replace the polygons behind an open confirmation dialog.
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({
+          ...baseProps,
+          initialPolygons: [makePolygon('a')],
+        })
+      );
+
+      act(() => result.current.handleDeletePolygon('vanished'));
+
+      expect(result.current.polygons.map(p => p.id)).toEqual(['a']);
+      expect(result.current.hasUnsavedChanges).toBe(false);
+      expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // The Delete key and a click in delete mode carry no scope of their own. For
+  // a tracked microtubule the parent needs to ask "this frame or the whole
+  // track?" FIRST — deleting locally and letting the save propagate is exactly
+  // the silent whole-track delete this exists to stop.
+  describe('onRequestDeletePolygon (scope-less delete gestures)', () => {
+    /** The delete handler the keyboard layer was actually handed. */
+    const keyboardDelete = () =>
+      vi.mocked(useKeyboardShortcuts).mock.calls.at(-1)![0]
+        .handleDeletePolygon as (id?: string) => void;
+
+    it('lets the parent intercept the Delete key and keeps the polygon', () => {
+      const onRequestDeletePolygon = vi.fn(() => true); // "I opened a dialog"
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({
+          ...baseProps,
+          initialPolygons: [makePolygon('mt-1'), makePolygon('mt-2')],
+          onRequestDeletePolygon,
+        })
+      );
+
+      act(() => result.current.setSelectedPolygonId('mt-1'));
+      act(() => keyboardDelete()());
+
+      expect(onRequestDeletePolygon).toHaveBeenCalledWith('mt-1');
+      expect(result.current.polygons.map(p => p.id)).toEqual(['mt-1', 'mt-2']);
+      expect(result.current.hasUnsavedChanges).toBe(false);
+    });
+
+    it('deletes normally when the parent declines', () => {
+      const onRequestDeletePolygon = vi.fn(() => false);
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({
+          ...baseProps,
+          initialPolygons: [makePolygon('a'), makePolygon('b')],
+          onRequestDeletePolygon,
+        })
+      );
+
+      act(() => result.current.setSelectedPolygonId('a'));
+      act(() => keyboardDelete()());
+
+      expect(result.current.polygons.map(p => p.id)).toEqual(['b']);
+    });
+
+    it('intercepts a click in DeletePolygon mode too', () => {
+      const onRequestDeletePolygon = vi.fn(() => true);
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({
+          ...baseProps,
+          initialPolygons: [makePolygon('a'), makePolygon('b')],
+          onRequestDeletePolygon,
+        })
+      );
+
+      act(() => result.current.setEditMode(EditMode.DeletePolygon));
+      act(() => result.current.handlePolygonSelection('a'));
+
+      expect(onRequestDeletePolygon).toHaveBeenCalledWith('a');
+      expect(result.current.polygons.map(p => p.id)).toEqual(['a', 'b']);
+    });
+
+    it('leaves handleDeletePolygon itself un-intercepted (applies a chosen scope)', () => {
+      // The sidebar / context-menu helpers call this one AFTER the user picked
+      // a scope; re-prompting there would loop.
+      const onRequestDeletePolygon = vi.fn(() => true);
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({
+          ...baseProps,
+          initialPolygons: [makePolygon('a'), makePolygon('b')],
+          onRequestDeletePolygon,
+        })
+      );
+
+      act(() => result.current.handleDeletePolygon('a'));
+
+      expect(onRequestDeletePolygon).not.toHaveBeenCalled();
+      expect(result.current.polygons.map(p => p.id)).toEqual(['b']);
     });
   });
 

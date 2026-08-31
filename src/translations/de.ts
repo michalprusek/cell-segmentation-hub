@@ -855,6 +855,12 @@ export default {
       propagateFailed: 'Übertragung des Mikrotubulus fehlgeschlagen',
       deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
       deleteTrackFailed: 'Löschen des Tracks fehlgeschlagen',
+      deleteFrameSuccess:
+        'Mikrotubulus aus diesem Frame entfernt; der restliche Track bleibt erhalten',
+      deleteFrameFailed:
+        'Entfernen des Mikrotubulus aus diesem Frame fehlgeschlagen',
+      deleteScopeUnavailable:
+        'Das Video wird noch geladen — versuchen Sie es gleich noch einmal',
     },
     modelNotCompatible:
       'Modell "{{model}}" ist nicht mit dem Projekttyp "{{type}}" kompatibel. Erlaubt: {{allowed}}.',
@@ -2041,11 +2047,17 @@ export default {
         csv: 'results.csv — eine Zeile je Mikrotubulus mit Länge, Intensität entlang des Filaments und dessen Hintergrund',
         failures:
           'failures.csv — jede Vertiefung oder Position, die nicht erzeugt werden konnte, und warum. Sie wird immer geschrieben, auch wenn sie leer ist',
+        focus:
+          'focus_qc.csv — eine Zeile je Position mit einem Unschärfewert für den segmentierten und den gemessenen Kanal. results.csv trägt dasselbe Urteil je Filament',
         overlays:
           'Zwei Überlagerungsbilder je Position: eines prüft die Segmentierung gegen ihre eigene Eingabe, das andere das Messband gegen das Signal',
         annotations:
           'Eine JSON-Datei je Position mit den verfolgten Mittellinien und ihren Längen',
       },
+      focusNote:
+        'Die Unschärfe-Markierung ist ein Hinweis — nichts wird verworfen.',
+      focusNoteText:
+        'Sie misst, wie viel eines Bildes von Struktur eingenommen wird, die deutlich über dem Rauschen liegt; ein dicht bedecktes Feld kann daher auch unscharf bestehen. Sie irrt zugunsten des Behaltens, nicht des Verwerfens. Die Schwellen wurden an einer einzigen Aufnahme angepasst, daher wird eine andere Belichtung oder Kamera in der Spalte reason als out_of_calibration gemeldet — das ist eine Aussage über die Schwelle, nicht über Ihr Bild.',
       channelNote: 'IRM wird segmentiert, Fluoreszenz wird gemessen.',
       channelNoteText:
         'Das Modell wurde auf IRM trainiert, daher werden die Filamente dort verfolgt und der Fluoreszenzkanal nur entlang dieser Spuren gelesen. Eine Datei ohne IRM-Kanal wird als Fehler gemeldet statt aus etwas anderem segmentiert.',
@@ -2443,6 +2455,13 @@ export default {
     confirmDeleteTrack: 'Den gesamten Mikrotubulus-Track löschen?',
     deleteTrackDescription:
       'Dies entfernt diesen Mikrotubulus aus allen {{count}} Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
+    deleteMicrotubule: 'Mikrotubulus löschen…',
+    confirmDeleteScope: 'Diesen Mikrotubulus löschen?',
+    deleteScopeDescription:
+      'Dieser Mikrotubulus wird über das gesamte Video verfolgt. Nur aus dem aktuellen Frame löschen oder aus allen Frames? Dies kann nicht rückgängig gemacht werden.',
+    deleteScopeThisFrame: 'Nur dieser Frame',
+    deleteScopeAllFrames: 'Alle Frames',
+    deleteScopeAllFramesCount: 'Alle {{count}} Frames',
     editPolygon: 'Polygon bearbeiten',
     splitPolygon: 'Polygon teilen',
     deletePolygon: 'Polygon löschen',

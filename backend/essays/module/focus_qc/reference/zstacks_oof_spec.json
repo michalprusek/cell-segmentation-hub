@@ -1,0 +1,14 @@
+{
+  "z_step_um": 0.1,
+  "channels": [
+    {"name": "IRM", "modality": "irm"},
+    {"name": "TIRF 488", "modality": "fluor"}
+  ],
+  "stacks": [
+    {"path": "/Users/michalprusek/Downloads/Z_stacks_OoF_dataset/Z_stack_001.nd2", "sharp_plane": 28},
+    {"path": "/Users/michalprusek/Downloads/Z_stacks_OoF_dataset/Z_stack_002.nd2", "sharp_plane": 20},
+    {"path": "/Users/michalprusek/Downloads/Z_stacks_OoF_dataset/Z_stack_003.nd2", "sharp_plane": 13},
+    {"path": "/Users/michalprusek/Downloads/Z_stacks_OoF_dataset/Z_stack_004.nd2", "sharp_plane": 27},
+    {"path": "/Users/michalprusek/Downloads/Z_stacks_OoF_dataset/Z_stack_005.nd2", "sharp_plane": 24}
+  ]
+}

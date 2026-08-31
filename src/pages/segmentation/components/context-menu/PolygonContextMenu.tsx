@@ -23,6 +23,7 @@ import { useLanguage } from '@/contexts/useLanguage';
 import { isMicrotubuleProject, type ProjectType } from '@/types';
 import type { MTTypeLabel } from '@/lib/api';
 import MtTypeLabelDialog from './MtTypeLabelDialog';
+import DeleteTrackScopeDialog from '../DeleteTrackScopeDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,7 +37,15 @@ import {
 
 interface PolygonContextMenuProps {
   children: React.ReactNode;
+  /** Delete this polygon. For a tracked microtubule this is the WHOLE-track
+   *  delete (every frame) — `onDeleteFromFrame` is the current-frame one. */
   onDelete: () => void;
+  /** Remove a tracked microtubule from the current frame only, keeping the rest
+   *  of its track. When provided together with a `trackId`, the delete item
+   *  opens a three-way scope dialog (this frame / all frames / cancel) instead
+   *  of the plain two-way confirm. Omitted when a frame-scoped delete is not
+   *  possible (no video container to address), which keeps the old behaviour. */
+  onDeleteFromFrame?: () => void;
   onSlice: () => void;
   onEdit: () => void;
   polygonId: string;
@@ -79,6 +88,7 @@ interface PolygonContextMenuProps {
 const PolygonContextMenu = ({
   children,
   onDelete,
+  onDeleteFromFrame,
   onSlice,
   onEdit,
   polygonId,
@@ -103,6 +113,9 @@ const PolygonContextMenu = ({
   // A microtubule with a cross-frame trackId: deleting it removes the whole
   // track, and it can be propagated forward.
   const hasTrack = isMicrotubules && !!trackId;
+  // A tracked MT the caller can also delete from just this frame: the delete
+  // item then asks WHICH scope instead of silently taking the whole track.
+  const canChooseDeleteScope = hasTrack && !!onDeleteFromFrame;
 
   // Fire the global "open kymograph" event that VideoModeOverlay
   // already listens for — no new prop plumbing needed. The overlay
@@ -130,6 +143,9 @@ const PolygonContextMenu = ({
     },
     [onCreateMtLabel, onChangeMtType]
   );
+  const handleDeleteFromFrame = React.useCallback(() => {
+    onDeleteFromFrame?.();
+  }, [onDeleteFromFrame]);
   // Bulk-propagate the Shift+click multi-selection — only meaningful with ≥2.
   const canPropagateSelected =
     isMicrotubules && !!onPropagateSelected && multiSelectCount >= 2;
@@ -345,46 +361,61 @@ const PolygonContextMenu = ({
           >
             <Trash className="mr-2 h-4 w-4" />
             <span>
-              {hasTrack
-                ? t('contextMenu.deleteTrack')
-                : isPolyline
-                  ? t('contextMenu.deletePolyline')
-                  : t('contextMenu.deletePolygon')}
+              {canChooseDeleteScope
+                ? t('contextMenu.deleteMicrotubule')
+                : hasTrack
+                  ? t('contextMenu.deleteTrack')
+                  : isPolyline
+                    ? t('contextMenu.deletePolyline')
+                    : t('contextMenu.deletePolygon')}
             </span>
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {hasTrack
-                ? t('contextMenu.confirmDeleteTrack')
-                : t('contextMenu.confirmDeletePolygon')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {hasTrack
-                ? t('contextMenu.deleteTrackDescription', {
-                    count: videoFrameCount ?? 0,
-                  })
-                : t('contextMenu.deletePolygonDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                onDelete();
-                setShowDeleteDialog(false);
-              }}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* A tracked microtubule is one object spread over the whole video, so
+          "delete" is ambiguous and gets a three-way choice. Everything else
+          keeps the plain two-way confirm. */}
+      {canChooseDeleteScope ? (
+        <DeleteTrackScopeDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          frameCount={videoFrameCount}
+          onDeleteFrame={handleDeleteFromFrame}
+          onDeleteTrack={onDelete}
+        />
+      ) : (
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {hasTrack
+                  ? t('contextMenu.confirmDeleteTrack')
+                  : t('contextMenu.confirmDeletePolygon')}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {hasTrack
+                  ? t('contextMenu.deleteTrackDescription', {
+                      count: videoFrameCount ?? 0,
+                    })
+                  : t('contextMenu.deletePolygonDescription')}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  onDelete();
+                  setShowDeleteDialog(false);
+                }}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {t('common.delete')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       <AlertDialog
         open={showPropagateDialog}

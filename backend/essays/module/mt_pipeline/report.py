@@ -43,6 +43,26 @@ COLUMNS = [
     # correctly refuses. A real misalignment would read `ok` at a quality well
     # above 1 with a non-zero offset. Blank when nothing measured it.
     "irm_tirf_dy", "irm_tirf_dx", "irm_tirf_quality", "irm_tirf_reason",
+    # Added 2026-08-31. The MEASURED out-of-focus verdict for this position —
+    # a diagnostic, never a gate (see mt_pipeline/nd2_io.judge_focus). The two
+    # scores are the focus_qc descriptor: area occupied by structure standing
+    # more than 5 sigma above the local background, in PIXELS PER 10,000, judged
+    # against thresholds of 7.640 (IRM) and 0.184 (fluorescence).
+    #
+    # Read them as triage, not as an acceptance test. The descriptor conflates
+    # focus with field density and fails PERMISSIVE — a dense field keeps enough
+    # pixels above 5 sigma when defocused (one validation field dropped only
+    # 15.0x -> 11.6x under a 0.5 um defocus where the calibration fields drop by
+    # 88 %) — and the published 0.959 balanced accuracy is leave-one-STACK-out
+    # within ONE acquisition session, so it does not support a cross-session
+    # transfer claim. `focus_reason` carries `out_of_calibration:<channel>` when
+    # the acquisition has drifted far enough that the absolute thresholds may
+    # not apply at all; that is advisory and never changes `focus_flagged`.
+    #
+    # A position with NO microtubules produces no row here at all, and so does a
+    # position whose segmentation failed. focus_qc.csv carries one row for every
+    # position that was read, which is where a badly defocused field shows up.
+    "focus_irm_score", "focus_tirf_score", "focus_flagged", "focus_reason",
 ]
 
 
@@ -62,6 +82,148 @@ FAILURE_COLUMNS = [
     "attempts",
     "error_type", "error_message",
 ]
+
+
+# One row per POSITION the run read, whether or not it produced microtubules.
+#
+# results.csv is one row per microtubule, so a position with no centerlines
+# contributes nothing to it (evaluate.py writes `[]`) and a position whose
+# segmentation failed contributes nothing either — and a badly out-of-focus
+# field is exactly the kind that yields no microtubules. Without this file the
+# focus verdict would be missing precisely where it matters most.
+#
+# Column order is free here (no downstream script indexes this file by
+# position — it is new as of 2026-08-31), but keep the two channel blocks
+# parallel: `irm_*` is the channel that was SEGMENTED, `tirf_*` the one whose
+# intensity was MEASURED, and naming the channel proves which frame was scored.
+FOCUS_COLUMNS = [
+    "well_id", "position", "source_file", "acquired_at",
+    # The OR verdict over both channels, and why. `reason` is `ok`, or a
+    # `;`-joined list of `oof:<channel>`, `unscoreable:<channel>` and
+    # `out_of_calibration:<channel>`; the last is advisory and never changes
+    # `flagged`. Blank cells mean nothing was measured — see `reason` for which
+    # of `detector_unavailable` / `error:<Type>` it was.
+    "flagged", "reason",
+    # Scores are focus_qc's descriptor: occupied structure area above 5 sigma,
+    # in pixels per 10,000. `*_threshold` travels with them so a row stays
+    # interpretable after a recalibration changes the thresholds.
+    "irm_channel", "irm_score", "irm_flag", "irm_threshold",
+    "irm_noise_sigma", "irm_background",
+    "tirf_channel", "tirf_score", "tirf_flag", "tirf_threshold",
+    "tirf_noise_sigma", "tirf_background",
+]
+
+#: Scores span ~0.0 to ~800 px/10,000 on real wells; four decimals keeps the
+#: tail of a nearly-empty channel readable without pretending to more precision
+#: than a pixel count has.
+_SCORE_DECIMALS = 4
+
+
+def cell(value):
+    """A CSV cell: blank for a value that was never measured.
+
+    `None` and `0` are different claims — "nothing ran" versus "it ran and found
+    zero" — and these tables' whole point is telling them apart. Lives here
+    rather than in evaluate.py because every writer that needs it is in this
+    module, and a second copy would eventually disagree with this one.
+    """
+    return "" if value is None else value
+
+
+def _rounded(value, decimals: int = _SCORE_DECIMALS):
+    return None if value is None else round(float(value), decimals)
+
+
+def _flag_cell(value) -> str | int:
+    """1/0 for a measured boolean, blank for one that was never measured."""
+    return "" if value is None else int(bool(value))
+
+
+class FocusLog:
+    """The out-of-focus verdict for every position the run read.
+
+    Written even when nothing is flagged, for the same reason ``FailureLog`` is:
+    a header-only file states "every position was judged and none was refused",
+    whereas a missing file cannot be told apart from a writer that never ran.
+    """
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(self.path, "w", newline="")
+        self._w = csv.DictWriter(self._fh, fieldnames=FOCUS_COLUMNS,
+                                 extrasaction="ignore")
+        self._w.writeheader()
+        self._fh.flush()
+        self.n_rows = 0
+        self.n_flagged = 0
+        #: Positions the check could not judge at all. Counted separately and
+        #: reported separately: without it a run whose detector never loaded
+        #: prints "0/900 flagged", which is the reassuring reading of a blank —
+        #: exactly the confusion every other column here is built to prevent,
+        #: and this line is the only summary an operator sees.
+        self.n_unmeasured = 0
+
+    def record(self, *, well_id: str, position: int, source_file: str,
+               acquired_at: str | None, focus) -> None:
+        """Log one position's verdict.
+
+        ``focus`` is a ``mt_pipeline.nd2_io.FocusQuality`` or None. Taken as an
+        object rather than eighteen keyword arguments, and duck-typed rather
+        than imported, so this module stays free of the reader it writes for.
+        """
+        row = {
+            "well_id": well_id,
+            "position": position,
+            "source_file": source_file,
+            "acquired_at": cell(acquired_at),
+            "flagged": _flag_cell(focus.flagged if focus else None),
+            # A position with no verdict at all still gets a row, and says so.
+            "reason": focus.reason if focus else "",
+        }
+        for prefix, channel in (("irm", focus.irm if focus else None),
+                                ("tirf", focus.tirf if focus else None)):
+            row[f"{prefix}_channel"] = channel.name if channel else ""
+            row[f"{prefix}_score"] = cell(_rounded(channel.score) if channel else None)
+            row[f"{prefix}_flag"] = _flag_cell(channel.flagged if channel else None)
+            # Verbatim, not rounded: this is the fitted constant a score was
+            # compared against, so a reader must be able to reproduce the
+            # comparison exactly. Rounding 7.64036346269919 to 7.6404 would
+            # decide a score that lands between them the other way.
+            row[f"{prefix}_threshold"] = cell(channel.threshold if channel else None)
+            row[f"{prefix}_noise_sigma"] = cell(
+                _rounded(channel.noise_sigma, 3) if channel else None)
+            row[f"{prefix}_background"] = cell(
+                _rounded(channel.background, 3) if channel else None)
+        self._w.writerow(row)
+        self.n_rows += 1
+        verdict = focus.flagged if focus else None
+        if verdict is None:
+            self.n_unmeasured += 1
+        elif verdict:
+            self.n_flagged += 1
+        # Flush per row, like FailureLog: a batch that dies mid-run must still
+        # hand over the verdicts it already reached.
+        self._fh.flush()
+
+    def close(self) -> None:
+        self._fh.close()
+
+
+def focus_result_cells(focus) -> dict:
+    """The four ``focus_*`` cells results.csv carries, for one position.
+
+    Built here beside ``COLUMNS`` so the row keys and the header cannot drift
+    apart, and shared by every microtubule row of the position — results.csv is
+    one row per microtubule and the verdict belongs to the frame pair they were
+    measured on.
+    """
+    return {
+        "focus_irm_score": cell(_rounded(focus.irm.score) if focus else None),
+        "focus_tirf_score": cell(_rounded(focus.tirf.score) if focus else None),
+        "focus_flagged": _flag_cell(focus.flagged if focus else None),
+        "focus_reason": focus.reason if focus else "",
+    }
 
 
 class CsvWriter:
@@ -170,8 +332,15 @@ def save_overlay(frame: np.ndarray, centerlines_rc: list[np.ndarray],
 def save_annotation_json(well_id: str, position: int, source_file: str,
                          image_shape: tuple[int, int],
                          centerlines_rc: list[np.ndarray], rows: list[dict],
-                         out_path: Path, acquired_at: str | None = None) -> None:
-    """Write MT centerlines as polylines (points are ``{x, y}`` = col, row px)."""
+                         out_path: Path, acquired_at: str | None = None,
+                         focus=None) -> None:
+    """Write MT centerlines as polylines (points are ``{x, y}`` = col, row px).
+
+    ``focus`` (a ``FocusQuality`` or None) rides along so a position's
+    annotation stays self-describing: ``num_microtubules: 0`` on its own does
+    not say whether the field was empty or out of focus, and that position has
+    no row in results.csv to say it either.
+    """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     polylines = []
@@ -193,6 +362,14 @@ def save_annotation_json(well_id: str, position: int, source_file: str,
         "acquired_at": acquired_at,
         "image_size": {"width": int(image_shape[1]), "height": int(image_shape[0])},
         "num_microtubules": len(polylines),
+        "focus": None if focus is None else {
+            "flagged": focus.flagged,
+            "reason": focus.reason,
+            "irm": {"channel": focus.irm.name, "score": _rounded(focus.irm.score),
+                    "flagged": focus.irm.flagged, "threshold": focus.irm.threshold},
+            "tirf": {"channel": focus.tirf.name, "score": _rounded(focus.tirf.score),
+                     "flagged": focus.tirf.flagged, "threshold": focus.tirf.threshold},
+        },
         "polylines": polylines,
     }
     out_path.write_text(json.dumps(payload, indent=2))
