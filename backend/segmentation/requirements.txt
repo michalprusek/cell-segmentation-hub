@@ -59,7 +59,7 @@
 fastapi==0.141.1
 starlette==1.6.0
 uvicorn==0.52.4
-pydantic==2.13.4
+pydantic==2.13.5
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
 # later session-redirect advisory.
@@ -81,7 +81,7 @@ torch==2.6.0
 torchvision==0.21.0
 
 # Image processing
-opencv-python-headless==4.11.0.86
+opencv-python-headless==4.14.0.94
 # Pillow 12.2.0 fixes the earlier ImageMath.eval RCE / c_memcpy overflow plus
 # the later high-severity decoder advisories. ML code uses no removed PIL APIs
 # (only the Image.NEAREST alias + ImageDraw, both still valid in Pillow 12).
@@ -191,7 +191,7 @@ einops>=0.7.0
 # below (`>=4.25.1`). Nothing else in this file names it, so unpinned it would
 # float on its own schedule.
 onnx==1.22.0
-ml_dtypes==0.5.4
+ml_dtypes==0.6.0
 onnx2torch==1.5.15
 protobuf==7.36.0
 
