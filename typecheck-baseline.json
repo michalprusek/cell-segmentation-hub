@@ -5,10 +5,10 @@
   "_doNotEditByHand": true,
   "typescriptVersion": "5.9.3",
   "totals": {
-    "tsconfig.app.json": 400,
+    "tsconfig.app.json": 399,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1217,
-    "all": 1638
+    "tsconfig.test.json": 1216,
+    "all": 1636
   },
   "projects": {
     "tsconfig.app.json": {
@@ -324,8 +324,7 @@
       },
       "src/pages/segmentation/components/KymographModal.tsx": {
         "TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | undefined'.": 1,
-        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 5,
-        "TS2339: Property 'data' does not exist on type '{}'.": 1
+        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 5
       },
       "src/pages/segmentation/components/MicrotubuleInstancePanel.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 2,
@@ -1378,8 +1377,7 @@
       },
       "src/pages/segmentation/components/KymographModal.tsx": {
         "TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | undefined'.": 1,
-        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 5,
-        "TS2339: Property 'data' does not exist on type '{}'.": 1
+        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 5
       },
       "src/pages/segmentation/components/MicrotubuleInstancePanel.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 2,

@@ -2766,6 +2766,12 @@ export default {
       zoomHint: 'drag to pan · scroll to zoom',
       empty: 'Kymograph could not be computed.',
       velocityAnalysis: 'Velocity analysis',
+      velocityHint:
+        'Finds moving particles and their velocities. It re-reads every frame, so it roughly doubles the wait.',
+      velocityIdle:
+        'Velocity analysis is off — the kymograph loads faster without it.',
+      analyseVelocities: 'Analyse velocities',
+      velocityComputing: 'Analysing velocities…',
       widthLabel: 'Intensity width',
       widthHint:
         'Width (px) of the band sampled around each trajectory for signal vs. background intensity.',

@@ -2741,6 +2741,12 @@ export default {
       zoomHint: 'arrastra para desplazar · rueda para zoom',
       empty: 'No se pudo calcular el kimograma.',
       velocityAnalysis: 'Análisis de velocidad',
+      velocityHint:
+        'Detecta partículas en movimiento y sus velocidades. Vuelve a leer todos los fotogramas, por lo que aproximadamente duplica la espera.',
+      velocityIdle:
+        'El análisis de velocidad está desactivado — el kimograma se carga más rápido sin él.',
+      analyseVelocities: 'Analizar velocidades',
+      velocityComputing: 'Analizando velocidades…',
       widthLabel: 'Ancho de intensidad',
       widthHint:
         'Ancho (px) de la banda muestreada alrededor de cada trayectoria para señal vs. intensidad de fondo.',

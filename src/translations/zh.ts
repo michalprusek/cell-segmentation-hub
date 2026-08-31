@@ -2586,6 +2586,11 @@ export default {
       zoomHint: '拖动平移 · 滚轮缩放',
       empty: '无法计算微管图。',
       velocityAnalysis: '速度分析',
+      velocityHint:
+        '检测运动颗粒及其速度。需要重新读取每一帧，因此等待时间大约会翻倍。',
+      velocityIdle: '速度分析已关闭——关闭时微管图加载更快。',
+      analyseVelocities: '分析速度',
+      velocityComputing: '正在分析速度…',
       widthLabel: '强度宽度',
       widthHint: '围绕每条轨迹采样的条带宽度 (px)，用于信号与背景强度的比较。',
       colVelocity: '净速度',
