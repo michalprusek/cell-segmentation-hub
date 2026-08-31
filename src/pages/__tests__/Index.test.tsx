@@ -3,7 +3,8 @@
  *
  * Behaviors tested:
  *  - Navbar / Hero / Features / Footer are composed onto the page.
- *  - About section renders its badge, heading and the contact email link.
+ *  - About section renders its badge, heading, the contact email link and
+ *    the financial-support line, each pointing at the same mailto: address.
  *  - Acknowledgments render the contributor's name and both links to their
  *    page — these are a real attribution, so the test pins them.
  *  - The sign-up band renders its heading and the link into /sign-in.
@@ -13,7 +14,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 import Index from '../Index';
@@ -46,6 +47,8 @@ vi.mock('@/contexts/useLanguage', () => ({
         'landing.about.description2': 'Description 2.',
         'landing.about.description3': 'Description 3.',
         'landing.about.contactText': 'For inquiries, please contact us at',
+        'landing.about.supportText':
+          'If you would like to support the project financially, please write to me at',
         'landing.acknowledgments.badge': 'Acknowledgments',
         'landing.acknowledgments.title': 'Special Thanks',
         'landing.acknowledgments.lukasIntro': 'We thank',
@@ -106,12 +109,23 @@ describe('Index (landing) page', () => {
       ).toBeInTheDocument();
     });
 
+    // Two paragraphs now end in the same address, so each assertion is scoped
+    // to its own <p>: an unscoped getByRole would match both and throw.
     it('renders the contact email link', () => {
       renderPage();
-      const emailLink = screen.getByRole('link', {
+      const line = screen.getByText(/For inquiries, please contact us at/);
+      const emailLink = within(line).getByRole('link', {
         name: /prusek@utia\.cas\.cz/i,
       });
-      expect(emailLink).toBeInTheDocument();
+      expect(emailLink).toHaveAttribute('href', 'mailto:prusek@utia.cas.cz');
+    });
+
+    it('invites financial support at the same address', () => {
+      renderPage();
+      const line = screen.getByText(/support the project financially/);
+      const emailLink = within(line).getByRole('link', {
+        name: /prusek@utia\.cas\.cz/i,
+      });
       expect(emailLink).toHaveAttribute('href', 'mailto:prusek@utia.cas.cz');
     });
   });
