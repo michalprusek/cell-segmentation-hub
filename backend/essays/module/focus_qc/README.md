@@ -42,12 +42,19 @@ the golden frames. See its module docstring and
 `tests/test_metrics.py::TestOptimisedFormsAreBitIdentical`.
 
 **The "a few milliseconds per frame" below is wrong at production frame sizes.**
-Measured in the essays image on real wells: one channel cost 91 ms at 1400² and
-213 ms at 2048², so a two-channel position paid **191 ms and 460 ms**. The
-rewrite removes 8–12 % of the CPU work (min-of-9 `process_time` over both
-channels: 190 → 174 ms and 496 → 436 ms); `nd2_io.judge_focus` then scores the
-two channels concurrently, which halves the wall clock when a core is free
-(399 → 203 ms at 2048²) and buys nothing when one is not.
+Measured in the essays image on real wells, min-of-9 back to back in one
+process, per position (both channels):
+
+| | 1400² | 2048² |
+|---|---|---|
+| before this change | 177 ms | 472 ms |
+| bit-identical metrics | 163 ms | 425 ms |
+| …plus scored concurrently | **95 ms** | **300 ms** |
+
+The rewrite accounts for 7–10 %, and the same figure in CPU time (175 → 163 ms
+and 469 → 420 ms), which is the contention-robust half of the claim. The rest is
+`nd2_io.judge_focus` scoring the two channels concurrently — worth having only
+while a second core is free; at load 30 on 4 cores it measured nothing at all.
 
 ## The idea
 

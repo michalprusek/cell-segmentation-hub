@@ -430,16 +430,17 @@ The two per-position CPU diagnostics ride along on top of that. Measured
 | Diagnostic | 1400×1400 | 2048×2048 |
 | ---------- | --------- | --------- |
 | IRM↔TIRF alignment | ~120 ms | ~270 ms |
-| Out-of-focus check, both channels | ~95 ms | ~205 ms |
-| …the same check before this change | 191 ms | 460 ms |
+| Out-of-focus check, both channels | **95 ms** | **300 ms** |
+| …the same check before this change | 177 ms | 472 ms |
 
 Neither uses the GPU. The focus check got there two ways: `focus_qc/metrics.py`
-was rewritten bit-identically, which removes 8–12 % of the CPU work, and the two
-channels are now scored concurrently, which numpy allows because it releases the
-GIL for the selection and filtering that dominate the descriptor. The second
-half is wall clock and needs a spare core — on a fully loaded machine the
-threaded form is no faster (measured: 1230 ms vs 1014 ms at load 30 on 4 cores).
-The batch loop is sequential and GPU-bound, so a core normally is free.
+was rewritten bit-identically, worth 7–10 % (177 → 163 ms and 472 → 425 ms, and
+the same in CPU time), and the two channels are now scored concurrently, which
+numpy allows because it releases the GIL for the selection and filtering that
+dominate the descriptor. The second half is wall clock and needs a spare core —
+on a fully loaded machine the threaded form is no faster (measured 1230 ms vs
+1014 ms at load 30 on 4 cores). The batch loop is sequential and GPU-bound, so a
+core normally is free.
 
 ---
 

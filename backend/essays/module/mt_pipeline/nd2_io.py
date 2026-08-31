@@ -350,22 +350,28 @@ def judge_focus(irm: np.ndarray, tirf: np.ndarray, *,
 
     Never raises: a diagnostic must not be able to fail a well.
 
-    COST, measured 2026-08-31 in the essays image on real wells. Before this
-    change a position cost **191 ms at 1400x1400 and 460 ms at 2048x2048** — 11 %
-    of that well's ~1.7 s/position and 3.3 % of the other's ~14 s. Two things
-    reduced it:
+    COST, measured 2026-08-31 in the essays image on real wells, min-of-9 back
+    to back in one process, per POSITION (both channels):
 
-    * the bit-identical rewrite of ``focus_qc.metrics``, worth **8-12 % of the
-      CPU work** (min-of-9 ``process_time``: 190 -> 174 ms and 496 -> 436 ms);
-    * scoring the two channels concurrently, below. numpy releases the GIL for
-      the selection and filtering that dominate the descriptor, and the two
-      calls share nothing, so with a free core the pair costs what one channel
-      costs: **399 -> 203 ms** at 2048x2048, on identical numbers.
+    ===========================  ===========  ===========
+    variant                      1400x1400    2048x2048
+    ===========================  ===========  ===========
+    before this change            177 ms       472 ms
+    bit-identical metrics         163 ms       425 ms
+    ...plus scored concurrently    95 ms       300 ms
+    ===========================  ===========  ===========
+
+    which is 10 % and 3.4 % of those wells' ~1.7 s and ~14 s per position before,
+    and 5.6 % / 2.1 % after. The rewrite of ``focus_qc.metrics`` accounts for
+    7-10 % and shows the same figure in CPU time; the rest is the pairing below.
+    numpy releases the GIL for the selection and filtering that dominate the
+    descriptor, and the two calls share nothing, so with a free core the pair
+    costs about what one channel costs — on identical numbers.
 
     That second saving is wall clock and needs a core to be idle. Re-measured on
     the same host at load 30 on 4 cores, the threaded form was 1230 ms against
-    the sequential 1014 ms — no overlap available, and a little worse for
-    trying. It is still the right default: the batch loop is strictly
+    the sequential 1014 ms at 2048x2048 — no overlap available, and a little
+    worse for trying. It is still the right default: the batch loop is strictly
     sequential and spends its time on the GPU, so a second core normally is
     free, and the fallback is losing a saving rather than losing correctness.
     """

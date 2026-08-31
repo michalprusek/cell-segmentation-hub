@@ -17,19 +17,20 @@ one failure this module exists to prevent.
 COST, and why parts of this file are written the long way round
 ---------------------------------------------------------------
 The deployment README claimed "a few milliseconds per frame".  Measured
-2026-08-31 inside the essays image on real wells, one channel took **91 ms at
-1400x1400 and 213 ms at 2048x2048** -- so a two-channel position paid 191 ms and
-460 ms, which is 11 % of a 1400x1400 position's ~1.7 s and 3.3 % of a 2048x2048
-position's ~14 s.  A 180-well production batch is 900 positions, so the
-difference is minutes, not milliseconds.
+2026-08-31 inside the essays image on real wells, a two-channel position cost
+**177 ms at 1400x1400 and 472 ms at 2048x2048** -- 10 % of a 1400x1400
+position's ~1.7 s and 3.4 % of a 2048x2048 position's ~14 s.  A 180-well
+production batch is 900 positions, so the difference is minutes, not
+milliseconds.
 
-The rewrite below removes **8-12 % of the CPU work** (min-of-9 ``process_time``
-over both channels: 190 -> 174 ms at 1400x1400, 496 -> 436 ms at 2048x2048).
-CPU time rather than wall clock on purpose -- this host is shared and its wall
-clock swings by 2.5x with the neighbours' load, while the work actually done
-does not.  The other half of the saving is not here: ``nd2_io.judge_focus``
-scores the two channels concurrently, which is worth ~2x wall clock when a
-second core is free and nothing at all when one is not.
+The rewrite below is worth **7-10 %** of that, and the same figure in CPU time
+(min-of-9, back to back in one process, over both channels: 177 -> 163 ms wall /
+175 -> 163 ms CPU at 1400x1400, and 472 -> 425 / 469 -> 420 ms at 2048x2048).
+CPU time is quoted alongside on purpose -- this host is shared, and its wall
+clock swings by 2.5x with the neighbours' load while the work actually done does
+not.  The rest of the saving is not here: ``nd2_io.judge_focus`` scores the two
+channels concurrently, taking the position to 95 ms and 300 ms, which is worth
+having only while a second core is free.
 
 Everything below that looks like hand-rolled numpy is there for that reason and
 is **bit-identical** to the obvious expression it replaced, verified on every
