@@ -19,6 +19,9 @@ import VideoFrameImage from './canvas/VideoFrameImage';
 import FrameWindowPrefetcher from './canvas/FrameWindowPrefetcher';
 import FrameLoadingGate from './canvas/FrameLoadingGate';
 import { SegmentChannelDialog } from '@/components/project/SegmentChannelDialog';
+import DeleteTrackScopeDialog, {
+  type DeleteTrackScopeDialogProps,
+} from './DeleteTrackScopeDialog';
 import CanvasPolygon from './canvas/CanvasPolygon';
 import CanvasSvgFilters from './canvas/CanvasSvgFilters';
 import ModeInstructions from './canvas/ModeInstructions';
@@ -126,6 +129,12 @@ export interface SegmentationEditorLayoutProps {
   /** Canvas right-click delete: removes the whole MT track (all frames) when
    *  the polyline has a trackId, else a single-frame delete. */
   handleDeletePolygonOrTrack: (polygonId: string) => void;
+  /** Canvas right-click delete, "this frame only" branch: removes a tracked MT
+   *  from the current frame and leaves the rest of the track alone. */
+  handleDeletePolygonFromFrame: (polygonId: string) => void;
+  /** Shared three-way delete confirmation, driven by every scope-less delete
+   *  gesture (Delete key, delete-mode click, sidebar trash). */
+  deleteScopeDialog: Omit<DeleteTrackScopeDialogProps, 'frameCount'>;
   /** Canvas right-click: propagate this MT into all following frames. */
   handlePropagateTrack: (polygonId: string) => void;
   /** Canvas click: Shift+click multi-selects; plain click single-selects. */
@@ -226,6 +235,8 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   hoveredPolygonId,
   handleTogglePolygonVisibility,
   handleDeletePolygonFromPanel,
+  handleDeletePolygonFromFrame,
+  deleteScopeDialog,
   handleSelectPolygon,
   handleDeletePolygonOrTrack,
   handlePropagateTrack,
@@ -448,6 +459,14 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           multiSelectCount={selectedPolygonIds.size}
                           onPropagateSelected={handlePropagateSelected}
                           onDeletePolygon={handleDeletePolygonOrTrack}
+                          // Only offered on a video: without a container there
+                          // is no "other frame" to keep the track on, and the
+                          // menu falls back to its plain delete confirm.
+                          onDeletePolygonFromFrame={
+                            videoContainerId
+                              ? handleDeletePolygonFromFrame
+                              : undefined
+                          }
                           onPropagateTrack={handlePropagateTrack}
                           videoFrameCount={video.container?.frameCount}
                           onSlicePolygon={handleSlicePolygonFromContextMenu}
@@ -700,6 +719,16 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
           void runResegment(channel);
         }}
         onCancel={() => setShowResegmentChannelDialog(false)}
+      />
+
+      {/* "This frame only / all frames / cancel" for a tracked microtubule.
+          Driven by the delete gestures that carry no scope of their own —
+          the Delete key, a click in delete mode, the sidebar trash. The canvas
+          context menu asks the same question from its own instance, next to
+          the item the user clicked. */}
+      <DeleteTrackScopeDialog
+        {...deleteScopeDialog}
+        frameCount={video.container?.frameCount}
       />
     </ImageDisplayProvider>
   );

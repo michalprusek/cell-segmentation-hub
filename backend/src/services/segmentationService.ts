@@ -2365,6 +2365,78 @@ export class SegmentationService {
   }
 
   /**
+   * Delete a microtubule from ONE frame only, leaving the rest of its track
+   * intact. The frame-scoped counterpart to {@link deleteTrackAcrossVideo}.
+   *
+   * Why this is a server round-trip rather than a purely local editor edit:
+   * dropping a tracked polyline from the editor's state and saving looks
+   * identical on the wire to a whole-track delete, so
+   * `computeCrossFrameTrackPropagation` mirrors the removal onto every sibling
+   * frame — correctly, given all it can see is "this trackId vanished".
+   * Writing the frame here FIRST also moves that diff's baseline: the next save
+   * compares against a stored frame which already lacks the track, so it emits
+   * no delete op at all. That is what keeps the two scopes apart;
+   * `segmentationService.trackOps.test.ts` proves the wiring both ways.
+   *
+   * Refuses to write a frame whose stored polygons are unreadable — overwriting
+   * them with the survivors of an empty parse would silently destroy every
+   * other microtubule on that frame.
+   *
+   * @throws {VideoAccessError} if the frame is not found / not owned by the user.
+   */
+  async deleteTrackFromFrame(
+    imageId: string,
+    trackId: string,
+    userId: string
+  ): Promise<{ removed: number }> {
+    // Ownership: the frame is an Image row the user must be able to access.
+    const image = await this.imageService.getImageById(imageId, userId);
+    if (!image) {
+      throw new VideoAccessError('Frame not found or no access');
+    }
+
+    const segmentation = await this.prisma.segmentation.findUnique({
+      where: { imageId },
+      select: { id: true, polygons: true },
+    });
+    if (!segmentation) {
+      return { removed: 0 };
+    }
+
+    const { polygons: parsed, corrupt } = parsePolygonsForWrite(
+      segmentation.polygons
+    );
+    if (corrupt) {
+      logger.error(
+        'Frame polygons unreadable; refusing to delete a track from it',
+        undefined,
+        'SegmentationService',
+        { imageId, trackId, segmentationId: segmentation.id }
+      );
+      throw new Error(
+        `Segmentation polygons for image ${imageId} are unreadable`
+      );
+    }
+
+    const { polygons, removed } = removePolygonsWithTrackId(parsed, trackId);
+    if (removed === 0) {
+      return { removed: 0 };
+    }
+
+    await this.prisma.segmentation.update({
+      where: { id: segmentation.id },
+      data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
+    });
+
+    logger.info(
+      'Deleted microtubule track from a single frame',
+      'SegmentationService',
+      { imageId, trackId, removed }
+    );
+    return { removed };
+  }
+
+  /**
    * Set (or clear) the microtubule type-label id on every polyline carrying one
    * of `trackIds`, across ALL frames of the video. Mirrors
    * {@link deleteTrackAcrossVideo}: frame-scan + a single `$transaction` of only

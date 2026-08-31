@@ -793,6 +793,9 @@ export default {
       propagateFailed: '微管传播失败',
       deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
       deleteTrackFailed: '删除轨迹失败',
+      deleteFrameSuccess: '已从当前帧删除该微管；其余轨迹保持不变',
+      deleteFrameFailed: '从当前帧删除该微管失败',
+      deleteScopeUnavailable: '视频仍在加载中——请稍后再删除该微管',
     },
     modelNotCompatible:
       '模型 "{{model}}" 与项目类型 "{{type}}" 不兼容。允许的: {{allowed}}。',
@@ -2285,6 +2288,13 @@ export default {
     confirmDeleteTrack: '删除整条微管轨迹？',
     deleteTrackDescription:
       '这将从视频的全部 {{count}} 帧中删除该微管。此操作无法撤销。',
+    deleteMicrotubule: '删除微管…',
+    confirmDeleteScope: '删除该微管？',
+    deleteScopeDescription:
+      '该微管在整个视频中被跟踪。仅从当前帧删除，还是从所有帧删除？此操作无法撤销。',
+    deleteScopeThisFrame: '仅当前帧',
+    deleteScopeAllFrames: '所有帧',
+    deleteScopeAllFramesCount: '全部 {{count}} 帧',
     editPolygon: '编辑多边形',
     splitPolygon: '分割多边形',
     deletePolygon: '删除多边形',

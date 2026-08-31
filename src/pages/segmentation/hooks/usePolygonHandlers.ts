@@ -11,7 +11,10 @@ import { logger } from '@/lib/logger';
 interface HandlerEditor {
   polygons: Polygon[];
   selectedPolygonId: string | null;
-  handleDeletePolygon: (polygonId: string) => void;
+  handleDeletePolygon: (
+    polygonId: string,
+    options?: { silent?: boolean }
+  ) => void;
   handlePolygonSelection: (polygonId: string | null) => void;
   setSelectedPolygonId: (polygonId: string | null) => void;
   setEditMode: (mode: EditMode) => void;
@@ -180,11 +183,13 @@ export function usePolygonHandlers({
     imageId,
   ]);
 
-  // Context menu handlers for polygon right-click
+  // Context menu handlers for polygon right-click. `silent` is forwarded for
+  // callers that report the delete themselves (the microtubule scope handlers,
+  // which name the frames affected) so one gesture raises one toast.
   const handleDeletePolygonFromContextMenu = useCallback(
-    (polygonId: string) => {
+    (polygonId: string, options?: { silent?: boolean }) => {
       const target = editorRef.current.polygons.find(p => p.id === polygonId);
-      editorRef.current.handleDeletePolygon(polygonId);
+      editorRef.current.handleDeletePolygon(polygonId, options);
       if (target) {
         const key = polygonKey(target);
         setHiddenPolygonIds(prev => {

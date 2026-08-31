@@ -290,7 +290,11 @@ describe('SegmentationService track ops (orchestration)', () => {
 
   beforeEach(() => {
     prismaMock = {
-      segmentation: { update: vi.fn(x => x), create: vi.fn(x => x) },
+      segmentation: {
+        update: vi.fn(x => x),
+        create: vi.fn(x => x),
+        findUnique: vi.fn(),
+      },
       image: { findMany: vi.fn(), update: vi.fn(x => x) },
       $transaction: vi.fn().mockResolvedValue([]),
     };
@@ -531,6 +535,146 @@ describe('SegmentationService track ops (orchestration)', () => {
       await expect(
         service.setTrackTypeAcrossVideo('vid', ['t1'], 'mt_type_x', 'user')
       ).rejects.toBeInstanceOf(VideoAccessError);
+    });
+  });
+
+  describe('deleteTrackFromFrame', () => {
+    it('removes the track from THIS frame only and never scans siblings', async () => {
+      prismaMock.segmentation.findUnique.mockResolvedValue(
+        seg('f1', [line('t1'), line('t2'), line('t1')])
+      );
+
+      const res = await service.deleteTrackFromFrame('f1', 't1', 'user');
+
+      expect(res.removed).toBe(2);
+      expect(prismaMock.segmentation.update).toHaveBeenCalledTimes(1);
+      const polys = writtenPolys(
+        prismaMock.segmentation.update.mock.calls[0]
+      );
+      expect(polys).toHaveLength(1);
+      expect(polys[0].trackId).toBe('t2');
+      // The whole point of the frame scope: no other frame is even looked at.
+      expect(prismaMock.image.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when the track is not on this frame', async () => {
+      prismaMock.segmentation.findUnique.mockResolvedValue(
+        seg('f1', [line('t2')])
+      );
+      const res = await service.deleteTrackFromFrame('f1', 't1', 'user');
+      expect(res.removed).toBe(0);
+      expect(prismaMock.segmentation.update).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when the frame has no segmentation row', async () => {
+      prismaMock.segmentation.findUnique.mockResolvedValue(null);
+      const res = await service.deleteTrackFromFrame('f1', 't1', 'user');
+      expect(res.removed).toBe(0);
+      expect(prismaMock.segmentation.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to write a frame whose stored polygons are unreadable', async () => {
+      // Overwriting it with the survivors of an empty parse would silently
+      // destroy every other microtubule on the frame.
+      prismaMock.segmentation.findUnique.mockResolvedValue({
+        id: 'seg-f1',
+        polygons: 'not json {[',
+      });
+      await expect(
+        service.deleteTrackFromFrame('f1', 't1', 'user')
+      ).rejects.toThrow(/unreadable/i);
+      expect(prismaMock.segmentation.update).not.toHaveBeenCalled();
+    });
+
+    it('throws VideoAccessError when the frame is not owned', async () => {
+      imageServiceMock.getImageById.mockResolvedValue(null);
+      await expect(
+        service.deleteTrackFromFrame('f1', 't1', 'user')
+      ).rejects.toBeInstanceOf(VideoAccessError);
+      expect(prismaMock.segmentation.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // The behaviour the feature exists for, exercised through BOTH methods that
+  // produce it — the frame-scoped delete and the save that follows it. Testing
+  // `deleteTrackFromFrame` alone would prove nothing: the destruction happens
+  // in `updateSegmentationResults`, one layer up.
+  describe('a frame-scoped delete survives the next save', () => {
+    /**
+     * Save frame f1 carrying only t2 (the editor dropped t1 locally), against a
+     * video whose siblings f2/f3 both carry t1. `storedPolygonsJson` is what the
+     * DB holds for f1 at that moment — the diff baseline, and the whole
+     * difference between the two tests below.
+     * Returns how many sibling frames the save rewrote.
+     */
+    const saveFrameWithoutT1 = async (
+      storedPolygonsJson: string
+    ): Promise<string[]> => {
+      imageServiceMock.getImageById.mockResolvedValue({
+        id: 'f1',
+        parentVideoId: 'vid',
+      });
+      prismaMock.segmentation.findUnique.mockResolvedValue({
+        id: 'seg-f1',
+        polygons: storedPolygonsJson,
+        imageWidth: 10,
+        imageHeight: 10,
+      });
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'f2', segmentation: seg('2', [line('t1')]) },
+        { id: 'f3', segmentation: seg('3', [line('t1')]) },
+      ]);
+      prismaMock.$transaction.mockImplementation(async (ops: any[]) => [
+        {
+          id: 'seg-f1',
+          imageId: 'f1',
+          model: 'manual',
+          threshold: 0.5,
+          confidence: 0.9,
+          imageWidth: 10,
+          imageHeight: 10,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        ...ops.slice(1),
+      ]);
+
+      prismaMock.segmentation.update.mockClear();
+      await service.updateSegmentationResults(
+        'f1',
+        [{ ...line('t2'), points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] }] as any,
+        'user'
+      );
+      // Every update op minus the one for the edited frame itself.
+      return prismaMock.segmentation.update.mock.calls
+        .map((call: any) => call[0].where.id as string)
+        .filter((id: string) => id !== 'seg-f1');
+    };
+
+    it('WITHOUT the frame-scoped call, saving purges the track everywhere', async () => {
+      // Baseline still carries t1 → `diffTrackOps` reads its absence from the
+      // saved polygons as "the user deleted this track" and mirrors it.
+      const siblings = await saveFrameWithoutT1(
+        JSON.stringify([line('t1'), line('t2')])
+      );
+      expect(siblings.sort()).toEqual(['seg-2', 'seg-3']);
+    });
+
+    it('WITH the frame-scoped call first, the siblings keep the track', async () => {
+      // 1. The user picks "this frame only".
+      prismaMock.segmentation.findUnique.mockResolvedValue(
+        seg('f1', [line('t1'), line('t2')])
+      );
+      const res = await service.deleteTrackFromFrame('f1', 't1', 'user');
+      expect(res.removed).toBe(1);
+      const storedAfterDelete =
+        prismaMock.segmentation.update.mock.calls[0][0].data.polygons;
+
+      // 2. The editor saves the frame later. The baseline it diffs against is
+      //    the row step 1 just wrote, so no delete op is emitted at all.
+      const siblings = await saveFrameWithoutT1(storedAfterDelete);
+      expect(siblings).toEqual([]);
     });
   });
 });

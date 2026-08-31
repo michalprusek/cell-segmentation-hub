@@ -695,6 +695,11 @@ export default {
       propagateFailed: 'Failed to propagate the microtubule',
       deleteTrackSuccess: 'Track removed from {{count}} frame(s)',
       deleteTrackFailed: 'Failed to delete the track',
+      deleteFrameSuccess:
+        'Microtubule removed from this frame; the rest of its track is unchanged',
+      deleteFrameFailed: 'Failed to remove the microtubule from this frame',
+      deleteScopeUnavailable:
+        'The video is still loading — try deleting this microtubule again in a moment',
     },
     modelNotCompatible:
       'Model "{{model}}" is not compatible with project type "{{type}}". Allowed: {{allowed}}.',
@@ -2438,6 +2443,13 @@ export default {
     confirmDeleteTrack: 'Delete the whole microtubule track?',
     deleteTrackDescription:
       'This removes this microtubule from all {{count}} frames of the video. This cannot be undone.',
+    deleteMicrotubule: 'Delete microtubule…',
+    confirmDeleteScope: 'Delete this microtubule?',
+    deleteScopeDescription:
+      'This microtubule is tracked across the video. Delete it from the current frame only, or from every frame? This cannot be undone.',
+    deleteScopeThisFrame: 'This frame only',
+    deleteScopeAllFrames: 'All frames',
+    deleteScopeAllFramesCount: 'All {{count}} frames',
     editPolygon: 'Edit polygon',
     splitPolygon: 'Split polygon',
     deletePolygon: 'Delete polygon',
