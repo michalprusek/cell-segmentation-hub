@@ -37,7 +37,8 @@ export interface MicrotubuleKymographsSectionProps {
  * ``projectType === 'microtubules'``. The user picks one of two outputs:
  *
  *  - **Kymograph** — the backend builds one space×time kymograph per microtubule
- *    (blob-motion velocities + segmented kymograph PNGs, per the sub-toggles).
+ *    (KymoButler trajectory velocities + segmented kymograph PNGs, per the
+ *    sub-toggles).
  *  - **Intensity profiles** — one matplotlib plot of intensity vs. position
  *    along the microtubule, per frame (a kymograph is a stack of exactly these
  *    rows), plus the intensity CSV.

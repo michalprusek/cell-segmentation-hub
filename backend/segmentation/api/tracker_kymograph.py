@@ -31,6 +31,7 @@ during per-frame segmentation:
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import csv
 import io
@@ -43,11 +44,13 @@ from typing import Any, Dict, List, Literal, NamedTuple, Optional, Tuple
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 
 from api.kymograph_velocity import (
-    detect_blobs,
+    detect_tracks,
     edge_touch,
     flag_bright_outliers,
+    kymograph_polarity,
     net_velocity_threshold,
     render_overlay,
     track_intensity,
@@ -69,6 +72,12 @@ router = APIRouter()
 # that the backend service sets. Paths supplied by callers must resolve to a
 # descendant of this directory.
 _UPLOAD_ROOT = Path(os.getenv("UPLOAD_DIR", "/app/uploads")).resolve()
+
+# One KymoButler detection at a time. See the comment at its acquisition site in
+# /kymograph: the work now runs in a worker thread so it stops blocking the
+# event loop, and this restores the one-at-a-time behaviour that being inline in
+# an `async def` handler used to give for free.
+_DETECT_LOCK = asyncio.Lock()
 
 
 def _assert_safe_path(p: Path, label: str) -> None:
@@ -992,10 +1001,22 @@ class KymographRequest(BaseModel):
         None,
         pattern=r"^#[0-9A-Fa-f]{6}$",
     )
-    # When True, run blob-motion detection on the sampled intensity matrix and
-    # return one KymographTrack per moving particle (velocities in px/frame —
-    # the Node backend converts to um/s with the container's calibration).
+    # When True, run trajectory detection (KymoButler) on the sampled intensity
+    # matrix and return one KymographTrack per moving particle (velocities in
+    # px/frame — the Node backend converts to um/s with the container's
+    # calibration).
     detect_velocity: bool = False
+    # Which KymoButler network to run. ``bidirectional`` is the default and the
+    # one to keep unless you know the movie: it is the mode with a decision
+    # module, so a crossing is resolved rather than guessed, and on 10 real
+    # kymographs from 4 production containers it returned 31 trajectories where
+    # the DoG detector it replaced returned 29 (both after the µm/s cut-off).
+    # ``unidirectional`` has no decision module — its trajectories are plain
+    # 8-connected components — and on the same 10 it returned 61, of which 13
+    # sat below the SNR floor the old detector enforced. It is offered because
+    # KymoButler ships it for genuinely one-way movies, not because it is
+    # interchangeable. It is also ~6x faster, which is not a reason to pick it.
+    kymobutler_mode: Literal["bidirectional", "unidirectional"] = "bidirectional"
     # When True (with detect_velocity), also composite the detected tracks onto
     # the kymograph and return it as ``overlay_png_base64`` — used by the export
     # pipeline to ship "segmented kymograph" images without a browser.
@@ -1023,7 +1044,7 @@ class KymographTrack(BaseModel):
     """One moving particle detected on the kymograph.
 
     Per-run detail is deliberately omitted: the run segmentation is internal to
-    ``detect_blobs`` and surfaces only as the two processive totals below.
+    ``detect_tracks`` and surfaces only as the two processive totals below.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1335,18 +1356,45 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     if kymo.size == 0:
         raise HTTPException(status_code=500, detail="Empty kymograph result")
 
-    # Blob-motion detection runs on the RAW (un-normalised) matrix so the
-    # background-subtraction and SNR estimates inside detect_blobs see real
-    # intensities, not a [0,1]-rescaled version. The velocity layer is
-    # OPTIONAL: a detection failure must never break the kymograph itself, so
-    # we degrade to "no tracks" rather than 500-ing the whole request.
+    # Trajectory detection runs on the RAW (un-normalised) matrix so the
+    # background-subtraction and SNR estimates inside detect_tracks see real
+    # intensities, not a [0,1]-rescaled version. KymoButler applies its own
+    # normalisation internally, to its own copy. The velocity layer is
+    # OPTIONAL: a detection failure must never break the kymograph itself — and
+    # since the swap to KymoButler that now also covers "the ONNX weights were
+    # never staged" — so we degrade to "no tracks" rather than 500-ing the whole
+    # request.
     raw_tracks: List[Dict[str, Any]] = []
     tracks: Optional[List[KymographTrack]] = None
     velocity_error: Optional[str] = None
     filtered_track_count = 0
     if req.detect_velocity:
         try:
-            raw_tracks = detect_blobs(kymo)
+            # OFF THE EVENT LOOP. This handler is `async def` (see the docstring
+            # above for why the sampling and matplotlib work stays serialised),
+            # and until 2026-08-31 detection was cheap enough — 0.03-0.2 s of
+            # numpy — that running it inline cost nothing. KymoButler is 2.6-132 s
+            # of torch per kymograph on CPU, plus a one-off ~5 s onnx2torch
+            # conversion. Inline, that stalls the whole ML service for the
+            # duration: uvicorn cannot accept /segment or /track, and the compose
+            # healthcheck (30 s interval, 5 retries) marks `ml` unhealthy after
+            # ~150 s of it.
+            #
+            # The lock keeps the SERIALISATION `async def` gives today — one
+            # detection at a time — while freeing the loop to answer /health and
+            # queue other work. Without it anyio's 40-slot threadpool would
+            # happily start 40 concurrent tracking runs, each with its own torch
+            # thread pool, on a box that also serves GPU inference.
+            async with _DETECT_LOCK:
+                raw_tracks = await run_in_threadpool(
+                    detect_tracks, kymo, mode=req.kymobutler_mode
+                )
+            # Which way "signal" points on THIS kymograph. detect_tracks signs
+            # its own SNR the same way; the metrics below are measured beside
+            # those tracks and must agree, or an inverted kymograph reports a
+            # negative intensity_minus_bg and flags its dimmest trajectories as
+            # aggregates.
+            polarity = kymograph_polarity(kymo)
             # Enrich each track with the edge-touch flag + background-subtracted
             # intensity along its trajectory (both read off the same kymo). A
             # failure on ONE track must not discard the whole batch, so isolate
@@ -1355,7 +1403,12 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
                 try:
                     tr["edge"] = edge_touch(tr["points"], n_samples)
                     tr.update(
-                        track_intensity(kymo, tr["points"], req.intensity_width)
+                        track_intensity(
+                            kymo,
+                            tr["points"],
+                            req.intensity_width,
+                            polarity=polarity,
+                        )
                     )
                 except Exception:
                     logger.exception(
@@ -1390,7 +1443,7 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
             # Flag intensity outliers among the FINAL (post-filter) tracks, so
             # the "bright" flag matches the trajectories that actually appear in
             # the table / overlay / exported sheet.
-            flag_bright_outliers(raw_tracks)
+            flag_bright_outliers(raw_tracks, polarity=polarity)
             tracks = [KymographTrack(**tr) for tr in raw_tracks]
         except Exception as _vel_exc:
             logger.exception(

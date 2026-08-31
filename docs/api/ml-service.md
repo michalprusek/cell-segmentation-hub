@@ -102,8 +102,19 @@ geometry library, not as tuning knobs: changing them changes nothing.
 Builds a space × time matrix by sampling the given centerline through a stack of
 per-frame channel PNGs, opened at native bit depth. Sampling is
 arc-length-uniform with nearest-neighbour interpolation and reads 0 outside the
-frame. Optionally detects blob trajectories and returns velocity metrics, and
-can render the raw intensity profile per frame instead.
+frame. Optionally detects trajectories and returns velocity metrics, and can
+render the raw intensity profile per frame instead.
+
+Trajectory detection is **KymoButler** (Jakobs, Dimitracopoulos & Franze, eLife
+2019), vendored at `backend/segmentation/models/kymobutler`. A U-Net segments
+the whole (t, x) plane at once, so a crossing is a shape it was trained on
+rather than a frame-to-frame association guess; `kymobutler_mode` picks between
+`bidirectional` (default — a decision module resolves every remaining fork) and
+`unidirectional`. The response shape is unchanged from the DoG-blob detector it
+replaced: same per-track fields, same units (kymograph **columns** per frame,
+which the Node backend scales by px-per-column before applying the µm
+calibration). Detection failure — including weights that were never staged —
+degrades to `tracks: []` plus `velocity_error`, never a 500.
 
 ---
 
