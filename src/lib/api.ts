@@ -1927,6 +1927,28 @@ class ApiClient {
   }
 
   /**
+   * Delete a microtubule from ONE frame only, keeping the rest of its track.
+   * Returns how many polylines were removed from that frame (0 when the track
+   * was not on it).
+   *
+   * This has to reach the server even though the editor could drop the polyline
+   * locally: a tracked polyline that simply vanishes from a save is
+   * indistinguishable from a whole-track delete, and the backend mirrors it onto
+   * every sibling frame. Writing the frame here first also moves that diff's
+   * baseline, so the following save propagates nothing.
+   */
+  async deleteTrackFromFrame(
+    imageId: string,
+    trackId: string
+  ): Promise<{ removed: number }> {
+    const response = await this.instance.delete(
+      `/segmentation/images/${imageId}/tracks/${encodeURIComponent(trackId)}`
+    );
+    const data = this.extractData(response);
+    return { removed: Number(data?.removed ?? 0) };
+  }
+
+  /**
    * Set (or clear, with `mtType: null`) the microtubule type-label id on one or
    * more whole tracks across a video. Returns how many frames were written.
    */

@@ -793,6 +793,9 @@ export default {
       propagateFailed: '微管传播失败',
       deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
       deleteTrackFailed: '删除轨迹失败',
+      deleteFrameSuccess: '已从当前帧删除该微管；其余轨迹保持不变',
+      deleteFrameFailed: '从当前帧删除该微管失败',
+      deleteScopeUnavailable: '视频仍在加载中——请稍后再删除该微管',
     },
     modelNotCompatible:
       '模型 "{{model}}" 与项目类型 "{{type}}" 不兼容。允许的: {{allowed}}。',
@@ -1892,10 +1895,15 @@ export default {
         csv: 'results.csv — 每根微管一行，包含长度、沿纤维的强度及其背景',
         failures:
           'failures.csv — 每一个未能处理的孔位或视野及其原因。即使为空也始终会生成',
+        focus:
+          'focus_qc.csv — 每个视野一行，给出分割通道与测量通道的离焦评分。results.csv 中每根纤维也带有同一判定',
         overlays:
           '每个视野两张叠加图：一张用于核对分割与其输入是否吻合，另一张用于核对测量条带是否落在信号上',
         annotations: '每个视野一个 JSON 文件，包含追踪出的中心线及其长度',
       },
+      focusNote: '离焦标记仅供参考 — 不会丢弃任何数据。',
+      focusNoteText:
+        '它衡量画面中有多少面积被明显高于噪声的结构占据，因此密集覆盖的视野即使离焦也可能通过；它宁可保留数据，也不会贸然舍弃。其阈值是在单次采集上拟合的，所以换了曝光或相机就会在 reason 列中报告 out_of_calibration — 那是关于阈值的说明，而不是关于您这一帧的判断。',
       channelNote: 'IRM 用于分割，荧光用于测量。',
       channelNoteText:
         '模型是在 IRM 上训练的，因此纤维在 IRM 中追踪，荧光通道只沿这些轨迹读取。缺少 IRM 通道的文件会被记为失败，而不会改用其他通道分割。',
@@ -2280,6 +2288,13 @@ export default {
     confirmDeleteTrack: '删除整条微管轨迹？',
     deleteTrackDescription:
       '这将从视频的全部 {{count}} 帧中删除该微管。此操作无法撤销。',
+    deleteMicrotubule: '删除微管…',
+    confirmDeleteScope: '删除该微管？',
+    deleteScopeDescription:
+      '该微管在整个视频中被跟踪。仅从当前帧删除，还是从所有帧删除？此操作无法撤销。',
+    deleteScopeThisFrame: '仅当前帧',
+    deleteScopeAllFrames: '所有帧',
+    deleteScopeAllFramesCount: '全部 {{count}} 帧',
     editPolygon: '编辑多边形',
     splitPolygon: '分割多边形',
     deletePolygon: '删除多边形',

@@ -695,6 +695,11 @@ export default {
       propagateFailed: 'Failed to propagate the microtubule',
       deleteTrackSuccess: 'Track removed from {{count}} frame(s)',
       deleteTrackFailed: 'Failed to delete the track',
+      deleteFrameSuccess:
+        'Microtubule removed from this frame; the rest of its track is unchanged',
+      deleteFrameFailed: 'Failed to remove the microtubule from this frame',
+      deleteScopeUnavailable:
+        'The video is still loading — try deleting this microtubule again in a moment',
     },
     modelNotCompatible:
       'Model "{{model}}" is not compatible with project type "{{type}}". Allowed: {{allowed}}.',
@@ -2024,11 +2029,16 @@ export default {
         csv: 'results.csv — one row per microtubule, with its length, the intensity along it and its background',
         failures:
           'failures.csv — every well or position that could not be produced, and why. It is always written, even when empty',
+        focus:
+          'focus_qc.csv — one row per position with an out-of-focus score for the segmented and the measured channel. results.csv carries the same verdict per filament',
         overlays:
           'Two overlay images per position: one checking the segmentation against its own input, one checking the measured band against the signal',
         annotations:
           'A JSON file per position with the traced centerlines and their lengths',
       },
+      focusNote: 'The out-of-focus flag is advisory — nothing is discarded.',
+      focusNoteText:
+        'It measures how much of a frame is occupied by structure standing clear of the noise, so a densely covered field can still pass while defocused; it errs towards keeping data, not towards throwing it away. Its thresholds were fitted on one acquisition, so a different exposure or camera is reported as out_of_calibration in the reason column — that is a note about the threshold, not about your frame.',
       channelNote: 'IRM is segmented, fluorescence is measured.',
       channelNoteText:
         'The model was trained on IRM, so the filaments are traced there and the fluorescence channel is only read along those traces. A file with no IRM channel is reported as a failure rather than segmented from something else.',
@@ -2433,6 +2443,13 @@ export default {
     confirmDeleteTrack: 'Delete the whole microtubule track?',
     deleteTrackDescription:
       'This removes this microtubule from all {{count}} frames of the video. This cannot be undone.',
+    deleteMicrotubule: 'Delete microtubule…',
+    confirmDeleteScope: 'Delete this microtubule?',
+    deleteScopeDescription:
+      'This microtubule is tracked across the video. Delete it from the current frame only, or from every frame? This cannot be undone.',
+    deleteScopeThisFrame: 'This frame only',
+    deleteScopeAllFrames: 'All frames',
+    deleteScopeAllFramesCount: 'All {{count}} frames',
     editPolygon: 'Edit polygon',
     splitPolygon: 'Split polygon',
     deletePolygon: 'Delete polygon',

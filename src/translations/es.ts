@@ -849,6 +849,11 @@ export default {
       propagateFailed: 'No se pudo propagar el microtúbulo',
       deleteTrackSuccess: 'Traza eliminada de {{count}} fotogramas',
       deleteTrackFailed: 'No se pudo eliminar la traza',
+      deleteFrameSuccess:
+        'Microtúbulo eliminado de este fotograma; el resto de su traza no cambia',
+      deleteFrameFailed: 'No se pudo eliminar el microtúbulo de este fotograma',
+      deleteScopeUnavailable:
+        'El vídeo aún se está cargando: vuelve a eliminar este microtúbulo en un momento',
     },
     modelNotCompatible:
       'El modelo "{{model}}" no es compatible con el tipo de proyecto "{{type}}". Permitidos: {{allowed}}.',
@@ -2021,11 +2026,16 @@ export default {
         csv: 'results.csv: una fila por microtúbulo, con su longitud, la intensidad a lo largo de él y su fondo',
         failures:
           'failures.csv: cada pocillo o posición que no pudo producirse, y por qué. Se escribe siempre, aunque esté vacío',
+        focus:
+          'focus_qc.csv: una fila por posición con una puntuación de desenfoque para el canal segmentado y el medido. results.csv lleva el mismo veredicto por filamento',
         overlays:
           'Dos imágenes superpuestas por posición: una comprueba la segmentación frente a su propia entrada, la otra la banda medida frente a la señal',
         annotations:
           'Un archivo JSON por posición con las líneas centrales trazadas y sus longitudes',
       },
+      focusNote: 'La marca de desenfoque es orientativa: no se descarta nada.',
+      focusNoteText:
+        'Mide qué parte del fotograma ocupa estructura que sobresale claramente del ruido, así que un campo densamente cubierto puede pasar aun estando desenfocado; se equivoca del lado de conservar los datos, no de tirarlos. Sus umbrales se ajustaron sobre una única adquisición, de modo que otra exposición u otra cámara se informa como out_of_calibration en la columna reason: es una nota sobre el umbral, no sobre su fotograma.',
       channelNote: 'Se segmenta IRM, se mide la fluorescencia.',
       channelNoteText:
         'El modelo se entrenó con IRM, así que los filamentos se trazan ahí y el canal de fluorescencia solo se lee a lo largo de esos trazos. Un archivo sin canal IRM se informa como fallo en lugar de segmentarse a partir de otra cosa.',
@@ -2421,6 +2431,13 @@ export default {
     confirmDeleteTrack: '¿Eliminar toda la traza del microtúbulo?',
     deleteTrackDescription:
       'Esto elimina este microtúbulo de los {{count}} fotogramas del vídeo. Esta acción no se puede deshacer.',
+    deleteMicrotubule: 'Eliminar microtúbulo…',
+    confirmDeleteScope: '¿Eliminar este microtúbulo?',
+    deleteScopeDescription:
+      'Este microtúbulo se sigue a lo largo del vídeo. ¿Eliminarlo solo del fotograma actual o de todos los fotogramas? Esta acción no se puede deshacer.',
+    deleteScopeThisFrame: 'Solo este fotograma',
+    deleteScopeAllFrames: 'Todos los fotogramas',
+    deleteScopeAllFramesCount: 'Los {{count}} fotogramas',
     editPolygon: 'Editar polígono',
     splitPolygon: 'Dividir polígono',
     deletePolygon: 'Eliminar polígono',

@@ -692,6 +692,11 @@ export default {
       propagateFailed: 'Propagace mikrotubulu selhala',
       deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
       deleteTrackFailed: 'Smazání tracku selhalo',
+      deleteFrameSuccess:
+        'Mikrotubulus odstraněn z tohoto snímku; zbytek tracku zůstává',
+      deleteFrameFailed: 'Odstranění mikrotubulu z tohoto snímku selhalo',
+      deleteScopeUnavailable:
+        'Video se ještě načítá — zkuste mikrotubulus smazat za okamžik znovu',
     },
     modelNotCompatible:
       'Model "{{model}}" není kompatibilní s typem projektu "{{type}}". Povolené: {{allowed}}.',
@@ -1998,11 +2003,17 @@ export default {
         csv: 'results.csv — jeden řádek na mikrotubulus s délkou, intenzitou podél něj a jeho pozadím',
         failures:
           'failures.csv — každá jamka či pozice, kterou nešlo zpracovat, a proč. Zapisuje se vždy, i když je prázdný',
+        focus:
+          'focus_qc.csv — jeden řádek na pozici se skóre rozostření pro segmentovaný a měřený kanál. Stejný verdikt nese i results.csv u každého vlákna',
         overlays:
           'Dva překryvné obrázky na pozici: jeden kontroluje segmentaci proti jejímu vlastnímu vstupu, druhý měřený pás proti signálu',
         annotations:
           'Soubor JSON pro každou pozici s vytrasovanými osami vláken a jejich délkami',
       },
+      focusNote:
+        'Příznak rozostření je pouze informativní — nic se nezahazuje.',
+      focusNoteText:
+        'Měří, jakou část snímku zabírá struktura zřetelně nad šumem, takže hustě pokryté pole může projít i rozostřené; chybuje směrem k zachování dat, ne k jejich zahození. Prahy byly odvozeny z jediného snímání, takže jiná expozice či kamera se ve sloupci reason ohlásí jako out_of_calibration — to je poznámka o prahu, ne o vašem snímku.',
       channelNote: 'Segmentuje se IRM, měří se fluorescence.',
       channelNoteText:
         'Model byl trénován na IRM, takže vlákna se trasují tam a fluorescenční kanál se čte jen podél těchto tras. Soubor bez kanálu IRM se ohlásí jako chyba, místo aby se segmentoval z něčeho jiného.',
@@ -2402,6 +2413,13 @@ export default {
     confirmDeleteTrack: 'Smazat celý track mikrotubulu?',
     deleteTrackDescription:
       'Odstraní tento mikrotubulus ze všech {{count}} snímků videa. Tuto akci nelze vrátit.',
+    deleteMicrotubule: 'Smazat mikrotubulus…',
+    confirmDeleteScope: 'Smazat tento mikrotubulus?',
+    deleteScopeDescription:
+      'Tento mikrotubulus je sledován napříč celým videem. Smazat ho jen z aktuálního snímku, nebo ze všech snímků? Tuto akci nelze vrátit.',
+    deleteScopeThisFrame: 'Jen z tohoto snímku',
+    deleteScopeAllFrames: 'Ze všech snímků',
+    deleteScopeAllFramesCount: 'Ze všech {{count}} snímků',
     editPolygon: 'Upravit polygon',
     splitPolygon: 'Rozdělit polygon',
     deletePolygon: 'Smazat polygon',

@@ -239,8 +239,26 @@ describe('usePolygonHandlers', () => {
       result.current.handleDeletePolygonFromContextMenu('p1');
     });
 
-    expect(editor.handleDeletePolygon).toHaveBeenCalledWith('p1');
+    expect(editor.handleDeletePolygon).toHaveBeenCalledWith('p1', undefined);
     expect(result.current.hiddenPolygonIds.has(key)).toBe(false);
+  });
+
+  it('forwards the silent option so one gesture raises one toast', () => {
+    // The microtubule scope handlers report the delete themselves, naming the
+    // frames touched; the editor's generic toast would be a second one.
+    const poly = makePoly({ id: 'p1' });
+    editor = makeEditor([poly]);
+    const { result } = renderHook(() =>
+      usePolygonHandlers({ editor, imageId: 'img-1' })
+    );
+
+    act(() => {
+      result.current.handleDeletePolygonFromContextMenu('p1', { silent: true });
+    });
+
+    expect(editor.handleDeletePolygon).toHaveBeenCalledWith('p1', {
+      silent: true,
+    });
   });
 
   // ─── handleSlicePolygonFromContextMenu ────────────────────────────────────

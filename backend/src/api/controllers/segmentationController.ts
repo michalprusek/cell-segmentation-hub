@@ -270,12 +270,15 @@ class SegmentationController {
   private handleTrackOpError(
     error: unknown,
     res: Response,
-    fallbackMessage: string
+    fallbackMessage: string,
+    // Frame-scoped ops address an Image, not a video container, so they say so
+    // rather than reporting a missing "video" the user never named.
+    notFoundMessage = 'Video nenalezeno nebo bez přístupu'
   ): void {
     // Ownership failures are a typed error (not a substring match, which would
     // silently drift-break if the message is reworded).
     if (error instanceof VideoAccessError) {
-      ResponseHelper.notFound(res, 'Video nenalezeno nebo bez přístupu');
+      ResponseHelper.notFound(res, notFoundMessage);
       return;
     }
     // Geometry-shape failure (also gated at the route, so this is defensive).
@@ -356,6 +359,49 @@ class SegmentationController {
         { videoId: req.params.videoId, userId: req.user?.id }
       );
       this.handleTrackOpError(error, res, 'Chyba při mazání tracku');
+    }
+  };
+
+  /**
+   * Delete a microtubule from ONE frame, leaving the rest of its track intact.
+   * The frame-scoped counterpart to {@link deleteTrack}.
+   */
+  deleteTrackFromFrame = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { imageId, trackId } = req.params;
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+      if (!this.validateParams(req.params, ['imageId', 'trackId'], res)) {
+        return;
+      }
+
+      const result = await this.segmentationService.deleteTrackFromFrame(
+        imageId as string,
+        trackId as string,
+        userId
+      );
+
+      ResponseHelper.success(
+        res,
+        result,
+        'Mikrotubulus smazán z aktuálního snímku'
+      );
+    } catch (error) {
+      logger.error(
+        'Failed to delete microtubule from a single frame',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        { imageId: req.params.imageId, userId: req.user?.id }
+      );
+      this.handleTrackOpError(
+        error,
+        res,
+        'Chyba při mazání mikrotubulu ze snímku',
+        'Snímek nenalezen nebo bez přístupu'
+      );
     }
   };
 
