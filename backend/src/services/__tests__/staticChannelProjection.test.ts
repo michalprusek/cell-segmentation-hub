@@ -7,6 +7,8 @@ import {
   planSparseCollapse,
   planStaticCollapse,
   sparseFollowers,
+  withMintedTrackIds,
+  type ProjectablePolygon,
   type StaticChannelLike,
 } from '../staticChannelProjection';
 
@@ -108,6 +110,132 @@ describe('projectPolygons', () => {
   it('is a faithful copy at zero shift', () => {
     const out = projectPolygons(polys, [0, 0]);
     expect(out[0].points).toEqual(polys[0].points);
+  });
+});
+
+describe('withMintedTrackIds', () => {
+  /** The shape a freshly segmented microtubule frame actually has — read off
+   *  production container 4972cad8 on 2026-08-31. Note what is NOT there: the
+   *  model emits `instanceId`, never `trackId`. */
+  const freshFromTheModel: ProjectablePolygon[] = [
+    {
+      id: 'polyline_1',
+      points: [
+        { x: 1786, y: 34 },
+        { x: 1769.18, y: 37.46 },
+      ],
+      geometry: 'polyline',
+      class: 'microtubule',
+      instanceId: 'mt_a01c27c9',
+      confidence: 1,
+    },
+    {
+      id: 'polyline_2',
+      points: [
+        { x: 120, y: 900 },
+        { x: 131.5, y: 902.25 },
+      ],
+      geometry: 'polyline',
+      class: 'microtubule',
+      instanceId: 'mt_7a7fa955',
+      confidence: 1,
+    },
+  ];
+
+  /** Deterministic, and — like the real generator — never repeats. */
+  function counter(prefix = 'mt_'): () => string {
+    let n = 0;
+    return () => `${prefix}${++n}`;
+  }
+
+  it('gives a model result an id where it has none — the whole fix', () => {
+    // Without this the projection copies `undefined` onto every frame and the
+    // container ends up segmented with no cross-frame identity anywhere.
+    const { polygons, minted } = withMintedTrackIds(
+      freshFromTheModel,
+      counter()
+    );
+    expect(minted).toBe(2);
+    expect(polygons.map(p => p.trackId)).toEqual(['mt_1', 'mt_2']);
+  });
+
+  it('keeps an id the user already established', () => {
+    // A hand-propagated polyline outranks a fresh id: replacing it would
+    // detach the filament from the track the user built.
+    const { polygons, minted } = withMintedTrackIds(
+      [{ ...freshFromTheModel[0], trackId: 'mt_userpicked' }, freshFromTheModel[1]],
+      counter()
+    );
+    expect(minted).toBe(1);
+    expect(polygons.map(p => p.trackId)).toEqual(['mt_userpicked', 'mt_1']);
+  });
+
+  it('never reuses an id already on the frame', () => {
+    // A collision would silently MERGE two filaments into one track — a wrong
+    // answer that looks like a right one.
+    const { polygons } = withMintedTrackIds(
+      [{ ...freshFromTheModel[0], trackId: 'mt_1' }, freshFromTheModel[1]],
+      counter()
+    );
+    expect(polygons[1].trackId).not.toBe('mt_1');
+    expect(new Set(polygons.map(p => p.trackId)).size).toBe(2);
+  });
+
+  it('terminates and stays unique even for a degenerate generator', () => {
+    // The uniqueness loop must not be able to hang the queue worker.
+    const { polygons } = withMintedTrackIds(
+      [
+        { ...freshFromTheModel[0], trackId: 'same' },
+        freshFromTheModel[1],
+        { ...freshFromTheModel[1], id: 'polyline_3' },
+      ],
+      () => 'same'
+    );
+    expect(new Set(polygons.map(p => p.trackId)).size).toBe(3);
+  });
+
+  it('touches nothing else on the polygon', () => {
+    const { polygons } = withMintedTrackIds(freshFromTheModel, counter());
+    expect(polygons[0]).toEqual({ ...freshFromTheModel[0], trackId: 'mt_1' });
+  });
+
+  it('leaves the input array alone', () => {
+    withMintedTrackIds(freshFromTheModel, counter());
+    expect(freshFromTheModel[0]).not.toHaveProperty('trackId');
+  });
+
+  it('mints nothing when every polyline already has an id', () => {
+    const tracked = freshFromTheModel.map((p, i) => ({
+      ...p,
+      trackId: `track_${i}`,
+    }));
+    const { polygons, minted } = withMintedTrackIds(tracked, counter());
+    expect(minted).toBe(0);
+    expect(polygons).toEqual(tracked);
+  });
+
+  it('mints a distinct id for all 60 filaments of the real frame', () => {
+    // The production container carries 60 polylines per frame, all untracked.
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      ...freshFromTheModel[0],
+      id: `polyline_${i + 1}`,
+      instanceId: `mt_${i.toString(16).padStart(8, '0')}`,
+    }));
+    const { polygons, minted } = withMintedTrackIds(many, counter());
+    expect(minted).toBe(60);
+    expect(new Set(polygons.map(p => p.trackId)).size).toBe(60);
+    expect(polygons.every(p => (p.trackId?.length ?? 0) > 0)).toBe(true);
+  });
+
+  it('treats an empty-string trackId as no id at all', () => {
+    // `coerceNonEmptyString` in polygonValidation drops it on the way out, so
+    // an empty string is indistinguishable from absent everywhere downstream.
+    const { polygons, minted } = withMintedTrackIds(
+      [{ ...freshFromTheModel[0], trackId: '' }],
+      counter()
+    );
+    expect(minted).toBe(1);
+    expect(polygons[0].trackId).toBe('mt_1');
   });
 });
 
