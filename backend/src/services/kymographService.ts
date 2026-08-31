@@ -94,6 +94,13 @@ export interface KymographServiceInput {
    *  the sampled matrix, so both the ML render cost and the output scope shrink
    *  to the selection. */
   frameFilter?: number[];
+  /** Pre-loaded per-container rows (see `loadKymographContainerContext`). Every
+   *  kymograph of one container reads the identical container + frame rows and
+   *  differs only in polyline geometry, so a caller building many of them loads
+   *  them once and passes them here instead of paying the same two queries —
+   *  and the same multi-MB polygon JSON decode — per call. Omitted by the
+   *  editor modal, which builds exactly one. */
+  containerContext?: KymographContainerContext;
 }
 
 /** One per-frame intensity profile rendered as a matplotlib PNG. Mirrors the ML
@@ -184,6 +191,126 @@ function parsePolygons(json: string | null | undefined): PolylineRecord[] {
   }
 }
 
+/** One frame of a container as the kymograph builder needs it. `polygonsJson`
+ *  is kept RAW and parsed at most once by `contextPolylines`: a 300-frame
+ *  microtubule container carries ~30 MB of polygon JSON, and the static-line
+ *  (untracked) path only ever reads the seed frame's copy. */
+export interface KymographContextFrame {
+  id: string;
+  frameIndex: number | null;
+  polygonsJson: string | null;
+  /** Memoised `parsePolygons(polygonsJson)` — populated on first read. */
+  parsed?: PolylineRecord[];
+}
+
+/**
+ * Everything `buildKymograph` reads from the database for ONE video container.
+ *
+ * Every kymograph of a container needs the identical rows — the container
+ * record and every frame's segmentation — and only the polyline geometry
+ * differs between them. Loading it per call therefore re-fetched the same
+ * ~30 MB of polygon JSON once per (microtubule x channel): the export of a
+ * real 300-frame, 3-channel, 60-microtubule container issued 180 identical
+ * pairs of queries and pulled 5.6 GB through Prisma, all of it decoded and
+ * materialised on the single Node event loop (so it stalled the rest of the
+ * API too). Callers that build many kymographs for one container load this
+ * once and pass it to every call.
+ */
+export interface KymographContainerContext {
+  container: {
+    id: string;
+    projectId: string;
+    channels: unknown;
+    pixelSizeUm: number | null;
+    frameIntervalMs: number | null;
+  };
+  /** Every frame of the container, frameIndex-ascending — including frames
+   *  with no segmentation, which still contribute an image to sample. */
+  frames: KymographContextFrame[];
+}
+
+/** Parse (once) and return a context frame's stored polylines. */
+function contextPolylines(frame: KymographContextFrame): PolylineRecord[] {
+  if (frame.parsed === undefined) {
+    frame.parsed = parsePolygons(frame.polygonsJson);
+  }
+  return frame.parsed;
+}
+
+/** Throws when `sourceChannel` is not one of the container's declared
+ *  channels. An empty/absent `channels` array means "not declared" and lets
+ *  any channel through (legacy uploads). */
+function assertChannelDeclared(channels: unknown, sourceChannel: string): void {
+  const declared = Array.isArray(channels)
+    ? (channels as Array<{ name: string }>).map(c => c.name)
+    : [];
+  if (declared.length > 0 && !declared.includes(sourceChannel)) {
+    throw new Error(`Unknown source channel: ${sourceChannel}`);
+  }
+}
+
+/**
+ * Load the per-container data `buildKymograph` needs, once.
+ *
+ * `sourceChannel` is optional and only decides WHERE the channel-whitelist
+ * error is raised: passing it keeps "Unknown source channel" ahead of "No
+ * frames found", which is the order `buildKymograph` has always thrown in.
+ * A context is otherwise channel-agnostic — one load serves every channel of
+ * the container — so bulk callers omit it and let `buildKymograph` do the
+ * per-call check.
+ */
+export async function loadKymographContainerContext(
+  videoContainerId: string,
+  sourceChannel?: string
+): Promise<KymographContainerContext> {
+  const container = await prisma.image.findUnique({
+    where: { id: videoContainerId },
+    select: {
+      id: true,
+      projectId: true,
+      isVideoContainer: true,
+      channels: true,
+      pixelSizeUm: true,
+      frameIntervalMs: true,
+    },
+  });
+  if (!container || !container.isVideoContainer) {
+    throw new Error('videoContainerId does not refer to a video container');
+  }
+
+  if (sourceChannel !== undefined) {
+    assertChannelDeclared(container.channels, sourceChannel);
+  }
+
+  const allFrames = await prisma.image.findMany({
+    where: { parentVideoId: videoContainerId },
+    orderBy: { frameIndex: 'asc' },
+    select: {
+      id: true,
+      frameIndex: true,
+      segmentation: { select: { polygons: true } },
+    },
+  });
+  if (allFrames.length === 0) {
+    throw new Error('No frames found for the given video container');
+  }
+
+  return {
+    container: {
+      id: container.id,
+      projectId: container.projectId,
+      channels: container.channels,
+      pixelSizeUm: container.pixelSizeUm ?? null,
+      frameIntervalMs: container.frameIntervalMs ?? null,
+    },
+    frames: allFrames.map(f => ({
+      id: f.id,
+      frameIndex: f.frameIndex,
+      polygonsJson: f.segmentation?.polygons ?? null,
+    })),
+  };
+}
+
 export async function buildKymograph(
   input: KymographServiceInput
 ): Promise<KymographServiceResult> {
@@ -215,50 +342,39 @@ export async function buildKymograph(
     throw new Error('Invalid channelColor (expected #RRGGBB)');
   }
 
-  const container = await prisma.image.findUnique({
-    where: { id: videoContainerId },
-    select: {
-      id: true,
-      projectId: true,
-      isVideoContainer: true,
-      channels: true,
-      pixelSizeUm: true,
-      frameIntervalMs: true,
-    },
-  });
-  if (!container || !container.isVideoContainer) {
-    throw new Error('videoContainerId does not refer to a video container');
+  // Either reuse the caller's prefetched per-container rows or load them now.
+  // The whitelist check runs on BOTH paths: a prefetched context is
+  // channel-agnostic (one load serves every channel), so it cannot have been
+  // validated against this call's channel. On the load path the loader already
+  // ran it, ahead of the frame query, which is the order this function has
+  // always raised these two errors in.
+  if (
+    input.containerContext &&
+    input.containerContext.container.id !== videoContainerId
+  ) {
+    // Loud, because the failure would otherwise be silent and plausible: the
+    // frame paths are built from the CONTEXT's projectId and the INPUT's
+    // container id, so a mismatched context yields a kymograph of some other
+    // container's frames (or of nothing) under this container's calibration.
+    throw new Error(
+      `containerContext is for ${input.containerContext.container.id}, ` +
+        `not ${videoContainerId}`
+    );
   }
+  const context =
+    input.containerContext ??
+    (await loadKymographContainerContext(videoContainerId, sourceChannel));
+  assertChannelDeclared(context.container.channels, sourceChannel);
 
-  // Whitelist sourceChannel against the container's declared channels.
-  const declared = Array.isArray(container.channels)
-    ? (container.channels as Array<{ name: string }>).map(c => c.name)
-    : [];
-  if (declared.length > 0 && !declared.includes(sourceChannel)) {
-    throw new Error(`Unknown source channel: ${sourceChannel}`);
-  }
-
-  const allFrames = await prisma.image.findMany({
-    where: { parentVideoId: videoContainerId },
-    orderBy: { frameIndex: 'asc' },
-    select: {
-      id: true,
-      frameIndex: true,
-      segmentation: { select: { polygons: true } },
-    },
-  });
-  if (allFrames.length === 0) {
-    throw new Error('No frames found for the given video container');
-  }
+  const container = context.container;
+  const allFrames = context.frames;
 
   // Locate the selected polyline and decide tracked vs static-line mode.
   const seedFrame = allFrames.find(f => f.frameIndex === frameIndex);
   if (!seedFrame) {
     throw new Error(`Frame ${frameIndex} not found in container`);
   }
-  const seedPolygons = parsePolygons(
-    seedFrame.segmentation?.polygons ?? null
-  );
+  const seedPolygons = contextPolylines(seedFrame);
   const seedPolyline = seedPolygons.find(p => p.id === polylineId);
   if (!seedPolyline || !Array.isArray(seedPolyline.points)) {
     throw new Error(`Polyline ${polylineId} not found in frame ${frameIndex}`);
@@ -283,7 +399,7 @@ export async function buildKymograph(
     }
     let geometry: Array<{ x: number; y: number }> | null = null;
     if (trackedMode) {
-      const polygons = parsePolygons(f.segmentation?.polygons ?? null);
+      const polygons = contextPolylines(f);
       const sibling = polygons.find(p => p.trackId === trackId);
       if (sibling && Array.isArray(sibling.points)) {
         geometry = sibling.points;

@@ -787,4 +787,159 @@ describe('buildKymograph', () => {
       expect(res.tracks).toBeUndefined();
     });
   });
+
+  // ── Prefetched per-container rows ────────────────────────────────────────
+  //
+  // Every kymograph of one container reads the identical container + frame
+  // rows, so a caller building many of them (the MT export: up to 60
+  // microtubules x every channel) loads them once and passes them in. These
+  // guard that the shortcut is real (no queries at all) AND that it does not
+  // change the request that reaches the ML service.
+  describe('prefetched containerContext', () => {
+    const CONTEXT = {
+      container: {
+        id: 'container-1',
+        projectId: 'project-1',
+        channels: [{ name: 'IRM' }, { name: 'GFP' }],
+        pixelSizeUm: 0.5,
+        frameIntervalMs: 200,
+      },
+      frames: [
+        {
+          id: 'frame-0',
+          frameIndex: 0,
+          polygonsJson: JSON.stringify([POLYLINE_STATIC]),
+        },
+        {
+          id: 'frame-1',
+          frameIndex: 1,
+          polygonsJson: JSON.stringify([POLYLINE_STATIC]),
+        },
+      ],
+    };
+
+    it('issues NO database queries when the rows are supplied', async () => {
+      mockPrisma.image.findUnique.mockResolvedValue(makeContainer());
+      mockPrisma.image.findMany.mockResolvedValue([]);
+
+      const res = await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        containerContext: structuredClone(CONTEXT),
+      });
+
+      expect(mockPrisma.image.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.image.findMany).not.toHaveBeenCalled();
+      expect(res.pixelSizeUm).toBe(0.5);
+      expect(res.frameIntervalMs).toBe(200);
+    });
+
+    it('builds the identical ML request it would have built from the DB', async () => {
+      // Same rows, once through the DB and once prefetched: the POSTed body
+      // must be byte-identical, or the export would silently drift from the
+      // editor modal.
+      mockPrisma.image.findUnique.mockResolvedValue(
+        makeContainer({ channels: CONTEXT.container.channels })
+      );
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+        makeFrame(1, [POLYLINE_STATIC]),
+      ]);
+      const args = {
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+      };
+      await buildKymograph(args);
+      const fromDb = JSON.stringify(mockAxios.post.mock.calls[0][1]);
+
+      mockAxios.post = vi.fn().mockResolvedValue(ML_RESPONSE);
+      await buildKymograph({
+        ...args,
+        containerContext: {
+          ...structuredClone(CONTEXT),
+          // pixelSize/frameInterval are absent from makeContainer(), so match
+          // it here: the payload, not the calibration, is what is compared.
+          container: {
+            ...CONTEXT.container,
+            pixelSizeUm: null,
+            frameIntervalMs: null,
+          },
+        },
+      });
+      expect(JSON.stringify(mockAxios.post.mock.calls[0][1])).toBe(fromDb);
+    });
+
+    it('rejects a context belonging to a different container', async () => {
+      // Silent-and-plausible otherwise: frame paths are built from the
+      // context's projectId and the input's container id, so the mismatch
+      // would render another container's frames under this one's calibration.
+      await expect(
+        buildKymograph({
+          videoContainerId: 'container-2',
+          polylineId: 'poly-1',
+          frameIndex: 0,
+          sourceChannel: 'IRM',
+          containerContext: structuredClone(CONTEXT),
+        })
+      ).rejects.toThrow('containerContext is for container-1, not container-2');
+      expect(mockAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('still whitelists the channel against the prefetched container', async () => {
+      // A context is channel-agnostic — one load serves every channel — so the
+      // per-call check cannot be skipped just because the rows came in ready.
+      await expect(
+        buildKymograph({
+          videoContainerId: 'container-1',
+          polylineId: 'poly-1',
+          frameIndex: 0,
+          sourceChannel: 'RFP',
+          containerContext: structuredClone(CONTEXT),
+        })
+      ).rejects.toThrow('Unknown source channel: RFP');
+    });
+
+    it('parses each frame ONCE across repeated tracked-mode builds', async () => {
+      // The reuse that matters for a 300-frame container: without memoisation
+      // every build re-parses every frame's polygon JSON (~30 MB per build,
+      // on the single Node event loop).
+      const context = {
+        ...structuredClone(CONTEXT),
+        frames: [
+          {
+            id: 'frame-0',
+            frameIndex: 0,
+            polygonsJson: JSON.stringify([POLYLINE_TRACKED]),
+          },
+          {
+            id: 'frame-1',
+            frameIndex: 1,
+            polygonsJson: JSON.stringify([POLYLINE_TRACKED]),
+          },
+        ],
+      };
+      const parseSpy = vi.spyOn(JSON, 'parse');
+      const before = parseSpy.mock.calls.length;
+      for (let i = 0; i < 5; i++) {
+        mockAxios.post = vi.fn().mockResolvedValue(ML_RESPONSE);
+        await buildKymograph({
+          videoContainerId: 'container-1',
+          polylineId: 'poly-1',
+          frameIndex: 0,
+          sourceChannel: 'IRM',
+          containerContext: context,
+        });
+      }
+      const polygonParses = parseSpy.mock.calls
+        .slice(before)
+        .filter(c => String(c[0]).includes('"poly-1"')).length;
+      parseSpy.mockRestore();
+      // 2 frames, 5 builds: 2 parses, not 10.
+      expect(polygonParses).toBe(2);
+    });
+  });
 });
