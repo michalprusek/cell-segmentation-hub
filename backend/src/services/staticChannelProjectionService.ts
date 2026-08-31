@@ -6,7 +6,11 @@
  * geometry; this module is only the database half. It runs after a queue item
  * completes, in place of scheduling the tracker: the projected polylines carry
  * the source frame's `trackId`, so cross-frame identity is exact rather than
- * inferred, and there is nothing left for a tracker to work out.
+ * inferred, and there is nothing left for a tracker to work out. A source frame
+ * that has no `trackId` yet — the usual case, since the model emits none — is
+ * given one here (`withMintedTrackIds`) and updated in place, because otherwise
+ * "carry the anchor's identity" carries nothing and the whole container ends up
+ * without one.
  *
  * The same function fills in a SPARSE channel's gaps, with one difference: a
  * sparse channel has an anchor per run of gaps rather than one for the whole
@@ -19,6 +23,7 @@
  * projected, and the caller falls back to the ordinary tracking path.
  */
 
+import { randomUUID } from 'crypto';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
 import {
@@ -27,9 +32,24 @@ import {
   projectionDelta,
   projectPolygons,
   sparseFollowers,
+  withMintedTrackIds,
   type ProjectablePolygon,
   type StaticChannelLike,
 } from './staticChannelProjection';
+
+/**
+ * A fresh cross-frame identity for one filament.
+ *
+ * Same shape as the id `segmentationService.propagateTrackGeometryForward`
+ * mints when the user propagates a polyline by hand (`mt_<8 hex>`), so a
+ * container can hold ids from both sources without a reader having to tell them
+ * apart. Nothing anywhere parses a `trackId` — the tracker's own ids are
+ * `track_<10 hex>` and are equally opaque — it is only ever compared for
+ * equality, and `withMintedTrackIds` guarantees uniqueness within the frame.
+ */
+function newTrackId(): string {
+  return `mt_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+}
 
 export interface ProjectStaticChannelArgs {
   containerId: string;
@@ -113,8 +133,8 @@ export async function projectStaticChannelResult(
       return NOT_APPLIED;
     }
 
-    const polygons = parsePolygons(source.polygons);
-    if (!polygons) {
+    const parsed = parsePolygons(source.polygons);
+    if (!parsed) {
       logger.warn(
         `Static channel '${channel}': source frame ${sourceImageId} has polygons this cannot project; leaving the other frames to segment normally`,
         'StaticChannelProjection',
@@ -155,15 +175,63 @@ export async function projectStaticChannelResult(
       return NOT_APPLIED;
     }
 
-    let projected = 0;
-    let skipped = 0;
+    // Resolve every target's shift BEFORE anything is written. A covered frame
+    // whose own offset was never recorded cannot be projected — assuming zero
+    // would put filaments somewhere they are not, and look entirely plausible
+    // doing it — and alignment failing for most of a channel's frames is a
+    // condition `addChannelService` explicitly warns about, so "nothing left to
+    // project" is a real outcome rather than a theoretical one. Knowing that up
+    // front is what keeps the minting below from stamping the anchor with ids
+    // for a projection that never happens.
+    const targets = covered.map(target => ({
+      target,
+      delta: projectionDelta(meta, sourceImageId, target.id),
+    }));
+    const skipped = targets.reduce((n, t) => (t.delta ? n : n + 1), 0);
+    if (skipped === targets.length) {
+      return NOT_APPLIED;
+    }
 
-    for (const target of covered) {
-      const delta = projectionDelta(meta, sourceImageId, target.id);
+    // Mint the cross-frame identity the copies are about to carry.
+    //
+    // A static channel's frames are one acquisition, so the polylines below are
+    // literally the same filaments — but a freshly segmented anchor arrives
+    // with no `trackId` at all (the model emits none; only the tracker writes
+    // the field), and suppressing the tracker means nothing downstream will
+    // ever supply one. Projecting that nothing is what left container 4972cad8
+    // with 299 segmented frames, 17 940 polylines and 0 trackIds, so every
+    // cross-frame editor operation on it degraded to a single-frame one.
+    //
+    // The anchor is written back FIRST, so an id is never projected onto a
+    // sibling that the frame which produced it does not itself carry — the
+    // editor reads `trackId` off whichever frame the user has open, the anchor
+    // included. A failure here throws to the catch below, which leaves every
+    // frame to the ordinary segment-then-track path, the same as any other
+    // failure in this module.
+    //
+    // SPARSE deliberately opts out: its real frames are genuinely different
+    // timepoints, `applied` is false for it, and the tracker that then runs
+    // would immediately overwrite anything minted here.
+    let polygons = parsed;
+    let minted = 0;
+    if (!isSparse) {
+      const minting = withMintedTrackIds(parsed, newTrackId);
+      minted = minting.minted;
+      if (minted > 0) {
+        polygons = minting.polygons;
+        await prisma.segmentation.update({
+          where: { imageId: sourceImageId },
+          data: { polygons: JSON.stringify(polygons) },
+        });
+      }
+    }
+
+    let projected = 0;
+
+    for (const { target, delta } of targets) {
       if (!delta) {
-        // Unknown offset. Assuming zero would put filaments somewhere they are
-        // not, and look entirely plausible doing it.
-        skipped++;
+        // Unknown offset — counted into `skipped` above and left to segment
+        // normally.
         continue;
       }
       const moved = projectPolygons(polygons, delta);
@@ -198,18 +266,15 @@ export async function projectStaticChannelResult(
       projected++;
     }
 
-    if (projected === 0) {
-      return NOT_APPLIED;
-    }
-
     logger.info(
       `${isSparse ? 'Sparse' : 'Static'} channel '${channel}': projected ${polygons.length} polyline(s) from frame ${sourceImageId} onto ${projected} frame(s)` +
         (skipped ? `, ${skipped} left to segment (no recorded shift)` : '') +
         (isSparse
           ? ' — these frames hold no acquisition of their own; the tracker still runs over the real ones'
-          : ' — no tracking needed, identity is carried not inferred'),
+          : ' — no tracking needed, identity is carried not inferred') +
+        (minted ? `; ${minted} trackId(s) minted onto the anchor` : ''),
       'StaticChannelProjection',
-      { containerId, projected, skipped, polylines: polygons.length }
+      { containerId, projected, skipped, minted, polylines: polygons.length }
     );
 
     // Frames left for normal segmentation still need the tracker, so only a
