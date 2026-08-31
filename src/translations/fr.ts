@@ -2741,6 +2741,12 @@ export default {
       zoomHint: 'glisser pour déplacer · molette pour zoomer',
       empty: 'Impossible de calculer le kymographe.',
       velocityAnalysis: 'Analyse de vitesse',
+      velocityHint:
+        'Détecte les particules en mouvement et leurs vitesses. Chaque image est relue, ce qui double environ le temps d’attente.',
+      velocityIdle:
+        'L’analyse de vitesse est désactivée — le kymographe se charge plus vite sans elle.',
+      analyseVelocities: 'Analyser les vitesses',
+      velocityComputing: 'Analyse des vitesses…',
       widthLabel: "Largeur d'intensité",
       widthHint:
         "Largeur (px) de la bande échantillonnée autour de chaque trajectoire pour le signal vs. l'intensité de fond.",

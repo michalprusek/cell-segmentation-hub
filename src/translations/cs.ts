@@ -2696,6 +2696,12 @@ export default {
       zoomHint: 'táhni pro posun · kolečko pro zoom',
       empty: 'Kymograf nelze spočítat.',
       velocityAnalysis: 'Analýza rychlosti',
+      velocityHint:
+        'Najde pohybující se částice a jejich rychlosti. Znovu čte každý snímek, takže čekání zhruba zdvojnásobí.',
+      velocityIdle:
+        'Analýza rychlosti je vypnutá — bez ní se kymograf načte rychleji.',
+      analyseVelocities: 'Spustit analýzu rychlosti',
+      velocityComputing: 'Analyzuji rychlosti…',
       widthLabel: 'Šířka intenzity',
       widthHint:
         'Šířka (px) pásu vzorkovaného kolem každé trajektorie pro signál vs. intenzitu pozadí.',

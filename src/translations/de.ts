@@ -2747,6 +2747,12 @@ export default {
       zoomHint: 'ziehen zum Verschieben · Rad zum Zoomen',
       empty: 'Kymograph konnte nicht berechnet werden.',
       velocityAnalysis: 'Geschwindigkeitsanalyse',
+      velocityHint:
+        'Findet bewegte Partikel und ihre Geschwindigkeiten. Dabei wird jedes Einzelbild erneut gelesen, was die Wartezeit etwa verdoppelt.',
+      velocityIdle:
+        'Die Geschwindigkeitsanalyse ist aus — ohne sie lädt das Kymograph schneller.',
+      analyseVelocities: 'Geschwindigkeiten analysieren',
+      velocityComputing: 'Geschwindigkeiten werden analysiert…',
       widthLabel: 'Intensitätsbreite',
       widthHint:
         'Breite (px) des um jede Trajektorie abgetasteten Bandes für Signal vs. Hintergrundintensität.',

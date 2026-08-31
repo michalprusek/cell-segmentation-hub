@@ -8,6 +8,24 @@
  * (with µm/s velocities derived from the container calibration). Those tracks
  * are drawn as an interactive SVG overlay on top of the kymograph and listed in
  * a velocity table.
+ *
+ * Velocity analysis is **opt-in**. Measured on a 300-frame container the same
+ * request costs 7.8–17.6 s without it and 18.6–29.4 s with it, so paying for it
+ * on every open made every user wait roughly twice as long for the picture they
+ * actually asked for. The image is fetched first; the trajectories are a second
+ * request the user triggers from the "Analyse velocities" button (or the
+ * matching checkbox), and because the PNG does not depend on the velocity flags
+ * the kymograph stays on screen while they are computed.
+ *
+ * There are two React Query queries — the repo's home for server state — over
+ * the one route, and exactly one of them is enabled at a time. The velocity
+ * response is a strict superset of the plain one, so enabling both would rebuild
+ * the same 300 frames twice; disabling the plain one instead of unmounting it
+ * keeps its cached image on screen, which is what survives a velocity pass that
+ * is still running or that failed, and makes un-ticking the box cost no request
+ * at all. React Query also supplies the `AbortSignal` the hand-rolled effect
+ * lacked: a superseded request is now cancelled rather than left to decode 300
+ * frames server-side.
  */
 
 import {
@@ -18,6 +36,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useQuery, type QueryKey } from '@tanstack/react-query';
 import {
   ArrowDown,
   Download,
@@ -101,6 +120,39 @@ interface KymographResponse {
   velocityError?: string;
 }
 
+/** The route answers through `ResponseHelper.success`, i.e. `{ data: … }`; the
+ *  older shape returned the payload flat. Accept both, as the effect did. */
+type KymographEnvelope = KymographResponse & { data?: KymographResponse };
+
+/** Request body. `intensityWidth` is only meaningful with `detectVelocity`. */
+interface KymographRequest {
+  videoContainerId: string;
+  polylineId: string;
+  frameIndex: number;
+  sourceChannel: string;
+  channelColor: string;
+  detectVelocity: boolean;
+  intensityWidth?: number;
+}
+
+async function fetchKymograph(
+  body: KymographRequest,
+  signal: AbortSignal
+): Promise<KymographResponse> {
+  const res = await apiClient.post<KymographEnvelope>(
+    '/segmentation/kymograph',
+    body,
+    // Consuming `signal` is what makes React Query cancel this request when the
+    // query is superseded or the modal unmounts (query-core `removeObserver`
+    // only aborts a fetch whose queryFn read the signal).
+    { signal }
+  );
+  return res.data?.data ?? res.data;
+}
+
+/** Scopes every cached kymograph to one open of the modal — see `cacheEpoch`. */
+let kymographCacheEpoch = 0;
+
 // Direction-coded colours for the overlay + table dots.
 const ANTERO = '#f87171'; // net position increasing (+)
 const RETRO = '#38bdf8'; // net position decreasing (−)
@@ -161,16 +213,103 @@ export function KymographModal({
   const [sourceChannel, setSourceChannel] = useState<string | null>(
     defaultChannel
   );
-  const [detectVelocity, setDetectVelocity] = useState(true);
+  // Opt-in: the velocity pass roughly doubles the wait (7.8–17.6 s → 18.6–29.4 s
+  // on a 300-frame container), so the image is fetched without it and the user
+  // asks for the trajectories when they want them.
+  const [detectVelocity, setDetectVelocity] = useState(false);
   const [intensityWidth, setIntensityWidth] = useState(DEFAULT_INTENSITY_WIDTH);
   // Debounced width drives the (expensive) kymograph refetch — each rebuild
   // re-reads every frame PNG + re-runs blob detection, so we coalesce rapid
   // keystrokes instead of firing a full ML round-trip per character.
   const [debouncedWidth, setDebouncedWidth] = useState(DEFAULT_INTENSITY_WIDTH);
-  const [result, setResult] = useState<KymographResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<number | null>(null);
+
+  // A kymograph is derived from polyline geometry the user can edit between two
+  // opens of this modal, so no cached entry may survive a close→reopen.
+  // `VideoModeOverlay` mounts this component per open, so a token minted once
+  // per mount scopes the cache to exactly one open: every open refetches, and
+  // inside that open a velocity toggle or a return to an already-fetched
+  // channel is served from memory instead of rebuilding the whole video.
+  const [cacheEpoch] = useState(() => ++kymographCacheEpoch);
+
+  // Match the kymograph render colour to the per-channel tint the user already
+  // chose in the editor's multi-channel overlay. Default white (#FFFFFF) is
+  // "grayscale" — sent as #FFFFFF, the ML linear gradient collapses to a
+  // black→white intensity ramp, which is the natural single-channel grayscale
+  // kymograph. Reading ONE colour out of the record matters: ImageDisplayContext
+  // mints a fresh `channelColors` object on every recolour, so depending on the
+  // record itself rebuilt this kymograph whenever any *other* channel was
+  // recoloured in the editor.
+  const channelColor = sourceChannel
+    ? (channelColors[sourceChannel] ?? '#FFFFFF')
+    : '#FFFFFF';
+
+  const queryEnabled = open && !!sourceChannel;
+
+  /** Everything that decides the rendered PNG; the shared prefix of both keys. */
+  const imageKey: QueryKey = [
+    'kymograph',
+    cacheEpoch,
+    videoContainerId,
+    polylineId,
+    frameIndex,
+    sourceChannel,
+    channelColor,
+  ];
+  const request = {
+    videoContainerId,
+    polylineId,
+    frameIndex,
+    sourceChannel: sourceChannel as string,
+    channelColor,
+  };
+  /** Deterministic per key, and `cacheEpoch` already scopes every key to one
+   *  open of the modal, so there is nothing to revalidate. `retry` is off
+   *  because the axios client already retries 429/502/503/504 with backoff and
+   *  a second layer on a 10-second request only doubles the wait for an error
+   *  the user is going to see anyway. */
+  const cacheOptions = {
+    staleTime: Infinity,
+    gcTime: 60_000,
+    retry: false,
+  } as const;
+
+  // The kymograph on its own — the cheapest request that can answer "show me
+  // this kymograph". Disabled, not unmounted, while velocity analysis is the
+  // request in flight: the observer stays, so the image already fetched keeps
+  // its cache entry and stays on screen, and un-ticking the box needs no
+  // request at all.
+  const imageQuery = useQuery({
+    queryKey: imageKey,
+    queryFn: ({ signal }) =>
+      fetchKymograph({ ...request, detectVelocity: false }, signal),
+    enabled: queryEnabled && !detectVelocity,
+    ...cacheOptions,
+  });
+
+  // The same kymograph plus blob-motion analysis. Only ever enabled by an
+  // explicit user action, and a failure here costs the user nothing they
+  // already had — the image above is a separate query.
+  const velocityQuery = useQuery({
+    queryKey: [...imageKey, 'velocity', debouncedWidth],
+    queryFn: ({ signal }) =>
+      fetchKymograph(
+        { ...request, detectVelocity: true, intensityWidth: debouncedWidth },
+        signal
+      ),
+    enabled: queryEnabled && detectVelocity,
+    ...cacheOptions,
+  });
+
+  // A disabled query still serves whatever it has cached, so this falls back to
+  // the plain image while velocity analysis runs (identical PNG) and after one
+  // that failed.
+  const velocity = detectVelocity ? velocityQuery.data : undefined;
+  const result = velocity ?? imageQuery.data;
+  const error = detectVelocity ? velocityQuery.error : imageQuery.error;
+  // Enabled, nothing to show and nothing to report ⇒ a request is on its way.
+  // Covers a *paused* query too (offline), which `isFetching` would call idle.
+  const isLoading = queryEnabled && !result && !error;
 
   // --- Kymograph zoom / pan (native aspect ratio, CSS-transform viewer) ------
   // The kymograph is shown at its native lengthPx×frameCount size and moved by a
@@ -319,56 +458,15 @@ export function KymographModal({
     return () => clearTimeout(id);
   }, [intensityWidth]);
 
-  useEffect(() => {
-    if (!open || !sourceChannel) return;
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    // Match the kymograph render colour to the per-channel tint the user
-    // already chose in the editor's multi-channel overlay. Default white
-    // (#FFFFFF) is "grayscale" — sent as #FFFFFF, the ML linear gradient
-    // collapses to a black→white intensity ramp, which is the natural
-    // single-channel grayscale kymograph.
-    const channelColor = channelColors[sourceChannel] ?? '#FFFFFF';
-    apiClient
-      .post('/segmentation/kymograph', {
-        videoContainerId,
-        polylineId,
-        frameIndex,
-        sourceChannel,
-        channelColor,
-        detectVelocity,
-        ...(detectVelocity ? { intensityWidth: debouncedWidth } : {}),
-      })
-      .then(res => {
-        if (cancelled) return;
-        const payload = res.data?.data ?? res.data;
-        setResult(payload as KymographResponse);
-      })
-      .catch((err: Error) => {
-        if (cancelled) return;
-        setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    open,
-    sourceChannel,
-    videoContainerId,
-    polylineId,
-    frameIndex,
-    channelColors,
-    detectVelocity,
-    debouncedWidth,
-  ]);
+  // Empty unless the box is ticked AND its request has landed — the overlay and
+  // the table must never draw trajectories belonging to a superseded request.
+  const tracks = velocity?.tracks ?? [];
+  const calibrated =
+    result?.pixelSizeUm != null && result.frameIntervalMs != null;
 
   const handleDownload = (kind: 'png' | 'csv') => {
-    if (!result) return;
-    const data = kind === 'png' ? result.pngBase64 : result.csvBase64;
+    const data = kind === 'png' ? result?.pngBase64 : result?.csvBase64;
+    if (!data) return;
     const mime = kind === 'png' ? 'image/png' : 'text/csv';
     triggerDownload(
       base64ToBlob(data, mime),
@@ -377,17 +475,13 @@ export function KymographModal({
   };
 
   const handleDownloadTracks = () => {
-    if (!result?.tracks) return;
-    const csv = tracksToCsv(result.tracks);
+    if (tracks.length === 0) return;
+    const csv = tracksToCsv(tracks);
     triggerDownload(
       new Blob([csv], { type: 'text/csv' }),
       `kymograph-velocity-${polylineId}.csv`
     );
   };
-
-  const tracks = result?.tracks ?? [];
-  const calibrated =
-    result?.pixelSizeUm != null && result.frameIntervalMs != null;
 
   const fmtVelocity = (track: KymographTrack): string => {
     if (track.netVelocityUmPerSec != null) {
@@ -436,7 +530,15 @@ export function KymographModal({
               </Select>
             </>
           )}
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-2"
+            title={String(
+              t('editor.kymograph.velocityHint', {
+                defaultValue:
+                  'Finds moving particles and their velocities. It re-reads every frame, so it roughly doubles the wait.',
+              })
+            )}
+          >
             <Checkbox
               id="kymo-velocity"
               checked={detectVelocity}
@@ -492,19 +594,19 @@ export function KymographModal({
               })}
             </div>
           )}
-          {error && (
+          {!isLoading && !result && error && (
             <div className="min-w-0 break-words text-destructive text-sm">
-              {error}
+              {error.message}
             </div>
           )}
-          {!isLoading && !error && result && !validKymo && (
+          {!isLoading && result && !validKymo && (
             <div className="text-sm text-muted-foreground">
               {t('editor.kymograph.empty', {
                 defaultValue: 'Kymograph could not be computed.',
               })}
             </div>
           )}
-          {!isLoading && !error && validKymo && result && (
+          {!isLoading && validKymo && result && (
             // Native-aspect-ratio viewer: the kymograph is NOT stretched — it's
             // shown at lengthPx×frameCount (× zoom) inside a scrollable box.
             // Rows = frames (time ↓), cols = position along the microtubule.
@@ -594,7 +696,7 @@ export function KymographModal({
                         style={{ imageRendering: 'pixelated' }}
                         draggable={false}
                       />
-                      {detectVelocity && tracks.length > 0 && (
+                      {tracks.length > 0 && (
                         // viewBox = native pixel grid mapped 1:1 onto the native
                         // box, then CSS-scaled by the parent transform ⇒ tracks
                         // stay aligned at any zoom. Stroke width is divided by the
@@ -651,10 +753,48 @@ export function KymographModal({
           )}
         </div>
 
-        {/* Velocity table */}
-        {detectVelocity && result && !isLoading && (
+        {/* Velocity analysis is opt-in, so when it is off this slot carries the
+            call-to-action that would otherwise be a table the user cannot find.
+            It sits exactly where the table appears, under the kymograph. */}
+        {validKymo && !detectVelocity && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2">
+            <span className="min-w-0 text-xs text-muted-foreground">
+              {t('editor.kymograph.velocityIdle', {
+                defaultValue:
+                  'Velocity analysis is off — the kymograph loads faster without it.',
+              })}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setDetectVelocity(true)}
+            >
+              {t('editor.kymograph.analyseVelocities', {
+                defaultValue: 'Analyse velocities',
+              })}
+            </Button>
+          </div>
+        )}
+
+        {/* Velocity table — or, while the second pass runs over an image that is
+            already on screen, its spinner. The request failing here is reported
+            in this slot alone: the kymograph above came from the other query. */}
+        {validKymo && detectVelocity && velocityQuery.error && (
+          <div className="min-w-0 break-words rounded border p-3 text-sm text-destructive">
+            {velocityQuery.error.message}
+          </div>
+        )}
+        {validKymo && detectVelocity && !velocityQuery.error && !velocity && (
+          <div className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t('editor.kymograph.velocityComputing', {
+              defaultValue: 'Analysing velocities…',
+            })}
+          </div>
+        )}
+        {validKymo && detectVelocity && velocity && (
           <div className="max-h-48 overflow-auto rounded border">
-            {result.velocityError ? (
+            {velocity.velocityError ? (
               <div className="p-3 text-sm text-destructive">
                 {t('editor.kymograph.velocityFailed', {
                   defaultValue: 'Velocity detection failed.',
@@ -778,20 +918,21 @@ export function KymographModal({
                 })}
               </div>
             )}
-            {!result.velocityError && (result.filteredTrackCount ?? 0) > 0 && (
-              <div className="px-2 py-1 text-[10px] text-muted-foreground border-t">
-                {t('editor.kymograph.filteredHidden', {
-                  count: result.filteredTrackCount ?? 0,
-                  defaultValue:
-                    '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
-                })}
-              </div>
-            )}
+            {!velocity.velocityError &&
+              (velocity.filteredTrackCount ?? 0) > 0 && (
+                <div className="px-2 py-1 text-[10px] text-muted-foreground border-t">
+                  {t('editor.kymograph.filteredHidden', {
+                    count: velocity.filteredTrackCount ?? 0,
+                    defaultValue:
+                      '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
+                  })}
+                </div>
+              )}
           </div>
         )}
 
         <DialogFooter>
-          {detectVelocity && tracks.length > 0 && (
+          {tracks.length > 0 && (
             <Button variant="outline" onClick={handleDownloadTracks}>
               <Download className="h-4 w-4 mr-1" />
               {t('editor.kymograph.downloadTracks', {
@@ -802,15 +943,17 @@ export function KymographModal({
           <Button
             variant="outline"
             onClick={() => handleDownload('png')}
-            disabled={!result}
+            disabled={!result?.pngBase64}
           >
             <Download className="h-4 w-4 mr-1" />
             {t('editor.kymograph.downloadPng', { defaultValue: 'PNG' })}
           </Button>
+          {/* Gated on the payload, not just on `result`: a response without the
+              intensity matrix would otherwise download an empty file. */}
           <Button
             variant="outline"
             onClick={() => handleDownload('csv')}
-            disabled={!result}
+            disabled={!result?.csvBase64}
           >
             <Download className="h-4 w-4 mr-1" />
             {t('editor.kymograph.downloadCsv', { defaultValue: 'CSV' })}
