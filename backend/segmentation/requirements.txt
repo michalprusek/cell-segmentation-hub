@@ -81,7 +81,7 @@ torch==2.6.0
 torchvision==0.21.0
 
 # Image processing
-opencv-python-headless==4.11.0.86
+opencv-python-headless==4.14.0.94
 # Pillow 12.2.0 fixes the earlier ImageMath.eval RCE / c_memcpy overflow plus
 # the later high-severity decoder advisories. ML code uses no removed PIL APIs
 # (only the Image.NEAREST alias + ImageDraw, both still valid in Pillow 12).
