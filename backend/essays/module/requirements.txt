@@ -52,5 +52,5 @@ opencv-python-headless==4.11.0.86
 
 # --- Image I/O ---
 Pillow==12.3.0
-tifffile>=2024.1.30   # multi-page TIFF microscopy stacks
+tifffile>=2024.12.12   # multi-page TIFF microscopy stacks
 nd2>=0.10.0           # Nikon NIS-Elements .nd2 (optional input format)
