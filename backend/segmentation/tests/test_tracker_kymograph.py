@@ -14,6 +14,7 @@ LUT). Catches regressions like:
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import sys
@@ -765,3 +766,439 @@ def test_a_gliding_filament_keeps_its_track(client):
     r = client.post("/api/v1/track", json=payload)
     assert r.status_code == 200, r.text
     assert r.json()["assignments"]["g0"] == r.json()["assignments"]["g1"]
+
+
+# ---------------------------------------------------------------------------
+#  /kymograph sampled-row cache + threadpool hop
+# ---------------------------------------------------------------------------
+#
+# Why these exist. Measured on a real 300-frame production container
+# (CH5_DO4 / 4972cad8, 1924x1476 16-bit PNGs), one kymograph read 1267 MB off
+# disk to use 200 pixels per frame — a 14 199x read amplification — and spent
+# 99% of its 9.6 s sampling loop inside the PNG decoder, on the event loop,
+# where it blocked GET /health for 10.24 s against a healthcheck that times out
+# at 10 s. The fix caches the sampled ROW (233 KB per request, against 3.4 GB
+# for the decoded frames), decodes misses on a small thread pool, and runs the
+# whole body on a one-slot executor.
+#
+# A cache that returns a stale or misaligned kymograph is far worse than a slow
+# one, so most of what follows is about the key, not about speed.
+
+
+@pytest.fixture(autouse=True)
+def _empty_sample_cache():
+    """The row cache is a module singleton: without this, one test's entries
+    make the next test's "cold" run warm, and every decode-count assertion
+    below becomes order-dependent."""
+    tracker_kymograph._SAMPLE_CACHE.clear()
+    yield
+    tracker_kymograph._SAMPLE_CACHE.clear()
+
+
+def _write_constant_png(path: Path, value: int, height: int = 16,
+                        width: int = 64) -> None:
+    """A flat grayscale PNG, so a row sampled from it is identifiable."""
+    from PIL import Image as PILImage
+
+    arr = np.full((height, width), value, dtype=np.uint8)
+    PILImage.fromarray(arr, mode="L").save(path)
+
+
+def _write_2d_ramp_png(path: Path, height: int = 16, width: int = 64) -> None:
+    """``value = 4*row + col``: unlike the horizontal gradient, two horizontal
+    polylines at DIFFERENT rows read different intensities from it. Needed to
+    separate the cache key's geometry digest from its ``n_samples``, which two
+    polylines of equal length share."""
+    from PIL import Image as PILImage
+
+    rows = np.arange(height, dtype=np.uint8)[:, None] * 4
+    cols = np.arange(width, dtype=np.uint8)[None, :]
+    PILImage.fromarray((rows + cols).astype(np.uint8), mode="L").save(path)
+
+
+def _kymo_payload(pngs, polyline_rc, **overrides):
+    payload = {
+        "frames": [
+            {"frame": i, "polyline_rc": polyline_rc, "image_path": str(p)}
+            for i, p in enumerate(pngs)
+        ],
+        "target_width": 64,
+        "tracked": False,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _count_decodes(monkeypatch) -> dict:
+    """Count frame decodes. ``PIL.Image.open`` is reached ONLY by
+    ``_sample_frame_row``; the response PNG is written with ``fromarray``."""
+    from PIL import Image as PILImage
+
+    counter = {"n": 0}
+    real_open = PILImage.open
+
+    def counting_open(*args, **kwargs):
+        counter["n"] += 1
+        return real_open(*args, **kwargs)
+
+    monkeypatch.setattr(PILImage, "open", counting_open)
+    return counter
+
+
+def _csv_rows(body) -> list:
+    text = base64.b64decode(body["csv_base64"]).decode("utf-8")
+    return [
+        line.split(",")
+        for line in text.strip().split("\n")
+        if not line.startswith("frame,")
+    ]
+
+
+def test_kymograph_warm_request_is_byte_identical_and_decodes_nothing(
+    client, monkeypatch, tmp_path
+):
+    """The whole point: a repeat of the same geometry must skip the decode and
+    return the SAME bytes. Measured on the 299-frame container: 10.44 s ->
+    0.033 s, with the same SHA-256 for the response PNG and CSV."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    pngs = [td_path / f"f{i}.png" for i in range(3)]
+    for p in pngs:
+        _write_gradient_png(p)
+    payload = _kymo_payload(pngs, [[8.0, float(x)] for x in range(64)])
+
+    decodes = _count_decodes(monkeypatch)
+    first = client.post("/api/v1/kymograph", json=payload)
+    assert first.status_code == 200, first.text
+    assert decodes["n"] == 3, "cold request should decode every frame once"
+
+    second = client.post("/api/v1/kymograph", json=payload)
+    assert second.status_code == 200, second.text
+    assert decodes["n"] == 3, "warm request re-decoded frames"
+    assert second.json() == first.json(), "warm response differs from cold"
+
+
+def test_kymograph_cache_misses_when_a_frame_is_rewritten_in_place(
+    client, monkeypatch, tmp_path
+):
+    """Frame PNGs are NOT immutable. ``drift_correction.correct_drift_in_place``
+    rewrites every frame on disk after extraction (and ``add_channel_align``
+    writes new ones), so a cache keyed on the path alone would serve
+    pre-correction intensities forever. The key carries st_mtime_ns and st_size
+    for exactly this."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_constant_png(png, 40)
+    payload = _kymo_payload([png], [[8.0, float(x)] for x in range(64)])
+
+    before = client.post("/api/v1/kymograph", json=payload)
+    assert before.status_code == 200, before.text
+    identity_before = (png.stat().st_mtime_ns, png.stat().st_size)
+    assert float(_csv_rows(before.json())[0][1]) == 40.0
+
+    # Same path, new pixels — the de-drift rewrite, minus the shift.
+    _write_constant_png(png, 200)
+    identity_after = (png.stat().st_mtime_ns, png.stat().st_size)
+    assert identity_after != identity_before, (
+        "precondition: the filesystem must report the rewrite in "
+        "(st_mtime_ns, st_size); it did not, so this test cannot prove anything"
+    )
+
+    after = client.post("/api/v1/kymograph", json=payload)
+    assert after.status_code == 200, after.text
+    assert float(_csv_rows(after.json())[0][1]) == 200.0, (
+        "served the pre-rewrite intensities from cache"
+    )
+
+
+def test_kymograph_cache_misses_on_a_different_polyline(
+    client, monkeypatch, tmp_path
+):
+    """Same frame, different microtubule. The geometry digest is what keeps
+    the second MT from inheriting the first one's row.
+
+    The two polylines are deliberately the SAME LENGTH, so they share
+    ``n_samples`` and the digest is the only thing separating them. An earlier
+    version of this test used polylines of different lengths and survived
+    deleting the digest outright — the mutation run is what caught that."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_2d_ramp_png(png)
+
+    row_8 = [[8.0, float(x)] for x in range(64)]
+    row_12 = [[12.0, float(x)] for x in range(64)]
+    first = client.post("/api/v1/kymograph", json=_kymo_payload([png], row_8))
+    second = client.post("/api/v1/kymograph", json=_kymo_payload([png], row_12))
+    assert first.status_code == 200 and second.status_code == 200
+    assert first.json()["length_px"] == second.json()["length_px"] == 64
+
+    # value = 4*row + col, so row 8 reads 32..95 and row 12 reads 48..111.
+    assert [float(v) for v in _csv_rows(first.json())[0][1:]] == [
+        32.0 + x for x in range(64)
+    ]
+    assert [float(v) for v in _csv_rows(second.json())[0][1:]] == [
+        48.0 + x for x in range(64)
+    ]
+
+
+def test_kymograph_cache_misses_when_n_samples_changes(
+    client, monkeypatch, tmp_path
+):
+    """``target_width`` reaches a row only through ``n_samples``, so that is
+    what the key carries. Two target_widths that clamp to the same n_samples
+    SHOULD hit (the rows are genuinely identical); one that changes it must
+    not."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+    polyline_rc = [[8.0, float(x)] for x in range(64)]
+
+    decodes = _count_decodes(monkeypatch)
+    wide = client.post(
+        "/api/v1/kymograph", json=_kymo_payload([png], polyline_rc, target_width=64)
+    )
+    assert wide.status_code == 200, wide.text
+    assert wide.json()["length_px"] == 64
+    assert decodes["n"] == 1
+
+    # 200 clamps back to the same 64 samples (the arc length is the binding
+    # constraint), so this is a legitimate hit and must not re-decode.
+    same = client.post(
+        "/api/v1/kymograph", json=_kymo_payload([png], polyline_rc, target_width=200)
+    )
+    assert same.status_code == 200, same.text
+    assert same.json()["length_px"] == 64
+    assert decodes["n"] == 1, "re-decoded for an identical n_samples"
+
+    narrow = client.post(
+        "/api/v1/kymograph", json=_kymo_payload([png], polyline_rc, target_width=20)
+    )
+    assert narrow.status_code == 200, narrow.text
+    assert narrow.json()["length_px"] == 20
+    assert decodes["n"] == 2, "served a 20-sample row from the 64-sample entry"
+
+
+def test_kymograph_rows_stay_aligned_with_frames(client, monkeypatch, tmp_path):
+    """Misses are decoded on a thread pool while degenerate frames are filled
+    in place, so row order is no longer the loop's order of arrival. Row i MUST
+    still be frame i — a shifted row axis would relabel every velocity and
+    every CSV line while looking perfectly plausible."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    values = [10, 60, 110, 160, 210]
+    pngs = []
+    for i, v in enumerate(values):
+        p = td_path / f"f{i}.png"
+        _write_constant_png(p, v)
+        pngs.append(p)
+
+    polyline_rc = [[8.0, float(x)] for x in range(64)]
+    payload = _kymo_payload(pngs, polyline_rc)
+    # Frame 2's polyline collapses to a single point: it takes the zero-fill
+    # branch and never reaches the pool.
+    payload["frames"][2]["polyline_rc"] = [[8.0, 8.0]]
+
+    r = client.post("/api/v1/kymograph", json=payload)
+    assert r.status_code == 200, r.text
+    rows = _csv_rows(r.json())
+    assert [row[0] for row in rows] == ["0", "1", "2", "3", "4"]
+    expected = [10.0, 60.0, 0.0, 160.0, 210.0]
+    assert [float(row[1]) for row in rows] == expected
+    assert [float(row[-1]) for row in rows] == expected
+
+
+def test_kymograph_missing_frame_still_404s(client, monkeypatch, tmp_path):
+    """Validation stays serial and in request order, so a missing frame names
+    itself the way it always did instead of surfacing as a pool exception."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+    gone = td_path / "f1.png"
+    payload = _kymo_payload([png, gone], [[8.0, float(x)] for x in range(64)])
+
+    r = client.post("/api/v1/kymograph", json=payload)
+    assert r.status_code == 404, r.text
+    assert "f1.png" in r.json()["detail"]
+
+
+def test_kymograph_include_csv_defaults_to_building_it(client, monkeypatch, tmp_path):
+    """Backward compatibility: a caller that never heard of ``include_csv``
+    must get exactly today's response. Both models are ``extra='forbid'``, so
+    the field had to be additive and defaulted in the safe direction."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+    payload = _kymo_payload([png], [[8.0, float(x)] for x in range(64)])
+
+    r = client.post("/api/v1/kymograph", json=payload)
+    assert r.status_code == 200, r.text
+    assert r.json()["csv_base64"], "omitting include_csv dropped the CSV"
+
+
+def test_kymograph_include_csv_false_omits_only_the_csv(
+    client, monkeypatch, tmp_path
+):
+    """The CSV was 626 KB of the 780 KB response on the 299-frame container,
+    and the modal only reads it when the user clicks download."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+    polyline_rc = [[8.0, float(x)] for x in range(64)]
+
+    full = client.post("/api/v1/kymograph", json=_kymo_payload([png], polyline_rc))
+    lean = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline_rc, include_csv=False),
+    )
+    assert full.status_code == 200 and lean.status_code == 200, lean.text
+    # None, not "" — an empty string would download as a zero-byte file.
+    assert lean.json()["csv_base64"] is None
+    assert lean.json()["png_base64"] == full.json()["png_base64"]
+    assert lean.json()["frame_count"] == full.json()["frame_count"]
+    assert lean.json()["length_px"] == full.json()["length_px"]
+
+
+async def test_kymograph_leaves_the_event_loop_free(monkeypatch, tmp_path):
+    """The handler used to run its whole blocking body on the event loop. On a
+    real 299-frame container that held GET /health for 10.24 s, against the
+    compose healthcheck's 10 s timeout; with the one-slot executor the worst
+    /health latency measured during the same request was 27.6 ms."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    pngs = []
+    for i in range(8):
+        p = td_path / f"f{i}.png"
+        _write_gradient_png(p)
+        pngs.append(p)
+
+    real_sample = tracker_kymograph._sample_frame_row
+
+    def slow_sample(path, pts, n_samples):
+        time.sleep(0.05)
+        return real_sample(path, pts, n_samples)
+
+    monkeypatch.setattr(tracker_kymograph, "_sample_frame_row", slow_sample)
+
+    ticks = 0
+
+    async def ticker():
+        nonlocal ticks
+        while True:
+            ticks += 1
+            await asyncio.sleep(0.005)
+
+    tick_task = asyncio.ensure_future(ticker())
+    try:
+        req = tracker_kymograph.KymographRequest(
+            **_kymo_payload(pngs, [[8.0, float(x)] for x in range(64)])
+        )
+        resp = await tracker_kymograph.kymograph(req)
+    finally:
+        tick_task.cancel()
+
+    assert resp.frame_count == 8
+    assert ticks > 5, f"the event loop was blocked; only {ticks} tick(s) ran"
+
+
+def test_sampled_row_cache_evicts_least_recently_used_within_its_budget():
+    """An unbounded cache on the container that also runs seven segmentation
+    models is a production incident. The budget is in BYTES, and the
+    bookkeeping counts too: at the default target_width a row is 800 B and its
+    OrderedDict/key/ndarray overhead is a measured 392 B, so an entry-count
+    budget would under-report the cache by a third."""
+    entry = 200 * 4 + tracker_kymograph._ENTRY_OVERHEAD_BYTES
+    cache = tracker_kymograph._SampledRowCache(budget_bytes=4 * entry)
+
+    def row():
+        return np.zeros(200, dtype=np.float32)
+
+    for i in range(4):
+        cache.put((i,), row())
+    assert cache.stats()["entries"] == 4
+    assert cache.stats()["evictions"] == 0
+
+    # Touch the oldest so it is no longer the eviction candidate.
+    assert cache.get((0,)) is not None
+    cache.put((99,), row())
+
+    stats = cache.stats()
+    assert stats["entries"] == 4
+    assert stats["bytes"] <= stats["budget_bytes"]
+    assert stats["evictions"] == 1
+    assert cache.get((0,)) is not None, "evicted the most recently used entry"
+    assert cache.get((1,)) is None, "kept an entry past the budget"
+
+
+def test_sampled_row_cache_refuses_an_entry_larger_than_its_whole_budget():
+    """A row wider than the budget must be dropped rather than evicting the
+    entire cache to make room for something that still will not fit."""
+    cache = tracker_kymograph._SampledRowCache(budget_bytes=2000)
+    cache.put(("small",), np.zeros(100, dtype=np.float32))
+    cache.put(("huge",), np.zeros(100_000, dtype=np.float32))
+    stats = cache.stats()
+    assert cache.get(("huge",)) is None
+    assert cache.get(("small",)) is not None, "a too-large entry flushed the cache"
+    assert stats["bytes"] <= stats["budget_bytes"]
+
+
+def test_sampled_rows_are_frozen_against_accidental_writes(tmp_path):
+    """A cached row is shared by every later request that hits the same key,
+    so a write through one would silently corrupt all of them. The row comes
+    back read-only, which turns that into an exception at the write."""
+    png = tmp_path / "f0.png"
+    _write_gradient_png(png)
+    row = tracker_kymograph._sample_frame_row(
+        png, np.array([[8.0, 0.0], [8.0, 63.0]], dtype=np.float32), 64
+    )
+    assert row.flags.writeable is False
+    with pytest.raises(ValueError):
+        row[0] = 1.0
+
+
+def test_decode_keeps_the_previous_frame_alive_per_thread(tmp_path):
+    """``_DECODE_SCRATCH.previous_frame`` looks like a useless assignment and
+    is not: it holds one decoded frame per decode thread so the next frame is
+    allocated while the previous block is still live, which is what stops glibc
+    returning 11 MB to the kernel between frames and re-faulting all 2775 pages
+    of the next one.
+
+    Measured over 299 real frames, deleting it costs 822 839 minor faults and
+    1.74 s of system time per request, against 5 312 faults and 0.24 s for the
+    loop this code replaced. A fault count is too flaky to assert directly, so
+    this pins the reference that produces it."""
+    png = tmp_path / "f0.png"
+    _write_gradient_png(png, height=16, width=64)
+    if hasattr(tracker_kymograph._DECODE_SCRATCH, "previous_frame"):
+        del tracker_kymograph._DECODE_SCRATCH.previous_frame
+
+    tracker_kymograph._sample_frame_row(
+        png, np.array([[8.0, 0.0], [8.0, 63.0]], dtype=np.float32), 64
+    )
+
+    held = getattr(tracker_kymograph._DECODE_SCRATCH, "previous_frame", None)
+    assert held is not None, "the decoded frame was released at return"
+    assert held.shape == (16, 64)
+    del tracker_kymograph._DECODE_SCRATCH.previous_frame
+
+
+def test_decode_worker_count_is_capped(monkeypatch):
+    """Four is the measured knee on the ml container's 4-CPU quota (1.999 s
+    serial -> 0.559 s at x4 -> 0.631 s at x8 over 60 real frames). The cap
+    exists because this box is shared with GPU inference and the essays
+    worker, so a bigger host must not buy more decode threads."""
+    monkeypatch.setattr(os, "sched_getaffinity", lambda _pid: set(range(64)))
+    monkeypatch.delenv("KYMOGRAPH_DECODE_WORKERS", raising=False)
+    assert tracker_kymograph._decode_workers() == tracker_kymograph._DECODE_WORKERS_CAP
+
+    monkeypatch.setenv("KYMOGRAPH_DECODE_WORKERS", "1")
+    assert tracker_kymograph._decode_workers() == 1
+    monkeypatch.setenv("KYMOGRAPH_DECODE_WORKERS", "99")
+    assert tracker_kymograph._decode_workers() == tracker_kymograph._DECODE_WORKERS_CAP
+    monkeypatch.setenv("KYMOGRAPH_DECODE_WORKERS", "nonsense")
+    assert tracker_kymograph._decode_workers() == tracker_kymograph._DECODE_WORKERS_CAP

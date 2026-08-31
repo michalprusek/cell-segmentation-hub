@@ -15,7 +15,10 @@
  *
  * Cross-frame identity becomes exact rather than inferred: every projected
  * polyline carries the reference frame's `trackId`, because it IS the same
- * object, not a match for it.
+ * object, not a match for it. The reference frame does not arrive with one —
+ * the model emits no `track_id` and suppressing the tracker means nothing else
+ * will write one either — so `withMintedTrackIds` synthesises the ids first and
+ * the caller persists them onto the anchor as well as the copies.
  *
  * ALIGNMENT. When such a channel is added with alignment on, each frame's copy
  * is the source image registered to that frame's own segmentation channel — so
@@ -115,6 +118,71 @@ export function projectPolygons<T extends ProjectablePolygon>(
     ...p,
     points: p.points.map(pt => ({ ...pt, x: pt.x + dx, y: pt.y + dy })),
   }));
+}
+
+/**
+ * Give every polyline a cross-frame identity, BEFORE its geometry is copied
+ * onto the frames that share the picture.
+ *
+ * WHY A SYNTHESISED ID IS A FACT HERE AND NOT A GUESS. Everywhere else a
+ * `trackId` is the tracker's *conclusion*: it compared two frames of genuinely
+ * different pixels and decided two filaments were the same one. A static
+ * channel is the one case where nothing has to be decided — every covered frame
+ * holds the SAME acquisition, so a projected polyline is not a match for the
+ * anchor's filament, it IS that filament, copied. Stamping one id across all of
+ * them records something this module already relies on being true; it is the
+ * same claim the header makes, finally written down where a reader can see it.
+ *
+ * IT IS ALSO THE ONLY WAY THESE CONTAINERS EVER GET ONE. The model emits no
+ * `track_id` — only `trackerService` writes that field — and this module exists
+ * precisely to stop the tracker running. So a freshly segmented anchor carries
+ * no `trackId`, the projection faithfully copied that nothing onto every
+ * sibling, and the container ended up fully segmented with not one `trackId`
+ * anywhere. Every cross-frame editor operation (delete track, propagate,
+ * kymograph) keys on `trackId`, so each silently degraded to a single-frame
+ * one. Measured on production container 4972cad8 on 2026-08-31: 299 frames,
+ * 17 940 polylines, 0 trackIds, and all 299 polygon rows byte-identical.
+ *
+ * An id already present is KEPT, never replaced: the user may have propagated a
+ * polyline by hand before this ran, and that identity outranks a fresh one.
+ *
+ * Pure on purpose — `makeId` is injected so the caller owns the id scheme and
+ * the tests own determinism.
+ */
+export function withMintedTrackIds<T extends ProjectablePolygon>(
+  polygons: readonly T[],
+  makeId: () => string
+): { polygons: T[]; minted: number } {
+  const idOf = (p: T): string | null =>
+    typeof p.trackId === 'string' && p.trackId.length > 0 ? p.trackId : null;
+
+  const used = new Set<string>();
+  for (const p of polygons) {
+    const existing = idOf(p);
+    if (existing) {
+      used.add(existing);
+    }
+  }
+
+  let minted = 0;
+  const out = polygons.map(p => {
+    if (idOf(p)) {
+      return p;
+    }
+    let id = makeId();
+    // A duplicate is vanishingly unlikely, but it would silently MERGE two
+    // filaments into one track — a wrong answer that looks like a right one —
+    // so make it impossible rather than improbable. The counter suffix also
+    // keeps this loop bounded for any `makeId`, degenerate ones included.
+    for (let n = 1; used.has(id); n++) {
+      id = `${makeId()}_${n}`;
+    }
+    used.add(id);
+    minted++;
+    return { ...p, trackId: id };
+  });
+
+  return { polygons: out, minted };
 }
 
 export interface CollapsePlan<TFrame> {
