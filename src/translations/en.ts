@@ -2024,11 +2024,16 @@ export default {
         csv: 'results.csv — one row per microtubule, with its length, the intensity along it and its background',
         failures:
           'failures.csv — every well or position that could not be produced, and why. It is always written, even when empty',
+        focus:
+          'focus_qc.csv — one row per position with an out-of-focus score for the segmented and the measured channel. results.csv carries the same verdict per filament',
         overlays:
           'Two overlay images per position: one checking the segmentation against its own input, one checking the measured band against the signal',
         annotations:
           'A JSON file per position with the traced centerlines and their lengths',
       },
+      focusNote: 'The out-of-focus flag is advisory — nothing is discarded.',
+      focusNoteText:
+        'It measures how much of a frame is occupied by structure standing clear of the noise, so a densely covered field can still pass while defocused; it errs towards keeping data, not towards throwing it away. Its thresholds were fitted on one acquisition, so a different exposure or camera is reported as out_of_calibration in the reason column — that is a note about the threshold, not about your frame.',
       channelNote: 'IRM is segmented, fluorescence is measured.',
       channelNoteText:
         'The model was trained on IRM, so the filaments are traced there and the fluorescence channel is only read along those traces. A file with no IRM channel is reported as a failure rather than segmented from something else.',
